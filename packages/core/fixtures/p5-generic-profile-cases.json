@@ -64,6 +64,15 @@
     "replace-after-lstat",
     "rewrite-after-open"
   ],
+  "authorityAnchorNegativeCases": [
+    "caller-created-canonical-receipt",
+    "copied-valid-receipt-untrusted-path",
+    "trusted-path-replacement",
+    "attacker-selected-admission-claims",
+    "missing-authority",
+    "wrong-expected-digest",
+    "request-effective-binding-mismatch"
+  ],
   "cliCases": [
     "missing-argument",
     "duplicate-argument",

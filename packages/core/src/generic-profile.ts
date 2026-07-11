@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { constants } from "node:fs";
-import { lstat, open } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, open, realpath } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
 
 import {
   ProtocolError,
@@ -32,10 +34,15 @@ export const GENERIC_PROFILE_OPERATIONS = Object.freeze([
 export const GENERIC_PROFILE_REASON_CODES = Object.freeze([
   "PROFILE_ACTION_UNADMITTED",
   "PROFILE_ADMISSION_CANONICAL_INVALID",
+  "PROFILE_ADMISSION_AUTHORITY_DIGEST",
+  "PROFILE_ADMISSION_AUTHORITY_PATH",
+  "PROFILE_ADMISSION_AUTHORITY_REQUIRED",
   "PROFILE_ADMISSION_CHANGED",
   "PROFILE_ADMISSION_LINK",
   "PROFILE_ADMISSION_MALFORMED",
   "PROFILE_ADMISSION_MISMATCH",
+  "PROFILE_ADMISSION_EFFECTIVE_MISMATCH",
+  "PROFILE_ADMISSION_REQUEST_MISMATCH",
   "PROFILE_ADMISSION_REQUIRED",
   "PROFILE_ADMISSION_SPECIAL_FILE",
   "PROFILE_BINDING_MISMATCH",
@@ -194,16 +201,25 @@ export interface GenericProfileAdmissionReceipt {
   readonly ownerRebindAdmission: GenericProfileOwnerRebindAdmission | null;
   readonly governedActions: readonly GenericProfileOperation[];
   readonly resolutionDisposition: "normal" | "cold_standby";
+  readonly requestDigest: string;
+  readonly effectiveDigest: string;
   readonly receiptDigest: string;
+}
+
+export interface GenericProfileAdmissionAuthority {
+  readonly expectedCanonicalPath: string;
+  readonly expectedFileSha256: string;
 }
 
 export interface GenericProfileAdmissionContext {
   readonly receipt: GenericProfileAdmissionReceipt;
   readonly sourcePath: string;
+  readonly authorityFileSha256: string;
   readonly sourceIdentityDigest: string;
 }
 
 export interface GenericProfileAdmissionReadOptions {
+  readonly authority?: GenericProfileAdmissionAuthority;
   readonly afterLstatForTest?: () => Promise<void>;
   readonly afterOpenForTest?: () => Promise<void>;
 }
@@ -563,6 +579,7 @@ function validateOwnerRebind(value: unknown): GenericProfileOwnerRebind {
 }
 
 const admittedContexts = new WeakSet<object>();
+const claimCalculationContexts = new WeakSet<object>();
 const maximumAdmissionReceiptBytes = 65_536;
 
 function validateLayerAdmission(value: unknown, index: number): GenericProfileLayerAdmission {
@@ -626,9 +643,9 @@ function validateAdmissionReceipt(value: unknown): GenericProfileAdmissionReceip
   exactFields(
     document,
     ["schemaVersion", "frameworkBaseDigest", "layerAdmissions", "ownerRebindAdmission", "governedActions",
-      "resolutionDisposition", "receiptDigest"],
+      "resolutionDisposition", "requestDigest", "effectiveDigest", "receiptDigest"],
     ["schemaVersion", "frameworkBaseDigest", "layerAdmissions", "ownerRebindAdmission", "governedActions",
-      "resolutionDisposition", "receiptDigest"],
+      "resolutionDisposition", "requestDigest", "effectiveDigest", "receiptDigest"],
     "profile admission receipt",
   );
   if (document.schemaVersion !== GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION) {
@@ -659,6 +676,8 @@ function validateAdmissionReceipt(value: unknown): GenericProfileAdmissionReceip
   if (document.resolutionDisposition !== "normal" && document.resolutionDisposition !== "cold_standby") {
     fail("PROFILE_ADMISSION_MALFORMED", "profile admission resolutionDisposition");
   }
+  assertSha256(document.requestDigest, "profile admission requestDigest");
+  assertSha256(document.effectiveDigest, "profile admission effectiveDigest");
   assertSha256(document.receiptDigest, "profile admission receiptDigest");
   const basis = {
     schemaVersion: GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
@@ -667,6 +686,8 @@ function validateAdmissionReceipt(value: unknown): GenericProfileAdmissionReceip
     ownerRebindAdmission,
     governedActions,
     resolutionDisposition: document.resolutionDisposition,
+    requestDigest: document.requestDigest,
+    effectiveDigest: document.effectiveDigest,
   };
   if (canonicalSha256(basis) !== document.receiptDigest) {
     fail("PROFILE_ADMISSION_MISMATCH", "profile admission receiptDigest");
@@ -691,6 +712,18 @@ export async function readGenericProfileAdmissionReceipt(
   path: string,
   options: GenericProfileAdmissionReadOptions = {},
 ): Promise<GenericProfileAdmissionContext> {
+  const authority = options.authority;
+  if (!authority || typeof authority.expectedCanonicalPath !== "string" ||
+    typeof authority.expectedFileSha256 !== "string") {
+    fail("PROFILE_ADMISSION_AUTHORITY_REQUIRED", "Out-of-band path and digest authority is required");
+  }
+  if (!isAbsolute(authority.expectedCanonicalPath) || resolve(authority.expectedCanonicalPath) !== authority.expectedCanonicalPath ||
+    path !== authority.expectedCanonicalPath) {
+    fail("PROFILE_ADMISSION_AUTHORITY_PATH", path);
+  }
+  if (!/^[a-f0-9]{64}$/u.test(authority.expectedFileSha256)) {
+    fail("PROFILE_ADMISSION_AUTHORITY_DIGEST", "Expected receipt digest must be lowercase SHA-256");
+  }
   let before;
   try {
     before = await lstat(path);
@@ -731,6 +764,15 @@ export async function readGenericProfileAdmissionReceipt(
   }
   const text = content.toString("utf8");
   if (!Buffer.from(text, "utf8").equals(content)) fail("PROFILE_ADMISSION_MALFORMED", path);
+  let canonicalPath;
+  try {
+    canonicalPath = await realpath(path);
+  } catch {
+    fail("PROFILE_ADMISSION_CHANGED", path);
+  }
+  if (canonicalPath !== authority.expectedCanonicalPath) fail("PROFILE_ADMISSION_AUTHORITY_PATH", path);
+  const fileSha256 = createHash("sha256").update(content).digest("hex");
+  if (fileSha256 !== authority.expectedFileSha256) fail("PROFILE_ADMISSION_AUTHORITY_DIGEST", path);
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -748,6 +790,7 @@ export async function readGenericProfileAdmissionReceipt(
   const context = deepFreeze({
     receipt,
     sourcePath: path,
+    authorityFileSha256: fileSha256,
     sourceIdentityDigest: canonicalSha256({
       dev: String(before.dev),
       ino: String(before.ino),
@@ -922,6 +965,9 @@ export function resolveGenericProfile(
   if (!base.fields.immutable || !base.fields.restrictOnly || !base.fields.ownerRebindOnly || !base.fields.displayOnly) {
     fail("PROFILE_SCHEMA_INVALID", "framework defaults merge matrix");
   }
+  if (!claimCalculationContexts.has(admission) && canonicalSha256(value) !== admission.receipt.requestDigest) {
+    fail("PROFILE_ADMISSION_REQUEST_MISMATCH", "Admission receipt does not bind this exact request");
+  }
   const nonBaseLayers = sorted.slice(1);
   for (const layer of nonBaseLayers) {
     const layerDigest = canonicalSha256(layer);
@@ -1020,7 +1066,65 @@ export function resolveGenericProfile(
     overlayDigest: canonicalSha256(profileDigests.slice(1)),
     effectivePolicyDigest: canonicalSha256(effectivePolicy),
   };
-  return { ...withoutDigest, effectiveDigest: canonicalSha256(withoutDigest) };
+  const effective = { ...withoutDigest, effectiveDigest: canonicalSha256(withoutDigest) };
+  if (!claimCalculationContexts.has(admission) && effective.effectiveDigest !== admission.receipt.effectiveDigest) {
+    fail("PROFILE_ADMISSION_EFFECTIVE_MISMATCH", "Admission receipt does not bind the resolved effective profile");
+  }
+  return effective;
+}
+
+export function calculateGenericProfileAdmissionClaims(
+  value: unknown,
+  resolutionDisposition: "normal" | "cold_standby" = "normal",
+): Readonly<{ requestDigest: string; effectiveDigest: string }> {
+  const document = asRecord(value, "admission claim request");
+  exactFields(document, ["schemaVersion", "layers", "ownerRebind"],
+    ["schemaVersion", "layers", "ownerRebind"], "admission claim request");
+  if (!Array.isArray(document.layers)) fail("PROFILE_INPUT_INVALID", "admission claim request layers");
+  const layers = document.layers.map((layer) => validateGenericProfileLayer(layer));
+  const ownerRebind = document.ownerRebind === null ? null : validateOwnerRebind(document.ownerRebind);
+  const targetLayer = ownerRebind === null ? null : layers.find((layer) => layer.layerId === ownerRebind.targetLayerId);
+  if (ownerRebind !== null && !targetLayer) fail("PROFILE_OWNER_REBIND_INVALID", ownerRebind.targetLayerId);
+  const layerAdmissions = layers.filter((layer) => layer.layerKind !== "framework_defaults").map((layer) => ({
+    layerDigest: canonicalSha256(layer),
+    layerKind: layer.layerKind as Exclude<GenericProfileLayerKind, "framework_defaults">,
+    trustLevel: layer.trustLevel,
+    releaseVerificationDigest: layer.releaseVerificationDigest,
+  })).sort((left, right) => {
+    const kind = compareCanonicalText(left.layerKind, right.layerKind);
+    return kind === 0 ? compareCanonicalText(left.layerDigest, right.layerDigest) : kind;
+  });
+  const ownerRebindAdmission = ownerRebind === null || targetLayer === null ? null : {
+    ownerRebindDigest: canonicalSha256(ownerRebind),
+    targetLayerDigest: canonicalSha256(targetLayer),
+    targetBindingDigest: canonicalSha256(ownerRebind.replacement.activeBinding),
+    ownerId: ownerRebind.ownerId,
+  };
+  const context = {
+    receipt: {
+      schemaVersion: GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
+      frameworkBaseDigest: GENERIC_PROFILE_BASE_DIGEST,
+      layerAdmissions,
+      ownerRebindAdmission,
+      governedActions: GENERIC_PROFILE_OPERATIONS,
+      resolutionDisposition,
+      requestDigest: "0".repeat(64),
+      effectiveDigest: "0".repeat(64),
+      receiptDigest: "0".repeat(64),
+    },
+    sourcePath: "internal:admission-claim-calculation",
+    authorityFileSha256: "0".repeat(64),
+    sourceIdentityDigest: "0".repeat(64),
+  } satisfies GenericProfileAdmissionContext;
+  admittedContexts.add(context);
+  claimCalculationContexts.add(context);
+  try {
+    const effective = resolveGenericProfile(value, context);
+    return Object.freeze({ requestDigest: canonicalSha256(value), effectiveDigest: effective.effectiveDigest });
+  } finally {
+    claimCalculationContexts.delete(context);
+    admittedContexts.delete(context);
+  }
 }
 
 export function validateEffectiveGenericProfile(value: unknown): EffectiveGenericProfile {

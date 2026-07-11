@@ -80,7 +80,8 @@ or starts P6.
 
 `pnpm verify:p5` proves the closed generic profile trust/binding model, a frozen
 framework-base digest, descriptor-bound independent admission receipts,
-authorization-time request re-resolution, fixed configuration precedence,
+an out-of-band governed path/file-digest authority anchor, complete request and
+effective-profile binding, authorization-time request re-resolution, fixed configuration precedence,
 exact field merge matrix, owner-rebind boundary, canonical profile/effective-
 policy digests, read-only CLI generation and validation, 64 actual layer-order
 permutations, and a disposable empty

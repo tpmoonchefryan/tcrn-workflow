@@ -47,3 +47,6 @@ Versioning after the first accepted release.
 - Bind P5 trust admission to the frozen framework base and independent,
   descriptor-validated receipts; authorization now re-resolves untrusted
   request bytes and rejects standalone effective-profile capabilities.
+- Require an out-of-band governed canonical path and raw receipt-file digest;
+  P5 receipts now bind the complete request and derived effective profile, so
+  caller-minted, copied, or replaced canonical receipts cannot authorize.

@@ -159,6 +159,7 @@ export {
   GENERIC_PROFILE_VERSION,
   GenericProfileError,
   authorizeGenericProfileOperation,
+  calculateGenericProfileAdmissionClaims,
   generateGenericStarterBundle,
   readGenericProfileAdmissionReceipt,
   resolveGenericProfile,
@@ -169,6 +170,7 @@ export {
 export type {
   EffectiveGenericProfile,
   GenericProfileAdmissionContext,
+  GenericProfileAdmissionAuthority,
   GenericProfileAdmissionReadOptions,
   GenericProfileAdmissionReceipt,
   GenericProfileAuthorizationContext,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,6 +17,7 @@ import {
   GENERIC_PROFILE_OPERATIONS,
   acquireWorkspaceLease,
   authorizeGenericProfileOperation,
+  calculateGenericProfileAdmissionClaims,
   createProject,
   createWork,
   generateGenericStarterBundle,
@@ -41,6 +43,10 @@ const fixture = JSON.parse(await readFile(
   "utf8",
 ));
 const clone = (value) => structuredClone(value);
+const fileAuthority = (path, bytes) => ({
+  expectedCanonicalPath: path,
+  expectedFileSha256: createHash("sha256").update(bytes).digest("hex"),
+});
 
 function expectReason(reasonCode, operation) {
   assert.throws(operation, (error) => error?.reasonCode === reasonCode, reasonCode);
@@ -148,6 +154,12 @@ function admissionReceipt(resolutionRequest, options = {}) {
       ownerId: resolutionRequest.ownerRebind.ownerId,
     };
   }
+  const claims = options.skipClaimCalculation
+    ? { requestDigest: canonicalSha256(resolutionRequest), effectiveDigest: "0".repeat(64) }
+    : calculateGenericProfileAdmissionClaims(
+      resolutionRequest,
+      options.resolutionDisposition ?? "normal",
+    );
   const basis = {
     schemaVersion: GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
     frameworkBaseDigest: GENERIC_PROFILE_BASE_DIGEST,
@@ -155,6 +167,8 @@ function admissionReceipt(resolutionRequest, options = {}) {
     ownerRebindAdmission,
     governedActions: options.governedActions ?? [...GENERIC_PROFILE_OPERATIONS],
     resolutionDisposition: options.resolutionDisposition ?? "normal",
+    requestDigest: options.requestDigest ?? claims.requestDigest,
+    effectiveDigest: options.effectiveDigest ?? claims.effectiveDigest,
   };
   const mutated = options.mutateBasis ? options.mutateBasis(clone(basis)) : basis;
   return { ...mutated, receiptDigest: options.receiptDigest ?? canonicalSha256(mutated) };
@@ -164,9 +178,14 @@ async function admissionFixture(resolutionRequest, options = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "workflow-profile-admission-")));
   const path = join(directory, "admission.json");
   const document = options.document ?? admissionReceipt(resolutionRequest, options);
-  await writeFile(path, `${canonicalJson(document)}\n`, { encoding: "utf8", mode: 0o600 });
-  const context = options.skipRead ? null : await readGenericProfileAdmissionReceipt(path, options.readOptions);
-  return { directory, path, document, context, close: () => rm(directory, { recursive: true, force: true }) };
+  const bytes = `${canonicalJson(document)}\n`;
+  await writeFile(path, bytes, { encoding: "utf8", mode: 0o600 });
+  const authority = options.authority ?? fileAuthority(path, bytes);
+  const context = options.skipRead ? null : await readGenericProfileAdmissionReceipt(path, {
+    ...options.readOptions,
+    authority,
+  });
+  return { directory, path, document, authority, context, close: () => rm(directory, { recursive: true, force: true }) };
 }
 
 async function withAdmission(resolutionRequest, operation, options = {}) {
@@ -400,9 +419,10 @@ test("trusted admission rejects forged trust, malformed receipts, and standalone
     const forgedBase = clone(base);
     forgedBase.fields.ownerRebindOnly = workspaceReplacement;
     expectReason("PROFILE_FRAMEWORK_BASE_MISMATCH", () => resolveGenericProfile(request([forgedBase]), admission));
-
-    expectReason("PROFILE_LAYER_UNADMITTED", () => resolveGenericProfile(bound, admission));
   });
+  await withAdmission(bound, async (admission) => {
+    expectReason("PROFILE_LAYER_UNADMITTED", () => resolveGenericProfile(bound, admission));
+  }, { admittedLayers: [] });
   await withAdmission(bound, async (admission) => {
     const effective = resolveGenericProfile(bound, admission);
     const forgedEffective = clone(effective);
@@ -445,32 +465,45 @@ test("trusted admission rejects forged trust, malformed receipts, and standalone
     "release_verified_framework_profile", "profile-layer:self-release", { displayOnly: display("Self Release") },
   );
   const releaseRequest = request([base, release]);
-  await withAdmission(baseRequest, async (admission) => {
+  await withAdmission(releaseRequest, async (admission) => {
     expectReason("PROFILE_RELEASE_UNADMITTED", () => resolveGenericProfile(releaseRequest, admission));
-  });
+  }, { admittedLayers: [] });
 
   const malformed = await admissionFixture(baseRequest, { skipRead: true });
   try {
-    await writeFile(malformed.path, "{\n", "utf8");
-    await expectReasonAsync("PROFILE_ADMISSION_MALFORMED", () => readGenericProfileAdmissionReceipt(malformed.path));
+    const malformedBytes = "{\n";
+    await writeFile(malformed.path, malformedBytes, "utf8");
+    await expectReasonAsync("PROFILE_ADMISSION_MALFORMED", () => readGenericProfileAdmissionReceipt(malformed.path, {
+      authority: fileAuthority(malformed.path, malformedBytes),
+    }));
     const mismatched = admissionReceipt(baseRequest, { receiptDigest: "0".repeat(64) });
-    await writeFile(malformed.path, `${canonicalJson(mismatched)}\n`, "utf8");
-    await expectReasonAsync("PROFILE_ADMISSION_MISMATCH", () => readGenericProfileAdmissionReceipt(malformed.path));
+    const mismatchedBytes = `${canonicalJson(mismatched)}\n`;
+    await writeFile(malformed.path, mismatchedBytes, "utf8");
+    await expectReasonAsync("PROFILE_ADMISSION_MISMATCH", () => readGenericProfileAdmissionReceipt(malformed.path, {
+      authority: fileAuthority(malformed.path, mismatchedBytes),
+    }));
     const valid = admissionReceipt(baseRequest);
-    await writeFile(malformed.path, `${canonicalJson(valid)}\n`, "utf8");
+    const validBytes = `${canonicalJson(valid)}\n`;
+    await writeFile(malformed.path, validBytes, "utf8");
     const hardlink = join(malformed.directory, "hardlink.json");
     await link(malformed.path, hardlink);
-    await expectReasonAsync("PROFILE_ADMISSION_LINK", () => readGenericProfileAdmissionReceipt(hardlink));
+    await expectReasonAsync("PROFILE_ADMISSION_LINK", () => readGenericProfileAdmissionReceipt(hardlink, {
+      authority: fileAuthority(hardlink, validBytes),
+    }));
     await rm(hardlink);
     const symlinkPath = join(malformed.directory, "symlink.json");
     await symlink(malformed.path, symlinkPath);
-    await expectReasonAsync("PROFILE_ADMISSION_LINK", () => readGenericProfileAdmissionReceipt(symlinkPath));
+    await expectReasonAsync("PROFILE_ADMISSION_LINK", () => readGenericProfileAdmissionReceipt(symlinkPath, {
+      authority: fileAuthority(symlinkPath, validBytes),
+    }));
     await rm(symlinkPath);
     await expectReasonAsync("PROFILE_ADMISSION_CHANGED", () => readGenericProfileAdmissionReceipt(malformed.path, {
+      authority: fileAuthority(malformed.path, validBytes),
       afterLstatForTest: async () => writeFile(malformed.path, `${canonicalJson({ ...valid, receiptDigest: "1".repeat(64) })}\n`, "utf8"),
     }));
-    await writeFile(malformed.path, `${canonicalJson(valid)}\n`, "utf8");
+    await writeFile(malformed.path, validBytes, "utf8");
     await expectReasonAsync("PROFILE_ADMISSION_CHANGED", () => readGenericProfileAdmissionReceipt(malformed.path, {
+      authority: fileAuthority(malformed.path, validBytes),
       afterOpenForTest: async () => writeFile(malformed.path, `${canonicalJson({ ...valid, receiptDigest: "2".repeat(64) })}\n`, "utf8"),
     }));
   } finally {
@@ -487,6 +520,88 @@ test("trusted admission rejects forged trust, malformed receipts, and standalone
   assert.deepEqual(fixture.trustAdmissionNegativeCases, selfTrustCases);
 });
 
+test("out-of-band path and digest authority rejects caller-minted admission receipts", async () => {
+  assert.deepEqual(fixture.authorityAnchorNegativeCases, [
+    "caller-created-canonical-receipt",
+    "copied-valid-receipt-untrusted-path",
+    "trusted-path-replacement",
+    "attacker-selected-admission-claims",
+    "missing-authority",
+    "wrong-expected-digest",
+    "request-effective-binding-mismatch",
+  ]);
+  const base = generateGenericStarterBundle().layers[0];
+  const legitimateRequest = request([base]);
+  const trusted = await admissionFixture(legitimateRequest, { skipRead: true });
+  const attackerDirectory = await realpath(await mkdtemp(join(tmpdir(), "workflow-profile-attacker-")));
+  try {
+    const trustedBytes = `${canonicalJson(trusted.document)}\n`;
+    const attackerPath = join(attackerDirectory, "self-minted.json");
+    const attackerReplacement = ownerFields("workspace:attacker", { escalationOwner: "owner:attacker" });
+    const attackerLayer = overlay("workspace_configuration", "profile-layer:attacker", {
+      ownerRebindOnly: attackerReplacement,
+    });
+    const attackerRequest = request([base, attackerLayer], {
+      ownerRebind: ownerRebind(attackerLayer, attackerReplacement, { ownerId: "owner:attacker" }),
+    });
+    const attackerBytes = `${canonicalJson(admissionReceipt(attackerRequest))}\n`;
+    await writeFile(attackerPath, attackerBytes, "utf8");
+
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_REQUIRED", () =>
+      readGenericProfileAdmissionReceipt(attackerPath));
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_REQUIRED", () => runCli([
+      "profile-authorize",
+      "--request", canonicalJson(attackerRequest),
+      "--receipt", attackerPath,
+      "--operation", "project.create",
+      "--workspace-id", "workspace:attacker",
+      "--project-id", "-",
+      "--command", "-",
+    ], { write: () => {} }));
+
+    const copiedPath = join(attackerDirectory, "copied-valid.json");
+    await writeFile(copiedPath, trustedBytes, "utf8");
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_PATH", () => readGenericProfileAdmissionReceipt(copiedPath, {
+      authority: trusted.authority,
+    }));
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_PATH", () => runCli([
+      "profile-resolve", "--request", canonicalJson(legitimateRequest), "--receipt", copiedPath,
+    ], { write: () => {}, profileAdmissionAuthority: trusted.authority }));
+
+    await writeFile(trusted.path, attackerBytes, "utf8");
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_DIGEST", () => readGenericProfileAdmissionReceipt(trusted.path, {
+      authority: trusted.authority,
+    }));
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_DIGEST", () => runCli([
+      "profile-authorize",
+      "--request", canonicalJson(attackerRequest),
+      "--receipt", trusted.path,
+      "--operation", "project.create",
+      "--workspace-id", "workspace:attacker",
+      "--project-id", "-",
+      "--command", "-",
+    ], { write: () => {}, profileAdmissionAuthority: trusted.authority }));
+
+    await writeFile(trusted.path, trustedBytes, "utf8");
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_DIGEST", () => readGenericProfileAdmissionReceipt(trusted.path, {
+      authority: { ...trusted.authority, expectedFileSha256: "0".repeat(64) },
+    }));
+    const admission = await readGenericProfileAdmissionReceipt(trusted.path, { authority: trusted.authority });
+    expectReason("PROFILE_ADMISSION_REQUEST_MISMATCH", () => resolveGenericProfile(attackerRequest, admission));
+    const wrongEffective = admissionReceipt(legitimateRequest, { effectiveDigest: "0".repeat(64) });
+    const wrongEffectiveBytes = `${canonicalJson(wrongEffective)}\n`;
+    await writeFile(trusted.path, wrongEffectiveBytes, "utf8");
+    const wrongEffectiveAdmission = await readGenericProfileAdmissionReceipt(trusted.path, {
+      authority: fileAuthority(trusted.path, wrongEffectiveBytes),
+    });
+    expectReason("PROFILE_ADMISSION_EFFECTIVE_MISMATCH", () =>
+      resolveGenericProfile(legitimateRequest, wrongEffectiveAdmission));
+  } finally {
+    await trusted.close();
+    await rm(attackerDirectory, { recursive: true, force: true });
+  }
+});
+
 test("all inherited profile negative vectors remain executable", async () => {
   const bundle = generateGenericStarterBundle();
   const base = bundle.layers[0];
@@ -498,7 +613,7 @@ test("all inherited profile negative vectors remain executable", async () => {
   const runResolve = async (resolutionRequest, reasonCode, options = {}) => withAdmission(
     options.admissionRequest ?? resolutionRequest,
     async (admission) => expectReason(reasonCode, () => resolveGenericProfile(resolutionRequest, admission)),
-    options.receiptOptions ?? {},
+    { skipClaimCalculation: true, ...(options.receiptOptions ?? {}) },
   );
   const sync = (reasonCode, operation) => async () => expectReason(reasonCode, operation);
   const restrictedOperations = base.fields.restrictOnly.allowedOperations.filter((entry) => entry !== "project.create");
@@ -528,7 +643,9 @@ test("all inherited profile negative vectors remain executable", async () => {
       const release = overlay("release_verified_framework_profile", "profile-layer:unadmitted-release", {
         displayOnly: display("Release"),
       });
-      return runResolve(request([base, release]), "PROFILE_RELEASE_UNADMITTED", { admissionRequest: baseRequest });
+      return runResolve(request([base, release]), "PROFILE_RELEASE_UNADMITTED", {
+        receiptOptions: { admittedLayers: [] },
+      });
     }],
     ["release-proof-missing", sync("PROFILE_SCHEMA_INVALID", () => validateGenericProfileLayer({
       ...overlay("release_verified_framework_profile", "profile-layer:missing-proof", { displayOnly: display("Release") }),
@@ -570,7 +687,7 @@ test("all inherited profile negative vectors remain executable", async () => {
     ["owner-rebind-missing", () => runResolve(request([base, workspace]), "PROFILE_OWNER_REBIND_REQUIRED")],
     ["owner-rebind-target-mismatch", () => runResolve(request([base, workspace], {
       ownerRebind: ownerRebind(workspace, workspaceReplacement, { targetLayerId: "profile-layer:other" }),
-    }), "PROFILE_OWNER_REBIND_UNADMITTED", { admissionRequest: request([base, workspace]) })],
+    }), "PROFILE_OWNER_REBIND_UNADMITTED", { receiptOptions: { admitOwnerRebind: false } })],
     ["owner-rebind-unbound", () => {
       const replacement = ownerFields(null, { mode: "unbound_read_only", workspaceId: null, escalationOwner: null });
       const layer = overlay("workspace_configuration", "profile-layer:unbound-rebind", { ownerRebindOnly: replacement });
@@ -688,16 +805,18 @@ test("64 actual insertion permutations produce identical admitted policy and dig
   const logical = fullPermutationLayers();
   const permutations = deterministicPermutations(logical.layers, fixture.propertyPermutations);
   assert.equal(permutations.length, 64);
-  const logicalRequest = request(logical.layers, logical);
-  const records = await withAdmission(logicalRequest, async (admission) => permutations.map((layers) => {
-      const effective = resolveGenericProfile(request(layers, logical), admission);
+  const records = await Promise.all(permutations.map(async (layers) => {
+    const permutationRequest = request(layers, logical);
+    return withAdmission(permutationRequest, async (admission) => {
+      const effective = resolveGenericProfile(permutationRequest, admission);
       assert.equal(effective.displayOnly.label, "Command Display");
       return {
         inputLayerIds: layers.map((layer) => layer.layerId),
         effectiveBytes: canonicalJson(effective),
         effectiveDigest: effective.effectiveDigest,
       };
-    }));
+    });
+  }));
   assert.equal(new Set(records.map((record) => record.effectiveBytes)).size, 1);
   assert.equal(new Set(records.map((record) => record.effectiveDigest)).size, 1);
   assert.equal(canonicalSha256(records), fixture.permutationCorpusDigest);
@@ -714,7 +833,7 @@ test("governed CLI generation, validation, resolution, and authorization fail cl
   const admitted = await admissionFixture(unboundRequest);
   try {
     await runCli(["profile-resolve", "--request", canonicalJson(unboundRequest), "--receipt", admitted.path],
-      { write: (value) => { output = value; } });
+      { write: (value) => { output = value; }, profileAdmissionAuthority: admitted.authority });
     const unbound = JSON.parse(output);
     assert.equal(unbound.resolution, "unbound_read_only");
     await expectReasonAsync("PROFILE_BINDING_REQUIRED", () => runCli([
@@ -725,7 +844,7 @@ test("governed CLI generation, validation, resolution, and authorization fail cl
       "--workspace-id", "-",
       "--project-id", "-",
       "--command", "-",
-    ], { write: () => {} }));
+    ], { write: () => {}, profileAdmissionAuthority: admitted.authority }));
     await expectReasonAsync("CLI_ARGUMENT_MISSING", () => runCli([
       "profile-resolve", "--request", canonicalJson(unboundRequest),
     ], { write: () => {} }));
@@ -747,36 +866,39 @@ test("governed CLI generation, validation, resolution, and authorization fail cl
   ));
   const selfLabeled = boundRequest();
   const baseOnly = request([generated.bundle.layers[0]]);
-  const baseAdmission = await admissionFixture(baseOnly);
+  const baseAdmission = await admissionFixture(selfLabeled, { admittedLayers: [] });
   try {
     await expectReasonAsync("PROFILE_LAYER_UNADMITTED", () => runCli([
       "profile-resolve", "--request", canonicalJson(selfLabeled), "--receipt", baseAdmission.path,
-    ], { write: () => {} }));
+    ], { write: () => {}, profileAdmissionAuthority: baseAdmission.authority }));
   } finally {
     await baseAdmission.close();
   }
   const filesystemAdmission = await admissionFixture(baseOnly, { skipRead: true });
   try {
-    await writeFile(filesystemAdmission.path, "{\n", "utf8");
+    const malformedBytes = "{\n";
+    await writeFile(filesystemAdmission.path, malformedBytes, "utf8");
     await expectReasonAsync("PROFILE_ADMISSION_MALFORMED", () => runCli([
       "profile-resolve", "--request", canonicalJson(baseOnly), "--receipt", filesystemAdmission.path,
-    ], { write: () => {} }));
+    ], { write: () => {}, profileAdmissionAuthority: fileAuthority(filesystemAdmission.path, malformedBytes) }));
     const mismatched = admissionReceipt(baseOnly, { receiptDigest: "0".repeat(64) });
-    await writeFile(filesystemAdmission.path, `${canonicalJson(mismatched)}\n`, "utf8");
+    const mismatchedBytes = `${canonicalJson(mismatched)}\n`;
+    await writeFile(filesystemAdmission.path, mismatchedBytes, "utf8");
     await expectReasonAsync("PROFILE_ADMISSION_MISMATCH", () => runCli([
       "profile-resolve", "--request", canonicalJson(baseOnly), "--receipt", filesystemAdmission.path,
-    ], { write: () => {} }));
-    await writeFile(filesystemAdmission.path, `${canonicalJson(admissionReceipt(baseOnly))}\n`, "utf8");
+    ], { write: () => {}, profileAdmissionAuthority: fileAuthority(filesystemAdmission.path, mismatchedBytes) }));
+    const validBytes = `${canonicalJson(admissionReceipt(baseOnly))}\n`;
+    await writeFile(filesystemAdmission.path, validBytes, "utf8");
     const hardlinkPath = join(filesystemAdmission.directory, "cli-hardlink.json");
     await link(filesystemAdmission.path, hardlinkPath);
     await expectReasonAsync("PROFILE_ADMISSION_LINK", () => runCli([
       "profile-resolve", "--request", canonicalJson(baseOnly), "--receipt", hardlinkPath,
-    ], { write: () => {} }));
+    ], { write: () => {}, profileAdmissionAuthority: fileAuthority(hardlinkPath, validBytes) }));
     await rm(hardlinkPath);
     await rm(filesystemAdmission.path);
     await expectReasonAsync("PROFILE_ADMISSION_CHANGED", () => runCli([
       "profile-resolve", "--request", canonicalJson(baseOnly), "--receipt", filesystemAdmission.path,
-    ], { write: () => {} }));
+    ], { write: () => {}, profileAdmissionAuthority: fileAuthority(filesystemAdmission.path, validBytes) }));
   } finally {
     await filesystemAdmission.close();
   }

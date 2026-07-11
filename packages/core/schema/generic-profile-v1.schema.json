@@ -738,6 +738,8 @@
         "ownerRebindAdmission",
         "governedActions",
         "resolutionDisposition",
+        "requestDigest",
+        "effectiveDigest",
         "receiptDigest"
       ],
       "properties": {
@@ -786,6 +788,12 @@
             "normal",
             "cold_standby"
           ]
+        },
+        "requestDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+        },
+        "effectiveDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
         },
         "receiptDigest": {
           "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
