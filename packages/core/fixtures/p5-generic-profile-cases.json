@@ -49,6 +49,21 @@
     "bundle-digest-tamper",
     "starter-flow-tamper"
   ],
+  "trustAdmissionNegativeCases": [
+    "forged-bound-framework-base",
+    "self-labeled-user-owned-overlay",
+    "self-approved-owner-rebind",
+    "self-supplied-release-digest",
+    "recomputed-forged-effective-object"
+  ],
+  "admissionFilesystemNegativeCases": [
+    "malformed",
+    "digest-mismatch",
+    "hardlink",
+    "symlink",
+    "replace-after-lstat",
+    "rewrite-after-open"
+  ],
   "cliCases": [
     "missing-argument",
     "duplicate-argument",

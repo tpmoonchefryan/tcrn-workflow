@@ -3,8 +3,9 @@
 Generic Profile V1 is an offline, inert-data policy layer for an empty standalone
 Workspace. It does not define a persona, agent, Skill, hook, model setting,
 thread identity, project fact, or external authority. The generated starter
-bundle is unbound and read-only until a caller supplies an explicit governed
-owner-rebind document.
+bundle is unbound and read-only until an independent admission boundary supplies
+a descriptor-bound canonical receipt for the requested layers, owner rebind,
+target binding, and governed action.
 
 ## Trust and precedence
 
@@ -20,12 +21,29 @@ Every layer has one frozen trust level:
 | `command_override` | `user_owned_overlay` | 5 |
 
 Input order never grants precedence. Resolution sorts by this table and then by
-the frozen UTF-8 comparator. Duplicate layer IDs or kinds fail closed. A release
-profile is admitted only when its exact canonical layer digest is supplied by an
-external release-verification boundary; this module neither fabricates nor
-performs that verification. Imported material has no identity, display, or
-rebinding authority and must contain exactly one restrict-only group that
-preserves or narrows the current restrictions.
+the frozen UTF-8 comparator. Duplicate layer IDs or kinds fail closed. The
+`framework_defaults` layer must be byte-identical to the generated base whose
+frozen digest is `86d0711f5a16811e44553786d52263325b35f61f3fa2ba518f858f1dd5a95397`;
+it must retain the unbound owner state. Request bytes cannot replace or bind it.
+A release profile is admitted only when its exact canonical layer digest and
+release-verification digest are present in the independent receipt. Imported
+material has no identity, display, or rebinding authority and must contain
+exactly one restrict-only group that preserves or narrows current restrictions.
+
+The request contains only untrusted layer and rebind bytes. Trust classification
+comes from a separate canonical `tcrn.generic-profile-admission-receipt.v1`
+file. The CLI opens that file with no-follow semantics, requires a regular
+single-link bounded file, binds the pre-open, descriptor, post-read, and named
+identity, and rejects noncanonical or changed bytes. The receipt binds the
+frozen base digest; every non-base layer digest, kind, and trust level; the
+release-verification digest; owner-rebind, target-layer, target-binding and
+owner digests; and the admitted governed actions. A structurally similar object
+supplied by the request is not an admitted context.
+
+The receipt also freezes `resolutionDisposition`. `normal` preserves the
+request-derived binding. `cold_standby` is accepted only with the exact frozen
+base, no overlays, and no owner rebind; it derives the inert cold-standby
+readback and every operation returns `PROFILE_COLD_STANDBY`.
 
 Environment variables and prompt text are not resolution inputs and cannot
 grant identity, binding, operation, path, tool, or escalation authority.
@@ -43,7 +61,8 @@ Removing or changing a mandatory refusal returns
 `PROFILE_REFUSAL_WEAKENING`. Other immutable changes return
 `PROFILE_FIELD_IMMUTABLE`. Restriction expansion returns
 `PROFILE_RESTRICTION_EXPANSION`. Missing or mismatched owner admission returns
-`PROFILE_OWNER_REBIND_REQUIRED` or `PROFILE_OWNER_REBIND_INVALID`.
+`PROFILE_OWNER_REBIND_REQUIRED`, `PROFILE_OWNER_REBIND_INVALID`, or
+`PROFILE_OWNER_REBIND_UNADMITTED`.
 
 ## Binding
 
@@ -68,6 +87,12 @@ arrays are duplicate-free and UTF-8-byte ordered. Resolution records the base,
 each layer, overlays, effective policy, and complete effective-profile digests.
 At least 64 actual insertion permutations of the same logical layer set must
 produce identical effective bytes and digests.
+
+Authorization re-resolves the untrusted request under the admitted receipt on
+every call and then checks that the action is receipt-admitted. An effective
+profile object is a deterministic readback, not an authorization capability;
+even a self-consistent object with recomputed policy/effective digests returns
+`PROFILE_EFFECTIVE_UNADMITTED` when presented as authority.
 
 ## Inert starter material
 

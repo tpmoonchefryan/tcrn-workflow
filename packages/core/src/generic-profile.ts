@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { constants } from "node:fs";
+import { lstat, open } from "node:fs/promises";
+
 import {
   ProtocolError,
   assertProtocolId,
@@ -12,6 +15,8 @@ export const GENERIC_PROFILE_VERSION = "tcrn.generic-profile.v1" as const;
 export const GENERIC_PROFILE_BUNDLE_VERSION = "tcrn.generic-profile-starter-bundle.v1" as const;
 export const GENERIC_PROFILE_EFFECTIVE_VERSION = "tcrn.generic-profile-effective.v1" as const;
 export const GENERIC_PROFILE_OWNER_REBIND_VERSION = "tcrn.generic-profile-owner-rebind.v1" as const;
+export const GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION = "tcrn.generic-profile-admission-receipt.v1" as const;
+export const GENERIC_PROFILE_BASE_DIGEST = "86d0711f5a16811e44553786d52263325b35f61f3fa2ba518f858f1dd5a95397" as const;
 
 export const GENERIC_PROFILE_OPERATIONS = Object.freeze([
   "profile.read",
@@ -25,6 +30,14 @@ export const GENERIC_PROFILE_OPERATIONS = Object.freeze([
 ] as const);
 
 export const GENERIC_PROFILE_REASON_CODES = Object.freeze([
+  "PROFILE_ACTION_UNADMITTED",
+  "PROFILE_ADMISSION_CANONICAL_INVALID",
+  "PROFILE_ADMISSION_CHANGED",
+  "PROFILE_ADMISSION_LINK",
+  "PROFILE_ADMISSION_MALFORMED",
+  "PROFILE_ADMISSION_MISMATCH",
+  "PROFILE_ADMISSION_REQUIRED",
+  "PROFILE_ADMISSION_SPECIAL_FILE",
   "PROFILE_BINDING_MISMATCH",
   "PROFILE_BINDING_REQUIRED",
   "PROFILE_BUNDLE_GENERATED",
@@ -34,22 +47,27 @@ export const GENERIC_PROFILE_REASON_CODES = Object.freeze([
   "PROFILE_DUPLICATE_LAYER",
   "PROFILE_DUPLICATE_VALUE",
   "PROFILE_EFFECTIVE_RESOLVED",
+  "PROFILE_EFFECTIVE_UNADMITTED",
   "PROFILE_FIELD_IMMUTABLE",
+  "PROFILE_FRAMEWORK_BASE_MISMATCH",
   "PROFILE_INERT_DATA_REQUIRED",
   "PROFILE_INPUT_INVALID",
   "PROFILE_OPERATION_AUTHORIZED",
   "PROFILE_OPERATION_DENIED",
   "PROFILE_OWNER_REBIND_INVALID",
   "PROFILE_OWNER_REBIND_REQUIRED",
+  "PROFILE_OWNER_REBIND_UNADMITTED",
   "PROFILE_PRECEDENCE_AMBIGUOUS",
   "PROFILE_REFUSAL_WEAKENING",
   "PROFILE_RELEASE_UNVERIFIED",
+  "PROFILE_RELEASE_UNADMITTED",
   "PROFILE_RESTRICTION_EXPANSION",
   "PROFILE_SCHEMA_INVALID",
   "PROFILE_TRUST_INVALID",
   "PROFILE_TYPE_CONFLICT",
   "PROFILE_UNKNOWN_FIELD",
   "PROFILE_VALIDATED",
+  "PROFILE_LAYER_UNADMITTED",
 ] as const);
 
 export type GenericProfileReasonCode = typeof GENERIC_PROFILE_REASON_CODES[number];
@@ -153,7 +171,41 @@ export interface GenericProfileResolutionRequest {
   readonly schemaVersion: "tcrn.generic-profile-resolution-request.v1";
   readonly layers: readonly GenericProfileLayer[];
   readonly ownerRebind: GenericProfileOwnerRebind | null;
-  readonly admittedReleaseProfileDigests: readonly string[];
+}
+
+export interface GenericProfileLayerAdmission {
+  readonly layerDigest: string;
+  readonly layerKind: Exclude<GenericProfileLayerKind, "framework_defaults">;
+  readonly trustLevel: GenericProfileTrustLevel;
+  readonly releaseVerificationDigest: string | null;
+}
+
+export interface GenericProfileOwnerRebindAdmission {
+  readonly ownerRebindDigest: string;
+  readonly targetLayerDigest: string;
+  readonly targetBindingDigest: string;
+  readonly ownerId: string;
+}
+
+export interface GenericProfileAdmissionReceipt {
+  readonly schemaVersion: typeof GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION;
+  readonly frameworkBaseDigest: typeof GENERIC_PROFILE_BASE_DIGEST;
+  readonly layerAdmissions: readonly GenericProfileLayerAdmission[];
+  readonly ownerRebindAdmission: GenericProfileOwnerRebindAdmission | null;
+  readonly governedActions: readonly GenericProfileOperation[];
+  readonly resolutionDisposition: "normal" | "cold_standby";
+  readonly receiptDigest: string;
+}
+
+export interface GenericProfileAdmissionContext {
+  readonly receipt: GenericProfileAdmissionReceipt;
+  readonly sourcePath: string;
+  readonly sourceIdentityDigest: string;
+}
+
+export interface GenericProfileAdmissionReadOptions {
+  readonly afterLstatForTest?: () => Promise<void>;
+  readonly afterOpenForTest?: () => Promise<void>;
 }
 
 export interface GenericProfileStarterBundle {
@@ -510,6 +562,211 @@ function validateOwnerRebind(value: unknown): GenericProfileOwnerRebind {
   };
 }
 
+const admittedContexts = new WeakSet<object>();
+const maximumAdmissionReceiptBytes = 65_536;
+
+function validateLayerAdmission(value: unknown, index: number): GenericProfileLayerAdmission {
+  const label = `profile admission layerAdmissions[${index}]`;
+  const document = asRecord(value, label);
+  exactFields(document, ["layerDigest", "layerKind", "trustLevel", "releaseVerificationDigest"],
+    ["layerDigest", "layerKind", "trustLevel", "releaseVerificationDigest"], label);
+  assertSha256(document.layerDigest, `${label}.layerDigest`);
+  const layerKinds = Object.keys(precedence).filter((kind) => kind !== "framework_defaults") as
+    Exclude<GenericProfileLayerKind, "framework_defaults">[];
+  if (typeof document.layerKind !== "string" ||
+    !layerKinds.includes(document.layerKind as Exclude<GenericProfileLayerKind, "framework_defaults">)) {
+    fail("PROFILE_ADMISSION_MALFORMED", `${label}.layerKind`);
+  }
+  const layerKind = document.layerKind as Exclude<GenericProfileLayerKind, "framework_defaults">;
+  if (document.trustLevel !== expectedTrust[layerKind]) fail("PROFILE_ADMISSION_MISMATCH", `${label}.trustLevel`);
+  if (layerKind === "release_verified_framework_profile") {
+    assertSha256(document.releaseVerificationDigest, `${label}.releaseVerificationDigest`);
+  } else if (document.releaseVerificationDigest !== null) {
+    fail("PROFILE_ADMISSION_MISMATCH", `${label}.releaseVerificationDigest`);
+  }
+  return {
+    layerDigest: document.layerDigest,
+    layerKind,
+    trustLevel: expectedTrust[layerKind],
+    releaseVerificationDigest: document.releaseVerificationDigest as string | null,
+  };
+}
+
+function validateOwnerRebindAdmission(value: unknown): GenericProfileOwnerRebindAdmission {
+  const document = asRecord(value, "profile admission ownerRebindAdmission");
+  exactFields(document, ["ownerRebindDigest", "targetLayerDigest", "targetBindingDigest", "ownerId"],
+    ["ownerRebindDigest", "targetLayerDigest", "targetBindingDigest", "ownerId"],
+    "profile admission ownerRebindAdmission");
+  assertSha256(document.ownerRebindDigest, "profile admission ownerRebindDigest");
+  assertSha256(document.targetLayerDigest, "profile admission targetLayerDigest");
+  assertSha256(document.targetBindingDigest, "profile admission targetBindingDigest");
+  assertStableId(document.ownerId, "profile admission ownerId");
+  return {
+    ownerRebindDigest: document.ownerRebindDigest,
+    targetLayerDigest: document.targetLayerDigest,
+    targetBindingDigest: document.targetBindingDigest,
+    ownerId: document.ownerId,
+  };
+}
+
+function validateGovernedActions(value: unknown): readonly GenericProfileOperation[] {
+  if (!Array.isArray(value) || value.length > GENERIC_PROFILE_OPERATIONS.length) {
+    fail("PROFILE_ADMISSION_MALFORMED", "profile admission governedActions");
+  }
+  const actions = value.map((entry, index) => operation(entry, `profile admission governedActions[${index}]`));
+  const sorted = [...actions].sort(compareCanonicalText);
+  if (new Set(actions).size !== actions.length || canonicalJson(actions) !== canonicalJson(sorted)) {
+    fail("PROFILE_ADMISSION_CANONICAL_INVALID", "profile admission governedActions");
+  }
+  return Object.freeze(sorted);
+}
+
+function validateAdmissionReceipt(value: unknown): GenericProfileAdmissionReceipt {
+  const document = asRecord(value, "profile admission receipt");
+  exactFields(
+    document,
+    ["schemaVersion", "frameworkBaseDigest", "layerAdmissions", "ownerRebindAdmission", "governedActions",
+      "resolutionDisposition", "receiptDigest"],
+    ["schemaVersion", "frameworkBaseDigest", "layerAdmissions", "ownerRebindAdmission", "governedActions",
+      "resolutionDisposition", "receiptDigest"],
+    "profile admission receipt",
+  );
+  if (document.schemaVersion !== GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION) {
+    fail("PROFILE_ADMISSION_MALFORMED", "profile admission schemaVersion");
+  }
+  if (document.frameworkBaseDigest !== GENERIC_PROFILE_BASE_DIGEST) {
+    fail("PROFILE_ADMISSION_MISMATCH", "profile admission frameworkBaseDigest");
+  }
+  if (!Array.isArray(document.layerAdmissions) || document.layerAdmissions.length > 5) {
+    fail("PROFILE_ADMISSION_MALFORMED", "profile admission layerAdmissions");
+  }
+  const layerAdmissions = document.layerAdmissions.map((entry, index) => validateLayerAdmission(entry, index));
+  if (new Set(layerAdmissions.map((entry) => entry.layerDigest)).size !== layerAdmissions.length ||
+    new Set(layerAdmissions.map((entry) => entry.layerKind)).size !== layerAdmissions.length) {
+    fail("PROFILE_ADMISSION_MISMATCH", "profile admission duplicate layer");
+  }
+  const sortedAdmissions = [...layerAdmissions].sort((left, right) => {
+    const kind = compareCanonicalText(left.layerKind, right.layerKind);
+    return kind === 0 ? compareCanonicalText(left.layerDigest, right.layerDigest) : kind;
+  });
+  if (canonicalJson(layerAdmissions) !== canonicalJson(sortedAdmissions)) {
+    fail("PROFILE_ADMISSION_CANONICAL_INVALID", "profile admission layer order");
+  }
+  const ownerRebindAdmission = document.ownerRebindAdmission === null
+    ? null
+    : validateOwnerRebindAdmission(document.ownerRebindAdmission);
+  const governedActions = validateGovernedActions(document.governedActions);
+  if (document.resolutionDisposition !== "normal" && document.resolutionDisposition !== "cold_standby") {
+    fail("PROFILE_ADMISSION_MALFORMED", "profile admission resolutionDisposition");
+  }
+  assertSha256(document.receiptDigest, "profile admission receiptDigest");
+  const basis = {
+    schemaVersion: GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
+    frameworkBaseDigest: GENERIC_PROFILE_BASE_DIGEST,
+    layerAdmissions: sortedAdmissions,
+    ownerRebindAdmission,
+    governedActions,
+    resolutionDisposition: document.resolutionDisposition,
+  };
+  if (canonicalSha256(basis) !== document.receiptDigest) {
+    fail("PROFILE_ADMISSION_MISMATCH", "profile admission receiptDigest");
+  }
+  return { ...basis, receiptDigest: document.receiptDigest };
+}
+
+function sameFileIdentity(left: Awaited<ReturnType<typeof lstat>>, right: Awaited<ReturnType<typeof lstat>>): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode && left.nlink === right.nlink &&
+    left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs;
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+    for (const child of Object.values(value as Readonly<Record<string, unknown>>)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+export async function readGenericProfileAdmissionReceipt(
+  path: string,
+  options: GenericProfileAdmissionReadOptions = {},
+): Promise<GenericProfileAdmissionContext> {
+  let before;
+  try {
+    before = await lstat(path);
+  } catch {
+    fail("PROFILE_ADMISSION_CHANGED", path);
+  }
+  if (before.isSymbolicLink() || before.nlink !== 1) fail("PROFILE_ADMISSION_LINK", path);
+  if (!before.isFile()) fail("PROFILE_ADMISSION_SPECIAL_FILE", path);
+  if (before.size < 2 || before.size > maximumAdmissionReceiptBytes) fail("PROFILE_ADMISSION_MALFORMED", path);
+  await options.afterLstatForTest?.();
+  let handle;
+  try {
+    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch (error) {
+    if ((error as { code?: string }).code === "ELOOP") fail("PROFILE_ADMISSION_LINK", path);
+    fail("PROFILE_ADMISSION_CHANGED", path);
+  }
+  let content: Buffer;
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.nlink !== 1 || !sameFileIdentity(before, opened)) {
+      fail("PROFILE_ADMISSION_CHANGED", path);
+    }
+    await options.afterOpenForTest?.();
+    content = await handle.readFile();
+    const afterRead = await handle.stat();
+    let named;
+    try {
+      named = await lstat(path);
+    } catch {
+      fail("PROFILE_ADMISSION_CHANGED", path);
+    }
+    if (!sameFileIdentity(opened, afterRead) || !sameFileIdentity(afterRead, named) || content.length !== afterRead.size) {
+      fail("PROFILE_ADMISSION_CHANGED", path);
+    }
+  } finally {
+    await handle.close();
+  }
+  const text = content.toString("utf8");
+  if (!Buffer.from(text, "utf8").equals(content)) fail("PROFILE_ADMISSION_MALFORMED", path);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    fail("PROFILE_ADMISSION_MALFORMED", path);
+  }
+  let canonical: string;
+  try {
+    canonical = `${canonicalJson(parsed)}\n`;
+  } catch {
+    fail("PROFILE_ADMISSION_CANONICAL_INVALID", path);
+  }
+  if (text !== canonical) fail("PROFILE_ADMISSION_CANONICAL_INVALID", path);
+  const receipt = deepFreeze(validateAdmissionReceipt(parsed));
+  const context = deepFreeze({
+    receipt,
+    sourcePath: path,
+    sourceIdentityDigest: canonicalSha256({
+      dev: String(before.dev),
+      ino: String(before.ino),
+      size: String(before.size),
+      mtimeMs: String(before.mtimeMs),
+      ctimeMs: String(before.ctimeMs),
+    }),
+  });
+  admittedContexts.add(context);
+  return context;
+}
+
+function admittedContext(value: unknown): GenericProfileAdmissionContext {
+  if (typeof value !== "object" || value === null || !admittedContexts.has(value)) {
+    fail("PROFILE_ADMISSION_REQUIRED", "An independently read admission receipt is required");
+  }
+  return value as GenericProfileAdmissionContext;
+}
+
 function starterBasis(): Omit<GenericProfileStarterBundle, "bundleDigest"> {
   const frameworkLayer = validateGenericProfileLayer({
     schemaVersion: GENERIC_PROFILE_VERSION,
@@ -571,6 +828,9 @@ function starterBasis(): Omit<GenericProfileStarterBundle, "bundleDigest"> {
       },
     },
   });
+  if (canonicalSha256(frameworkLayer) !== GENERIC_PROFILE_BASE_DIGEST) {
+    fail("PROFILE_FRAMEWORK_BASE_MISMATCH", "Generated framework defaults changed without a new admission anchor");
+  }
   return {
     schemaVersion: GENERIC_PROFILE_BUNDLE_VERSION,
     layers: [frameworkLayer],
@@ -628,23 +888,18 @@ function mergeRestrictOnly(
   return next;
 }
 
-export function resolveGenericProfile(value: unknown): EffectiveGenericProfile {
+export function resolveGenericProfile(
+  value: unknown,
+  admissionValue: unknown,
+): EffectiveGenericProfile {
+  const admission = admittedContext(admissionValue);
   const document = asRecord(value, "resolution request");
-  exactFields(document, ["schemaVersion", "layers", "ownerRebind", "admittedReleaseProfileDigests"],
-    ["schemaVersion", "layers", "ownerRebind", "admittedReleaseProfileDigests"], "resolution request");
+  exactFields(document, ["schemaVersion", "layers", "ownerRebind"],
+    ["schemaVersion", "layers", "ownerRebind"], "resolution request");
   if (document.schemaVersion !== "tcrn.generic-profile-resolution-request.v1" || !Array.isArray(document.layers) ||
     document.layers.length === 0 || document.layers.length > 6) {
     fail("PROFILE_INPUT_INVALID", "resolution request structure");
   }
-  const admittedReleaseProfileDigests = canonicalStringList(
-    document.admittedReleaseProfileDigests,
-    "resolution request admittedReleaseProfileDigests",
-    (entry, label) => {
-      assertSha256(entry, label);
-      return entry;
-    },
-    6,
-  );
   const ownerRebind = document.ownerRebind === null ? null : validateOwnerRebind(document.ownerRebind);
   const layers = document.layers.map((layer) => validateGenericProfileLayer(layer));
   const layerIds = layers.map((layer) => layer.layerId);
@@ -657,14 +912,51 @@ export function resolveGenericProfile(value: unknown): EffectiveGenericProfile {
   });
   const baseLayers = sorted.filter((layer) => layer.layerKind === "framework_defaults");
   if (baseLayers.length !== 1) fail("PROFILE_PRECEDENCE_AMBIGUOUS", "one framework_defaults layer is required");
-  for (const layer of sorted.filter((entry) => entry.layerKind === "release_verified_framework_profile")) {
-    if (!admittedReleaseProfileDigests.includes(canonicalSha256(layer))) {
-      fail("PROFILE_RELEASE_UNVERIFIED", layer.layerId);
-    }
-  }
   const base = baseLayers[0];
+  if (canonicalSha256(base) !== GENERIC_PROFILE_BASE_DIGEST ||
+    base.fields.ownerRebindOnly?.activeBinding.mode !== "unbound_read_only" ||
+    base.fields.ownerRebindOnly.roleReplacement !== null || base.fields.ownerRebindOnly.projectAuthority !== null ||
+    base.fields.ownerRebindOnly.escalationOwner !== null) {
+    fail("PROFILE_FRAMEWORK_BASE_MISMATCH", base.layerId);
+  }
   if (!base.fields.immutable || !base.fields.restrictOnly || !base.fields.ownerRebindOnly || !base.fields.displayOnly) {
     fail("PROFILE_SCHEMA_INVALID", "framework defaults merge matrix");
+  }
+  const nonBaseLayers = sorted.slice(1);
+  for (const layer of nonBaseLayers) {
+    const layerDigest = canonicalSha256(layer);
+    const layerAdmission = admission.receipt.layerAdmissions.find((entry) => entry.layerDigest === layerDigest);
+    if (!layerAdmission) {
+      fail(
+        layer.layerKind === "release_verified_framework_profile" ? "PROFILE_RELEASE_UNADMITTED" : "PROFILE_LAYER_UNADMITTED",
+        layer.layerId,
+      );
+    }
+    if (layerAdmission.layerKind !== layer.layerKind || layerAdmission.trustLevel !== layer.trustLevel ||
+      layerAdmission.releaseVerificationDigest !== layer.releaseVerificationDigest) {
+      fail("PROFILE_ADMISSION_MISMATCH", layer.layerId);
+    }
+  }
+  if (admission.receipt.layerAdmissions.length !== nonBaseLayers.length) {
+    fail("PROFILE_ADMISSION_MISMATCH", "Admission receipt contains unrequested layer evidence");
+  }
+  if (ownerRebind === null && admission.receipt.ownerRebindAdmission !== null) {
+    fail("PROFILE_ADMISSION_MISMATCH", "Unused owner-rebind admission");
+  }
+  if (ownerRebind !== null) {
+    const ownerAdmission = admission.receipt.ownerRebindAdmission;
+    const targetLayer = nonBaseLayers.find((layer) => layer.layerId === ownerRebind.targetLayerId);
+    if (!ownerAdmission || !targetLayer) fail("PROFILE_OWNER_REBIND_UNADMITTED", ownerRebind.targetLayerId);
+    if (ownerAdmission.ownerRebindDigest !== canonicalSha256(ownerRebind) ||
+      ownerAdmission.targetLayerDigest !== canonicalSha256(targetLayer) ||
+      ownerAdmission.targetBindingDigest !== canonicalSha256(ownerRebind.replacement.activeBinding) ||
+      ownerAdmission.ownerId !== ownerRebind.ownerId) {
+      fail("PROFILE_OWNER_REBIND_UNADMITTED", ownerRebind.targetLayerId);
+    }
+  }
+  if (admission.receipt.resolutionDisposition === "cold_standby" &&
+    (nonBaseLayers.length !== 0 || ownerRebind !== null)) {
+    fail("PROFILE_ADMISSION_MISMATCH", "Cold standby admission must retain the frozen unbound base");
   }
   let immutable = base.fields.immutable;
   let restrictOnly = base.fields.restrictOnly;
@@ -693,6 +985,17 @@ export function resolveGenericProfile(value: unknown): EffectiveGenericProfile {
       rebindApplied = true;
     }
     if (layer.fields.displayOnly) displayOnly = layer.fields.displayOnly;
+  }
+  if (admission.receipt.resolutionDisposition === "cold_standby") {
+    ownerRebindOnly = {
+      ...ownerRebindOnly,
+      activeBinding: {
+        mode: "cold_standby",
+        workspaceId: null,
+        projectId: null,
+        command: null,
+      },
+    };
   }
   if (ownerRebind !== null && !rebindApplied) fail("PROFILE_OWNER_REBIND_INVALID", ownerRebind.targetLayerId);
   const resolution = ownerRebindOnly.activeBinding.mode === "cold_standby"
@@ -810,12 +1113,21 @@ const readOnlyOperations: readonly GenericProfileOperation[] = Object.freeze([
 ]);
 
 export function authorizeGenericProfileOperation(
-  profileValue: unknown,
+  requestValue: unknown,
+  admissionValue: unknown,
   operationValue: unknown,
   contextValue: unknown,
 ): Readonly<Record<string, string>> {
-  const profile = validateEffectiveGenericProfile(profileValue);
+  const requestDocument = asRecord(requestValue, "authorization request");
+  if (requestDocument.schemaVersion === GENERIC_PROFILE_EFFECTIVE_VERSION) {
+    fail("PROFILE_EFFECTIVE_UNADMITTED", "Standalone effective profiles cannot authorize operations");
+  }
+  const admission = admittedContext(admissionValue);
+  const profile = resolveGenericProfile(requestValue, admission);
   const requestedOperation = operation(operationValue, "authorization operation");
+  if (!admission.receipt.governedActions.includes(requestedOperation)) {
+    fail("PROFILE_ACTION_UNADMITTED", requestedOperation);
+  }
   const contextDocument = asRecord(contextValue, "authorization context");
   exactFields(contextDocument, ["workspaceId", "projectId", "command"], ["workspaceId", "projectId", "command"], "authorization context");
   const context: GenericProfileAuthorizationContext = {
@@ -846,5 +1158,6 @@ export function authorizeGenericProfileOperation(
     operation: requestedOperation,
     effectiveDigest: profile.effectiveDigest,
     bindingMode: binding.mode,
+    admissionReceiptDigest: admission.receipt.receiptDigest,
   };
 }

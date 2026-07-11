@@ -475,6 +475,10 @@ async function verifyP5() {
   assertion(fixture.schemaVersion === "tcrn.p5-generic-profile-cases.v1", "P5_FIXTURE_SCHEMA");
   assertion(Array.isArray(fixture.operationCases) && fixture.operationCases.length === 8, "P5_OPERATION_CASES");
   assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 36, "P5_NEGATIVE_CASES");
+  assertion(Array.isArray(fixture.trustAdmissionNegativeCases) && fixture.trustAdmissionNegativeCases.length === 5,
+    "P5_TRUST_ADMISSION_NEGATIVES");
+  assertion(Array.isArray(fixture.admissionFilesystemNegativeCases) && fixture.admissionFilesystemNegativeCases.length === 6,
+    "P5_ADMISSION_FILESYSTEM_NEGATIVES");
   assertion(Array.isArray(fixture.cliCases) && fixture.cliCases.length === 6, "P5_CLI_CASES");
   assertion(fixture.propertyPermutations === 64 && fixture.permutationLayerCount === 6 &&
     /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P5_PROPERTY_PERMUTATIONS");
@@ -496,6 +500,8 @@ async function verifyP5() {
     mergeClasses: 4,
     operationCases: fixture.operationCases.length,
     negativeCases: fixture.negativeCases.length,
+    trustAdmissionNegativeCases: fixture.trustAdmissionNegativeCases.length,
+    admissionFilesystemNegativeCases: fixture.admissionFilesystemNegativeCases.length,
     cliCases: fixture.cliCases.length,
     propertyPermutations: fixture.propertyPermutations,
     permutationLayerCount: fixture.permutationLayerCount,

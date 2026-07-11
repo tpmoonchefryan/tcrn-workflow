@@ -21,6 +21,7 @@ import {
   initializeWorkspace,
   listKnowledgeMetadata,
   planWorkspaceMigration,
+  readGenericProfileAdmissionReceipt,
   readKnowledgeBody,
   readKnowledgeSnippet,
   recoverWorkspace,
@@ -195,16 +196,19 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "profile-resolve") {
-    const values = parseArguments(rest, ["request"]);
-    required(values, ["request"]);
-    io.write(canonicalJson(resolveGenericProfile(jsonValue(values.request, "request"))));
+    const values = parseArguments(rest, ["request", "receipt"]);
+    required(values, ["request", "receipt"]);
+    const admission = await readGenericProfileAdmissionReceipt(values.receipt ?? "");
+    io.write(canonicalJson(resolveGenericProfile(jsonValue(values.request, "request"), admission)));
     return;
   }
   if (command === "profile-authorize") {
-    const values = parseArguments(rest, ["request", "operation", "workspace-id", "project-id", "command"]);
-    required(values, ["request", "operation", "workspace-id", "project-id", "command"]);
+    const values = parseArguments(rest, ["request", "receipt", "operation", "workspace-id", "project-id", "command"]);
+    required(values, ["request", "receipt", "operation", "workspace-id", "project-id", "command"]);
+    const admission = await readGenericProfileAdmissionReceipt(values.receipt ?? "");
     io.write(canonicalJson(authorizeGenericProfileOperation(
-      resolveGenericProfile(jsonValue(values.request, "request")),
+      jsonValue(values.request, "request"),
+      admission,
       values.operation,
       {
         workspaceId: values["workspace-id"] === "-" ? null : values["workspace-id"],

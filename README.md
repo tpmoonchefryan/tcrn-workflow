@@ -78,10 +78,12 @@ unbounded reads or writes.
 `P4_KNOWLEDGE_CORE_VERIFIED` reason code. Neither command mutates the live graph
 or starts P6.
 
-`pnpm verify:p5` proves the closed generic profile trust/binding model, fixed
-configuration precedence, exact field merge matrix, owner-rebind boundary,
-canonical profile/effective-policy digests, read-only CLI generation and
-validation, 64 actual layer-order permutations, and a disposable empty
+`pnpm verify:p5` proves the closed generic profile trust/binding model, a frozen
+framework-base digest, descriptor-bound independent admission receipts,
+authorization-time request re-resolution, fixed configuration precedence,
+exact field merge matrix, owner-rebind boundary, canonical profile/effective-
+policy digests, read-only CLI generation and validation, 64 actual layer-order
+permutations, and a disposable empty
 Workspace cold-start through Initiative → Epic → Story → Subtask. Generated
 material is inert data and carries no external project/persona, model, hook,
 thread, network, database, AOS, or absolute-path authority. The live Workspace

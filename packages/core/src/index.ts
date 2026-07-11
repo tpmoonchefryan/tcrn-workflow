@@ -150,6 +150,8 @@ export type {
 } from "./knowledge-core.js";
 export {
   GENERIC_PROFILE_BUNDLE_VERSION,
+  GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
+  GENERIC_PROFILE_BASE_DIGEST,
   GENERIC_PROFILE_EFFECTIVE_VERSION,
   GENERIC_PROFILE_OPERATIONS,
   GENERIC_PROFILE_OWNER_REBIND_VERSION,
@@ -158,6 +160,7 @@ export {
   GenericProfileError,
   authorizeGenericProfileOperation,
   generateGenericStarterBundle,
+  readGenericProfileAdmissionReceipt,
   resolveGenericProfile,
   validateEffectiveGenericProfile,
   validateGenericProfileLayer,
@@ -165,6 +168,9 @@ export {
 } from "./generic-profile.js";
 export type {
   EffectiveGenericProfile,
+  GenericProfileAdmissionContext,
+  GenericProfileAdmissionReadOptions,
+  GenericProfileAdmissionReceipt,
   GenericProfileAuthorizationContext,
   GenericProfileBinding,
   GenericProfileBindingMode,
@@ -173,9 +179,11 @@ export type {
   GenericProfileIdentity,
   GenericProfileImmutableFields,
   GenericProfileLayer,
+  GenericProfileLayerAdmission,
   GenericProfileLayerKind,
   GenericProfileOperation,
   GenericProfileOwnerRebind,
+  GenericProfileOwnerRebindAdmission,
   GenericProfileOwnerRebindFields,
   GenericProfileReasonCode,
   GenericProfileResolutionRequest,
