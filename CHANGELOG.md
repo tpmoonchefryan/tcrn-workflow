@@ -44,3 +44,6 @@ Versioning after the first accepted release.
   binding, deterministic precedence, exact merge classes, owner-rebind gating,
   canonical digests, read-only CLI surfaces, 64 insertion permutations, and a
   disposable empty-Workspace planned-delivery cold-start proof.
+- Bind P5 trust admission to the frozen framework base and independent,
+  descriptor-validated receipts; authorization now re-resolves untrusted
+  request bytes and rejects standalone effective-profile capabilities.

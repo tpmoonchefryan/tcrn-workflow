@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -11,6 +11,8 @@ import Ajv2020 from "ajv/dist/2020.js";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
+  GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
+  GENERIC_PROFILE_BASE_DIGEST,
   GENERIC_PROFILE_OPERATIONS,
   acquireWorkspaceLease,
   authorizeGenericProfileOperation,
@@ -18,6 +20,7 @@ import {
   createWork,
   generateGenericStarterBundle,
   initializeWorkspace,
+  readGenericProfileAdmissionReceipt,
   resolveGenericProfile,
   transitionWork,
   validateEffectiveGenericProfile,
@@ -103,11 +106,10 @@ function request(layers, options = {}) {
     schemaVersion: "tcrn.generic-profile-resolution-request.v1",
     layers,
     ownerRebind: options.ownerRebind ?? null,
-    admittedReleaseProfileDigests: options.admittedReleaseProfileDigests ?? [],
   };
 }
 
-function boundProfile(workspaceId = "workspace:generic-fixture", options = {}) {
+function boundRequest(workspaceId = "workspace:generic-fixture", options = {}) {
   const bundle = generateGenericStarterBundle();
   const replacement = ownerFields(workspaceId, options);
   const workspace = overlay(
@@ -119,10 +121,65 @@ function boundProfile(workspaceId = "workspace:generic-fixture", options = {}) {
       displayOnly: display("Workspace Configuration"),
     },
   );
-  return resolveGenericProfile(request(
-    [workspace, ...bundle.layers],
-    { ownerRebind: ownerRebind(workspace, replacement) },
-  ));
+  return request([workspace, ...bundle.layers], { ownerRebind: ownerRebind(workspace, replacement) });
+}
+
+function admissionReceipt(resolutionRequest, options = {}) {
+  const admittedLayers = options.admittedLayers ?? resolutionRequest.layers.filter(
+    (layer) => layer.layerKind !== "framework_defaults",
+  );
+  const layerAdmissions = admittedLayers.map((layer) => ({
+    layerDigest: canonicalSha256(layer),
+    layerKind: layer.layerKind,
+    trustLevel: layer.trustLevel,
+    releaseVerificationDigest: layer.releaseVerificationDigest,
+  })).sort((left, right) => compareCanonicalText(left.layerKind, right.layerKind) ||
+    compareCanonicalText(left.layerDigest, right.layerDigest));
+  let ownerRebindAdmission = null;
+  if (resolutionRequest.ownerRebind !== null && options.admitOwnerRebind !== false) {
+    const target = resolutionRequest.layers.find(
+      (layer) => layer.layerId === resolutionRequest.ownerRebind.targetLayerId,
+    );
+    assert.ok(target);
+    ownerRebindAdmission = {
+      ownerRebindDigest: canonicalSha256(resolutionRequest.ownerRebind),
+      targetLayerDigest: canonicalSha256(target),
+      targetBindingDigest: canonicalSha256(resolutionRequest.ownerRebind.replacement.activeBinding),
+      ownerId: resolutionRequest.ownerRebind.ownerId,
+    };
+  }
+  const basis = {
+    schemaVersion: GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
+    frameworkBaseDigest: GENERIC_PROFILE_BASE_DIGEST,
+    layerAdmissions,
+    ownerRebindAdmission,
+    governedActions: options.governedActions ?? [...GENERIC_PROFILE_OPERATIONS],
+    resolutionDisposition: options.resolutionDisposition ?? "normal",
+  };
+  const mutated = options.mutateBasis ? options.mutateBasis(clone(basis)) : basis;
+  return { ...mutated, receiptDigest: options.receiptDigest ?? canonicalSha256(mutated) };
+}
+
+async function admissionFixture(resolutionRequest, options = {}) {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "workflow-profile-admission-")));
+  const path = join(directory, "admission.json");
+  const document = options.document ?? admissionReceipt(resolutionRequest, options);
+  await writeFile(path, `${canonicalJson(document)}\n`, { encoding: "utf8", mode: 0o600 });
+  const context = options.skipRead ? null : await readGenericProfileAdmissionReceipt(path, options.readOptions);
+  return { directory, path, document, context, close: () => rm(directory, { recursive: true, force: true }) };
+}
+
+async function withAdmission(resolutionRequest, operation, options = {}) {
+  const admitted = await admissionFixture(resolutionRequest, options);
+  try {
+    return await operation(admitted.context, admitted);
+  } finally {
+    await admitted.close();
+  }
+}
+
+async function resolveAdmitted(resolutionRequest, options = {}) {
+  return withAdmission(resolutionRequest, (context) => resolveGenericProfile(resolutionRequest, context), options);
 }
 
 function deterministicPermutations(values, maximum) {
@@ -172,11 +229,10 @@ function fullPermutationLayers() {
   return {
     layers: [base, release, imported, workspace, project, command],
     ownerRebind: ownerRebind(workspace, replacement),
-    admittedReleaseProfileDigests: [canonicalSha256(release)],
   };
 }
 
-test("starter bundle is closed, schema-valid, deterministic, and inert", () => {
+test("starter bundle is closed, schema-valid, deterministic, inert, and base-anchored", async () => {
   const bundle1 = generateGenericStarterBundle();
   const bundle2 = generateGenericStarterBundle();
   assert.equal(canonicalJson(bundle1), canonicalJson(bundle2));
@@ -186,7 +242,8 @@ test("starter bundle is closed, schema-valid, deterministic, and inert", () => {
     starterFlow: bundle1.starterFlow,
   }));
   assert.equal(bundle1.bundleDigest, fixture.starterBundleDigest);
-  assert.equal(canonicalSha256(bundle1.layers[0]), fixture.baseProfileDigest);
+  assert.equal(canonicalSha256(bundle1.layers[0]), GENERIC_PROFILE_BASE_DIGEST);
+  assert.equal(GENERIC_PROFILE_BASE_DIGEST, fixture.baseProfileDigest);
   assert.deepEqual(bundle1.starterFlow.map((step) => step.kind), ["Initiative", "Epic", "Story", "Subtask"]);
   const serialized = canonicalJson(bundle1);
   assert.equal(/persona|https?:\/\/|file:\/\/|\/Users\/|"(?:hooks?|models?|threadIds?)"\s*:/iu.test(serialized), false);
@@ -201,6 +258,7 @@ test("starter bundle is closed, schema-valid, deterministic, and inert", () => {
   const validateBundle = ajv.getSchema(schema.$id);
   const validateLayer = ajv.compile({ $ref: `${schema.$id}#/$defs/layer` });
   const validateRequest = ajv.compile({ $ref: `${schema.$id}#/$defs/resolutionRequest` });
+  const validateReceipt = ajv.compile({ $ref: `${schema.$id}#/$defs/admissionReceipt` });
   const validateEffective = ajv.compile({ $ref: `${schema.$id}#/$defs/effectiveProfile` });
   assert.equal(validateBundle(bundle1), true, JSON.stringify(validateBundle.errors));
   assert.deepEqual(validateGenericStarterBundle(bundle1), bundle1);
@@ -226,16 +284,20 @@ test("starter bundle is closed, schema-valid, deterministic, and inert", () => {
   expectReason("PROFILE_SCHEMA_INVALID", () => validateGenericProfileLayer(invalidBinding));
 
   const resolutionRequest = request(bundle1.layers);
-  const effective = resolveGenericProfile(resolutionRequest);
+  const receipt = admissionReceipt(resolutionRequest);
+  const effective = await resolveAdmitted(resolutionRequest);
   assert.equal(effective.effectiveDigest, fixture.unboundEffectiveDigest);
   assert.equal(validateRequest(resolutionRequest), true, JSON.stringify(validateRequest.errors));
+  assert.equal(validateReceipt(receipt), true, JSON.stringify(validateReceipt.errors));
   assert.equal(validateEffective(effective), true, JSON.stringify(validateEffective.errors));
   assert.deepEqual(validateEffectiveGenericProfile(effective), effective);
 });
 
-test("trust, precedence, binding, and field merge matrix are exact", () => {
+test("independently admitted trust, precedence, binding, and merge matrix are exact", async () => {
   const permutation = fullPermutationLayers();
-  const effective = resolveGenericProfile(request(permutation.layers, permutation));
+  const resolutionRequest = request(permutation.layers, permutation);
+  await withAdmission(resolutionRequest, async (admission) => {
+    const effective = resolveGenericProfile(resolutionRequest, admission);
   assert.equal(effective.resolution, "bound");
   assert.equal(effective.displayOnly.label, "Command Display");
   assert.equal(effective.ownerRebindOnly.activeBinding.workspaceId, "workspace:generic-fixture");
@@ -252,18 +314,20 @@ test("trust, precedence, binding, and field merge matrix are exact", () => {
     userOwnedOverlays: 3,
     importedUntrusted: 1,
   });
-  const boundVector = boundProfile();
+    assert.equal(authorizeGenericProfileOperation(resolutionRequest, admission, "project.create", {
+      workspaceId: "workspace:generic-fixture",
+      projectId: null,
+      command: null,
+    }).reasonCode, "PROFILE_OPERATION_AUTHORIZED");
+  });
+  const bound = boundRequest();
+  const boundVector = await resolveAdmitted(bound);
   assert.equal(boundVector.effectiveDigest, fixture.boundEffectiveDigest);
   assert.equal(boundVector.overlayDigest, fixture.boundOverlayDigest);
   assert.equal(boundVector.effectivePolicyDigest, fixture.boundEffectivePolicyDigest);
-  assert.equal(authorizeGenericProfileOperation(effective, "project.create", {
-    workspaceId: "workspace:generic-fixture",
-    projectId: null,
-    command: null,
-  }).reasonCode, "PROFILE_OPERATION_AUTHORIZED");
 });
 
-test("workspace, project, and owner-approved command bindings are exact", () => {
+test("workspace, project, and owner-approved command bindings are exact", async () => {
   const base = generateGenericStarterBundle().layers[0];
   for (const bindingCase of [
     {
@@ -311,16 +375,18 @@ test("workspace, project, and owner-approved command bindings are exact", () => 
       ownerRebindOnly: bindingCase.replacement,
       displayOnly: display(`Bound ${bindingCase.kind}`),
     });
-    const effective = resolveGenericProfile(request([layer, base], {
-      ownerRebind: ownerRebind(layer, bindingCase.replacement),
-    }));
-    assert.equal(authorizeGenericProfileOperation(effective, bindingCase.operation, bindingCase.context).reasonCode,
-      "PROFILE_OPERATION_AUTHORIZED");
-    assert.deepEqual(effective.ownerRebindOnly, bindingCase.replacement);
+    const resolutionRequest = request([layer, base], { ownerRebind: ownerRebind(layer, bindingCase.replacement) });
+    await withAdmission(resolutionRequest, async (admission) => {
+      const effective = resolveGenericProfile(resolutionRequest, admission);
+      assert.equal(authorizeGenericProfileOperation(
+        resolutionRequest, admission, bindingCase.operation, bindingCase.context,
+      ).reasonCode, "PROFILE_OPERATION_AUTHORIZED");
+      assert.deepEqual(effective.ownerRebindOnly, bindingCase.replacement);
+    });
   }
 });
 
-test("all declared profile negatives are executable with frozen reasons", () => {
+test("trusted admission rejects forged trust, malformed receipts, and standalone effective objects", async () => {
   const bundle = generateGenericStarterBundle();
   const base = bundle.layers[0];
   const baseRequest = request(bundle.layers);
@@ -328,190 +394,310 @@ test("all declared profile negatives are executable with frozen reasons", () => 
   const workspace = overlay("workspace_configuration", "profile-layer:workspace-configuration", {
     ownerRebindOnly: workspaceReplacement,
   });
-  const resolveBound = () => resolveGenericProfile(request(
-    [base, workspace],
-    { ownerRebind: ownerRebind(workspace, workspaceReplacement) },
-  ));
+  const bound = request([base, workspace], { ownerRebind: ownerRebind(workspace, workspaceReplacement) });
+
+  await withAdmission(baseRequest, async (admission) => {
+    const forgedBase = clone(base);
+    forgedBase.fields.ownerRebindOnly = workspaceReplacement;
+    expectReason("PROFILE_FRAMEWORK_BASE_MISMATCH", () => resolveGenericProfile(request([forgedBase]), admission));
+
+    expectReason("PROFILE_LAYER_UNADMITTED", () => resolveGenericProfile(bound, admission));
+  });
+  await withAdmission(bound, async (admission) => {
+    const effective = resolveGenericProfile(bound, admission);
+    const forgedEffective = clone(effective);
+    forgedEffective.ownerRebindOnly.activeBinding.workspaceId = "workspace:forged";
+    forgedEffective.effectivePolicyDigest = canonicalSha256({
+      immutable: forgedEffective.immutable,
+      restrictOnly: forgedEffective.restrictOnly,
+      ownerRebindOnly: forgedEffective.ownerRebindOnly,
+    });
+    forgedEffective.effectiveDigest = canonicalSha256({
+      schemaVersion: forgedEffective.schemaVersion,
+      resolution: forgedEffective.resolution,
+      immutable: forgedEffective.immutable,
+      restrictOnly: forgedEffective.restrictOnly,
+      ownerRebindOnly: forgedEffective.ownerRebindOnly,
+      displayOnly: forgedEffective.displayOnly,
+      sourceLayerIds: forgedEffective.sourceLayerIds,
+      trustSummary: forgedEffective.trustSummary,
+      overlayDigest: forgedEffective.overlayDigest,
+      effectivePolicyDigest: forgedEffective.effectivePolicyDigest,
+    });
+    expectReason("PROFILE_EFFECTIVE_UNADMITTED", () => authorizeGenericProfileOperation(
+      forgedEffective, admission, "project.create",
+      { workspaceId: "workspace:forged", projectId: null, command: null },
+    ));
+  });
+  await withAdmission(baseRequest, async (admission) => {
+    const cold = resolveGenericProfile(baseRequest, admission);
+    assert.equal(cold.resolution, "cold_standby");
+    expectReason("PROFILE_COLD_STANDBY", () => authorizeGenericProfileOperation(
+      baseRequest, admission, "profile.read", { workspaceId: null, projectId: null, command: null },
+    ));
+  }, { resolutionDisposition: "cold_standby" });
+
+  await withAdmission(bound, async (admission) => {
+    expectReason("PROFILE_OWNER_REBIND_UNADMITTED", () => resolveGenericProfile(bound, admission));
+  }, { admitOwnerRebind: false });
+
+  const release = overlay(
+    "release_verified_framework_profile", "profile-layer:self-release", { displayOnly: display("Self Release") },
+  );
+  const releaseRequest = request([base, release]);
+  await withAdmission(baseRequest, async (admission) => {
+    expectReason("PROFILE_RELEASE_UNADMITTED", () => resolveGenericProfile(releaseRequest, admission));
+  });
+
+  const malformed = await admissionFixture(baseRequest, { skipRead: true });
+  try {
+    await writeFile(malformed.path, "{\n", "utf8");
+    await expectReasonAsync("PROFILE_ADMISSION_MALFORMED", () => readGenericProfileAdmissionReceipt(malformed.path));
+    const mismatched = admissionReceipt(baseRequest, { receiptDigest: "0".repeat(64) });
+    await writeFile(malformed.path, `${canonicalJson(mismatched)}\n`, "utf8");
+    await expectReasonAsync("PROFILE_ADMISSION_MISMATCH", () => readGenericProfileAdmissionReceipt(malformed.path));
+    const valid = admissionReceipt(baseRequest);
+    await writeFile(malformed.path, `${canonicalJson(valid)}\n`, "utf8");
+    const hardlink = join(malformed.directory, "hardlink.json");
+    await link(malformed.path, hardlink);
+    await expectReasonAsync("PROFILE_ADMISSION_LINK", () => readGenericProfileAdmissionReceipt(hardlink));
+    await rm(hardlink);
+    const symlinkPath = join(malformed.directory, "symlink.json");
+    await symlink(malformed.path, symlinkPath);
+    await expectReasonAsync("PROFILE_ADMISSION_LINK", () => readGenericProfileAdmissionReceipt(symlinkPath));
+    await rm(symlinkPath);
+    await expectReasonAsync("PROFILE_ADMISSION_CHANGED", () => readGenericProfileAdmissionReceipt(malformed.path, {
+      afterLstatForTest: async () => writeFile(malformed.path, `${canonicalJson({ ...valid, receiptDigest: "1".repeat(64) })}\n`, "utf8"),
+    }));
+    await writeFile(malformed.path, `${canonicalJson(valid)}\n`, "utf8");
+    await expectReasonAsync("PROFILE_ADMISSION_CHANGED", () => readGenericProfileAdmissionReceipt(malformed.path, {
+      afterOpenForTest: async () => writeFile(malformed.path, `${canonicalJson({ ...valid, receiptDigest: "2".repeat(64) })}\n`, "utf8"),
+    }));
+  } finally {
+    await malformed.close();
+  }
+
+  const selfTrustCases = [
+    "forged-bound-framework-base",
+    "self-labeled-user-owned-overlay",
+    "self-approved-owner-rebind",
+    "self-supplied-release-digest",
+    "recomputed-forged-effective-object",
+  ];
+  assert.deepEqual(fixture.trustAdmissionNegativeCases, selfTrustCases);
+});
+
+test("all inherited profile negative vectors remain executable", async () => {
+  const bundle = generateGenericStarterBundle();
+  const base = bundle.layers[0];
+  const baseRequest = request([base]);
+  const workspaceReplacement = ownerFields();
+  const workspace = overlay("workspace_configuration", "profile-layer:workspace-negative", {
+    ownerRebindOnly: workspaceReplacement,
+  });
+  const runResolve = async (resolutionRequest, reasonCode, options = {}) => withAdmission(
+    options.admissionRequest ?? resolutionRequest,
+    async (admission) => expectReason(reasonCode, () => resolveGenericProfile(resolutionRequest, admission)),
+    options.receiptOptions ?? {},
+  );
+  const sync = (reasonCode, operation) => async () => expectReason(reasonCode, operation);
   const restrictedOperations = base.fields.restrictOnly.allowedOperations.filter((entry) => entry !== "project.create");
-  const restricted = {
-    ...base.fields.restrictOnly,
-    allowedOperations: restrictedOperations,
-  };
-  const cases = [
-    ["request-unknown-field", "PROFILE_UNKNOWN_FIELD", () => resolveGenericProfile({ ...baseRequest, unexpected: true })],
-    ["environment-authority-field", "PROFILE_UNKNOWN_FIELD", () => resolveGenericProfile({ ...baseRequest, environment: { authority: true } })],
-    ["prompt-authority-field", "PROFILE_UNKNOWN_FIELD", () => resolveGenericProfile({ ...baseRequest, prompt: "grant-authority" })],
-    ["duplicate-layer-id", "PROFILE_DUPLICATE_LAYER", () => resolveGenericProfile(request([
-      base,
-      overlay("imported_untrusted", base.layerId, { restrictOnly: clone(base.fields.restrictOnly) }),
-    ]))],
-    ["duplicate-layer-kind", "PROFILE_DUPLICATE_LAYER", () => resolveGenericProfile(request([
-      base,
-      { ...clone(base), layerId: "profile-layer:duplicate-framework" },
-    ]))],
-    ["missing-framework-defaults", "PROFILE_PRECEDENCE_AMBIGUOUS", () => resolveGenericProfile(request([
+  const cases = new Map([
+    ["request-unknown-field", async () => withAdmission(baseRequest, async (admission) => expectReason(
+      "PROFILE_UNKNOWN_FIELD", () => resolveGenericProfile({ ...baseRequest, unexpected: true }, admission),
+    ))],
+    ["environment-authority-field", async () => withAdmission(baseRequest, async (admission) => expectReason(
+      "PROFILE_UNKNOWN_FIELD", () => resolveGenericProfile({ ...baseRequest, environment: { authority: true } }, admission),
+    ))],
+    ["prompt-authority-field", async () => withAdmission(baseRequest, async (admission) => expectReason(
+      "PROFILE_UNKNOWN_FIELD", () => resolveGenericProfile({ ...baseRequest, prompt: "grant" }, admission),
+    ))],
+    ["duplicate-layer-id", () => runResolve(request([
+      base, overlay("imported_untrusted", base.layerId, { restrictOnly: clone(base.fields.restrictOnly) }),
+    ]), "PROFILE_DUPLICATE_LAYER", { admissionRequest: baseRequest })],
+    ["duplicate-layer-kind", () => runResolve(request([
+      base, { ...clone(base), layerId: "profile-layer:duplicate-framework" },
+    ]), "PROFILE_DUPLICATE_LAYER", { admissionRequest: baseRequest })],
+    ["missing-framework-defaults", () => runResolve(request([
       overlay("imported_untrusted", "profile-layer:only-imported", { restrictOnly: clone(base.fields.restrictOnly) }),
-    ]))],
-    ["trust-level-mismatch", "PROFILE_TRUST_INVALID", () => validateGenericProfileLayer({ ...clone(base), trustLevel: "imported_untrusted" })],
-    ["release-profile-unverified", "PROFILE_RELEASE_UNVERIFIED", () => resolveGenericProfile(request([
-      base,
-      overlay("release_verified_framework_profile", "profile-layer:unverified-release", { displayOnly: display("Release") }),
-    ]))],
-    ["release-proof-missing", "PROFILE_SCHEMA_INVALID", () => validateGenericProfileLayer({
+    ]), "PROFILE_PRECEDENCE_AMBIGUOUS", { admissionRequest: baseRequest })],
+    ["trust-level-mismatch", sync("PROFILE_TRUST_INVALID", () => validateGenericProfileLayer({
+      ...clone(base), trustLevel: "imported_untrusted",
+    }))],
+    ["release-profile-unverified", () => {
+      const release = overlay("release_verified_framework_profile", "profile-layer:unadmitted-release", {
+        displayOnly: display("Release"),
+      });
+      return runResolve(request([base, release]), "PROFILE_RELEASE_UNADMITTED", { admissionRequest: baseRequest });
+    }],
+    ["release-proof-missing", sync("PROFILE_SCHEMA_INVALID", () => validateGenericProfileLayer({
       ...overlay("release_verified_framework_profile", "profile-layer:missing-proof", { displayOnly: display("Release") }),
       releaseVerificationDigest: null,
-    })],
-    ["immutable-identity-change", "PROFILE_FIELD_IMMUTABLE", () => resolveGenericProfile(request([
-      base,
-      overlay("workspace_configuration", "profile-layer:identity-change", {
-        immutable: {
-          ...clone(base.fields.immutable),
-          identity: { ...clone(base.fields.immutable.identity), profileId: "profile:changed" },
+    }))],
+    ["immutable-identity-change", () => runResolve(request([base, overlay(
+      "workspace_configuration", "profile-layer:identity-change", { immutable: {
+        ...clone(base.fields.immutable),
+        identity: { ...clone(base.fields.immutable.identity), profileId: "profile:changed" },
+      } },
+    )]), "PROFILE_FIELD_IMMUTABLE")],
+    ["mandatory-refusal-weakening", () => runResolve(request([base, overlay(
+      "workspace_configuration", "profile-layer:refusal-change", { immutable: {
+        ...clone(base.fields.immutable), mandatoryRefusals: base.fields.immutable.mandatoryRefusals.slice(1),
+      } },
+    )]), "PROFILE_REFUSAL_WEAKENING")],
+    ["write-path-expansion", () => runResolve(request([base, overlay(
+      "workspace_configuration", "profile-layer:path-expansion", { restrictOnly: {
+        ...clone(base.fields.restrictOnly), writePaths: [".tcrn-workflow", "other"],
+      } },
+    )]), "PROFILE_RESTRICTION_EXPANSION")],
+    ["tool-expansion", () => runResolve(request([base, overlay(
+      "workspace_configuration", "profile-layer:tool-expansion", { restrictOnly: {
+        ...clone(base.fields.restrictOnly), tools: ["node-filesystem", "shell"],
+      } },
+    )]), "PROFILE_RESTRICTION_EXPANSION")],
+    ["operation-expansion", () => runResolve(request([base, overlay(
+      "workspace_configuration", "profile-layer:operation-expansion", { restrictOnly: {
+        ...clone(base.fields.restrictOnly), allowedOperations: [...base.fields.restrictOnly.allowedOperations, "unsafe.operation"],
+      } },
+    )]), "PROFILE_SCHEMA_INVALID")],
+    ["budget-expansion", () => runResolve(request([base, overlay(
+      "workspace_configuration", "profile-layer:budget-expansion", { restrictOnly: {
+        ...clone(base.fields.restrictOnly), budgets: {
+          ...clone(base.fields.restrictOnly.budgets), maximumWrites: base.fields.restrictOnly.budgets.maximumWrites + 1,
         },
-      }),
-    ]))],
-    ["mandatory-refusal-weakening", "PROFILE_REFUSAL_WEAKENING", () => resolveGenericProfile(request([
-      base,
-      overlay("workspace_configuration", "profile-layer:refusal-change", {
-        immutable: { ...clone(base.fields.immutable), mandatoryRefusals: base.fields.immutable.mandatoryRefusals.slice(1) },
-      }),
-    ]))],
-    ["write-path-expansion", "PROFILE_RESTRICTION_EXPANSION", () => resolveGenericProfile(request([
-      base,
-      overlay("workspace_configuration", "profile-layer:path-expansion", {
-        restrictOnly: { ...clone(base.fields.restrictOnly), writePaths: [".tcrn-workflow", "other"] },
-      }),
-    ]))],
-    ["tool-expansion", "PROFILE_RESTRICTION_EXPANSION", () => resolveGenericProfile(request([
-      base,
-      overlay("workspace_configuration", "profile-layer:tool-expansion", {
-        restrictOnly: { ...clone(base.fields.restrictOnly), tools: ["node-filesystem", "shell"] },
-      }),
-    ]))],
-    ["operation-expansion", "PROFILE_RESTRICTION_EXPANSION", () => {
-      const narrowBase = clone(base);
-      narrowBase.fields.restrictOnly.allowedOperations = restrictedOperations;
-      return resolveGenericProfile(request([
-        narrowBase,
-        overlay("workspace_configuration", "profile-layer:operation-expansion", { restrictOnly: clone(base.fields.restrictOnly) }),
-      ]));
-    }],
-    ["budget-expansion", "PROFILE_RESTRICTION_EXPANSION", () => resolveGenericProfile(request([
-      base,
-      overlay("workspace_configuration", "profile-layer:budget-expansion", {
-        restrictOnly: {
-          ...clone(base.fields.restrictOnly),
-          budgets: { ...clone(base.fields.restrictOnly.budgets), maximumWrites: base.fields.restrictOnly.budgets.maximumWrites + 1 },
-        },
-      }),
-    ]))],
-    ["owner-rebind-missing", "PROFILE_OWNER_REBIND_REQUIRED", () => resolveGenericProfile(request([base, workspace]))],
-    ["owner-rebind-target-mismatch", "PROFILE_OWNER_REBIND_REQUIRED", () => resolveGenericProfile(request(
-      [base, workspace],
-      { ownerRebind: ownerRebind(workspace, workspaceReplacement, { targetLayerId: "profile-layer:other" }) },
-    ))],
-    ["owner-rebind-unbound", "PROFILE_OWNER_REBIND_INVALID", () => {
+      } },
+    )]), "PROFILE_RESTRICTION_EXPANSION")],
+    ["owner-rebind-missing", () => runResolve(request([base, workspace]), "PROFILE_OWNER_REBIND_REQUIRED")],
+    ["owner-rebind-target-mismatch", () => runResolve(request([base, workspace], {
+      ownerRebind: ownerRebind(workspace, workspaceReplacement, { targetLayerId: "profile-layer:other" }),
+    }), "PROFILE_OWNER_REBIND_UNADMITTED", { admissionRequest: request([base, workspace]) })],
+    ["owner-rebind-unbound", () => {
       const replacement = ownerFields(null, { mode: "unbound_read_only", workspaceId: null, escalationOwner: null });
       const layer = overlay("workspace_configuration", "profile-layer:unbound-rebind", { ownerRebindOnly: replacement });
-      return resolveGenericProfile(request([base, layer], { ownerRebind: ownerRebind(layer, replacement) }));
+      return runResolve(request([base, layer], { ownerRebind: ownerRebind(layer, replacement) }),
+        "PROFILE_OWNER_REBIND_INVALID", { admissionRequest: baseRequest });
     }],
-    ["owner-rebind-escalation-missing", "PROFILE_OWNER_REBIND_INVALID", () => {
+    ["owner-rebind-escalation-missing", () => {
       const replacement = ownerFields("workspace:generic-fixture", { escalationOwner: null });
       const layer = overlay("workspace_configuration", "profile-layer:no-escalation", { ownerRebindOnly: replacement });
-      return resolveGenericProfile(request([base, layer], { ownerRebind: ownerRebind(layer, replacement) }));
+      return runResolve(request([base, layer], { ownerRebind: ownerRebind(layer, replacement) }),
+        "PROFILE_OWNER_REBIND_INVALID", { admissionRequest: baseRequest });
     }],
-    ["owner-rebind-unused", "PROFILE_OWNER_REBIND_INVALID", () => {
+    ["owner-rebind-unused", () => {
       const layer = overlay("workspace_configuration", "profile-layer:display-only", { displayOnly: display("Display") });
-      return resolveGenericProfile(request([base, layer], { ownerRebind: ownerRebind(layer, workspaceReplacement) }));
+      const resolutionRequest = request([base, layer], { ownerRebind: ownerRebind(layer, workspaceReplacement) });
+      return runResolve(resolutionRequest, "PROFILE_OWNER_REBIND_INVALID");
     }],
-    ["imported-owner-rebind", "PROFILE_TRUST_INVALID", () => {
+    ["imported-owner-rebind", () => {
       const layer = overlay("imported_untrusted", "profile-layer:imported-owner", { ownerRebindOnly: workspaceReplacement });
-      return resolveGenericProfile(request([base, layer], { ownerRebind: ownerRebind(layer, workspaceReplacement) }));
+      return runResolve(request([base, layer], { ownerRebind: ownerRebind(layer, workspaceReplacement) }),
+        "PROFILE_TRUST_INVALID", { admissionRequest: baseRequest });
     }],
-    ["imported-display-authority", "PROFILE_TRUST_INVALID", () => validateGenericProfileLayer(overlay(
-      "imported_untrusted", "profile-layer:imported-display", { displayOnly: display("Imported Display") },
+    ["imported-display-authority", sync("PROFILE_TRUST_INVALID", () => validateGenericProfileLayer(overlay(
+      "imported_untrusted", "profile-layer:imported-display", { displayOnly: display("Imported") },
+    )))],
+    ["unknown-layer-field", sync("PROFILE_UNKNOWN_FIELD", () => validateGenericProfileLayer({
+      ...clone(base), extraAuthority: true,
+    }))],
+    ["layer-type-conflict", sync("PROFILE_TYPE_CONFLICT", () => validateGenericProfileLayer(null))],
+    ["malformed-stable-id", sync("PROFILE_SCHEMA_INVALID", () => validateGenericProfileLayer({
+      ...clone(base), layerId: "bad id",
+    }))],
+    ["unsorted-canonical-array", sync("PROFILE_CANONICAL_INVALID", () => validateGenericProfileLayer({
+      ...clone(base), fields: { ...clone(base.fields), restrictOnly: {
+        ...clone(base.fields.restrictOnly), allowedOperations: [...base.fields.restrictOnly.allowedOperations].reverse(),
+      } },
+    }))],
+    ["duplicate-array-value", sync("PROFILE_DUPLICATE_VALUE", () => validateGenericProfileLayer({
+      ...clone(base), fields: { ...clone(base.fields), restrictOnly: {
+        ...clone(base.fields.restrictOnly), tools: ["node-filesystem", "node-filesystem"],
+      } },
+    }))],
+    ["url-in-display", sync("PROFILE_INERT_DATA_REQUIRED", () => validateGenericProfileLayer(overlay(
+      "imported_untrusted", "profile-layer:url-display", { displayOnly: {
+        ...display("URL"), description: "https://example.test",
+      } },
+    )))],
+    ["interpolation-in-display", sync("PROFILE_INERT_DATA_REQUIRED", () => validateGenericProfileLayer(overlay(
+      "imported_untrusted", "profile-layer:interpolation", { displayOnly: {
+        ...display("Interpolation"), description: "${unsafe}",
+      } },
+    )))],
+    ["absolute-write-path", sync("PROFILE_INERT_DATA_REQUIRED", () => validateGenericProfileLayer(overlay(
+      "workspace_configuration", "profile-layer:absolute-path", { restrictOnly: {
+        ...clone(base.fields.restrictOnly), writePaths: ["/tmp/authority"],
+      } },
+    )))],
+    ["cold-standby-operation", async () => withAdmission(baseRequest, async (admission) => expectReason(
+      "PROFILE_COLD_STANDBY", () => authorizeGenericProfileOperation(
+        baseRequest, admission, "profile.read", { workspaceId: null, projectId: null, command: null },
+      ),
+    ), { resolutionDisposition: "cold_standby" })],
+    ["unbound-mutation", async () => withAdmission(baseRequest, async (admission) => expectReason(
+      "PROFILE_BINDING_REQUIRED", () => authorizeGenericProfileOperation(
+        baseRequest, admission, "project.create", { workspaceId: null, projectId: null, command: null },
+      ),
     ))],
-    ["unknown-layer-field", "PROFILE_UNKNOWN_FIELD", () => validateGenericProfileLayer({ ...clone(base), extraAuthority: true })],
-    ["layer-type-conflict", "PROFILE_TYPE_CONFLICT", () => validateGenericProfileLayer(null)],
-    ["malformed-stable-id", "PROFILE_SCHEMA_INVALID", () => validateGenericProfileLayer({ ...clone(base), layerId: "bad id" })],
-    ["unsorted-canonical-array", "PROFILE_CANONICAL_INVALID", () => validateGenericProfileLayer({
-      ...clone(base),
-      fields: {
-        ...clone(base.fields),
-        restrictOnly: { ...clone(base.fields.restrictOnly), allowedOperations: [...base.fields.restrictOnly.allowedOperations].reverse() },
-      },
-    })],
-    ["duplicate-array-value", "PROFILE_DUPLICATE_VALUE", () => validateGenericProfileLayer({
-      ...clone(base),
-      fields: {
-        ...clone(base.fields),
-        restrictOnly: { ...clone(base.fields.restrictOnly), tools: ["node-filesystem", "node-filesystem"] },
-      },
-    })],
-    ["url-in-display", "PROFILE_INERT_DATA_REQUIRED", () => validateGenericProfileLayer(overlay(
-      "imported_untrusted", "profile-layer:url-display", { displayOnly: { ...display("URL"), description: "https://example.test" } },
-    ))],
-    ["interpolation-in-display", "PROFILE_INERT_DATA_REQUIRED", () => validateGenericProfileLayer(overlay(
-      "imported_untrusted", "profile-layer:interpolation", { displayOnly: { ...display("Interpolation"), description: "${unsafe}" } },
-    ))],
-    ["absolute-write-path", "PROFILE_INERT_DATA_REQUIRED", () => validateGenericProfileLayer(overlay(
-      "workspace_configuration", "profile-layer:absolute-path", {
-        restrictOnly: { ...clone(base.fields.restrictOnly), writePaths: ["/tmp/authority"] },
-      },
-    ))],
-    ["cold-standby-operation", "PROFILE_COLD_STANDBY", () => {
-      const coldBase = clone(base);
-      coldBase.fields.ownerRebindOnly.activeBinding.mode = "cold_standby";
-      const effective = resolveGenericProfile(request([coldBase]));
-      return authorizeGenericProfileOperation(effective, "profile.read", { workspaceId: null, projectId: null, command: null });
+    ["workspace-binding-mismatch", async () => {
+      const resolutionRequest = boundRequest();
+      return withAdmission(resolutionRequest, async (admission) => expectReason(
+        "PROFILE_BINDING_MISMATCH", () => authorizeGenericProfileOperation(
+          resolutionRequest, admission, "project.create", { workspaceId: "workspace:other", projectId: null, command: null },
+        ),
+      ));
     }],
-    ["unbound-mutation", "PROFILE_BINDING_REQUIRED", () => authorizeGenericProfileOperation(
-      resolveGenericProfile(baseRequest), "project.create", { workspaceId: null, projectId: null, command: null },
-    )],
-    ["workspace-binding-mismatch", "PROFILE_BINDING_MISMATCH", () => authorizeGenericProfileOperation(
-      resolveBound(), "project.create", { workspaceId: "workspace:other", projectId: null, command: null },
-    )],
-    ["operation-denied", "PROFILE_OPERATION_DENIED", () => authorizeGenericProfileOperation(
-      boundProfile("workspace:generic-fixture", { restrictOnly: { ...clone(base.fields.restrictOnly), allowedOperations: restrictedOperations } }),
-      "project.create",
-      { workspaceId: "workspace:generic-fixture", projectId: null, command: null },
-    )],
-    ["effective-digest-tamper", "PROFILE_CANONICAL_INVALID", () => {
-      const effective = resolveBound();
-      effective.displayOnly.label = "Tampered";
-      return authorizeGenericProfileOperation(effective, "profile.read", {
-        workspaceId: "workspace:generic-fixture", projectId: null, command: null,
+    ["operation-denied", async () => {
+      const resolutionRequest = boundRequest("workspace:generic-fixture", { restrictOnly: {
+        ...clone(base.fields.restrictOnly), allowedOperations: restrictedOperations,
+      } });
+      return withAdmission(resolutionRequest, async (admission) => expectReason(
+        "PROFILE_OPERATION_DENIED", () => authorizeGenericProfileOperation(
+          resolutionRequest, admission, "project.create",
+          { workspaceId: "workspace:generic-fixture", projectId: null, command: null },
+        ),
+      ));
+    }],
+    ["effective-digest-tamper", async () => {
+      const resolutionRequest = boundRequest();
+      return withAdmission(resolutionRequest, async (admission) => {
+        const effective = resolveGenericProfile(resolutionRequest, admission);
+        effective.displayOnly.label = "Tampered";
+        expectReason("PROFILE_EFFECTIVE_UNADMITTED", () => authorizeGenericProfileOperation(
+          effective, admission, "profile.read",
+          { workspaceId: "workspace:generic-fixture", projectId: null, command: null },
+        ));
       });
     }],
-    ["bundle-digest-tamper", "PROFILE_BUNDLE_INVALID", () => validateGenericStarterBundle({ ...clone(bundle), bundleDigest: "0".repeat(64) })],
-    ["starter-flow-tamper", "PROFILE_BUNDLE_INVALID", () => {
+    ["bundle-digest-tamper", sync("PROFILE_BUNDLE_INVALID", () => validateGenericStarterBundle({
+      ...clone(bundle), bundleDigest: "0".repeat(64),
+    }))],
+    ["starter-flow-tamper", async () => {
       const changed = clone(bundle);
       changed.starterFlow[3].parentKind = "Epic";
       changed.bundleDigest = canonicalSha256({
         schemaVersion: changed.schemaVersion, layers: changed.layers, starterFlow: changed.starterFlow,
       });
-      return validateGenericStarterBundle(changed);
+      expectReason("PROFILE_BUNDLE_INVALID", () => validateGenericStarterBundle(changed));
     }],
-  ];
-  assert.deepEqual(cases.map(([id]) => id), fixture.negativeCases);
-  for (const [id, reasonCode, operation] of cases) {
-    expectReason(reasonCode, operation, id);
-  }
+  ]);
+  assert.deepEqual([...cases.keys()], fixture.negativeCases);
+  for (const operation of cases.values()) await operation();
 });
 
-test("64 actual insertion permutations produce identical canonical policy and digest", () => {
+test("64 actual insertion permutations produce identical admitted policy and digest", async () => {
   const logical = fullPermutationLayers();
   const permutations = deterministicPermutations(logical.layers, fixture.propertyPermutations);
   assert.equal(permutations.length, 64);
-  const records = permutations.map((layers) => {
-    const effective = resolveGenericProfile(request(layers, logical));
-    assert.equal(effective.displayOnly.label, "Command Display");
-    return {
-      inputLayerIds: layers.map((layer) => layer.layerId),
-      effectiveBytes: canonicalJson(effective),
-      effectiveDigest: effective.effectiveDigest,
-    };
-  });
+  const logicalRequest = request(logical.layers, logical);
+  const records = await withAdmission(logicalRequest, async (admission) => permutations.map((layers) => {
+      const effective = resolveGenericProfile(request(layers, logical), admission);
+      assert.equal(effective.displayOnly.label, "Command Display");
+      return {
+        inputLayerIds: layers.map((layer) => layer.layerId),
+        effectiveBytes: canonicalJson(effective),
+        effectiveDigest: effective.effectiveDigest,
+      };
+    }));
   assert.equal(new Set(records.map((record) => record.effectiveBytes)).size, 1);
   assert.equal(new Set(records.map((record) => record.effectiveDigest)).size, 1);
   assert.equal(canonicalSha256(records), fixture.permutationCorpusDigest);
@@ -525,17 +711,30 @@ test("governed CLI generation, validation, resolution, and authorization fail cl
   await runCli(["profile-validate", "--bundle", canonicalJson(generated.bundle)], { write: (value) => { output = value; } });
   assert.equal(JSON.parse(output).reasonCode, "PROFILE_VALIDATED");
   const unboundRequest = request(generated.bundle.layers);
-  await runCli(["profile-resolve", "--request", canonicalJson(unboundRequest)], { write: (value) => { output = value; } });
-  const unbound = JSON.parse(output);
-  assert.equal(unbound.resolution, "unbound_read_only");
-  await expectReasonAsync("PROFILE_BINDING_REQUIRED", () => runCli([
-    "profile-authorize",
-    "--request", canonicalJson(unboundRequest),
-    "--operation", "project.create",
-    "--workspace-id", "-",
-    "--project-id", "-",
-    "--command", "-",
-  ], { write: () => {} }));
+  const admitted = await admissionFixture(unboundRequest);
+  try {
+    await runCli(["profile-resolve", "--request", canonicalJson(unboundRequest), "--receipt", admitted.path],
+      { write: (value) => { output = value; } });
+    const unbound = JSON.parse(output);
+    assert.equal(unbound.resolution, "unbound_read_only");
+    await expectReasonAsync("PROFILE_BINDING_REQUIRED", () => runCli([
+      "profile-authorize",
+      "--request", canonicalJson(unboundRequest),
+      "--receipt", admitted.path,
+      "--operation", "project.create",
+      "--workspace-id", "-",
+      "--project-id", "-",
+      "--command", "-",
+    ], { write: () => {} }));
+    await expectReasonAsync("CLI_ARGUMENT_MISSING", () => runCli([
+      "profile-resolve", "--request", canonicalJson(unboundRequest),
+    ], { write: () => {} }));
+    await expectReasonAsync("CLI_ARGUMENT_UNKNOWN", () => runCli([
+      "profile-resolve", "--request", canonicalJson(unboundRequest), "--receipt", admitted.path, "--trust", "self",
+    ], { write: () => {} }));
+  } finally {
+    await admitted.close();
+  }
   await expectReasonAsync("CLI_ARGUMENT_MISSING", () => runCli(["profile-generate"], { write: () => {} }));
   await expectReasonAsync("CLI_ARGUMENT_DUPLICATE", () => runCli(
     ["profile-generate", "--mode", "generic", "--mode", "generic"], { write: () => {} },
@@ -546,17 +745,41 @@ test("governed CLI generation, validation, resolution, and authorization fail cl
   await expectReasonAsync("PROFILE_INPUT_INVALID", () => runCli(
     ["profile-validate", "--bundle", "{"], { write: () => {} },
   ));
-  const invalidReplacement = ownerFields("workspace:generic-fixture", { escalationOwner: null });
-  const invalidLayer = overlay("workspace_configuration", "profile-layer:invalid-escalation", {
-    ownerRebindOnly: invalidReplacement,
-  });
-  await expectReasonAsync("PROFILE_OWNER_REBIND_INVALID", () => runCli([
-    "profile-resolve",
-    "--request",
-    canonicalJson(request([generated.bundle.layers[0], invalidLayer], {
-      ownerRebind: ownerRebind(invalidLayer, invalidReplacement),
-    })),
-  ], { write: () => {} }));
+  const selfLabeled = boundRequest();
+  const baseOnly = request([generated.bundle.layers[0]]);
+  const baseAdmission = await admissionFixture(baseOnly);
+  try {
+    await expectReasonAsync("PROFILE_LAYER_UNADMITTED", () => runCli([
+      "profile-resolve", "--request", canonicalJson(selfLabeled), "--receipt", baseAdmission.path,
+    ], { write: () => {} }));
+  } finally {
+    await baseAdmission.close();
+  }
+  const filesystemAdmission = await admissionFixture(baseOnly, { skipRead: true });
+  try {
+    await writeFile(filesystemAdmission.path, "{\n", "utf8");
+    await expectReasonAsync("PROFILE_ADMISSION_MALFORMED", () => runCli([
+      "profile-resolve", "--request", canonicalJson(baseOnly), "--receipt", filesystemAdmission.path,
+    ], { write: () => {} }));
+    const mismatched = admissionReceipt(baseOnly, { receiptDigest: "0".repeat(64) });
+    await writeFile(filesystemAdmission.path, `${canonicalJson(mismatched)}\n`, "utf8");
+    await expectReasonAsync("PROFILE_ADMISSION_MISMATCH", () => runCli([
+      "profile-resolve", "--request", canonicalJson(baseOnly), "--receipt", filesystemAdmission.path,
+    ], { write: () => {} }));
+    await writeFile(filesystemAdmission.path, `${canonicalJson(admissionReceipt(baseOnly))}\n`, "utf8");
+    const hardlinkPath = join(filesystemAdmission.directory, "cli-hardlink.json");
+    await link(filesystemAdmission.path, hardlinkPath);
+    await expectReasonAsync("PROFILE_ADMISSION_LINK", () => runCli([
+      "profile-resolve", "--request", canonicalJson(baseOnly), "--receipt", hardlinkPath,
+    ], { write: () => {} }));
+    await rm(hardlinkPath);
+    await rm(filesystemAdmission.path);
+    await expectReasonAsync("PROFILE_ADMISSION_CHANGED", () => runCli([
+      "profile-resolve", "--request", canonicalJson(baseOnly), "--receipt", filesystemAdmission.path,
+    ], { write: () => {} }));
+  } finally {
+    await filesystemAdmission.close();
+  }
 });
 
 test("empty non-project-specific Workspace cold-start completes the minimal planned-delivery flow", async () => {
@@ -570,9 +793,10 @@ test("empty non-project-specific Workspace cold-start completes the minimal plan
     }
     const externalKey = "GENERIC-EMPTY-WORKSPACE";
     const workspaceId = deriveStableId("workspace", canonicalExternalKey(externalKey));
-    const effective = boundProfile(workspaceId);
+    const resolutionRequest = boundRequest(workspaceId);
+    const admitted = await admissionFixture(resolutionRequest);
     const context = { workspaceId, projectId: null, command: null };
-    assert.equal(authorizeGenericProfileOperation(effective, "workspace.initialize", context).reasonCode,
+    assert.equal(authorizeGenericProfileOperation(resolutionRequest, admitted.context, "workspace.initialize", context).reasonCode,
       "PROFILE_OPERATION_AUTHORIZED");
     let state = await initializeWorkspace({
       roots,
@@ -583,7 +807,7 @@ test("empty non-project-specific Workspace cold-start completes the minimal plan
     const workspaceRoot = join(base, "workspace");
     const lease = await acquireWorkspaceLease(workspaceRoot, { now: "2026-07-11T19:00:01Z" });
     try {
-      authorizeGenericProfileOperation(effective, "project.create", context);
+      authorizeGenericProfileOperation(resolutionRequest, admitted.context, "project.create", context);
       state = await createProject(workspaceRoot, lease, {
         expectedVersion: 0,
         occurredAt: "2026-07-11T19:00:01Z",
@@ -599,7 +823,7 @@ test("empty non-project-specific Workspace cold-start completes the minimal plan
       ];
       for (let index = 0; index < records.length; index += 1) {
         const [key, kind, parentKey] = records[index];
-        authorizeGenericProfileOperation(effective, "work.create", context);
+        authorizeGenericProfileOperation(resolutionRequest, admitted.context, "work.create", context);
         const parentId = parentKey === null ? null : state.work.find((record) => record.externalKey === parentKey).id;
         state = await createWork(workspaceRoot, lease, {
           expectedVersion: state.version,
@@ -615,7 +839,7 @@ test("empty non-project-specific Workspace cold-start completes the minimal plan
       let second = 6;
       for (const key of completionOrder) {
         for (const status of ["ready", "active", "done"]) {
-          authorizeGenericProfileOperation(effective, "work.transition", context);
+          authorizeGenericProfileOperation(resolutionRequest, admitted.context, "work.transition", context);
           state = await transitionWork(workspaceRoot, lease, {
             expectedVersion: state.version,
             occurredAt: `2026-07-11T19:00:${String(second).padStart(2, "0")}Z`,
@@ -628,6 +852,7 @@ test("empty non-project-specific Workspace cold-start completes the minimal plan
     } finally {
       await lease.release();
     }
+    await admitted.close();
     const validated = await validateWorkspace(workspaceRoot);
     assert.equal(validated.version, fixture.coldStartEvents);
     assert.equal(validated.events.length, fixture.coldStartEvents);

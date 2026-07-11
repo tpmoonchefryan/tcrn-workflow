@@ -637,8 +637,7 @@
       "required": [
         "schemaVersion",
         "layers",
-        "ownerRebind",
-        "admittedReleaseProfileDigests"
+        "ownerRebind"
       ],
       "properties": {
         "schemaVersion": {
@@ -661,14 +660,135 @@
               "type": "null"
             }
           ]
+        }
+      }
+    },
+    "layerAdmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layerDigest",
+        "layerKind",
+        "trustLevel",
+        "releaseVerificationDigest"
+      ],
+      "properties": {
+        "layerDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
         },
-        "admittedReleaseProfileDigests": {
+        "layerKind": {
+          "enum": [
+            "release_verified_framework_profile",
+            "imported_untrusted",
+            "workspace_configuration",
+            "project_configuration",
+            "command_override"
+          ]
+        },
+        "trustLevel": {
+          "enum": [
+            "framework_profile",
+            "user_owned_overlay",
+            "imported_untrusted"
+          ]
+        },
+        "releaseVerificationDigest": {
+          "anyOf": [
+            {
+              "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "ownerRebindAdmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerRebindDigest",
+        "targetLayerDigest",
+        "targetBindingDigest",
+        "ownerId"
+      ],
+      "properties": {
+        "ownerRebindDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+        },
+        "targetLayerDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+        },
+        "targetBindingDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+        },
+        "ownerId": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+        }
+      }
+    },
+    "admissionReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "frameworkBaseDigest",
+        "layerAdmissions",
+        "ownerRebindAdmission",
+        "governedActions",
+        "resolutionDisposition",
+        "receiptDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.generic-profile-admission-receipt.v1"
+        },
+        "frameworkBaseDigest": {
+          "const": "86d0711f5a16811e44553786d52263325b35f61f3fa2ba518f858f1dd5a95397"
+        },
+        "layerAdmissions": {
           "type": "array",
-          "maxItems": 6,
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/layerAdmission"
+          }
+        },
+        "ownerRebindAdmission": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ownerRebindAdmission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "governedActions": {
+          "type": "array",
+          "maxItems": 8,
           "uniqueItems": true,
           "items": {
-            "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+            "enum": [
+              "profile.read",
+              "project.create",
+              "view.generate",
+              "work.create",
+              "work.transition",
+              "workspace.initialize",
+              "workspace.read",
+              "workspace.validate"
+            ]
           }
+        },
+        "resolutionDisposition": {
+          "enum": [
+            "normal",
+            "cold_standby"
+          ]
+        },
+        "receiptDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
         }
       }
     },
