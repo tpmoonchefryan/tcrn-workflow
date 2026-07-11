@@ -11,3 +11,6 @@ Versioning after the first accepted release.
 - Freeze the P2 Protocol V1 schemas, specifications, conformance fixtures,
   generic AOS requirements ledger, P3 marker contract, and unaccepted RC1
   candidate proof manifest.
+- Freeze runtime-independent UTF-8 byte ordering, exact nanosecond instant
+  comparisons, closed runtime/schema parity, and executable adversarial vectors
+  with offline Draft 2020-12 evaluation.

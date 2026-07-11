@@ -4,7 +4,10 @@ import { createHash } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 
+import Ajv2020 from "ajv/dist/2020.js";
+
 import { canonicalJson } from "./canonical-json.mjs";
+import { compareCanonicalText } from "./canonical-order.mjs";
 import { fileRecord, readJson, readSourceFile, repositoryRoot, toPosixPath, walkFiles } from "./files.mjs";
 
 export const p3MarkerPath = ".context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json";
@@ -79,7 +82,7 @@ export async function validateAosLedger() {
     ids.add(requirement.id);
     assertion(["specified", "fixture_verified"].includes(requirement.maturity), "AOS_MATURITY_OVERCLAIM", requirement.id);
     maturityCounts[requirement.maturity] += 1;
-    assertion(Object.keys(requirement).sort().join("\0") === ["id", "maturity", "subject"].sort().join("\0"), "AOS_REQUIREMENT_FIELDS", requirement.id);
+    assertion(Object.keys(requirement).sort(compareCanonicalText).join("\0") === ["id", "maturity", "subject"].sort(compareCanonicalText).join("\0"), "AOS_REQUIREMENT_FIELDS", requirement.id);
   }
   const forbiddenKeys = new Set(["endpoint", "credential", "database", "releasePairs", "runtimeMutation"]);
   assertion(!Object.keys(ledger).some((key) => forbiddenKeys.has(key)), "AOS_IMPLEMENTATION_ASSUMPTION", "Forbidden implementation field");
@@ -114,6 +117,8 @@ export async function validateP2SchemasAndFixtures() {
   const files = await walkFiles();
   const schemas = files.filter((path) => toPosixPath(relative(repositoryRoot, path)).startsWith("schemas/"));
   let p2Schemas = 0;
+  let resolvedLocalRefs = 0;
+  const p2Documents = [];
   for (const path of schemas) {
     const name = toPosixPath(relative(repositoryRoot, path));
     const document = await readJson(path);
@@ -123,13 +128,47 @@ export async function validateP2SchemasAndFixtures() {
     const content = (await readSourceFile(path)).toString("utf8");
     for (const match of content.matchAll(/"\$ref": "\.\/([^"#]+)(?:#[^"]*)?"/gu)) {
       assertion(schemas.some((candidate) => candidate.endsWith(`/${match[1]}`)), "P2_SCHEMA_REF_MISSING", `${name}:${match[1]}`);
+      resolvedLocalRefs += 1;
     }
     if (p2SchemaNames.has(name.slice("schemas/".length))) {
       assertion(Array.isArray(document["x-tcrn-aos-requirementIds"]), "AOS_REQUIREMENT_LINK_MISSING", name);
+      p2Documents.push(document);
       p2Schemas += 1;
     }
   }
   assertion(p2Schemas === p2SchemaNames.size, "P2_SCHEMA_SET_INCOMPLETE", `${p2Schemas}/${p2SchemaNames.size}`);
+
+  const ajv = new Ajv2020({ allErrors: true, strict: true, validateSchema: true });
+  ajv.addKeyword({ keyword: "x-tcrn-aos-requirementIds", schemaType: "array" });
+  let metaSchemasValidated = 0;
+  for (const document of p2Documents) {
+    assertion(ajv.validateSchema(document), "P2_SCHEMA_META_INVALID", `${document.$id}:${ajv.errorsText()}`);
+    ajv.addSchema(document);
+    metaSchemasValidated += 1;
+  }
+
+  const schemaCases = await readJson(resolve(repositoryRoot, "fixtures/protocol/v1/schema-cases.json"));
+  assertion(schemaCases.schemaVersion === "tcrn.schema-cases.v1" && schemaCases.simulationOnly === true &&
+    schemaCases.p3CapabilityClaimed === false && Array.isArray(schemaCases.cases), "P2_SCHEMA_CASES_INVALID", "Schema cases contract");
+  let schemaPositiveCases = 0;
+  let schemaNegativeCases = 0;
+  const seenSchemas = new Set();
+  for (const schemaCase of schemaCases.cases) {
+    assertion(p2SchemaNames.has(schemaCase.schema), "P2_SCHEMA_CASE_UNKNOWN", schemaCase.schema);
+    assertion(!seenSchemas.has(schemaCase.schema), "P2_SCHEMA_CASE_DUPLICATE", schemaCase.schema);
+    seenSchemas.add(schemaCase.schema);
+    const schema = p2Documents.find((entry) => entry.$id.endsWith(schemaCase.schema));
+    const validate = schema ? ajv.getSchema(schema.$id) : undefined;
+    assertion(typeof validate === "function", "P2_SCHEMA_COMPILE_FAILED", schemaCase.schema);
+    assertion(validate(schemaCase.valid), "P2_SCHEMA_POSITIVE_REJECTED", `${schemaCase.schema}:${ajv.errorsText(validate.errors)}`);
+    schemaPositiveCases += 1;
+    assertion(Array.isArray(schemaCase.invalid) && schemaCase.invalid.length >= 2, "P2_SCHEMA_NEGATIVE_MISSING", schemaCase.schema);
+    for (const invalid of schemaCase.invalid) {
+      assertion(!validate(invalid), "P2_SCHEMA_NEGATIVE_ADMITTED", schemaCase.schema);
+      schemaNegativeCases += 1;
+    }
+  }
+  assertion(seenSchemas.size === p2SchemaNames.size, "P2_SCHEMA_CASE_SET_INCOMPLETE", `${seenSchemas.size}/${p2SchemaNames.size}`);
 
   const fixtures = files.filter((path) => toPosixPath(relative(repositoryRoot, path)).startsWith("fixtures/protocol/") && path.endsWith(".json"));
   for (const path of fixtures) {
@@ -147,7 +186,16 @@ export async function validateP2SchemasAndFixtures() {
       throw error;
     }
   }
-  return { schemas: p2Schemas, fixtures: fixtures.length, p3Marker: "absent" };
+  return {
+    schemas: p2Schemas,
+    fixtures: fixtures.length,
+    metaSchemasValidated,
+    schemaPositiveCases,
+    schemaNegativeCases,
+    resolvedLocalRefs,
+    evaluator: "ajv@8.17.1-draft-2020-12",
+    p3Marker: "absent",
+  };
 }
 
 export async function normativeInputPaths() {
@@ -157,8 +205,8 @@ export async function normativeInputPaths() {
     .map((path) => toPosixPath(relative(repositoryRoot, path)))
     .filter((path) => path === "extensions/aos-requirements-v1.json" || path.startsWith("schemas/") || path.startsWith("specs/") ||
       (path.startsWith("fixtures/") && !path.startsWith("fixtures/rc1/")) || path === "verification-map.yaml")
-    .sort((left, right) => left.localeCompare(right, "en"));
-  const declared = [...policy.normativeInputs].sort((left, right) => left.localeCompare(right, "en"));
+    .sort(compareCanonicalText);
+  const declared = [...policy.normativeInputs].sort(compareCanonicalText);
   assertion(JSON.stringify(discovered) === JSON.stringify(declared), "RC1_INPUT_SET_MISMATCH", "Normative input policy is stale");
   return declared;
 }
@@ -166,7 +214,7 @@ export async function normativeInputPaths() {
 export async function calculateRc1InputRecords() {
   const paths = await normativeInputPaths();
   const records = await Promise.all(paths.map((path) => fileRecord(resolve(repositoryRoot, path))));
-  records.sort((left, right) => left.path.localeCompare(right.path, "en"));
+  records.sort((left, right) => compareCanonicalText(left.path, right.path));
   return records;
 }
 
@@ -185,7 +233,7 @@ export async function validateRc1Candidate() {
     "security-risk-reviewer",
     "reality-checker",
   ];
-  assertion(Object.keys(manifest.roleVerdictSlots).sort().join("\0") === requiredRoles.sort().join("\0"), "RC1_VERDICT_SLOTS", "Required role slots differ");
+  assertion(Object.keys(manifest.roleVerdictSlots).sort(compareCanonicalText).join("\0") === requiredRoles.sort(compareCanonicalText).join("\0"), "RC1_VERDICT_SLOTS", "Required role slots differ");
   for (const role of requiredRoles) {
     const slot = manifest.roleVerdictSlots[role];
     assertion(slot.status === "unresolved" && slot.verdict === null && slot.basisDigest === null, "RC1_VERDICT_FABRICATED", role);

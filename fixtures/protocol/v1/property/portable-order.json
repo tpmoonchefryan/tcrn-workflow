@@ -1,0 +1,127 @@
+{
+  "schemaVersion": "tcrn.order-fixture.v1",
+  "aosFacing": true,
+  "requirementIds": [
+    "AOS-REQ-001",
+    "AOS-REQ-002",
+    "AOS-REQ-007",
+    "AOS-REQ-009"
+  ],
+  "algorithm": "utf8-byte-order-v1",
+  "values": [
+    "é",
+    "é",
+    "!",
+    "A",
+    "a",
+    "ß",
+    "中",
+    "/",
+    "0",
+    "_"
+  ],
+  "expectedOrder": [
+    "!",
+    "/",
+    "0",
+    "A",
+    "_",
+    "a",
+    "é",
+    "ß",
+    "é",
+    "中"
+  ],
+  "objectEntries": [
+    [
+      "é",
+      1
+    ],
+    [
+      "é",
+      2
+    ],
+    [
+      "!",
+      3
+    ],
+    [
+      "A",
+      4
+    ],
+    [
+      "a",
+      5
+    ]
+  ],
+  "expectedCanonical": "{\"!\":3,\"A\":4,\"a\":5,\"é\":2,\"é\":1}\n",
+  "expectedSha256": "26d60f0946f56c2770a1265fc1d023a4a657eb031cdd5098b0882e37c1e451ba",
+  "paths": [
+    "é/item",
+    "é/item",
+    "a/item",
+    "A/item",
+    "!/item"
+  ],
+  "expectedPaths": [
+    "!/item",
+    "A/item",
+    "a/item",
+    "é/item",
+    "é/item"
+  ],
+  "ids": [
+    "work:z",
+    "work:a_",
+    "work:a-",
+    "work:a.",
+    "work:a"
+  ],
+  "expectedIds": [
+    "work:a",
+    "work:a-",
+    "work:a.",
+    "work:a_",
+    "work:z"
+  ],
+  "expectedWorkOrder": [
+    "work:a",
+    "work:a-",
+    "work:a.",
+    "work:a_",
+    "work:z"
+  ],
+  "eventTieIds": [
+    "event:a_",
+    "event:a-",
+    "event:a.",
+    "event:a"
+  ],
+  "expectedEventTieIds": [
+    "event:a",
+    "event:a-",
+    "event:a.",
+    "event:a_"
+  ],
+  "rc1Paths": [
+    "specs/é.md",
+    "specs/é.md",
+    "schemas/A.json",
+    "schemas/a.json"
+  ],
+  "expectedRc1Paths": [
+    "schemas/A.json",
+    "schemas/a.json",
+    "specs/é.md",
+    "specs/é.md"
+  ],
+  "expectedDigests": {
+    "values": "51e0a5abf198ebecc6967e7de31ccd7633a6065d1f5c13fdf1019fb20d94848f",
+    "paths": "1b61ba03d94b0b04acf02349afeec0167a7e18b83493c0c00eb086c40ea9cbde",
+    "ids": "a9512149417482b03d8725f9e8c7907e64da33638e14b6c999e4e019d69f2da2",
+    "workOrder": "a9512149417482b03d8725f9e8c7907e64da33638e14b6c999e4e019d69f2da2",
+    "eventTies": "24e270d9edbd2673cf7b68a62cbee731281934ef1bfc5e6e74075916e19a8985",
+    "rc1Records": "4ff49d206a42f1d72a5c5429b137cd3163983cb08423e0f92135cc0d6aba72f0"
+  },
+  "permutations": 128
+}

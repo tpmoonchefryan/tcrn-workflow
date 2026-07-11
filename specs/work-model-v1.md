@@ -12,6 +12,7 @@ tombstoned parents fail closed.
 
 Review, Incident, Release, and Knowledge are extension work shapes. They MAY
 reference a same-project record but are not inserted into or required by the
-planned-delivery hierarchy. Deterministic order is project ID, kind rank, then
-record ID. The permitted status transitions are frozen in the protocol module;
+planned-delivery hierarchy. Deterministic order is project ID in
+`utf8-byte-order-v1`, kind rank, then record ID in that same total order. The
+permitted status transitions are frozen in the protocol module;
 terminal states have no outgoing transitions.

@@ -16,6 +16,7 @@ import {
   toPosixPath,
   walkFiles,
 } from "./lib/files.mjs";
+import { compareCanonicalText } from "./lib/canonical-order.mjs";
 import { parseHistoricalTreePaths, scanPrivacyEntries } from "./lib/privacy.mjs";
 import {
   ProtocolProofError,
@@ -231,6 +232,8 @@ async function build() {
     const target = toPosixPath(relative(repositoryRoot, path)).replace(/\.ts$/u, ".js");
     await safeWriteOutput(repositoryRoot, `dist/build/${target}`, `${output.replace(/\n*$/u, "")}\n`);
   }
+  const canonicalOrder = await readSourceFile(resolve(repositoryRoot, "scripts/lib/canonical-order.mjs"));
+  await safeWriteOutput(repositoryRoot, "dist/build/scripts/lib/canonical-order.mjs", canonicalOrder);
   return success("BUILD_VERIFIED", {
     files: files.length,
     engine: checked.engine,
@@ -315,7 +318,7 @@ function tarEntry(name, content, mode) {
 async function archive() {
   await verifySource();
   const records = await sourceRecords();
-  records.sort((left, right) => left.path.localeCompare(right.path, "en"));
+  records.sort((left, right) => compareCanonicalText(left.path, right.path));
   const entries = [];
   for (const record of records) {
     const content = await readSourceFile(resolve(repositoryRoot, record.path));
@@ -339,14 +342,21 @@ async function sbom() {
   const lockContent = await readSourceFile(resolve(repositoryRoot, "pnpm-lock.yaml"));
   const packageContent = await readSourceFile(resolve(repositoryRoot, "package.json"));
   const basis = createHash("sha256").update(packageContent).update(lockContent).digest("hex");
-  const components = Object.entries(packageJson.devDependencies ?? {}).map(([name, version]) => {
-    const approved = policy.dependencies[`${name}@${version}`];
-    assertion(approved, "SBOM_DEPENDENCY_NOT_APPROVED", `${name}@${version}`);
+  const directDependencies = Object.entries(packageJson.devDependencies ?? {}).map(([name, version]) => `${name}@${version}`);
+  const approvedDirect = Object.entries(policy.dependencies).filter(([, entry]) => entry.direct).map(([identity]) => identity);
+  assertion(JSON.stringify(directDependencies.sort(compareCanonicalText)) === JSON.stringify(approvedDirect.sort(compareCanonicalText)),
+    "SBOM_DIRECT_DEPENDENCY_MISMATCH", directDependencies.join(","));
+  const components = Object.entries(policy.dependencies).sort(([left], [right]) => compareCanonicalText(left, right)).map(([identity, approved]) => {
+    const separator = identity.lastIndexOf("@");
+    const name = identity.slice(0, separator);
+    const version = identity.slice(separator + 1);
+    assertion(lockContent.includes(`  ${identity}:\n    resolution: {integrity: ${approved.integrity}}`),
+      "SBOM_LOCK_INTEGRITY_MISMATCH", identity);
     return {
       type: "library",
       name,
       version,
-      scope: "optional",
+      scope: approved.direct ? "optional" : "required",
       licenses: [{ license: { id: approved.license } }],
       purl: `pkg:npm/${encodeURIComponent(name)}@${version}`,
     };
@@ -584,7 +594,7 @@ async function verifyOfflineBoundary() {
 
 async function aggregateDigest(paths) {
   const records = await Promise.all(paths.map((path) => fileRecord(resolve(repositoryRoot, path))));
-  records.sort((left, right) => left.path.localeCompare(right.path, "en"));
+  records.sort((left, right) => compareCanonicalText(left.path, right.path));
   return createHash("sha256").update(JSON.stringify(records)).digest("hex");
 }
 
