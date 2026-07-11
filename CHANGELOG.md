@@ -24,3 +24,5 @@ Versioning after the first accepted release.
   dry-run migration planning, and filesystem fault proof without a P3 marker.
 - Close RC-P3 root-entry schema parity, exact event lifecycle and Workspace
   identity binding, and exclusive crash/race-safe lease recovery proof.
+- Serialize same-lease mutation admission with an identity-bound filesystem
+  claim so concurrent same-version writes cannot silently replace an event.
