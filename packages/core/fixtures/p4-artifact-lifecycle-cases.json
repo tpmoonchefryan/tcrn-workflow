@@ -53,6 +53,12 @@
     "source-post-read-size-mutation",
     "source-oversize",
     "entry-count-limit",
+    "transient-count-before-read",
+    "transient-stored-byte-limit",
+    "archive-generation-count-limit",
+    "archive-stored-byte-limit",
+    "archive-partial-generation-count-limit",
+    "archive-partial-entry-count-limit",
     "high-water-mismatch",
     "archive-overwrite",
     "restore-overwrite",
@@ -69,5 +75,8 @@
   "maximumEntries": 1024,
   "maximumSourceBytes": 1048576,
   "maximumStoredBytes": 16777216,
-  "maximumArchiveBytes": 33554432
+  "maximumArchiveBytes": 33554432,
+  "maximumArchiveGenerations": 16,
+  "maximumArchiveFilesPerGeneration": 1,
+  "maximumArchiveStoredBytes": 33554432
 }

@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "c57b31139f40cdaff5224c01e218807b7bad2dc5365628769e59cc27275125c5",
+      "fixtureDigest": "cdcc94319b89722680df0cc01f4a59094cf7daa89c64883438e912259dfa6357",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "b5703b367b91bdd8197080336ecf5e2fe9263475ebc4c519bbd1dafd1e1aa3eb",
+      "fixtureDigest": "749310ae15cfe478689515554006705b8d186746335046fee0421f3e80372b68",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -75,7 +75,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "0957b3f16ff4b8be3ed96488265c39245d67519fae402a7a864deaabcd833bc2",
+      "fixtureDigest": "6667086a730bd3f4877185e8e92a28e79a56c94bd23ab375daf72664da515d09",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -147,7 +147,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "aefdedccef719d3756f2e7d9562a725ca933ec2089666745bae747bb48f49ea5",
+      "fixtureDigest": "0e679875bf47a99696d22ddd099b6518cac61ec97fd19dcee12d847fd6f6354f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "8c82c07b681f89accd7c864452995e60ef16082475b15342063d5f3a7db72bba",
+      "fixtureDigest": "783c6706331fe2566d18ece88e0521986b78cef8066750cae7e37822e5d90c48",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -208,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "b757171f029c0e9410405cf1fe5fac166d5afd7cdaf85f7514347ebf5402cf7d",
+      "fixtureDigest": "a609fbaad4aea36de3e8905892325f97d2f4f3690af5e3999bb0a1b820a76399",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -233,7 +233,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "8438fb8cd608e3ccbe779e7f7eb56c8b9ed794c5bdaf7b91b81b48a4c90fb8b6",
+      "fixtureDigest": "1dc4c23050fc808d565654c3c5fdff9235cf4105cddb45ce04892c75c2f02187",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -260,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "d5a8e4735e1b5838a40281cf2f59d2320f0a2dfb122d481e6f06c10a84f8099d",
+      "fixtureDigest": "c0903e53611c7cfa8efaaee1a43e3e2f51b224e13fbc0153d0bb9acf00093f0a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -455,7 +455,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "540c217b8ba400940d3472dd18588e59141e55aea37c94a1d05ea6a4b11f4490",
+      "fixtureDigest": "bb5818956189a52c774153159b2be0b1585c8aacc657ce37b2ce690ef07044c7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -472,7 +472,7 @@
       "id": "P3-EVENT-INTEGRITY-RECOVERY",
       "phase": "P3",
       "status": "implemented",
-      "subject": "Exact event operations and lifecycle transitions are bound to Workspace-derived stream/event identities; single-writer leases, lease-bound exclusive mutation and recovery claims, in-boundary CAS, atomic segments, rotation, crash recovery, and deterministic views fail closed under adversarial replay and same-lease contention.",
+      "subject": "Exact event operations and lifecycle transitions are bound to Workspace-derived identities; single-writer recovery identity-quarantines both stale-owner and ownerless generations, binds delayed creators to their captured generation, and preserves lease-bound mutation CAS, atomic segments, crash recovery, and deterministic views under adversarial contention.",
       "command": "pnpm verify:p3",
       "fixturePaths": [
         "packages/core/src/workspace.ts",
@@ -480,7 +480,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "989ec12c0d768bc46b0581885cb0f05a1df2a30ab39a8ff54f27e2a602e9a87b",
+      "fixtureDigest": "320bbd608aa1147c1a281fcac3029dff9f5dc1996219d774c93afd9dbf7c721f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -490,7 +490,7 @@
       "expectedReasonCode": "P3_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
-        "Operation admission, lifecycle, Workspace event identity, lease mutation/recovery claim, CAS, atomic write, segment, view, corruption, or filesystem boundary changes"
+        "Operation admission, lifecycle, Workspace event identity, stale or ownerless lease generation quarantine, delayed creator identity, mutation/recovery claim, CAS, atomic write, segment, view, corruption, or filesystem boundary changes"
       ]
     },
     {
@@ -512,7 +512,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "b0ee2af6b52ba7cfac2a7edf79a895e4803f335256bc930aed0d51ce335a8ba0",
+      "fixtureDigest": "06f08d787c71e4d877b7bd8bd002bd07a7e840a83b8d9f549437650cf6241dcb",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -529,7 +529,7 @@
       "id": "P4-ARTIFACT-LIFECYCLE-REPORTING",
       "phase": "P4",
       "status": "implemented",
-      "subject": "P4 freezes closed artifact/receipt/cache lifecycle classes, ASCII-space-normalized all-hierarchical-URL userinfo redaction, descriptor-bound source size/change admission, deterministic size and doctor budgets, and mutation-free compact/archive projections while retaining terminal, decision, gate, acceptance, evidence-reference, and event high-water authority.",
+      "subject": "P4 freezes closed artifact/receipt/cache classes, descriptor-bound sources, pre-read transient count admission, incremental logical/stored byte limits, bounded archive-generation storage surfaced through deterministic size/doctor reports, and mutation-free compact/archive projections while retaining protected records and event high-water authority.",
       "command": "pnpm verify:p4",
       "fixturePaths": [
         "package.json",
@@ -542,7 +542,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "4214d5ea23ba2a7f5fbc6bfb89835841bc99a5048b4cf1493ca15ac90777b849",
+      "fixtureDigest": "d7c831261c6226a102366459c6a081ecd760e453d4981a2f6bd56fe2952e28dd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -552,14 +552,14 @@
       "expectedReasonCode": "P4_ARTIFACT_LIFECYCLE_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4.json",
       "invalidationTriggers": [
-        "Artifact kind/classification, record schema, redaction, doctor budget, size accounting, compact/archive projection, transient exclusion, or high-water preservation changes"
+        "Artifact kind/classification, record schema, redaction, doctor budget, incremental size accounting, transient pre-read count, archive generation storage, compact/archive projection, transient exclusion, or high-water preservation changes"
       ]
     },
     {
       "id": "P4-DISPOSABLE-ARCHIVE-RESTORE",
       "phase": "P4",
       "status": "implemented",
-      "subject": "Archive apply and exact restore are admitted only for explicit synthetic disposable Workspaces and enforce no-follow single-link identity plus size/change snapshots, ASCII-space-normalized hierarchical-URL credential exclusion, no overwrite, canonical bundle, high-water, crash/partial, limit, path, and legacy-read-absence boundaries without live Workspace apply.",
+      "subject": "Archive apply and exact restore are admitted only for synthetic disposable Workspaces and enforce no-follow identity, bounded complete/partial generation count and aggregate bytes, incremental decoded bytes, credential exclusion, no overwrite, canonical bundle, high-water, crash/partial, path, and legacy-read boundaries without live Workspace apply.",
       "command": "pnpm verify:p4",
       "fixturePaths": [
         "packages/core/src/artifact-lifecycle.ts",
@@ -569,7 +569,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "04c36ddc73024f9eab4f7c9c356bd177fd28545e9eb6bbdd17ba9bad80eeab84",
+      "fixtureDigest": "e15cd0790d2460441973af900ca03d92ae5f568fa03bde128449bf700039f287",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -586,7 +586,7 @@
       "id": "P4-FILE-NATIVE-KNOWLEDGE-CORE",
       "phase": "P4",
       "status": "implemented",
-      "subject": "P4 provides a disposable-only file-native Knowledge Core whose metadata surfaces never open body files, whose explicit-current-source records require accountable source/evidence provenance, and whose default checkpoints, strict instants, UTF-8 byte budgets, and 64 real-store insertion orders are executable and deterministic without live-store, database, AOS, or network access.",
+      "subject": "P4 provides a disposable-only file-native Knowledge Core whose metadata surfaces never open body files, whose promotion state is validated before identity-bound claim admission and cleaned on ordinary errors, and whose accountable provenance, default checkpoints, strict instants, UTF-8 byte budgets, and 64 real-store insertion orders are deterministic without live-store, database, AOS, or network access.",
       "command": "pnpm verify:p4:knowledge",
       "fixturePaths": [
         "package.json",
@@ -604,7 +604,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "0042dbcefb92b8f08635bb048d554b8cbc23d65a5cbb213a0e97479a0b928444",
+      "fixtureDigest": "92a89b25ef32a548ca1247d5881e0e8ec7638a7ef3686f2662073e7380d34d71",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -614,7 +614,7 @@
       "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
-        "Knowledge metadata/schema, P2 binding, body-open separation, accountable provenance, strict instant, selection/default/checkpoint policy, UTF-8 byte budget, real insertion corpus, locator redaction, limit, filesystem identity, fault, CLI, standalone, or live-store boundary changes"
+        "Knowledge metadata/schema, P2 binding, body-open separation, promotion pre-claim admission or cleanup, accountable provenance, strict instant, selection/default/checkpoint policy, UTF-8 byte budget, real insertion corpus, locator redaction, limit, filesystem identity, fault, CLI, standalone, or live-store boundary changes"
       ]
     },
     {
@@ -637,7 +637,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "f935ddb0dbd3d03b51329bb2e88a1319652d1ea14017fe2785188ce28d3c73d3",
+      "fixtureDigest": "ad57d34f626172fabd011e6d4f1b614f29fb05eefd1e170e15e3d1373c338cd2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

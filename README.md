@@ -59,7 +59,8 @@ and the unaccepted RC1 candidate manifest. A green
 remain unresolved in the regenerated candidate proof. The accepted RC1 parent
 is recorded externally. `pnpm verify:p3` exercises the standalone file-native
 Workspace, leases/CAS, event recovery, migrations, deterministic views, and
-filesystem attack matrix. P3 acceptance and capability activation remain
+filesystem attack matrix, including identity-bound quarantine of ownerless
+stale lease generations. P3 acceptance and capability activation remain
 external control-plane facts. `pnpm verify:p4` checks artifact classification,
 doctor/size budgets, deterministic compact/archive projections, redaction,
 disposable-only archive apply/restore, and filesystem attack/fault vectors. It
@@ -68,7 +69,9 @@ explicit body reads, metadata-only surfaces that never open body files,
 accountable source/evidence provenance, strict UTF-8 byte budgets, freshness,
 promotion CAS, and 64 real-store insertion permutations with exact index/list/
 checkpoint parity, plus disposable-only initialization and filesystem/privacy
-faults.
+faults. Promotion enum admission occurs before claim creation, and artifact
+transient/archive generation counts and cumulative storage are bounded before
+unbounded reads or writes.
 `pnpm verify:p4:knowledge` exposes the narrower
 `P4_KNOWLEDGE_CORE_VERIFIED` reason code. Neither command marks the graph work
 done or starts RC2/P5/P6.

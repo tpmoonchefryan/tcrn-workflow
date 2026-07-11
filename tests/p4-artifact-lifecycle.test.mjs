@@ -22,6 +22,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
+  ARTIFACT_LIMITS,
   ARTIFACT_REASON_CODES,
   ArtifactLifecycleError,
   acquireWorkspaceLease,
@@ -198,6 +199,8 @@ test("closed schema, size report, doctor budgets, and compact projection preserv
   try {
     const schema = JSON.parse(await readFile(new URL("../packages/core/schema/artifact-lifecycle-v1.schema.json", import.meta.url), "utf8"));
     const ajv = new Ajv2020({ strict: true, validateFormats: false });
+    ajv.addKeyword({ keyword: "x-tcrn-storageLimits", schemaType: "object" });
+    assert.deepEqual(schema["x-tcrn-storageLimits"], ARTIFACT_LIMITS);
     const records = await seedLifecycle(fixture);
     for (const record of records) {
       assert.equal(ajv.validate(schema, record), true, JSON.stringify(ajv.errors));
@@ -211,6 +214,13 @@ test("closed schema, size report, doctor budgets, and compact projection preserv
     assert.equal(report1.categories["protected-record"].count, 4);
     assert.equal(report1.categories["transient-receipt"].count, 2);
     assert.equal(report1.categories["transient-cache"].count, 2);
+    assert.deepEqual(report1.archiveStorage, {
+      generationCount: 0,
+      storedBytes: 0,
+      maximumGenerations: ARTIFACT_LIMITS.maximumArchiveGenerations,
+      maximumStoredBytes: ARTIFACT_LIMITS.maximumArchiveStoredBytes,
+    });
+    assert.deepEqual(report1.limits, ARTIFACT_LIMITS);
     assert.equal((await artifactDoctor(fixture.workspace, {
       warningBytes: 10_000,
       criticalBytes: 20_000,
@@ -316,6 +326,10 @@ test("archive apply and exact restore preserve high-water authority on a disposa
     assert.equal(applied.entries, 6);
     assert.equal(applied.authorityMutated, false);
     assert.equal(applied.eventHighWaterDigest, fixture.marker.eventHighWaterDigest);
+    const archivedSize = await artifactSizeReport(fixture.workspace);
+    assert.equal(archivedSize.archiveStorage.generationCount, 1);
+    assert.ok(archivedSize.archiveStorage.storedBytes > 0);
+    assert.equal(archivedSize.totals.storedBytes > archivedSize.archiveStorage.storedBytes, true);
     assert.deepEqual(await recordSnapshot(fixture), before);
     await expectReason("ARTIFACT_ARCHIVE_EXISTS", () => applyArtifactArchive(
       fixture.workspace,
@@ -540,6 +554,86 @@ test("size/count limits and non-disposable archive admission fail closed", async
     ));
   } finally {
     await nondisposable.close();
+  }
+});
+
+test("transient and archive storage exhaustion fail before unbounded admission", async () => {
+  const transientCount = await artifactFixture({ externalKey: "FIXTURE-TRANSIENT-COUNT" });
+  try {
+    const root = join(transientCount.store, "transient", "receipts");
+    for (let index = 0; index <= ARTIFACT_LIMITS.maximumEntries; index += 1) {
+      await writeFile(join(root, `receipt-${String(index).padStart(4, "0")}`), "");
+    }
+    let transientOpened = false;
+    await expectReason("ARTIFACT_LIMIT_EXCEEDED", () => artifactSizeReport(transientCount.workspace, {
+      async beforeDescriptorReadForTest(path) {
+        if (path.includes("/transient/")) transientOpened = true;
+      },
+    }));
+    assert.equal(transientOpened, false);
+  } finally {
+    await transientCount.close();
+  }
+
+  const transientBytes = await artifactFixture({ externalKey: "FIXTURE-TRANSIENT-BYTES" });
+  try {
+    const root = join(transientBytes.store, "transient", "cache");
+    const count = Math.floor(ARTIFACT_LIMITS.maximumStoredBytes / ARTIFACT_LIMITS.maximumSourceBytes) + 1;
+    for (let index = 0; index < count; index += 1) {
+      await writeFile(join(root, `cache-${String(index).padStart(2, "0")}`), Buffer.alloc(ARTIFACT_LIMITS.maximumSourceBytes));
+    }
+    await expectReason("ARTIFACT_LIMIT_EXCEEDED", () => artifactSizeReport(transientBytes.workspace));
+  } finally {
+    await transientBytes.close();
+  }
+
+  const completeCount = await artifactFixture({ externalKey: "FIXTURE-ARCHIVE-GENERATION-COUNT" });
+  try {
+    const root = join(completeCount.store, "archives");
+    for (let index = 0; index <= ARTIFACT_LIMITS.maximumArchiveGenerations; index += 1) {
+      const generation = join(root, index.toString(16).padStart(24, "0"));
+      await mkdir(generation);
+      await writeFile(join(generation, "bundle.json"), "");
+    }
+    await expectReason("ARTIFACT_LIMIT_EXCEEDED", () => artifactDoctor(completeCount.workspace));
+  } finally {
+    await completeCount.close();
+  }
+
+  const archiveBytes = await artifactFixture({ externalKey: "FIXTURE-ARCHIVE-STORED-BYTES" });
+  try {
+    const root = join(archiveBytes.store, "archives");
+    const perGeneration = Math.floor(ARTIFACT_LIMITS.maximumArchiveStoredBytes / 2) + 1;
+    for (let index = 0; index < 2; index += 1) {
+      const generation = join(root, index.toString(16).padStart(24, "0"));
+      await mkdir(generation);
+      await writeFile(join(generation, "bundle.json"), Buffer.alloc(perGeneration));
+    }
+    await expectReason("ARTIFACT_LIMIT_EXCEEDED", () => artifactSizeReport(archiveBytes.workspace));
+  } finally {
+    await archiveBytes.close();
+  }
+
+  const partialCount = await artifactFixture({ externalKey: "FIXTURE-ARCHIVE-PARTIAL-COUNT" });
+  try {
+    const root = join(partialCount.store, "archives");
+    for (let index = 0; index <= ARTIFACT_LIMITS.maximumArchiveGenerations; index += 1) {
+      await mkdir(join(root, index.toString(16).padStart(24, "0")));
+    }
+    await expectReason("ARTIFACT_LIMIT_EXCEEDED", () => artifactSizeReport(partialCount.workspace));
+  } finally {
+    await partialCount.close();
+  }
+
+  const partialEntries = await artifactFixture({ externalKey: "FIXTURE-ARCHIVE-PARTIAL-ENTRIES" });
+  try {
+    const generation = join(partialEntries.store, "archives", "f".repeat(24));
+    await mkdir(generation);
+    await writeFile(join(generation, "first.tmp"), "");
+    await writeFile(join(generation, "second.tmp"), "");
+    await expectReason("ARTIFACT_LIMIT_EXCEEDED", () => artifactSizeReport(partialEntries.workspace));
+  } finally {
+    await partialEntries.close();
   }
 });
 

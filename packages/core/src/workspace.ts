@@ -977,9 +977,16 @@ async function reclaimObservedLease(leasePath: string, workspaceRoot: string, ob
   await rm(quarantine, { recursive: true, force: true });
 }
 
-async function createLeaseOwner(leasePath: string, workspaceRoot: string, now: string, nowNanoseconds: bigint, ttl: number): Promise<string> {
+async function createLeaseOwner(
+  leasePath: string,
+  workspaceRoot: string,
+  expectedDirectoryIdentity: FileIdentity,
+  now: string,
+  nowNanoseconds: bigint,
+  ttl: number,
+): Promise<string> {
   const directoryBefore = await lstat(leasePath).catch(() => fail("WORKSPACE_LEASE_INVALID", "lease directory disappeared before owner creation"));
-  if (!directoryBefore.isDirectory() || directoryBefore.isSymbolicLink()) {
+  if (!directoryBefore.isDirectory() || directoryBefore.isSymbolicLink() || !sameIdentity(directoryBefore, expectedDirectoryIdentity)) {
     fail("WORKSPACE_LEASE_INVALID", "lease owner parent is unsafe");
   }
   const token = randomBytes(24).toString("hex");
@@ -1045,6 +1052,7 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
   let claim: RecoveryClaim | undefined;
   try {
     let created = false;
+    let leaseDirectoryIdentity: FileIdentity | undefined;
     try {
       await mkdir(leasePath, { mode: 0o700 });
       created = true;
@@ -1054,6 +1062,11 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
       }
     }
     if (created) {
+      const createdDirectory = await lstat(leasePath);
+      if (!createdDirectory.isDirectory() || createdDirectory.isSymbolicLink()) {
+        fail("WORKSPACE_LEASE_INVALID", "new lease directory is unsafe");
+      }
+      leaseDirectoryIdentity = { dev: createdDirectory.dev, ino: createdDirectory.ino };
       const claimPath = controlPath(workspaceRoot, "lease-recovery.claim");
       try {
         await lstat(claimPath);
@@ -1095,17 +1108,21 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
           fail("WORKSPACE_LOCKED", "incomplete lease changed within its creation grace period");
         }
       }
-      if (observed.owner) {
-        await reclaimObservedLease(leasePath, workspaceRoot, observed);
-        await mkdir(leasePath, { mode: 0o700 });
+      await reclaimObservedLease(leasePath, workspaceRoot, observed);
+      await mkdir(leasePath, { mode: 0o700 });
+      const freshDirectory = await lstat(leasePath);
+      if (!freshDirectory.isDirectory() || freshDirectory.isSymbolicLink()) {
+        fail("WORKSPACE_LEASE_INVALID", "recovered lease directory is unsafe");
       }
+      leaseDirectoryIdentity = { dev: freshDirectory.dev, ino: freshDirectory.ino };
     }
     await boundDirectory(leasePath, workspaceRoot);
+    if (!leaseDirectoryIdentity) fail("WORKSPACE_LEASE_INVALID", "lease generation identity is unavailable");
     if (options.crashAfterLeaseDirectoryForTest) {
       fail("WORKSPACE_FAULT_INJECTED", "injected crash after lease directory creation");
     }
     await options.beforeLeaseOwnerForTest?.();
-    const token = await createLeaseOwner(leasePath, workspaceRoot, options.now, nowNanoseconds, ttl);
+    const token = await createLeaseOwner(leasePath, workspaceRoot, leaseDirectoryIdentity, options.now, nowNanoseconds, ttl);
     let released = false;
     return {
       workspaceRoot,

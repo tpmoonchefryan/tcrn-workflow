@@ -80,7 +80,12 @@ An incomplete `lease/` remains locked for one lease TTL, preventing a live
 creator from being mistaken for a crash. After that grace period, stale or
 incomplete recovery uses an independent single-link `O_EXCL|O_NOFOLLOW`
 recovery claim, re-reads and binds both lease-directory and owner identities,
-and quarantines only the observed generation. Concurrent recoverers admit one
+and quarantines the observed generation whether it has a stale owner or is
+ownerless/incomplete. A fresh lease directory is created only after quarantine;
+the old directory is never adopted, and unexpected, linked, or special entries
+inside it cannot carry into the new generation. Owner creation also binds the
+directory identity captured by that creator, so a delayed creator cannot attach
+an owner to a replacement generation. Concurrent recoverers admit one
 winner; delayed contenders cannot remove the winner's claim or lease. Normal
 claim cleanup is identity-bound. A malformed, linked, special, colliding, or
 crash-retained recovery claim fails closed and requires operator verification;

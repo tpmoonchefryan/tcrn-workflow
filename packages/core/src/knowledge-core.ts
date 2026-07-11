@@ -1128,61 +1128,63 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
     !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
     fail("KNOWLEDGE_INPUT_INVALID", "promotion versions");
   }
+  if (input.promotionState !== "promoted" && input.promotionState !== "rejected") {
+    fail("KNOWLEDGE_PROMOTION_INVALID", String(input.promotionState));
+  }
   const initial = await mutationAdmissionScan(workspaceRoot, options);
   const claim = await acquireMutationClaim(initial);
-  const scan = await scanKnowledgeStore(workspaceRoot, options, true);
-  if (scan.marker.version !== input.expectedVersion) {
+  let released = false;
+  try {
+    const scan = await scanKnowledgeStore(workspaceRoot, options, true);
+    if (scan.marker.version !== input.expectedVersion) {
+      fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
+    }
+    const unit = scan.units.find((entry) => entry.metadata.id === input.id);
+    if (!unit) fail("KNOWLEDGE_NOT_FOUND", input.id);
+    if (unit.metadata.revision !== input.expectedRevision) {
+      fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedRevision}:${unit.metadata.revision}`);
+    }
+    if (unit.metadata.promotionState !== "candidate") {
+      fail("KNOWLEDGE_PROMOTION_INVALID", unit.metadata.promotionState);
+    }
+    const metadata: KnowledgeUnitMetadata = {
+      ...unit.metadata,
+      promotionState: input.promotionState,
+      revision: unit.metadata.revision + 1,
+      updatedAt: input.occurredAt,
+    };
+    assertPromotableProvenance(metadata);
+    const unitBody = requireBody(unit);
+    const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace);
+    validateMetadataBody(validated, unitBody, scan.workspace);
+    const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
+    const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
+    const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
+      Buffer.byteLength(canonicalJson(knowledgeIndex(marker, projectedMetadata)), "utf8") +
+      scan.units.reduce((total, entry) => total +
+        Buffer.byteLength(canonicalJson(entry.metadata.id === metadata.id ? metadata : entry.metadata), "utf8") + requireBody(entry).length, 0);
+    if (projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
+      fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge promotion aggregate bytes");
+    }
+    await replaceRegularFile(unit.metadataPath, canonicalJson(metadata));
+    crash("after-metadata-write", options.faultAt);
+    await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+    crash("after-marker-write", options.faultAt);
+    await writeIndex(scan, marker, projectedMetadata);
     await releaseMutationClaim(scan.storeRoot, claim);
-    fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
+    released = true;
+    await scanKnowledgeStore(workspaceRoot, options);
+    return {
+      schemaVersion: "tcrn.knowledge-promotion-result.v1",
+      reasonCode: "KNOWLEDGE_PROMOTION_UPDATED",
+      id: metadata.id,
+      promotionState: metadata.promotionState,
+      revision: metadata.revision,
+      version: marker.version,
+    };
+  } finally {
+    if (!released) await releaseMutationClaim(initial.storeRoot, claim);
   }
-  const unit = scan.units.find((entry) => entry.metadata.id === input.id);
-  if (!unit) {
-    await releaseMutationClaim(scan.storeRoot, claim);
-    fail("KNOWLEDGE_NOT_FOUND", input.id);
-  }
-  if (unit.metadata.revision !== input.expectedRevision) {
-    await releaseMutationClaim(scan.storeRoot, claim);
-    fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedRevision}:${unit.metadata.revision}`);
-  }
-  if (unit.metadata.promotionState !== "candidate") {
-    await releaseMutationClaim(scan.storeRoot, claim);
-    fail("KNOWLEDGE_PROMOTION_INVALID", unit.metadata.promotionState);
-  }
-  const metadata: KnowledgeUnitMetadata = {
-    ...unit.metadata,
-    promotionState: input.promotionState,
-    revision: unit.metadata.revision + 1,
-    updatedAt: input.occurredAt,
-  };
-  assertPromotableProvenance(metadata);
-  const unitBody = requireBody(unit);
-  const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace);
-  validateMetadataBody(validated, unitBody, scan.workspace);
-  const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
-  const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
-  const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
-    Buffer.byteLength(canonicalJson(knowledgeIndex(marker, projectedMetadata)), "utf8") +
-    scan.units.reduce((total, entry) => total +
-      Buffer.byteLength(canonicalJson(entry.metadata.id === metadata.id ? metadata : entry.metadata), "utf8") + requireBody(entry).length, 0);
-  if (projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
-    await releaseMutationClaim(scan.storeRoot, claim);
-    fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge promotion aggregate bytes");
-  }
-  await replaceRegularFile(unit.metadataPath, canonicalJson(metadata));
-  crash("after-metadata-write", options.faultAt);
-  await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
-  crash("after-marker-write", options.faultAt);
-  await writeIndex(scan, marker, projectedMetadata);
-  await releaseMutationClaim(scan.storeRoot, claim);
-  await scanKnowledgeStore(workspaceRoot, options);
-  return {
-    schemaVersion: "tcrn.knowledge-promotion-result.v1",
-    reasonCode: "KNOWLEDGE_PROMOTION_UPDATED",
-    id: metadata.id,
-    promotionState: metadata.promotionState,
-    revision: metadata.revision,
-    version: marker.version,
-  };
 }
 
 export async function exportKnowledgeCheckpoint(workspaceRoot: string, at: string, options: KnowledgeReadOptions = {}): Promise<string> {
