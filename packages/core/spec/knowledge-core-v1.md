@@ -55,6 +55,12 @@ are candidate to `promoted` or `rejected`; promoted and rejected states are
 terminal. Candidate bodies require an explicit override on the explicit body
 surface and are never checkpointed.
 
+Promotion input is admitted as exactly `promoted|rejected` before the mutation
+claim is acquired. Every non-crash error after claim acquisition releases only
+the identity-bound claim generation before returning its frozen reason code, so
+an invalid request cannot poison an otherwise valid store or block a later
+valid mutation.
+
 ## Limits and privacy
 
 V1 limits body bytes to 8192, subject bytes to 512, summary bytes to 2048,

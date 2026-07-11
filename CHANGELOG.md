@@ -37,3 +37,6 @@ Versioning after the first accepted release.
   accountable source/evidence provenance, selection and strict-instant
   admission, UTF-8 byte-budget schema proof, and 64 actual-store insertion
   permutations.
+- Close RC2 defensive boundaries for pre-claim Knowledge promotion admission,
+  ownerless stale-lease generation quarantine, and incremental transient/archive
+  storage exhaustion enforcement.

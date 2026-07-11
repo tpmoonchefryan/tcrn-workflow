@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import {
   link,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -654,8 +655,15 @@ test("lease creation crash and recovery-claim contention are recoverable and sin
       crashAfterLeaseDirectoryForTest: true,
     }));
     const incompleteLease = join(crashFixture.workspace, ".tcrn-workflow", "lease");
+    const incompleteIdentity = await lstat(incompleteLease);
     await utimes(incompleteLease, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
     const recovered = await acquireWorkspaceLease(crashFixture.workspace, { now: instant(2) });
+    const recoveredIdentity = await lstat(incompleteLease);
+    assert.notDeepEqual(
+      { dev: recoveredIdentity.dev, ino: recoveredIdentity.ino },
+      { dev: incompleteIdentity.dev, ino: incompleteIdentity.ino },
+    );
+    assert.deepEqual(await readdir(incompleteLease), ["owner.json"]);
     await recovered.release();
   } finally {
     await crashFixture.close();
@@ -721,9 +729,22 @@ test("lease creation crash and recovery-claim contention are recoverable and sin
     await entered;
     const leasePath = join(delayedFixture.workspace, ".tcrn-workflow", "lease");
     await utimes(leasePath, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
-    const winner = await acquireWorkspaceLease(delayedFixture.workspace, { now: instant(2) });
+    let winnerEntered;
+    const winnerAtOwner = new Promise((resolve) => { winnerEntered = resolve; });
+    let resumeWinner;
+    const winnerResume = new Promise((resolve) => { resumeWinner = resolve; });
+    const winnerOperation = acquireWorkspaceLease(delayedFixture.workspace, {
+      now: instant(2),
+      async beforeLeaseOwnerForTest() {
+        winnerEntered();
+        await winnerResume;
+      },
+    });
+    await winnerAtOwner;
     resumeCreator();
-    await expectReasonAsync("WORKSPACE_LOCKED", () => original);
+    await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => original);
+    resumeWinner();
+    const winner = await winnerOperation;
     await createProject(delayedFixture.workspace, winner, {
       expectedVersion: 0, occurredAt: instant(3), externalKey: "PROJECT-DELAYED-WINNER", name: "Delayed Winner",
     });
@@ -731,6 +752,38 @@ test("lease creation crash and recovery-claim contention are recoverable and sin
     assert.equal((await materializeWorkspace(delayedFixture.workspace)).version, 1);
   } finally {
     await delayedFixture.close();
+  }
+});
+
+test("ownerless stale generations are quarantined without carrying unexpected entries", async () => {
+  for (const kind of ["file", "symlink", "directory"]) {
+    const fixture = await workspaceFixture({ externalKey: `WORKSPACE-STALE-${kind.toUpperCase()}` });
+    try {
+      const control = join(fixture.workspace, ".tcrn-workflow");
+      const leasePath = join(control, "lease");
+      const unexpected = join(leasePath, "unexpected");
+      await mkdir(leasePath);
+      if (kind === "file") {
+        await writeFile(unexpected, "stale");
+      } else if (kind === "symlink") {
+        await symlink(join(fixture.base, "missing-target"), unexpected);
+      } else {
+        await mkdir(unexpected);
+      }
+      const staleIdentity = await lstat(leasePath);
+      await utimes(leasePath, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
+      const recovered = await acquireWorkspaceLease(fixture.workspace, { now: instant(3) });
+      const freshIdentity = await lstat(leasePath);
+      assert.notDeepEqual(
+        { dev: freshIdentity.dev, ino: freshIdentity.ino },
+        { dev: staleIdentity.dev, ino: staleIdentity.ino },
+      );
+      assert.deepEqual(await readdir(leasePath), ["owner.json"]);
+      assert.deepEqual((await readdir(control)).filter((name) => name.startsWith("stale-lease-")), []);
+      await recovered.release();
+    } finally {
+      await fixture.close();
+    }
   }
 });
 

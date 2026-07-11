@@ -33,6 +33,8 @@
     "store-cas",
     "record-revision-cas",
     "promotion-terminal",
+    "promotion-invalid-state-preclaim",
+    "promotion-error-claim-cleanup",
     "default-candidate-omission",
     "candidate-body-denial",
     "stale-default-omission",

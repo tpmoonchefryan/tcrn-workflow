@@ -357,6 +357,13 @@ test("governed Knowledge CLI exposes init, validate, create, list, snippet, body
       { write: (value) => { output += value; } });
     assert.equal(JSON.parse(output).body, input.body);
     output = "";
+    await expectReason("KNOWLEDGE_PROMOTION_INVALID", () => runCli([
+      "knowledge-promote", "--workspace", fixture.workspace, "--expected-version", "1", "--expected-revision", "1",
+      "--at", instant(12, 1), "--id", created.id, "--state", "approved",
+    ], { write() {} }));
+    assert.equal((await readdir(fixture.store)).includes("mutation.claim"), false);
+    assert.equal((await validateKnowledgeStore(fixture.workspace)).reasonCode, "KNOWLEDGE_STORE_VALID");
+    output = "";
     await runCli(["knowledge-promote", "--workspace", fixture.workspace, "--expected-version", "1", "--expected-revision", "1",
       "--at", instant(12, 1), "--id", created.id, "--state", "promoted"], { write: (value) => { output += value; } });
     assert.equal(JSON.parse(output).reasonCode, "KNOWLEDGE_PROMOTION_UPDATED");
@@ -557,6 +564,11 @@ test("duplicate, CAS, promotion, and concurrent writer integrity fail closed", a
   try {
     const input = unitInput(fixture, "KNOWLEDGE-CAS");
     const created = await createKnowledgeUnit(fixture.workspace, input);
+    await expectReason("KNOWLEDGE_PROMOTION_INVALID", () => transitionKnowledgePromotion(fixture.workspace, {
+      expectedVersion: 1, expectedRevision: 1, occurredAt: instant(12), id: created.id, promotionState: "approved",
+    }));
+    assert.equal((await readdir(fixture.store)).includes("mutation.claim"), false);
+    assert.equal((await validateKnowledgeStore(fixture.workspace)).version, 1);
     await expectReason("KNOWLEDGE_DUPLICATE", () => createKnowledgeUnit(fixture.workspace, { ...input, expectedVersion: 1 }));
     await expectReason("KNOWLEDGE_CAS_MISMATCH", () => transitionKnowledgePromotion(fixture.workspace, {
       expectedVersion: 0, expectedRevision: 1, occurredAt: instant(12), id: created.id, promotionState: "promoted",
@@ -564,6 +576,9 @@ test("duplicate, CAS, promotion, and concurrent writer integrity fail closed", a
     await expectReason("KNOWLEDGE_CAS_MISMATCH", () => transitionKnowledgePromotion(fixture.workspace, {
       expectedVersion: 1, expectedRevision: 2, occurredAt: instant(12), id: created.id, promotionState: "promoted",
     }));
+    assert.equal((await transitionKnowledgePromotion(fixture.workspace, {
+      expectedVersion: 1, expectedRevision: 1, occurredAt: instant(12), id: created.id, promotionState: "promoted",
+    })).version, 2);
   } finally {
     await fixture.close();
   }

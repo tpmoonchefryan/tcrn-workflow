@@ -2,6 +2,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { constants } from "node:fs";
+import type { Dirent } from "node:fs";
 import {
   lstat,
   mkdir,
@@ -156,11 +157,24 @@ const archiveFields = [
   "entries",
 ];
 const archiveEntryFields = ["path", "size", "sha256", "contentBase64"];
-const maxSourceBytes = 1_048_576;
-const maxStoredBytes = 16_777_216;
-const maxArchiveBytes = 33_554_432;
-const maxEntries = 1_024;
-const maxLogicalBytes = 4_294_967_296;
+export const ARTIFACT_LIMITS = Object.freeze({
+  maximumSourceBytes: 1_048_576,
+  maximumStoredBytes: 16_777_216,
+  maximumArchiveBytes: 33_554_432,
+  maximumEntries: 1_024,
+  maximumLogicalBytes: 4_294_967_296,
+  maximumArchiveGenerations: 16,
+  maximumArchiveFilesPerGeneration: 1,
+  maximumArchiveStoredBytes: 33_554_432,
+});
+const maxSourceBytes = ARTIFACT_LIMITS.maximumSourceBytes;
+const maxStoredBytes = ARTIFACT_LIMITS.maximumStoredBytes;
+const maxArchiveBytes = ARTIFACT_LIMITS.maximumArchiveBytes;
+const maxEntries = ARTIFACT_LIMITS.maximumEntries;
+const maxLogicalBytes = ARTIFACT_LIMITS.maximumLogicalBytes;
+const maxArchiveGenerations = ARTIFACT_LIMITS.maximumArchiveGenerations;
+const maxArchiveFilesPerGeneration = ARTIFACT_LIMITS.maximumArchiveFilesPerGeneration;
+const maxArchiveStoredBytes = ARTIFACT_LIMITS.maximumArchiveStoredBytes;
 
 interface FileIdentity {
   readonly dev: number | bigint;
@@ -209,6 +223,12 @@ interface ArtifactStoreScan {
   readonly marker: ArtifactStoreMarker;
   readonly records: readonly ScannedArtifactRecord[];
   readonly transient: readonly ScannedTransient[];
+  readonly archiveStorage: ArchiveStorageSummary;
+}
+
+interface ArchiveStorageSummary {
+  readonly generationCount: number;
+  readonly storedBytes: number;
 }
 
 interface ExclusiveFile {
@@ -533,7 +553,7 @@ async function readStoreMarker(storeRoot: string, options: ArtifactScanOptions =
   return validateStoreMarker(parseCanonicalObject(opened.bytes, "artifact store marker", "ARTIFACT_INPUT_INVALID"));
 }
 
-async function assertNoPartialState(storeRoot: string, options: ArtifactScanOptions = {}): Promise<void> {
+async function assertNoPartialState(storeRoot: string, options: ArtifactScanOptions = {}): Promise<ArchiveStorageSummary> {
   try {
     await lstat(resolve(storeRoot, "restore.claim"));
     await readBoundRegularFile(resolve(storeRoot, "restore.claim"), 16_384, options);
@@ -546,6 +566,10 @@ async function assertNoPartialState(storeRoot: string, options: ArtifactScanOpti
   const archivesRoot = await boundDirectory(resolve(storeRoot, "archives"), storeRoot);
   const archives = await readdir(archivesRoot, { withFileTypes: true });
   archives.sort((left, right) => compareCanonicalText(left.name, right.name));
+  if (archives.length > maxArchiveGenerations) {
+    fail("ARTIFACT_LIMIT_EXCEEDED", `archive generations ${archives.length}`);
+  }
+  let storedBytes = 0;
   for (const entry of archives) {
     const path = resolve(archivesRoot, entry.name);
     if (entry.isSymbolicLink()) {
@@ -555,12 +579,31 @@ async function assertNoPartialState(storeRoot: string, options: ArtifactScanOpti
       fail("ARTIFACT_SPECIAL_FILE", path);
     }
     await boundDirectory(path, archivesRoot);
-    const contents = await readdir(path);
-    if (JSON.stringify(contents.sort(compareCanonicalText)) !== JSON.stringify(["bundle.json"])) {
+    const contents = await readdir(path, { withFileTypes: true });
+    contents.sort((left, right) => compareCanonicalText(left.name, right.name));
+    if (contents.length > maxArchiveFilesPerGeneration) {
+      fail("ARTIFACT_LIMIT_EXCEEDED", `archive generation entries ${path}:${contents.length}`);
+    }
+    for (const content of contents) {
+      const contentPath = resolve(path, content.name);
+      const metadata = await lstat(contentPath, { bigint: true });
+      if (metadata.isSymbolicLink()) fail("ARTIFACT_LINK_UNSAFE", contentPath);
+      if (!metadata.isFile()) fail("ARTIFACT_SPECIAL_FILE", contentPath);
+      if (metadata.nlink !== 1n) fail("ARTIFACT_LINK_UNSAFE", contentPath);
+      if (metadata.size > BigInt(maxArchiveBytes)) {
+        fail("ARTIFACT_LIMIT_EXCEEDED", `archive generation bytes ${contentPath}:${metadata.size}`);
+      }
+      storedBytes += Number(metadata.size);
+      if (storedBytes > maxArchiveStoredBytes) {
+        fail("ARTIFACT_LIMIT_EXCEEDED", `archive stored bytes ${storedBytes}`);
+      }
+    }
+    if (JSON.stringify(contents.map((content) => content.name)) !== JSON.stringify(["bundle.json"])) {
       fail("ARTIFACT_PARTIAL_STATE", path);
     }
     await readBoundRegularFile(resolve(path, "bundle.json"), maxArchiveBytes, options);
   }
+  return { generationCount: archives.length, storedBytes };
 }
 
 async function resolveArtifactStore(workspaceRootInput: string, options: ArtifactScanOptions = {}): Promise<{
@@ -568,6 +611,7 @@ async function resolveArtifactStore(workspaceRootInput: string, options: Artifac
   readonly workspaceExternalKey: string;
   readonly storeRoot: string;
   readonly marker: ArtifactStoreMarker;
+  readonly archiveStorage: ArchiveStorageSummary;
 }> {
   const state = await materializeWorkspace(workspaceRootInput);
   const workspaceRoot = await boundDirectory(workspaceRootInput);
@@ -583,8 +627,8 @@ async function resolveArtifactStore(workspaceRootInput: string, options: Artifac
   if (marker.workspaceId !== state.metadata.workspaceId || marker.eventHighWaterDigest !== state.headEventHash) {
     fail("ARTIFACT_HIGH_WATER_MISMATCH", state.metadata.workspaceId);
   }
-  await assertNoPartialState(storeRoot, options);
-  return { workspaceRoot, workspaceExternalKey: state.metadata.externalKey, storeRoot, marker };
+  const archiveStorage = await assertNoPartialState(storeRoot, options);
+  return { workspaceRoot, workspaceExternalKey: state.metadata.externalKey, storeRoot, marker, archiveStorage };
 }
 
 async function scanArtifactStore(workspaceRootInput: string, options: ArtifactScanOptions = {}): Promise<ArtifactStoreScan> {
@@ -596,6 +640,8 @@ async function scanArtifactStore(workspaceRootInput: string, options: ArtifactSc
   if (entries.length > maxEntries) {
     fail("ARTIFACT_LIMIT_EXCEEDED", `record count ${entries.length}`);
   }
+  let storedBytes = 0;
+  let logicalBytes = 0;
   for (const entry of entries) {
     const path = resolve(recordsRoot, entry.name);
     if (entry.isSymbolicLink()) {
@@ -613,6 +659,10 @@ async function scanArtifactStore(workspaceRootInput: string, options: ArtifactSc
     if (`${record.id}.json` !== entry.name) {
       fail("ARTIFACT_PATH_INVALID", entry.name);
     }
+    storedBytes += opened.bytes.length;
+    logicalBytes += record.byteSize;
+    if (storedBytes > maxStoredBytes) fail("ARTIFACT_LIMIT_EXCEEDED", `stored bytes ${storedBytes}`);
+    if (logicalBytes > maxLogicalBytes) fail("ARTIFACT_LIMIT_EXCEEDED", `logical bytes ${logicalBytes}`);
     records.push({
       path,
       relativePath: `records/${entry.name}`,
@@ -622,11 +672,25 @@ async function scanArtifactStore(workspaceRootInput: string, options: ArtifactSc
     });
   }
   const transient: ScannedTransient[] = [];
+  const transientGroups: {
+    readonly directoryName: "receipts" | "cache";
+    readonly classification: "transient-receipt" | "transient-cache";
+    readonly root: string;
+    readonly entries: readonly Dirent[];
+  }[] = [];
   for (const [directoryName, classification] of [["receipts", "transient-receipt"], ["cache", "transient-cache"]] as const) {
     const root = await boundDirectory(resolve(resolved.storeRoot, `transient/${directoryName}`), resolved.storeRoot);
     const transientEntries = await readdir(root, { withFileTypes: true });
     transientEntries.sort((left, right) => compareCanonicalText(left.name, right.name));
-    for (const entry of transientEntries) {
+    transientGroups.push({ directoryName, classification, root, entries: transientEntries });
+  }
+  const transientCount = transientGroups.reduce((total, group) => total + group.entries.length, 0);
+  if (records.length + transientCount > maxEntries) {
+    fail("ARTIFACT_LIMIT_EXCEEDED", `entry count ${records.length + transientCount}`);
+  }
+  for (const group of transientGroups) {
+    for (const entry of group.entries) {
+      const { directoryName, classification, root } = group;
       const path = resolve(root, entry.name);
       if (entry.isSymbolicLink()) {
         fail("ARTIFACT_LINK_UNSAFE", path);
@@ -638,6 +702,10 @@ async function scanArtifactStore(workspaceRootInput: string, options: ArtifactSc
         fail("ARTIFACT_PATH_INVALID", entry.name);
       }
       const opened = await readBoundRegularFile(path, maxSourceBytes, options);
+      storedBytes += opened.bytes.length;
+      logicalBytes += opened.bytes.length;
+      if (storedBytes > maxStoredBytes) fail("ARTIFACT_LIMIT_EXCEEDED", `stored bytes ${storedBytes}`);
+      if (logicalBytes > maxLogicalBytes) fail("ARTIFACT_LIMIT_EXCEEDED", `logical bytes ${logicalBytes}`);
       transient.push({
         path,
         relativePath: `transient/${directoryName}/${entry.name}`,
@@ -645,14 +713,6 @@ async function scanArtifactStore(workspaceRootInput: string, options: ArtifactSc
         classification,
       });
     }
-  }
-  if (records.length + transient.length > maxEntries) {
-    fail("ARTIFACT_LIMIT_EXCEEDED", `entry count ${records.length + transient.length}`);
-  }
-  const storedBytes = records.reduce((total, entry) => total + entry.bytes.length, 0) +
-    transient.reduce((total, entry) => total + entry.size, 0);
-  if (storedBytes > maxStoredBytes) {
-    fail("ARTIFACT_LIMIT_EXCEEDED", `stored bytes ${storedBytes}`);
   }
   return { ...resolved, records, transient };
 }
@@ -708,12 +768,23 @@ export async function artifactSizeReport(workspaceRoot: string, options: Artifac
     category.logicalBytes += entry.size;
     category.storedBytes += entry.size;
   }
-  const totals = Object.values(categories).reduce((result, category) => ({
+  const artifactTotals = Object.values(categories).reduce((result, category) => ({
     count: result.count + category.count,
     logicalBytes: result.logicalBytes + category.logicalBytes,
     storedBytes: result.storedBytes + category.storedBytes,
   }), emptyCategory());
-  if (totals.logicalBytes > maxLogicalBytes || totals.count > maxEntries) {
+  const archiveStorage = {
+    generationCount: scan.archiveStorage.generationCount,
+    storedBytes: scan.archiveStorage.storedBytes,
+    maximumGenerations: maxArchiveGenerations,
+    maximumStoredBytes: maxArchiveStoredBytes,
+  };
+  const totals = {
+    count: artifactTotals.count + archiveStorage.generationCount,
+    logicalBytes: artifactTotals.logicalBytes + archiveStorage.storedBytes,
+    storedBytes: artifactTotals.storedBytes + archiveStorage.storedBytes,
+  };
+  if (totals.logicalBytes > maxLogicalBytes) {
     fail("ARTIFACT_LIMIT_EXCEEDED", canonicalJson(totals));
   }
   return {
@@ -722,6 +793,8 @@ export async function artifactSizeReport(workspaceRoot: string, options: Artifac
     workspaceId: scan.marker.workspaceId,
     eventHighWaterDigest: scan.marker.eventHighWaterDigest,
     categories,
+    archiveStorage,
+    limits: ARTIFACT_LIMITS,
     totals,
   };
 }
@@ -894,6 +967,12 @@ export async function applyArtifactArchive(workspaceRoot: string, options: Artif
   if (bundleBytes.length > maxArchiveBytes) {
     fail("ARTIFACT_LIMIT_EXCEEDED", `archive bytes ${bundleBytes.length}`);
   }
+  if (projected.scan.archiveStorage.generationCount + 1 > maxArchiveGenerations) {
+    fail("ARTIFACT_LIMIT_EXCEEDED", `archive generations ${projected.scan.archiveStorage.generationCount + 1}`);
+  }
+  if (projected.scan.archiveStorage.storedBytes + bundleBytes.length > maxArchiveStoredBytes) {
+    fail("ARTIFACT_LIMIT_EXCEEDED", `archive stored bytes ${projected.scan.archiveStorage.storedBytes + bundleBytes.length}`);
+  }
   const archiveDirectory = resolve(projected.scan.storeRoot, `archives/${archiveId.slice("artifact-archive:".length)}`);
   try {
     await mkdir(archiveDirectory, { mode: 0o700 });
@@ -978,6 +1057,7 @@ function validateArchiveBundle(value: Readonly<Record<string, JsonValue>>, archi
     fail("ARTIFACT_ARCHIVE_INVALID", "archive entry count does not match retained plan");
   }
   let priorPath: string | undefined;
+  let decodedBytes = 0;
   for (const raw of value.entries) {
     exactFields(raw, archiveEntryFields, "archive entry", "ARTIFACT_ARCHIVE_INVALID");
     if (typeof raw.path !== "string" || typeof raw.size !== "number" || !Number.isSafeInteger(raw.size) ||
@@ -990,6 +1070,10 @@ function validateArchiveBundle(value: Readonly<Record<string, JsonValue>>, archi
     }
     assertHexDigest(raw.sha256, "archive entry", "ARTIFACT_ARCHIVE_INVALID");
     const bytes = decodeCanonicalBase64(raw.contentBase64);
+    decodedBytes += bytes.length;
+    if (decodedBytes > maxStoredBytes) {
+      fail("ARTIFACT_LIMIT_EXCEEDED", `archive decoded bytes ${decodedBytes}`);
+    }
     const retained = retainedByPath.get(raw.path);
     if (!retained || retained.size !== raw.size || retained.sha256 !== raw.sha256 || bytes.length !== raw.size ||
       sha256(bytes) !== raw.sha256 || (priorPath && compareCanonicalText(priorPath, raw.path) >= 0)) {

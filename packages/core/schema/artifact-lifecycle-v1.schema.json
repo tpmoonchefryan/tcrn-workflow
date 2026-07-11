@@ -2,6 +2,16 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tcrn.dev/schemas/artifact-lifecycle-v1.schema.json",
   "title": "TCRN Artifact Lifecycle V1 Record",
+  "x-tcrn-storageLimits": {
+    "maximumSourceBytes": 1048576,
+    "maximumStoredBytes": 16777216,
+    "maximumArchiveBytes": 33554432,
+    "maximumEntries": 1024,
+    "maximumLogicalBytes": 4294967296,
+    "maximumArchiveGenerations": 16,
+    "maximumArchiveFilesPerGeneration": 1,
+    "maximumArchiveStoredBytes": 33554432
+  },
   "type": "object",
   "additionalProperties": false,
   "required": [

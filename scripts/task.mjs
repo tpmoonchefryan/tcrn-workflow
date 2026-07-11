@@ -361,7 +361,9 @@ async function verifyP4() {
   assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 28, "P4_NEGATIVE_CASES");
   assertion(fixture.propertyPermutations >= 64, "P4_PROPERTY_PERMUTATIONS");
   assertion(fixture.maximumEntries === 1_024 && fixture.maximumSourceBytes === 1_048_576 &&
-    fixture.maximumStoredBytes === 16_777_216 && fixture.maximumArchiveBytes === 33_554_432, "P4_LIMIT_CONTRACT");
+    fixture.maximumStoredBytes === 16_777_216 && fixture.maximumArchiveBytes === 33_554_432 &&
+    fixture.maximumArchiveGenerations === 16 && fixture.maximumArchiveFilesPerGeneration === 1 &&
+    fixture.maximumArchiveStoredBytes === 33_554_432, "P4_LIMIT_CONTRACT");
   assertion(knowledgeFixture.schemaVersion === "tcrn.p4-knowledge-core-cases.v1", "P4_KNOWLEDGE_FIXTURE_SCHEMA");
   assertion(Array.isArray(knowledgeFixture.operationCases) && knowledgeFixture.operationCases.length === 9, "P4_KNOWLEDGE_OPERATION_CASES");
   assertion(Array.isArray(knowledgeFixture.freshnessCases) && knowledgeFixture.freshnessCases.length === 3, "P4_KNOWLEDGE_FRESHNESS_CASES");
@@ -388,6 +390,9 @@ async function verifyP4() {
     faultCases: fixture.faultCases.length,
     negativeCases: fixture.negativeCases.length,
     propertyPermutations: fixture.propertyPermutations,
+    maximumArchiveGenerations: fixture.maximumArchiveGenerations,
+    maximumArchiveFilesPerGeneration: fixture.maximumArchiveFilesPerGeneration,
+    maximumArchiveStoredBytes: fixture.maximumArchiveStoredBytes,
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
     schemaDigest: (await fileRecord(schemaPath)).sha256,
     archiveApplyScope: "disposable-synthetic-workspaces-only",
