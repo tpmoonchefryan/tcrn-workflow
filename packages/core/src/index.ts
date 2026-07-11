@@ -46,3 +46,40 @@ export function admitDevelopment(): DevelopmentAdmission {
 
 export { assertDistinctRoots, RootIdentityError } from "./root-identity.js";
 export type { CanonicalRoot } from "./root-identity.js";
+export {
+  WORKSPACE_CONTROL_DIRECTORY,
+  WORKSPACE_REASON_CODES,
+  WORKSPACE_SCHEMA_VERSION,
+  WORKSPACE_STORAGE_VERSION,
+  WorkspaceError,
+  acquireWorkspaceLease,
+  applyWorkspaceMigration,
+  assertSupportedWorkspaceFilesystem,
+  assertWorkspaceRecordCount,
+  assertWorkspaceRelativePath,
+  createProject,
+  createWorkspaceArchive,
+  createWork,
+  deleteProject,
+  deleteWork,
+  exportWorkspace,
+  initializeWorkspace,
+  materializeWorkspace,
+  planWorkspaceMigration,
+  rebuildWorkspaceViews,
+  recoverWorkspace,
+  transitionWork,
+  updateProject,
+  validateWorkspace,
+  withWorkspaceLease,
+} from "./workspace.js";
+export type {
+  ProjectRecord,
+  WorkspaceCrashPoint,
+  WorkspaceLease,
+  WorkspaceMetadata,
+  WorkspaceMigrationPlan,
+  WorkspaceMutationOptions,
+  WorkspaceReasonCode,
+  WorkspaceState,
+} from "./workspace.js";

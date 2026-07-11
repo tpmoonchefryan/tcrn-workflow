@@ -19,3 +19,6 @@ Versioning after the first accepted release.
   enforce vulnerability policy over the complete frozen dependency graph.
 - Emit shared canonical objects directly in UTF-8 byte order, preserving every
   own key, and close RC1 candidate and verdict-slot field admission.
+- Add the P3 file-native Workspace/event-engine candidate with governed CRUD,
+  leases/CAS, no-follow atomic segments, crash recovery, deterministic views,
+  dry-run migration planning, and filesystem fault proof without a P3 marker.

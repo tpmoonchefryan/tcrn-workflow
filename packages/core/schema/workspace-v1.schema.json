@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tcrn.dev/schemas/workspace-v1.schema.json",
+  "title": "TCRN file-native Workspace metadata V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "storageVersion",
+    "minimumStorageVersion",
+    "maximumStorageVersion",
+    "workspaceId",
+    "externalKey",
+    "createdAt",
+    "segmentEventLimit",
+    "roots"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.workspace.v1"
+    },
+    "storageVersion": {
+      "const": 1
+    },
+    "minimumStorageVersion": {
+      "const": 1
+    },
+    "maximumStorageVersion": {
+      "const": 1
+    },
+    "workspaceId": {
+      "type": "string",
+      "pattern": "^workspace:[a-f0-9]{24}$"
+    },
+    "externalKey": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$",
+      "maxLength": 128
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "segmentEventLimit": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 1024
+    },
+    "roots": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/root"
+      }
+    }
+  },
+  "$defs": {
+    "root": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "path",
+        "canonicalPath",
+        "portableIdentity"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "framework",
+            "workspace",
+            "transient",
+            "evidence-locator",
+            "release-trust"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "canonicalPath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "portableIdentity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        }
+      }
+    }
+  }
+}

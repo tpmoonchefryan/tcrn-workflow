@@ -2,8 +2,10 @@
 
 TCRN Workflow is an offline-first framework for deterministic work, context,
 evidence, and release verification. This repository contains the accepted P1
-framework bootstrap and the P2 V1 protocol/conformance basis. P3 capability,
-live integrations, and release support remain intentionally unavailable.
+framework bootstrap, the P2 V1 protocol/conformance basis, and the P3
+file-native engine candidate. P3 capability remains unavailable until RC-P3
+acceptance and a separate marker route; live integrations and release support
+remain intentionally unavailable.
 
 ## Modes
 
@@ -24,6 +26,7 @@ pnpm install --offline --frozen-lockfile --ignore-scripts
 pnpm verify:p1
 pnpm verify:p2
 pnpm verify:rc1
+pnpm verify:p3
 ```
 
 The repository does not collect telemetry. Static checks, a process executable
@@ -51,7 +54,16 @@ marker contracts; deterministic vectors and negative/property tests; the public
 AOS requirements ledger; exact-pinned meta-schema/local-reference evaluation;
 and the unaccepted RC1 candidate manifest. A green
 `pnpm verify:rc1` means only `RC1_CANDIDATE_READY`: all four role-verdict slots
-remain unresolved, RC1 is not accepted, and P3 remains unavailable.
+remain unresolved in the regenerated candidate proof. The accepted RC1 parent
+is recorded externally. `pnpm verify:p3` exercises the standalone file-native
+Workspace, leases/CAS, event recovery, migrations, deterministic views, and
+filesystem attack matrix. `P3_VERIFIED` is a review candidate only and does not
+authorize the P3 capability marker.
+
+After `pnpm build`, governed local commands are available through
+`node scripts/tcrn-workflow.mjs`. Mutation commands require an explicit
+Workspace, strict timestamp, and expected version; they contact neither AOS nor
+a database.
 
 See `docs/architecture/root-model.md` and
 `docs/release-trust/external-release-trust-root-v1.md` for the bootstrap trust
@@ -81,4 +93,5 @@ privacy regex set is a focused policy control, not a general DLP system.
 
 The public API is pre-release. Supported release mode is unavailable unless the
 external trust verifier succeeds. P2 claims specification and fixture maturity
-only; it claims no live external-runtime compatibility or supported release pair.
+only; P3 is an unaccepted local-engine candidate; neither claims live
+external-runtime compatibility or a supported release pair.
