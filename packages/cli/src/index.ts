@@ -36,6 +36,7 @@ import {
 } from "../../core/src/index.js";
 import type {
   ExplicitRoot,
+  GenericProfileAdmissionAuthority,
   KnowledgeCategory,
   KnowledgeFreshnessState,
   KnowledgeKind,
@@ -74,6 +75,7 @@ export class WorkflowCliError extends Error {
 
 export interface CliIo {
   write(value: string): void;
+  readonly profileAdmissionAuthority?: GenericProfileAdmissionAuthority;
 }
 
 function fail(reasonCode: string, message: string): never {
@@ -198,14 +200,16 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   if (command === "profile-resolve") {
     const values = parseArguments(rest, ["request", "receipt"]);
     required(values, ["request", "receipt"]);
-    const admission = await readGenericProfileAdmissionReceipt(values.receipt ?? "");
+    const admission = await readGenericProfileAdmissionReceipt(values.receipt ?? "",
+      io.profileAdmissionAuthority ? { authority: io.profileAdmissionAuthority } : {});
     io.write(canonicalJson(resolveGenericProfile(jsonValue(values.request, "request"), admission)));
     return;
   }
   if (command === "profile-authorize") {
     const values = parseArguments(rest, ["request", "receipt", "operation", "workspace-id", "project-id", "command"]);
     required(values, ["request", "receipt", "operation", "workspace-id", "project-id", "command"]);
-    const admission = await readGenericProfileAdmissionReceipt(values.receipt ?? "");
+    const admission = await readGenericProfileAdmissionReceipt(values.receipt ?? "",
+      io.profileAdmissionAuthority ? { authority: io.profileAdmissionAuthority } : {});
     io.write(canonicalJson(authorizeGenericProfileOperation(
       jsonValue(values.request, "request"),
       admission,

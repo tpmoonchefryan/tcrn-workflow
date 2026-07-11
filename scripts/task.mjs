@@ -479,6 +479,8 @@ async function verifyP5() {
     "P5_TRUST_ADMISSION_NEGATIVES");
   assertion(Array.isArray(fixture.admissionFilesystemNegativeCases) && fixture.admissionFilesystemNegativeCases.length === 6,
     "P5_ADMISSION_FILESYSTEM_NEGATIVES");
+  assertion(Array.isArray(fixture.authorityAnchorNegativeCases) && fixture.authorityAnchorNegativeCases.length === 7,
+    "P5_AUTHORITY_ANCHOR_NEGATIVES");
   assertion(Array.isArray(fixture.cliCases) && fixture.cliCases.length === 6, "P5_CLI_CASES");
   assertion(fixture.propertyPermutations === 64 && fixture.permutationLayerCount === 6 &&
     /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P5_PROPERTY_PERMUTATIONS");
@@ -502,6 +504,7 @@ async function verifyP5() {
     negativeCases: fixture.negativeCases.length,
     trustAdmissionNegativeCases: fixture.trustAdmissionNegativeCases.length,
     admissionFilesystemNegativeCases: fixture.admissionFilesystemNegativeCases.length,
+    authorityAnchorNegativeCases: fixture.authorityAnchorNegativeCases.length,
     cliCases: fixture.cliCases.length,
     propertyPermutations: fixture.propertyPermutations,
     permutationLayerCount: fixture.permutationLayerCount,

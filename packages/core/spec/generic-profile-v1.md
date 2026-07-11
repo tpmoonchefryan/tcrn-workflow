@@ -34,11 +34,22 @@ The request contains only untrusted layer and rebind bytes. Trust classification
 comes from a separate canonical `tcrn.generic-profile-admission-receipt.v1`
 file. The CLI opens that file with no-follow semantics, requires a regular
 single-link bounded file, binds the pre-open, descriptor, post-read, and named
-identity, and rejects noncanonical or changed bytes. The receipt binds the
+identity, and rejects noncanonical or changed bytes. File identity is not trust
+provenance: resolution additionally requires an exact canonical path and raw
+file SHA-256 supplied through the governed `CliIo` admission-authority channel.
+Neither value is a CLI argument, request field, environment input, prompt field,
+or receipt field. The standalone command wrapper supplies no authority and
+therefore fails closed; the accepted gate/control plane must inject both values
+out of band. A copied receipt, a caller-created receipt, or replacement bytes at
+the governed path cannot satisfy this anchor.
+
+The receipt binds the
 frozen base digest; every non-base layer digest, kind, and trust level; the
 release-verification digest; owner-rebind, target-layer, target-binding and
-owner digests; and the admitted governed actions. A structurally similar object
-supplied by the request is not an admitted context.
+owner digests; admitted governed actions; the complete canonical request digest;
+and the derived effective-profile digest. Resolution recomputes both digests.
+A structurally similar object supplied by the request is not an admitted
+context.
 
 The receipt also freezes `resolutionDisposition`. `normal` preserves the
 request-derived binding. `cold_standby` is accepted only with the exact frozen
@@ -93,6 +104,10 @@ every call and then checks that the action is receipt-admitted. An effective
 profile object is a deterministic readback, not an authorization capability;
 even a self-consistent object with recomputed policy/effective digests returns
 `PROFILE_EFFECTIVE_UNADMITTED` when presented as authority.
+
+`calculateGenericProfileAdmissionClaims` is a non-authorizing gate helper: it
+derives the request/effective digests for receipt construction, but cannot
+create an admitted context or bypass the external path/file-digest anchor.
 
 ## Inert starter material
 
