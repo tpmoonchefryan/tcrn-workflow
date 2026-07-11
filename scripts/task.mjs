@@ -369,6 +369,8 @@ async function verifyP4() {
   assertion(Array.isArray(knowledgeFixture.faultCases) && knowledgeFixture.faultCases.length === 3, "P4_KNOWLEDGE_FAULT_CASES");
   assertion(Array.isArray(knowledgeFixture.negativeCases) && knowledgeFixture.negativeCases.length >= 36, "P4_KNOWLEDGE_NEGATIVE_CASES");
   assertion(knowledgeFixture.propertyPermutations >= 64, "P4_KNOWLEDGE_PROPERTY_PERMUTATIONS");
+  assertion(knowledgeFixture.propertyPermutations === 64 && knowledgeFixture.permutationLogicalRecords === 5 &&
+    /^[a-f0-9]{64}$/u.test(knowledgeFixture.permutationCorpusDigest), "P4_KNOWLEDGE_REAL_PERMUTATION_CORPUS");
   assertion(knowledgeFixture.maximumBodyBytes === 8_192 && knowledgeFixture.maximumSummaryBytes === 2_048 &&
     knowledgeFixture.maximumSnippetBytes === 512 && knowledgeFixture.maximumMetadataBytes === 32_768 &&
     knowledgeFixture.maximumRecords === 16 && knowledgeFixture.maximumQueryResults === 8 &&
@@ -399,6 +401,8 @@ async function verifyP4() {
     knowledgeFaultCases: knowledgeFixture.faultCases.length,
     knowledgeNegativeCases: knowledgeFixture.negativeCases.length,
     knowledgePropertyPermutations: knowledgeFixture.propertyPermutations,
+    knowledgePermutationLogicalRecords: knowledgeFixture.permutationLogicalRecords,
+    knowledgePermutationCorpusDigest: knowledgeFixture.permutationCorpusDigest,
     knowledgeFixtureDigest: (await fileRecord(knowledgeFixturePath)).sha256,
     knowledgeSchemaDigest: (await fileRecord(knowledgeSchemaPath)).sha256,
     acceptance: "not-claimed",
@@ -417,6 +421,8 @@ async function verifyP4Knowledge() {
   assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 3, "P4_KNOWLEDGE_FAULT_CASES");
   assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 36, "P4_KNOWLEDGE_NEGATIVE_CASES");
   assertion(fixture.propertyPermutations >= 64, "P4_KNOWLEDGE_PROPERTY_PERMUTATIONS");
+  assertion(fixture.propertyPermutations === 64 && fixture.permutationLogicalRecords === 5 &&
+    /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P4_KNOWLEDGE_REAL_PERMUTATION_CORPUS");
   const packages = await Promise.all([
     readJson(resolve(repositoryRoot, "packages/core/package.json")),
     readJson(resolve(repositoryRoot, "packages/cli/package.json")),
@@ -430,10 +436,14 @@ async function verifyP4Knowledge() {
     faultCases: fixture.faultCases.length,
     negativeCases: fixture.negativeCases.length,
     propertyPermutations: fixture.propertyPermutations,
+    permutationLogicalRecords: fixture.permutationLogicalRecords,
+    permutationCorpusDigest: fixture.permutationCorpusDigest,
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
     schemaDigest: (await fileRecord(schemaPath)).sha256,
-    bodyStorage: "separate-explicit-read-only",
-    defaultSelection: "promoted-fresh-active-only",
+    bodyStorage: "metadata-surfaces-never-open-bodies-explicit-or-full-validation-only",
+    defaultSelection: "promoted-fresh-active-default-retrieval-only",
+    provenance: "explicit-source-evidence-owner-required",
+    utf8ByteBudgetProof: "custom-keyword-max-and-max-plus-one",
     liveWorkspaceStore: "not-created",
     standalone: "node-filesystem-only-no-database-no-aos-no-network",
     acceptance: "not-claimed",
