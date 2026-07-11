@@ -7,20 +7,35 @@ import {
   artifactCompactDryRun,
   artifactDoctor,
   artifactSizeReport,
+  createKnowledgeUnit,
   createProject,
   createWork,
   deleteProject,
   deleteWork,
+  evaluateKnowledgeFreshness,
+  exportKnowledgeCheckpoint,
   exportWorkspace,
+  initializeKnowledgeStore,
   initializeWorkspace,
+  listKnowledgeMetadata,
   planWorkspaceMigration,
+  readKnowledgeBody,
+  readKnowledgeSnippet,
   recoverWorkspace,
   restoreArtifactArchive,
+  transitionKnowledgePromotion,
   transitionWork,
   updateProject,
+  validateKnowledgeStore,
   validateWorkspace,
 } from "../../core/src/index.js";
-import type { ExplicitRoot } from "../../core/src/index.js";
+import type {
+  ExplicitRoot,
+  KnowledgeCategory,
+  KnowledgeFreshnessState,
+  KnowledgeKind,
+  KnowledgePromotionState,
+} from "../../core/src/index.js";
 import { canonicalJson } from "../../protocol/src/index.js";
 import type { PlannedDeliveryKind, WorkStatus } from "../../protocol/src/index.js";
 
@@ -110,6 +125,19 @@ function boundedInteger(values: Readonly<Record<string, string>>, name: string):
   return value;
 }
 
+function listValue(value: string | undefined): readonly string[] {
+  if (!value || value === "-") return [];
+  const values = value.split(",");
+  if (values.some((entry) => entry.length === 0)) fail("CLI_ARGUMENT_MALFORMED", "list");
+  return values;
+}
+
+function booleanValue(value: string | undefined, name: string): boolean {
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  fail("CLI_ARGUMENT_MALFORMED", name);
+}
+
 async function withLease<T>(workspace: string, at: string, operation: (lease: Awaited<ReturnType<typeof acquireWorkspaceLease>>) => Promise<T>): Promise<T> {
   const lease = await acquireWorkspaceLease(workspace, { now: at });
   try {
@@ -184,6 +212,111 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const at = values.at ?? "";
     const state = await withLease(workspace, at, (lease) => recoverWorkspace(workspace, lease));
     writeState(io, state);
+    return;
+  }
+  if (command === "knowledge-init") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await initializeKnowledgeStore(values.workspace ?? "")));
+    return;
+  }
+  if (command === "knowledge-validate") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await validateKnowledgeStore(values.workspace ?? "")));
+    return;
+  }
+  if (command === "knowledge-create") {
+    const names = [
+      "workspace", "expected-version", "at", "external-key", "scope", "project-id", "role-scopes", "category", "kind", "tags",
+      "subject", "summary", "snippet", "source-references", "source-digest", "work-ids", "decision-ids", "gate-ids", "evidence-ids",
+      "lifecycle", "retrieval", "freshness", "last-verified", "stale-days", "export", "body",
+    ];
+    const values = parseArguments(rest, names);
+    required(values, names);
+    io.write(canonicalJson(await createKnowledgeUnit(values.workspace ?? "", {
+      expectedVersion: expectedVersion(values),
+      occurredAt: values.at ?? "",
+      externalKey: values["external-key"] ?? "",
+      scope: values.scope as "workspace" | "project" | "role",
+      projectId: values["project-id"] === "null" ? null : values["project-id"] ?? null,
+      roleScopes: listValue(values["role-scopes"]),
+      category: values.category as KnowledgeCategory,
+      kind: values.kind as KnowledgeKind,
+      tags: listValue(values.tags),
+      subject: values.subject ?? "",
+      summary: values.summary ?? "",
+      snippet: values.snippet ?? "",
+      sourceReferences: listValue(values["source-references"]),
+      sourceDigest: values["source-digest"] ?? "",
+      linkedWorkIds: listValue(values["work-ids"]),
+      linkedDecisionIds: listValue(values["decision-ids"]),
+      linkedGateIds: listValue(values["gate-ids"]),
+      linkedEvidenceIds: listValue(values["evidence-ids"]),
+      lifecycle: values.lifecycle as "candidate" | "active" | "retired",
+      retrievalDisposition: values.retrieval as "default" | "explicit-only" | "excluded",
+      freshnessState: values.freshness as KnowledgeFreshnessState,
+      lastVerified: values["last-verified"] === "null" ? null : values["last-verified"] ?? null,
+      stalenessPolicy: { maximumAgeDays: Number(values["stale-days"]), unknownDisposition: "fail-closed" },
+      exportDisposition: values.export as "metadata-only" | "excluded",
+      body: values.body ?? "",
+    })));
+    return;
+  }
+  if (command === "knowledge-list") {
+    const values = parseArguments(rest, ["workspace", "at", "selection", "project-id", "role-scope", "category", "kind", "tag", "freshness", "promotion"]);
+    required(values, ["workspace", "at"]);
+    io.write(canonicalJson(await listKnowledgeMetadata(values.workspace ?? "", {
+      at: values.at ?? "",
+      ...(values.selection ? { selection: values.selection as "default" | "all" } : {}),
+      ...(values["project-id"] ? { projectId: values["project-id"] } : {}),
+      ...(values["role-scope"] ? { roleScope: values["role-scope"] } : {}),
+      ...(values.category ? { category: values.category as KnowledgeCategory } : {}),
+      ...(values.kind ? { kind: values.kind as KnowledgeKind } : {}),
+      ...(values.tag ? { tag: values.tag } : {}),
+      ...(values.freshness ? { freshness: values.freshness as KnowledgeFreshnessState } : {}),
+      ...(values.promotion ? { promotionState: values.promotion as KnowledgePromotionState } : {}),
+    })));
+    return;
+  }
+  if (command === "knowledge-snippet") {
+    const values = parseArguments(rest, ["workspace", "id"]);
+    required(values, ["workspace", "id"]);
+    io.write(canonicalJson(await readKnowledgeSnippet(values.workspace ?? "", values.id ?? "")));
+    return;
+  }
+  if (command === "knowledge-body") {
+    const values = parseArguments(rest, ["workspace", "id", "at", "allow-unpromoted", "allow-stale"]);
+    required(values, ["workspace", "id", "at"]);
+    io.write(canonicalJson(await readKnowledgeBody(values.workspace ?? "", values.id ?? "", {
+      at: values.at ?? "",
+      allowUnpromoted: booleanValue(values["allow-unpromoted"], "allow-unpromoted"),
+      allowStale: booleanValue(values["allow-stale"], "allow-stale"),
+    })));
+    return;
+  }
+  if (command === "knowledge-freshness") {
+    const values = parseArguments(rest, ["workspace", "at"]);
+    required(values, ["workspace", "at"]);
+    io.write(canonicalJson(await evaluateKnowledgeFreshness(values.workspace ?? "", values.at ?? "")));
+    return;
+  }
+  if (command === "knowledge-promote") {
+    const values = parseArguments(rest, ["workspace", "expected-version", "expected-revision", "at", "id", "state"]);
+    required(values, ["workspace", "expected-version", "expected-revision", "at", "id", "state"]);
+    io.write(canonicalJson(await transitionKnowledgePromotion(values.workspace ?? "", {
+      expectedVersion: expectedVersion(values),
+      expectedRevision: Number(values["expected-revision"]),
+      occurredAt: values.at ?? "",
+      id: values.id ?? "",
+      promotionState: values.state as "promoted" | "rejected",
+    })));
+    return;
+  }
+  if (command === "knowledge-checkpoint") {
+    const values = parseArguments(rest, ["workspace", "at"]);
+    required(values, ["workspace", "at"]);
+    io.write(await exportKnowledgeCheckpoint(values.workspace ?? "", values.at ?? ""));
     return;
   }
   if (command === "artifact-size") {

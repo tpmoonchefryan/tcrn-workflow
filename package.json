@@ -37,6 +37,7 @@
     "verify:p2": "node scripts/task.mjs p2",
     "verify:p3": "node scripts/task.mjs p3",
     "verify:p4": "node scripts/task.mjs p4",
+    "verify:p4:knowledge": "node scripts/task.mjs p4-knowledge",
     "verify:protocol": "node scripts/task.mjs protocol-test",
     "verify:schemas": "node scripts/task.mjs protocol-schemas",
     "verify:privacy": "node scripts/task.mjs privacy",

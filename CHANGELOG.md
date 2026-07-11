@@ -29,3 +29,7 @@ Versioning after the first accepted release.
 - Add the bounded P4 artifact lifecycle candidate: closed classification,
   deterministic doctor/size and compact projections, redacted metadata-first
   references, and disposable-only archive apply/restore with fault proof.
+- Add the bounded P4 file-native Knowledge Core candidate with closed metadata,
+  separate explicit body reads, deterministic filters/indexes/checkpoints,
+  freshness and promotion CAS, inert locators, strict limits, and disposable
+  filesystem fault proof without live-store initialization.
