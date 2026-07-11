@@ -39,9 +39,12 @@ fail closed.
 References must already be redacted before admission. Authentication material,
 userinfo in every parsed hierarchical URL scheme and scheme-relative URL,
 URL query/fragment data, common credential forms, email-like private identifiers,
-and private machine-home paths are removed or replaced. Malformed or unsupported
-hierarchical userinfo fails closed instead of being admitted. This deterministic
-focused policy is metadata/reference-first and is not a general DLP claim.
+and private machine-home paths are removed or replaced. Leading and trailing
+ASCII space (`U+0020`) is removed before URL structural detection; ASCII control
+whitespace remains invalid under the printable-reference rule. Malformed or
+unsupported hierarchical userinfo fails closed instead of being admitted. This
+deterministic focused policy is metadata/reference-first and is not a general
+DLP claim.
 
 ## Doctor, size, and compact projection
 
