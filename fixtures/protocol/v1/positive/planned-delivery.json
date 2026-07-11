@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "tcrn.fixture.v1",
+  "aosFacing": true,
+  "requirementIds": [
+    "AOS-REQ-002",
+    "AOS-REQ-004",
+    "AOS-REQ-005"
+  ],
+  "records": [
+    {
+      "schemaVersion": "tcrn.work.v1",
+      "id": "work:story-alpha",
+      "externalKey": "STORY-ALPHA",
+      "projectId": "project:alpha",
+      "kind": "Story",
+      "parentId": "work:epic-alpha",
+      "status": "ready",
+      "revision": 1,
+      "updatedAt": "2026-07-11T00:00:02Z",
+      "tombstone": false,
+      "extensions": {}
+    },
+    {
+      "schemaVersion": "tcrn.work.v1",
+      "id": "work:initiative-alpha",
+      "externalKey": "INITIATIVE-ALPHA",
+      "projectId": "project:alpha",
+      "kind": "Initiative",
+      "parentId": null,
+      "status": "active",
+      "revision": 2,
+      "updatedAt": "2026-07-11T00:00:00Z",
+      "tombstone": false,
+      "extensions": {}
+    },
+    {
+      "schemaVersion": "tcrn.work.v1",
+      "id": "work:subtask-alpha",
+      "externalKey": "SUBTASK-ALPHA",
+      "projectId": "project:alpha",
+      "kind": "Subtask",
+      "parentId": "work:story-alpha",
+      "status": "planned",
+      "revision": 1,
+      "updatedAt": "2026-07-11T00:00:03Z",
+      "tombstone": false,
+      "extensions": {}
+    },
+    {
+      "schemaVersion": "tcrn.work.v1",
+      "id": "work:epic-alpha",
+      "externalKey": "EPIC-ALPHA",
+      "projectId": "project:alpha",
+      "kind": "Epic",
+      "parentId": "work:initiative-alpha",
+      "status": "active",
+      "revision": 1,
+      "updatedAt": "2026-07-11T00:00:01Z",
+      "tombstone": false,
+      "extensions": {}
+    }
+  ],
+  "expectedOrder": [
+    "work:initiative-alpha",
+    "work:epic-alpha",
+    "work:story-alpha",
+    "work:subtask-alpha"
+  ],
+  "expectedGraphHash": "3b39bf5a74dfb3d5c1fadedf5d72f68695497eb2f02621b05d15e463a9a59ceb"
+}

@@ -65,6 +65,19 @@ test("filenames are scanned as privacy-bearing metadata", () => {
   );
   assert.ok(findings.some((finding) => finding.startsWith("CUSTOMER_SOURCE_MARKER:")));
 });
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+      .some((finding) => finding.startsWith("CONTROL_PLANE_PATH:")),
+  );
+});
 
 test("recursive historical tree records preserve privacy-bearing full paths", () => {
   assert.deepEqual(parseHistoricalTreePaths(""), []);

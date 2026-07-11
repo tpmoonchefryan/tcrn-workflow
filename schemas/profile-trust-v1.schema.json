@@ -1,0 +1,50 @@
+{
+  "$id": "https://tcrn.dev/schemas/profile-trust-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Profile Trust V1",
+  "type": "object",
+  "additionalProperties": false,
+  "x-tcrn-aos-requirementIds": [
+    "AOS-REQ-011"
+  ],
+  "required": [
+    "schemaVersion",
+    "profileId",
+    "issuer",
+    "issuedAt",
+    "expiresAt",
+    "minimumProtocolVersion",
+    "maximumProtocolVersion",
+    "capabilityDigest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.profile-trust.v1"
+    },
+    "profileId": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "issuer": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "issuedAt": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "expiresAt": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "minimumProtocolVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "maximumProtocolVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "capabilityDigest": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/sha256"
+    }
+  }
+}

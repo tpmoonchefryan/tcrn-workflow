@@ -47,11 +47,11 @@ test("release mode declares every required external input", () => {
   ]);
 });
 
-test("P1 does not overclaim normative protocol availability", () => {
-  assert.equal(PROTOCOL_STATUS, "not-implemented-p1");
+test("P2 exposes the frozen normative protocol without claiming P3", () => {
+  assert.equal(PROTOCOL_STATUS, "implemented-p2-v1");
   assert.deepEqual(protocolBootstrapStatus, {
-    phase: "P1",
-    normativeProtocolAvailable: false,
-    reasonCode: "P2_OUT_OF_SCOPE",
+    phase: "P2",
+    normativeProtocolAvailable: true,
+    reasonCode: "P2_VERIFIED",
   });
 });

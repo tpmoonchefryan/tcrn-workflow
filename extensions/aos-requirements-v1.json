@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "tcrn.aos-requirements.v1",
+  "requirements": [
+    {
+      "id": "AOS-REQ-001",
+      "subject": "canonical-utf8-json",
+      "maturity": "fixture_verified"
+    },
+    {
+      "id": "AOS-REQ-002",
+      "subject": "stable-identifiers-and-external-keys",
+      "maturity": "fixture_verified"
+    },
+    {
+      "id": "AOS-REQ-003",
+      "subject": "strict-instants-limits-and-reason-codes",
+      "maturity": "fixture_verified"
+    },
+    {
+      "id": "AOS-REQ-004",
+      "subject": "typed-planned-delivery-graph",
+      "maturity": "fixture_verified"
+    },
+    {
+      "id": "AOS-REQ-005",
+      "subject": "work-extensions-tombstones-and-transitions",
+      "maturity": "fixture_verified"
+    },
+    {
+      "id": "AOS-REQ-006",
+      "subject": "knowledge-records",
+      "maturity": "specified"
+    },
+    {
+      "id": "AOS-REQ-007",
+      "subject": "event-integrity-and-replay",
+      "maturity": "fixture_verified"
+    },
+    {
+      "id": "AOS-REQ-008",
+      "subject": "deterministic-context",
+      "maturity": "specified"
+    },
+    {
+      "id": "AOS-REQ-009",
+      "subject": "portable-exchange-envelope",
+      "maturity": "fixture_verified"
+    },
+    {
+      "id": "AOS-REQ-010",
+      "subject": "version-window-and-maturity",
+      "maturity": "fixture_verified"
+    },
+    {
+      "id": "AOS-REQ-011",
+      "subject": "profile-trust-without-release-elevation",
+      "maturity": "specified"
+    },
+    {
+      "id": "AOS-REQ-012",
+      "subject": "immutable-receipts",
+      "maturity": "specified"
+    },
+    {
+      "id": "AOS-REQ-013",
+      "subject": "required-and-optional-extension-registration",
+      "maturity": "fixture_verified"
+    },
+    {
+      "id": "AOS-REQ-014",
+      "subject": "p3-acceptance-marker-contract",
+      "maturity": "specified"
+    }
+  ],
+  "prohibitedClaims": [
+    "live-endpoint",
+    "credential",
+    "database-layout",
+    "current-runtime-mutation",
+    "supported-release-pair"
+  ]
+}

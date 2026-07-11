@@ -1,0 +1,225 @@
+{
+  "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
+  "status": "candidate_unreviewed",
+  "accepted": false,
+  "basisDigest": "00b900d40652a04dd7d0f55e8792ef2f1b54e5e400ef7c381fef5f7079116b92",
+  "inputs": [
+    {
+      "path": "extensions/aos-requirements-v1.json",
+      "size": 1974,
+      "sha256": "70b3f4bcbae1e4a4921d2dfbbe2a7e176bca64e31fe15114d8f4542868599173"
+    },
+    {
+      "path": "fixtures/isolated-proof/README.md",
+      "size": 1033,
+      "sha256": "618fcac10ceb782483f984e848e008799f8e6d98e890782a12948daf2d737388"
+    },
+    {
+      "path": "fixtures/protocol/v1/negative/cases.json",
+      "size": 2037,
+      "sha256": "aa7afe3b8afa2cfef26862bbd6de6a59ba62cd77d42b05a4147849ecfb73f506"
+    },
+    {
+      "path": "fixtures/protocol/v1/positive/canonical-vector.json",
+      "size": 615,
+      "sha256": "5165c944407bca6ca9605e4f56bf8add710d113f0f45f52fed90d45e508eb810"
+    },
+    {
+      "path": "fixtures/protocol/v1/positive/event-chain.json",
+      "size": 1047,
+      "sha256": "2a09455a3739ed7e31002c48237c31da888dcf005b4209fdfb5c50c9523bca66"
+    },
+    {
+      "path": "fixtures/protocol/v1/positive/exchange.json",
+      "size": 372,
+      "sha256": "03a30fe65961106311439d6346c8faf9bdac8ee24fffca3024ffcfa209120cbe"
+    },
+    {
+      "path": "fixtures/protocol/v1/positive/extensions.json",
+      "size": 2050,
+      "sha256": "c9bd74dc0d3c376382cc927bb8b7d0f7cdb20ea4b6e0af46a932f63048e42d55"
+    },
+    {
+      "path": "fixtures/protocol/v1/positive/models.json",
+      "size": 2737,
+      "sha256": "3f26633db84a7079fcf38422b4349801f702c01459a4e6333b5012fb97ee7b9e"
+    },
+    {
+      "path": "fixtures/protocol/v1/positive/planned-delivery.json",
+      "size": 1814,
+      "sha256": "bcc314ad98e792e11b312f4d57396750e5663fa158a34839f13e32f3148bd599"
+    },
+    {
+      "path": "fixtures/protocol/v1/property/determinism.json",
+      "size": 298,
+      "sha256": "280332581a6fafcc91583c9724ff9c2df380d84dd3546263fcab20e68e9fa3d6"
+    },
+    {
+      "path": "fixtures/release-trust/README.md",
+      "size": 241,
+      "sha256": "e31e43b81940a7e13b9f4f2379b5c5a594b7df92545a17ff28e3aff5a4b7c72e"
+    },
+    {
+      "path": "schemas/compatibility-v1.schema.json",
+      "size": 1058,
+      "sha256": "5c0292f89ec40574f3dfb3380ad01edcd95632e7032c9600549bc5479d22c265"
+    },
+    {
+      "path": "schemas/context-v1.schema.json",
+      "size": 1244,
+      "sha256": "2e7c77ac322598671cee5190346a835e69dcada00295f35e9bcc3c99575781a9"
+    },
+    {
+      "path": "schemas/event-integrity-v1.schema.json",
+      "size": 1291,
+      "sha256": "708ceeb897e51e7d65ae5ccfeaa1d837a2e5e6f3ebf6ef9f13646449509b7784"
+    },
+    {
+      "path": "schemas/exchange-v1.schema.json",
+      "size": 1634,
+      "sha256": "b932712a9dcbc6929eb68cce49608d6713ec6d94e6ef96ec377b777fb139dd5a"
+    },
+    {
+      "path": "schemas/extension-registration-v1.schema.json",
+      "size": 1131,
+      "sha256": "e882479cad6b7e54017e063a42260c8cc3ddaa724dff492b92fa4c40d73a5ab1"
+    },
+    {
+      "path": "schemas/knowledge-model-v1.schema.json",
+      "size": 1212,
+      "sha256": "2af3b83379b1e3d8a0a365c57ac7a2db61934b7e6f0ebe6654c3f638cbceb64a"
+    },
+    {
+      "path": "schemas/p3-acceptance-marker-v1.schema.json",
+      "size": 1637,
+      "sha256": "d781dd166eb9755a976cd3b00587b739d95426c3dda16fcddeb6ad4db741b3fd"
+    },
+    {
+      "path": "schemas/profile-trust-v1.schema.json",
+      "size": 1257,
+      "sha256": "de20f6d31badfe57706b85a3f385fa29107b66d872b9c101ff9f4d19c694ede7"
+    },
+    {
+      "path": "schemas/protocol-common-v1.schema.json",
+      "size": 1289,
+      "sha256": "56d885dc696ab1bc8adfa0caabb8c3c25f0682a1c2ebab02520a48f93349dfe0"
+    },
+    {
+      "path": "schemas/receipt-v1.schema.json",
+      "size": 1036,
+      "sha256": "83754718ea0867b5cc090e85ddff32a43867cfabc23e0a62ac46a660ce108c42"
+    },
+    {
+      "path": "schemas/release-manifest-v1.schema.json",
+      "size": 1678,
+      "sha256": "d270fc2154f747c6d4a0174056259e9aa429a5d797b601558f8ac1da76058059"
+    },
+    {
+      "path": "schemas/release-trust-root-v1.schema.json",
+      "size": 1992,
+      "sha256": "e4c9c7160f816f3b2db1008c8499f80cfe28099660c00bffa069595d6cdc8fb2"
+    },
+    {
+      "path": "schemas/work-model-v1.schema.json",
+      "size": 1730,
+      "sha256": "404bfd5e2b0a6eb7af7d04e586880e0c883142a3be9343b1db1ac76fc87e2c25"
+    },
+    {
+      "path": "specs/aos-requirements-v1.md",
+      "size": 551,
+      "sha256": "58d060244f65efede51dfacdc3ebc9006d8102a6a02fdc70992408fbc29eef14"
+    },
+    {
+      "path": "specs/compatibility-v1.md",
+      "size": 370,
+      "sha256": "fd1380d2e808a785cea44152151e9e2cf733df191b8157e6b3e51915219a92c2"
+    },
+    {
+      "path": "specs/context-v1.md",
+      "size": 416,
+      "sha256": "cd5c98c2466d755a982983b5759afe2a51fd9cef24d7f2e7a98129f3a40e5533"
+    },
+    {
+      "path": "specs/event-integrity-v1.md",
+      "size": 593,
+      "sha256": "befe7f2ca51760553f1dd65a7e4e94ef798fc4b19905e2fd4653449028115602"
+    },
+    {
+      "path": "specs/exchange-v1.md",
+      "size": 442,
+      "sha256": "2220523ee906918aa29f18a24fe1203764e3db04f61c4a6c3bd7add1607ce713"
+    },
+    {
+      "path": "specs/extension-registration-v1.md",
+      "size": 506,
+      "sha256": "10c879dcc8cff41663c0e7e4d2b3100f5c95af85fa95bb322a4f42b0b468c6a1"
+    },
+    {
+      "path": "specs/knowledge-model-v1.md",
+      "size": 485,
+      "sha256": "27f9dad0196783146707b1516c011a180aa34ffaa1f01a60b9fbe2407b522352"
+    },
+    {
+      "path": "specs/p3-acceptance-marker-v1.md",
+      "size": 594,
+      "sha256": "3ca8567c94dcf35dbc163f6115d43aff7f6e192bac9f86ab00dd3bde910e8fc4"
+    },
+    {
+      "path": "specs/profile-trust-v1.md",
+      "size": 407,
+      "sha256": "ca7bb7674a5344080b9c3fcb4b8acbdd7f219913828033c1e53d19b1278f56f0"
+    },
+    {
+      "path": "specs/protocol-common-v1.md",
+      "size": 1332,
+      "sha256": "fab9124af1a7f4f005c7646bebc919a354c83d493bf0fb31b800c6b5cff2f7aa"
+    },
+    {
+      "path": "specs/rc1-candidate-proof-manifest-v1.md",
+      "size": 705,
+      "sha256": "2f91ef3b371a908e9f6a1cf3fc69e7cc7fbb88a9ac250cf4592c0e15551a346a"
+    },
+    {
+      "path": "specs/receipt-v1.md",
+      "size": 424,
+      "sha256": "1e7d25bf31fe43c4a66ab3f91662c0b4dc7dbbd7d371826edbb0678bd69f3066"
+    },
+    {
+      "path": "specs/release-trust-v1.md",
+      "size": 1722,
+      "sha256": "a839e079d57cbc62a1552c5515ab5a167dcb74ff9d1809b13616b11a0b65cd23"
+    },
+    {
+      "path": "specs/work-model-v1.md",
+      "size": 916,
+      "sha256": "00a55a2c295889d3cb2a30be0cbef4ef17190d4519abccfa9a4ed680aed00ca4"
+    },
+    {
+      "path": "verification-map.yaml",
+      "size": 16373,
+      "sha256": "3a762d4df2daaa1cdb2aa7d101a7a8f1e7d28c2bd3f59fdb04775611438ba6fa"
+    }
+  ],
+  "roleVerdictSlots": {
+    "platform-workflow-architect": {
+      "status": "unresolved",
+      "verdict": null,
+      "basisDigest": null
+    },
+    "workflow-verification-engineer": {
+      "status": "unresolved",
+      "verdict": null,
+      "basisDigest": null
+    },
+    "security-risk-reviewer": {
+      "status": "unresolved",
+      "verdict": null,
+      "basisDigest": null
+    },
+    "reality-checker": {
+      "status": "unresolved",
+      "verdict": null,
+      "basisDigest": null
+    }
+  }
+}

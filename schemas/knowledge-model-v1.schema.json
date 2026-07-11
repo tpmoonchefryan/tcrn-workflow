@@ -1,0 +1,55 @@
+{
+  "$id": "https://tcrn.dev/schemas/knowledge-model-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Knowledge Model V1",
+  "type": "object",
+  "additionalProperties": false,
+  "x-tcrn-aos-requirementIds": [
+    "AOS-REQ-006"
+  ],
+  "required": [
+    "schemaVersion",
+    "id",
+    "projectId",
+    "subject",
+    "body",
+    "revision",
+    "updatedAt",
+    "tombstone",
+    "extensions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.knowledge.v1"
+    },
+    "id": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "projectId": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "body": {
+      "type": "string",
+      "maxLength": 8192
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "updatedAt": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "tombstone": {
+      "type": "boolean"
+    },
+    "extensions": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/extensionMap"
+    }
+  }
+}

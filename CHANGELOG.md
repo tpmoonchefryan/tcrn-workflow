@@ -8,3 +8,6 @@ Versioning after the first accepted release.
 - Establish the clean-history P1 framework bootstrap.
 - Pin the toolchain and offline deterministic verification commands.
 - Define external release-trust-root verification and privacy boundaries.
+- Freeze the P2 Protocol V1 schemas, specifications, conformance fixtures,
+  generic AOS requirements ledger, P3 marker contract, and unaccepted RC1
+  candidate proof manifest.

@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "tcrn.negative-fixture.v1",
+  "aosFacing": true,
+  "requirementIds": [
+    "AOS-REQ-003",
+    "AOS-REQ-004",
+    "AOS-REQ-005",
+    "AOS-REQ-007",
+    "AOS-REQ-009",
+    "AOS-REQ-013"
+  ],
+  "cases": [
+    {
+      "id": "canonical-value-invalid",
+      "expectedReasonCode": "CANONICAL_VALUE_INVALID"
+    },
+    {
+      "id": "malformed-record",
+      "expectedReasonCode": "RECORD_MALFORMED"
+    },
+    {
+      "id": "duplicate-id",
+      "expectedReasonCode": "DUPLICATE_ID"
+    },
+    {
+      "id": "cycle",
+      "expectedReasonCode": "GRAPH_CYCLE"
+    },
+    {
+      "id": "cross-project-parent",
+      "expectedReasonCode": "GRAPH_CROSS_PROJECT_PARENT"
+    },
+    {
+      "id": "invalid-parent-kind",
+      "expectedReasonCode": "GRAPH_PARENT_KIND_INVALID"
+    },
+    {
+      "id": "invalid-transition",
+      "expectedReasonCode": "INVALID_TRANSITION"
+    },
+    {
+      "id": "invalid-id",
+      "expectedReasonCode": "ID_INVALID"
+    },
+    {
+      "id": "invalid-external-key",
+      "expectedReasonCode": "EXTERNAL_KEY_INVALID"
+    },
+    {
+      "id": "invalid-timestamp",
+      "expectedReasonCode": "TIMESTAMP_INVALID"
+    },
+    {
+      "id": "invalid-version-window",
+      "expectedReasonCode": "VERSION_WINDOW_INVALID"
+    },
+    {
+      "id": "oversized-input",
+      "expectedReasonCode": "INPUT_OVERSIZED"
+    },
+    {
+      "id": "unknown-required-extension",
+      "expectedReasonCode": "UNKNOWN_REQUIRED_EXTENSION"
+    },
+    {
+      "id": "event-replay",
+      "expectedReasonCode": "EVENT_REPLAY"
+    },
+    {
+      "id": "event-corruption",
+      "expectedReasonCode": "EVENT_CHAIN_CORRUPT"
+    },
+    {
+      "id": "path-escape",
+      "expectedReasonCode": "PATH_ESCAPE"
+    },
+    {
+      "id": "canonicalization-mismatch",
+      "expectedReasonCode": "CANONICALIZATION_MISMATCH"
+    },
+    {
+      "id": "tombstone-reference",
+      "expectedReasonCode": "TOMBSTONE_REFERENCED"
+    },
+    {
+      "id": "missing-parent",
+      "expectedReasonCode": "REFERENTIAL_INTEGRITY"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "$id": "https://tcrn.dev/schemas/event-integrity-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Event Integrity V1",
+  "type": "object",
+  "additionalProperties": false,
+  "x-tcrn-aos-requirementIds": [
+    "AOS-REQ-007"
+  ],
+  "required": [
+    "schemaVersion",
+    "id",
+    "streamId",
+    "sequence",
+    "occurredAt",
+    "priorHash",
+    "payload",
+    "payloadHash",
+    "eventHash"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.event.v1"
+    },
+    "id": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "streamId": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "occurredAt": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "priorHash": {
+      "anyOf": [
+        {
+          "$ref": "./protocol-common-v1.schema.json#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "payload": true,
+    "payloadHash": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/sha256"
+    },
+    "eventHash": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/sha256"
+    }
+  }
+}

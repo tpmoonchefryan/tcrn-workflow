@@ -1,0 +1,13 @@
+# RC1 Candidate Proof Manifest V1
+
+The RC1 candidate manifest lists the public AOS ledger, every normative P1/P2
+schema, specification, fixture, and the verification map as sorted
+path/size/SHA-256 records. Its basis digest is the SHA-256 of canonical JSON for
+that sorted input array. The candidate manifest digest is the SHA-256 of the
+complete canonical manifest bytes.
+
+Required role slots are platform-workflow-architect,
+workflow-verification-engineer, security-risk-reviewer, and reality-checker.
+P2 freezes all slots as unresolved with null verdict and basis digest. The
+`RC1_CANDIDATE_READY` reason proves deterministic candidate construction only;
+it does not mean RC1 was reviewed or accepted.

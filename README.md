@@ -1,9 +1,9 @@
 # TCRN Workflow
 
 TCRN Workflow is an offline-first framework for deterministic work, context,
-evidence, and release verification. This repository currently contains the P1
-framework bootstrap. Protocol semantics and integrations are intentionally not
-part of this milestone.
+evidence, and release verification. This repository contains the accepted P1
+framework bootstrap and the P2 V1 protocol/conformance basis. P3 capability,
+live integrations, and release support remain intentionally unavailable.
 
 ## Modes
 
@@ -22,6 +22,8 @@ offline:
 ```sh
 pnpm install --offline --frozen-lockfile --ignore-scripts
 pnpm verify:p1
+pnpm verify:p2
+pnpm verify:rc1
 ```
 
 The repository does not collect telemetry. Static checks, a process executable
@@ -34,6 +36,13 @@ The P1 workspace is dependency-free. Its `typecheck` and `build` commands use
 the pinned Node type-transform engine plus P1 public-contract checks; runtime
 tests execute every emitted module. Introducing a general-purpose compiler is a
 dependency-policy change and requires a reviewed exact pin.
+
+`pnpm verify:p2` checks the frozen Work, Knowledge, Event Integrity, Context,
+Exchange, Compatibility, Profile Trust, Receipt, extension-registration, and P3
+marker contracts; deterministic vectors and negative/property tests; the public
+AOS requirements ledger; and the unaccepted RC1 candidate manifest. A green
+`pnpm verify:rc1` means only `RC1_CANDIDATE_READY`: all four role-verdict slots
+remain unresolved, RC1 is not accepted, and P3 remains unavailable.
 
 See `docs/architecture/root-model.md` and
 `docs/release-trust/external-release-trust-root-v1.md` for the bootstrap trust
@@ -62,5 +71,5 @@ privacy regex set is a focused policy control, not a general DLP system.
 ## Status
 
 The public API is pre-release. Supported release mode is unavailable unless the
-external trust verifier succeeds. No compatibility with an external runtime is
-claimed by P1.
+external trust verifier succeeds. P2 claims specification and fixture maturity
+only; it claims no live external-runtime compatibility or supported release pair.

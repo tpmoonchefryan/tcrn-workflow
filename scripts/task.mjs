@@ -18,6 +18,12 @@ import {
 } from "./lib/files.mjs";
 import { parseHistoricalTreePaths, scanPrivacyEntries } from "./lib/privacy.mjs";
 import {
+  ProtocolProofError,
+  validateAosLedger,
+  validateP2SchemasAndFixtures,
+  validateRc1Candidate,
+} from "./lib/protocol-proof.mjs";
+import {
   BoundaryError,
   assertCleanExclusiveSourceBasis,
   readBoundRegularFile,
@@ -232,13 +238,14 @@ async function build() {
   });
 }
 
-async function runTests({ trustOnly = false, rootOnly = false } = {}) {
+async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = false } = {}) {
   await build();
   const tests = (await walkFiles())
     .map((path) => toPosixPath(relative(repositoryRoot, path)))
     .filter((path) => path.startsWith("tests/") && path.endsWith(".test.mjs"))
     .filter((path) => !trustOnly || path === "tests/release-trust.test.mjs")
-    .filter((path) => !rootOnly || path === "tests/root-boundaries.test.mjs");
+    .filter((path) => !rootOnly || path === "tests/root-boundaries.test.mjs")
+    .filter((path) => !protocolOnly || path === "tests/protocol-v1.test.mjs");
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -246,9 +253,34 @@ async function runTests({ trustOnly = false, rootOnly = false } = {}) {
     },
   });
   return success(
-    trustOnly ? "TRUST_NEGATIVE_MATRIX_VERIFIED" : rootOnly ? "ROOT_BOUNDARIES_VERIFIED" : "TESTS_VERIFIED",
+    trustOnly
+      ? "TRUST_NEGATIVE_MATRIX_VERIFIED"
+      : rootOnly
+        ? "ROOT_BOUNDARIES_VERIFIED"
+        : protocolOnly
+          ? "P2_CONFORMANCE_VERIFIED"
+          : "TESTS_VERIFIED",
     { tests, result: "passed" },
   );
+}
+
+async function verifyP2Schemas() {
+  const result = await validateP2SchemasAndFixtures();
+  return success("P2_SCHEMAS_VERIFIED", result);
+}
+
+async function verifyAosRequirements() {
+  const result = await validateAosLedger();
+  return success("AOS_REQUIREMENTS_VERIFIED", result);
+}
+
+async function verifyProtocolConformance() {
+  return runTests({ protocolOnly: true });
+}
+
+async function verifyRc1CandidateReadiness() {
+  const result = await validateRc1Candidate();
+  return success("RC1_CANDIDATE_READY", result);
 }
 
 function octal(value, length) {
@@ -458,6 +490,7 @@ async function verifyPrivacy() {
     historicalFullPaths: historicalPaths,
     archiveScanned: entries.some((entry) => entry.kind === "archive"),
     allowedPublicMetadata: "strict-github-noreply-commit-or-tag-lines-only",
+    allowedPublicControlMetadata: "exact-p3-marker-contract-only",
     sourceFiles: source.files,
   });
 }
@@ -565,8 +598,8 @@ const commandContracts = {
   roots: { exit: 0, reasonCode: "ROOT_BOUNDARIES_VERIFIED" },
   ci: { exit: 0, reasonCode: "CI_HARDENING_VERIFIED" },
   isolated: { exit: 0, reasonCode: "ISOLATED_P1_VERIFIED" },
-  p2: { exit: 1, reasonCode: "P2_OUT_OF_SCOPE" },
-  rc1: { exit: 1, reasonCode: "RC1_OUT_OF_SCOPE" },
+  p2: { exit: 0, reasonCode: "P2_VERIFIED" },
+  rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
 async function verifyMap() {
@@ -594,7 +627,7 @@ async function verifyMap() {
     assertion(!ids.has(claim.id), "VERIFICATION_MAP_DUPLICATE", claim.id);
     ids.add(claim.id);
     assertion(["P1", "P2", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
-    assertion(["implemented", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
+    assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);
     const commandMatch = claim.command.match(/^pnpm ([a-z0-9:.-]+)$/u);
@@ -609,7 +642,7 @@ async function verifyMap() {
     assertion(contract, "VERIFICATION_MAP_COMMAND_CONTRACT", `${claim.id}:${contractName}`);
     assertion(contract.exit === claim.expectedExit, "VERIFICATION_MAP_EXIT_UNOBSERVABLE", claim.id);
     assertion(contract.reasonCode === claim.expectedReasonCode, "VERIFICATION_MAP_REASON_UNOBSERVABLE", claim.id);
-    if (claim.status === "implemented") {
+    if (claim.status === "implemented" || claim.status === "candidate") {
       assertion(/^[a-f0-9]{64}$/u.test(claim.fixtureDigest), "VERIFICATION_MAP_DIGEST", claim.id);
       assertion(claim.fixtureDigest === await aggregateDigest(claim.fixturePaths), "VERIFICATION_MAP_DIGEST_MISMATCH", claim.id);
     } else {
@@ -623,6 +656,7 @@ async function verifyMap() {
   return success("VERIFICATION_MAP_VERIFIED", {
     claims: map.claims.length,
     implemented: map.claims.filter((claim) => claim.status === "implemented").length,
+    candidate: map.claims.filter((claim) => claim.status === "candidate").length,
     observableReasonCodes: map.claims.length,
   });
 }
@@ -729,12 +763,26 @@ async function verifyP1() {
   });
 }
 
+async function verifyP2() {
+  assertCleanExclusiveSourceBasis(run("git", ["status", "--porcelain=v1", "--untracked-files=all"]));
+  const sequence = ["protocol-schemas", "protocol-test", "aos", "rc1"];
+  const results = [];
+  for (const name of sequence) {
+    results.push(await invoke(name));
+  }
+  return success("P2_VERIFIED", {
+    commands: sequence,
+    observedReasonCodes: results.map((result) => result.reasonCode),
+  });
+}
+
 async function clean() {
   const result = await safeCleanOutputRoot(repositoryRoot);
   return success("OUTPUTS_CLEANED", result);
 }
 
 const handlers = {
+  aos: verifyAosRequirements,
   archive,
   build,
   ci: verifyCi,
@@ -747,10 +795,12 @@ const handlers = {
   lifecycle: verifyLifecycle,
   lint,
   offline: verifyOfflineBoundary,
-  p2: async () => fail("P2_OUT_OF_SCOPE", "P2 is not implemented by the P1 repair"),
+  p2: verifyP2,
   privacy: verifyPrivacy,
-  rc1: async () => fail("RC1_OUT_OF_SCOPE", "RC1 is not implemented by the P1 repair"),
+  rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
+  "protocol-schemas": verifyP2Schemas,
+  "protocol-test": verifyProtocolConformance,
   runtime: verifyRuntime,
   sbom,
   source: verifySource,
@@ -764,14 +814,14 @@ const handlers = {
 };
 
 function errorReason(error) {
-  if (error instanceof TaskError || error instanceof BoundaryError) {
+  if (error instanceof TaskError || error instanceof BoundaryError || error instanceof ProtocolProofError) {
     return error.reasonCode;
   }
   return "TASK_INTERNAL_ERROR";
 }
 
 function evidencePhase(name) {
-  if (name === "p2") {
+  if (["aos", "p2", "protocol-schemas", "protocol-test"].includes(name)) {
     return "p2";
   }
   if (name === "rc1") {

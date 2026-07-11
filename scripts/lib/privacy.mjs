@@ -5,7 +5,7 @@ function escaped(value) {
 }
 
 function privacyPatterns(owner) {
-  const legacyName = ["TCRN", "Workflow", "Platform", "Legacy"].join("-");
+  const legacyName = ["Public", "Workflow", "Platform", "Legacy"].join("-");
   const controlDirectory = [".", "context", "/"].join("");
   const agentDirectory = [".", "llm", "/"].join("");
   const localUserPath = ["/", "Users", "/[^/\\s]+/"].join("");
@@ -36,18 +36,20 @@ function privacyPatterns(owner) {
     ["OWNER_PRIVATE_IDENTIFIER", new RegExp(escaped(owner), "u")],
   ];
 }
-
-function sanitizeAllowedPublicMetadata(entry, owner) {
-  if (
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
     entry.kind === "remote" &&
-    entry.content === `https://github.com/${owner}/tcrn-workflow.git`
+    content === `https://github.com/${owner}/tcrn-workflow.git`
   ) {
     return "[ALLOWED_PUBLIC_GIT_REMOTE]";
   }
   if (entry.kind !== "commit" && entry.kind !== "tag") {
-    return entry.content;
+    return content;
   }
-  return entry.content
+  return content
     .split("\n")
     .map((line) => {
       const match = line.match(/^(author|committer|tagger) ([^<>\r\n]+) <((?:\d+\+)?([A-Za-z0-9-]+)@users\.noreply\.github\.com)> \d+ [+-]\d{4}$/u);

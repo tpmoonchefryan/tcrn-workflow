@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "tcrn.fixture.v1",
+  "aosFacing": true,
+  "requirementIds": [
+    "AOS-REQ-001",
+    "AOS-REQ-002",
+    "AOS-REQ-003"
+  ],
+  "input": {
+    "z": [
+      3,
+      2,
+      1
+    ],
+    "a": {
+      "enabled": true,
+      "name": "alpha"
+    },
+    "revision": 7
+  },
+  "expectedCanonical": "{\"a\":{\"enabled\":true,\"name\":\"alpha\"},\"revision\":7,\"z\":[3,2,1]}\n",
+  "expectedSha256": "09982ba4d191bf0428d71c02657d7eb0a0c1101d3e4e5910a7ba98b51b53d418",
+  "stableIdVector": {
+    "namespace": "work",
+    "externalKey": "story-alpha",
+    "expectedId": "work:7392c272c945bc220c41ec40"
+  }
+}

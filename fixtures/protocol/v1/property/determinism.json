@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "tcrn.property-fixture.v1",
+  "aosFacing": true,
+  "requirementIds": [
+    "AOS-REQ-001",
+    "AOS-REQ-002",
+    "AOS-REQ-004"
+  ],
+  "seed": 2711,
+  "permutations": 128,
+  "invariants": [
+    "canonical-hash-stable",
+    "graph-order-stable",
+    "stable-id-repeatable"
+  ]
+}

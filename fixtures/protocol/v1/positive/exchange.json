@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "tcrn.fixture.v1",
+  "aosFacing": true,
+  "requirementIds": [
+    "AOS-REQ-009",
+    "AOS-REQ-010",
+    "AOS-REQ-012"
+  ],
+  "paths": [
+    "context/context-alpha.json",
+    "events/stream-alpha.json",
+    "work/project-alpha.json"
+  ],
+  "versionWindow": {
+    "minimum": 1,
+    "version": 1,
+    "maximum": 1
+  },
+  "maturity": "fixture_verified"
+}
