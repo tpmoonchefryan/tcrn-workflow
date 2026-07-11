@@ -3,7 +3,7 @@
 TCRN Workflow is an offline-first framework for deterministic work, context,
 evidence, and release verification. This repository contains the accepted P1
 framework bootstrap, the P2 V1 protocol/conformance basis, the accepted P3
-file-native engine, and a bounded P4 artifact-lifecycle candidate. The canonical
+file-native engine, and bounded P4 artifact-lifecycle and Knowledge Core candidates. The canonical
 P3 capability marker and local graph are governed outside this product checkout;
 live integrations and release support remain intentionally unavailable.
 
@@ -28,6 +28,7 @@ pnpm verify:p2
 pnpm verify:rc1
 pnpm verify:p3
 pnpm verify:p4
+pnpm verify:p4:knowledge
 ```
 
 The repository does not collect telemetry. Static checks, a process executable
@@ -61,9 +62,13 @@ Workspace, leases/CAS, event recovery, migrations, deterministic views, and
 filesystem attack matrix. P3 acceptance and capability activation remain
 external control-plane facts. `pnpm verify:p4` checks artifact classification,
 doctor/size budgets, deterministic compact/archive projections, redaction,
-disposable-only archive apply/restore, and filesystem attack/fault vectors.
-`P4_ARTIFACT_LIFECYCLE_VERIFIED` is a review candidate only: it does not
-complete P4 or implement the separate knowledge core.
+disposable-only archive apply/restore, and filesystem attack/fault vectors. It
+also runs the file-native Knowledge Core proof for closed metadata, separate
+explicit body reads, freshness, promotion CAS, deterministic indexes and
+checkpoints, disposable-only initialization, and filesystem/privacy faults.
+`pnpm verify:p4:knowledge` exposes the narrower
+`P4_KNOWLEDGE_CORE_VERIFIED` reason code. Neither command marks the graph work
+done or starts RC2/P5/P6.
 
 After `pnpm build`, governed local commands are available through
 `node scripts/tcrn-workflow.mjs`. Mutation commands require an explicit
@@ -99,6 +104,6 @@ privacy regex set is a focused policy control, not a general DLP system.
 The public API is pre-release. Supported release mode is unavailable unless the
 external trust verifier succeeds. P2 claims specification and fixture maturity
 only; P3 is an unaccepted local-engine candidate; neither claims live
-external-runtime compatibility or a supported release pair. P4 artifact
-lifecycle remains an unaccepted bounded candidate and makes no knowledge-core
-or live-archive claim.
+external-runtime compatibility or a supported release pair. P4 Knowledge Core
+remains an unaccepted bounded candidate and makes no live knowledge-store,
+live-archive, database, AOS, or network claim.

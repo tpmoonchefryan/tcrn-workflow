@@ -246,7 +246,7 @@ async function build() {
   });
 }
 
-async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = false, p3Only = false, p4Only = false } = {}) {
+async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = false, p3Only = false, p4Only = false, knowledgeOnly = false } = {}) {
   await build();
   const tests = (await walkFiles())
     .map((path) => toPosixPath(relative(repositoryRoot, path)))
@@ -255,7 +255,8 @@ async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = fa
     .filter((path) => !rootOnly || path === "tests/root-boundaries.test.mjs")
     .filter((path) => !protocolOnly || path === "tests/protocol-v1.test.mjs")
     .filter((path) => !p3Only || path === "tests/p3-file-engine.test.mjs")
-    .filter((path) => !p4Only || path === "tests/p4-artifact-lifecycle.test.mjs");
+    .filter((path) => !p4Only || ["tests/p4-artifact-lifecycle.test.mjs", "tests/p4-knowledge-core.test.mjs"].includes(path))
+    .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs");
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -271,7 +272,9 @@ async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = fa
           ? "P2_CONFORMANCE_VERIFIED"
           : p3Only
             ? "P3_ENGINE_TESTS_VERIFIED"
-            : p4Only
+            : knowledgeOnly
+              ? "P4_KNOWLEDGE_CORE_TESTS_VERIFIED"
+              : p4Only
               ? "P4_ARTIFACT_LIFECYCLE_TESTS_VERIFIED"
               : "TESTS_VERIFIED",
     { tests, result: "passed" },
@@ -347,6 +350,9 @@ async function verifyP4() {
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p4-artifact-lifecycle-cases.json");
   const schemaPath = resolve(repositoryRoot, "packages/core/schema/artifact-lifecycle-v1.schema.json");
   const fixture = await readJson(fixturePath);
+  const knowledgeFixturePath = resolve(repositoryRoot, "packages/core/fixtures/p4-knowledge-core-cases.json");
+  const knowledgeSchemaPath = resolve(repositoryRoot, "packages/core/schema/knowledge-core-v1.schema.json");
+  const knowledgeFixture = await readJson(knowledgeFixturePath);
   assertion(fixture.schemaVersion === "tcrn.p4-artifact-lifecycle-cases.v1", "P4_FIXTURE_SCHEMA");
   assertion(Array.isArray(fixture.classificationCases) && fixture.classificationCases.length === 8, "P4_CLASSIFICATION_CASES");
   assertion(Array.isArray(fixture.doctorBudgetCases) && fixture.doctorBudgetCases.length === 3, "P4_DOCTOR_CASES");
@@ -356,6 +362,17 @@ async function verifyP4() {
   assertion(fixture.propertyPermutations >= 64, "P4_PROPERTY_PERMUTATIONS");
   assertion(fixture.maximumEntries === 1_024 && fixture.maximumSourceBytes === 1_048_576 &&
     fixture.maximumStoredBytes === 16_777_216 && fixture.maximumArchiveBytes === 33_554_432, "P4_LIMIT_CONTRACT");
+  assertion(knowledgeFixture.schemaVersion === "tcrn.p4-knowledge-core-cases.v1", "P4_KNOWLEDGE_FIXTURE_SCHEMA");
+  assertion(Array.isArray(knowledgeFixture.operationCases) && knowledgeFixture.operationCases.length === 9, "P4_KNOWLEDGE_OPERATION_CASES");
+  assertion(Array.isArray(knowledgeFixture.freshnessCases) && knowledgeFixture.freshnessCases.length === 3, "P4_KNOWLEDGE_FRESHNESS_CASES");
+  assertion(Array.isArray(knowledgeFixture.promotionCases) && knowledgeFixture.promotionCases.length === 3, "P4_KNOWLEDGE_PROMOTION_CASES");
+  assertion(Array.isArray(knowledgeFixture.faultCases) && knowledgeFixture.faultCases.length === 3, "P4_KNOWLEDGE_FAULT_CASES");
+  assertion(Array.isArray(knowledgeFixture.negativeCases) && knowledgeFixture.negativeCases.length >= 36, "P4_KNOWLEDGE_NEGATIVE_CASES");
+  assertion(knowledgeFixture.propertyPermutations >= 64, "P4_KNOWLEDGE_PROPERTY_PERMUTATIONS");
+  assertion(knowledgeFixture.maximumBodyBytes === 8_192 && knowledgeFixture.maximumSummaryBytes === 2_048 &&
+    knowledgeFixture.maximumSnippetBytes === 512 && knowledgeFixture.maximumMetadataBytes === 32_768 &&
+    knowledgeFixture.maximumRecords === 16 && knowledgeFixture.maximumQueryResults === 8 &&
+    knowledgeFixture.maximumAggregateBytes === 131_072, "P4_KNOWLEDGE_LIMIT_CONTRACT");
   const packages = await Promise.all([
     readJson(resolve(repositoryRoot, "packages/core/package.json")),
     readJson(resolve(repositoryRoot, "packages/cli/package.json")),
@@ -375,7 +392,50 @@ async function verifyP4() {
     liveWorkspaceApply: "not-run",
     compactMode: "dry-run-projection-only",
     legacyReadBoundary: "static-negative-proven",
-    knowledgeCore: "out-of-scope",
+    knowledgeCore: "file-native-metadata-first-verified",
+    knowledgeOperationCases: knowledgeFixture.operationCases.length,
+    knowledgeFreshnessCases: knowledgeFixture.freshnessCases.length,
+    knowledgePromotionCases: knowledgeFixture.promotionCases.length,
+    knowledgeFaultCases: knowledgeFixture.faultCases.length,
+    knowledgeNegativeCases: knowledgeFixture.negativeCases.length,
+    knowledgePropertyPermutations: knowledgeFixture.propertyPermutations,
+    knowledgeFixtureDigest: (await fileRecord(knowledgeFixturePath)).sha256,
+    knowledgeSchemaDigest: (await fileRecord(knowledgeSchemaPath)).sha256,
+    acceptance: "not-claimed",
+  });
+}
+
+async function verifyP4Knowledge() {
+  const tests = await runTests({ knowledgeOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p4-knowledge-core-cases.json");
+  const schemaPath = resolve(repositoryRoot, "packages/core/schema/knowledge-core-v1.schema.json");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.p4-knowledge-core-cases.v1", "P4_KNOWLEDGE_FIXTURE_SCHEMA");
+  assertion(Array.isArray(fixture.operationCases) && fixture.operationCases.length === 9, "P4_KNOWLEDGE_OPERATION_CASES");
+  assertion(Array.isArray(fixture.freshnessCases) && fixture.freshnessCases.length === 3, "P4_KNOWLEDGE_FRESHNESS_CASES");
+  assertion(Array.isArray(fixture.promotionCases) && fixture.promotionCases.length === 3, "P4_KNOWLEDGE_PROMOTION_CASES");
+  assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 3, "P4_KNOWLEDGE_FAULT_CASES");
+  assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 36, "P4_KNOWLEDGE_NEGATIVE_CASES");
+  assertion(fixture.propertyPermutations >= 64, "P4_KNOWLEDGE_PROPERTY_PERMUTATIONS");
+  const packages = await Promise.all([
+    readJson(resolve(repositoryRoot, "packages/core/package.json")),
+    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
+  ]);
+  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P4_KNOWLEDGE_STANDALONE_DEPENDENCY");
+  return success("P4_KNOWLEDGE_CORE_VERIFIED", {
+    tests: tests.reasonCode,
+    operationCases: fixture.operationCases.length,
+    freshnessCases: fixture.freshnessCases.length,
+    promotionCases: fixture.promotionCases.length,
+    faultCases: fixture.faultCases.length,
+    negativeCases: fixture.negativeCases.length,
+    propertyPermutations: fixture.propertyPermutations,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    bodyStorage: "separate-explicit-read-only",
+    defaultSelection: "promoted-fresh-active-only",
+    liveWorkspaceStore: "not-created",
+    standalone: "node-filesystem-only-no-database-no-aos-no-network",
     acceptance: "not-claimed",
   });
 }
@@ -709,6 +769,7 @@ const commandContracts = {
   p2: { exit: 0, reasonCode: "P2_VERIFIED" },
   p3: { exit: 0, reasonCode: "P3_VERIFIED" },
   p4: { exit: 0, reasonCode: "P4_ARTIFACT_LIFECYCLE_VERIFIED" },
+  "p4-knowledge": { exit: 0, reasonCode: "P4_KNOWLEDGE_CORE_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
@@ -908,6 +969,7 @@ const handlers = {
   p2: verifyP2,
   p3: verifyP3,
   p4: verifyP4,
+  "p4-knowledge": verifyP4Knowledge,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
@@ -938,6 +1000,9 @@ function evidencePhase(name) {
   }
   if (name === "p3" || name === "p4") {
     return name;
+  }
+  if (name === "p4-knowledge") {
+    return "p4";
   }
   if (name === "rc1") {
     return "rc1";

@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "87387eb51a21e087b2f6512706628321eedd8b01c3ca02181edd9b0c407a9964",
+      "fixtureDigest": "7b1c01c96eef7f159bfea10001d0ac6d1474761cb495cf7a3e24fc0dc4d2d6c6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "9bfd4f798cc19e2e884a68ade5f77bb13bfac6ac207029f924b98a21c5926318",
+      "fixtureDigest": "888a9a5d75dd876d054c52e68384be44d10cb32cfc671d6a20c4f5fa2b4efac2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -75,7 +75,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "ee4bd8daaf44c36f00629024567d4c52cf8da2c1c337330819dfa0abba914d16",
+      "fixtureDigest": "54698fca335c7da31851a7f43a4d21ee47dbb660f823d736d9f4cd58e14c66f3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -147,7 +147,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "cc207383021f77782a1e64079811d50c77c9eda772b344cebd591eedda6d3cdd",
+      "fixtureDigest": "39514103ec50c9e337d4d8242659efb99c976e918bea8816d01058483f35f11f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "f60acc98db6263ea026fff3ae828db3d6dd592544e55610fcd433cd82ce2e335",
+      "fixtureDigest": "307cd98a276c8b51e5f8c1d7fd1aaa7340099798e5a62e6c867a64abef721739",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -208,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "7830c3c0c67932fe659f4c83fd447a6cf100448275640886ec2e80a352fa889c",
+      "fixtureDigest": "3ddd1a6834dd0c6957d91614642c9fb72c88a2c6f837b59e21dd4dcaa99d6808",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -233,7 +233,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "770fa1fd878b9ce7512da5ea0eb45672232654944a84916da041fca06a2b22e4",
+      "fixtureDigest": "8438fb8cd608e3ccbe779e7f7eb56c8b9ed794c5bdaf7b91b81b48a4c90fb8b6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -260,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "7a72c1521403ea625d300a864dde53e29d8b90d13770ecbc56a3d6fdac8dc7e8",
+      "fixtureDigest": "31bf6a9cb0b79f1520289898148d49ac72cdc22509497e7db39577ec36e64160",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -288,7 +288,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "b0e7b46c07f494ac651f36ce8e200e1c422f919817103e04bce3e2ea5776ecf6",
+      "fixtureDigest": "e3e5ecbe6fe6f582a5380df1be8ee6f988e949d387487b9444605f7e1808dbbe",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -397,7 +397,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "51beb3fbb5a8c604fcd369d8655d466fc434827fd9ee71801b1d91e59a3d962d",
+      "fixtureDigest": "552db275cfe96380370065cc87dd087fa8e03b8486cf0febfb95bd1ab25e78ac",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -455,7 +455,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "9f6edb392abfb649444a1448536a8ceb0aa8abfcdc75d0079a3e74920e8e6f38",
+      "fixtureDigest": "76cbdd047fc311243f1604e2141af23dcbbbea4eb06d2b82604a881c8ea7b2bb",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -512,7 +512,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "798fa178b3a5c43b2868ef4f3d34c852d4acc317436e0be7f6f352acca4f65ef",
+      "fixtureDigest": "a28d8de52a4f73fc5181018c6e5a8d9971c2e9eff720c8956b88b95828f91565",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -542,7 +542,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "8582c8cd5bad8126e343962fdf884040b1e873c95806e42ca435fc6d33a99ecc",
+      "fixtureDigest": "0868b83b5154067e01844f3d7093d93920c74994d4c59a76d8a92729002730af",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -569,7 +569,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "f6d587806204f9ce162dd4583ab64d61c09261a492bbd6278dd77a7aacc0b990",
+      "fixtureDigest": "5d63e5329a7ae9a53806ce233d6f8a5d3dc5806e5f3a1f4a8f1f2b272c20c661",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -580,6 +580,41 @@
       "evidencePath": "dist/evidence/p4/p4.json",
       "invalidationTriggers": [
         "Disposable admission, archive generation, bundle encoding, restore claim, source identity, overwrite, crash/partial, high-water, limit, path/link/special-file, or legacy-read boundary changes"
+      ]
+    },
+    {
+      "id": "P4-FILE-NATIVE-KNOWLEDGE-CORE",
+      "phase": "P4",
+      "status": "implemented",
+      "subject": "P4 provides a disposable-only file-native Knowledge Core with closed P2-bound metadata, separately stored explicit-read bodies, deterministic indexes/filters/checkpoints, fail-closed freshness, promotion CAS, inert redacted locators, strict budgets, and filesystem fault proof without live-store, database, AOS, or network access.",
+      "command": "pnpm verify:p4:knowledge",
+      "fixturePaths": [
+        "package.json",
+        "packages/core/src/index.ts",
+        "packages/core/src/knowledge-core.ts",
+        "packages/core/src/artifact-lifecycle.ts",
+        "packages/cli/src/index.ts",
+        "packages/protocol/src/index.ts",
+        "schemas/knowledge-model-v1.schema.json",
+        "specs/knowledge-model-v1.md",
+        "packages/core/schema/knowledge-core-v1.schema.json",
+        "packages/core/spec/knowledge-core-v1.md",
+        "packages/core/fixtures/p4-knowledge-core-cases.json",
+        "tests/p4-knowledge-core.test.mjs",
+        "scripts/task.mjs",
+        "README.md"
+      ],
+      "fixtureDigest": "bd3fb863c0288c9515495e50244175fdd68e73233a3a53a3ecc69e6255c71a94",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "evidencePath": "dist/evidence/p4/p4-knowledge.json",
+      "invalidationTriggers": [
+        "Knowledge metadata/schema, P2 binding, body separation, freshness, promotion, query/default/checkpoint selection, locator redaction, limit, filesystem identity, fault, CLI, standalone, or live-store boundary changes"
       ]
     },
     {
@@ -602,7 +637,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "02d6ffca12375c574240dfce2337db9336d3a249da0bcb546ba1ce0132f37035",
+      "fixtureDigest": "432786c2f423528c76b86745b7519a142ac45de46dd74e4fda433eb2f5d5253a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
