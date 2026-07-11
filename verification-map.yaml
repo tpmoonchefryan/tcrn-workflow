@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "cdcc94319b89722680df0cc01f4a59094cf7daa89c64883438e912259dfa6357",
+      "fixtureDigest": "9447f16392923dcc933fff9eecb87a12b39ac8db9128b394f8e0272ad364441b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "749310ae15cfe478689515554006705b8d186746335046fee0421f3e80372b68",
+      "fixtureDigest": "2e75beae22d33e6064eda88db17aab55979b624bf21a9769e92e2b8ee7bbabb0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -75,7 +75,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "6667086a730bd3f4877185e8e92a28e79a56c94bd23ab375daf72664da515d09",
+      "fixtureDigest": "e62eb2dd128ea2cf4bfadd5a4ae53acd90802cad6ec8ddc8d427b9b9e88496f6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -147,7 +147,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "0e679875bf47a99696d22ddd099b6518cac61ec97fd19dcee12d847fd6f6354f",
+      "fixtureDigest": "bde9723a330e615e0ae5a9f7945e90aa230932a9ea846f8996fba1daa2ac47b1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "783c6706331fe2566d18ece88e0521986b78cef8066750cae7e37822e5d90c48",
+      "fixtureDigest": "ff2b96c36efbf8ad6aefb9d566c635e60b1a4b496e7b772463e6e0e74e0f50ac",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -208,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "a609fbaad4aea36de3e8905892325f97d2f4f3690af5e3999bb0a1b820a76399",
+      "fixtureDigest": "cec56ce086d319fcabd10f97d81db9664cc6e324a60e47f9b4b55882f5fe4cbc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -233,7 +233,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "1dc4c23050fc808d565654c3c5fdff9235cf4105cddb45ce04892c75c2f02187",
+      "fixtureDigest": "4a816b34a5c97aa7cd2680e036fecc822eeba07953a7f7300a1038b5eec7ac84",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -260,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "c0903e53611c7cfa8efaaee1a43e3e2f51b224e13fbc0153d0bb9acf00093f0a",
+      "fixtureDigest": "0ce570c8d68380615dcc709cbfc9616c2df1014edb1e1f73018eb46ccec0453c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -288,7 +288,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "e3e5ecbe6fe6f582a5380df1be8ee6f988e949d387487b9444605f7e1808dbbe",
+      "fixtureDigest": "40e55cc504861d878ca244dbdf20428126b1769063d2906d4c675303afdfa84a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -397,7 +397,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "552db275cfe96380370065cc87dd087fa8e03b8486cf0febfb95bd1ab25e78ac",
+      "fixtureDigest": "9292d6af165528a4c29ec4e4ad4065f1d81246a77245204010b1ed32e11a925e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -455,7 +455,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "bb5818956189a52c774153159b2be0b1585c8aacc657ce37b2ce690ef07044c7",
+      "fixtureDigest": "956eb68412c6cd4c2d744d6a9b923485520c3d4be731ec93ea72a26d1abd4651",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -512,7 +512,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "06f08d787c71e4d877b7bd8bd002bd07a7e840a83b8d9f549437650cf6241dcb",
+      "fixtureDigest": "d8530b36b963470cc4616d7f54f47a093f98ce2d7fdd7bda562b2095339ca4c5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -542,7 +542,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "d7c831261c6226a102366459c6a081ecd760e453d4981a2f6bd56fe2952e28dd",
+      "fixtureDigest": "1c8ea2aef65318fca32369aea1fa8898c64394bb8122ee603a05a671bb3200fe",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -569,7 +569,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "e15cd0790d2460441973af900ca03d92ae5f568fa03bde128449bf700039f287",
+      "fixtureDigest": "801024edcf32155830078b0b2250ac2aae903dc22b1c50e0692351260ccdd521",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -604,7 +604,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "92a89b25ef32a548ca1247d5881e0e8ec7638a7ef3686f2662073e7380d34d71",
+      "fixtureDigest": "a7a878b8db99a0db069d964a976ecec95b7dcd36c018dccc85bf707215d16142",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -615,6 +615,65 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Knowledge metadata/schema, P2 binding, body-open separation, promotion pre-claim admission or cleanup, accountable provenance, strict instant, selection/default/checkpoint policy, UTF-8 byte budget, real insertion corpus, locator redaction, limit, filesystem identity, fault, CLI, standalone, or live-store boundary changes"
+      ]
+    },
+    {
+      "id": "P5-GENERIC-PROFILE-POLICY",
+      "phase": "P5",
+      "status": "implemented",
+      "subject": "P5 freezes generic non-project-specific profile identity/trust, deterministic precedence, exact immutable/restrict-only/owner-rebind/display-only merge rules, fail-closed unbound and cold-standby behavior, canonical digests, and read-only governed CLI surfaces without environment or prompt authority.",
+      "command": "pnpm verify:p5",
+      "fixturePaths": [
+        "package.json",
+        "packages/core/src/index.ts",
+        "packages/core/src/generic-profile.ts",
+        "packages/cli/src/index.ts",
+        "packages/protocol/src/index.ts",
+        "packages/core/schema/generic-profile-v1.schema.json",
+        "packages/core/spec/generic-profile-v1.md",
+        "packages/core/fixtures/p5-generic-profile-cases.json",
+        "tests/p5-generic-profile.test.mjs",
+        "scripts/task.mjs",
+        "README.md"
+      ],
+      "fixtureDigest": "b0eb148fa18dddc032206d25664d4eb9f4cfd50a07ab87dfd224c3e5bb07cc11",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P5_GENERIC_PROFILES_VERIFIED",
+      "evidencePath": "dist/evidence/p5/p5.json",
+      "invalidationTriggers": [
+        "Profile trust, layer precedence, merge class, owner rebind, binding, canonical digest, CLI, inert-data, environment/prompt authority, or standalone boundary changes"
+      ]
+    },
+    {
+      "id": "P5-GENERIC-COLD-START",
+      "phase": "P5",
+      "status": "implemented",
+      "subject": "The inert generic starter bundle can, after explicit owner binding, authorize a disposable empty Workspace to complete one Initiative-Epic-Story-Subtask flow with expected-version event integrity while creating no live profile store or external project/persona dependency.",
+      "command": "pnpm verify:p5",
+      "fixturePaths": [
+        "packages/core/src/generic-profile.ts",
+        "packages/core/src/workspace.ts",
+        "packages/core/schema/generic-profile-v1.schema.json",
+        "packages/core/spec/generic-profile-v1.md",
+        "packages/core/fixtures/p5-generic-profile-cases.json",
+        "tests/p5-generic-profile.test.mjs"
+      ],
+      "fixtureDigest": "10df64d840a306023de856fe9b16a7d1f115fd8de38b94e003faf3bbac1020dd",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P5_GENERIC_PROFILES_VERIFIED",
+      "evidencePath": "dist/evidence/p5/p5.json",
+      "invalidationTriggers": [
+        "Starter bundle, disposable Workspace flow, operation authorization, expected-version CAS, live-store absence, or external-project/persona boundary changes"
       ]
     },
     {
@@ -637,7 +696,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "ad57d34f626172fabd011e6d4f1b614f29fb05eefd1e170e15e3d1373c338cd2",
+      "fixtureDigest": "fdbd320a93faec9de9aaa02a0f99e7e08d2e4a85fbe07ac4c438af174b2a1a2f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
