@@ -2,6 +2,14 @@
 
 import { createHash } from "node:crypto";
 
+import {
+  CanonicalOrderError,
+  canonicalUtf8Bytes,
+  compareCanonicalText,
+} from "../../../scripts/lib/canonical-order.mjs";
+
+export { compareCanonicalText } from "../../../scripts/lib/canonical-order.mjs";
+
 export const PROTOCOL_STATUS = "implemented-p2-v1" as const;
 export const PROTOCOL_VERSION = 1 as const;
 export const P3_ACCEPTANCE_MARKER_PATH = ".context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json" as const;
@@ -147,25 +155,50 @@ function isPlainObject(value: unknown): value is Readonly<Record<string, unknown
 }
 
 function assertExactFields(value: unknown, expected: readonly string[], label: string): asserts value is Readonly<Record<string, unknown>> {
-  if (!isPlainObject(value) || Object.keys(value).sort().join("\0") !== [...expected].sort().join("\0")) {
+  if (!isPlainObject(value)) {
     fail("RECORD_MALFORMED", `${label} requires the exact V1 field set`);
+  }
+  try {
+    if (Object.keys(value).sort(compareCanonicalText).join("\0") !== [...expected].sort(compareCanonicalText).join("\0")) {
+      fail("RECORD_MALFORMED", `${label} requires the exact V1 field set`);
+    }
+  } catch (error) {
+    if (error instanceof CanonicalOrderError) {
+      fail("CANONICAL_VALUE_INVALID", error.message);
+    }
+    throw error;
   }
 }
 
-function assertSha256(value: string): void {
-  if (!/^[a-f0-9]{64}$/u.test(value)) {
+function assertSha256(value: unknown): asserts value is string {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/u.test(value)) {
     fail("RECORD_MALFORMED", "Expected a lowercase SHA-256 digest");
   }
 }
 
-function assertSortedUnique(values: readonly string[], label: string): void {
-  if (!Array.isArray(values) || new Set(values).size !== values.length) {
+function canonicalStringLength(value: string): number {
+  try {
+    canonicalUtf8Bytes(value);
+  } catch (error) {
+    if (error instanceof CanonicalOrderError) {
+      fail("CANONICAL_VALUE_INVALID", error.message);
+    }
+    throw error;
+  }
+  return [...value].length;
+}
+
+function assertSortedUnique(values: unknown, label: string): asserts values is readonly string[] {
+  if (!Array.isArray(values) || values.length > PROTOCOL_LIMITS.maxRecords || new Set(values).size !== values.length) {
+    if (Array.isArray(values) && values.length > PROTOCOL_LIMITS.maxRecords) {
+      fail("INPUT_OVERSIZED", label);
+    }
     fail("RECORD_MALFORMED", label);
   }
   for (const value of values) {
     assertProtocolId(value);
   }
-  const sorted = [...values].sort((left, right) => left.localeCompare(right, "en"));
+  const sorted = [...values].sort(compareCanonicalText);
   if (JSON.stringify(values) !== JSON.stringify(sorted)) {
     fail("CANONICALIZATION_MISMATCH", `${label} must be sorted`);
   }
@@ -176,7 +209,7 @@ function canonicalValue(value: unknown, depth: number): string {
     fail("CANONICAL_VALUE_INVALID", "Canonical values may not exceed 64 levels");
   }
   if (value === null || typeof value === "boolean" || typeof value === "string") {
-    if (typeof value === "string" && value.length > PROTOCOL_LIMITS.maxStringLength) {
+    if (typeof value === "string" && canonicalStringLength(value) > PROTOCOL_LIMITS.maxStringLength) {
       fail("INPUT_OVERSIZED", "A protocol string exceeds the configured limit");
     }
     return JSON.stringify(value);
@@ -188,12 +221,26 @@ function canonicalValue(value: unknown, depth: number): string {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
+    if (value.length > PROTOCOL_LIMITS.maxRecords) {
+      fail("INPUT_OVERSIZED", "Canonical arrays may not exceed the record limit");
+    }
     return `[${value.map((entry) => canonicalValue(entry, depth + 1)).join(",")}]`;
   }
   if (!isPlainObject(value)) {
     fail("CANONICAL_VALUE_INVALID", "Only JSON objects, arrays, strings, booleans, null, and safe integers are supported");
   }
-  const keys = Object.keys(value).sort((left, right) => left.localeCompare(right, "en"));
+  let keys: string[];
+  try {
+    keys = Object.keys(value).sort(compareCanonicalText);
+  } catch (error) {
+    if (error instanceof CanonicalOrderError) {
+      fail("CANONICAL_VALUE_INVALID", error.message);
+    }
+    throw error;
+  }
+  if (keys.length > PROTOCOL_LIMITS.maxRecords) {
+    fail("INPUT_OVERSIZED", "Canonical objects may not exceed the property limit");
+  }
   return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalValue(value[key], depth + 1)}`).join(",")}}`;
 }
 
@@ -209,8 +256,8 @@ export function canonicalSha256(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
 }
 
-export function assertCanonicalJson(text: string): JsonValue {
-  if (!text.endsWith("\n") || text.length === 0) {
+export function assertCanonicalJson(text: unknown): JsonValue {
+  if (typeof text !== "string" || !text.endsWith("\n") || text.length === 0) {
     fail("CANONICALIZATION_MISMATCH", "Canonical JSON requires exactly one terminal LF");
   }
   let parsed: unknown;
@@ -225,34 +272,40 @@ export function assertCanonicalJson(text: string): JsonValue {
   return parsed as JsonValue;
 }
 
-export function canonicalExternalKey(value: string): string {
-  const normalized = value.normalize("NFC").toUpperCase();
-  if (!/^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$/u.test(normalized) || normalized.length > 128) {
+export function canonicalExternalKey(value: unknown): string {
+  if (typeof value !== "string" || !/^[\x21-\x7e]+$/u.test(value)) {
+    fail("EXTERNAL_KEY_INVALID", String(value));
+  }
+  const canonical = value.toUpperCase();
+  if (!/^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$/u.test(canonical) || canonical.length > 128) {
     fail("EXTERNAL_KEY_INVALID", value);
   }
-  return normalized;
+  return canonical;
 }
 
-export function deriveStableId(namespace: string, externalKey: string): string {
-  if (!/^[a-z][a-z0-9-]{1,31}$/u.test(namespace)) {
-    fail("ID_INVALID", namespace);
+export function deriveStableId(namespace: unknown, externalKey: unknown): string {
+  if (typeof namespace !== "string" || !/^[a-z][a-z0-9-]{1,31}$/u.test(namespace)) {
+    fail("ID_INVALID", String(namespace));
   }
   const key = canonicalExternalKey(externalKey);
   return `${namespace}:${createHash("sha256").update(`${namespace}\0${key}`, "utf8").digest("hex").slice(0, 24)}`;
 }
 
-export function assertProtocolId(value: string): void {
-  if (!/^[a-z][a-z0-9-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$/u.test(value)) {
-    fail("ID_INVALID", value);
+export function assertProtocolId(value: unknown): asserts value is string {
+  if (typeof value !== "string" || !/^[a-z][a-z0-9-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$/u.test(value)) {
+    fail("ID_INVALID", String(value));
   }
 }
 
-export function assertStrictInstant(value: string): void {
+export function parseStrictInstant(value: unknown): bigint {
+  if (typeof value !== "string") {
+    fail("TIMESTAMP_INVALID", String(value));
+  }
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/u);
   if (!match) {
     fail("TIMESTAMP_INVALID", value);
   }
-  const [, yearText, monthText, dayText, hourText, minuteText, secondText, , offset] = match;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, fractionText = "", offset] = match;
   const year = Number(yearText);
   const month = Number(monthText);
   const day = Number(dayText);
@@ -271,6 +324,25 @@ export function assertStrictInstant(value: string): void {
       fail("TIMESTAMP_INVALID", value);
     }
   }
+  const adjustedYear = year - (month <= 2 ? 1 : 0);
+  const era = Math.floor(adjustedYear / 400);
+  const yearOfEra = adjustedYear - era * 400;
+  const adjustedMonth = month + (month > 2 ? -3 : 9);
+  const dayOfYear = Math.floor((153 * adjustedMonth + 2) / 5) + day - 1;
+  const dayOfEra = yearOfEra * 365 + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100) + dayOfYear;
+  const daysSinceEpoch = era * 146097 + dayOfEra - 719468;
+  let offsetSeconds = 0;
+  if (offset !== "Z") {
+    const magnitude = Number(offset?.slice(1, 3)) * 3600 + Number(offset?.slice(4, 6)) * 60;
+    offsetSeconds = offset?.startsWith("+") ? magnitude : -magnitude;
+  }
+  const wholeSeconds = BigInt(daysSinceEpoch * 86400 + hour * 3600 + minute * 60 + second - offsetSeconds);
+  const fractionNanoseconds = BigInt(fractionText.padEnd(9, "0") || "0");
+  return wholeSeconds * 1_000_000_000n + fractionNanoseconds;
+}
+
+export function assertStrictInstant(value: unknown): void {
+  parseStrictInstant(value);
 }
 
 export function assertVersionWindow(version: number, minimum: number, maximum: number): void {
@@ -285,8 +357,9 @@ function assertWorkRecordShape(record: WorkRecord): void {
     "status", "revision", "updatedAt", "tombstone", "extensions",
   ];
   assertExactFields(record, expectedFields, "Work records");
-  if (record.schemaVersion !== "tcrn.work.v1" || !Number.isSafeInteger(record.revision) || record.revision < 1) {
-    fail("RECORD_MALFORMED", record.id ?? "unknown");
+  if (record.schemaVersion !== "tcrn.work.v1" || !Number.isSafeInteger(record.revision) || record.revision < 1 ||
+    typeof record.tombstone !== "boolean") {
+    fail("RECORD_MALFORMED", String(record.id ?? "unknown"));
   }
   assertProtocolId(record.id);
   assertProtocolId(record.projectId);
@@ -294,34 +367,85 @@ function assertWorkRecordShape(record: WorkRecord): void {
     fail("EXTERNAL_KEY_INVALID", record.externalKey);
   }
   assertStrictInstant(record.updatedAt);
-  if (!(["Initiative", "Epic", "Story", "Subtask", "Review", "Incident", "Release", "Knowledge"] as const).includes(record.kind)) {
-    fail("RECORD_MALFORMED", record.id);
+  if (record.parentId !== null) {
+    assertProtocolId(record.parentId);
   }
-  if (!(["planned", "ready", "active", "blocked", "done", "cancelled"] as const).includes(record.status)) {
-    fail("RECORD_MALFORMED", record.id);
+  if (typeof record.kind !== "string" || !["Initiative", "Epic", "Story", "Subtask", "Review", "Incident", "Release", "Knowledge"].includes(record.kind)) {
+    fail("RECORD_MALFORMED", String(record.id));
   }
-  if (!isPlainObject(record.extensions) || Object.keys(record.extensions).length > PROTOCOL_LIMITS.maxExtensions) {
-    fail("INPUT_OVERSIZED", record.id);
+  if (typeof record.status !== "string" || !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(record.status)) {
+    fail("RECORD_MALFORMED", String(record.id));
   }
 }
 
-export function validateKnowledgeRecord(record: KnowledgeRecord): KnowledgeRecord {
+function validatedExtensionRegistry(registry: unknown): ReadonlyMap<string, ExtensionRegistration> {
+  if (!Array.isArray(registry)) {
+    fail("RECORD_MALFORMED", "Extension registry");
+  }
+  if (registry.length > PROTOCOL_LIMITS.maxExtensions) {
+    fail("INPUT_OVERSIZED", "Extension registry");
+  }
+  const registrations = new Map<string, ExtensionRegistration>();
+  for (const entry of registry) {
+    assertExactFields(entry, ["id", "version", "requiredByDefault"], "Extension registry entries");
+    assertProtocolId(entry.id);
+    if (registrations.has(entry.id)) {
+      fail("DUPLICATE_ID", entry.id);
+    }
+    if (!Number.isSafeInteger(entry.version) || entry.version < 1 || typeof entry.requiredByDefault !== "boolean") {
+      fail("RECORD_MALFORMED", entry.id);
+    }
+    registrations.set(entry.id, entry as unknown as ExtensionRegistration);
+  }
+  return registrations;
+}
+
+function validateExtensionMap(extensions: unknown, registry: unknown, label: string): void {
+  if (!isPlainObject(extensions)) {
+    fail("RECORD_MALFORMED", `${label} extensions`);
+  }
+  let ids: string[];
+  try {
+    ids = Object.keys(extensions).sort(compareCanonicalText);
+  } catch (error) {
+    if (error instanceof CanonicalOrderError) {
+      fail("CANONICAL_VALUE_INVALID", error.message);
+    }
+    throw error;
+  }
+  if (ids.length > PROTOCOL_LIMITS.maxExtensions) {
+    fail("INPUT_OVERSIZED", `${label} extensions`);
+  }
+  const registrations = validatedExtensionRegistry(registry);
+  for (const id of ids) {
+    assertProtocolId(id);
+    const extension = extensions[id];
+    assertExactFields(extension, ["required", "value"], "Extension values");
+    if (typeof extension.required !== "boolean") {
+      fail("RECORD_MALFORMED", `${label}:${id}`);
+    }
+    if (extension.required && !registrations.has(id)) {
+      fail("UNKNOWN_REQUIRED_EXTENSION", `${label}:${id}`);
+    }
+    canonicalJson(extension.value);
+  }
+}
+
+export function validateKnowledgeRecord(record: KnowledgeRecord, registry: readonly ExtensionRegistration[] = []): KnowledgeRecord {
   assertExactFields(
     record,
     ["schemaVersion", "id", "projectId", "subject", "body", "revision", "updatedAt", "tombstone", "extensions"],
     "Knowledge records",
   );
   if (record.schemaVersion !== "tcrn.knowledge.v1" || !Number.isSafeInteger(record.revision) || record.revision < 1 ||
-    typeof record.subject !== "string" || record.subject.length < 1 || record.subject.length > 512 ||
-    typeof record.body !== "string" || record.body.length > PROTOCOL_LIMITS.maxStringLength) {
-    fail("RECORD_MALFORMED", record.id ?? "unknown");
+    typeof record.subject !== "string" || canonicalStringLength(record.subject) < 1 || canonicalStringLength(record.subject) > 512 ||
+    typeof record.body !== "string" || canonicalStringLength(record.body) > PROTOCOL_LIMITS.maxStringLength || typeof record.tombstone !== "boolean") {
+    fail("RECORD_MALFORMED", String(record.id ?? "unknown"));
   }
   assertProtocolId(record.id);
   assertProtocolId(record.projectId);
   assertStrictInstant(record.updatedAt);
-  if (typeof record.tombstone !== "boolean" || !isPlainObject(record.extensions)) {
-    fail("RECORD_MALFORMED", record.id);
-  }
+  validateExtensionMap(record.extensions, registry, record.id);
   return record;
 }
 
@@ -329,20 +453,29 @@ export function validateContextDocument(
   document: ContextDocument,
   workRecords: readonly WorkRecord[],
   knowledgeRecords: readonly KnowledgeRecord[],
+  registry: readonly ExtensionRegistration[] = [],
 ): ContextDocument {
   assertExactFields(
     document,
     ["schemaVersion", "id", "projectId", "workIds", "knowledgeIds", "generatedAt", "extensions"],
     "Context documents",
   );
-  if (document.schemaVersion !== "tcrn.context.v1" || !isPlainObject(document.extensions)) {
-    fail("RECORD_MALFORMED", document.id ?? "unknown");
+  if (document.schemaVersion !== "tcrn.context.v1" || !Array.isArray(workRecords) || !Array.isArray(knowledgeRecords)) {
+    fail("RECORD_MALFORMED", String(document.id ?? "unknown"));
+  }
+  if (workRecords.length > PROTOCOL_LIMITS.maxRecords || knowledgeRecords.length > PROTOCOL_LIMITS.maxRecords) {
+    fail("INPUT_OVERSIZED", "Context record inputs");
   }
   assertProtocolId(document.id);
   assertProtocolId(document.projectId);
   assertStrictInstant(document.generatedAt);
   assertSortedUnique(document.workIds, "workIds");
   assertSortedUnique(document.knowledgeIds, "knowledgeIds");
+  validateExtensionMap(document.extensions, registry, document.id);
+  validateWorkGraph(workRecords, registry);
+  for (const record of knowledgeRecords) {
+    validateKnowledgeRecord(record, registry);
+  }
   const workById = new Map(workRecords.map((record) => [record.id, record]));
   const knowledgeById = new Map(knowledgeRecords.map((record) => [record.id, record]));
   for (const id of document.workIds) {
@@ -366,21 +499,32 @@ export function validateContextDocument(
   return document;
 }
 
-export function validateExchangeEnvelope(envelope: ExchangeEnvelope): ExchangeEnvelope {
+export function validateExchangeEnvelope(envelope: ExchangeEnvelope, registry: readonly ExtensionRegistration[] = []): ExchangeEnvelope {
   assertExactFields(envelope, ["schemaVersion", "id", "createdAt", "protocolVersion", "entries", "extensions"], "Exchange envelopes");
-  if (envelope.schemaVersion !== "tcrn.exchange.v1" || envelope.protocolVersion !== PROTOCOL_VERSION ||
-    !Array.isArray(envelope.entries) || envelope.entries.length > PROTOCOL_LIMITS.maxRecords || !isPlainObject(envelope.extensions)) {
-    fail("RECORD_MALFORMED", envelope.id ?? "unknown");
+  if (envelope.schemaVersion !== "tcrn.exchange.v1" || envelope.protocolVersion !== PROTOCOL_VERSION || !Array.isArray(envelope.entries)) {
+    fail("RECORD_MALFORMED", String(envelope.id ?? "unknown"));
+  }
+  if (envelope.entries.length > PROTOCOL_LIMITS.maxRecords) {
+    fail("INPUT_OVERSIZED", "Exchange entries");
   }
   assertProtocolId(envelope.id);
   assertStrictInstant(envelope.createdAt);
-  let previous = "";
+  validateExtensionMap(envelope.extensions, registry, envelope.id);
+  let previous: string | null = null;
   for (const entry of envelope.entries) {
     assertExactFields(entry, ["path", "mediaType", "size", "sha256"], "Exchange entries");
     assertExchangePath(entry.path);
+    if (typeof entry.sha256 !== "string") {
+      fail("RECORD_MALFORMED", entry.path);
+    }
     assertSha256(entry.sha256);
-    if (entry.path.localeCompare(previous, "en") <= 0 || !Number.isSafeInteger(entry.size) || entry.size < 0 ||
-      entry.size > PROTOCOL_LIMITS.maxCanonicalBytes || typeof entry.mediaType !== "string" || entry.mediaType.length < 1) {
+    if (!Number.isSafeInteger(entry.size) || entry.size < 0 || typeof entry.mediaType !== "string" || canonicalStringLength(entry.mediaType) < 1) {
+      fail("RECORD_MALFORMED", entry.path);
+    }
+    if (entry.size > PROTOCOL_LIMITS.maxCanonicalBytes || canonicalStringLength(entry.mediaType) > 128) {
+      fail("INPUT_OVERSIZED", entry.path);
+    }
+    if (previous !== null && compareCanonicalText(entry.path, previous) <= 0) {
       fail("CANONICALIZATION_MISMATCH", entry.path);
     }
     previous = entry.path;
@@ -410,27 +554,31 @@ export function validateProfileTrust(document: Readonly<Record<string, unknown>>
   }
   assertProtocolId(document.profileId);
   assertProtocolId(document.issuer);
-  assertStrictInstant(document.issuedAt);
-  assertStrictInstant(document.expiresAt);
+  const issuedAt = parseStrictInstant(document.issuedAt);
+  const expiresAt = parseStrictInstant(document.expiresAt);
   assertVersionWindow(PROTOCOL_VERSION, document.minimumProtocolVersion, document.maximumProtocolVersion);
   assertSha256(document.capabilityDigest);
-  if (Date.parse(document.issuedAt) >= Date.parse(document.expiresAt)) {
+  if (issuedAt >= expiresAt) {
     fail("VERSION_WINDOW_INVALID", "Profile trust validity window is empty");
   }
   return document;
 }
 
-export function validateReceipt(document: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+export function validateReceipt(
+  document: Readonly<Record<string, unknown>>,
+  registry: readonly ExtensionRegistration[] = [],
+): Readonly<Record<string, unknown>> {
   assertExactFields(document, ["schemaVersion", "id", "exchangeId", "receivedAt", "status", "subjectDigest", "extensions"], "Receipts");
   if (document.schemaVersion !== "tcrn.receipt.v1" || typeof document.id !== "string" || typeof document.exchangeId !== "string" ||
     typeof document.receivedAt !== "string" || !["accepted", "rejected"].includes(String(document.status)) ||
-    typeof document.subjectDigest !== "string" || !isPlainObject(document.extensions)) {
+    typeof document.subjectDigest !== "string") {
     fail("RECORD_MALFORMED", "receipt");
   }
   assertProtocolId(document.id);
   assertProtocolId(document.exchangeId);
   assertStrictInstant(document.receivedAt);
   assertSha256(document.subjectDigest);
+  validateExtensionMap(document.extensions, registry, document.id);
   return document;
 }
 
@@ -450,42 +598,17 @@ export function validateExtensionRegistration(document: Readonly<Record<string, 
   return document;
 }
 
-function validateExtensions(record: WorkRecord, registry: readonly ExtensionRegistration[]): void {
-  const registrations = new Map<string, ExtensionRegistration>();
-  for (const entry of registry) {
-    assertProtocolId(entry.id);
-    if (registrations.has(entry.id)) {
-      fail("DUPLICATE_ID", entry.id);
-    }
-    if (!Number.isSafeInteger(entry.version) || entry.version < 1 || typeof entry.requiredByDefault !== "boolean") {
-      fail("RECORD_MALFORMED", entry.id);
-    }
-    registrations.set(entry.id, entry);
-  }
-  for (const [id, extension] of Object.entries(record.extensions)) {
-    assertProtocolId(id);
-    if (!isPlainObject(extension)) {
-      fail("RECORD_MALFORMED", `${record.id}:${id}`);
-    }
-    assertExactFields(extension, ["required", "value"], "Extension values");
-    if (typeof extension.required !== "boolean") {
-      fail("RECORD_MALFORMED", `${record.id}:${id}`);
-    }
-    if (extension.required && !registrations.has(id)) {
-      fail("UNKNOWN_REQUIRED_EXTENSION", `${record.id}:${id}`);
-    }
-    canonicalJson(extension.value);
-  }
-}
-
 export function validateWorkGraph(records: readonly WorkRecord[], registry: readonly ExtensionRegistration[] = []): readonly WorkRecord[] {
+  if (!Array.isArray(records) || !Array.isArray(registry)) {
+    fail("RECORD_MALFORMED", "Work graph inputs");
+  }
   if (records.length > PROTOCOL_LIMITS.maxRecords) {
     fail("INPUT_OVERSIZED", String(records.length));
   }
   const byId = new Map<string, WorkRecord>();
   for (const record of records) {
     assertWorkRecordShape(record);
-    validateExtensions(record, registry);
+    validateExtensionMap(record.extensions, registry, record.id);
     if (byId.has(record.id)) {
       fail("DUPLICATE_ID", record.id);
     }
@@ -560,12 +683,12 @@ export function deterministicWorkOrder(records: readonly WorkRecord[]): readonly
     ["Review", 4], ["Incident", 5], ["Release", 6], ["Knowledge", 7],
   ]);
   return [...records].sort((left, right) => {
-    const project = left.projectId.localeCompare(right.projectId, "en");
+    const project = compareCanonicalText(left.projectId, right.projectId);
     if (project !== 0) {
       return project;
     }
     const kind = (rank.get(left.kind) ?? 99) - (rank.get(right.kind) ?? 99);
-    return kind === 0 ? left.id.localeCompare(right.id, "en") : kind;
+    return kind === 0 ? compareCanonicalText(left.id, right.id) : kind;
   });
 }
 
@@ -578,17 +701,22 @@ const transitions: Readonly<Record<WorkStatus, readonly WorkStatus[]>> = Object.
   cancelled: [],
 });
 
-export function assertWorkTransition(from: WorkStatus, to: WorkStatus): void {
-  if (!transitions[from]?.includes(to)) {
-    fail("INVALID_TRANSITION", `${from}:${to}`);
+export function assertWorkTransition(from: unknown, to: unknown): void {
+  if (typeof from !== "string" || typeof to !== "string" || !Object.hasOwn(transitions, from) ||
+    !(transitions as Readonly<Record<string, readonly string[]>>)[from]?.includes(to)) {
+    fail("INVALID_TRANSITION", `${String(from)}:${String(to)}`);
   }
 }
 
 export function createEvent(input: Omit<EventRecord, "eventHash" | "payloadHash" | "schemaVersion">): EventRecord {
+  assertExactFields(input, ["id", "streamId", "sequence", "occurredAt", "priorHash", "payload"], "Event inputs");
   assertProtocolId(input.id);
   assertProtocolId(input.streamId);
   assertStrictInstant(input.occurredAt);
-  if (!Number.isSafeInteger(input.sequence) || input.sequence < 1 || (input.sequence === 1) !== (input.priorHash === null)) {
+  if (!Number.isSafeInteger(input.sequence) || input.sequence < 1) {
+    fail("RECORD_MALFORMED", input.id);
+  }
+  if ((input.sequence === 1) !== (input.priorHash === null)) {
     fail("EVENT_CHAIN_CORRUPT", input.id);
   }
   if (input.priorHash !== null) {
@@ -609,7 +737,33 @@ export function createEvent(input: Omit<EventRecord, "eventHash" | "payloadHash"
 }
 
 export function validateEventChain(events: readonly EventRecord[]): readonly EventRecord[] {
-  const ordered = [...events].sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id, "en"));
+  if (!Array.isArray(events)) {
+    fail("RECORD_MALFORMED", "Event chain");
+  }
+  if (events.length > PROTOCOL_LIMITS.maxRecords) {
+    fail("INPUT_OVERSIZED", "Event chain");
+  }
+  for (const event of events) {
+    assertExactFields(
+      event,
+      ["schemaVersion", "id", "streamId", "sequence", "occurredAt", "priorHash", "payload", "payloadHash", "eventHash"],
+      "Event records",
+    );
+    if (event.schemaVersion !== "tcrn.event.v1" || typeof event.payloadHash !== "string" || typeof event.eventHash !== "string") {
+      fail("RECORD_MALFORMED", String(event.id ?? "unknown"));
+    }
+    assertSha256(event.payloadHash);
+    assertSha256(event.eventHash);
+    createEvent({
+      id: event.id,
+      streamId: event.streamId,
+      sequence: event.sequence,
+      occurredAt: event.occurredAt,
+      priorHash: event.priorHash,
+      payload: event.payload,
+    });
+  }
+  const ordered = [...events].sort((left, right) => left.sequence - right.sequence || compareCanonicalText(left.id, right.id));
   const ids = new Set<string>();
   for (const [index, event] of ordered.entries()) {
     if (ids.has(event.id) || event.sequence !== index + 1) {
@@ -633,7 +787,13 @@ export function validateEventChain(events: readonly EventRecord[]): readonly Eve
   return ordered;
 }
 
-export function assertExchangePath(path: string): void {
+export function assertExchangePath(path: unknown): asserts path is string {
+  if (typeof path !== "string") {
+    fail("RECORD_MALFORMED", "Exchange path must be a string");
+  }
+  if (canonicalStringLength(path) > 512) {
+    fail("INPUT_OVERSIZED", path.slice(0, 32));
+  }
   if (path.startsWith("/") || path.includes("\\") || path.split("/").some((segment) => segment === "" || segment === "." || segment === "..")) {
     fail("PATH_ESCAPE", path);
   }

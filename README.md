@@ -32,15 +32,19 @@ network path. CI action startup and frozen dependency acquisition opt into
 network access explicitly. The offline vulnerability command verifies a dated
 local denylist only; a fresh external advisory scan remains a release boundary.
 
-The P1 workspace is dependency-free. Its `typecheck` and `build` commands use
-the pinned Node type-transform engine plus P1 public-contract checks; runtime
-tests execute every emitted module. Introducing a general-purpose compiler is a
-dependency-policy change and requires a reviewed exact pin.
+The workspace has one exact-pinned development dependency, `ajv@8.17.1`, used
+only for offline Draft 2020-12 protocol-schema proof. It was acquired through
+an explicit registry boundary with lifecycle scripts disabled; the frozen
+lockfile and dependency policy bind its integrity. `typecheck` and `build` use
+the pinned Node type-transform engine plus public-contract checks; runtime tests
+execute every emitted module. Any dependency change requires another explicit,
+reviewed acquisition and policy update.
 
 `pnpm verify:p2` checks the frozen Work, Knowledge, Event Integrity, Context,
 Exchange, Compatibility, Profile Trust, Receipt, extension-registration, and P3
 marker contracts; deterministic vectors and negative/property tests; the public
-AOS requirements ledger; and the unaccepted RC1 candidate manifest. A green
+AOS requirements ledger; exact-pinned meta-schema/local-reference evaluation;
+and the unaccepted RC1 candidate manifest. A green
 `pnpm verify:rc1` means only `RC1_CANDIDATE_READY`: all four role-verdict slots
 remain unresolved, RC1 is not accepted, and P3 remains unavailable.
 

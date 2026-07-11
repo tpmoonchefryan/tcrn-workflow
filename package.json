@@ -43,5 +43,8 @@
     "verify:trust": "node scripts/task.mjs test-trust",
     "verify:vulnerabilities": "node scripts/task.mjs vulnerabilities",
     "verify:workspace": "node scripts/task.mjs workspace"
+  },
+  "devDependencies": {
+    "ajv": "8.17.1"
   }
 }

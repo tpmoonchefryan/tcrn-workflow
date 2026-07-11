@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import { readJson, repositoryRoot } from "./lib/files.mjs";
+import { compareCanonicalText } from "./lib/canonical-order.mjs";
 import {
   readBoundRegularFile,
   safeWriteOutput,
@@ -84,16 +85,20 @@ try {
   }
 
   const guardUrl = pathToFileURL(resolve(checkout, "scripts/no-network.mjs")).href;
+  const checkoutEnvironment = {
+    ...process.env,
+    COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+    NODE_OPTIONS: `--import=${guardUrl}`,
+    TCRN_OFFLINE_PROOF: "1",
+    npm_config_audit: "false",
+    npm_config_fund: "false",
+    npm_config_offline: "true",
+  };
+  run("pnpm", ["install", "--offline", "--frozen-lockfile", "--ignore-scripts"], checkout, {
+    env: checkoutEnvironment,
+  });
   const proof = run("pnpm", ["verify:p1"], checkout, {
-    env: {
-      ...process.env,
-      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
-      NODE_OPTIONS: `--import=${guardUrl}`,
-      TCRN_OFFLINE_PROOF: "1",
-      npm_config_audit: "false",
-      npm_config_fund: "false",
-      npm_config_offline: "true",
-    },
+    env: checkoutEnvironment,
   });
   const terminal = JSON.parse(proof.split("\n").filter(Boolean).at(-1));
   if (!terminal.ok || terminal.reasonCode !== "P1_VERIFIED") {
@@ -105,7 +110,7 @@ try {
     map.claims
       .filter((claim) => claim.phase === "P1" && claim.expectedReasonCode !== "ISOLATED_P1_VERIFIED")
       .map((claim) => claim.evidencePath),
-  )].sort();
+  )].sort(compareCanonicalText);
   const evidence = [];
   for (const path of evidencePaths) {
     const input = await readBoundRegularFile(resolve(checkout, path), {
@@ -134,6 +139,7 @@ try {
     origin,
     node: process.version.slice(1),
     pnpm: "11.3.0",
+    dependencyInstall: "offline-frozen-lockfile-ignore-scripts",
     sourceBasisMutated: false,
     checkoutClean: true,
     evidence,

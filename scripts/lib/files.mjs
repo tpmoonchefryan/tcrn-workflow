@@ -5,6 +5,7 @@ import { readdir, realpath } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { compareCanonicalText } from "./canonical-order.mjs";
 import { readBoundRegularFile } from "./safe-io.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -36,7 +37,7 @@ export async function walkFiles(root = repositoryRoot) {
 
   async function walk(directory) {
     const entries = await readdir(directory, { withFileTypes: true });
-    entries.sort((left, right) => left.name.localeCompare(right.name, "en"));
+    entries.sort((left, right) => compareCanonicalText(left.name, right.name));
     for (const entry of entries) {
       if (entry.isDirectory() && excludedDirectories.has(entry.name)) {
         continue;

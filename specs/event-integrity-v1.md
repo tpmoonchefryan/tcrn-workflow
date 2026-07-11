@@ -6,6 +6,8 @@ hash. `payloadHash` is the canonical SHA-256 of the payload; `eventHash` is the
 canonical SHA-256 of the event basis before `eventHash` is added.
 
 Duplicate IDs, duplicate or missing sequence values, prior-hash mismatch,
-payload corruption, and event-hash corruption fail with `EVENT_REPLAY` or
-`EVENT_CHAIN_CORRUPT`. Validation sorts by sequence then ID before checking so
-input order cannot change the result.
+payload corruption, unknown or unhashed fields, and event-hash corruption fail
+closed. Validation sorts by numeric sequence then ID using
+`utf8-byte-order-v1` before checking so input order cannot change the result.
+Every accepted event field participates directly or transitively in
+`payloadHash` and `eventHash`.

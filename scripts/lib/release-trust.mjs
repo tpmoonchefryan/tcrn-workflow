@@ -4,6 +4,7 @@ import { createHash, createPublicKey, verify as verifySignature } from "node:cry
 import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
 
 import { canonicalJson, canonicalJsonBytes } from "./canonical-json.mjs";
+import { compareCanonicalText } from "./canonical-order.mjs";
 import { isInside } from "./files.mjs";
 import { BoundaryError, readBoundRegularFile, resolveBoundDirectory } from "./safe-io.mjs";
 
@@ -23,8 +24,8 @@ function exactKeys(value, expected, reasonCode) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail(reasonCode, "Expected an object");
   }
-  const actual = Object.keys(value).sort();
-  const wanted = [...expected].sort();
+  const actual = Object.keys(value).sort(compareCanonicalText);
+  const wanted = [...expected].sort(compareCanonicalText);
   if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) {
     fail(reasonCode, `Unexpected fields: ${actual.join(",")}`);
   }

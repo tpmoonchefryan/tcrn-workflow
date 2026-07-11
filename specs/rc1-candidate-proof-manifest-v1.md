@@ -6,6 +6,10 @@ path/size/SHA-256 records. Its basis digest is the SHA-256 of canonical JSON for
 that sorted input array. The candidate manifest digest is the SHA-256 of the
 complete canonical manifest bytes.
 
+Paths, record sets, object keys, and role slots use the normative
+`utf8-byte-order-v1` total order; host locale collation is forbidden. Composed
+and decomposed Unicode path spellings remain distinct inputs.
+
 Required role slots are platform-workflow-architect,
 workflow-verification-engineer, security-risk-reviewer, and reality-checker.
 P2 freezes all slots as unresolved with null verdict and basis digest. The

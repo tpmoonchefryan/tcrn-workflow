@@ -10,6 +10,8 @@
     "fixtures/protocol/v1/positive/models.json",
     "fixtures/protocol/v1/positive/planned-delivery.json",
     "fixtures/protocol/v1/property/determinism.json",
+    "fixtures/protocol/v1/property/portable-order.json",
+    "fixtures/protocol/v1/schema-cases.json",
     "fixtures/release-trust/README.md",
     "schemas/compatibility-v1.schema.json",
     "schemas/context-v1.schema.json",

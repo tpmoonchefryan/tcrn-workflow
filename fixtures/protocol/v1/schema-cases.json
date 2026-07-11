@@ -1,0 +1,436 @@
+{
+  "schemaVersion": "tcrn.schema-cases.v1",
+  "aosFacing": true,
+  "requirementIds": [
+    "AOS-REQ-001",
+    "AOS-REQ-003",
+    "AOS-REQ-004",
+    "AOS-REQ-006",
+    "AOS-REQ-007",
+    "AOS-REQ-008",
+    "AOS-REQ-009",
+    "AOS-REQ-010",
+    "AOS-REQ-011",
+    "AOS-REQ-012",
+    "AOS-REQ-013",
+    "AOS-REQ-014"
+  ],
+  "simulationOnly": true,
+  "p3CapabilityClaimed": false,
+  "cases": [
+    {
+      "schema": "protocol-common-v1.schema.json",
+      "valid": {},
+      "invalid": [
+        {
+          "unexpected": true
+        },
+        []
+      ]
+    },
+    {
+      "schema": "work-model-v1.schema.json",
+      "valid": {
+        "schemaVersion": "tcrn.work.v1",
+        "id": "work:initiative-alpha",
+        "externalKey": "INITIATIVE-ALPHA",
+        "projectId": "project:alpha",
+        "kind": "Initiative",
+        "parentId": null,
+        "status": "active",
+        "revision": 1,
+        "updatedAt": "2026-07-11T00:00:00Z",
+        "tombstone": false,
+        "extensions": {}
+      },
+      "invalid": [
+        {
+          "schemaVersion": "tcrn.work.v1",
+          "id": "INVALID",
+          "externalKey": "INITIATIVE-ALPHA",
+          "projectId": "project:alpha",
+          "kind": "Initiative",
+          "parentId": null,
+          "status": "active",
+          "revision": 1,
+          "updatedAt": "2026-07-11T00:00:00Z",
+          "tombstone": false,
+          "extensions": {}
+        },
+        {
+          "schemaVersion": "tcrn.work.v1",
+          "id": "work:initiative-alpha",
+          "externalKey": "INITIATIVE-ALPHA",
+          "projectId": "project:alpha",
+          "kind": "Initiative",
+          "parentId": null,
+          "status": "active",
+          "revision": 1,
+          "updatedAt": "2026-07-11T00:00:00Z",
+          "tombstone": false,
+          "extensions": {},
+          "unexpected": true
+        }
+      ]
+    },
+    {
+      "schema": "knowledge-model-v1.schema.json",
+      "valid": {
+        "schemaVersion": "tcrn.knowledge.v1",
+        "id": "knowledge:alpha",
+        "projectId": "project:alpha",
+        "subject": "Decision",
+        "body": "Frozen.",
+        "revision": 1,
+        "updatedAt": "2026-07-11T00:00:00Z",
+        "tombstone": false,
+        "extensions": {}
+      },
+      "invalid": [
+        {
+          "schemaVersion": "tcrn.knowledge.v1",
+          "id": "knowledge:alpha",
+          "projectId": "INVALID",
+          "subject": "Decision",
+          "body": "Frozen.",
+          "revision": 1,
+          "updatedAt": "2026-07-11T00:00:00Z",
+          "tombstone": false,
+          "extensions": {}
+        },
+        {
+          "schemaVersion": "tcrn.knowledge.v1",
+          "id": "knowledge:alpha",
+          "projectId": "project:alpha",
+          "subject": "Decision",
+          "body": "Frozen.",
+          "revision": 1,
+          "updatedAt": "2026-07-11T00:00:00Z",
+          "tombstone": false,
+          "extensions": {},
+          "unexpected": true
+        }
+      ]
+    },
+    {
+      "schema": "event-integrity-v1.schema.json",
+      "valid": {
+        "schemaVersion": "tcrn.event.v1",
+        "id": "event:alpha-1",
+        "streamId": "stream:alpha",
+        "sequence": 1,
+        "occurredAt": "2026-07-11T01:00:00Z",
+        "priorHash": null,
+        "payload": {
+          "revision": 1
+        },
+        "payloadHash": "c686afabbf12d6ad9b5605fd8f88831a1a654bce6085f131eb459308c73162be",
+        "eventHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "invalid": [
+        {
+          "schemaVersion": "tcrn.event.v1",
+          "id": "event:alpha-1",
+          "streamId": "INVALID",
+          "sequence": 1,
+          "occurredAt": "2026-07-11T01:00:00Z",
+          "priorHash": null,
+          "payload": {
+            "revision": 1
+          },
+          "payloadHash": "c686afabbf12d6ad9b5605fd8f88831a1a654bce6085f131eb459308c73162be",
+          "eventHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "schemaVersion": "tcrn.event.v1",
+          "id": "event:alpha-1",
+          "streamId": "stream:alpha",
+          "sequence": 1,
+          "occurredAt": "2026-07-11T01:00:00Z",
+          "priorHash": null,
+          "payload": {
+            "revision": 1
+          },
+          "payloadHash": "c686afabbf12d6ad9b5605fd8f88831a1a654bce6085f131eb459308c73162be",
+          "eventHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "unexpected": true
+        }
+      ]
+    },
+    {
+      "schema": "context-v1.schema.json",
+      "valid": {
+        "schemaVersion": "tcrn.context.v1",
+        "id": "context:alpha",
+        "projectId": "project:alpha",
+        "workIds": [
+          "work:initiative-alpha"
+        ],
+        "knowledgeIds": [
+          "knowledge:alpha"
+        ],
+        "generatedAt": "2026-07-11T03:00:01Z",
+        "extensions": {}
+      },
+      "invalid": [
+        {
+          "schemaVersion": "tcrn.context.v1",
+          "id": "context:alpha",
+          "projectId": "project:alpha",
+          "workIds": [
+            "INVALID"
+          ],
+          "knowledgeIds": [
+            "knowledge:alpha"
+          ],
+          "generatedAt": "2026-07-11T03:00:01Z",
+          "extensions": {}
+        },
+        {
+          "schemaVersion": "tcrn.context.v1",
+          "id": "context:alpha",
+          "projectId": "project:alpha",
+          "workIds": [
+            "work:initiative-alpha"
+          ],
+          "knowledgeIds": [
+            "knowledge:alpha"
+          ],
+          "generatedAt": "2026-07-11T03:00:01Z",
+          "extensions": {},
+          "unexpected": true
+        }
+      ]
+    },
+    {
+      "schema": "exchange-v1.schema.json",
+      "valid": {
+        "schemaVersion": "tcrn.exchange.v1",
+        "id": "exchange:alpha",
+        "createdAt": "2026-07-11T03:00:02Z",
+        "protocolVersion": 1,
+        "entries": [
+          {
+            "path": "work/alpha.json",
+            "mediaType": "application/json",
+            "size": 10,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "extensions": {}
+      },
+      "invalid": [
+        {
+          "schemaVersion": "tcrn.exchange.v1",
+          "id": "exchange:alpha",
+          "createdAt": "2026-07-11T03:00:02Z",
+          "protocolVersion": 1,
+          "entries": [
+            {
+              "path": "work/alpha.json",
+              "mediaType": "application/json",
+              "size": 10,
+              "sha256": "invalid"
+            }
+          ],
+          "extensions": {}
+        },
+        {
+          "schemaVersion": "tcrn.exchange.v1",
+          "id": "exchange:alpha",
+          "createdAt": "2026-07-11T03:00:02Z",
+          "protocolVersion": 1,
+          "entries": [],
+          "extensions": {},
+          "unexpected": true
+        }
+      ]
+    },
+    {
+      "schema": "compatibility-v1.schema.json",
+      "valid": {
+        "schemaVersion": "tcrn.compatibility.v1",
+        "profileId": "profile:alpha",
+        "protocolVersion": 1,
+        "minimumProtocolVersion": 1,
+        "maximumProtocolVersion": 1,
+        "maturity": "fixture_verified"
+      },
+      "invalid": [
+        {
+          "schemaVersion": "tcrn.compatibility.v1",
+          "profileId": "INVALID",
+          "protocolVersion": 1,
+          "minimumProtocolVersion": 1,
+          "maximumProtocolVersion": 1,
+          "maturity": "fixture_verified"
+        },
+        {
+          "schemaVersion": "tcrn.compatibility.v1",
+          "profileId": "profile:alpha",
+          "protocolVersion": 1,
+          "minimumProtocolVersion": 1,
+          "maximumProtocolVersion": 1,
+          "maturity": "fixture_verified",
+          "unexpected": true
+        }
+      ]
+    },
+    {
+      "schema": "profile-trust-v1.schema.json",
+      "valid": {
+        "schemaVersion": "tcrn.profile-trust.v1",
+        "profileId": "profile:alpha",
+        "issuer": "authority:alpha",
+        "issuedAt": "2026-07-11T03:00:00Z",
+        "expiresAt": "2026-08-11T03:00:00Z",
+        "minimumProtocolVersion": 1,
+        "maximumProtocolVersion": 1,
+        "capabilityDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "invalid": [
+        {
+          "schemaVersion": "tcrn.profile-trust.v1",
+          "profileId": "profile:alpha",
+          "issuer": "INVALID",
+          "issuedAt": "2026-07-11T03:00:00Z",
+          "expiresAt": "2026-08-11T03:00:00Z",
+          "minimumProtocolVersion": 1,
+          "maximumProtocolVersion": 1,
+          "capabilityDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "schemaVersion": "tcrn.profile-trust.v1",
+          "profileId": "profile:alpha",
+          "issuer": "authority:alpha",
+          "issuedAt": "2026-07-11T03:00:00Z",
+          "expiresAt": "2026-08-11T03:00:00Z",
+          "minimumProtocolVersion": 1,
+          "maximumProtocolVersion": 1,
+          "capabilityDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "unexpected": true
+        }
+      ]
+    },
+    {
+      "schema": "receipt-v1.schema.json",
+      "valid": {
+        "schemaVersion": "tcrn.receipt.v1",
+        "id": "receipt:alpha",
+        "exchangeId": "exchange:alpha",
+        "receivedAt": "2026-07-11T03:00:03Z",
+        "status": "accepted",
+        "subjectDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "extensions": {}
+      },
+      "invalid": [
+        {
+          "schemaVersion": "tcrn.receipt.v1",
+          "id": "receipt:alpha",
+          "exchangeId": "INVALID",
+          "receivedAt": "2026-07-11T03:00:03Z",
+          "status": "accepted",
+          "subjectDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "extensions": {}
+        },
+        {
+          "schemaVersion": "tcrn.receipt.v1",
+          "id": "receipt:alpha",
+          "exchangeId": "exchange:alpha",
+          "receivedAt": "2026-07-11T03:00:03Z",
+          "status": "accepted",
+          "subjectDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "extensions": {},
+          "unexpected": true
+        }
+      ]
+    },
+    {
+      "schema": "extension-registration-v1.schema.json",
+      "valid": {
+        "schemaVersion": "tcrn.extension-registration.v1",
+        "id": "extension:risk",
+        "version": 1,
+        "requiredByDefault": false,
+        "appliesTo": [
+          "work"
+        ],
+        "schemaDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "invalid": [
+        {
+          "schemaVersion": "tcrn.extension-registration.v1",
+          "id": "INVALID",
+          "version": 1,
+          "requiredByDefault": false,
+          "appliesTo": [
+            "work"
+          ],
+          "schemaDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "schemaVersion": "tcrn.extension-registration.v1",
+          "id": "extension:risk",
+          "version": 1,
+          "requiredByDefault": false,
+          "appliesTo": [
+            "work"
+          ],
+          "schemaDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "unexpected": true
+        }
+      ]
+    },
+    {
+      "schema": "p3-acceptance-marker-v1.schema.json",
+      "valid": {
+        "schemaVersion": "tcrn.p3-acceptance-marker.v1",
+        "capability": "p3-local-work-graph",
+        "accepted": true,
+        "acceptedAt": "2026-07-11T04:00:00Z",
+        "basisCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "basisTree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rc1ManifestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "roleVerdicts": {
+          "platform-workflow-architect": "approved",
+          "workflow-verification-engineer": "approved",
+          "security-risk-reviewer": "approved",
+          "reality-checker": "approved"
+        }
+      },
+      "invalid": [
+        {
+          "schemaVersion": "tcrn.p3-acceptance-marker.v1",
+          "capability": "p3-local-work-graph",
+          "accepted": true,
+          "acceptedAt": "2026-07-11T04:00:00Z",
+          "basisCommit": "short",
+          "basisTree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "rc1ManifestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "roleVerdicts": {
+            "platform-workflow-architect": "approved",
+            "workflow-verification-engineer": "approved",
+            "security-risk-reviewer": "approved",
+            "reality-checker": "approved"
+          }
+        },
+        {
+          "schemaVersion": "tcrn.p3-acceptance-marker.v1",
+          "capability": "p3-local-work-graph",
+          "accepted": true,
+          "acceptedAt": "2026-07-11T04:00:00Z",
+          "basisCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "basisTree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "rc1ManifestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "roleVerdicts": {
+            "platform-workflow-architect": "approved",
+            "workflow-verification-engineer": "approved",
+            "security-risk-reviewer": "approved",
+            "reality-checker": "approved"
+          },
+          "unexpected": true
+        }
+      ]
+    }
+  ]
+}

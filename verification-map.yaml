@@ -11,10 +11,11 @@
         "scripts/task.mjs",
         "scripts/policy/history-policy.json",
         "scripts/policy/source-allowlist.json",
+        "scripts/lib/canonical-order.mjs",
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "8800f6fceca533741585eac649aa413a827163018ab54f8f40dc5288054f8959",
+      "fixtureDigest": "48af1d974d97990e58082507fe05a0b7d729791c11f22532258d2aee69b6a4b0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -43,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "bb53b1d72bb4b8fb9f69cb5dcf073922da1a4aa1f8b9e70bb29867032cc6fc73",
+      "fixtureDigest": "eba67d7672322d289e03aea06302342b39c2d85bb610b78a66968437192c1374",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -66,11 +67,13 @@
         "README.md",
         ".npmrc",
         "package.json",
+        "pnpm-lock.yaml",
+        "scripts/policy/dependency-policy.json",
         "scripts/task.mjs",
         "scripts/no-network.mjs",
         "tests/offline-boundary.test.mjs"
       ],
-      "fixtureDigest": "dc379be83a85b6ed76945e67480959e40469aa9b5d3a3c274722d0bef9872a60",
+      "fixtureDigest": "d348c21e33b56faf874fe33d525ddbce611014d58c2c88982959b6b313ab94ed",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -96,13 +99,14 @@
         "schemas/release-trust-root-v1.schema.json",
         "schemas/release-manifest-v1.schema.json",
         "scripts/lib/canonical-json.mjs",
+        "scripts/lib/canonical-order.mjs",
         "scripts/lib/release-trust.mjs",
         "scripts/lib/safe-io.mjs",
         "scripts/verify-release-trust.mjs",
         "tests/release-trust.test.mjs",
         "fixtures/release-trust/README.md"
       ],
-      "fixtureDigest": "bcf26eb916d71f6af00e36b27668426a652686c90d30c5c2f56a57ed2c8a60e8",
+      "fixtureDigest": "df71c68631c1491f1aee30ccbaae2fa7825e90c4a4c14c214260e965992d8c86",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -134,9 +138,11 @@
         "CHANGELOG.md",
         ".node-version",
         ".npmrc",
-        "package.json"
+        "package.json",
+        "pnpm-lock.yaml",
+        "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "6f9d9a2bb48a5563fb738bc559d051e395bdf4e995bd76dfdd861f3756448eba",
+      "fixtureDigest": "546e2b136b80a81d5ba9a610b1b4e404f93e8044a43af2a125012e278de0b97d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -164,9 +170,11 @@
         "tsconfig.json",
         "tsconfig.build.json",
         "scripts/task.mjs",
+        "scripts/lib/canonical-order.mjs",
+        "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "030ac2158ea5af1602e45baa47d982a0cc805480aa8268dfdeb1e4a7186b0fab",
+      "fixtureDigest": "e6d4eebb5485a09c617817bbf33b8d77a9bca348e0d1905c53e834629c8a31bd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -213,9 +221,12 @@
       "fixturePaths": [
         ".github/workflows/ci.yml",
         ".github/dependabot.yml",
-        "scripts/task.mjs"
+        "scripts/task.mjs",
+        "package.json",
+        "pnpm-lock.yaml",
+        "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "32fe32bf55a3bd4842989b1f45651a90e5fba9fedcd82de68e784d0005ae6940",
+      "fixtureDigest": "de0f6f30a3a4ef0bfcc9f4bb6f2be7ac62fc526d8b982cda4f162618c49194a8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -238,10 +249,12 @@
         "scripts/isolated-proof.mjs",
         "fixtures/isolated-proof/README.md",
         "scripts/no-network.mjs",
+        "scripts/lib/canonical-order.mjs",
         "scripts/lib/safe-io.mjs",
-        "package.json"
+        "package.json",
+        "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "a220fdfb9a2aaf87c9466607cc74f2ea4866767b1df7bdde1abfe80e396b78ac",
+      "fixtureDigest": "5bc1df24ab136f6b2b69478bc86afb1d9d4a50462a396c8c0747d95971c597b4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -258,10 +271,11 @@
       "id": "P2-PROTOCOL-DETERMINISM",
       "phase": "P2",
       "status": "implemented",
-      "subject": "Canonical UTF-8 serialization, stable IDs, strict instants, version windows, event chains, deterministic order, hashes, limits, and exact reason codes match frozen V1 vectors.",
+      "subject": "Canonical UTF-8 serialization uses one locale-independent byte comparator; stable IDs reject raw Unicode aliases; exact epoch-nanosecond instants, event chains, deterministic order, hashes, limits, and exact reason codes match frozen V1 vectors.",
       "command": "pnpm verify:p2",
       "fixturePaths": [
         "packages/protocol/src/index.ts",
+        "scripts/lib/canonical-order.mjs",
         "schemas/protocol-common-v1.schema.json",
         "schemas/event-integrity-v1.schema.json",
         "schemas/exchange-v1.schema.json",
@@ -273,10 +287,13 @@
         "fixtures/protocol/v1/positive/exchange.json",
         "fixtures/protocol/v1/positive/models.json",
         "fixtures/protocol/v1/property/determinism.json",
+        "fixtures/protocol/v1/property/portable-order.json",
+        "fixtures/protocol/v1/schema-cases.json",
         "fixtures/protocol/v1/negative/cases.json",
-        "tests/protocol-v1.test.mjs"
+        "tests/protocol-v1.test.mjs",
+        "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "1c2597579bf8b68d063d76520ceddbaa7b1d93271b881e1cd2a02d216fdb5134",
+      "fixtureDigest": "ff02f1e6a9b1d39901cecd4990b8f3ec98d0d5612a4a18ba982531acb5bf6d3f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -298,6 +315,7 @@
       "fixturePaths": [
         "packages/protocol/src/index.ts",
         "schemas/work-model-v1.schema.json",
+        "schemas/protocol-common-v1.schema.json",
         "schemas/knowledge-model-v1.schema.json",
         "schemas/extension-registration-v1.schema.json",
         "specs/work-model-v1.md",
@@ -306,9 +324,10 @@
         "fixtures/protocol/v1/positive/planned-delivery.json",
         "fixtures/protocol/v1/positive/extensions.json",
         "fixtures/protocol/v1/negative/cases.json",
+        "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-v1.test.mjs"
       ],
-      "fixtureDigest": "5d1b368638e4df59bd34c308486d20e1c18fb8f3cced02e29d5c97ce78c6d483",
+      "fixtureDigest": "982f9a2a0f01e4bf8189497c7e21a4c8840bda019c5a78c6ec6e720af6147bb5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -325,7 +344,7 @@
       "id": "P2-EXTERNAL-RUNTIME-NO-OVERCLAIM",
       "phase": "P2",
       "status": "implemented",
-      "subject": "The generic public AOS ledger links every AOS-facing schema and fixture while maturity remains specified or fixture-verified and no live pair, endpoint, credential, database, or mutation is claimed.",
+      "subject": "The generic public AOS ledger links every AOS-facing schema and fixture; exact-pinned Draft 2020-12 evaluation resolves local references and executes schema cases while maturity remains specified or fixture-verified and no live runtime claim is made.",
       "command": "pnpm verify:p2",
       "fixturePaths": [
         "extensions/aos-requirements-v1.json",
@@ -334,10 +353,15 @@
         "schemas/context-v1.schema.json",
         "schemas/profile-trust-v1.schema.json",
         "schemas/receipt-v1.schema.json",
+        "fixtures/protocol/v1/schema-cases.json",
         "fixtures/protocol/v1/positive/models.json",
-        "scripts/lib/protocol-proof.mjs"
+        "scripts/lib/protocol-proof.mjs",
+        "scripts/policy/dependency-policy.json",
+        "package.json",
+        "pnpm-lock.yaml",
+        "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "b4d7f0b2c3d0e17d8fff85731a64783c9d4a4ea290a920d0dd6c2aeb5513a5a0",
+      "fixtureDigest": "8ab5bd63ed3933c16818b50229ec54d40ff73a08982d8c2627b9ce7cb7be8974",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -361,10 +385,11 @@
         "specs/p3-acceptance-marker-v1.md",
         "packages/protocol/src/index.ts",
         "scripts/lib/protocol-proof.mjs",
+        "fixtures/protocol/v1/schema-cases.json",
         "scripts/lib/privacy.mjs",
         "tests/privacy-boundary.test.mjs"
       ],
-      "fixtureDigest": "2d3b6b402010e89901c5e168da248ab05fd12792c86b388f2084fef9fa06db39",
+      "fixtureDigest": "a36fc7fb30a0ad0e1362dbacda168f6e9eb197efc2325a57aee95797c9e66af1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -387,10 +412,16 @@
         "specs/rc1-candidate-proof-manifest-v1.md",
         "scripts/policy/rc1-inputs.json",
         "scripts/lib/protocol-proof.mjs",
+        "scripts/lib/canonical-order.mjs",
         "scripts/task.mjs",
-        "package.json"
+        "package.json",
+        "pnpm-lock.yaml",
+        "scripts/policy/dependency-policy.json",
+        "fixtures/protocol/v1/property/portable-order.json",
+        "fixtures/protocol/v1/schema-cases.json",
+        "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "b1db1952757d3018ddcefb69ac53f711587cd47690cee86b6831dcd23ac79957",
+      "fixtureDigest": "d4f759a76edff29344aff0d87d01a7ea0ef446f5dc5505e1a0faa92943d11fad",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "00b900d40652a04dd7d0f55e8792ef2f1b54e5e400ef7c381fef5f7079116b92",
+  "basisDigest": "6d4bf71069ed7be9e1f48a865c48f866602f53b992a74805193e96bcfcc31008",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -11,8 +11,8 @@
     },
     {
       "path": "fixtures/isolated-proof/README.md",
-      "size": 1033,
-      "sha256": "618fcac10ceb782483f984e848e008799f8e6d98e890782a12948daf2d737388"
+      "size": 1156,
+      "sha256": "c7456c4f6d6c8e47e857b041d00682412c109dd54f4eddfae7f34518764ce68b"
     },
     {
       "path": "fixtures/protocol/v1/negative/cases.json",
@@ -55,6 +55,16 @@
       "sha256": "280332581a6fafcc91583c9724ff9c2df380d84dd3546263fcab20e68e9fa3d6"
     },
     {
+      "path": "fixtures/protocol/v1/property/portable-order.json",
+      "size": 2207,
+      "sha256": "c8abcd6569ef6dec212710af895fc6af8a6f85c5548ef1821d62c4779794c520"
+    },
+    {
+      "path": "fixtures/protocol/v1/schema-cases.json",
+      "size": 13495,
+      "sha256": "09bd3f5692e5a5707f1e4c8992437b0bb3a3aec23af9769fed38a5f1a915ae83"
+    },
+    {
       "path": "fixtures/release-trust/README.md",
       "size": 241,
       "sha256": "e31e43b81940a7e13b9f4f2379b5c5a594b7df92545a17ff28e3aff5a4b7c72e"
@@ -71,13 +81,13 @@
     },
     {
       "path": "schemas/event-integrity-v1.schema.json",
-      "size": 1291,
-      "sha256": "708ceeb897e51e7d65ae5ccfeaa1d837a2e5e6f3ebf6ef9f13646449509b7784"
+      "size": 1360,
+      "sha256": "8dbd6853008662d314442d05603bf6c60d7de3db323aa7faf41e24ed5182ea15"
     },
     {
       "path": "schemas/exchange-v1.schema.json",
-      "size": 1634,
-      "sha256": "b932712a9dcbc6929eb68cce49608d6713ec6d94e6ef96ec377b777fb139dd5a"
+      "size": 1636,
+      "sha256": "1a97c21021bb05b3c9d31b6e97944dc1f762869eb1572128e0b08fb08d777108"
     },
     {
       "path": "schemas/extension-registration-v1.schema.json",
@@ -101,8 +111,8 @@
     },
     {
       "path": "schemas/protocol-common-v1.schema.json",
-      "size": 1289,
-      "sha256": "56d885dc696ab1bc8adfa0caabb8c3c25f0682a1c2ebab02520a48f93349dfe0"
+      "size": 2009,
+      "sha256": "135f4a139229e9125e1cc6955b4eabbc3a0b5bea242053918b70ef2e8c77073d"
     },
     {
       "path": "schemas/receipt-v1.schema.json",
@@ -136,18 +146,18 @@
     },
     {
       "path": "specs/context-v1.md",
-      "size": 416,
-      "sha256": "cd5c98c2466d755a982983b5759afe2a51fd9cef24d7f2e7a98129f3a40e5533"
+      "size": 424,
+      "sha256": "8d75c4688180e8f0f2e48d5591ae95bd987fd8e2a550536530245cb2b5cc060d"
     },
     {
       "path": "specs/event-integrity-v1.md",
-      "size": 593,
-      "sha256": "befe7f2ca51760553f1dd65a7e4e94ef798fc4b19905e2fd4653449028115602"
+      "size": 717,
+      "sha256": "1c40ef59a98bc165366e93f645cfa884cb0b4f61c88969ff30f1478362af5dec"
     },
     {
       "path": "specs/exchange-v1.md",
-      "size": 442,
-      "sha256": "2220523ee906918aa29f18a24fe1203764e3db04f61c4a6c3bd7add1607ce713"
+      "size": 618,
+      "sha256": "f231007aa43295f9525150347dd1788a245b1f89d43168858290260ca6d24c29"
     },
     {
       "path": "specs/extension-registration-v1.md",
@@ -156,8 +166,8 @@
     },
     {
       "path": "specs/knowledge-model-v1.md",
-      "size": 485,
-      "sha256": "27f9dad0196783146707b1516c011a180aa34ffaa1f01a60b9fbe2407b522352"
+      "size": 512,
+      "sha256": "7ebe8659eef1ddb1cf3cddddd0c06ecbe275e582d9bec1cc1b77f196c1a9c4f5"
     },
     {
       "path": "specs/p3-acceptance-marker-v1.md",
@@ -166,18 +176,18 @@
     },
     {
       "path": "specs/profile-trust-v1.md",
-      "size": 407,
-      "sha256": "ca7bb7674a5344080b9c3fcb4b8acbdd7f219913828033c1e53d19b1278f56f0"
+      "size": 689,
+      "sha256": "4fc9fbaf81cdc72bd54b4fdb4545c93abd27136f7e549d5e69bdfbbf6820ba01"
     },
     {
       "path": "specs/protocol-common-v1.md",
-      "size": 1332,
-      "sha256": "fab9124af1a7f4f005c7646bebc919a354c83d493bf0fb31b800c6b5cff2f7aa"
+      "size": 2265,
+      "sha256": "19f31625ded95d0c6ad25cf27e0380fd8ea2e5d7eb48b58e85b2f478a889b0d0"
     },
     {
       "path": "specs/rc1-candidate-proof-manifest-v1.md",
-      "size": 705,
-      "sha256": "2f91ef3b371a908e9f6a1cf3fc69e7cc7fbb88a9ac250cf4592c0e15551a346a"
+      "size": 913,
+      "sha256": "244a88aeb02569878162393cfd1b47aefd25f02d1b6ca72ad8542da272e6c9c6"
     },
     {
       "path": "specs/receipt-v1.md",
@@ -191,13 +201,13 @@
     },
     {
       "path": "specs/work-model-v1.md",
-      "size": 916,
-      "sha256": "00a55a2c295889d3cb2a30be0cbef4ef17190d4519abccfa9a4ed680aed00ca4"
+      "size": 965,
+      "sha256": "92dbd467d5ca253e458206304aad68591d845b460fe5bfc485948887217a9d5a"
     },
     {
       "path": "verification-map.yaml",
-      "size": 16373,
-      "sha256": "3a762d4df2daaa1cdb2aa7d101a7a8f1e7d28c2bd3f59fdb04775611438ba6fa"
+      "size": 17796,
+      "sha256": "4886bed656d26b15d5194938cbbc94f7b21f8e9dc40cca8db7a743d9206ecdea"
     }
   ],
   "roleVerdictSlots": {
