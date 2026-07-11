@@ -1,0 +1,884 @@
+{
+  "$id": "https://tcrn.dev/schemas/generic-profile-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Generic Profile Starter Bundle V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "layers",
+    "starterFlow",
+    "bundleDigest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.generic-profile-starter-bundle.v1"
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/$defs/layer"
+      }
+    },
+    "starterFlow": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/initiativeStep"
+        },
+        {
+          "$ref": "#/$defs/epicStep"
+        },
+        {
+          "$ref": "#/$defs/storyStep"
+        },
+        {
+          "$ref": "#/$defs/subtaskStep"
+        }
+      ],
+      "items": false
+    },
+    "bundleDigest": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "nullableStableId": {
+      "anyOf": [
+        {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "token": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9._-]{1,127}$"
+    },
+    "canonicalTokenArray": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/token"
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "workspaceId",
+        "projectId",
+        "command"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "unbound_read_only",
+            "cold_standby",
+            "workspace",
+            "project",
+            "command"
+          ]
+        },
+        "workspaceId": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "projectId": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9:-]{1,63}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "enum": [
+                  "unbound_read_only",
+                  "cold_standby"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "workspaceId": {
+                "type": "null"
+              },
+              "projectId": {
+                "type": "null"
+              },
+              "command": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "workspace"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "workspaceId": {
+                "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+              },
+              "projectId": {
+                "type": "null"
+              },
+              "command": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "project"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "workspaceId": {
+                "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+              },
+              "projectId": {
+                "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+              },
+              "command": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "command"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "workspaceId": {
+                "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+              },
+              "projectId": {
+                "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+              },
+              "command": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "immutable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "baseMission",
+        "mandatorySafety",
+        "mandatoryRefusals",
+        "protocolVersion",
+        "profileSchemaVersion"
+      ],
+      "properties": {
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "profileId",
+            "authorityId",
+            "authorityKind"
+          ],
+          "properties": {
+            "profileId": {
+              "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+            },
+            "authorityId": {
+              "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+            },
+            "authorityKind": {
+              "const": "framework"
+            }
+          }
+        },
+        "baseMission": {
+          "$ref": "#/$defs/token"
+        },
+        "mandatorySafety": {
+          "$ref": "#/$defs/canonicalTokenArray"
+        },
+        "mandatoryRefusals": {
+          "$ref": "#/$defs/canonicalTokenArray"
+        },
+        "protocolVersion": {
+          "const": 1
+        },
+        "profileSchemaVersion": {
+          "const": 1
+        }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximumOperations",
+        "maximumWrites",
+        "maximumEvidenceBytes"
+      ],
+      "properties": {
+        "maximumOperations": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "maximumWrites": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "maximumEvidenceBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777216
+        }
+      }
+    },
+    "restrictOnly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "writePaths",
+        "tools",
+        "budgets",
+        "dataClassifications",
+        "allowedOperations"
+      ],
+      "properties": {
+        "writePaths": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[a-z0-9._/-]+$"
+          }
+        },
+        "tools": {
+          "$ref": "#/$defs/canonicalTokenArray"
+        },
+        "budgets": {
+          "$ref": "#/$defs/budgets"
+        },
+        "dataClassifications": {
+          "$ref": "#/$defs/canonicalTokenArray"
+        },
+        "allowedOperations": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "profile.read",
+              "project.create",
+              "view.generate",
+              "work.create",
+              "work.transition",
+              "workspace.initialize",
+              "workspace.read",
+              "workspace.validate"
+            ]
+          }
+        }
+      }
+    },
+    "ownerRebindOnly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "activeBinding",
+        "roleReplacement",
+        "projectAuthority",
+        "escalationOwner"
+      ],
+      "properties": {
+        "activeBinding": {
+          "$ref": "#/$defs/binding"
+        },
+        "roleReplacement": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "projectAuthority": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "escalationOwner": {
+          "$ref": "#/$defs/nullableStableId"
+        }
+      }
+    },
+    "displayOnly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "description",
+        "examples",
+        "presentation"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "examples": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "presentation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "category",
+            "audience"
+          ],
+          "properties": {
+            "category": {
+              "$ref": "#/$defs/token"
+            },
+            "audience": {
+              "$ref": "#/$defs/token"
+            }
+          }
+        }
+      }
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "immutable": {
+          "$ref": "#/$defs/immutable"
+        },
+        "restrictOnly": {
+          "$ref": "#/$defs/restrictOnly"
+        },
+        "ownerRebindOnly": {
+          "$ref": "#/$defs/ownerRebindOnly"
+        },
+        "displayOnly": {
+          "$ref": "#/$defs/displayOnly"
+        }
+      }
+    },
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "layerId",
+        "layerKind",
+        "trustLevel",
+        "releaseVerificationDigest",
+        "fields"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.generic-profile.v1"
+        },
+        "layerId": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+        },
+        "layerKind": {
+          "enum": [
+            "framework_defaults",
+            "release_verified_framework_profile",
+            "imported_untrusted",
+            "workspace_configuration",
+            "project_configuration",
+            "command_override"
+          ]
+        },
+        "trustLevel": {
+          "enum": [
+            "framework_profile",
+            "user_owned_overlay",
+            "imported_untrusted"
+          ]
+        },
+        "releaseVerificationDigest": {
+          "anyOf": [
+            {
+              "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fields": {
+          "$ref": "#/$defs/fields"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "layerKind": {
+                "const": "framework_defaults"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "trustLevel": {
+                "const": "framework_profile"
+              },
+              "releaseVerificationDigest": {
+                "type": "null"
+              },
+              "fields": {
+                "type": "object",
+                "properties": {
+                  "immutable": true,
+                  "restrictOnly": true,
+                  "ownerRebindOnly": true,
+                  "displayOnly": true
+                },
+                "required": [
+                  "immutable",
+                  "restrictOnly",
+                  "ownerRebindOnly",
+                  "displayOnly"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "layerKind": {
+                "const": "release_verified_framework_profile"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "trustLevel": {
+                "const": "framework_profile"
+              },
+              "releaseVerificationDigest": {
+                "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "layerKind": {
+                "const": "imported_untrusted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "trustLevel": {
+                "const": "imported_untrusted"
+              },
+              "releaseVerificationDigest": {
+                "type": "null"
+              },
+              "fields": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "restrictOnly"
+                ],
+                "properties": {
+                  "restrictOnly": {
+                    "$ref": "#/$defs/restrictOnly"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "layerKind": {
+                "enum": [
+                  "workspace_configuration",
+                  "project_configuration",
+                  "command_override"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "trustLevel": {
+                "const": "user_owned_overlay"
+              },
+              "releaseVerificationDigest": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ownerRebind": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "approved",
+        "ownerId",
+        "targetLayerId",
+        "replacement"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.generic-profile-owner-rebind.v1"
+        },
+        "approved": {
+          "const": true
+        },
+        "ownerId": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+        },
+        "targetLayerId": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+        },
+        "replacement": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/ownerRebindOnly"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "activeBinding": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "enum": [
+                        "workspace",
+                        "project",
+                        "command"
+                      ]
+                    }
+                  }
+                },
+                "escalationOwner": {
+                  "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "resolutionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "layers",
+        "ownerRebind",
+        "admittedReleaseProfileDigests"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.generic-profile-resolution-request.v1"
+        },
+        "layers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/layer"
+          }
+        },
+        "ownerRebind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ownerRebind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "admittedReleaseProfileDigests": {
+          "type": "array",
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+          }
+        }
+      }
+    },
+    "profileDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layerId",
+        "digest"
+      ],
+      "properties": {
+        "layerId": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+        },
+        "digest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+        }
+      }
+    },
+    "effectiveProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "resolution",
+        "sourceLayerIds",
+        "trustSummary",
+        "immutable",
+        "restrictOnly",
+        "ownerRebindOnly",
+        "displayOnly",
+        "baseDigest",
+        "profileDigests",
+        "overlayDigest",
+        "effectivePolicyDigest",
+        "effectiveDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.generic-profile-effective.v1"
+        },
+        "resolution": {
+          "enum": [
+            "bound",
+            "unbound_read_only",
+            "cold_standby"
+          ]
+        },
+        "sourceLayerIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+          }
+        },
+        "trustSummary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "frameworkProfiles",
+            "userOwnedOverlays",
+            "importedUntrusted"
+          ],
+          "properties": {
+            "frameworkProfiles": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 6
+            },
+            "userOwnedOverlays": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 6
+            },
+            "importedUntrusted": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 6
+            }
+          }
+        },
+        "immutable": {
+          "$ref": "#/$defs/immutable"
+        },
+        "restrictOnly": {
+          "$ref": "#/$defs/restrictOnly"
+        },
+        "ownerRebindOnly": {
+          "$ref": "#/$defs/ownerRebindOnly"
+        },
+        "displayOnly": {
+          "$ref": "#/$defs/displayOnly"
+        },
+        "baseDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+        },
+        "profileDigests": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/profileDigest"
+          }
+        },
+        "overlayDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+        },
+        "effectivePolicyDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+        },
+        "effectiveDigest": {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/sha256"
+        }
+      }
+    },
+    "authorizationContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workspaceId",
+        "projectId",
+        "command"
+      ],
+      "properties": {
+        "workspaceId": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "projectId": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9:-]{1,63}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "initiativeStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "parentKind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "Initiative"
+        },
+        "parentKind": {
+          "type": "null"
+        }
+      }
+    },
+    "epicStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "parentKind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "Epic"
+        },
+        "parentKind": {
+          "const": "Initiative"
+        }
+      }
+    },
+    "storyStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "parentKind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "Story"
+        },
+        "parentKind": {
+          "const": "Epic"
+        }
+      }
+    },
+    "subtaskStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "parentKind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "Subtask"
+        },
+        "parentKind": {
+          "const": "Story"
+        }
+      }
+    }
+  }
+}

@@ -15,6 +15,8 @@ import {
   evaluateKnowledgeFreshness,
   exportKnowledgeCheckpoint,
   exportWorkspace,
+  authorizeGenericProfileOperation,
+  generateGenericStarterBundle,
   initializeKnowledgeStore,
   initializeWorkspace,
   listKnowledgeMetadata,
@@ -23,10 +25,12 @@ import {
   readKnowledgeSnippet,
   recoverWorkspace,
   restoreArtifactArchive,
+  resolveGenericProfile,
   transitionKnowledgePromotion,
   transitionWork,
   updateProject,
   validateKnowledgeStore,
+  validateGenericStarterBundle,
   validateWorkspace,
 } from "../../core/src/index.js";
 import type {
@@ -138,6 +142,14 @@ function booleanValue(value: string | undefined, name: string): boolean {
   fail("CLI_ARGUMENT_MALFORMED", name);
 }
 
+function jsonValue(value: string | undefined, name: string): unknown {
+  try {
+    return JSON.parse(value ?? "");
+  } catch {
+    fail("PROFILE_INPUT_INVALID", name);
+  }
+}
+
 async function withLease<T>(workspace: string, at: string, operation: (lease: Awaited<ReturnType<typeof acquireWorkspaceLease>>) => Promise<T>): Promise<T> {
   const lease = await acquireWorkspaceLease(workspace, { now: at });
   try {
@@ -164,6 +176,44 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     fail("CLI_COMMAND_REQUIRED", "A governed command is required");
   }
   const rest = arguments_.slice(1);
+  if (command === "profile-generate") {
+    const values = parseArguments(rest, ["mode"]);
+    required(values, ["mode"]);
+    if (values.mode !== "generic") fail("PROFILE_INPUT_INVALID", "mode");
+    io.write(canonicalJson({ reasonCode: "PROFILE_BUNDLE_GENERATED", bundle: generateGenericStarterBundle() }));
+    return;
+  }
+  if (command === "profile-validate") {
+    const values = parseArguments(rest, ["bundle"]);
+    required(values, ["bundle"]);
+    const bundle = validateGenericStarterBundle(jsonValue(values.bundle, "bundle"));
+    io.write(canonicalJson({
+      reasonCode: "PROFILE_VALIDATED",
+      bundleDigest: bundle.bundleDigest,
+      layers: bundle.layers.length,
+    }));
+    return;
+  }
+  if (command === "profile-resolve") {
+    const values = parseArguments(rest, ["request"]);
+    required(values, ["request"]);
+    io.write(canonicalJson(resolveGenericProfile(jsonValue(values.request, "request"))));
+    return;
+  }
+  if (command === "profile-authorize") {
+    const values = parseArguments(rest, ["request", "operation", "workspace-id", "project-id", "command"]);
+    required(values, ["request", "operation", "workspace-id", "project-id", "command"]);
+    io.write(canonicalJson(authorizeGenericProfileOperation(
+      resolveGenericProfile(jsonValue(values.request, "request")),
+      values.operation,
+      {
+        workspaceId: values["workspace-id"] === "-" ? null : values["workspace-id"],
+        projectId: values["project-id"] === "-" ? null : values["project-id"],
+        command: values.command === "-" ? null : values.command,
+      },
+    )));
+    return;
+  }
   if (command === "init") {
     const names = ["workspace", "framework", "transient", "evidence-locator", "release-trust", "external-key", "at", "segment-events"];
     const values = parseArguments(rest, names);

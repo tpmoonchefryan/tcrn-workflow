@@ -246,7 +246,15 @@ async function build() {
   });
 }
 
-async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = false, p3Only = false, p4Only = false, knowledgeOnly = false } = {}) {
+async function runTests({
+  trustOnly = false,
+  rootOnly = false,
+  protocolOnly = false,
+  p3Only = false,
+  p4Only = false,
+  knowledgeOnly = false,
+  p5Only = false,
+} = {}) {
   await build();
   const tests = (await walkFiles())
     .map((path) => toPosixPath(relative(repositoryRoot, path)))
@@ -256,7 +264,8 @@ async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = fa
     .filter((path) => !protocolOnly || path === "tests/protocol-v1.test.mjs")
     .filter((path) => !p3Only || path === "tests/p3-file-engine.test.mjs")
     .filter((path) => !p4Only || ["tests/p4-artifact-lifecycle.test.mjs", "tests/p4-knowledge-core.test.mjs"].includes(path))
-    .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs");
+    .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs")
+    .filter((path) => !p5Only || path === "tests/p5-generic-profile.test.mjs");
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -274,6 +283,8 @@ async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = fa
             ? "P3_ENGINE_TESTS_VERIFIED"
             : knowledgeOnly
               ? "P4_KNOWLEDGE_CORE_TESTS_VERIFIED"
+              : p5Only
+                ? "P5_GENERIC_PROFILE_TESTS_VERIFIED"
               : p4Only
               ? "P4_ARTIFACT_LIFECYCLE_TESTS_VERIFIED"
               : "TESTS_VERIFIED",
@@ -450,6 +461,60 @@ async function verifyP4Knowledge() {
     provenance: "explicit-source-evidence-owner-required",
     utf8ByteBudgetProof: "custom-keyword-max-and-max-plus-one",
     liveWorkspaceStore: "not-created",
+    standalone: "node-filesystem-only-no-database-no-aos-no-network",
+    acceptance: "not-claimed",
+  });
+}
+
+async function verifyP5() {
+  const tests = await runTests({ p5Only: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p5-generic-profile-cases.json");
+  const schemaPath = resolve(repositoryRoot, "packages/core/schema/generic-profile-v1.schema.json");
+  const specPath = resolve(repositoryRoot, "packages/core/spec/generic-profile-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.p5-generic-profile-cases.v1", "P5_FIXTURE_SCHEMA");
+  assertion(Array.isArray(fixture.operationCases) && fixture.operationCases.length === 8, "P5_OPERATION_CASES");
+  assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 36, "P5_NEGATIVE_CASES");
+  assertion(Array.isArray(fixture.cliCases) && fixture.cliCases.length === 6, "P5_CLI_CASES");
+  assertion(fixture.propertyPermutations === 64 && fixture.permutationLayerCount === 6 &&
+    /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P5_PROPERTY_PERMUTATIONS");
+  for (const digestName of ["starterBundleDigest", "baseProfileDigest", "unboundEffectiveDigest", "boundEffectiveDigest",
+    "boundOverlayDigest", "boundEffectivePolicyDigest"]) {
+    assertion(/^[a-f0-9]{64}$/u.test(fixture[digestName]), "P5_CANONICAL_DIGEST_VECTOR", digestName);
+  }
+  assertion(fixture.coldStartRecords === 4 && fixture.coldStartEvents === 17, "P5_COLD_START_PROOF");
+  assertion(fixture.liveProfileStore === "not-created", "P5_LIVE_STORE_BOUNDARY");
+  const packages = await Promise.all([
+    readJson(resolve(repositoryRoot, "packages/core/package.json")),
+    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
+  ]);
+  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P5_STANDALONE_DEPENDENCY");
+  return success("P5_GENERIC_PROFILES_VERIFIED", {
+    tests: tests.reasonCode,
+    trustLevels: 3,
+    bindingModes: 5,
+    mergeClasses: 4,
+    operationCases: fixture.operationCases.length,
+    negativeCases: fixture.negativeCases.length,
+    cliCases: fixture.cliCases.length,
+    propertyPermutations: fixture.propertyPermutations,
+    permutationLayerCount: fixture.permutationLayerCount,
+    permutationCorpusDigest: fixture.permutationCorpusDigest,
+    starterBundleDigest: fixture.starterBundleDigest,
+    baseProfileDigest: fixture.baseProfileDigest,
+    unboundEffectiveDigest: fixture.unboundEffectiveDigest,
+    boundEffectiveDigest: fixture.boundEffectiveDigest,
+    boundOverlayDigest: fixture.boundOverlayDigest,
+    boundEffectivePolicyDigest: fixture.boundEffectivePolicyDigest,
+    coldStartRecords: fixture.coldStartRecords,
+    coldStartEvents: fixture.coldStartEvents,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    generatedMaterial: "inert-generic-data-only",
+    liveProfileStore: "not-created",
+    ownerGate: "OG-03-unsatisfied",
+    namedPersonaContent: "not-read-not-admitted",
     standalone: "node-filesystem-only-no-database-no-aos-no-network",
     acceptance: "not-claimed",
   });
@@ -785,6 +850,7 @@ const commandContracts = {
   p3: { exit: 0, reasonCode: "P3_VERIFIED" },
   p4: { exit: 0, reasonCode: "P4_ARTIFACT_LIFECYCLE_VERIFIED" },
   "p4-knowledge": { exit: 0, reasonCode: "P4_KNOWLEDGE_CORE_VERIFIED" },
+  p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
@@ -812,7 +878,7 @@ async function verifyMap() {
     assertion(required.every((field) => Object.hasOwn(claim, field)), "VERIFICATION_MAP_FIELDS", claim.id ?? "unknown");
     assertion(!ids.has(claim.id), "VERIFICATION_MAP_DUPLICATE", claim.id);
     ids.add(claim.id);
-    assertion(["P1", "P2", "P3", "P4", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    assertion(["P1", "P2", "P3", "P4", "P5", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);
@@ -836,7 +902,7 @@ async function verifyMap() {
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
   }
-  for (const phase of ["P1", "P2", "P3", "P4", "RC1"]) {
+  for (const phase of ["P1", "P2", "P3", "P4", "P5", "RC1"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   return success("VERIFICATION_MAP_VERIFIED", {
@@ -985,6 +1051,7 @@ const handlers = {
   p3: verifyP3,
   p4: verifyP4,
   "p4-knowledge": verifyP4Knowledge,
+  p5: verifyP5,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
@@ -1018,6 +1085,9 @@ function evidencePhase(name) {
   }
   if (name === "p4-knowledge") {
     return "p4";
+  }
+  if (name === "p5") {
+    return "p5";
   }
   if (name === "rc1") {
     return "rc1";

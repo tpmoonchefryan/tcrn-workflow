@@ -40,3 +40,7 @@ Versioning after the first accepted release.
 - Close RC2 defensive boundaries for pre-claim Knowledge promotion admission,
   ownerless stale-lease generation quarantine, and incremental transient/archive
   storage exhaustion enforcement.
+- Add the bounded P5 generic profile-policy candidate with closed trust and
+  binding, deterministic precedence, exact merge classes, owner-rebind gating,
+  canonical digests, read-only CLI surfaces, 64 insertion permutations, and a
+  disposable empty-Workspace planned-delivery cold-start proof.

@@ -3,7 +3,8 @@
 TCRN Workflow is an offline-first framework for deterministic work, context,
 evidence, and release verification. This repository contains the accepted P1
 framework bootstrap, the P2 V1 protocol/conformance basis, the accepted P3
-file-native engine, and bounded P4 artifact-lifecycle and Knowledge Core candidates. The canonical
+file-native engine, bounded P4 artifact-lifecycle and Knowledge Core candidates,
+and a bounded generic P5 profile-policy candidate. The canonical
 P3 capability marker and local graph are governed outside this product checkout;
 live integrations and release support remain intentionally unavailable.
 
@@ -29,6 +30,7 @@ pnpm verify:rc1
 pnpm verify:p3
 pnpm verify:p4
 pnpm verify:p4:knowledge
+pnpm verify:p5
 ```
 
 The repository does not collect telemetry. Static checks, a process executable
@@ -73,8 +75,17 @@ faults. Promotion enum admission occurs before claim creation, and artifact
 transient/archive generation counts and cumulative storage are bounded before
 unbounded reads or writes.
 `pnpm verify:p4:knowledge` exposes the narrower
-`P4_KNOWLEDGE_CORE_VERIFIED` reason code. Neither command marks the graph work
-done or starts RC2/P5/P6.
+`P4_KNOWLEDGE_CORE_VERIFIED` reason code. Neither command mutates the live graph
+or starts P6.
+
+`pnpm verify:p5` proves the closed generic profile trust/binding model, fixed
+configuration precedence, exact field merge matrix, owner-rebind boundary,
+canonical profile/effective-policy digests, read-only CLI generation and
+validation, 64 actual layer-order permutations, and a disposable empty
+Workspace cold-start through Initiative → Epic → Story → Subtask. Generated
+material is inert data and carries no external project/persona, model, hook,
+thread, network, database, AOS, or absolute-path authority. The live Workspace
+has no profile store, and the separate owner gate remains unsatisfied.
 
 After `pnpm build`, governed local commands are available through
 `node scripts/tcrn-workflow.mjs`. Mutation commands require an explicit
@@ -111,5 +122,5 @@ The public API is pre-release. Supported release mode is unavailable unless the
 external trust verifier succeeds. P2 claims specification and fixture maturity
 only; P3 is an unaccepted local-engine candidate; neither claims live
 external-runtime compatibility or a supported release pair. P4 Knowledge Core
-remains an unaccepted bounded candidate and makes no live knowledge-store,
-live-archive, database, AOS, or network claim.
+and P5 generic profiles remain unaccepted bounded candidates and make no live
+knowledge/profile-store, live-archive, database, AOS, or network claim.
