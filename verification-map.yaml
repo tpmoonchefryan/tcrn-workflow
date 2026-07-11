@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "4e5d34fe71f2b5d29e3a179a32e2165491e57bf2ff5a8cc3cb29c4d67eef19ba",
+      "fixtureDigest": "e19524796ac387b5fea15d1403b0d4313ba2644545e75ff5ba6a378eea7b62a8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "2c2609f0775a1626973bbdc816136217a98cd9f78663c305846d737c651d63a2",
+      "fixtureDigest": "0170fe3979b052820c5017e5b5cb7421693d4659a7081c65a0b69252c1ab3bb0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -75,7 +75,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "758da58610f2063fa0037aedb71bf075a2a4d959ae3ae044d2e778bf3cf2812c",
+      "fixtureDigest": "5bf096fea77dad4432807eb1112354a7985eee28bee3423097afb44c6e729ebf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -147,7 +147,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "f6b488dcf618a55b52c96a54332608994c50295f5112bdc20aea857e8713ef9d",
+      "fixtureDigest": "b352644d55a43cd7c3e375a8590b8167b53cc9d97aaf22eae4d0aaefe4e9228b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "71b7c699b667022d7e191482c774bbc51b8185db25bf8f5aa938402ef0790809",
+      "fixtureDigest": "59e98f1cbd91f22b90e9dd381304192a76a7c2c65da7cdfb6d6edb50992cfb83",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -208,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "1394fce4a247a0fc8fe624982554c4788865db7fcb214f2c98c42ea090bf8e83",
+      "fixtureDigest": "95241f008f080554e2006730d450742ea490061e03088bdabd68d4aad3d1b2ba",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -260,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "e628cf2eed53658cf8512ac4c86a98f6266f08d753f5a4ac3bcc345cd3b0e009",
+      "fixtureDigest": "0633e06c34f7921439b4fea0b7fa6399eafe4ec92f15ea80a24956ddbc2d1957",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -455,7 +455,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "9fbd9290bcb8ceac163e363a46c1d7f97178f40d1cb6841bcc762aa59609406d",
+      "fixtureDigest": "9ced595c957e800cbf908f6e2e99641bf4462acd23a06be069bd47a648a5674e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -472,7 +472,7 @@
       "id": "P3-EVENT-INTEGRITY-RECOVERY",
       "phase": "P3",
       "status": "implemented",
-      "subject": "Exact event operations and lifecycle transitions are bound to Workspace-derived stream/event identities; single-writer leases, exclusive recovery claims, CAS, atomic segments, rotation, crash recovery, and deterministic views fail closed under adversarial replay and contention.",
+      "subject": "Exact event operations and lifecycle transitions are bound to Workspace-derived stream/event identities; single-writer leases, lease-bound exclusive mutation and recovery claims, in-boundary CAS, atomic segments, rotation, crash recovery, and deterministic views fail closed under adversarial replay and same-lease contention.",
       "command": "pnpm verify:p3",
       "fixturePaths": [
         "packages/core/src/workspace.ts",
@@ -480,7 +480,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "42e01f41a9359e44b56aeea1c55ad91970896299773853c4ed3b712f1b0cf348",
+      "fixtureDigest": "989ec12c0d768bc46b0581885cb0f05a1df2a30ab39a8ff54f27e2a602e9a87b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -490,7 +490,7 @@
       "expectedReasonCode": "P3_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
-        "Operation admission, lifecycle, Workspace event identity, lease/recovery claim, CAS, atomic write, segment, view, corruption, or filesystem boundary changes"
+        "Operation admission, lifecycle, Workspace event identity, lease mutation/recovery claim, CAS, atomic write, segment, view, corruption, or filesystem boundary changes"
       ]
     },
     {
@@ -512,7 +512,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "00dc447c4797acb4219cec3dabbe4a8215be305d294dc8a4a433825669e296cd",
+      "fixtureDigest": "6a34449714eec0db28154757db5a4af89de84d9d4b55bc2062e54737e4919f05",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -545,7 +545,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "760eb1788e8aee9b692a15b2af9bf1c21438c6ecb8a3c1533f210b710d6b28c7",
+      "fixtureDigest": "240c7d8758a23355863704b60f72ff4842953c9dad289b97485bda6bcd07849e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

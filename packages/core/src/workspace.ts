@@ -123,6 +123,7 @@ export interface WorkspaceMutationOptions {
   readonly expectedVersion: number;
   readonly occurredAt: string;
   readonly crashAt?: WorkspaceCrashPoint;
+  readonly afterMutationClaimForTest?: () => Promise<void>;
 }
 
 export interface WorkspaceMigrationPlan {
@@ -678,6 +679,13 @@ interface RecoveryClaim {
   readonly identity: { readonly dev: number | bigint; readonly ino: number | bigint };
 }
 
+interface MutationClaim {
+  readonly path: string;
+  readonly token: string;
+  readonly leaseToken: string;
+  readonly identity: { readonly dev: number | bigint; readonly ino: number | bigint };
+}
+
 interface LeaseObservation {
   readonly directoryIdentity: { readonly dev: number | bigint; readonly ino: number | bigint };
   readonly directoryModifiedMilliseconds: number;
@@ -770,6 +778,108 @@ async function releaseRecoveryClaim(workspaceRoot: string, claim: RecoveryClaim)
   const moved = await lstat(quarantine);
   if (!sameIdentity(moved, claim.identity) || !moved.isFile() || moved.nlink !== 1) {
     fail("WORKSPACE_LEASE_INVALID", "released recovery claim identity changed");
+  }
+  await rm(quarantine);
+}
+
+async function parseMutationClaim(path: string): Promise<{
+  readonly owner: Readonly<Record<string, JsonValue>>;
+  readonly identity: { readonly dev: number | bigint; readonly ino: number | bigint };
+}> {
+  let before;
+  try {
+    before = await lstat(path);
+    if (before.isSymbolicLink() || !before.isFile() || before.nlink !== 1) {
+      fail("WORKSPACE_LEASE_INVALID", "mutation claim must be a single-link regular file");
+    }
+    const content = await boundFile(path, 16_384);
+    const after = await lstat(path);
+    if (!sameIdentity(before, after) || after.nlink !== 1 || !after.isFile() || after.isSymbolicLink()) {
+      fail("WORKSPACE_LEASE_INVALID", "mutation claim identity changed");
+    }
+    const owner = assertCanonicalJson(content.toString("utf8"));
+    exactFields(owner, ["schemaVersion", "leaseToken", "token", "pid"], "WORKSPACE_LEASE_INVALID", "mutation claim");
+    if (owner.schemaVersion !== "tcrn.workspace-mutation-claim.v1" || typeof owner.leaseToken !== "string" ||
+      !/^[a-f0-9]{48}$/u.test(owner.leaseToken) || typeof owner.token !== "string" ||
+      !/^[a-f0-9]{48}$/u.test(owner.token) || typeof owner.pid !== "number" || !Number.isSafeInteger(owner.pid)) {
+      fail("WORKSPACE_LEASE_INVALID", "mutation claim fields are invalid");
+    }
+    return { owner, identity: { dev: after.dev, ino: after.ino } };
+  } catch (error) {
+    if (error instanceof WorkspaceError) {
+      throw error;
+    }
+    if (error instanceof ProtocolError) {
+      fail("WORKSPACE_LEASE_INVALID", error.message);
+    }
+    fail("WORKSPACE_LEASE_INVALID", String(error));
+  }
+}
+
+async function createMutationClaim(workspaceRoot: string, lease: WorkspaceLease): Promise<MutationClaim> {
+  const leasePath = controlPath(workspaceRoot, "lease");
+  const path = resolve(leasePath, "mutation.claim");
+  const token = randomBytes(24).toString("hex");
+  const directoryBefore = await lstat(leasePath);
+  if (!directoryBefore.isDirectory() || directoryBefore.isSymbolicLink()) {
+    fail("WORKSPACE_LEASE_INVALID", "lease directory is unsafe for mutation admission");
+  }
+  await boundDirectory(leasePath, workspaceRoot);
+  let handle;
+  try {
+    handle = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    await handle.writeFile(canonicalJson({
+      schemaVersion: "tcrn.workspace-mutation-claim.v1",
+      leaseToken: lease.token,
+      token,
+      pid: process.pid,
+    }));
+    await handle.sync();
+    const written = await handle.stat();
+    if (!written.isFile() || written.nlink !== 1) {
+      fail("WORKSPACE_LEASE_INVALID", "mutation claim descriptor is unsafe");
+    }
+    await handle.close();
+    handle = undefined;
+    const directoryAfter = await lstat(leasePath);
+    const named = await lstat(path);
+    if (!sameIdentity(directoryBefore, directoryAfter) || !directoryAfter.isDirectory() ||
+      !named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || !sameIdentity(written, named)) {
+      fail("WORKSPACE_LEASE_INVALID", "mutation claim path does not bind the lease generation");
+    }
+    return { path, token, leaseToken: lease.token, identity: { dev: named.dev, ino: named.ino } };
+  } catch (error) {
+    await handle?.close();
+    if ((error as { code?: string }).code === "EEXIST") {
+      const existing = await parseMutationClaim(path);
+      if (existing.owner.leaseToken !== lease.token) {
+        fail("WORKSPACE_LEASE_INVALID", "mutation claim belongs to another lease generation");
+      }
+      fail("WORKSPACE_CAS_MISMATCH", "another mutation owns this lease commit boundary");
+    }
+    if (error instanceof WorkspaceError) {
+      throw error;
+    }
+    fail("WORKSPACE_LEASE_INVALID", String(error));
+  }
+}
+
+async function releaseMutationClaim(workspaceRoot: string, lease: WorkspaceLease, claim: MutationClaim): Promise<void> {
+  await assertLease(workspaceRoot, lease);
+  const current = await parseMutationClaim(claim.path);
+  if (!sameIdentity(current.identity, claim.identity) || current.owner.token !== claim.token ||
+    current.owner.leaseToken !== claim.leaseToken) {
+    fail("WORKSPACE_LEASE_INVALID", "mutation claim ownership changed");
+  }
+  const quarantine = resolve(dirname(claim.path), `released-mutation-${claim.token}`);
+  try {
+    await rename(claim.path, quarantine);
+  } catch {
+    fail("WORKSPACE_LEASE_INVALID", "mutation claim release was not exclusive");
+  }
+  const moved = await lstat(quarantine);
+  if (!sameIdentity(moved, claim.identity) || !moved.isFile() || moved.isSymbolicLink() || moved.nlink !== 1) {
+    fail("WORKSPACE_LEASE_INVALID", "released mutation claim identity changed");
   }
   await rm(quarantine);
 }
@@ -1130,31 +1240,38 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, pa
   assertStrictInstant(options.occurredAt);
   const workspace = await resolveWorkspace(workspaceRootInput);
   await assertLease(workspace.root, lease);
-  const state = materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
-  if (!Number.isSafeInteger(options.expectedVersion) || options.expectedVersion !== state.version) {
-    fail("WORKSPACE_CAS_MISMATCH", `expected=${String(options.expectedVersion)} actual=${state.version}`);
+  const claim = await createMutationClaim(workspace.root, lease);
+  try {
+    await options.afterMutationClaimForTest?.();
+    await assertLease(workspace.root, lease);
+    const state = materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
+    if (!Number.isSafeInteger(options.expectedVersion) || options.expectedVersion !== state.version) {
+      fail("WORKSPACE_CAS_MISMATCH", `expected=${String(options.expectedVersion)} actual=${state.version}`);
+    }
+    assertWorkspaceRecordCount(state.version + 1);
+    const sequence = state.version + 1;
+    const streamId = workspaceStreamId(workspace.metadata);
+    const event = createEvent({
+      id: workspaceEventId(streamId, sequence),
+      streamId,
+      sequence,
+      occurredAt: options.occurredAt,
+      priorHash: state.headEventHash,
+      payload,
+    });
+    const segmentIndex = Math.floor((sequence - 1) / workspace.metadata.segmentEventLimit) + 1;
+    const segmentPath = controlPath(workspace.root, `events/${String(segmentIndex).padStart(6, "0")}.json`);
+    const current = sequence % workspace.metadata.segmentEventLimit === 1 && sequence !== 1
+      ? []
+      : state.events.slice((segmentIndex - 1) * workspace.metadata.segmentEventLimit);
+    await atomicWrite(segmentPath, canonicalJson([...current, event]), workspace.root, options.crashAt);
+    crash("after-event-commit", options.crashAt);
+    const committed = materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
+    await writeViews(workspace.root, committed, options.crashAt);
+    return committed;
+  } finally {
+    await releaseMutationClaim(workspace.root, lease, claim);
   }
-  assertWorkspaceRecordCount(state.version + 1);
-  const sequence = state.version + 1;
-  const streamId = workspaceStreamId(workspace.metadata);
-  const event = createEvent({
-    id: workspaceEventId(streamId, sequence),
-    streamId,
-    sequence,
-    occurredAt: options.occurredAt,
-    priorHash: state.headEventHash,
-    payload,
-  });
-  const segmentIndex = Math.floor((sequence - 1) / workspace.metadata.segmentEventLimit) + 1;
-  const segmentPath = controlPath(workspace.root, `events/${String(segmentIndex).padStart(6, "0")}.json`);
-  const current = sequence % workspace.metadata.segmentEventLimit === 1 && sequence !== 1
-    ? []
-    : state.events.slice((segmentIndex - 1) * workspace.metadata.segmentEventLimit);
-  await atomicWrite(segmentPath, canonicalJson([...current, event]), workspace.root, options.crashAt);
-  crash("after-event-commit", options.crashAt);
-  const committed = materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
-  await writeViews(workspace.root, committed, options.crashAt);
-  return committed;
 }
 
 function projectById(state: WorkspaceState, id: string): ProjectRecord {

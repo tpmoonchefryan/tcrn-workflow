@@ -38,7 +38,8 @@
   "concurrencyCases": [
     "two-contender-stale-reclaim",
     "delayed-creator-cannot-replace-winner",
-    "same-version-single-commit"
+    "same-version-single-commit",
+    "same-lease-same-version-single-commit"
   ],
   "negativeCases": [
     "cas-mismatch",
@@ -87,7 +88,13 @@
     "hardlink-lease-owner",
     "concurrent-stale-reclaim",
     "delayed-creator-replacement",
-    "same-version-contenders"
+    "same-version-contenders",
+    "mutation-claim-symlink",
+    "mutation-claim-hardlink",
+    "mutation-claim-special",
+    "mutation-claim-malformed",
+    "mutation-claim-foreign-generation",
+    "stale-mutation-claim-recovery"
   ],
   "migrationCases": [
     "v1-noop-dry-run",

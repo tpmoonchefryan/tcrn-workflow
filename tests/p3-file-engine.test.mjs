@@ -338,6 +338,69 @@ test("single-writer lease, CAS, stale-lock recovery, and atomic crash points fai
   }
 });
 
+test("same lease and expected version admit exactly one concurrent mutation", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(1) });
+    try {
+      let claimEntered;
+      const entered = new Promise((resolve) => { claimEntered = resolve; });
+      let releaseBarrier;
+      const barrier = new Promise((resolve) => { releaseBarrier = resolve; });
+      const winner = createProject(fixture.workspace, lease, {
+        expectedVersion: 0,
+        occurredAt: instant(2),
+        externalKey: "PROJECT-CONCURRENT-ALPHA",
+        name: "Concurrent Alpha",
+        async afterMutationClaimForTest() {
+          claimEntered();
+          await barrier;
+        },
+      });
+      await entered;
+      const leaseAlias = {
+        workspaceRoot: lease.workspaceRoot,
+        token: lease.token,
+        acquiredAt: lease.acquiredAt,
+        release: lease.release.bind(lease),
+      };
+      assert.notEqual(leaseAlias, lease);
+      const loser = createProject(fixture.workspace, leaseAlias, {
+        expectedVersion: 0,
+        occurredAt: instant(2),
+        externalKey: "PROJECT-CONCURRENT-BETA",
+        name: "Concurrent Beta",
+      }).finally(() => {
+        releaseBarrier();
+      });
+      const settle = async (operation) => {
+        try {
+          return { status: "fulfilled", value: await operation };
+        } catch (reason) {
+          return { status: "rejected", reason };
+        }
+      };
+      const outcomes = await Promise.all([settle(winner), settle(loser)]);
+      const fulfilled = outcomes.filter((outcome) => outcome.status === "fulfilled");
+      const rejected = outcomes.filter((outcome) => outcome.status === "rejected");
+      assert.equal(fulfilled.length, 1);
+      assert.equal(rejected.length, 1);
+      assert.equal(rejected[0].reason.reasonCode, "WORKSPACE_CAS_MISMATCH");
+      const state = await materializeWorkspace(fixture.workspace);
+      assert.equal(state.version, 1);
+      assert.equal(state.events.length, 1);
+      assert.deepEqual(state.projects.filter((record) => !record.tombstone).map((record) => record.externalKey), [
+        "PROJECT-CONCURRENT-ALPHA",
+      ]);
+      assert.equal((await validateWorkspace(fixture.workspace)).version, 1);
+    } finally {
+      await lease.release();
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("segment rotation and replay, truncation, reordering, corruption, gap, and special-entry attacks are rejected", async () => {
   const fixture = await workspaceFixture({ segmentEventLimit: 2 });
   try {
@@ -740,6 +803,90 @@ test("unsafe or active recovery claims fail closed", async () => {
     } finally {
       await unsafe.close();
     }
+  }
+
+  for (const kind of ["symlink", "hardlink", "directory"]) {
+    const unsafe = await workspaceFixture();
+    const lease = await acquireWorkspaceLease(unsafe.workspace, { now: instant(1) });
+    try {
+      const leasePath = join(unsafe.workspace, ".tcrn-workflow", "lease");
+      const claimPath = join(leasePath, "mutation.claim");
+      const backing = join(leasePath, `mutation-${kind}.json`);
+      await writeFile(backing, canonicalJson({ invalid: true }));
+      if (kind === "symlink") {
+        await symlink(backing, claimPath);
+      } else if (kind === "hardlink") {
+        await link(backing, claimPath);
+      } else {
+        await mkdir(claimPath);
+      }
+      await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => createProject(unsafe.workspace, lease, {
+        expectedVersion: 0,
+        occurredAt: instant(2),
+        externalKey: `PROJECT-MUTATION-${kind.toUpperCase()}`,
+        name: kind,
+      }));
+    } finally {
+      await lease.release();
+      await unsafe.close();
+    }
+  }
+
+  for (const kind of ["malformed", "foreign-generation"]) {
+    const unsafe = await workspaceFixture();
+    const lease = await acquireWorkspaceLease(unsafe.workspace, { now: instant(1) });
+    try {
+      const claimPath = join(unsafe.workspace, ".tcrn-workflow", "lease", "mutation.claim");
+      await writeFile(claimPath, canonicalJson(kind === "malformed" ? { invalid: true } : {
+        schemaVersion: "tcrn.workspace-mutation-claim.v1",
+        leaseToken: "f".repeat(48),
+        token: "a".repeat(48),
+        pid: process.pid,
+      }));
+      await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => createProject(unsafe.workspace, lease, {
+        expectedVersion: 0,
+        occurredAt: instant(2),
+        externalKey: `PROJECT-MUTATION-${kind.toUpperCase()}`,
+        name: kind,
+      }));
+    } finally {
+      await lease.release();
+      await unsafe.close();
+    }
+  }
+
+  const staleMutation = await workspaceFixture();
+  try {
+    const leasePath = join(staleMutation.workspace, ".tcrn-workflow", "lease");
+    const leaseToken = "d".repeat(48);
+    await mkdir(leasePath);
+    await writeFile(join(leasePath, "owner.json"), canonicalJson({
+      schemaVersion: "tcrn.workspace-lease.v1",
+      token: leaseToken,
+      pid: 999999,
+      acquiredAt: "2000-01-01T00:00:00Z",
+      expiresAtNanoseconds: "946684801000000000",
+    }));
+    await writeFile(join(leasePath, "mutation.claim"), canonicalJson({
+      schemaVersion: "tcrn.workspace-mutation-claim.v1",
+      leaseToken,
+      token: "e".repeat(48),
+      pid: 999999,
+    }));
+    const recovered = await acquireWorkspaceLease(staleMutation.workspace, { now: instant(2) });
+    try {
+      const state = await createProject(staleMutation.workspace, recovered, {
+        expectedVersion: 0,
+        occurredAt: instant(3),
+        externalKey: "PROJECT-STALE-MUTATION-RECOVERED",
+        name: "Recovered",
+      });
+      assert.equal(state.version, 1);
+    } finally {
+      await recovered.release();
+    }
+  } finally {
+    await staleMutation.close();
   }
 });
 
