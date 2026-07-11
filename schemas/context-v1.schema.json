@@ -1,0 +1,52 @@
+{
+  "$id": "https://tcrn.dev/schemas/context-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Context V1",
+  "type": "object",
+  "additionalProperties": false,
+  "x-tcrn-aos-requirementIds": [
+    "AOS-REQ-008"
+  ],
+  "required": [
+    "schemaVersion",
+    "id",
+    "projectId",
+    "workIds",
+    "knowledgeIds",
+    "generatedAt",
+    "extensions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.context.v1"
+    },
+    "id": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "projectId": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "workIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 10000,
+      "items": {
+        "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+      }
+    },
+    "knowledgeIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 10000,
+      "items": {
+        "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+      }
+    },
+    "generatedAt": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "extensions": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/extensionMap"
+    }
+  }
+}

@@ -38,16 +38,18 @@ function privacyPatterns(owner) {
 }
 
 function sanitizeAllowedPublicMetadata(entry, owner) {
+  const p3Marker = [".", "context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json"].join("");
+  const content = entry.content.split(p3Marker).join("[ALLOWED_PUBLIC_P3_MARKER_CONTRACT]");
   if (
     entry.kind === "remote" &&
-    entry.content === `https://github.com/${owner}/tcrn-workflow.git`
+    content === `https://github.com/${owner}/tcrn-workflow.git`
   ) {
     return "[ALLOWED_PUBLIC_GIT_REMOTE]";
   }
   if (entry.kind !== "commit" && entry.kind !== "tag") {
-    return entry.content;
+    return content;
   }
-  return entry.content
+  return content
     .split("\n")
     .map((line) => {
       const match = line.match(/^(author|committer|tagger) ([^<>\r\n]+) <((?:\d+\+)?([A-Za-z0-9-]+)@users\.noreply\.github\.com)> \d+ [+-]\d{4}$/u);

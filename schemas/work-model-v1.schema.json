@@ -1,0 +1,84 @@
+{
+  "$id": "https://tcrn.dev/schemas/work-model-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Work Model V1",
+  "type": "object",
+  "additionalProperties": false,
+  "x-tcrn-aos-requirementIds": [
+    "AOS-REQ-004",
+    "AOS-REQ-005"
+  ],
+  "required": [
+    "schemaVersion",
+    "id",
+    "externalKey",
+    "projectId",
+    "kind",
+    "parentId",
+    "status",
+    "revision",
+    "updatedAt",
+    "tombstone",
+    "extensions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.work.v1"
+    },
+    "id": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "externalKey": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/canonicalExternalKey"
+    },
+    "projectId": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "kind": {
+      "enum": [
+        "Initiative",
+        "Epic",
+        "Story",
+        "Subtask",
+        "Review",
+        "Incident",
+        "Release",
+        "Knowledge"
+      ]
+    },
+    "parentId": {
+      "anyOf": [
+        {
+          "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "enum": [
+        "planned",
+        "ready",
+        "active",
+        "blocked",
+        "done",
+        "cancelled"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "updatedAt": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "tombstone": {
+      "type": "boolean"
+    },
+    "extensions": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/extensionMap"
+    }
+  }
+}

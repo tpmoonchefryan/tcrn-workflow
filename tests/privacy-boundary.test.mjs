@@ -66,6 +66,19 @@ test("filenames are scanned as privacy-bearing metadata", () => {
   assert.ok(findings.some((finding) => finding.startsWith("CUSTOMER_SOURCE_MARKER:")));
 });
 
+test("only the exact public P3 marker contract bypasses control-path rejection", () => {
+  const marker = [".", "context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json"].join("");
+  assert.deepEqual(
+    scanPrivacyEntries([{ label: "contract", kind: "source", content: marker }], { owner: publicIdentity.login }),
+    [],
+  );
+  const sibling = [".", "context/private-note.json"].join("");
+  assert.ok(
+    scanPrivacyEntries([{ label: "sibling", kind: "source", content: sibling }], { owner: publicIdentity.login })
+      .some((finding) => finding.startsWith("CONTROL_PLANE_PATH:")),
+  );
+});
+
 test("recursive historical tree records preserve privacy-bearing full paths", () => {
   assert.deepEqual(parseHistoricalTreePaths(""), []);
   assert.throws(() => parseHistoricalTreePaths("malformed"), /PRIVACY_TREE_RECORD_INVALID/u);

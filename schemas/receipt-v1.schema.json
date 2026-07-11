@@ -1,0 +1,45 @@
+{
+  "$id": "https://tcrn.dev/schemas/receipt-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Receipt V1",
+  "type": "object",
+  "additionalProperties": false,
+  "x-tcrn-aos-requirementIds": [
+    "AOS-REQ-012"
+  ],
+  "required": [
+    "schemaVersion",
+    "id",
+    "exchangeId",
+    "receivedAt",
+    "status",
+    "subjectDigest",
+    "extensions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.receipt.v1"
+    },
+    "id": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "exchangeId": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "receivedAt": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "status": {
+      "enum": [
+        "accepted",
+        "rejected"
+      ]
+    },
+    "subjectDigest": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/sha256"
+    },
+    "extensions": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/extensionMap"
+    }
+  }
+}

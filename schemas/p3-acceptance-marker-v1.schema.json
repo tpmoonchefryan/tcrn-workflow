@@ -1,0 +1,69 @@
+{
+  "$id": "https://tcrn.dev/schemas/p3-acceptance-marker-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN P3 Acceptance Marker V1",
+  "type": "object",
+  "additionalProperties": false,
+  "x-tcrn-aos-requirementIds": [
+    "AOS-REQ-014"
+  ],
+  "required": [
+    "schemaVersion",
+    "capability",
+    "accepted",
+    "acceptedAt",
+    "basisCommit",
+    "basisTree",
+    "rc1ManifestDigest",
+    "roleVerdicts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.p3-acceptance-marker.v1"
+    },
+    "capability": {
+      "const": "p3-local-work-graph"
+    },
+    "accepted": {
+      "const": true
+    },
+    "acceptedAt": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "basisCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "basisTree": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "rc1ManifestDigest": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/sha256"
+    },
+    "roleVerdicts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform-workflow-architect",
+        "workflow-verification-engineer",
+        "security-risk-reviewer",
+        "reality-checker"
+      ],
+      "properties": {
+        "platform-workflow-architect": {
+          "const": "approved"
+        },
+        "workflow-verification-engineer": {
+          "const": "approved"
+        },
+        "security-risk-reviewer": {
+          "const": "approved"
+        },
+        "reality-checker": {
+          "const": "approved"
+        }
+      }
+    }
+  }
+}

@@ -26,5 +26,10 @@ The scanner is a focused deterministic regex policy, not a general DLP system.
 A fresh advisory or Codex Security scan and an operating-system network sandbox
 remain external boundaries.
 
+P2 permits one exact public control-plane string solely as a normative contract:
+`.context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json`.
+The marker itself is absent in P2 and its presence is rejected by P2 verification.
+No sibling control-plane path or embedded control-plane content is allowed.
+
 Any future networked feature requires an explicit opt-in contract, documented
 data flow, retention policy, and separate acceptance.

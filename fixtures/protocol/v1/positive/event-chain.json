@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "tcrn.fixture.v1",
+  "aosFacing": true,
+  "requirementIds": [
+    "AOS-REQ-001",
+    "AOS-REQ-007"
+  ],
+  "inputs": [
+    {
+      "id": "event:alpha-1",
+      "streamId": "stream:alpha",
+      "sequence": 1,
+      "occurredAt": "2026-07-11T01:00:00Z",
+      "priorHash": null,
+      "payload": {
+        "action": "created",
+        "revision": 1
+      }
+    },
+    {
+      "id": "event:alpha-2",
+      "streamId": "stream:alpha",
+      "sequence": 2,
+      "occurredAt": "2026-07-11T01:00:01Z",
+      "priorHash": "d33917d70b9f7d651a913595073d9745b04607d534381525e04da83422db18d2",
+      "payload": {
+        "action": "advanced",
+        "revision": 2
+      }
+    }
+  ],
+  "expectedPayloadHashes": [
+    "1cdcd274daf663686da4242afd38d2d4fe8662a6c340222787b4e2ade2d9d6f9",
+    "0b8d4f2aed986d6ff86b57147d57c493a950aeb35359db306f3de6399ac0b770"
+  ],
+  "expectedEventHashes": [
+    "d33917d70b9f7d651a913595073d9745b04607d534381525e04da83422db18d2",
+    "745c92433bc7c3f393798655beb82e4b48384298e18f346a4076dcaf8c06ddea"
+  ]
+}

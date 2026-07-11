@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "tcrn.fixture.v1",
+  "aosFacing": true,
+  "requirementIds": [
+    "AOS-REQ-005",
+    "AOS-REQ-013"
+  ],
+  "registry": [
+    {
+      "id": "extension:risk",
+      "version": 1,
+      "requiredByDefault": false
+    }
+  ],
+  "records": [
+    {
+      "schemaVersion": "tcrn.work.v1",
+      "id": "work:review-alpha",
+      "externalKey": "REVIEW-ALPHA",
+      "projectId": "project:alpha",
+      "kind": "Review",
+      "parentId": null,
+      "status": "planned",
+      "revision": 1,
+      "updatedAt": "2026-07-11T00:01:00Z",
+      "tombstone": false,
+      "extensions": {
+        "extension:risk": {
+          "required": true,
+          "value": {
+            "level": 2,
+            "label": "bounded"
+          }
+        },
+        "extension:unknown-optional": {
+          "required": false,
+          "value": {
+            "preserved": true
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": "tcrn.work.v1",
+      "id": "work:incident-alpha",
+      "externalKey": "INCIDENT-ALPHA",
+      "projectId": "project:alpha",
+      "kind": "Incident",
+      "parentId": null,
+      "status": "active",
+      "revision": 1,
+      "updatedAt": "2026-07-11T00:01:01Z",
+      "tombstone": false,
+      "extensions": {}
+    },
+    {
+      "schemaVersion": "tcrn.work.v1",
+      "id": "work:release-alpha",
+      "externalKey": "RELEASE-ALPHA",
+      "projectId": "project:alpha",
+      "kind": "Release",
+      "parentId": null,
+      "status": "planned",
+      "revision": 1,
+      "updatedAt": "2026-07-11T00:01:02Z",
+      "tombstone": false,
+      "extensions": {}
+    },
+    {
+      "schemaVersion": "tcrn.work.v1",
+      "id": "work:knowledge-alpha",
+      "externalKey": "KNOWLEDGE-ALPHA",
+      "projectId": "project:alpha",
+      "kind": "Knowledge",
+      "parentId": null,
+      "status": "ready",
+      "revision": 1,
+      "updatedAt": "2026-07-11T00:01:03Z",
+      "tombstone": false,
+      "extensions": {}
+    }
+  ],
+  "expectedHash": "39353e73c5adf12cce75c9e96a250cbc12d9353c8b3227e8a5fb76de6c4f64aa"
+}

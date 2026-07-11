@@ -1,0 +1,69 @@
+{
+  "$id": "https://tcrn.dev/schemas/exchange-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Exchange V1",
+  "type": "object",
+  "additionalProperties": false,
+  "x-tcrn-aos-requirementIds": [
+    "AOS-REQ-009"
+  ],
+  "required": [
+    "schemaVersion",
+    "id",
+    "createdAt",
+    "protocolVersion",
+    "entries",
+    "extensions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.exchange.v1"
+    },
+    "id": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "createdAt": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "protocolVersion": {
+      "const": 1
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "mediaType",
+          "size",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[^/]+(?:/[^/]+)*$",
+            "maxLength": 512
+          },
+          "mediaType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1048576
+          },
+          "sha256": {
+            "$ref": "./protocol-common-v1.schema.json#/$defs/sha256"
+          }
+        }
+      }
+    },
+    "extensions": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/extensionMap"
+    }
+  }
+}

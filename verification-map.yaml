@@ -14,7 +14,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "d06e9c272595c985b06c811b0c8fd3077fbd345a6f23da07e3e5673495983102",
+      "fixtureDigest": "8800f6fceca533741585eac649aa413a827163018ab54f8f40dc5288054f8959",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -43,7 +43,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "c9aeb1c2034335de842f05b0b13b94f8d48a016987dcdfef0b9de99cc8c54eee",
+      "fixtureDigest": "bb53b1d72bb4b8fb9f69cb5dcf073922da1a4aa1f8b9e70bb29867032cc6fc73",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -70,7 +70,7 @@
         "scripts/no-network.mjs",
         "tests/offline-boundary.test.mjs"
       ],
-      "fixtureDigest": "622b5f805a49ef61e53f6723b37567be0b782c893df0df0be3acddebbc3bd284",
+      "fixtureDigest": "dc379be83a85b6ed76945e67480959e40469aa9b5d3a3c274722d0bef9872a60",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -136,7 +136,7 @@
         ".npmrc",
         "package.json"
       ],
-      "fixtureDigest": "f8ffe5acd09c11d474abdc76dc6b3495b307c1226a963b42a1ade56248712ee8",
+      "fixtureDigest": "6f9d9a2bb48a5563fb738bc559d051e395bdf4e995bd76dfdd861f3756448eba",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -166,7 +166,7 @@
         "scripts/task.mjs",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "2f942570250e6abad3dee691c4a8f010cfad8b4a8d235708487463568a19e5b4",
+      "fixtureDigest": "030ac2158ea5af1602e45baa47d982a0cc805480aa8268dfdeb1e4a7186b0fab",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -215,7 +215,7 @@
         ".github/dependabot.yml",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "30051d4a00acae48a8438a19027336e3b4aa0ff86f9badf62f120c76df9643f3",
+      "fixtureDigest": "32fe32bf55a3bd4842989b1f45651a90e5fba9fedcd82de68e784d0005ae6940",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -241,7 +241,7 @@
         "scripts/lib/safe-io.mjs",
         "package.json"
       ],
-      "fixtureDigest": "d0fb20882124257169c182ce3e7bd091be36cf0ae25f866acae4d9ef91e84295",
+      "fixtureDigest": "a220fdfb9a2aaf87c9466607cc74f2ea4866767b1df7bdde1abfe80e396b78ac",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -257,81 +257,150 @@
     {
       "id": "P2-PROTOCOL-DETERMINISM",
       "phase": "P2",
-      "status": "planned",
-      "subject": "Canonical protocol serialization and digest vectors are deterministic.",
+      "status": "implemented",
+      "subject": "Canonical UTF-8 serialization, stable IDs, strict instants, version windows, event chains, deterministic order, hashes, limits, and exact reason codes match frozen V1 vectors.",
       "command": "pnpm verify:p2",
-      "fixturePaths": [],
-      "fixtureDigest": null,
+      "fixturePaths": [
+        "packages/protocol/src/index.ts",
+        "schemas/protocol-common-v1.schema.json",
+        "schemas/event-integrity-v1.schema.json",
+        "schemas/exchange-v1.schema.json",
+        "specs/protocol-common-v1.md",
+        "specs/event-integrity-v1.md",
+        "specs/exchange-v1.md",
+        "fixtures/protocol/v1/positive/canonical-vector.json",
+        "fixtures/protocol/v1/positive/event-chain.json",
+        "fixtures/protocol/v1/positive/exchange.json",
+        "fixtures/protocol/v1/positive/models.json",
+        "fixtures/protocol/v1/property/determinism.json",
+        "fixtures/protocol/v1/negative/cases.json",
+        "tests/protocol-v1.test.mjs"
+      ],
+      "fixtureDigest": "1c2597579bf8b68d063d76520ceddbaa7b1d93271b881e1cd2a02d216fdb5134",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
-      "expectedExit": 1,
-      "expectedReasonCode": "P2_OUT_OF_SCOPE",
+      "expectedExit": 0,
+      "expectedReasonCode": "P2_VERIFIED",
       "evidencePath": "dist/evidence/p2/p2.json",
       "invalidationTriggers": [
-        "P2 schemas, canonicalization, fixtures, or property tests are introduced"
+        "Protocol schemas, canonicalization, stable-ID rules, ordering, limits, fixtures, reason codes, or property tests change"
       ]
     },
     {
       "id": "P2-WORK-GRAPH-VALIDITY",
       "phase": "P2",
-      "status": "planned",
-      "subject": "Typed work graphs reject cycles, cross-project parents, and referential-integrity failures.",
+      "status": "implemented",
+      "subject": "The Initiative-Epic-Story-Subtask hierarchy and independent extension shapes reject duplicate IDs, cycles, cross-project or invalid parents, bad transitions, tombstone references, and missing references.",
       "command": "pnpm verify:p2",
-      "fixturePaths": [],
-      "fixtureDigest": null,
+      "fixturePaths": [
+        "packages/protocol/src/index.ts",
+        "schemas/work-model-v1.schema.json",
+        "schemas/knowledge-model-v1.schema.json",
+        "schemas/extension-registration-v1.schema.json",
+        "specs/work-model-v1.md",
+        "specs/knowledge-model-v1.md",
+        "specs/extension-registration-v1.md",
+        "fixtures/protocol/v1/positive/planned-delivery.json",
+        "fixtures/protocol/v1/positive/extensions.json",
+        "fixtures/protocol/v1/negative/cases.json",
+        "tests/protocol-v1.test.mjs"
+      ],
+      "fixtureDigest": "5d1b368638e4df59bd34c308486d20e1c18fb8f3cced02e29d5c97ce78c6d483",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
-      "expectedExit": 1,
-      "expectedReasonCode": "P2_OUT_OF_SCOPE",
+      "expectedExit": 0,
+      "expectedReasonCode": "P2_VERIFIED",
       "evidencePath": "dist/evidence/p2/p2.json",
       "invalidationTriggers": [
-        "P2 graph schemas, transition rules, or conformance fixtures are introduced"
+        "Work/knowledge schemas, hierarchy, extension, transition, tombstone, ordering, or conformance rules change"
       ]
     },
     {
       "id": "P2-EXTERNAL-RUNTIME-NO-OVERCLAIM",
       "phase": "P2",
-      "status": "planned",
-      "subject": "External-runtime requirements remain specified or fixture-verified without claiming a live compatible pair.",
+      "status": "implemented",
+      "subject": "The generic public AOS ledger links every AOS-facing schema and fixture while maturity remains specified or fixture-verified and no live pair, endpoint, credential, database, or mutation is claimed.",
       "command": "pnpm verify:p2",
-      "fixturePaths": [],
-      "fixtureDigest": null,
+      "fixturePaths": [
+        "extensions/aos-requirements-v1.json",
+        "specs/aos-requirements-v1.md",
+        "schemas/compatibility-v1.schema.json",
+        "schemas/context-v1.schema.json",
+        "schemas/profile-trust-v1.schema.json",
+        "schemas/receipt-v1.schema.json",
+        "fixtures/protocol/v1/positive/models.json",
+        "scripts/lib/protocol-proof.mjs"
+      ],
+      "fixtureDigest": "b4d7f0b2c3d0e17d8fff85731a64783c9d4a4ea290a920d0dd6c2aeb5513a5a0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
-      "expectedExit": 1,
-      "expectedReasonCode": "P2_OUT_OF_SCOPE",
+      "expectedExit": 0,
+      "expectedReasonCode": "P2_VERIFIED",
       "evidencePath": "dist/evidence/p2/p2.json",
       "invalidationTriggers": [
-        "P2 requirements ledger, maturity, endpoint, credential, or compatibility claims change"
+        "AOS requirement IDs, links, maturity, prohibited implementation assumptions, or compatibility claims change"
+      ]
+    },
+    {
+      "id": "P2-P3-MARKER-CONTRACT",
+      "phase": "P2",
+      "status": "implemented",
+      "subject": "P2 freezes the canonical P3 acceptance-marker schema and path while proving that the marker is absent and P3 capability is not claimed.",
+      "command": "pnpm verify:p2",
+      "fixturePaths": [
+        "schemas/p3-acceptance-marker-v1.schema.json",
+        "specs/p3-acceptance-marker-v1.md",
+        "packages/protocol/src/index.ts",
+        "scripts/lib/protocol-proof.mjs",
+        "scripts/lib/privacy.mjs",
+        "tests/privacy-boundary.test.mjs"
+      ],
+      "fixtureDigest": "2d3b6b402010e89901c5e168da248ab05fd12792c86b388f2084fef9fa06db39",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P2_VERIFIED",
+      "evidencePath": "dist/evidence/p2/p2.json",
+      "invalidationTriggers": [
+        "P3 marker path, schema, required verdicts, privacy allowance, absence check, or capability language changes"
       ]
     },
     {
       "id": "RC1-IMMUTABLE-PROOF-BASIS",
       "phase": "RC1",
-      "status": "planned",
-      "subject": "One proof-manifest digest binds every normative schema, specification, fixture, verification entry, and role verdict.",
+      "status": "candidate",
+      "subject": "One unaccepted candidate manifest binds every normative P1/P2 schema, specification, fixture, verification entry, and four unresolved role-verdict slots without fabricating acceptance.",
       "command": "pnpm verify:rc1",
-      "fixturePaths": [],
-      "fixtureDigest": null,
+      "fixturePaths": [
+        "specs/rc1-candidate-proof-manifest-v1.md",
+        "scripts/policy/rc1-inputs.json",
+        "scripts/lib/protocol-proof.mjs",
+        "scripts/task.mjs",
+        "package.json"
+      ],
+      "fixtureDigest": "b1db1952757d3018ddcefb69ac53f711587cd47690cee86b6831dcd23ac79957",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
-      "expectedExit": 1,
-      "expectedReasonCode": "RC1_OUT_OF_SCOPE",
+      "expectedExit": 0,
+      "expectedReasonCode": "RC1_CANDIDATE_READY",
       "evidencePath": "dist/evidence/rc1/rc1.json",
       "invalidationTriggers": [
-        "Any normative P1/P2 input, RC1 role contract, verdict, or proof-manifest algorithm changes"
+        "Any normative P1/P2 input, candidate manifest, RC1 role contract, verdict slot, or proof-manifest algorithm changes"
       ]
     }
   ]

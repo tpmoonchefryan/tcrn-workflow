@@ -1,0 +1,47 @@
+{
+  "$id": "https://tcrn.dev/schemas/compatibility-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Compatibility V1",
+  "type": "object",
+  "additionalProperties": false,
+  "x-tcrn-aos-requirementIds": [
+    "AOS-REQ-010"
+  ],
+  "required": [
+    "schemaVersion",
+    "profileId",
+    "protocolVersion",
+    "minimumProtocolVersion",
+    "maximumProtocolVersion",
+    "maturity"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.compatibility.v1"
+    },
+    "profileId": {
+      "$ref": "./protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "protocolVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "minimumProtocolVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "maximumProtocolVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "maturity": {
+      "enum": [
+        "specified",
+        "fixture_verified"
+      ]
+    }
+  }
+}
