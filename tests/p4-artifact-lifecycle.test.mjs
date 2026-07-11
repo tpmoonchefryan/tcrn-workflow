@@ -47,6 +47,9 @@ import {
 
 const instant = (second) => `2026-07-11T12:00:${String(second).padStart(2, "0")}Z`;
 const authenticatedReference = (path) => ["https://", "user", ":", "secret", "@", "example.test", path].join("");
+const ftpAuthenticatedReference = (path) => ["ftp://", "user", ":", "secret", "@", "example.test", path].join("");
+const schemeRelativeAuthenticatedReference = (path) => ["//", "user", ":", "secret", "@", "example.test", path].join("");
+const unsupportedAuthenticatedReference = (path) => ["file://", "user", ":", "secret", "@", "example.test", path].join("");
 const privateMachinePath = () => ["/", "Users", "/private/source.json"].join("");
 const privateIdentifierReference = () => ["evidence://public/", "user", "@", "example.test/item"].join("");
 const fineGrainedTokenReference = () => ["evidence://public/", "github", "_pat_", "abcdefghijklmnopqrstuvwxyz123456"].join("");
@@ -167,6 +170,10 @@ test("artifact lifecycle classification and reference redaction are closed and d
     redactArtifactReference(authenticatedReference("/evidence?id=private#token")),
     "https://example.test/evidence",
   );
+  assert.equal(redactArtifactReference(ftpAuthenticatedReference("/evidence?id=private#token")), "ftp://example.test/evidence");
+  assert.equal(redactArtifactReference(schemeRelativeAuthenticatedReference("/evidence?id=private#token")), "//example.test/evidence");
+  assert.throws(() => redactArtifactReference(unsupportedAuthenticatedReference("/evidence")),
+    (error) => error?.reasonCode === "ARTIFACT_INPUT_INVALID");
   assert.equal(redactArtifactReference("evidence://public/item?credential=secret#fragment"), "evidence://public/item");
   assert.equal(redactArtifactReference(privateMachinePath()), "[redacted-private-path]");
   assert.equal(redactArtifactReference(privateIdentifierReference()), "evidence://public/[redacted-private-identifier]/item");
@@ -331,9 +338,48 @@ test("archive apply and exact restore preserve high-water authority on a disposa
   }
 });
 
+test("hierarchical URL credentials are redacted before archive apply and exact restore", async () => {
+  const fixture = await artifactFixture({ externalKey: "FIXTURE-ARTIFACT-URL-REDACTION" });
+  try {
+    const references = [
+      ftpAuthenticatedReference("/evidence?id=private#token"),
+      schemeRelativeAuthenticatedReference("/evidence?id=private#token"),
+    ];
+    const expected = ["ftp://example.test/evidence", "//example.test/evidence"];
+    const records = [];
+    for (const [index, reference] of references.entries()) {
+      const record = artifactRecord(fixture.marker, `URL-REDACTION-${index}`, "artifact", {
+        reference: redactArtifactReference(reference),
+      });
+      records.push(record);
+      await writeRecord(fixture, record);
+    }
+    const plan = await artifactArchiveDryRun(fixture.workspace);
+    await applyArtifactArchive(fixture.workspace, { expectedPlanDigest: plan.planDigest });
+    const bundlePath = join(fixture.store, "archives", plan.archiveId.slice("artifact-archive:".length), "bundle.json");
+    const bundleText = await readFile(bundlePath, "utf8");
+    for (const reference of references) {
+      assert.equal(bundleText.includes(reference), false);
+    }
+    for (const record of records) {
+      await unlink(join(fixture.store, "records", `${record.id}.json`));
+    }
+    await restoreArtifactArchive(fixture.workspace, plan.archiveId, { expectedPlanDigest: plan.planDigest });
+    for (const [index, record] of records.entries()) {
+      const restored = JSON.parse(await readFile(join(fixture.store, "records", `${record.id}.json`), "utf8"));
+      assert.equal(restored.reference, expected[index]);
+      assert.equal(references.includes(restored.reference), false);
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("redaction, closed records, high-water, links, special files, and replacement attacks fail closed", async () => {
   for (const [label, mutate, reasonCode] of [
     ["authenticated-url", (record) => ({ ...record, reference: authenticatedReference("/item?token=raw") }), "ARTIFACT_REDACTION_REQUIRED"],
+    ["ftp-userinfo", (record) => ({ ...record, reference: ftpAuthenticatedReference("/item?token=raw") }), "ARTIFACT_REDACTION_REQUIRED"],
+    ["scheme-relative-userinfo", (record) => ({ ...record, reference: schemeRelativeAuthenticatedReference("/item?token=raw") }), "ARTIFACT_REDACTION_REQUIRED"],
     ["protected-active", (record) => ({ ...record, kind: "decision", state: "active" }), "ARTIFACT_INPUT_INVALID"],
     ["extra-field", (record) => ({ ...record, extraAuthority: true }), "ARTIFACT_INPUT_INVALID"],
   ]) {
@@ -378,6 +424,59 @@ test("redaction, closed records, high-water, links, special files, and replaceme
     }));
   } finally {
     await replacement.close();
+  }
+
+  const grown = await artifactFixture({ externalKey: "FIXTURE-SOURCE-GROW" });
+  try {
+    const record = artifactRecord(grown.marker, "GROWN", "artifact");
+    const path = await writeRecord(grown, record);
+    let changed = false;
+    await expectReason("ARTIFACT_LIMIT_EXCEEDED", () => artifactSizeReport(grown.workspace, {
+      async beforeDescriptorReadForTest(candidate) {
+        if (!changed && candidate === path) {
+          changed = true;
+          await writeFile(path, Buffer.alloc(1_048_577));
+        }
+      },
+    }));
+  } finally {
+    await grown.close();
+  }
+
+  const rewritten = await artifactFixture({ externalKey: "FIXTURE-SOURCE-SAME-INODE" });
+  try {
+    const record = artifactRecord(rewritten.marker, "SAME-INODE", "artifact", { byteSize: 256 });
+    const path = await writeRecord(rewritten, record);
+    const changedRecord = { ...record, byteSize: 257 };
+    assert.equal(canonicalJson(record).length, canonicalJson(changedRecord).length);
+    let changed = false;
+    await expectReason("ARTIFACT_SOURCE_CHANGED", () => artifactSizeReport(rewritten.workspace, {
+      async afterDescriptorOpenForTest(candidate) {
+        if (!changed && candidate === path) {
+          changed = true;
+          await writeFile(path, canonicalJson(changedRecord));
+        }
+      },
+    }));
+  } finally {
+    await rewritten.close();
+  }
+
+  const resized = await artifactFixture({ externalKey: "FIXTURE-SOURCE-POST-READ-SIZE" });
+  try {
+    const record = artifactRecord(resized.marker, "POST-READ-SIZE", "artifact");
+    const path = await writeRecord(resized, record);
+    let changed = false;
+    await expectReason("ARTIFACT_SOURCE_CHANGED", () => artifactSizeReport(resized.workspace, {
+      async afterDescriptorReadForTest(candidate) {
+        if (!changed && candidate === path) {
+          changed = true;
+          await writeFile(path, `${canonicalJson(record)} `);
+        }
+      },
+    }));
+  } finally {
+    await resized.close();
   }
 
   const highWater = await artifactFixture({ externalKey: "FIXTURE-HIGH-WATER" });
@@ -485,8 +584,8 @@ test("archive and restore crash/partial states remain observable and fail closed
   }
 });
 
-test("malformed archive fields, base64, records, and paths fail closed", async () => {
-  for (const variant of ["fields", "base64", "record", "path"]) {
+test("malformed archive fields, base64, records, paths, and URL userinfo fail closed", async () => {
+  for (const variant of ["fields", "base64", "record", "record-ftp", "record-scheme-relative", "path"]) {
     const fixture = await artifactFixture({ externalKey: `FIXTURE-ARCHIVE-INVALID-${variant.toUpperCase()}` });
     try {
       const record = artifactRecord(fixture.marker, `INVALID-${variant}`, "artifact");
@@ -498,9 +597,11 @@ test("malformed archive fields, base64, records, and paths fail closed", async (
       const bundle = JSON.parse(await readFile(bundlePath, "utf8"));
       if (variant === "fields") bundle.extraAuthority = true;
       else if (variant === "base64") bundle.entries[0].contentBase64 += "=";
-      else if (variant === "record") {
+      else if (variant.startsWith("record")) {
         const archived = JSON.parse(Buffer.from(bundle.entries[0].contentBase64, "base64").toString("utf8"));
-        archived.reference = authenticatedReference("/evidence?token=raw");
+        archived.reference = variant === "record-ftp" ? ftpAuthenticatedReference("/evidence?token=raw") :
+          variant === "record-scheme-relative" ? schemeRelativeAuthenticatedReference("/evidence?token=raw") :
+            authenticatedReference("/evidence?token=raw");
         bundle.entries[0].contentBase64 = Buffer.from(canonicalJson(archived)).toString("base64");
       }
       else bundle.entries[0].path = "../escape";
@@ -510,6 +611,7 @@ test("malformed archive fields, base64, records, and paths fail closed", async (
         plan.archiveId,
         { expectedPlanDigest: plan.planDigest },
       ));
+      assert.deepEqual(await readdir(join(fixture.store, "records")), []);
     } finally {
       await fixture.close();
     }

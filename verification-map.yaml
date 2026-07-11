@@ -529,7 +529,7 @@
       "id": "P4-ARTIFACT-LIFECYCLE-REPORTING",
       "phase": "P4",
       "status": "implemented",
-      "subject": "P4 freezes closed artifact/receipt/cache lifecycle classes, metadata-first redaction, deterministic size and doctor budgets, and mutation-free compact/archive projections while retaining terminal, decision, gate, acceptance, evidence-reference, and event high-water authority.",
+      "subject": "P4 freezes closed artifact/receipt/cache lifecycle classes, all-hierarchical-URL userinfo redaction, descriptor-bound source size/change admission, deterministic size and doctor budgets, and mutation-free compact/archive projections while retaining terminal, decision, gate, acceptance, evidence-reference, and event high-water authority.",
       "command": "pnpm verify:p4",
       "fixturePaths": [
         "package.json",
@@ -542,7 +542,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "d5b68523449857909ba17442ea90450988fdb85b94f0778b073d0a9dd79e9813",
+      "fixtureDigest": "ae5a8480aeaa95116f5e91ee2ec715ae754c8585221a4381c9deb1c0adb64f6f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -559,7 +559,7 @@
       "id": "P4-DISPOSABLE-ARCHIVE-RESTORE",
       "phase": "P4",
       "status": "implemented",
-      "subject": "Archive apply and exact restore are admitted only for explicit synthetic disposable Workspaces and enforce no-follow single-link identity, no overwrite, canonical bundle, high-water, crash/partial, limit, path, and legacy-read-absence boundaries without live Workspace apply.",
+      "subject": "Archive apply and exact restore are admitted only for explicit synthetic disposable Workspaces and enforce no-follow single-link identity plus size/change snapshots, hierarchical-URL credential exclusion, no overwrite, canonical bundle, high-water, crash/partial, limit, path, and legacy-read-absence boundaries without live Workspace apply.",
       "command": "pnpm verify:p4",
       "fixturePaths": [
         "packages/core/src/artifact-lifecycle.ts",
@@ -569,7 +569,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "99511e5e2df70a418920c7c523171885a0c48a612778cb8df7129638eb822e58",
+      "fixtureDigest": "a2367d7083fd9ea0631c246349990e3694f589ca4e2747ef27a99528b2feeda2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

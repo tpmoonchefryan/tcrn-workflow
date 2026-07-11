@@ -106,6 +106,8 @@ export interface ArtifactRecord {
 
 export interface ArtifactScanOptions {
   readonly beforeDescriptorReadForTest?: (path: string) => Promise<void>;
+  readonly afterDescriptorOpenForTest?: (path: string) => Promise<void>;
+  readonly afterDescriptorReadForTest?: (path: string) => Promise<void>;
 }
 
 export interface ArtifactDoctorBudgets {
@@ -163,6 +165,13 @@ const maxLogicalBytes = 4_294_967_296;
 interface FileIdentity {
   readonly dev: number | bigint;
   readonly ino: number | bigint;
+}
+
+interface FileAdmissionSnapshot extends FileIdentity {
+  readonly size: bigint;
+  readonly mode: bigint;
+  readonly mtimeNs: bigint;
+  readonly ctimeNs: bigint;
 }
 
 interface BoundBytes {
@@ -226,6 +235,22 @@ function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
   return left.dev === right.dev && left.ino === right.ino;
 }
 
+function admissionSnapshot(value: FileAdmissionSnapshot): FileAdmissionSnapshot {
+  return {
+    dev: value.dev,
+    ino: value.ino,
+    size: value.size,
+    mode: value.mode,
+    mtimeNs: value.mtimeNs,
+    ctimeNs: value.ctimeNs,
+  };
+}
+
+function sameAdmissionSnapshot(left: FileAdmissionSnapshot, right: FileAdmissionSnapshot): boolean {
+  return sameIdentity(left, right) && left.size === right.size && left.mode === right.mode &&
+    left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs;
+}
+
 function inside(parent: string, candidate: string): boolean {
   const relation = relative(parent, candidate);
   return relation === "" || (!relation.startsWith("..") && !relation.startsWith(sep));
@@ -284,7 +309,7 @@ async function boundDirectory(path: string, parent?: string): Promise<string> {
 async function readBoundRegularFile(path: string, maximumBytes = maxSourceBytes, options: ArtifactScanOptions = {}): Promise<BoundBytes> {
   let before;
   try {
-    before = await lstat(path);
+    before = await lstat(path, { bigint: true });
   } catch (error) {
     fail("ARTIFACT_PATH_INVALID", `${path}:${String((error as { code?: string }).code ?? error)}`);
   }
@@ -294,25 +319,39 @@ async function readBoundRegularFile(path: string, maximumBytes = maxSourceBytes,
   if (!before.isFile()) {
     fail("ARTIFACT_SPECIAL_FILE", path);
   }
-  if (before.nlink !== 1) {
+  if (before.nlink !== 1n) {
     fail("ARTIFACT_LINK_UNSAFE", path);
   }
-  if (before.size > maximumBytes) {
+  const maximum = BigInt(maximumBytes);
+  if (before.size > maximum) {
     fail("ARTIFACT_LIMIT_EXCEEDED", `${path}:${before.size}`);
   }
+  const beforeSnapshot = admissionSnapshot(before);
   await options.beforeDescriptorReadForTest?.(path);
   let handle;
   try {
     handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-    const opened = await handle.stat();
-    if (!opened.isFile() || opened.nlink !== 1 || !sameIdentity(before, opened)) {
+    const opened = await handle.stat({ bigint: true });
+    if (!opened.isFile() || opened.nlink !== 1n || !sameIdentity(beforeSnapshot, opened)) {
       fail("ARTIFACT_SOURCE_CHANGED", path);
     }
+    if (opened.size > maximum) {
+      fail("ARTIFACT_LIMIT_EXCEEDED", `${path}:${opened.size}`);
+    }
+    const openedSnapshot = admissionSnapshot(opened);
+    if (!sameAdmissionSnapshot(beforeSnapshot, openedSnapshot)) {
+      fail("ARTIFACT_SOURCE_CHANGED", path);
+    }
+    await options.afterDescriptorOpenForTest?.(path);
     const bytes = await handle.readFile();
-    const afterRead = await handle.stat();
-    const named = await lstat(path);
-    if (bytes.length !== opened.size || !sameIdentity(opened, afterRead) || !sameIdentity(opened, named) ||
-      named.isSymbolicLink() || !named.isFile() || named.nlink !== 1) {
+    await options.afterDescriptorReadForTest?.(path);
+    const afterRead = await handle.stat({ bigint: true });
+    const named = await lstat(path, { bigint: true });
+    if (BigInt(bytes.length) > maximum || afterRead.size > maximum || named.size > maximum) {
+      fail("ARTIFACT_LIMIT_EXCEEDED", `${path}:${bytes.length}:${afterRead.size}:${named.size}`);
+    }
+    if (BigInt(bytes.length) !== openedSnapshot.size || !sameAdmissionSnapshot(openedSnapshot, afterRead) ||
+      !sameAdmissionSnapshot(openedSnapshot, named) || named.isSymbolicLink() || !named.isFile() || named.nlink !== 1n) {
       fail("ARTIFACT_SOURCE_CHANGED", path);
     }
     return { bytes, identity: { dev: opened.dev, ino: opened.ino } };
@@ -410,17 +449,27 @@ export function redactArtifactReference(input: unknown): string {
     return "[redacted-private-path]";
   }
   try {
-    const url = new URL(value);
-    if (url.protocol === "http:" || url.protocol === "https:") {
+    const schemeRelative = value.startsWith("//");
+    const url = new URL(schemeRelative ? `https:${value}` : value);
+    if (url.host !== "") {
       url.username = "";
       url.password = "";
       url.search = "";
       url.hash = "";
-      value = url.toString();
+      value = schemeRelative ? `//${url.host}${url.pathname}` : url.toString();
     } else {
+      if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#]*@/u.test(value)) {
+        fail("ARTIFACT_INPUT_INVALID", "unsupported hierarchical URL userinfo");
+      }
       value = value.split(/[?#]/u, 1)[0] ?? "";
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof ArtifactLifecycleError) {
+      throw error;
+    }
+    if (/^(?:[A-Za-z][A-Za-z0-9+.-]*:)?\/\/[^/?#]*@/u.test(value)) {
+      fail("ARTIFACT_INPUT_INVALID", "malformed hierarchical URL userinfo");
+    }
     value = value.split(/[?#]/u, 1)[0] ?? "";
   }
   value = value

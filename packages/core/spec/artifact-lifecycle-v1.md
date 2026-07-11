@@ -28,16 +28,20 @@ which continues to serialize only the accepted Work graph and event chain.
 The store lives at `.tcrn-workflow/artifacts/` with closed `store.json`,
 `records/`, `transient/receipts/`, `transient/cache/`, and `archives/` entries.
 All source files are bounded, single-link regular files read through
-`O_NOFOLLOW` descriptors with pre/open/post identity checks. Paths are bounded
-relative ASCII segments. Symlinks, hardlinks, special files, source replacement,
-path traversal, count/size overflow, malformed canonical JSON, and high-water
-drift fail closed.
+`O_NOFOLLOW` descriptors. Pre-open, opened-descriptor, post-read descriptor, and
+post-read named-file snapshots bind device, inode, size, mode, nanosecond mtime,
+and nanosecond ctime; every stage and the actual byte count is checked against
+the applicable size limit. Paths are bounded relative ASCII segments. Symlinks,
+hardlinks, special files, same-inode mutation, source replacement, path
+traversal, count/size overflow, malformed canonical JSON, and high-water drift
+fail closed.
 
 References must already be redacted before admission. Authentication material,
-URL userinfo, URL query/fragment data, common credential forms, email-like
-private identifiers, and private machine-home paths are removed or replaced.
-This deterministic boundary is metadata/reference-first and is not a general
-DLP claim.
+userinfo in every parsed hierarchical URL scheme and scheme-relative URL,
+URL query/fragment data, common credential forms, email-like private identifiers,
+and private machine-home paths are removed or replaced. Malformed or unsupported
+hierarchical userinfo fails closed instead of being admitted. This deterministic
+focused policy is metadata/reference-first and is not a general DLP claim.
 
 ## Doctor, size, and compact projection
 
