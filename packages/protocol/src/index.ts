@@ -159,7 +159,11 @@ function assertExactFields(value: unknown, expected: readonly string[], label: s
     fail("RECORD_MALFORMED", `${label} requires the exact V1 field set`);
   }
   try {
-    if (Object.keys(value).sort(compareCanonicalText).join("\0") !== [...expected].sort(compareCanonicalText).join("\0")) {
+    const keys = Object.keys(value);
+    for (const key of keys) {
+      canonicalStringLength(key);
+    }
+    if (keys.sort(compareCanonicalText).join("\0") !== [...expected].sort(compareCanonicalText).join("\0")) {
       fail("RECORD_MALFORMED", `${label} requires the exact V1 field set`);
     }
   } catch (error) {
@@ -231,7 +235,11 @@ function canonicalValue(value: unknown, depth: number): string {
   }
   let keys: string[];
   try {
-    keys = Object.keys(value).sort(compareCanonicalText);
+    keys = Object.keys(value);
+    for (const key of keys) {
+      canonicalStringLength(key);
+    }
+    keys.sort(compareCanonicalText);
   } catch (error) {
     if (error instanceof CanonicalOrderError) {
       fail("CANONICAL_VALUE_INVALID", error.message);
@@ -418,6 +426,7 @@ function validateExtensionMap(extensions: unknown, registry: unknown, label: str
   }
   const registrations = validatedExtensionRegistry(registry);
   for (const id of ids) {
+    canonicalStringLength(id);
     assertProtocolId(id);
     const extension = extensions[id];
     assertExactFields(extension, ["required", "value"], "Extension values");

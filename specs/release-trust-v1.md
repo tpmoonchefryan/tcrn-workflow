@@ -6,7 +6,10 @@ MAY are interpreted as described by RFC 2119.
 1. A release verifier MUST receive the trust-root path explicitly.
 2. The resolved trust-root path MUST be outside the candidate framework root.
 3. Trust roots and manifests MUST be canonical UTF-8 JSON with one terminal LF,
-   conform to the committed V1 schemas, and reject unknown fields.
+   conform to the committed V1 schemas, and reject unknown fields. Every scalar
+   string and object key is validated independently; malformed Unicode fails
+   with the applicable `TRUST_*_CANONICAL_JSON` reason before claim or signature
+   evaluation.
 4. The manifest signature MUST be Ed25519 over canonical JSON UTF-8 bytes.
 5. Repository, workflow, and subject MUST match caller expectations.
 6. Every instant MUST use the strict no-leap-second RFC 3339 subset without

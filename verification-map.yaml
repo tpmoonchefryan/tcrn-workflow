@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "48af1d974d97990e58082507fe05a0b7d729791c11f22532258d2aee69b6a4b0",
+      "fixtureDigest": "622d9e98d79d3f460d8106da1d1b5df3746724dbec339a3dd63ef45498ec6a7d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "eba67d7672322d289e03aea06302342b39c2d85bb610b78a66968437192c1374",
+      "fixtureDigest": "8d1c12c286c2c8f378b2968dc0080bcce3c91c1c4d35bee1911e48b53a5e2cf0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -70,10 +70,12 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json",
         "scripts/task.mjs",
+        "scripts/lib/dependency-graph.mjs",
         "scripts/no-network.mjs",
-        "tests/offline-boundary.test.mjs"
+        "tests/offline-boundary.test.mjs",
+        "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "d348c21e33b56faf874fe33d525ddbce611014d58c2c88982959b6b313ab94ed",
+      "fixtureDigest": "e9fedd9032a40f909f494b78a13a3736b95c8038b8f2ee7f6b3d07bfa6e442f1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -106,7 +108,7 @@
         "tests/release-trust.test.mjs",
         "fixtures/release-trust/README.md"
       ],
-      "fixtureDigest": "df71c68631c1491f1aee30ccbaae2fa7825e90c4a4c14c214260e965992d8c86",
+      "fixtureDigest": "4d37a77842520934f060f3676830d97c44380a9a4f3608c2b5579ca266fbcccf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -140,9 +142,12 @@
         ".npmrc",
         "package.json",
         "pnpm-lock.yaml",
-        "scripts/policy/dependency-policy.json"
+        "scripts/policy/dependency-policy.json",
+        "scripts/policy/vulnerability-policy.json",
+        "scripts/lib/dependency-graph.mjs",
+        "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "546e2b136b80a81d5ba9a610b1b4e404f93e8044a43af2a125012e278de0b97d",
+      "fixtureDigest": "d7c7ab244a5f600f4d7ddc4bd72b99932e152fa31f9927b23356d07a5df5b24b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -153,6 +158,35 @@
       "evidencePath": "dist/evidence/p1/governance.json",
       "invalidationTriggers": [
         "Governance, license, source-header, dependency, lifecycle, Node, pnpm, or package-manifest changes"
+      ]
+    },
+    {
+      "id": "P1-DEPENDENCY-GRAPH",
+      "phase": "P1",
+      "status": "implemented",
+      "subject": "The complete exact frozen direct/transitive dependency graph has policy, integrity, license and SBOM closure, and every graph identity is checked against the dated local vulnerability denylist without claiming a fresh advisory scan.",
+      "command": "pnpm verify:vulnerabilities",
+      "fixturePaths": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "scripts/task.mjs",
+        "scripts/lib/dependency-graph.mjs",
+        "scripts/policy/dependency-policy.json",
+        "scripts/policy/vulnerability-policy.json",
+        "tests/dependency-policy.test.mjs",
+        "README.md"
+      ],
+      "fixtureDigest": "d3b0d1d2e340e50fad1bdf43209d4977a8cb59df43e671bf3b52a09f4ab745a7",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline; dated local denylist only"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "VULNERABILITY_POLICY_VERIFIED",
+      "evidencePath": "dist/evidence/p1/vulnerabilities.json",
+      "invalidationTriggers": [
+        "Direct dependency, transitive lock edge, exact identity, integrity, license, dependency policy, denylist tuple, SBOM closure, or advisory-boundary claim changes"
       ]
     },
     {
@@ -174,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "e6d4eebb5485a09c617817bbf33b8d77a9bca348e0d1905c53e834629c8a31bd",
+      "fixtureDigest": "4c0058b7ef8df5c605763d1c88d531862cd9add94e401623863b396a2697106d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -226,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "de0f6f30a3a4ef0bfcc9f4bb6f2be7ac62fc526d8b982cda4f162618c49194a8",
+      "fixtureDigest": "d3eba347b8484363db8a4fafa64e61e56cc5d3a9ad6d449959114c218f6ecc47",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -275,6 +309,7 @@
       "command": "pnpm verify:p2",
       "fixturePaths": [
         "packages/protocol/src/index.ts",
+        "scripts/lib/canonical-json.mjs",
         "scripts/lib/canonical-order.mjs",
         "schemas/protocol-common-v1.schema.json",
         "schemas/event-integrity-v1.schema.json",
@@ -293,7 +328,7 @@
         "tests/protocol-v1.test.mjs",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "ff02f1e6a9b1d39901cecd4990b8f3ec98d0d5612a4a18ba982531acb5bf6d3f",
+      "fixtureDigest": "f19c0700fe627fbbeb957eb2be1c6c8dc3187daa176c122edcf578e435bb3081",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -327,7 +362,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-v1.test.mjs"
       ],
-      "fixtureDigest": "982f9a2a0f01e4bf8189497c7e21a4c8840bda019c5a78c6ec6e720af6147bb5",
+      "fixtureDigest": "f8e7fdc7bf4a5a0b945e4ddbdeb7cc4d968faf94873ba896e6a37205f8ec7837",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -356,12 +391,13 @@
         "fixtures/protocol/v1/schema-cases.json",
         "fixtures/protocol/v1/positive/models.json",
         "scripts/lib/protocol-proof.mjs",
+        "scripts/lib/canonical-json.mjs",
         "scripts/policy/dependency-policy.json",
         "package.json",
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "8ab5bd63ed3933c16818b50229ec54d40ff73a08982d8c2627b9ce7cb7be8974",
+      "fixtureDigest": "9f9979d698cdd5d3a840643268bf4eaa7f3c974f797d0b5955755f69f53df005",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -389,7 +425,7 @@
         "scripts/lib/privacy.mjs",
         "tests/privacy-boundary.test.mjs"
       ],
-      "fixtureDigest": "a36fc7fb30a0ad0e1362dbacda168f6e9eb197efc2325a57aee95797c9e66af1",
+      "fixtureDigest": "55fa419976ed990c0af145bab7fd79888aefe8a551c6196e9489892c2c2d91da",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -412,6 +448,7 @@
         "specs/rc1-candidate-proof-manifest-v1.md",
         "scripts/policy/rc1-inputs.json",
         "scripts/lib/protocol-proof.mjs",
+        "scripts/lib/canonical-json.mjs",
         "scripts/lib/canonical-order.mjs",
         "scripts/task.mjs",
         "package.json",
@@ -421,7 +458,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "d4f759a76edff29344aff0d87d01a7ea0ef446f5dc5505e1a0faa92943d11fad",
+      "fixtureDigest": "1aada1878de6eba4ba4ab2574aabad9277a8850a78e2fc9051b86a8190cc7e8c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

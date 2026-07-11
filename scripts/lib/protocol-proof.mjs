@@ -6,7 +6,7 @@ import { relative, resolve } from "node:path";
 
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { canonicalJson } from "./canonical-json.mjs";
+import { CanonicalJsonError, canonicalJson } from "./canonical-json.mjs";
 import { compareCanonicalText } from "./canonical-order.mjs";
 import { fileRecord, readJson, readSourceFile, repositoryRoot, toPosixPath, walkFiles } from "./files.mjs";
 
@@ -48,8 +48,25 @@ function sha256(content) {
   return createHash("sha256").update(content).digest("hex");
 }
 
-function canonicalBytes(value) {
-  return Buffer.from(`${canonicalJson(value)}\n`, "utf8");
+export function canonicalProofBytes(value) {
+  try {
+    return Buffer.from(`${canonicalJson(value)}\n`, "utf8");
+  } catch (error) {
+    if (error instanceof CanonicalJsonError) {
+      fail("RC1_CANONICAL_VALUE_INVALID", error.message);
+    }
+    throw error;
+  }
+}
+
+function withPathValue(value, path, replacement) {
+  const copy = structuredClone(value);
+  let target = copy;
+  for (const segment of path.slice(0, -1)) {
+    target = target[segment];
+  }
+  target[path.at(-1)] = replacement;
+  return copy;
 }
 
 function collectRequirementIds(value, output = new Set()) {
@@ -170,6 +187,36 @@ export async function validateP2SchemasAndFixtures() {
   }
   assertion(seenSchemas.size === p2SchemaNames.size, "P2_SCHEMA_CASE_SET_INCOMPLETE", `${seenSchemas.size}/${p2SchemaNames.size}`);
 
+  const idBoundaryCases = schemaCases.idBoundaryCases;
+  assertion(idBoundaryCases?.maximumLength === 161 && idBoundaryCases.maximumId.length === 161 &&
+    idBoundaryCases.overlongId.length === 162 && Array.isArray(idBoundaryCases.targets),
+  "P2_ID_BOUNDARY_CASES_INVALID", "Stable ID boundary fixture");
+  let stableIdBoundaryCases = 0;
+  for (const boundaryCase of idBoundaryCases.targets) {
+    const schemaCase = schemaCases.cases.find((entry) => entry.schema === boundaryCase.schema);
+    const schema = p2Documents.find((entry) => entry.$id.endsWith(boundaryCase.schema));
+    const validate = schema ? ajv.getSchema(schema.$id) : undefined;
+    assertion(schemaCase && typeof validate === "function" && Array.isArray(boundaryCase.path),
+      "P2_ID_BOUNDARY_TARGET_INVALID", boundaryCase.schema);
+    assertion(validate(withPathValue(schemaCase.valid, boundaryCase.path, idBoundaryCases.maximumId)),
+      "P2_ID_MAXIMUM_REJECTED", `${boundaryCase.schema}:${boundaryCase.path.join(".")}:${ajv.errorsText(validate.errors)}`);
+    assertion(!validate(withPathValue(schemaCase.valid, boundaryCase.path, idBoundaryCases.overlongId)),
+      "P2_ID_OVERLONG_ADMITTED", `${boundaryCase.schema}:${boundaryCase.path.join(".")}`);
+    stableIdBoundaryCases += 1;
+  }
+
+  const commonSchema = p2Documents.find((entry) => entry.$id.endsWith("protocol-common-v1.schema.json"));
+  const validateExtensionMap = ajv.compile({ $ref: `${commonSchema.$id}#/$defs/extensionMap` });
+  const extensionNameCases = schemaCases.extensionNameCases;
+  assertion(typeof extensionNameCases?.valid === "string" && Array.isArray(extensionNameCases.invalid),
+    "P2_EXTENSION_NAME_CASES_INVALID", "Extension-name fixture");
+  assertion(validateExtensionMap({ [extensionNameCases.valid]: { required: false, value: null } }),
+    "P2_EXTENSION_NAME_MAXIMUM_REJECTED", ajv.errorsText(validateExtensionMap.errors));
+  for (const invalidName of extensionNameCases.invalid) {
+    assertion(!validateExtensionMap({ [invalidName]: { required: false, value: null } }),
+      "P2_EXTENSION_NAME_INVALID_ADMITTED", invalidName);
+  }
+
   const fixtures = files.filter((path) => toPosixPath(relative(repositoryRoot, path)).startsWith("fixtures/protocol/") && path.endsWith(".json"));
   for (const path of fixtures) {
     const content = (await readSourceFile(path)).toString("utf8");
@@ -192,6 +239,9 @@ export async function validateP2SchemasAndFixtures() {
     metaSchemasValidated,
     schemaPositiveCases,
     schemaNegativeCases,
+    stableIdMaximumLength: idBoundaryCases.maximumLength,
+    stableIdBoundaryCases,
+    extensionNameCases: 1 + extensionNameCases.invalid.length,
     resolvedLocalRefs,
     evaluator: "ajv@8.17.1-draft-2020-12",
     p3Marker: "absent",
@@ -221,11 +271,13 @@ export async function calculateRc1InputRecords() {
 export async function validateRc1Candidate() {
   const manifestPath = resolve(repositoryRoot, "fixtures/rc1/rc1-candidate-proof-manifest.json");
   const manifest = await readJson(manifestPath);
+  canonicalProofBytes(manifest);
   assertion(manifest.schemaVersion === "tcrn.rc1-candidate-proof-manifest.v1", "RC1_MANIFEST_SCHEMA", manifest.schemaVersion);
   assertion(manifest.status === "candidate_unreviewed" && manifest.accepted === false, "RC1_ACCEPTANCE_OVERCLAIM", manifest.status);
   const records = await calculateRc1InputRecords();
+  const recordBytes = canonicalProofBytes(records);
   assertion(JSON.stringify(manifest.inputs) === JSON.stringify(records), "RC1_MANIFEST_INPUT_MISMATCH", "Input hashes changed");
-  const basisDigest = sha256(canonicalBytes(records));
+  const basisDigest = sha256(recordBytes);
   assertion(manifest.basisDigest === basisDigest, "RC1_MANIFEST_BASIS_DIGEST", basisDigest);
   const requiredRoles = [
     "platform-workflow-architect",
@@ -238,7 +290,7 @@ export async function validateRc1Candidate() {
     const slot = manifest.roleVerdictSlots[role];
     assertion(slot.status === "unresolved" && slot.verdict === null && slot.basisDigest === null, "RC1_VERDICT_FABRICATED", role);
   }
-  const manifestDigest = sha256(canonicalBytes(manifest));
+  const manifestDigest = sha256(canonicalProofBytes(manifest));
   return {
     basisDigest,
     manifestDigest,

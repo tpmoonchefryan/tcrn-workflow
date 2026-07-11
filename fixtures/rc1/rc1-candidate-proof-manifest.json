@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "6d4bf71069ed7be9e1f48a865c48f866602f53b992a74805193e96bcfcc31008",
+  "basisDigest": "b55957338c98762d0f7ab8998d8f2fbf6b99b0f323df9820d3af010907fe56f6",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -61,8 +61,8 @@
     },
     {
       "path": "fixtures/protocol/v1/schema-cases.json",
-      "size": 13495,
-      "sha256": "09bd3f5692e5a5707f1e4c8992437b0bb3a3aec23af9769fed38a5f1a915ae83"
+      "size": 16404,
+      "sha256": "f6f0edfc4aefb962c7e7a14ece6372ffb283b2ba688107eb80ae59fbb26bde41"
     },
     {
       "path": "fixtures/release-trust/README.md",
@@ -111,8 +111,8 @@
     },
     {
       "path": "schemas/protocol-common-v1.schema.json",
-      "size": 2009,
-      "sha256": "135f4a139229e9125e1cc6955b4eabbc3a0b5bea242053918b70ef2e8c77073d"
+      "size": 2078,
+      "sha256": "683c3b7cb7f97e4d566a31cb4b6763ed3197211bccf9835fc348be2541640864"
     },
     {
       "path": "schemas/receipt-v1.schema.json",
@@ -181,13 +181,13 @@
     },
     {
       "path": "specs/protocol-common-v1.md",
-      "size": 2265,
-      "sha256": "19f31625ded95d0c6ad25cf27e0380fd8ea2e5d7eb48b58e85b2f478a889b0d0"
+      "size": 2703,
+      "sha256": "555ddf41101f76228ad5c188b123245613eb52db7b1e527aa82aca4b57d497b7"
     },
     {
       "path": "specs/rc1-candidate-proof-manifest-v1.md",
-      "size": 913,
-      "sha256": "244a88aeb02569878162393cfd1b47aefd25f02d1b6ca72ad8542da272e6c9c6"
+      "size": 1178,
+      "sha256": "28d78402846437647e717ce045469a7fcc1fe8a9b313ca34e7527a73ab8bbd39"
     },
     {
       "path": "specs/receipt-v1.md",
@@ -196,8 +196,8 @@
     },
     {
       "path": "specs/release-trust-v1.md",
-      "size": 1722,
-      "sha256": "a839e079d57cbc62a1552c5515ab5a167dcb74ff9d1809b13616b11a0b65cd23"
+      "size": 1908,
+      "sha256": "b8982d4b6023bcd804fccca3de652e505f8b3f517c091087c1c51936b705237a"
     },
     {
       "path": "specs/work-model-v1.md",
@@ -206,8 +206,8 @@
     },
     {
       "path": "verification-map.yaml",
-      "size": 17796,
-      "sha256": "4886bed656d26b15d5194938cbbc94f7b21f8e9dc40cca8db7a743d9206ecdea"
+      "size": 19479,
+      "sha256": "760657f6ac2004c687b643ebe10eb24785a5d38bf7251705b8c26b1fe1a062ba"
     }
   ],
   "roleVerdictSlots": {

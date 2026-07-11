@@ -11,8 +11,15 @@ Arrays otherwise preserve their specified order; JSON has no insignificant
 whitespace, permits safe-integer numbers only, and ends with exactly one LF.
 SHA-256 digests cover those exact bytes.
 
+Every scalar string and every object key is validated independently before
+ordering or serialization, including singleton and nested objects. Lone UTF-16
+surrogates fail with `CANONICAL_VALUE_INVALID`; implementations may not rely on
+a sorting callback to discover malformed keys.
+
 Stable IDs use `namespace:value`; namespaces and values are lowercase ASCII and
-match the common schema. Raw external keys must be printable ASCII before any
+match the common schema. The frozen maximum is 161 characters: a namespace of
+at most 32 characters, one colon, and a value of at most 128 characters. Raw
+external keys must be printable ASCII before any
 conversion and canonicalize with ASCII lowercase-to-uppercase conversion only;
 non-ASCII values are rejected. `deriveStableId` hashes the namespace, a NUL
 separator, and the canonical external key, then uses the first 24 lowercase
@@ -27,7 +34,8 @@ Version windows are inclusive and require `1 <= minimum <= version <= maximum`.
 
 Unknown optional extensions are preserved byte-semantically through canonical
 JSON. Every extension-bearing V1 record uses the same closed extension value
-shape, 64-entry limit, safe-integer canonical-value rules, and registry check.
+shape, 64-entry limit, stable-ID property-name rule, safe-integer
+canonical-value rules, and registry check.
 Unknown required extensions fail with `UNKNOWN_REQUIRED_EXTENSION`.
 Objects reject unknown normative fields. Inputs are limited to 1 MiB canonical
 bytes, 10,000 records, 8,192 characters per string, 64 extensions per record,

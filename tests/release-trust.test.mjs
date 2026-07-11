@@ -307,6 +307,24 @@ test("canonical JSON and strict schemas fail closed", async (context) => {
   await expectReason(fixture, "TRUST_ROOT_SCHEMA");
 });
 
+test("release-trust canonical JSON rejects malformed Unicode before claim or signature evaluation", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const canonicalManifest = await readFile(fixture.manifestPath, "utf8");
+  for (const escaped of ["\\ud800", "\\udfff"]) {
+    await writeFile(
+      fixture.manifestPath,
+      canonicalManifest.replace('"subject":"tcrn-workflow-source"', `"subject":"bad${escaped}"`),
+    );
+    await expectReason(fixture, "TRUST_MANIFEST_CANONICAL_JSON");
+    await writeFile(
+      fixture.manifestPath,
+      canonicalManifest.replace(/"artifact":\{[^}]+\}/u, `"artifact":{"key-${escaped}":1}`),
+    );
+    await expectReason(fixture, "TRUST_MANIFEST_CANONICAL_JSON");
+  }
+});
+
 test("unknown and invalid signing keys fail closed", async (context) => {
   const fixture = await createFixture();
   context.after(() => rm(fixture.root, { recursive: true, force: true }));

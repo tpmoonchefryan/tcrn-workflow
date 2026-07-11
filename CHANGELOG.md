@@ -14,3 +14,6 @@ Versioning after the first accepted release.
 - Freeze runtime-independent UTF-8 byte ordering, exact nanosecond instant
   comparisons, closed runtime/schema parity, and executable adversarial vectors
   with offline Draft 2020-12 evaluation.
+- Reject malformed Unicode across canonical protocol/proof/trust surfaces,
+  align the 161-character stable-ID and extension-name schema boundary, and
+  enforce vulnerability policy over the complete frozen dependency graph.

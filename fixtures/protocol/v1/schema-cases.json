@@ -17,6 +17,130 @@
   ],
   "simulationOnly": true,
   "p3CapabilityClaimed": false,
+  "idBoundaryCases": {
+    "maximumLength": 161,
+    "maximumId": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn:vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+    "overlongId": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn:vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+    "targets": [
+      {
+        "schema": "work-model-v1.schema.json",
+        "path": [
+          "id"
+        ]
+      },
+      {
+        "schema": "work-model-v1.schema.json",
+        "path": [
+          "projectId"
+        ]
+      },
+      {
+        "schema": "work-model-v1.schema.json",
+        "path": [
+          "parentId"
+        ]
+      },
+      {
+        "schema": "knowledge-model-v1.schema.json",
+        "path": [
+          "id"
+        ]
+      },
+      {
+        "schema": "knowledge-model-v1.schema.json",
+        "path": [
+          "projectId"
+        ]
+      },
+      {
+        "schema": "event-integrity-v1.schema.json",
+        "path": [
+          "id"
+        ]
+      },
+      {
+        "schema": "event-integrity-v1.schema.json",
+        "path": [
+          "streamId"
+        ]
+      },
+      {
+        "schema": "context-v1.schema.json",
+        "path": [
+          "id"
+        ]
+      },
+      {
+        "schema": "context-v1.schema.json",
+        "path": [
+          "projectId"
+        ]
+      },
+      {
+        "schema": "context-v1.schema.json",
+        "path": [
+          "workIds",
+          0
+        ]
+      },
+      {
+        "schema": "context-v1.schema.json",
+        "path": [
+          "knowledgeIds",
+          0
+        ]
+      },
+      {
+        "schema": "exchange-v1.schema.json",
+        "path": [
+          "id"
+        ]
+      },
+      {
+        "schema": "compatibility-v1.schema.json",
+        "path": [
+          "profileId"
+        ]
+      },
+      {
+        "schema": "profile-trust-v1.schema.json",
+        "path": [
+          "profileId"
+        ]
+      },
+      {
+        "schema": "profile-trust-v1.schema.json",
+        "path": [
+          "issuer"
+        ]
+      },
+      {
+        "schema": "receipt-v1.schema.json",
+        "path": [
+          "id"
+        ]
+      },
+      {
+        "schema": "receipt-v1.schema.json",
+        "path": [
+          "exchangeId"
+        ]
+      },
+      {
+        "schema": "extension-registration-v1.schema.json",
+        "path": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "extensionNameCases": {
+    "valid": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn:vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+    "invalid": [
+      "bad key",
+      "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn:vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
+    ]
+  },
   "cases": [
     {
       "schema": "protocol-common-v1.schema.json",

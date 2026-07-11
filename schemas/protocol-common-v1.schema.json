@@ -18,6 +18,9 @@
     "extensionMap": {
       "type": "object",
       "maxProperties": 64,
+      "propertyNames": {
+        "$ref": "#/$defs/stableId"
+      },
       "additionalProperties": {
         "type": "object",
         "required": [
@@ -75,7 +78,7 @@
     "stableId": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$",
-      "maxLength": 160
+      "maxLength": 161
     },
     "strictInstant": {
       "type": "string",
