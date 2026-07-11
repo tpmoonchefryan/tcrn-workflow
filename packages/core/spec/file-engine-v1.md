@@ -13,6 +13,11 @@ derived views. Event segments plus Workspace metadata are authority. `STATUS.md`
 `index.json`, and `readback.json` are deterministic, rebuildable views and never
 authority.
 
+Every metadata root entry has exactly `kind`, `path`, `canonicalPath`, and
+`portableIdentity`. Nested additions, omissions, scalar replacements, and field
+type changes fail with `WORKSPACE_SCHEMA_INVALID`, matching the closed V1
+schema.
+
 The portable Workspace archive is canonical JSON that binds its canonical
 authority export by SHA-256. It excludes host root paths, is byte-identical for
 the same event basis, and is an exchange artifact rather than a second source of
@@ -39,6 +44,32 @@ truncated, replayed, reordered, malformed, or hash-corrupt events fail closed;
 recovery never discards authoritative corruption. A crash after an event commit
 may leave derived views stale. Governed recovery removes only safe orphan
 temporaries and rebuilds the views from the exact chain.
+
+Only `project.created`, `project.updated`, `project.deleted`, `work.created`,
+`work.updated`, and `work.deleted` are admitted. Creation cannot reuse a live or
+tombstoned identity. Update and delete require a live prior record, exact next
+revision, event-bound timestamp, unchanged identity fields, valid Work status
+transition, and valid project/parent relationships. Repeated delete,
+resurrection, sibling operation names, and forged lifecycle events fail with
+`WORKSPACE_EVENT_CORRUPT`.
+
+The Workspace stream identity is the first 24 hexadecimal SHA-256 characters
+of canonical `{schemaVersion:"tcrn.workspace-stream-identity.v1",workspaceId,
+createdAt}` prefixed by `stream:`. Each event identity similarly hashes
+canonical `{schemaVersion:"tcrn.workspace-event-identity.v1",streamId,
+sequence}` and is prefixed by `event:`. Replay validates both identities before
+materialization, so an internally valid chain transplanted to another Workspace
+fails closed without changing the frozen P2 event hash contract.
+
+An incomplete `lease/` remains locked for one lease TTL, preventing a live
+creator from being mistaken for a crash. After that grace period, stale or
+incomplete recovery uses an independent single-link `O_EXCL|O_NOFOLLOW`
+recovery claim, re-reads and binds both lease-directory and owner identities,
+and quarantines only the observed generation. Concurrent recoverers admit one
+winner; delayed contenders cannot remove the winner's claim or lease. Normal
+claim cleanup is identity-bound. A malformed, linked, special, colliding, or
+crash-retained recovery claim fails closed and requires operator verification;
+it is never silently replaced.
 
 ## Work model
 

@@ -22,6 +22,24 @@
       "expectedReasonCode": "WORKSPACE_FAULT_INJECTED"
     }
   ],
+  "leaseFaultCases": [
+    {
+      "id": "after-lease-directory-before-owner",
+      "recoverableAfterGrace": true,
+      "expectedReasonCode": "WORKSPACE_FAULT_INJECTED"
+    }
+  ],
+  "schemaParityCases": [
+    "root-extra-field",
+    "root-missing-field",
+    "root-field-type",
+    "root-scalar"
+  ],
+  "concurrencyCases": [
+    "two-contender-stale-reclaim",
+    "delayed-creator-cannot-replace-winner",
+    "same-version-single-commit"
+  ],
   "negativeCases": [
     "cas-mismatch",
     "active-writer",
@@ -42,7 +60,34 @@
     "event-hash-corruption",
     "future-schema",
     "unsupported-downgrade",
-    "migration-apply-unavailable"
+    "migration-apply-unavailable",
+    "root-extra-field",
+    "root-missing-field",
+    "root-field-type",
+    "root-scalar",
+    "unknown-project-operation",
+    "unknown-work-operation",
+    "absent-project-update",
+    "absent-project-delete",
+    "absent-work-update",
+    "forged-revision",
+    "repeated-delete",
+    "tombstone-resurrection",
+    "invalid-work-project",
+    "transplanted-chain",
+    "wrong-stream",
+    "wrong-event-id",
+    "lease-crash-before-owner",
+    "recovery-claim-active",
+    "recovery-claim-symlink",
+    "recovery-claim-hardlink",
+    "recovery-claim-special",
+    "malformed-lease-owner",
+    "symlink-lease-owner",
+    "hardlink-lease-owner",
+    "concurrent-stale-reclaim",
+    "delayed-creator-replacement",
+    "same-version-contenders"
   ],
   "migrationCases": [
     "v1-noop-dry-run",
