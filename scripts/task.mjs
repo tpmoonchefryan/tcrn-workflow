@@ -301,7 +301,10 @@ async function verifyP3() {
   const fixture = await readJson(fixturePath);
   assertion(fixture.schemaVersion === "tcrn.p3-file-engine-cases.v1", "P3_FIXTURE_SCHEMA");
   assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 4, "P3_FAULT_CASES");
-  assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 20, "P3_NEGATIVE_CASES");
+  assertion(Array.isArray(fixture.leaseFaultCases) && fixture.leaseFaultCases.length === 1, "P3_LEASE_FAULT_CASES");
+  assertion(Array.isArray(fixture.schemaParityCases) && fixture.schemaParityCases.length === 4, "P3_SCHEMA_PARITY_CASES");
+  assertion(Array.isArray(fixture.concurrencyCases) && fixture.concurrencyCases.length === 3, "P3_CONCURRENCY_CASES");
+  assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 47, "P3_NEGATIVE_CASES");
   assertion(Array.isArray(fixture.migrationCases) && fixture.migrationCases.length === 3, "P3_MIGRATION_CASES");
   assertion(fixture.propertyPermutations >= 64, "P3_PROPERTY_PERMUTATIONS");
   const packages = await Promise.all([
@@ -321,6 +324,9 @@ async function verifyP3() {
   return success("P3_VERIFIED", {
     engineTests: tests.reasonCode,
     faultCases: fixture.faultCases.length,
+    leaseFaultCases: fixture.leaseFaultCases.length,
+    schemaParityCases: fixture.schemaParityCases.length,
+    concurrencyCases: fixture.concurrencyCases.length,
     negativeCases: fixture.negativeCases.length,
     migrationCases: fixture.migrationCases.length,
     propertyPermutations: fixture.propertyPermutations,

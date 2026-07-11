@@ -6,10 +6,12 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   realpath,
   rename,
   rm,
   symlink,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -40,7 +42,13 @@ import {
   updateProject,
   validateWorkspace,
 } from "../dist/build/packages/core/src/index.js";
-import { ProtocolError, canonicalJson, canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
+import {
+  ProtocolError,
+  canonicalJson,
+  canonicalSha256,
+  createEvent,
+  deriveStableId,
+} from "../dist/build/packages/protocol/src/index.js";
 
 const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
 
@@ -69,6 +77,78 @@ async function workspaceFixture(options = {}) {
       await rm(base, { recursive: true, force: true });
     },
   };
+}
+
+function expectedStreamId(metadata) {
+  return `stream:${canonicalSha256({
+    schemaVersion: "tcrn.workspace-stream-identity.v1",
+    workspaceId: metadata.workspaceId,
+    createdAt: metadata.createdAt,
+  }).slice(0, 24)}`;
+}
+
+function expectedEventId(streamId, sequence) {
+  return `event:${canonicalSha256({
+    schemaVersion: "tcrn.workspace-event-identity.v1",
+    streamId,
+    sequence,
+  }).slice(0, 24)}`;
+}
+
+async function rewriteEventChain(workspace, transform, identity = {}) {
+  const control = join(workspace, ".tcrn-workflow");
+  const metadata = JSON.parse(await readFile(join(control, "workspace.json"), "utf8"));
+  const eventsRoot = join(control, "events");
+  const names = (await readdir(eventsRoot)).filter((name) => /^\d{6}\.json$/u.test(name)).sort();
+  const original = [];
+  for (const name of names) {
+    original.push(...JSON.parse(await readFile(join(eventsRoot, name), "utf8")));
+  }
+  const specifications = transform(structuredClone(original));
+  const streamId = identity.streamId ?? expectedStreamId(metadata);
+  const rebuilt = [];
+  for (const [index, specification] of specifications.entries()) {
+    const sequence = index + 1;
+    rebuilt.push(createEvent({
+      id: identity.eventIdFor?.(streamId, sequence) ?? expectedEventId(streamId, sequence),
+      streamId,
+      sequence,
+      occurredAt: specification.occurredAt,
+      priorHash: rebuilt.at(-1)?.eventHash ?? null,
+      payload: specification.payload,
+    }));
+  }
+  for (const name of names) {
+    await rm(join(eventsRoot, name));
+  }
+  for (let offset = 0; offset < rebuilt.length; offset += metadata.segmentEventLimit) {
+    const segment = rebuilt.slice(offset, offset + metadata.segmentEventLimit);
+    const index = Math.floor(offset / metadata.segmentEventLimit) + 1;
+    await writeFile(join(eventsRoot, `${String(index).padStart(6, "0")}.json`), canonicalJson(segment));
+  }
+  return rebuilt;
+}
+
+async function createProjectHistory(fixture, update = false, remove = false) {
+  const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(1) });
+  try {
+    let state = await createProject(fixture.workspace, lease, {
+      expectedVersion: 0, occurredAt: instant(1), externalKey: "PROJECT-FORGED", name: "Forged",
+    });
+    if (update) {
+      state = await updateProject(fixture.workspace, lease, {
+        expectedVersion: 1, occurredAt: instant(2), id: state.projects[0].id, name: "Updated",
+      });
+    }
+    if (remove) {
+      state = await deleteProject(fixture.workspace, lease, {
+        expectedVersion: 1, occurredAt: instant(2), id: state.projects[0].id,
+      });
+    }
+    return state;
+  } finally {
+    await lease.release();
+  }
 }
 
 function expectReason(reasonCode, operation) {
@@ -117,6 +197,30 @@ test("Workspace metadata schema, five-root initialization, CLI readback, and sta
     }
   } finally {
     await fixture.close();
+  }
+});
+
+test("Workspace root entries have exact Ajv/runtime field and type parity", async () => {
+  const schema = JSON.parse(await readFile(new URL("../packages/core/schema/workspace-v1.schema.json", import.meta.url), "utf8"));
+  const ajv = new Ajv2020({ strict: true, validateFormats: false });
+  const mutations = [
+    (metadata) => { metadata.roots[0].extraAuthority = true; },
+    (metadata) => { delete metadata.roots[0].canonicalPath; },
+    (metadata) => { metadata.roots[0].path = 7; },
+    (metadata) => { metadata.roots[0] = "framework"; },
+  ];
+  for (const mutate of mutations) {
+    const fixture = await workspaceFixture();
+    try {
+      const metadataPath = join(fixture.workspace, ".tcrn-workflow", "workspace.json");
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+      mutate(metadata);
+      assert.equal(ajv.validate(schema, metadata), false);
+      await writeFile(metadataPath, canonicalJson(metadata));
+      await expectReasonAsync("WORKSPACE_SCHEMA_INVALID", () => materializeWorkspace(fixture.workspace));
+    } finally {
+      await fixture.close();
+    }
   }
 });
 
@@ -194,7 +298,7 @@ test("single-writer lease, CAS, stale-lock recovery, and atomic crash points fai
     await mkdir(leaseRoot);
     await writeFile(join(leaseRoot, "owner.json"), canonicalJson({
       schemaVersion: "tcrn.workspace-lease.v1",
-      token: "stale",
+      token: "b".repeat(48),
       pid: 999999,
       acquiredAt: "2000-01-01T00:00:00Z",
       expiresAtNanoseconds: "946684801000000000",
@@ -287,6 +391,355 @@ test("segment rotation and replay, truncation, reordering, corruption, gap, and 
     assert.equal(secondText, await readFile(secondPath, "utf8"));
   } finally {
     await fixture.close();
+  }
+});
+
+test("event admission rejects unknown operations, lifecycle forgery, resurrection, and invalid relationships", async () => {
+  const scenarios = [
+    {
+      prepare: (fixture) => createProjectHistory(fixture, true, false),
+      mutate(events) {
+        events[1].payload.operation = "project.archived";
+        return events;
+      },
+    },
+    {
+      prepare: (fixture) => createProjectHistory(fixture, false, true),
+      mutate(events) {
+        const deleted = structuredClone(events[1]);
+        deleted.occurredAt = instant(3);
+        deleted.payload.record.revision = 3;
+        return [...events, deleted];
+      },
+    },
+    {
+      prepare: (fixture) => createProjectHistory(fixture, false, true),
+      mutate(events) {
+        const resurrected = structuredClone(events[1]);
+        resurrected.occurredAt = instant(3);
+        resurrected.payload.operation = "project.updated";
+        resurrected.payload.record.revision = 3;
+        resurrected.payload.record.tombstone = false;
+        resurrected.payload.record.updatedAt = instant(3);
+        return [...events, resurrected];
+      },
+    },
+    {
+      prepare: (fixture) => createProjectHistory(fixture, true, false),
+      mutate(events) {
+        events[1].payload.record.revision = 99;
+        return events;
+      },
+    },
+  ];
+  for (const scenario of scenarios) {
+    const fixture = await workspaceFixture();
+    try {
+      await scenario.prepare(fixture);
+      await rewriteEventChain(fixture.workspace, scenario.mutate);
+      await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(fixture.workspace));
+    } finally {
+      await fixture.close();
+    }
+  }
+
+  for (const operation of ["project.updated", "project.deleted"]) {
+    const absentFixture = await workspaceFixture();
+    try {
+      const externalKey = "PROJECT-ABSENT";
+      await rewriteEventChain(absentFixture.workspace, () => [{
+        occurredAt: instant(1),
+        payload: {
+          operation,
+          record: {
+            schemaVersion: "tcrn.project.v1",
+            id: deriveStableId("project", externalKey),
+            externalKey,
+            name: "Absent",
+            revision: 1,
+            updatedAt: instant(1),
+            tombstone: operation === "project.deleted",
+          },
+        },
+      }]);
+      await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(absentFixture.workspace));
+    } finally {
+      await absentFixture.close();
+    }
+  }
+
+  const workFixture = await workspaceFixture();
+  try {
+    const lease = await acquireWorkspaceLease(workFixture.workspace, { now: instant(1) });
+    try {
+      let state = await createProject(workFixture.workspace, lease, {
+        expectedVersion: 0, occurredAt: instant(1), externalKey: "PROJECT-WORK-FORGE", name: "Work Forge",
+      });
+      state = await createWork(workFixture.workspace, lease, {
+        expectedVersion: 1,
+        occurredAt: instant(2),
+        projectId: state.projects[0].id,
+        externalKey: "INITIATIVE-WORK-FORGE",
+        kind: "Initiative",
+        parentId: null,
+      });
+      await transitionWork(workFixture.workspace, lease, {
+        expectedVersion: 2, occurredAt: instant(3), id: state.work[0].id, status: "ready",
+      });
+    } finally {
+      await lease.release();
+    }
+    await rewriteEventChain(workFixture.workspace, (events) => {
+      events[2].payload.operation = "work.archived";
+      return events;
+    });
+    await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(workFixture.workspace));
+  } finally {
+    await workFixture.close();
+  }
+
+  const relationshipFixture = await workspaceFixture();
+  try {
+    const lease = await acquireWorkspaceLease(relationshipFixture.workspace, { now: instant(1) });
+    try {
+      let state = await createProject(relationshipFixture.workspace, lease, {
+        expectedVersion: 0, occurredAt: instant(1), externalKey: "PROJECT-RELATIONSHIP", name: "Relationship",
+      });
+      await createWork(relationshipFixture.workspace, lease, {
+        expectedVersion: 1,
+        occurredAt: instant(2),
+        projectId: state.projects[0].id,
+        externalKey: "INITIATIVE-RELATIONSHIP",
+        kind: "Initiative",
+        parentId: null,
+      });
+    } finally {
+      await lease.release();
+    }
+    await rewriteEventChain(relationshipFixture.workspace, (events) => {
+      events[1].payload.record.projectId = "project:missing";
+      return events;
+    });
+    await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(relationshipFixture.workspace));
+  } finally {
+    await relationshipFixture.close();
+  }
+
+  const absentWorkFixture = await workspaceFixture();
+  try {
+    const state = await createProjectHistory(absentWorkFixture, false, false);
+    const externalKey = "INITIATIVE-ABSENT";
+    await rewriteEventChain(absentWorkFixture.workspace, (events) => [...events, {
+      occurredAt: instant(2),
+      payload: {
+        operation: "work.updated",
+        record: {
+          schemaVersion: "tcrn.work.v1",
+          id: deriveStableId("work", externalKey),
+          externalKey,
+          projectId: state.projects[0].id,
+          kind: "Initiative",
+          parentId: null,
+          status: "ready",
+          revision: 1,
+          updatedAt: instant(2),
+          tombstone: false,
+          extensions: {},
+        },
+      },
+    }]);
+    await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(absentWorkFixture.workspace));
+  } finally {
+    await absentWorkFixture.close();
+  }
+});
+
+test("event stream and event IDs are bound to canonical Workspace metadata", async () => {
+  const source = await workspaceFixture({ externalKey: "WORKSPACE-SOURCE" });
+  const target = await workspaceFixture({ externalKey: "WORKSPACE-TARGET" });
+  try {
+    await createProjectHistory(source, false, false);
+    const sourceSegment = join(source.workspace, ".tcrn-workflow", "events", "000001.json");
+    const targetSegment = join(target.workspace, ".tcrn-workflow", "events", "000001.json");
+    await writeFile(targetSegment, await readFile(sourceSegment));
+    await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(target.workspace));
+  } finally {
+    await source.close();
+    await target.close();
+  }
+
+  for (const identity of [
+    { streamId: "stream:wrong" },
+    { eventIdFor: () => "event:wrong" },
+  ]) {
+    const fixture = await workspaceFixture();
+    try {
+      await createProjectHistory(fixture, false, false);
+      await rewriteEventChain(fixture.workspace, (events) => events, identity);
+      await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(fixture.workspace));
+    } finally {
+      await fixture.close();
+    }
+  }
+});
+
+test("lease creation crash and recovery-claim contention are recoverable and single-writer", async () => {
+  const crashFixture = await workspaceFixture();
+  try {
+    await expectReasonAsync("WORKSPACE_FAULT_INJECTED", () => acquireWorkspaceLease(crashFixture.workspace, {
+      now: instant(1),
+      crashAfterLeaseDirectoryForTest: true,
+    }));
+    const incompleteLease = join(crashFixture.workspace, ".tcrn-workflow", "lease");
+    await utimes(incompleteLease, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
+    const recovered = await acquireWorkspaceLease(crashFixture.workspace, { now: instant(2) });
+    await recovered.release();
+  } finally {
+    await crashFixture.close();
+  }
+
+  const contenderFixture = await workspaceFixture();
+  try {
+    await mkdir(join(contenderFixture.workspace, ".tcrn-workflow", "lease"));
+    await utimes(
+      join(contenderFixture.workspace, ".tcrn-workflow", "lease"),
+      new Date("2000-01-01T00:00:00Z"),
+      new Date("2000-01-01T00:00:00Z"),
+    );
+    let arrivals = 0;
+    let releaseBarrier;
+    const barrier = new Promise((resolve) => { releaseBarrier = resolve; });
+    const beforeClaimForTest = async () => {
+      arrivals += 1;
+      if (arrivals === 2) {
+        releaseBarrier();
+      }
+      await barrier;
+    };
+    const outcomes = await Promise.allSettled([
+      acquireWorkspaceLease(contenderFixture.workspace, { now: instant(3), beforeClaimForTest }),
+      acquireWorkspaceLease(contenderFixture.workspace, { now: instant(3), beforeClaimForTest }),
+    ]);
+    const winners = outcomes.filter((outcome) => outcome.status === "fulfilled");
+    const losers = outcomes.filter((outcome) => outcome.status === "rejected");
+    assert.equal(winners.length, 1);
+    assert.equal(losers.length, 1);
+    assert.ok(["WORKSPACE_LOCKED", "WORKSPACE_LEASE_INVALID"].includes(losers[0].reason.reasonCode));
+    const winner = winners[0].value;
+    await createProject(contenderFixture.workspace, winner, {
+      expectedVersion: 0, occurredAt: instant(4), externalKey: "PROJECT-WINNER", name: "Winner",
+    });
+    await winner.release();
+    const next = await acquireWorkspaceLease(contenderFixture.workspace, { now: instant(5) });
+    try {
+      await expectReasonAsync("WORKSPACE_CAS_MISMATCH", () => createProject(contenderFixture.workspace, next, {
+        expectedVersion: 0, occurredAt: instant(5), externalKey: "PROJECT-LOSER", name: "Loser",
+      }));
+    } finally {
+      await next.release();
+    }
+  } finally {
+    await contenderFixture.close();
+  }
+
+  const delayedFixture = await workspaceFixture();
+  try {
+    let creatorEntered;
+    const entered = new Promise((resolve) => { creatorEntered = resolve; });
+    let resumeCreator;
+    const resume = new Promise((resolve) => { resumeCreator = resolve; });
+    const original = acquireWorkspaceLease(delayedFixture.workspace, {
+      now: instant(1),
+      async beforeLeaseOwnerForTest() {
+        creatorEntered();
+        await resume;
+      },
+    });
+    await entered;
+    const leasePath = join(delayedFixture.workspace, ".tcrn-workflow", "lease");
+    await utimes(leasePath, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
+    const winner = await acquireWorkspaceLease(delayedFixture.workspace, { now: instant(2) });
+    resumeCreator();
+    await expectReasonAsync("WORKSPACE_LOCKED", () => original);
+    await createProject(delayedFixture.workspace, winner, {
+      expectedVersion: 0, occurredAt: instant(3), externalKey: "PROJECT-DELAYED-WINNER", name: "Delayed Winner",
+    });
+    await winner.release();
+    assert.equal((await materializeWorkspace(delayedFixture.workspace)).version, 1);
+  } finally {
+    await delayedFixture.close();
+  }
+});
+
+test("unsafe or active recovery claims fail closed", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const claimPath = join(fixture.workspace, ".tcrn-workflow", "lease-recovery.claim");
+    await writeFile(claimPath, canonicalJson({
+      schemaVersion: "tcrn.workspace-lease-recovery.v1",
+      token: "a".repeat(48),
+      pid: process.pid,
+      acquiredAt: instant(1),
+      expiresAtNanoseconds: "9999999999999999999",
+    }));
+    await expectReasonAsync("WORKSPACE_LOCKED", () => acquireWorkspaceLease(fixture.workspace, { now: instant(2) }));
+  } finally {
+    await fixture.close();
+  }
+
+  const malformedOwner = await workspaceFixture();
+  try {
+    const leasePath = join(malformedOwner.workspace, ".tcrn-workflow", "lease");
+    await mkdir(leasePath);
+    await writeFile(join(leasePath, "owner.json"), canonicalJson({ invalid: true }));
+    await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => acquireWorkspaceLease(malformedOwner.workspace, { now: instant(2) }));
+  } finally {
+    await malformedOwner.close();
+  }
+
+  for (const kind of ["symlink", "hardlink"]) {
+    const unsafeOwner = await workspaceFixture();
+    try {
+      const leasePath = join(unsafeOwner.workspace, ".tcrn-workflow", "lease");
+      await mkdir(leasePath);
+      const ownerPath = join(leasePath, "owner.json");
+      const backing = join(leasePath, `owner-${kind}.json`);
+      await writeFile(backing, canonicalJson({
+        schemaVersion: "tcrn.workspace-lease.v1",
+        token: "c".repeat(48),
+        pid: 999999,
+        acquiredAt: "2000-01-01T00:00:00Z",
+        expiresAtNanoseconds: "946684801000000000",
+      }));
+      if (kind === "symlink") {
+        await symlink(backing, ownerPath);
+      } else {
+        await link(backing, ownerPath);
+      }
+      await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => acquireWorkspaceLease(unsafeOwner.workspace, { now: instant(2) }));
+    } finally {
+      await unsafeOwner.close();
+    }
+  }
+
+  for (const kind of ["symlink", "hardlink", "directory"]) {
+    const unsafe = await workspaceFixture();
+    try {
+      const control = join(unsafe.workspace, ".tcrn-workflow");
+      const claimPath = join(control, "lease-recovery.claim");
+      const backing = join(control, `claim-${kind}.json`);
+      await writeFile(backing, canonicalJson({ invalid: true }));
+      if (kind === "symlink") {
+        await symlink(backing, claimPath);
+      } else if (kind === "hardlink") {
+        await link(backing, claimPath);
+      } else {
+        await mkdir(claimPath);
+      }
+      await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => acquireWorkspaceLease(unsafe.workspace, { now: instant(2) }));
+    } finally {
+      await unsafe.close();
+    }
   }
 });
 

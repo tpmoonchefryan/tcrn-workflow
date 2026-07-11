@@ -22,3 +22,5 @@ Versioning after the first accepted release.
 - Add the P3 file-native Workspace/event-engine candidate with governed CRUD,
   leases/CAS, no-follow atomic segments, crash recovery, deterministic views,
   dry-run migration planning, and filesystem fault proof without a P3 marker.
+- Close RC-P3 root-entry schema parity, exact event lifecycle and Workspace
+  identity binding, and exclusive crash/race-safe lease recovery proof.
