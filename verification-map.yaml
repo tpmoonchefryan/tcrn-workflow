@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "e19524796ac387b5fea15d1403b0d4313ba2644545e75ff5ba6a378eea7b62a8",
+      "fixtureDigest": "87387eb51a21e087b2f6512706628321eedd8b01c3ca02181edd9b0c407a9964",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "0170fe3979b052820c5017e5b5cb7421693d4659a7081c65a0b69252c1ab3bb0",
+      "fixtureDigest": "9bfd4f798cc19e2e884a68ade5f77bb13bfac6ac207029f924b98a21c5926318",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -75,7 +75,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "5bf096fea77dad4432807eb1112354a7985eee28bee3423097afb44c6e729ebf",
+      "fixtureDigest": "ee4bd8daaf44c36f00629024567d4c52cf8da2c1c337330819dfa0abba914d16",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -147,7 +147,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "b352644d55a43cd7c3e375a8590b8167b53cc9d97aaf22eae4d0aaefe4e9228b",
+      "fixtureDigest": "cc207383021f77782a1e64079811d50c77c9eda772b344cebd591eedda6d3cdd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "59e98f1cbd91f22b90e9dd381304192a76a7c2c65da7cdfb6d6edb50992cfb83",
+      "fixtureDigest": "f60acc98db6263ea026fff3ae828db3d6dd592544e55610fcd433cd82ce2e335",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -208,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "95241f008f080554e2006730d450742ea490061e03088bdabd68d4aad3d1b2ba",
+      "fixtureDigest": "7830c3c0c67932fe659f4c83fd447a6cf100448275640886ec2e80a352fa889c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -233,7 +233,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "8d0ed45bd23073a5b0ef688c739a1a94f3eefdc438617fe84232d3dd206fe8a6",
+      "fixtureDigest": "770fa1fd878b9ce7512da5ea0eb45672232654944a84916da041fca06a2b22e4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -260,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "0633e06c34f7921439b4fea0b7fa6399eafe4ec92f15ea80a24956ddbc2d1957",
+      "fixtureDigest": "7a72c1521403ea625d300a864dde53e29d8b90d13770ecbc56a3d6fdac8dc7e8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -288,7 +288,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "c72e3d315d38d72853ba74384b2e3972bf197c4465dfb3910a318a110ec15e8a",
+      "fixtureDigest": "b0e7b46c07f494ac651f36ce8e200e1c422f919817103e04bce3e2ea5776ecf6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -397,7 +397,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "0486352b821ae7e74add3528dc7b713570c18f15802a8fa197c1efa086139953",
+      "fixtureDigest": "51beb3fbb5a8c604fcd369d8655d466fc434827fd9ee71801b1d91e59a3d962d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -455,7 +455,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "9ced595c957e800cbf908f6e2e99641bf4462acd23a06be069bd47a648a5674e",
+      "fixtureDigest": "9f6edb392abfb649444a1448536a8ceb0aa8abfcdc75d0079a3e74920e8e6f38",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -512,7 +512,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "6a34449714eec0db28154757db5a4af89de84d9d4b55bc2062e54737e4919f05",
+      "fixtureDigest": "798fa178b3a5c43b2868ef4f3d34c852d4acc317436e0be7f6f352acca4f65ef",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -523,6 +523,63 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Runtime dependencies, standalone claims, schema windows, migration contracts, or marker state change"
+      ]
+    },
+    {
+      "id": "P4-ARTIFACT-LIFECYCLE-REPORTING",
+      "phase": "P4",
+      "status": "implemented",
+      "subject": "P4 freezes closed artifact/receipt/cache lifecycle classes, metadata-first redaction, deterministic size and doctor budgets, and mutation-free compact/archive projections while retaining terminal, decision, gate, acceptance, evidence-reference, and event high-water authority.",
+      "command": "pnpm verify:p4",
+      "fixturePaths": [
+        "package.json",
+        "packages/core/src/index.ts",
+        "packages/core/src/artifact-lifecycle.ts",
+        "packages/cli/src/index.ts",
+        "packages/core/schema/artifact-lifecycle-v1.schema.json",
+        "packages/core/spec/artifact-lifecycle-v1.md",
+        "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
+        "tests/p4-artifact-lifecycle.test.mjs",
+        "README.md"
+      ],
+      "fixtureDigest": "d5b68523449857909ba17442ea90450988fdb85b94f0778b073d0a9dd79e9813",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P4_ARTIFACT_LIFECYCLE_VERIFIED",
+      "evidencePath": "dist/evidence/p4/p4.json",
+      "invalidationTriggers": [
+        "Artifact kind/classification, record schema, redaction, doctor budget, size accounting, compact/archive projection, transient exclusion, or high-water preservation changes"
+      ]
+    },
+    {
+      "id": "P4-DISPOSABLE-ARCHIVE-RESTORE",
+      "phase": "P4",
+      "status": "implemented",
+      "subject": "Archive apply and exact restore are admitted only for explicit synthetic disposable Workspaces and enforce no-follow single-link identity, no overwrite, canonical bundle, high-water, crash/partial, limit, path, and legacy-read-absence boundaries without live Workspace apply.",
+      "command": "pnpm verify:p4",
+      "fixturePaths": [
+        "packages/core/src/artifact-lifecycle.ts",
+        "packages/cli/src/index.ts",
+        "packages/core/schema/artifact-lifecycle-v1.schema.json",
+        "packages/core/spec/artifact-lifecycle-v1.md",
+        "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
+        "tests/p4-artifact-lifecycle.test.mjs"
+      ],
+      "fixtureDigest": "99511e5e2df70a418920c7c523171885a0c48a612778cb8df7129638eb822e58",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P4_ARTIFACT_LIFECYCLE_VERIFIED",
+      "evidencePath": "dist/evidence/p4/p4.json",
+      "invalidationTriggers": [
+        "Disposable admission, archive generation, bundle encoding, restore claim, source identity, overwrite, crash/partial, high-water, limit, path/link/special-file, or legacy-read boundary changes"
       ]
     },
     {
@@ -545,7 +602,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "240c7d8758a23355863704b60f72ff4842953c9dad289b97485bda6bcd07849e",
+      "fixtureDigest": "02d6ffca12375c574240dfce2337db9336d3a249da0bcb546ba1ce0132f37035",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

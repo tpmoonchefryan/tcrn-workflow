@@ -26,3 +26,6 @@ Versioning after the first accepted release.
   identity binding, and exclusive crash/race-safe lease recovery proof.
 - Serialize same-lease mutation admission with an identity-bound filesystem
   claim so concurrent same-version writes cannot silently replace an event.
+- Add the bounded P4 artifact lifecycle candidate: closed classification,
+  deterministic doctor/size and compact projections, redacted metadata-first
+  references, and disposable-only archive apply/restore with fault proof.

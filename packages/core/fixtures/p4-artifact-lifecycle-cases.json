@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "tcrn.p4-artifact-lifecycle-cases.v1",
+  "classificationCases": [
+    "artifact",
+    "terminal-state",
+    "decision",
+    "gate",
+    "acceptance",
+    "evidence-reference",
+    "receipt",
+    "cache"
+  ],
+  "doctorBudgetCases": [
+    "ok",
+    "warning",
+    "critical"
+  ],
+  "archiveCases": [
+    "dry-run",
+    "disposable-apply",
+    "exact-restore"
+  ],
+  "faultCases": [
+    "after-archive-directory",
+    "after-bundle-sync",
+    "after-bundle-commit",
+    "after-restore-claim",
+    "after-first-restore-write"
+  ],
+  "negativeCases": [
+    "unknown-kind",
+    "nonterminal-protected-record",
+    "unredacted-authenticated-url",
+    "unredacted-query",
+    "unredacted-private-path",
+    "unredacted-private-identifier",
+    "path-traversal",
+    "backslash-path",
+    "symlink-record",
+    "hardlink-record",
+    "special-record",
+    "symlink-archive-bundle",
+    "hardlink-archive-bundle",
+    "special-archive-bundle",
+    "source-replacement",
+    "source-oversize",
+    "entry-count-limit",
+    "high-water-mismatch",
+    "archive-overwrite",
+    "restore-overwrite",
+    "archive-partial",
+    "restore-partial",
+    "non-disposable-apply",
+    "malformed-archive",
+    "noncanonical-base64",
+    "archive-path-escape",
+    "archive-record-redaction",
+    "legacy-read-absence"
+  ],
+  "propertyPermutations": 64,
+  "maximumEntries": 1024,
+  "maximumSourceBytes": 1048576,
+  "maximumStoredBytes": 16777216,
+  "maximumArchiveBytes": 33554432
+}

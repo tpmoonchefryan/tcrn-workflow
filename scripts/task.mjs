@@ -246,7 +246,7 @@ async function build() {
   });
 }
 
-async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = false, p3Only = false } = {}) {
+async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = false, p3Only = false, p4Only = false } = {}) {
   await build();
   const tests = (await walkFiles())
     .map((path) => toPosixPath(relative(repositoryRoot, path)))
@@ -254,7 +254,8 @@ async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = fa
     .filter((path) => !trustOnly || path === "tests/release-trust.test.mjs")
     .filter((path) => !rootOnly || path === "tests/root-boundaries.test.mjs")
     .filter((path) => !protocolOnly || path === "tests/protocol-v1.test.mjs")
-    .filter((path) => !p3Only || path === "tests/p3-file-engine.test.mjs");
+    .filter((path) => !p3Only || path === "tests/p3-file-engine.test.mjs")
+    .filter((path) => !p4Only || path === "tests/p4-artifact-lifecycle.test.mjs");
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -270,7 +271,9 @@ async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = fa
           ? "P2_CONFORMANCE_VERIFIED"
           : p3Only
             ? "P3_ENGINE_TESTS_VERIFIED"
-            : "TESTS_VERIFIED",
+            : p4Only
+              ? "P4_ARTIFACT_LIFECYCLE_TESTS_VERIFIED"
+              : "TESTS_VERIFIED",
     { tests, result: "passed" },
   );
 }
@@ -335,6 +338,44 @@ async function verifyP3() {
     schemaDigest: (await fileRecord(schemaPath)).sha256,
     standalone: "node-filesystem-only-no-database-no-aos",
     p3Marker: "absent",
+    acceptance: "not-claimed",
+  });
+}
+
+async function verifyP4() {
+  const tests = await runTests({ p4Only: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p4-artifact-lifecycle-cases.json");
+  const schemaPath = resolve(repositoryRoot, "packages/core/schema/artifact-lifecycle-v1.schema.json");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.p4-artifact-lifecycle-cases.v1", "P4_FIXTURE_SCHEMA");
+  assertion(Array.isArray(fixture.classificationCases) && fixture.classificationCases.length === 8, "P4_CLASSIFICATION_CASES");
+  assertion(Array.isArray(fixture.doctorBudgetCases) && fixture.doctorBudgetCases.length === 3, "P4_DOCTOR_CASES");
+  assertion(Array.isArray(fixture.archiveCases) && fixture.archiveCases.length === 3, "P4_ARCHIVE_CASES");
+  assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 5, "P4_FAULT_CASES");
+  assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 28, "P4_NEGATIVE_CASES");
+  assertion(fixture.propertyPermutations >= 64, "P4_PROPERTY_PERMUTATIONS");
+  assertion(fixture.maximumEntries === 1_024 && fixture.maximumSourceBytes === 1_048_576 &&
+    fixture.maximumStoredBytes === 16_777_216 && fixture.maximumArchiveBytes === 33_554_432, "P4_LIMIT_CONTRACT");
+  const packages = await Promise.all([
+    readJson(resolve(repositoryRoot, "packages/core/package.json")),
+    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
+  ]);
+  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P4_STANDALONE_DEPENDENCY");
+  return success("P4_ARTIFACT_LIFECYCLE_VERIFIED", {
+    lifecycleTests: tests.reasonCode,
+    classificationCases: fixture.classificationCases.length,
+    doctorBudgetCases: fixture.doctorBudgetCases.length,
+    archiveCases: fixture.archiveCases.length,
+    faultCases: fixture.faultCases.length,
+    negativeCases: fixture.negativeCases.length,
+    propertyPermutations: fixture.propertyPermutations,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    archiveApplyScope: "disposable-synthetic-workspaces-only",
+    liveWorkspaceApply: "not-run",
+    compactMode: "dry-run-projection-only",
+    legacyReadBoundary: "static-negative-proven",
+    knowledgeCore: "out-of-scope",
     acceptance: "not-claimed",
   });
 }
@@ -667,6 +708,7 @@ const commandContracts = {
   isolated: { exit: 0, reasonCode: "ISOLATED_P1_VERIFIED" },
   p2: { exit: 0, reasonCode: "P2_VERIFIED" },
   p3: { exit: 0, reasonCode: "P3_VERIFIED" },
+  p4: { exit: 0, reasonCode: "P4_ARTIFACT_LIFECYCLE_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
@@ -694,7 +736,7 @@ async function verifyMap() {
     assertion(required.every((field) => Object.hasOwn(claim, field)), "VERIFICATION_MAP_FIELDS", claim.id ?? "unknown");
     assertion(!ids.has(claim.id), "VERIFICATION_MAP_DUPLICATE", claim.id);
     ids.add(claim.id);
-    assertion(["P1", "P2", "P3", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    assertion(["P1", "P2", "P3", "P4", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);
@@ -718,7 +760,7 @@ async function verifyMap() {
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
   }
-  for (const phase of ["P1", "P2", "P3", "RC1"]) {
+  for (const phase of ["P1", "P2", "P3", "P4", "RC1"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   return success("VERIFICATION_MAP_VERIFIED", {
@@ -865,6 +907,7 @@ const handlers = {
   offline: verifyOfflineBoundary,
   p2: verifyP2,
   p3: verifyP3,
+  p4: verifyP4,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
@@ -893,8 +936,8 @@ function evidencePhase(name) {
   if (["aos", "p2", "protocol-schemas", "protocol-test"].includes(name)) {
     return "p2";
   }
-  if (name === "p3") {
-    return "p3";
+  if (name === "p3" || name === "p4") {
+    return name;
   }
   if (name === "rc1") {
     return "rc1";
