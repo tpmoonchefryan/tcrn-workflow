@@ -64,8 +64,11 @@ external control-plane facts. `pnpm verify:p4` checks artifact classification,
 doctor/size budgets, deterministic compact/archive projections, redaction,
 disposable-only archive apply/restore, and filesystem attack/fault vectors. It
 also runs the file-native Knowledge Core proof for closed metadata, separate
-explicit body reads, freshness, promotion CAS, deterministic indexes and
-checkpoints, disposable-only initialization, and filesystem/privacy faults.
+explicit body reads, metadata-only surfaces that never open body files,
+accountable source/evidence provenance, strict UTF-8 byte budgets, freshness,
+promotion CAS, and 64 real-store insertion permutations with exact index/list/
+checkpoint parity, plus disposable-only initialization and filesystem/privacy
+faults.
 `pnpm verify:p4:knowledge` exposes the narrower
 `P4_KNOWLEDGE_CORE_VERIFIED` reason code. Neither command marks the graph work
 done or starts RC2/P5/P6.

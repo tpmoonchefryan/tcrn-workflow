@@ -30,7 +30,8 @@
       "items": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 512
+        "maxLength": 512,
+        "x-tcrn-maxUtf8Bytes": 512
       }
     },
     "storeMarker": {
@@ -84,6 +85,7 @@
         "subject",
         "summary",
         "snippet",
+        "accountableOwnerId",
         "sourceReferences",
         "sourceDigest",
         "linkedWorkIds",
@@ -177,15 +179,29 @@
         "subject": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512
+          "maxLength": 512,
+          "x-tcrn-maxUtf8Bytes": 512
         },
         "summary": {
           "type": "string",
-          "maxLength": 2048
+          "maxLength": 2048,
+          "x-tcrn-maxUtf8Bytes": 2048
         },
         "snippet": {
           "type": "string",
-          "maxLength": 512
+          "maxLength": 512,
+          "x-tcrn-maxUtf8Bytes": 512
+        },
+        "accountableOwnerId": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stableId"
+            },
+            {
+              "type": "string",
+              "pattern": "^owner:[A-Za-z0-9._:-]{1,128}$"
+            }
+          ]
         },
         "sourceReferences": {
           "allOf": [
@@ -194,6 +210,7 @@
             },
             {
               "type": "array",
+              "minItems": 1,
               "maxItems": 16
             }
           ]
@@ -241,6 +258,7 @@
             },
             {
               "type": "array",
+              "minItems": 1,
               "maxItems": 64
             }
           ]

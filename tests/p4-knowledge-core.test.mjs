@@ -44,6 +44,17 @@ const instant = (day, second = 0) => `2026-07-${String(day).padStart(2, "0")}T14
 const credentialReference = () => ["https://", "user", ":", "secret", "@", "example.test/current"].join("");
 const privateReference = () => ["/", "Users", "/source/current"].join("");
 
+function knowledgeAjv() {
+  const ajv = new Ajv2020({ strict: true, validateFormats: false });
+  ajv.addKeyword({
+    keyword: "x-tcrn-maxUtf8Bytes",
+    schemaType: "number",
+    type: "string",
+    validate: (maximumBytes, value) => Buffer.byteLength(value, "utf8") <= maximumBytes,
+  });
+  return ajv;
+}
+
 async function workspaceFixture({ externalKey = "FIXTURE-KNOWLEDGE-CORE", initialize = true } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-p4-knowledge-")));
   const roots = [];
@@ -102,6 +113,7 @@ function unitInput(fixture, key, options = {}) {
     subject: options.subject ?? `Subject ${key}`,
     summary: options.summary ?? `Summary ${key}`,
     snippet: options.snippet ?? `Snippet ${key}`,
+    accountableOwnerId: options.accountableOwnerId ?? deriveStableId("owner", `${key}-OWNER`),
     sourceReferences: options.sourceReferences ?? [`evidence://fixture/${key.toLowerCase()}`],
     sourceDigest: options.sourceDigest ?? canonicalSha256({ key, source: "current-explicit" }),
     linkedWorkIds: options.linkedWorkIds ?? [fixture.workId],
@@ -129,6 +141,21 @@ function settle(operation) {
   );
 }
 
+function deterministicPermutations(values) {
+  const result = [];
+  const visit = (prefix, remaining) => {
+    if (remaining.length === 0) {
+      result.push(prefix);
+      return;
+    }
+    for (let index = 0; index < remaining.length; index += 1) {
+      visit([...prefix, remaining[index]], [...remaining.slice(0, index), ...remaining.slice(index + 1)]);
+    }
+  };
+  visit([], values);
+  return result;
+}
+
 test("empty Knowledge bootstrap is closed, schema-valid, deterministic, and body-free", async () => {
   const fixture = await workspaceFixture();
   try {
@@ -144,7 +171,7 @@ test("empty Knowledge bootstrap is closed, schema-valid, deterministic, and body
     assert.equal(index1, index2);
     assert.deepEqual(JSON.parse(index1).records, []);
     const schema = JSON.parse(await readFile(new URL("../packages/core/schema/knowledge-core-v1.schema.json", import.meta.url), "utf8"));
-    const ajv = new Ajv2020({ strict: true, validateFormats: false });
+    const ajv = knowledgeAjv();
     assert.equal(ajv.validate(schema, JSON.parse(await readFile(join(fixture.store, "store.json"), "utf8"))), true, JSON.stringify(ajv.errors));
   } finally {
     await fixture.close();
@@ -164,7 +191,7 @@ test("metadata/body separation, default omission, explicit reads, promotion, fre
     assert.equal(bodyText, input.body);
     assert.equal(metadataText.includes(input.body), false);
     const schema = JSON.parse(await readFile(new URL("../packages/core/schema/knowledge-core-v1.schema.json", import.meta.url), "utf8"));
-    const ajv = new Ajv2020({ strict: true, validateFormats: false });
+    const ajv = knowledgeAjv();
     assert.equal(ajv.validate(schema, JSON.parse(metadataText)), true, JSON.stringify(ajv.errors));
     assert.equal((await listKnowledgeMetadata(fixture.workspace, { at: instant(12) })).records.length, 0);
     assert.equal((await listKnowledgeMetadata(fixture.workspace, { at: instant(12), selection: "all" })).records.length, 1);
@@ -200,6 +227,65 @@ test("metadata/body separation, default omission, explicit reads, promotion, fre
       id,
       promotionState: "rejected",
     }));
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("metadata-only surfaces never open bodies while explicit/full integrity paths do", async () => {
+  const fixture = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-METADATA-ONLY" });
+  try {
+    const created = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, "KNOWLEDGE-METADATA-ONLY"));
+    await transitionKnowledgePromotion(fixture.workspace, {
+      expectedVersion: 1, expectedRevision: 1, occurredAt: instant(12, 1), id: created.id, promotionState: "promoted",
+    });
+    const bodyPath = join(fixture.store, "bodies", `${created.id}.body`);
+    const observed = [];
+    const observation = { beforeDescriptorReadForTest: async (path) => { observed.push(path); } };
+    await listKnowledgeMetadata(fixture.workspace, { at: instant(12), ...observation });
+    await readKnowledgeSnippet(fixture.workspace, created.id, observation);
+    await evaluateKnowledgeFreshness(fixture.workspace, instant(12), observation);
+    await exportKnowledgeCheckpoint(fixture.workspace, instant(12), observation);
+    assert.equal(observed.includes(bodyPath), false);
+    observed.length = 0;
+    await readKnowledgeBody(fixture.workspace, created.id, { at: instant(12), ...observation });
+    assert.deepEqual(observed.filter((path) => path.endsWith(".body")), [bodyPath]);
+    observed.length = 0;
+    await validateKnowledgeStore(fixture.workspace, observation);
+    assert.deepEqual(observed.filter((path) => path.endsWith(".body")), [bodyPath]);
+
+    const backing = join(fixture.base, "body-backing");
+    await rename(bodyPath, backing);
+    await symlink(backing, bodyPath);
+    assert.equal((await listKnowledgeMetadata(fixture.workspace, { at: instant(12) })).records.length, 1);
+    assert.equal((await readKnowledgeSnippet(fixture.workspace, created.id)).id, created.id);
+    assert.equal((await evaluateKnowledgeFreshness(fixture.workspace, instant(12))).records.length, 1);
+    assert.equal(JSON.parse(await exportKnowledgeCheckpoint(fixture.workspace, instant(12))).records.length, 1);
+    await expectReason("KNOWLEDGE_LINK_UNSAFE", () => validateKnowledgeStore(fixture.workspace));
+    await expectReason("KNOWLEDGE_LINK_UNSAFE", () => readKnowledgeBody(fixture.workspace, created.id, { at: instant(12) }));
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("checkpoint is exactly the promoted fresh default-selection corpus", async () => {
+  const fixture = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-CHECKPOINT-PARITY" });
+  try {
+    const defaultUnit = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, "KNOWLEDGE-DEFAULT", { expectedVersion: 0 }));
+    const explicitUnit = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, "KNOWLEDGE-EXPLICIT", {
+      expectedVersion: 1, occurredAt: instant(11, 4), retrievalDisposition: "explicit-only",
+    }));
+    await transitionKnowledgePromotion(fixture.workspace, {
+      expectedVersion: 2, expectedRevision: 1, occurredAt: instant(12, 1), id: defaultUnit.id, promotionState: "promoted",
+    });
+    await transitionKnowledgePromotion(fixture.workspace, {
+      expectedVersion: 3, expectedRevision: 1, occurredAt: instant(12, 2), id: explicitUnit.id, promotionState: "promoted",
+    });
+    const listed = await listKnowledgeMetadata(fixture.workspace, { at: instant(12) });
+    const checkpoint = JSON.parse(await exportKnowledgeCheckpoint(fixture.workspace, instant(12)));
+    assert.deepEqual(checkpoint.records.map((record) => record.id), listed.records.map((record) => record.id));
+    assert.deepEqual(checkpoint.records.map((record) => record.id), [defaultUnit.id]);
+    assert.equal(checkpoint.records.some((record) => record.id === explicitUnit.id), false);
   } finally {
     await fixture.close();
   }
@@ -242,6 +328,7 @@ test("governed Knowledge CLI exposes init, validate, create, list, snippet, body
       "--external-key", input.externalKey, "--scope", input.scope, "--project-id", input.projectId,
       "--role-scopes", "-", "--category", input.category, "--kind", input.kind, "--tags", input.tags.join(","),
       "--subject", input.subject, "--summary", input.summary, "--snippet", input.snippet,
+      "--accountable-owner-id", input.accountableOwnerId,
       "--source-references", input.sourceReferences.join(","), "--source-digest", input.sourceDigest,
       "--work-ids", input.linkedWorkIds.join(","), "--decision-ids", input.linkedDecisionIds.join(","),
       "--gate-ids", input.linkedGateIds.join(","), "--evidence-ids", input.linkedEvidenceIds.join(","),
@@ -276,33 +363,120 @@ test("governed Knowledge CLI exposes init, validate, create, list, snippet, body
     output = "";
     await runCli(["knowledge-checkpoint", "--workspace", fixture.workspace, "--at", instant(12)], { write: (value) => { output += value; } });
     assert.equal(JSON.parse(output).reasonCode, "KNOWLEDGE_CHECKPOINT_READY");
+    await expectReason("KNOWLEDGE_SELECTION_INVALID", () => runCli([
+      "knowledge-list", "--workspace", fixture.workspace, "--at", instant(12), "--selection", "everything",
+    ], { write() {} }));
   } finally {
     await fixture.close();
   }
 });
 
-test("insertion permutations produce one metadata index order and digest", async () => {
-  const digests = [];
-  for (const order of [["KNOWLEDGE-A", "KNOWLEDGE-B", "KNOWLEDGE-C"], ["KNOWLEDGE-C", "KNOWLEDGE-A", "KNOWLEDGE-B"]]) {
-    const fixture = await workspaceFixture({ externalKey: `FIXTURE-PERMUTATION-${order[0]}` });
+test("selection and strict evaluation instants fail before Knowledge-store scanning", async () => {
+  const empty = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-VALIDATION-ORDER" });
+  try {
+    let opened = false;
+    const observer = { beforeDescriptorReadForTest: async () => { opened = true; } };
+    await expectReason("KNOWLEDGE_SELECTION_INVALID", () => listKnowledgeMetadata(empty.workspace, {
+      at: instant(12), selection: "candidate-leak", ...observer,
+    }));
+    assert.equal(opened, false);
+    await expectReason("KNOWLEDGE_INPUT_INVALID", () => evaluateKnowledgeFreshness(empty.workspace, "2026-07-11", observer));
+    assert.equal(opened, false);
+    await expectReason("KNOWLEDGE_INPUT_INVALID", () => exportKnowledgeCheckpoint(empty.workspace, "not-an-instant", observer));
+    assert.equal(opened, false);
+    await createKnowledgeUnit(empty.workspace, unitInput(empty, "KNOWLEDGE-INELIGIBLE", {
+      retrievalDisposition: "excluded", freshnessState: "unknown", lastVerified: null,
+    }));
+    opened = false;
+    await expectReason("KNOWLEDGE_INPUT_INVALID", () => exportKnowledgeCheckpoint(empty.workspace, "2026-02-30T00:00:00Z", observer));
+    assert.equal(opened, false);
+    await expectReason("KNOWLEDGE_INPUT_INVALID", () => evaluateKnowledgeFreshness(empty.workspace, "2026-02-30T00:00:00Z", observer));
+    assert.equal(opened, false);
+  } finally {
+    await empty.close();
+  }
+});
+
+test("explicit-current-source provenance requires source, evidence, and accountable owner", async () => {
+  for (const [label, override] of [
+    ["source", { sourceReferences: [] }],
+    ["evidence", { linkedEvidenceIds: [] }],
+    ["owner-empty", { accountableOwnerId: "" }],
+    ["owner-namespace", { accountableOwnerId: deriveStableId("profile", "UNADMITTED-OWNER") }],
+  ]) {
+    const fixture = await workspaceFixture({ externalKey: `FIXTURE-PROVENANCE-${label.toUpperCase()}` });
     try {
-      for (const [version, key] of order.entries()) {
-        await createKnowledgeUnit(fixture.workspace, unitInput(fixture, key, {
-          expectedVersion: version,
-          occurredAt: instant(11, 3 + ["KNOWLEDGE-A", "KNOWLEDGE-B", "KNOWLEDGE-C"].indexOf(key)),
-        }));
-      }
-      digests.push(JSON.parse(await readFile(join(fixture.store, "views", "index.json"), "utf8")).indexDigest);
+      await expectReason("KNOWLEDGE_PROVENANCE_INVALID", () => createKnowledgeUnit(
+        fixture.workspace,
+        unitInput(fixture, `KNOWLEDGE-PROVENANCE-${label.toUpperCase()}`, override),
+      ));
     } finally {
       await fixture.close();
     }
   }
-  assert.equal(digests[0], digests[1]);
-  const records = ["knowledge:c", "knowledge:a", "knowledge:b"];
-  const expected = canonicalSha256([...records].sort());
-  for (let index = 0; index < 64; index += 1) {
-    const rotated = records.slice(index % records.length).concat(records.slice(0, index % records.length));
-    assert.equal(canonicalSha256(rotated.sort()), expected);
+  for (const field of ["sourceReferences", "linkedEvidenceIds", "accountableOwnerId"]) {
+    const fixture = await workspaceFixture({ externalKey: `FIXTURE-PROMOTION-${field.toUpperCase()}` });
+    try {
+      const created = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, `KNOWLEDGE-PROMOTION-${field.toUpperCase()}`));
+      const metadataPath = join(fixture.store, "metadata", `${created.id}.json`);
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+      metadata[field] = field === "accountableOwnerId" ? deriveStableId("profile", "UNADMITTED-OWNER") : [];
+      await writeFile(metadataPath, canonicalJson(metadata));
+      await expectReason("KNOWLEDGE_PROVENANCE_INVALID", () => transitionKnowledgePromotion(fixture.workspace, {
+        expectedVersion: 1, expectedRevision: 1, occurredAt: instant(12), id: created.id, promotionState: "promoted",
+      }));
+    } finally {
+      await fixture.close();
+    }
+  }
+});
+
+test("64 real insertion orders produce exact index, list, and checkpoint parity", async () => {
+  const fixtureContract = JSON.parse(await readFile(
+    new URL("../packages/core/fixtures/p4-knowledge-core-cases.json", import.meta.url),
+    "utf8",
+  ));
+  const logicalKeys = ["KNOWLEDGE-PERM-A", "KNOWLEDGE-PERM-B", "KNOWLEDGE-PERM-C", "KNOWLEDGE-PERM-D", "KNOWLEDGE-PERM-E"];
+  const orders = deterministicPermutations(logicalKeys).slice(0, fixtureContract.propertyPermutations);
+  assert.equal(orders.length, 64);
+  assert.equal(new Set(orders.map((order) => JSON.stringify(order))).size, 64);
+  const corpusDigest = canonicalSha256(orders);
+  assert.equal(corpusDigest, fixtureContract.permutationCorpusDigest);
+  let baseline;
+  for (const order of orders) {
+    const fixture = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-PERMUTATION-CORPUS" });
+    try {
+      for (const [version, key] of order.entries()) {
+        await createKnowledgeUnit(fixture.workspace, unitInput(fixture, key, {
+          expectedVersion: version,
+          occurredAt: instant(11, 3 + logicalKeys.indexOf(key)),
+        }));
+      }
+      for (const [index, key] of logicalKeys.entries()) {
+        await transitionKnowledgePromotion(fixture.workspace, {
+          expectedVersion: logicalKeys.length + index,
+          expectedRevision: 1,
+          occurredAt: instant(12, index),
+          id: deriveStableId("knowledge", key),
+          promotionState: "promoted",
+        });
+      }
+      const indexBytes = await readFile(join(fixture.store, "views", "index.json"), "utf8");
+      const listBytes = canonicalJson(await listKnowledgeMetadata(fixture.workspace, { at: instant(12) }));
+      const checkpointBytes = await exportKnowledgeCheckpoint(fixture.workspace, instant(12));
+      const observation = {
+        indexBytes,
+        indexDigest: JSON.parse(indexBytes).indexDigest,
+        listBytes,
+        listDigest: JSON.parse(listBytes).resultDigest,
+        checkpointBytes,
+        checkpointDigest: JSON.parse(checkpointBytes).checkpointDigest,
+      };
+      baseline ??= observation;
+      assert.deepEqual(observation, baseline);
+    } finally {
+      await fixture.close();
+    }
   }
 });
 
@@ -329,6 +503,52 @@ test("input, link, redaction, Unicode, body, summary, and snippet boundaries fai
     await expectReason("KNOWLEDGE_WORKSPACE_NOT_DISPOSABLE", () => initializeKnowledgeStore(liveLike.workspace));
   } finally {
     await liveLike.close();
+  }
+});
+
+test("custom schema proof enforces the normative UTF-8 byte budgets", async () => {
+  const schema = JSON.parse(await readFile(new URL("../packages/core/schema/knowledge-core-v1.schema.json", import.meta.url), "utf8"));
+  const customAjv = knowledgeAjv();
+  const stockAjv = new Ajv2020({ strict: false, validateFormats: false });
+  const boundary = (maximumBytes, prefix = "") => {
+    const remaining = maximumBytes - Buffer.byteLength(prefix, "utf8");
+    return `${prefix}${"é".repeat(Math.floor(remaining / 2))}${remaining % 2 === 0 ? "" : "a"}`;
+  };
+  for (const [field, maximumBytes, prefix] of [
+    ["subject", 512, ""],
+    ["summary", KNOWLEDGE_LIMITS.maximumSummaryBytes, ""],
+    ["snippet", KNOWLEDGE_LIMITS.maximumSnippetBytes, ""],
+    ["sourceReferences", 512, "evidence-ref-"],
+  ]) {
+    const fixture = await workspaceFixture({ externalKey: `FIXTURE-UTF8-${field.toUpperCase()}` });
+    try {
+      const exact = boundary(maximumBytes, prefix);
+      assert.equal(Buffer.byteLength(exact, "utf8"), maximumBytes);
+      const exactOverride = field === "sourceReferences" ? { sourceReferences: [exact] } : { [field]: exact };
+      const created = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, `KNOWLEDGE-UTF8-${field.toUpperCase()}`, exactOverride));
+      const metadata = JSON.parse(await readFile(join(fixture.store, "metadata", `${created.id}.json`), "utf8"));
+      assert.equal(customAjv.validate(schema, metadata), true, JSON.stringify(customAjv.errors));
+      const over = `${exact}a`;
+      assert.equal(Buffer.byteLength(over, "utf8"), maximumBytes + 1);
+      const overMetadata = structuredClone(metadata);
+      if (field === "sourceReferences") overMetadata.sourceReferences = [over];
+      else overMetadata[field] = over;
+      assert.equal(stockAjv.validate(schema, overMetadata), true, JSON.stringify(stockAjv.errors));
+      assert.equal(customAjv.validate(schema, overMetadata), false);
+    } finally {
+      await fixture.close();
+    }
+    const runtime = await workspaceFixture({ externalKey: `FIXTURE-UTF8-OVER-${field.toUpperCase()}` });
+    try {
+      const over = `${boundary(maximumBytes, prefix)}a`;
+      const overOverride = field === "sourceReferences" ? { sourceReferences: [over] } : { [field]: over };
+      await expectReason("KNOWLEDGE_LIMIT_EXCEEDED", () => createKnowledgeUnit(
+        runtime.workspace,
+        unitInput(runtime, `KNOWLEDGE-UTF8-OVER-${field.toUpperCase()}`, overOverride),
+      ));
+    } finally {
+      await runtime.close();
+    }
   }
 });
 

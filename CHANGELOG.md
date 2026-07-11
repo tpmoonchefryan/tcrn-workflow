@@ -33,3 +33,7 @@ Versioning after the first accepted release.
   separate explicit body reads, deterministic filters/indexes/checkpoints,
   freshness and promotion CAS, inert locators, strict limits, and disposable
   filesystem fault proof without live-store initialization.
+- Close Knowledge metadata/body access separation, default-checkpoint parity,
+  accountable source/evidence provenance, selection and strict-instant
+  admission, UTF-8 byte-budget schema proof, and 64 actual-store insertion
+  permutations.

@@ -229,7 +229,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   if (command === "knowledge-create") {
     const names = [
       "workspace", "expected-version", "at", "external-key", "scope", "project-id", "role-scopes", "category", "kind", "tags",
-      "subject", "summary", "snippet", "source-references", "source-digest", "work-ids", "decision-ids", "gate-ids", "evidence-ids",
+      "subject", "summary", "snippet", "accountable-owner-id", "source-references", "source-digest", "work-ids", "decision-ids", "gate-ids", "evidence-ids",
       "lifecycle", "retrieval", "freshness", "last-verified", "stale-days", "export", "body",
     ];
     const values = parseArguments(rest, names);
@@ -247,6 +247,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       subject: values.subject ?? "",
       summary: values.summary ?? "",
       snippet: values.snippet ?? "",
+      accountableOwnerId: values["accountable-owner-id"] ?? "",
       sourceReferences: listValue(values["source-references"]),
       sourceDigest: values["source-digest"] ?? "",
       linkedWorkIds: listValue(values["work-ids"]),

@@ -70,8 +70,10 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_PATH_INVALID",
   "KNOWLEDGE_PROMOTION_INVALID",
   "KNOWLEDGE_PROMOTION_UPDATED",
+  "KNOWLEDGE_PROVENANCE_INVALID",
   "KNOWLEDGE_RECORD_INVALID",
   "KNOWLEDGE_REDACTION_REQUIRED",
+  "KNOWLEDGE_SELECTION_INVALID",
   "KNOWLEDGE_SOURCE_CHANGED",
   "KNOWLEDGE_SPECIAL_FILE",
   "KNOWLEDGE_STORE_INITIALIZED",
@@ -119,6 +121,7 @@ export interface KnowledgeUnitMetadata {
   readonly subject: string;
   readonly summary: string;
   readonly snippet: string;
+  readonly accountableOwnerId: string;
   readonly sourceReferences: readonly string[];
   readonly sourceDigest: string;
   readonly linkedWorkIds: readonly string[];
@@ -155,6 +158,7 @@ export interface CreateKnowledgeUnitInput {
   readonly subject: string;
   readonly summary: string;
   readonly snippet: string;
+  readonly accountableOwnerId: string;
   readonly sourceReferences: readonly string[];
   readonly sourceDigest: string;
   readonly linkedWorkIds: readonly string[];
@@ -232,7 +236,7 @@ interface ScannedKnowledgeUnit {
   readonly metadataPath: string;
   readonly bodyPath: string;
   readonly metadata: KnowledgeUnitMetadata;
-  readonly body: Buffer;
+  readonly body: Buffer | null;
 }
 
 interface KnowledgeStoreScan {
@@ -250,7 +254,7 @@ interface KnowledgeStoreScan {
 const markerFields = ["schemaVersion", "workspaceId", "eventHighWaterDigest", "version", "disposable", "authority"];
 const metadataFields = [
   "schemaVersion", "id", "externalKey", "scope", "projectId", "roleScopes", "category", "kind", "tags", "subject",
-  "summary", "snippet", "sourceReferences", "sourceDigest", "linkedWorkIds", "linkedDecisionIds", "linkedGateIds",
+  "summary", "snippet", "accountableOwnerId", "sourceReferences", "sourceDigest", "linkedWorkIds", "linkedDecisionIds", "linkedGateIds",
   "linkedEvidenceIds", "lifecycle", "retrievalDisposition", "promotionState", "freshnessState", "lastVerified",
   "stalenessPolicy", "redactionDisposition", "exportDisposition", "authority", "sourceProvenance", "bodySha256",
   "bodyBytes", "revision", "updatedAt", "extensions",
@@ -527,7 +531,18 @@ function validateMarker(value: Readonly<Record<string, JsonValue>>): KnowledgeSt
   return value as unknown as KnowledgeStoreMarker;
 }
 
-function validateMetadata(value: Readonly<Record<string, JsonValue>>, body: Buffer, workspace: WorkspaceState): KnowledgeUnitMetadata {
+function assertPromotableProvenance(metadata: KnowledgeUnitMetadata): void {
+  try {
+    assertProtocolId(metadata.accountableOwnerId);
+  } catch (error) {
+    fail("KNOWLEDGE_PROVENANCE_INVALID", `accountable owner:${String(error)}`);
+  }
+  if (!metadata.accountableOwnerId.startsWith("owner:") || metadata.sourceReferences.length === 0 || metadata.linkedEvidenceIds.length === 0) {
+    fail("KNOWLEDGE_PROVENANCE_INVALID", `${metadata.id}:source, evidence, and accountable owner are required`);
+  }
+}
+
+function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, workspace: WorkspaceState): KnowledgeUnitMetadata {
   exactFields(value, metadataFields, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID");
   exactFields(value.stalenessPolicy, stalenessFields, "knowledge staleness policy", "KNOWLEDGE_RECORD_INVALID");
   if (value.schemaVersion !== KNOWLEDGE_METADATA_SCHEMA_VERSION || typeof value.id !== "string" ||
@@ -536,6 +551,7 @@ function validateMetadata(value: Readonly<Record<string, JsonValue>>, body: Buff
     !["architecture", "domain", "implementation", "standards", "testing", "workflow", "decision", "evidence"].includes(value.category) ||
     typeof value.kind !== "string" || !["fact", "guide", "decision", "reference", "summary"].includes(value.kind) ||
     typeof value.subject !== "string" || typeof value.summary !== "string" || typeof value.snippet !== "string" ||
+    typeof value.accountableOwnerId !== "string" ||
     typeof value.sourceDigest !== "string" || !/^[a-f0-9]{64}$/u.test(value.sourceDigest) ||
     typeof value.lifecycle !== "string" || !["candidate", "active", "retired"].includes(value.lifecycle) ||
     typeof value.retrievalDisposition !== "string" || !["default", "explicit-only", "excluded"].includes(value.retrievalDisposition) ||
@@ -564,8 +580,8 @@ function validateMetadata(value: Readonly<Record<string, JsonValue>>, body: Buff
   } catch (error) {
     fail(error instanceof ProtocolError && error.reasonCode === "CANONICAL_VALUE_INVALID" ? "KNOWLEDGE_CANONICAL_INVALID" : "KNOWLEDGE_RECORD_INVALID", String(error));
   }
-  if (deriveStableId("knowledge", metadata.externalKey) !== metadata.id || metadata.bodyBytes !== body.length || sha256(body) !== metadata.bodySha256) {
-    fail("KNOWLEDGE_RECORD_INVALID", `${metadata.id}:identity or body binding`);
+  if (deriveStableId("knowledge", metadata.externalKey) !== metadata.id) {
+    fail("KNOWLEDGE_RECORD_INVALID", `${metadata.id}:identity binding`);
   }
   assertBoundedString(metadata.subject, 512, "subject");
   assertBoundedString(metadata.summary, KNOWLEDGE_LIMITS.maximumSummaryBytes, "summary");
@@ -577,6 +593,7 @@ function validateMetadata(value: Readonly<Record<string, JsonValue>>, body: Buff
   assertLinkIds(metadata.linkedDecisionIds, "decision", "linked decision IDs");
   assertLinkIds(metadata.linkedGateIds, "gate", "linked gate IDs");
   assertLinkIds(metadata.linkedEvidenceIds, "evidence", "linked evidence IDs");
+  assertPromotableProvenance(metadata);
   for (const reference of metadata.sourceReferences) {
     try {
       if (redactArtifactReference(reference) !== reference) {
@@ -603,6 +620,13 @@ function validateMetadata(value: Readonly<Record<string, JsonValue>>, body: Buff
   if ((metadata.freshnessState === "unknown") !== (metadata.lastVerified === null)) {
     fail("KNOWLEDGE_RECORD_INVALID", `${metadata.id}:freshness`);
   }
+  return metadata;
+}
+
+function validateMetadataBody(metadata: KnowledgeUnitMetadata, body: Buffer, workspace: WorkspaceState): void {
+  if (metadata.bodyBytes !== body.length || sha256(body) !== metadata.bodySha256) {
+    fail("KNOWLEDGE_RECORD_INVALID", `${metadata.id}:body binding`);
+  }
   const protocolRecord: KnowledgeRecord = {
     schemaVersion: "tcrn.knowledge.v1",
     id: metadata.id,
@@ -622,7 +646,11 @@ function validateMetadata(value: Readonly<Record<string, JsonValue>>, body: Buff
   } catch (error) {
     fail(error instanceof ProtocolError && error.reasonCode === "CANONICAL_VALUE_INVALID" ? "KNOWLEDGE_CANONICAL_INVALID" : "KNOWLEDGE_RECORD_INVALID", String(error));
   }
-  return metadata;
+}
+
+function requireBody(unit: ScannedKnowledgeUnit): Buffer {
+  if (unit.body === null) fail("KNOWLEDGE_RECORD_INVALID", `${unit.metadata.id}:body was not admitted`);
+  return unit.body;
 }
 
 function knowledgeIndex(marker: KnowledgeStoreMarker, metadata: readonly KnowledgeUnitMetadata[]): Readonly<Record<string, JsonValue>> {
@@ -652,7 +680,12 @@ async function claimPresence(storeRoot: string): Promise<"absent" | "present"> {
   }
 }
 
-async function scanKnowledgeStore(workspaceRootInput: string, options: KnowledgeReadOptions = {}, allowClaim = false): Promise<KnowledgeStoreScan> {
+async function scanKnowledgeStore(
+  workspaceRootInput: string,
+  options: KnowledgeReadOptions = {},
+  allowClaim = false,
+  bodyMode: "full" | "metadata-only" = "full",
+): Promise<KnowledgeStoreScan> {
   const workspace = await materializeWorkspace(workspaceRootInput);
   const workspaceRoot = await boundDirectory(workspaceRootInput);
   const storedWorkspaceRoot = workspace.metadata.roots.find((root) => root.kind === "workspace")?.canonicalPath;
@@ -697,12 +730,18 @@ async function scanKnowledgeStore(workspaceRootInput: string, options: Knowledge
     const metadataPath = resolve(metadataRoot, `${id}.json`);
     const bodyPath = resolve(bodiesRoot, `${id}.body`);
     const metadataBytes = (await readBoundRegularFile(metadataPath, KNOWLEDGE_LIMITS.maximumMetadataBytes, options)).bytes;
-    const body = (await readBoundRegularFile(bodyPath, KNOWLEDGE_LIMITS.maximumBodyBytes, options)).bytes;
-    aggregateBytes += metadataBytes.length + body.length;
+    const metadata = validateMetadataShape(
+      parseCanonicalObject(metadataBytes, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID"),
+      workspace,
+    );
+    const body = bodyMode === "full"
+      ? (await readBoundRegularFile(bodyPath, KNOWLEDGE_LIMITS.maximumBodyBytes, options)).bytes
+      : null;
+    if (body !== null) validateMetadataBody(metadata, body, workspace);
+    aggregateBytes += metadataBytes.length + (body?.length ?? 0);
     if (aggregateBytes > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
       fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge aggregate bytes");
     }
-    const metadata = validateMetadata(parseCanonicalObject(metadataBytes, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID"), body, workspace);
     if (metadata.id !== id) {
       fail("KNOWLEDGE_PATH_INVALID", id);
     }
@@ -799,6 +838,26 @@ function computeFreshness(metadata: KnowledgeUnitMetadata, at: string): Knowledg
   return metadata.freshnessState === "stale" || now - verified > maximumAge ? "stale" : "fresh";
 }
 
+function assertEvaluationInstant(at: string): void {
+  try {
+    assertStrictInstant(at);
+  } catch (error) {
+    fail("KNOWLEDGE_INPUT_INVALID", String(error));
+  }
+}
+
+function assertSelection(selection: unknown): asserts selection is "default" | "all" {
+  if (selection !== "default" && selection !== "all") {
+    fail("KNOWLEDGE_SELECTION_INVALID", String(selection));
+  }
+}
+
+function isDefaultSelectable(metadata: KnowledgeUnitMetadata, at: string): boolean {
+  return metadata.promotionState === "promoted" && metadata.lifecycle === "active" &&
+    metadata.retrievalDisposition === "default" && metadata.exportDisposition === "metadata-only" &&
+    computeFreshness(metadata, at) === "fresh";
+}
+
 function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace: WorkspaceState): KnowledgeUnitMetadata {
   let externalKey: string;
   try {
@@ -821,6 +880,7 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
     subject: input.subject,
     summary: input.summary,
     snippet: input.snippet,
+    accountableOwnerId: input.accountableOwnerId,
     sourceReferences: input.sourceReferences,
     sourceDigest: input.sourceDigest,
     linkedWorkIds: input.linkedWorkIds,
@@ -843,7 +903,8 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
     updatedAt: input.occurredAt,
     extensions: {},
   };
-  validateMetadata(metadata as unknown as Readonly<Record<string, JsonValue>>, body, workspace);
+  const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, workspace);
+  validateMetadataBody(validated, body, workspace);
   return metadata;
 }
 
@@ -921,7 +982,7 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
   const projectedMetadata = [...scan.units.map((unit) => unit.metadata), metadata];
   const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
     Buffer.byteLength(canonicalJson(knowledgeIndex(marker, projectedMetadata)), "utf8") +
-    scan.units.reduce((total, unit) => total + Buffer.byteLength(canonicalJson(unit.metadata), "utf8") + unit.body.length, 0) +
+    scan.units.reduce((total, unit) => total + Buffer.byteLength(canonicalJson(unit.metadata), "utf8") + requireBody(unit).length, 0) +
     metadataBytes.length + body.length;
   if (metadataBytes.length > KNOWLEDGE_LIMITS.maximumMetadataBytes || scan.units.length >= KNOWLEDGE_LIMITS.maximumRecords ||
     projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
@@ -953,17 +1014,13 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
 }
 
 export async function listKnowledgeMetadata(workspaceRoot: string, query: KnowledgeListQuery): Promise<Readonly<Record<string, JsonValue>>> {
-  try {
-    assertStrictInstant(query.at);
-  } catch (error) {
-    fail("KNOWLEDGE_INPUT_INVALID", String(error));
-  }
-  const scan = await scanKnowledgeStore(workspaceRoot, query);
+  assertEvaluationInstant(query.at);
   const selection = query.selection ?? "default";
+  assertSelection(selection);
+  const scan = await scanKnowledgeStore(workspaceRoot, query, false, "metadata-only");
   let records = scan.units.map((unit) => unit.metadata).filter((metadata) => {
     const freshness = computeFreshness(metadata, query.at);
-    if (selection === "default" && (metadata.promotionState !== "promoted" || metadata.lifecycle !== "active" ||
-      metadata.retrievalDisposition !== "default" || metadata.exportDisposition === "excluded" || freshness !== "fresh")) return false;
+    if (selection === "default" && !isDefaultSelectable(metadata, query.at)) return false;
     return (!query.projectId || metadata.projectId === query.projectId) &&
       (!query.roleScope || metadata.roleScopes.includes(query.roleScope)) &&
       (!query.category || metadata.category === query.category) && (!query.kind || metadata.kind === query.kind) &&
@@ -992,7 +1049,7 @@ export async function readKnowledgeSnippet(workspaceRoot: string, id: string, op
     if (error instanceof KnowledgeCoreError) throw error;
     fail("KNOWLEDGE_PATH_INVALID", String(error));
   }
-  const scan = await scanKnowledgeStore(workspaceRoot, options);
+  const scan = await scanKnowledgeStore(workspaceRoot, options, false, "metadata-only");
   const unit = scan.units.find((entry) => entry.metadata.id === id);
   if (!unit) fail("KNOWLEDGE_NOT_FOUND", id);
   return {
@@ -1013,7 +1070,8 @@ export async function readKnowledgeBody(workspaceRoot: string, id: string, optio
     if (error instanceof KnowledgeCoreError) throw error;
     fail("KNOWLEDGE_PATH_INVALID", String(error));
   }
-  const scan = await scanKnowledgeStore(workspaceRoot, options);
+  assertEvaluationInstant(options.at);
+  const scan = await scanKnowledgeStore(workspaceRoot, options, false, "metadata-only");
   const unit = scan.units.find((entry) => entry.metadata.id === id);
   if (!unit) fail("KNOWLEDGE_NOT_FOUND", id);
   const freshness = computeFreshness(unit.metadata, options.at);
@@ -1021,19 +1079,22 @@ export async function readKnowledgeBody(workspaceRoot: string, id: string, optio
     (!options.allowStale && freshness !== "fresh") || unit.metadata.retrievalDisposition === "excluded" || unit.metadata.lifecycle === "retired") {
     fail("KNOWLEDGE_BODY_ACCESS_DENIED", id);
   }
+  const body = (await readBoundRegularFile(unit.bodyPath, KNOWLEDGE_LIMITS.maximumBodyBytes, options)).bytes;
+  validateMetadataBody(unit.metadata, body, scan.workspace);
   return {
     schemaVersion: "tcrn.knowledge-body-read.v1",
     id,
     revision: unit.metadata.revision,
     freshness,
     bodySha256: unit.metadata.bodySha256,
-    body: unit.body.toString("utf8"),
+    body: body.toString("utf8"),
     explicit: true,
   };
 }
 
 export async function evaluateKnowledgeFreshness(workspaceRoot: string, at: string, options: KnowledgeReadOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
-  const scan = await scanKnowledgeStore(workspaceRoot, options);
+  assertEvaluationInstant(at);
+  const scan = await scanKnowledgeStore(workspaceRoot, options, false, "metadata-only");
   const records = scan.units.map((unit) => ({
     id: unit.metadata.id,
     state: computeFreshness(unit.metadata, at),
@@ -1093,13 +1154,16 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
     revision: unit.metadata.revision + 1,
     updatedAt: input.occurredAt,
   };
-  validateMetadata(metadata as unknown as Readonly<Record<string, JsonValue>>, unit.body, scan.workspace);
+  assertPromotableProvenance(metadata);
+  const unitBody = requireBody(unit);
+  const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace);
+  validateMetadataBody(validated, unitBody, scan.workspace);
   const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
   const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
   const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
     Buffer.byteLength(canonicalJson(knowledgeIndex(marker, projectedMetadata)), "utf8") +
     scan.units.reduce((total, entry) => total +
-      Buffer.byteLength(canonicalJson(entry.metadata.id === metadata.id ? metadata : entry.metadata), "utf8") + entry.body.length, 0);
+      Buffer.byteLength(canonicalJson(entry.metadata.id === metadata.id ? metadata : entry.metadata), "utf8") + requireBody(entry).length, 0);
   if (projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
     await releaseMutationClaim(scan.storeRoot, claim);
     fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge promotion aggregate bytes");
@@ -1122,10 +1186,9 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
 }
 
 export async function exportKnowledgeCheckpoint(workspaceRoot: string, at: string, options: KnowledgeReadOptions = {}): Promise<string> {
-  const scan = await scanKnowledgeStore(workspaceRoot, options);
-  const records = scan.units.map((unit) => unit.metadata).filter((metadata) =>
-    metadata.promotionState === "promoted" && metadata.lifecycle === "active" && metadata.exportDisposition === "metadata-only" &&
-    metadata.retrievalDisposition !== "excluded" && computeFreshness(metadata, at) === "fresh");
+  assertEvaluationInstant(at);
+  const scan = await scanKnowledgeStore(workspaceRoot, options, false, "metadata-only");
+  const records = scan.units.map((unit) => unit.metadata).filter((metadata) => isDefaultSelectable(metadata, at));
   records.sort((left, right) => compareCanonicalText(left.id, right.id));
   return canonicalJson({
     schemaVersion: "tcrn.knowledge-checkpoint.v1",
