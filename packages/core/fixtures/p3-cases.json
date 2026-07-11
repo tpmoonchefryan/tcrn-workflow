@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "tcrn.p3-file-engine-cases.v1",
+  "faultCases": [
+    {
+      "id": "before-write",
+      "committed": false,
+      "expectedReasonCode": "WORKSPACE_FAULT_INJECTED"
+    },
+    {
+      "id": "after-temp-sync",
+      "committed": false,
+      "expectedReasonCode": "WORKSPACE_FAULT_INJECTED"
+    },
+    {
+      "id": "after-event-commit",
+      "committed": true,
+      "expectedReasonCode": "WORKSPACE_FAULT_INJECTED"
+    },
+    {
+      "id": "before-view-commit",
+      "committed": true,
+      "expectedReasonCode": "WORKSPACE_FAULT_INJECTED"
+    }
+  ],
+  "negativeCases": [
+    "cas-mismatch",
+    "active-writer",
+    "stale-lock",
+    "path-traversal",
+    "backslash-path",
+    "symlink-metadata",
+    "hardlink-metadata",
+    "special-segment-entry",
+    "malformed-unicode",
+    "oversized-name",
+    "record-limit",
+    "unsupported-filesystem",
+    "segment-gap",
+    "segment-truncation",
+    "event-replay",
+    "event-reordering",
+    "event-hash-corruption",
+    "future-schema",
+    "unsupported-downgrade",
+    "migration-apply-unavailable"
+  ],
+  "migrationCases": [
+    "v1-noop-dry-run",
+    "downgrade-refused",
+    "future-version-refused"
+  ],
+  "propertyPermutations": 64,
+  "segmentRotationEvents": 7,
+  "segmentEventLimit": 2
+}

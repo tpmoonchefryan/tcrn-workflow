@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "622d9e98d79d3f460d8106da1d1b5df3746724dbec339a3dd63ef45498ec6a7d",
+      "fixtureDigest": "a4ede7d3750878c379e2c0e5c43b70e8027737f776fbbf1f24ec846d4ede1113",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "8d1c12c286c2c8f378b2968dc0080bcce3c91c1c4d35bee1911e48b53a5e2cf0",
+      "fixtureDigest": "b915ac3cf03756da9c0477f9553760e001a479898818a6cfe35f930cb852fe2d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -75,7 +75,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "e9fedd9032a40f909f494b78a13a3736b95c8038b8f2ee7f6b3d07bfa6e442f1",
+      "fixtureDigest": "96dcb01c0d4c57406336b4e7d23725af5ceaf81d5d7f1fdbff887a5e67b6a8ff",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -147,7 +147,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "edddc3fdf39f4a3e0d155cc8de070478ef04c3d7bf28b3d641777fe6b5a10b6f",
+      "fixtureDigest": "0d84f2e33cc85db2466d6155a1290728c42fb1b3f96866a8e895fa3b10548795",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "d3b0d1d2e340e50fad1bdf43209d4977a8cb59df43e671bf3b52a09f4ab745a7",
+      "fixtureDigest": "5cc686bab5198651b6590440c58c3a15714eea5531240d4caac227d9b8133680",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -208,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "4c0058b7ef8df5c605763d1c88d531862cd9add94e401623863b396a2697106d",
+      "fixtureDigest": "5445a475d8eb40e73ebdf3bbf0d2f26ff59f6d85ceeb575e401f07bc8b43ffc2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -233,7 +233,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "3bfd7b919d3cad6baebea2cd47c3eb367e43f236c0fcdde9dbc1712677528d9d",
+      "fixtureDigest": "8d0ed45bd23073a5b0ef688c739a1a94f3eefdc438617fe84232d3dd206fe8a6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -260,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "d3eba347b8484363db8a4fafa64e61e56cc5d3a9ad6d449959114c218f6ecc47",
+      "fixtureDigest": "04b44f9b089f2aa39042fef36067b4e9410641cdb9d7ee6cc91b2c2e6e007fd8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -288,7 +288,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "5bc1df24ab136f6b2b69478bc86afb1d9d4a50462a396c8c0747d95971c597b4",
+      "fixtureDigest": "c72e3d315d38d72853ba74384b2e3972bf197c4465dfb3910a318a110ec15e8a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -397,7 +397,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "6e84470935967c07f1671cd692775cf8c7eb6663b65757c8105454c0c519b9fd",
+      "fixtureDigest": "0486352b821ae7e74add3528dc7b713570c18f15802a8fa197c1efa086139953",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -439,6 +439,93 @@
       ]
     },
     {
+      "id": "P3-FILE-NATIVE-WORK-GRAPH",
+      "phase": "P3",
+      "status": "implemented",
+      "subject": "The standalone file-native Workspace integrates the exact five-root model, stable project/work identities, governed CLI CRUD, and the frozen Initiative-Epic-Story-Subtask protocol without redefining P2 semantics.",
+      "command": "pnpm verify:p3",
+      "fixturePaths": [
+        "packages/core/src/index.ts",
+        "packages/core/src/root-identity.ts",
+        "packages/core/src/workspace.ts",
+        "packages/cli/src/index.ts",
+        "packages/protocol/src/index.ts",
+        "packages/core/schema/workspace-v1.schema.json",
+        "packages/core/spec/file-engine-v1.md",
+        "packages/core/fixtures/p3-cases.json",
+        "tests/p3-file-engine.test.mjs"
+      ],
+      "fixtureDigest": "770de52aee19177eeadd09b0fde88d4931a007a3b7c466f56c3735cde4892090",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P3_VERIFIED",
+      "evidencePath": "dist/evidence/p3/p3.json",
+      "invalidationTriggers": [
+        "Workspace roots, stable IDs, project/work CRUD, hierarchy, CLI admission, or protocol imports change"
+      ]
+    },
+    {
+      "id": "P3-EVENT-INTEGRITY-RECOVERY",
+      "phase": "P3",
+      "status": "implemented",
+      "subject": "Single-writer leases, exact-version CAS, descriptor-written atomic segments, accepted event hashes, rotation, crash recovery, and deterministic rebuildable views fail closed on corruption and path/link attacks.",
+      "command": "pnpm verify:p3",
+      "fixturePaths": [
+        "packages/core/src/workspace.ts",
+        "packages/core/spec/file-engine-v1.md",
+        "packages/core/fixtures/p3-cases.json",
+        "tests/p3-file-engine.test.mjs"
+      ],
+      "fixtureDigest": "66dd1b6a12093d10dd93f1254fddd7e63791d1b48933441f925c831c54150d0b",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P3_VERIFIED",
+      "evidencePath": "dist/evidence/p3/p3.json",
+      "invalidationTriggers": [
+        "Lease, CAS, atomic write, segment, recovery, view, corruption, or filesystem boundary changes"
+      ]
+    },
+    {
+      "id": "P3-STANDALONE-MIGRATION-BOUNDARY",
+      "phase": "P3",
+      "status": "implemented",
+      "subject": "P3 runs with Node and supported local filesystems only, admits no runtime dependency or AOS/database assumption, supports exact dry-run V1 migration planning, and keeps the P3 marker absent.",
+      "command": "pnpm verify:p3",
+      "fixturePaths": [
+        "package.json",
+        "packages/core/package.json",
+        "packages/cli/package.json",
+        "packages/core/src/workspace.ts",
+        "packages/cli/src/index.ts",
+        "packages/core/schema/workspace-v1.schema.json",
+        "packages/core/spec/file-engine-v1.md",
+        "packages/core/fixtures/p3-cases.json",
+        "scripts/task.mjs",
+        "scripts/tcrn-workflow.mjs",
+        "tests/p3-file-engine.test.mjs"
+      ],
+      "fixtureDigest": "8a75d8e7e362c673c70671e5a1a334e83d5cddbd24e734ade8c5ac8fd01f05af",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P3_VERIFIED",
+      "evidencePath": "dist/evidence/p3/p3.json",
+      "invalidationTriggers": [
+        "Runtime dependencies, standalone claims, schema windows, migration contracts, or marker state change"
+      ]
+    },
+    {
       "id": "RC1-IMMUTABLE-PROOF-BASIS",
       "phase": "RC1",
       "status": "candidate",
@@ -458,7 +545,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "f91f53f3d5fb83e28455f2ccd1175f7c44348a6bc08985ed5b28484d8d21f0d3",
+      "fixtureDigest": "6de72cd781b93d66043ee535127db29b0b448673ca9eb48b4c30bcca91365acb",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

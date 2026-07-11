@@ -11,6 +11,7 @@
   },
   "packageManager": "pnpm@11.3.0",
   "bin": {
+    "tcrn-workflow": "scripts/tcrn-workflow.mjs",
     "tcrn-workflow-release-verify": "scripts/verify-release-trust.mjs"
   },
   "scripts": {
@@ -34,6 +35,7 @@
     "verify:aos": "node scripts/task.mjs aos",
     "verify:p1": "node scripts/task.mjs verify-p1",
     "verify:p2": "node scripts/task.mjs p2",
+    "verify:p3": "node scripts/task.mjs p3",
     "verify:protocol": "node scripts/task.mjs protocol-test",
     "verify:schemas": "node scripts/task.mjs protocol-schemas",
     "verify:privacy": "node scripts/task.mjs privacy",

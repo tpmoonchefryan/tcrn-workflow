@@ -246,14 +246,15 @@ async function build() {
   });
 }
 
-async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = false } = {}) {
+async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = false, p3Only = false } = {}) {
   await build();
   const tests = (await walkFiles())
     .map((path) => toPosixPath(relative(repositoryRoot, path)))
     .filter((path) => path.startsWith("tests/") && path.endsWith(".test.mjs"))
     .filter((path) => !trustOnly || path === "tests/release-trust.test.mjs")
     .filter((path) => !rootOnly || path === "tests/root-boundaries.test.mjs")
-    .filter((path) => !protocolOnly || path === "tests/protocol-v1.test.mjs");
+    .filter((path) => !protocolOnly || path === "tests/protocol-v1.test.mjs")
+    .filter((path) => !p3Only || path === "tests/p3-file-engine.test.mjs");
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -267,7 +268,9 @@ async function runTests({ trustOnly = false, rootOnly = false, protocolOnly = fa
         ? "ROOT_BOUNDARIES_VERIFIED"
         : protocolOnly
           ? "P2_CONFORMANCE_VERIFIED"
-          : "TESTS_VERIFIED",
+          : p3Only
+            ? "P3_ENGINE_TESTS_VERIFIED"
+            : "TESTS_VERIFIED",
     { tests, result: "passed" },
   );
 }
@@ -289,6 +292,45 @@ async function verifyProtocolConformance() {
 async function verifyRc1CandidateReadiness() {
   const result = await validateRc1Candidate();
   return success("RC1_CANDIDATE_READY", result);
+}
+
+async function verifyP3() {
+  const tests = await runTests({ p3Only: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p3-cases.json");
+  const schemaPath = resolve(repositoryRoot, "packages/core/schema/workspace-v1.schema.json");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.p3-file-engine-cases.v1", "P3_FIXTURE_SCHEMA");
+  assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 4, "P3_FAULT_CASES");
+  assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 20, "P3_NEGATIVE_CASES");
+  assertion(Array.isArray(fixture.migrationCases) && fixture.migrationCases.length === 3, "P3_MIGRATION_CASES");
+  assertion(fixture.propertyPermutations >= 64, "P3_PROPERTY_PERMUTATIONS");
+  const packages = await Promise.all([
+    readJson(resolve(repositoryRoot, "packages/core/package.json")),
+    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
+  ]);
+  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P3_STANDALONE_DEPENDENCY");
+  const marker = resolve(repositoryRoot, ".context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json");
+  try {
+    await lstat(marker);
+    fail("P3_MARKER_PREMATURE", marker);
+  } catch (error) {
+    if (error instanceof TaskError || error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+  return success("P3_VERIFIED", {
+    engineTests: tests.reasonCode,
+    faultCases: fixture.faultCases.length,
+    negativeCases: fixture.negativeCases.length,
+    migrationCases: fixture.migrationCases.length,
+    propertyPermutations: fixture.propertyPermutations,
+    segmentRotationEvents: fixture.segmentRotationEvents,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    standalone: "node-filesystem-only-no-database-no-aos",
+    p3Marker: "absent",
+    acceptance: "not-claimed",
+  });
 }
 
 function octal(value, length) {
@@ -618,6 +660,7 @@ const commandContracts = {
   ci: { exit: 0, reasonCode: "CI_HARDENING_VERIFIED" },
   isolated: { exit: 0, reasonCode: "ISOLATED_P1_VERIFIED" },
   p2: { exit: 0, reasonCode: "P2_VERIFIED" },
+  p3: { exit: 0, reasonCode: "P3_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
@@ -645,7 +688,7 @@ async function verifyMap() {
     assertion(required.every((field) => Object.hasOwn(claim, field)), "VERIFICATION_MAP_FIELDS", claim.id ?? "unknown");
     assertion(!ids.has(claim.id), "VERIFICATION_MAP_DUPLICATE", claim.id);
     ids.add(claim.id);
-    assertion(["P1", "P2", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    assertion(["P1", "P2", "P3", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);
@@ -669,7 +712,7 @@ async function verifyMap() {
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
   }
-  for (const phase of ["P1", "P2", "RC1"]) {
+  for (const phase of ["P1", "P2", "P3", "RC1"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   return success("VERIFICATION_MAP_VERIFIED", {
@@ -815,6 +858,7 @@ const handlers = {
   lint,
   offline: verifyOfflineBoundary,
   p2: verifyP2,
+  p3: verifyP3,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
@@ -842,6 +886,9 @@ function errorReason(error) {
 function evidencePhase(name) {
   if (["aos", "p2", "protocol-schemas", "protocol-test"].includes(name)) {
     return "p2";
+  }
+  if (name === "p3") {
+    return "p3";
   }
   if (name === "rc1") {
     return "rc1";
