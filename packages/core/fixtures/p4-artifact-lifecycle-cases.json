@@ -33,6 +33,8 @@
     "unredacted-authenticated-url",
     "unredacted-ftp-userinfo",
     "unredacted-scheme-relative-userinfo",
+    "unredacted-leading-space-scheme-relative-userinfo",
+    "ascii-url-control-whitespace",
     "unsupported-scheme-userinfo",
     "unredacted-query",
     "unredacted-private-path",

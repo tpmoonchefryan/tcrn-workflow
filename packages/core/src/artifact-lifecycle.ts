@@ -444,7 +444,7 @@ export function redactArtifactReference(input: unknown): string {
   if (typeof input !== "string" || input.length === 0 || input.length > 8_192 || /[\u0000-\u001f\u007f]/u.test(input)) {
     fail("ARTIFACT_INPUT_INVALID", "artifact reference must be a bounded printable string");
   }
-  let value = input;
+  let value = input.replace(/^ +| +$/gu, "");
   if (/^(?:[A-Za-z]:[\\/]|\/(?:Users|home|private|var\/folders)\/)/u.test(value)) {
     return "[redacted-private-path]";
   }

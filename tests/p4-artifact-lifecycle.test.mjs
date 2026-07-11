@@ -49,6 +49,10 @@ const instant = (second) => `2026-07-11T12:00:${String(second).padStart(2, "0")}
 const authenticatedReference = (path) => ["https://", "user", ":", "secret", "@", "example.test", path].join("");
 const ftpAuthenticatedReference = (path) => ["ftp://", "user", ":", "secret", "@", "example.test", path].join("");
 const schemeRelativeAuthenticatedReference = (path) => ["//", "user", ":", "secret", "@", "example.test", path].join("");
+const loopbackReferenceHost = () => ["127", "0", "0", "1"].join(".");
+const loopbackReference = (path) => ["//", loopbackReferenceHost(), path].join("");
+const leadingSpaceAuthenticatedReference = (path) => [" ", "//", "alice", ":", "supersecret", "@", loopbackReferenceHost(), path].join("");
+const trailingSpaceAuthenticatedReference = (path) => ["//", "alice", ":", "supersecret", "@", loopbackReferenceHost(), path, " "].join("");
 const unsupportedAuthenticatedReference = (path) => ["file://", "user", ":", "secret", "@", "example.test", path].join("");
 const privateMachinePath = () => ["/", "Users", "/private/source.json"].join("");
 const privateIdentifierReference = () => ["evidence://public/", "user", "@", "example.test/item"].join("");
@@ -172,6 +176,12 @@ test("artifact lifecycle classification and reference redaction are closed and d
   );
   assert.equal(redactArtifactReference(ftpAuthenticatedReference("/evidence?id=private#token")), "ftp://example.test/evidence");
   assert.equal(redactArtifactReference(schemeRelativeAuthenticatedReference("/evidence?id=private#token")), "//example.test/evidence");
+  assert.equal(redactArtifactReference(leadingSpaceAuthenticatedReference("/path")), loopbackReference("/path"));
+  assert.equal(redactArtifactReference(trailingSpaceAuthenticatedReference("/path")), loopbackReference("/path"));
+  for (const whitespace of ["\t", "\n", "\r", "\f", "\v"]) {
+    assert.throws(() => redactArtifactReference(`${whitespace}${schemeRelativeAuthenticatedReference("/path")}`),
+      (error) => error?.reasonCode === "ARTIFACT_INPUT_INVALID");
+  }
   assert.throws(() => redactArtifactReference(unsupportedAuthenticatedReference("/evidence")),
     (error) => error?.reasonCode === "ARTIFACT_INPUT_INVALID");
   assert.equal(redactArtifactReference("evidence://public/item?credential=secret#fragment"), "evidence://public/item");
@@ -344,8 +354,9 @@ test("hierarchical URL credentials are redacted before archive apply and exact r
     const references = [
       ftpAuthenticatedReference("/evidence?id=private#token"),
       schemeRelativeAuthenticatedReference("/evidence?id=private#token"),
+      leadingSpaceAuthenticatedReference("/path"),
     ];
-    const expected = ["ftp://example.test/evidence", "//example.test/evidence"];
+    const expected = ["ftp://example.test/evidence", "//example.test/evidence", loopbackReference("/path")];
     const records = [];
     for (const [index, reference] of references.entries()) {
       const record = artifactRecord(fixture.marker, `URL-REDACTION-${index}`, "artifact", {
@@ -380,6 +391,7 @@ test("redaction, closed records, high-water, links, special files, and replaceme
     ["authenticated-url", (record) => ({ ...record, reference: authenticatedReference("/item?token=raw") }), "ARTIFACT_REDACTION_REQUIRED"],
     ["ftp-userinfo", (record) => ({ ...record, reference: ftpAuthenticatedReference("/item?token=raw") }), "ARTIFACT_REDACTION_REQUIRED"],
     ["scheme-relative-userinfo", (record) => ({ ...record, reference: schemeRelativeAuthenticatedReference("/item?token=raw") }), "ARTIFACT_REDACTION_REQUIRED"],
+    ["leading-space-userinfo", (record) => ({ ...record, reference: leadingSpaceAuthenticatedReference("/path") }), "ARTIFACT_REDACTION_REQUIRED"],
     ["protected-active", (record) => ({ ...record, kind: "decision", state: "active" }), "ARTIFACT_INPUT_INVALID"],
     ["extra-field", (record) => ({ ...record, extraAuthority: true }), "ARTIFACT_INPUT_INVALID"],
   ]) {
@@ -585,7 +597,7 @@ test("archive and restore crash/partial states remain observable and fail closed
 });
 
 test("malformed archive fields, base64, records, paths, and URL userinfo fail closed", async () => {
-  for (const variant of ["fields", "base64", "record", "record-ftp", "record-scheme-relative", "path"]) {
+  for (const variant of ["fields", "base64", "record", "record-ftp", "record-scheme-relative", "record-leading-space", "path"]) {
     const fixture = await artifactFixture({ externalKey: `FIXTURE-ARCHIVE-INVALID-${variant.toUpperCase()}` });
     try {
       const record = artifactRecord(fixture.marker, `INVALID-${variant}`, "artifact");
@@ -601,6 +613,7 @@ test("malformed archive fields, base64, records, paths, and URL userinfo fail cl
         const archived = JSON.parse(Buffer.from(bundle.entries[0].contentBase64, "base64").toString("utf8"));
         archived.reference = variant === "record-ftp" ? ftpAuthenticatedReference("/evidence?token=raw") :
           variant === "record-scheme-relative" ? schemeRelativeAuthenticatedReference("/evidence?token=raw") :
+            variant === "record-leading-space" ? leadingSpaceAuthenticatedReference("/path") :
             authenticatedReference("/evidence?token=raw");
         bundle.entries[0].contentBase64 = Buffer.from(canonicalJson(archived)).toString("base64");
       }
