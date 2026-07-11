@@ -101,6 +101,17 @@ test("RC1 candidate and verdict slots enforce exact field sets", async () => {
     );
   }
   for (const mutation of [
+    (slots) => { slots["unexpected-reviewer"] = { status: "unresolved", verdict: null, basisDigest: null }; },
+    (slots) => { delete slots["workflow-verification-engineer"]; },
+  ]) {
+    const candidate = structuredClone(manifest);
+    mutation(candidate.roleVerdictSlots);
+    assert.throws(
+      () => validateRc1ManifestShape(candidate),
+      (error) => error instanceof ProtocolProofError && error.reasonCode === "RC1_VERDICT_SLOTS",
+    );
+  }
+  for (const mutation of [
     (slot) => { slot.unexpected = true; },
     (slot) => { delete slot.verdict; },
   ]) {

@@ -328,7 +328,7 @@
         "tests/protocol-v1.test.mjs",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "e34336a2c480969082ebc4289a85b31461e7d56f3de758bd425bc8855a4710e8",
+      "fixtureDigest": "2566345339cd8d3d2931c1e16e70476c7d26161b12c896d946da39ea6d660d2d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -397,7 +397,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "43fbf165a3213ad4e9bf67884a2d93e0adb177a4d83a2df3a271dff7280a16b5",
+      "fixtureDigest": "6e84470935967c07f1671cd692775cf8c7eb6663b65757c8105454c0c519b9fd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -442,7 +442,7 @@
       "id": "RC1-IMMUTABLE-PROOF-BASIS",
       "phase": "RC1",
       "status": "candidate",
-      "subject": "One unaccepted closed-field candidate manifest binds every normative P1/P2 input and four exact unresolved role-verdict slots using direct canonical bytes without fabricating acceptance.",
+      "subject": "One unaccepted closed-field candidate manifest binds every normative P1/P2 input and four exact unresolved role-verdict slots; executable missing-role and extra-role negatives fail with RC1_VERDICT_SLOTS before digest admission.",
       "command": "pnpm verify:rc1",
       "fixturePaths": [
         "specs/rc1-candidate-proof-manifest-v1.md",
@@ -458,7 +458,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "20a222fd565c9717313a68a9c2c8668f9345cd21a8db5dd652ae56d43b8cdc79",
+      "fixtureDigest": "f91f53f3d5fb83e28455f2ccd1175f7c44348a6bc08985ed5b28484d8d21f0d3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
