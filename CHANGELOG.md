@@ -17,3 +17,5 @@ Versioning after the first accepted release.
 - Reject malformed Unicode across canonical protocol/proof/trust surfaces,
   align the 161-character stable-ID and extension-name schema boundary, and
   enforce vulnerability policy over the complete frozen dependency graph.
+- Emit shared canonical objects directly in UTF-8 byte order, preserving every
+  own key, and close RC1 candidate and verdict-slot field admission.

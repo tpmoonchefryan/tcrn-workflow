@@ -325,6 +325,16 @@ test("release-trust canonical JSON rejects malformed Unicode before claim or sig
   }
 });
 
+test("release-trust canonical parsing uses UTF-8 order for integer-like keys", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const canonicalManifest = await readFile(fixture.manifestPath, "utf8");
+  await writeFile(fixture.manifestPath, `{"2":2,"10":1,${canonicalManifest.slice(1)}`);
+  await expectReason(fixture, "TRUST_MANIFEST_CANONICAL_JSON");
+  await writeFile(fixture.manifestPath, `{"10":1,"2":2,${canonicalManifest.slice(1)}`);
+  await expectReason(fixture, "TRUST_MANIFEST_MALFORMED");
+});
+
 test("unknown and invalid signing keys fail closed", async (context) => {
   const fixture = await createFixture();
   context.after(() => rm(fixture.root, { recursive: true, force: true }));

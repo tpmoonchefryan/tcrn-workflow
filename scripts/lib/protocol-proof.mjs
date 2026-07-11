@@ -69,6 +69,14 @@ function withPathValue(value, path, replacement) {
   return copy;
 }
 
+function assertExactObjectFields(value, expected, reasonCode, label) {
+  assertion(value !== null && typeof value === "object" && !Array.isArray(value), reasonCode, `${label} must be an object`);
+  const actual = Object.keys(value).sort(compareCanonicalText);
+  const required = [...expected].sort(compareCanonicalText);
+  assertion(JSON.stringify(actual) === JSON.stringify(required), reasonCode,
+    `${label} fields=${actual.join(",")};required=${required.join(",")}`);
+}
+
 function collectRequirementIds(value, output = new Set()) {
   if (Array.isArray(value)) {
     for (const entry of value) {
@@ -268,10 +276,36 @@ export async function calculateRc1InputRecords() {
   return records;
 }
 
+export function validateRc1ManifestShape(manifest) {
+  canonicalProofBytes(manifest);
+  assertExactObjectFields(
+    manifest,
+    ["schemaVersion", "status", "accepted", "basisDigest", "inputs", "roleVerdictSlots"],
+    "RC1_MANIFEST_FIELDS",
+    "RC1 candidate manifest",
+  );
+  const requiredRoles = [
+    "platform-workflow-architect",
+    "workflow-verification-engineer",
+    "security-risk-reviewer",
+    "reality-checker",
+  ];
+  assertExactObjectFields(manifest.roleVerdictSlots, requiredRoles, "RC1_VERDICT_SLOTS", "RC1 role verdict slots");
+  for (const role of requiredRoles) {
+    assertExactObjectFields(
+      manifest.roleVerdictSlots[role],
+      ["status", "verdict", "basisDigest"],
+      "RC1_VERDICT_SLOT_FIELDS",
+      role,
+    );
+  }
+  return requiredRoles;
+}
+
 export async function validateRc1Candidate() {
   const manifestPath = resolve(repositoryRoot, "fixtures/rc1/rc1-candidate-proof-manifest.json");
   const manifest = await readJson(manifestPath);
-  canonicalProofBytes(manifest);
+  const requiredRoles = validateRc1ManifestShape(manifest);
   assertion(manifest.schemaVersion === "tcrn.rc1-candidate-proof-manifest.v1", "RC1_MANIFEST_SCHEMA", manifest.schemaVersion);
   assertion(manifest.status === "candidate_unreviewed" && manifest.accepted === false, "RC1_ACCEPTANCE_OVERCLAIM", manifest.status);
   const records = await calculateRc1InputRecords();
@@ -279,13 +313,6 @@ export async function validateRc1Candidate() {
   assertion(JSON.stringify(manifest.inputs) === JSON.stringify(records), "RC1_MANIFEST_INPUT_MISMATCH", "Input hashes changed");
   const basisDigest = sha256(recordBytes);
   assertion(manifest.basisDigest === basisDigest, "RC1_MANIFEST_BASIS_DIGEST", basisDigest);
-  const requiredRoles = [
-    "platform-workflow-architect",
-    "workflow-verification-engineer",
-    "security-risk-reviewer",
-    "reality-checker",
-  ];
-  assertion(Object.keys(manifest.roleVerdictSlots).sort(compareCanonicalText).join("\0") === requiredRoles.sort(compareCanonicalText).join("\0"), "RC1_VERDICT_SLOTS", "Required role slots differ");
   for (const role of requiredRoles) {
     const slot = manifest.roleVerdictSlots[role];
     assertion(slot.status === "unresolved" && slot.verdict === null && slot.basisDigest === null, "RC1_VERDICT_FABRICATED", role);
