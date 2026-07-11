@@ -6,6 +6,7 @@ import { repositoryRoot } from "./lib/files.mjs";
 
 function parseArguments(values) {
   const output = {};
+  const allowed = new Set(["trust-root", "bundle", "subject", "repository", "workflow", "now"]);
   for (let index = 0; index < values.length; index += 2) {
     const flag = values[index];
     const value = values[index + 1];
@@ -13,6 +14,9 @@ function parseArguments(values) {
       throw new TrustVerificationError("TRUST_ARGUMENTS_INVALID", "Arguments must be --name value pairs");
     }
     const name = flag.slice(2);
+    if (!allowed.has(name)) {
+      throw new TrustVerificationError("TRUST_ARGUMENT_UNKNOWN", `Unknown argument: ${name}`);
+    }
     if (output[name] !== undefined) {
       throw new TrustVerificationError("TRUST_ARGUMENTS_INVALID", `Duplicate argument: ${name}`);
     }

@@ -2,18 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, writeFile } from "node:fs/promises";
 import { stripTypeScriptTypes } from "node:module";
 import { dirname, extname, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import {
   fileRecord,
   repositoryRoot,
   readJson,
+  readSourceFile,
   toPosixPath,
   walkFiles,
 } from "./lib/files.mjs";
+import { scanPrivacyEntries } from "./lib/privacy.mjs";
+import {
+  BoundaryError,
+  readBoundRegularFile,
+  safeCleanOutputRoot,
+  safeResetOutputDirectory,
+  safeWriteOutput,
+} from "./lib/safe-io.mjs";
+import { installNoNetworkGuard } from "./no-network.mjs";
+
+installNoNetworkGuard();
 
 const command = process.argv[2];
 const textExtensions = new Set([".json", ".md", ".mjs", ".ts", ".yaml", ".yml"]);
@@ -26,26 +39,78 @@ const textNames = new Set([
   "LICENSE",
   "NOTICE",
 ]);
+const noNetworkImport = pathToFileURL(resolve(repositoryRoot, "scripts/no-network.mjs")).href;
 
-function assertion(condition, code, detail = "") {
-  if (!condition) {
-    throw new Error(`${code}${detail ? `:${detail}` : ""}`);
+class TaskError extends Error {
+  constructor(reasonCode, message) {
+    super(message);
+    this.name = "TaskError";
+    this.reasonCode = reasonCode;
   }
 }
 
+function fail(reasonCode, message) {
+  throw new TaskError(reasonCode, message);
+}
+
+function assertion(condition, reasonCode, detail = "") {
+  if (!condition) {
+    fail(reasonCode, detail || reasonCode);
+  }
+}
+
+function success(reasonCode, fields = {}) {
+  return { reasonCode, ...fields };
+}
+
 function run(executable, arguments_, options = {}) {
+  const allowed = executable === process.execPath || executable === "git";
+  assertion(allowed, "PROCESS_EXECUTABLE_NOT_ALLOWED", executable);
+  if (executable === "git") {
+    const localOnly = new Set([
+      "cat-file",
+      "for-each-ref",
+      "fsck",
+      "ls-tree",
+      "reflog",
+      "remote",
+      "rev-list",
+    ]);
+    assertion(localOnly.has(arguments_[0]), "GIT_PROCESS_BOUNDARY", arguments_.join(" "));
+    if (arguments_[0] === "remote") {
+      assertion(
+        arguments_.length === 1 || arguments_[1] === "get-url",
+        "GIT_PROCESS_BOUNDARY",
+        arguments_.join(" "),
+      );
+    }
+  }
+  const { env: extraEnvironment = {}, raw = false, ...spawnOptions } = options;
   const result = spawnSync(executable, arguments_, {
     cwd: repositoryRoot,
     encoding: "utf8",
-    env: { ...process.env, NO_COLOR: "1" },
-    ...options,
+    env: {
+      ...process.env,
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+      NO_COLOR: "1",
+      npm_config_audit: "false",
+      npm_config_fund: "false",
+      npm_config_offline: "true",
+      ...extraEnvironment,
+    },
+    ...spawnOptions,
   });
   if (result.status !== 0) {
-    throw new Error(
-      `COMMAND_FAILED:${executable} ${arguments_.join(" ")}\n${result.stdout}${result.stderr}`,
+    fail(
+      "COMMAND_FAILED",
+      `${executable} ${arguments_.join(" ")}\n${result.stdout ?? ""}${result.stderr ?? ""}`,
     );
   }
-  return result.stdout.trim();
+  return raw ? result.stdout : result.stdout.trim();
+}
+
+async function readText(path) {
+  return (await readSourceFile(path)).toString("utf8");
 }
 
 async function sourcePolicy() {
@@ -53,7 +118,7 @@ async function sourcePolicy() {
 }
 
 function allowedByPolicy(path, policy) {
-  return policy.allowedFiles.includes(path) || policy.allowedPrefixes.some((prefix) => path.startsWith(prefix));
+  return policy.allowedFiles.includes(path);
 }
 
 async function sourceRecords() {
@@ -65,7 +130,7 @@ async function verifyRuntime() {
   assertion(process.version === "v24.16.0", "RUNTIME_NODE_VERSION", process.version);
   const userAgent = process.env.npm_config_user_agent ?? "";
   assertion(userAgent.startsWith("pnpm/11.3.0 "), "RUNTIME_PNPM_VERSION", userAgent || "missing");
-  return { node: process.version, pnpm: "11.3.0" };
+  return success("RUNTIME_VERIFIED", { node: process.version, pnpm: "11.3.0" });
 }
 
 async function formatCheck({ write = false } = {}) {
@@ -76,8 +141,8 @@ async function formatCheck({ write = false } = {}) {
     if (!textExtensions.has(extname(path)) && !textNames.has(name)) {
       continue;
     }
-    const original = await readFile(path, "utf8");
-    let normalized = original.replace(/\r\n?/g, "\n");
+    const original = await readText(path);
+    let normalized = original.replace(/\r\n?/gu, "\n");
     if (!name.endsWith(".md")) {
       normalized = normalized
         .split("\n")
@@ -97,7 +162,10 @@ async function formatCheck({ write = false } = {}) {
     }
   }
   assertion(findings.length === 0, "FORMAT_MISMATCH", findings.join(","));
-  return { checked: files.length, rewritten: write };
+  return success(write ? "FORMAT_APPLIED" : "FORMAT_VERIFIED", {
+    checked: files.length,
+    rewritten: write,
+  });
 }
 
 async function lint() {
@@ -107,55 +175,77 @@ async function lint() {
     run(process.execPath, ["--check", path]);
   }
   for (const path of files.filter((candidate) => candidate.endsWith(".ts"))) {
-    const content = await readFile(path, "utf8");
+    const content = await readText(path);
     assertion(!/\bany\b/u.test(content), "LINT_EXPLICIT_ANY", toPosixPath(relative(repositoryRoot, path)));
     assertion(!content.includes("@ts-ignore"), "LINT_TS_IGNORE", toPosixPath(relative(repositoryRoot, path)));
     assertion(!/\beval\s*\(/u.test(content), "LINT_EVAL", toPosixPath(relative(repositoryRoot, path)));
   }
   for (const path of files.filter((candidate) => candidate.includes("/.github/workflows/") && candidate.endsWith(".yml"))) {
-    const content = await readFile(path, "utf8");
+    const content = await readText(path);
     assertion(!content.includes("pull_request_target"), "CI_PULL_REQUEST_TARGET_FORBIDDEN");
     for (const line of content.split("\n").filter((value) => value.trim().startsWith("uses:"))) {
-      assertion(/uses:\s+[^@\s]+@[a-f0-9]{40}(?:\s+#.*)?$/u.test(line.trim()), "CI_ACTION_NOT_PINNED", line.trim());
+      assertion(
+        /uses:\s+[^@\s]+@[a-f0-9]{40}(?:\s+#.*)?$/u.test(line.trim()),
+        "CI_ACTION_NOT_PINNED",
+        line.trim(),
+      );
     }
   }
-  return { modules: moduleFiles.length };
+  return success("LINT_VERIFIED", { modules: moduleFiles.length });
 }
 
 async function typecheck() {
   await verifyRuntime();
   const files = (await walkFiles()).filter((path) => path.endsWith(".ts"));
   for (const path of files) {
-    const content = await readFile(path, "utf8");
+    const content = await readText(path);
     stripTypeScriptTypes(content, { mode: "transform", sourceMap: false });
-    assertion(!/function\s+\w+\s*\([^)]*\)\s*\{/u.test(content), "TYPECHECK_RETURN_TYPE_REQUIRED", toPosixPath(relative(repositoryRoot, path)));
+    assertion(
+      !/function\s+\w+\s*\([^)]*\)\s*\{/u.test(content),
+      "TYPECHECK_RETURN_TYPE_REQUIRED",
+      toPosixPath(relative(repositoryRoot, path)),
+    );
   }
-  return { files: files.length, engine: "node-strip-types-and-p1-contracts" };
+  return success("TYPECHECK_VERIFIED", {
+    files: files.length,
+    engine: "node-strip-types-and-p1-contracts",
+  });
 }
 
 async function build() {
   const checked = await typecheck();
-  const outputRoot = resolve(repositoryRoot, "dist/build");
-  await rm(outputRoot, { recursive: true, force: true });
+  await safeResetOutputDirectory(repositoryRoot, "dist/build");
   const files = (await walkFiles()).filter((path) => path.endsWith(".ts"));
   for (const path of files) {
-    const source = await readFile(path, "utf8");
+    const source = await readText(path);
     const output = stripTypeScriptTypes(source, { mode: "transform", sourceMap: false });
-    const target = resolve(outputRoot, relative(repositoryRoot, path)).replace(/\.ts$/u, ".js");
-    await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, `${output.replace(/\n*$/u, "")}\n`);
+    const target = toPosixPath(relative(repositoryRoot, path)).replace(/\.ts$/u, ".js");
+    await safeWriteOutput(repositoryRoot, `dist/build/${target}`, `${output.replace(/\n*$/u, "")}\n`);
   }
-  return { files: files.length, engine: checked.engine, output: "dist/build" };
+  return success("BUILD_VERIFIED", {
+    files: files.length,
+    engine: checked.engine,
+    output: "dist/build",
+  });
 }
 
-async function runTests({ trustOnly = false } = {}) {
+async function runTests({ trustOnly = false, rootOnly = false } = {}) {
   await build();
   const tests = (await walkFiles())
     .map((path) => toPosixPath(relative(repositoryRoot, path)))
     .filter((path) => path.startsWith("tests/") && path.endsWith(".test.mjs"))
-    .filter((path) => !trustOnly || path === "tests/release-trust.test.mjs");
-  run(process.execPath, ["--test", ...tests]);
-  return { trustOnly, tests, result: "passed" };
+    .filter((path) => !trustOnly || path === "tests/release-trust.test.mjs")
+    .filter((path) => !rootOnly || path === "tests/root-boundaries.test.mjs");
+  run(process.execPath, ["--test", ...tests], {
+    env: {
+      NODE_OPTIONS: `--import=${noNetworkImport}`,
+      TCRN_OFFLINE_PROOF: "1",
+    },
+  });
+  return success(
+    trustOnly ? "TRUST_NEGATIVE_MATRIX_VERIFIED" : rootOnly ? "ROOT_BOUNDARIES_VERIFIED" : "TESTS_VERIFIED",
+    { tests, result: "passed" },
+  );
 }
 
 function octal(value, length) {
@@ -167,8 +257,7 @@ function writeTarField(header, offset, length, value) {
 }
 
 function tarEntry(name, content, mode) {
-  const nameBytes = Buffer.byteLength(name);
-  assertion(nameBytes <= 100, "ARCHIVE_PATH_TOO_LONG", name);
+  assertion(Buffer.byteLength(name) <= 100, "ARCHIVE_PATH_TOO_LONG", name);
   const header = Buffer.alloc(512, 0);
   writeTarField(header, 0, 100, name);
   writeTarField(header, 100, 8, octal(mode, 8));
@@ -194,27 +283,26 @@ async function archive() {
   records.sort((left, right) => left.path.localeCompare(right.path, "en"));
   const entries = [];
   for (const record of records) {
-    const content = await readFile(resolve(repositoryRoot, record.path));
+    const content = await readSourceFile(resolve(repositoryRoot, record.path));
     const executable = content.subarray(0, 2).toString("utf8") === "#!";
     entries.push(tarEntry(record.path, content, executable ? 0o755 : 0o644));
   }
   entries.push(Buffer.alloc(1024, 0));
   const output = Buffer.concat(entries);
-  const outputPath = resolve(repositoryRoot, "dist/source/tcrn-workflow-source.tar");
-  await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, output);
-  return {
-    path: toPosixPath(relative(repositoryRoot, outputPath)),
+  const relativePath = "dist/source/tcrn-workflow-source.tar";
+  await safeWriteOutput(repositoryRoot, relativePath, output);
+  return success("ARCHIVE_VERIFIED", {
+    path: relativePath,
     sha256: createHash("sha256").update(output).digest("hex"),
     files: records.length,
-  };
+  });
 }
 
 async function sbom() {
   const packageJson = await readJson(resolve(repositoryRoot, "package.json"));
   const policy = await readJson(resolve(repositoryRoot, "scripts/policy/dependency-policy.json"));
-  const lockContent = await readFile(resolve(repositoryRoot, "pnpm-lock.yaml"));
-  const packageContent = await readFile(resolve(repositoryRoot, "package.json"));
+  const lockContent = await readSourceFile(resolve(repositoryRoot, "pnpm-lock.yaml"));
+  const packageContent = await readSourceFile(resolve(repositoryRoot, "package.json"));
   const basis = createHash("sha256").update(packageContent).update(lockContent).digest("hex");
   const components = Object.entries(packageJson.devDependencies ?? {}).map(([name, version]) => {
     const approved = policy.dependencies[`${name}@${version}`];
@@ -234,50 +322,51 @@ async function sbom() {
     serialNumber: `urn:uuid:${basis.slice(0, 8)}-${basis.slice(8, 12)}-4${basis.slice(13, 16)}-a${basis.slice(17, 20)}-${basis.slice(20, 32)}`,
     version: 1,
     metadata: {
-      component: {
-        type: "application",
-        name: packageJson.name,
-        version: packageJson.version,
-      },
+      component: { type: "application", name: packageJson.name, version: packageJson.version },
       properties: [{ name: "tcrn:deterministic-basis-sha256", value: basis }],
     },
     components,
   };
-  const outputPath = resolve(repositoryRoot, "dist/sbom/sbom.cdx.json");
-  await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, `${JSON.stringify(document, null, 2)}\n`);
-  return { path: toPosixPath(relative(repositoryRoot, outputPath)), components: components.length, basis };
+  const relativePath = "dist/sbom/sbom.cdx.json";
+  await safeWriteOutput(repositoryRoot, relativePath, `${JSON.stringify(document, null, 2)}\n`);
+  return success("SBOM_VERIFIED", { path: relativePath, components: components.length, basis });
 }
 
 async function verifyLicenses() {
-  const license = await readFile(resolve(repositoryRoot, "LICENSE"), "utf8");
-  const notice = await readFile(resolve(repositoryRoot, "NOTICE"), "utf8");
+  const license = await readText(resolve(repositoryRoot, "LICENSE"));
+  const notice = await readText(resolve(repositoryRoot, "NOTICE"));
   assertion(license.includes("Apache License") && license.includes("Version 2.0"), "LICENSE_APACHE_REQUIRED");
   assertion(notice.includes("Apache-2.0"), "NOTICE_SPDX_REQUIRED");
-  const files = await walkFiles();
-  const sourceFiles = files.filter((path) => [".mjs", ".ts"].includes(extname(path)));
+  const sourceFiles = (await walkFiles()).filter((path) => [".mjs", ".ts"].includes(extname(path)));
   const missing = [];
   for (const path of sourceFiles) {
-    const content = await readFile(path, "utf8");
+    const content = await readText(path);
     if (!content.split("\n").slice(0, 4).some((line) => line.includes("SPDX-License-Identifier: Apache-2.0"))) {
       missing.push(toPosixPath(relative(repositoryRoot, path)));
     }
   }
   assertion(missing.length === 0, "SPDX_HEADER_MISSING", missing.join(","));
-  return { sourceFiles: sourceFiles.length };
+  return success("LICENSES_VERIFIED", { sourceFiles: sourceFiles.length });
 }
 
 async function verifyVulnerabilities() {
   const packageJson = await readJson(resolve(repositoryRoot, "package.json"));
   const policy = await readJson(resolve(repositoryRoot, "scripts/policy/vulnerability-policy.json"));
-  const snapshot = Date.parse(`${policy.snapshotDate}T00:00:00.000Z`);
+  const [year, month, day] = policy.snapshotDate.split("-").map(Number);
+  assertion(year && month && day, "VULNERABILITY_POLICY_DATE_INVALID");
+  const snapshot = Date.UTC(year, month - 1, day);
   const ageDays = Math.floor((Date.now() - snapshot) / 86_400_000);
   assertion(ageDays >= 0 && ageDays <= policy.maxAgeDays, "VULNERABILITY_POLICY_STALE", String(ageDays));
   for (const vulnerability of policy.knownVulnerabilities) {
     const version = packageJson.dependencies?.[vulnerability.package] ?? packageJson.devDependencies?.[vulnerability.package];
     assertion(version !== vulnerability.version, "VULNERABLE_DEPENDENCY", `${vulnerability.package}@${version}`);
   }
-  return { disposition: policy.disposition, snapshotDate: policy.snapshotDate, ageDays };
+  return success("VULNERABILITY_POLICY_VERIFIED", {
+    disposition: policy.disposition,
+    snapshotDate: policy.snapshotDate,
+    ageDays,
+    externalAdvisoryScan: "not-performed-by-offline-command",
+  });
 }
 
 async function remoteOwner() {
@@ -287,95 +376,88 @@ async function remoteOwner() {
   return match[1];
 }
 
+async function archiveEntryIfPresent() {
+  const archivePath = resolve(repositoryRoot, "dist/source/tcrn-workflow-source.tar");
+  try {
+    await lstat(archivePath);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+  const archiveInput = await readBoundRegularFile(archivePath, {
+    reasonCode: "PRIVACY_ARCHIVE_INVALID",
+    hardlinkReasonCode: "PRIVACY_ARCHIVE_HARDLINK",
+    pathChangedReasonCode: "PRIVACY_ARCHIVE_CHANGED",
+  });
+  return [{
+    label: "dist/source/tcrn-workflow-source.tar",
+    kind: "archive",
+    content: archiveInput.content.toString("utf8"),
+  }];
+}
+
 async function verifyPrivacy() {
   const owner = await remoteOwner();
-  const legacyName = ["TCRN", "Workflow", "Platform", "Legacy"].join("-");
-  const controlDirectory = [".", "context", "/"].join("");
-  const agentDirectory = [".", "llm", "/"].join("");
-  const privateKeyMarker = ["BEGIN", " PRIVATE KEY"].join("");
-  const patterns = [
-    ["LOCAL_ABSOLUTE_PATH", new RegExp(["/", "Users", "/[^/\\s]+/"].join(""), "u")],
-    ["WINDOWS_USER_PATH", /[A-Za-z]:\\\\Users\\\\/u],
-    ["THREAD_IDENTIFIER", /019[a-f0-9]{5}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/u],
-    ["PRIVATE_KEY", new RegExp(privateKeyMarker, "u")],
-    ["GITHUB_TOKEN", /gh[pousr]_[A-Za-z0-9_]{20,}/u],
-    ["AWS_ACCESS_KEY", /AKIA[0-9A-Z]{16}/u],
-    ["CONTROL_PLANE_PATH", new RegExp(controlDirectory.replace(".", "\\."), "u")],
-    ["AGENT_CONTROL_PATH", new RegExp(agentDirectory.replace(".", "\\."), "u")],
-    ["LEGACY_REMOTE_NAME", new RegExp(legacyName, "u")],
-    ["PRIVATE_RUNTIME_PATH", new RegExp(["/", "srv", "/"].join(""), "u")],
-    ["PRIVATE_SSH_URL", /ssh:\/\//u],
-  ];
-  if (owner) {
-    patterns.push(["OWNER_PRIVATE_IDENTIFIER", new RegExp(owner.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u")]);
-  }
-  const findings = [];
-  const scanned = (await walkFiles()).map((path) => ({
-    label: toPosixPath(relative(repositoryRoot, path)),
-    path,
-  }));
-  const archivePath = resolve(repositoryRoot, "dist/source/tcrn-workflow-source.tar");
-  if (await stat(archivePath).then(() => true).catch(() => false)) {
-    scanned.push({ label: "dist/source/tcrn-workflow-source.tar", path: archivePath });
-  }
-  const headProbe = spawnSync("git", ["rev-parse", "--verify", "HEAD"], {
-    cwd: repositoryRoot,
-    encoding: "utf8",
+  const entries = [];
+  entries.push({
+    label: "git-origin",
+    kind: "remote",
+    content: run("git", ["remote", "get-url", "origin"]),
   });
-  const historicalContent = [];
-  if (headProbe.status === 0) {
-    const objectLines = run("git", ["rev-list", "--objects", "--all"]).split("\n").filter(Boolean);
-    for (const line of objectLines) {
-      const [object, ...pathParts] = line.split(" ");
-      if (run("git", ["cat-file", "-t", object]) === "blob") {
-        historicalContent.push({
-          label: `git:${object}:${pathParts.join(" ")}`,
-          content: run("git", ["cat-file", "blob", object]),
-          kind: "blob",
-        });
-      }
-    }
-    for (const commit of run("git", ["rev-list", "--all"]).split("\n").filter(Boolean)) {
-      historicalContent.push({
-        label: `git-commit:${commit}`,
-        content: run("git", ["cat-file", "commit", commit]),
-        kind: "commit",
+  for (const path of await walkFiles()) {
+    const label = toPosixPath(relative(repositoryRoot, path));
+    entries.push({ label, kind: "filename", content: label });
+    entries.push({ label, kind: "source", content: await readText(path) });
+  }
+  entries.push(...await archiveEntryIfPresent());
+
+  const objectIds = run("git", ["cat-file", "--batch-all-objects", "--batch-check=%(objectname)"])
+    .split("\n")
+    .filter(Boolean);
+  for (const object of objectIds) {
+    const type = run("git", ["cat-file", "-t", object]);
+    if (["blob", "commit", "tag"].includes(type)) {
+      entries.push({
+        label: `git-${type}:${object}`,
+        kind: type,
+        content: run("git", ["cat-file", type, object], { raw: true }),
       });
+    } else if (type === "tree") {
+      const tree = run("git", ["ls-tree", "-rz", object], { raw: true });
+      for (const record of tree.split("\0").filter(Boolean)) {
+        const tab = record.indexOf("\t");
+        const path = tab >= 0 ? record.slice(tab + 1) : record;
+        entries.push({ label: `git-tree:${object}:${path}`, kind: "filename", content: path });
+      }
+    } else {
+      fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:${type}`);
     }
   }
-  const contentEntries = await Promise.all(
-    scanned.map(async (entry) => ({
-      label: entry.label,
-      content: await readFile(entry.path, "utf8").catch(() => ""),
-      kind: "source",
-    })),
-  );
-  contentEntries.push(...historicalContent);
-  for (const entry of contentEntries) {
-    for (const [code, pattern] of patterns) {
-      if (entry.kind === "commit" && code === "OWNER_PRIVATE_IDENTIFIER") {
-        continue;
-      }
-      if (pattern.test(entry.content)) {
-        findings.push(`${code}:${entry.label}`);
-      }
-    }
-  }
+  const refs = run("git", ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(upstream)"], { raw: true });
+  entries.push({ label: "git-refs", kind: "ref", content: refs });
+  const findings = scanPrivacyEntries(entries, { owner });
   assertion(findings.length === 0, "PRIVACY_FINDINGS", findings.join(","));
-  return {
-    scannedFiles: scanned.length,
-    historicalObjects: historicalContent.length,
-    archiveScanned: scanned.some((entry) => entry.path === archivePath),
-    patterns: patterns.length,
-  };
+  const source = await verifySource();
+  return success("PRIVACY_SOURCE_CLEAN", {
+    scannedEntries: entries.length,
+    gitObjects: objectIds.length,
+    archiveScanned: entries.some((entry) => entry.kind === "archive"),
+    allowedPublicMetadata: "strict-github-noreply-commit-or-tag-lines-only",
+    sourceFiles: source.files,
+  });
 }
 
 async function verifySource() {
   const policy = await sourcePolicy();
+  assertion(!Object.hasOwn(policy, "allowedPrefixes"), "SOURCE_PREFIX_ALLOWLIST_FORBIDDEN");
   const records = await sourceRecords();
   const denied = records.map((record) => record.path).filter((path) => !allowedByPolicy(path, policy));
   assertion(denied.length === 0, "SOURCE_NOT_ALLOWLISTED", denied.join(","));
-  return { files: records.length };
+  const missing = policy.allowedFiles.filter((path) => !records.some((record) => record.path === path));
+  assertion(missing.length === 0, "SOURCE_ALLOWLIST_ENTRY_MISSING", missing.join(","));
+  return success("SOURCE_ALLOWLIST_VERIFIED", { files: records.length, exactEntries: policy.allowedFiles.length });
 }
 
 async function verifyLifecycle() {
@@ -392,10 +474,66 @@ async function verifyLifecycle() {
       }
     }
   }
-  const npmrc = await readFile(resolve(repositoryRoot, ".npmrc"), "utf8");
+  const npmrc = await readText(resolve(repositoryRoot, ".npmrc"));
   assertion(/^ignore-scripts=true$/mu.test(npmrc), "IGNORE_SCRIPTS_REQUIRED");
   assertion(/^offline=true$/mu.test(npmrc), "OFFLINE_DEFAULT_REQUIRED");
-  return { manifests: manifests.length };
+  return success("LIFECYCLE_POLICY_VERIFIED", { manifests: manifests.length });
+}
+
+async function verifyOfflineBoundary() {
+  const guardFiles = new Set(["scripts/no-network.mjs", "tests/offline-boundary.test.mjs"]);
+  const modules = [
+    "node:" + "http",
+    "node:" + "https",
+    "node:" + "net",
+    "node:" + "tls",
+    "node:" + "dns",
+    "node:" + "dgram",
+    ["un", "dici"].join(""),
+  ];
+  const findings = [];
+  for (const path of (await walkFiles()).filter((candidate) => [".mjs", ".ts"].includes(extname(candidate)))) {
+    const label = toPosixPath(relative(repositoryRoot, path));
+    const content = await readText(path);
+    if (!guardFiles.has(label)) {
+      for (const moduleName of modules) {
+        if (content.includes(`\"${moduleName}\"`) || content.includes(`'${moduleName}'`)) {
+          findings.push(`NETWORK_MODULE:${label}:${moduleName}`);
+        }
+      }
+      if (/\bfetch\s*\(/u.test(content) || /\bWebSocket\s*\(/u.test(content)) {
+        findings.push(`NETWORK_API:${label}`);
+      }
+    }
+  }
+  const packageJson = await readJson(resolve(repositoryRoot, "package.json"));
+  const externalTools = [["cu", "rl"].join(""), ["wg", "et"].join(""), ["np", "x"].join("")];
+  for (const [name, script] of Object.entries(packageJson.scripts ?? {})) {
+    if (externalTools.some((tool) => new RegExp(`(?:^|\\s)${tool}(?:\\s|$)`, "u").test(script))) {
+      findings.push(`NETWORK_TOOL:${name}`);
+    }
+    if (/[;&|]{1,2}/u.test(script)) {
+      findings.push(`SHELL_CONJUNCTION:${name}`);
+    }
+  }
+  const npmrc = await readText(resolve(repositoryRoot, ".npmrc"));
+  for (const setting of ["offline=true", "audit=false", "fund=false", "update-notifier=false"]) {
+    if (!npmrc.split("\n").includes(setting)) {
+      findings.push(`OFFLINE_SETTING:${setting}`);
+    }
+  }
+  assertion(findings.length === 0, "OFFLINE_BOUNDARY_FINDINGS", findings.join(","));
+  run(process.execPath, ["--test", "tests/offline-boundary.test.mjs"], {
+    env: { NODE_OPTIONS: `--import=${noNetworkImport}`, TCRN_OFFLINE_PROOF: "1" },
+  });
+  return success("OFFLINE_BOUNDARY_VERIFIED", {
+    nodeProcessGuard: true,
+    staticProcessAllowlist: ["node", "git-local-only", "pinned-pnpm-offline-isolated-proof"],
+    telemetry: "no-client-detected",
+    osNetworkSandbox: "not-provided",
+    freshAdvisoryScan: "not-performed",
+    ciDependencyAcquisition: "explicit-external-boundary",
+  });
 }
 
 async function aggregateDigest(paths) {
@@ -404,8 +542,23 @@ async function aggregateDigest(paths) {
   return createHash("sha256").update(JSON.stringify(records)).digest("hex");
 }
 
+const commandContracts = {
+  history: { exit: 0, reasonCode: "HISTORY_CLEAN" },
+  privacy: { exit: 0, reasonCode: "PRIVACY_SOURCE_CLEAN" },
+  "verify-p1": { exit: 0, reasonCode: "P1_VERIFIED" },
+  "test-trust": { exit: 0, reasonCode: "TRUST_NEGATIVE_MATRIX_VERIFIED" },
+  governance: { exit: 0, reasonCode: "GOVERNANCE_TOOLCHAIN_VERIFIED" },
+  workspace: { exit: 0, reasonCode: "WORKSPACE_VERIFIED" },
+  roots: { exit: 0, reasonCode: "ROOT_BOUNDARIES_VERIFIED" },
+  ci: { exit: 0, reasonCode: "CI_HARDENING_VERIFIED" },
+  isolated: { exit: 0, reasonCode: "ISOLATED_P1_VERIFIED" },
+  p2: { exit: 1, reasonCode: "P2_OUT_OF_SCOPE" },
+  rc1: { exit: 1, reasonCode: "RC1_OUT_OF_SCOPE" },
+};
+
 async function verifyMap() {
-  const map = JSON.parse(await readFile(resolve(repositoryRoot, "verification-map.yaml"), "utf8"));
+  const map = JSON.parse(await readText(resolve(repositoryRoot, "verification-map.yaml")));
+  const packageJson = await readJson(resolve(repositoryRoot, "package.json"));
   assertion(map.schemaVersion === "tcrn.verification-map.v1", "VERIFICATION_MAP_SCHEMA");
   assertion(Array.isArray(map.claims) && map.claims.length > 0, "VERIFICATION_MAP_EMPTY");
   const ids = new Set();
@@ -431,6 +584,18 @@ async function verifyMap() {
     assertion(["implemented", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);
+    const commandMatch = claim.command.match(/^pnpm ([a-z0-9:.-]+)$/u);
+    assertion(commandMatch, "VERIFICATION_MAP_COMMAND_SURFACE", claim.id);
+    const scriptName = commandMatch[1];
+    const script = packageJson.scripts?.[scriptName];
+    const handlerMatch = script?.match(/^node scripts\/task\.mjs ([a-z0-9-]+)$/u);
+    const isolatedMatch = script === "node scripts/isolated-proof.mjs";
+    assertion(handlerMatch || isolatedMatch, "VERIFICATION_MAP_COMMAND_SCRIPT", `${claim.id}:${scriptName}`);
+    const contractName = isolatedMatch ? "isolated" : handlerMatch[1];
+    const contract = commandContracts[contractName];
+    assertion(contract, "VERIFICATION_MAP_COMMAND_CONTRACT", `${claim.id}:${contractName}`);
+    assertion(contract.exit === claim.expectedExit, "VERIFICATION_MAP_EXIT_UNOBSERVABLE", claim.id);
+    assertion(contract.reasonCode === claim.expectedReasonCode, "VERIFICATION_MAP_REASON_UNOBSERVABLE", claim.id);
     if (claim.status === "implemented") {
       assertion(/^[a-f0-9]{64}$/u.test(claim.fixtureDigest), "VERIFICATION_MAP_DIGEST", claim.id);
       assertion(claim.fixtureDigest === await aggregateDigest(claim.fixturePaths), "VERIFICATION_MAP_DIGEST_MISMATCH", claim.id);
@@ -442,68 +607,193 @@ async function verifyMap() {
   for (const phase of ["P1", "P2", "RC1"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
-  return { claims: map.claims.length, implemented: map.claims.filter((claim) => claim.status === "implemented").length };
+  return success("VERIFICATION_MAP_VERIFIED", {
+    claims: map.claims.length,
+    implemented: map.claims.filter((claim) => claim.status === "implemented").length,
+    observableReasonCodes: map.claims.length,
+  });
 }
 
 async function verifyHistory() {
+  const policy = await readJson(resolve(repositoryRoot, "scripts/policy/history-policy.json"));
   const remotes = run("git", ["remote"]).split("\n").filter(Boolean);
   assertion(remotes.length === 1 && remotes[0] === "origin", "HISTORY_REMOTE_SET", remotes.join(","));
   const remote = run("git", ["remote", "get-url", "--all", "origin"]).split("\n").filter(Boolean);
   assertion(remote.length === 1 && /^https:\/\/github\.com\/[^/]+\/tcrn-workflow\.git$/u.test(remote[0]), "HISTORY_ORIGIN", remote.join(","));
   const roots = run("git", ["rev-list", "--max-parents=0", "--all"]).split("\n").filter(Boolean);
   assertion(roots.length === 1, "HISTORY_ROOT_COUNT", String(roots.length));
+  assertion(roots[0] === policy.requiredRootCommit, "HISTORY_ROOT_REWRITTEN", roots[0]);
   const rootLine = run("git", ["rev-list", "--parents", "-n", "1", roots[0]]).split(/\s+/u);
   assertion(rootLine.length === 1, "HISTORY_ROOT_HAS_PARENT");
   const refs = run("git", ["for-each-ref", "--format=%(refname)"]).split("\n").filter(Boolean);
   assertion(refs.every((ref) => !ref.startsWith("refs/replace/") && !ref.startsWith("refs/notes/")), "HISTORY_FORBIDDEN_REF", refs.join(","));
-  assertion(!await stat(resolve(repositoryRoot, ".git/objects/info/alternates")).then(() => true).catch(() => false), "HISTORY_ALTERNATES");
+  try {
+    await lstat(resolve(repositoryRoot, ".git/objects/info/alternates"));
+    fail("HISTORY_ALTERNATES", "Object-store alternates are forbidden");
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
   run("git", ["fsck", "--strict", "--no-reflogs", "--unreachable"]);
-  const reachable = new Set(run("git", ["rev-list", "--objects", "--all"]).split("\n").filter(Boolean).map((line) => line.split(" ")[0]));
-  const stored = new Set(run("git", ["cat-file", "--batch-all-objects", "--batch-check=%(objectname)"]).split("\n").filter(Boolean));
+  const reachable = new Set(
+    run("git", ["rev-list", "--objects", "--all"]).split("\n").filter(Boolean).map((line) => line.split(" ")[0]),
+  );
+  const stored = new Set(
+    run("git", ["cat-file", "--batch-all-objects", "--batch-check=%(objectname)"]).split("\n").filter(Boolean),
+  );
   const unreachable = [...stored].filter((object) => !reachable.has(object));
   assertion(unreachable.length === 0, "HISTORY_UNREACHABLE_OBJECTS", unreachable.join(","));
   const reflog = run("git", ["reflog", "show", "--all", "--format=%H"]).split("\n").filter(Boolean);
   assertion(reflog.every((object) => reachable.has(object)), "HISTORY_REFLOG_UNREACHABLE");
-  return { rootCommit: roots[0], objects: stored.size, refs: refs.length, reflogEntries: reflog.length };
+  return success("HISTORY_CLEAN", {
+    rootCommit: roots[0],
+    objects: stored.size,
+    refs: refs.length,
+    reflogEntries: reflog.length,
+  });
+}
+
+async function verifyGovernance() {
+  const runtime = await verifyRuntime();
+  const licenses = await verifyLicenses();
+  const lifecycle = await verifyLifecycle();
+  return success("GOVERNANCE_TOOLCHAIN_VERIFIED", { runtime, licenses, lifecycle });
+}
+
+async function verifyWorkspace() {
+  const runtime = await verifyRuntime();
+  const checked = await typecheck();
+  const built = await build();
+  return success("WORKSPACE_VERIFIED", { runtime, checked, built });
+}
+
+async function verifyRoots() {
+  const result = await runTests({ rootOnly: true });
+  return success("ROOT_BOUNDARIES_VERIFIED", { tests: result.tests });
+}
+
+async function verifyCi() {
+  const linted = await lint();
+  const workflow = await readText(resolve(repositoryRoot, ".github/workflows/ci.yml"));
+  assertion(/^permissions:\n  contents: read$/mu.test(workflow), "CI_PERMISSIONS_NOT_MINIMAL");
+  assertion(!workflow.includes("pull_request_target"), "CI_PULL_REQUEST_TARGET_FORBIDDEN");
+  assertion(workflow.includes("--frozen-lockfile --ignore-scripts --config.offline=false"), "CI_INSTALL_NOT_EXPLICIT");
+  return success("CI_HARDENING_VERIFIED", { linted });
+}
+
+async function verifyP1() {
+  const sequence = [
+    "format-check",
+    "lint",
+    "typecheck",
+    "build",
+    "test",
+    "test-trust",
+    "archive",
+    "sbom",
+    "licenses",
+    "vulnerabilities",
+    "source",
+    "lifecycle",
+    "offline",
+    "governance",
+    "workspace",
+    "privacy",
+    "roots",
+    "ci",
+    "verification-map",
+    "history",
+  ];
+  const results = [];
+  for (const name of sequence) {
+    results.push(await invoke(name));
+  }
+  return success("P1_VERIFIED", {
+    commands: sequence,
+    observedReasonCodes: results.map((result) => result.reasonCode),
+  });
 }
 
 async function clean() {
-  await rm(resolve(repositoryRoot, "dist"), { recursive: true, force: true });
-  return { removed: "dist" };
+  const result = await safeCleanOutputRoot(repositoryRoot);
+  return success("OUTPUTS_CLEANED", result);
 }
 
 const handlers = {
   archive,
   build,
+  ci: verifyCi,
   clean,
   "format-check": () => formatCheck(),
   "format-write": () => formatCheck({ write: true }),
+  governance: verifyGovernance,
   history: verifyHistory,
   licenses: verifyLicenses,
   lifecycle: verifyLifecycle,
   lint,
+  offline: verifyOfflineBoundary,
+  p2: async () => fail("P2_OUT_OF_SCOPE", "P2 is not implemented by the P1 repair"),
   privacy: verifyPrivacy,
+  rc1: async () => fail("RC1_OUT_OF_SCOPE", "RC1 is not implemented by the P1 repair"),
+  roots: verifyRoots,
   runtime: verifyRuntime,
   sbom,
   source: verifySource,
   test: () => runTests(),
   "test-trust": () => runTests({ trustOnly: true }),
-  "verification-map": verifyMap,
   typecheck,
+  "verification-map": verifyMap,
+  "verify-p1": verifyP1,
   vulnerabilities: verifyVulnerabilities,
+  workspace: verifyWorkspace,
 };
 
+function errorReason(error) {
+  if (error instanceof TaskError || error instanceof BoundaryError) {
+    return error.reasonCode;
+  }
+  return "TASK_INTERNAL_ERROR";
+}
+
+function evidencePhase(name) {
+  if (name === "p2") {
+    return "p2";
+  }
+  if (name === "rc1") {
+    return "rc1";
+  }
+  return "p1";
+}
+
+async function recordEvidence(name, ok, reasonCode, resultOrMessage) {
+  const relativePath = `dist/evidence/${evidencePhase(name)}/${name}.json`;
+  const document = ok
+    ? { schemaVersion: "tcrn.command-evidence.v1", command: name, ok, reasonCode, result: resultOrMessage }
+    : { schemaVersion: "tcrn.command-evidence.v1", command: name, ok, reasonCode, error: resultOrMessage };
+  await safeWriteOutput(repositoryRoot, relativePath, `${JSON.stringify(document, null, 2)}\n`);
+  return relativePath;
+}
+
+async function invoke(name) {
+  const handler = handlers[name];
+  assertion(handler, "TASK_UNKNOWN", name ?? "missing");
+  try {
+    const result = await handler();
+    assertion(typeof result?.reasonCode === "string", "TASK_REASON_CODE_MISSING", name);
+    await recordEvidence(name, true, result.reasonCode, result);
+    return result;
+  } catch (error) {
+    const reasonCode = errorReason(error);
+    await recordEvidence(name, false, reasonCode, error.message);
+    throw error;
+  }
+}
+
 try {
-  assertion(command && handlers[command], "TASK_UNKNOWN", command ?? "missing");
-  const result = await handlers[command]();
-  const evidencePath = resolve(repositoryRoot, `dist/evidence/p1/${command}.json`);
-  await mkdir(dirname(evidencePath), { recursive: true });
-  await writeFile(
-    evidencePath,
-    `${JSON.stringify({ schemaVersion: "tcrn.p1-command-evidence.v1", command, result }, null, 2)}\n`,
-  );
+  const result = await invoke(command);
   process.stdout.write(`${JSON.stringify({ ok: true, command, ...result })}\n`);
 } catch (error) {
-  process.stderr.write(`${JSON.stringify({ ok: false, command, error: error.message })}\n`);
+  process.stderr.write(`${JSON.stringify({ ok: false, command, reasonCode: errorReason(error), error: error.message })}\n`);
   process.exitCode = 1;
 }

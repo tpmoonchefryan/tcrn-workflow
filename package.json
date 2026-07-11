@@ -23,14 +23,22 @@
     "sbom": "node scripts/task.mjs sbom",
     "test": "node scripts/task.mjs test",
     "typecheck": "node scripts/task.mjs typecheck",
+    "verify:ci": "node scripts/task.mjs ci",
+    "verify:governance": "node scripts/task.mjs governance",
     "verify:history": "node scripts/task.mjs history",
+    "verify:isolated": "node scripts/isolated-proof.mjs",
     "verify:licenses": "node scripts/task.mjs licenses",
     "verify:lifecycle": "node scripts/task.mjs lifecycle",
     "verify:map": "node scripts/task.mjs verification-map",
-    "verify:p1": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run verify:trust && pnpm run archive && pnpm run sbom && pnpm run verify:licenses && pnpm run verify:vulnerabilities && pnpm run verify:privacy && pnpm run verify:source && pnpm run verify:lifecycle && pnpm run verify:map && pnpm run verify:history",
+    "verify:offline": "node scripts/task.mjs offline",
+    "verify:p1": "node scripts/task.mjs verify-p1",
+    "verify:p2": "node scripts/task.mjs p2",
     "verify:privacy": "node scripts/task.mjs privacy",
+    "verify:rc1": "node scripts/task.mjs rc1",
+    "verify:roots": "node scripts/task.mjs roots",
     "verify:source": "node scripts/task.mjs source",
     "verify:trust": "node scripts/task.mjs test-trust",
-    "verify:vulnerabilities": "node scripts/task.mjs vulnerabilities"
+    "verify:vulnerabilities": "node scripts/task.mjs vulnerabilities",
+    "verify:workspace": "node scripts/task.mjs workspace"
   }
 }

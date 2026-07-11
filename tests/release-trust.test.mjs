@@ -5,10 +5,12 @@ import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { canonicalJsonBytes } from "../scripts/lib/canonical-json.mjs";
+import { canonicalJson, canonicalJsonBytes } from "../scripts/lib/canonical-json.mjs";
 import {
+  strictRfc3339Instant,
   TrustVerificationError,
   verifyReleaseBundle,
 } from "../scripts/lib/release-trust.mjs";
@@ -57,17 +59,19 @@ async function createFixture() {
     ],
   };
   const trustRootPath = resolve(root, "trust-root.json");
+  const manifestPath = resolve(bundlePath, "manifest.json");
+  const signaturePath = resolve(bundlePath, "manifest.sig");
 
   async function writeSignedManifest(signingKey = privateKey) {
-    await writeFile(resolve(bundlePath, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+    await writeFile(manifestPath, `${canonicalJson(manifest)}\n`);
     await writeFile(
-      resolve(bundlePath, "manifest.sig"),
+      signaturePath,
       `${sign(null, canonicalJsonBytes(manifest), signingKey).toString("base64")}\n`,
     );
   }
 
   async function writeTrustRoot() {
-    await writeFile(trustRootPath, `${JSON.stringify(trustRoot, null, 2)}\n`);
+    await writeFile(trustRootPath, `${canonicalJson(trustRoot)}\n`);
   }
 
   await writeSignedManifest();
@@ -76,6 +80,8 @@ async function createFixture() {
     root,
     bundlePath,
     artifactPath,
+    manifestPath,
+    signaturePath,
     manifest,
     trustRoot,
     trustRootPath,
@@ -112,6 +118,7 @@ test("valid external trust root admits the signed bundle", async (context) => {
     admitted: true,
     reasonCode: "TRUST_VERIFIED",
     rootVersion: 3,
+    rootVersionRollbackDisposition: "external-prior-root-floor-required",
     sequence: 7,
     signerKeyId: "release-key-1",
     artifactSha256: fixture.manifest.artifact.sha256,
@@ -193,4 +200,167 @@ test("symbolic and hard-linked artifacts are rejected", async (context) => {
   await rm(fixture.artifactPath);
   await link(original, fixture.artifactPath);
   await expectReason(fixture, "TRUST_ARTIFACT_HARDLINK");
+});
+
+test("trust root, manifest, and signature links fail closed", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+
+  const rootAlias = resolve(fixture.root, "trust-root-alias.json");
+  await link(fixture.trustRootPath, rootAlias);
+  await expectReason(fixture, "TRUST_ROOT_HARDLINK");
+  await rm(rootAlias);
+  const rootOriginal = resolve(fixture.root, "trust-root-original.json");
+  await writeFile(rootOriginal, await readFile(fixture.trustRootPath));
+  await rm(fixture.trustRootPath);
+  await symlink(rootOriginal, fixture.trustRootPath);
+  await expectReason(fixture, "TRUST_ROOT_FILE");
+  await rm(fixture.trustRootPath);
+  await writeFile(fixture.trustRootPath, await readFile(rootOriginal));
+
+  const manifestAlias = resolve(fixture.root, "manifest-alias.json");
+  await link(fixture.manifestPath, manifestAlias);
+  await expectReason(fixture, "TRUST_MANIFEST_HARDLINK");
+  await rm(manifestAlias);
+  const manifestOriginal = resolve(fixture.root, "manifest-original.json");
+  await writeFile(manifestOriginal, await readFile(fixture.manifestPath));
+  await rm(fixture.manifestPath);
+  await symlink(manifestOriginal, fixture.manifestPath);
+  await expectReason(fixture, "TRUST_MANIFEST_FILE");
+  await rm(fixture.manifestPath);
+  await writeFile(fixture.manifestPath, await readFile(manifestOriginal));
+
+  const signatureAlias = resolve(fixture.root, "signature-alias.txt");
+  await link(fixture.signaturePath, signatureAlias);
+  await expectReason(fixture, "TRUST_SIGNATURE_HARDLINK");
+  await rm(signatureAlias);
+  const signatureOriginal = resolve(fixture.root, "signature-original.txt");
+  await writeFile(signatureOriginal, await readFile(fixture.signaturePath));
+  await rm(fixture.signaturePath);
+  await symlink(signatureOriginal, fixture.signaturePath);
+  await expectReason(fixture, "TRUST_SIGNATURE_FILE");
+});
+
+test("bundle directory symlink fails closed", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const alias = resolve(fixture.root, "bundle-alias");
+  await symlink(fixture.bundlePath, alias);
+  await expectReason(fixture, "TRUST_BUNDLE_SYMLINK", { bundlePath: alias });
+});
+
+test("strict RFC 3339 rejects normalization and impossible instants", () => {
+  assert.equal(
+    strictRfc3339Instant("2026-07-11T12:00:00.123456789+08:00", "TIME", "value"),
+    strictRfc3339Instant("2026-07-11T04:00:00.123456789Z", "TIME", "value"),
+  );
+  for (const value of [
+    "2026-07-11",
+    "July 11, 2026 12:00:00",
+    "2026-02-30T00:00:00Z",
+    "2026-07-11T24:00:00Z",
+    "2026-07-11T12:00:60Z",
+    "2026-07-11t12:00:00z",
+    "2026-07-11T12:00:00",
+    "2026-07-11T12:00:00.1234567890Z",
+  ]) {
+    assert.throws(() => strictRfc3339Instant(value, "TIME", "value"), (error) => error.reasonCode === "TIME");
+  }
+});
+
+test("verification, root, and manifest time vectors fail closed", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  await expectReason(fixture, "TRUST_TIME_INVALID", { now: "2026-07-11" });
+  await expectReason(fixture, "TRUST_ROOT_NOT_YET_VALID", { now: "2026-07-09T00:00:00Z" });
+  fixture.manifest.issuedAt = "2026-07-11T13:00:00Z";
+  await fixture.writeSignedManifest();
+  await expectReason(fixture, "TRUST_MANIFEST_NOT_YET_VALID");
+  fixture.manifest.issuedAt = "2026-07-10T00:00:00Z";
+  fixture.manifest.expiresAt = "2026-07-11T01:00:00Z";
+  await fixture.writeSignedManifest();
+  await expectReason(fixture, "TRUST_MANIFEST_EXPIRED");
+  fixture.trustRoot.validFrom = "not-a-date";
+  await fixture.writeTrustRoot();
+  await expectReason(fixture, "TRUST_ROOT_TIME_INVALID");
+});
+
+test("canonical JSON and strict schemas fail closed", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  await writeFile(fixture.trustRootPath, `${JSON.stringify(fixture.trustRoot, null, 2)}\n`);
+  await expectReason(fixture, "TRUST_ROOT_CANONICAL_JSON");
+  await fixture.writeTrustRoot();
+  await writeFile(fixture.manifestPath, `${JSON.stringify(fixture.manifest, null, 2)}\n`);
+  await expectReason(fixture, "TRUST_MANIFEST_CANONICAL_JSON");
+  fixture.manifest.unexpected = true;
+  await fixture.writeSignedManifest();
+  await expectReason(fixture, "TRUST_MANIFEST_MALFORMED");
+  delete fixture.manifest.unexpected;
+  fixture.trustRoot.unexpected = true;
+  await fixture.writeTrustRoot();
+  await fixture.writeSignedManifest();
+  await expectReason(fixture, "TRUST_ROOT_MALFORMED");
+  delete fixture.trustRoot.unexpected;
+  fixture.trustRoot.schemaVersion = "unknown";
+  await fixture.writeTrustRoot();
+  await expectReason(fixture, "TRUST_ROOT_SCHEMA");
+});
+
+test("unknown and invalid signing keys fail closed", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  fixture.manifest.signerKeyId = "unknown-key";
+  await fixture.writeSignedManifest();
+  await expectReason(fixture, "TRUST_KEY_UNKNOWN");
+  fixture.manifest.signerKeyId = "release-key-1";
+  fixture.trustRoot.keys[0].publicKeyPem = "not-a-public-key";
+  await fixture.writeTrustRoot();
+  await fixture.writeSignedManifest();
+  await expectReason(fixture, "TRUST_KEY_INVALID");
+});
+
+test("canonical base64 and Ed25519 length are enforced", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const canonical = (await readFile(fixture.signaturePath, "utf8")).trim();
+  await writeFile(fixture.signaturePath, `${canonical.replace(/=+$/u, "")}\n`);
+  await expectReason(fixture, "TRUST_SIGNATURE_ENCODING");
+  await writeFile(fixture.signaturePath, `${Buffer.alloc(63).toString("base64")}\n`);
+  await expectReason(fixture, "TRUST_SIGNATURE_LENGTH");
+  await writeFile(fixture.signaturePath, "!!!!\n");
+  await expectReason(fixture, "TRUST_SIGNATURE_ENCODING");
+});
+
+test("artifact size and non-canonical paths fail closed", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  fixture.manifest.artifact.size += 1;
+  await fixture.writeSignedManifest();
+  await expectReason(fixture, "TRUST_ARTIFACT_SIZE");
+  fixture.manifest.artifact.size -= 1;
+  for (const [path, reasonCode] of [
+    ["/absolute.bin", "TRUST_ARTIFACT_PATH"],
+    ["folder\\artifact.bin", "TRUST_ARTIFACT_PATH"],
+    ["folder/../artifact.bin", "TRUST_ARTIFACT_PATH"],
+    [".", "TRUST_ARTIFACT_PATH_ESCAPE"],
+  ]) {
+    fixture.manifest.artifact.path = path;
+    await fixture.writeSignedManifest();
+    await expectReason(fixture, reasonCode);
+  }
+});
+
+test("CLI rejects missing, duplicate, and unknown arguments", () => {
+  const cli = resolve(repositoryRoot, "scripts/verify-release-trust.mjs");
+  const cases = [
+    [[], "TRUST_ARGUMENTS_REQUIRED"],
+    [["--now", now, "--now", now], "TRUST_ARGUMENTS_INVALID"],
+    [["--unknown", "value"], "TRUST_ARGUMENT_UNKNOWN"],
+  ];
+  for (const [arguments_, reasonCode] of cases) {
+    const result = spawnSync(process.execPath, [cli, ...arguments_], { encoding: "utf8" });
+    assert.equal(result.status, 1);
+    assert.equal(JSON.parse(result.stderr).reasonCode, reasonCode);
+  }
 });

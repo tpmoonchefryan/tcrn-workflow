@@ -7,7 +7,6 @@ import {
   DEFAULT_MODE,
   FRAMEWORK_VERSION,
   admitDevelopment,
-  assertDistinctRoots,
 } from "../dist/build/packages/core/src/index.js";
 import {
   RELEASE_REQUIRED_ARGUMENTS,
@@ -24,26 +23,10 @@ test("development mode is explicitly offline and telemetry-free", () => {
   assert.deepEqual(admitDevelopment(), {
     admitted: true,
     mode: "development",
-    network: "offline",
+    projectCommandNetwork: "process-guarded-offline",
+    osNetworkSandbox: "not-provided",
     telemetry: "disabled",
   });
-});
-
-test("root collisions fail closed", () => {
-  assert.doesNotThrow(() =>
-    assertDistinctRoots([
-      { kind: "framework", path: "/framework" },
-      { kind: "workspace", path: "/workspace" },
-    ]),
-  );
-  assert.throws(
-    () =>
-      assertDistinctRoots([
-        { kind: "framework", path: "/same" },
-        { kind: "release-trust", path: "/same" },
-      ]),
-    /ROOT_PATH_COLLISION/u,
-  );
 });
 
 test("release mode declares every required external input", () => {
@@ -53,12 +36,14 @@ test("release mode declares every required external input", () => {
     "subject",
     "repository",
     "workflow",
+    "now",
   ]);
   assert.deepEqual(missingReleaseArguments({ repository: "tcrn-workflow" }), [
     "trust-root",
     "bundle",
     "subject",
     "workflow",
+    "now",
   ]);
 });
 

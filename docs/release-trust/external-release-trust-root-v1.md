@@ -3,9 +3,11 @@
 ## Authority boundary
 
 The trust root is supplied explicitly with `--trust-root` and must resolve
-outside the candidate checkout. The verifier rejects symbolic links that land
-inside the checkout. No embedded key, repository setting, manifest field, or
-environment fallback can replace this external authority.
+outside the candidate checkout. Trust root, manifest, signature, and artifact
+must each be a single-link regular file. The verifier opens them with
+`O_NOFOLLOW`, validates descriptor/path identity, reads through that descriptor,
+and rejects links or path replacement. No embedded key, repository setting,
+manifest field, or environment fallback can replace this external authority.
 
 The trust root binds:
 
@@ -25,8 +27,13 @@ The signed manifest binds:
 - signer key id;
 - artifact relative path, byte length, and SHA-256 digest.
 
-JSON signatures cover UTF-8 bytes produced by recursively sorting object keys,
-preserving array order, and serializing with no insignificant whitespace.
+Trust-root and manifest files use canonical UTF-8 JSON: recursively sorted object
+keys, preserved array order, no insignificant whitespace, and one terminal LF.
+JSON signatures cover the canonical bytes without the terminal LF. Instants use
+strict RFC 3339 syntax and must name possible dates, times, and offsets.
+
+Signature files contain canonical padded base64 plus one terminal LF. Exact
+decode/re-encode equality and a 64-byte Ed25519 signature are required.
 
 ## Failure behavior
 
@@ -34,6 +41,11 @@ Verification returns a stable reason code and exits nonzero. It rejects missing
 or malformed input, path escape, symlinks, hard-linked artifacts, wrong claims,
 invalid time windows, rollback, revoked or unknown keys, invalid signatures,
 and artifact size or digest mismatch.
+
+`rootVersion` is recorded but cross-invocation root-version rollback remains an
+external release-controller responsibility in V1. The verifier has no accepted
+prior-root or root-version-floor input. Manifest sequence rollback is enforced
+locally through `minimumSequence`; no stronger root-version claim is made.
 
 ## Command
 
