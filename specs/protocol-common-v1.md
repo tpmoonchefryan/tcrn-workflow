@@ -14,7 +14,11 @@ SHA-256 digests cover those exact bytes.
 Every scalar string and every object key is validated independently before
 ordering or serialization, including singleton and nested objects. Lone UTF-16
 surrogates fail with `CANONICAL_VALUE_INVALID`; implementations may not rely on
-a sorting callback to discover malformed keys.
+a sorting callback to discover malformed keys. Canonical object bytes are
+emitted directly from the validated `utf8-byte-order-v1` key list; reconstructing
+a JavaScript object and relying on its enumeration order is forbidden. Every
+enumerable own key is preserved exactly, including `__proto__` and integer-like
+keys; therefore `"10"` sorts before `"2"`.
 
 Stable IDs use `namespace:value`; namespaces and values are lowercase ASCII and
 match the common schema. The frozen maximum is 161 characters: a namespace of

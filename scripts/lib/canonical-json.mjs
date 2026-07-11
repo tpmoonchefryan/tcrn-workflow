@@ -25,31 +25,38 @@ function assertCanonicalString(value, label) {
   }
 }
 
-function canonicalValue(value) {
+function canonicalSerialize(value) {
   if (typeof value === "string") {
     assertCanonicalString(value, "String value");
-    return value;
+    return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return value.map(canonicalValue);
+    const entries = [];
+    for (let index = 0; index < value.length; index += 1) {
+      entries.push(canonicalSerialize(value[index]) ?? "null");
+    }
+    return `[${entries.join(",")}]`;
   }
   if (value !== null && typeof value === "object") {
-    const output = {};
     const keys = Object.keys(value);
     for (const key of keys) {
       assertCanonicalString(key, "Object key");
     }
+    const entries = [];
     for (const key of keys.sort(compareCanonicalText)) {
-      output[key] = canonicalValue(value[key]);
+      const serialized = canonicalSerialize(value[key]);
+      if (serialized !== undefined) {
+        entries.push(`${JSON.stringify(key)}:${serialized}`);
+      }
     }
-    return output;
+    return `{${entries.join(",")}}`;
   }
-  return value;
+  return JSON.stringify(value);
 }
 
 export function canonicalJson(value) {
   try {
-    const serialized = JSON.stringify(canonicalValue(value));
+    const serialized = canonicalSerialize(value);
     if (typeof serialized !== "string") {
       throw new CanonicalJsonError("CANONICAL_VALUE_INVALID", "Value is not canonical JSON");
     }

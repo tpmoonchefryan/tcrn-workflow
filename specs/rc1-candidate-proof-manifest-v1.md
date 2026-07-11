@@ -15,6 +15,13 @@ hashing. A lone surrogate anywhere in the candidate manifest or input-record
 basis fails closed with `RC1_CANONICAL_VALUE_INVALID`; a generic runtime error
 is not an admissible result.
 
+The candidate manifest top-level field set is exactly `schemaVersion`,
+`status`, `accepted`, `basisDigest`, `inputs`, and `roleVerdictSlots`; additions
+or omissions fail with `RC1_MANIFEST_FIELDS`. The role map contains exactly the
+four required roles, and each role slot contains exactly `status`, `verdict`,
+and `basisDigest`. Per-slot additions or omissions fail with
+`RC1_VERDICT_SLOT_FIELDS` before digest calculation or candidate admission.
+
 Required role slots are platform-workflow-architect,
 workflow-verification-engineer, security-risk-reviewer, and reality-checker.
 P2 freezes all slots as unresolved with null verdict and basis digest. The

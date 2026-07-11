@@ -93,7 +93,7 @@
       "id": "P1-EXTERNAL-TRUST",
       "phase": "P1",
       "status": "implemented",
-      "subject": "Release admission uses canonical inputs and descriptor-bound single-link files, strict instants/base64/Ed25519, external trust authority, and fail-closed negatives.",
+      "subject": "Release admission uses direct UTF-8-byte-ordered canonical object bytes, descriptor-bound single-link files, strict instants/base64/Ed25519, external trust authority, and fail-closed negatives.",
       "command": "pnpm verify:trust",
       "fixturePaths": [
         "docs/release-trust/external-release-trust-root-v1.md",
@@ -108,7 +108,7 @@
         "tests/release-trust.test.mjs",
         "fixtures/release-trust/README.md"
       ],
-      "fixtureDigest": "4d37a77842520934f060f3676830d97c44380a9a4f3608c2b5579ca266fbcccf",
+      "fixtureDigest": "89f34f8bb62a22afa7568934688f2f4500549691d12b929ef140b1215075191e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -147,7 +147,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "d7c7ab244a5f600f4d7ddc4bd72b99932e152fa31f9927b23356d07a5df5b24b",
+      "fixtureDigest": "edddc3fdf39f4a3e0d155cc8de070478ef04c3d7bf28b3d641777fe6b5a10b6f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -305,7 +305,7 @@
       "id": "P2-PROTOCOL-DETERMINISM",
       "phase": "P2",
       "status": "implemented",
-      "subject": "Canonical UTF-8 serialization uses one locale-independent byte comparator; stable IDs reject raw Unicode aliases; exact epoch-nanosecond instants, event chains, deterministic order, hashes, limits, and exact reason codes match frozen V1 vectors.",
+      "subject": "Canonical UTF-8 serialization directly emits every validated own key in one locale-independent byte order; stable IDs reject raw Unicode aliases; exact instants, hashes, limits, and reason codes match frozen V1 vectors.",
       "command": "pnpm verify:p2",
       "fixturePaths": [
         "packages/protocol/src/index.ts",
@@ -328,7 +328,7 @@
         "tests/protocol-v1.test.mjs",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "f19c0700fe627fbbeb957eb2be1c6c8dc3187daa176c122edcf578e435bb3081",
+      "fixtureDigest": "e34336a2c480969082ebc4289a85b31461e7d56f3de758bd425bc8855a4710e8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -397,7 +397,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "9f9979d698cdd5d3a840643268bf4eaa7f3c974f797d0b5955755f69f53df005",
+      "fixtureDigest": "43fbf165a3213ad4e9bf67884a2d93e0adb177a4d83a2df3a271dff7280a16b5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -425,7 +425,7 @@
         "scripts/lib/privacy.mjs",
         "tests/privacy-boundary.test.mjs"
       ],
-      "fixtureDigest": "55fa419976ed990c0af145bab7fd79888aefe8a551c6196e9489892c2c2d91da",
+      "fixtureDigest": "688c180dcc4856321f63aa5ed8df8795b83cfd62a3581924fd5d4e3c84ce8ba8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -442,7 +442,7 @@
       "id": "RC1-IMMUTABLE-PROOF-BASIS",
       "phase": "RC1",
       "status": "candidate",
-      "subject": "One unaccepted candidate manifest binds every normative P1/P2 schema, specification, fixture, verification entry, and four unresolved role-verdict slots without fabricating acceptance.",
+      "subject": "One unaccepted closed-field candidate manifest binds every normative P1/P2 input and four exact unresolved role-verdict slots using direct canonical bytes without fabricating acceptance.",
       "command": "pnpm verify:rc1",
       "fixturePaths": [
         "specs/rc1-candidate-proof-manifest-v1.md",
@@ -458,7 +458,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "1aada1878de6eba4ba4ab2574aabad9277a8850a78e2fc9051b86a8190cc7e8c",
+      "fixtureDigest": "20a222fd565c9717313a68a9c2c8668f9345cd21a8db5dd652ae56d43b8cdc79",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

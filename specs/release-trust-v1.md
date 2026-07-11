@@ -9,7 +9,9 @@ MAY are interpreted as described by RFC 2119.
    conform to the committed V1 schemas, and reject unknown fields. Every scalar
    string and object key is validated independently; malformed Unicode fails
    with the applicable `TRUST_*_CANONICAL_JSON` reason before claim or signature
-   evaluation.
+   evaluation. Object keys use direct UTF-8 byte ordering, including integer-like
+   keys where `"10"` precedes `"2"`; host object-enumeration order is not
+   canonical.
 4. The manifest signature MUST be Ed25519 over canonical JSON UTF-8 bytes.
 5. Repository, workflow, and subject MUST match caller expectations.
 6. Every instant MUST use the strict no-leap-second RFC 3339 subset without
