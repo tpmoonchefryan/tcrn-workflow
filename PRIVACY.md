@@ -15,9 +15,16 @@ requires them. They are not allowed in source, filenames, archives, or commit
 messages merely because they are public.
 
 `pnpm verify:privacy` scans current filenames and contents, the source archive,
-all stored Git commit/tree/blob/tag objects, and ref metadata. Reads fail closed;
-single-link regular source inputs are required. Generated output is ignored by
-Git but is written only through a validated real `dist` root.
+all stored Git commit/tree/blob/tag objects, full recursive paths from every
+reachable commit root, and ref metadata. Reads fail closed; single-link regular
+source inputs are required. Generated output is ignored by Git but is written
+only through a validated real `dist` root while the clean checkout's exclusive
+output session is held. Pre-existing redirects fail closed; concurrent hostile
+workspace mutation is outside the P1 threat model.
+
+The scanner is a focused deterministic regex policy, not a general DLP system.
+A fresh advisory or Codex Security scan and an operating-system network sandbox
+remain external boundaries.
 
 Any future networked feature requires an explicit opt-in contract, documented
 data flow, retention policy, and separate acceptance.

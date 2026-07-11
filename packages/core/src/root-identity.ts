@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { lstat, readdir, realpath } from "node:fs/promises";
-import { basename, dirname, isAbsolute, normalize, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, normalize, parse, relative, resolve, sep } from "node:path";
 
 import type { ExplicitRoot, RootKind } from "./index.js";
 
@@ -37,17 +37,26 @@ function portableIdentity(path: string): string {
 }
 
 async function classifyMissingCaseAlias(path: string): Promise<never> {
-  const parent = dirname(path);
-  try {
-    const entries = await readdir(parent);
-    const requested = basename(path).normalize("NFC").toLocaleLowerCase("en-US");
-    if (entries.some((entry) => entry !== basename(path) && entry.normalize("NFC").toLocaleLowerCase("en-US") === requested)) {
-      fail("ROOT_PATH_ALIAS", `${path} is a case alias`);
+  const normalized = normalize(path);
+  const root = parse(normalized).root;
+  const segments = relative(root, normalized).split(sep).filter(Boolean);
+  let current = root;
+  for (const segment of segments) {
+    let entries: string[];
+    try {
+      entries = await readdir(current);
+    } catch {
+      fail("ROOT_PATH_INVALID", `${path} does not resolve to a directory`);
     }
-  } catch (error) {
-    if (error instanceof RootIdentityError) {
-      throw error;
+    if (entries.includes(segment)) {
+      current = join(current, segment);
+      continue;
     }
+    const requested = segment.normalize("NFC").toLocaleLowerCase("en-US");
+    if (entries.some((entry) => entry.normalize("NFC").toLocaleLowerCase("en-US") === requested)) {
+      fail("ROOT_PATH_ALIAS", `${path} contains a case-aliased ancestor`);
+    }
+    fail("ROOT_PATH_INVALID", `${path} does not resolve to a directory`);
   }
   fail("ROOT_PATH_INVALID", `${path} does not resolve to a directory`);
 }

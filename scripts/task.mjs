@@ -16,13 +16,15 @@ import {
   toPosixPath,
   walkFiles,
 } from "./lib/files.mjs";
-import { scanPrivacyEntries } from "./lib/privacy.mjs";
+import { parseHistoricalTreePaths, scanPrivacyEntries } from "./lib/privacy.mjs";
 import {
   BoundaryError,
+  assertCleanExclusiveSourceBasis,
   readBoundRegularFile,
   safeCleanOutputRoot,
   safeResetOutputDirectory,
   safeWriteOutput,
+  withExclusiveOutputSession,
 } from "./lib/safe-io.mjs";
 import { installNoNetworkGuard } from "./no-network.mjs";
 
@@ -75,6 +77,7 @@ function run(executable, arguments_, options = {}) {
       "reflog",
       "remote",
       "rev-list",
+      "status",
     ]);
     assertion(localOnly.has(arguments_[0]), "GIT_PROCESS_BOUNDARY", arguments_.join(" "));
     if (arguments_[0] === "remote") {
@@ -425,14 +428,22 @@ async function verifyPrivacy() {
         content: run("git", ["cat-file", type, object], { raw: true }),
       });
     } else if (type === "tree") {
-      const tree = run("git", ["ls-tree", "-rz", object], { raw: true });
-      for (const record of tree.split("\0").filter(Boolean)) {
-        const tab = record.indexOf("\t");
-        const path = tab >= 0 ? record.slice(tab + 1) : record;
-        entries.push({ label: `git-tree:${object}:${path}`, kind: "filename", content: path });
-      }
+      entries.push({
+        label: `git-tree:${object}`,
+        kind: "tree",
+        content: run("git", ["cat-file", "tree", object], { raw: true }),
+      });
     } else {
       fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:${type}`);
+    }
+  }
+  const commits = run("git", ["rev-list", "--all"]).split("\n").filter(Boolean);
+  let historicalPaths = 0;
+  for (const commit of commits) {
+    const tree = run("git", ["ls-tree", "-rz", "--full-tree", commit], { raw: true });
+    for (const path of parseHistoricalTreePaths(tree)) {
+      entries.push({ label: `git-commit-tree:${commit}:${path}`, kind: "filename", content: path });
+      historicalPaths += 1;
     }
   }
   const refs = run("git", ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(upstream)"], { raw: true });
@@ -443,6 +454,8 @@ async function verifyPrivacy() {
   return success("PRIVACY_SOURCE_CLEAN", {
     scannedEntries: entries.length,
     gitObjects: objectIds.length,
+    historicalCommits: commits.length,
+    historicalFullPaths: historicalPaths,
     archiveScanned: entries.some((entry) => entry.kind === "archive"),
     allowedPublicMetadata: "strict-github-noreply-commit-or-tag-lines-only",
     sourceFiles: source.files,
@@ -683,6 +696,7 @@ async function verifyCi() {
 }
 
 async function verifyP1() {
+  assertCleanExclusiveSourceBasis(run("git", ["status", "--porcelain=v1", "--untracked-files=all"]));
   const sequence = [
     "format-check",
     "lint",
@@ -791,8 +805,10 @@ async function invoke(name) {
 }
 
 try {
-  const result = await invoke(command);
-  process.stdout.write(`${JSON.stringify({ ok: true, command, ...result })}\n`);
+  await withExclusiveOutputSession(repositoryRoot, async () => {
+    const result = await invoke(command);
+    process.stdout.write(`${JSON.stringify({ ok: true, command, ...result })}\n`);
+  });
 } catch (error) {
   process.stderr.write(`${JSON.stringify({ ok: false, command, reasonCode: errorReason(error), error: error.message })}\n`);
   process.exitCode = 1;

@@ -82,3 +82,22 @@ export function scanPrivacyEntries(entries, { owner }) {
   }
   return findings;
 }
+
+export function parseHistoricalTreePaths(content) {
+  if (content === "") {
+    return [];
+  }
+  if (typeof content !== "string" || !content.endsWith("\0")) {
+    throw new Error("PRIVACY_TREE_RECORD_INVALID");
+  }
+  return content
+    .split("\0")
+    .slice(0, -1)
+    .map((record) => {
+      const match = record.match(/^[0-7]{6} (?:blob|tree|commit) [a-f0-9]{40,64}\t(.+)$/su);
+      if (!match || match[1].length === 0) {
+        throw new Error("PRIVACY_TREE_RECORD_INVALID");
+      }
+      return match[1];
+    });
+}

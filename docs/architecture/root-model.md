@@ -15,7 +15,10 @@ paths are explicit absolute inputs and must exist as non-symlink directories.
 Admission resolves their real paths and portable case-folded identities. It
 rejects lexical aliases, symlink aliases, case aliases, equality, and either
 direction of ancestor/descendant containment. A path may represent only one root
-in an operation.
+in an operation. Case-alias classification walks existing ancestors, so a case
+variant cannot become a generic missing-path result merely because an earlier
+component used alternate spelling. Portable identity also rejects two existing
+case-only variants on case-sensitive filesystems.
 
 Development mode can operate on framework and explicitly selected workspace or
 transient roots. Release mode additionally requires an external release-trust

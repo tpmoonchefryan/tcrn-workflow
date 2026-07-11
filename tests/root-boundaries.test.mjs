@@ -53,7 +53,7 @@ test("missing, duplicate, equal, and contained roots fail closed", async (contex
   );
 });
 
-test("lexical, symlink, and case aliases fail closed", async (context) => {
+test("lexical and symlink aliases fail closed", async (context) => {
   const fixture = await rootsFixture();
   context.after(() => rm(fixture.root, { recursive: true, force: true }));
   await expectRootReason(
@@ -66,8 +66,48 @@ test("lexical, symlink, and case aliases fail closed", async (context) => {
     fixture.roots.map((root, index) => index === 1 ? { ...root, path: alias } : root),
     "ROOT_PATH_SYMLINK",
   );
+});
+
+test("portable case identity fails closed on case-sensitive and case-insensitive filesystems", async (context) => {
+  const fixture = await rootsFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const canonical = resolve(fixture.root, "CaseIdentity");
+  const alternate = resolve(fixture.root, "caseidentity");
+  await mkdir(canonical);
+  let caseSensitive = true;
+  try {
+    await mkdir(alternate);
+  } catch (error) {
+    if (error.code !== "EEXIST") {
+      throw error;
+    }
+    caseSensitive = false;
+  }
+  context.diagnostic(`case-semantics:${caseSensitive ? "sensitive-existing-variants" : "insensitive-alternate-alias"}`);
+  if (caseSensitive) {
+    await expectRootReason(
+      fixture.roots.map((root, index) => index === 0
+        ? { ...root, path: canonical }
+        : index === 1 ? { ...root, path: alternate } : root),
+      "ROOT_PATH_COLLISION",
+    );
+  } else {
+    await expectRootReason(
+      fixture.roots.map((root, index) => index === 1 ? { ...root, path: alternate } : root),
+      "ROOT_PATH_ALIAS",
+    );
+  }
+});
+
+test("case aliases in existing ancestors retain alias classification", async (context) => {
+  const fixture = await rootsFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const canonicalParent = resolve(fixture.root, "AncestorCase");
+  const child = resolve(canonicalParent, "child");
+  await mkdir(child, { recursive: true });
+  const alternate = resolve(fixture.root, "ancestorcase", "child");
   await expectRootReason(
-    fixture.roots.map((root, index) => index === 1 ? { ...root, path: root.path.toUpperCase() } : root),
+    fixture.roots.map((root, index) => index === 1 ? { ...root, path: alternate } : root),
     "ROOT_PATH_ALIAS",
   );
 });
