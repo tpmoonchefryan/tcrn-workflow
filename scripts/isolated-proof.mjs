@@ -9,7 +9,11 @@ import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import { readJson, repositoryRoot } from "./lib/files.mjs";
-import { readBoundRegularFile, safeWriteOutput } from "./lib/safe-io.mjs";
+import {
+  readBoundRegularFile,
+  safeWriteOutput,
+  withExclusiveOutputSession,
+} from "./lib/safe-io.mjs";
 import "./no-network.mjs";
 
 function run(executable, arguments_, cwd, { acceptedStatuses = [0], env = process.env } = {}) {
@@ -134,11 +138,13 @@ try {
     checkoutClean: true,
     evidence,
   };
-  await safeWriteOutput(
-    repositoryRoot,
-    "dist/evidence/p1/isolated.json",
-    `${JSON.stringify(receipt, null, 2)}\n`,
-  );
+  await withExclusiveOutputSession(repositoryRoot, async () => {
+    await safeWriteOutput(
+      repositoryRoot,
+      "dist/evidence/p1/isolated.json",
+      `${JSON.stringify(receipt, null, 2)}\n`,
+    );
+  });
   process.stdout.write(`${JSON.stringify({ ok: true, ...receipt })}\n`);
 } finally {
   await rm(temporary, { recursive: true, force: true });

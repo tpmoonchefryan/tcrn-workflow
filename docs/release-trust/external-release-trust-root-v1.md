@@ -30,7 +30,8 @@ The signed manifest binds:
 Trust-root and manifest files use canonical UTF-8 JSON: recursively sorted object
 keys, preserved array order, no insignificant whitespace, and one terminal LF.
 JSON signatures cover the canonical bytes without the terminal LF. Instants use
-strict RFC 3339 syntax and must name possible dates, times, and offsets.
+the strict no-leap-second RFC 3339 subset and must name possible dates, times,
+and offsets. A seconds value of `60` is rejected rather than normalized.
 
 Signature files contain canonical padded base64 plus one terminal LF. Exact
 decode/re-encode equality and a 64-byte Ed25519 signature are required.

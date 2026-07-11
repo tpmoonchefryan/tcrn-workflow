@@ -43,6 +43,22 @@ boundary.
 checkout, retains the canonical origin without contacting it, runs the complete
 P1 proof, validates declared evidence, and deletes the checkout.
 
+An accepted P1 proof runs from a clean Git checkout and holds an atomic
+repository-local output lock for the whole command. All reset and write helpers
+require that same session. This cross-platform lock prevents overlapping
+framework commands and the path checks reject pre-existing symlink, hardlink,
+and output redirection states. P1 intentionally assumes no concurrent hostile
+mutation of the exclusive checkout: Node does not expose a portable
+descriptor-relative `openat2`/rename boundary, so replacement of output parent
+components by an external attacker during the command is outside this
+milestone's threat model. A stale lock fails closed and must be removed only
+after confirming that no framework command is running.
+
+P1 retains four explicit external boundaries: cross-invocation `rootVersion`
+continuity requires an external prior-root or floor; there is no operating-system
+network sandbox; no fresh advisory or Codex Security scan is performed; and the
+privacy regex set is a focused policy control, not a general DLP system.
+
 ## Status
 
 The public API is pre-release. Supported release mode is unavailable unless the

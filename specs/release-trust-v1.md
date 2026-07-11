@@ -9,8 +9,10 @@ MAY are interpreted as described by RFC 2119.
    conform to the committed V1 schemas, and reject unknown fields.
 4. The manifest signature MUST be Ed25519 over canonical JSON UTF-8 bytes.
 5. Repository, workflow, and subject MUST match caller expectations.
-6. Every instant MUST be strict RFC 3339 without parser normalization. Trust-root
-   and manifest validity windows MUST contain the supplied verification time.
+6. Every instant MUST use the strict no-leap-second RFC 3339 subset without
+   parser normalization. Seconds `60` and impossible calendar instants are
+   rejected. Trust-root and manifest validity windows MUST contain the supplied
+   verification time.
 7. Revoked or invalid keys, unknown keys, sequence rollback, path escape,
    symlinks, any multi-link security input, path replacement, invalid canonical
    base64, non-64-byte signatures, invalid signatures, and artifact mismatches

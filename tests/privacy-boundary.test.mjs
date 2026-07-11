@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { scanPrivacyEntries } from "../scripts/lib/privacy.mjs";
+import { parseHistoricalTreePaths, scanPrivacyEntries } from "../scripts/lib/privacy.mjs";
 
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
@@ -64,4 +64,24 @@ test("filenames are scanned as privacy-bearing metadata", () => {
 [REDACTED_PUBLIC_HISTORY_LINE]
   );
   assert.ok(findings.some((finding) => finding.startsWith("CUSTOMER_SOURCE_MARKER:")));
+});
+
+test("recursive historical tree records preserve privacy-bearing full paths", () => {
+  assert.deepEqual(parseHistoricalTreePaths(""), []);
+  assert.throws(() => parseHistoricalTreePaths("malformed"), /PRIVACY_TREE_RECORD_INVALID/u);
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+    `100644 blob ${object}\t${machinePath}`,
+  ].join("\0") + "\0";
+  const paths = parseHistoricalTreePaths(records);
+  assert.deepEqual(paths, [controlPath, machinePath]);
+  const findings = scanPrivacyEntries(
+    paths.map((path) => ({ label: path, kind: "filename", content: path })),
+    { owner: publicIdentity.login },
+  );
+  assert.ok(findings.some((finding) => finding.startsWith("CONTROL_PLANE_PATH:")));
+  assert.ok(findings.some((finding) => finding.startsWith("LOCAL_ABSOLUTE_PATH:")));
 });

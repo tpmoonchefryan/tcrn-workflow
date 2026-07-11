@@ -1,16 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, realpath, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, open, realpath, rename, rm, rmdir } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 let temporarySequence = 0;
+const outputSessionStorage = new AsyncLocalStorage();
+const outputLockName = "tcrn-workflow-output.lock";
 
 export class BoundaryError extends Error {
   constructor(reasonCode, message) {
     super(message);
     this.name = "BoundaryError";
     this.reasonCode = reasonCode;
+  }
+}
+
+export function assertCleanExclusiveSourceBasis(status) {
+  if (typeof status !== "string" || status !== "") {
+    fail(
+      "P1_EXCLUSIVE_SOURCE_BASIS_REQUIRED",
+      "The accepted P1 proof requires a clean checkout under the exclusive output session",
+    );
   }
 }
 
@@ -29,6 +41,64 @@ function inside(parent, candidate) {
 
 async function pathMetadata(path, reasonCode) {
   return lstat(path).catch((error) => fail(reasonCode, `${path}: ${error.code ?? error.message}`));
+}
+
+async function resolveOutputRepository(repositoryPath) {
+  return resolveBoundDirectory(repositoryPath, {
+    reasonCode: "OUTPUT_REPOSITORY_INVALID",
+    symlinkReasonCode: "OUTPUT_REPOSITORY_SYMLINK",
+  });
+}
+
+async function requireOutputSession(repositoryPath) {
+  const repository = await resolveOutputRepository(repositoryPath);
+  const session = outputSessionStorage.getStore();
+  if (!session || session.repositoryReal !== repository.realPath) {
+    fail("OUTPUT_SESSION_REQUIRED", "Output mutation requires the repository's exclusive output session");
+  }
+  const lock = await pathMetadata(session.lockPath, "OUTPUT_SESSION_LOST");
+  if (lock.isSymbolicLink() || !lock.isDirectory()) {
+    fail("OUTPUT_SESSION_LOST", `${session.lockPath} no longer names the exclusive output lock`);
+  }
+  return repository;
+}
+
+export async function withExclusiveOutputSession(repositoryPath, operation) {
+  if (typeof operation !== "function") {
+    fail("OUTPUT_SESSION_OPERATION_REQUIRED", "An output session requires an operation callback");
+  }
+  const repository = await resolveOutputRepository(repositoryPath);
+  const active = outputSessionStorage.getStore();
+  if (active) {
+    if (active.repositoryReal !== repository.realPath) {
+      fail("OUTPUT_SESSION_REPOSITORY_MISMATCH", "A nested output session cannot change repositories");
+    }
+    return operation();
+  }
+  const gitDirectory = resolve(repository.realPath, ".git");
+  const gitMetadata = await pathMetadata(gitDirectory, "OUTPUT_SESSION_REPOSITORY_INVALID");
+  if (gitMetadata.isSymbolicLink() || !gitMetadata.isDirectory()) {
+    fail("OUTPUT_SESSION_REPOSITORY_INVALID", `${gitDirectory} must be a real directory`);
+  }
+  const gitReal = await realpath(gitDirectory);
+  if (dirname(gitReal) !== repository.realPath) {
+    fail("OUTPUT_SESSION_REPOSITORY_INVALID", `${gitDirectory} must remain directly beneath the repository`);
+  }
+  const lockPath = resolve(gitReal, outputLockName);
+  try {
+    await mkdir(lockPath, { mode: 0o700 });
+  } catch (error) {
+    if (error.code === "EEXIST") {
+      fail("OUTPUT_SESSION_LOCKED", `${lockPath} already exists`);
+    }
+    throw error;
+  }
+  const session = Object.freeze({ repositoryReal: repository.realPath, lockPath });
+  try {
+    return await outputSessionStorage.run(session, operation);
+  } finally {
+    await rmdir(lockPath).catch((error) => fail("OUTPUT_SESSION_RELEASE_FAILED", `${lockPath}: ${error.code ?? error.message}`));
+  }
 }
 
 export async function readBoundRegularFile(path, {
@@ -152,10 +222,7 @@ async function ensureDirectory(path, repositoryReal, isDist) {
 
 export async function ensureSafeOutputDirectory(repositoryPath, relativeDirectory = "dist") {
   const segments = outputSegments(relativeDirectory === "dist" ? "dist/.sentinel" : `${relativeDirectory}/.sentinel`).slice(0, -1);
-  const repository = await resolveBoundDirectory(repositoryPath, {
-    reasonCode: "OUTPUT_REPOSITORY_INVALID",
-    symlinkReasonCode: "OUTPUT_REPOSITORY_SYMLINK",
-  });
+  const repository = await requireOutputSession(repositoryPath);
   let current = repository.realPath;
   for (const [index, segment] of segments.entries()) {
     current = resolve(current, segment);
@@ -247,10 +314,7 @@ export async function safeWriteOutput(repositoryPath, relativePath, content, { m
 }
 
 export async function safeCleanOutputRoot(repositoryPath) {
-  const repository = await resolveBoundDirectory(repositoryPath, {
-    reasonCode: "OUTPUT_REPOSITORY_INVALID",
-    symlinkReasonCode: "OUTPUT_REPOSITORY_SYMLINK",
-  });
+  const repository = await requireOutputSession(repositoryPath);
   const dist = resolve(repository.realPath, "dist");
   try {
     const metadata = await lstat(dist);

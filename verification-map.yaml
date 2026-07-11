@@ -14,7 +14,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "bc1e08d671d1b1724275a624a96b2725aa89b1d73989ba0df68333d5d1956a6a",
+      "fixtureDigest": "d06e9c272595c985b06c811b0c8fd3077fbd345a6f23da07e3e5673495983102",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -31,7 +31,7 @@
       "id": "P1-NO-PRIVATE-MIGRATION",
       "phase": "P1",
       "status": "implemented",
-      "subject": "Source, filenames, archives, Git objects, tags, refs, and history metadata exclude private/raw identifiers while allowing only explicit public Git remote and noreply identity metadata.",
+      "subject": "Source, filenames, archives, Git objects, tags, refs, and full recursive paths from every reachable commit exclude private/raw identifiers while allowing only explicit public Git remote and noreply identity metadata.",
       "command": "pnpm verify:privacy",
       "fixturePaths": [
         "PRIVACY.md",
@@ -43,7 +43,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "ab0981d8dbaa7e1f68e98863814ec1efb7d1a2d771edcc4827c8810160a38475",
+      "fixtureDigest": "c9aeb1c2034335de842f05b0b13b94f8d48a016987dcdfef0b9de99cc8c54eee",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -70,7 +70,7 @@
         "scripts/no-network.mjs",
         "tests/offline-boundary.test.mjs"
       ],
-      "fixtureDigest": "ef0bdee123e74e7b382f3950cf55e07679a1fc9ffd5e164805330930a89f4900",
+      "fixtureDigest": "622b5f805a49ef61e53f6723b37567be0b782c893df0df0be3acddebbc3bd284",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -102,7 +102,7 @@
         "tests/release-trust.test.mjs",
         "fixtures/release-trust/README.md"
       ],
-      "fixtureDigest": "b9a794fa5b321f16b075a0ff8597bf2ac4da6930b8614cfa07514e5fec09e529",
+      "fixtureDigest": "bcf26eb916d71f6af00e36b27668426a652686c90d30c5c2f56a57ed2c8a60e8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -136,7 +136,7 @@
         ".npmrc",
         "package.json"
       ],
-      "fixtureDigest": "51e5490e21c68b07bf0fcf1dd6dd5b72b3d1e943396adaec7658a4f80d81d8b0",
+      "fixtureDigest": "f8ffe5acd09c11d474abdc76dc6b3495b307c1226a963b42a1ade56248712ee8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -153,7 +153,7 @@
       "id": "P1-PINNED-WORKSPACE",
       "phase": "P1",
       "status": "implemented",
-      "subject": "The TypeScript workspace binds exact Node/pnpm versions and writes generated output only through the validated dist boundary.",
+      "subject": "The TypeScript workspace binds exact Node/pnpm versions and writes generated output only through one validated, exclusive dist session in a clean accepted checkout with no concurrent hostile mutation.",
       "command": "pnpm verify:workspace",
       "fixturePaths": [
         ".node-version",
@@ -166,7 +166,7 @@
         "scripts/task.mjs",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "0860ef33fc9891ea442363efc6ce89007a1b3a4828f62067da9fb65ab1cd2839",
+      "fixtureDigest": "2f942570250e6abad3dee691c4a8f010cfad8b4a8d235708487463568a19e5b4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -191,7 +191,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "d1b5d63e9994ca514b714718204cbeec859a5d22ae462022974bad5bef6cb556",
+      "fixtureDigest": "3bfd7b919d3cad6baebea2cd47c3eb367e43f236c0fcdde9dbc1712677528d9d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -215,7 +215,7 @@
         ".github/dependabot.yml",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "35b2af4e977a1150279454fbd3b6e24dd4d896423cb9172ffbc57a27bfd734b4",
+      "fixtureDigest": "30051d4a00acae48a8438a19027336e3b4aa0ff86f9badf62f120c76df9643f3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -232,7 +232,7 @@
       "id": "P1-ISOLATED-CHECKOUT",
       "phase": "P1",
       "status": "implemented",
-      "subject": "The exact committed P1 basis verifies in a disposable Git checkout with canonical origin retained, declared evidence captured, and source basis unchanged.",
+      "subject": "The exact committed P1 basis verifies under one exclusive output session in a disposable clean Git checkout with canonical origin retained, declared evidence captured, and source basis unchanged.",
       "command": "pnpm verify:isolated",
       "fixturePaths": [
         "scripts/isolated-proof.mjs",
@@ -241,7 +241,7 @@
         "scripts/lib/safe-io.mjs",
         "package.json"
       ],
-      "fixtureDigest": "cbbe40093b7aff6593eba8b086332e24d43247312b918a45628d8705418bc629",
+      "fixtureDigest": "d0fb20882124257169c182ce3e7bd091be36cf0ae25f866acae4d9ef91e84295",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
