@@ -378,3 +378,48 @@ test("raw external keys reject non-ASCII aliases before normalization or case co
     expectReason("EXTERNAL_KEY_INVALID", () => canonicalExternalKey(value));
   }
 });
+
+test("malformed Unicode fails closed across canonical values, keys, arrays, and event payloads", () => {
+  for (const surrogate of ["\ud800", "\udfff"]) {
+    const malformedValues = [
+      surrogate,
+      [surrogate],
+      { nested: surrogate },
+      { nested: [surrogate] },
+      { [`key-${surrogate}`]: 1 },
+      { nested: { [`key-${surrogate}`]: 1 } },
+    ];
+    for (const value of malformedValues) {
+      expectReason("CANONICAL_VALUE_INVALID", () => canonicalJson(value));
+      expectReason("CANONICAL_VALUE_INVALID", () => canonicalSha256(value));
+    }
+    expectReason("CANONICAL_VALUE_INVALID", () => createEvent({
+      id: "event:unicode",
+      streamId: "stream:unicode",
+      sequence: 1,
+      occurredAt: "2026-07-11T00:00:00Z",
+      priorHash: null,
+      payload: { nested: { [`key-${surrogate}`]: 1 } },
+    }));
+  }
+});
+
+test("stable ID and extension-name boundaries match the frozen 161-character contract", async () => {
+  const vectors = await fixture("schema-cases.json");
+  const { maximumId, overlongId } = vectors.idBoundaryCases;
+  assert.equal(maximumId.length, 161);
+  assert.equal(overlongId.length, 162);
+  assert.doesNotThrow(() => assertProtocolId(maximumId));
+  expectReason("ID_INVALID", () => assertProtocolId(overlongId));
+  const base = work();
+  assert.doesNotThrow(() => validateWorkGraph([{
+    ...base,
+    extensions: { [maximumId]: { required: false, value: null } },
+  }]));
+  for (const invalidName of vectors.extensionNameCases.invalid) {
+    expectReason("ID_INVALID", () => validateWorkGraph([{
+      ...base,
+      extensions: { [invalidName]: { required: false, value: null } },
+    }]));
+  }
+});

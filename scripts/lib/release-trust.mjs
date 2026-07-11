@@ -3,7 +3,7 @@
 import { createHash, createPublicKey, verify as verifySignature } from "node:crypto";
 import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
 
-import { canonicalJson, canonicalJsonBytes } from "./canonical-json.mjs";
+import { CanonicalJsonError, canonicalJson, canonicalJsonBytes } from "./canonical-json.mjs";
 import { compareCanonicalText } from "./canonical-order.mjs";
 import { isInside } from "./files.mjs";
 import { BoundaryError, readBoundRegularFile, resolveBoundDirectory } from "./safe-io.mjs";
@@ -101,7 +101,16 @@ function parseCanonicalJson(content, malformedReason, canonicalReason) {
   } catch (error) {
     fail(malformedReason, String(error));
   }
-  if (text !== `${canonicalJson(value)}\n`) {
+  let canonical;
+  try {
+    canonical = canonicalJson(value);
+  } catch (error) {
+    if (error instanceof CanonicalJsonError) {
+      fail(canonicalReason, error.message);
+    }
+    throw error;
+  }
+  if (text !== `${canonical}\n`) {
     fail(canonicalReason, "JSON input must be canonical UTF-8 with one terminal LF");
   }
   return value;

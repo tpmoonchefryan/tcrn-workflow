@@ -10,6 +10,11 @@ Paths, record sets, object keys, and role slots use the normative
 `utf8-byte-order-v1` total order; host locale collation is forbidden. Composed
 and decomposed Unicode path spellings remain distinct inputs.
 
+RC1 proof canonicalization validates every scalar string and object key before
+hashing. A lone surrogate anywhere in the candidate manifest or input-record
+basis fails closed with `RC1_CANONICAL_VALUE_INVALID`; a generic runtime error
+is not an admissible result.
+
 Required role slots are platform-workflow-architect,
 workflow-verification-engineer, security-risk-reviewer, and reality-checker.
 P2 freezes all slots as unresolved with null verdict and basis digest. The

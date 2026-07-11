@@ -40,6 +40,11 @@ the pinned Node type-transform engine plus public-contract checks; runtime tests
 execute every emitted module. Any dependency change requires another explicit,
 reviewed acquisition and policy update.
 
+The deterministic vulnerability command derives the complete direct and
+transitive graph from the frozen lockfile, requires exact identity/integrity
+closure against dependency policy, and checks every graph identity against the
+dated local denylist. It still does not claim a fresh advisory-service scan.
+
 `pnpm verify:p2` checks the frozen Work, Knowledge, Event Integrity, Context,
 Exchange, Compatibility, Profile Trust, Receipt, extension-registration, and P3
 marker contracts; deterministic vectors and negative/property tests; the public

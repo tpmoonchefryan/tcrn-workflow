@@ -17,6 +17,11 @@ import {
   walkFiles,
 } from "./lib/files.mjs";
 import { compareCanonicalText } from "./lib/canonical-order.mjs";
+import {
+  DependencyGraphError,
+  assertNoKnownVulnerabilities,
+  validateFrozenDependencyGraph,
+} from "./lib/dependency-graph.mjs";
 import { parseHistoricalTreePaths, scanPrivacyEntries } from "./lib/privacy.mjs";
 import {
   ProtocolProofError,
@@ -342,23 +347,15 @@ async function sbom() {
   const lockContent = await readSourceFile(resolve(repositoryRoot, "pnpm-lock.yaml"));
   const packageContent = await readSourceFile(resolve(repositoryRoot, "package.json"));
   const basis = createHash("sha256").update(packageContent).update(lockContent).digest("hex");
-  const directDependencies = Object.entries(packageJson.devDependencies ?? {}).map(([name, version]) => `${name}@${version}`);
-  const approvedDirect = Object.entries(policy.dependencies).filter(([, entry]) => entry.direct).map(([identity]) => identity);
-  assertion(JSON.stringify(directDependencies.sort(compareCanonicalText)) === JSON.stringify(approvedDirect.sort(compareCanonicalText)),
-    "SBOM_DIRECT_DEPENDENCY_MISMATCH", directDependencies.join(","));
-  const components = Object.entries(policy.dependencies).sort(([left], [right]) => compareCanonicalText(left, right)).map(([identity, approved]) => {
-    const separator = identity.lastIndexOf("@");
-    const name = identity.slice(0, separator);
-    const version = identity.slice(separator + 1);
-    assertion(lockContent.includes(`  ${identity}:\n    resolution: {integrity: ${approved.integrity}}`),
-      "SBOM_LOCK_INTEGRITY_MISMATCH", identity);
+  const graph = validateFrozenDependencyGraph({ packageJson, dependencyPolicy: policy, lockContent: lockContent.toString("utf8") });
+  const components = graph.records.map((record) => {
     return {
       type: "library",
-      name,
-      version,
-      scope: approved.direct ? "optional" : "required",
-      licenses: [{ license: { id: approved.license } }],
-      purl: `pkg:npm/${encodeURIComponent(name)}@${version}`,
+      name: record.name,
+      version: record.version,
+      scope: record.direct ? "optional" : "required",
+      licenses: [{ license: { id: record.license } }],
+      purl: `pkg:npm/${encodeURIComponent(record.name)}@${record.version}`,
     };
   });
   const document = {
@@ -374,7 +371,14 @@ async function sbom() {
   };
   const relativePath = "dist/sbom/sbom.cdx.json";
   await safeWriteOutput(repositoryRoot, relativePath, `${JSON.stringify(document, null, 2)}\n`);
-  return success("SBOM_VERIFIED", { path: relativePath, components: components.length, basis });
+  return success("SBOM_VERIFIED", {
+    path: relativePath,
+    components: components.length,
+    directComponents: graph.directIdentities.length,
+    transitiveComponents: graph.transitiveIdentities.length,
+    dependencyGraphClosure: "complete",
+    basis,
+  });
 }
 
 async function verifyLicenses() {
@@ -396,20 +400,24 @@ async function verifyLicenses() {
 
 async function verifyVulnerabilities() {
   const packageJson = await readJson(resolve(repositoryRoot, "package.json"));
+  const dependencyPolicy = await readJson(resolve(repositoryRoot, "scripts/policy/dependency-policy.json"));
+  const lockContent = (await readSourceFile(resolve(repositoryRoot, "pnpm-lock.yaml"))).toString("utf8");
   const policy = await readJson(resolve(repositoryRoot, "scripts/policy/vulnerability-policy.json"));
   const [year, month, day] = policy.snapshotDate.split("-").map(Number);
   assertion(year && month && day, "VULNERABILITY_POLICY_DATE_INVALID");
   const snapshot = Date.UTC(year, month - 1, day);
   const ageDays = Math.floor((Date.now() - snapshot) / 86_400_000);
   assertion(ageDays >= 0 && ageDays <= policy.maxAgeDays, "VULNERABILITY_POLICY_STALE", String(ageDays));
-  for (const vulnerability of policy.knownVulnerabilities) {
-    const version = packageJson.dependencies?.[vulnerability.package] ?? packageJson.devDependencies?.[vulnerability.package];
-    assertion(version !== vulnerability.version, "VULNERABLE_DEPENDENCY", `${vulnerability.package}@${version}`);
-  }
+  const graph = validateFrozenDependencyGraph({ packageJson, dependencyPolicy, lockContent });
+  const vulnerabilityReadback = assertNoKnownVulnerabilities(graph, policy.knownVulnerabilities);
   return success("VULNERABILITY_POLICY_VERIFIED", {
     disposition: policy.disposition,
     snapshotDate: policy.snapshotDate,
     ageDays,
+    dependencyGraphPackages: vulnerabilityReadback.checkedPackages,
+    directPackages: graph.directIdentities.length,
+    transitivePackages: graph.transitiveIdentities.length,
+    policyClosure: "complete-lock-graph",
     externalAdvisoryScan: "not-performed-by-offline-command",
   });
 }
@@ -604,6 +612,7 @@ const commandContracts = {
   "verify-p1": { exit: 0, reasonCode: "P1_VERIFIED" },
   "test-trust": { exit: 0, reasonCode: "TRUST_NEGATIVE_MATRIX_VERIFIED" },
   governance: { exit: 0, reasonCode: "GOVERNANCE_TOOLCHAIN_VERIFIED" },
+  vulnerabilities: { exit: 0, reasonCode: "VULNERABILITY_POLICY_VERIFIED" },
   workspace: { exit: 0, reasonCode: "WORKSPACE_VERIFIED" },
   roots: { exit: 0, reasonCode: "ROOT_BOUNDARIES_VERIFIED" },
   ci: { exit: 0, reasonCode: "CI_HARDENING_VERIFIED" },
@@ -824,7 +833,7 @@ const handlers = {
 };
 
 function errorReason(error) {
-  if (error instanceof TaskError || error instanceof BoundaryError || error instanceof ProtocolProofError) {
+  if (error instanceof TaskError || error instanceof BoundaryError || error instanceof ProtocolProofError || error instanceof DependencyGraphError) {
     return error.reasonCode;
   }
   return "TASK_INTERNAL_ERROR";
