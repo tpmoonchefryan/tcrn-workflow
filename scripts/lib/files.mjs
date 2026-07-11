@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createHash } from "node:crypto";
-import { readdir, readFile, realpath, stat } from "node:fs/promises";
+import { readdir, realpath } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { readBoundRegularFile } from "./safe-io.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 export const repositoryRoot = resolve(scriptDirectory, "../..");
@@ -43,6 +45,14 @@ export async function walkFiles(root = repositoryRoot) {
       if (entry.isDirectory()) {
         await walk(absolute);
       } else if (entry.isFile()) {
+        const opened = await readBoundRegularFile(absolute, {
+          reasonCode: "SOURCE_FILE_INVALID",
+          hardlinkReasonCode: "SOURCE_HARDLINK",
+          pathChangedReasonCode: "SOURCE_PATH_CHANGED",
+        });
+        if (opened.metadata.nlink !== 1) {
+          throw new Error(`SOURCE_HARDLINK:${toPosixPath(relative(root, absolute))}`);
+        }
         files.push(absolute);
       } else {
         throw new Error(`SOURCE_SPECIAL_FILE:${toPosixPath(relative(root, absolute))}`);
@@ -55,19 +65,31 @@ export async function walkFiles(root = repositoryRoot) {
 }
 
 export async function readJson(path) {
-  return JSON.parse(await readFile(path, "utf8"));
+  return JSON.parse((await readSourceFile(path)).toString("utf8"));
 }
 
 export async function sha256File(path) {
-  const content = await readFile(path);
+  const content = await readSourceFile(path);
   return createHash("sha256").update(content).digest("hex");
 }
 
 export async function fileRecord(path, root = repositoryRoot) {
-  const metadata = await stat(path);
+  const opened = await readBoundRegularFile(path, {
+    reasonCode: "SOURCE_FILE_INVALID",
+    hardlinkReasonCode: "SOURCE_HARDLINK",
+    pathChangedReasonCode: "SOURCE_PATH_CHANGED",
+  });
   return {
     path: toPosixPath(relative(root, path)),
-    size: metadata.size,
-    sha256: await sha256File(path),
+    size: opened.metadata.size,
+    sha256: createHash("sha256").update(opened.content).digest("hex"),
   };
+}
+
+export async function readSourceFile(path) {
+  return (await readBoundRegularFile(path, {
+    reasonCode: "SOURCE_FILE_INVALID",
+    hardlinkReasonCode: "SOURCE_HARDLINK",
+    pathChangedReasonCode: "SOURCE_PATH_CHANGED",
+  })).content;
 }

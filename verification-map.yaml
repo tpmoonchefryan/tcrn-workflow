@@ -5,118 +5,123 @@
       "id": "P1-CLEAN-HISTORY",
       "phase": "P1",
       "status": "implemented",
-      "subject": "The framework has one independent Git root, one canonical origin, and no unreachable or alternate object store.",
+      "subject": "The framework retains the accepted root commit, one canonical origin, and no alternate or unreachable object store.",
       "command": "pnpm verify:history",
       "fixturePaths": [
         "scripts/task.mjs",
-        "scripts/policy/source-allowlist.json"
+        "scripts/policy/history-policy.json",
+        "scripts/policy/source-allowlist.json",
+        "scripts/lib/safe-io.mjs",
+        "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "06a9ee6ba42fa102101f3f2d0ff2673df62a6ae77aae9be027d56f5d573bf797",
+      "fixtureDigest": "bc1e08d671d1b1724275a624a96b2725aa89b1d73989ba0df68333d5d1956a6a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline"
+        "network": "process-guarded-offline"
       },
       "expectedExit": 0,
       "expectedReasonCode": "HISTORY_CLEAN",
       "evidencePath": "dist/evidence/p1/history.json",
       "invalidationTriggers": [
-        "Git root or object database changes",
-        "remote or ref topology changes",
-        "source allowlist changes"
+        "Root commit, object database, ref, reflog, remote, history policy, or source input identity changes"
       ]
     },
     {
       "id": "P1-NO-PRIVATE-MIGRATION",
       "phase": "P1",
       "status": "implemented",
-      "subject": "Source and archive inputs exclude private paths, credentials, control-plane state, runtime state, and owner identifiers.",
-      "command": "pnpm verify:privacy && pnpm verify:source",
+      "subject": "Source, filenames, archives, Git objects, tags, refs, and history metadata exclude private/raw identifiers while allowing only explicit public Git remote and noreply identity metadata.",
+      "command": "pnpm verify:privacy",
       "fixturePaths": [
         "PRIVACY.md",
         "scripts/task.mjs",
-        "scripts/policy/source-allowlist.json"
+        "scripts/lib/privacy.mjs",
+        "scripts/lib/files.mjs",
+        "scripts/lib/safe-io.mjs",
+        "scripts/policy/source-allowlist.json",
+        "tests/privacy-boundary.test.mjs",
+        "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "d6b69dbf13b04beb98dd0aecb3f61e08ac381293f5e0772220aac441b1003933",
+      "fixtureDigest": "ab0981d8dbaa7e1f68e98863814ec1efb7d1a2d771edcc4827c8810160a38475",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline"
+        "network": "process-guarded-offline"
       },
       "expectedExit": 0,
       "expectedReasonCode": "PRIVACY_SOURCE_CLEAN",
       "evidencePath": "dist/evidence/p1/privacy.json",
       "invalidationTriggers": [
-        "Any source, generated archive input, or privacy pattern changes",
-        "Canonical remote owner changes",
-        "New source root is introduced"
+        "Privacy patterns, public-metadata allowance, source paths, archive format, Git metadata, or input-read policy changes"
       ]
     },
     {
       "id": "P1-OFFLINE-STANDALONE",
       "phase": "P1",
       "status": "implemented",
-      "subject": "Pinned local commands build, typecheck, test, archive, and produce an SBOM without implicit network or telemetry.",
+      "subject": "P1 project commands have no implicit network or telemetry path under the Node process guard and static process boundary; no OS sandbox or fresh advisory scan is claimed.",
       "command": "pnpm verify:p1",
       "fixturePaths": [
+        "README.md",
+        ".npmrc",
         "package.json",
         "scripts/task.mjs",
-        "tests/bootstrap.test.mjs"
+        "scripts/no-network.mjs",
+        "tests/offline-boundary.test.mjs"
       ],
-      "fixtureDigest": "1db42060cd2905e876cbb219a6ce9e61cf0d68204abe042dddd2c755e0647894",
+      "fixtureDigest": "ef0bdee123e74e7b382f3950cf55e07679a1fc9ffd5e164805330930a89f4900",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline",
-        "telemetry": "disabled"
+        "network": "Node process guard; no OS sandbox",
+        "telemetry": "no client"
       },
       "expectedExit": 0,
       "expectedReasonCode": "P1_VERIFIED",
-      "evidencePath": "dist/evidence/p1/test.json",
+      "evidencePath": "dist/evidence/p1/verify-p1.json",
       "invalidationTriggers": [
-        "Toolchain, lockfile, command, test, or environment changes",
-        "Network or telemetry behavior changes",
-        "Lifecycle-script policy changes"
+        "Toolchain, command, process allowlist, network guard, telemetry, test, or offline configuration changes"
       ]
     },
     {
       "id": "P1-EXTERNAL-TRUST",
       "phase": "P1",
       "status": "implemented",
-      "subject": "Release mode requires an external Release Trust Root V1 and rejects forged, expired, revoked, rolled-back, path-unsafe, or tampered bundles.",
+      "subject": "Release admission uses canonical inputs and descriptor-bound single-link files, strict instants/base64/Ed25519, external trust authority, and fail-closed negatives.",
       "command": "pnpm verify:trust",
       "fixturePaths": [
         "docs/release-trust/external-release-trust-root-v1.md",
         "specs/release-trust-v1.md",
         "schemas/release-trust-root-v1.schema.json",
         "schemas/release-manifest-v1.schema.json",
+        "scripts/lib/canonical-json.mjs",
         "scripts/lib/release-trust.mjs",
+        "scripts/lib/safe-io.mjs",
         "scripts/verify-release-trust.mjs",
         "tests/release-trust.test.mjs",
         "fixtures/release-trust/README.md"
       ],
-      "fixtureDigest": "fc45da6e1771ea569743fc486fd9fab8248751037d2f64023f5c9a2bb6b15b86",
+      "fixtureDigest": "b9a794fa5b321f16b075a0ff8597bf2ac4da6930b8614cfa07514e5fec09e529",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline",
+        "network": "process-guarded-offline",
         "crypto": "Ed25519 and SHA-256"
       },
       "expectedExit": 0,
       "expectedReasonCode": "TRUST_NEGATIVE_MATRIX_VERIFIED",
       "evidencePath": "dist/evidence/p1/test-trust.json",
       "invalidationTriggers": [
-        "Trust schema, canonicalization, verifier, fixture, or cryptographic primitive changes",
-        "Release claim or path policy changes",
-        "External trust-root contract changes"
+        "Trust schema, canonicalization, time, encoding, file identity, verifier, fixture, key, claim, or external authority changes"
       ]
     },
     {
       "id": "P1-GOVERNANCE-TOOLCHAIN",
       "phase": "P1",
       "status": "implemented",
-      "subject": "Apache-2.0 governance, NOTICE and SPDX policy, exact toolchain pins, and disabled lifecycle scripts are enforced.",
-      "command": "pnpm verify:licenses && pnpm verify:lifecycle && pnpm typecheck",
+      "subject": "Apache-2.0 governance, NOTICE/SPDX policy, exact toolchain pins, and disabled lifecycle scripts are enforced.",
+      "command": "pnpm verify:governance",
       "fixturePaths": [
         "LICENSE",
         "NOTICE",
@@ -126,29 +131,30 @@
         "PRIVACY.md",
         "CONTRIBUTING.md",
         "CODE_OF_CONDUCT.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        ".node-version",
+        ".npmrc",
+        "package.json"
       ],
-      "fixtureDigest": "2ed6ffa8e264f31c578ae44419246462bb3306bdd3025ea731522f7bc4a687d7",
+      "fixtureDigest": "51e5490e21c68b07bf0fcf1dd6dd5b72b3d1e943396adaec7658a4f80d81d8b0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline"
+        "network": "process-guarded-offline"
       },
       "expectedExit": 0,
       "expectedReasonCode": "GOVERNANCE_TOOLCHAIN_VERIFIED",
-      "evidencePath": "dist/evidence/p1/lifecycle.json",
+      "evidencePath": "dist/evidence/p1/governance.json",
       "invalidationTriggers": [
-        "Governance, license, source-header, dependency, or lifecycle policy changes",
-        "Node or pnpm pin changes",
-        "Package manifest changes"
+        "Governance, license, source-header, dependency, lifecycle, Node, pnpm, or package-manifest changes"
       ]
     },
     {
       "id": "P1-PINNED-WORKSPACE",
       "phase": "P1",
       "status": "implemented",
-      "subject": "The TypeScript workspace and deterministic command surface bind exact Node and pnpm versions with a frozen dependency-free lockfile.",
-      "command": "pnpm typecheck && pnpm build",
+      "subject": "The TypeScript workspace binds exact Node/pnpm versions and writes generated output only through the validated dist boundary.",
+      "command": "pnpm verify:workspace",
       "fixturePaths": [
         ".node-version",
         ".npmrc",
@@ -156,69 +162,96 @@
         "pnpm-lock.yaml",
         "pnpm-workspace.yaml",
         "tsconfig.json",
-        "tsconfig.build.json"
+        "tsconfig.build.json",
+        "scripts/task.mjs",
+        "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "5b005d17bf3a47ca1de2fb4474bcdba7bea1295664c5059658cd14be26cc5962",
+      "fixtureDigest": "0860ef33fc9891ea442363efc6ce89007a1b3a4828f62067da9fb65ab1cd2839",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline"
+        "network": "process-guarded-offline"
       },
       "expectedExit": 0,
       "expectedReasonCode": "WORKSPACE_VERIFIED",
-      "evidencePath": "dist/evidence/p1/build.json",
+      "evidencePath": "dist/evidence/p1/workspace.json",
       "invalidationTriggers": [
-        "Toolchain, workspace, compiler-policy, or lockfile changes",
-        "Dependency introduction",
-        "Build output layout changes"
+        "Toolchain, workspace, compiler policy, lockfile, output identity, or dependency changes"
       ]
     },
     {
       "id": "P1-ROOT-BOUNDARIES",
       "phase": "P1",
       "status": "implemented",
-      "subject": "Framework, Workspace, transient, evidence-locator, and release-trust roots are explicit and non-overlapping.",
-      "command": "pnpm test",
+      "subject": "All five roots are realpath-canonical, non-symlink, portable-case-distinct, and non-overlapping by equality or containment.",
+      "command": "pnpm verify:roots",
       "fixturePaths": [
         "docs/architecture/root-model.md",
-        "packages/core/src/index.ts"
+        "packages/core/src/index.ts",
+        "packages/core/src/root-identity.ts",
+        "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "f1a26aae0b252478e77a8e5ae5ede2a7b3d10bc9b57d8b814ab18deb9d90a4b7",
+      "fixtureDigest": "d1b5d63e9994ca514b714718204cbeec859a5d22ae462022974bad5bef6cb556",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline"
+        "network": "process-guarded-offline"
       },
       "expectedExit": 0,
       "expectedReasonCode": "ROOT_BOUNDARIES_VERIFIED",
-      "evidencePath": "dist/evidence/p1/test.json",
+      "evidencePath": "dist/evidence/p1/roots.json",
       "invalidationTriggers": [
-        "Root taxonomy, collision semantics, or mode admission changes",
-        "Implicit root discovery is introduced"
+        "Root taxonomy, canonicalization, filesystem identity, case-folding, symlink, or containment behavior changes"
       ]
     },
     {
       "id": "P1-CI-HARDENING",
       "phase": "P1",
       "status": "implemented",
-      "subject": "CI uses minimal permissions, immutable action pins, frozen install, disabled lifecycle scripts, and no privileged pull-request trigger.",
-      "command": "pnpm lint",
+      "subject": "CI uses minimal permissions, immutable action pins, explicit frozen acquisition, disabled lifecycle scripts, and no privileged pull-request trigger.",
+      "command": "pnpm verify:ci",
       "fixturePaths": [
         ".github/workflows/ci.yml",
-        ".github/dependabot.yml"
+        ".github/dependabot.yml",
+        "scripts/task.mjs"
       ],
-      "fixtureDigest": "b140cfe3d7ad8354854c1a4031aa4815374c83b8034bd8fa817807f2ce51f4f4",
+      "fixtureDigest": "35b2af4e977a1150279454fbd3b6e24dd4d896423cb9172ffbc57a27bfd734b4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline after explicit dependency acquisition"
+        "network": "explicit CI acquisition boundary"
       },
       "expectedExit": 0,
       "expectedReasonCode": "CI_HARDENING_VERIFIED",
-      "evidencePath": "dist/evidence/p1/lint.json",
+      "evidencePath": "dist/evidence/p1/ci.json",
       "invalidationTriggers": [
-        "Workflow action, permission, trigger, runner, or install step changes",
-        "Action tag moves or pin provenance changes"
+        "Workflow action, permission, trigger, runner, install, or pin-provenance changes"
+      ]
+    },
+    {
+      "id": "P1-ISOLATED-CHECKOUT",
+      "phase": "P1",
+      "status": "implemented",
+      "subject": "The exact committed P1 basis verifies in a disposable Git checkout with canonical origin retained, declared evidence captured, and source basis unchanged.",
+      "command": "pnpm verify:isolated",
+      "fixturePaths": [
+        "scripts/isolated-proof.mjs",
+        "fixtures/isolated-proof/README.md",
+        "scripts/no-network.mjs",
+        "scripts/lib/safe-io.mjs",
+        "package.json"
+      ],
+      "fixtureDigest": "cbbe40093b7aff6593eba8b086332e24d43247312b918a45628d8705418bc629",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "local clone plus process guard; origin not contacted"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "ISOLATED_P1_VERIFIED",
+      "evidencePath": "dist/evidence/p1/isolated.json",
+      "invalidationTriggers": [
+        "Commit, tree, origin, isolated-clone procedure, evidence contract, toolchain, or source-basis mutation changes"
       ]
     },
     {
@@ -232,11 +265,11 @@
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline"
+        "network": "process-guarded-offline"
       },
       "expectedExit": 1,
       "expectedReasonCode": "P2_OUT_OF_SCOPE",
-      "evidencePath": "dist/evidence/p2/protocol-determinism.json",
+      "evidencePath": "dist/evidence/p2/p2.json",
       "invalidationTriggers": [
         "P2 schemas, canonicalization, fixtures, or property tests are introduced"
       ]
@@ -252,13 +285,13 @@
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline"
+        "network": "process-guarded-offline"
       },
       "expectedExit": 1,
       "expectedReasonCode": "P2_OUT_OF_SCOPE",
-      "evidencePath": "dist/evidence/p2/work-graph-validity.json",
+      "evidencePath": "dist/evidence/p2/p2.json",
       "invalidationTriggers": [
-        "P2 work-graph schemas, transition rules, or conformance fixtures are introduced"
+        "P2 graph schemas, transition rules, or conformance fixtures are introduced"
       ]
     },
     {
@@ -272,13 +305,13 @@
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline"
+        "network": "process-guarded-offline"
       },
       "expectedExit": 1,
       "expectedReasonCode": "P2_OUT_OF_SCOPE",
-      "evidencePath": "dist/evidence/p2/external-runtime-maturity.json",
+      "evidencePath": "dist/evidence/p2/p2.json",
       "invalidationTriggers": [
-        "P2 requirements ledger, maturity field, endpoint, credential, or compatibility claims change"
+        "P2 requirements ledger, maturity, endpoint, credential, or compatibility claims change"
       ]
     },
     {
@@ -292,15 +325,13 @@
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
-        "network": "offline"
+        "network": "process-guarded-offline"
       },
       "expectedExit": 1,
       "expectedReasonCode": "RC1_OUT_OF_SCOPE",
-      "evidencePath": "dist/evidence/rc1/proof-manifest.json",
+      "evidencePath": "dist/evidence/rc1/rc1.json",
       "invalidationTriggers": [
-        "Any normative P1 or P2 input changes",
-        "Any RC1 role contract or verdict changes",
-        "Proof-manifest algorithm changes"
+        "Any normative P1/P2 input, RC1 role contract, verdict, or proof-manifest algorithm changes"
       ]
     }
   ]

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "tcrn.clean-history-policy.v1",
+  "requiredRootCommit": "5a7cc1f5cfca22bb3b7cd12a0476817355b517f9",
+  "rootRewriteAllowed": false,
+  "remotePublicationRequired": false
+}

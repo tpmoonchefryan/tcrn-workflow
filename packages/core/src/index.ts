@@ -20,7 +20,8 @@ export interface ExplicitRoot {
 export interface DevelopmentAdmission {
   readonly admitted: true;
   readonly mode: "development";
-  readonly network: "offline";
+  readonly projectCommandNetwork: "process-guarded-offline";
+  readonly osNetworkSandbox: "not-provided";
   readonly telemetry: "disabled";
 }
 
@@ -37,20 +38,11 @@ export function admitDevelopment(): DevelopmentAdmission {
   return {
     admitted: true,
     mode: DEFAULT_MODE,
-    network: "offline",
+    projectCommandNetwork: "process-guarded-offline",
+    osNetworkSandbox: "not-provided",
     telemetry: "disabled",
   };
 }
 
-export function assertDistinctRoots(roots: readonly ExplicitRoot[]): void {
-  const paths = new Set<string>();
-  for (const root of roots) {
-    if (root.path.length === 0) {
-      throw new Error("ROOT_PATH_REQUIRED");
-    }
-    if (paths.has(root.path)) {
-      throw new Error("ROOT_PATH_COLLISION");
-    }
-    paths.add(root.path);
-  }
-}
+export { assertDistinctRoots, RootIdentityError } from "./root-identity.js";
+export type { CanonicalRoot } from "./root-identity.js";

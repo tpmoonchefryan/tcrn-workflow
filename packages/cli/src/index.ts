@@ -6,6 +6,7 @@ export const RELEASE_REQUIRED_ARGUMENTS = [
   "subject",
   "repository",
   "workflow",
+  "now",
 ] as const;
 
 export type ReleaseRequiredArgument =
