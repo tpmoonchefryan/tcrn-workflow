@@ -1,0 +1,34 @@
+{
+  "allowedFiles": [
+    ".editorconfig",
+    ".gitattributes",
+    ".gitignore",
+    ".node-version",
+    ".npmrc",
+    "CHANGELOG.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "NOTICE",
+    "PRIVACY.md",
+    "README.md",
+    "SECURITY.md",
+    "SUPPORT.md",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig.build.json",
+    "tsconfig.json",
+    "verification-map.yaml"
+  ],
+  "allowedPrefixes": [
+    ".github/",
+    "docs/",
+    "fixtures/",
+    "packages/",
+    "schemas/",
+    "scripts/",
+    "specs/",
+    "tests/"
+  ]
+}

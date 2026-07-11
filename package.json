@@ -1,0 +1,36 @@
+{
+  "name": "tcrn-workflow",
+  "version": "0.0.0-development",
+  "private": true,
+  "description": "Offline-first, verifiable workflow framework bootstrap.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": "24.16.0",
+    "pnpm": "11.3.0"
+  },
+  "packageManager": "pnpm@11.3.0",
+  "bin": {
+    "tcrn-workflow-release-verify": "scripts/verify-release-trust.mjs"
+  },
+  "scripts": {
+    "archive": "node scripts/task.mjs archive",
+    "build": "node scripts/task.mjs build",
+    "clean": "node scripts/task.mjs clean",
+    "format": "node scripts/task.mjs format-write",
+    "format:check": "node scripts/task.mjs format-check",
+    "lint": "node scripts/task.mjs lint",
+    "sbom": "node scripts/task.mjs sbom",
+    "test": "node scripts/task.mjs test",
+    "typecheck": "node scripts/task.mjs typecheck",
+    "verify:history": "node scripts/task.mjs history",
+    "verify:licenses": "node scripts/task.mjs licenses",
+    "verify:lifecycle": "node scripts/task.mjs lifecycle",
+    "verify:map": "node scripts/task.mjs verification-map",
+    "verify:p1": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run verify:trust && pnpm run archive && pnpm run sbom && pnpm run verify:licenses && pnpm run verify:vulnerabilities && pnpm run verify:privacy && pnpm run verify:source && pnpm run verify:lifecycle && pnpm run verify:map && pnpm run verify:history",
+    "verify:privacy": "node scripts/task.mjs privacy",
+    "verify:source": "node scripts/task.mjs source",
+    "verify:trust": "node scripts/task.mjs test-trust",
+    "verify:vulnerabilities": "node scripts/task.mjs vulnerabilities"
+  }
+}
