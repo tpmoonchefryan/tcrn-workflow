@@ -83,3 +83,31 @@ export type {
   WorkspaceReasonCode,
   WorkspaceState,
 } from "./workspace.js";
+export {
+  ARTIFACT_ARCHIVE_SCHEMA_VERSION,
+  ARTIFACT_LIFECYCLE_VERSION,
+  ARTIFACT_REASON_CODES,
+  ARTIFACT_RECORD_SCHEMA_VERSION,
+  ARTIFACT_STORE_SCHEMA_VERSION,
+  ArtifactLifecycleError,
+  applyArtifactArchive,
+  artifactArchiveDryRun,
+  artifactCompactDryRun,
+  artifactDoctor,
+  artifactSizeReport,
+  assertArtifactRelativePath,
+  classifyArtifact,
+  initializeArtifactStore,
+  redactArtifactReference,
+  restoreArtifactArchive,
+} from "./artifact-lifecycle.js";
+export type {
+  ArtifactArchiveOptions,
+  ArtifactClassification,
+  ArtifactDoctorBudgets,
+  ArtifactFaultPoint,
+  ArtifactKind,
+  ArtifactReasonCode,
+  ArtifactRecord,
+  ArtifactScanOptions,
+} from "./artifact-lifecycle.js";

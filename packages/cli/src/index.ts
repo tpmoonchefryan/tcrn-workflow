@@ -2,6 +2,11 @@
 
 import {
   acquireWorkspaceLease,
+  applyArtifactArchive,
+  artifactArchiveDryRun,
+  artifactCompactDryRun,
+  artifactDoctor,
+  artifactSizeReport,
   createProject,
   createWork,
   deleteProject,
@@ -10,6 +15,7 @@ import {
   initializeWorkspace,
   planWorkspaceMigration,
   recoverWorkspace,
+  restoreArtifactArchive,
   transitionWork,
   updateProject,
   validateWorkspace,
@@ -92,6 +98,18 @@ function expectedVersion(values: Readonly<Record<string, string>>): number {
   return version;
 }
 
+function boundedInteger(values: Readonly<Record<string, string>>, name: string): number | undefined {
+  const raw = values[name];
+  if (raw === undefined) {
+    return undefined;
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    fail("CLI_ARGUMENT_MALFORMED", name);
+  }
+  return value;
+}
+
 async function withLease<T>(workspace: string, at: string, operation: (lease: Awaited<ReturnType<typeof acquireWorkspaceLease>>) => Promise<T>): Promise<T> {
   const lease = await acquireWorkspaceLease(workspace, { now: at });
   try {
@@ -166,6 +184,58 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const at = values.at ?? "";
     const state = await withLease(workspace, at, (lease) => recoverWorkspace(workspace, lease));
     writeState(io, state);
+    return;
+  }
+  if (command === "artifact-size") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await artifactSizeReport(values.workspace ?? "")));
+    return;
+  }
+  if (command === "artifact-doctor") {
+    const names = ["workspace", "warning-bytes", "critical-bytes", "warning-count", "critical-count"];
+    const values = parseArguments(rest, names);
+    required(values, ["workspace"]);
+    const warningBytes = boundedInteger(values, "warning-bytes");
+    const criticalBytes = boundedInteger(values, "critical-bytes");
+    const warningCount = boundedInteger(values, "warning-count");
+    const criticalCount = boundedInteger(values, "critical-count");
+    io.write(canonicalJson(await artifactDoctor(values.workspace ?? "", {
+      ...(warningBytes === undefined ? {} : { warningBytes }),
+      ...(criticalBytes === undefined ? {} : { criticalBytes }),
+      ...(warningCount === undefined ? {} : { warningCount }),
+      ...(criticalCount === undefined ? {} : { criticalCount }),
+    })));
+    return;
+  }
+  if (command === "artifact-compact-dry-run") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await artifactCompactDryRun(values.workspace ?? "")));
+    return;
+  }
+  if (command === "artifact-archive-dry-run") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await artifactArchiveDryRun(values.workspace ?? "")));
+    return;
+  }
+  if (command === "artifact-archive-apply") {
+    const values = parseArguments(rest, ["workspace", "expected-plan-digest"]);
+    required(values, ["workspace", "expected-plan-digest"]);
+    io.write(canonicalJson(await applyArtifactArchive(values.workspace ?? "", {
+      expectedPlanDigest: values["expected-plan-digest"] ?? "",
+    })));
+    return;
+  }
+  if (command === "artifact-archive-restore") {
+    const values = parseArguments(rest, ["workspace", "archive-id", "expected-plan-digest"]);
+    required(values, ["workspace", "archive-id", "expected-plan-digest"]);
+    io.write(canonicalJson(await restoreArtifactArchive(
+      values.workspace ?? "",
+      values["archive-id"] ?? "",
+      { expectedPlanDigest: values["expected-plan-digest"] ?? "" },
+    )));
     return;
   }
   const shared = ["workspace", "expected-version", "at"];
