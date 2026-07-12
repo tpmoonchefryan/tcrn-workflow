@@ -487,6 +487,7 @@ async function verifyP5() {
   assertion(fixture.propertyPermutations === 64 && fixture.permutationLayerCount === 6 &&
     /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P5_PROPERTY_PERMUTATIONS");
   assertion(fixture.corePersonaDistinctPermutations === 64 && /^[a-f0-9]{64}$/u.test(fixture.corePersonaPermutationCorpusDigest), "P5_PERSONA_PROPERTY_PERMUTATIONS");
+  assertion(fixture.corePersonaAstralParityCases === 20, "P5_PERSONA_ASTRAL_PARITY");
   for (const digestName of ["starterBundleDigest", "baseProfileDigest", "unboundEffectiveDigest", "boundEffectiveDigest",
     "boundOverlayDigest", "boundEffectivePolicyDigest"]) {
     assertion(/^[a-f0-9]{64}$/u.test(fixture[digestName]), "P5_CANONICAL_DIGEST_VECTOR", digestName);
@@ -509,6 +510,7 @@ async function verifyP5() {
     admissionFilesystemNegativeCases: fixture.admissionFilesystemNegativeCases.length,
     authorityAnchorNegativeCases: fixture.authorityAnchorNegativeCases.length,
     coreReferenceProfiles: 8,
+    coreReferenceAstralParityCases: fixture.corePersonaAstralParityCases,
     coreReferenceDistinctPermutations: fixture.corePersonaDistinctPermutations,
     coreReferencePermutationCorpusDigest: fixture.corePersonaPermutationCorpusDigest,
     coreReferenceSourceManifestSha256: "9fa68e8f06e73e1d1b4bffb59a059814e683619b1d80234aef82e44f76de7c13",

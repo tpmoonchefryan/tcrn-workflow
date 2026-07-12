@@ -52,9 +52,14 @@ test("forbidden, tampered, duplicate, unknown, and extended roster records fail 
 test("schema and runtime structural boundaries have exact bidirectional parity", async () => {
   const base = structuredClone(generateCorePersonaBundle().profiles[0]);
   const schema = JSON.parse(await readFile(new URL("../packages/core/schema/core-reference-persona-v1.schema.json", import.meta.url), "utf8")); const ajv = new Ajv2020({ strict: true }); ajv.addSchema(schema); const validate = ajv.compile({ $ref: `${schema.$id}#/$defs/profile` });
-  for (const [field, value, accepted] of [["jobTitle", "x", false], ["jobTitle", "xx", true], ["jobTitle", "x".repeat(128), true], ["jobTitle", "x".repeat(129), false], ["requiredInputs", ["x"], false], ["requiredInputs", ["xx"], true], ["requiredInputs", ["x".repeat(256)], true], ["requiredInputs", ["x".repeat(257)], false]]) {
+  const astral = "\u{1F680}";
+  const asciiCases = [["jobTitle", "x", false], ["jobTitle", "xx", true], ["jobTitle", "x".repeat(128), true], ["jobTitle", "x".repeat(129), false], ["requiredInputs", ["x"], false], ["requiredInputs", ["xx"], true], ["requiredInputs", ["x".repeat(256)], true], ["requiredInputs", ["x".repeat(257)], false]];
+  const astralCases = [["jobTitle", astral.repeat(1), false], ["jobTitle", astral.repeat(2), true], ["jobTitle", astral.repeat(128), true], ["jobTitle", astral.repeat(129), false], ["requiredInputs", [astral.repeat(1)], false], ["requiredInputs", [astral.repeat(2)], true], ["requiredInputs", [astral.repeat(256)], true], ["requiredInputs", [astral.repeat(257)], false], ...["mission", "authorityBoundary", "contactWhen"].flatMap((field) => [[field, astral.repeat(9), false], [field, astral.repeat(10), true], [field, astral.repeat(512), true], [field, astral.repeat(513), false]])];
+  assert.equal(astralCases.length, fixture.corePersonaAstralParityCases);
+  for (const [field, value, accepted] of [...asciiCases, ...astralCases]) {
     const candidate = { ...base, [field]: value }; delete candidate.profileDigest; candidate.profileDigest = canonicalSha256(candidate); const schemaAccepted = validate(candidate); let runtimeAccepted = true; try { validateCorePersonaProfileShape(candidate); } catch { runtimeAccepted = false; } assert.equal(schemaAccepted, accepted, `${field}:schema`); assert.equal(runtimeAccepted, accepted, `${field}:runtime`);
   }
+  const nonSource = { ...base, jobTitle: astral.repeat(2) }; delete nonSource.profileDigest; nonSource.profileDigest = canonicalSha256(nonSource); assert.doesNotThrow(() => validateCorePersonaProfileShape(nonSource)); reason("PERSONA_SOURCE_MISMATCH", () => validateCorePersonaProfile(nonSource));
 });
 
 test("64 distinct insertion permutations normalize to identical accepted bytes", () => {
