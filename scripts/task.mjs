@@ -718,7 +718,7 @@ async function verifyP7Compatibility() {
   const fixture = await readJson(fixturePath);
   assertion(fixture.schemaVersion === "tcrn.p7-compatibility-modes-cases.v1", "P7_COMPATIBILITY_FIXTURE_SCHEMA");
   assertion(fixture.positiveOperations === 6 && fixture.schemaParityCases === 15 && fixture.documentBudgetCases === 2, "P7_COMPATIBILITY_POSITIVE_PARITY_CORPUS");
-  assertion(fixture.authorityFilesystemCases === 9 && fixture.authorityBindingCases === 14 && fixture.cliAuthorityCases === 11 && fixture.unavailableSurfaces === 4, "P7_COMPATIBILITY_AUTHORITY_UNAVAILABLE_CORPUS");
+  assertion(fixture.authorityFilesystemCases === 9 && fixture.authorityBoundedReadCases === 5 && fixture.authorityBindingCases === 14 && fixture.cliAuthorityCases === 12 && fixture.unavailableSurfaces === 4, "P7_COMPATIBILITY_AUTHORITY_UNAVAILABLE_CORPUS");
   assertion(fixture.propertyPermutations === 64 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P7_COMPATIBILITY_PROPERTY_CORPUS");
   assertion(fixture.supportedAosReleases === 0 && fixture.networkAccess === false && fixture.mutation === false && fixture.liveAosMutation === false, "P7_COMPATIBILITY_OFFLINE_BOUNDARY");
   assertion(fixture.capabilityDisposition === "capability_unavailable_until_mutual_release", "P7_COMPATIBILITY_UNAVAILABLE_DISPOSITION");
@@ -728,6 +728,7 @@ async function verifyP7Compatibility() {
     schemaParityCases: fixture.schemaParityCases,
     documentBudgetCases: fixture.documentBudgetCases,
     authorityFilesystemCases: fixture.authorityFilesystemCases,
+    authorityBoundedReadCases: fixture.authorityBoundedReadCases,
     authorityBindingCases: fixture.authorityBindingCases,
     cliAuthorityCases: fixture.cliAuthorityCases,
     unavailableSurfaces: fixture.unavailableSurfaces,

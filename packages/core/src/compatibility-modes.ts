@@ -198,6 +198,8 @@ export interface CompatibilityAdmissionAuthority {
 export interface CompatibilityAdmissionReadOptions {
   readonly afterLstatForTest?: () => Promise<void>;
   readonly afterOpenForTest?: () => Promise<void>;
+  readonly afterReadChunkForTest?: (totalBytesRead: number) => Promise<void>;
+  readonly observeReadBytesForTest?: (totalBytesRead: number) => void;
 }
 
 export interface CompatibilityPlan {
@@ -461,6 +463,33 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+async function readBoundedAuthorityBytes(
+  handle: Awaited<ReturnType<typeof open>>,
+  path: string,
+  options: CompatibilityAdmissionReadOptions,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let totalBytesRead = 0;
+  while (true) {
+    const remaining = maximumAdmissionReceiptBytes + 1 - totalBytesRead;
+    if (remaining <= 0) fail("COMPATIBILITY_LIMIT_EXCEEDED", path);
+    const buffer = Buffer.allocUnsafe(Math.min(16_384, remaining));
+    let bytesRead: number;
+    try {
+      ({ bytesRead } = await handle.read(buffer, 0, buffer.length, null));
+    } catch {
+      fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
+    }
+    if (bytesRead === 0) break;
+    totalBytesRead += bytesRead;
+    options.observeReadBytesForTest?.(totalBytesRead);
+    if (totalBytesRead > maximumAdmissionReceiptBytes) fail("COMPATIBILITY_LIMIT_EXCEEDED", path);
+    chunks.push(buffer.subarray(0, bytesRead));
+    await options.afterReadChunkForTest?.(totalBytesRead);
+  }
+  return Buffer.concat(chunks, totalBytesRead);
+}
+
 export async function readCompatibilityAdmissionReceipt(
   path: string,
   authority: CompatibilityAdmissionAuthority | undefined,
@@ -488,7 +517,7 @@ export async function readCompatibilityAdmissionReceipt(
     const opened = await handle.stat({ bigint: true });
     if (!opened.isFile() || opened.nlink !== 1n || !sameFileIdentity(before, opened)) fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
     await options.afterOpenForTest?.();
-    content = await handle.readFile();
+    content = await readBoundedAuthorityBytes(handle, path, options);
     const afterRead = await handle.stat({ bigint: true });
     let named;
     try { named = await lstat(path, { bigint: true }); } catch { fail("COMPATIBILITY_AUTHORITY_CHANGED", path); }

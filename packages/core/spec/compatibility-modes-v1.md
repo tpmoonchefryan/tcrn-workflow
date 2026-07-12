@@ -10,7 +10,11 @@ receipt. Its absolute canonical path and raw file SHA-256 arrive only through a
 host authority channel. Admission reads a regular single-link file through
 `O_NOFOLLOW` and binds pre-open, opened, post-read and named
 device/inode/size/mode/mtimeNs/ctimeNs identity. Canonical bytes and closed
-fields bind the exact pair receipt, manifest and release pair, complete request
+fields are read incrementally from the opened descriptor with a hard
+65537-byte observation cap; the reader stops on the first byte beyond the
+65536-byte receipt limit before post-read validation. Same-inode sparse or
+continuous growth therefore cannot cause unbounded allocation or I/O.
+The closed canonical receipt binds the exact pair receipt, manifest and release pair, complete request
 digest, effective plan digest, repository, workflow, subject, signer, issuer,
 audience, nonce, verification time, policy floor, instance, data epoch,
 revocation/replay snapshot and Workspace lock generation. The resulting context
