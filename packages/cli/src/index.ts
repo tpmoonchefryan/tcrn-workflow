@@ -38,8 +38,14 @@ import {
   validateContextRouteResult,
   validateGenericStarterBundle,
   validateWorkspace,
+  codexAdapterAuthorityEmptyFallback,
+  generateCodexAdapterBundle,
+  planCodexAdapterRollback,
+  simulateCodexAdapterLifecycle,
+  validateCodexAdapterBundle,
 } from "../../core/src/index.js";
 import type {
+  CodexAdapterHostContext,
   ExplicitRoot,
   ContextRouteAuthorityFileIdentity,
   GenericProfileAdmissionAuthority,
@@ -83,6 +89,7 @@ export interface CliIo {
   write(value: string): void;
   readonly profileAdmissionAuthority?: GenericProfileAdmissionAuthority;
   readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
+  readonly codexAdapterHost?: CodexAdapterHostContext;
 }
 
 function fail(reasonCode: string, message: string): never {
@@ -253,6 +260,37 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, ["result"]);
     const result = validateContextRouteResult(jsonValue(values.result, "result"));
     io.write(canonicalJson({ reasonCode: "CONTEXT_VALIDATED", contextDigest: result.contextDigest }));
+    return;
+  }
+  if (command === "adapter-generate") {
+    const values = parseArguments(rest, ["request"]);
+    required(values, ["request"]);
+    io.write(canonicalJson(generateCodexAdapterBundle(jsonValue(values.request, "request"), io.codexAdapterHost)));
+    return;
+  }
+  if (command === "adapter-validate") {
+    const values = parseArguments(rest, ["bundle"]);
+    required(values, ["bundle"]);
+    const bundle = validateCodexAdapterBundle(jsonValue(values.bundle, "bundle"));
+    io.write(canonicalJson({ reasonCode: "ADAPTER_VALIDATED", bundleDigest: bundle.bundleDigest, activation: false }));
+    return;
+  }
+  if (command === "adapter-simulate") {
+    const values = parseArguments(rest, ["lifecycle"]);
+    required(values, ["lifecycle"]);
+    io.write(canonicalJson(simulateCodexAdapterLifecycle(jsonValue(values.lifecycle, "lifecycle"))));
+    return;
+  }
+  if (command === "adapter-fallback") {
+    const values = parseArguments(rest, ["input"]);
+    required(values, ["input"]);
+    io.write(canonicalJson(codexAdapterAuthorityEmptyFallback(jsonValue(values.input, "input"))));
+    return;
+  }
+  if (command === "adapter-rollback-plan") {
+    const values = parseArguments(rest, ["bundle", "observed"]);
+    required(values, ["bundle", "observed"]);
+    io.write(canonicalJson(planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), jsonValue(values.observed, "observed"))));
     return;
   }
   if (command === "init") {

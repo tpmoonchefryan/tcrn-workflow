@@ -28,7 +28,7 @@
     "receipt": 250
   },
   "permutationCorpusDigest": "62cdd322485262a52669161b349fd3cb95eff7c60f132d4c0d67f811ba42a3cb",
-  "codexAdapter": "unimplemented",
+  "codexAdapter": "implemented_inert_templates_only",
   "rc3": "unaccepted",
   "ownerVisibleActivation": "not-claimed",
   "liveContextStore": "not-created",

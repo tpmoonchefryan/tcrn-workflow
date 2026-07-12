@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "0e1a219c28875f5d5705c0b5b433760cd90471a6ef37d9f63bfd1e0774b150b8",
+      "fixtureDigest": "7c40df08d26307b0eeab77913c9ec1f072a4e31d9fc0291afd55d78f01f4b7b8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "4e14cb4a3562f0db356c55e7b09bb50e7395cc8c1b230d0c38a638503c8c9823",
+      "fixtureDigest": "036630344478bfcfd89e76cc16990d2847f6f3cbf97d34079a1628de94e0755d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -75,7 +75,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "503c0971be76553b238a472976dfbe75d34ab91e286b1d38684c10b19a94e779",
+      "fixtureDigest": "fb8093370d4a1a44419a07a3aa771cfb54249fbc393add8fbc1139e9c8504774",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -147,7 +147,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "2f4e57766910c8126945ccf53777672103d91b919a8896a0e82512d0ecbb7fb6",
+      "fixtureDigest": "e3125db46f3a42b2d947dacb80e18c45110378c4683600bd5a8da5a1ce68ac68",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "d3f7340a89664a51fbd4ec6f5597cafcbffc0a9f4c67316e37758055a292cde8",
+      "fixtureDigest": "94bafc11df9caba807db083df0dd7a5e85c17eb89ddad887920bcb685292e128",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -208,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "b7edb7e43c3a88adacdca2b8e12bca409b5cccf14a2a1e27a395a0998722f64d",
+      "fixtureDigest": "72dc12c9c5208d265e4f211c3cf99338ab6aa1a63f8e11cdf317fcb1cf1b21e1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -233,7 +233,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "3c33f80ea2d13e64d6f33b7e87b0f0b4ffe44c0d0d8e8ef04c7dfef461495a50",
+      "fixtureDigest": "6043794180f3a97e3ee39e3c3d761579d95987aa01f7d8705bd6c48931d5fa8e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -260,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "b514bb0b7f2f50a27b1553cb099af5fd16eba8057d845c213bda4b8b5bb867ff",
+      "fixtureDigest": "29edf8b0c5d343553a7e48ab9a94049883181e5e7a5f32a89e3a909b48cd7ae9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -288,7 +288,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "e1b4c592bcd20d8063eae7e30302c0fdf229e0e0631db0eaba0ee508c61f408a",
+      "fixtureDigest": "ab843ebfe52dd3dacc4865f118a793449898d884d73bd7a27156a1a8ab375342",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -397,7 +397,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "57ba863f036e3e94b0058dd34b06a1e478454a964c5b4b66b88aab5aa1e6ff46",
+      "fixtureDigest": "f7d07dd51bc724bae4ab670577a0f95a6daa178c7aae943e58f1a98091b1a7ff",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -455,7 +455,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "f02e37e7d2fa5317ed86a7b66162264d6e960b3e2cca98e984f18500b8ff1a60",
+      "fixtureDigest": "aee0c632230bf4e332150f37c31178a309c783bf0021e70b065ced94c4d6d357",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -512,7 +512,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "223eaf4a4a2d71911caef0db6b56daf165416f6e308715221f7c6ce6038381e0",
+      "fixtureDigest": "16fd5d577b89025af5e6b1a9f7a8ea46a2dfa94cfdd60970f10f687ff0eef5e7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -542,7 +542,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "2ec741199225f7d3d88e7ade777e805f8fecad8d606b331f6ce60bf0fa8fee4a",
+      "fixtureDigest": "705044c19dca5a9b12d9b00b6ab2d8d1b1b7fb24bac5367201e3755d3dc5d422",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -569,7 +569,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "f6e90c0b71687a617cbf4dbc79e454efc5632c293560e230ca95a7d4bbb43e11",
+      "fixtureDigest": "a287f5f08caf9c64c47d94a663a5de706331632003e1297a88e9e4a801de2343",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -604,7 +604,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "563407a0efb1bb8d030d8dc292bcd95df04c34e805e05a6dceca36e04755303f",
+      "fixtureDigest": "804cdb0abc0a4bdcb8d5856426571df208f6e3558c467217c977d38dcd590cd5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -640,7 +640,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "fccb5388070ad20daf97652e44597b3a4b0f82eb849c1769edb91f62a9d5c301",
+      "fixtureDigest": "86fc7aca2ed1359784384bddb346f18c7e0d58763bda1963afb35be79d005ce3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -684,7 +684,7 @@
       "id": "P6-CONTEXT-ROUTER",
       "phase": "P6",
       "status": "implemented",
-      "subject": "P6 implements the standalone deterministic metadata-first Context Router with descriptor-bound request authority, re-resolved generic-profile admission, exact scope/risk/budget controls, explicit body/procedure reads, privacy-minimal receipts, hostile prompt proof, 64 real permutations and bounded local latency observations; Codex Adapter remains unimplemented and RC3 unaccepted.",
+      "subject": "P6 implements the standalone deterministic metadata-first Context Router with descriptor-bound request authority, re-resolved generic-profile admission, exact scope/risk/budget controls, explicit body/procedure reads, privacy-minimal receipts, hostile prompt proof, 64 real permutations and bounded local latency observations; the separately proved Codex Adapter is inert and RC3 remains unaccepted.",
       "command": "pnpm verify:p6",
       "fixturePaths": [
         "package.json",
@@ -702,7 +702,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "90e86efb689d9c44e0930644e888d1a210803f3b646f7f9bf77411cfa28e2bad",
+      "fixtureDigest": "152b038b8f92fd54ad7acb6676f23e87eceb15c7417cd2a17813328e1a5119be",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -713,6 +713,39 @@
       "evidencePath": "dist/evidence/p6/p6.json",
       "invalidationTriggers": [
         "Context request, authority admission, profile binding, scope/freshness selection, explicit-read, privacy receipt, budget, determinism, latency, CLI, storeless, Codex Adapter, RC3, or activation boundary changes"
+      ]
+    },
+    {
+      "id": "P6-CODEX-ADAPTER",
+      "phase": "P6",
+      "status": "implemented",
+      "subject": "P6 implements an uninstalled and unactivated Codex Adapter as closed inert template data only, with separately injected host admission, authority-empty fallback, deterministic four-file bundle, exact rollback identity plan, final-hop visibility model, hostile proof and 64 real input/template permutations; OG-04 and RC3 remain unsatisfied.",
+      "command": "pnpm verify:p6:adapter",
+      "fixturePaths": [
+        "package.json",
+        "packages/core/src/index.ts",
+        "packages/core/src/codex-adapter.ts",
+        "packages/core/src/context-router.ts",
+        "packages/cli/src/index.ts",
+        "packages/core/schema/codex-adapter-v1.schema.json",
+        "packages/core/schema/context-router-v1.schema.json",
+        "packages/core/spec/codex-adapter-v1.md",
+        "packages/core/fixtures/p6-codex-adapter-cases.json",
+        "tests/p6-codex-adapter.test.mjs",
+        "scripts/task.mjs",
+        "README.md"
+      ],
+      "fixtureDigest": "424139b1e191f39e8afb6cf8fc37e1e9fed145bd64f1b57d3c64b64059a69637",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P6_CODEX_ADAPTER_VERIFIED",
+      "evidencePath": "dist/evidence/p6/p6-adapter.json",
+      "invalidationTriggers": [
+        "Adapter request, trusted host injection, Context binding, template closed set, path/content/manifest digest, fallback, final-hop, rollback identity, CLI, property corpus, activation, OG-04, RC3, storeless, or privacy boundary changes"
       ]
     },
     {
@@ -735,7 +768,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "a25088142b716844e95a6e99282a0cb05d018493b97ae2235cefe29882b20460",
+      "fixtureDigest": "bfdabb33e52489202c29123ea141963679eadd39b4afdc523acc7c83ff2d474e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

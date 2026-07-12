@@ -5,7 +5,7 @@ evidence, and release verification. This repository contains the accepted P1
 framework bootstrap, the P2 V1 protocol/conformance basis, the accepted P3
 file-native engine, bounded P4 artifact-lifecycle and Knowledge Core candidates,
 bounded generic P5 profile-policy and Core Reference persona candidates, and a
-bounded P6 Context Router candidate. The canonical
+bounded P6 Context Router and inert Codex Adapter candidates. The canonical
 P3 capability marker and local graph are governed outside this product checkout;
 live integrations and release support remain intentionally unavailable.
 
@@ -33,6 +33,7 @@ pnpm verify:p4
 pnpm verify:p4:knowledge
 pnpm verify:p5
 pnpm verify:p6
+pnpm verify:p6:adapter
 ```
 
 The repository does not collect telemetry. Static checks, a process executable
@@ -101,8 +102,13 @@ exact scope/risk/budget controls, metadata-first selection, explicit
 body/procedure reads, privacy-minimal receipts, hostile prompt corpus, 64 actual
 candidate-order permutations, and bounded pinned-runtime latency observations.
 Those observations are local process measurements, not real-time guarantees.
-The Codex Adapter remains unimplemented, RC3 remains unaccepted, and no live
-context store, hook, Skill, or owner-visible activation is created.
+`pnpm verify:p6:adapter` separately proves the closed Context-result bridge,
+independently injected host binding, authority-empty raw-session fallback,
+deterministic four-file inert template bundle, identity/digest-bound rollback
+plan, final-hop visibility model, hostile corpus, and 64 real input/template
+orders. The templates are not installed or activated; OG-04 and RC3 remain
+unsatisfied, and no live context/profile/Knowledge/artifact store, hook, Skill,
+configuration, or owner-visible activation is created.
 
 After `pnpm build`, governed local commands are available through
 `node scripts/tcrn-workflow.mjs`. Mutation commands require an explicit

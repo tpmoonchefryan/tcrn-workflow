@@ -1,0 +1,313 @@
+{
+  "$id": "https://tcrn.dev/schemas/codex-adapter-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Inert Codex Adapter V1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/host"
+    },
+    {
+      "$ref": "#/$defs/bundle"
+    },
+    {
+      "$ref": "#/$defs/lifecycle"
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "stableId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$",
+      "maxLength": 161
+    },
+    "instant": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "request": {
+      "type": "object",
+      "x-tcrn-deepWellFormedUnicode": true,
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "workspaceId",
+        "projectId",
+        "workId",
+        "contextResult",
+        "promptText",
+        "environmentText",
+        "rawSessionText"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.codex-adapter-request.v1"
+        },
+        "workspaceId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "projectId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "workId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/stableId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contextResult": {
+          "$ref": "https://tcrn.dev/schemas/context-router-v1.schema.json#/$defs/result"
+        },
+        "promptText": {
+          "type": "string",
+          "maxLength": 8192,
+          "x-tcrn-maxUtf8Bytes": 8192
+        },
+        "environmentText": {
+          "type": "string",
+          "maxLength": 8192,
+          "x-tcrn-maxUtf8Bytes": 8192
+        },
+        "rawSessionText": {
+          "type": "string",
+          "maxLength": 8192,
+          "x-tcrn-maxUtf8Bytes": 8192
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestDigest",
+        "contextDigest",
+        "workspaceId",
+        "projectId",
+        "workId",
+        "governedAction",
+        "contextIssuedAt",
+        "contextExpiresAt",
+        "verificationTime",
+        "installationTarget",
+        "activationAllowed",
+        "hostDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.codex-adapter-host.v1"
+        },
+        "requestDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contextDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "workspaceId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "projectId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "workId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/stableId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "governedAction": {
+          "enum": [
+            "generate",
+            "validate",
+            "simulate"
+          ]
+        },
+        "contextIssuedAt": {
+          "$ref": "#/$defs/instant"
+        },
+        "contextExpiresAt": {
+          "$ref": "#/$defs/instant"
+        },
+        "verificationTime": {
+          "$ref": "#/$defs/instant"
+        },
+        "installationTarget": {
+          "const": "inert_bundle_only"
+        },
+        "activationAllowed": {
+          "const": false
+        },
+        "hostDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "content",
+        "contentDigest",
+        "mode"
+      ],
+      "properties": {
+        "path": {
+          "enum": [
+            ".codex/tcrn-workflow/bootstrap.json",
+            ".codex/tcrn-workflow/final-hop.json",
+            ".codex/tcrn-workflow/project.json",
+            ".codex/tcrn-workflow/stop.json"
+          ]
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 65536,
+          "x-tcrn-maxUtf8Bytes": 65536
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "mode": {
+          "const": "inert_json"
+        }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "contentDigest",
+        "removalPolicy",
+        "requireNoFollow",
+        "requireRegularSingleLink"
+      ],
+      "properties": {
+        "path": {
+          "enum": [
+            ".codex/tcrn-workflow/bootstrap.json",
+            ".codex/tcrn-workflow/final-hop.json",
+            ".codex/tcrn-workflow/project.json",
+            ".codex/tcrn-workflow/stop.json"
+          ]
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "removalPolicy": {
+          "const": "identity_digest_match_only"
+        },
+        "requireNoFollow": {
+          "const": true
+        },
+        "requireRegularSingleLink": {
+          "const": true
+        }
+      }
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "reasonCode",
+        "activation",
+        "requestDigest",
+        "contextDigest",
+        "hostDigest",
+        "files",
+        "manifestDigest",
+        "rollback",
+        "bundleDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.codex-adapter-bundle.v1"
+        },
+        "reasonCode": {
+          "const": "ADAPTER_BUNDLE_GENERATED"
+        },
+        "activation": {
+          "const": false
+        },
+        "requestDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contextDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "hostDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "files": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/file"
+          }
+        },
+        "manifestDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "rollback": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/rollback"
+          }
+        },
+        "bundleDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "contextDigest",
+        "governedRoutingSucceeded",
+        "stopRequests",
+        "finalHopRequests"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.codex-adapter-lifecycle.v1"
+        },
+        "contextDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "governedRoutingSucceeded": {
+          "type": "boolean"
+        },
+        "stopRequests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "finalHopRequests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        }
+      }
+    }
+  }
+}
