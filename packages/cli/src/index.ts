@@ -39,11 +39,14 @@ import {
   validateGenericStarterBundle,
   validateWorkspace,
   codexAdapterAuthorityEmptyFallback,
+  dryRunCanonicalExchange,
   generateCodexAdapterBundle,
+  planCanonicalExchange,
   planCodexAdapterRollback,
   readCodexAdapterInstallationReceipt,
   simulateCodexAdapterLifecycle,
   validateCodexAdapterBundle,
+  validateCanonicalExchangeBundle,
 } from "../../core/src/index.js";
 import type {
   CodexAdapterHostContext,
@@ -170,6 +173,14 @@ function jsonValue(value: string | undefined, name: string): unknown {
   }
 }
 
+function exchangeJson(value: string | undefined, name: string): unknown {
+  try {
+    return JSON.parse(value ?? "");
+  } catch {
+    fail("EXCHANGE_INPUT_INVALID", name);
+  }
+}
+
 async function withLease<T>(workspace: string, at: string, operation: (lease: Awaited<ReturnType<typeof acquireWorkspaceLease>>) => Promise<T>): Promise<T> {
   const lease = await acquireWorkspaceLease(workspace, { now: at });
   try {
@@ -196,6 +207,24 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     fail("CLI_COMMAND_REQUIRED", "A governed command is required");
   }
   const rest = arguments_.slice(1);
+  if (command === "exchange-plan") {
+    const values = parseArguments(rest, ["request"]);
+    required(values, ["request"]);
+    io.write(canonicalJson(planCanonicalExchange(exchangeJson(values.request, "request"))));
+    return;
+  }
+  if (command === "exchange-validate") {
+    const values = parseArguments(rest, ["bundle"]);
+    required(values, ["bundle"]);
+    io.write(canonicalJson(await validateCanonicalExchangeBundle(values.bundle ?? "")));
+    return;
+  }
+  if (command === "exchange-dry-run") {
+    const values = parseArguments(rest, ["request", "output"]);
+    required(values, ["request", "output"]);
+    io.write(canonicalJson(dryRunCanonicalExchange(exchangeJson(values.request, "request"), values.output ?? "")));
+    return;
+  }
   if (command === "profile-generate") {
     const values = parseArguments(rest, ["mode"]);
     required(values, ["mode"]);
