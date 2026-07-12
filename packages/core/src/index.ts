@@ -232,6 +232,34 @@ export {
   validateGenericStarterBundle,
 } from "./generic-profile.js";
 export {
+  CANONICAL_EXCHANGE_LIMITS,
+  CANONICAL_EXCHANGE_MANIFEST_VERSION,
+  CANONICAL_EXCHANGE_REASON_CODES,
+  CANONICAL_EXCHANGE_REQUEST_VERSION,
+  CANONICAL_EXCHANGE_RESUME_VERSION,
+  CANONICAL_EXCHANGE_TRANSACTION_VERSION,
+  CanonicalExchangeError,
+  dryRunCanonicalExchange,
+  planCanonicalExchange,
+  readCanonicalExchangeBundle,
+  validateCanonicalExchangeBundle,
+  writeCanonicalExchangeBundle,
+} from "./canonical-exchange.js";
+export type {
+  CanonicalExchangeChunkInput,
+  CanonicalExchangeChunkRecord,
+  CanonicalExchangeFaultPoint,
+  CanonicalExchangeManifest,
+  CanonicalExchangePlan,
+  CanonicalExchangeReadOptions,
+  CanonicalExchangeReadback,
+  CanonicalExchangeReasonCode,
+  CanonicalExchangeRequest,
+  CanonicalExchangeResume,
+  CanonicalExchangeTransaction,
+  CanonicalExchangeWriteOptions,
+} from "./canonical-exchange.js";
+export {
   CORE_PERSONA_BUNDLE_VERSION,
   CORE_PERSONA_PROFILE_VERSION,
   CORE_PERSONA_REASON_CODES,

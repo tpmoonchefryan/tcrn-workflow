@@ -256,6 +256,7 @@ async function runTests({
   p5Only = false,
   p6Only = false,
   p6AdapterOnly = false,
+  p7Only = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -269,7 +270,8 @@ async function runTests({
     .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs")
     .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path))
     .filter((path) => !p6Only || ["tests/p6-context-router.test.mjs", "tests/p6-codex-adapter.test.mjs"].includes(path))
-    .filter((path) => !p6AdapterOnly || path === "tests/p6-codex-adapter.test.mjs");
+    .filter((path) => !p6AdapterOnly || path === "tests/p6-codex-adapter.test.mjs")
+    .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs");
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -293,7 +295,9 @@ async function runTests({
                   ? "P6_CODEX_ADAPTER_TESTS_VERIFIED"
                 : p6Only
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
-              : p4Only
+                  : p7Only
+                    ? "P7_CANONICAL_EXCHANGE_TESTS_VERIFIED"
+                  : p4Only
               ? "P4_ARTIFACT_LIFECYCLE_TESTS_VERIFIED"
               : "TESTS_VERIFIED",
     { tests, result: "passed" },
@@ -654,6 +658,48 @@ async function verifyP6Adapter() {
   });
 }
 
+async function verifyP7() {
+  const tests = await runTests({ p7Only: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p7-canonical-exchange-cases.json");
+  const schemaPath = resolve(repositoryRoot, "packages/core/schema/canonical-exchange-v1.schema.json");
+  const specPath = resolve(repositoryRoot, "packages/core/spec/canonical-exchange-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.p7-canonical-exchange-cases.v1", "P7_EXCHANGE_FIXTURE_SCHEMA");
+  assertion(fixture.positiveCases === 8 && fixture.schemaParityCases === 8, "P7_EXCHANGE_POSITIVE_PARITY_CORPUS");
+  assertion(Array.isArray(fixture.hostileCases) && fixture.hostileCases.length === 32, "P7_EXCHANGE_HOSTILE_CORPUS");
+  assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 8, "P7_EXCHANGE_FAULT_CORPUS");
+  assertion(fixture.propertyPermutations === 64 && fixture.logicalChunks === 5 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P7_EXCHANGE_PROPERTY_CORPUS");
+  assertion(fixture.maximumChunks === 128 && fixture.maximumChunkBytes === 1_048_576 && fixture.maximumTotalBytes === 8_388_608, "P7_EXCHANGE_LIMITS");
+  assertion(fixture.networkAccess === false && fixture.codeExecution === false && fixture.liveAosMutation === false, "P7_EXCHANGE_OFFLINE_BOUNDARY");
+  const packages = await Promise.all([
+    readJson(resolve(repositoryRoot, "packages/core/package.json")),
+    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
+  ]);
+  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P7_EXCHANGE_STANDALONE_DEPENDENCY");
+  return success("P7_CANONICAL_EXCHANGE_VERIFIED", {
+    tests: tests.reasonCode,
+    positiveCases: fixture.positiveCases,
+    schemaParityCases: fixture.schemaParityCases,
+    hostileCases: fixture.hostileCases.length,
+    faultCases: fixture.faultCases.length,
+    propertyPermutations: fixture.propertyPermutations,
+    logicalChunks: fixture.logicalChunks,
+    permutationCorpusDigest: fixture.permutationCorpusDigest,
+    maximumChunks: fixture.maximumChunks,
+    maximumChunkBytes: fixture.maximumChunkBytes,
+    maximumTotalBytes: fixture.maximumTotalBytes,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    networkAccess: fixture.networkAccess,
+    codeExecution: fixture.codeExecution,
+    liveAosMutation: fixture.liveAosMutation,
+    compatibilityModes: "out-of-scope",
+    aosRequirements: "out-of-scope",
+    rc4: "unaccepted",
+  });
+}
+
 function octal(value, length) {
   return `${value.toString(8).padStart(length - 1, "0")}\0`;
 }
@@ -987,6 +1033,7 @@ const commandContracts = {
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
+  p7: { exit: 0, reasonCode: "P7_CANONICAL_EXCHANGE_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
@@ -1014,7 +1061,7 @@ async function verifyMap() {
     assertion(required.every((field) => Object.hasOwn(claim, field)), "VERIFICATION_MAP_FIELDS", claim.id ?? "unknown");
     assertion(!ids.has(claim.id), "VERIFICATION_MAP_DUPLICATE", claim.id);
     ids.add(claim.id);
-    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);
@@ -1038,7 +1085,7 @@ async function verifyMap() {
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
   }
-  for (const phase of ["P1", "P2", "P3", "P4", "P5", "RC1"]) {
+  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "RC1"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   return success("VERIFICATION_MAP_VERIFIED", {
@@ -1190,6 +1237,7 @@ const handlers = {
   p5: verifyP5,
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,
+  p7: verifyP7,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
@@ -1232,6 +1280,9 @@ function evidencePhase(name) {
   }
   if (name === "p6-adapter") {
     return "p6";
+  }
+  if (name === "p7") {
+    return "p7";
   }
   if (name === "rc1") {
     return "rc1";
