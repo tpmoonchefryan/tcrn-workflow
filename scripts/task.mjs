@@ -254,6 +254,7 @@ async function runTests({
   p4Only = false,
   knowledgeOnly = false,
   p5Only = false,
+  p6Only = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -265,7 +266,8 @@ async function runTests({
     .filter((path) => !p3Only || path === "tests/p3-file-engine.test.mjs")
     .filter((path) => !p4Only || ["tests/p4-artifact-lifecycle.test.mjs", "tests/p4-knowledge-core.test.mjs"].includes(path))
     .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs")
-    .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path));
+    .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path))
+    .filter((path) => !p6Only || path === "tests/p6-context-router.test.mjs");
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -285,6 +287,8 @@ async function runTests({
               ? "P4_KNOWLEDGE_CORE_TESTS_VERIFIED"
               : p5Only
                 ? "P5_GENERIC_PROFILE_TESTS_VERIFIED"
+                : p6Only
+                  ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
               : p4Only
               ? "P4_ARTIFACT_LIFECYCLE_TESTS_VERIFIED"
               : "TESTS_VERIFIED",
@@ -537,6 +541,53 @@ async function verifyP5() {
     namedPersonaContent: "eight-core-reference-records-only",
     standalone: "node-filesystem-only-no-database-no-aos-no-network",
     acceptance: "not-claimed",
+  });
+}
+
+async function verifyP6() {
+  const tests = await runTests({ p6Only: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p6-context-router-cases.json");
+  const schemaPath = resolve(repositoryRoot, "packages/core/schema/context-router-v1.schema.json");
+  const specPath = resolve(repositoryRoot, "packages/core/spec/context-router-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.p6-context-router-cases.v1", "P6_CONTEXT_FIXTURE_SCHEMA");
+  assertion(fixture.goldenProfileCases === 8, "P6_CONTEXT_GOLDEN_PROFILES");
+  assertion(fixture.hostileCases === 24 && fixture.schemaParityCases === 8, "P6_CONTEXT_HOSTILE_CORPUS");
+  assertion(fixture.propertyPermutations === 64 && fixture.logicalMetadataCandidates === 6 &&
+    /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6_CONTEXT_PROPERTY_CORPUS");
+  assertion(Array.isArray(fixture.latencyStages) && fixture.latencyStages.length === 6 &&
+    Object.values(fixture.latencyBudgetMilliseconds).every((value) => Number.isSafeInteger(value) && value > 0),
+  "P6_CONTEXT_LATENCY_BUDGETS");
+  assertion(fixture.codexAdapter === "unimplemented" && fixture.rc3 === "unaccepted" &&
+    fixture.ownerVisibleActivation === "not-claimed" && fixture.liveContextStore === "not-created",
+  "P6_CONTEXT_NO_OVERCLAIM");
+  const packages = await Promise.all([
+    readJson(resolve(repositoryRoot, "packages/core/package.json")),
+    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
+  ]);
+  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P6_STANDALONE_DEPENDENCY");
+  return success("P6_CONTEXT_ROUTER_VERIFIED", {
+    tests: tests.reasonCode,
+    goldenProfileCases: fixture.goldenProfileCases,
+    hostileCases: fixture.hostileCases,
+    admittedHostileCases: 7,
+    schemaParityCases: fixture.schemaParityCases,
+    propertyPermutations: fixture.propertyPermutations,
+    logicalMetadataCandidates: fixture.logicalMetadataCandidates,
+    explicitReadCandidates: fixture.explicitReadCandidates,
+    permutationCorpusDigest: fixture.permutationCorpusDigest,
+    latencyStages: fixture.latencyStages,
+    latencyBudgetMilliseconds: fixture.latencyBudgetMilliseconds,
+    latencyResidual: fixture.latencyResidual,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    contextRouter: "implemented",
+    codexAdapter: fixture.codexAdapter,
+    rc3: fixture.rc3,
+    ownerVisibleActivation: fixture.ownerVisibleActivation,
+    liveContextStore: fixture.liveContextStore,
+    standalone: "node-filesystem-only-no-database-no-aos-no-network",
   });
 }
 
@@ -871,6 +922,7 @@ const commandContracts = {
   p4: { exit: 0, reasonCode: "P4_ARTIFACT_LIFECYCLE_VERIFIED" },
   "p4-knowledge": { exit: 0, reasonCode: "P4_KNOWLEDGE_CORE_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
+  p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
@@ -898,7 +950,7 @@ async function verifyMap() {
     assertion(required.every((field) => Object.hasOwn(claim, field)), "VERIFICATION_MAP_FIELDS", claim.id ?? "unknown");
     assertion(!ids.has(claim.id), "VERIFICATION_MAP_DUPLICATE", claim.id);
     ids.add(claim.id);
-    assertion(["P1", "P2", "P3", "P4", "P5", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);
@@ -1072,6 +1124,7 @@ const handlers = {
   p4: verifyP4,
   "p4-knowledge": verifyP4Knowledge,
   p5: verifyP5,
+  p6: verifyP6,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
@@ -1108,6 +1161,9 @@ function evidencePhase(name) {
   }
   if (name === "p5") {
     return "p5";
+  }
+  if (name === "p6") {
+    return "p6";
   }
   if (name === "rc1") {
     return "rc1";

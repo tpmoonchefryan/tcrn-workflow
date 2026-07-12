@@ -52,3 +52,7 @@ Versioning after the first accepted release.
   caller-minted, copied, or replaced canonical receipts cannot authorize.
 - Add the sanitized eight-record Core Reference persona bundle, closed schema,
   display-only release layers, read-only CLI, and deterministic/privacy proof.
+- Add the bounded P6 Context Router with descriptor-bound request authority,
+  admitted profile re-resolution, metadata-first and explicit-read selection,
+  privacy-minimal receipts, hostile/schema/property proof, and no Codex Adapter,
+  RC3, store, hook, Skill, or activation claim.

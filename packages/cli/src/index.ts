@@ -23,21 +23,25 @@ import {
   listKnowledgeMetadata,
   planWorkspaceMigration,
   readGenericProfileAdmissionReceipt,
+  readContextRouteAuthorityReceipt,
   readKnowledgeBody,
   readKnowledgeSnippet,
   recoverWorkspace,
   restoreArtifactArchive,
   resolveGenericProfile,
+  routeContext,
   transitionKnowledgePromotion,
   transitionWork,
   updateProject,
   validateKnowledgeStore,
   validateCorePersonaBundle,
+  validateContextRouteResult,
   validateGenericStarterBundle,
   validateWorkspace,
 } from "../../core/src/index.js";
 import type {
   ExplicitRoot,
+  ContextRouteAuthorityFileIdentity,
   GenericProfileAdmissionAuthority,
   KnowledgeCategory,
   KnowledgeFreshnessState,
@@ -78,6 +82,7 @@ export class WorkflowCliError extends Error {
 export interface CliIo {
   write(value: string): void;
   readonly profileAdmissionAuthority?: GenericProfileAdmissionAuthority;
+  readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
 }
 
 function fail(reasonCode: string, message: string): never {
@@ -232,6 +237,22 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
         command: values.command === "-" ? null : values.command,
       },
     )));
+    return;
+  }
+  if (command === "context-route") {
+    const values = parseArguments(rest, ["request", "profile-receipt", "authority"]);
+    required(values, ["request", "profile-receipt", "authority"]);
+    const profileAdmission = await readGenericProfileAdmissionReceipt(values["profile-receipt"] ?? "",
+      io.profileAdmissionAuthority ? { authority: io.profileAdmissionAuthority } : {});
+    const contextAuthority = await readContextRouteAuthorityReceipt(values.authority ?? "", io.contextRouteAuthority);
+    io.write(canonicalJson(routeContext(jsonValue(values.request, "request"), profileAdmission, contextAuthority)));
+    return;
+  }
+  if (command === "context-validate") {
+    const values = parseArguments(rest, ["result"]);
+    required(values, ["result"]);
+    const result = validateContextRouteResult(jsonValue(values.result, "result"));
+    io.write(canonicalJson({ reasonCode: "CONTEXT_VALIDATED", contextDigest: result.contextDigest }));
     return;
   }
   if (command === "init") {
