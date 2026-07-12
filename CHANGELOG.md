@@ -59,3 +59,6 @@ Versioning after the first accepted release.
   separate host injection, authority-empty fallback, deterministic bundle,
   identity-bound rollback planning, final-hop simulation, and no OG-04, RC3,
   store, hook, Skill, configuration, or activation claim.
+- Require exact canonical template bytes, positional bundle/schema parity, and
+  a pinned no-follow descriptor-verified installation-generation receipt before
+  inert rollback planning; caller-supplied identity objects no longer admit it.

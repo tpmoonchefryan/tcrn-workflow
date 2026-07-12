@@ -611,7 +611,10 @@ async function verifyP6Adapter() {
   const fixture = await readJson(fixturePath);
   assertion(fixture.schemaVersion === "tcrn.p6-codex-adapter-cases.v1", "P6_ADAPTER_FIXTURE_SCHEMA");
   assertion(fixture.goldenCases === 8 && fixture.hostileCases === 31 && fixture.schemaParityCases === 8, "P6_ADAPTER_HOSTILE_CORPUS");
-  assertion(fixture.pathFaultCases === 8 && fixture.rollbackCases === 8 && fixture.finalHopCases === 4, "P6_ADAPTER_SECURITY_CORPUS");
+  assertion(fixture.pathFaultCases === 8 && fixture.rollbackCases === 14 && fixture.finalHopCases === 4 &&
+    fixture.canonicalTemplateCases === 3 && fixture.bundleOrderParityCases === 4 && fixture.bundleUnicodeParityCases === 8 &&
+    fixture.hostParityCases === 4 && fixture.lifecycleParityCases === 4 && fixture.installationAuthorityCases === 12,
+  "P6_ADAPTER_SECURITY_CORPUS");
   assertion(fixture.propertyPermutations === 64 && fixture.templateFiles === 4 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6_ADAPTER_PROPERTY_CORPUS");
   assertion(fixture.coldStartCases === 1 && fixture.staticBoundaryCases === 1, "P6_ADAPTER_STANDALONE_BOUNDARY");
   assertion(fixture.adapter === "implemented_inert_templates_only" && fixture.liveActivation === false && fixture.og04 === "unsatisfied" && fixture.rc3 === "unaccepted" && fixture.liveStore === "not-created", "P6_ADAPTER_NO_OVERCLAIM");
@@ -622,6 +625,12 @@ async function verifyP6Adapter() {
     schemaParityCases: fixture.schemaParityCases,
     pathFaultCases: fixture.pathFaultCases,
     rollbackCases: fixture.rollbackCases,
+    canonicalTemplateCases: fixture.canonicalTemplateCases,
+    bundleOrderParityCases: fixture.bundleOrderParityCases,
+    bundleUnicodeParityCases: fixture.bundleUnicodeParityCases,
+    hostParityCases: fixture.hostParityCases,
+    lifecycleParityCases: fixture.lifecycleParityCases,
+    installationAuthorityCases: fixture.installationAuthorityCases,
     finalHopCases: fixture.finalHopCases,
     propertyPermutations: fixture.propertyPermutations,
     templateFiles: fixture.templateFiles,

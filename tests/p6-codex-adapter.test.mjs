@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -11,6 +11,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
   CODEX_ADAPTER_HOST_VERSION,
+  CODEX_ADAPTER_INSTALLATION_VERSION,
   CODEX_ADAPTER_LIFECYCLE_VERSION,
   CODEX_ADAPTER_REQUEST_VERSION,
   CODEX_ADAPTER_TEMPLATE_PATHS,
@@ -19,6 +20,7 @@ import {
   codexAdapterAuthorityEmptyFallback,
   generateCodexAdapterBundle,
   planCodexAdapterRollback,
+  readCodexAdapterInstallationReceipt,
   simulateCodexAdapterLifecycle,
   validateCodexAdapterBundle,
   validateCodexAdapterRequest,
@@ -101,8 +103,43 @@ function hostFor(adapterRequest, overrides = {}) {
   return admitCodexAdapterHostInput({ ...basis, hostDigest: canonicalSha256(basis) });
 }
 
-function observed(bundle) {
-  return bundle.files.map((file, index) => ({ path: file.path, contentDigest: file.contentDigest, kind: "regular", nlink: 1, symlink: false, identityDigest: hash(`identity-${index}`) }));
+function statIdentity(value) {
+  return canonicalSha256({ dev: String(value.dev), ino: String(value.ino), size: String(value.size), mtimeMs: String(value.mtimeMs), ctimeMs: String(value.ctimeMs) });
+}
+
+function resealBundleFile(bundleValue, index, content, { resealBundleDigest = true } = {}) {
+  const bundle = clone(bundleValue);
+  bundle.files[index].content = content;
+  bundle.files[index].contentDigest = createHash("sha256").update(content).digest("hex");
+  bundle.rollback[index].contentDigest = bundle.files[index].contentDigest;
+  bundle.manifestDigest = canonicalSha256(bundle.files.map(({ path, contentDigest, mode }) => ({ path, contentDigest, mode })));
+  if (resealBundleDigest) {
+    delete bundle.bundleDigest;
+    bundle.bundleDigest = canonicalSha256(bundle);
+  }
+  return bundle;
+}
+
+async function installationFixture(bundle, { read = true } = {}) {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "workflow-adapter-installation-")));
+  const installationRoot = join(directory, "project");
+  await mkdir(installationRoot);
+  const entries = [];
+  for (const file of bundle.files) {
+    const path = join(installationRoot, ...file.path.split("/"));
+    await mkdir(path.slice(0, path.lastIndexOf("/")), { recursive: true });
+    await writeFile(path, file.content, { mode: 0o600 });
+    const stat = await lstat(path);
+    entries.push({ path: file.path, realpath: await realpath(path), contentDigest: file.contentDigest, identityDigest: statIdentity(stat) });
+  }
+  const basis = { schemaVersion: CODEX_ADAPTER_INSTALLATION_VERSION, generationId: "adapter-generation:fixture", bundleDigest: bundle.bundleDigest, installationRoot, entries };
+  const receipt = { ...basis, receiptDigest: canonicalSha256(basis) };
+  const receiptPath = join(directory, "installation-generation.json");
+  const bytes = `${canonicalJson(receipt)}\n`;
+  await writeFile(receiptPath, bytes, { mode: 0o600 });
+  const authority = { expectedCanonicalPath: receiptPath, expectedFileSha256: createHash("sha256").update(bytes).digest("hex") };
+  const context = read ? await readCodexAdapterInstallationReceipt(receiptPath, authority) : null;
+  return { directory, installationRoot, entries, receipt, receiptPath, authority, context, close: () => rm(directory, { recursive: true, force: true }) };
 }
 
 function permutations(values) {
@@ -130,7 +167,17 @@ test("golden inert bundle is closed, canonical, unactivated, and CLI read-only",
   }
 });
 
-test("empty-project cold start remains empty and Adapter source has no legacy, store, network, database, or AOS reader", async () => {
+test("fully resealed noncanonical template bytes fail for whitespace, key order, and escape spelling", () => {
+  const input = request(), bundle = generateCodexAdapterBundle(input, hostFor(input));
+  const parsed = JSON.parse(bundle.files[0].content);
+  const reverseOrder = JSON.stringify(Object.fromEntries(Object.entries(parsed).reverse()));
+  const escapeForm = bundle.files[0].content.replace('"activation"', '"acti\\u0076ation"');
+  const vectors = [`${bundle.files[0].content} `, reverseOrder, escapeForm];
+  assert.equal(vectors.length, fixture.canonicalTemplateCases);
+  for (const content of vectors) reason("ADAPTER_CANONICAL_INVALID", () => validateCodexAdapterBundle(resealBundleFile(bundle, 0, content)));
+});
+
+test("empty-project cold start remains empty and Adapter source has no legacy, ambient store scan, network, database, or AOS reader", async () => {
   const directory = await mkdtemp(join(tmpdir(), "workflow-inert-adapter-"));
   try {
     assert.deepEqual(await readdir(directory), []);
@@ -140,7 +187,7 @@ test("empty-project cold start remains empty and Adapter source has no legacy, s
     assert.deepEqual(await readdir(directory), []);
     const source = await readFile(new URL("../packages/core/src/codex-adapter.ts", import.meta.url), "utf8");
     const forbiddenSources = [
-      ["node", ":", "fs"], ["node", ":", "child_process"], ["node", ":", "http"], ["node", ":", "https"],
+      ["node", ":", "child_process"], ["node", ":", "http"], ["node", ":", "https"],
       ["node", ":", "net"], ["legacy", " Workflow"], ["Vault", "/"], ["A", "OS"], ["data", "base"], ["fetch", "("],
     ].map((parts) => parts.join(""));
     for (const forbidden of forbiddenSources) {
@@ -205,24 +252,42 @@ test("hostile request, host, Context, Unicode, budget, and closed-field vectors 
   await cliReason("ADAPTER_HOST_REQUIRED", ["adapter-generate", "--request", canonicalJson(base)]);
 });
 
-test("rollback planning rejects traversal-equivalent identity, link, special, replacement, and digest mismatches", async () => {
-  const input = request(), bundle = generateCodexAdapterBundle(input, hostFor(input)), valid = observed(bundle);
-  assert.equal(planCodexAdapterRollback(bundle, valid).reasonCode, "ADAPTER_ROLLBACK_PLANNED");
+test("rollback requires descriptor-bound installation generation and rejects forged, copied, replaced, linked, special, changed, or mismatched evidence", async () => {
+  const input = request(), bundle = generateCodexAdapterBundle(input, hostFor(input));
+  const valid = await installationFixture(bundle);
+  try {
+    assert.equal(planCodexAdapterRollback(bundle, valid.context).reasonCode, "ADAPTER_ROLLBACK_PLANNED");
+    reason("ADAPTER_INSTALLATION_REQUIRED", () => planCodexAdapterRollback(bundle, { receipt: valid.receipt }));
+    await cliReason("ADAPTER_INSTALLATION_REQUIRED", ["adapter-rollback-plan", "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath]);
+    let output = "";
+    await runCli(["adapter-rollback-plan", "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath], {
+      codexAdapterInstallationAuthority: valid.authority, write: (value) => { output = value; },
+    });
+    assert.equal(JSON.parse(output).reasonCode, "ADAPTER_ROLLBACK_PLANNED");
+  } finally { await valid.close(); }
+
   const cases = [
-    (x) => { x[0].path = "../escape"; },
-    (x) => { x[0].path = "/absolute"; },
-    (x) => { x[0].path = ".codex\\escape"; },
-    (x) => { x[0].contentDigest = hash("replacement"); },
-    (x) => { x[0].kind = "directory"; },
-    (x) => { x[0].kind = "fifo"; },
-    (x) => { x[0].nlink = 2; },
-    (x) => { x[0].symlink = true; },
+    async (fixtureValue) => readCodexAdapterInstallationReceipt(fixtureValue.receiptPath),
+    async (fixtureValue) => readCodexAdapterInstallationReceipt(fixtureValue.receiptPath, { ...fixtureValue.authority, expectedFileSha256: hash("wrong") }),
+    async (fixtureValue) => { const copy = join(fixtureValue.directory, "copy.json"); await writeFile(copy, await readFile(fixtureValue.receiptPath)); return readCodexAdapterInstallationReceipt(copy, fixtureValue.authority); },
+    async (fixtureValue) => { const target = join(fixtureValue.directory, "receipt-target.json"); await rename(fixtureValue.receiptPath, target); await symlink(target, fixtureValue.receiptPath); return readCodexAdapterInstallationReceipt(fixtureValue.receiptPath, fixtureValue.authority); },
+    async (fixtureValue) => { const copy = join(fixtureValue.directory, "hardlink.json"); await link(fixtureValue.receiptPath, copy); return readCodexAdapterInstallationReceipt(fixtureValue.receiptPath, fixtureValue.authority); },
+    async (fixtureValue) => { await rm(fixtureValue.receiptPath); await mkdir(fixtureValue.receiptPath); return readCodexAdapterInstallationReceipt(fixtureValue.receiptPath, fixtureValue.authority); },
+    async (fixtureValue) => readCodexAdapterInstallationReceipt(fixtureValue.receiptPath, fixtureValue.authority, { afterReceiptLstat: async () => { const old = `${fixtureValue.receiptPath}.old`; await rename(fixtureValue.receiptPath, old); await writeFile(fixtureValue.receiptPath, await readFile(old)); } }),
+    async (fixtureValue) => { await writeFile(fixtureValue.entries[0].realpath, "replacement"); return readCodexAdapterInstallationReceipt(fixtureValue.receiptPath, fixtureValue.authority); },
+    async (fixtureValue) => { const target = `${fixtureValue.entries[0].realpath}.target`; await rename(fixtureValue.entries[0].realpath, target); await symlink(target, fixtureValue.entries[0].realpath); return readCodexAdapterInstallationReceipt(fixtureValue.receiptPath, fixtureValue.authority); },
+    async (fixtureValue) => { await link(fixtureValue.entries[0].realpath, `${fixtureValue.entries[0].realpath}.hardlink`); return readCodexAdapterInstallationReceipt(fixtureValue.receiptPath, fixtureValue.authority); },
+    async (fixtureValue) => { await rm(fixtureValue.entries[0].realpath); await mkdir(fixtureValue.entries[0].realpath); return readCodexAdapterInstallationReceipt(fixtureValue.receiptPath, fixtureValue.authority); },
+    async (fixtureValue) => readCodexAdapterInstallationReceipt(fixtureValue.receiptPath, fixtureValue.authority, { afterEntryLstat: async (path, index) => { if (index === 0) await writeFile(path, "changed-after-lstat"); } }),
   ];
-  assert.equal(cases.length, fixture.rollbackCases);
-  for (const mutate of cases) { const changed = clone(valid); mutate(changed); reason("ADAPTER_ROLLBACK_MISMATCH", () => planCodexAdapterRollback(bundle, changed)); }
-  let output = "";
-  await runCli(["adapter-rollback-plan", "--bundle", canonicalJson(bundle), "--observed", canonicalJson(valid)], { write: (value) => { output = value; } });
-  assert.equal(JSON.parse(output).reasonCode, "ADAPTER_ROLLBACK_PLANNED");
+  assert.equal(cases.length, fixture.installationAuthorityCases);
+  for (const operation of cases) {
+    const fixtureValue = await installationFixture(bundle, { read: false });
+    try { await assert.rejects(operation(fixtureValue), (error) => String(error?.reasonCode).startsWith("ADAPTER_INSTALLATION_")); } finally { await fixtureValue.close(); }
+  }
+  const otherInput = request({ promptText: "different admitted request" }), otherBundle = generateCodexAdapterBundle(otherInput, hostFor(otherInput));
+  const mismatched = await installationFixture(bundle);
+  try { reason("ADAPTER_INSTALLATION_MISMATCH", () => planCodexAdapterRollback(otherBundle, mismatched.context)); } finally { await mismatched.close(); }
 });
 
 test("Stop and final-hop model preserves exactly one owner-visible response", async () => {
@@ -255,7 +320,7 @@ test("64 distinct request/template orders produce identical canonical bundle byt
   assert.equal(canonicalSha256(records), fixture.permutationCorpusDigest);
 });
 
-test("Draft 2020-12 and runtime agree for closed fields, Unicode, and bounded strings", async () => {
+test("Draft 2020-12 and runtime agree for request, complete bundle, host, lifecycle, ordering, and recursive Unicode surfaces", async () => {
   const adapterSchema = JSON.parse(await readFile(new URL("../packages/core/schema/codex-adapter-v1.schema.json", import.meta.url), "utf8"));
   const contextSchema = JSON.parse(await readFile(new URL("../packages/core/schema/context-router-v1.schema.json", import.meta.url), "utf8"));
   const profileSchema = JSON.parse(await readFile(new URL("../packages/core/schema/generic-profile-v1.schema.json", import.meta.url), "utf8"));
@@ -263,10 +328,15 @@ test("Draft 2020-12 and runtime agree for closed fields, Unicode, and bounded st
   const ajv = new Ajv2020({ strict: false, allErrors: true });
   ajv.addKeyword({ keyword: "x-tcrn-maxUtf8Bytes", type: "string", schemaType: "number", validate: (limit, value) => Buffer.byteLength(value, "utf8") <= limit });
   ajv.addKeyword({ keyword: "x-tcrn-deepWellFormedUnicode", schemaType: "boolean", validate: (_schema, value) => { const visit = (entry) => typeof entry === "string" ? entry.isWellFormed() : Array.isArray(entry) ? entry.every(visit) : entry && typeof entry === "object" ? Object.entries(entry).every(([key, child]) => key.isWellFormed() && visit(child)) : true; return visit(value); } });
+  ajv.addKeyword({ keyword: "x-tcrn-canonicalJsonString", type: "string", schemaType: "boolean", validate: (_schema, value) => { try { return canonicalJson(JSON.parse(value)) === value; } catch { return false; } } });
+  ajv.addKeyword({ keyword: "x-tcrn-runtimeBundle", type: "object", schemaType: "boolean", validate: (_schema, value) => { try { validateCodexAdapterBundle(value); return true; } catch { return false; } } });
   ajv.addSchema(protocolSchema); ajv.addSchema(profileSchema); ajv.addSchema(contextSchema); ajv.addSchema(adapterSchema);
-  const validate = ajv.getSchema(`${adapterSchema.$id}#/$defs/request`);
-  assert.ok(validate);
-  const valid = request(); assert.equal(validate(valid), true); validateCodexAdapterRequest(valid);
+  const requestSchema = ajv.getSchema(`${adapterSchema.$id}#/$defs/request`);
+  const bundleSchema = ajv.getSchema(`${adapterSchema.$id}#/$defs/bundle`);
+  const hostSchema = ajv.getSchema(`${adapterSchema.$id}#/$defs/host`);
+  const lifecycleSchema = ajv.getSchema(`${adapterSchema.$id}#/$defs/lifecycle`);
+  assert.ok(requestSchema && bundleSchema && hostSchema && lifecycleSchema);
+  const valid = request(); assert.equal(requestSchema(valid), true); validateCodexAdapterRequest(valid);
   const vectors = [
     { ...valid, extra: true },
     { ...valid, promptText: "\ud800" },
@@ -278,5 +348,43 @@ test("Draft 2020-12 and runtime agree for closed fields, Unicode, and bounded st
     { ...valid, environmentText: null },
   ];
   assert.equal(vectors.length, fixture.schemaParityCases);
-  for (const vector of vectors) { assert.equal(validate(vector), false); assert.throws(() => validateCodexAdapterRequest(vector)); }
+  for (const vector of vectors) { assert.equal(requestSchema(vector), false); assert.throws(() => validateCodexAdapterRequest(vector)); }
+
+  const bundle = generateCodexAdapterBundle(valid, hostFor(valid));
+  assert.equal(bundleSchema(bundle), true); validateCodexAdapterBundle(bundle);
+  const bundleVectors = [
+    (() => { const changed = clone(bundle); changed.files.reverse(); return changed; })(),
+    (() => { const changed = clone(bundle); changed.files[1] = clone(changed.files[0]); return changed; })(),
+    (() => { const changed = clone(bundle); changed.rollback.reverse(); return changed; })(),
+    (() => { const changed = clone(bundle); changed.rollback[1] = clone(changed.rollback[0]); return changed; })(),
+  ];
+  assert.equal(bundleVectors.length, fixture.bundleOrderParityCases);
+  for (const vector of bundleVectors) { assert.equal(bundleSchema(vector), false); assert.throws(() => validateCodexAdapterBundle(vector)); }
+  const unicodeVectors = [];
+  for (let index = 0; index < bundle.files.length; index += 1) {
+    unicodeVectors.push(resealBundleFile(bundle, index, `${bundle.files[index].content}\ud800`, { resealBundleDigest: false }));
+    unicodeVectors.push(resealBundleFile(bundle, index, `${bundle.files[index].content}\udfff`, { resealBundleDigest: false }));
+  }
+  assert.equal(unicodeVectors.length, fixture.bundleUnicodeParityCases);
+  for (const vector of unicodeVectors) { assert.equal(bundleSchema(vector), false); reason("ADAPTER_UNICODE_INVALID", () => validateCodexAdapterBundle(vector)); }
+
+  const canonicalParsed = JSON.parse(bundle.files[0].content);
+  const canonicalVectors = [
+    resealBundleFile(bundle, 0, `${bundle.files[0].content} `),
+    resealBundleFile(bundle, 0, JSON.stringify(Object.fromEntries(Object.entries(canonicalParsed).reverse()))),
+    resealBundleFile(bundle, 0, bundle.files[0].content.replace('"activation"', '"acti\\u0076ation"')),
+  ];
+  for (const vector of canonicalVectors) { assert.equal(bundleSchema(vector), false); reason("ADAPTER_CANONICAL_INVALID", () => validateCodexAdapterBundle(vector)); }
+
+  const host = hostFor(valid).input;
+  assert.equal(hostSchema(host), true); admitCodexAdapterHostInput(host);
+  const hostVectors = [{ ...host, extra: true }, { ...host, workspaceId: "\ud800" }, { ...host, activationAllowed: true }, Object.fromEntries(Object.entries(host).filter(([field]) => field !== "hostDigest"))];
+  assert.equal(hostVectors.length, fixture.hostParityCases);
+  for (const vector of hostVectors) { assert.equal(hostSchema(vector), false); assert.throws(() => admitCodexAdapterHostInput(vector)); }
+
+  const lifecycle = { schemaVersion: CODEX_ADAPTER_LIFECYCLE_VERSION, contextDigest: bundle.contextDigest, governedRoutingSucceeded: true, stopRequests: 1, finalHopRequests: 1 };
+  assert.equal(lifecycleSchema(lifecycle), true); simulateCodexAdapterLifecycle(lifecycle);
+  const lifecycleVectors = [{ ...lifecycle, extra: true }, { ...lifecycle, contextDigest: "\udfff" }, { ...lifecycle, stopRequests: 3 }, { ...lifecycle, finalHopRequests: "1" }];
+  assert.equal(lifecycleVectors.length, fixture.lifecycleParityCases);
+  for (const vector of lifecycleVectors) { assert.equal(lifecycleSchema(vector), false); assert.throws(() => simulateCodexAdapterLifecycle(vector)); }
 });

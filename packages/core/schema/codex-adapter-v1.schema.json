@@ -14,6 +14,9 @@
     },
     {
       "$ref": "#/$defs/lifecycle"
+    },
+    {
+      "$ref": "#/$defs/installation"
     }
   ],
   "$defs": {
@@ -86,6 +89,7 @@
     },
     "host": {
       "type": "object",
+      "x-tcrn-deepWellFormedUnicode": true,
       "additionalProperties": false,
       "required": [
         "schemaVersion",
@@ -176,7 +180,8 @@
         "content": {
           "type": "string",
           "maxLength": 65536,
-          "x-tcrn-maxUtf8Bytes": 65536
+          "x-tcrn-maxUtf8Bytes": 65536,
+          "x-tcrn-canonicalJsonString": true
         },
         "contentDigest": {
           "$ref": "#/$defs/sha256"
@@ -221,6 +226,8 @@
     },
     "bundle": {
       "type": "object",
+      "x-tcrn-deepWellFormedUnicode": true,
+      "x-tcrn-runtimeBundle": true,
       "additionalProperties": false,
       "required": [
         "schemaVersion",
@@ -257,9 +264,65 @@
           "type": "array",
           "minItems": 4,
           "maxItems": 4,
-          "items": {
-            "$ref": "#/$defs/file"
-          }
+          "prefixItems": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/file"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/bootstrap.json"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/file"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/final-hop.json"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/file"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/project.json"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/file"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/stop.json"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
         },
         "manifestDigest": {
           "$ref": "#/$defs/sha256"
@@ -268,9 +331,65 @@
           "type": "array",
           "minItems": 4,
           "maxItems": 4,
-          "items": {
-            "$ref": "#/$defs/rollback"
-          }
+          "prefixItems": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/rollback"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/bootstrap.json"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/rollback"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/final-hop.json"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/rollback"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/project.json"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/rollback"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/stop.json"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
         },
         "bundleDigest": {
           "$ref": "#/$defs/sha256"
@@ -279,6 +398,7 @@
     },
     "lifecycle": {
       "type": "object",
+      "x-tcrn-deepWellFormedUnicode": true,
       "additionalProperties": false,
       "required": [
         "schemaVersion",
@@ -306,6 +426,135 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 2
+        }
+      }
+    },
+    "installationEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "realpath",
+        "contentDigest",
+        "identityDigest"
+      ],
+      "properties": {
+        "path": {
+          "enum": [
+            ".codex/tcrn-workflow/bootstrap.json",
+            ".codex/tcrn-workflow/final-hop.json",
+            ".codex/tcrn-workflow/project.json",
+            ".codex/tcrn-workflow/stop.json"
+          ]
+        },
+        "realpath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "x-tcrn-maxUtf8Bytes": 4096
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "identityDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "installation": {
+      "type": "object",
+      "x-tcrn-deepWellFormedUnicode": true,
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "generationId",
+        "bundleDigest",
+        "installationRoot",
+        "entries",
+        "receiptDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.codex-adapter-installation-generation.v1"
+        },
+        "generationId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "bundleDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "installationRoot": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "x-tcrn-maxUtf8Bytes": 4096
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/installationEntry"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/bootstrap.json"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/installationEntry"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/final-hop.json"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/installationEntry"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/project.json"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/installationEntry"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": ".codex/tcrn-workflow/stop.json"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
+        },
+        "receiptDigest": {
+          "$ref": "#/$defs/sha256"
         }
       }
     }

@@ -105,8 +105,10 @@ Those observations are local process measurements, not real-time guarantees.
 `pnpm verify:p6:adapter` separately proves the closed Context-result bridge,
 independently injected host binding, authority-empty raw-session fallback,
 deterministic four-file inert template bundle, identity/digest-bound rollback
-plan, final-hop visibility model, hostile corpus, and 64 real input/template
-orders. The templates are not installed or activated; OG-04 and RC3 remain
+plan admitted from a pinned descriptor-verified installation-generation receipt,
+exact canonical template bytes, complete ordered bundle/schema parity,
+final-hop visibility, hostile corpus, and 64 real input/template orders. The
+templates are not installed or activated; OG-04 and RC3 remain
 unsatisfied, and no live context/profile/Knowledge/artifact store, hook, Skill,
 configuration, or owner-visible activation is created.
 
