@@ -15,6 +15,7 @@ import {
   evaluateKnowledgeFreshness,
   exportKnowledgeCheckpoint,
   exportWorkspace,
+  generateCorePersonaBundle,
   authorizeGenericProfileOperation,
   generateGenericStarterBundle,
   initializeKnowledgeStore,
@@ -31,6 +32,7 @@ import {
   transitionWork,
   updateProject,
   validateKnowledgeStore,
+  validateCorePersonaBundle,
   validateGenericStarterBundle,
   validateWorkspace,
 } from "../../core/src/index.js";
@@ -83,7 +85,7 @@ function fail(reasonCode: string, message: string): never {
 }
 
 function parseArguments(arguments_: readonly string[], allowed: readonly string[]): Readonly<Record<string, string>> {
-  if (arguments_.some((value) => value.length > 8_192)) {
+  if (arguments_.some((value) => value.length > 65_536)) {
     fail("CLI_INPUT_OVERSIZED", "CLI arguments exceed the local input limit");
   }
   const values: Record<string, string> = {};
@@ -185,6 +187,16 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     if (values.mode !== "generic") fail("PROFILE_INPUT_INVALID", "mode");
     io.write(canonicalJson({ reasonCode: "PROFILE_BUNDLE_GENERATED", bundle: generateGenericStarterBundle() }));
     return;
+  }
+  if (command === "persona-generate") {
+    const values = parseArguments(rest, ["set"]); required(values, ["set"]);
+    if (values.set !== "core-reference") fail("PROFILE_INPUT_INVALID", "set");
+    io.write(canonicalJson({ reasonCode: "PERSONA_BUNDLE_GENERATED", bundle: generateCorePersonaBundle() })); return;
+  }
+  if (command === "persona-validate") {
+    const values = parseArguments(rest, ["bundle"]); required(values, ["bundle"]);
+    const bundle = validateCorePersonaBundle(jsonValue(values.bundle, "bundle"));
+    io.write(canonicalJson({ reasonCode: "PERSONA_VALIDATED", bundleDigest: bundle.bundleDigest, profiles: bundle.profiles.length })); return;
   }
   if (command === "profile-validate") {
     const values = parseArguments(rest, ["bundle"]);

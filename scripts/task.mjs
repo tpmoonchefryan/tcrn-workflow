@@ -265,7 +265,7 @@ async function runTests({
     .filter((path) => !p3Only || path === "tests/p3-file-engine.test.mjs")
     .filter((path) => !p4Only || ["tests/p4-artifact-lifecycle.test.mjs", "tests/p4-knowledge-core.test.mjs"].includes(path))
     .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs")
-    .filter((path) => !p5Only || path === "tests/p5-generic-profile.test.mjs");
+    .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path));
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -471,6 +471,8 @@ async function verifyP5() {
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p5-generic-profile-cases.json");
   const schemaPath = resolve(repositoryRoot, "packages/core/schema/generic-profile-v1.schema.json");
   const specPath = resolve(repositoryRoot, "packages/core/spec/generic-profile-v1.md");
+  const personaSchemaPath = resolve(repositoryRoot, "packages/core/schema/core-reference-persona-v1.schema.json");
+  const personaSpecPath = resolve(repositoryRoot, "packages/core/spec/core-reference-persona-v1.md");
   const fixture = await readJson(fixturePath);
   assertion(fixture.schemaVersion === "tcrn.p5-generic-profile-cases.v1", "P5_FIXTURE_SCHEMA");
   assertion(Array.isArray(fixture.operationCases) && fixture.operationCases.length === 8, "P5_OPERATION_CASES");
@@ -505,6 +507,10 @@ async function verifyP5() {
     trustAdmissionNegativeCases: fixture.trustAdmissionNegativeCases.length,
     admissionFilesystemNegativeCases: fixture.admissionFilesystemNegativeCases.length,
     authorityAnchorNegativeCases: fixture.authorityAnchorNegativeCases.length,
+    coreReferenceProfiles: 8,
+    coreReferenceSourceManifestSha256: "9fa68e8f06e73e1d1b4bffb59a059814e683619b1d80234aef82e44f76de7c13",
+    coreReferenceSchemaDigest: (await fileRecord(personaSchemaPath)).sha256,
+    coreReferenceSpecDigest: (await fileRecord(personaSpecPath)).sha256,
     cliCases: fixture.cliCases.length,
     propertyPermutations: fixture.propertyPermutations,
     permutationLayerCount: fixture.permutationLayerCount,
@@ -522,8 +528,8 @@ async function verifyP5() {
     specDigest: (await fileRecord(specPath)).sha256,
     generatedMaterial: "inert-generic-data-only",
     liveProfileStore: "not-created",
-    ownerGate: "OG-03-unsatisfied",
-    namedPersonaContent: "not-read-not-admitted",
+    ownerGate: "standing-owner-authority-admitted",
+    namedPersonaContent: "eight-core-reference-records-only",
     standalone: "node-filesystem-only-no-database-no-aos-no-network",
     acceptance: "not-claimed",
   });
