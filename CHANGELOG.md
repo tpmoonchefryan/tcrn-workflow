@@ -50,3 +50,5 @@ Versioning after the first accepted release.
 - Require an out-of-band governed canonical path and raw receipt-file digest;
   P5 receipts now bind the complete request and derived effective profile, so
   caller-minted, copied, or replaced canonical receipts cannot authorize.
+- Add the sanitized eight-record Core Reference persona bundle, closed schema,
+  display-only release layers, read-only CLI, and deterministic/privacy proof.

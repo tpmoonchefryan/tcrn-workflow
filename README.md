@@ -88,7 +88,10 @@ permutations, and a disposable empty
 Workspace cold-start through Initiative → Epic → Story → Subtask. Generated
 material is inert data and carries no external project/persona, model, hook,
 thread, network, database, AOS, or absolute-path authority. The live Workspace
-has no profile store, and the separate owner gate remains unsatisfied.
+has no profile store; persona admission remains separate from technical profile authority.
+The bounded Core Reference persona set generates exactly eight inert,
+source-manifest-bound public records and display-only release layers; it creates
+no live store, agent, hook, Skill, or authorization capability.
 
 After `pnpm build`, governed local commands are available through
 `node scripts/tcrn-workflow.mjs`. Mutation commands require an explicit

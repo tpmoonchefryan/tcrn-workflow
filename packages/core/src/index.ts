@@ -167,6 +167,18 @@ export {
   validateGenericProfileLayer,
   validateGenericStarterBundle,
 } from "./generic-profile.js";
+export {
+  CORE_PERSONA_BUNDLE_VERSION,
+  CORE_PERSONA_PROFILE_VERSION,
+  CORE_PERSONA_REASON_CODES,
+  CORE_PERSONA_SOURCE_MANIFEST_SHA256,
+  CorePersonaError,
+  generateCorePersonaBundle,
+  generateCorePersonaReleaseLayers,
+  validateCorePersonaBundle,
+  validateCorePersonaProfile,
+} from "./core-reference-personas.js";
+export type { CorePersonaBundle, CorePersonaProfile, CorePersonaReasonCode } from "./core-reference-personas.js";
 export type {
   EffectiveGenericProfile,
   GenericProfileAdmissionContext,
