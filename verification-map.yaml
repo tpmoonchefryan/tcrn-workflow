@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "7c40df08d26307b0eeab77913c9ec1f072a4e31d9fc0291afd55d78f01f4b7b8",
+      "fixtureDigest": "80f589b62c4831ef7dc403f8a617250c97530ce1c3d9e3edeef9168eabc9319d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "036630344478bfcfd89e76cc16990d2847f6f3cbf97d34079a1628de94e0755d",
+      "fixtureDigest": "26e266f1c0f4ad7a4107ebbe933ea8848e3a48da661117c68d2b42769907ee8b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -75,7 +75,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "fb8093370d4a1a44419a07a3aa771cfb54249fbc393add8fbc1139e9c8504774",
+      "fixtureDigest": "752e43baf9383178589bcb83b12ee95c2df95f986d97d1e4d9498827f7b432cf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -147,7 +147,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "e3125db46f3a42b2d947dacb80e18c45110378c4683600bd5a8da5a1ce68ac68",
+      "fixtureDigest": "568e17cb63ee384604bc49e331273fd3599ea3da8b964c455c93a85811999f1a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "94bafc11df9caba807db083df0dd7a5e85c17eb89ddad887920bcb685292e128",
+      "fixtureDigest": "7fd6b2612eda9d94e6205a5be199e2904a70f784d5b846456d8ecb708a8b032d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -208,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "72dc12c9c5208d265e4f211c3cf99338ab6aa1a63f8e11cdf317fcb1cf1b21e1",
+      "fixtureDigest": "b4e396ce2a8acf790701ff694a6d06985f73bba4a039c2a165c07ddb64ecca29",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -233,7 +233,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "6043794180f3a97e3ee39e3c3d761579d95987aa01f7d8705bd6c48931d5fa8e",
+      "fixtureDigest": "b0853bab8737b5dffcb7341159527f3407ba9017fd20483bf7bd7dbdd4013fde",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -260,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "29edf8b0c5d343553a7e48ab9a94049883181e5e7a5f32a89e3a909b48cd7ae9",
+      "fixtureDigest": "728e499b6ba126a87c26f46688128378f1869f5cc49abd873c019174c5c4c968",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -455,7 +455,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "aee0c632230bf4e332150f37c31178a309c783bf0021e70b065ced94c4d6d357",
+      "fixtureDigest": "af0afe1c88ff4632ef826d10504ffa61c1c44a46aea2f8d81f03869d518a76e4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -512,7 +512,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "16fd5d577b89025af5e6b1a9f7a8ea46a2dfa94cfdd60970f10f687ff0eef5e7",
+      "fixtureDigest": "cbeacc50c561b2ad723393d26c4bf313e7175865138ad78b5160a1575a622710",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -542,7 +542,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "705044c19dca5a9b12d9b00b6ab2d8d1b1b7fb24bac5367201e3755d3dc5d422",
+      "fixtureDigest": "b275cbd87e649983a04e393d0092fc0b4cec87d9c45ea03324c8eda4205f99ec",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -569,7 +569,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "a287f5f08caf9c64c47d94a663a5de706331632003e1297a88e9e4a801de2343",
+      "fixtureDigest": "5a9000d120a08e1a648e53d09889682b55c5b08078dfafd7907cd12bfb72e694",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -604,7 +604,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "804cdb0abc0a4bdcb8d5856426571df208f6e3558c467217c977d38dcd590cd5",
+      "fixtureDigest": "8dcd3dffec516cd69a098626131cf324dc99700c7ef03256b6e321c0e4fc2867",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -640,7 +640,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "86fc7aca2ed1359784384bddb346f18c7e0d58763bda1963afb35be79d005ce3",
+      "fixtureDigest": "a3db09ae435466d810b242c67487ca43a961bd0a5c6c35e693f07d862a414521",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -702,7 +702,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "152b038b8f92fd54ad7acb6676f23e87eceb15c7417cd2a17813328e1a5119be",
+      "fixtureDigest": "0d7c02148275c79bed12bc29886734fe54c8f1212bfbc59853bd7ace85dff4cc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -719,7 +719,7 @@
       "id": "P6-CODEX-ADAPTER",
       "phase": "P6",
       "status": "implemented",
-      "subject": "P6 implements an uninstalled and unactivated Codex Adapter as closed inert template data only, with separately injected host admission, authority-empty fallback, deterministic four-file bundle, exact rollback identity plan, final-hop visibility model, hostile proof and 64 real input/template permutations; OG-04 and RC3 remain unsatisfied.",
+      "subject": "P6 implements an uninstalled and unactivated Codex Adapter as closed inert template data only, with separately injected host admission, authority-empty fallback, exact canonical template bytes, positional complete-bundle parity, descriptor-bound installation-generation rollback admission, final-hop visibility, hostile proof and 64 real input/template permutations; OG-04 and RC3 remain unsatisfied.",
       "command": "pnpm verify:p6:adapter",
       "fixturePaths": [
         "package.json",
@@ -735,7 +735,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "424139b1e191f39e8afb6cf8fc37e1e9fed145bd64f1b57d3c64b64059a69637",
+      "fixtureDigest": "b340a52f35c98b567a9573ac5300f92c329362b469cea6a66d65653a0bd05fe8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -768,7 +768,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "bfdabb33e52489202c29123ea141963679eadd39b4afdc523acc7c83ff2d474e",
+      "fixtureDigest": "915cafea70f26f2dc75f0da97fc24d2d792df00ce14da2ddf06e4ef23a6182cc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

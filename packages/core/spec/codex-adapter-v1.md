@@ -24,15 +24,30 @@ Context result and its binding. CLI flags cannot populate the host context.
 ## Bundle
 
 The output is canonical inert JSON data for exactly four repository-relative
-paths under `.codex/tcrn-workflow/`. Paths and file order are a closed set and are
-UTF-8-byte ordered. Contents, manifest, host, request, Context, rollback, and
-bundle digests are SHA-256 bound. No ambient discovery or filesystem write exists.
+paths under `.codex/tcrn-workflow/`. Paths and file/rollback array positions are
+a closed ordered tuple. Every template byte string must equal
+`canonicalJson(JSON.parse(bytes))` exactly; whitespace, alternate key ordering,
+and alternate JSON escape spellings fail even when all enclosing digests are
+resealed. Contents, manifest, host, request, Context, rollback, and bundle
+digests are SHA-256 bound. No ambient discovery or filesystem write exists.
 
-The rollback manifest names only generated paths and digests. A rollback plan is
-returned only when every separately observed entry is a non-symlink regular file
-with `nlink=1` and exact path/content/identity digests. The product does not delete
-files; a later governed installer would need no-follow descriptor binding and the
-accepted cooperative clean-checkout ancestor boundary.
+Draft 2020-12 proof registers executable UTF-8-byte, recursive well-formed
+Unicode, canonical-JSON-string, and complete runtime-bundle keywords. It checks
+the complete bundle tuple plus explicit request, host, lifecycle, and
+installation-receipt parity matrices. The instant regex remains structural;
+runtime strict-instant and validity-window checks remain the semantic authority.
+
+The rollback manifest names only generated paths and digests. Caller-supplied
+identity objects confer no authority. A rollback plan requires a separately
+admitted installation-generation receipt at an out-of-band pinned canonical path
+and raw file digest. The reader binds the receipt and every synthetic installed
+entry through `lstat`, `O_NOFOLLOW`, regular/single-link checks, pre/open/post and
+named dev+ino+size+mtime+ctime identity, realpath, and raw content digest. The
+receipt binds generation, bundle, installation root, exact paths, realpaths,
+content digests, and descriptor-derived identity digests. Copied, replaced,
+linked, special, changed, wrong-path/digest, or mismatched-generation evidence
+fails closed. The product returns a plan only and never deletes files. Ancestor
+replacement remains under the accepted cooperative clean-checkout boundary.
 
 ## Fallback and final hop
 

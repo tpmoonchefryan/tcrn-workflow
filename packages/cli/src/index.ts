@@ -41,11 +41,13 @@ import {
   codexAdapterAuthorityEmptyFallback,
   generateCodexAdapterBundle,
   planCodexAdapterRollback,
+  readCodexAdapterInstallationReceipt,
   simulateCodexAdapterLifecycle,
   validateCodexAdapterBundle,
 } from "../../core/src/index.js";
 import type {
   CodexAdapterHostContext,
+  CodexAdapterInstallationFileIdentity,
   ExplicitRoot,
   ContextRouteAuthorityFileIdentity,
   GenericProfileAdmissionAuthority,
@@ -90,6 +92,7 @@ export interface CliIo {
   readonly profileAdmissionAuthority?: GenericProfileAdmissionAuthority;
   readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
   readonly codexAdapterHost?: CodexAdapterHostContext;
+  readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
 }
 
 function fail(reasonCode: string, message: string): never {
@@ -288,9 +291,10 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "adapter-rollback-plan") {
-    const values = parseArguments(rest, ["bundle", "observed"]);
-    required(values, ["bundle", "observed"]);
-    io.write(canonicalJson(planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), jsonValue(values.observed, "observed"))));
+    const values = parseArguments(rest, ["bundle", "installation-receipt"]);
+    required(values, ["bundle", "installation-receipt"]);
+    const installation = await readCodexAdapterInstallationReceipt(values["installation-receipt"] ?? "", io.codexAdapterInstallationAuthority);
+    io.write(canonicalJson(planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), installation)));
     return;
   }
   if (command === "init") {

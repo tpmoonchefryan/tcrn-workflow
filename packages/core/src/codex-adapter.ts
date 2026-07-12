@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createHash } from "node:crypto";
+import { constants } from "node:fs";
+import { lstat, open, realpath } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
 
 import { canonicalJson, canonicalSha256, assertProtocolId, compareCanonicalText, parseStrictInstant } from "../../protocol/src/index.js";
 import { validateContextRouteResult } from "./context-router.js";
@@ -10,6 +13,7 @@ export const CODEX_ADAPTER_HOST_VERSION = "tcrn.codex-adapter-host.v1" as const;
 export const CODEX_ADAPTER_BUNDLE_VERSION = "tcrn.codex-adapter-bundle.v1" as const;
 export const CODEX_ADAPTER_FALLBACK_VERSION = "tcrn.codex-adapter-fallback.v1" as const;
 export const CODEX_ADAPTER_LIFECYCLE_VERSION = "tcrn.codex-adapter-lifecycle.v1" as const;
+export const CODEX_ADAPTER_INSTALLATION_VERSION = "tcrn.codex-adapter-installation-generation.v1" as const;
 
 export const CODEX_ADAPTER_REASON_CODES = Object.freeze([
   "ADAPTER_BINDING_MISMATCH",
@@ -25,6 +29,15 @@ export const CODEX_ADAPTER_REASON_CODES = Object.freeze([
   "ADAPTER_GOVERNED_ROUTING_REQUIRED",
   "ADAPTER_HOST_MISMATCH",
   "ADAPTER_HOST_REQUIRED",
+  "ADAPTER_INSTALLATION_CANONICAL_INVALID",
+  "ADAPTER_INSTALLATION_CHANGED",
+  "ADAPTER_INSTALLATION_DIGEST",
+  "ADAPTER_INSTALLATION_LINK",
+  "ADAPTER_INSTALLATION_MALFORMED",
+  "ADAPTER_INSTALLATION_MISMATCH",
+  "ADAPTER_INSTALLATION_PATH",
+  "ADAPTER_INSTALLATION_REQUIRED",
+  "ADAPTER_INSTALLATION_SPECIAL_FILE",
   "ADAPTER_PATH_INVALID",
   "ADAPTER_ROLLBACK_MISMATCH",
   "ADAPTER_ROLLBACK_PLANNED",
@@ -68,6 +81,39 @@ export interface CodexAdapterHostContext {
   readonly input: CodexAdapterHostInput;
 }
 
+export interface CodexAdapterInstallationFileIdentity {
+  readonly expectedCanonicalPath: string;
+  readonly expectedFileSha256: string;
+}
+
+export interface CodexAdapterInstallationEntry {
+  readonly path: string;
+  readonly realpath: string;
+  readonly contentDigest: string;
+  readonly identityDigest: string;
+}
+
+export interface CodexAdapterInstallationReceipt {
+  readonly schemaVersion: typeof CODEX_ADAPTER_INSTALLATION_VERSION;
+  readonly generationId: string;
+  readonly bundleDigest: string;
+  readonly installationRoot: string;
+  readonly entries: readonly CodexAdapterInstallationEntry[];
+  readonly receiptDigest: string;
+}
+
+export interface CodexAdapterInstallationContext {
+  readonly receipt: CodexAdapterInstallationReceipt;
+  readonly sourcePath: string;
+  readonly authorityFileSha256: string;
+  readonly sourceIdentityDigest: string;
+}
+
+export interface CodexAdapterInstallationReadOptions {
+  readonly afterReceiptLstat?: () => void | Promise<void>;
+  readonly afterEntryLstat?: (path: string, index: number) => void | Promise<void>;
+}
+
 export interface CodexAdapterFile {
   readonly path: string;
   readonly content: string;
@@ -102,6 +148,7 @@ export const CODEX_ADAPTER_TEMPLATE_PATHS = Object.freeze([
 ] as const);
 
 const hostContexts = new WeakSet<object>();
+const installationContexts = new WeakSet<object>();
 const shaPattern = /^[a-f0-9]{64}$/u;
 const maximumUntrustedBytes = 8_192;
 
@@ -166,6 +213,14 @@ function deepFreeze<T>(value: T): T {
     Object.freeze(value);
   }
   return value;
+}
+
+function sameIdentity(left: Awaited<ReturnType<typeof lstat>>, right: Awaited<ReturnType<typeof lstat>>): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.nlink === right.nlink && left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs;
+}
+
+function identityDigest(value: Awaited<ReturnType<typeof lstat>>): string {
+  return canonicalSha256({ dev: String(value.dev), ino: String(value.ino), size: String(value.size), mtimeMs: String(value.mtimeMs), ctimeMs: String(value.ctimeMs) });
 }
 
 function bindingFromResult(result: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
@@ -266,6 +321,9 @@ function validateTemplateContent(path: string, content: string, common: { readon
     if (error instanceof CodexAdapterError) throw error;
     fail("ADAPTER_BUNDLE_INVALID", `template ${path}`);
   }
+  let canonicalContent: string;
+  try { canonicalContent = canonicalJson(parsed); } catch { fail("ADAPTER_CANONICAL_INVALID", `template bytes ${path}`); }
+  if (canonicalContent !== content) fail("ADAPTER_CANONICAL_INVALID", `template bytes ${path}`);
   const shared = ["schemaVersion", "activation", "contextDigest", "hostDigest", "requestDigest"];
   const specific = path.endsWith("bootstrap.json") ? ["routing", "ambientDiscovery"]
     : path.endsWith("final-hop.json") ? ["behavior", "duplicate", "receiptRetention"]
@@ -330,14 +388,97 @@ export function simulateCodexAdapterLifecycle(value: unknown): Readonly<Record<s
   return deepFreeze({ schemaVersion: CODEX_ADAPTER_LIFECYCLE_VERSION, reasonCode, contextDigest, ownerVisibleResponses: routed && finalHops > 0 ? 1 : 0, finalHopPending: routed && finalHops === 0, rawInputRetained: false });
 }
 
-export function planCodexAdapterRollback(bundleValue: unknown, observedValue: unknown): Readonly<Record<string, unknown>> {
-  const bundle = validateCodexAdapterBundle(bundleValue);
-  if (!Array.isArray(observedValue) || observedValue.length !== bundle.files.length) fail("ADAPTER_ROLLBACK_MISMATCH", "observed files");
-  const observed = observedValue.map((entry, index) => {
-    const item = record(entry, `observed[${index}]`); exact(item, ["path", "contentDigest", "kind", "nlink", "symlink", "identityDigest"], `observed[${index}]`);
-    const expected = bundle.files[index];
-    if (item.path !== expected?.path || item.contentDigest !== expected.contentDigest || item.kind !== "regular" || item.nlink !== 1 || item.symlink !== false) fail("ADAPTER_ROLLBACK_MISMATCH", `observed[${index}]`);
-    return { path: item.path as string, contentDigest: item.contentDigest as string, identityDigest: sha(item.identityDigest, `observed[${index}].identityDigest`) };
+function validateInstallationReceipt(value: unknown): CodexAdapterInstallationReceipt {
+  const document = record(value, "adapter installation receipt");
+  exact(document, ["schemaVersion", "generationId", "bundleDigest", "installationRoot", "entries", "receiptDigest"], "adapter installation receipt");
+  if (document.schemaVersion !== CODEX_ADAPTER_INSTALLATION_VERSION || !Array.isArray(document.entries) || document.entries.length !== CODEX_ADAPTER_TEMPLATE_PATHS.length || typeof document.installationRoot !== "string" || !isAbsolute(document.installationRoot) || resolve(document.installationRoot) !== document.installationRoot) fail("ADAPTER_INSTALLATION_MALFORMED", "installation receipt header");
+  const entries = document.entries.map((entry, index) => {
+    const item = record(entry, `installation entries[${index}]`);
+    exact(item, ["path", "realpath", "contentDigest", "identityDigest"], `installation entries[${index}]`);
+    if (item.path !== CODEX_ADAPTER_TEMPLATE_PATHS[index] || typeof item.realpath !== "string" || !isAbsolute(item.realpath) || resolve(item.realpath) !== item.realpath) fail("ADAPTER_INSTALLATION_PATH", `installation entries[${index}]`);
+    return { path: item.path as string, realpath: item.realpath, contentDigest: sha(item.contentDigest, `installation entries[${index}].contentDigest`), identityDigest: sha(item.identityDigest, `installation entries[${index}].identityDigest`) };
   });
-  return deepFreeze({ schemaVersion: "tcrn.codex-adapter-rollback-plan.v1", reasonCode: "ADAPTER_ROLLBACK_PLANNED", activation: false, removals: observed, planDigest: canonicalSha256(observed) });
+  const basis = { schemaVersion: CODEX_ADAPTER_INSTALLATION_VERSION, generationId: id(document.generationId, "generationId"), bundleDigest: sha(document.bundleDigest, "installation bundleDigest"), installationRoot: document.installationRoot, entries };
+  if (sha(document.receiptDigest, "installation receiptDigest") !== canonicalSha256(basis)) fail("ADAPTER_INSTALLATION_MISMATCH", "installation receiptDigest");
+  return { ...basis, receiptDigest: document.receiptDigest as string };
+}
+
+export async function readCodexAdapterInstallationReceipt(
+  path: string,
+  authority?: CodexAdapterInstallationFileIdentity,
+  options: CodexAdapterInstallationReadOptions = {},
+): Promise<CodexAdapterInstallationContext> {
+  if (!authority) fail("ADAPTER_INSTALLATION_REQUIRED", "out-of-band installation authority required");
+  if (!isAbsolute(authority.expectedCanonicalPath) || resolve(authority.expectedCanonicalPath) !== authority.expectedCanonicalPath || path !== authority.expectedCanonicalPath) fail("ADAPTER_INSTALLATION_PATH", path);
+  if (!shaPattern.test(authority.expectedFileSha256)) fail("ADAPTER_INSTALLATION_DIGEST", path);
+  let before;
+  try { before = await lstat(path); } catch { fail("ADAPTER_INSTALLATION_CHANGED", path); }
+  if (before.isSymbolicLink() || before.nlink !== 1) fail("ADAPTER_INSTALLATION_LINK", path);
+  if (!before.isFile()) fail("ADAPTER_INSTALLATION_SPECIAL_FILE", path);
+  if (before.size < 2 || before.size > 65_536) fail("ADAPTER_INSTALLATION_MALFORMED", path);
+  await options.afterReceiptLstat?.();
+  let handle;
+  try { handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); } catch { fail("ADAPTER_INSTALLATION_CHANGED", path); }
+  let content: Buffer;
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.nlink !== 1 || !sameIdentity(before, opened)) fail("ADAPTER_INSTALLATION_CHANGED", path);
+    content = await handle.readFile();
+    const after = await handle.stat(), named = await lstat(path);
+    if (!sameIdentity(opened, after) || !sameIdentity(after, named) || content.length !== after.size) fail("ADAPTER_INSTALLATION_CHANGED", path);
+  } finally { await handle.close(); }
+  const canonicalPath = await realpath(path).catch(() => fail("ADAPTER_INSTALLATION_CHANGED", path));
+  if (canonicalPath !== authority.expectedCanonicalPath) fail("ADAPTER_INSTALLATION_PATH", path);
+  const fileSha256 = createHash("sha256").update(content).digest("hex");
+  if (fileSha256 !== authority.expectedFileSha256) fail("ADAPTER_INSTALLATION_DIGEST", path);
+  const sourceText = content.toString("utf8");
+  if (!Buffer.from(sourceText, "utf8").equals(content)) fail("ADAPTER_INSTALLATION_MALFORMED", path);
+  let parsed: unknown;
+  try { parsed = JSON.parse(sourceText); } catch { fail("ADAPTER_INSTALLATION_MALFORMED", path); }
+  let canonicalReceipt: string;
+  try { canonicalReceipt = `${canonicalJson(parsed)}\n`; } catch { fail("ADAPTER_INSTALLATION_CANONICAL_INVALID", path); }
+  if (canonicalReceipt !== sourceText) fail("ADAPTER_INSTALLATION_CANONICAL_INVALID", path);
+  const receipt = validateInstallationReceipt(parsed);
+  const rootRealpath = await realpath(receipt.installationRoot).catch(() => fail("ADAPTER_INSTALLATION_PATH", receipt.installationRoot));
+  const rootStat = await lstat(receipt.installationRoot).catch(() => fail("ADAPTER_INSTALLATION_PATH", receipt.installationRoot));
+  if (rootRealpath !== receipt.installationRoot || rootStat.isSymbolicLink() || !rootStat.isDirectory()) fail("ADAPTER_INSTALLATION_PATH", receipt.installationRoot);
+  for (let index = 0; index < receipt.entries.length; index += 1) {
+    const entry = receipt.entries[index] as CodexAdapterInstallationEntry;
+    const expectedPath = resolve(receipt.installationRoot, entry.path);
+    if (expectedPath !== entry.realpath || !expectedPath.startsWith(`${receipt.installationRoot}/`)) fail("ADAPTER_INSTALLATION_PATH", entry.path);
+    let entryBefore;
+    try { entryBefore = await lstat(expectedPath); } catch { fail("ADAPTER_INSTALLATION_CHANGED", entry.path); }
+    if (entryBefore.isSymbolicLink() || entryBefore.nlink !== 1) fail("ADAPTER_INSTALLATION_LINK", entry.path);
+    if (!entryBefore.isFile()) fail("ADAPTER_INSTALLATION_SPECIAL_FILE", entry.path);
+    await options.afterEntryLstat?.(expectedPath, index);
+    let entryHandle;
+    try { entryHandle = await open(expectedPath, constants.O_RDONLY | constants.O_NOFOLLOW); } catch { fail("ADAPTER_INSTALLATION_CHANGED", entry.path); }
+    let entryContent: Buffer;
+    try {
+      const opened = await entryHandle.stat();
+      if (!opened.isFile() || opened.nlink !== 1 || !sameIdentity(entryBefore, opened)) fail("ADAPTER_INSTALLATION_CHANGED", entry.path);
+      entryContent = await entryHandle.readFile();
+      const after = await entryHandle.stat(), named = await lstat(expectedPath);
+      if (!sameIdentity(opened, after) || !sameIdentity(after, named) || entryContent.length !== after.size) fail("ADAPTER_INSTALLATION_CHANGED", entry.path);
+    } finally { await entryHandle.close(); }
+    const namedRealpath = await realpath(expectedPath).catch(() => fail("ADAPTER_INSTALLATION_CHANGED", entry.path));
+    if (namedRealpath !== entry.realpath) fail("ADAPTER_INSTALLATION_PATH", entry.path);
+    if (createHash("sha256").update(entryContent).digest("hex") !== entry.contentDigest || identityDigest(entryBefore) !== entry.identityDigest) fail("ADAPTER_INSTALLATION_MISMATCH", entry.path);
+  }
+  const context = deepFreeze({ receipt, sourcePath: path, authorityFileSha256: fileSha256, sourceIdentityDigest: identityDigest(before) });
+  installationContexts.add(context);
+  return context;
+}
+
+export function planCodexAdapterRollback(bundleValue: unknown, installationValue: unknown): Readonly<Record<string, unknown>> {
+  const bundle = validateCodexAdapterBundle(bundleValue);
+  if (typeof installationValue !== "object" || installationValue === null || !installationContexts.has(installationValue)) fail("ADAPTER_INSTALLATION_REQUIRED", "descriptor-bound installation generation required");
+  const installation = installationValue as CodexAdapterInstallationContext;
+  if (installation.receipt.bundleDigest !== bundle.bundleDigest) fail("ADAPTER_INSTALLATION_MISMATCH", "bundle generation");
+  const removals = installation.receipt.entries.map((entry, index) => {
+    if (entry.path !== bundle.files[index]?.path || entry.contentDigest !== bundle.files[index]?.contentDigest) fail("ADAPTER_ROLLBACK_MISMATCH", entry.path);
+    return { path: entry.path, realpath: entry.realpath, contentDigest: entry.contentDigest, identityDigest: entry.identityDigest };
+  });
+  const basis = { generationId: installation.receipt.generationId, bundleDigest: bundle.bundleDigest, installationReceiptDigest: installation.receipt.receiptDigest, installationSourceIdentityDigest: installation.sourceIdentityDigest, removals };
+  return deepFreeze({ schemaVersion: "tcrn.codex-adapter-rollback-plan.v1", reasonCode: "ADAPTER_ROLLBACK_PLANNED", activation: false, ...basis, planDigest: canonicalSha256(basis) });
 }
