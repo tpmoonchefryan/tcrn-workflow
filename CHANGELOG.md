@@ -62,3 +62,6 @@ Versioning after the first accepted release.
 - Require exact canonical template bytes, positional bundle/schema parity, and
   a pinned no-follow descriptor-verified installation-generation receipt before
   inert rollback planning; caller-supplied identity objects no longer admit it.
+- Add P7-B offline Compatibility And Modes planning with a closed Workflow
+  manifest, governed pair-receipt admission, policy rollback/replay controls,
+  field-level AOS ownership preservation, and exact unavailable live surfaces.

@@ -34,6 +34,8 @@ pnpm verify:p4:knowledge
 pnpm verify:p5
 pnpm verify:p6
 pnpm verify:p6:adapter
+pnpm verify:p7
+pnpm verify:p7:compatibility
 ```
 
 The repository does not collect telemetry. Static checks, a process executable
@@ -77,6 +79,11 @@ checkpoint parity, plus disposable-only initialization and filesystem/privacy
 faults. Promotion enum admission occurs before claim creation, and artifact
 transient/archive generation counts and cumulative storage are bounded before
 unbounded reads or writes.
+`pnpm verify:p7:compatibility` checks the offline-only compatibility manifest,
+authenticated pair-reference admission, anti-rollback policy floor, Workspace
+lock binding, deterministic import/checkpoint/fallback/conflict/reconciliation
+plans, and exact field ownership. All live AOS/apply surfaces remain unavailable
+with zero network and zero mutation until a mutually supported release exists.
 `pnpm verify:p4:knowledge` exposes the narrower
 `P4_KNOWLEDGE_CORE_VERIFIED` reason code. Neither command mutates the live graph
 or starts P6.

@@ -40,13 +40,17 @@ import {
   validateWorkspace,
   codexAdapterAuthorityEmptyFallback,
   dryRunCanonicalExchange,
+  dryRunCompatibilityMode,
   generateCodexAdapterBundle,
   planCanonicalExchange,
+  planCompatibilityMode,
   planCodexAdapterRollback,
   readCodexAdapterInstallationReceipt,
   simulateCodexAdapterLifecycle,
   validateCodexAdapterBundle,
   validateCanonicalExchangeBundle,
+  validateCompatibilityRequest,
+  unavailableCompatibilityCapability,
 } from "../../core/src/index.js";
 import type {
   CodexAdapterHostContext,
@@ -58,6 +62,7 @@ import type {
   KnowledgeFreshnessState,
   KnowledgeKind,
   KnowledgePromotionState,
+  CompatibilityAdmissionContext,
 } from "../../core/src/index.js";
 import { canonicalJson } from "../../protocol/src/index.js";
 import type { PlannedDeliveryKind, WorkStatus } from "../../protocol/src/index.js";
@@ -96,6 +101,7 @@ export interface CliIo {
   readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
   readonly codexAdapterHost?: CodexAdapterHostContext;
   readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
+  readonly compatibilityAdmission?: CompatibilityAdmissionContext;
 }
 
 function fail(reasonCode: string, message: string): never {
@@ -181,6 +187,14 @@ function exchangeJson(value: string | undefined, name: string): unknown {
   }
 }
 
+function compatibilityJson(value: string | undefined, name: string): unknown {
+  try {
+    return JSON.parse(value ?? "");
+  } catch {
+    fail("COMPATIBILITY_INPUT_INVALID", name);
+  }
+}
+
 async function withLease<T>(workspace: string, at: string, operation: (lease: Awaited<ReturnType<typeof acquireWorkspaceLease>>) => Promise<T>): Promise<T> {
   const lease = await acquireWorkspaceLease(workspace, { now: at });
   try {
@@ -207,6 +221,29 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     fail("CLI_COMMAND_REQUIRED", "A governed command is required");
   }
   const rest = arguments_.slice(1);
+  if (command === "compatibility-validate") {
+    const values = parseArguments(rest, ["request"]);
+    required(values, ["request"]);
+    const request = validateCompatibilityRequest(compatibilityJson(values.request, "request"));
+    io.write(canonicalJson({ reasonCode: "COMPATIBILITY_MANIFEST_VALID", requestDigest: request.requestDigest, manifestDigest: request.manifest.manifestDigest }));
+    return;
+  }
+  if (command === "compatibility-plan" || command === "compatibility-dry-run") {
+    const values = parseArguments(rest, ["request"]);
+    required(values, ["request"]);
+    if (!io.compatibilityAdmission) fail("COMPATIBILITY_RECEIPT_UNAUTHENTICATED", "governed compatibility admission is required");
+    const request = compatibilityJson(values.request, "request");
+    io.write(canonicalJson(command === "compatibility-plan"
+      ? planCompatibilityMode(request, io.compatibilityAdmission)
+      : dryRunCompatibilityMode(request, io.compatibilityAdmission)));
+    return;
+  }
+  if (command === "compatibility-unavailable") {
+    const values = parseArguments(rest, ["surface"]);
+    required(values, ["surface"]);
+    io.write(canonicalJson(unavailableCompatibilityCapability(values.surface)));
+    return;
+  }
   if (command === "exchange-plan") {
     const values = parseArguments(rest, ["request"]);
     required(values, ["request"]);

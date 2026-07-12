@@ -245,6 +245,34 @@ export {
   validateCanonicalExchangeBundle,
   writeCanonicalExchangeBundle,
 } from "./canonical-exchange.js";
+export {
+  COMPATIBILITY_ADMISSION_VERSION,
+  COMPATIBILITY_LIMITS,
+  COMPATIBILITY_MANIFEST_VERSION,
+  COMPATIBILITY_REASON_CODES,
+  COMPATIBILITY_RECEIPT_VERSION,
+  COMPATIBILITY_REQUEST_VERSION,
+  COMPATIBILITY_RESULT_VERSION,
+  CompatibilityError,
+  dryRunCompatibilityMode,
+  parseWorkflowCompatibilityManifest,
+  planCompatibilityMode,
+  unavailableCompatibilityCapability,
+  validateCompatibilityRequest,
+  validateWorkflowCompatibilityManifest,
+} from "./compatibility-modes.js";
+export type {
+  CompatibilityAdmissionContext,
+  CompatibilityCheckpoint,
+  CompatibilityOperation,
+  CompatibilityPairReceipt,
+  CompatibilityPlan,
+  CompatibilityReasonCode,
+  CompatibilityRequest,
+  CompatibilityUnavailableSurface,
+  CompatibilityWorkspaceLock,
+  WorkflowCompatibilityManifest,
+} from "./compatibility-modes.js";
 export type {
   CanonicalExchangeChunkInput,
   CanonicalExchangeChunkRecord,
