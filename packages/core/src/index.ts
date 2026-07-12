@@ -177,6 +177,7 @@ export {
   generateCorePersonaReleaseLayers,
   validateCorePersonaBundle,
   validateCorePersonaProfile,
+  validateCorePersonaProfileShape,
 } from "./core-reference-personas.js";
 export type { CorePersonaBundle, CorePersonaProfile, CorePersonaReasonCode } from "./core-reference-personas.js";
 export type {
