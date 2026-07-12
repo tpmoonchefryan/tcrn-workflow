@@ -66,16 +66,17 @@ const record = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail("PERSONA_SCHEMA_INVALID", "profile object");
   return value as Record<string, unknown>;
 };
+const codePoints = (value: string): number => Array.from(value).length;
 const strings = (value: unknown, label: string): readonly string[] => {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 16 || value.some((v) => typeof v !== "string" || v.length < 2 || v.length > 256)) fail("PERSONA_SCHEMA_INVALID", label);
+  if (!Array.isArray(value) || value.length < 1 || value.length > 16 || value.some((v) => typeof v !== "string" || codePoints(v) < 2 || codePoints(v) > 256)) fail("PERSONA_SCHEMA_INVALID", label);
   if (new Set(value).size !== value.length) fail("PERSONA_DUPLICATE", label);
   return value as string[];
 };
 function validateProfile(value: unknown, requireExactSource: boolean): CorePersonaProfile {
   const v = record(value); const keys = Object.keys(v).sort(compareCanonicalText);
   if (canonicalJson(keys) !== canonicalJson([...exactFields].sort(compareCanonicalText))) fail("PERSONA_UNKNOWN_FIELD", keys.join(","));
-  if (v.schemaVersion !== CORE_PERSONA_PROFILE_VERSION || typeof v.profileId !== "string" || !/^profile:tcrn-[a-z]+-v1$/u.test(v.profileId) || typeof v.displayName !== "string" || !roster.has(v.displayName) || typeof v.jobTitle !== "string" || v.jobTitle.length < 2 || v.jobTitle.length > 128) fail("PERSONA_SCHEMA_INVALID", "identity");
-  for (const field of ["mission", "authorityBoundary", "contactWhen"] as const) if (typeof v[field] !== "string" || v[field].length < 10 || v[field].length > 512) fail("PERSONA_SCHEMA_INVALID", field);
+  if (v.schemaVersion !== CORE_PERSONA_PROFILE_VERSION || typeof v.profileId !== "string" || !/^profile:tcrn-[a-z]+-v1$/u.test(v.profileId) || typeof v.displayName !== "string" || !roster.has(v.displayName) || typeof v.jobTitle !== "string" || codePoints(v.jobTitle) < 2 || codePoints(v.jobTitle) > 128) fail("PERSONA_SCHEMA_INVALID", "identity");
+  for (const field of ["mission", "authorityBoundary", "contactWhen"] as const) if (typeof v[field] !== "string" || codePoints(v[field]) < 10 || codePoints(v[field]) > 512) fail("PERSONA_SCHEMA_INVALID", field);
   const basis = { schemaVersion: CORE_PERSONA_PROFILE_VERSION, profileId: v.profileId, displayName: v.displayName, jobTitle: v.jobTitle, mission: v.mission, authorityBoundary: v.authorityBoundary, contactWhen: v.contactWhen, requiredInputs: strings(v.requiredInputs, "requiredInputs"), deliverables: strings(v.deliverables, "deliverables"), refusals: strings(v.refusals, "refusals"), successCriteria: strings(v.successCriteria, "successCriteria"), collaborationRelationships: strings(v.collaborationRelationships, "collaborationRelationships") };
   if ([...basis.collaborationRelationships].some((name) => name !== "Owner" && !roster.has(name))) fail("PERSONA_EXTENDED_ROSTER_FORBIDDEN", "relationship");
   if (typeof v.profileDigest !== "string" || v.profileDigest !== canonicalSha256(basis)) fail("PERSONA_CANONICAL_INVALID", v.profileId);
