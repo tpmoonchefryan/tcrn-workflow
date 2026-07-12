@@ -613,7 +613,8 @@ async function verifyP6Adapter() {
   assertion(fixture.goldenCases === 8 && fixture.hostileCases === 31 && fixture.schemaParityCases === 8, "P6_ADAPTER_HOSTILE_CORPUS");
   assertion(fixture.pathFaultCases === 8 && fixture.rollbackCases === 14 && fixture.finalHopCases === 4 &&
     fixture.canonicalTemplateCases === 3 && fixture.bundleOrderParityCases === 4 && fixture.bundleUnicodeParityCases === 8 &&
-    fixture.hostParityCases === 4 && fixture.lifecycleParityCases === 4 && fixture.installationAuthorityCases === 12,
+    fixture.hostParityCases === 4 && fixture.lifecycleParityCases === 4 && fixture.installationAuthorityCases === 12 &&
+    fixture.installationCanonicalByteCases === 4,
   "P6_ADAPTER_SECURITY_CORPUS");
   assertion(fixture.propertyPermutations === 64 && fixture.templateFiles === 4 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6_ADAPTER_PROPERTY_CORPUS");
   assertion(fixture.coldStartCases === 1 && fixture.staticBoundaryCases === 1, "P6_ADAPTER_STANDALONE_BOUNDARY");
@@ -631,6 +632,7 @@ async function verifyP6Adapter() {
     hostParityCases: fixture.hostParityCases,
     lifecycleParityCases: fixture.lifecycleParityCases,
     installationAuthorityCases: fixture.installationAuthorityCases,
+    installationCanonicalByteCases: fixture.installationCanonicalByteCases,
     finalHopCases: fixture.finalHopCases,
     propertyPermutations: fixture.propertyPermutations,
     templateFiles: fixture.templateFiles,

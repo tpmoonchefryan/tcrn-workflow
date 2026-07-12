@@ -11,6 +11,7 @@
   "hostParityCases": 4,
   "lifecycleParityCases": 4,
   "installationAuthorityCases": 12,
+  "installationCanonicalByteCases": 4,
   "finalHopCases": 4,
   "propertyPermutations": 64,
   "templateFiles": 4,

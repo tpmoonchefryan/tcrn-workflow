@@ -36,6 +36,7 @@ const workId = "work:adapter-fixture";
 const hash = (label) => canonicalSha256(label);
 
 function reason(code, operation) { assert.throws(operation, (error) => error?.reasonCode === code, code); }
+async function reasonAsync(code, operation) { await assert.rejects(operation, (error) => error?.reasonCode === code, code); }
 async function cliReason(code, arguments_, io = {}) { await assert.rejects(runCli(arguments_, { write() {}, ...io }), (error) => error?.reasonCode === code, code); }
 
 function contextResult() {
@@ -120,7 +121,7 @@ function resealBundleFile(bundleValue, index, content, { resealBundleDigest = tr
   return bundle;
 }
 
-async function installationFixture(bundle, { read = true } = {}) {
+async function installationFixture(bundle, { read = true, transformBytes = (value) => value } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "workflow-adapter-installation-")));
   const installationRoot = join(directory, "project");
   await mkdir(installationRoot);
@@ -135,11 +136,11 @@ async function installationFixture(bundle, { read = true } = {}) {
   const basis = { schemaVersion: CODEX_ADAPTER_INSTALLATION_VERSION, generationId: "adapter-generation:fixture", bundleDigest: bundle.bundleDigest, installationRoot, entries };
   const receipt = { ...basis, receiptDigest: canonicalSha256(basis) };
   const receiptPath = join(directory, "installation-generation.json");
-  const bytes = `${canonicalJson(receipt)}\n`;
+  const bytes = transformBytes(canonicalJson(receipt));
   await writeFile(receiptPath, bytes, { mode: 0o600 });
   const authority = { expectedCanonicalPath: receiptPath, expectedFileSha256: createHash("sha256").update(bytes).digest("hex") };
   const context = read ? await readCodexAdapterInstallationReceipt(receiptPath, authority) : null;
-  return { directory, installationRoot, entries, receipt, receiptPath, authority, context, close: () => rm(directory, { recursive: true, force: true }) };
+  return { directory, installationRoot, entries, receipt, receiptPath, authority, bytes, context, close: () => rm(directory, { recursive: true, force: true }) };
 }
 
 function permutations(values) {
@@ -288,6 +289,26 @@ test("rollback requires descriptor-bound installation generation and rejects for
   const otherInput = request({ promptText: "different admitted request" }), otherBundle = generateCodexAdapterBundle(otherInput, hostFor(otherInput));
   const mismatched = await installationFixture(bundle);
   try { reason("ADAPTER_INSTALLATION_MISMATCH", () => planCodexAdapterRollback(otherBundle, mismatched.context)); } finally { await mismatched.close(); }
+});
+
+test("installation receipt accepts exactly one terminal LF and rejects fully rehashed whitespace variants", async () => {
+  const input = request(), bundle = generateCodexAdapterBundle(input, hostFor(input));
+  const positive = await installationFixture(bundle);
+  try {
+    assert.equal(positive.bytes.endsWith("\n"), true);
+    assert.equal(positive.bytes.endsWith("\n\n"), false);
+    assert.equal(createHash("sha256").update(positive.bytes).digest("hex"), positive.authority.expectedFileSha256);
+    assert.equal(planCodexAdapterRollback(bundle, positive.context).reasonCode, "ADAPTER_ROLLBACK_PLANNED");
+  } finally { await positive.close(); }
+  const transforms = [(bytes) => `${bytes}\n`, (bytes) => `${bytes} `, (bytes) => ` ${bytes}`];
+  assert.equal(transforms.length + 1, fixture.installationCanonicalByteCases);
+  for (const transformBytes of transforms) {
+    const changed = await installationFixture(bundle, { read: false, transformBytes });
+    try {
+      assert.equal(createHash("sha256").update(changed.bytes).digest("hex"), changed.authority.expectedFileSha256);
+      await reasonAsync("ADAPTER_INSTALLATION_CANONICAL_INVALID", () => readCodexAdapterInstallationReceipt(changed.receiptPath, changed.authority));
+    } finally { await changed.close(); }
+  }
 });
 
 test("Stop and final-hop model preserves exactly one owner-visible response", async () => {
