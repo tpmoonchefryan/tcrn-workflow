@@ -34,6 +34,49 @@
         "$ref": "#/$defs/text"
       }
     },
+    "jsonValue": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "x-tcrn-maxUtf8Bytes": 4096,
+          "x-tcrn-wellFormedUnicode": true
+        },
+        {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "maxProperties": 128,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "x-tcrn-maxUtf8Bytes": 128,
+            "x-tcrn-wellFormedUnicode": true
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        }
+      ]
+    },
     "manifest": {
       "type": "object",
       "additionalProperties": false,
@@ -264,10 +307,156 @@
         }
       }
     },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-tcrn-deepWellFormedUnicode": true,
+      "x-tcrn-maxCanonicalBytes": 65536,
+      "required": [
+        "schemaVersion",
+        "authenticatedPairReceiptDigest",
+        "expectedManifestDigest",
+        "expectedWorkflowReleaseId",
+        "expectedAosReleaseId",
+        "expectedRequestDigest",
+        "expectedEffectivePlanDigest",
+        "expectedRepositoryId",
+        "expectedWorkflowId",
+        "expectedSubjectId",
+        "expectedSignerId",
+        "expectedIssuerId",
+        "expectedAudience",
+        "expectedNonce",
+        "verificationTime",
+        "minimumPolicyEpoch",
+        "minimumPolicyVersion",
+        "expectedInstanceId",
+        "expectedDataEpoch",
+        "revokedReceiptIds",
+        "consumedReceiptIds",
+        "workspaceLock",
+        "activeAos",
+        "admissionDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.compatibility-admission.v1"
+        },
+        "authenticatedPairReceiptDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "expectedManifestDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "expectedWorkflowReleaseId": {
+          "$ref": "#/$defs/id"
+        },
+        "expectedAosReleaseId": {
+          "$ref": "#/$defs/id"
+        },
+        "expectedRequestDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "expectedEffectivePlanDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "expectedRepositoryId": {
+          "$ref": "#/$defs/id"
+        },
+        "expectedWorkflowId": {
+          "$ref": "#/$defs/id"
+        },
+        "expectedSubjectId": {
+          "$ref": "#/$defs/id"
+        },
+        "expectedSignerId": {
+          "$ref": "#/$defs/id"
+        },
+        "expectedIssuerId": {
+          "$ref": "#/$defs/id"
+        },
+        "expectedAudience": {
+          "$ref": "#/$defs/text"
+        },
+        "expectedNonce": {
+          "$ref": "#/$defs/text"
+        },
+        "verificationTime": {
+          "$ref": "#/$defs/instant"
+        },
+        "minimumPolicyEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "minimumPolicyVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expectedInstanceId": {
+          "$ref": "#/$defs/id"
+        },
+        "expectedDataEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "revokedReceiptIds": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "consumedReceiptIds": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "workspaceLock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "workspaceId",
+            "lockId",
+            "generation",
+            "valid"
+          ],
+          "properties": {
+            "workspaceId": {
+              "$ref": "#/$defs/id"
+            },
+            "lockId": {
+              "$ref": "#/$defs/id"
+            },
+            "generation": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "valid": {
+              "const": true
+            }
+          }
+        },
+        "activeAos": {
+          "const": false
+        },
+        "admissionDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
     "request": {
       "type": "object",
       "additionalProperties": false,
       "x-tcrn-deepWellFormedUnicode": true,
+      "x-tcrn-maxCanonicalBytes": 262144,
       "required": [
         "schemaVersion",
         "operation",
@@ -308,11 +497,33 @@
         },
         "workflowDefinitions": {
           "type": "object",
-          "maxProperties": 128
+          "maxProperties": 128,
+          "x-tcrn-maxDepth": 16,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "x-tcrn-maxUtf8Bytes": 128,
+            "x-tcrn-wellFormedUnicode": true
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/jsonValue"
+          }
         },
         "aosOperationalState": {
           "type": "object",
-          "maxProperties": 64
+          "maxProperties": 64,
+          "x-tcrn-maxDepth": 16,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "x-tcrn-maxUtf8Bytes": 128,
+            "x-tcrn-wellFormedUnicode": true
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/jsonValue"
+          }
         },
         "externalEffectIds": {
           "type": "array",

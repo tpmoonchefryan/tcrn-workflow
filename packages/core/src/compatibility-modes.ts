@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { createHash } from "node:crypto";
+import { constants } from "node:fs";
+import { lstat, open, realpath } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
+
 import {
   assertProtocolId,
   canonicalJson,
@@ -28,6 +33,14 @@ export const COMPATIBILITY_REASON_CODES = Object.freeze([
   "COMPATIBILITY_UNICODE_INVALID",
   "COMPATIBILITY_LIMIT_EXCEEDED",
   "COMPATIBILITY_CANONICAL_INVALID",
+  "COMPATIBILITY_AUTHORITY_REQUIRED",
+  "COMPATIBILITY_AUTHORITY_PATH",
+  "COMPATIBILITY_AUTHORITY_DIGEST",
+  "COMPATIBILITY_AUTHORITY_LINK",
+  "COMPATIBILITY_AUTHORITY_SPECIAL_FILE",
+  "COMPATIBILITY_AUTHORITY_CHANGED",
+  "COMPATIBILITY_AUTHORITY_CANONICAL_INVALID",
+  "COMPATIBILITY_AUTHORITY_MISMATCH",
   "COMPATIBILITY_MANIFEST_VALID",
   "COMPATIBILITY_MANIFEST_MISMATCH",
   "COMPATIBILITY_REFERENCE_MISMATCH",
@@ -144,8 +157,20 @@ export interface CompatibilityWorkspaceLock {
 }
 
 export interface CompatibilityAdmissionContext {
+  readonly receipt: CompatibilityAdmissionReceipt;
+  readonly sourcePath: string;
+  readonly authorityFileSha256: string;
+  readonly sourceIdentityDigest: string;
+}
+
+export interface CompatibilityAdmissionReceipt {
   readonly schemaVersion: typeof COMPATIBILITY_ADMISSION_VERSION;
   readonly authenticatedPairReceiptDigest: string;
+  readonly expectedManifestDigest: string;
+  readonly expectedWorkflowReleaseId: string;
+  readonly expectedAosReleaseId: string;
+  readonly expectedRequestDigest: string;
+  readonly expectedEffectivePlanDigest: string;
   readonly expectedRepositoryId: string;
   readonly expectedWorkflowId: string;
   readonly expectedSubjectId: string;
@@ -165,6 +190,16 @@ export interface CompatibilityAdmissionContext {
   readonly admissionDigest: string;
 }
 
+export interface CompatibilityAdmissionAuthority {
+  readonly expectedCanonicalPath: string;
+  readonly expectedFileSha256: string;
+}
+
+export interface CompatibilityAdmissionReadOptions {
+  readonly afterLstatForTest?: () => Promise<void>;
+  readonly afterOpenForTest?: () => Promise<void>;
+}
+
 export interface CompatibilityPlan {
   readonly schemaVersion: typeof COMPATIBILITY_RESULT_VERSION;
   readonly reasonCode: "COMPATIBILITY_PLAN_READY" | "COMPATIBILITY_DRY_RUN_READY";
@@ -180,15 +215,20 @@ export interface CompatibilityPlan {
   readonly externalEffectIds: readonly string[];
   readonly mutation: false;
   readonly network: false;
+  readonly effectivePlanDigest: string;
   readonly planDigest: string;
 }
+
+type CompatibilityEffectivePlan = Omit<CompatibilityPlan, "schemaVersion" | "reasonCode" | "planDigest">;
 
 const manifestFields = ["schemaVersion", "repositoryId", "workflowId", "subjectId", "releaseId", "protocolVersion", "policyEpoch", "policyVersion", "instanceId", "dataEpoch", "definitionsDigest", "workflowOwnedFields", "aosOwnedOperationalFields", "supportedAosReleases", "manifestDigest"] as const;
 const receiptFields = ["schemaVersion", "receiptId", "repositoryId", "workflowId", "subjectId", "workflowReleaseId", "aosReleaseId", "signerId", "issuerId", "audience", "nonce", "issuedAt", "notBefore", "expiresAt", "policyEpoch", "policyVersion", "instanceId", "dataEpoch", "workflowManifestDigest", "aosManifestDigest", "verdict", "revoked", "receiptDigest"] as const;
 const requestFields = ["schemaVersion", "operation", "workspaceId", "manifest", "pairReceipt", "checkpoint", "workflowDefinitions", "aosOperationalState", "externalEffectIds", "requestDigest"] as const;
-const admissionFields = ["schemaVersion", "authenticatedPairReceiptDigest", "expectedRepositoryId", "expectedWorkflowId", "expectedSubjectId", "expectedSignerId", "expectedIssuerId", "expectedAudience", "expectedNonce", "verificationTime", "minimumPolicyEpoch", "minimumPolicyVersion", "expectedInstanceId", "expectedDataEpoch", "revokedReceiptIds", "consumedReceiptIds", "workspaceLock", "activeAos", "admissionDigest"] as const;
+const admissionFields = ["schemaVersion", "authenticatedPairReceiptDigest", "expectedManifestDigest", "expectedWorkflowReleaseId", "expectedAosReleaseId", "expectedRequestDigest", "expectedEffectivePlanDigest", "expectedRepositoryId", "expectedWorkflowId", "expectedSubjectId", "expectedSignerId", "expectedIssuerId", "expectedAudience", "expectedNonce", "verificationTime", "minimumPolicyEpoch", "minimumPolicyVersion", "expectedInstanceId", "expectedDataEpoch", "revokedReceiptIds", "consumedReceiptIds", "workspaceLock", "activeAos", "admissionDigest"] as const;
 const operations: readonly CompatibilityOperation[] = Object.freeze(["initial_import", "portable_checkpoint", "fallback_admission", "fallback_delta", "conflict_plan", "reconciliation_dry_run"]);
 const unavailableSurfaces: readonly CompatibilityUnavailableSurface[] = Object.freeze(["aos_primary", "fallback_activation", "import_apply", "reconciliation_apply"]);
+const admittedContexts = new WeakSet<object>();
+const maximumAdmissionReceiptBytes = 65_536;
 
 function fail(reasonCode: CompatibilityReasonCode, message: string): never {
   throw new CompatibilityError(reasonCode, message);
@@ -200,7 +240,9 @@ function record(value: unknown, label: string): Readonly<Record<string, unknown>
 }
 
 function exact(value: Readonly<Record<string, unknown>>, expected: readonly string[], label: string): void {
-  const actual = Object.keys(value).sort(compareCanonicalText);
+  const actual = Object.keys(value);
+  if (actual.some((field) => !field.isWellFormed())) fail("COMPATIBILITY_UNICODE_INVALID", `${label}:field`);
+  actual.sort(compareCanonicalText);
   const wanted = [...expected].sort(compareCanonicalText);
   const unknown = actual.filter((field) => !wanted.includes(field));
   if (unknown.length) fail("COMPATIBILITY_UNKNOWN_FIELD", `${label}:${unknown.join(",")}`);
@@ -259,6 +301,25 @@ function sealedDigest(value: Readonly<Record<string, unknown>>, field: string, r
   if (canonicalSha256(unsealed) !== supplied) fail(reason, field);
 }
 
+function normalizedDigest(value: Readonly<Record<string, unknown>>, field: string, normalized: Readonly<Record<string, unknown>>, reason: CompatibilityReasonCode): void {
+  const supplied = digest(value[field], field);
+  if (safeCanonicalSha256(normalized, field) !== supplied) fail(reason, field);
+}
+
+function safeCanonicalJson(value: unknown, label: string): string {
+  try { return canonicalJson(value); } catch (error) {
+    if ((error as { reasonCode?: string }).reasonCode === "INPUT_OVERSIZED") fail("COMPATIBILITY_LIMIT_EXCEEDED", label);
+    fail("COMPATIBILITY_CANONICAL_INVALID", label);
+  }
+}
+
+function safeCanonicalSha256(value: unknown, label: string): string {
+  try { return canonicalSha256(value); } catch (error) {
+    if ((error as { reasonCode?: string }).reasonCode === "INPUT_OVERSIZED") fail("COMPATIBILITY_LIMIT_EXCEEDED", label);
+    fail("COMPATIBILITY_CANONICAL_INVALID", label);
+  }
+}
+
 export function validateWorkflowCompatibilityManifest(value: unknown): WorkflowCompatibilityManifest {
   const input = record(value, "manifest"); exact(input, manifestFields, "manifest");
   if (input.schemaVersion !== COMPATIBILITY_MANIFEST_VERSION) fail("COMPATIBILITY_INPUT_INVALID", "manifest.schemaVersion");
@@ -270,8 +331,24 @@ export function validateWorkflowCompatibilityManifest(value: unknown): WorkflowC
   if (workflow.some((field) => operational.includes(field))) fail("COMPATIBILITY_FIELD_OWNERSHIP_CONFLICT", "manifest ownership overlap");
   const supported = stringList(input.supportedAosReleases, "manifest.supportedAosReleases", 16, true);
   if (supported.length !== 0) fail("COMPATIBILITY_MANIFEST_MISMATCH", "P7-B supported AOS releases must remain empty");
-  sealedDigest(input, "manifestDigest", "COMPATIBILITY_MANIFEST_MISMATCH");
-  return input as unknown as WorkflowCompatibilityManifest;
+  const normalized = {
+    schemaVersion: COMPATIBILITY_MANIFEST_VERSION,
+    repositoryId: input.repositoryId as string,
+    workflowId: input.workflowId as string,
+    subjectId: input.subjectId as string,
+    releaseId: input.releaseId as string,
+    protocolVersion: input.protocolVersion as number,
+    policyEpoch: input.policyEpoch as number,
+    policyVersion: input.policyVersion as number,
+    instanceId: input.instanceId as string,
+    dataEpoch: input.dataEpoch as number,
+    definitionsDigest: input.definitionsDigest as string,
+    workflowOwnedFields: workflow,
+    aosOwnedOperationalFields: operational,
+    supportedAosReleases: supported,
+  };
+  normalizedDigest(input, "manifestDigest", normalized, "COMPATIBILITY_MANIFEST_MISMATCH");
+  return { ...normalized, manifestDigest: input.manifestDigest as string };
 }
 
 function validatePairReceipt(value: unknown): CompatibilityPairReceipt {
@@ -307,31 +384,149 @@ function validateRequest(value: unknown): CompatibilityRequest {
   const rawEffects = input.externalEffectIds.map((effect, index) => id(effect, `request.externalEffectIds[${index}]`));
   if (new Set(rawEffects).size !== rawEffects.length) fail("COMPATIBILITY_EXTERNAL_EFFECT_DUPLICATE", "externalEffectIds");
   const effects = stringList(input.externalEffectIds, "request.externalEffectIds", COMPATIBILITY_LIMITS.maximumExternalEffects, true);
-  if (canonicalSha256(definitions) !== manifest.definitionsDigest) fail("COMPATIBILITY_MANIFEST_MISMATCH", "definitionsDigest");
-  if (Buffer.byteLength(canonicalJson(input), "utf8") > COMPATIBILITY_LIMITS.maximumDocumentBytes) fail("COMPATIBILITY_LIMIT_EXCEEDED", "request");
-  sealedDigest(input, "requestDigest", "COMPATIBILITY_CANONICAL_INVALID");
-  return { ...(input as unknown as CompatibilityRequest), manifest, pairReceipt, checkpoint };
+  if (safeCanonicalSha256(definitions, "definitions") !== manifest.definitionsDigest) fail("COMPATIBILITY_MANIFEST_MISMATCH", "definitionsDigest");
+  const normalized = {
+    schemaVersion: COMPATIBILITY_REQUEST_VERSION,
+    operation: input.operation as CompatibilityOperation,
+    workspaceId: input.workspaceId as string,
+    manifest,
+    pairReceipt,
+    checkpoint,
+    workflowDefinitions: definitions,
+    aosOperationalState: operational,
+    externalEffectIds: effects,
+  };
+  if (Buffer.byteLength(safeCanonicalJson({ ...normalized, requestDigest: input.requestDigest }, "request"), "utf8") > COMPATIBILITY_LIMITS.maximumDocumentBytes) fail("COMPATIBILITY_LIMIT_EXCEEDED", "request");
+  normalizedDigest(input, "requestDigest", normalized, "COMPATIBILITY_CANONICAL_INVALID");
+  return { ...normalized, requestDigest: input.requestDigest as string };
 }
 
-function validateAdmission(value: unknown): CompatibilityAdmissionContext {
+function validateAdmissionReceipt(value: unknown): CompatibilityAdmissionReceipt {
   const input = record(value, "admission"); exact(input, admissionFields, "admission");
   if (input.schemaVersion !== COMPATIBILITY_ADMISSION_VERSION || input.activeAos !== false) fail("COMPATIBILITY_SPLIT_BRAIN", "admission activeAos");
   digest(input.authenticatedPairReceiptDigest, "admission.authenticatedPairReceiptDigest");
-  for (const field of ["expectedRepositoryId", "expectedWorkflowId", "expectedSubjectId", "expectedSignerId", "expectedIssuerId", "expectedInstanceId"] as const) id(input[field], `admission.${field}`);
+  for (const field of ["expectedManifestDigest", "expectedRequestDigest", "expectedEffectivePlanDigest"] as const) digest(input[field], `admission.${field}`);
+  for (const field of ["expectedWorkflowReleaseId", "expectedAosReleaseId", "expectedRepositoryId", "expectedWorkflowId", "expectedSubjectId", "expectedSignerId", "expectedIssuerId", "expectedInstanceId"] as const) id(input[field], `admission.${field}`);
   text(input.expectedAudience, "admission.expectedAudience"); text(input.expectedNonce, "admission.expectedNonce"); instant(input.verificationTime, "admission.verificationTime");
   integer(input.minimumPolicyEpoch, "admission.minimumPolicyEpoch", 1); integer(input.minimumPolicyVersion, "admission.minimumPolicyVersion", 1); integer(input.expectedDataEpoch, "admission.expectedDataEpoch", 1);
-  stringList(input.revokedReceiptIds, "admission.revokedReceiptIds", 128, true); stringList(input.consumedReceiptIds, "admission.consumedReceiptIds", 128, true);
+  const revokedReceiptIds = stringList(input.revokedReceiptIds, "admission.revokedReceiptIds", 128, true);
+  const consumedReceiptIds = stringList(input.consumedReceiptIds, "admission.consumedReceiptIds", 128, true);
   const lock = record(input.workspaceLock, "admission.workspaceLock"); exact(lock, ["workspaceId", "lockId", "generation", "valid"], "admission.workspaceLock");
   id(lock.workspaceId, "admission.workspaceLock.workspaceId"); id(lock.lockId, "admission.workspaceLock.lockId"); integer(lock.generation, "admission.workspaceLock.generation", 1);
   if (lock.valid !== true) fail("COMPATIBILITY_WORKSPACE_LOCK_REQUIRED", "admission.workspaceLock.valid");
-  sealedDigest(input, "admissionDigest", "COMPATIBILITY_RECEIPT_UNAUTHENTICATED");
-  return structuredClone(input) as unknown as CompatibilityAdmissionContext;
+  const normalized = {
+    schemaVersion: COMPATIBILITY_ADMISSION_VERSION,
+    authenticatedPairReceiptDigest: input.authenticatedPairReceiptDigest as string,
+    expectedManifestDigest: input.expectedManifestDigest as string,
+    expectedWorkflowReleaseId: input.expectedWorkflowReleaseId as string,
+    expectedAosReleaseId: input.expectedAosReleaseId as string,
+    expectedRequestDigest: input.expectedRequestDigest as string,
+    expectedEffectivePlanDigest: input.expectedEffectivePlanDigest as string,
+    expectedRepositoryId: input.expectedRepositoryId as string,
+    expectedWorkflowId: input.expectedWorkflowId as string,
+    expectedSubjectId: input.expectedSubjectId as string,
+    expectedSignerId: input.expectedSignerId as string,
+    expectedIssuerId: input.expectedIssuerId as string,
+    expectedAudience: input.expectedAudience as string,
+    expectedNonce: input.expectedNonce as string,
+    verificationTime: input.verificationTime as string,
+    minimumPolicyEpoch: input.minimumPolicyEpoch as number,
+    minimumPolicyVersion: input.minimumPolicyVersion as number,
+    expectedInstanceId: input.expectedInstanceId as string,
+    expectedDataEpoch: input.expectedDataEpoch as number,
+    revokedReceiptIds,
+    consumedReceiptIds,
+    workspaceLock: {
+      workspaceId: lock.workspaceId as string,
+      lockId: lock.lockId as string,
+      generation: lock.generation as number,
+      valid: true as const,
+    },
+    activeAos: false as const,
+  };
+  normalizedDigest(input, "admissionDigest", normalized, "COMPATIBILITY_RECEIPT_UNAUTHENTICATED");
+  return { ...normalized, admissionDigest: input.admissionDigest as string };
+}
+
+function sameFileIdentity(left: Awaited<ReturnType<typeof lstat>>, right: Awaited<ReturnType<typeof lstat>>): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.mode === right.mode &&
+    left.nlink === right.nlink && left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs;
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+    for (const child of Object.values(value as Readonly<Record<string, unknown>>)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+export async function readCompatibilityAdmissionReceipt(
+  path: string,
+  authority: CompatibilityAdmissionAuthority | undefined,
+  options: CompatibilityAdmissionReadOptions = {},
+): Promise<CompatibilityAdmissionContext> {
+  if (!authority || typeof authority.expectedCanonicalPath !== "string" || typeof authority.expectedFileSha256 !== "string") {
+    fail("COMPATIBILITY_AUTHORITY_REQUIRED", "Out-of-band path and digest authority is required");
+  }
+  if (!isAbsolute(authority.expectedCanonicalPath) || resolve(authority.expectedCanonicalPath) !== authority.expectedCanonicalPath || path !== authority.expectedCanonicalPath) fail("COMPATIBILITY_AUTHORITY_PATH", path);
+  if (!/^[a-f0-9]{64}$/u.test(authority.expectedFileSha256)) fail("COMPATIBILITY_AUTHORITY_DIGEST", "expectedFileSha256");
+  let before;
+  try { before = await lstat(path, { bigint: true }); } catch { fail("COMPATIBILITY_AUTHORITY_CHANGED", path); }
+  if (before.isSymbolicLink()) fail("COMPATIBILITY_AUTHORITY_LINK", path);
+  if (!before.isFile()) fail("COMPATIBILITY_AUTHORITY_SPECIAL_FILE", path);
+  if (before.nlink !== 1n) fail("COMPATIBILITY_AUTHORITY_LINK", path);
+  if (before.size < 2n || before.size > BigInt(maximumAdmissionReceiptBytes)) fail("COMPATIBILITY_LIMIT_EXCEEDED", path);
+  await options.afterLstatForTest?.();
+  let handle;
+  try { handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); } catch (error) {
+    if ((error as { code?: string }).code === "ELOOP") fail("COMPATIBILITY_AUTHORITY_LINK", path);
+    fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
+  }
+  let content: Buffer;
+  try {
+    const opened = await handle.stat({ bigint: true });
+    if (!opened.isFile() || opened.nlink !== 1n || !sameFileIdentity(before, opened)) fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
+    await options.afterOpenForTest?.();
+    content = await handle.readFile();
+    const afterRead = await handle.stat({ bigint: true });
+    let named;
+    try { named = await lstat(path, { bigint: true }); } catch { fail("COMPATIBILITY_AUTHORITY_CHANGED", path); }
+    if (!sameFileIdentity(opened, afterRead) || !sameFileIdentity(afterRead, named) || BigInt(content.length) !== afterRead.size) fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
+  } catch (error) {
+    if (error instanceof CompatibilityError) throw error;
+    fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
+  } finally { await handle.close(); }
+  const sourceText = content.toString("utf8");
+  if (!Buffer.from(sourceText, "utf8").equals(content)) fail("COMPATIBILITY_AUTHORITY_CANONICAL_INVALID", path);
+  let canonicalPath;
+  try { canonicalPath = await realpath(path); } catch { fail("COMPATIBILITY_AUTHORITY_CHANGED", path); }
+  if (canonicalPath !== path) fail("COMPATIBILITY_AUTHORITY_PATH", path);
+  const fileSha256 = createHash("sha256").update(content).digest("hex");
+  if (fileSha256 !== authority.expectedFileSha256) fail("COMPATIBILITY_AUTHORITY_DIGEST", path);
+  let parsed: unknown;
+  try { parsed = JSON.parse(sourceText); } catch { fail("COMPATIBILITY_AUTHORITY_CANONICAL_INVALID", path); }
+  let canonicalSource: string;
+  try { canonicalSource = canonicalJson(parsed); } catch { fail("COMPATIBILITY_AUTHORITY_CANONICAL_INVALID", path); }
+  if (canonicalSource !== sourceText) fail("COMPATIBILITY_AUTHORITY_CANONICAL_INVALID", path);
+  const receipt = deepFreeze(validateAdmissionReceipt(parsed));
+  const context = deepFreeze({
+    receipt,
+    sourcePath: path,
+    authorityFileSha256: fileSha256,
+    sourceIdentityDigest: canonicalSha256({
+      dev: before.dev.toString(), ino: before.ino.toString(), size: before.size.toString(), mode: before.mode.toString(),
+      mtimeNs: before.mtimeNs.toString(), ctimeNs: before.ctimeNs.toString(),
+    }),
+  });
+  admittedContexts.add(context);
+  return context;
 }
 
 export function parseWorkflowCompatibilityManifest(sourceText: unknown): WorkflowCompatibilityManifest {
   if (typeof sourceText !== "string" || !sourceText.isWellFormed()) fail("COMPATIBILITY_UNICODE_INVALID", "manifest bytes");
   let parsed: unknown; try { parsed = JSON.parse(sourceText); } catch { fail("COMPATIBILITY_INPUT_INVALID", "manifest bytes"); }
-  if (canonicalJson(parsed) !== sourceText) fail("COMPATIBILITY_CANONICAL_INVALID", "manifest bytes");
+  if (safeCanonicalJson(parsed, "manifest bytes") !== sourceText) fail("COMPATIBILITY_CANONICAL_INVALID", "manifest bytes");
   return validateWorkflowCompatibilityManifest(parsed);
 }
 
@@ -339,26 +534,34 @@ export function validateCompatibilityRequest(value: unknown): CompatibilityReque
   return validateRequest(value);
 }
 
-function admit(request: CompatibilityRequest, contextValue: unknown): CompatibilityAdmissionContext {
-  const context = validateAdmission(contextValue);
-  const receipt = request.pairReceipt; const manifest = request.manifest;
-  if (context.authenticatedPairReceiptDigest !== receipt.receiptDigest) fail("COMPATIBILITY_RECEIPT_UNAUTHENTICATED", "authenticated digest");
-  const references = [[manifest.repositoryId, receipt.repositoryId, context.expectedRepositoryId], [manifest.workflowId, receipt.workflowId, context.expectedWorkflowId], [manifest.subjectId, receipt.subjectId, context.expectedSubjectId]];
-  if (references.some(([a, b, c]) => a !== b || b !== c) || receipt.workflowReleaseId !== manifest.releaseId || receipt.workflowManifestDigest !== manifest.manifestDigest) fail("COMPATIBILITY_REFERENCE_MISMATCH", "mutual references");
-  if (receipt.signerId !== context.expectedSignerId || receipt.issuerId !== context.expectedIssuerId || receipt.audience !== context.expectedAudience || receipt.nonce !== context.expectedNonce) fail("COMPATIBILITY_RECEIPT_UNAUTHENTICATED", "pair claims");
-  const now = instant(context.verificationTime, "admission.verificationTime");
-  if (now < instant(receipt.notBefore, "pairReceipt.notBefore") || now < instant(receipt.issuedAt, "pairReceipt.issuedAt") || now >= instant(receipt.expiresAt, "pairReceipt.expiresAt")) fail("COMPATIBILITY_RECEIPT_EXPIRED", "pair receipt window");
-  if (context.revokedReceiptIds.includes(receipt.receiptId)) fail("COMPATIBILITY_RECEIPT_REVOKED", receipt.receiptId);
-  if (context.consumedReceiptIds.includes(receipt.receiptId)) fail("COMPATIBILITY_RECEIPT_REPLAYED", receipt.receiptId);
-  if (receipt.policyEpoch < context.minimumPolicyEpoch || (receipt.policyEpoch === context.minimumPolicyEpoch && receipt.policyVersion < context.minimumPolicyVersion) || manifest.policyEpoch < context.minimumPolicyEpoch || (manifest.policyEpoch === context.minimumPolicyEpoch && manifest.policyVersion < context.minimumPolicyVersion)) fail("COMPATIBILITY_POLICY_ROLLBACK", "policy floor");
-  if (receipt.instanceId !== context.expectedInstanceId || manifest.instanceId !== context.expectedInstanceId) fail("COMPATIBILITY_INSTANCE_MISMATCH", "instance");
-  if (receipt.dataEpoch !== context.expectedDataEpoch || manifest.dataEpoch !== context.expectedDataEpoch) fail("COMPATIBILITY_DATA_EPOCH_MISMATCH", "data epoch");
-  if (context.workspaceLock.workspaceId !== request.workspaceId) fail("COMPATIBILITY_WORKSPACE_LOCK_REQUIRED", "workspace lock binding");
-  return Object.freeze(context);
+function admittedContext(value: unknown): CompatibilityAdmissionContext {
+  if (typeof value !== "object" || value === null || !admittedContexts.has(value)) {
+    fail("COMPATIBILITY_AUTHORITY_REQUIRED", "An independently read admission receipt is required");
+  }
+  return value as CompatibilityAdmissionContext;
 }
 
-function buildPlan(requestValue: unknown, admissionValue: unknown, dryRun: boolean): CompatibilityPlan {
-  const request = validateRequest(requestValue); admit(request, admissionValue);
+function admit(request: CompatibilityRequest, contextValue: unknown, effectivePlanDigest: string): CompatibilityAdmissionReceipt {
+  const context = admittedContext(contextValue);
+  const authority = context.receipt;
+  const receipt = request.pairReceipt; const manifest = request.manifest;
+  if (authority.authenticatedPairReceiptDigest !== receipt.receiptDigest) fail("COMPATIBILITY_RECEIPT_UNAUTHENTICATED", "authenticated digest");
+  if (authority.expectedManifestDigest !== manifest.manifestDigest || authority.expectedWorkflowReleaseId !== manifest.releaseId || authority.expectedAosReleaseId !== receipt.aosReleaseId || authority.expectedRequestDigest !== request.requestDigest || authority.expectedEffectivePlanDigest !== effectivePlanDigest) fail("COMPATIBILITY_AUTHORITY_MISMATCH", "request or effective plan binding");
+  const references = [[manifest.repositoryId, receipt.repositoryId, authority.expectedRepositoryId], [manifest.workflowId, receipt.workflowId, authority.expectedWorkflowId], [manifest.subjectId, receipt.subjectId, authority.expectedSubjectId]];
+  if (references.some(([a, b, c]) => a !== b || b !== c) || receipt.workflowReleaseId !== manifest.releaseId || receipt.workflowManifestDigest !== manifest.manifestDigest) fail("COMPATIBILITY_REFERENCE_MISMATCH", "mutual references");
+  if (receipt.signerId !== authority.expectedSignerId || receipt.issuerId !== authority.expectedIssuerId || receipt.audience !== authority.expectedAudience || receipt.nonce !== authority.expectedNonce) fail("COMPATIBILITY_RECEIPT_UNAUTHENTICATED", "pair claims");
+  const now = instant(authority.verificationTime, "admission.verificationTime");
+  if (now < instant(receipt.notBefore, "pairReceipt.notBefore") || now < instant(receipt.issuedAt, "pairReceipt.issuedAt") || now >= instant(receipt.expiresAt, "pairReceipt.expiresAt")) fail("COMPATIBILITY_RECEIPT_EXPIRED", "pair receipt window");
+  if (authority.revokedReceiptIds.includes(receipt.receiptId)) fail("COMPATIBILITY_RECEIPT_REVOKED", receipt.receiptId);
+  if (authority.consumedReceiptIds.includes(receipt.receiptId)) fail("COMPATIBILITY_RECEIPT_REPLAYED", receipt.receiptId);
+  if (receipt.policyEpoch < authority.minimumPolicyEpoch || (receipt.policyEpoch === authority.minimumPolicyEpoch && receipt.policyVersion < authority.minimumPolicyVersion) || manifest.policyEpoch < authority.minimumPolicyEpoch || (manifest.policyEpoch === authority.minimumPolicyEpoch && manifest.policyVersion < authority.minimumPolicyVersion)) fail("COMPATIBILITY_POLICY_ROLLBACK", "policy floor");
+  if (receipt.instanceId !== authority.expectedInstanceId || manifest.instanceId !== authority.expectedInstanceId) fail("COMPATIBILITY_INSTANCE_MISMATCH", "instance");
+  if (receipt.dataEpoch !== authority.expectedDataEpoch || manifest.dataEpoch !== authority.expectedDataEpoch) fail("COMPATIBILITY_DATA_EPOCH_MISMATCH", "data epoch");
+  if (authority.workspaceLock.workspaceId !== request.workspaceId) fail("COMPATIBILITY_WORKSPACE_LOCK_REQUIRED", "workspace lock binding");
+  return authority;
+}
+
+function deriveEffectivePlan(request: CompatibilityRequest): CompatibilityEffectivePlan {
   const workflowKeys = Object.keys(request.workflowDefinitions).sort(compareCanonicalText);
   const operationalKeys = Object.keys(request.aosOperationalState).sort(compareCanonicalText);
   const workflowAllowed = new Set(request.manifest.workflowOwnedFields);
@@ -371,15 +574,37 @@ function buildPlan(requestValue: unknown, admissionValue: unknown, dryRun: boole
   const conflicts = workflowKeys.filter((key) => operationalKeys.includes(key)).sort(compareCanonicalText);
   if (conflicts.length && request.operation !== "conflict_plan" && request.operation !== "reconciliation_dry_run") fail("COMPATIBILITY_FIELD_OWNERSHIP_CONFLICT", "overlapping conflict");
   const state = request.operation === "portable_checkpoint" ? "checkpoint_planned" : request.operation.startsWith("fallback_") ? "fallback_planned" : request.operation === "conflict_plan" ? "conflicts_planned" : request.operation === "reconciliation_dry_run" ? "reconciliation_planned" : "planned";
+  const effective = {
+    operation: request.operation,
+    workspaceId: request.workspaceId,
+    requestDigest: request.requestDigest,
+    manifestDigest: request.manifest.manifestDigest,
+    receiptDigest: request.pairReceipt.receiptDigest,
+    state,
+    workflowDefinitionKeys: workflowKeys,
+    preservedAosOperationalKeys: operationalKeys,
+    conflicts,
+    externalEffectIds: request.externalEffectIds,
+    mutation: false as const,
+    network: false as const,
+  };
+  return { ...effective, effectivePlanDigest: safeCanonicalSha256(effective, "effective plan") };
+}
+
+export function calculateCompatibilityEffectivePlanDigest(requestValue: unknown): string {
+  return deriveEffectivePlan(validateRequest(requestValue)).effectivePlanDigest;
+}
+
+function buildPlan(requestValue: unknown, admissionValue: unknown, dryRun: boolean): CompatibilityPlan {
+  const request = validateRequest(requestValue);
+  const effective = deriveEffectivePlan(request);
+  admit(request, admissionValue, effective.effectivePlanDigest);
   const base = {
     schemaVersion: COMPATIBILITY_RESULT_VERSION,
     reasonCode: dryRun ? "COMPATIBILITY_DRY_RUN_READY" as const : "COMPATIBILITY_PLAN_READY" as const,
-    operation: request.operation, workspaceId: request.workspaceId, requestDigest: request.requestDigest,
-    manifestDigest: request.manifest.manifestDigest, receiptDigest: request.pairReceipt.receiptDigest,
-    state, workflowDefinitionKeys: workflowKeys, preservedAosOperationalKeys: operationalKeys,
-    conflicts, externalEffectIds: [...request.externalEffectIds].sort(compareCanonicalText), mutation: false as const, network: false as const,
+    ...effective,
   };
-  return { ...base, planDigest: canonicalSha256(base) };
+  return { ...base, planDigest: safeCanonicalSha256(base, "plan") };
 }
 
 export function planCompatibilityMode(request: unknown, admission: unknown): CompatibilityPlan { return buildPlan(request, admission, false); }
@@ -395,5 +620,5 @@ export function unavailableCompatibilityCapability(surface: unknown): Readonly<R
     mutation: false as const,
     network: false as const,
   };
-  return { ...base, resultDigest: canonicalSha256(base) };
+  return { ...base, resultDigest: safeCanonicalSha256(base, "unavailable result") };
 }

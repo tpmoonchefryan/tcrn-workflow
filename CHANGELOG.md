@@ -65,3 +65,6 @@ Versioning after the first accepted release.
 - Add P7-B offline Compatibility And Modes planning with a closed Workflow
   manifest, governed pair-receipt admission, policy rollback/replay controls,
   field-level AOS ownership preservation, and exact unavailable live surfaces.
+- Bind P7-B admission to a no-follow host-anchored canonical authority receipt,
+  normalize semantic sets before hashing, and prove recursive JSON and exact
+  aggregate-document limits across schema and runtime.

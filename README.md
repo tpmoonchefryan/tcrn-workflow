@@ -81,8 +81,9 @@ transient/archive generation counts and cumulative storage are bounded before
 unbounded reads or writes.
 `pnpm verify:p7:compatibility` checks the offline-only compatibility manifest,
 authenticated pair-reference admission, anti-rollback policy floor, Workspace
-lock binding, deterministic import/checkpoint/fallback/conflict/reconciliation
-plans, and exact field ownership. All live AOS/apply surfaces remain unavailable
+lock binding, descriptor-bound host-only authority receipts, recursive schema
+parity, canonical semantic sets, deterministic import/checkpoint/fallback/
+conflict/reconciliation plans, and exact field ownership. All live AOS/apply surfaces remain unavailable
 with zero network and zero mutation until a mutually supported release exists.
 `pnpm verify:p4:knowledge` exposes the narrower
 `P4_KNOWLEDGE_CORE_VERIFIED` reason code. Neither command mutates the live graph
