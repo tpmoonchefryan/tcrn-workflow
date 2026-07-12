@@ -69,6 +69,9 @@ use, exclusions, retention class, and final context digest. Default retention is
 procedure content, credentials, authenticated URLs, local paths, thread/session
 history, model settings, or owner-private prose. This is a focused structural
 privacy boundary, not a general DLP scanner.
+Authority-receipt source bytes must equal `canonicalJson(receipt)` directly,
+including its single terminal LF; fully rehashed leading, trailing, or double-LF
+variants fail closed.
 Result validation recomputes every fixed-injection, authority, metadata summary,
 reference, explicit body/procedure, and receipt byte/count usage field from the
 included canonical result; resealed under- or over-reporting fails closed.

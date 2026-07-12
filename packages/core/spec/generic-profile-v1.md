@@ -37,6 +37,8 @@ single-link bounded file, binds the pre-open, descriptor, post-read, and named
 identity, and rejects noncanonical or changed bytes. File identity is not trust
 provenance: resolution additionally requires an exact canonical path and raw
 file SHA-256 supplied through the governed `CliIo` admission-authority channel.
+Receipt source bytes must equal `canonicalJson(receipt)` directly, including its
+single terminal LF; fully rehashed leading, trailing, or double-LF variants fail.
 Neither value is a CLI argument, request field, environment input, prompt field,
 or receipt field. The standalone command wrapper supplies no authority and
 therefore fails closed; the accepted gate/control plane must inject both values

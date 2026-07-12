@@ -491,6 +491,7 @@ async function verifyP5() {
     "P5_ADMISSION_FILESYSTEM_NEGATIVES");
   assertion(Array.isArray(fixture.authorityAnchorNegativeCases) && fixture.authorityAnchorNegativeCases.length === 7,
     "P5_AUTHORITY_ANCHOR_NEGATIVES");
+  assertion(fixture.admissionCanonicalByteCases === 4, "P5_ADMISSION_CANONICAL_BYTES");
   assertion(Array.isArray(fixture.cliCases) && fixture.cliCases.length === 6, "P5_CLI_CASES");
   assertion(fixture.propertyPermutations === 64 && fixture.permutationLayerCount === 6 &&
     /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P5_PROPERTY_PERMUTATIONS");
@@ -517,6 +518,7 @@ async function verifyP5() {
     trustAdmissionNegativeCases: fixture.trustAdmissionNegativeCases.length,
     admissionFilesystemNegativeCases: fixture.admissionFilesystemNegativeCases.length,
     authorityAnchorNegativeCases: fixture.authorityAnchorNegativeCases.length,
+    admissionCanonicalByteCases: fixture.admissionCanonicalByteCases,
     coreReferenceProfiles: 8,
     coreReferenceAstralParityCases: fixture.corePersonaAstralParityCases,
     coreReferenceDistinctPermutations: fixture.corePersonaDistinctPermutations,
@@ -559,7 +561,7 @@ async function verifyP6() {
   assertion(fixture.hostileCases === 24 && fixture.schemaParityCases === 8, "P6_CONTEXT_HOSTILE_CORPUS");
   assertion(fixture.bindingParityCases === 6 && fixture.authorityAllowlistCountCases === 2 &&
     fixture.unicodeParityCases === 12 && fixture.receiptBudgetTamperCases === 2 &&
-    fixture.authorityImmutabilityCases === 2, "P6_CONTEXT_REPAIR_VECTORS");
+    fixture.authorityImmutabilityCases === 2 && fixture.authorityCanonicalByteCases === 4, "P6_CONTEXT_REPAIR_VECTORS");
   assertion(fixture.propertyPermutations === 64 && fixture.logicalMetadataCandidates === 6 &&
     /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6_CONTEXT_PROPERTY_CORPUS");
   assertion(Array.isArray(fixture.latencyStages) && fixture.latencyStages.length === 6 &&
@@ -584,6 +586,7 @@ async function verifyP6() {
     unicodeParityCases: fixture.unicodeParityCases,
     receiptBudgetTamperCases: fixture.receiptBudgetTamperCases,
     authorityImmutabilityCases: fixture.authorityImmutabilityCases,
+    authorityCanonicalByteCases: fixture.authorityCanonicalByteCases,
     propertyPermutations: fixture.propertyPermutations,
     logicalMetadataCandidates: fixture.logicalMetadataCandidates,
     explicitReadCandidates: fixture.explicitReadCandidates,

@@ -785,7 +785,7 @@ export async function readGenericProfileAdmissionReceipt(
   }
   let canonical: string;
   try {
-    canonical = `${canonicalJson(parsed)}\n`;
+    canonical = canonicalJson(parsed);
   } catch {
     fail("PROFILE_ADMISSION_CANONICAL_INVALID", path);
   }

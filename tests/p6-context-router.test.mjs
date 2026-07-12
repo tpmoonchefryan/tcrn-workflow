@@ -144,17 +144,17 @@ async function admittedFixture(personaIndex = 0, options = {}) {
   const authorityPath = join(directory, "context-authority.json");
   const request = options.request ?? routeRequest(personaIndex, options.query);
   const profileDocument = profileReceipt(request.profileResolution).receipt;
-  const profileBytes = `${canonicalJson(profileDocument)}\n`;
+  const profileBytes = canonicalJson(profileDocument);
   await writeFile(profilePath, profileBytes, { mode: 0o600 });
   const profileFileAuthority = fileAuthority(profilePath, profileBytes);
   const profileAdmission = await readGenericProfileAdmissionReceipt(profilePath, { authority: profileFileAuthority });
   const baseAuthority = contextAuthority(request, profileDocument, options.authorityOverrides);
   const authorityDocument = options.authorityMutator ? options.authorityMutator(clone(baseAuthority)) : baseAuthority;
-  const authorityBytes = `${canonicalJson(authorityDocument)}\n`;
+  const authorityBytes = (options.authorityBytesTransform ?? ((value) => value))(canonicalJson(authorityDocument));
   await writeFile(authorityPath, authorityBytes, { mode: 0o600 });
   const contextFileAuthority = fileAuthority(authorityPath, authorityBytes);
   const contextAdmission = options.skipContextRead ? null : await readContextRouteAuthorityReceipt(authorityPath, options.contextFileAuthority ?? contextFileAuthority);
-  return { directory, request, profilePath, authorityPath, profileFileAuthority, contextFileAuthority, profileAdmission, contextAdmission, profileDocument, authorityDocument, close: () => rm(directory, { recursive: true, force: true }) };
+  return { directory, request, profilePath, authorityPath, profileFileAuthority, contextFileAuthority, profileAdmission, contextAdmission, profileDocument, authorityDocument, authorityBytes, close: () => rm(directory, { recursive: true, force: true }) };
 }
 
 function permutations(values, maximum) {
@@ -319,18 +319,38 @@ test("risk, stale authority, authority file identity, and governed CLI admission
   try {
     await reasonAsync("CONTEXT_AUTHORITY_REQUIRED", () => readContextRouteAuthorityReceipt(admitted.authorityPath));
     await reasonAsync("CONTEXT_AUTHORITY_DIGEST", () => readContextRouteAuthorityReceipt(admitted.authorityPath, { ...admitted.contextFileAuthority, expectedFileSha256: "0".repeat(64) }));
-    const copy = join(admitted.directory, "copy.json"); await writeFile(copy, `${canonicalJson(admitted.authorityDocument)}\n`);
+    const copy = join(admitted.directory, "copy.json"); await writeFile(copy, canonicalJson(admitted.authorityDocument));
     await reasonAsync("CONTEXT_AUTHORITY_PATH", () => readContextRouteAuthorityReceipt(copy, admitted.contextFileAuthority));
     const symbolic = join(admitted.directory, "symbolic.json"); await symlink(admitted.authorityPath, symbolic);
     await reasonAsync("CONTEXT_AUTHORITY_LINK", () => readContextRouteAuthorityReceipt(symbolic, { ...admitted.contextFileAuthority, expectedCanonicalPath: symbolic }));
     const hard = join(admitted.directory, "hard.json"); await link(admitted.authorityPath, hard);
-    await reasonAsync("CONTEXT_AUTHORITY_LINK", () => readContextRouteAuthorityReceipt(hard, fileAuthority(hard, `${canonicalJson(admitted.authorityDocument)}\n`)));
+    await reasonAsync("CONTEXT_AUTHORITY_LINK", () => readContextRouteAuthorityReceipt(hard, fileAuthority(hard, canonicalJson(admitted.authorityDocument))));
     await rm(hard);
     let output = "";
     await runCli(["context-route", "--request", canonicalJson(admitted.request), "--profile-receipt", admitted.profilePath, "--authority", admitted.authorityPath], { write: (value) => { output = value; }, profileAdmissionAuthority: admitted.profileFileAuthority, contextRouteAuthority: admitted.contextFileAuthority });
     assert.equal(JSON.parse(output).reasonCode, "CONTEXT_ROUTED");
     await reasonAsync("CONTEXT_AUTHORITY_REQUIRED", () => runCli(["context-route", "--request", canonicalJson(admitted.request), "--profile-receipt", admitted.profilePath, "--authority", admitted.authorityPath], { write: () => {}, profileAdmissionAuthority: admitted.profileFileAuthority }));
   } finally { await admitted.close(); }
+});
+
+test("context authority receipts require exactly one canonical terminal LF", async () => {
+  const positive = await admittedFixture();
+  try {
+    assert.equal(positive.authorityBytes.endsWith("\n"), true);
+    assert.equal(positive.authorityBytes.endsWith("\n\n"), false);
+    assert.equal(createHash("sha256").update(positive.authorityBytes).digest("hex"), positive.contextFileAuthority.expectedFileSha256);
+    assert.equal(positive.contextAdmission.receipt.authorityDigest, positive.authorityDocument.authorityDigest);
+  } finally { await positive.close(); }
+  const transforms = [(bytes) => `${bytes}\n`, (bytes) => ` ${bytes}`, (bytes) => `${bytes} `];
+  assert.equal(transforms.length + 1, fixture.authorityCanonicalByteCases);
+  for (const authorityBytesTransform of transforms) {
+    const changed = await admittedFixture(0, { skipContextRead: true, authorityBytesTransform });
+    try {
+      assert.equal(createHash("sha256").update(changed.authorityBytes).digest("hex"), changed.contextFileAuthority.expectedFileSha256);
+      await reasonAsync("CONTEXT_AUTHORITY_CANONICAL_INVALID", () =>
+        readContextRouteAuthorityReceipt(changed.authorityPath, changed.contextFileAuthority));
+    } finally { await changed.close(); }
+  }
 });
 
 test("Draft 2020-12 schema and runtime request surfaces reject the same representative malformed vectors", async () => {

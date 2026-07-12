@@ -178,14 +178,14 @@ async function admissionFixture(resolutionRequest, options = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "workflow-profile-admission-")));
   const path = join(directory, "admission.json");
   const document = options.document ?? admissionReceipt(resolutionRequest, options);
-  const bytes = `${canonicalJson(document)}\n`;
+  const bytes = (options.transformBytes ?? ((value) => value))(canonicalJson(document));
   await writeFile(path, bytes, { encoding: "utf8", mode: 0o600 });
   const authority = options.authority ?? fileAuthority(path, bytes);
   const context = options.skipRead ? null : await readGenericProfileAdmissionReceipt(path, {
     ...options.readOptions,
     authority,
   });
-  return { directory, path, document, authority, context, close: () => rm(directory, { recursive: true, force: true }) };
+  return { directory, path, document, bytes, authority, context, close: () => rm(directory, { recursive: true, force: true }) };
 }
 
 async function withAdmission(resolutionRequest, operation, options = {}) {
@@ -477,13 +477,13 @@ test("trusted admission rejects forged trust, malformed receipts, and standalone
       authority: fileAuthority(malformed.path, malformedBytes),
     }));
     const mismatched = admissionReceipt(baseRequest, { receiptDigest: "0".repeat(64) });
-    const mismatchedBytes = `${canonicalJson(mismatched)}\n`;
+    const mismatchedBytes = canonicalJson(mismatched);
     await writeFile(malformed.path, mismatchedBytes, "utf8");
     await expectReasonAsync("PROFILE_ADMISSION_MISMATCH", () => readGenericProfileAdmissionReceipt(malformed.path, {
       authority: fileAuthority(malformed.path, mismatchedBytes),
     }));
     const valid = admissionReceipt(baseRequest);
-    const validBytes = `${canonicalJson(valid)}\n`;
+    const validBytes = canonicalJson(valid);
     await writeFile(malformed.path, validBytes, "utf8");
     const hardlink = join(malformed.directory, "hardlink.json");
     await link(malformed.path, hardlink);
@@ -499,12 +499,12 @@ test("trusted admission rejects forged trust, malformed receipts, and standalone
     await rm(symlinkPath);
     await expectReasonAsync("PROFILE_ADMISSION_CHANGED", () => readGenericProfileAdmissionReceipt(malformed.path, {
       authority: fileAuthority(malformed.path, validBytes),
-      afterLstatForTest: async () => writeFile(malformed.path, `${canonicalJson({ ...valid, receiptDigest: "1".repeat(64) })}\n`, "utf8"),
+      afterLstatForTest: async () => writeFile(malformed.path, canonicalJson({ ...valid, receiptDigest: "1".repeat(64) }), "utf8"),
     }));
     await writeFile(malformed.path, validBytes, "utf8");
     await expectReasonAsync("PROFILE_ADMISSION_CHANGED", () => readGenericProfileAdmissionReceipt(malformed.path, {
       authority: fileAuthority(malformed.path, validBytes),
-      afterOpenForTest: async () => writeFile(malformed.path, `${canonicalJson({ ...valid, receiptDigest: "2".repeat(64) })}\n`, "utf8"),
+      afterOpenForTest: async () => writeFile(malformed.path, canonicalJson({ ...valid, receiptDigest: "2".repeat(64) }), "utf8"),
     }));
   } finally {
     await malformed.close();
@@ -518,6 +518,27 @@ test("trusted admission rejects forged trust, malformed receipts, and standalone
     "recomputed-forged-effective-object",
   ];
   assert.deepEqual(fixture.trustAdmissionNegativeCases, selfTrustCases);
+});
+
+test("profile admission receipts require exactly one canonical terminal LF", async () => {
+  const baseRequest = request([generateGenericStarterBundle().layers[0]]);
+  const positive = await admissionFixture(baseRequest);
+  try {
+    assert.equal(positive.bytes.endsWith("\n"), true);
+    assert.equal(positive.bytes.endsWith("\n\n"), false);
+    assert.equal(createHash("sha256").update(positive.bytes).digest("hex"), positive.authority.expectedFileSha256);
+    assert.equal(positive.context.receipt.receiptDigest, positive.document.receiptDigest);
+  } finally { await positive.close(); }
+  const transforms = [(bytes) => `${bytes}\n`, (bytes) => ` ${bytes}`, (bytes) => `${bytes} `];
+  assert.equal(transforms.length + 1, fixture.admissionCanonicalByteCases);
+  for (const transformBytes of transforms) {
+    const changed = await admissionFixture(baseRequest, { skipRead: true, transformBytes });
+    try {
+      assert.equal(createHash("sha256").update(changed.bytes).digest("hex"), changed.authority.expectedFileSha256);
+      await expectReasonAsync("PROFILE_ADMISSION_CANONICAL_INVALID", () =>
+        readGenericProfileAdmissionReceipt(changed.path, { authority: changed.authority }));
+    } finally { await changed.close(); }
+  }
 });
 
 test("out-of-band path and digest authority rejects caller-minted admission receipts", async () => {
@@ -535,7 +556,7 @@ test("out-of-band path and digest authority rejects caller-minted admission rece
   const trusted = await admissionFixture(legitimateRequest, { skipRead: true });
   const attackerDirectory = await realpath(await mkdtemp(join(tmpdir(), "workflow-profile-attacker-")));
   try {
-    const trustedBytes = `${canonicalJson(trusted.document)}\n`;
+    const trustedBytes = canonicalJson(trusted.document);
     const attackerPath = join(attackerDirectory, "self-minted.json");
     const attackerReplacement = ownerFields("workspace:attacker", { escalationOwner: "owner:attacker" });
     const attackerLayer = overlay("workspace_configuration", "profile-layer:attacker", {
@@ -544,7 +565,7 @@ test("out-of-band path and digest authority rejects caller-minted admission rece
     const attackerRequest = request([base, attackerLayer], {
       ownerRebind: ownerRebind(attackerLayer, attackerReplacement, { ownerId: "owner:attacker" }),
     });
-    const attackerBytes = `${canonicalJson(admissionReceipt(attackerRequest))}\n`;
+    const attackerBytes = canonicalJson(admissionReceipt(attackerRequest));
     await writeFile(attackerPath, attackerBytes, "utf8");
 
     await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_REQUIRED", () =>
@@ -589,7 +610,7 @@ test("out-of-band path and digest authority rejects caller-minted admission rece
     const admission = await readGenericProfileAdmissionReceipt(trusted.path, { authority: trusted.authority });
     expectReason("PROFILE_ADMISSION_REQUEST_MISMATCH", () => resolveGenericProfile(attackerRequest, admission));
     const wrongEffective = admissionReceipt(legitimateRequest, { effectiveDigest: "0".repeat(64) });
-    const wrongEffectiveBytes = `${canonicalJson(wrongEffective)}\n`;
+    const wrongEffectiveBytes = canonicalJson(wrongEffective);
     await writeFile(trusted.path, wrongEffectiveBytes, "utf8");
     const wrongEffectiveAdmission = await readGenericProfileAdmissionReceipt(trusted.path, {
       authority: fileAuthority(trusted.path, wrongEffectiveBytes),
@@ -882,12 +903,12 @@ test("governed CLI generation, validation, resolution, and authorization fail cl
       "profile-resolve", "--request", canonicalJson(baseOnly), "--receipt", filesystemAdmission.path,
     ], { write: () => {}, profileAdmissionAuthority: fileAuthority(filesystemAdmission.path, malformedBytes) }));
     const mismatched = admissionReceipt(baseOnly, { receiptDigest: "0".repeat(64) });
-    const mismatchedBytes = `${canonicalJson(mismatched)}\n`;
+    const mismatchedBytes = canonicalJson(mismatched);
     await writeFile(filesystemAdmission.path, mismatchedBytes, "utf8");
     await expectReasonAsync("PROFILE_ADMISSION_MISMATCH", () => runCli([
       "profile-resolve", "--request", canonicalJson(baseOnly), "--receipt", filesystemAdmission.path,
     ], { write: () => {}, profileAdmissionAuthority: fileAuthority(filesystemAdmission.path, mismatchedBytes) }));
-    const validBytes = `${canonicalJson(admissionReceipt(baseOnly))}\n`;
+    const validBytes = canonicalJson(admissionReceipt(baseOnly));
     await writeFile(filesystemAdmission.path, validBytes, "utf8");
     const hardlinkPath = join(filesystemAdmission.directory, "cli-hardlink.json");
     await link(filesystemAdmission.path, hardlinkPath);

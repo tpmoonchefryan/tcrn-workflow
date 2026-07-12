@@ -8,6 +8,7 @@
   "unicodeParityCases": 12,
   "receiptBudgetTamperCases": 2,
   "authorityImmutabilityCases": 2,
+  "authorityCanonicalByteCases": 4,
   "propertyPermutations": 64,
   "logicalMetadataCandidates": 6,
   "explicitReadCandidates": 2,
