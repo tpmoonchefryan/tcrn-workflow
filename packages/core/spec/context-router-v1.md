@@ -23,6 +23,9 @@ task kind, minimum risk, maximum budgets, explicit-read allowlist, and validity
 window. Caller-recomputed effective objects and caller-created receipt files do
 not confer authority. Profile resolution and `profile.read` authorization are
 re-run inside routing against the admitted profile context.
+The admitted authority object and its nested budget and explicit-read allowlist
+graphs are deeply frozen before exposure or routing use. The explicit-read
+allowlist is capped at 32 entries in both schema and runtime.
 
 Prompt and environment text are untrusted query data. They cannot select a
 profile, trust level, binding, scope, risk tier, budget, explicit read, operation,
@@ -52,6 +55,9 @@ count and UTF-8 byte budgets are checked before inclusion.
 Schema proof registers the annotation keyword `x-tcrn-maxUtf8Bytes` so the
 runtime byte limits are executable rather than attributed to stock JSON Schema
 `maxLength`, which counts Unicode code points.
+The request, authority, and result roots additionally require the executable
+`x-tcrn-deepWellFormedUnicode` keyword; runtime performs the same recursive
+high/low-surrogate rejection before other semantic admission.
 
 ## Receipt and privacy
 
@@ -62,6 +68,9 @@ use, exclusions, retention class, and final context digest. Default retention is
 procedure content, credentials, authenticated URLs, local paths, thread/session
 history, model settings, or owner-private prose. This is a focused structural
 privacy boundary, not a general DLP scanner.
+Result validation recomputes every fixed-injection, authority, metadata summary,
+reference, explicit body/procedure, and receipt byte/count usage field from the
+included canonical result; resealed under- or over-reporting fails closed.
 
 ## Determinism and performance
 

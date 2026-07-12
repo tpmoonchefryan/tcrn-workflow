@@ -159,6 +159,7 @@ export {
   readContextRouteAuthorityReceipt,
   routeContext,
   validateContextRouteRequest,
+  validateContextRouteAuthorityReceipt,
   validateContextRouteResult,
 } from "./context-router.js";
 export type {
@@ -192,6 +193,7 @@ export {
   readGenericProfileAdmissionReceipt,
   resolveGenericProfile,
   validateEffectiveGenericProfile,
+  validateGenericProfileBinding,
   validateGenericProfileLayer,
   validateGenericStarterBundle,
 } from "./generic-profile.js";

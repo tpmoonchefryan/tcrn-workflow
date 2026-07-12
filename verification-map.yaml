@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "8a0f7edf188bae9e13f0a7cb72578255322013d58db1fa2f43f649324b29bfa6",
+      "fixtureDigest": "0e1a219c28875f5d5705c0b5b433760cd90471a6ef37d9f63bfd1e0774b150b8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "a62999d654c090a93e176e0f28d969aa7cb1ddcfefb080e0af3be6201e2f369f",
+      "fixtureDigest": "4e14cb4a3562f0db356c55e7b09bb50e7395cc8c1b230d0c38a638503c8c9823",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -75,7 +75,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "c5d6967e01aafb6a6f87802dae36ed4b9e16fb60688bf6b1a0053d37373fe662",
+      "fixtureDigest": "503c0971be76553b238a472976dfbe75d34ab91e286b1d38684c10b19a94e779",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "e8a0b26c31d2c0c372719b99727b09e114671f6df7a62ee9362c3de7a9c8cfb1",
+      "fixtureDigest": "d3f7340a89664a51fbd4ec6f5597cafcbffc0a9f4c67316e37758055a292cde8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -208,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "a0f3f8d455c8c55790418ce19e44f316afe1e2010d06c33b1f259ab40a1d1262",
+      "fixtureDigest": "b7edb7e43c3a88adacdca2b8e12bca409b5cccf14a2a1e27a395a0998722f64d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -233,7 +233,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "60d49d7d105ec0b08058006135cbfcb5a8f01ca09a4fd867ed50e68c28497cee",
+      "fixtureDigest": "3c33f80ea2d13e64d6f33b7e87b0f0b4ffe44c0d0d8e8ef04c7dfef461495a50",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -260,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "626c3d78cadc3f301f6ba80986c75b62f9710b6379a9896b74905ae42221c613",
+      "fixtureDigest": "b514bb0b7f2f50a27b1553cb099af5fd16eba8057d845c213bda4b8b5bb867ff",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -455,7 +455,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "441896d1c18d48c1cd10ec9ee25a1df0ed2048ccf47af331bca9a920edf1a4da",
+      "fixtureDigest": "f02e37e7d2fa5317ed86a7b66162264d6e960b3e2cca98e984f18500b8ff1a60",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -512,7 +512,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "ca29d541f8a26d4f623c5b20d2ce661a632751925b7498548f6c8b646b70c72d",
+      "fixtureDigest": "223eaf4a4a2d71911caef0db6b56daf165416f6e308715221f7c6ce6038381e0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -542,7 +542,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "dad1ebf51835e88f2637bf929390ac2a20871900e9b9692145ac1149adfb5a0d",
+      "fixtureDigest": "2ec741199225f7d3d88e7ade777e805f8fecad8d606b331f6ce60bf0fa8fee4a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -604,7 +604,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "1c32ae55b9eb728385a0e28843dc14b5a08eccad59d4b2b2bee78f67ea270097",
+      "fixtureDigest": "563407a0efb1bb8d030d8dc292bcd95df04c34e805e05a6dceca36e04755303f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -640,7 +640,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "9a4af067bcdd07d4b1b9b35544aa0e94cc5d09dca2f68e86153c7797298eb2b6",
+      "fixtureDigest": "fccb5388070ad20daf97652e44597b3a4b0f82eb849c1769edb91f62a9d5c301",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -667,7 +667,7 @@
         "packages/core/fixtures/p5-generic-profile-cases.json",
         "tests/p5-generic-profile.test.mjs"
       ],
-      "fixtureDigest": "628645ba5f4eb896b721cc2ec0f5aa7acb8538fa3b1f112eaf9820dd66e71d7b",
+      "fixtureDigest": "5ef31ed077e11142a9137a08e21c57273f8ed8f4f61df6484fa78bc699111ca4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -702,7 +702,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "ad8fa533441d46cf026afeef37632a2331e8dbd7f59b41e18d6167b6afa8fe79",
+      "fixtureDigest": "90e86efb689d9c44e0930644e888d1a210803f3b646f7f9bf77411cfa28e2bad",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -735,7 +735,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "f1ee58941b69960d7404b734acc45615cdc652e49c115d5fc00cac94c164bdde",
+      "fixtureDigest": "a25088142b716844e95a6e99282a0cb05d018493b97ae2235cefe29882b20460",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

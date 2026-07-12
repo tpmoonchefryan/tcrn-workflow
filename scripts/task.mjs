@@ -553,6 +553,9 @@ async function verifyP6() {
   assertion(fixture.schemaVersion === "tcrn.p6-context-router-cases.v1", "P6_CONTEXT_FIXTURE_SCHEMA");
   assertion(fixture.goldenProfileCases === 8, "P6_CONTEXT_GOLDEN_PROFILES");
   assertion(fixture.hostileCases === 24 && fixture.schemaParityCases === 8, "P6_CONTEXT_HOSTILE_CORPUS");
+  assertion(fixture.bindingParityCases === 6 && fixture.authorityAllowlistCountCases === 2 &&
+    fixture.unicodeParityCases === 12 && fixture.receiptBudgetTamperCases === 2 &&
+    fixture.authorityImmutabilityCases === 2, "P6_CONTEXT_REPAIR_VECTORS");
   assertion(fixture.propertyPermutations === 64 && fixture.logicalMetadataCandidates === 6 &&
     /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6_CONTEXT_PROPERTY_CORPUS");
   assertion(Array.isArray(fixture.latencyStages) && fixture.latencyStages.length === 6 &&
@@ -572,6 +575,11 @@ async function verifyP6() {
     hostileCases: fixture.hostileCases,
     admittedHostileCases: 7,
     schemaParityCases: fixture.schemaParityCases,
+    bindingParityCases: fixture.bindingParityCases,
+    authorityAllowlistCountCases: fixture.authorityAllowlistCountCases,
+    unicodeParityCases: fixture.unicodeParityCases,
+    receiptBudgetTamperCases: fixture.receiptBudgetTamperCases,
+    authorityImmutabilityCases: fixture.authorityImmutabilityCases,
     propertyPermutations: fixture.propertyPermutations,
     logicalMetadataCandidates: fixture.logicalMetadataCandidates,
     explicitReadCandidates: fixture.explicitReadCandidates,

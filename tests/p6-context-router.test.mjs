@@ -23,6 +23,7 @@ import {
   readContextRouteAuthorityReceipt,
   readGenericProfileAdmissionReceipt,
   routeContext,
+  validateContextRouteAuthorityReceipt,
   validateContextRouteRequest,
   validateContextRouteResult,
 } from "../dist/build/packages/core/src/index.js";
@@ -165,6 +166,29 @@ function permutations(values, maximum) {
   };
   visit([], values);
   return result;
+}
+
+function deepWellFormed(value) {
+  if (typeof value === "string") return value.isWellFormed();
+  if (Array.isArray(value)) return value.every(deepWellFormed);
+  if (value && typeof value === "object") return Object.entries(value).every(([key, entry]) => key.isWellFormed() && deepWellFormed(entry));
+  return true;
+}
+
+function resealReceipt(receiptValue, mutateBudgetUse) {
+  const receipt = clone(receiptValue);
+  delete receipt.receiptDigest;
+  mutateBudgetUse(receipt.budgetUse);
+  let receiptBytes = 0;
+  for (let index = 0; index < 10; index += 1) {
+    receipt.budgetUse.receiptBytes = receiptBytes;
+    receipt.receiptDigest = canonicalSha256(Object.fromEntries(Object.entries(receipt).filter(([field]) => field !== "receiptDigest")));
+    const next = Buffer.byteLength(canonicalJson(receipt), "utf8");
+    if (next === receiptBytes) return receipt;
+    receiptBytes = next;
+    delete receipt.receiptDigest;
+  }
+  throw new Error("receipt byte fixed point");
 }
 
 test("eight admitted Core Reference profile layers route golden and hostile prompt prose without authority expansion", async () => {
@@ -315,6 +339,7 @@ test("Draft 2020-12 schema and runtime request surfaces reject the same represen
   const commonSchema = JSON.parse(await readFile(new URL("../schemas/protocol-common-v1.schema.json", import.meta.url), "utf8"));
   const ajv = new Ajv2020({ strict: true });
   ajv.addKeyword({ keyword: "x-tcrn-maxUtf8Bytes", schemaType: "number", type: "string", validate: (maximum, value) => Buffer.byteLength(value, "utf8") <= maximum });
+  ajv.addKeyword({ keyword: "x-tcrn-deepWellFormedUnicode", schemaType: "boolean", validate: (enabled, value) => !enabled || deepWellFormed(value) });
   ajv.addKeyword({ keyword: "x-tcrn-aos-requirementIds", schemaType: "array" });
   ajv.addSchema(commonSchema); ajv.addSchema(genericSchema); ajv.addSchema(schema);
   const validate = ajv.compile({ $ref: `${schema.$id}#/$defs/request` });
@@ -336,6 +361,126 @@ test("Draft 2020-12 schema and runtime request surfaces reject the same represen
   }
   assert.equal(validate(base), true, JSON.stringify(validate.errors));
   assert.deepEqual(validateContextRouteRequest(base).metadataCandidates.map((entry) => entry.id), [...base.metadataCandidates].sort((left, right) => compareCanonicalText(left.id, right.id)).map((entry) => entry.id));
+});
+
+test("result binding semantics match the generic-profile Draft 2020-12 contract", async () => {
+  const admitted = await admittedFixture();
+  try {
+    const valid = routeContext(admitted.request, admitted.profileAdmission, admitted.contextAdmission);
+    const genericSchema = JSON.parse(await readFile(new URL("../packages/core/schema/generic-profile-v1.schema.json", import.meta.url), "utf8"));
+    const schema = JSON.parse(await readFile(new URL("../packages/core/schema/context-router-v1.schema.json", import.meta.url), "utf8"));
+    const commonSchema = JSON.parse(await readFile(new URL("../schemas/protocol-common-v1.schema.json", import.meta.url), "utf8"));
+    const ajv = new Ajv2020({ strict: true });
+    ajv.addKeyword({ keyword: "x-tcrn-maxUtf8Bytes", schemaType: "number", type: "string", validate: (maximum, value) => Buffer.byteLength(value, "utf8") <= maximum });
+    ajv.addKeyword({ keyword: "x-tcrn-deepWellFormedUnicode", schemaType: "boolean", validate: (enabled, value) => !enabled || deepWellFormed(value) });
+    ajv.addKeyword({ keyword: "x-tcrn-aos-requirementIds", schemaType: "array" });
+    ajv.addSchema(commonSchema); ajv.addSchema(genericSchema); ajv.addSchema(schema);
+    const validateResult = ajv.compile({ $ref: `${schema.$id}#/$defs/result` });
+    const vectors = [
+      { mode: "workspace", workspaceId: null, projectId: null, command: null },
+      { mode: "workspace", workspaceId, projectId, command: null },
+      { mode: "project", workspaceId, projectId: null, command: null },
+      { mode: "project", workspaceId, projectId, command: "context-route" },
+      { mode: "command", workspaceId, projectId, command: null },
+      { mode: "unbound_read_only", workspaceId, projectId: null, command: null },
+    ];
+    assert.equal(vectors.length, fixture.bindingParityCases);
+    for (const binding of vectors) {
+      const changed = clone(valid); changed.context.authoritySummary.binding = binding;
+      assert.equal(validateResult(changed), false, JSON.stringify(validateResult.errors));
+      reason("CONTEXT_SCHEMA_INVALID", () => validateContextRouteResult(changed));
+    }
+    assert.equal(validateResult(valid), true, JSON.stringify(validateResult.errors));
+    assert.doesNotThrow(() => validateContextRouteResult(valid));
+  } finally { await admitted.close(); }
+});
+
+test("authority explicit-read allowlist count is exact at 32 and fails at 33", async () => {
+  const admitted = await admittedFixture();
+  try {
+    const genericSchema = JSON.parse(await readFile(new URL("../packages/core/schema/generic-profile-v1.schema.json", import.meta.url), "utf8"));
+    const schema = JSON.parse(await readFile(new URL("../packages/core/schema/context-router-v1.schema.json", import.meta.url), "utf8"));
+    const commonSchema = JSON.parse(await readFile(new URL("../schemas/protocol-common-v1.schema.json", import.meta.url), "utf8"));
+    const ajv = new Ajv2020({ strict: true });
+    ajv.addKeyword({ keyword: "x-tcrn-maxUtf8Bytes", schemaType: "number", type: "string", validate: (maximum, value) => Buffer.byteLength(value, "utf8") <= maximum });
+    ajv.addKeyword({ keyword: "x-tcrn-deepWellFormedUnicode", schemaType: "boolean", validate: (enabled, value) => !enabled || deepWellFormed(value) });
+    ajv.addKeyword({ keyword: "x-tcrn-aos-requirementIds", schemaType: "array" });
+    ajv.addSchema(commonSchema); ajv.addSchema(genericSchema); ajv.addSchema(schema);
+    const validateAuthority = ajv.compile({ $ref: `${schema.$id}#/$defs/authority` });
+    for (const [count, accepted] of [[32, true], [33, false]]) {
+      const allowedExplicitReadIds = Array.from({ length: count }, (_, index) => `context:read-${String(index).padStart(2, "0")}`).sort(compareCanonicalText);
+      const basis = { ...admitted.authorityDocument, allowedExplicitReadIds }; delete basis.authorityDigest;
+      const document = { ...basis, authorityDigest: canonicalSha256(basis) };
+      assert.equal(validateAuthority(document), accepted, JSON.stringify(validateAuthority.errors));
+      if (accepted) assert.doesNotThrow(() => validateContextRouteAuthorityReceipt(document));
+      else reason("CONTEXT_AUTHORITY_MALFORMED", () => validateContextRouteAuthorityReceipt(document));
+    }
+  } finally { await admitted.close(); }
+});
+
+test("deep well-formed Unicode parity rejects high and low lone surrogates in nested request, authority, and result fields", async () => {
+  const admitted = await admittedFixture();
+  try {
+    const genericSchema = JSON.parse(await readFile(new URL("../packages/core/schema/generic-profile-v1.schema.json", import.meta.url), "utf8"));
+    const schema = JSON.parse(await readFile(new URL("../packages/core/schema/context-router-v1.schema.json", import.meta.url), "utf8"));
+    const commonSchema = JSON.parse(await readFile(new URL("../schemas/protocol-common-v1.schema.json", import.meta.url), "utf8"));
+    const ajv = new Ajv2020({ strict: true });
+    ajv.addKeyword({ keyword: "x-tcrn-maxUtf8Bytes", schemaType: "number", type: "string", validate: (maximum, value) => Buffer.byteLength(value, "utf8") <= maximum });
+    ajv.addKeyword({ keyword: "x-tcrn-deepWellFormedUnicode", schemaType: "boolean", validate: (enabled, value) => !enabled || deepWellFormed(value) });
+    ajv.addKeyword({ keyword: "x-tcrn-aos-requirementIds", schemaType: "array" });
+    ajv.addSchema(commonSchema); ajv.addSchema(genericSchema); ajv.addSchema(schema);
+    const validators = {
+      request: ajv.compile({ $ref: `${schema.$id}#/$defs/request` }),
+      authority: ajv.compile({ $ref: `${schema.$id}#/$defs/authority` }),
+      result: ajv.compile({ $ref: `${schema.$id}#/$defs/result` }),
+    };
+    const result = routeContext(admitted.request, admitted.profileAdmission, admitted.contextAdmission);
+    const vectors = [];
+    for (const malformed of ["\uD800", "\uDC00"]) {
+      const query = { ...admitted.request, query: malformed };
+      const title = clone(admitted.request); title.metadataCandidates[0].title = malformed;
+      const content = clone(admitted.request); content.explicitReadCandidates[0].content = malformed;
+      const authority = clone(admitted.authorityDocument); authority.allowedExplicitReadIds[0] = malformed;
+      const fixed = clone(result); fixed.context.fixedInjection[0] = malformed;
+      const nestedSummary = clone(result); nestedSummary.context.metadata[0].summary = malformed;
+      vectors.push(["request", query, validateContextRouteRequest], ["request", title, validateContextRouteRequest], ["request", content, validateContextRouteRequest], ["authority", authority, validateContextRouteAuthorityReceipt], ["result", fixed, validateContextRouteResult], ["result", nestedSummary, validateContextRouteResult]);
+    }
+    assert.equal(vectors.length, fixture.unicodeParityCases);
+    for (const [surface, value, runtime] of vectors) {
+      assert.equal(validators[surface](value), false, JSON.stringify(validators[surface].errors));
+      reason("CONTEXT_UNICODE_INVALID", () => runtime(value));
+    }
+  } finally { await admitted.close(); }
+});
+
+test("receipt budget-use validation rejects canonically resealed under- and over-reporting", async () => {
+  const admitted = await admittedFixture();
+  try {
+    const result = routeContext(admitted.request, admitted.profileAdmission, admitted.contextAdmission);
+    const bodyUnder = { ...result, receipt: resealReceipt(result.receipt, (budgetUse) => { budgetUse.bodyCount = 0; budgetUse.bodyBytes = 0; }) };
+    const summaryOver = { ...result, receipt: resealReceipt(result.receipt, (budgetUse) => { budgetUse.summaryCount += 1; }) };
+    const vectors = [bodyUnder, summaryOver];
+    assert.equal(vectors.length, fixture.receiptBudgetTamperCases);
+    for (const vector of vectors) reason("CONTEXT_CANONICAL_INVALID", () => validateContextRouteResult(vector));
+  } finally { await admitted.close(); }
+});
+
+test("descriptor-admitted authority is deeply immutable across nested allowlist and budget graphs", async () => {
+  const admitted = await admittedFixture();
+  try {
+    const context = admitted.contextAdmission;
+    const digest = context.receipt.authorityDigest;
+    assert.equal(Object.isFrozen(context), true);
+    assert.equal(Object.isFrozen(context.receipt), true);
+    assert.equal(Object.isFrozen(context.receipt.allowedExplicitReadIds), true);
+    assert.equal(Object.isFrozen(context.receipt.maximumBudgets), true);
+    assert.throws(() => context.receipt.allowedExplicitReadIds.push("context:attacker"), TypeError);
+    assert.throws(() => { context.receipt.maximumBudgets.bodyCount = 16; }, TypeError);
+    assert.equal(context.receipt.authorityDigest, digest);
+    assert.deepEqual(context.receipt.allowedExplicitReadIds, [bodyId, procedureId].sort(compareCanonicalText));
+    assert.equal(context.receipt.maximumBudgets.bodyCount, defaultBudgets.bodyCount);
+    assert.equal(routeContext(admitted.request, admitted.profileAdmission, context).reasonCode, "CONTEXT_ROUTED");
+  } finally { await admitted.close(); }
 });
 
 test("Context Router implementation is storeless and contains no legacy, network, database, hook, Skill, environment, model, or session authority", async () => {
