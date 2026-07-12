@@ -51,6 +51,7 @@ import {
   validateCanonicalExchangeBundle,
   validateCompatibilityRequest,
   unavailableCompatibilityCapability,
+  readCompatibilityAdmissionReceipt,
 } from "../../core/src/index.js";
 import type {
   CodexAdapterHostContext,
@@ -62,7 +63,7 @@ import type {
   KnowledgeFreshnessState,
   KnowledgeKind,
   KnowledgePromotionState,
-  CompatibilityAdmissionContext,
+  CompatibilityAdmissionAuthority,
 } from "../../core/src/index.js";
 import { canonicalJson } from "../../protocol/src/index.js";
 import type { PlannedDeliveryKind, WorkStatus } from "../../protocol/src/index.js";
@@ -101,7 +102,7 @@ export interface CliIo {
   readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
   readonly codexAdapterHost?: CodexAdapterHostContext;
   readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
-  readonly compatibilityAdmission?: CompatibilityAdmissionContext;
+  readonly compatibilityAdmissionAuthority?: CompatibilityAdmissionAuthority;
 }
 
 function fail(reasonCode: string, message: string): never {
@@ -231,11 +232,12 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   if (command === "compatibility-plan" || command === "compatibility-dry-run") {
     const values = parseArguments(rest, ["request"]);
     required(values, ["request"]);
-    if (!io.compatibilityAdmission) fail("COMPATIBILITY_RECEIPT_UNAUTHENTICATED", "governed compatibility admission is required");
+    if (!io.compatibilityAdmissionAuthority) fail("COMPATIBILITY_AUTHORITY_REQUIRED", "governed compatibility admission authority is required");
     const request = compatibilityJson(values.request, "request");
+    const admission = await readCompatibilityAdmissionReceipt(io.compatibilityAdmissionAuthority.expectedCanonicalPath, io.compatibilityAdmissionAuthority);
     io.write(canonicalJson(command === "compatibility-plan"
-      ? planCompatibilityMode(request, io.compatibilityAdmission)
-      : dryRunCompatibilityMode(request, io.compatibilityAdmission)));
+      ? planCompatibilityMode(request, admission)
+      : dryRunCompatibilityMode(request, admission)));
     return;
   }
   if (command === "compatibility-unavailable") {
