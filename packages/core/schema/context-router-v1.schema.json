@@ -1,0 +1,657 @@
+{
+  "$id": "https://tcrn.dev/schemas/context-router-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context Router V1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/authority"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ],
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$",
+      "maxLength": 161
+    },
+    "nullableStableId": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/stableId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "instant": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "taskKind": {
+      "enum": [
+        "planning",
+        "implementation",
+        "review",
+        "verification",
+        "incident",
+        "continuation"
+      ]
+    },
+    "riskTier": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "scope": {
+      "enum": [
+        "workspace",
+        "project",
+        "work"
+      ]
+    },
+    "freshness": {
+      "enum": [
+        "fresh",
+        "stale",
+        "unknown"
+      ]
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixedInjectionBytes",
+        "authorityBytes",
+        "summaryCount",
+        "summaryBytes",
+        "bodyCount",
+        "bodyBytes",
+        "receiptBytes",
+        "referenceCount",
+        "referenceBytes"
+      ],
+      "properties": {
+        "fixedInjectionBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "authorityBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "summaryCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "summaryBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "bodyCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "bodyBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "receiptBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "referenceCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "referenceBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        }
+      }
+    },
+    "metadataCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "id",
+        "kind",
+        "scope",
+        "workspaceId",
+        "projectId",
+        "workId",
+        "freshness",
+        "title",
+        "summary",
+        "retentionClass",
+        "candidateDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.context-metadata-candidate.v1"
+        },
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "kind": {
+          "enum": [
+            "metadata",
+            "summary",
+            "reference"
+          ]
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "workspaceId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "projectId": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "workId": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "x-tcrn-maxUtf8Bytes": 512
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384,
+          "x-tcrn-maxUtf8Bytes": 16384
+        },
+        "retentionClass": {
+          "enum": [
+            "metadata_only",
+            "ephemeral"
+          ]
+        },
+        "candidateDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "explicitCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "id",
+        "kind",
+        "scope",
+        "workspaceId",
+        "projectId",
+        "workId",
+        "freshness",
+        "content",
+        "retentionClass",
+        "candidateDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.context-explicit-read-candidate.v1"
+        },
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "kind": {
+          "enum": [
+            "body",
+            "procedure"
+          ]
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "workspaceId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "projectId": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "workId": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 262144,
+          "x-tcrn-maxUtf8Bytes": 262144
+        },
+        "retentionClass": {
+          "const": "ephemeral"
+        },
+        "candidateDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "verificationTime",
+        "workspaceId",
+        "projectId",
+        "workId",
+        "taskKind",
+        "riskTier",
+        "profileResolution",
+        "expectedEffectiveDigest",
+        "budgets",
+        "query",
+        "metadataCandidates",
+        "explicitReadCandidates",
+        "explicitReadRequests"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.context-route-request.v1"
+        },
+        "verificationTime": {
+          "$ref": "#/$defs/instant"
+        },
+        "workspaceId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "projectId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "workId": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "taskKind": {
+          "$ref": "#/$defs/taskKind"
+        },
+        "riskTier": {
+          "$ref": "#/$defs/riskTier"
+        },
+        "profileResolution": {
+          "$ref": "https://tcrn.dev/schemas/generic-profile-v1.schema.json#/$defs/resolutionRequest"
+        },
+        "expectedEffectiveDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "budgets": {
+          "$ref": "#/$defs/budgets"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "x-tcrn-maxUtf8Bytes": 4096
+        },
+        "metadataCandidates": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/metadataCandidate"
+          }
+        },
+        "explicitReadCandidates": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/explicitCandidate"
+          }
+        },
+        "explicitReadRequests": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestDigest",
+        "profileAdmissionReceiptDigest",
+        "effectiveDigest",
+        "workspaceId",
+        "projectId",
+        "workId",
+        "taskKind",
+        "minimumRiskTier",
+        "maximumBudgets",
+        "allowedExplicitReadIds",
+        "issuedAt",
+        "expiresAt",
+        "authorityDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.context-route-authority.v1"
+        },
+        "requestDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "profileAdmissionReceiptDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "effectiveDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "workspaceId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "projectId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "workId": {
+          "$ref": "#/$defs/nullableStableId"
+        },
+        "taskKind": {
+          "$ref": "#/$defs/taskKind"
+        },
+        "minimumRiskTier": {
+          "$ref": "#/$defs/riskTier"
+        },
+        "maximumBudgets": {
+          "$ref": "#/$defs/budgets"
+        },
+        "allowedExplicitReadIds": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "issuedAt": {
+          "$ref": "#/$defs/instant"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/instant"
+        },
+        "authorityDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "budgetUse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixedInjectionBytes",
+        "authorityBytes",
+        "summaryCount",
+        "summaryBytes",
+        "bodyCount",
+        "bodyBytes",
+        "referenceCount",
+        "referenceBytes",
+        "receiptBytes"
+      ],
+      "properties": {
+        "fixedInjectionBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "authorityBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "summaryCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "summaryBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bodyCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bodyBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "referenceCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "referenceBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "receiptBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "reasonCode",
+        "context",
+        "contextDigest",
+        "receipt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.context-route-result.v1"
+        },
+        "reasonCode": {
+          "const": "CONTEXT_ROUTED"
+        },
+        "contextDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fixedInjection",
+            "authoritySummary",
+            "queryDigest",
+            "metadata",
+            "references",
+            "explicitReads"
+          ],
+          "properties": {
+            "fixedInjection": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "type": "string"
+              }
+            },
+            "authoritySummary": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "profileId",
+                "binding",
+                "taskKind",
+                "riskTier",
+                "effectivePolicyDigest"
+              ],
+              "properties": {
+                "profileId": {
+                  "$ref": "#/$defs/stableId"
+                },
+                "binding": {
+                  "$ref": "https://tcrn.dev/schemas/generic-profile-v1.schema.json#/$defs/binding"
+                },
+                "taskKind": {
+                  "$ref": "#/$defs/taskKind"
+                },
+                "riskTier": {
+                  "$ref": "#/$defs/riskTier"
+                },
+                "effectivePolicyDigest": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            },
+            "queryDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "metadata": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/metadataCandidate"
+              }
+            },
+            "references": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/metadataCandidate"
+              }
+            },
+            "explicitReads": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/explicitCandidate"
+              }
+            }
+          }
+        },
+        "receipt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "requestDigest",
+            "profileAdmissionReceiptDigest",
+            "contextAuthorityDigest",
+            "authorityFileSha256",
+            "authoritySourceIdentityDigest",
+            "effectivePolicyDigest",
+            "effectiveDigest",
+            "selectedMetadataDigests",
+            "selectedReferenceDigests",
+            "explicitReadDigests",
+            "budgetUse",
+            "exclusions",
+            "retentionClass",
+            "contextDigest",
+            "receiptDigest"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "tcrn.context-route-receipt.v1"
+            },
+            "requestDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "profileAdmissionReceiptDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contextAuthorityDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "authorityFileSha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "authoritySourceIdentityDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "effectivePolicyDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "effectiveDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "selectedMetadataDigests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/sha256"
+              }
+            },
+            "selectedReferenceDigests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/sha256"
+              }
+            },
+            "explicitReadDigests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/sha256"
+              }
+            },
+            "budgetUse": {
+              "$ref": "#/$defs/budgetUse"
+            },
+            "exclusions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "reasonCode"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/stableId"
+                  },
+                  "reasonCode": {
+                    "enum": [
+                      "CONTEXT_STALE_EXCLUDED",
+                      "CONTEXT_UNKNOWN_FRESHNESS_EXCLUDED"
+                    ]
+                  }
+                }
+              }
+            },
+            "retentionClass": {
+              "const": "metadata_only_ephemeral"
+            },
+            "contextDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "receiptDigest": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        }
+      }
+    }
+  }
+}

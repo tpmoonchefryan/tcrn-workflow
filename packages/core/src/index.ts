@@ -149,6 +149,34 @@ export type {
   KnowledgeUnitMetadata,
 } from "./knowledge-core.js";
 export {
+  CONTEXT_ROUTE_AUTHORITY_VERSION,
+  CONTEXT_ROUTE_LIMITS,
+  CONTEXT_ROUTE_REASON_CODES,
+  CONTEXT_ROUTE_REQUEST_VERSION,
+  CONTEXT_ROUTE_RESULT_VERSION,
+  ContextRouteError,
+  calculateContextRouteRequestDigest,
+  readContextRouteAuthorityReceipt,
+  routeContext,
+  validateContextRouteRequest,
+  validateContextRouteResult,
+} from "./context-router.js";
+export type {
+  ContextBudgets,
+  ContextExplicitReadCandidate,
+  ContextFreshness,
+  ContextMetadataCandidate,
+  ContextRiskTier,
+  ContextRouteAuthorityContext,
+  ContextRouteAuthorityFileIdentity,
+  ContextRouteAuthorityReceipt,
+  ContextRouteOptions,
+  ContextRouteReasonCode,
+  ContextRouteRequest,
+  ContextScope,
+  ContextTaskKind,
+} from "./context-router.js";
+export {
   GENERIC_PROFILE_BUNDLE_VERSION,
   GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
   GENERIC_PROFILE_BASE_DIGEST,

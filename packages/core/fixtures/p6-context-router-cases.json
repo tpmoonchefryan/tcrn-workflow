@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "tcrn.p6-context-router-cases.v1",
+  "goldenProfileCases": 8,
+  "hostileCases": 24,
+  "schemaParityCases": 8,
+  "propertyPermutations": 64,
+  "logicalMetadataCandidates": 6,
+  "explicitReadCandidates": 2,
+  "latencyStages": [
+    "authorityEvaluation",
+    "explicitBody",
+    "fixedInjection",
+    "full",
+    "metadataSelection",
+    "receipt"
+  ],
+  "latencyBudgetMilliseconds": {
+    "authorityEvaluation": 250,
+    "explicitBody": 250,
+    "fixedInjection": 250,
+    "full": 1000,
+    "metadataSelection": 250,
+    "receipt": 250
+  },
+  "permutationCorpusDigest": "62cdd322485262a52669161b349fd3cb95eff7c60f132d4c0d67f811ba42a3cb",
+  "codexAdapter": "unimplemented",
+  "rc3": "unaccepted",
+  "ownerVisibleActivation": "not-claimed",
+  "liveContextStore": "not-created",
+  "latencyResidual": "local-process-observation-not-real-time-guarantee"
+}

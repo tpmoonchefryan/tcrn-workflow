@@ -4,7 +4,8 @@ TCRN Workflow is an offline-first framework for deterministic work, context,
 evidence, and release verification. This repository contains the accepted P1
 framework bootstrap, the P2 V1 protocol/conformance basis, the accepted P3
 file-native engine, bounded P4 artifact-lifecycle and Knowledge Core candidates,
-and a bounded generic P5 profile-policy candidate. The canonical
+bounded generic P5 profile-policy and Core Reference persona candidates, and a
+bounded P6 Context Router candidate. The canonical
 P3 capability marker and local graph are governed outside this product checkout;
 live integrations and release support remain intentionally unavailable.
 
@@ -31,6 +32,7 @@ pnpm verify:p3
 pnpm verify:p4
 pnpm verify:p4:knowledge
 pnpm verify:p5
+pnpm verify:p6
 ```
 
 The repository does not collect telemetry. Static checks, a process executable
@@ -93,6 +95,15 @@ The bounded Core Reference persona set generates exactly eight inert,
 source-manifest-bound public records and display-only release layers; it creates
 no live store, agent, hook, Skill, or authorization capability.
 
+`pnpm verify:p6` proves the closed deterministic Context Router request,
+descriptor-bound out-of-band authority, admitted generic-profile re-resolution,
+exact scope/risk/budget controls, metadata-first selection, explicit
+body/procedure reads, privacy-minimal receipts, hostile prompt corpus, 64 actual
+candidate-order permutations, and bounded pinned-runtime latency observations.
+Those observations are local process measurements, not real-time guarantees.
+The Codex Adapter remains unimplemented, RC3 remains unaccepted, and no live
+context store, hook, Skill, or owner-visible activation is created.
+
 After `pnpm build`, governed local commands are available through
 `node scripts/tcrn-workflow.mjs`. Mutation commands require an explicit
 Workspace, strict timestamp, and expected version; they contact neither AOS nor
@@ -128,5 +139,6 @@ The public API is pre-release. Supported release mode is unavailable unless the
 external trust verifier succeeds. P2 claims specification and fixture maturity
 only; P3 is an unaccepted local-engine candidate; neither claims live
 external-runtime compatibility or a supported release pair. P4 Knowledge Core
-and P5 generic profiles remain unaccepted bounded candidates and make no live
-knowledge/profile-store, live-archive, database, AOS, or network claim.
+P5 generic profiles, and the P6 Context Router remain unaccepted bounded
+candidates and make no live knowledge/profile/context store, live-archive,
+Codex Adapter, database, AOS, or network claim.

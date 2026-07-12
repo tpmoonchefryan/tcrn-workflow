@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "59e3d094a566a1083264b10b9e24636b9c14b3ef8a228991a7e72c4e06bc1053",
+      "fixtureDigest": "8a0f7edf188bae9e13f0a7cb72578255322013d58db1fa2f43f649324b29bfa6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "b5f13d3dbd28b6e8658e4828153354147c9a8f8b8f2e7788156680712ffafa3c",
+      "fixtureDigest": "a62999d654c090a93e176e0f28d969aa7cb1ddcfefb080e0af3be6201e2f369f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -75,7 +75,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "1f14dcd68660c68941a7fe99d71731ee727ea1a09b33bff18061e07904855079",
+      "fixtureDigest": "c5d6967e01aafb6a6f87802dae36ed4b9e16fb60688bf6b1a0053d37373fe662",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -147,7 +147,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "3536968ddb4d0a1a5dabff3b32fe1642b1fafa7277b81a99067d7c5588727e72",
+      "fixtureDigest": "2f4e57766910c8126945ccf53777672103d91b919a8896a0e82512d0ecbb7fb6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "f6bce1692565a3b665a4e3c7cec89ff6271e437c067286747241bb606da8e6f1",
+      "fixtureDigest": "e8a0b26c31d2c0c372719b99727b09e114671f6df7a62ee9362c3de7a9c8cfb1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -208,7 +208,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "8b611c130faec2ec1d2369ea346f3f48fdc3f1d17c356cf588808ec05d29bd5c",
+      "fixtureDigest": "a0f3f8d455c8c55790418ce19e44f316afe1e2010d06c33b1f259ab40a1d1262",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -233,7 +233,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "ba2679db443dbf1c7dcfd1e7f2da32041bb231f480d892834d611941e3331f6e",
+      "fixtureDigest": "60d49d7d105ec0b08058006135cbfcb5a8f01ca09a4fd867ed50e68c28497cee",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -260,7 +260,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "850f4ca49ba5a517c19be9197b5f50017560d2f5df234c31b72d130a78c87f79",
+      "fixtureDigest": "626c3d78cadc3f301f6ba80986c75b62f9710b6379a9896b74905ae42221c613",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -288,7 +288,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "40e55cc504861d878ca244dbdf20428126b1769063d2906d4c675303afdfa84a",
+      "fixtureDigest": "e1b4c592bcd20d8063eae7e30302c0fdf229e0e0631db0eaba0ee508c61f408a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -397,7 +397,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "9292d6af165528a4c29ec4e4ad4065f1d81246a77245204010b1ed32e11a925e",
+      "fixtureDigest": "57ba863f036e3e94b0058dd34b06a1e478454a964c5b4b66b88aab5aa1e6ff46",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -455,7 +455,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "6a3fdb932dc7f34045a9c8053b31fdd66616a1f92153c394707679435b81a96e",
+      "fixtureDigest": "441896d1c18d48c1cd10ec9ee25a1df0ed2048ccf47af331bca9a920edf1a4da",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -512,7 +512,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "ed11dd6df39329a827e222f43bc7aacf9cfb947dfb27f71412ab0b949c20f34f",
+      "fixtureDigest": "ca29d541f8a26d4f623c5b20d2ce661a632751925b7498548f6c8b646b70c72d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -542,7 +542,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "74b29fef99c8e7e4060e7cf16a31c77bf3d288b99aec38cafd04614214b641c8",
+      "fixtureDigest": "dad1ebf51835e88f2637bf929390ac2a20871900e9b9692145ac1149adfb5a0d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -569,7 +569,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "e096b3a716ddc2dac34439230fd09ef3024cc018758aae7a0c7392fd2885b967",
+      "fixtureDigest": "f6e90c0b71687a617cbf4dbc79e454efc5632c293560e230ca95a7d4bbb43e11",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -604,7 +604,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "fa68dc294b4021906e1cf813683a8603ed49bdf439a1ad9f709476e8bc267e46",
+      "fixtureDigest": "1c32ae55b9eb728385a0e28843dc14b5a08eccad59d4b2b2bee78f67ea270097",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -640,7 +640,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "4c6513efd58768795e05cbe9224b53609955c4392ae2d3ea775768b9fd2ac329",
+      "fixtureDigest": "9a4af067bcdd07d4b1b9b35544aa0e94cc5d09dca2f68e86153c7797298eb2b6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -681,6 +681,41 @@
       ]
     },
     {
+      "id": "P6-CONTEXT-ROUTER",
+      "phase": "P6",
+      "status": "implemented",
+      "subject": "P6 implements the standalone deterministic metadata-first Context Router with descriptor-bound request authority, re-resolved generic-profile admission, exact scope/risk/budget controls, explicit body/procedure reads, privacy-minimal receipts, hostile prompt proof, 64 real permutations and bounded local latency observations; Codex Adapter remains unimplemented and RC3 unaccepted.",
+      "command": "pnpm verify:p6",
+      "fixturePaths": [
+        "package.json",
+        "packages/core/src/index.ts",
+        "packages/core/src/context-router.ts",
+        "packages/core/src/generic-profile.ts",
+        "packages/cli/src/index.ts",
+        "packages/protocol/src/index.ts",
+        "packages/core/schema/context-router-v1.schema.json",
+        "packages/core/schema/generic-profile-v1.schema.json",
+        "packages/core/spec/context-router-v1.md",
+        "packages/core/spec/generic-profile-v1.md",
+        "packages/core/fixtures/p6-context-router-cases.json",
+        "tests/p6-context-router.test.mjs",
+        "scripts/task.mjs",
+        "README.md"
+      ],
+      "fixtureDigest": "ad8fa533441d46cf026afeef37632a2331e8dbd7f59b41e18d6167b6afa8fe79",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P6_CONTEXT_ROUTER_VERIFIED",
+      "evidencePath": "dist/evidence/p6/p6.json",
+      "invalidationTriggers": [
+        "Context request, authority admission, profile binding, scope/freshness selection, explicit-read, privacy receipt, budget, determinism, latency, CLI, storeless, Codex Adapter, RC3, or activation boundary changes"
+      ]
+    },
+    {
       "id": "RC1-IMMUTABLE-PROOF-BASIS",
       "phase": "RC1",
       "status": "candidate",
@@ -700,7 +735,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "156db00351dbc7a6b610ad4d77a86e7e78414423605d0ac896c8b59e29e2c2c1",
+      "fixtureDigest": "f1ee58941b69960d7404b734acc45615cdc652e49c115d5fc00cac94c164bdde",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
