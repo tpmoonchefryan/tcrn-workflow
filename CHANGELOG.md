@@ -68,3 +68,5 @@ Versioning after the first accepted release.
 - Bind P7-B admission to a no-follow host-anchored canonical authority receipt,
   normalize semantic sets before hashing, and prove recursive JSON and exact
   aggregate-document limits across schema and runtime.
+- Bound P7-B authority receipt reads to 65,537 observed bytes so concurrent
+  same-inode growth fails immediately without unbounded allocation or I/O.

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -162,6 +162,19 @@ function requestAtCanonicalSize(target) {
   return result;
 }
 
+function canonicalPaddingDocument(target) {
+  const padding = [];
+  let current = canonicalJson({ padding });
+  while (Buffer.byteLength(current) + 4_099 <= target) {
+    padding.push("x".repeat(4096)); current = canonicalJson({ padding });
+  }
+  const overhead = padding.length === 0 ? 2 : 3;
+  const remainder = target - Buffer.byteLength(current) - overhead;
+  assert.ok(remainder >= 1 && remainder <= 4096);
+  padding.push("x".repeat(remainder));
+  const result = canonicalJson({ padding }); assert.equal(Buffer.byteLength(result), target); return result;
+}
+
 async function authorityFile(request, changes = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "workflow-p7b-authority-")));
   const path = join(directory, "compatibility-admission.json");
@@ -263,6 +276,41 @@ test("authority file admission rejects forged, copied, path, digest, link, speci
   try {
     await reasonAsync("COMPATIBILITY_AUTHORITY_CHANGED", () => readCompatibilityAdmissionReceipt(changed.path, changed.authority, { afterOpenForTest: async () => { await writeFile(changed.path, `${changed.bytes} `); } }));
   } finally { await changed.close(); }
+});
+
+test("authority reads stay bounded under sparse and continuous same-inode growth with exact size boundaries", async () => {
+  const { request } = documents();
+  const sparse = await authorityFile(request); let sparseRead = 0;
+  try {
+    await reasonAsync("COMPATIBILITY_LIMIT_EXCEEDED", () => readCompatibilityAdmissionReceipt(sparse.path, sparse.authority, {
+      afterOpenForTest: async () => { await truncate(sparse.path, 32 * 1024 * 1024); },
+      observeReadBytesForTest: (bytes) => { sparseRead = bytes; },
+    }));
+    assert.equal(sparseRead, 65_537);
+  } finally { await sparse.close(); }
+
+  const growing = await authorityFile(request); let growingRead = 0; let growthRounds = 0;
+  try {
+    await reasonAsync("COMPATIBILITY_LIMIT_EXCEEDED", () => readCompatibilityAdmissionReceipt(growing.path, growing.authority, {
+      observeReadBytesForTest: (bytes) => { growingRead = bytes; },
+      afterReadChunkForTest: async () => { growthRounds += 1; await appendFile(growing.path, "x".repeat(16_384)); },
+    }));
+    assert.equal(growingRead, 65_537); assert.ok(growthRounds >= 4);
+  } finally { await growing.close(); }
+
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "workflow-p7b-boundary-")));
+  try {
+    const exactPath = join(directory, "exact.json");
+    const exactBytes = canonicalPaddingDocument(65_536);
+    assert.equal(Buffer.byteLength(exactBytes), 65_536); await writeFile(exactPath, exactBytes);
+    let exactRead = 0;
+    await reasonAsync("COMPATIBILITY_UNKNOWN_FIELD", () => readCompatibilityAdmissionReceipt(exactPath, { expectedCanonicalPath: exactPath, expectedFileSha256: sha256(exactBytes) }, { observeReadBytesForTest: (bytes) => { exactRead = bytes; } }));
+    assert.equal(exactRead, 65_536);
+    const overPath = join(directory, "over.json"); const overBytes = `${exactBytes} `; await writeFile(overPath, overBytes); let overRead = 0;
+    await reasonAsync("COMPATIBILITY_LIMIT_EXCEEDED", () => readCompatibilityAdmissionReceipt(overPath, { expectedCanonicalPath: overPath, expectedFileSha256: sha256(overBytes) }, { observeReadBytesForTest: (bytes) => { overRead = bytes; } }));
+    assert.equal(overRead, 0);
+    await assert.rejects(runCli(["compatibility-plan", "--request", canonicalJson(request)], { compatibilityAdmissionAuthority: { expectedCanonicalPath: overPath, expectedFileSha256: sha256(overBytes) }, write() {} }), (error) => error.reasonCode === "COMPATIBILITY_LIMIT_EXCEEDED");
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test("anchored receipt binds request, plan, release pair, lock, policy, replay and revocation", async () => {
