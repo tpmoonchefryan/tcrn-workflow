@@ -57,9 +57,11 @@ const semanticProfiles = [
   ["profile:tcrn-verity-v1", "Verity", "Verification Engineer", "Determine whether an exact immutable basis provides executable and reproducible proof for every claimed contract.", "Owns proof-sufficiency verdicts; reviews read-only and cannot mutate the reviewed basis or substitute for security and Owner acceptance.", "A candidate, repair, checkpoint, release, or evidence contract requires independent proof confirmation.", ["exact commit and tree", "claim and verification map", "fixtures, commands, and receipts"], ["approved or changes-requested verdict", "reproducible findings", "explicit residual boundaries"], ["no static-inspection-only proof where execution is claimed", "no mixed-basis approval", "no mutation during review"], ["claims are executable", "digests and reason codes bind", "residuals are truthful"], ["Minerva", "Ilya", "Sable", "Janus"]],
 ] as const;
 
+const semanticBasis = (p: typeof semanticProfiles[number]) => ({ schemaVersion: CORE_PERSONA_PROFILE_VERSION, profileId: p[0], displayName: p[1], jobTitle: p[2], mission: p[3], authorityBoundary: p[4], contactWhen: p[5], requiredInputs: p[6], deliverables: p[7], refusals: p[8], successCriteria: p[9], collaborationRelationships: p[10] });
+const exactSourceDigests = new Map(semanticProfiles.map((profile) => [profile[0], canonicalSha256(semanticBasis(profile))]));
+
 const exactFields = ["schemaVersion", "profileId", "displayName", "jobTitle", "mission", "authorityBoundary", "contactWhen", "requiredInputs", "deliverables", "refusals", "successCriteria", "collaborationRelationships", "profileDigest"];
 const roster = new Set(["Arturo", "Mara", "Minerva", "Ilya", "Verity", "Sable", "Janus", "Mneme"]);
-const forbidden = /(?:thread|session|conversation)[-_ ]?(?:id|uuid|epoch)|\bmodel\b|thinking|performance setting|\/Users\/|file:\/\/|https?:\/\/|credential|password|token|secret|\$\{|<script|legacy (?:hook|skill|helper|registry)|retained resource|incident recovery/iu;
 const record = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail("PERSONA_SCHEMA_INVALID", "profile object");
   return value as Record<string, unknown>;
@@ -69,20 +71,22 @@ const strings = (value: unknown, label: string): readonly string[] => {
   if (new Set(value).size !== value.length) fail("PERSONA_DUPLICATE", label);
   return value as string[];
 };
-export function validateCorePersonaProfile(value: unknown): CorePersonaProfile {
+function validateProfile(value: unknown, requireExactSource: boolean): CorePersonaProfile {
   const v = record(value); const keys = Object.keys(v).sort(compareCanonicalText);
   if (canonicalJson(keys) !== canonicalJson([...exactFields].sort(compareCanonicalText))) fail("PERSONA_UNKNOWN_FIELD", keys.join(","));
-  if (v.schemaVersion !== CORE_PERSONA_PROFILE_VERSION || typeof v.profileId !== "string" || !/^profile:tcrn-[a-z]+-v1$/u.test(v.profileId) || typeof v.displayName !== "string" || !roster.has(v.displayName) || typeof v.jobTitle !== "string") fail("PERSONA_SCHEMA_INVALID", "identity");
+  if (v.schemaVersion !== CORE_PERSONA_PROFILE_VERSION || typeof v.profileId !== "string" || !/^profile:tcrn-[a-z]+-v1$/u.test(v.profileId) || typeof v.displayName !== "string" || !roster.has(v.displayName) || typeof v.jobTitle !== "string" || v.jobTitle.length < 2 || v.jobTitle.length > 128) fail("PERSONA_SCHEMA_INVALID", "identity");
   for (const field of ["mission", "authorityBoundary", "contactWhen"] as const) if (typeof v[field] !== "string" || v[field].length < 10 || v[field].length > 512) fail("PERSONA_SCHEMA_INVALID", field);
   const basis = { schemaVersion: CORE_PERSONA_PROFILE_VERSION, profileId: v.profileId, displayName: v.displayName, jobTitle: v.jobTitle, mission: v.mission, authorityBoundary: v.authorityBoundary, contactWhen: v.contactWhen, requiredInputs: strings(v.requiredInputs, "requiredInputs"), deliverables: strings(v.deliverables, "deliverables"), refusals: strings(v.refusals, "refusals"), successCriteria: strings(v.successCriteria, "successCriteria"), collaborationRelationships: strings(v.collaborationRelationships, "collaborationRelationships") };
   if ([...basis.collaborationRelationships].some((name) => name !== "Owner" && !roster.has(name))) fail("PERSONA_EXTENDED_ROSTER_FORBIDDEN", "relationship");
-  if (forbidden.test(canonicalJson(basis))) fail("PERSONA_FORBIDDEN_CONTENT", v.profileId);
   if (typeof v.profileDigest !== "string" || v.profileDigest !== canonicalSha256(basis)) fail("PERSONA_CANONICAL_INVALID", v.profileId);
+  if (requireExactSource && exactSourceDigests.get(v.profileId) !== v.profileDigest) fail("PERSONA_SOURCE_MISMATCH", v.profileId);
   return { ...basis, profileDigest: v.profileDigest } as CorePersonaProfile;
 }
+export const validateCorePersonaProfileShape = (value: unknown): CorePersonaProfile => validateProfile(value, false);
+export const validateCorePersonaProfile = (value: unknown): CorePersonaProfile => validateProfile(value, true);
 function generatedProfiles(): readonly CorePersonaProfile[] {
   return semanticProfiles.map((p) => {
-    const basis = { schemaVersion: CORE_PERSONA_PROFILE_VERSION, profileId: p[0], displayName: p[1], jobTitle: p[2], mission: p[3], authorityBoundary: p[4], contactWhen: p[5], requiredInputs: p[6], deliverables: p[7], refusals: p[8], successCriteria: p[9], collaborationRelationships: p[10] };
+    const basis = semanticBasis(p);
     return validateCorePersonaProfile({ ...basis, profileDigest: canonicalSha256(basis) });
   }).sort((a, b) => compareCanonicalText(a.profileId, b.profileId));
 }
@@ -94,8 +98,8 @@ export function validateCorePersonaBundle(value: unknown): CorePersonaBundle {
   const v = record(value); if (canonicalJson(Object.keys(v).sort(compareCanonicalText)) !== canonicalJson(["schemaVersion", "sourceManifestSha256", "profiles", "bundleDigest"].sort(compareCanonicalText))) fail("PERSONA_UNKNOWN_FIELD", "bundle");
   if (v.schemaVersion !== CORE_PERSONA_BUNDLE_VERSION || v.sourceManifestSha256 !== CORE_PERSONA_SOURCE_MANIFEST_SHA256 || !Array.isArray(v.profiles) || v.profiles.length !== 8) fail(v.sourceManifestSha256 === CORE_PERSONA_SOURCE_MANIFEST_SHA256 ? "PERSONA_BUNDLE_INVALID" : "PERSONA_SOURCE_MISMATCH", "bundle");
   const profiles = v.profiles.map(validateCorePersonaProfile); if (new Set(profiles.map((p) => p.profileId)).size !== 8 || new Set(profiles.map((p) => p.displayName)).size !== 8) fail("PERSONA_DUPLICATE", "roster");
-  if (canonicalJson(profiles) !== canonicalJson([...profiles].sort((a, b) => compareCanonicalText(a.profileId, b.profileId)))) fail("PERSONA_CANONICAL_INVALID", "profile order");
-  const basis = { schemaVersion: CORE_PERSONA_BUNDLE_VERSION, sourceManifestSha256: CORE_PERSONA_SOURCE_MANIFEST_SHA256, profiles }; if (v.bundleDigest !== canonicalSha256(basis)) fail("PERSONA_BUNDLE_INVALID", "digest"); return { ...basis, bundleDigest: v.bundleDigest as string };
+  const normalized = [...profiles].sort((a, b) => compareCanonicalText(a.profileId, b.profileId));
+  const basis = { schemaVersion: CORE_PERSONA_BUNDLE_VERSION, sourceManifestSha256: CORE_PERSONA_SOURCE_MANIFEST_SHA256, profiles: normalized }; if (v.bundleDigest !== canonicalSha256(basis)) fail("PERSONA_BUNDLE_INVALID", "digest"); return { ...basis, bundleDigest: v.bundleDigest as string };
 }
 export function generateCorePersonaReleaseLayers(): readonly GenericProfileLayer[] {
   return generateCorePersonaBundle().profiles.map((profile) => validateGenericProfileLayer({ schemaVersion: GENERIC_PROFILE_VERSION, layerId: `profile-layer:${profile.displayName.toLowerCase()}-reference`, layerKind: "release_verified_framework_profile", trustLevel: "framework_profile", releaseVerificationDigest: profile.profileDigest, fields: { displayOnly: { label: profile.displayName, description: profile.mission, examples: [profile.jobTitle], presentation: { category: "core-reference", audience: "workspace-owner" } } } }));
