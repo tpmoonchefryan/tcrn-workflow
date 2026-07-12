@@ -16,6 +16,7 @@ import {
 import {
   authorizeGenericProfileOperation,
   resolveGenericProfile,
+  validateGenericProfileBinding,
 } from "./generic-profile.js";
 import type {
   GenericProfileAdmissionContext,
@@ -217,6 +218,23 @@ function safeText(value: unknown, label: string, maximumBytes: number, minimumCo
   return value;
 }
 
+function assertDeepWellFormed(value: unknown, label: string): void {
+  if (typeof value === "string") {
+    if (!value.isWellFormed()) fail("CONTEXT_UNICODE_INVALID", label);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => assertDeepWellFormed(entry, `${label}[${index}]`));
+    return;
+  }
+  if (typeof value === "object" && value !== null) {
+    for (const [field, entry] of Object.entries(value as Readonly<Record<string, unknown>>)) {
+      if (!field.isWellFormed()) fail("CONTEXT_UNICODE_INVALID", `${label}.key`);
+      assertDeepWellFormed(entry, `${label}.${field}`);
+    }
+  }
+}
+
 function sha256(value: unknown, label: string): string {
   if (typeof value !== "string" || !/^[a-f0-9]{64}$/u.test(value)) fail("CONTEXT_SCHEMA_INVALID", label);
   return value;
@@ -249,6 +267,14 @@ function canonicalArray(values: readonly string[], label: string): readonly stri
   const sorted = [...values].sort(compareCanonicalText);
   if (canonicalJson(sorted) !== canonicalJson(values)) fail("CONTEXT_CANONICAL_INVALID", label);
   return values;
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+    for (const child of Object.values(value as Readonly<Record<string, unknown>>)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
 }
 
 function validateBudgets(value: unknown, maximum: ContextBudgets = CONTEXT_ROUTE_LIMITS): ContextBudgets {
@@ -322,6 +348,7 @@ function checkScope(candidate: Pick<ContextMetadataCandidate, "scope" | "workspa
 }
 
 export function validateContextRouteRequest(value: unknown): ContextRouteRequest {
+  assertDeepWellFormed(value, "context request");
   const document = asRecord(value, "context request");
   const fields = ["schemaVersion", "verificationTime", "workspaceId", "projectId", "workId", "taskKind", "riskTier", "profileResolution", "expectedEffectiveDigest", "budgets", "query", "metadataCandidates", "explicitReadCandidates", "explicitReadRequests"];
   exactFields(document, fields, "context request");
@@ -361,12 +388,14 @@ export function calculateContextRouteRequestDigest(value: unknown): string {
 }
 
 function validateAuthorityReceipt(value: unknown): ContextRouteAuthorityReceipt {
+  assertDeepWellFormed(value, "context authority");
   const document = asRecord(value, "context authority");
   const fields = ["schemaVersion", "requestDigest", "profileAdmissionReceiptDigest", "effectiveDigest", "workspaceId", "projectId", "workId", "taskKind", "minimumRiskTier", "maximumBudgets", "allowedExplicitReadIds", "issuedAt", "expiresAt", "authorityDigest"];
   exactFields(document, fields, "context authority");
   if (document.schemaVersion !== CONTEXT_ROUTE_AUTHORITY_VERSION || !taskKinds.includes(document.taskKind as ContextTaskKind) || !riskTiers.includes(document.minimumRiskTier as ContextRiskTier) || !Array.isArray(document.allowedExplicitReadIds)) {
     fail("CONTEXT_AUTHORITY_MALFORMED", "context authority header");
   }
+  if (document.allowedExplicitReadIds.length > CONTEXT_ROUTE_LIMITS.explicitReadCandidates) fail("CONTEXT_AUTHORITY_MALFORMED", "allowed explicit read ids count");
   const allowedExplicitReadIds = canonicalArray(document.allowedExplicitReadIds.map((entry) => protocolId(entry, "allowed explicit read id")), "allowed explicit read ids");
   const basis = {
     schemaVersion: CONTEXT_ROUTE_AUTHORITY_VERSION,
@@ -386,6 +415,10 @@ function validateAuthorityReceipt(value: unknown): ContextRouteAuthorityReceipt 
   if (parseStrictInstant(basis.issuedAt) >= parseStrictInstant(basis.expiresAt)) fail("CONTEXT_AUTHORITY_MALFORMED", "authority window");
   if (sha256(document.authorityDigest, "authorityDigest") !== canonicalSha256(basis)) fail("CONTEXT_AUTHORITY_MISMATCH", "authorityDigest");
   return { ...basis, authorityDigest: document.authorityDigest as string };
+}
+
+export function validateContextRouteAuthorityReceipt(value: unknown): ContextRouteAuthorityReceipt {
+  return validateAuthorityReceipt(value);
 }
 
 function sameIdentity(left: Awaited<ReturnType<typeof lstat>>, right: Awaited<ReturnType<typeof lstat>>): boolean {
@@ -426,8 +459,8 @@ export async function readContextRouteAuthorityReceipt(
   let canonical: string;
   try { canonical = `${canonicalJson(parsed)}\n`; } catch { fail("CONTEXT_AUTHORITY_CANONICAL_INVALID", path); }
   if (canonical !== text) fail("CONTEXT_AUTHORITY_CANONICAL_INVALID", path);
-  const context = Object.freeze({
-    receipt: Object.freeze(validateAuthorityReceipt(parsed)),
+  const context = deepFreeze({
+    receipt: validateAuthorityReceipt(parsed),
     sourcePath: path,
     authorityFileSha256: fileSha256,
     sourceIdentityDigest: canonicalSha256({ dev: String(before.dev), ino: String(before.ino), size: String(before.size), mtimeMs: String(before.mtimeMs), ctimeMs: String(before.ctimeMs) }),
@@ -580,6 +613,7 @@ export function routeContext(
 }
 
 export function validateContextRouteResult(value: unknown): Readonly<Record<string, unknown>> {
+  assertDeepWellFormed(value, "context route result");
   const document = asRecord(value, "context route result");
   exactFields(document, ["schemaVersion", "reasonCode", "context", "contextDigest", "receipt"], "context route result");
   if (document.schemaVersion !== CONTEXT_ROUTE_RESULT_VERSION || document.reasonCode !== "CONTEXT_ROUTED") fail("CONTEXT_SCHEMA_INVALID", "context route result header");
@@ -591,12 +625,7 @@ export function validateContextRouteResult(value: unknown): Readonly<Record<stri
   protocolId(authoritySummary.profileId, "context route result profileId");
   if (!taskKinds.includes(authoritySummary.taskKind as ContextTaskKind) || !riskTiers.includes(authoritySummary.riskTier as ContextRiskTier)) fail("CONTEXT_SCHEMA_INVALID", "context route result task or risk");
   sha256(authoritySummary.effectivePolicyDigest, "context route result effectivePolicyDigest");
-  const binding = asRecord(authoritySummary.binding, "context route result binding");
-  exactFields(binding, ["mode", "workspaceId", "projectId", "command"], "context route result binding");
-  if (!["unbound_read_only", "cold_standby", "workspace", "project", "command"].includes(String(binding.mode))) fail("CONTEXT_SCHEMA_INVALID", "context route result binding mode");
-  nullableId(binding.workspaceId, "context route result binding workspaceId");
-  nullableId(binding.projectId, "context route result binding projectId");
-  if (binding.command !== null && (typeof binding.command !== "string" || !/^[a-z][a-z0-9:-]{1,63}$/u.test(binding.command))) fail("CONTEXT_SCHEMA_INVALID", "context route result binding command");
+  try { validateGenericProfileBinding(authoritySummary.binding); } catch { fail("CONTEXT_SCHEMA_INVALID", "context route result binding"); }
   sha256(context.queryDigest, "context route result queryDigest");
   const metadata = context.metadata.map(metadataCandidate);
   const references = context.references.map(metadataCandidate);
@@ -624,6 +653,18 @@ export function validateContextRouteResult(value: unknown): Readonly<Record<stri
   const budgetUse = asRecord(receipt.budgetUse, "context receipt budgetUse");
   exactFields(budgetUse, [...budgetFields, "receiptBytes"].filter((field, index, fields) => fields.indexOf(field) === index), "context receipt budgetUse");
   for (const value of Object.values(budgetUse)) if (!Number.isSafeInteger(value) || (value as number) < 0) fail("CONTEXT_SCHEMA_INVALID", "context receipt budgetUse");
+  const recomputedBudgetUse = {
+    fixedInjectionBytes: Buffer.byteLength(canonicalJson(context.fixedInjection), "utf8"),
+    authorityBytes: Buffer.byteLength(canonicalJson(authoritySummary), "utf8"),
+    summaryCount: metadata.length,
+    summaryBytes: metadata.reduce((total, entry) => total + Buffer.byteLength(canonicalJson(entry), "utf8"), 0),
+    bodyCount: explicitReads.length,
+    bodyBytes: explicitReads.reduce((total, entry) => total + Buffer.byteLength(entry.content, "utf8"), 0),
+    referenceCount: references.length,
+    referenceBytes: references.reduce((total, entry) => total + Buffer.byteLength(canonicalJson(entry), "utf8"), 0),
+    receiptBytes: budgetUse.receiptBytes,
+  };
+  if (canonicalJson(budgetUse) !== canonicalJson(recomputedBudgetUse)) fail("CONTEXT_CANONICAL_INVALID", "context receipt budget use");
   if (!Array.isArray(receipt.exclusions)) fail("CONTEXT_SCHEMA_INVALID", "context receipt exclusions");
   const exclusionIds = receipt.exclusions.map((entry, index) => {
     const exclusion = asRecord(entry, `context receipt exclusions[${index}]`);

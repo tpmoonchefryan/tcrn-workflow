@@ -260,6 +260,7 @@
     },
     "request": {
       "type": "object",
+      "x-tcrn-deepWellFormedUnicode": true,
       "additionalProperties": false,
       "required": [
         "schemaVersion",
@@ -340,6 +341,7 @@
     },
     "authority": {
       "type": "object",
+      "x-tcrn-deepWellFormedUnicode": true,
       "additionalProperties": false,
       "required": [
         "schemaVersion",
@@ -462,6 +464,7 @@
     },
     "result": {
       "type": "object",
+      "x-tcrn-deepWellFormedUnicode": true,
       "additionalProperties": false,
       "required": [
         "schemaVersion",

@@ -384,6 +384,10 @@ function validateBinding(value: unknown, label: string): GenericProfileBinding {
   return { mode, workspaceId, projectId, command } as GenericProfileBinding;
 }
 
+export function validateGenericProfileBinding(value: unknown): GenericProfileBinding {
+  return validateBinding(value, "generic profile binding");
+}
+
 function validateImmutable(value: unknown, label: string): GenericProfileImmutableFields {
   const document = asRecord(value, label);
   exactFields(
