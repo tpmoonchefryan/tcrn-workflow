@@ -457,7 +457,7 @@ export async function readContextRouteAuthorityReceipt(
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { fail("CONTEXT_AUTHORITY_MALFORMED", path); }
   let canonical: string;
-  try { canonical = `${canonicalJson(parsed)}\n`; } catch { fail("CONTEXT_AUTHORITY_CANONICAL_INVALID", path); }
+  try { canonical = canonicalJson(parsed); } catch { fail("CONTEXT_AUTHORITY_CANONICAL_INVALID", path); }
   if (canonical !== text) fail("CONTEXT_AUTHORITY_CANONICAL_INVALID", path);
   const context = deepFreeze({
     receipt: validateAuthorityReceipt(parsed),

@@ -73,6 +73,7 @@
     "wrong-expected-digest",
     "request-effective-binding-mismatch"
   ],
+  "admissionCanonicalByteCases": 4,
   "cliCases": [
     "missing-argument",
     "duplicate-argument",
