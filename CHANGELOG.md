@@ -54,5 +54,8 @@ Versioning after the first accepted release.
   display-only release layers, read-only CLI, and deterministic/privacy proof.
 - Add the bounded P6 Context Router with descriptor-bound request authority,
   admitted profile re-resolution, metadata-first and explicit-read selection,
-  privacy-minimal receipts, hostile/schema/property proof, and no Codex Adapter,
-  RC3, store, hook, Skill, or activation claim.
+  and privacy-minimal receipts.
+- Add the Codex Adapter only as an uninstalled inert-template candidate with
+  separate host injection, authority-empty fallback, deterministic bundle,
+  identity-bound rollback planning, final-hop simulation, and no OG-04, RC3,
+  store, hook, Skill, configuration, or activation claim.

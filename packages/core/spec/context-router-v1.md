@@ -4,8 +4,9 @@
 
 Context Router V1 is a standalone, deterministic, metadata-first projection over
 explicitly supplied candidates. It creates no store, reads no legacy Workflow
-source, performs no network or database access, and does not implement the Codex
-Adapter, hooks, Skills, activation, raw-session fallback, or RC3 acceptance.
+source and performs no network or database access. The separately verified Codex
+Adapter consumes only a validated result and remains inert; this Router does not
+activate hooks, Skills, raw-session authority, or RC3 acceptance.
 
 ## Trusted admission
 
@@ -84,5 +85,6 @@ real-time or production service guarantees.
 ## Status
 
 Context Router is implemented only after `pnpm verify:p6` returns
-`P6_CONTEXT_ROUTER_VERIFIED`. Codex Adapter remains unimplemented, RC3 remains
-unaccepted, and no owner-visible activation is claimed.
+`P6_CONTEXT_ROUTER_VERIFIED`. The Codex Adapter is implemented only as separately
+verified inert templates, RC3 remains unaccepted, and no owner-visible activation
+is claimed.

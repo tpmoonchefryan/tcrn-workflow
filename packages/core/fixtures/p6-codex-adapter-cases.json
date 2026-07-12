@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "tcrn.p6-codex-adapter-cases.v1",
+  "goldenCases": 8,
+  "hostileCases": 31,
+  "schemaParityCases": 8,
+  "pathFaultCases": 8,
+  "rollbackCases": 8,
+  "finalHopCases": 4,
+  "propertyPermutations": 64,
+  "templateFiles": 4,
+  "coldStartCases": 1,
+  "staticBoundaryCases": 1,
+  "permutationCorpusDigest": "cad1ffbeb2abe134e2c9f22ed0ddfd3affac9369c3fe7150ea8c55bbedfcb06c",
+  "adapter": "implemented_inert_templates_only",
+  "liveActivation": false,
+  "og04": "unsatisfied",
+  "rc3": "unaccepted",
+  "liveStore": "not-created"
+}

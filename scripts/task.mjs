@@ -255,6 +255,7 @@ async function runTests({
   knowledgeOnly = false,
   p5Only = false,
   p6Only = false,
+  p6AdapterOnly = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -267,7 +268,8 @@ async function runTests({
     .filter((path) => !p4Only || ["tests/p4-artifact-lifecycle.test.mjs", "tests/p4-knowledge-core.test.mjs"].includes(path))
     .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs")
     .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path))
-    .filter((path) => !p6Only || path === "tests/p6-context-router.test.mjs");
+    .filter((path) => !p6Only || ["tests/p6-context-router.test.mjs", "tests/p6-codex-adapter.test.mjs"].includes(path))
+    .filter((path) => !p6AdapterOnly || path === "tests/p6-codex-adapter.test.mjs");
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -287,6 +289,8 @@ async function runTests({
               ? "P4_KNOWLEDGE_CORE_TESTS_VERIFIED"
               : p5Only
                 ? "P5_GENERIC_PROFILE_TESTS_VERIFIED"
+                : p6AdapterOnly
+                  ? "P6_CODEX_ADAPTER_TESTS_VERIFIED"
                 : p6Only
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
               : p4Only
@@ -561,7 +565,7 @@ async function verifyP6() {
   assertion(Array.isArray(fixture.latencyStages) && fixture.latencyStages.length === 6 &&
     Object.values(fixture.latencyBudgetMilliseconds).every((value) => Number.isSafeInteger(value) && value > 0),
   "P6_CONTEXT_LATENCY_BUDGETS");
-  assertion(fixture.codexAdapter === "unimplemented" && fixture.rc3 === "unaccepted" &&
+  assertion(fixture.codexAdapter === "implemented_inert_templates_only" && fixture.rc3 === "unaccepted" &&
     fixture.ownerVisibleActivation === "not-claimed" && fixture.liveContextStore === "not-created",
   "P6_CONTEXT_NO_OVERCLAIM");
   const packages = await Promise.all([
@@ -596,6 +600,43 @@ async function verifyP6() {
     ownerVisibleActivation: fixture.ownerVisibleActivation,
     liveContextStore: fixture.liveContextStore,
     standalone: "node-filesystem-only-no-database-no-aos-no-network",
+  });
+}
+
+async function verifyP6Adapter() {
+  const tests = await runTests({ p6AdapterOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p6-codex-adapter-cases.json");
+  const schemaPath = resolve(repositoryRoot, "packages/core/schema/codex-adapter-v1.schema.json");
+  const specPath = resolve(repositoryRoot, "packages/core/spec/codex-adapter-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.p6-codex-adapter-cases.v1", "P6_ADAPTER_FIXTURE_SCHEMA");
+  assertion(fixture.goldenCases === 8 && fixture.hostileCases === 31 && fixture.schemaParityCases === 8, "P6_ADAPTER_HOSTILE_CORPUS");
+  assertion(fixture.pathFaultCases === 8 && fixture.rollbackCases === 8 && fixture.finalHopCases === 4, "P6_ADAPTER_SECURITY_CORPUS");
+  assertion(fixture.propertyPermutations === 64 && fixture.templateFiles === 4 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6_ADAPTER_PROPERTY_CORPUS");
+  assertion(fixture.coldStartCases === 1 && fixture.staticBoundaryCases === 1, "P6_ADAPTER_STANDALONE_BOUNDARY");
+  assertion(fixture.adapter === "implemented_inert_templates_only" && fixture.liveActivation === false && fixture.og04 === "unsatisfied" && fixture.rc3 === "unaccepted" && fixture.liveStore === "not-created", "P6_ADAPTER_NO_OVERCLAIM");
+  return success("P6_CODEX_ADAPTER_VERIFIED", {
+    tests: tests.reasonCode,
+    goldenCases: fixture.goldenCases,
+    hostileCases: fixture.hostileCases,
+    schemaParityCases: fixture.schemaParityCases,
+    pathFaultCases: fixture.pathFaultCases,
+    rollbackCases: fixture.rollbackCases,
+    finalHopCases: fixture.finalHopCases,
+    propertyPermutations: fixture.propertyPermutations,
+    templateFiles: fixture.templateFiles,
+    coldStartCases: fixture.coldStartCases,
+    staticBoundaryCases: fixture.staticBoundaryCases,
+    permutationCorpusDigest: fixture.permutationCorpusDigest,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    adapter: fixture.adapter,
+    liveActivation: fixture.liveActivation,
+    og04: fixture.og04,
+    rc3: fixture.rc3,
+    liveStore: fixture.liveStore,
+    standalone: "inert-product-data-only-no-database-no-aos-no-network",
   });
 }
 
@@ -931,6 +972,7 @@ const commandContracts = {
   "p4-knowledge": { exit: 0, reasonCode: "P4_KNOWLEDGE_CORE_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
+  "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
@@ -1133,6 +1175,7 @@ const handlers = {
   "p4-knowledge": verifyP4Knowledge,
   p5: verifyP5,
   p6: verifyP6,
+  "p6-adapter": verifyP6Adapter,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
@@ -1171,6 +1214,9 @@ function evidencePhase(name) {
     return "p5";
   }
   if (name === "p6") {
+    return "p6";
+  }
+  if (name === "p6-adapter") {
     return "p6";
   }
   if (name === "rc1") {

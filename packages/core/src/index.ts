@@ -162,6 +162,33 @@ export {
   validateContextRouteAuthorityReceipt,
   validateContextRouteResult,
 } from "./context-router.js";
+export {
+  CODEX_ADAPTER_BUNDLE_VERSION,
+  CODEX_ADAPTER_FALLBACK_VERSION,
+  CODEX_ADAPTER_HOST_VERSION,
+  CODEX_ADAPTER_LIFECYCLE_VERSION,
+  CODEX_ADAPTER_REASON_CODES,
+  CODEX_ADAPTER_REQUEST_VERSION,
+  CODEX_ADAPTER_TEMPLATE_PATHS,
+  CodexAdapterError,
+  admitCodexAdapterHostInput,
+  calculateCodexAdapterRequestDigest,
+  codexAdapterAuthorityEmptyFallback,
+  generateCodexAdapterBundle,
+  planCodexAdapterRollback,
+  simulateCodexAdapterLifecycle,
+  validateCodexAdapterBundle,
+  validateCodexAdapterRequest,
+} from "./codex-adapter.js";
+export type {
+  CodexAdapterBundle,
+  CodexAdapterFile,
+  CodexAdapterGovernedAction,
+  CodexAdapterHostContext,
+  CodexAdapterHostInput,
+  CodexAdapterReasonCode,
+  CodexAdapterRequest,
+} from "./codex-adapter.js";
 export type {
   ContextBudgets,
   ContextExplicitReadCandidate,
