@@ -436,7 +436,7 @@ export async function readCodexAdapterInstallationReceipt(
   let parsed: unknown;
   try { parsed = JSON.parse(sourceText); } catch { fail("ADAPTER_INSTALLATION_MALFORMED", path); }
   let canonicalReceipt: string;
-  try { canonicalReceipt = `${canonicalJson(parsed)}\n`; } catch { fail("ADAPTER_INSTALLATION_CANONICAL_INVALID", path); }
+  try { canonicalReceipt = canonicalJson(parsed); } catch { fail("ADAPTER_INSTALLATION_CANONICAL_INVALID", path); }
   if (canonicalReceipt !== sourceText) fail("ADAPTER_INSTALLATION_CANONICAL_INVALID", path);
   const receipt = validateInstallationReceipt(parsed);
   const rootRealpath = await realpath(receipt.installationRoot).catch(() => fail("ADAPTER_INSTALLATION_PATH", receipt.installationRoot));

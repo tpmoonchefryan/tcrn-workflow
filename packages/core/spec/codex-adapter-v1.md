@@ -46,7 +46,10 @@ named dev+ino+size+mtime+ctime identity, realpath, and raw content digest. The
 receipt binds generation, bundle, installation root, exact paths, realpaths,
 content digests, and descriptor-derived identity digests. Copied, replaced,
 linked, special, changed, wrong-path/digest, or mismatched-generation evidence
-fails closed. The product returns a plan only and never deletes files. Ancestor
+fails closed. Receipt source bytes must equal `canonicalJson(receipt)` directly,
+including its single terminal LF; double-LF and other leading/trailing whitespace
+fail even when the out-of-band raw file digest is recomputed. The product returns
+a plan only and never deletes files. Ancestor
 replacement remains under the accepted cooperative clean-checkout boundary.
 
 ## Fallback and final hop
