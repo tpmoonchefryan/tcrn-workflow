@@ -257,6 +257,7 @@ async function runTests({
   p6Only = false,
   p6AdapterOnly = false,
   p7Only = false,
+  p7CompatibilityOnly = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -271,7 +272,8 @@ async function runTests({
     .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path))
     .filter((path) => !p6Only || ["tests/p6-context-router.test.mjs", "tests/p6-codex-adapter.test.mjs"].includes(path))
     .filter((path) => !p6AdapterOnly || path === "tests/p6-codex-adapter.test.mjs")
-    .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs");
+    .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
+    .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs");
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -295,6 +297,8 @@ async function runTests({
                   ? "P6_CODEX_ADAPTER_TESTS_VERIFIED"
                 : p6Only
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
+                  : p7CompatibilityOnly
+                    ? "P7_COMPATIBILITY_MODES_TESTS_VERIFIED"
                   : p7Only
                     ? "P7_CANONICAL_EXCHANGE_TESTS_VERIFIED"
                   : p4Only
@@ -706,6 +710,40 @@ async function verifyP7() {
   });
 }
 
+async function verifyP7Compatibility() {
+  const tests = await runTests({ p7CompatibilityOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p7-compatibility-modes-cases.json");
+  const schemaPath = resolve(repositoryRoot, "packages/core/schema/compatibility-modes-v1.schema.json");
+  const specPath = resolve(repositoryRoot, "packages/core/spec/compatibility-modes-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.p7-compatibility-modes-cases.v1", "P7_COMPATIBILITY_FIXTURE_SCHEMA");
+  assertion(fixture.positiveOperations === 6 && fixture.schemaParityCases === 12, "P7_COMPATIBILITY_POSITIVE_PARITY_CORPUS");
+  assertion(fixture.hostileCases === 24 && fixture.unavailableSurfaces === 4, "P7_COMPATIBILITY_HOSTILE_UNAVAILABLE_CORPUS");
+  assertion(fixture.propertyPermutations === 64 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P7_COMPATIBILITY_PROPERTY_CORPUS");
+  assertion(fixture.supportedAosReleases === 0 && fixture.networkAccess === false && fixture.mutation === false && fixture.liveAosMutation === false, "P7_COMPATIBILITY_OFFLINE_BOUNDARY");
+  assertion(fixture.capabilityDisposition === "capability_unavailable_until_mutual_release", "P7_COMPATIBILITY_UNAVAILABLE_DISPOSITION");
+  return success("P7_COMPATIBILITY_MODES_VERIFIED", {
+    tests: tests.reasonCode,
+    positiveOperations: fixture.positiveOperations,
+    schemaParityCases: fixture.schemaParityCases,
+    hostileCases: fixture.hostileCases,
+    unavailableSurfaces: fixture.unavailableSurfaces,
+    propertyPermutations: fixture.propertyPermutations,
+    permutationCorpusDigest: fixture.permutationCorpusDigest,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    supportedAosReleases: fixture.supportedAosReleases,
+    networkAccess: fixture.networkAccess,
+    mutation: fixture.mutation,
+    liveAosMutation: fixture.liveAosMutation,
+    capabilityDisposition: fixture.capabilityDisposition,
+    compatibilityModes: "implemented-offline-planning-only",
+    aosRequirements: "out-of-scope",
+    rc4: "unaccepted",
+  });
+}
+
 function octal(value, length) {
   return `${value.toString(8).padStart(length - 1, "0")}\0`;
 }
@@ -1040,6 +1078,7 @@ const commandContracts = {
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
   p7: { exit: 0, reasonCode: "P7_CANONICAL_EXCHANGE_VERIFIED" },
+  "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
@@ -1244,6 +1283,7 @@ const handlers = {
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,
   p7: verifyP7,
+  "p7-compatibility": verifyP7Compatibility,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
@@ -1287,7 +1327,7 @@ function evidencePhase(name) {
   if (name === "p6-adapter") {
     return "p6";
   }
-  if (name === "p7") {
+  if (name === "p7" || name === "p7-compatibility") {
     return "p7";
   }
   if (name === "rc1") {
