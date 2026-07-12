@@ -6,7 +6,7 @@ import {
   lstat,
   mkdir,
   open,
-  readdir,
+  opendir,
   realpath,
   rename,
   rm,
@@ -149,10 +149,13 @@ export type CanonicalExchangeReadback = Omit<CanonicalExchangePlan, "reasonCode"
 
 export interface CanonicalExchangeWriteOptions {
   readonly faultPointForTest?: CanonicalExchangeFaultPoint;
+  readonly cleanupCrashForTest?: boolean;
+  readonly beforeOwnedStageCleanupForTest?: (path: string) => Promise<void>;
 }
 
 export interface CanonicalExchangeReadOptions {
   readonly afterLstatForTest?: (path: string) => Promise<void>;
+  readonly beforeChunkOpenForTest?: (path: string) => Promise<void>;
 }
 
 export class CanonicalExchangeError extends Error {
@@ -315,6 +318,28 @@ function sameDirectoryIdentity(left: Awaited<ReturnType<typeof lstat>>, right: A
   return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode && left.isDirectory() && right.isDirectory();
 }
 
+async function readDirectoryBound(path: string, maximumEntries: number): Promise<string[]> {
+  let directory;
+  try {
+    directory = await opendir(path);
+    const entries: string[] = [];
+    while (true) {
+      const entry = await directory.read();
+      if (entry === null) break;
+      entries.push(entry.name);
+      if (entries.length > maximumEntries) fail("EXCHANGE_LIMIT_EXCEEDED", `${path}:directory entries`);
+    }
+    return entries.sort(compareCanonicalText);
+  } catch (error) {
+    if (error instanceof CanonicalExchangeError) throw error;
+    fail("EXCHANGE_FILE_INVALID", `${path}:${String(error)}`);
+  } finally {
+    await directory?.close().catch((error: unknown) => {
+      if ((error as { code?: string }).code !== "ERR_DIR_CLOSED") fail("EXCHANGE_FILE_INVALID", `${path}:${String(error)}`);
+    });
+  }
+}
+
 async function safeWrite(path: string, bytes: Buffer | string): Promise<void> {
   let handle;
   try {
@@ -353,11 +378,15 @@ export async function writeCanonicalExchangeBundle(outputRoot: string, value: un
   const internal = validateRequest(value);
   const boundary = await outputBoundary(outputRoot);
   const stage = join(boundary.parent, `.${basename(outputRoot)}.partial-${internal.publicPlan.manifest.manifestDigest.slice(0, 16)}`);
+  let ownedStage: Awaited<ReturnType<typeof lstat>> | undefined;
   try {
     try { await mkdir(stage, { mode: 0o700 }); } catch (error) {
       if ((error as { code?: string }).code === "EEXIST") fail("EXCHANGE_OUTPUT_EXISTS", stage);
       fail("EXCHANGE_OUTPUT_UNSAFE", stage);
     }
+    const createdStage = await lstat(stage).catch(() => fail("EXCHANGE_CHANGED", stage));
+    if (!createdStage.isDirectory() || createdStage.isSymbolicLink()) fail("EXCHANGE_OUTPUT_UNSAFE", stage);
+    ownedStage = createdStage;
     await mkdir(join(stage, "chunks"), { mode: 0o700 });
     for (const [index, chunk] of internal.chunks.entries()) {
       await safeWrite(join(stage, chunk.record.storedPath), chunk.bytes);
@@ -370,11 +399,18 @@ export async function writeCanonicalExchangeBundle(outputRoot: string, value: un
     const parentAfter = await lstat(boundary.parent);
     if (!sameDirectoryIdentity(boundary.parentIdentity, parentAfter)) fail("EXCHANGE_CHANGED", boundary.parent);
     await rename(stage, outputRoot);
+    ownedStage = undefined;
     const parentCommitted = await lstat(boundary.parent);
     if (!sameDirectoryIdentity(parentAfter, parentCommitted)) fail("EXCHANGE_CHANGED", boundary.parent);
     return await readCanonicalExchangeBundle(outputRoot);
   } catch (error) {
-    if (!(error instanceof CanonicalExchangeError && error.reasonCode === "EXCHANGE_WRITE_CRASH")) await rm(stage, { recursive: true, force: true });
+    const preserveCrash = error instanceof CanonicalExchangeError && error.reasonCode === "EXCHANGE_WRITE_CRASH" && options.cleanupCrashForTest !== true;
+    if (ownedStage && !preserveCrash) {
+      await options.beforeOwnedStageCleanupForTest?.(stage);
+      const current = await lstat(stage).catch(() => fail("EXCHANGE_CHANGED", stage));
+      if (!sameDirectoryIdentity(ownedStage, current)) fail("EXCHANGE_CHANGED", stage);
+      await rm(stage, { recursive: true, force: false }).catch((cleanupError) => fail("EXCHANGE_OUTPUT_UNSAFE", `${stage}:${String(cleanupError)}`));
+    }
     throw error;
   }
 }
@@ -417,20 +453,72 @@ function validateStoredManifest(value: unknown): CanonicalExchangeManifest {
   exactFields(value, ["schemaVersion", "bundleId", "transactionId", "sourceWorkspaceId", "targetWorkspaceId", "idempotencyKey", "createdAt", "semanticSubjectDigest", "exchange", "chunks", "totalBytes", "manifestDigest"], "manifest");
   const document = value as unknown as CanonicalExchangeManifest;
   if (document.schemaVersion !== CANONICAL_EXCHANGE_MANIFEST_VERSION || !Array.isArray(document.chunks) || !Number.isSafeInteger(document.totalBytes) || document.totalBytes < 0) fail("EXCHANGE_INPUT_INVALID", "manifest");
+  if (document.chunks.length === 0 || document.chunks.length > CANONICAL_EXCHANGE_LIMITS.maximumChunks || document.chunks.length + 3 > CANONICAL_EXCHANGE_LIMITS.maximumBundleFiles || document.totalBytes > CANONICAL_EXCHANGE_LIMITS.maximumTotalBytes) fail("EXCHANGE_LIMIT_EXCEEDED", "manifest limits");
   stableId(document.bundleId, "bundleId");
   stableId(document.transactionId, "transactionId");
   stableId(document.sourceWorkspaceId, "sourceWorkspaceId");
   stableId(document.targetWorkspaceId, "targetWorkspaceId");
   stableId(document.idempotencyKey, "idempotencyKey");
+  if (typeof document.createdAt !== "string") fail("EXCHANGE_INPUT_INVALID", "createdAt");
   digest(document.semanticSubjectDigest, "semanticSubjectDigest");
   digest(document.manifestDigest, "manifestDigest");
-  try { validateExchangeEnvelope(document.exchange); } catch (error) {
+  let exchange: ExchangeEnvelope;
+  try { exchange = validateExchangeEnvelope(document.exchange); } catch (error) {
     if (error instanceof ProtocolError) fail("EXCHANGE_INPUT_INVALID", error.message);
     throw error;
   }
+  if (document.bundleId !== exchange.id || document.createdAt !== exchange.createdAt) fail("EXCHANGE_CHUNK_SUBSTITUTED", "manifest exchange binding");
+  const records = document.chunks.map((record, index) => validateStoredChunkRecord(record, index));
+  if (exchange.entries.length !== records.length) fail("EXCHANGE_CHUNK_SUBSTITUTED", "manifest exchange membership");
+  const identities = [records.map((record) => record.id), records.map((record) => record.logicalPath), records.map((record) => record.storedPath)];
+  if (identities.some((entries) => new Set(entries).size !== entries.length)) fail("EXCHANGE_CHUNK_DUPLICATE", "manifest chunk identity");
+  const declaredBytes = records.reduce((sum, record) => {
+    if (sum + record.size > CANONICAL_EXCHANGE_LIMITS.maximumTotalBytes) fail("EXCHANGE_LIMIT_EXCEEDED", "manifest declared bytes");
+    return sum + record.size;
+  }, 0);
+  if (declaredBytes !== document.totalBytes) fail("EXCHANGE_CHUNK_SUBSTITUTED", "manifest totalBytes");
   const basis = { schemaVersion: document.schemaVersion, bundleId: document.bundleId, transactionId: document.transactionId, sourceWorkspaceId: document.sourceWorkspaceId, targetWorkspaceId: document.targetWorkspaceId, idempotencyKey: document.idempotencyKey, createdAt: document.createdAt, semanticSubjectDigest: document.semanticSubjectDigest, exchange: document.exchange, chunks: document.chunks, totalBytes: document.totalBytes };
   if (canonicalSha256(basis) !== document.manifestDigest) fail("EXCHANGE_CHUNK_SUBSTITUTED", "manifestDigest");
   return document;
+}
+
+function validateStoredChunkRecord(value: unknown, position: number): CanonicalExchangeChunkRecord {
+  exactFields(value, ["id", "index", "logicalPath", "storedPath", "mediaType", "size", "sha256", "semanticDigest"], `chunk record:${position}`);
+  const record = value as unknown as CanonicalExchangeChunkRecord;
+  stableId(record.id, `chunk id:${position}`);
+  logicalPath(record.logicalPath);
+  if (record.index !== position || !Number.isSafeInteger(record.index) || !Number.isSafeInteger(record.size) || record.size < 0) fail("EXCHANGE_INPUT_INVALID", `chunk record:${position}`);
+  if (record.size > CANONICAL_EXCHANGE_LIMITS.maximumChunkBytes) fail("EXCHANGE_LIMIT_EXCEEDED", `chunk size:${position}`);
+  if (typeof record.storedPath !== "string" || !/^chunks\/[0-9]{4}-[a-f0-9]{16}\.chunk$/u.test(record.storedPath)) fail("EXCHANGE_PATH_INVALID", `storedPath:${position}`);
+  wellFormed(record.storedPath, `storedPath:${position}`);
+  if (record.mediaType !== "application/json" && record.mediaType !== "text/plain; charset=utf-8") fail("EXCHANGE_INPUT_INVALID", `chunk mediaType:${position}`);
+  digest(record.sha256, `chunk sha256:${position}`);
+  digest(record.semanticDigest, `chunk semanticDigest:${position}`);
+  return record;
+}
+
+function validateStoredTransaction(value: unknown): CanonicalExchangeTransaction {
+  exactFields(value, ["schemaVersion", "transactionId", "bundleId", "idempotencyKey", "manifestDigest", "chunkCount", "totalBytes", "phase", "transactionDigest"], "transaction");
+  const transaction = value as unknown as CanonicalExchangeTransaction;
+  if (transaction.schemaVersion !== CANONICAL_EXCHANGE_TRANSACTION_VERSION || transaction.phase !== "committed" || !Number.isSafeInteger(transaction.chunkCount) || transaction.chunkCount < 1 || transaction.chunkCount > CANONICAL_EXCHANGE_LIMITS.maximumChunks || !Number.isSafeInteger(transaction.totalBytes) || transaction.totalBytes < 0 || transaction.totalBytes > CANONICAL_EXCHANGE_LIMITS.maximumTotalBytes) fail("EXCHANGE_INPUT_INVALID", "transaction");
+  stableId(transaction.transactionId, "transaction.transactionId");
+  stableId(transaction.bundleId, "transaction.bundleId");
+  stableId(transaction.idempotencyKey, "transaction.idempotencyKey");
+  digest(transaction.manifestDigest, "transaction.manifestDigest");
+  digest(transaction.transactionDigest, "transaction.transactionDigest");
+  return transaction;
+}
+
+function validateStoredResume(value: unknown): CanonicalExchangeResume {
+  exactFields(value, ["schemaVersion", "transactionId", "bundleId", "manifestDigest", "completedChunkIds", "remainingChunkIds", "resumeDigest"], "resume");
+  const resume = value as unknown as CanonicalExchangeResume;
+  if (resume.schemaVersion !== CANONICAL_EXCHANGE_RESUME_VERSION || !Array.isArray(resume.completedChunkIds) || !Array.isArray(resume.remainingChunkIds) || resume.completedChunkIds.length > CANONICAL_EXCHANGE_LIMITS.maximumChunks || resume.remainingChunkIds.length > CANONICAL_EXCHANGE_LIMITS.maximumChunks) fail("EXCHANGE_INPUT_INVALID", "resume");
+  stableId(resume.transactionId, "resume.transactionId");
+  stableId(resume.bundleId, "resume.bundleId");
+  digest(resume.manifestDigest, "resume.manifestDigest");
+  for (const id of [...resume.completedChunkIds, ...resume.remainingChunkIds]) stableId(id, "resume chunk id");
+  digest(resume.resumeDigest, "resume.resumeDigest");
+  return resume;
 }
 
 export async function readCanonicalExchangeBundle(bundleRoot: string, options: CanonicalExchangeReadOptions = {}): Promise<CanonicalExchangeReadback> {
@@ -439,51 +527,54 @@ export async function readCanonicalExchangeBundle(bundleRoot: string, options: C
   if (canonicalRoot !== bundleRoot) fail("EXCHANGE_LINK_INVALID", bundleRoot);
   const root = await lstat(bundleRoot);
   if (!root.isDirectory() || root.isSymbolicLink()) fail("EXCHANGE_FILE_INVALID", bundleRoot);
-  const rootEntries = (await readdir(bundleRoot)).sort(compareCanonicalText);
+  const rootEntries = await readDirectoryBound(bundleRoot, 4);
   if (JSON.stringify(rootEntries) !== JSON.stringify(["chunks", "manifest.json", "resume.json", "transaction.json"])) fail("EXCHANGE_INCOMPLETE", "bundle root files");
   const chunksRoot = join(bundleRoot, "chunks");
   const chunksDirectory = await lstat(chunksRoot).catch(() => fail("EXCHANGE_INCOMPLETE", chunksRoot));
   if (!chunksDirectory.isDirectory() || chunksDirectory.isSymbolicLink()) fail("EXCHANGE_LINK_INVALID", chunksRoot);
   const manifest = validateStoredManifest(canonicalDocument(await readBound(join(bundleRoot, "manifest.json"), CANONICAL_EXCHANGE_LIMITS.maximumManifestBytes, options), "manifest"));
-  if (manifest.chunks.length === 0 || manifest.chunks.length > CANONICAL_EXCHANGE_LIMITS.maximumChunks) fail("EXCHANGE_LIMIT_EXCEEDED", "manifest chunks");
-  const transaction = canonicalDocument<CanonicalExchangeTransaction>(await readBound(join(bundleRoot, "transaction.json"), CANONICAL_EXCHANGE_LIMITS.maximumControlBytes, options), "transaction");
-  const resume = canonicalDocument<CanonicalExchangeResume>(await readBound(join(bundleRoot, "resume.json"), CANONICAL_EXCHANGE_LIMITS.maximumControlBytes, options), "resume");
-  exactFields(transaction, ["schemaVersion", "transactionId", "bundleId", "idempotencyKey", "manifestDigest", "chunkCount", "totalBytes", "phase", "transactionDigest"], "transaction");
-  exactFields(resume, ["schemaVersion", "transactionId", "bundleId", "manifestDigest", "completedChunkIds", "remainingChunkIds", "resumeDigest"], "resume");
+  const transaction = validateStoredTransaction(canonicalDocument(await readBound(join(bundleRoot, "transaction.json"), CANONICAL_EXCHANGE_LIMITS.maximumControlBytes, options), "transaction"));
+  const resume = validateStoredResume(canonicalDocument(await readBound(join(bundleRoot, "resume.json"), CANONICAL_EXCHANGE_LIMITS.maximumControlBytes, options), "resume"));
   const expectedFiles = manifest.chunks.map((entry) => basename(entry.storedPath)).sort(compareCanonicalText);
-  const actualFiles = (await readdir(chunksRoot)).sort(compareCanonicalText);
+  const actualFiles = await readDirectoryBound(chunksRoot, CANONICAL_EXCHANGE_LIMITS.maximumChunks);
+  if (actualFiles.length + 3 > CANONICAL_EXCHANGE_LIMITS.maximumBundleFiles) fail("EXCHANGE_LIMIT_EXCEEDED", "bundle files");
   if (new Set(actualFiles).size !== actualFiles.length) fail("EXCHANGE_CHUNK_DUPLICATE", "stored chunks");
   if (JSON.stringify(actualFiles) !== JSON.stringify(expectedFiles)) fail(actualFiles.length < expectedFiles.length ? "EXCHANGE_CHUNK_MISSING" : "EXCHANGE_INCOMPLETE", "stored chunks");
   const chunks = [];
   let totalBytes = 0;
   for (const [position, record] of manifest.chunks.entries()) {
-    exactFields(record, ["id", "index", "logicalPath", "storedPath", "mediaType", "size", "sha256", "semanticDigest"], "chunk record");
-    stableId(record.id, "chunk id");
-    logicalPath(record.logicalPath);
-    if (record.index !== position || !Number.isSafeInteger(record.size) || record.size < 0 || record.size > CANONICAL_EXCHANGE_LIMITS.maximumChunkBytes) fail("EXCHANGE_INPUT_INVALID", "chunk record");
-    if (record.mediaType !== "application/json" && record.mediaType !== "text/plain; charset=utf-8") fail("EXCHANGE_INPUT_INVALID", "chunk mediaType");
-    digest(record.sha256, "chunk sha256");
-    digest(record.semanticDigest, "chunk semanticDigest");
-    if (!/^chunks\/[0-9]{4}-[a-f0-9]{16}\.chunk$/u.test(record.storedPath)) fail("EXCHANGE_PATH_INVALID", record.storedPath);
+    if (totalBytes + record.size > CANONICAL_EXCHANGE_LIMITS.maximumTotalBytes) fail("EXCHANGE_LIMIT_EXCEEDED", "stored total bytes");
+    await options.beforeChunkOpenForTest?.(join(bundleRoot, record.storedPath));
     const bytes = await readBound(join(bundleRoot, record.storedPath), CANONICAL_EXCHANGE_LIMITS.maximumChunkBytes, options);
     if (bytes.length !== record.size || sha256(bytes) !== record.sha256) fail("EXCHANGE_CHUNK_SUBSTITUTED", record.logicalPath);
     if (semanticDigest(bytes, record.mediaType) !== record.semanticDigest) fail("EXCHANGE_SEMANTIC_MISMATCH", record.logicalPath);
     totalBytes += bytes.length;
     chunks.push({ record, contentBase64: bytes.toString("base64") });
   }
+  if (manifest.exchange.entries.length !== manifest.chunks.length) fail("EXCHANGE_CHUNK_SUBSTITUTED", "exchange entry count");
   for (const [index, entry] of manifest.exchange.entries.entries()) {
     const record = manifest.chunks[index];
     if (!record || entry.path !== record.logicalPath || entry.mediaType !== record.mediaType || entry.size !== record.size || entry.sha256 !== record.sha256) fail("EXCHANGE_CHUNK_SUBSTITUTED", `exchange entry:${index}`);
   }
   if (totalBytes !== manifest.totalBytes || totalBytes > CANONICAL_EXCHANGE_LIMITS.maximumTotalBytes) fail("EXCHANGE_LIMIT_EXCEEDED", "stored total bytes");
+  const reconstructed = validateRequest({
+    schemaVersion: CANONICAL_EXCHANGE_REQUEST_VERSION,
+    exchange: manifest.exchange,
+    transactionId: manifest.transactionId,
+    sourceWorkspaceId: manifest.sourceWorkspaceId,
+    targetWorkspaceId: manifest.targetWorkspaceId,
+    idempotencyKey: manifest.idempotencyKey,
+    semanticSubjectDigest: manifest.semanticSubjectDigest,
+    chunks: chunks.map(({ record, contentBase64 }) => ({ logicalPath: record.logicalPath, mediaType: record.mediaType, contentBase64, semanticDigest: record.semanticDigest })),
+  }).publicPlan;
+  if (canonicalJson(reconstructed.manifest) !== canonicalJson(manifest)) fail("EXCHANGE_CHUNK_SUBSTITUTED", "derived manifest");
   const transactionBasis = { schemaVersion: transaction.schemaVersion, transactionId: transaction.transactionId, bundleId: transaction.bundleId, idempotencyKey: transaction.idempotencyKey, manifestDigest: transaction.manifestDigest, chunkCount: transaction.chunkCount, totalBytes: transaction.totalBytes, phase: transaction.phase };
-  digest(transaction.transactionDigest, "transactionDigest");
   if (transaction.schemaVersion !== CANONICAL_EXCHANGE_TRANSACTION_VERSION || transaction.phase !== "committed" || transaction.transactionId !== manifest.transactionId || transaction.bundleId !== manifest.bundleId || transaction.idempotencyKey !== manifest.idempotencyKey || transaction.manifestDigest !== manifest.manifestDigest || transaction.chunkCount !== manifest.chunks.length || transaction.totalBytes !== totalBytes || canonicalSha256(transactionBasis) !== transaction.transactionDigest) fail("EXCHANGE_TRANSACTION_MISMATCH", "transaction");
+  if (canonicalJson(reconstructed.transaction) !== canonicalJson(transaction)) fail("EXCHANGE_TRANSACTION_MISMATCH", "derived transaction");
   const expectedIds = manifest.chunks.map((entry) => entry.id).sort(compareCanonicalText);
-  if (!Array.isArray(resume.completedChunkIds) || resume.completedChunkIds.some((entry) => typeof entry !== "string")) fail("EXCHANGE_RESUME_MISMATCH", "completedChunkIds");
-  digest(resume.resumeDigest, "resumeDigest");
   const resumeBasis = { schemaVersion: resume.schemaVersion, transactionId: resume.transactionId, bundleId: resume.bundleId, manifestDigest: resume.manifestDigest, completedChunkIds: resume.completedChunkIds, remainingChunkIds: resume.remainingChunkIds };
   if (resume.schemaVersion !== CANONICAL_EXCHANGE_RESUME_VERSION || resume.transactionId !== manifest.transactionId || resume.bundleId !== manifest.bundleId || resume.manifestDigest !== manifest.manifestDigest || JSON.stringify(resume.completedChunkIds) !== JSON.stringify(expectedIds) || !Array.isArray(resume.remainingChunkIds) || resume.remainingChunkIds.length !== 0 || canonicalSha256(resumeBasis) !== resume.resumeDigest) fail("EXCHANGE_RESUME_MISMATCH", "resume");
+  if (canonicalJson(reconstructed.resume) !== canonicalJson(resume)) fail("EXCHANGE_RESUME_MISMATCH", "derived resume");
   const bundleDigest = canonicalSha256({ manifestDigest: manifest.manifestDigest, transactionDigest: transaction.transactionDigest, resumeDigest: resume.resumeDigest, chunkDigests: manifest.chunks.map((entry) => entry.sha256) });
   const planBasis = { manifest, transaction, resume, bundleDigest, fileCount: manifest.chunks.length + 3, totalBytes };
   return { reasonCode: "EXCHANGE_BUNDLE_VERIFIED", ...planBasis, planDigest: canonicalSha256(planBasis), bundleRoot, chunks };

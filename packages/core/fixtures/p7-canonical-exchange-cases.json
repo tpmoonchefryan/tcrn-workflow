@@ -2,6 +2,10 @@
   "schemaVersion": "tcrn.p7-canonical-exchange-cases.v1",
   "positiveCases": 8,
   "schemaParityCases": 8,
+  "storedSchemaParityCases": 21,
+  "derivedIdentityCases": 8,
+  "stagingOwnershipCases": 5,
+  "resourceBudgetCases": 5,
   "hostileCases": [
     "unknown-request-field",
     "unknown-chunk-field",
