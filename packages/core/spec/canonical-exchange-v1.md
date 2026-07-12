@@ -22,6 +22,15 @@ idempotency key. The resume record binds the complete sorted chunk-ID set and an
 empty remaining set. Their digests plus ordered chunk digests form the bundle
 digest; the full plan forms the plan digest.
 
+Stored admission validates the closed manifest, transaction, resume, and every
+nested chunk record before any nested field is dereferenced. The reader requires
+equal-length, one-to-one, canonically ordered exchange-entry/chunk membership;
+unique IDs, logical paths, and stored paths; and exact `bundleId`/`createdAt`
+binding to the strict-instant P2 envelope. After descriptor-bound chunk reads it
+reconstructs the complete request-derived manifest, transaction, and resume and
+requires canonical equality. Caller-selected IDs, record order, stored paths, or
+resealed control digests therefore cannot replace deterministic identity.
+
 ## Filesystem and limits
 
 The reader admits only a real absolute bundle root, a closed file set, real
@@ -30,13 +39,27 @@ identity. Symlinks, hardlinks, special files, replacement, missing/extra files,
 partial bundles, traversal, backslashes, absolute logical paths, and limits fail
 closed. Each chunk is at most 1 MiB, aggregate chunk bytes are at most 8 MiB,
 there are at most 128 chunks, and logical paths are at most 256 UTF-8 bytes.
+Directory iteration is bounded before full enumeration. Declared chunk count,
+per-chunk bytes, aggregate bytes, and total bundle files are rejected before any
+chunk descriptor is opened; cumulative declared and observed bytes are checked
+again before every chunk read.
 
 The writer requires a supported local filesystem and an existing real parent,
 writes a deterministic partial generation with no-follow exclusive files,
 rechecks the parent identity, and atomically renames the completed generation.
-It never overwrites an existing output. Cooperative clean-checkout protection is
-retained; hostile concurrent ancestor-component replacement is outside the P1
-Option-B threat model.
+It never overwrites an existing output. A staging generation is cleanup-eligible
+only after this invocation created it and recorded its directory device/inode/type.
+`EEXIST`, links, and special files are never recursively removed. Cleanup
+revalidates the exact owned identity and rejects replacement before removal.
+Cooperative clean-checkout protection is retained; hostile concurrent
+ancestor-component replacement is outside the P1 Option-B threat model.
+
+The Draft 2020-12 proof evaluates the request plus closed stored manifest,
+transaction, resume, and nested chunk-record definitions. Runtime parity vectors
+cover null, primitive, missing/unknown fields, wrong types, malformed Unicode,
+and limits. Cross-field derived identity, ordering, digest, and aggregate-sum
+rules remain executable runtime invariants because JSON Schema does not express
+those relationships by itself.
 
 ## Execution and transport boundary
 

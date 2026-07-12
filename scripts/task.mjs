@@ -666,6 +666,8 @@ async function verifyP7() {
   const fixture = await readJson(fixturePath);
   assertion(fixture.schemaVersion === "tcrn.p7-canonical-exchange-cases.v1", "P7_EXCHANGE_FIXTURE_SCHEMA");
   assertion(fixture.positiveCases === 8 && fixture.schemaParityCases === 8, "P7_EXCHANGE_POSITIVE_PARITY_CORPUS");
+  assertion(fixture.storedSchemaParityCases === 21 && fixture.derivedIdentityCases === 8, "P7_EXCHANGE_STORED_IDENTITY_CORPUS");
+  assertion(fixture.stagingOwnershipCases === 5 && fixture.resourceBudgetCases === 5, "P7_EXCHANGE_FILESYSTEM_BUDGET_CORPUS");
   assertion(Array.isArray(fixture.hostileCases) && fixture.hostileCases.length === 32, "P7_EXCHANGE_HOSTILE_CORPUS");
   assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 8, "P7_EXCHANGE_FAULT_CORPUS");
   assertion(fixture.propertyPermutations === 64 && fixture.logicalChunks === 5 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P7_EXCHANGE_PROPERTY_CORPUS");
@@ -680,6 +682,10 @@ async function verifyP7() {
     tests: tests.reasonCode,
     positiveCases: fixture.positiveCases,
     schemaParityCases: fixture.schemaParityCases,
+    storedSchemaParityCases: fixture.storedSchemaParityCases,
+    derivedIdentityCases: fixture.derivedIdentityCases,
+    stagingOwnershipCases: fixture.stagingOwnershipCases,
+    resourceBudgetCases: fixture.resourceBudgetCases,
     hostileCases: fixture.hostileCases.length,
     faultCases: fixture.faultCases.length,
     propertyPermutations: fixture.propertyPermutations,
