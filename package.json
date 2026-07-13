@@ -43,6 +43,7 @@
     "verify:p6:adapter": "node scripts/task.mjs p6-adapter",
     "verify:p7": "node scripts/task.mjs p7",
     "verify:p7:compatibility": "node scripts/task.mjs p7-compatibility",
+    "verify:p7:aos-requirements": "node scripts/task.mjs p7-aos-requirements",
     "verify:protocol": "node scripts/task.mjs protocol-test",
     "verify:schemas": "node scripts/task.mjs protocol-schemas",
     "verify:privacy": "node scripts/task.mjs privacy",

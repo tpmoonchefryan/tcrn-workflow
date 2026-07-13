@@ -1,0 +1,287 @@
+{
+  "$id": "https://tcrn.dev/packages/core/schema/public-aos-requirements-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Public AOS Requirements V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "requirements",
+    "ledgerDigest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.public-aos-requirements.v1"
+    },
+    "ledgerDigest": {
+      "const": "bf728e361765a9453cf5a8e4d6a12408b8c01f91ef86eb708a51cdc4ad0f4e0f"
+    },
+    "requirements": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "oneOf": [
+          {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:conformance-mutual-release",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "require conformance matrix before mutual release activation",
+              "aosCapabilityNeeded": "conformance matrix",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.conformance-mutual-release",
+              "securityBoundary": "supported releases remain empty",
+              "status": "accepted",
+              "maturity": "specified"
+            }
+          },
+          {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:durable-idempotency-revisions",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "fence duplicate external effects by durable revision",
+              "aosCapabilityNeeded": "idempotency and revisions",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.idempotency-revisions",
+              "securityBoundary": "no external effect execution",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          },
+          {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:fallback-epoch-reconciliation",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "fence fallback epoch revision conflict and reconciliation",
+              "aosCapabilityNeeded": "fallback reconciliation planning",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.fallback-fencing",
+              "securityBoundary": "no fallback activation",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          },
+          {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:knowledge-compatibility",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "compare public knowledge compatibility metadata",
+              "aosCapabilityNeeded": "knowledge compatibility metadata",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.knowledge-compatibility",
+              "securityBoundary": "no body or private knowledge access",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          },
+          {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:portable-checkpoint-readiness",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "evaluate portable checkpoint readiness",
+              "aosCapabilityNeeded": "portable checkpoint",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.checkpoint-readiness",
+              "securityBoundary": "read-only readiness",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          },
+          {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:projection-import-truth-ownership",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "project import fields without replacing operational truth",
+              "aosCapabilityNeeded": "projection import ownership",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.projection-ownership",
+              "securityBoundary": "operational truth remains external",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          },
+          {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:release-manifest-readback",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "compare public release manifest and compatibility readback",
+              "aosCapabilityNeeded": "public release manifest readback",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.release-manifest-readback",
+              "securityBoundary": "offline read-only only",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          },
+          {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:trusted-role-actor-binding",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "bind trusted role and actor assertions",
+              "aosCapabilityNeeded": "trusted actor binding",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.trusted-role-actor",
+              "securityBoundary": "no credential or live identity lookup",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          }
+        ]
+      },
+      "allOf": [
+        {
+          "contains": {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:conformance-mutual-release",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "require conformance matrix before mutual release activation",
+              "aosCapabilityNeeded": "conformance matrix",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.conformance-mutual-release",
+              "securityBoundary": "supported releases remain empty",
+              "status": "accepted",
+              "maturity": "specified"
+            }
+          }
+        },
+        {
+          "contains": {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:durable-idempotency-revisions",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "fence duplicate external effects by durable revision",
+              "aosCapabilityNeeded": "idempotency and revisions",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.idempotency-revisions",
+              "securityBoundary": "no external effect execution",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          }
+        },
+        {
+          "contains": {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:fallback-epoch-reconciliation",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "fence fallback epoch revision conflict and reconciliation",
+              "aosCapabilityNeeded": "fallback reconciliation planning",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.fallback-fencing",
+              "securityBoundary": "no fallback activation",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          }
+        },
+        {
+          "contains": {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:knowledge-compatibility",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "compare public knowledge compatibility metadata",
+              "aosCapabilityNeeded": "knowledge compatibility metadata",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.knowledge-compatibility",
+              "securityBoundary": "no body or private knowledge access",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          }
+        },
+        {
+          "contains": {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:portable-checkpoint-readiness",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "evaluate portable checkpoint readiness",
+              "aosCapabilityNeeded": "portable checkpoint",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.checkpoint-readiness",
+              "securityBoundary": "read-only readiness",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          }
+        },
+        {
+          "contains": {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:projection-import-truth-ownership",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "project import fields without replacing operational truth",
+              "aosCapabilityNeeded": "projection import ownership",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.projection-ownership",
+              "securityBoundary": "operational truth remains external",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          }
+        },
+        {
+          "contains": {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:release-manifest-readback",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "compare public release manifest and compatibility readback",
+              "aosCapabilityNeeded": "public release manifest readback",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.release-manifest-readback",
+              "securityBoundary": "offline read-only only",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          }
+        },
+        {
+          "contains": {
+            "const": {
+              "schemaVersion": "tcrn.public-aos-requirements.v1",
+              "requirementId": "aos-requirement:trusted-role-actor-binding",
+              "discoveredInPhase": "P7-C",
+              "workflowBehavior": "bind trusted role and actor assertions",
+              "aosCapabilityNeeded": "trusted actor binding",
+              "protocolVersion": 1,
+              "requiredForMode": "offline_reference",
+              "acceptanceFixture": "fixture.trusted-role-actor",
+              "securityBoundary": "no credential or live identity lookup",
+              "status": "candidate",
+              "maturity": "fixture_verified"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
