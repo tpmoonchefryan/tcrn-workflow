@@ -3,7 +3,6 @@
 
 import { createHash } from "node:crypto";
 import { lstat, writeFile } from "node:fs/promises";
-import { stripTypeScriptTypes } from "node:module";
 import { dirname, extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -39,6 +38,7 @@ import {
   withExclusiveOutputSession,
 } from "./lib/safe-io.mjs";
 import { installNoNetworkGuard } from "./no-network.mjs";
+import { ScopedStripTypesError, stripTypesWithScopedExperimentalWarning } from "./lib/scoped-strip-types.mjs";
 
 installNoNetworkGuard();
 
@@ -121,6 +121,9 @@ function run(executable, arguments_, options = {}) {
       `${executable} ${arguments_.join(" ")}\n${result.stdout ?? ""}${result.stderr ?? ""}`,
     );
   }
+  if ((result.stderr ?? "").trim() !== "") {
+    fail("COMMAND_UNEXPECTED_STDERR", `${executable} ${arguments_.join(" ")}\n${result.stderr}`);
+  }
   return raw ? result.stdout : result.stdout.trim();
 }
 
@@ -143,6 +146,8 @@ async function sourceRecords() {
 
 async function verifyRuntime() {
   assertion(process.version === "v24.16.0", "RUNTIME_NODE_VERSION", process.version);
+  const warningFilters = process.execArgv.filter((argument) => argument.startsWith("--disable-warning="));
+  assertion(warningFilters.length === 0, "RUNTIME_WARNING_FILTER_FORBIDDEN", warningFilters.join(","));
   const userAgent = process.env.npm_config_user_agent ?? "";
   assertion(userAgent.startsWith("pnpm/11.3.0 "), "RUNTIME_PNPM_VERSION", userAgent || "missing");
   return success("RUNTIME_VERIFIED", { node: process.version, pnpm: "11.3.0" });
@@ -214,7 +219,7 @@ async function typecheck() {
   const files = (await walkFiles()).filter((path) => path.endsWith(".ts"));
   for (const path of files) {
     const content = await readText(path);
-    stripTypeScriptTypes(content, { mode: "transform", sourceMap: false });
+    stripTypesWithScopedExperimentalWarning(content, { mode: "transform", sourceMap: false });
     assertion(
       !/function\s+\w+\s*\([^)]*\)\s*\{/u.test(content),
       "TYPECHECK_RETURN_TYPE_REQUIRED",
@@ -233,7 +238,7 @@ async function build() {
   const files = (await walkFiles()).filter((path) => path.endsWith(".ts"));
   for (const path of files) {
     const source = await readText(path);
-    const output = stripTypeScriptTypes(source, { mode: "transform", sourceMap: false });
+    const output = stripTypesWithScopedExperimentalWarning(source, { mode: "transform", sourceMap: false });
     const target = toPosixPath(relative(repositoryRoot, path)).replace(/\.ts$/u, ".js");
     await safeWriteOutput(repositoryRoot, `dist/build/${target}`, `${output.replace(/\n*$/u, "")}\n`);
   }
@@ -1032,6 +1037,7 @@ async function verifyLifecycle() {
 
 async function verifyOfflineBoundary() {
   const guardFiles = new Set(["scripts/no-network.mjs", "tests/offline-boundary.test.mjs"]);
+  const localUnixSocketTest = "tests/output-session-lifecycle.test.mjs";
   const modules = [
     "node:" + "http",
     "node:" + "https",
@@ -1047,7 +1053,8 @@ async function verifyOfflineBoundary() {
     const content = await readText(path);
     if (!guardFiles.has(label)) {
       for (const moduleName of modules) {
-        if (content.includes(`\"${moduleName}\"`) || content.includes(`'${moduleName}'`)) {
+        const localUnixSocketImport = label === localUnixSocketTest && moduleName === modules[2];
+        if (!localUnixSocketImport && (content.includes(`\"${moduleName}\"`) || content.includes(`'${moduleName}'`))) {
           findings.push(`NETWORK_MODULE:${label}:${moduleName}`);
         }
       }
@@ -1337,7 +1344,7 @@ const handlers = {
 };
 
 function errorReason(error) {
-  if (error instanceof TaskError || error instanceof BoundaryError || error instanceof ProtocolProofError || error instanceof DependencyGraphError) {
+  if (error instanceof TaskError || error instanceof BoundaryError || error instanceof ProtocolProofError || error instanceof DependencyGraphError || error instanceof ScopedStripTypesError) {
     return error.reasonCode;
   }
   return "TASK_INTERNAL_ERROR";
@@ -1396,10 +1403,8 @@ async function invoke(name) {
 }
 
 try {
-  await withExclusiveOutputSession(repositoryRoot, async () => {
-    const result = await invoke(command);
-    process.stdout.write(`${JSON.stringify({ ok: true, command, ...result })}\n`);
-  });
+  const result = await withExclusiveOutputSession(repositoryRoot, async () => invoke(command));
+  process.stdout.write(`${JSON.stringify({ ok: true, command, ...result })}\n`);
 } catch (error) {
   process.stderr.write(`${JSON.stringify({ ok: false, command, reasonCode: errorReason(error), error: error.message })}\n`);
   process.exitCode = 1;

@@ -15,6 +15,7 @@
     "tcrn-workflow-release-verify": "scripts/verify-release-trust.mjs"
   },
   "scripts": {
+    "generate:proof-artifacts": "node scripts/generate-proof-artifacts.mjs",
     "archive": "node scripts/task.mjs archive",
     "build": "node scripts/task.mjs build",
     "clean": "node scripts/task.mjs clean",

@@ -90,7 +90,7 @@ test("accepted P1 basis requires a clean status", () => {
   );
 });
 
-test("exclusive output session fails closed when its repository lock already exists", async (context) => {
+test("exclusive output session preserves a foreign lock whose identity is outside recovery policy", async (context) => {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), "tcrn-output-lock-")));
   context.after(() => rm(temporary, { recursive: true, force: true }));
   const gitDirectory = resolve(temporary, ".git");
@@ -98,7 +98,7 @@ test("exclusive output session fails closed when its repository lock already exi
   await mkdir(resolve(gitDirectory, "tcrn-workflow-output.lock"));
   await assert.rejects(
     withExclusiveOutputSession(temporary, async () => undefined),
-    (error) => error.reasonCode === "OUTPUT_SESSION_LOCKED",
+    (error) => error.reasonCode === "OUTPUT_SESSION_RECOVERY_IDENTITY",
   );
 });
 
