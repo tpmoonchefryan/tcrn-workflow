@@ -2521,6 +2521,72 @@ test("a concurrent real task entrypoint preserves its live command-wide owner an
   await assertTaskResidueClean(root);
 });
 
+test("a real task entrypoint does not let an inherited detached worker pipe strand command-wide release", async (context) => {
+  const holderSource = [
+    'import { spawn } from "node:child_process";',
+    'import { writeFileSync } from "node:fs";',
+    'import test from "node:test";',
+    'const holder = spawn(process.execPath, ["--eval", "setTimeout(() => {}, 1_000);"], { detached: true, stdio: "inherit" });',
+    'holder.unref();',
+    'writeFileSync(process.env.TCRN_TASK_PIPE_HOLDER_PID_PATH, String(holder.pid) + "\\n");',
+    'test("the test controller may exit while a detached inherited pipe holder remains", () => {});',
+    "",
+  ].join("\n");
+  const current = await taskEntrypointFixture(context, holderSource);
+  const currentHolderPath = resolve(current, "pipe-holder.pid");
+  const currentStarted = Date.now();
+  const currentResult = await startTaskEntrypoint(current, {
+    TCRN_TASK_PIPE_HOLDER_PID_PATH: currentHolderPath,
+  }).result;
+  const currentElapsed = Date.now() - currentStarted;
+  assert.equal(currentResult.code, 0, currentResult.stderr);
+  assert.equal(currentResult.signal, null);
+  assert.equal(currentResult.stderr, "");
+  assert.equal(JSON.parse(currentResult.stdout).reasonCode, "TESTS_VERIFIED");
+  assert.ok(currentElapsed < 1_800, "controller pipe isolated from detached holder: " + currentElapsed + "ms");
+  const currentHolder = Number(await readFile(currentHolderPath, "utf8"));
+  assert.ok(Number.isSafeInteger(currentHolder) && currentHolder > 0);
+  await waitForDeadPid(currentHolder);
+  await assertTaskResidueClean(current);
+
+  // Reconstruct the rejected bootstrap's inherited-stream boundary in a
+  // second clean fixture. Its task-facing pipe remains open until the
+  // detached holder exits, so the outer entrypoint cannot reach terminal
+  // success even though the recorded controller group is already gone.
+  const rejected = await taskEntrypointFixture(context, holderSource);
+  const rejectedBootstrapPath = resolve(rejected, "scripts/test-controller-bootstrap.mjs");
+  const fixedBootstrap = await readFile(rejectedBootstrapPath, "utf8");
+  assert.equal(fixedBootstrap.includes('  stdio: ["ignore", "pipe", "pipe"],'), true, "isolated stdio fixture boundary");
+  assert.equal(fixedBootstrap.includes('testController.once("exit", (code, signal) => resolveResult({ code, signal }));'), true, "exit fixture boundary");
+  const rejectedBootstrap = fixedBootstrap
+    .replace('  stdio: ["ignore", "pipe", "pipe"],', '  stdio: "inherit",')
+    .replace('testController.stdout.on("data", (chunk) => process.stdout.write(chunk));\n', '')
+    .replace('testController.stderr.on("data", (chunk) => process.stderr.write(chunk));\n', '')
+    .replace('testController.once("exit", (code, signal) => resolveResult({ code, signal }));', 'testController.once("close", (code, signal) => resolveResult({ code, signal }));')
+    .replace('testController.stdout.destroy();\ntestController.stderr.destroy();\n', '');
+  await writeFile(rejectedBootstrapPath, rejectedBootstrap, { mode: 0o600 });
+  runGit(rejected, ["add", "scripts/test-controller-bootstrap.mjs"]);
+  runGit(rejected, ["commit", "--quiet", "-m", "rejected inherited-stream bootstrap"]);
+  const rejectedHolderPath = resolve(rejected, "pipe-holder.pid");
+  const rejectedRun = startTaskEntrypoint(rejected, {
+    TCRN_TASK_PIPE_HOLDER_PID_PATH: rejectedHolderPath,
+  });
+  await waitForPath(rejectedHolderPath, rejectedRun.result);
+  const early = await Promise.race([
+    rejectedRun.result.then(() => "settled"),
+    new Promise((resolveDelay) => setTimeout(() => resolveDelay("pending"), 300)),
+  ]);
+  assert.equal(early, "pending", "rejected inherited pipe must delay terminal task close");
+  const rejectedHolder = Number(await readFile(rejectedHolderPath, "utf8"));
+  await waitForDeadPid(rejectedHolder);
+  const rejectedResult = await rejectedRun.result;
+  assert.equal(rejectedResult.code, 0, rejectedResult.stderr);
+  assert.equal(rejectedResult.signal, null);
+  assert.equal(rejectedResult.stderr, "");
+  assert.equal(JSON.parse(rejectedResult.stdout).reasonCode, "TESTS_VERIFIED");
+  await assertTaskResidueClean(rejected);
+});
+
 test("a passing detached test that writes stderr fails the real task entrypoint cleanly", async (context) => {
   const root = await taskEntrypointFixture(context, [
     'import test from "node:test";',
@@ -2555,6 +2621,36 @@ test("a passing detached test that writes stderr fails the real task entrypoint 
     command: "test",
     ok: false,
     reasonCode: "COMMAND_UNEXPECTED_STDERR",
+    error: receipt.error,
+  });
+  await assertTaskResidueClean(root);
+});
+
+test("a nonzero detached controller propagates COMMAND_FAILED and releases the real task entrypoint cleanly", async (context) => {
+  const root = await taskEntrypointFixture(context, [
+    'import test from "node:test";',
+    'test("the detached controller fails", () => { throw new Error("test-only nonzero controller failure"); });',
+    "",
+  ].join("\n"));
+  const result = await startTaskEntrypoint(root).result;
+  assert.equal(result.code, 1);
+  assert.equal(result.signal, null);
+  assert.equal(result.stdout, "");
+  const lines = result.stderr.trimEnd().split("\n");
+  assert.equal(lines.length, 1, result.stderr);
+  const receipt = JSON.parse(lines[0]);
+  assert.deepEqual({ ok: receipt.ok, command: receipt.command, reasonCode: receipt.reasonCode }, {
+    ok: false,
+    command: "test",
+    reasonCode: "COMMAND_FAILED",
+  });
+  assert.equal(receipt.error.includes("test-only nonzero controller failure"), true);
+  assert.equal(result.stderr.includes("TESTS_VERIFIED"), false);
+  assert.deepEqual(JSON.parse(await readFile(resolve(root, "dist/evidence/p1/test.json"), "utf8")), {
+    schemaVersion: "tcrn.command-evidence.v1",
+    command: "test",
+    ok: false,
+    reasonCode: "COMMAND_FAILED",
     error: receipt.error,
   });
   await assertTaskResidueClean(root);
