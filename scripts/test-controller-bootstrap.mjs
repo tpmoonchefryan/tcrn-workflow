@@ -105,12 +105,28 @@ if (!await waitForDurableGroupBinding()) {
 // dead outer task must remain unrecoverable until this group exits.
 await waitForTestControllerRunGate();
 
+// Keep the test controller's streams private to this bootstrap.  With
+// `inherit`, a worker (or an orphan it created) can retain the bootstrap's
+// task-facing pipe after the controller exits.  That prevents the outer task
+// from observing the bootstrap close and strands its command-wide session.
+// The bootstrap forwards controller output while it is alive, but its own
+// streams are never inherited by controller descendants.
 const testController = spawn(process.execPath, testArguments, {
-  stdio: "inherit",
+  stdio: ["ignore", "pipe", "pipe"],
   env: { ...process.env, TCRN_TEST_CONTROLLER_PROCESS_GROUP: String(process.pid) },
 });
+testController.stdout.on("data", (chunk) => process.stdout.write(chunk));
+testController.stderr.on("data", (chunk) => process.stderr.write(chunk));
 const result = await new Promise((resolveResult, rejectResult) => {
   testController.once("error", rejectResult);
-  testController.once("close", (code, signal) => resolveResult({ code, signal }));
+  // The controller's `close` waits for its inherited descriptors to close.
+  // A detached descendant can retain those descriptors after the controller
+  // has exited, which is outside this command's recorded process group.  The
+  // outer task independently waits for the recorded group before releasing
+  // its output session; use `exit` here so an unrelated pipe holder cannot
+  // deadlock that release boundary.
+  testController.once("exit", (code, signal) => resolveResult({ code, signal }));
 });
+testController.stdout.destroy();
+testController.stderr.destroy();
 process.exitCode = result.code ?? (result.signal ? 1 : 1);

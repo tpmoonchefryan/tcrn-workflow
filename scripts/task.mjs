@@ -153,6 +153,10 @@ async function runDetachedTestController(arguments_, extraEnvironment) {
   child.stderr.on("data", (chunk) => stderr.push(chunk));
   const result = new Promise((resolveResult, rejectResult) => {
     child.once("error", rejectResult);
+    // The bootstrap keeps controller streams private, so no controller
+    // descendant can retain these task-facing descriptors. Waiting for close
+    // preserves complete stdout/stderr capture before zero-stderr validation
+    // and command-wide output-session release.
     child.once("close", (code, signal) => resolveResult({ code, signal }));
   });
   if (process.env.TCRN_TEST_BIND_PROCESS_GROUP_FAILURE === "1") {
