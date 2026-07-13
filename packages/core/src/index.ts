@@ -84,6 +84,23 @@ export type {
   WorkspaceState,
 } from "./workspace.js";
 export {
+  PUBLIC_AOS_REQUIREMENTS_REASON_CODES,
+  PUBLIC_AOS_REQUIREMENTS_READBACK_VERSION,
+  PUBLIC_AOS_REQUIREMENTS_VERSION,
+  publicAosRequirementsValidReason,
+  PublicAosRequirementsError,
+  parsePublicAosRequirementsLedger,
+  publicAosRequirementsReadback,
+  validatePublicAosRequirementsLedger,
+} from "./public-aos-requirements.js";
+export type {
+  PublicAosRequirement,
+  PublicAosRequirementMaturity,
+  PublicAosRequirementsLedger,
+  PublicAosRequirementsReasonCode,
+  PublicAosRequirementStatus,
+} from "./public-aos-requirements.js";
+export {
   ARTIFACT_ARCHIVE_SCHEMA_VERSION,
   ARTIFACT_LIFECYCLE_VERSION,
   ARTIFACT_LIMITS,

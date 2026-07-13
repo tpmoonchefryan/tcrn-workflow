@@ -52,6 +52,9 @@ import {
   validateCompatibilityRequest,
   unavailableCompatibilityCapability,
   readCompatibilityAdmissionReceipt,
+  parsePublicAosRequirementsLedger,
+  publicAosRequirementsReadback,
+  publicAosRequirementsValidReason,
 } from "../../core/src/index.js";
 import type {
   CodexAdapterHostContext,
@@ -196,6 +199,11 @@ function compatibilityJson(value: string | undefined, name: string): unknown {
   }
 }
 
+function aosRequirementsJson(value: string | undefined, name: string): string {
+  if (typeof value !== "string") fail("CLI_ARGUMENT_MALFORMED", name);
+  return value;
+}
+
 async function withLease<T>(workspace: string, at: string, operation: (lease: Awaited<ReturnType<typeof acquireWorkspaceLease>>) => Promise<T>): Promise<T> {
   const lease = await acquireWorkspaceLease(workspace, { now: at });
   try {
@@ -222,6 +230,17 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     fail("CLI_COMMAND_REQUIRED", "A governed command is required");
   }
   const rest = arguments_.slice(1);
+  if (command === "aos-requirements-validate" || command === "aos-requirements-readback") {
+    const values = parseArguments(rest, ["ledger"]);
+    required(values, ["ledger"]);
+    const ledger = parsePublicAosRequirementsLedger(aosRequirementsJson(values.ledger, "ledger"));
+    if (command === "aos-requirements-validate") {
+      io.write(canonicalJson({ reasonCode: publicAosRequirementsValidReason, ledgerDigest: ledger.ledgerDigest, requirements: ledger.requirements.length }));
+    } else {
+      io.write(canonicalJson(publicAosRequirementsReadback(ledger)));
+    }
+    return;
+  }
   if (command === "compatibility-validate") {
     const values = parseArguments(rest, ["request"]);
     required(values, ["request"]);

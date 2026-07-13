@@ -258,6 +258,7 @@ async function runTests({
   p6AdapterOnly = false,
   p7Only = false,
   p7CompatibilityOnly = false,
+  p7AosRequirementsOnly = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -273,7 +274,8 @@ async function runTests({
     .filter((path) => !p6Only || ["tests/p6-context-router.test.mjs", "tests/p6-codex-adapter.test.mjs"].includes(path))
     .filter((path) => !p6AdapterOnly || path === "tests/p6-codex-adapter.test.mjs")
     .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
-    .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs");
+    .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
+    .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs");
   run(process.execPath, ["--test", ...tests], {
     env: {
       NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -299,6 +301,8 @@ async function runTests({
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
                   : p7CompatibilityOnly
                     ? "P7_COMPATIBILITY_MODES_TESTS_VERIFIED"
+                    : p7AosRequirementsOnly
+                      ? "P7_PUBLIC_AOS_REQUIREMENTS_TESTS_VERIFIED"
                   : p7Only
                     ? "P7_CANONICAL_EXCHANGE_TESTS_VERIFIED"
                   : p4Only
@@ -748,6 +752,31 @@ async function verifyP7Compatibility() {
   });
 }
 
+async function verifyP7AosRequirements() {
+  const tests = await runTests({ p7AosRequirementsOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p7-public-aos-requirements-ledger.json");
+  const schemaPath = resolve(repositoryRoot, "packages/core/schema/public-aos-requirements-v1.schema.json");
+  const specPath = resolve(repositoryRoot, "packages/core/spec/public-aos-requirements-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.public-aos-requirements.v1" && fixture.requirements.length === 8, "P7_AOS_REQUIREMENTS_FIXTURE");
+  assertion(fixture.requirements.every((entry) => ["specified", "fixture_verified"].includes(entry.maturity)), "P7_AOS_REQUIREMENTS_MATURITY");
+  assertion(fixture.requirements.every((entry) => ["candidate", "accepted", "superseded"].includes(entry.status)), "P7_AOS_REQUIREMENTS_STATUS");
+  return success("P7_PUBLIC_AOS_REQUIREMENTS_VERIFIED", {
+    tests: tests.reasonCode,
+    requirements: fixture.requirements.length,
+    hostileVectors: 11,
+    scalarParityVectors: 6,
+    cliNegativeVectors: 1,
+    propertyPermutations: 64,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    liveCompatibility: false,
+    runtimeMutation: false,
+    supportedReleaseClaims: false,
+  });
+}
+
 function octal(value, length) {
   return `${value.toString(8).padStart(length - 1, "0")}\0`;
 }
@@ -1083,6 +1112,7 @@ const commandContracts = {
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
   p7: { exit: 0, reasonCode: "P7_CANONICAL_EXCHANGE_VERIFIED" },
   "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
+  "p7-aos-requirements": { exit: 0, reasonCode: "P7_PUBLIC_AOS_REQUIREMENTS_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
@@ -1288,6 +1318,7 @@ const handlers = {
   "p6-adapter": verifyP6Adapter,
   p7: verifyP7,
   "p7-compatibility": verifyP7Compatibility,
+  "p7-aos-requirements": verifyP7AosRequirements,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
@@ -1331,7 +1362,7 @@ function evidencePhase(name) {
   if (name === "p6-adapter") {
     return "p6";
   }
-  if (name === "p7" || name === "p7-compatibility") {
+  if (name === "p7" || name === "p7-compatibility" || name === "p7-aos-requirements") {
     return "p7";
   }
   if (name === "rc1") {
