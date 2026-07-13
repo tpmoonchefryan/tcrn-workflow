@@ -155,6 +155,8 @@ export interface CanonicalExchangeWriteOptions {
 
 export interface CanonicalExchangeReadOptions {
   readonly afterLstatForTest?: (path: string) => Promise<void>;
+  readonly afterDescriptorOpenForTest?: (path: string) => Promise<void>;
+  readonly afterDescriptorReadForTest?: (path: string, consumedBytes: number) => Promise<void>;
   readonly beforeChunkOpenForTest?: (path: string) => Promise<void>;
 }
 
@@ -427,7 +429,21 @@ async function readBound(path: string, maximumBytes: number, options: CanonicalE
   try {
     const opened = await handle.stat();
     if (!opened.isFile() || opened.nlink !== 1 || !sameIdentity(before, opened) || opened.size > maximumBytes) fail("EXCHANGE_CHANGED", path);
-    const bytes = await handle.readFile();
+    await options.afterDescriptorOpenForTest?.(path);
+    const chunks: Buffer[] = [];
+    let consumedBytes = 0;
+    while (true) {
+      const remaining = maximumBytes + 1 - consumedBytes;
+      if (remaining <= 0) fail("EXCHANGE_LIMIT_EXCEEDED", path);
+      const buffer = Buffer.allocUnsafe(Math.min(65_536, remaining));
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
+      if (bytesRead === 0) break;
+      consumedBytes += bytesRead;
+      await options.afterDescriptorReadForTest?.(path, consumedBytes);
+      if (consumedBytes > maximumBytes) fail("EXCHANGE_LIMIT_EXCEEDED", path);
+      chunks.push(Buffer.from(buffer.subarray(0, bytesRead)));
+    }
+    const bytes = Buffer.concat(chunks, consumedBytes);
     const after = await handle.stat();
     const named = await lstat(path).catch(() => fail("EXCHANGE_CHANGED", path));
     if (!sameIdentity(opened, after) || !sameIdentity(after, named) || bytes.length !== after.size || bytes.length > maximumBytes) fail("EXCHANGE_CHANGED", path);

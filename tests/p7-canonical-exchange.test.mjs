@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { access, link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { access, appendFile, link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
@@ -505,6 +505,54 @@ test("reader enforces directory and declared aggregate budgets before chunk open
     assert.equal(readback.totalBytes, CANONICAL_EXCHANGE_LIMITS.maximumChunkBytes);
   } finally { await rm(maximumBundle, { recursive: true, force: true }); }
   assert.equal(vectors.length + 2, fixture.resourceBudgetCases);
+});
+
+test("reader bounds every descriptor to maximum plus one bytes across stable and growing inode states", async () => {
+  const maximum = CANONICAL_EXCHANGE_LIMITS.maximumChunkBytes;
+  const maximumChunk = textChunk("maximum.txt", "x".repeat(maximum));
+  const { bytes: maximumBytes, ...maximumInput } = maximumChunk;
+  const base = request();
+  const maximumRequest = {
+    ...base,
+    chunks: [maximumInput],
+    exchange: { ...base.exchange, entries: [{ path: maximumChunk.logicalPath, mediaType: maximumChunk.mediaType, size: maximumBytes.length, sha256: sha256(maximumBytes) }] },
+  };
+  const bundle = await temporary("descriptor-read-bound");
+  const output = join(bundle, "exchange-bundle");
+  try {
+    const stable = await writeCanonicalExchangeBundle(output, maximumRequest);
+    const stablePath = join(output, stable.manifest.chunks[0].storedPath);
+    const exactMaximum = [];
+    await readCanonicalExchangeBundle(output, { afterDescriptorReadForTest: async (path, consumed) => { if (path === stablePath) exactMaximum.push(consumed); } });
+    assert.equal(exactMaximum.at(-1), maximum);
+    assert.equal(Math.max(...exactMaximum), maximum);
+
+    await writeFile(stablePath, Buffer.alloc(maximum + 1, 0x78));
+    let preOpenReads = 0;
+    await reasonAsync("EXCHANGE_LIMIT_EXCEEDED", () => readCanonicalExchangeBundle(output, { afterDescriptorOpenForTest: async (path) => { if (path === stablePath) preOpenReads += 1; } }));
+    assert.equal(preOpenReads, 0);
+
+    await writeFile(stablePath, Buffer.alloc(1, 0x78));
+    const sparseReads = [];
+    await reasonAsync("EXCHANGE_LIMIT_EXCEEDED", () => readCanonicalExchangeBundle(output, {
+      afterDescriptorOpenForTest: async (path) => { if (path === stablePath) await appendFile(path, Buffer.alloc(maximum + 1, 0x78)); },
+      afterDescriptorReadForTest: async (path, consumed) => { if (path === stablePath) sparseReads.push(consumed); },
+    }));
+    assert.equal(sparseReads.at(-1), maximum + 1);
+    assert.equal(Math.max(...sparseReads), maximum + 1);
+
+    await writeFile(stablePath, Buffer.alloc(1, 0x78));
+    const continuousReads = [];
+    await reasonAsync("EXCHANGE_LIMIT_EXCEEDED", () => readCanonicalExchangeBundle(output, {
+      afterDescriptorReadForTest: async (path, consumed) => {
+        if (path !== stablePath) return;
+        continuousReads.push(consumed);
+        if (consumed <= maximum) await appendFile(path, Buffer.alloc(Math.min(65_536, maximum + 1 - consumed), 0x78));
+      },
+    }));
+    assert.equal(continuousReads.at(-1), maximum + 1);
+    assert.equal(Math.max(...continuousReads), maximum + 1);
+  } finally { await rm(bundle, { recursive: true, force: true }); }
 });
 
 async function readdirSafe(path) {

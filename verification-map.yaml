@@ -765,7 +765,7 @@
         "tests/p7-canonical-exchange.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "4fff9eef2f3580df702e96dff423a15e81a6577f229db9459c721c89e37076e8",
+      "fixtureDigest": "4847474f220c037f51807c2f6527a315ee6c382de7bfc1675c8030607ffcdd1e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
