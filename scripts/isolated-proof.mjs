@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { lstat, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -27,6 +27,9 @@ function run(executable, arguments_, cwd, { acceptedStatuses = [0], env = proces
   const result = spawnSync(executable, arguments_, { cwd, encoding: "utf8", env });
   if (!acceptedStatuses.includes(result.status)) {
     throw new Error(`ISOLATED_COMMAND_FAILED:${executable} ${arguments_.join(" ")}\n${result.stdout}${result.stderr}`);
+  }
+  if ((result.stderr ?? "").trim() !== "") {
+    throw new Error(`ISOLATED_COMMAND_UNEXPECTED_STDERR:${executable} ${arguments_.join(" ")}\n${result.stderr}`);
   }
   return result.stdout.trim();
 }
@@ -66,11 +69,11 @@ if (!/^https:\/\/github\.com\/[^/]+\/tcrn-workflow\.git$/u.test(origin)) {
 const temporary = await mkdtemp(join(tmpdir(), "tcrn-isolated-proof-"));
 const checkout = resolve(temporary, "checkout");
 try {
-  git(["clone", "--local", "--no-hardlinks", "--no-checkout", repositoryRoot, checkout], repositoryRoot);
+  git(["clone", "--quiet", "--local", "--no-hardlinks", "--no-checkout", repositoryRoot, checkout], repositoryRoot);
   git(["remote", "set-url", "origin", origin], checkout);
-  git(["checkout", "--detach", commit], checkout);
+  git(["checkout", "--quiet", "--detach", commit], checkout);
   git(["branch", "-f", "main", commit], checkout);
-  git(["checkout", "main"], checkout);
+  git(["checkout", "--quiet", "main"], checkout);
   git(["update-ref", "-d", "refs/remotes/origin/main"], checkout, { acceptedStatuses: [0, 1] });
   git(["symbolic-ref", "-d", "refs/remotes/origin/HEAD"], checkout, { acceptedStatuses: [0, 1] });
   git(["config", "--unset-all", "branch.main.remote"], checkout, { acceptedStatuses: [0, 1, 5] });
@@ -97,12 +100,20 @@ try {
   run("pnpm", ["install", "--offline", "--frozen-lockfile", "--ignore-scripts"], checkout, {
     env: checkoutEnvironment,
   });
-  const proof = run("pnpm", ["verify:p1"], checkout, {
+  const proof = run("pnpm", ["--silent", "verify:p1"], checkout, {
     env: checkoutEnvironment,
   });
   const terminal = JSON.parse(proof.split("\n").filter(Boolean).at(-1));
   if (!terminal.ok || terminal.reasonCode !== "P1_VERIFIED") {
     throw new Error(`ISOLATED_P1_REASON:${JSON.stringify(terminal)}`);
+  }
+  try {
+    await lstat(resolve(checkout, ".git/tcrn-workflow-output.lock"));
+    throw new Error("ISOLATED_OUTPUT_LOCK_RETAINED");
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
   }
 
   const map = await readJson(resolve(checkout, "verification-map.yaml"));
