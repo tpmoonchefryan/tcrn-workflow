@@ -129,9 +129,16 @@ See `docs/architecture/root-model.md` and
 `docs/release-trust/external-release-trust-root-v1.md` for the bootstrap trust
 boundary.
 
-`pnpm verify:isolated` copies the exact current Git basis into a disposable
-checkout, retains the canonical origin without contacting it, runs the complete
-P1 proof, validates declared evidence, and deletes the checkout.
+`pnpm verify:isolated` requires `TCRN_DEPENDENCY_MATERIALIZATION_ROOT` to name
+an external, lockfile-bound dependency materialization. Build it once with
+`node scripts/dependency-materialization.mjs --mode fetch --materialization
+<absolute-directory> --allow-network-fetch`; that explicit path is the only
+authorized registry-read phase. The isolated proof validates the manifest,
+copies its exact store inventory into a newly absent dedicated store, then
+installs offline with the frozen lockfile and ignored lifecycle scripts before
+running P1. It copies the exact current Git basis into a disposable checkout,
+retains the canonical origin without contacting it, validates declared
+evidence, and deletes the checkout.
 
 An accepted P1 proof runs from a clean Git checkout and holds an atomic
 repository-local output lock for the whole command. All reset and write helpers

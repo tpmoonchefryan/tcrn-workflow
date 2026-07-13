@@ -17,9 +17,13 @@ const generatedPaths = [
 ];
 const routeAdditions = new Set([
   "scripts/generate-proof-artifacts.mjs",
+  "scripts/dependency-materialization.mjs",
+  "scripts/lib/dependency-materialization.mjs",
   "scripts/lib/proof-artifacts.mjs",
   "scripts/lib/scoped-strip-types.mjs",
+  "scripts/test-controller-bootstrap.mjs",
   "tests/output-session-lifecycle.test.mjs",
+  "tests/dependency-materialization.test.mjs",
   "tests/proof-artifact-generator.test.mjs",
 ]);
 const claimFields = [
