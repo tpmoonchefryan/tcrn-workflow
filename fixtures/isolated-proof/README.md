@@ -1,13 +1,16 @@
 # Isolated P1 proof fixture
 
-`pnpm verify:isolated` creates a disposable local clone with copied objects, no
-alternates or hardlinks, the exact current commit and tree, and the canonical
-origin URL retained without contacting it. It removes clone-only tracking refs,
-installs the exact frozen dependency graph from the local pnpm store using
-`--offline --frozen-lockfile --ignore-scripts`, runs the full P1 command with
-the pinned Node/pnpm pair and Node process network guard, verifies every declared
-P1 evidence path, writes one ignored receipt to `dist/evidence/p1/isolated.json`,
-and deletes the disposable checkout.
+`pnpm verify:isolated` requires an external
+`TCRN_DEPENDENCY_MATERIALIZATION_ROOT`. Its manifest binds every frozen lock
+identity/integrity and the exact pnpm-store file inventory. The proof validates
+that manifest, copies it to a newly absent dedicated store, then creates a
+disposable local clone with copied objects, no alternates or hardlinks, the
+exact current commit and tree, and the canonical origin URL retained without
+contacting it. It removes clone-only tracking refs, installs only from that
+dedicated store using `--offline --frozen-lockfile --ignore-scripts`, runs the
+full P1 command with the pinned Node/pnpm pair and Node process network guard,
+verifies every declared P1 evidence path, writes one ignored receipt to
+`dist/evidence/p1/isolated.json`, and deletes the disposable checkout.
 
 The disposable checkout is clean and exclusive. The full command holds one
 atomic repository-local output lock shared by reset and write operations. It

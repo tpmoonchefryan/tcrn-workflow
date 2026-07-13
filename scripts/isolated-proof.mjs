@@ -15,6 +15,7 @@ import {
   safeWriteOutput,
   withExclusiveOutputSession,
 } from "./lib/safe-io.mjs";
+import { populateDependencyStore, verifyDependencyMaterialization } from "./lib/dependency-materialization.mjs";
 import "./no-network.mjs";
 
 function run(executable, arguments_, cwd, { acceptedStatuses = [0], env = process.env } = {}) {
@@ -68,6 +69,10 @@ if (!/^https:\/\/github\.com\/[^/]+\/tcrn-workflow\.git$/u.test(origin)) {
 
 const temporary = await mkdtemp(join(tmpdir(), "tcrn-isolated-proof-"));
 const checkout = resolve(temporary, "checkout");
+const dependencyMaterialization = process.env.TCRN_DEPENDENCY_MATERIALIZATION_ROOT;
+if (typeof dependencyMaterialization !== "string" || !dependencyMaterialization.startsWith("/")) {
+  throw new Error("ISOLATED_DEPENDENCY_MATERIALIZATION_REQUIRED");
+}
 try {
   git(["clone", "--quiet", "--local", "--no-hardlinks", "--no-checkout", repositoryRoot, checkout], repositoryRoot);
   git(["remote", "set-url", "origin", origin], checkout);
@@ -97,7 +102,10 @@ try {
     npm_config_fund: "false",
     npm_config_offline: "true",
   };
-  run("pnpm", ["install", "--offline", "--frozen-lockfile", "--ignore-scripts"], checkout, {
+  const materialization = await verifyDependencyMaterialization(checkout, dependencyMaterialization);
+  const store = resolve(temporary, "pnpm-store");
+  await populateDependencyStore(checkout, dependencyMaterialization, store);
+  run("pnpm", ["install", "--offline", "--frozen-lockfile", "--ignore-scripts", "--store-dir", store], checkout, {
     env: checkoutEnvironment,
   });
   const proof = run("pnpm", ["--silent", "verify:p1"], checkout, {
@@ -151,6 +159,11 @@ try {
     node: process.version.slice(1),
     pnpm: "11.3.0",
     dependencyInstall: "offline-frozen-lockfile-ignore-scripts",
+    dependencyMaterialization: {
+      lockSha256: materialization.lockSha256,
+      packages: materialization.packages.length,
+      storeFiles: materialization.store.length,
+    },
     sourceBasisMutated: false,
     checkoutClean: true,
     evidence,

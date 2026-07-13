@@ -11,7 +11,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 
-import { admitLegacyOutputSessionReceipt, readBoundClaim, recoverStaleOutputSessionLock, safeWriteOutput, withExclusiveOutputSession } from "../scripts/lib/safe-io.mjs";
+import { admitLegacyOutputSessionReceipt, bindOutputSessionProcessGroup, readBoundClaim, recoverStaleOutputSessionLock, safeWriteOutput, withExclusiveOutputSession } from "../scripts/lib/safe-io.mjs";
 
 const ownerSchema = "tcrn.output-session-owner.v1";
 async function fixture(context) {
@@ -37,6 +37,28 @@ function lockPath(root) {
 
 function recoveryClaimPath(root) {
   return resolve(root, ".git/.tcrn-workflow-output-recovery-claim");
+}
+
+function acquisitionClaimPath(root) {
+  return resolve(root, ".git/.tcrn-workflow-output-acquisition-claim");
+}
+
+async function sealAcquisitionStage(root, pid = 999999, { sequence = 1, bytes } = {}) {
+  const stagePath = resolve(root, `.git/.tcrn-workflow-output-acquisition-claim.staging-${pid}-${sequence}`);
+  await writeFile(stagePath, "", { mode: 0o600 });
+  const identity = await lstat(stagePath);
+  const value = {
+    schemaVersion: "tcrn.output-session-acquisition-claim.v1",
+    pid,
+    uid: process.getuid(),
+    repositoryPath: root,
+    lockPath: lockPath(root),
+    claimDev: identity.dev,
+    claimIno: identity.ino,
+  };
+  const canonical = `${JSON.stringify(value)}\n`;
+  await writeFile(stagePath, bytes ?? canonical, { mode: 0o600 });
+  return { stagePath, identity, canonical };
 }
 
 async function sealRecoveryClaim(root, pid, overrides = {}) {
@@ -75,7 +97,7 @@ async function receipt(lock) {
 async function sealOwner(lock, pid, extra = {}) {
   const lockMetadata = await lstat(lock);
   const ownerPath = resolve(lock, "owner.json");
-  const base = { schemaVersion: ownerSchema, pid, uid: process.getuid(), lockDev: lockMetadata.dev, lockIno: lockMetadata.ino, ownerDev: 0, ownerIno: 0, ...extra };
+  const base = { schemaVersion: ownerSchema, pid, uid: process.getuid(), lockDev: lockMetadata.dev, lockIno: lockMetadata.ino, ownerDev: 0, ownerIno: 0, processGroup: null, ...extra };
   await writeFile(ownerPath, `${JSON.stringify(base)}\n`, { mode: 0o600 });
   const ownerMetadata = await lstat(ownerPath);
   const sealed = { ...base, ownerDev: ownerMetadata.dev, ownerIno: ownerMetadata.ino };
@@ -129,7 +151,7 @@ async function assertRecoveryStateClean(root) {
   await assert.rejects(lstat(lockPath(root)), { code: "ENOENT" });
   await assert.rejects(lstat(recoveryClaimPath(root)), { code: "ENOENT" });
   const names = await (await import("node:fs/promises")).readdir(resolve(root, ".git"));
-  assert.equal(names.some((name) => name.startsWith(".tcrn-workflow-output-recovery-claim.staging-")), false);
+  assert.equal(names.some((name) => name.startsWith(".tcrn-workflow-output-recovery-claim.staging-") || name.startsWith(".tcrn-workflow-output-acquisition-claim")), false);
 }
 
 const productRoot = resolve(import.meta.dirname, "..");
@@ -157,11 +179,12 @@ async function taskEntrypointFixture(context, testSource) {
   return root;
 }
 
-function startTaskEntrypoint(root) {
+function startTaskEntrypoint(root, extraEnvironment = {}) {
   const environment = {
     ...process.env,
     TCRN_TASK_DESCENDANT_PID_PATH: resolve(root, "descendant.pid"),
     npm_config_user_agent: "pnpm/11.3.0 npm/? node/v24.16.0 darwin arm64",
+    ...extraEnvironment,
   };
   delete environment.NODE_TEST_CONTEXT;
   const child = spawn(process.execPath, [resolve(root, "scripts/task.mjs"), "test"], {
@@ -191,6 +214,19 @@ async function waitForPath(path, diagnostic) {
   assert.fail(`timed out waiting for ${path}${result ? `: ${JSON.stringify(result)}` : ""}`);
 }
 
+async function readJsonWhenReady(path, diagnostic) {
+  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+    try {
+      return JSON.parse(await readFile(path, "utf8"));
+    } catch (error) {
+      if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const result = diagnostic ? await diagnostic : undefined;
+  assert.fail(`timed out reading ${path}${result ? `: ${JSON.stringify(result)}` : ""}`);
+}
+
 async function waitForDeadPid(pid) {
   for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
     try {
@@ -202,6 +238,24 @@ async function waitForDeadPid(pid) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   assert.fail(`timed out waiting for descendant ${pid} to exit`);
+}
+
+async function liveDetachedProcessGroup() {
+  const child = spawn(process.execPath, ["--eval", "setInterval(() => {}, 1000);"], {
+    detached: true,
+    stdio: "ignore",
+  });
+  assert.ok(Number.isSafeInteger(child.pid) && child.pid > 0);
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+  process.kill(-child.pid, 0);
+  return child;
+}
+
+async function stopDetachedProcessGroup(child) {
+  const exited = once(child, "exit");
+  process.kill(-child.pid, "SIGTERM");
+  await exited;
+  await waitForDeadPid(child.pid);
 }
 
 async function assertTaskResidueClean(root) {
@@ -324,7 +378,7 @@ async function rewriteLegacyReceipt(receipt, mutate) {
 async function crashInjectionHarness(root, name, marker, { before = false, partial = false, anchor } = {}) {
   const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
   const source = await readFile(sourcePath, "utf8");
-  const injection = `${partial ? "    await handle.write(\"partial\");\n" : ""}    process.kill(process.pid, \"SIGKILL\");\n`;
+  const injection = `${partial ? "    await handle.write(\"{\\\"schemaVersion\\\":\");\n" : ""}    /* harness crash */ process.kill(process.pid, \"SIGKILL\");\n`;
   assert.equal(source.split(marker).length, 2, name);
   if (anchor) assert.equal(marker.split(anchor).length, 2, name);
   const replacement = anchor ? marker.replace(anchor, `${anchor}${injection}`) : (before ? `${injection}${marker}` : `${marker}${injection}`);
@@ -341,10 +395,10 @@ async function crashInjectionHarness(root, name, marker, { before = false, parti
   assert.equal(signal, "SIGKILL", name);
 }
 
-async function livenessHarness(root, name, marker, prefix = "", code = "EPERM") {
+async function livenessHarness(root, name, marker, prefix = "", code = "EPERM", condition = "true") {
   const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
   const source = await readFile(sourcePath, "utf8");
-  const injection = `    { const error = Object.assign(new Error(${JSON.stringify(code)}), { code: ${JSON.stringify(code)} }); throw error; }\n`;
+  const injection = `    if (${condition}) { const error = Object.assign(new Error(${JSON.stringify(code)}), { code: ${JSON.stringify(code)} }); throw error; }\n`;
   assert.equal(source.split(marker).length, 2, name);
   const replacement = prefix ? `${prefix}${injection}${marker.slice(prefix.length)}` : `${injection}${marker}`;
   const instrumented = source.replace(marker, replacement);
@@ -391,6 +445,85 @@ async function pathnameReplacementHarness(root) {
   const harnessPath = resolve(root, "stage-pathname-replacement-safe-io-harness.mjs");
   await writeFile(harnessPath, source.replace(marker, `${barrier}${marker}`), { mode: 0o600 });
   return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+}
+
+async function acquisitionRestartHarness(root) {
+  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
+  const source = await readFile(sourcePath, "utf8");
+  const marker = "  if (lockBeforeAcquisition) {\n    try {\n";
+  const barrier = "    await globalThis.__tcrnAcquisitionRestartInterleave({ lockPath, recoveryClaim });\n";
+  assert.equal(source.split(marker).length, 2, "acquisition restart boundary");
+  const harnessPath = resolve(root, "acquisition-restart-safe-io-harness.mjs");
+  await writeFile(harnessPath, source.replace(marker, `${marker}${barrier}`), { mode: 0o600 });
+  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+}
+
+async function releaseAcquisitionInterleaveHarness(root) {
+  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
+  const source = await readFile(sourcePath, "utf8");
+  const releaseMarker = "  injectReleaseFailure(\"after-owner-unlink\");\n";
+  const observedMarker = "  if (lockBeforeAcquisition) {\n    try {\n";
+  const publicationMarker = "  await publishAcquisition();\n  try {\n";
+  const releaseBarrier = [
+    "  if (process.env.TCRN_TEST_RELEASE_READY_PATH) {",
+    "    await writeFile(process.env.TCRN_TEST_RELEASE_READY_PATH, \"ready\\n\", { mode: 0o600, flag: \"wx\" });",
+    "    while (true) {",
+    "      try { await lstat(process.env.TCRN_TEST_RELEASE_GO_PATH); break; }",
+    "      catch (error) { if (error?.code !== \"ENOENT\") throw error; }",
+    "      await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));",
+    "    }",
+    "  }",
+    "",
+  ].join("\n");
+  const observedBarrier = [
+    "    if (process.env.TCRN_TEST_ACQUISITION_OBSERVED_PATH) {",
+    "      await writeFile(process.env.TCRN_TEST_ACQUISITION_OBSERVED_PATH, \"observed\\n\", { mode: 0o600, flag: \"wx\" });",
+    "      while (true) {",
+    "        try { await lstat(process.env.TCRN_TEST_ACQUISITION_CONTINUE_PATH); break; }",
+    "        catch (error) { if (error?.code !== \"ENOENT\") throw error; }",
+    "        await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));",
+    "      }",
+    "    }",
+  ].join("\n");
+  const publicationProof = [
+    "  if (process.env.TCRN_TEST_ACQUISITION_PUBLISHED_PATH) {",
+    "    const published = await readAcquisitionClaim(acquisitionClaimPath, repository.realPath, lockPath, \"OUTPUT_SESSION_ACQUISITION_CHANGED\");",
+    "    if (!acquisition || published.value.pid !== process.pid || !sameIdentity(published.metadata, acquisition.metadata)) fail(\"OUTPUT_SESSION_ACQUISITION_CHANGED\", acquisitionClaimPath);",
+    "    await writeFile(process.env.TCRN_TEST_ACQUISITION_PUBLISHED_PATH, `${JSON.stringify({ pid: process.pid, claimPid: published.value.pid })}\\n`, { mode: 0o600, flag: \"wx\" });",
+    "  }",
+  ].join("\n");
+  assert.equal(source.split(releaseMarker).length, 2, "release ownerless barrier boundary");
+  assert.equal(source.split(observedMarker).length, 2, "acquisition observed barrier boundary");
+  assert.equal(source.split(publicationMarker).length, 2, "acquisition publication proof boundary");
+  const instrumented = source
+    .replace(releaseMarker, `${releaseMarker}${releaseBarrier}`)
+    .replace(observedMarker, `${observedMarker}${observedBarrier}`)
+    .replace(publicationMarker, `${publicationMarker.replace("  try {\n", publicationProof + "\n  try {\n")}`);
+  const harnessPath = resolve(root, "release-acquisition-interleave-safe-io-harness.mjs");
+  await writeFile(harnessPath, instrumented, { mode: 0o600 });
+  return pathToFileURL(harnessPath).href;
+}
+
+function startExclusiveOutputSession(moduleUrl, root, environment = {}) {
+  const child = spawn(process.execPath, ["--input-type=module", "--eval", [
+    `import { withExclusiveOutputSession } from ${JSON.stringify(moduleUrl)};`,
+    "try {",
+    `  await withExclusiveOutputSession(${JSON.stringify(root)}, async () => {});`,
+    "  process.stdout.write(\"OK\\n\");",
+    "} catch (error) {",
+    "  process.stderr.write(`${JSON.stringify({ reasonCode: error?.reasonCode ?? null, message: error?.message ?? String(error) })}\\n`);",
+    "  process.exitCode = 1;",
+    "}",
+  ].join("\n")], {
+    cwd: root,
+    env: { ...process.env, ...environment },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  return { child, result: once(child, "close").then(([code, signal]) => ({ code, signal, stdout, stderr })) };
 }
 
 async function localPublicationReplacementHarness(root) {
@@ -1155,17 +1288,92 @@ test("dead owner metadata recovers while a live owner is rejected", async (conte
   assert.equal((await recoverStaleOutputSessionLock(root)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED");
 });
 
+test("descendant process-group liveness blocks recovery and normal release until the exact group is gone", async (context) => {
+  const group = await liveDetachedProcessGroup();
+  try {
+    const root = await fixture(context);
+    const lock = lockPath(root);
+    await mkdir(lock, { mode: 0o700 });
+    await sealOwner(lock, 999999, { processGroup: group.pid });
+    const before = await snapshotFilesystem([lock, resolve(lock, "owner.json")]);
+    await assert.rejects(recoverStaleOutputSessionLock(root), expectReason("OUTPUT_SESSION_RECOVERY_DESCENDANT_LIVE"));
+    assert.deepEqual(await snapshotFilesystem([lock, resolve(lock, "owner.json")]), before);
+
+    const releaseRoot = await fixture(context);
+    const releaseLock = lockPath(releaseRoot);
+    const runnerPath = resolve(releaseRoot, "release-group-runner.mjs");
+    await writeFile(runnerPath, [
+      `import { bindOutputSessionProcessGroup, withExclusiveOutputSession } from ${JSON.stringify(new URL("../scripts/lib/safe-io.mjs", import.meta.url).href)};`,
+      `await withExclusiveOutputSession(${JSON.stringify(releaseRoot)}, async () => bindOutputSessionProcessGroup(${group.pid}));`,
+      "",
+    ].join("\n"), { mode: 0o600 });
+    const runner = spawn(process.execPath, [runnerPath], { stdio: ["ignore", "ignore", "ignore"] });
+    const [runnerCode, runnerSignal] = await once(runner, "exit");
+    assert.equal(runnerCode, 1);
+    assert.equal(runnerSignal, null);
+    await lstat(releaseLock);
+
+    await stopDetachedProcessGroup(group);
+    assert.equal((await recoverStaleOutputSessionLock(root)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED");
+    assert.equal((await recoverStaleOutputSessionLock(releaseRoot)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED");
+    await assertRecoveryStateClean(root);
+    await assertRecoveryStateClean(releaseRoot);
+    await rm(runnerPath);
+  } finally {
+    try { process.kill(-group.pid, 0); } catch (error) { if (error.code !== "ESRCH") throw error; }
+  }
+});
+
+test("a command can bind a later test-controller group only after the prior group is provably gone", async (context) => {
+  const [first, second] = await Promise.all([liveDetachedProcessGroup(), liveDetachedProcessGroup()]);
+  try {
+    const root = await fixture(context);
+    await withExclusiveOutputSession(root, async () => {
+      await bindOutputSessionProcessGroup(first.pid);
+      await assert.rejects(bindOutputSessionProcessGroup(second.pid), expectReason("OUTPUT_SESSION_PROCESS_GROUP_LIVE"));
+      await stopDetachedProcessGroup(first);
+      await bindOutputSessionProcessGroup(second.pid);
+      await stopDetachedProcessGroup(second);
+    });
+    await assertRecoveryStateClean(root);
+  } finally {
+    for (const child of [first, second]) {
+      try { process.kill(-child.pid, 0); } catch (error) { if (error.code !== "ESRCH") throw error; }
+    }
+  }
+});
+
+test("descendant process-group EPERM and dead-group recovery preserve stable fail-closed reasons", async (context) => {
+  const uncertain = await deadOwnerLock(context);
+  await sealOwner(uncertain.lock, 999999, { processGroup: 999998 });
+  const before = await snapshotFilesystem([uncertain.lock, resolve(uncertain.lock, "owner.json")]);
+  const harness = await livenessHarness(
+    uncertain.root,
+    "descendant-group-eperm",
+    "    process.kill(-processGroup, 0);\n",
+    "",
+    "EPERM",
+  );
+  await assert.rejects(harness.recoverStaleOutputSessionLock(uncertain.root), expectReason("OUTPUT_SESSION_RECOVERY_DESCENDANT_LIVENESS_UNKNOWN"));
+  assert.deepEqual(await snapshotFilesystem([uncertain.lock, resolve(uncertain.lock, "owner.json")]), before);
+
+  const dead = await deadOwnerLock(context);
+  await sealOwner(dead.lock, 999999, { processGroup: 999998 });
+  assert.equal((await recoverStaleOutputSessionLock(dead.root)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED");
+  await assertRecoveryStateClean(dead.root);
+});
+
 test("owner and claimant EPERM or unknown liveness are stable reasons with state preservation", async (context) => {
   for (const code of ["EPERM", "EIO"]) {
     const owner = await deadOwnerLock(context);
-    const ownerHarness = await livenessHarness(owner.root, `owner-${code}`, "    try { process.kill(owner.value.pid, 0); fail(\"OUTPUT_SESSION_RECOVERY_OWNER_LIVE\", String(owner.value.pid)); } catch (error) {\n", "    try { ", code);
+    const ownerHarness = await livenessHarness(owner.root, `owner-${code}`, "    process.kill(pid, 0);\n", "", code);
     await assert.rejects(ownerHarness.recoverStaleOutputSessionLock(owner.root), expectReason("OUTPUT_SESSION_RECOVERY_OWNER_LIVENESS_UNKNOWN"));
     await lstat(owner.lock);
     await lstat(resolve(owner.lock, "owner.json"));
 
     const claimant = await deadOwnerLock(context);
-    const claim = await sealPublishedRecoveryClaim(claimant.root, claimant.lock);
-    const claimantHarness = await livenessHarness(claimant.root, `claimant-${code}`, "    process.kill(pid, 0);\n", "", code);
+    const claim = await sealPublishedRecoveryClaim(claimant.root, claimant.lock, { pid: 999998 });
+    const claimantHarness = await livenessHarness(claimant.root, `claimant-${code}`, "    process.kill(pid, 0);\n", "", code, "pid === 999998");
     await assert.rejects(claimantHarness.recoverStaleOutputSessionLock(claimant.root), expectReason("OUTPUT_SESSION_RECOVERY_CLAIM_LIVENESS_UNKNOWN"));
     await lstat(claimant.lock);
     await lstat(claim.claimPath);
@@ -1533,7 +1741,7 @@ test("stage-only orphan matrix cleans only exact governed dead residue and prese
       name: "dead partial-byte stage",
       create: async (root) => {
         const path = stage(root);
-        await writeFile(path, "partial", { mode: 0o600 });
+        await writeFile(path, '{"schemaVersion":', { mode: 0o600 });
         return [path];
       },
     },
@@ -1692,7 +1900,7 @@ test("terminal recovery matrix emits success only after CLEAN readback and prese
   assert.deepEqual(await snapshotFilesystem(paths), before, "fail-closed recovery must preserve the exact pre-call state");
 });
 
-test("stage-only live and malformed residue is preserved while exact dead partial residue is cleared", async (context) => {
+test("stage-only live and malformed residue is preserved while exact dead canonical partial residue is cleared", async (context) => {
   const live = await deadOwnerLock(context);
   const liveStage = resolve(live.root, ".git", `.tcrn-workflow-output-recovery-claim.staging-${process.pid}-1`);
   await writeFile(liveStage, "", { mode: 0o600 });
@@ -1707,9 +1915,31 @@ test("stage-only live and malformed residue is preserved while exact dead partia
 
   const dead = await deadOwnerLock(context);
   const deadStage = resolve(dead.root, ".git/.tcrn-workflow-output-recovery-claim.staging-999999-1");
-  await writeFile(deadStage, "partial", { mode: 0o600 });
+  // The stage writer may be killed at any byte boundary.  Recovery accepts
+  // only a proper prefix of the exact claim it can derive from this lock and
+  // owner, rather than treating arbitrary short bytes as ours.
+  await writeFile(deadStage, '{"schemaVersion":"tcrn.output-session-recovery-claim.v1","pid":999999,', { mode: 0o600 });
   assert.equal((await recoverStaleOutputSessionLock(dead.root)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED");
   await assertRecoveryStateClean(dead.root);
+
+  for (const bytes of [
+    '{"schemaVersion":',
+    '{"schemaVersion":"tcrn.output-session-recovery-claim.v1","pid":999999,"uid":',
+  ]) {
+    const partial = await deadOwnerLock(context);
+    await writeFile(resolve(partial.root, ".git/.tcrn-workflow-output-recovery-claim.staging-999999-1"), bytes, { mode: 0o600 });
+    assert.equal((await recoverStaleOutputSessionLock(partial.root)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED");
+    await assertRecoveryStateClean(partial.root);
+  }
+
+  for (const bytes of ["not-a-prefix", '{"schemaVersion":"tcrn.output-session-recovery-claim.v1"}\n']) {
+    const invalid = await deadOwnerLock(context);
+    const stagePath = resolve(invalid.root, ".git/.tcrn-workflow-output-recovery-claim.staging-999999-1");
+    await writeFile(stagePath, bytes, { mode: 0o600 });
+    const before = await snapshotFilesystem([invalid.lock, resolve(invalid.lock, "owner.json"), stagePath]);
+    await assert.rejects(recoverStaleOutputSessionLock(invalid.root), expectReason("OUTPUT_SESSION_RECOVERY_CLAIM_INVALID"));
+    assert.deepEqual(await snapshotFilesystem([invalid.lock, resolve(invalid.lock, "owner.json"), stagePath]), before);
+  }
 });
 
 test("recovery rejects every malformed, copied, linked, nonregular, mode, and foreign metadata form", async (context) => {
@@ -1807,11 +2037,404 @@ test("forced crash leaves recoverable dead-owner metadata", async (context) => {
   await assert.rejects(lstat(lockPath(root)), { code: "ENOENT" });
 });
 
-test("a fresh real task entrypoint recovers an authenticated killed predecessor and emits one clean terminal receipt", async (context) => {
+test("acquisition provenance recovers a dead claimant before, during, and after initial owner publication", async (context) => {
+  const safeIo = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
+  for (const point of ["after-marker-publication", "after-lock-mkdir", "after-owner-publication"]) {
+    const root = await fixture(context);
+    const runner = spawn(process.execPath, ["--input-type=module", "--eval", [
+      `import { withExclusiveOutputSession } from ${JSON.stringify(safeIo.href)};`,
+      `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => {});`,
+    ].join("\n")], {
+      env: { ...process.env, TCRN_TEST_OUTPUT_SESSION_ACQUISITION_CRASH_AT: point },
+      stdio: "ignore",
+    });
+    const [code, signal] = await once(runner, "exit");
+    assert.equal(code, null, point);
+    assert.equal(signal, "SIGKILL", point);
+    await withExclusiveOutputSession(root, async () => {});
+    await assertRecoveryStateClean(root);
+  }
+});
+
+test("acquisition hard-link publication resumes every durable crash boundary", async (context) => {
+  const safeIo = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
+  for (const point of ["stage-open", "stage-partial", "stage-fsynced", "before-link", "nlink2", "stage-unlinked", "fixed-nlink1"]) {
+    const root = await fixture(context);
+    const runner = spawn(process.execPath, ["--input-type=module", "--eval", [
+      `import { withExclusiveOutputSession } from ${JSON.stringify(safeIo.href)};`,
+      `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => {});`,
+    ].join("\n")], {
+      env: { ...process.env, TCRN_TEST_OUTPUT_SESSION_ACQUISITION_PUBLICATION_CRASH_AT: point },
+      stdio: "ignore",
+    });
+    const [code, signal] = await once(runner, "exit");
+    assert.equal(code, null, point);
+    assert.equal(signal, "SIGKILL", point);
+    await withExclusiveOutputSession(root, async () => {});
+    await assertRecoveryStateClean(root);
+  }
+});
+
+test("dead acquisition stages accept exact arbitrary proper prefixes and reject non-prefix residue", async (context) => {
+  for (const select of [0, 1, 80, -1]) {
+    const root = await fixture(context);
+    const staged = await sealAcquisitionStage(root);
+    const length = select < 0 ? staged.canonical.length - 1 : Math.min(select, staged.canonical.length - 1);
+    await writeFile(staged.stagePath, staged.canonical.slice(0, length), { mode: 0o600 });
+    await withExclusiveOutputSession(root, async () => {});
+    await assert.rejects(lstat(staged.stagePath), { code: "ENOENT" });
+    await assertRecoveryStateClean(root);
+  }
+  for (const bytes of ["not-a-prefix", '{"schemaVersion":"tcrn.output-session-acquisition-claim.v1"}\n']) {
+    const root = await fixture(context);
+    const staged = await sealAcquisitionStage(root, 999999, { bytes });
+    const before = await snapshotFilesystem([resolve(root, ".git"), staged.stagePath]);
+    await assert.rejects(withExclusiveOutputSession(root, async () => {}), expectReason("OUTPUT_SESSION_ACQUISITION_INVALID"));
+    assert.deepEqual(await snapshotFilesystem([resolve(root, ".git"), staged.stagePath]), before);
+  }
+});
+
+test("dead acquisition fixed-stage publication and loser residue resume without replacing the winner", async (context) => {
+  const root = await fixture(context);
+  const published = await sealAcquisitionStage(root);
+  await link(published.stagePath, acquisitionClaimPath(root));
+  assert.equal((await lstat(published.stagePath)).nlink, 2);
+  await withExclusiveOutputSession(root, async () => {});
+  await assertRecoveryStateClean(root);
+
+  const loserRoot = await fixture(context);
+  const winner = await sealAcquisitionStage(loserRoot, 999999, { sequence: 1 });
+  await rename(winner.stagePath, acquisitionClaimPath(loserRoot));
+  const loser = await sealAcquisitionStage(loserRoot, 999999, { sequence: 2 });
+  const beforeWinner = await readFile(acquisitionClaimPath(loserRoot), "utf8");
+  await withExclusiveOutputSession(loserRoot, async () => {});
+  assert.notEqual(beforeWinner, "");
+  await assertRecoveryStateClean(loserRoot);
+});
+
+test("normal-release provenance resumes ownerless and lockless interruptions without legacy authority", async (context) => {
+  const safeIo = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
+  for (const point of ["after-owner-unlink", "after-lock-rmdir"]) {
+    const root = await fixture(context);
+    const runner = spawn(process.execPath, ["--input-type=module", "--eval", [
+      `import { withExclusiveOutputSession } from ${JSON.stringify(safeIo.href)};`,
+      `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => {});`,
+    ].join("\n")], {
+      env: { ...process.env, TCRN_TEST_OUTPUT_SESSION_RELEASE_FAILURE_AT: point },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const [code, signal] = await once(runner, "exit");
+    assert.equal(code, 1, point);
+    assert.equal(signal, null, point);
+    const claim = recoveryClaimPath(root);
+    await lstat(claim);
+    if (point === "after-owner-unlink") {
+      await lstat(lockPath(root));
+      await assert.rejects(lstat(resolve(lockPath(root), "owner.json")), { code: "ENOENT" });
+    } else {
+      await assert.rejects(lstat(lockPath(root)), { code: "ENOENT" });
+    }
+    // A fresh contender consumes only the transaction it can authenticate;
+    // no historical legacy receipt is admitted for this new ownerless state.
+    await withExclusiveOutputSession(root, async () => {});
+    await assertRecoveryStateClean(root);
+  }
+});
+
+test("a stale release-lock observation restarts only after an exact CLEAN reread", async (context) => {
+  const state = await deadOwnerLock(context);
+  const oldLock = await lstat(state.lock);
+  const claim = await sealPublishedRecoveryClaim(state.root, state.lock);
+  await rm(resolve(state.lock, "owner.json"));
+  const harness = await acquisitionRestartHarness(state.root);
+  globalThis.__tcrnAcquisitionRestartInterleave = async ({ lockPath: observedLock, recoveryClaim }) => {
+    assert.equal(observedLock, state.lock);
+    assert.equal(recoveryClaim, claim.claimPath);
+    const current = await lstat(observedLock);
+    assert.equal(current.dev, oldLock.dev);
+    assert.equal(current.ino, oldLock.ino);
+    await rmdir(observedLock);
+    await rm(recoveryClaim);
+  };
+  try {
+    await harness.withExclusiveOutputSession(state.root, async () => {});
+  } finally {
+    delete globalThis.__tcrnAcquisitionRestartInterleave;
+  }
+  await assertRecoveryStateClean(state.root);
+});
+
+test("two-process release and acquisition interleavings preserve the release transaction and restart claim-held", async (context) => {
+  const runPausedRelease = async (root, harnessUrl, suffix) => {
+    const readyPath = resolve(root, `release-${suffix}.ready`);
+    const goPath = resolve(root, `release-${suffix}.go`);
+    const owner = startExclusiveOutputSession(harnessUrl, root, {
+      TCRN_TEST_RELEASE_READY_PATH: readyPath,
+      TCRN_TEST_RELEASE_GO_PATH: goPath,
+    });
+    await waitForPath(readyPath, owner.result);
+    const lock = await lstat(lockPath(root));
+    const claimBytes = await readFile(recoveryClaimPath(root), "utf8");
+    await assert.rejects(lstat(resolve(lockPath(root), "owner.json")), { code: "ENOENT" });
+    process.kill(owner.child.pid, 0);
+    return { owner, readyPath, goPath, lock, claimBytes };
+  };
+  const release = async ({ owner, goPath }) => {
+    await writeFile(goPath, "go\n", { mode: 0o600, flag: "wx" });
+    const result = await owner.result;
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.signal, null, result.stderr);
+    assert.equal(result.stdout, "OK\n");
+    assert.equal(result.stderr, "");
+  };
+
+  // Schedule A: a contender observes the existing ownerless lock while the
+  // original releaser and its fixed recovery transaction are still live. It
+  // must not create an acquisition marker or replace the old lock.
+  const scheduleARoot = await fixture(context);
+  const scheduleAHarness = await releaseAcquisitionInterleaveHarness(scheduleARoot);
+  const scheduleA = await runPausedRelease(scheduleARoot, scheduleAHarness, "a");
+  const ordinary = await startExclusiveOutputSession(new URL("../scripts/lib/safe-io.mjs", import.meta.url).href, scheduleARoot).result;
+  assert.equal(ordinary.code, 1, ordinary.stderr);
+  assert.equal(ordinary.signal, null, ordinary.stderr);
+  assert.equal(ordinary.stdout, "");
+  assert.equal(JSON.parse(ordinary.stderr).reasonCode, "OUTPUT_SESSION_RECOVERY_CLAIM_LIVE");
+  const scheduleALockAfter = await lstat(lockPath(scheduleARoot));
+  assert.equal(scheduleALockAfter.dev, scheduleA.lock.dev);
+  assert.equal(scheduleALockAfter.ino, scheduleA.lock.ino);
+  assert.equal(await readFile(recoveryClaimPath(scheduleARoot), "utf8"), scheduleA.claimBytes);
+  await assert.rejects(lstat(acquisitionClaimPath(scheduleARoot)), { code: "ENOENT" });
+  assert.equal((await readdir(resolve(scheduleARoot, ".git"))).some((name) => name.startsWith(".tcrn-workflow-output-acquisition-claim.staging-")), false);
+  process.kill(scheduleA.owner.child.pid, 0);
+  await release(scheduleA);
+  await assertRecoveryStateClean(scheduleARoot);
+
+  // Schedule B: the contender is deliberately paused after observing that
+  // same old lock. The releaser naturally reaches CLEAN; only then may the
+  // contender restart, publish its own fixed acquisition claim, mkdir, and
+  // complete. The copied source records the claim identity immediately before
+  // mkdir so this is a real two-process ordering proof, not test-side cleanup.
+  const scheduleBRoot = await fixture(context);
+  const scheduleBHarness = await releaseAcquisitionInterleaveHarness(scheduleBRoot);
+  const scheduleB = await runPausedRelease(scheduleBRoot, scheduleBHarness, "b");
+  const observedPath = resolve(scheduleBRoot, "acquisition-observed");
+  const continuePath = resolve(scheduleBRoot, "acquisition-continue");
+  const publishedPath = resolve(scheduleBRoot, "acquisition-published.json");
+  const restarting = startExclusiveOutputSession(scheduleBHarness, scheduleBRoot, {
+    TCRN_TEST_ACQUISITION_OBSERVED_PATH: observedPath,
+    TCRN_TEST_ACQUISITION_CONTINUE_PATH: continuePath,
+    TCRN_TEST_ACQUISITION_PUBLISHED_PATH: publishedPath,
+  });
+  await waitForPath(observedPath, restarting.result);
+  const scheduleBObservedLock = await lstat(lockPath(scheduleBRoot));
+  assert.equal(scheduleBObservedLock.dev, scheduleB.lock.dev);
+  assert.equal(scheduleBObservedLock.ino, scheduleB.lock.ino);
+  await release(scheduleB);
+  await assertRecoveryStateClean(scheduleBRoot);
+  await writeFile(continuePath, "continue\n", { mode: 0o600, flag: "wx" });
+  const restarted = await restarting.result;
+  assert.equal(restarted.code, 0, restarted.stderr);
+  assert.equal(restarted.signal, null, restarted.stderr);
+  assert.equal(restarted.stdout, "OK\n");
+  assert.equal(restarted.stderr, "");
+  const publication = JSON.parse(await readFile(publishedPath, "utf8"));
+  assert.equal(publication.pid, restarting.child.pid);
+  assert.equal(publication.claimPid, restarting.child.pid);
+  await assertRecoveryStateClean(scheduleBRoot);
+});
+
+test("atomic owner-group publication recovers before and after its durable replacement", async (context) => {
+  for (const point of ["group-stage-open", "group-stage-partial", "group-stage-fsynced", "prepublication", "afterpublication"]) {
+    const root = await fixture(context);
+    const runnerPath = resolve(root, `owner-publication-${point}.mjs`);
+    await writeFile(runnerPath, [
+      `import { bindOutputSessionProcessGroup, withExclusiveOutputSession } from ${JSON.stringify(new URL("../scripts/lib/safe-io.mjs", import.meta.url).href)};`,
+      `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => bindOutputSessionProcessGroup(999998));`,
+      "",
+    ].join("\n"), { mode: 0o600 });
+    const runner = spawn(process.execPath, [runnerPath], {
+      env: { ...process.env, TCRN_TEST_OWNER_PUBLICATION_CRASH_AT: point },
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const [code, signal] = await once(runner, "exit");
+    assert.equal(code, null, point);
+    assert.equal(signal, "SIGKILL", point);
+    assert.equal((await recoverStaleOutputSessionLock(root)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED", point);
+    await assertRecoveryStateClean(root);
+    await rm(runnerPath);
+  }
+});
+
+test("atomic initial owner publication recovers before and after its durable replacement", async (context) => {
+  for (const point of ["initial-stage-open", "initial-stage-partial", "initial-stage-fsynced", "initial-prepublication", "initial-afterpublication"]) {
+    const root = await fixture(context);
+    const runnerPath = resolve(root, `initial-owner-publication-${point}.mjs`);
+    await writeFile(runnerPath, [
+      `import { withExclusiveOutputSession } from ${JSON.stringify(new URL("../scripts/lib/safe-io.mjs", import.meta.url).href)};`,
+      `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => {});`,
+      "",
+    ].join("\n"), { mode: 0o600 });
+    const runner = spawn(process.execPath, [runnerPath], {
+      env: { ...process.env, TCRN_TEST_OWNER_PUBLICATION_CRASH_AT: point },
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const [code, signal] = await once(runner, "exit");
+    assert.equal(code, null, point);
+    assert.equal(signal, "SIGKILL", point);
+    assert.equal((await recoverStaleOutputSessionLock(root)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED", point);
+    await assertRecoveryStateClean(root);
+    await rm(runnerPath);
+  }
+});
+
+test("a malformed owner-publication stage preserves the dead lock fail-closed", async (context) => {
+  const root = await fixture(context);
+  const lock = lockPath(root);
+  await mkdir(lock, { mode: 0o700 });
+  await sealOwner(lock, 999999);
+  const stagePath = resolve(lock, ".owner.json.staging-999999-0-1");
+  await writeFile(stagePath, "foreign\\n", { mode: 0o600 });
+  const before = await snapshotFilesystem([lock, resolve(lock, "owner.json"), stagePath]);
+  await assert.rejects(recoverStaleOutputSessionLock(root), expectReason("OUTPUT_SESSION_METADATA_INVALID"));
+  assert.deepEqual(await snapshotFilesystem([lock, resolve(lock, "owner.json"), stagePath]), before);
+});
+
+test("an unbound detached test controller exits before discovery after its task owner dies", async (context) => {
+  const importPath = resolve(await mkdtemp(join(tmpdir(), "tcrn-test-import-")), "imported");
+  context.after(() => rm(resolve(importPath, ".."), { recursive: true, force: true }));
+  const root = await taskEntrypointFixture(context, [
+    'import { writeFileSync } from "node:fs";',
+    'import test from "node:test";',
+    'if (process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH) writeFileSync(process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH, "test-source-imported\\n");',
+    'test("only a durably bound controller may import this source", () => {});',
+    "",
+  ].join("\n"));
+  const readyPath = resolve(root, "bind-window-ready.json");
+  const orphanPath = resolve(root, "bind-window-orphan.json");
+  const holdPath = resolve(root, "bind-window-release");
+  const interrupted = startTaskEntrypoint(root, {
+    TCRN_TEST_BIND_WINDOW_READY_PATH: readyPath,
+    TCRN_TEST_BIND_WINDOW_ORPHAN_PATH: orphanPath,
+    TCRN_TEST_BIND_WINDOW_HOLD_PATH: holdPath,
+    TCRN_TEST_BIND_WINDOW_ORPHAN_DELAY_MS: "3000",
+    TCRN_TEST_BIND_WINDOW_IMPORT_PATH: importPath,
+  });
+  await waitForPath(lockPath(root), interrupted.result);
+  await waitForPath(readyPath, interrupted.result);
+  const ready = await readJsonWhenReady(readyPath, interrupted.result);
+  assert.ok(Number.isSafeInteger(ready.processGroup) && ready.processGroup > 0);
+  assert.deepEqual(JSON.parse(await readFile(resolve(lockPath(root), "owner.json"), "utf8")).processGroup, null);
+  await assert.rejects(lstat(importPath), { code: "ENOENT" });
+
+  // This SIGKILL lands after detached spawn but before the task is allowed to
+  // bind owner.processGroup.  The bootstrap remains alive briefly only to
+  // make the no-wait contender observation deterministic; it terminates
+  // before spawning Node's test controller, so no test worker can start.
+  interrupted.child.kill("SIGKILL");
+  const interruptedResult = await interrupted.result;
+  assert.equal(interruptedResult.code, null, JSON.stringify(interruptedResult));
+  assert.equal(interruptedResult.signal, "SIGKILL", JSON.stringify(interruptedResult));
+  assert.equal(interruptedResult.stdout, "");
+  assert.equal(interruptedResult.stderr, "");
+  await waitForPath(orphanPath);
+  process.kill(ready.processGroup, 0);
+  await assert.rejects(lstat(importPath), { code: "ENOENT" });
+
+  const contender = startTaskEntrypoint(root);
+  // A dead outer owner may be recovered here, but this explicitly proves the
+  // only surviving predecessor is an inert bootstrap: it is still live and
+  // the predecessor test source has not been imported.
+  process.kill(ready.processGroup, 0);
+  const contenderResult = await contender.result;
+  assert.equal(contenderResult.code, 0, contenderResult.stderr);
+  assert.equal(contenderResult.signal, null);
+  assert.equal(contenderResult.stderr, "");
+  assert.equal(JSON.parse(contenderResult.stdout).reasonCode, "TESTS_VERIFIED");
+  await assert.rejects(lstat(importPath), { code: "ENOENT" });
+  await waitForDeadPid(ready.processGroup);
+  await assertTaskResidueClean(root);
+});
+
+test("a pre-bind process-group bind failure terminates the controller before test discovery", async (context) => {
+  const importPath = resolve(await mkdtemp(join(tmpdir(), "tcrn-test-import-")), "imported");
+  context.after(() => rm(resolve(importPath, ".."), { recursive: true, force: true }));
+  const root = await taskEntrypointFixture(context, [
+    'import { writeFileSync } from "node:fs";',
+    'import test from "node:test";',
+    'if (process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH) writeFileSync(process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH, "test-source-imported\\n");',
+    'test("pre-bind failure never discovers this source", () => {});',
+    "",
+  ].join("\n"));
+  const failed = await startTaskEntrypoint(root, {
+    TCRN_TEST_BIND_PROCESS_GROUP_FAILURE: "1",
+    TCRN_TEST_BIND_WINDOW_IMPORT_PATH: importPath,
+  }).result;
+  assert.equal(failed.code, 1);
+  assert.equal(failed.signal, null);
+  assert.equal(failed.stdout, "");
+  assert.equal(JSON.parse(failed.stderr).reasonCode, "TEST_CONTROLLER_BIND_INJECTED_FAILURE");
+  await assert.rejects(lstat(importPath), { code: "ENOENT" });
+  await assertTaskResidueClean(root);
+});
+
+test("a bound bootstrap blocks recovery before it starts the test controller", async (context) => {
+  const importPath = resolve(await mkdtemp(join(tmpdir(), "tcrn-test-import-")), "imported");
+  context.after(() => rm(resolve(importPath, ".."), { recursive: true, force: true }));
+  const root = await taskEntrypointFixture(context, [
+    'import { writeFileSync } from "node:fs";',
+    'import test from "node:test";',
+    'if (process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH) writeFileSync(process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH, "test-source-imported\\n");',
+    'test("controller starts only after its group was recorded", () => {});',
+    "",
+  ].join("\n"));
+  const boundPath = resolve(root, "bind-window-bound.json");
+  const runPath = resolve(root, "bind-window-run");
+  const interrupted = startTaskEntrypoint(root, {
+    TCRN_TEST_BIND_WINDOW_BOUND_PATH: boundPath,
+    TCRN_TEST_BIND_WINDOW_RUN_PATH: runPath,
+    TCRN_TEST_BIND_WINDOW_IMPORT_PATH: importPath,
+  });
+  await waitForPath(lockPath(root), interrupted.result);
+  await waitForPath(boundPath, interrupted.result);
+  const bound = await readJsonWhenReady(boundPath, interrupted.result);
+  assert.ok(Number.isSafeInteger(bound.processGroup) && bound.processGroup > 0);
+  const owner = JSON.parse(await readFile(resolve(lockPath(root), "owner.json"), "utf8"));
+  assert.equal(owner.processGroup, bound.processGroup);
+  await assert.rejects(lstat(importPath), { code: "ENOENT" });
+
+  // The outer task is gone, but the durably bound bootstrap group is still
+  // live and has not created the Node test controller.  Recovery must fail
+  // closed rather than allowing a contender to rebuild dist concurrently.
+  interrupted.child.kill("SIGKILL");
+  const interruptedResult = await interrupted.result;
+  assert.equal(interruptedResult.code, null, JSON.stringify(interruptedResult));
+  assert.equal(interruptedResult.signal, "SIGKILL", JSON.stringify(interruptedResult));
+  assert.equal(interruptedResult.stdout, "");
+  assert.equal(interruptedResult.stderr, "");
+  const noWait = await startTaskEntrypoint(root).result;
+  assert.equal(noWait.code, 1);
+  assert.equal(noWait.signal, null);
+  assert.equal(noWait.stdout, "");
+  assert.equal(JSON.parse(noWait.stderr).reasonCode, "OUTPUT_SESSION_RECOVERY_DESCENDANT_LIVE");
+  await lstat(lockPath(root));
+  await assert.rejects(lstat(importPath), { code: "ENOENT" });
+
+  await writeFile(runPath, "run\\n", { mode: 0o600, flag: "wx" });
+  await waitForPath(importPath);
+  await waitForDeadPid(bound.processGroup);
+  const recovered = await startTaskEntrypoint(root).result;
+  assert.equal(recovered.code, 0, recovered.stderr);
+  assert.equal(recovered.signal, null);
+  assert.equal(recovered.stderr, "");
+  assert.equal(JSON.parse(recovered.stdout).reasonCode, "TESTS_VERIFIED");
+  await assertTaskResidueClean(root);
+});
+
+test("a fresh real task entrypoint fails closed while a killed predecessor group lives, then recovers cleanly", async (context) => {
   const crashSource = [
     'import { writeFileSync } from "node:fs";',
     'import test from "node:test";',
-    'writeFileSync(process.env.TCRN_TASK_DESCENDANT_PID_PATH, `${JSON.stringify({ testPid: process.pid, controllerPid: process.ppid })}\\n`);',
+    'writeFileSync(process.env.TCRN_TASK_DESCENDANT_PID_PATH, `${JSON.stringify({ testPid: process.pid, controllerPid: process.ppid, processGroup: Number(process.env.TCRN_TEST_CONTROLLER_PROCESS_GROUP) })}\\n`);',
     'test("remain alive while the outer lifecycle probe kills the actual task entrypoint", async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });',
     "",
   ].join("\n");
@@ -1822,7 +2445,8 @@ test("a fresh real task entrypoint recovers an authenticated killed predecessor 
   const descendants = JSON.parse(await readFile(resolve(root, "descendant.pid"), "utf8"));
   assert.ok(Number.isSafeInteger(descendants.testPid) && descendants.testPid > 0);
   assert.ok(Number.isSafeInteger(descendants.controllerPid) && descendants.controllerPid > 0);
-  // `spawnSync(node --test)` creates a controller plus a test-file process.
+  assert.ok(Number.isSafeInteger(descendants.processGroup) && descendants.processGroup > 0);
+  // The bootstrap launches a Node test controller plus a test-file process.
   // The recovery run starts only after both recorded descendants are gone, so
   // it cannot overlap a surviving importer of dist/build.
   interrupted.child.kill("SIGKILL");
@@ -1831,9 +2455,20 @@ test("a fresh real task entrypoint recovers an authenticated killed predecessor 
   assert.equal(interruptedResult.signal, "SIGKILL", JSON.stringify(interruptedResult));
   assert.equal(interruptedResult.stdout, "");
   assert.equal(interruptedResult.stderr, "");
-  await lstat(resolve(lockPath(root), "owner.json"));
+  const owner = JSON.parse(await readFile(resolve(lockPath(root), "owner.json"), "utf8"));
+  assert.equal(owner.processGroup, descendants.processGroup);
+  const noWait = await startTaskEntrypoint(root).result;
+  assert.equal(noWait.code, 1);
+  assert.equal(noWait.signal, null);
+  assert.equal(noWait.stdout, "");
+  assert.equal(JSON.parse(noWait.stderr).reasonCode, "OUTPUT_SESSION_RECOVERY_DESCENDANT_LIVE");
+  await lstat(lockPath(root));
+  // The test controller is the leader of a dedicated detached process group;
+  // its worker and controller must both be gone before stale-owner recovery
+  // is permitted to acquire the command-wide output session.
   await waitForDeadPid(descendants.testPid);
   await waitForDeadPid(descendants.controllerPid);
+  await waitForDeadPid(descendants.processGroup);
   await rm(resolve(root, "descendant.pid"));
 
   await writeFile(resolve(root, "tests/entrypoint.test.mjs"), [
@@ -1886,6 +2521,45 @@ test("a concurrent real task entrypoint preserves its live command-wide owner an
   await assertTaskResidueClean(root);
 });
 
+test("a passing detached test that writes stderr fails the real task entrypoint cleanly", async (context) => {
+  const root = await taskEntrypointFixture(context, [
+    'import test from "node:test";',
+    'test("the underlying detached test passes", () => {});',
+    "",
+  ].join("\n"));
+  const bootstrapPath = resolve(root, "scripts/test-controller-bootstrap.mjs");
+  const bootstrap = await readFile(bootstrapPath, "utf8");
+  const exitMarker = "process.exitCode = result.code ?? (result.signal ? 1 : 1);\n";
+  const fixtureStderr = "process.stderr.write(\"test-only detached controller stderr\\n\");\n";
+  assert.equal(bootstrap.split(exitMarker).length, 2, "fixture bootstrap terminal boundary");
+  await writeFile(bootstrapPath, bootstrap.replace(exitMarker, `${fixtureStderr}${exitMarker}`), { mode: 0o600 });
+  runGit(root, ["add", "scripts/test-controller-bootstrap.mjs"]);
+  runGit(root, ["commit", "--quiet", "-m", "fixture controller stderr"]);
+  assert.equal(spawnSync("git", ["status", "--porcelain=v1"], { cwd: root, encoding: "utf8" }).stdout, "");
+  const result = await startTaskEntrypoint(root).result;
+  assert.equal(result.code, 1, result.stderr);
+  assert.equal(result.signal, null, result.stderr);
+  assert.equal(result.stdout, "");
+  const lines = result.stderr.trimEnd().split("\n");
+  assert.equal(lines.length, 1, result.stderr);
+  const receipt = JSON.parse(lines[0]);
+  assert.deepEqual({ ok: receipt.ok, command: receipt.command, reasonCode: receipt.reasonCode }, {
+    ok: false,
+    command: "test",
+    reasonCode: "COMMAND_UNEXPECTED_STDERR",
+  });
+  assert.equal(result.stderr.includes("TESTS_VERIFIED"), false);
+  assert.equal(result.stderr.includes("test-only detached controller stderr"), true);
+  assert.deepEqual(JSON.parse(await readFile(resolve(root, "dist/evidence/p1/test.json"), "utf8")), {
+    schemaVersion: "tcrn.command-evidence.v1",
+    command: "test",
+    ok: false,
+    reasonCode: "COMMAND_UNEXPECTED_STDERR",
+    error: receipt.error,
+  });
+  await assertTaskResidueClean(root);
+});
+
 test("SIGKILL injection at each staged publication and release boundary resumes deterministically", async (context) => {
   const points = [
     ["stage-created", "    stagingIdentity = await handle.stat();\n", {}, "stage"],
@@ -1898,7 +2572,7 @@ test("SIGKILL injection at each staged publication and release boundary resumes 
     ["owner-unlinked-before-fsync", "  await syncDirectory(lockPath, \"OUTPUT_SESSION_RELEASE_FAILED\");\n", { before: true }, "owner-absent"],
     ["owner-unlinked-after-fsync", "  const afterOwnerUnlink = await pathMetadata(lockPath, \"OUTPUT_SESSION_RELEASE_FAILED\");\n", { before: true }, "owner-absent"],
     ["lock-rmdir-before-git-fsync", "  await syncDirectory(dirname(lockPath), \"OUTPUT_SESSION_RELEASE_FAILED\");\n", { before: true }, "lock-absent"],
-    ["lock-rmdir-after-git-fsync", "  await rmdir(lockPath).catch((error) => fail(\"OUTPUT_SESSION_RELEASE_FAILED\", `${lockPath}: ${error.code ?? error.message}`));\n  await syncDirectory(dirname(lockPath), \"OUTPUT_SESSION_RELEASE_FAILED\");\n", {}, "lock-absent"],
+    ["lock-rmdir-after-git-fsync", "  await rmdir(lockPath).catch((error) => fail(\"OUTPUT_SESSION_RELEASE_FAILED\", `${lockPath}: ${error.code ?? error.message}`));\n  injectReleaseFailure(\"after-lock-rmdir\");\n  await syncDirectory(dirname(lockPath), \"OUTPUT_SESSION_RELEASE_FAILED\");\n", {}, "lock-absent"],
     ["fixed-unlinked-before-git-fsync", "  await validateRecoveryClaim(claimPath, claimIdentity, expectedBytes, \"OUTPUT_SESSION_RECOVERY_CLAIM_CHANGED\");\n  await rm(claimPath).catch((error) => fail(\"OUTPUT_SESSION_RECOVERY_CLAIM_CHANGED\", `${claimPath}: ${error.code ?? error.message}`));\n", {}, "clean"],
     ["fixed-unlinked-after-git-fsync", "  await validateRecoveryClaim(claimPath, claimIdentity, expectedBytes, \"OUTPUT_SESSION_RECOVERY_CLAIM_CHANGED\");\n  await rm(claimPath).catch((error) => fail(\"OUTPUT_SESSION_RECOVERY_CLAIM_CHANGED\", `${claimPath}: ${error.code ?? error.message}`));\n  await syncDirectory(dirname(claimPath), \"OUTPUT_SESSION_RECOVERY_CLAIM_CHANGED\");\n", {}, "clean"],
   ];
@@ -1913,7 +2587,7 @@ test("SIGKILL injection at each staged publication and release boundary resumes 
       assert.equal(stage.nlink, 1, name);
       assert.equal(stage.mode & 0o777, 0o600, name);
       if (name === "stage-created") assert.equal(stage.size, 0, name);
-      if (name === "stage-partial") assert.equal(stage.size, 7, name);
+      if (name === "stage-partial") assert.equal(stage.size, Buffer.byteLength('{"schemaVersion":'), name);
       await assert.rejects(lstat(claim), { code: "ENOENT" });
     } else if (state === "nlink2") {
       const fixed = await lstat(claim);

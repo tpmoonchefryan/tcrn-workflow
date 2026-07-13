@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { lstat, writeFile } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 import {
   fileRecord,
@@ -30,6 +30,7 @@ import {
 } from "./lib/protocol-proof.mjs";
 import {
   BoundaryError,
+  bindOutputSessionProcessGroup,
   assertCleanExclusiveSourceBasis,
   readBoundRegularFile,
   safeCleanOutputRoot,
@@ -54,6 +55,7 @@ const textNames = new Set([
   "NOTICE",
 ]);
 const noNetworkImport = pathToFileURL(resolve(repositoryRoot, "scripts/no-network.mjs")).href;
+const testControllerBootstrapPath = resolve(repositoryRoot, "scripts/test-controller-bootstrap.mjs");
 
 class TaskError extends Error {
   constructor(reasonCode, message) {
@@ -125,6 +127,84 @@ function run(executable, arguments_, options = {}) {
     fail("COMMAND_UNEXPECTED_STDERR", `${executable} ${arguments_.join(" ")}\n${result.stderr}`);
   }
   return raw ? result.stdout : result.stdout.trim();
+}
+
+async function runDetachedTestController(arguments_, extraEnvironment) {
+  const child = spawn(process.execPath, [testControllerBootstrapPath, ...arguments_], {
+    cwd: repositoryRoot,
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+      NO_COLOR: "1",
+      npm_config_audit: "false",
+      npm_config_fund: "false",
+      npm_config_offline: "true",
+      ...extraEnvironment,
+      TCRN_TEST_CONTROLLER_LOCK_PATH: resolve(repositoryRoot, ".git/tcrn-workflow-output.lock"),
+      TCRN_TEST_CONTROLLER_OUTER_PID: String(process.pid),
+    },
+  });
+  assertion(Number.isSafeInteger(child.pid) && child.pid > 0, "TEST_CONTROLLER_PID_INVALID");
+  const stdout = [];
+  const stderr = [];
+  child.stdout.on("data", (chunk) => stdout.push(chunk));
+  child.stderr.on("data", (chunk) => stderr.push(chunk));
+  const result = new Promise((resolveResult, rejectResult) => {
+    child.once("error", rejectResult);
+    child.once("close", (code, signal) => resolveResult({ code, signal }));
+  });
+  if (process.env.TCRN_TEST_BIND_PROCESS_GROUP_FAILURE === "1") {
+    // This test-only injection exercises the failure branch before owner
+    // metadata can authorize the controller to discover a test file.
+    child.kill("SIGTERM");
+    await result;
+    await waitForProcessGroupExit(child.pid);
+    fail("TEST_CONTROLLER_BIND_INJECTED_FAILURE", "test-only pre-bind injection");
+  }
+  await waitForTestControllerBindWindow();
+  // `detached` makes this controller the leader of a dedicated POSIX process
+  // group.  Recovery subsequently treats every live group member as a live
+  // command descendant, rather than trusting only this outer task PID.
+  await bindOutputSessionProcessGroup(child.pid);
+  const completed = await result;
+  await waitForProcessGroupExit(child.pid);
+  if (completed.code !== 0) {
+    fail("COMMAND_FAILED", `${process.execPath} ${arguments_.join(" ")}\n${Buffer.concat(stdout).toString("utf8")}${Buffer.concat(stderr).toString("utf8")}`);
+  }
+  if (Buffer.concat(stderr).toString("utf8").trim() !== "") {
+    fail("COMMAND_UNEXPECTED_STDERR", `${process.execPath} ${arguments_.join(" ")}\n${Buffer.concat(stderr).toString("utf8")}`);
+  }
+}
+
+async function waitForTestControllerBindWindow() {
+  const holdPath = process.env.TCRN_TEST_BIND_WINDOW_HOLD_PATH;
+  if (!holdPath) return;
+  assertion(holdPath === resolve(holdPath), "TEST_CONTROLLER_BIND_WINDOW_PATH", holdPath);
+  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+    try {
+      await lstat(holdPath);
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+  }
+  fail("TEST_CONTROLLER_BIND_WINDOW_TIMEOUT", holdPath);
+}
+
+async function waitForProcessGroupExit(processGroup) {
+  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+    try {
+      process.kill(-processGroup, 0);
+    } catch (error) {
+      if (error.code === "ESRCH") return;
+      fail("TEST_CONTROLLER_GROUP_LIVENESS_UNKNOWN", `${processGroup}: ${error.code ?? error.message}`);
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+  }
+  fail("TEST_CONTROLLER_GROUP_LIVENESS_TIMEOUT", String(processGroup));
 }
 
 async function readText(path) {
@@ -281,11 +361,9 @@ async function runTests({
     .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs");
-  run(process.execPath, ["--test", ...tests], {
-    env: {
-      NODE_OPTIONS: `--import=${noNetworkImport}`,
-      TCRN_OFFLINE_PROOF: "1",
-    },
+  await runDetachedTestController(["--test", ...tests], {
+    NODE_OPTIONS: `--import=${noNetworkImport}`,
+    TCRN_OFFLINE_PROOF: "1",
   });
   return success(
     trustOnly

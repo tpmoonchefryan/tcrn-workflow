@@ -10,8 +10,12 @@ import { ProofArtifactError, generateProofArtifacts } from "../scripts/lib/proof
 
 const routeFiles = [
   "scripts/generate-proof-artifacts.mjs",
+  "scripts/dependency-materialization.mjs",
+  "scripts/lib/dependency-materialization.mjs",
   "scripts/lib/proof-artifacts.mjs",
   "scripts/lib/scoped-strip-types.mjs",
+  "scripts/test-controller-bootstrap.mjs",
+  "tests/dependency-materialization.test.mjs",
   "tests/output-session-lifecycle.test.mjs",
   "tests/proof-artifact-generator.test.mjs",
 ];
@@ -32,9 +36,13 @@ async function fixture(context) {
     "specs/example.md": "# example\n",
     "fixtures/protocol/example.json": "{}\n",
     "scripts/generate-proof-artifacts.mjs": "// route fixture\n",
+    "scripts/dependency-materialization.mjs": "// route fixture\n",
+    "scripts/lib/dependency-materialization.mjs": "// route fixture\n",
     "scripts/lib/proof-artifacts.mjs": "// route fixture\n",
     "scripts/lib/scoped-strip-types.mjs": "// route fixture\n",
+    "scripts/test-controller-bootstrap.mjs": "// route fixture\n",
     "tests/output-session-lifecycle.test.mjs": "// route fixture\n",
+    "tests/dependency-materialization.test.mjs": "// route fixture\n",
     "tests/proof-artifact-generator.test.mjs": "// route fixture\n",
   };
   for (const [path, bytes] of Object.entries(files)) {
