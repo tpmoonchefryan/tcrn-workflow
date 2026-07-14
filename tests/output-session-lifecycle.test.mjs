@@ -244,7 +244,7 @@ async function liveDetachedProcessGroup() {
   // The production preload forbids detached descendants unconditionally.
   // This isolated safe-io fixture uses an unpreloaded launcher solely to make
   // a controlled foreign process-group target for recovery tests.
-  const child = spawn(process.execPath, ["--eval", [
+  const child = spawn("/usr/bin/env", ["-u", "NODE_OPTIONS", process.execPath, "--eval", [
     'const { spawn } = require("node:child_process");',
     'const child = spawn(process.execPath, ["--eval", "setInterval(() => {}, 1000);"], { detached: true, stdio: "ignore" });',
     'process.stdout.write(String(child.pid));',
@@ -2626,6 +2626,53 @@ test("the real command-five test path rejects a same-group inherited descendant 
   await assertTaskResidueClean(root);
 });
 
+test("a permitted real-entrypoint Node relay cannot create a detached escaped descendant", async (context) => {
+  const source = [
+    'import assert from "node:assert/strict";',
+    'import { spawn } from "node:child_process";',
+    'import { once } from "node:events";',
+    'import { readFileSync, writeFileSync } from "node:fs";',
+    'import test from "node:test";',
+    'test("a permitted relay retains the controller child policy", async () => {',
+    '  const relay = [',
+    '    "const { spawn } = require(\\\"node:child_process\\\");",',
+    '    "const { writeFileSync } = require(\\\"node:fs\\\");",',
+    '    "const attempted = [",',
+    '    "  [\\\"TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN\\\", () => spawn(process.execPath, [\\\"--eval\\\", \\\"setInterval(() => {}, 1000);\\\"], { detached: true, stdio: \\\"ignore\\\" })],",',
+    '    "  [\\\"TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN\\\", () => spawn(process.execPath, [\\\"--eval\\\", \\\"\\\"], { stdio: \\\"inherit\\\" })],",',
+    '    "];",',
+    '    "const codes = attempted.map(([expected, attempt]) => { try { attempt(); return \\\"escaped\\\"; } catch (error) { return error.code === expected ? error.code : \\\"unexpected\\\"; } });",',
+    '    "writeFileSync(process.env.TCRN_TASK_RELAY_RESULT_PATH, codes.join(\\\",\\\") + \\\"\\\\n\\\");",',
+    '    "process.exit(codes.every((code, index) => code === attempted[index][0]) ? 0 : 1);",',
+    '  ].join("\\n");',
+    '  const child = spawn(process.execPath, ["--eval", relay], {',
+    '    env: { TCRN_TASK_RELAY_RESULT_PATH: process.env.TCRN_TASK_RELAY_RESULT_PATH, NODE_OPTIONS: "" },',
+    '    stdio: "ignore",',
+    '  });',
+    '  const [code, signal] = await once(child, "exit");',
+    '  assert.equal(code, 0);',
+    '  assert.equal(signal, null);',
+    '  assert.equal(readFileSync(process.env.TCRN_TASK_RELAY_RESULT_PATH, "utf8"), "TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN,TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN\\n");',
+    '});',
+    "",
+  ].join("\n");
+  const root = await taskEntrypointFixture(context, source);
+  const relayResultPath = resolve(root, "relay-result.txt");
+  const result = await startTaskEntrypoint(root, { TCRN_TASK_RELAY_RESULT_PATH: relayResultPath }).result;
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.signal, null);
+  assert.equal(result.stderr, "");
+  assert.deepEqual(JSON.parse(result.stdout), {
+    ok: true,
+    command: "test",
+    reasonCode: "TESTS_VERIFIED",
+    tests: ["tests/entrypoint.test.mjs"],
+    result: "passed",
+  });
+  await rm(relayResultPath);
+  await assertTaskResidueClean(root);
+});
+
 test("the controller child policy rejects detached escape through every supported child_process signature", () => {
   const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
   const source = [
@@ -2648,6 +2695,24 @@ test("the controller child policy rejects detached escape through every supporte
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stderr, "");
   assert.deepEqual(JSON.parse(result.stdout), Array(9).fill("TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN"));
+});
+
+test("the controller child policy propagates to a Node relay even when it supplies an empty environment", () => {
+  const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
+  const relay = [
+    'const { spawnSync } = require("node:child_process");',
+    'try { spawnSync(process.execPath, ["--eval", ""], { detached: true, stdio: "ignore" }); process.stdout.write("escaped"); }',
+    'catch (error) { process.stdout.write(error.code ?? "unexpected"); }',
+  ].join("\n");
+  const source = [
+    'import { spawnSync } from "node:child_process";',
+    `const result = spawnSync(process.execPath, ["--eval", ${JSON.stringify(relay)}], { encoding: "utf8", env: {} });`,
+    'process.stdout.write(result.stdout);',
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.equal(result.stdout, "TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN");
 });
 
 test("a passing detached test that writes stderr fails the real task entrypoint cleanly", async (context) => {
