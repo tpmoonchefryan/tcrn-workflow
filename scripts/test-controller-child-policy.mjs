@@ -39,9 +39,18 @@ function optionsIndex(name, arguments_) {
     // Node accepts an explicitly undefined optional arguments array, with the
     // options object still supplied in the third position. Normalize that
     // signature before both policy enforcement and environment propagation.
-    return Array.isArray(arguments_[1]) || (arguments_.length >= 3 && arguments_[1] === undefined) ? 2 : 1;
+    if (name !== "execFile") {
+      return Array.isArray(arguments_[1]) || (arguments_.length >= 3 && arguments_[1] === undefined) ? 2 : 1;
+    }
+    // execFile has a trailing callback.  A callback in either optional slot is
+    // not an options object and must never be overwritten while injecting the
+    // controller policy.
+    if (Array.isArray(arguments_[1]) || (arguments_.length >= 3 && arguments_[1] === undefined)) {
+      return typeof arguments_[2] === "function" ? undefined : 2;
+    }
+    return typeof arguments_[1] === "function" ? undefined : 1;
   }
-  if (name === "exec") return 1;
+  if (name === "exec") return typeof arguments_[1] === "function" ? undefined : 1;
   return undefined;
 }
 
@@ -73,11 +82,9 @@ function propagatePolicyToNodeChild(name, arguments_) {
   // caller-supplied options and environment.
   if (name !== "fork" && !isNodeExecutable(arguments_[0])) return arguments_;
   const index = optionsIndex(name, arguments_);
-  if (index === undefined) return arguments_;
-  const options = object(arguments_[index]) ?? {};
+  const options = index === undefined ? {} : object(arguments_[index]) ?? {};
   const environment = object(options.env) ?? process.env;
-  const updated = [...arguments_];
-  updated[index] = {
+  const updatedOptions = {
     ...options,
     // `task.mjs` is the separately governed command entrypoint, whose own
     // bootstrap creates the recorded detached process group. It must start
@@ -87,6 +94,25 @@ function propagatePolicyToNodeChild(name, arguments_) {
       ? environmentWithoutPolicy(environment)
       : { ...environment, NODE_OPTIONS: nodeOptionsWithPolicy(environment.NODE_OPTIONS) },
   };
+  const updated = [...arguments_];
+  if (index !== undefined) {
+    updated[index] = updatedOptions;
+    return updated;
+  }
+  // The two callback APIs admit omitted options. Insert options before their
+  // callback rather than replacing that callback with an object.
+  if (name === "exec") {
+    if (typeof updated[1] === "function") updated.splice(1, 0, updatedOptions);
+    else updated[1] = updatedOptions;
+    return updated;
+  }
+  if (name === "execFile") {
+    const argumentsWereSupplied = Array.isArray(updated[1]) || (updated.length >= 3 && updated[1] === undefined);
+    const target = argumentsWereSupplied ? 2 : 1;
+    if (typeof updated[target] === "function") updated.splice(target, 0, updatedOptions);
+    else updated[target] = updatedOptions;
+    return updated;
+  }
   return updated;
 }
 
