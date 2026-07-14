@@ -15,7 +15,7 @@
         "scripts/lib/safe-io.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "c5b83a72ad3d83d68415e457b9adec20aa6f07acd917a2b4293a0ab797cc14d5",
+      "fixtureDigest": "04b97a902731005f3a8705cae8928d7ddb36e64a8408d2aca7afb7ac0b9c56c6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -44,7 +44,7 @@
         "tests/privacy-boundary.test.mjs",
         "tests/io-boundaries.test.mjs"
       ],
-      "fixtureDigest": "248b3fc99a27d7bbfd2436ee37f033d6e2b6730cfd0109f9b9d6fa86b2f63d34",
+      "fixtureDigest": "1d30139fea801d3c495a3be04b5b75f565a9016103ede72355ed802f0fa51be7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -826,7 +826,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "55ea8c21b66bf52d18fde66f36e5d15e75722f60cc21cdb6a0695a2d4b6d6ede",
+      "fixtureDigest": "1d6dd7493a22093b2267cb5cb6691e5016b615bf0477e93391a4b1f688d1ddb1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

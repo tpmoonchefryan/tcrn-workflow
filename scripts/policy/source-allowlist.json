@@ -123,6 +123,8 @@
     "scripts/task.mjs",
     "scripts/tcrn-workflow.mjs",
     "scripts/test-controller-bootstrap.mjs",
+    "scripts/test-controller-child-policy.mjs",
+    "scripts/test-controller-reaper.mjs",
     "scripts/verify-release-trust.mjs",
     "specs/aos-requirements-v1.md",
     "specs/compatibility-v1.md",

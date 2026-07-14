@@ -241,20 +241,28 @@ async function waitForDeadPid(pid) {
 }
 
 async function liveDetachedProcessGroup() {
-  const child = spawn(process.execPath, ["--eval", "setInterval(() => {}, 1000);"], {
-    detached: true,
-    stdio: "ignore",
-  });
-  assert.ok(Number.isSafeInteger(child.pid) && child.pid > 0);
+  // The production preload forbids detached descendants unconditionally.
+  // This isolated safe-io fixture uses an unpreloaded launcher solely to make
+  // a controlled foreign process-group target for recovery tests.
+  const child = spawn(process.execPath, ["--eval", [
+    'const { spawn } = require("node:child_process");',
+    'const child = spawn(process.execPath, ["--eval", "setInterval(() => {}, 1000);"], { detached: true, stdio: "ignore" });',
+    'process.stdout.write(String(child.pid));',
+    'child.unref();',
+  ].join("\n")], { stdio: ["ignore", "pipe", "ignore"] });
+  const chunks = [];
+  child.stdout.on("data", (chunk) => chunks.push(chunk));
+  await once(child, "exit");
+  const detachedPid = Number(Buffer.concat(chunks).toString("utf8"));
+  const detached = { pid: detachedPid };
+  assert.ok(Number.isSafeInteger(detached.pid) && detached.pid > 0);
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
-  process.kill(-child.pid, 0);
-  return child;
+  process.kill(-detached.pid, 0);
+  return detached;
 }
 
 async function stopDetachedProcessGroup(child) {
-  const exited = once(child, "exit");
   process.kill(-child.pid, "SIGTERM");
-  await exited;
   await waitForDeadPid(child.pid);
 }
 
@@ -2521,49 +2529,41 @@ test("a concurrent real task entrypoint preserves its live command-wide owner an
   await assertTaskResidueClean(root);
 });
 
-test("a real task entrypoint does not let an inherited detached worker pipe strand command-wide release", async (context) => {
+test("the real command-five test path rejects detached inherited-pipe descendants and reproduces the rejected cycle only in a disposable fixture", async (context) => {
   const holderSource = [
     'import { spawn } from "node:child_process";',
     'import { writeFileSync } from "node:fs";',
     'import test from "node:test";',
-    'const holder = spawn(process.execPath, ["--eval", "setTimeout(() => {}, 1_000);"], { detached: true, stdio: "inherit" });',
+    'const lockPath = process.env.TCRN_TEST_CONTROLLER_LOCK_PATH;',
+    'const holder = spawn(process.execPath, ["--eval", "const { existsSync } = require(\\\"node:fs\\\"); const lock = process.argv[1]; const timer = setInterval(() => { if (!existsSync(lock)) { clearInterval(timer); process.exit(0); } }, 10);", lockPath], { detached: true, stdio: "inherit" });',
     'holder.unref();',
     'writeFileSync(process.env.TCRN_TASK_PIPE_HOLDER_PID_PATH, String(holder.pid) + "\\n");',
-    'test("the test controller may exit while a detached inherited pipe holder remains", () => {});',
+    'test("the descendant waits for the command-wide lock", () => {});',
     "",
   ].join("\n");
   const current = await taskEntrypointFixture(context, holderSource);
   const currentHolderPath = resolve(current, "pipe-holder.pid");
-  const currentStarted = Date.now();
   const currentResult = await startTaskEntrypoint(current, {
     TCRN_TASK_PIPE_HOLDER_PID_PATH: currentHolderPath,
   }).result;
-  const currentElapsed = Date.now() - currentStarted;
-  assert.equal(currentResult.code, 0, currentResult.stderr);
+  assert.equal(currentResult.code, 1, currentResult.stderr);
   assert.equal(currentResult.signal, null);
-  assert.equal(currentResult.stderr, "");
-  assert.equal(JSON.parse(currentResult.stdout).reasonCode, "TESTS_VERIFIED");
-  assert.ok(currentElapsed < 1_800, "controller pipe isolated from detached holder: " + currentElapsed + "ms");
-  const currentHolder = Number(await readFile(currentHolderPath, "utf8"));
-  assert.ok(Number.isSafeInteger(currentHolder) && currentHolder > 0);
-  await waitForDeadPid(currentHolder);
+  assert.equal(currentResult.stdout, "");
+  const currentReceipt = JSON.parse(currentResult.stderr);
+  assert.equal(currentReceipt.reasonCode, "COMMAND_FAILED");
+  assert.equal(currentReceipt.error.includes("TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN"), true);
+  await assert.rejects(lstat(currentHolderPath), { code: "ENOENT" });
   await assertTaskResidueClean(current);
 
-  // Reconstruct the rejected bootstrap's inherited-stream boundary in a
-  // second clean fixture. Its task-facing pipe remains open until the
-  // detached holder exits, so the outer entrypoint cannot reach terminal
-  // success even though the recorded controller group is already gone.
+  // Reconstruct the rejected controller stream topology in a second clean
+  // fixture. The detached holder waits for the retained lock, while the old
+  // controller close waits for that holder's inherited task-facing pipe.
   const rejected = await taskEntrypointFixture(context, holderSource);
   const rejectedBootstrapPath = resolve(rejected, "scripts/test-controller-bootstrap.mjs");
   const fixedBootstrap = await readFile(rejectedBootstrapPath, "utf8");
-  assert.equal(fixedBootstrap.includes('  stdio: ["ignore", "pipe", "pipe"],'), true, "isolated stdio fixture boundary");
-  assert.equal(fixedBootstrap.includes('testController.once("exit", (code, signal) => resolveResult({ code, signal }));'), true, "exit fixture boundary");
-  const rejectedBootstrap = fixedBootstrap
-    .replace('  stdio: ["ignore", "pipe", "pipe"],', '  stdio: "inherit",')
-    .replace('testController.stdout.on("data", (chunk) => process.stdout.write(chunk));\n', '')
-    .replace('testController.stderr.on("data", (chunk) => process.stderr.write(chunk));\n', '')
-    .replace('testController.once("exit", (code, signal) => resolveResult({ code, signal }));', 'testController.once("close", (code, signal) => resolveResult({ code, signal }));')
-    .replace('testController.stdout.destroy();\ntestController.stderr.destroy();\n', '');
+  const rejectedMarker = "// Test-controller output goes to private regular files, never inherited pipes.\n";
+  assert.equal(fixedBootstrap.includes(rejectedMarker), true, "controller topology fixture boundary");
+  const rejectedBootstrap = `${fixedBootstrap.slice(0, fixedBootstrap.indexOf(rejectedMarker))}const testController = spawn(process.execPath, testArguments, {\n  stdio: "inherit",\n  env: { ...process.env, TCRN_TEST_CONTROLLER_PROCESS_GROUP: String(process.pid) },\n});\nconst result = await new Promise((resolveResult, rejectResult) => {\n  testController.once("error", rejectResult);\n  testController.once("close", (code, signal) => resolveResult({ code, signal }));\n});\nprocess.exitCode = result.code ?? (result.signal ? 1 : 1);\n`;
   await writeFile(rejectedBootstrapPath, rejectedBootstrap, { mode: 0o600 });
   runGit(rejected, ["add", "scripts/test-controller-bootstrap.mjs"]);
   runGit(rejected, ["commit", "--quiet", "-m", "rejected inherited-stream bootstrap"]);
@@ -2574,17 +2574,80 @@ test("a real task entrypoint does not let an inherited detached worker pipe stra
   await waitForPath(rejectedHolderPath, rejectedRun.result);
   const early = await Promise.race([
     rejectedRun.result.then(() => "settled"),
-    new Promise((resolveDelay) => setTimeout(() => resolveDelay("pending"), 300)),
+    new Promise((resolveDelay) => setTimeout(() => resolveDelay("pending"), 500)),
   ]);
   assert.equal(early, "pending", "rejected inherited pipe must delay terminal task close");
   const rejectedHolder = Number(await readFile(rejectedHolderPath, "utf8"));
+  const rejectedOwner = JSON.parse(await readFile(resolve(lockPath(rejected), "owner.json"), "utf8"));
+  assert.ok(Number.isSafeInteger(rejectedOwner.processGroup) && rejectedOwner.processGroup > 0);
+  // Dispose only the captured disposable processes; no lock or claim is
+  // removed manually. A later real task invocation performs governed stale
+  // owner recovery after the cycle has been demonstrated.
+  rejectedRun.child.kill("SIGKILL");
+  await rejectedRun.result;
+  process.kill(rejectedHolder, "SIGKILL");
+  process.kill(-rejectedOwner.processGroup, "SIGKILL");
   await waitForDeadPid(rejectedHolder);
-  const rejectedResult = await rejectedRun.result;
-  assert.equal(rejectedResult.code, 0, rejectedResult.stderr);
-  assert.equal(rejectedResult.signal, null);
-  assert.equal(rejectedResult.stderr, "");
-  assert.equal(JSON.parse(rejectedResult.stdout).reasonCode, "TESTS_VERIFIED");
+  await waitForDeadPid(rejectedOwner.processGroup);
+  await writeFile(resolve(rejected, "tests/entrypoint.test.mjs"), [
+    'import test from "node:test";',
+    'test("recovered fixture", () => {});',
+    "",
+  ].join("\n"), { mode: 0o600 });
+  runGit(rejected, ["add", "tests/entrypoint.test.mjs"]);
+  runGit(rejected, ["commit", "--quiet", "-m", "recovery fixture"]);
+  const recovered = await startTaskEntrypoint(rejected).result;
+  assert.equal(recovered.code, 0, recovered.stderr);
+  assert.equal(JSON.parse(recovered.stdout).reasonCode, "TESTS_VERIFIED");
   await assertTaskResidueClean(rejected);
+});
+
+test("the real command-five test path rejects a same-group inherited descendant before terminal release", async (context) => {
+  const source = [
+    'import { spawn } from "node:child_process";',
+    'import { writeFileSync } from "node:fs";',
+    'import test from "node:test";',
+    'const lockPath = process.env.TCRN_TEST_CONTROLLER_LOCK_PATH;',
+    'const child = spawn(process.execPath, ["--eval", "const { existsSync } = require(\\\"node:fs\\\"); const lock = process.argv[1]; const timer = setInterval(() => { if (!existsSync(lock)) { clearInterval(timer); process.exit(0); } }, 10);", lockPath], { stdio: "inherit" });',
+    'writeFileSync(process.env.TCRN_TASK_PIPE_HOLDER_PID_PATH, String(child.pid) + "\\n");',
+    'test("the controller exits while its same-group descendant awaits cleanup", () => {});',
+    "",
+  ].join("\n");
+  const root = await taskEntrypointFixture(context, source);
+  const holderPath = resolve(root, "pipe-holder.pid");
+  const result = await startTaskEntrypoint(root, { TCRN_TASK_PIPE_HOLDER_PID_PATH: holderPath }).result;
+  assert.equal(result.code, 1, result.stderr);
+  assert.equal(result.signal, null);
+  assert.equal(result.stdout, "");
+  const receipt = JSON.parse(result.stderr);
+  assert.equal(receipt.reasonCode, "COMMAND_FAILED");
+  assert.equal(receipt.error.includes("TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN"), true);
+  await assert.rejects(lstat(holderPath), { code: "ENOENT" });
+  await assertTaskResidueClean(root);
+});
+
+test("the controller child policy rejects detached escape through every supported child_process signature", () => {
+  const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
+  const source = [
+    'import { exec, execFile, fork, spawn, spawnSync } from "node:child_process";',
+    'const attempts = [',
+    '  () => spawn(process.execPath, { detached: true }),',
+    '  () => spawn(process.execPath, [], { detached: true }),',
+    '  () => spawnSync(process.execPath, { detached: true }),',
+    '  () => spawnSync(process.execPath, [], { detached: true }),',
+    '  () => exec("ignored", { detached: true }),',
+    '  () => execFile(process.execPath, { detached: true }),',
+    '  () => execFile(process.execPath, [], { detached: true }),',
+    '  () => fork("ignored.mjs", { detached: true }),',
+    '  () => fork("ignored.mjs", [], { detached: true }),',
+    '];',
+    'const codes = attempts.map((attempt) => { try { attempt(); return "escaped"; } catch (error) { return error.code; } });',
+    'process.stdout.write(JSON.stringify(codes));',
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.deepEqual(JSON.parse(result.stdout), Array(9).fill("TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN"));
 });
 
 test("a passing detached test that writes stderr fails the real task entrypoint cleanly", async (context) => {
