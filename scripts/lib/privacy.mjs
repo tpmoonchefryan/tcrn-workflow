@@ -1,5 +1,46 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { createHash } from "node:crypto";
+import { TextDecoder } from "node:util";
+
+import { compareCanonicalText } from "./canonical-order.mjs";
+
+const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
+
+export function decodeGitMetadataBytes(content, reasonCode) {
+  if (!Buffer.isBuffer(content) || typeof reasonCode !== "string" || reasonCode.length === 0) {
+    throw new Error("GIT_METADATA_DECODE_INPUT_INVALID");
+  }
+  try {
+    return strictUtf8.decode(content);
+  } catch {
+    throw new Error(reasonCode);
+  }
+}
+
+export function decodePrivacyScanBytes(content) {
+  if (!Buffer.isBuffer(content)) throw new Error("PRIVACY_SCAN_BYTES_REQUIRED");
+  // Privacy patterns are textual and continue to scan the UTF-8 projection,
+  // while byte-count and digest evidence retain the original Buffer below.
+  return content.toString("utf8");
+}
+
+export function aggregatePrivacySurface(records) {
+  const ordered = [...records].sort((left, right) => compareCanonicalText(left.path, right.path));
+  const digest = createHash("sha256");
+  let bytes = 0;
+  for (const record of ordered) {
+    const content = Buffer.isBuffer(record.content) ? record.content : Buffer.from(record.content, "utf8");
+    bytes += content.length;
+    digest.update(record.path, "utf8");
+    digest.update("\0", "utf8");
+    digest.update(String(content.length), "utf8");
+    digest.update("\0", "utf8");
+    digest.update(content);
+  }
+  return { entries: ordered.length, bytes, sha256: digest.digest("hex") };
+}
+
 function escaped(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }

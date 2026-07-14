@@ -19,6 +19,7 @@ const routeAdditions = new Set([
   "scripts/generate-proof-artifacts.mjs",
   "scripts/dependency-materialization.mjs",
   "scripts/lib/dependency-materialization.mjs",
+  "scripts/lib/local-command.mjs",
   "scripts/lib/proof-artifacts.mjs",
   "scripts/lib/p8-workflow-rc.mjs",
   "docs/releases/0.1.0-rc.1.md",
@@ -28,6 +29,7 @@ const routeAdditions = new Set([
   "scripts/test-controller-reaper.mjs",
   "tests/output-session-lifecycle.test.mjs",
   "tests/dependency-materialization.test.mjs",
+  "tests/local-command-byte-fidelity.test.mjs",
   "tests/proof-artifact-generator.test.mjs",
   "tests/p8-workflow-rc.test.mjs",
 ]);
@@ -36,6 +38,11 @@ const claimFields = [
 ];
 const manifestFields = ["schemaVersion", "status", "accepted", "basisDigest", "inputs", "roleVerdictSlots"];
 const roleNames = ["platform-workflow-architect", "workflow-verification-engineer", "security-risk-reviewer", "reality-checker"];
+const claimRouteAdditions = new Map([
+  ["P1-CLEAN-HISTORY", ["scripts/lib/local-command.mjs", "tests/local-command-byte-fidelity.test.mjs"]],
+  ["P1-NO-PRIVATE-MIGRATION", ["scripts/lib/local-command.mjs", "tests/local-command-byte-fidelity.test.mjs"]],
+  ["P8-WORKFLOW-RC", ["scripts/lib/local-command.mjs", "scripts/lib/privacy.mjs", "tests/local-command-byte-fidelity.test.mjs"]],
+]);
 const stagePrefix = ".tcrn-proof-artifact-";
 let sequence = 0;
 
@@ -168,10 +175,11 @@ async function rebuiltMap(root, virtual) {
       claims.push({ ...claim, fixtureDigest: null });
       continue;
     }
-    assert(!claim.fixturePaths.includes("verification-map.yaml"), "PROOF_ARTIFACT_SELF_REFERENCE", claim.id);
-    const records = await Promise.all(claim.fixturePaths.map((path) => record(root, path, virtual)));
+    const fixturePaths = [...new Set([...claim.fixturePaths, ...(claimRouteAdditions.get(claim.id) ?? [])])];
+    assert(!fixturePaths.includes("verification-map.yaml"), "PROOF_ARTIFACT_SELF_REFERENCE", claim.id);
+    const records = await Promise.all(fixturePaths.map((path) => record(root, path, virtual)));
     records.sort((left, right) => compareCanonicalText(left.path, right.path));
-    claims.push({ ...claim, fixtureDigest: sha256(JSON.stringify(records)) });
+    claims.push({ ...claim, fixturePaths, fixtureDigest: sha256(JSON.stringify(records)) });
   }
   return { ...map, claims };
 }

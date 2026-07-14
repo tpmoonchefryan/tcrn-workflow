@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { lstat, writeFile } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 
 import {
   fileRecord,
@@ -16,12 +16,19 @@ import {
   walkFiles,
 } from "./lib/files.mjs";
 import { compareCanonicalText } from "./lib/canonical-order.mjs";
+import { LocalCommandError, runLocalCommand } from "./lib/local-command.mjs";
 import {
   DependencyGraphError,
   assertNoKnownVulnerabilities,
   validateFrozenDependencyGraph,
 } from "./lib/dependency-graph.mjs";
-import { parseHistoricalTreePaths, scanPrivacyEntries } from "./lib/privacy.mjs";
+import {
+  aggregatePrivacySurface,
+  decodeGitMetadataBytes,
+  decodePrivacyScanBytes,
+  parseHistoricalTreePaths,
+  scanPrivacyEntries,
+} from "./lib/privacy.mjs";
 import {
   P8_SUPPORTED_AOS_RELEASES,
   P8_RELEASE_ARTIFACTS,
@@ -88,53 +95,7 @@ function success(reasonCode, fields = {}) {
 }
 
 function run(executable, arguments_, options = {}) {
-  const allowed = executable === process.execPath || executable === "git";
-  assertion(allowed, "PROCESS_EXECUTABLE_NOT_ALLOWED", executable);
-  if (executable === "git") {
-    const localOnly = new Set([
-      "cat-file",
-      "for-each-ref",
-      "fsck",
-      "ls-tree",
-      "reflog",
-      "remote",
-      "rev-list",
-      "status",
-    ]);
-    assertion(localOnly.has(arguments_[0]), "GIT_PROCESS_BOUNDARY", arguments_.join(" "));
-    if (arguments_[0] === "remote") {
-      assertion(
-        arguments_.length === 1 || arguments_[1] === "get-url",
-        "GIT_PROCESS_BOUNDARY",
-        arguments_.join(" "),
-      );
-    }
-  }
-  const { env: extraEnvironment = {}, raw = false, ...spawnOptions } = options;
-  const result = spawnSync(executable, arguments_, {
-    cwd: repositoryRoot,
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
-      NO_COLOR: "1",
-      npm_config_audit: "false",
-      npm_config_fund: "false",
-      npm_config_offline: "true",
-      ...extraEnvironment,
-    },
-    ...spawnOptions,
-  });
-  if (result.status !== 0) {
-    fail(
-      "COMMAND_FAILED",
-      `${executable} ${arguments_.join(" ")}\n${result.stdout ?? ""}${result.stderr ?? ""}`,
-    );
-  }
-  if ((result.stderr ?? "").trim() !== "") {
-    fail("COMMAND_UNEXPECTED_STDERR", `${executable} ${arguments_.join(" ")}\n${result.stderr}`);
-  }
-  return raw ? result.stdout : result.stdout.trim();
+  return runLocalCommand(executable, arguments_, { cwd: repositoryRoot, ...options });
 }
 
 async function runDetachedTestController(arguments_, extraEnvironment) {
@@ -374,7 +335,7 @@ async function runTests({
     .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs")
-    .filter((path) => !p8Only || path === "tests/p8-workflow-rc.test.mjs");
+    .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path));
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
@@ -1088,22 +1049,6 @@ async function archiveEntryIfPresent() {
   }];
 }
 
-function aggregatePrivacySurface(records) {
-  const ordered = [...records].sort((left, right) => compareCanonicalText(left.path, right.path));
-  const digest = createHash("sha256");
-  let bytes = 0;
-  for (const record of ordered) {
-    const content = Buffer.isBuffer(record.content) ? record.content : Buffer.from(record.content, "utf8");
-    bytes += content.length;
-    digest.update(record.path, "utf8");
-    digest.update("\0", "utf8");
-    digest.update(String(content.length), "utf8");
-    digest.update("\0", "utf8");
-    digest.update(content);
-  }
-  return { entries: ordered.length, bytes, sha256: digest.digest("hex") };
-}
-
 async function filesForPrivacySurface(root, labelPrefix = "") {
   const files = await walkFiles(root);
   return Promise.all(files.map(async (path) => ({
@@ -1140,7 +1085,7 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
       entries.push({
         label: `git-${type}:${object}`,
         kind: type,
-        content,
+        content: decodePrivacyScanBytes(content),
       });
     } else if (type === "tree") {
       const content = run("git", ["cat-file", "tree", object], { raw: true });
@@ -1148,7 +1093,7 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
       entries.push({
         label: `git-tree:${object}`,
         kind: "tree",
-        content,
+        content: decodePrivacyScanBytes(content),
       });
     } else {
       fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:${type}`);
@@ -1185,13 +1130,14 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
   let historicalPaths = 0;
   for (const commit of commits) {
     const tree = run("git", ["ls-tree", "-rz", "--full-tree", commit], { raw: true });
-    for (const path of parseHistoricalTreePaths(tree)) {
+    const treeText = decodeGitMetadataBytes(tree, "PRIVACY_TREE_UTF8_INVALID");
+    for (const path of parseHistoricalTreePaths(treeText)) {
       entries.push({ label: `git-commit-tree:${commit}:${path}`, kind: "filename", content: path });
       historicalPaths += 1;
     }
   }
   const refs = run("git", ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(upstream)"], { raw: true });
-  entries.push({ label: "git-refs", kind: "ref", content: refs });
+  entries.push({ label: "git-refs", kind: "ref", content: decodeGitMetadataBytes(refs, "PRIVACY_REFS_UTF8_INVALID") });
   const findings = scanPrivacyEntries(entries, { owner });
   assertion(findings.length === 0, "PRIVACY_FINDINGS", findings.join(","));
   const source = await verifySource();
@@ -1550,7 +1496,7 @@ const handlers = {
 };
 
 function errorReason(error) {
-  if (error instanceof TaskError || error instanceof BoundaryError || error instanceof ProtocolProofError || error instanceof DependencyGraphError || error instanceof ScopedStripTypesError) {
+  if (error instanceof TaskError || error instanceof LocalCommandError || error instanceof BoundaryError || error instanceof ProtocolProofError || error instanceof DependencyGraphError || error instanceof ScopedStripTypesError) {
     return error.reasonCode;
   }
   return "TASK_INTERNAL_ERROR";
