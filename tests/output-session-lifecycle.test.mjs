@@ -2694,6 +2694,73 @@ test("a real task entrypoint rejects a detached child through the undefined opti
   await assertTaskResidueClean(root);
 });
 
+test("the controller child policy preserves exec and execFile callbacks across optional overloads", async (context) => {
+  const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
+  const nodeBin = await mkdtemp(join(tmpdir(), "tcrn-callback-node-"));
+  const nodePath = resolve(nodeBin, "node");
+  context.after(() => rm(nodeBin, { recursive: true, force: true }));
+  await writeFile(nodePath, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+  const source = [
+    'import { exec, execFile } from "node:child_process";',
+    'process.env.PATH = process.env.TCRN_CALLBACK_NODE_BIN + ":" + process.env.PATH;',
+    'const calls = [];',
+    'function callback(name) { return (error, stdout, stderr) => { if (error) throw error; if (stdout !== "" || stderr !== "") throw new Error(name + " output"); calls.push(name); }; }',
+    'await Promise.all([',
+    '  new Promise((resolve, reject) => exec("node", (error, stdout, stderr) => { try { callback("exec-omitted")(error, stdout, stderr); resolve(); } catch (failure) { reject(failure); } })),',
+    '  new Promise((resolve, reject) => exec("node", undefined, (error, stdout, stderr) => { try { callback("exec-undefined")(error, stdout, stderr); resolve(); } catch (failure) { reject(failure); } })),',
+    '  new Promise((resolve, reject) => exec("node", {}, (error, stdout, stderr) => { try { callback("exec-options")(error, stdout, stderr); resolve(); } catch (failure) { reject(failure); } })),',
+    '  new Promise((resolve, reject) => execFile("node", (error, stdout, stderr) => { try { callback("execFile-omitted")(error, stdout, stderr); resolve(); } catch (failure) { reject(failure); } })),',
+    '  new Promise((resolve, reject) => execFile("node", undefined, (error, stdout, stderr) => { try { callback("execFile-undefined-args")(error, stdout, stderr); resolve(); } catch (failure) { reject(failure); } })),',
+    '  new Promise((resolve, reject) => execFile("node", [], (error, stdout, stderr) => { try { callback("execFile-omitted-options")(error, stdout, stderr); resolve(); } catch (failure) { reject(failure); } })),',
+    '  new Promise((resolve, reject) => execFile("node", [], undefined, (error, stdout, stderr) => { try { callback("execFile-undefined-options")(error, stdout, stderr); resolve(); } catch (failure) { reject(failure); } })),',
+    '  new Promise((resolve, reject) => execFile("node", undefined, {}, (error, stdout, stderr) => { try { callback("execFile-undefined-args-options")(error, stdout, stderr); resolve(); } catch (failure) { reject(failure); } })),',
+    ']);',
+    'process.stdout.write(JSON.stringify(calls.sort()));',
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8", timeout: 10_000, env: { ...process.env, TCRN_CALLBACK_NODE_BIN: nodeBin } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.deepEqual(JSON.parse(result.stdout), [
+    "exec-omitted", "exec-options", "exec-undefined", "execFile-omitted", "execFile-omitted-options", "execFile-undefined-args", "execFile-undefined-args-options", "execFile-undefined-options",
+  ]);
+});
+
+test("a real task entrypoint completes exec and execFile undefined optional callbacks before TESTS_VERIFIED", async (context) => {
+  const root = await taskEntrypointFixture(context, [
+    'import assert from "node:assert/strict";',
+    'import { exec, execFile } from "node:child_process";',
+    'import test from "node:test";',
+    'test("callbacks complete", async () => {',
+    '  process.env.PATH = process.env.TCRN_CALLBACK_NODE_BIN + ":" + process.env.PATH;',
+    '  const callback = (resolve, reject) => (error, stdout, stderr) => { try { assert.equal(error, null); assert.equal(stdout, ""); assert.equal(stderr, ""); resolve(); } catch (failure) { reject(failure); } };',
+    '  await Promise.all([',
+    '    new Promise((resolve, reject) => exec("node", undefined, callback(resolve, reject))),',
+    '    new Promise((resolve, reject) => execFile("node", undefined, callback(resolve, reject))),',
+    '    new Promise((resolve, reject) => execFile("node", [], undefined, callback(resolve, reject))),',
+    '  ]);',
+    '});',
+    '',
+  ].join("\n"));
+  const nodeBin = resolve(root, "callback-bin");
+  await mkdir(nodeBin);
+  await writeFile(resolve(nodeBin, "node"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+  runGit(root, ["add", "callback-bin/node"]);
+  runGit(root, ["commit", "--quiet", "-m", "callback exit fixture"]);
+  assert.equal(spawnSync("git", ["status", "--porcelain=v1"], { cwd: root, encoding: "utf8" }).stdout, "");
+  const result = await startTaskEntrypoint(root, { TCRN_CALLBACK_NODE_BIN: nodeBin }).result;
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.signal, null);
+  assert.equal(result.stderr, "");
+  assert.deepEqual(JSON.parse(result.stdout), {
+    ok: true,
+    command: "test",
+    reasonCode: "TESTS_VERIFIED",
+    tests: ["tests/entrypoint.test.mjs"],
+    result: "passed",
+  });
+  await assertTaskResidueClean(root);
+});
+
 test("the controller child policy rejects detached escape through every supported child_process signature", () => {
   const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
   const source = [
