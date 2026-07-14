@@ -23,6 +23,13 @@ import {
 } from "./lib/dependency-graph.mjs";
 import { parseHistoricalTreePaths, scanPrivacyEntries } from "./lib/privacy.mjs";
 import {
+  P8_SUPPORTED_AOS_RELEASES,
+  P8_VERSION,
+  buildDeterministicSourceArchive,
+  buildP8ReleaseArtifacts,
+  p8ArtifactRecords,
+} from "./lib/p8-workflow-rc.mjs";
+import {
   ProtocolProofError,
   validateAosLedger,
   validateP2SchemasAndFixtures,
@@ -348,6 +355,7 @@ async function runTests({
   p7Only = false,
   p7CompatibilityOnly = false,
   p7AosRequirementsOnly = false,
+  p8Only = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -364,7 +372,8 @@ async function runTests({
     .filter((path) => !p6AdapterOnly || path === "tests/p6-codex-adapter.test.mjs")
     .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
-    .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs");
+    .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs")
+    .filter((path) => !p8Only || path === "tests/p8-workflow-rc.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
@@ -392,11 +401,59 @@ async function runTests({
                       ? "P7_PUBLIC_AOS_REQUIREMENTS_TESTS_VERIFIED"
                   : p7Only
                     ? "P7_CANONICAL_EXCHANGE_TESTS_VERIFIED"
+                  : p8Only
+                    ? "P8_WORKFLOW_RC_TESTS_VERIFIED"
                   : p4Only
               ? "P4_ARTIFACT_LIFECYCLE_TESTS_VERIFIED"
               : "TESTS_VERIFIED",
     { tests, result: "passed" },
   );
+}
+
+async function verifyP8() {
+  assertCleanExclusiveSourceBasis(run("git", ["status", "--porcelain=v1", "--untracked-files=all"]));
+  const packagePaths = ["package.json", "packages/cli/package.json", "packages/core/package.json", "packages/protocol/package.json"];
+  const packages = await Promise.all(packagePaths.map((path) => readJson(resolve(repositoryRoot, path))));
+  assertion(packages.every((manifest) => manifest.version === P8_VERSION && manifest.private === true), "P8_PACKAGE_VERSION_MISMATCH");
+  const frameworkSource = await readText(resolve(repositoryRoot, "packages/core/src/index.ts"));
+  assertion(frameworkSource.includes(`FRAMEWORK_VERSION = \"${P8_VERSION}\"`), "P8_FRAMEWORK_VERSION_MISMATCH");
+  const compatibility = await readJson(resolve(repositoryRoot, "packages/core/fixtures/p7-compatibility-modes-cases.json"));
+  assertion(compatibility.supportedAosReleases === 0 && P8_SUPPORTED_AOS_RELEASES.length === 0, "P8_SUPPORTED_AOS_RELEASES_MISMATCH");
+  const dogfood = await runTests({ p8Only: true });
+  const trust = await runTests({ trustOnly: true });
+  const sourceArchive = await archive();
+  const sbomResult = await sbom();
+  const sourceBytes = await readSourceFile(resolve(repositoryRoot, sourceArchive.path));
+  const sbomBytes = await readSourceFile(resolve(repositoryRoot, sbomResult.path));
+  const source = await sourceRecords();
+  const archiveRecords = await Promise.all(source.map(async (record) => {
+    const content = await readSourceFile(resolve(repositoryRoot, record.path));
+    return { path: record.path, content, executable: content.subarray(0, 2).toString("utf8") === "#!", singleLink: true };
+  }));
+  const independentlyRebuilt = buildDeterministicSourceArchive([...archiveRecords].reverse());
+  assertion(sourceBytes.equals(independentlyRebuilt), "P8_ARCHIVE_REPRODUCIBILITY_MISMATCH");
+  const artifacts = buildP8ReleaseArtifacts({ sourceArchive: sourceBytes, sbom: sbomBytes });
+  for (const [name, content] of artifacts) await safeWriteOutput(repositoryRoot, `dist/release/${name}`, content);
+  const owner = await remoteOwner();
+  const privacyFindings = scanPrivacyEntries(
+    [...artifacts.entries()].map(([path, content]) => ({ label: `dist/release/${path}`, kind: "release", content: content.toString("utf8") })),
+    { owner },
+  );
+  assertion(privacyFindings.length === 0, "P8_RELEASE_PRIVACY_FINDINGS", privacyFindings.join(","));
+  const privacy = await verifyPrivacy();
+  return success("P8_WORKFLOW_RC_VERIFIED", {
+    tests: dogfood.reasonCode,
+    trust: trust.reasonCode,
+    sourceArchive,
+    sbom: sbomResult,
+    artifacts: p8ArtifactRecords(artifacts),
+    supportedAosReleases: P8_SUPPORTED_AOS_RELEASES,
+    network: false,
+    mutation: false,
+    publication: false,
+    releaseStatus: "unpublished_candidate",
+    privacy: privacy.reasonCode,
+  });
 }
 
 async function verifyP2Schemas() {
@@ -1202,6 +1259,7 @@ const commandContracts = {
   p7: { exit: 0, reasonCode: "P7_CANONICAL_EXCHANGE_VERIFIED" },
   "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
   "p7-aos-requirements": { exit: 0, reasonCode: "P7_PUBLIC_AOS_REQUIREMENTS_VERIFIED" },
+  p8: { exit: 0, reasonCode: "P8_WORKFLOW_RC_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
 };
 
@@ -1229,7 +1287,7 @@ async function verifyMap() {
     assertion(required.every((field) => Object.hasOwn(claim, field)), "VERIFICATION_MAP_FIELDS", claim.id ?? "unknown");
     assertion(!ids.has(claim.id), "VERIFICATION_MAP_DUPLICATE", claim.id);
     ids.add(claim.id);
-    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);
@@ -1253,7 +1311,7 @@ async function verifyMap() {
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
   }
-  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "RC1"]) {
+  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   return success("VERIFICATION_MAP_VERIFIED", {
@@ -1408,6 +1466,7 @@ const handlers = {
   p7: verifyP7,
   "p7-compatibility": verifyP7Compatibility,
   "p7-aos-requirements": verifyP7AosRequirements,
+  p8: verifyP8,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
@@ -1456,6 +1515,9 @@ function evidencePhase(name) {
   }
   if (name === "rc1") {
     return "rc1";
+  }
+  if (name === "p8") {
+    return "p8";
   }
   return "p1";
 }

@@ -36,6 +36,8 @@ pnpm verify:p6
 pnpm verify:p6:adapter
 pnpm verify:p7
 pnpm verify:p7:compatibility
+pnpm verify:p8
+pnpm verify:p8
 ```
 
 The repository does not collect telemetry. Static checks, a process executable
@@ -89,6 +91,12 @@ with zero network and zero mutation until a mutually supported release exists.
 `P4_KNOWLEDGE_CORE_VERIFIED` reason code. Neither command mutates the live graph
 or starts P6.
 
+`pnpm verify:p8` requires a clean candidate basis, runs the bounded release
+candidate and external-trust proof, independently rebuilds the canonical source
+archive, and writes a closed six-file unpublished candidate bundle through the
+governed output session. It does not publish, access AOS, or claim a supported
+release pair.
+
 `pnpm verify:p5` proves the closed generic profile trust/binding model, a frozen
 framework-base digest, descriptor-bound independent admission receipts,
 an out-of-band governed path/file-digest authority anchor, complete request and
@@ -119,6 +127,15 @@ final-hop visibility, hostile corpus, and 64 real input/template orders. The
 templates are not installed or activated; OG-04 and RC3 remain
 unsatisfied, and no live context/profile/Knowledge/artifact store, hook, Skill,
 configuration, or owner-visible activation is created.
+
+`pnpm verify:p8` is the release-candidate proof. It verifies one disposable
+dogfood fixture, the eight-record sanitized Core Reference projection, the
+external-bootstrap release-trust negative matrix, exact `0.1.0-rc.1` package
+and framework versions, a reproducible canonical USTAR source archive, and a
+closed local release set containing source archive, SBOM, manifest, provenance,
+checksums, and release notes. Its candidate has `supportedAosReleases: []`,
+does not publish or push, and makes no graph, store, template, AOS, or network
+mutation claim.
 
 After `pnpm build`, governed local commands are available through
 `node scripts/tcrn-workflow.mjs`. Mutation commands require an explicit

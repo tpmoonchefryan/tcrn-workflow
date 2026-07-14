@@ -1,6 +1,6 @@
 {
   "name": "tcrn-workflow",
-  "version": "0.0.0-development",
+  "version": "0.1.0-rc.1",
   "private": true,
   "description": "Offline-first, verifiable workflow framework bootstrap.",
   "license": "Apache-2.0",
@@ -45,6 +45,7 @@
     "verify:p7": "node scripts/task.mjs p7",
     "verify:p7:compatibility": "node scripts/task.mjs p7-compatibility",
     "verify:p7:aos-requirements": "node scripts/task.mjs p7-aos-requirements",
+    "verify:p8": "node scripts/task.mjs p8",
     "verify:protocol": "node scripts/task.mjs protocol-test",
     "verify:schemas": "node scripts/task.mjs protocol-schemas",
     "verify:privacy": "node scripts/task.mjs privacy",

@@ -5,6 +5,14 @@ Versioning after the first accepted release.
 
 ## Unreleased
 
+- Add the deterministic `0.1.0-rc.1` unpublished local Workflow release
+  candidate proof, canonical USTAR source archive, closed six-artifact release
+  set, sanitized Core Reference projection, and P8 verification command.
+
+- Prepare the immutable unpublished `0.1.0-rc.1` Workflow release candidate
+  with deterministic source/release artifacts, SBOM, provenance, closed
+  allowlist, sanitized Core Reference projection, and offline P8 proof.
+
 - Establish the clean-history P1 framework bootstrap.
 - Pin the toolchain and offline deterministic verification commands.
 - Define external release-trust-root verification and privacy boundaries.
