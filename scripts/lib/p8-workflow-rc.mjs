@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { relative, resolve, sep } from "node:path";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 
 import { canonicalJson } from "./canonical-json.mjs";
 import { compareCanonicalText } from "./canonical-order.mjs";
@@ -130,6 +131,51 @@ export async function releaseSourceRecords(repositoryRoot, allowedFiles) {
     records.push({ path, bytes: source.content, mode: fixedMode(path, source.content) });
   }
   return records;
+}
+
+function orderedRecordPaths(records) {
+  return records.map((record) => record.path).sort(compareCanonicalText);
+}
+
+async function materializeSourceRecords(root, records) {
+  for (const record of records) {
+    const target = resolve(root, safePath(record.path));
+    assertion(posix(relative(root, target)) === record.path, "P8_RELEASE_PATH_ESCAPE", record.path);
+    await mkdir(resolve(target, ".."), { recursive: true, mode: 0o700 });
+    await writeFile(target, record.bytes, { mode: record.mode });
+  }
+}
+
+export async function rebuildP8SourceArchiveInIndependentRoots({ repositoryRoot, allowedFiles }) {
+  const basisRecords = await releaseSourceRecords(repositoryRoot, allowedFiles);
+  const expectedPaths = orderedRecordPaths(basisRecords);
+  const stagingBase = await realpath(await mkdtemp(join(tmpdir(), "tcrn-p8-source-basis-")));
+  const roots = [];
+  try {
+    for (const name of ["first", "second"]) {
+      const root = resolve(stagingBase, name);
+      await mkdir(root, { mode: 0o700 });
+      await materializeSourceRecords(root, basisRecords);
+      roots.push(root);
+    }
+    const rebuilt = [];
+    for (const root of roots) {
+      const records = await releaseSourceRecords(root, allowedFiles);
+      const orderedPaths = orderedRecordPaths(records);
+      assertion(JSON.stringify(orderedPaths) === JSON.stringify(expectedPaths), "P8_ARCHIVE_REPRODUCIBILITY_PATHS");
+      rebuilt.push({ root, orderedPaths, archive: buildCanonicalUstar(records) });
+    }
+    assertion(rebuilt[0].archive.equals(rebuilt[1].archive), "P8_ARCHIVE_REPRODUCIBILITY_MISMATCH");
+    return {
+      sourceFiles: expectedPaths.length,
+      orderedEntries: expectedPaths,
+      archive: rebuilt[0].archive,
+      sha256: sha256(rebuilt[0].archive),
+      rootsIndependent: true,
+    };
+  } finally {
+    await rm(stagingBase, { recursive: true, force: true });
+  }
 }
 
 export async function assertP8Versions(repositoryRoot) {

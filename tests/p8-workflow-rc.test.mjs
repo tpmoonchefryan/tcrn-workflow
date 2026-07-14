@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -11,19 +11,29 @@ import {
   acquireWorkspaceLease,
   artifactArchiveDryRun,
   artifactCompactDryRun,
+  authorizeGenericProfileOperation,
+  calculateContextRouteRequestDigest,
+  calculateGenericProfileAdmissionClaims,
   createKnowledgeUnit,
   createProject,
   createWork,
   exportWorkspace,
+  GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
+  GENERIC_PROFILE_BASE_DIGEST,
+  GENERIC_PROFILE_OPERATIONS,
   generateGenericStarterBundle,
+  generateCorePersonaBundle,
   initializeArtifactStore,
   initializeKnowledgeStore,
   initializeWorkspace,
   listKnowledgeMetadata,
+  readContextRouteAuthorityReceipt,
+  readGenericProfileAdmissionReceipt,
+  routeContext,
   transitionKnowledgePromotion,
   transitionWork,
 } from "../dist/build/packages/core/src/index.js";
-import { canonicalSha256, deriveStableId } from "../dist/build/packages/protocol/src/index.js";
+import { canonicalJson, canonicalSha256, compareCanonicalText, deriveStableId } from "../dist/build/packages/protocol/src/index.js";
 
 import {
   P8_RELEASE_ARTIFACTS,
@@ -31,44 +41,113 @@ import {
   P8_TAG,
   P8_VERSION,
   assertClosedReleaseArtifactAllowlist,
-  buildDeterministicSourceArchive,
   buildP8ReleaseArtifacts,
   p8ArtifactRecords,
-  sanitizeCoreReference,
+  rebuildP8SourceArchiveInIndependentRoots,
+  sanitizedCoreReferenceProjection,
 } from "../scripts/lib/p8-workflow-rc.mjs";
 
-function sourceRecords(order) {
-  const records = [
-    { path: "README.md", content: Buffer.from("public workflow\n", "utf8"), executable: false, singleLink: true },
-    { path: "scripts/task.mjs", content: Buffer.from("#!/usr/bin/env node\n", "utf8"), executable: true, singleLink: true },
-    { path: "packages/core/src/index.ts", content: Buffer.from("export {};\n", "utf8"), executable: false, singleLink: true },
-  ];
-  return order === "reverse" ? records.reverse() : records;
+function fileAuthority(path, bytes) {
+  return { expectedCanonicalPath: path, expectedFileSha256: createHash("sha256").update(bytes).digest("hex") };
 }
 
-function profiles() {
-  return Array.from({ length: 8 }, (_, index) => ({
-    profileId: `profile:public-${index + 1}`,
-    displayName: `Public ${index + 1}`,
-    jobTitle: "Reference role",
-    mission: "Public deterministic reference.",
-    profileDigest: createHash("sha256").update(String(index)).digest("hex"),
-  }));
+function p8ProfileResolution(workspaceId, projectId) {
+  const base = generateGenericStarterBundle().layers[0];
+  const replacement = {
+    activeBinding: { mode: "project", workspaceId, projectId, command: null },
+    roleReplacement: null,
+    projectAuthority: projectId,
+    escalationOwner: "owner:fixture-p8",
+  };
+  const workspaceLayer = {
+    schemaVersion: "tcrn.generic-profile.v1",
+    layerId: "profile-layer:p8-disposable-project",
+    layerKind: "workspace_configuration",
+    trustLevel: "user_owned_overlay",
+    releaseVerificationDigest: null,
+    fields: {
+      ownerRebindOnly: replacement,
+      displayOnly: {
+        label: "P8 Disposable Profile",
+        description: "Inert project-bound profile for disposable P8 dogfood.",
+        examples: ["p8-disposable-project"],
+        presentation: { category: "workflow", audience: "workspace-owner" },
+      },
+    },
+  };
+  return {
+    schemaVersion: "tcrn.generic-profile-resolution-request.v1",
+    layers: [base, workspaceLayer],
+    ownerRebind: {
+      schemaVersion: "tcrn.generic-profile-owner-rebind.v1",
+      approved: true,
+      ownerId: "owner:fixture-p8",
+      targetLayerId: workspaceLayer.layerId,
+      replacement,
+    },
+  };
 }
 
-test("P8 builds byte-identical USTAR source archives across insertion orders", () => {
-  const first = buildDeterministicSourceArchive(sourceRecords("forward"));
-  const second = buildDeterministicSourceArchive(sourceRecords("reverse"));
-  assert.deepEqual(first, second);
-  assert.equal(first.subarray(257, 263).toString("utf8"), "ustar\0");
-  assert.throws(
-    () => buildDeterministicSourceArchive([{ ...sourceRecords("forward")[0], singleLink: false }]),
-    (error) => error.reasonCode === "P8_ARCHIVE_LINK_INVALID",
-  );
+function p8AdmissionReceipt(profileResolution) {
+  const claims = calculateGenericProfileAdmissionClaims(profileResolution);
+  const layer = profileResolution.layers.find((entry) => entry.layerKind === "workspace_configuration");
+  const layerAdmissions = [{
+    layerDigest: canonicalSha256(layer),
+    layerKind: layer.layerKind,
+    trustLevel: layer.trustLevel,
+    releaseVerificationDigest: layer.releaseVerificationDigest,
+  }];
+  const ownerRebindAdmission = {
+    ownerRebindDigest: canonicalSha256(profileResolution.ownerRebind),
+    targetLayerDigest: canonicalSha256(layer),
+    targetBindingDigest: canonicalSha256(profileResolution.ownerRebind.replacement.activeBinding),
+    ownerId: profileResolution.ownerRebind.ownerId,
+  };
+  const basis = {
+    schemaVersion: GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
+    frameworkBaseDigest: GENERIC_PROFILE_BASE_DIGEST,
+    layerAdmissions,
+    ownerRebindAdmission,
+    governedActions: [...GENERIC_PROFILE_OPERATIONS].sort(compareCanonicalText),
+    resolutionDisposition: "normal",
+    requestDigest: claims.requestDigest,
+    effectiveDigest: claims.effectiveDigest,
+  };
+  return { claims, receipt: { ...basis, receiptDigest: canonicalSha256(basis) } };
+}
+
+function metadataCandidate(metadata, workspaceId, projectId) {
+  const basis = {
+    schemaVersion: "tcrn.context-metadata-candidate.v1",
+    id: metadata.id,
+    kind: "summary",
+    scope: "project",
+    workspaceId,
+    projectId,
+    workId: null,
+    freshness: "fresh",
+    title: metadata.subject,
+    summary: metadata.summary,
+    retentionClass: "metadata_only",
+  };
+  return { ...basis, candidateDigest: canonicalSha256(basis) };
+}
+
+const p8ContextBudgets = Object.freeze({ fixedInjectionBytes: 1024, authorityBytes: 4096, summaryCount: 16, summaryBytes: 65536, bodyCount: 4, bodyBytes: 65536, receiptBytes: 65536, referenceCount: 16, referenceBytes: 65536 });
+
+test("P8 rebuilds the exact full allowlisted USTAR archive in two independent disposable roots", async () => {
+  const policy = JSON.parse(await readFile("scripts/policy/source-allowlist.json", "utf8"));
+  const rebuilt = await rebuildP8SourceArchiveInIndependentRoots({ repositoryRoot: process.cwd(), allowedFiles: policy.allowedFiles });
+  assert.equal(rebuilt.rootsIndependent, true);
+  assert.equal(rebuilt.sourceFiles, policy.allowedFiles.length);
+  assert.ok(rebuilt.sourceFiles > 3);
+  assert.deepEqual(rebuilt.orderedEntries, [...policy.allowedFiles].sort(compareCanonicalText));
+  assert.equal(rebuilt.archive.subarray(257, 263).toString("utf8"), "ustar\0");
+  assert.match(rebuilt.sha256, /^[a-f0-9]{64}$/u);
 });
 
 test("P8 creates a closed unpublished release candidate without supported AOS releases", () => {
-  const source = buildDeterministicSourceArchive(sourceRecords("forward"));
+  const source = Buffer.from("P8 source fixture\n", "utf8");
   const sbom = Buffer.from('{"bomFormat":"CycloneDX"}\n', "utf8");
   const artifacts = buildP8ReleaseArtifacts({ sourceArchive: source, sbom });
   assert.deepEqual([...artifacts.keys()].sort(), [...P8_RELEASE_ARTIFACTS].sort());
@@ -85,22 +164,22 @@ test("P8 creates a closed unpublished release candidate without supported AOS re
   );
 });
 
-test("P8 Core Reference projection admits only eight closed public records", () => {
-  const projection = sanitizeCoreReference(profiles());
-  assert.deepEqual(projection.supportedAosReleases, []);
+test("P8 projects the generated eight-profile Core Reference bundle through the closed sanitizer", () => {
+  const bundle = generateCorePersonaBundle();
+  const projection = sanitizedCoreReferenceProjection(bundle);
+  assert.equal(bundle.profiles.length, 8);
   assert.equal(projection.profiles.length, 8);
-  assert.ok(/^[a-f0-9]{64}$/u.test(projection.bundleIdentity));
-  const contaminated = profiles();
-  contaminated[0].legacyState = "forbidden";
-  assert.throws(
-    () => sanitizeCoreReference(contaminated),
-    (error) => error.reasonCode === "P8_CORE_REFERENCE_FIELDS",
-  );
+  assert.equal(projection.bundleIdentity, bundle.bundleDigest);
+  assert.deepEqual(Object.keys(projection.profiles[0]).sort(compareCanonicalText), ["displayName", "jobTitle", "mission", "profileDigest", "profileId"]);
+  assert.equal(canonicalJson(projection).match(/legacy|transcript|credential|\/Users\/|AOS/iu), null);
 });
 
 test("P8 dogfood completes one disposable local_primary initiative with Knowledge and dry-run artifacts", async (context) => {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-p8-dogfood-")));
-  context.after(() => rm(base, { recursive: true, force: true }));
+  context.after(async () => {
+    await rm(base, { recursive: true, force: true });
+    await assert.rejects(lstat(base));
+  });
   const roots = [];
   for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
     const path = join(base, kind);
@@ -124,7 +203,22 @@ test("P8 dogfood completes one disposable local_primary initiative with Knowledg
   const exportOne = await exportWorkspace(workspace);
   const exportTwo = await exportWorkspace(workspace);
   assert.equal(exportOne, exportTwo);
-  assert.ok(generateGenericStarterBundle().bundleDigest);
+  const profileResolution = p8ProfileResolution(state.metadata.workspaceId, state.projects[0].id);
+  const admission = p8AdmissionReceipt(profileResolution);
+  const admissionPath = join(base, "release-trust", "generic-profile-admission.json");
+  const admissionBytes = canonicalJson(admission.receipt);
+  await writeFile(admissionPath, admissionBytes, { mode: 0o600 });
+  const admittedProfile = await readGenericProfileAdmissionReceipt(admissionPath, { authority: fileAuthority(admissionPath, admissionBytes) });
+  const authorization = authorizeGenericProfileOperation(profileResolution, admittedProfile, "work.transition", {
+    workspaceId: state.metadata.workspaceId,
+    projectId: state.projects[0].id,
+    command: null,
+  });
+  assert.equal(authorization.reasonCode, "PROFILE_OPERATION_AUTHORIZED");
+  assert.equal(authorization.admissionReceiptDigest, admission.receipt.receiptDigest);
+  assert.throws(() => authorizeGenericProfileOperation(profileResolution, admittedProfile, "work.transition", {
+    workspaceId: "workspace:wrong", projectId: state.projects[0].id, command: null,
+  }), (error) => error.reasonCode === "PROFILE_BINDING_MISMATCH");
   await initializeKnowledgeStore(workspace);
   const knowledge = await createKnowledgeUnit(workspace, {
     expectedVersion: 0,
@@ -163,6 +257,53 @@ test("P8 dogfood completes one disposable local_primary initiative with Knowledg
   });
   const selected = await listKnowledgeMetadata(workspace, { at: "2026-07-14T00:00:07Z", projectId: state.projects[0].id, selection: "all" });
   assert.equal(selected.records.length, 1);
+  assert.equal(selected.records[0].id, knowledge.id);
+  const routedMetadata = metadataCandidate(selected.records[0], state.metadata.workspaceId, state.projects[0].id);
+  const routeRequest = {
+    schemaVersion: "tcrn.context-route-request.v1",
+    verificationTime: "2026-07-14T00:00:07Z",
+    workspaceId: state.metadata.workspaceId,
+    projectId: state.projects[0].id,
+    workId: null,
+    taskKind: "implementation",
+    riskTier: "high",
+    profileResolution,
+    expectedEffectiveDigest: admission.claims.effectiveDigest,
+    budgets: { ...p8ContextBudgets },
+    query: "Route created P8 Knowledge metadata only.",
+    metadataCandidates: [routedMetadata],
+    explicitReadCandidates: [],
+    explicitReadRequests: [],
+  };
+  const authorityBasis = {
+    schemaVersion: "tcrn.context-route-authority.v1",
+    requestDigest: calculateContextRouteRequestDigest(routeRequest),
+    profileAdmissionReceiptDigest: admission.receipt.receiptDigest,
+    effectiveDigest: admission.claims.effectiveDigest,
+    workspaceId: state.metadata.workspaceId,
+    projectId: state.projects[0].id,
+    workId: null,
+    taskKind: "implementation",
+    minimumRiskTier: "high",
+    maximumBudgets: { ...p8ContextBudgets },
+    allowedExplicitReadIds: [],
+    issuedAt: "2026-07-14T00:00:00Z",
+    expiresAt: "2026-07-14T01:00:00Z",
+  };
+  const contextAuthority = { ...authorityBasis, authorityDigest: canonicalSha256(authorityBasis) };
+  const contextAuthorityPath = join(base, "release-trust", "context-route-authority.json");
+  const contextAuthorityBytes = canonicalJson(contextAuthority);
+  await writeFile(contextAuthorityPath, contextAuthorityBytes, { mode: 0o600 });
+  const admittedContextAuthority = await readContextRouteAuthorityReceipt(contextAuthorityPath, fileAuthority(contextAuthorityPath, contextAuthorityBytes));
+  const routed = routeContext(routeRequest, admittedProfile, admittedContextAuthority);
+  assert.equal(routed.reasonCode, "CONTEXT_ROUTED");
+  assert.deepEqual(routed.context.metadata.map((entry) => entry.id), [knowledge.id]);
+  assert.deepEqual(routed.context.references, []);
+  assert.deepEqual(routed.context.explicitReads, []);
+  assert.equal(routed.receipt.profileAdmissionReceiptDigest, admission.receipt.receiptDigest);
+  assert.equal(routed.receipt.contextAuthorityDigest, contextAuthority.authorityDigest);
+  assert.equal(canonicalJson(routed).includes("Disposable P8 body"), false);
+  assert.throws(() => routeContext({ ...routeRequest, query: "tampered" }, admittedProfile, admittedContextAuthority), (error) => error.reasonCode === "CONTEXT_AUTHORITY_MISMATCH");
   await initializeArtifactStore(workspace, { disposable: true });
   const compactOne = await artifactCompactDryRun(workspace);
   const compactTwo = await artifactCompactDryRun(workspace);
