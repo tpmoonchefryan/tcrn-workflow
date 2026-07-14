@@ -24,10 +24,11 @@ import {
 import { parseHistoricalTreePaths, scanPrivacyEntries } from "./lib/privacy.mjs";
 import {
   P8_SUPPORTED_AOS_RELEASES,
+  P8_RELEASE_ARTIFACTS,
   P8_VERSION,
-  buildDeterministicSourceArchive,
   buildP8ReleaseArtifacts,
   p8ArtifactRecords,
+  rebuildP8SourceArchiveInIndependentRoots,
 } from "./lib/p8-workflow-rc.mjs";
 import {
   ProtocolProofError,
@@ -425,13 +426,12 @@ async function verifyP8() {
   const sbomResult = await sbom();
   const sourceBytes = await readSourceFile(resolve(repositoryRoot, sourceArchive.path));
   const sbomBytes = await readSourceFile(resolve(repositoryRoot, sbomResult.path));
-  const source = await sourceRecords();
-  const archiveRecords = await Promise.all(source.map(async (record) => {
-    const content = await readSourceFile(resolve(repositoryRoot, record.path));
-    return { path: record.path, content, executable: content.subarray(0, 2).toString("utf8") === "#!", singleLink: true };
-  }));
-  const independentlyRebuilt = buildDeterministicSourceArchive([...archiveRecords].reverse());
-  assertion(sourceBytes.equals(independentlyRebuilt), "P8_ARCHIVE_REPRODUCIBILITY_MISMATCH");
+  const policy = await sourcePolicy();
+  const independentlyRebuilt = await rebuildP8SourceArchiveInIndependentRoots({
+    repositoryRoot,
+    allowedFiles: policy.allowedFiles,
+  });
+  assertion(sourceBytes.equals(independentlyRebuilt.archive), "P8_ARCHIVE_REPRODUCIBILITY_MISMATCH");
   const artifacts = buildP8ReleaseArtifacts({ sourceArchive: sourceBytes, sbom: sbomBytes });
   for (const [name, content] of artifacts) await safeWriteOutput(repositoryRoot, `dist/release/${name}`, content);
   const owner = await remoteOwner();
@@ -440,7 +440,7 @@ async function verifyP8() {
     { owner },
   );
   assertion(privacyFindings.length === 0, "P8_RELEASE_PRIVACY_FINDINGS", privacyFindings.join(","));
-  const privacy = await verifyPrivacy();
+  const privacy = await verifyPrivacy({ requireP8Surfaces: true });
   return success("P8_WORKFLOW_RC_VERIFIED", {
     tests: dogfood.reasonCode,
     trust: trust.reasonCode,
@@ -453,6 +453,13 @@ async function verifyP8() {
     publication: false,
     releaseStatus: "unpublished_candidate",
     privacy: privacy.reasonCode,
+    reproducibility: {
+      sha256: independentlyRebuilt.sha256,
+      sourceFiles: independentlyRebuilt.sourceFiles,
+      orderedEntries: independentlyRebuilt.orderedEntries,
+      rootsIndependent: independentlyRebuilt.rootsIndependent,
+    },
+    privacySurfaces: privacy.p8Surfaces,
   });
 }
 
@@ -1081,7 +1088,31 @@ async function archiveEntryIfPresent() {
   }];
 }
 
-async function verifyPrivacy() {
+function aggregatePrivacySurface(records) {
+  const ordered = [...records].sort((left, right) => compareCanonicalText(left.path, right.path));
+  const digest = createHash("sha256");
+  let bytes = 0;
+  for (const record of ordered) {
+    const content = Buffer.isBuffer(record.content) ? record.content : Buffer.from(record.content, "utf8");
+    bytes += content.length;
+    digest.update(record.path, "utf8");
+    digest.update("\0", "utf8");
+    digest.update(String(content.length), "utf8");
+    digest.update("\0", "utf8");
+    digest.update(content);
+  }
+  return { entries: ordered.length, bytes, sha256: digest.digest("hex") };
+}
+
+async function filesForPrivacySurface(root, labelPrefix = "") {
+  const files = await walkFiles(root);
+  return Promise.all(files.map(async (path) => ({
+    path: `${labelPrefix}${toPosixPath(relative(root, path))}`,
+    content: await readSourceFile(path),
+  })));
+}
+
+async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
   const owner = await remoteOwner();
   const entries = [];
   entries.push({
@@ -1089,33 +1120,66 @@ async function verifyPrivacy() {
     kind: "remote",
     content: run("git", ["remote", "get-url", "origin"]),
   });
-  for (const path of await walkFiles()) {
-    const label = toPosixPath(relative(repositoryRoot, path));
+  const trackedSourceRecords = await filesForPrivacySurface(repositoryRoot);
+  for (const record of trackedSourceRecords) {
+    const label = record.path;
     entries.push({ label, kind: "filename", content: label });
-    entries.push({ label, kind: "source", content: await readText(path) });
+    entries.push({ label, kind: "source", content: record.content.toString("utf8") });
   }
   entries.push(...await archiveEntryIfPresent());
 
   const objectIds = run("git", ["cat-file", "--batch-all-objects", "--batch-check=%(objectname)"])
     .split("\n")
     .filter(Boolean);
+  const historyRecords = [];
   for (const object of objectIds) {
     const type = run("git", ["cat-file", "-t", object]);
     if (["blob", "commit", "tag"].includes(type)) {
+      const content = run("git", ["cat-file", type, object], { raw: true });
+      historyRecords.push({ path: `${type}:${object}`, content });
       entries.push({
         label: `git-${type}:${object}`,
         kind: type,
-        content: run("git", ["cat-file", type, object], { raw: true }),
+        content,
       });
     } else if (type === "tree") {
+      const content = run("git", ["cat-file", "tree", object], { raw: true });
+      historyRecords.push({ path: `tree:${object}`, content });
       entries.push({
         label: `git-tree:${object}`,
         kind: "tree",
-        content: run("git", ["cat-file", "tree", object], { raw: true }),
+        content,
       });
     } else {
       fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:${type}`);
     }
+  }
+  const buildRoot = resolve(repositoryRoot, "dist/build");
+  const sourceArchivePath = resolve(repositoryRoot, "dist/source/tcrn-workflow-source.tar");
+  const releaseRoot = resolve(repositoryRoot, "dist/release");
+  const p8Surfaces = {};
+  if (requireP8Surfaces) {
+    for (const root of [buildRoot, releaseRoot]) {
+      const metadata = await lstat(root).catch(() => null);
+      assertion(metadata?.isDirectory(), "P8_PRIVACY_SURFACE_MISSING", root);
+    }
+    const sourceArchive = await readBoundRegularFile(sourceArchivePath, {
+      reasonCode: "P8_PRIVACY_ARCHIVE_INVALID",
+      hardlinkReasonCode: "P8_PRIVACY_ARCHIVE_HARDLINK",
+      pathChangedReasonCode: "P8_PRIVACY_ARCHIVE_CHANGED",
+    });
+    const buildRecords = await filesForPrivacySurface(buildRoot, "dist/build/");
+    const releaseRecords = await filesForPrivacySurface(releaseRoot, "dist/release/");
+    assertion(JSON.stringify(releaseRecords.map((record) => record.path.slice("dist/release/".length)).sort(compareCanonicalText)) === JSON.stringify([...P8_RELEASE_ARTIFACTS].sort(compareCanonicalText)), "P8_PRIVACY_RELEASE_ARTIFACT_SET");
+    entries.push(...buildRecords.map((record) => ({ label: record.path, kind: "build", content: record.content.toString("utf8") })));
+    entries.push({ label: "dist/source/tcrn-workflow-source.tar", kind: "archive", content: sourceArchive.content.toString("utf8") });
+    entries.push(...releaseRecords.map((record) => ({ label: record.path, kind: "release", content: record.content.toString("utf8") })));
+    p8Surfaces.aggregateAlgorithm = "sha256(path-NUL-byteLength-NUL-bytes over canonical path order)";
+    p8Surfaces.trackedSource = aggregatePrivacySurface(trackedSourceRecords);
+    p8Surfaces.fullHistory = aggregatePrivacySurface(historyRecords);
+    p8Surfaces.buildOutput = aggregatePrivacySurface(buildRecords);
+    p8Surfaces.sourceArchive = aggregatePrivacySurface([{ path: "dist/source/tcrn-workflow-source.tar", content: sourceArchive.content }]);
+    p8Surfaces.releaseArtifacts = aggregatePrivacySurface(releaseRecords);
   }
   const commits = run("git", ["rev-list", "--all"]).split("\n").filter(Boolean);
   let historicalPaths = 0;
@@ -1140,6 +1204,7 @@ async function verifyPrivacy() {
     allowedPublicMetadata: "strict-github-noreply-commit-or-tag-lines-only",
     allowedPublicControlMetadata: "exact-p3-marker-contract-only",
     sourceFiles: source.files,
+    p8Surfaces: requireP8Surfaces ? p8Surfaces : null,
   });
 }
 
