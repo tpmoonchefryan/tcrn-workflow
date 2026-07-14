@@ -1,8 +1,9 @@
 # Versioning Policy
 
-The P1 bootstrap version is `0.0.0-development` and has no supported public API.
-Accepted releases will use Semantic Versioning. Schemas and trust contracts use
-explicit versioned identifiers independent of package versions.
+The current package version is `0.1.0-rc.1`, an immutable unpublished local
+candidate with no supported public API or supported AOS release. Accepted
+releases will use Semantic Versioning. Schemas and trust contracts use explicit
+versioned identifiers independent of package versions.
 
 Compatibility or trust semantics may not change under an existing schema
 identifier. A release sequence and trust-root version are monotonic integers;

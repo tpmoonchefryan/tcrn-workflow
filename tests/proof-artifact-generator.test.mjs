@@ -12,7 +12,11 @@ const routeFiles = [
   "scripts/generate-proof-artifacts.mjs",
   "scripts/dependency-materialization.mjs",
   "scripts/lib/dependency-materialization.mjs",
+  "scripts/lib/p8-workflow-rc.mjs",
   "scripts/lib/proof-artifacts.mjs",
+  "scripts/lib/p8-workflow-rc.mjs",
+  "docs/releases/0.1.0-rc.1.md",
+  "docs/releases/0.1.0-rc.1.md",
   "scripts/lib/scoped-strip-types.mjs",
   "scripts/test-controller-bootstrap.mjs",
   "scripts/test-controller-child-policy.mjs",
@@ -20,6 +24,8 @@ const routeFiles = [
   "tests/dependency-materialization.test.mjs",
   "tests/output-session-lifecycle.test.mjs",
   "tests/proof-artifact-generator.test.mjs",
+  "tests/p8-workflow-rc.test.mjs",
+  "tests/p8-workflow-rc.test.mjs",
 ];
 const roles = Object.fromEntries(["platform-workflow-architect", "workflow-verification-engineer", "security-risk-reviewer", "reality-checker"].map((role) => [role, { status: "unresolved", verdict: null, basisDigest: null }]));
 
@@ -40,7 +46,11 @@ async function fixture(context) {
     "scripts/generate-proof-artifacts.mjs": "// route fixture\n",
     "scripts/dependency-materialization.mjs": "// route fixture\n",
     "scripts/lib/dependency-materialization.mjs": "// route fixture\n",
+    "scripts/lib/p8-workflow-rc.mjs": "// route fixture\n",
     "scripts/lib/proof-artifacts.mjs": "// route fixture\n",
+    "scripts/lib/p8-workflow-rc.mjs": "// route fixture\n",
+    "docs/releases/0.1.0-rc.1.md": "# release fixture\n",
+    "docs/releases/0.1.0-rc.1.md": "# route fixture\n",
     "scripts/lib/scoped-strip-types.mjs": "// route fixture\n",
     "scripts/test-controller-bootstrap.mjs": "// route fixture\n",
     "scripts/test-controller-child-policy.mjs": "// route fixture\n",
@@ -48,6 +58,8 @@ async function fixture(context) {
     "tests/output-session-lifecycle.test.mjs": "// route fixture\n",
     "tests/dependency-materialization.test.mjs": "// route fixture\n",
     "tests/proof-artifact-generator.test.mjs": "// route fixture\n",
+    "tests/p8-workflow-rc.test.mjs": "// route fixture\n",
+    "tests/p8-workflow-rc.test.mjs": "// route fixture\n",
   };
   for (const [path, bytes] of Object.entries(files)) {
     await mkdir(resolve(root, path, ".."), { recursive: true });

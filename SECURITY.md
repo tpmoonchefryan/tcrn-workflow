@@ -3,8 +3,9 @@
 ## Supported versions
 
 Only the current default branch is eligible for security fixes during the
-pre-release bootstrap. There is no supported release until a release bundle is
-verified against an external trust root.
+pre-release bootstrap. `0.1.0-rc.1` is an immutable unpublished candidate, not
+a supported release. There is no supported release until a release bundle is
+verified against an external trust root and separately accepted.
 
 ## Reporting a vulnerability
 

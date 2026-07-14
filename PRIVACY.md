@@ -26,6 +26,10 @@ The scanner is a focused deterministic regex policy, not a general DLP system.
 A fresh advisory or Codex Security scan and an operating-system network sandbox
 remain external boundaries.
 
+The P8 candidate bundle contains only the canonical source archive, release
+manifest, checksums, SBOM, provenance, and release notes. Local trust test keys
+remain outside the candidate checkout and are never copied into these artifacts.
+
 P2 permits one exact public control-plane string solely as a normative contract:
 `.context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json`.
 The marker itself is absent in P2 and its presence is rejected by P2 verification.

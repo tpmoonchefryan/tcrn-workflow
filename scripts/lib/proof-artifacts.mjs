@@ -20,6 +20,8 @@ const routeAdditions = new Set([
   "scripts/dependency-materialization.mjs",
   "scripts/lib/dependency-materialization.mjs",
   "scripts/lib/proof-artifacts.mjs",
+  "scripts/lib/p8-workflow-rc.mjs",
+  "docs/releases/0.1.0-rc.1.md",
   "scripts/lib/scoped-strip-types.mjs",
   "scripts/test-controller-bootstrap.mjs",
   "scripts/test-controller-child-policy.mjs",
@@ -27,6 +29,7 @@ const routeAdditions = new Set([
   "tests/output-session-lifecycle.test.mjs",
   "tests/dependency-materialization.test.mjs",
   "tests/proof-artifact-generator.test.mjs",
+  "tests/p8-workflow-rc.test.mjs",
 ]);
 const claimFields = [
   "id", "phase", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
