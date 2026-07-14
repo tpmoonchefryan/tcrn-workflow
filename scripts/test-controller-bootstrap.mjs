@@ -6,7 +6,10 @@
 // it exits before any test controller or worker can be created.
 
 import { spawn } from "node:child_process";
-import { lstat, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 
 const lockPath = process.env.TCRN_TEST_CONTROLLER_LOCK_PATH;
 const outerPid = Number(process.env.TCRN_TEST_CONTROLLER_OUTER_PID);
@@ -16,6 +19,8 @@ const boundPath = process.env.TCRN_TEST_BIND_WINDOW_BOUND_PATH;
 const runPath = process.env.TCRN_TEST_BIND_WINDOW_RUN_PATH;
 const orphanDelay = Number(process.env.TCRN_TEST_BIND_WINDOW_ORPHAN_DELAY_MS ?? "0");
 const testArguments = process.argv.slice(2);
+const childPolicyImport = new URL("./test-controller-child-policy.mjs", import.meta.url).href;
+const reaperPath = fileURLToPath(new URL("./test-controller-reaper.mjs", import.meta.url));
 
 function validAbsolutePath(path) {
   return typeof path === "string" && path.startsWith("/") && !path.includes("\0");
@@ -89,6 +94,30 @@ async function waitForTestControllerRunGate() {
   throw new Error("TEST_CONTROLLER_RUN_GATE_TIMEOUT");
 }
 
+function waitForReaperMessage(reaper, type) {
+  return new Promise((resolveMessage, rejectMessage) => {
+    const onMessage = (message) => {
+      if (message?.type === type) {
+        cleanup();
+        resolveMessage(message);
+      } else if (message?.type === "error") {
+        cleanup();
+        rejectMessage(new Error(message.code));
+      }
+    };
+    const onExit = (code, signal) => {
+      cleanup();
+      rejectMessage(new Error(`TEST_CONTROLLER_REAPER_EXITED:${code ?? signal}`));
+    };
+    const cleanup = () => {
+      reaper.off("message", onMessage);
+      reaper.off("exit", onExit);
+    };
+    reaper.on("message", onMessage);
+    reaper.once("exit", onExit);
+  });
+}
+
 if (!validAbsolutePath(lockPath) || !Number.isSafeInteger(outerPid) || outerPid <= 0 || testArguments.length === 0) {
   abort();
 }
@@ -105,28 +134,44 @@ if (!await waitForDurableGroupBinding()) {
 // dead outer task must remain unrecoverable until this group exits.
 await waitForTestControllerRunGate();
 
-// Keep the test controller's streams private to this bootstrap.  With
-// `inherit`, a worker (or an orphan it created) can retain the bootstrap's
-// task-facing pipe after the controller exits.  That prevents the outer task
-// from observing the bootstrap close and strands its command-wide session.
-// The bootstrap forwards controller output while it is alive, but its own
-// streams are never inherited by controller descendants.
-const testController = spawn(process.execPath, testArguments, {
-  stdio: ["ignore", "pipe", "pipe"],
-  env: { ...process.env, TCRN_TEST_CONTROLLER_PROCESS_GROUP: String(process.pid) },
+// Test-controller output goes to private regular files, never inherited pipes.
+// The policy preload refuses a detached child that would escape the recorded
+// group.  The detached reaper terminates any remaining same-group descendants
+// before output is read and the command-wide session may be released.
+const outputDirectory = await mkdtemp(join(tmpdir(), "tcrn-test-controller-"));
+const stdoutPath = join(outputDirectory, "stdout");
+const stderrPath = join(outputDirectory, "stderr");
+const stdoutFile = await open(stdoutPath, "w", 0o600);
+const stderrFile = await open(stderrPath, "w", 0o600);
+const reaper = spawn(process.execPath, [reaperPath, String(process.pid), String(process.pid), outputDirectory], {
+  detached: true,
+  stdio: ["ignore", "ignore", "ignore", "ipc"],
 });
-testController.stdout.on("data", (chunk) => process.stdout.write(chunk));
-testController.stderr.on("data", (chunk) => process.stderr.write(chunk));
-const result = await new Promise((resolveResult, rejectResult) => {
-  testController.once("error", rejectResult);
-  // The controller's `close` waits for its inherited descriptors to close.
-  // A detached descendant can retain those descriptors after the controller
-  // has exited, which is outside this command's recorded process group.  The
-  // outer task independently waits for the recorded group before releasing
-  // its output session; use `exit` here so an unrelated pipe holder cannot
-  // deadlock that release boundary.
-  testController.once("exit", (code, signal) => resolveResult({ code, signal }));
-});
-testController.stdout.destroy();
-testController.stderr.destroy();
-process.exitCode = result.code ?? (result.signal ? 1 : 1);
+try {
+  await waitForReaperMessage(reaper, "ready");
+  const testController = spawn(process.execPath, ["--import", childPolicyImport, ...testArguments], {
+    stdio: ["ignore", stdoutFile.fd, stderrFile.fd],
+    env: { ...process.env, TCRN_TEST_CONTROLLER_PROCESS_GROUP: String(process.pid) },
+  });
+  const result = await new Promise((resolveResult, rejectResult) => {
+    testController.once("error", rejectResult);
+    testController.once("exit", (code, signal) => resolveResult({ code, signal }));
+  });
+  await stdoutFile.close();
+  await stderrFile.close();
+  reaper.send({ type: "cleanup" });
+  await waitForReaperMessage(reaper, "clean");
+  const [stdout, stderr] = await Promise.all([readFile(stdoutPath), readFile(stderrPath)]);
+  process.stdout.write(stdout);
+  process.stderr.write(stderr);
+  const reaperExit = new Promise((resolveExit) => reaper.once("exit", resolveExit));
+  reaper.send({ type: "dispose" });
+  await reaperExit;
+  process.exitCode = result.code ?? (result.signal ? 1 : 1);
+} catch (error) {
+  await stdoutFile.close().catch(() => undefined);
+  await stderrFile.close().catch(() => undefined);
+  reaper.kill("SIGTERM");
+  await rm(outputDirectory, { recursive: true, force: true });
+  throw error;
+}

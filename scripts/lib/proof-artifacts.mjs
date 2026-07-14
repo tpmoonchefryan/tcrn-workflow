@@ -22,6 +22,8 @@ const routeAdditions = new Set([
   "scripts/lib/proof-artifacts.mjs",
   "scripts/lib/scoped-strip-types.mjs",
   "scripts/test-controller-bootstrap.mjs",
+  "scripts/test-controller-child-policy.mjs",
+  "scripts/test-controller-reaper.mjs",
   "tests/output-session-lifecycle.test.mjs",
   "tests/dependency-materialization.test.mjs",
   "tests/proof-artifact-generator.test.mjs",
