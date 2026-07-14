@@ -2673,6 +2673,27 @@ test("a permitted real-entrypoint Node relay cannot create a detached escaped de
   await assertTaskResidueClean(root);
 });
 
+test("a real task entrypoint rejects a detached child through the undefined optional-arguments overload", async (context) => {
+  const root = await taskEntrypointFixture(context, [
+    'import { spawn } from "node:child_process";',
+    'import { writeFileSync } from "node:fs";',
+    'const escaped = spawn(process.execPath, undefined, { detached: true, stdio: "ignore" });',
+    'writeFileSync(process.env.TCRN_TASK_OPTIONAL_ARGS_ESCAPE_PATH, String(escaped.pid) + "\\n");',
+    "",
+  ].join("\n"));
+  const escapedPath = resolve(root, "optional-args-escaped.pid");
+  const result = await startTaskEntrypoint(root, { TCRN_TASK_OPTIONAL_ARGS_ESCAPE_PATH: escapedPath }).result;
+  assert.equal(result.code, 1, result.stderr);
+  assert.equal(result.signal, null);
+  assert.equal(result.stdout, "");
+  const receipt = JSON.parse(result.stderr);
+  assert.equal(receipt.reasonCode, "COMMAND_FAILED");
+  assert.equal(receipt.error.includes("TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN"), true);
+  assert.equal(result.stderr.includes("TESTS_VERIFIED"), false);
+  await assert.rejects(lstat(escapedPath), { code: "ENOENT" });
+  await assertTaskResidueClean(root);
+});
+
 test("the controller child policy rejects detached escape through every supported child_process signature", () => {
   const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
   const source = [
@@ -2695,6 +2716,38 @@ test("the controller child policy rejects detached escape through every supporte
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stderr, "");
   assert.deepEqual(JSON.parse(result.stdout), Array(9).fill("TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN"));
+});
+
+test("the controller child policy normalizes every supported undefined optional-arguments overload", () => {
+  const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
+  const source = [
+    'import { execFile, fork, spawn, spawnSync } from "node:child_process";',
+    'const attempts = [',
+    '  ["TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN", () => spawn(process.execPath, undefined, { detached: true })],',
+    '  ["TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN", () => spawnSync(process.execPath, undefined, { detached: true })],',
+    '  ["TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN", () => execFile(process.execPath, undefined, { detached: true })],',
+    '  ["TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN", () => fork("ignored.mjs", undefined, { detached: true })],',
+    '  ["TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN", () => spawn(process.execPath, undefined, { stdio: "inherit" })],',
+    '  ["TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN", () => spawnSync(process.execPath, undefined, { stdio: "inherit" })],',
+    '  ["TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN", () => execFile(process.execPath, undefined, { stdio: "inherit" })],',
+    '  ["TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN", () => fork("ignored.mjs", undefined, { stdio: "inherit" })],',
+    '];',
+    'const codes = attempts.map(([expected, attempt]) => { try { attempt(); return "escaped"; } catch (error) { return error.code === expected ? error.code : "unexpected"; } });',
+    'process.stdout.write(JSON.stringify(codes));',
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.deepEqual(JSON.parse(result.stdout), [
+    "TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN",
+    "TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN",
+    "TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN",
+    "TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN",
+    "TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN",
+    "TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN",
+    "TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN",
+    "TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN",
+  ]);
 });
 
 test("the controller child policy propagates to a Node relay even when it supplies an empty environment", () => {

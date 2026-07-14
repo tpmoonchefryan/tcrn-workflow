@@ -34,21 +34,20 @@ function object(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
 }
 
-function optionsFor(name, arguments_) {
-  if (name === "spawn" || name === "spawnSync" || name === "execFile") {
-    return Array.isArray(arguments_[1]) ? object(arguments_[2]) : object(arguments_[1]);
-  }
-  if (name === "fork") return Array.isArray(arguments_[1]) ? object(arguments_[2]) : object(arguments_[1]);
-  if (name === "exec") return object(arguments_[1]);
-  return undefined;
-}
-
 function optionsIndex(name, arguments_) {
   if (name === "spawn" || name === "spawnSync" || name === "execFile" || name === "fork") {
-    return Array.isArray(arguments_[1]) ? 2 : 1;
+    // Node accepts an explicitly undefined optional arguments array, with the
+    // options object still supplied in the third position. Normalize that
+    // signature before both policy enforcement and environment propagation.
+    return Array.isArray(arguments_[1]) || (arguments_.length >= 3 && arguments_[1] === undefined) ? 2 : 1;
   }
   if (name === "exec") return 1;
   return undefined;
+}
+
+function optionsFor(name, arguments_) {
+  const index = optionsIndex(name, arguments_);
+  return index === undefined ? undefined : object(arguments_[index]);
 }
 
 function isNodeExecutable(command) {
