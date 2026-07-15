@@ -43,6 +43,11 @@ import {
   updateProject,
   validateWorkspace,
 } from "../dist/build/packages/core/src/index.js";
+import * as publicCore from "../dist/build/packages/core/src/index.js";
+import {
+  isQuarantineReplacementTestInstrumentationArmed,
+  withQuarantineReplacementTestInstrumentation,
+} from "../dist/build/packages/core/src/workspace-test-instrumentation.js";
 import {
   ProtocolError,
   canonicalJson,
@@ -811,20 +816,39 @@ test("ownerless stale generations are quarantined without carrying unexpected en
 test("quarantine replacement is preserved and fails closed before recursive cleanup", async () => {
   const fixture = await workspaceFixture({ externalKey: "WORKSPACE-QUARANTINE-REPLACEMENT" });
   try {
+    const [packageManifest, packageIndex, publicSignature] = await Promise.all([
+      readFile(new URL("../packages/core/package.json", import.meta.url), "utf8"),
+      readFile(new URL("../packages/core/src/index.ts", import.meta.url), "utf8"),
+      readFile(new URL("../dist/build/packages/core/src/workspace.js", import.meta.url), "utf8"),
+    ]);
+    assert.equal(packageManifest.includes("workspace-test-instrumentation"), false);
+    assert.equal(packageIndex.includes("workspace-test-instrumentation"), false);
+    assert.equal(publicSignature.includes("quarantineReplacementForTest"), false);
+    assert.equal(Object.keys(publicCore).some((name) => name.toLowerCase().includes("instrumentation")), false);
     const control = join(fixture.workspace, ".tcrn-workflow");
     const leasePath = join(control, "lease");
     const attemptOwned = join(control, "attempt-owned-quarantine-for-test");
     await mkdir(leasePath);
     await writeFile(join(leasePath, "attempt-entry"), "attempt-owned");
     await utimes(leasePath, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
-    await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => acquireWorkspaceLease(fixture.workspace, {
+    await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => withQuarantineReplacementTestInstrumentation(() => acquireWorkspaceLease(fixture.workspace, {
       now: instant(3),
-      quarantineReplacementForTest: true,
-    }));
+    })));
+    assert.equal(isQuarantineReplacementTestInstrumentationArmed(), false);
     assert.equal(await readFile(join(attemptOwned, "attempt-entry"), "utf8"), "attempt-owned");
     const replacement = (await readdir(control)).find((entry) => entry.startsWith("stale-lease-incomplete-"));
     assert.ok(replacement);
     assert.equal(await readFile(join(control, replacement, "foreign-sentinel"), "utf8"), "foreign-survives");
+    const ordinaryCaller = await acquireWorkspaceLease(fixture.workspace, {
+      now: instant(4),
+      quarantineReplacementForTest: true,
+    });
+    try {
+      assert.equal(isQuarantineReplacementTestInstrumentationArmed(), false);
+      assert.equal(await readFile(join(attemptOwned, "attempt-entry"), "utf8"), "attempt-owned");
+    } finally {
+      await ordinaryCaller.release();
+    }
   } finally {
     await fixture.close();
   }

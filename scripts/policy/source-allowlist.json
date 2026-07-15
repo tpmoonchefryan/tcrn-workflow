@@ -85,6 +85,7 @@
     "packages/core/src/knowledge-core.ts",
     "packages/core/src/public-aos-requirements.ts",
     "packages/core/src/root-identity.ts",
+    "packages/core/src/workspace-test-instrumentation.ts",
     "packages/core/src/workspace.ts",
     "packages/protocol/package.json",
     "packages/protocol/src/index.ts",
