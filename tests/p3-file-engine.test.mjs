@@ -657,12 +657,27 @@ test("lease creation crash and recovery-claim contention are recoverable and sin
     const incompleteLease = join(crashFixture.workspace, ".tcrn-workflow", "lease");
     const incompleteIdentity = await lstat(incompleteLease);
     await utimes(incompleteLease, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
-    const recovered = await acquireWorkspaceLease(crashFixture.workspace, { now: instant(2) });
-    const recoveredIdentity = await lstat(incompleteLease);
-    assert.notDeepEqual(
-      { dev: recoveredIdentity.dev, ino: recoveredIdentity.ino },
-      { dev: incompleteIdentity.dev, ino: incompleteIdentity.ino },
-    );
+    let quarantined = false;
+    let reusedTupleObserved = false;
+    const recovered = await acquireWorkspaceLease(crashFixture.workspace, {
+      now: instant(2),
+      async afterLeaseQuarantineForTest({ leasePath, quarantinePath, identity }) {
+        assert.deepEqual(identity, { dev: incompleteIdentity.dev, ino: incompleteIdentity.ino });
+        await assert.rejects(lstat(leasePath), { code: "ENOENT" });
+        assert.deepEqual(await readdir(quarantinePath), []);
+        quarantined = true;
+      },
+      // A filesystem may reuse the tuple after removal.  Recovery is bound to
+      // the quarantined pathname/generation, not to global inode uniqueness.
+      freshLeaseIdentityObservationForTest: () => ({ dev: incompleteIdentity.dev, ino: incompleteIdentity.ino }),
+      async afterFreshLeaseForTest({ observedIdentity, freshIdentity }) {
+        assert.deepEqual(observedIdentity, { dev: incompleteIdentity.dev, ino: incompleteIdentity.ino });
+        assert.deepEqual(freshIdentity, observedIdentity);
+        reusedTupleObserved = true;
+      },
+    });
+    assert.equal(quarantined, true);
+    assert.equal(reusedTupleObserved, true);
     assert.deepEqual(await readdir(incompleteLease), ["owner.json"]);
     await recovered.release();
   } finally {
@@ -772,12 +787,14 @@ test("ownerless stale generations are quarantined without carrying unexpected en
       }
       const staleIdentity = await lstat(leasePath);
       await utimes(leasePath, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
-      const recovered = await acquireWorkspaceLease(fixture.workspace, { now: instant(3) });
-      const freshIdentity = await lstat(leasePath);
-      assert.notDeepEqual(
-        { dev: freshIdentity.dev, ino: freshIdentity.ino },
-        { dev: staleIdentity.dev, ino: staleIdentity.ino },
-      );
+      let quarantined = false;
+      const recovered = await acquireWorkspaceLease(fixture.workspace, { now: instant(3), async afterLeaseQuarantineForTest({ leasePath: live, quarantinePath, identity }) {
+        assert.deepEqual(identity, { dev: staleIdentity.dev, ino: staleIdentity.ino });
+        await assert.rejects(lstat(live), { code: "ENOENT" });
+        assert.ok((await readdir(quarantinePath)).includes("unexpected"));
+        quarantined = true;
+      } });
+      assert.equal(quarantined, true);
       assert.deepEqual(await readdir(leasePath), ["owner.json"]);
       assert.deepEqual((await readdir(control)).filter((name) => name.startsWith("stale-lease-")), []);
       await recovered.release();
