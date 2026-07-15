@@ -45,6 +45,7 @@ import {
 } from "../dist/build/packages/core/src/index.js";
 import * as publicCore from "../dist/build/packages/core/src/index.js";
 import {
+  consumeQuarantineReplacementTestInstrumentation,
   isQuarantineReplacementTestInstrumentationArmed,
   withQuarantineReplacementTestInstrumentation,
 } from "../dist/build/packages/core/src/workspace-test-instrumentation.js";
@@ -852,6 +853,134 @@ test("quarantine replacement is preserved and fails closed before recursive clea
   } finally {
     await fixture.close();
   }
+});
+
+test("quarantine replacement instrumentation is operation-local, one-shot, and cleaned after overlap", async () => {
+  async function prepareStale(fixture, entry) {
+    const control = join(fixture.workspace, ".tcrn-workflow");
+    const leasePath = join(control, "lease");
+    await mkdir(leasePath);
+    await writeFile(join(leasePath, entry), "attempt-owned");
+    await utimes(leasePath, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
+    return { control, leasePath };
+  }
+
+  async function runOverlap(ordinaryFirst) {
+    const intended = await workspaceFixture({ externalKey: `WORKSPACE-INTENDED-${ordinaryFirst}` });
+    const ordinary = await workspaceFixture({ externalKey: `WORKSPACE-ORDINARY-${ordinaryFirst}` });
+    try {
+      const intendedPaths = await prepareStale(intended, "intended-entry");
+      const ordinaryPaths = await prepareStale(ordinary, "ordinary-entry");
+      const intendedAttempt = join(intendedPaths.control, "attempt-owned-quarantine-for-test");
+      let intendedEntered;
+      const intendedAtBarrier = new Promise((resolve) => { intendedEntered = resolve; });
+      let releaseIntended;
+      const intendedResume = new Promise((resolve) => { releaseIntended = resolve; });
+      let intendedContextVisible = false;
+      let intendedOperation;
+      const startIntended = () => {
+        intendedOperation = withQuarantineReplacementTestInstrumentation(() => acquireWorkspaceLease(intended.workspace, {
+          now: instant(3),
+          async beforeClaimForTest() {
+            intendedContextVisible = isQuarantineReplacementTestInstrumentationArmed();
+            intendedEntered();
+            await intendedResume;
+          },
+        }));
+      };
+
+      let ordinaryLease;
+      if (ordinaryFirst) {
+        let ordinaryEntered;
+        const ordinaryAtBarrier = new Promise((resolve) => { ordinaryEntered = resolve; });
+        let releaseOrdinary;
+        const ordinaryResume = new Promise((resolve) => { releaseOrdinary = resolve; });
+        const ordinaryOperation = acquireWorkspaceLease(ordinary.workspace, {
+          now: instant(3),
+          async beforeClaimForTest() {
+            ordinaryEntered();
+            await ordinaryResume;
+          },
+        });
+        await ordinaryAtBarrier;
+        startIntended();
+        await intendedAtBarrier;
+        releaseOrdinary();
+        ordinaryLease = await ordinaryOperation;
+      } else {
+        startIntended();
+        await intendedAtBarrier;
+        ordinaryLease = await acquireWorkspaceLease(ordinary.workspace, { now: instant(3) });
+      }
+      try {
+        assert.equal(intendedContextVisible, true);
+        assert.equal(isQuarantineReplacementTestInstrumentationArmed(), false);
+        assert.equal((await readdir(ordinaryPaths.control)).some((entry) => entry.startsWith("attempt-owned-") || entry.startsWith("stale-lease-")), false);
+        assert.deepEqual(await readdir(ordinaryPaths.leasePath), ["owner.json"]);
+      } finally {
+        await ordinaryLease.release();
+      }
+
+      releaseIntended();
+      await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => intendedOperation);
+      assert.equal(isQuarantineReplacementTestInstrumentationArmed(), false);
+      assert.equal(await readFile(join(intendedAttempt, "intended-entry"), "utf8"), "attempt-owned");
+      const replacement = (await readdir(intendedPaths.control)).find((entry) => entry.startsWith("stale-lease-incomplete-"));
+      assert.ok(replacement);
+      assert.equal(await readFile(join(intendedPaths.control, replacement, "foreign-sentinel"), "utf8"), "foreign-survives");
+    } finally {
+      await intended.close();
+      await ordinary.close();
+    }
+  }
+
+  await runOverlap(false);
+  await runOverlap(true);
+  await assert.rejects(withQuarantineReplacementTestInstrumentation(async () => {
+    assert.equal(isQuarantineReplacementTestInstrumentationArmed(), true);
+    throw new Error("private wrapper rejection");
+  }), /private wrapper rejection/u);
+  assert.equal(isQuarantineReplacementTestInstrumentationArmed(), false);
+  await assert.rejects(withQuarantineReplacementTestInstrumentation(async () => withQuarantineReplacementTestInstrumentation(async () => {})), /nesting is unsupported/u);
+  assert.equal(isQuarantineReplacementTestInstrumentationArmed(), false);
+});
+
+test("detached instrumentation descendants cannot consume closed operation capabilities", async () => {
+  async function deferredConsumer({ consumeBeforeReturn = false, rejectWrapper = false } = {}) {
+    let childEntered;
+    const childAtBarrier = new Promise((resolve) => { childEntered = resolve; });
+    let releaseChild;
+    const childResume = new Promise((resolve) => { releaseChild = resolve; });
+    let detached;
+    const wrapper = withQuarantineReplacementTestInstrumentation(async () => {
+      detached = (async () => {
+        childEntered();
+        await childResume;
+        return consumeQuarantineReplacementTestInstrumentation();
+      })();
+      await childAtBarrier;
+      if (consumeBeforeReturn) {
+        assert.equal(consumeQuarantineReplacementTestInstrumentation(), true);
+      }
+      if (rejectWrapper) {
+        throw new Error("wrapper closes detached capability");
+      }
+      return "detached-started";
+    });
+    if (rejectWrapper) {
+      await assert.rejects(wrapper, /wrapper closes detached capability/u);
+    } else {
+      await wrapper;
+    }
+    assert.equal(isQuarantineReplacementTestInstrumentationArmed(), false);
+    releaseChild();
+    assert.equal(await detached, false);
+    assert.equal(isQuarantineReplacementTestInstrumentationArmed(), false);
+  }
+
+  await deferredConsumer();
+  await deferredConsumer({ rejectWrapper: true });
+  await deferredConsumer({ consumeBeforeReturn: true });
 });
 
 test("unsafe or active recovery claims fail closed", async () => {
