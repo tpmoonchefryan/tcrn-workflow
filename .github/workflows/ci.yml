@@ -25,18 +25,34 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Install pinned pnpm without project lifecycle scripts
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-        with:
-          version: 11.3.0
-          run_install: false
-
       - name: Install pinned Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24.16.0
 
+      - name: Acquire exact pnpm under explicit online bootstrap policy
+        env:
+          npm_config_offline: "false"
+          npm_config_prefer_offline: "false"
+          npm_config_ignore_scripts: "true"
+          npm_config_audit: "false"
+          npm_config_fund: "false"
+          npm_config_update_notifier: "false"
+          NO_UPDATE_NOTIFIER: "1"
+        run: npm install --global pnpm@11.3.0 --ignore-scripts --no-audit --no-fund --no-update-notifier --prefer-online
+
+      - name: Verify acquired pnpm version
+        run: test "$(pnpm --version)" = "11.3.0"
+
       - name: Acquire exact dependencies explicitly
+        env:
+          npm_config_offline: "false"
+          npm_config_prefer_offline: "false"
+          npm_config_ignore_scripts: "true"
+          npm_config_audit: "false"
+          npm_config_fund: "false"
+          npm_config_update_notifier: "false"
+          NO_UPDATE_NOTIFIER: "1"
         run: pnpm install --frozen-lockfile --ignore-scripts --config.offline=false
 
       - name: Verify P1 offline

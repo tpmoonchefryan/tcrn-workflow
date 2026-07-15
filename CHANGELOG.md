@@ -5,6 +5,10 @@ Versioning after the first accepted release.
 
 ## Unreleased
 
+- Repair the CI package-manager bootstrap with explicit online acquisition of
+  pinned Node and pnpm, then retain frozen dependency acquisition and offline
+  P1 verification for the `0.1.0-rc.2` unpublished local candidate.
+
 - Add the deterministic `0.1.0-rc.1` unpublished local Workflow release
   candidate proof, canonical USTAR source archive, closed six-artifact release
   set, sanitized Core Reference projection, and P8 verification command.

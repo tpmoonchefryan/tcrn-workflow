@@ -130,7 +130,7 @@ configuration, or owner-visible activation is created.
 
 `pnpm verify:p8` is the release-candidate proof. It verifies one disposable
 dogfood fixture, the eight-record sanitized Core Reference projection, the
-external-bootstrap release-trust negative matrix, exact `0.1.0-rc.1` package
+external-bootstrap release-trust negative matrix, exact `0.1.0-rc.2` package
 and framework versions, a reproducible canonical USTAR source archive, and a
 closed local release set containing source archive, SBOM, manifest, provenance,
 checksums, and release notes. Its candidate has `supportedAosReleases: []`,
