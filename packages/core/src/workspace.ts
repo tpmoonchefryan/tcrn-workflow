@@ -39,6 +39,7 @@ import type {
   WorkStatus,
 } from "../../protocol/src/index.js";
 import { assertDistinctRoots } from "./root-identity.js";
+import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
 import type { CanonicalRoot } from "./root-identity.js";
 import type { ExplicitRoot } from "./index.js";
 
@@ -945,7 +946,6 @@ async function observeLease(leasePath: string, workspaceRoot: string): Promise<L
 
 async function reclaimObservedLease(leasePath: string, workspaceRoot: string, observed: LeaseObservation, options: {
   readonly afterLeaseQuarantineForTest?: (value: { readonly identity: FileIdentity; readonly entries: readonly string[] }) => Promise<void>;
-  readonly quarantineReplacementForTest?: boolean;
 }): Promise<void> {
   const directory = await lstat(leasePath).catch(() => fail("WORKSPACE_LOCKED", "lease changed before reclaim"));
   if (!directory.isDirectory() || directory.isSymbolicLink() || !sameIdentity(directory, observed.directoryIdentity)) {
@@ -982,7 +982,7 @@ async function reclaimObservedLease(leasePath: string, workspaceRoot: string, ob
     identity: Object.freeze({ dev: observed.directoryIdentity.dev, ino: observed.directoryIdentity.ino }),
     entries: Object.freeze([...await readdir(quarantine)]),
   });
-  if (options.quarantineReplacementForTest === true) {
+  if (consumeQuarantineReplacementTestInstrumentation()) {
     const attemptOwned = controlPath(workspaceRoot, "attempt-owned-quarantine-for-test");
     await rename(quarantine, attemptOwned);
     await mkdir(quarantine, { mode: 0o700 });
@@ -1057,7 +1057,6 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
   readonly ttlMilliseconds?: number;
   readonly beforeClaimForTest?: () => Promise<void>;
   readonly afterLeaseQuarantineForTest?: (value: { readonly identity: FileIdentity; readonly entries: readonly string[] }) => Promise<void>;
-  readonly quarantineReplacementForTest?: boolean;
   // Observation-only portability seam: the returned value is never used to
   // authorize the real fresh lease directory.
   readonly freshLeaseIdentityObservationForTest?: (identity: FileIdentity) => FileIdentity;
