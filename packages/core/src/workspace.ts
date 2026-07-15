@@ -11,6 +11,7 @@ import {
   rename,
   rm,
   statfs,
+  writeFile,
 } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
@@ -942,7 +943,10 @@ async function observeLease(leasePath: string, workspaceRoot: string): Promise<L
   };
 }
 
-async function reclaimObservedLease(leasePath: string, workspaceRoot: string, observed: LeaseObservation, afterQuarantineForTest?: (value: { readonly leasePath: string; readonly quarantinePath: string; readonly identity: FileIdentity; }) => Promise<void>): Promise<void> {
+async function reclaimObservedLease(leasePath: string, workspaceRoot: string, observed: LeaseObservation, options: {
+  readonly afterLeaseQuarantineForTest?: (value: { readonly identity: FileIdentity; readonly entries: readonly string[] }) => Promise<void>;
+  readonly quarantineReplacementForTest?: boolean;
+}): Promise<void> {
   const directory = await lstat(leasePath).catch(() => fail("WORKSPACE_LOCKED", "lease changed before reclaim"));
   if (!directory.isDirectory() || directory.isSymbolicLink() || !sameIdentity(directory, observed.directoryIdentity)) {
     fail("WORKSPACE_LOCKED", "lease changed before reclaim");
@@ -974,8 +978,22 @@ async function reclaimObservedLease(leasePath: string, workspaceRoot: string, ob
   if (!moved.isDirectory() || !sameIdentity(moved, observed.directoryIdentity)) {
     fail("WORKSPACE_LEASE_INVALID", "quarantined lease identity changed");
   }
-  await afterQuarantineForTest?.({ leasePath, quarantinePath: quarantine, identity: observed.directoryIdentity });
+  const captured = Object.freeze({
+    identity: Object.freeze({ dev: observed.directoryIdentity.dev, ino: observed.directoryIdentity.ino }),
+    entries: Object.freeze([...await readdir(quarantine)]),
+  });
+  if (options.quarantineReplacementForTest === true) {
+    const attemptOwned = controlPath(workspaceRoot, "attempt-owned-quarantine-for-test");
+    await rename(quarantine, attemptOwned);
+    await mkdir(quarantine, { mode: 0o700 });
+    await writeFile(resolve(quarantine, "foreign-sentinel"), "foreign-survives", { mode: 0o600 });
+  }
+  const current = await lstat(quarantine).catch(() => fail("WORKSPACE_LEASE_INVALID", "quarantine disappeared before cleanup"));
+  if (!current.isDirectory() || current.isSymbolicLink() || !sameIdentity(current, observed.directoryIdentity)) {
+    fail("WORKSPACE_LEASE_INVALID", "quarantine changed before cleanup");
+  }
   await rm(quarantine, { recursive: true, force: true });
+  await options.afterLeaseQuarantineForTest?.(captured);
 }
 
 async function createLeaseOwner(
@@ -1038,7 +1056,8 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
   readonly now: string;
   readonly ttlMilliseconds?: number;
   readonly beforeClaimForTest?: () => Promise<void>;
-  readonly afterLeaseQuarantineForTest?: (value: { readonly leasePath: string; readonly quarantinePath: string; readonly identity: FileIdentity; }) => Promise<void>;
+  readonly afterLeaseQuarantineForTest?: (value: { readonly identity: FileIdentity; readonly entries: readonly string[] }) => Promise<void>;
+  readonly quarantineReplacementForTest?: boolean;
   // Observation-only portability seam: the returned value is never used to
   // authorize the real fresh lease directory.
   readonly freshLeaseIdentityObservationForTest?: (identity: FileIdentity) => FileIdentity;
@@ -1114,7 +1133,7 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
           fail("WORKSPACE_LOCKED", "incomplete lease changed within its creation grace period");
         }
       }
-      await reclaimObservedLease(leasePath, workspaceRoot, observed, options.afterLeaseQuarantineForTest);
+      await reclaimObservedLease(leasePath, workspaceRoot, observed, options);
       await mkdir(leasePath, { mode: 0o700 });
       const freshDirectory = await lstat(leasePath);
       if (!freshDirectory.isDirectory() || freshDirectory.isSymbolicLink()) {

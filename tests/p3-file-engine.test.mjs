@@ -661,10 +661,15 @@ test("lease creation crash and recovery-claim contention are recoverable and sin
     let reusedTupleObserved = false;
     const recovered = await acquireWorkspaceLease(crashFixture.workspace, {
       now: instant(2),
-      async afterLeaseQuarantineForTest({ leasePath, quarantinePath, identity }) {
+      async afterLeaseQuarantineForTest({ identity, entries }) {
         assert.deepEqual(identity, { dev: incompleteIdentity.dev, ino: incompleteIdentity.ino });
-        await assert.rejects(lstat(leasePath), { code: "ENOENT" });
-        assert.deepEqual(await readdir(quarantinePath), []);
+        assert.deepEqual(entries, []);
+        assert.equal(Object.isFrozen(identity), true);
+        assert.equal(Object.isFrozen(entries), true);
+        assert.throws(() => { identity.dev = 0; }, TypeError);
+        assert.throws(() => { entries.push("mutation"); }, TypeError);
+        assert.deepEqual(identity, { dev: incompleteIdentity.dev, ino: incompleteIdentity.ino });
+        assert.deepEqual(entries, []);
         quarantined = true;
       },
       // A filesystem may reuse the tuple after removal.  Recovery is bound to
@@ -788,10 +793,9 @@ test("ownerless stale generations are quarantined without carrying unexpected en
       const staleIdentity = await lstat(leasePath);
       await utimes(leasePath, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
       let quarantined = false;
-      const recovered = await acquireWorkspaceLease(fixture.workspace, { now: instant(3), async afterLeaseQuarantineForTest({ leasePath: live, quarantinePath, identity }) {
+      const recovered = await acquireWorkspaceLease(fixture.workspace, { now: instant(3), async afterLeaseQuarantineForTest({ identity, entries }) {
         assert.deepEqual(identity, { dev: staleIdentity.dev, ino: staleIdentity.ino });
-        await assert.rejects(lstat(live), { code: "ENOENT" });
-        assert.ok((await readdir(quarantinePath)).includes("unexpected"));
+        assert.ok(entries.includes("unexpected"));
         quarantined = true;
       } });
       assert.equal(quarantined, true);
@@ -801,6 +805,28 @@ test("ownerless stale generations are quarantined without carrying unexpected en
     } finally {
       await fixture.close();
     }
+  }
+});
+
+test("quarantine replacement is preserved and fails closed before recursive cleanup", async () => {
+  const fixture = await workspaceFixture({ externalKey: "WORKSPACE-QUARANTINE-REPLACEMENT" });
+  try {
+    const control = join(fixture.workspace, ".tcrn-workflow");
+    const leasePath = join(control, "lease");
+    const attemptOwned = join(control, "attempt-owned-quarantine-for-test");
+    await mkdir(leasePath);
+    await writeFile(join(leasePath, "attempt-entry"), "attempt-owned");
+    await utimes(leasePath, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
+    await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => acquireWorkspaceLease(fixture.workspace, {
+      now: instant(3),
+      quarantineReplacementForTest: true,
+    }));
+    assert.equal(await readFile(join(attemptOwned, "attempt-entry"), "utf8"), "attempt-owned");
+    const replacement = (await readdir(control)).find((entry) => entry.startsWith("stale-lease-incomplete-"));
+    assert.ok(replacement);
+    assert.equal(await readFile(join(control, replacement, "foreign-sentinel"), "utf8"), "foreign-survives");
+  } finally {
+    await fixture.close();
   }
 });
 
