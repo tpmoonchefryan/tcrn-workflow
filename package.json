@@ -1,6 +1,6 @@
 {
   "name": "tcrn-workflow",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0-rc.2",
   "private": true,
   "description": "Offline-first, verifiable workflow framework bootstrap.",
   "license": "Apache-2.0",

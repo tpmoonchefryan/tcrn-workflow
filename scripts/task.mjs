@@ -1397,7 +1397,13 @@ async function verifyCi() {
   const workflow = await readText(resolve(repositoryRoot, ".github/workflows/ci.yml"));
   assertion(/^permissions:\n  contents: read$/mu.test(workflow), "CI_PERMISSIONS_NOT_MINIMAL");
   assertion(!workflow.includes("pull_request_target"), "CI_PULL_REQUEST_TARGET_FORBIDDEN");
+  assertion(!workflow.includes("pnpm/action-setup"), "CI_PNPM_ACTION_SETUP_FORBIDDEN");
+  assertion(workflow.indexOf("uses: actions/setup-node") < workflow.indexOf("Acquire exact pnpm under explicit online bootstrap policy"), "CI_NODE_BOOTSTRAP_ORDER_INVALID");
+  assertion(workflow.includes('npm_config_offline: "false"') && workflow.includes('npm_config_prefer_offline: "false"'), "CI_BOOTSTRAP_ONLINE_OVERRIDE_MISSING");
+  assertion(workflow.includes("npm install --global pnpm@11.3.0 --ignore-scripts --no-audit --no-fund --no-update-notifier --prefer-online"), "CI_PNPM_BOOTSTRAP_NOT_PINNED");
+  assertion(workflow.includes('test "$(pnpm --version)" = "11.3.0"'), "CI_PNPM_VERSION_CHECK_MISSING");
   assertion(workflow.includes("--frozen-lockfile --ignore-scripts --config.offline=false"), "CI_INSTALL_NOT_EXPLICIT");
+  assertion(workflow.includes("- name: Verify P1 offline\n        run: pnpm verify:p1"), "CI_OFFLINE_P1_MISSING");
   return success("CI_HARDENING_VERIFIED", { linted });
 }
 
