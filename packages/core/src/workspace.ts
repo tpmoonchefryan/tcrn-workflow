@@ -942,7 +942,7 @@ async function observeLease(leasePath: string, workspaceRoot: string): Promise<L
   };
 }
 
-async function reclaimObservedLease(leasePath: string, workspaceRoot: string, observed: LeaseObservation): Promise<void> {
+async function reclaimObservedLease(leasePath: string, workspaceRoot: string, observed: LeaseObservation, afterQuarantineForTest?: (value: { readonly leasePath: string; readonly quarantinePath: string; readonly identity: FileIdentity; }) => Promise<void>): Promise<void> {
   const directory = await lstat(leasePath).catch(() => fail("WORKSPACE_LOCKED", "lease changed before reclaim"));
   if (!directory.isDirectory() || directory.isSymbolicLink() || !sameIdentity(directory, observed.directoryIdentity)) {
     fail("WORKSPACE_LOCKED", "lease changed before reclaim");
@@ -974,6 +974,7 @@ async function reclaimObservedLease(leasePath: string, workspaceRoot: string, ob
   if (!moved.isDirectory() || !sameIdentity(moved, observed.directoryIdentity)) {
     fail("WORKSPACE_LEASE_INVALID", "quarantined lease identity changed");
   }
+  await afterQuarantineForTest?.({ leasePath, quarantinePath: quarantine, identity: observed.directoryIdentity });
   await rm(quarantine, { recursive: true, force: true });
 }
 
@@ -1037,6 +1038,11 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
   readonly now: string;
   readonly ttlMilliseconds?: number;
   readonly beforeClaimForTest?: () => Promise<void>;
+  readonly afterLeaseQuarantineForTest?: (value: { readonly leasePath: string; readonly quarantinePath: string; readonly identity: FileIdentity; }) => Promise<void>;
+  // Observation-only portability seam: the returned value is never used to
+  // authorize the real fresh lease directory.
+  readonly freshLeaseIdentityObservationForTest?: (identity: FileIdentity) => FileIdentity;
+  readonly afterFreshLeaseForTest?: (value: { readonly observedIdentity: FileIdentity; readonly freshIdentity: FileIdentity }) => Promise<void>;
   readonly beforeLeaseOwnerForTest?: () => Promise<void>;
   readonly crashAfterLeaseDirectoryForTest?: boolean;
 }): Promise<WorkspaceLease> {
@@ -1108,13 +1114,17 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
           fail("WORKSPACE_LOCKED", "incomplete lease changed within its creation grace period");
         }
       }
-      await reclaimObservedLease(leasePath, workspaceRoot, observed);
+      await reclaimObservedLease(leasePath, workspaceRoot, observed, options.afterLeaseQuarantineForTest);
       await mkdir(leasePath, { mode: 0o700 });
       const freshDirectory = await lstat(leasePath);
       if (!freshDirectory.isDirectory() || freshDirectory.isSymbolicLink()) {
         fail("WORKSPACE_LEASE_INVALID", "recovered lease directory is unsafe");
       }
       leaseDirectoryIdentity = { dev: freshDirectory.dev, ino: freshDirectory.ino };
+      await options.afterFreshLeaseForTest?.({
+        observedIdentity: observed.directoryIdentity,
+        freshIdentity: options.freshLeaseIdentityObservationForTest?.(leaseDirectoryIdentity) ?? leaseDirectoryIdentity,
+      });
     }
     await boundDirectory(leasePath, workspaceRoot);
     if (!leaseDirectoryIdentity) fail("WORKSPACE_LEASE_INVALID", "lease generation identity is unavailable");

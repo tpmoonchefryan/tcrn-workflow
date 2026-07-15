@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-export const FRAMEWORK_VERSION = "0.1.0-rc.2" as const;
+export const FRAMEWORK_VERSION = "0.1.0-rc.3" as const;
 export const DEFAULT_MODE = "development" as const;
 
 export type WorkflowMode = "development" | "release";
