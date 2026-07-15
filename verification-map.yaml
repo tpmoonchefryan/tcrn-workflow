@@ -459,7 +459,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "51936a5e85b12661341f9c04344a2a743746b98bad2886494206609259913fbf",
+      "fixtureDigest": "104f67f3e9a5a67f4f89059973dd843bd3257ef698c45ee46dabfdb3cceb2400",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -484,7 +484,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "c800bd560f0070684c7cb762e4eaf3a2be6282315cccdc3afac6d8cdd94de263",
+      "fixtureDigest": "9841df08429d30f368e866ec668286baa9357d26646593d996cf4a006915968c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -516,7 +516,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "2f05f41a16c2259ee1b327c22f20f8fa459584499f866aa00f4a9271ea560b7d",
+      "fixtureDigest": "6bbeeabd1b95f142555cb66421b1d0e026ae3602dee2359c7bcb399f4ce8578d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
