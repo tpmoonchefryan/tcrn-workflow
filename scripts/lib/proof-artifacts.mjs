@@ -43,8 +43,9 @@ const routeAdditions = new Set([
   "docs/adr/0002-snapshot-not-mirror-backup.md",
 ]);
 const claimFields = [
-  "id", "phase", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
+  "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
 ];
+const claimCategories = ["framework-hygiene", "inertness-proof", "runtime-capability"];
 const manifestFields = ["schemaVersion", "status", "accepted", "basisDigest", "inputs", "roleVerdictSlots"];
 const roleNames = ["platform-workflow-architect", "workflow-verification-engineer", "security-risk-reviewer", "reality-checker"];
 const claimRouteAdditions = new Map([
@@ -167,6 +168,7 @@ function validateMap(map) {
     assert(typeof claim.id === "string" && !ids.has(claim.id), "PROOF_ARTIFACT_MAP_INVALID", claim?.id ?? "unknown");
     ids.add(claim.id);
     assert(["implemented", "candidate", "planned"].includes(claim.status), "PROOF_ARTIFACT_MAP_INVALID", claim.id);
+    assert(claimCategories.includes(claim.category), "PROOF_ARTIFACT_MAP_INVALID", claim.id);
     assert(Array.isArray(claim.fixturePaths), "PROOF_ARTIFACT_MAP_INVALID", claim.id);
     const paths = claim.fixturePaths.map((path) => safePath(path, "PROOF_ARTIFACT_PATH_INVALID"));
     assert(new Set(paths).size === paths.length, "PROOF_ARTIFACT_DUPLICATE_PATH", claim.id);

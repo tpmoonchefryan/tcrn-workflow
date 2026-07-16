@@ -4,6 +4,7 @@
     {
       "id": "P1-CLEAN-HISTORY",
       "phase": "P1",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "The framework retains the accepted root commit, one canonical origin, and no alternate or unreachable object store.",
       "command": "pnpm verify:history",
@@ -17,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "9b5523ef272764919c0666a4b81b0e972b7f142d8731107bc859a42eed1728d8",
+      "fixtureDigest": "ea7a1c001abfa22b89e1fae1b842ddf3924296bc0fe657dcfb841aab88bbac88",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -33,6 +34,7 @@
     {
       "id": "P1-NO-PRIVATE-MIGRATION",
       "phase": "P1",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "Source, filenames, archives, Git objects, tags, refs, and full recursive paths from every reachable commit exclude private/raw identifiers while allowing only explicit public Git remote and noreply identity metadata.",
       "command": "pnpm verify:privacy",
@@ -48,7 +50,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "dfae45c2e126a798adfdf6fa67b3f2609e4acf5d9a44fe2c5f965ea1e828cffa",
+      "fixtureDigest": "f96537eaf8d6246a40d48c15c30f2664c16d5a515f42ca12ee45685348536424",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -64,6 +66,7 @@
     {
       "id": "P1-OFFLINE-STANDALONE",
       "phase": "P1",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "P1 project commands have no implicit network or telemetry path under the Node process guard and static process boundary; no OS sandbox or fresh advisory scan is claimed.",
       "command": "pnpm verify:p1",
@@ -79,7 +82,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "14cc6617384f193887f572607a563e36e6d5f63e5fab98622250e700d60b1b36",
+      "fixtureDigest": "34bb4f7413003e5baad8705edc3ff51035d2522c46679424a5dc24c36e3a3c08",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -96,6 +99,7 @@
     {
       "id": "P1-EXTERNAL-TRUST",
       "phase": "P1",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "Release admission uses direct UTF-8-byte-ordered canonical object bytes, descriptor-bound single-link files, strict instants/base64/Ed25519, external trust authority, and fail-closed negatives.",
       "command": "pnpm verify:trust",
@@ -129,6 +133,7 @@
     {
       "id": "P1-GOVERNANCE-TOOLCHAIN",
       "phase": "P1",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "Apache-2.0 governance, NOTICE/SPDX policy, exact toolchain pins, and disabled lifecycle scripts are enforced.",
       "command": "pnpm verify:governance",
@@ -151,7 +156,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "ee22eec56642164c5f323c5e9bb0c6e3314e0501306aece511b35f46eb593694",
+      "fixtureDigest": "75ff04b558fc8ede6c51b49b0b7e9ea1aa8566fa4705e810b8abbaa7574cd90b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -167,6 +172,7 @@
     {
       "id": "P1-DEPENDENCY-GRAPH",
       "phase": "P1",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "The complete exact frozen direct/transitive dependency graph has policy, integrity, license and SBOM closure, and every graph identity is checked against the dated local vulnerability denylist without claiming a fresh advisory scan.",
       "command": "pnpm verify:vulnerabilities",
@@ -180,7 +186,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "5cb23d9bdbb2f139516fe3d347bbeb5bd6ee6ee783b98d58c385c40a4a3d60f6",
+      "fixtureDigest": "16b728817a8a03d897491566c51e09e9c8cb6089ae05b6a5f521866e4ae9b7e9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -196,6 +202,7 @@
     {
       "id": "P1-PINNED-WORKSPACE",
       "phase": "P1",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "The TypeScript workspace binds exact Node/pnpm versions and writes generated output only through one validated, exclusive dist session in a clean accepted checkout with no concurrent hostile mutation.",
       "command": "pnpm verify:workspace",
@@ -212,7 +219,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "1c76183ec22655a20b903e5140760636ace779be0c32e14b9f8ce3ef7d260277",
+      "fixtureDigest": "2bdb1c51574a897c957b4b6f02a575a10d49776d5680a4ad19cbb4dcd42b3ab6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -228,6 +235,7 @@
     {
       "id": "P1-ROOT-BOUNDARIES",
       "phase": "P1",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "All five roots are realpath-canonical, non-symlink, portable-case-distinct, and non-overlapping by equality or containment.",
       "command": "pnpm verify:roots",
@@ -253,6 +261,7 @@
     {
       "id": "P1-CI-HARDENING",
       "phase": "P1",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "CI uses minimal permissions, immutable action pins, explicit frozen acquisition, disabled lifecycle scripts, and no privileged pull-request trigger.",
       "command": "pnpm verify:ci",
@@ -264,7 +273,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "647c715d3a62a2e40084b7261c8090af68016c8aaa1afc86db36e7a268dc2d38",
+      "fixtureDigest": "d89cf180be804d8c832fd13bb828d54ee4a1140ca1a21bf199e1c79e49bab74b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -280,6 +289,7 @@
     {
       "id": "P1-ISOLATED-CHECKOUT",
       "phase": "P1",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "The exact committed P1 basis verifies under one exclusive output session in a disposable clean Git checkout with canonical origin retained, declared evidence captured, and source basis unchanged.",
       "command": "pnpm verify:isolated",
@@ -308,6 +318,7 @@
     {
       "id": "P2-PROTOCOL-DETERMINISM",
       "phase": "P2",
+      "category": "runtime-capability",
       "status": "implemented",
       "subject": "Canonical UTF-8 serialization directly emits every validated own key in one locale-independent byte order; stable IDs reject raw Unicode aliases; exact instants, hashes, limits, and reason codes match frozen V1 vectors.",
       "command": "pnpm verify:p2",
@@ -348,6 +359,7 @@
     {
       "id": "P2-WORK-GRAPH-VALIDITY",
       "phase": "P2",
+      "category": "runtime-capability",
       "status": "implemented",
       "subject": "The Initiative-Epic-Story-Subtask hierarchy and independent extension shapes reject duplicate IDs, cycles, cross-project or invalid parents, bad transitions, tombstone references, and missing references.",
       "command": "pnpm verify:p2",
@@ -382,6 +394,7 @@
     {
       "id": "P2-EXTERNAL-RUNTIME-NO-OVERCLAIM",
       "phase": "P2",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "The generic public AOS ledger links every AOS-facing schema and fixture; exact-pinned Draft 2020-12 evaluation resolves local references and executes schema cases while maturity remains specified or fixture-verified and no live runtime claim is made.",
       "command": "pnpm verify:p2",
@@ -417,6 +430,7 @@
     {
       "id": "P2-P3-MARKER-CONTRACT",
       "phase": "P2",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "P2 freezes the canonical P3 acceptance-marker schema and path while proving that the marker is absent and P3 capability is not claimed.",
       "command": "pnpm verify:p2",
@@ -445,6 +459,7 @@
     {
       "id": "P3-FILE-NATIVE-WORK-GRAPH",
       "phase": "P3",
+      "category": "runtime-capability",
       "status": "implemented",
       "subject": "The standalone file-native Workspace enforces closed-field parity for every canonical root entry, stable project/work identities, governed CLI CRUD, and the frozen Initiative-Epic-Story-Subtask protocol without redefining P2 semantics.",
       "command": "pnpm verify:p3",
@@ -475,6 +490,7 @@
     {
       "id": "P3-EVENT-INTEGRITY-RECOVERY",
       "phase": "P3",
+      "category": "runtime-capability",
       "status": "implemented",
       "subject": "Exact event operations and lifecycle transitions are bound to Workspace-derived identities; single-writer recovery identity-quarantines both stale-owner and ownerless generations, binds delayed creators to their captured generation, and preserves lease-bound mutation CAS, atomic segments, crash recovery, and deterministic views under adversarial contention.",
       "command": "pnpm verify:p3",
@@ -500,6 +516,7 @@
     {
       "id": "P3-STANDALONE-MIGRATION-BOUNDARY",
       "phase": "P3",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "P3 runs with Node and supported local filesystems only, admits no runtime dependency or AOS/database assumption, supports exact dry-run V1 migration planning, and keeps the P3 marker absent.",
       "command": "pnpm verify:p3",
@@ -516,7 +533,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "f78453bed5d5b8ffa91adf3653a81111f5e7ecc44f28e9e950f71e5a43aa3bc2",
+      "fixtureDigest": "3449fbd2fc3033dde28974f1276a05544a4d5927fafc0575ffc5868b4f7a2dd3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -532,6 +549,7 @@
     {
       "id": "P4-ARTIFACT-LIFECYCLE-REPORTING",
       "phase": "P4",
+      "category": "runtime-capability",
       "status": "implemented",
       "subject": "P4 freezes closed artifact/receipt/cache classes, descriptor-bound sources, pre-read transient count admission, incremental logical/stored byte limits, bounded archive-generation storage surfaced through deterministic size/doctor reports, and mutation-free compact/archive projections while retaining protected records and event high-water authority.",
       "command": "pnpm verify:p4",
@@ -546,7 +564,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "88b92df4075c7fbc65c6a9f364b4c922177a8221c0ec43fd9a0f0d2fcca8eacb",
+      "fixtureDigest": "54d60bd1f75ae926e12ae297f411193e2c9afd4286a7661086b434b8e28efc0d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -562,6 +580,7 @@
     {
       "id": "P4-DISPOSABLE-ARCHIVE-RESTORE",
       "phase": "P4",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "Archive apply and exact restore are admitted only for synthetic disposable Workspaces and enforce no-follow identity, bounded complete/partial generation count and aggregate bytes, incremental decoded bytes, credential exclusion, no overwrite, canonical bundle, high-water, crash/partial, path, and legacy-read boundaries without live Workspace apply.",
       "command": "pnpm verify:p4",
@@ -589,6 +608,7 @@
     {
       "id": "P4-FILE-NATIVE-KNOWLEDGE-CORE",
       "phase": "P4",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "P4 provides a disposable-only file-native Knowledge Core whose metadata surfaces never open body files, whose promotion state is validated before identity-bound claim admission and cleaned on ordinary errors, and whose accountable provenance, default checkpoints, strict instants, UTF-8 byte budgets, and 64 real-store insertion orders are deterministic without live-store, database, AOS, or network access.",
       "command": "pnpm verify:p4:knowledge",
@@ -608,7 +628,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "438a43a91b15165b5120e05fa9285b5db11abe43948e0083646ed60e180d2eb7",
+      "fixtureDigest": "f6776f4a1d75f5a36265e7d29d5f62d0d1ae5334410a0ff2ea06c5e30ec971c2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -624,6 +644,7 @@
     {
       "id": "P5-GENERIC-PROFILE-POLICY",
       "phase": "P5",
+      "category": "runtime-capability",
       "status": "implemented",
       "subject": "P5 freezes generic profile trust plus exactly eight sanitized source-manifest-bound inert Core Reference persona records, closed fields, display-only release layers, deterministic canonical digests, and read-only governed CLI surfaces without prompt, environment, live-store, hook, Skill, model, thread, network, database, or AOS authority.",
       "command": "pnpm verify:p5",
@@ -644,7 +665,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "2bb8ef620ec8485c2fdc219b69356f03b8e5aa8f16850588961bb435ef440b7b",
+      "fixtureDigest": "74a275e1e87e92ef2a1c2eff24db1d5e2e61105d042966f73ac0156cdc9fd4c4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -660,6 +681,7 @@
     {
       "id": "P5-GENERIC-COLD-START",
       "phase": "P5",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "The inert generic starter bundle can, after explicit owner binding, authorize a disposable empty Workspace to complete one Initiative-Epic-Story-Subtask flow with expected-version event integrity while creating no live profile store or external project/persona dependency.",
       "command": "pnpm verify:p5",
@@ -687,6 +709,7 @@
     {
       "id": "P6-CONTEXT-ROUTER",
       "phase": "P6",
+      "category": "runtime-capability",
       "status": "implemented",
       "subject": "P6 implements the standalone deterministic metadata-first Context Router with descriptor-bound request authority, re-resolved generic-profile admission, exact scope/risk/budget controls, explicit body/procedure reads, privacy-minimal receipts, hostile prompt proof, 64 real permutations and bounded local latency observations; the separately proved Codex Adapter is inert and RC3 remains unaccepted.",
       "command": "pnpm verify:p6",
@@ -706,7 +729,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "d71c09093282cb0d065897bd09112bf7ed02e63c9592c9f27502cecac9e9b02a",
+      "fixtureDigest": "47594e88c1f300e7047b6177fd9a790e590e5bf10d4e4e76516b60b525749d00",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -722,6 +745,7 @@
     {
       "id": "P6-CODEX-ADAPTER",
       "phase": "P6",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "P6 implements an uninstalled and unactivated Codex Adapter as closed inert template data only, with separately injected host admission, authority-empty fallback, exact canonical template bytes, positional complete-bundle parity, descriptor-bound installation-generation rollback admission, final-hop visibility, hostile proof and 64 real input/template permutations; OG-04 and RC3 remain unsatisfied.",
       "command": "pnpm verify:p6:adapter",
@@ -739,7 +763,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "caaee4477f2e2dd69528e7abf4723860a1bca2b31c17933fadcf7817150f761c",
+      "fixtureDigest": "b1c4f2b3e2accf31eab76a8867578636428f124543b507714f71e105010a767f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -755,6 +779,7 @@
     {
       "id": "P6B-CLAUDE-ADAPTER",
       "phase": "P6",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "P6B implements an uninstalled and unactivated Claude Code Adapter as closed inert template data only under .claude/tcrn-workflow/, with a claude-code host identity and data-only version readback, separately injected host admission, authority-empty CLAUDE.md-only fallback, exact canonical template bytes, positional complete-bundle parity, descriptor-bound installation-generation rollback admission, final-hop visibility, a byte-reversible settings hook fragment that never clobbers user content, forbidden user-level path rejection, hostile proof, 64 real input/template permutations, and a cross-host parity check byte-binding the Codex adapter; OG-04 and RC3 remain unsatisfied.",
       "command": "pnpm verify:p6b",
@@ -773,7 +798,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "7acfc9ccaadc5673a1da75eaadde37524318bdd58b5b7be4bf826dc56ae10067",
+      "fixtureDigest": "f3af0359203139965ad9a64ef7556ac1a976f469d46e12c1a9d12e8f536a4363",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -789,6 +814,7 @@
     {
       "id": "EXT-DEPENDENCY",
       "phase": "P2",
+      "category": "runtime-capability",
       "status": "implemented",
       "subject": "EXT-DEPENDENCY implements the additive tcrn.dependency.v1 work-dependency extension record as inert product data: a closed project-scoped directed edge schema with blocks/informs kinds and active/resolved/waived statuses, waived-audit fields, canonical hashing over unknown optional extensions, deterministic utf8-byte-order-v1 ordering, live same-project endpoint rules with cross-project and self-edge fail-closed, active-blocks cycle detection, list-blockers and list-by-work-item read paths, an extension-registration record with appliesTo work and requiredByDefault false, hostile and schema-parity proof, and no live store; work-model-v1 is unchanged.",
       "command": "pnpm verify:dep",
@@ -804,7 +830,7 @@
         "tests/dependency.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b974d7d0f6328c8874b183aa23d6a4dc7b0e4b0e23eac0802eba0e3bf17cdc32",
+      "fixtureDigest": "bc2bbe1a1f59ab24cd215746c72fa1256be75609f5a5e8fb7a0ea022bc39bf4f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -820,6 +846,7 @@
     {
       "id": "EXT-CONFERENCE",
       "phase": "P2",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "EXT-CONFERENCE implements the additive tcrn.conference.v1 pre-commitment deliberation skeleton as inert product data: closed request, position, and minutes record schemas adopting the AOS conference type and outcome-class vocabularies, a minimal open/append-position/close/list-by-work-item operation surface bound by conference and project id, close-distillation of each minutes decision into a knowledge decision candidate backlinking the conference through inert source references, hostile and schema-parity proof, an extension-registration record with appliesTo work, and no orchestration, action-item automation, search, or live store; work-model-v1 is unchanged.",
       "command": "pnpm verify:conference",
@@ -837,7 +864,7 @@
         "tests/conference.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "4c8d1f44aab7a843b70445884275dc6c6a62e3f0bbb0e9931877b0926e6eb461",
+      "fixtureDigest": "034cb2fee9f1aedf3d30f7b1b21e20f2b075d34562d8609d6ef5d59211c11453",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -853,6 +880,7 @@
     {
       "id": "EXT-ASSIGNMENT",
       "phase": "P2",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "EXT-ASSIGNMENT implements the additive tcrn.assignment.v1 skeleton as inert product data: a closed record binding a work item to one accountableActorId with proposed/active/released status, minimal read/write validation, a list-by-work-item read path, an extension-registration record with appliesTo work, hostile and schema-parity proof, and no employee lifecycle, capacity, scheduling, or live store; work-model-v1 is unchanged.",
       "command": "pnpm verify:ext-ag",
@@ -868,7 +896,7 @@
         "tests/assignment-gate.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "3a2ae266ab2f250ffaa35edc3f02d73d637d9ea8392aecd886749daa4223ba8c",
+      "fixtureDigest": "83c801f7e6207a49f5ddf887828d53b7fe013f8e2f444dbe045072018d632714",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -884,6 +912,7 @@
     {
       "id": "EXT-GATE",
       "phase": "P2",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "EXT-GATE implements the additive tcrn.gate.v1 skeleton as inert product data: a closed minimal gate record with an optional work anchor, an outcomeClass reusing the conference vocabulary (including owner_intent_required), pending/satisfied/blocked status, minimal read/write validation, a list-by-work-item read path, an extension-registration record with appliesTo work grounding knowledge linkedGateIds, hostile and schema-parity proof, and no gate lifecycle, approval routing, or live store; work-model-v1 is unchanged.",
       "command": "pnpm verify:ext-ag",
@@ -899,7 +928,7 @@
         "tests/assignment-gate.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "8afc2932d1d9f0b20a3c84e9557f82e0e157b0d4e02aabb768d9c28e0158614b",
+      "fixtureDigest": "95fd3d070f4fa5ac8c1f69c4a41528fb7d8bcea27f6782a41ad25820bedd6c1e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -915,6 +944,7 @@
     {
       "id": "P7-CANONICAL-EXCHANGE",
       "phase": "P7",
+      "category": "runtime-capability",
       "status": "implemented",
       "subject": "P7-A implements a deterministic offline canonical exchange bundle with frozen P2 envelope import, complete request-derived manifest/transaction/resume reconstruction, closed stored-surface schema/runtime parity, identity-bound staging cleanup, pre-read resource budgets, descriptor-bound validation, hostile/fault/property proof, and no network or candidate-code execution; compatibility modes, AOS requirements and RC4 remain out of scope.",
       "command": "pnpm verify:p7",
@@ -929,7 +959,7 @@
         "tests/p7-canonical-exchange.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9cc10d578ec9ab3e7d7f7517f0ba2430f8894536378867ec7f4cab38440c638d",
+      "fixtureDigest": "92b72872ab066512771e88ccb8d9c3baa8e4c7c9010da0622476a5941fec6492",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -945,6 +975,7 @@
     {
       "id": "P7-COMPATIBILITY-MODES",
       "phase": "P7",
+      "category": "runtime-capability",
       "status": "implemented",
       "subject": "P7-B implements closed offline Workflow compatibility manifests, descriptor-bound host-anchored opaque authority admission with a 65,537-byte hard read cap, exact request/effective-plan and lock/policy/replay binding, canonical semantic sets, recursive schema/runtime/document parity, deterministic initial-import/checkpoint/fallback/conflict/reconciliation planning, AOS operational-field ownership preservation, and exact unavailable state-changing surfaces with zero network and zero mutation; supported AOS releases remain empty, AOS Requirements and RC4 remain out of scope.",
       "command": "pnpm verify:p7:compatibility",
@@ -959,7 +990,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "cfb1bd6d581502bc4f646feb38a54ce2e512fe839e638a66435f631daa00ac6c",
+      "fixtureDigest": "0ab9165238604f8ffcb315807ab3fb4ba1c3a397e6fbad78c42cbecea88eef30",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -975,6 +1006,7 @@
     {
       "id": "P7-PUBLIC-AOS-REQUIREMENTS",
       "phase": "P7",
+      "category": "inertness-proof",
       "status": "implemented",
       "subject": "P7-C maintains only a closed generic public offline requirements ledger whose eight exact source projections bind semantics, status and maturity, with hostile schema/runtime/canonical/order/duplicate/private-field/transplant/tamper and UTF-8/safe-integer parity proof plus a read-only validator/readback CLI; it makes no live compatibility, runtime mutation or supported-release claim.",
       "command": "pnpm verify:p7:aos-requirements",
@@ -990,7 +1022,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "c0aad67925c9b0c32e99fb73897aa823141c80bf2535d3a845dd2d2b4965023f",
+      "fixtureDigest": "9abbb83d884a5d2e48eee958cf735b8a68cc6bda3b113d19e22b54e4a70bd912",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1006,6 +1038,7 @@
     {
       "id": "P8-WORKFLOW-RC",
       "phase": "P8",
+      "category": "framework-hygiene",
       "status": "implemented",
       "subject": "P8 creates a deterministic, privacy-scanned, immutable unpublished local Workflow 0.1.0-rc.4 candidate with a closed six-artifact release set, zero supported AOS releases, external-bootstrap trust negatives, disposable dogfood proof, and no network, publication, graph, store, template, or AOS mutation.",
       "command": "pnpm verify:p8",
@@ -1033,7 +1066,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "93218cdeeb59320513cc3240cdd2aea7ec7b5f78b33e02d5ac95331884369822",
+      "fixtureDigest": "4c76702f581f533c283b97cae10cf3cf69d313f5653d46714e3c95e2067f2726",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1049,6 +1082,7 @@
     {
       "id": "RC1-IMMUTABLE-PROOF-BASIS",
       "phase": "RC1",
+      "category": "inertness-proof",
       "status": "candidate",
       "subject": "One unaccepted closed-field candidate manifest binds every normative P1/P2 input and four exact unresolved role-verdict slots; executable missing-role and extra-role negatives fail with RC1_VERDICT_SLOTS before digest admission.",
       "command": "pnpm verify:rc1",
@@ -1066,7 +1100,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "084bcafcc8f000bc1fde9733a30206d24f218a0d7c021e6791ce7c993a8ccf15",
+      "fixtureDigest": "bfe9b41af90dc2ba79cf6893982d3bcbc43d8a2277f6a961fef12e39914d0f42",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

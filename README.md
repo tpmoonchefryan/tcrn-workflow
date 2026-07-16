@@ -4,7 +4,7 @@
 
 **A deterministic, offline-first framework for governed AI-agent work — where every capability is a machine-verified claim, not a promise.**
 
-`Status: 0.1.0-rc.4 (pre-release candidate)` · `License: Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Verified claims: 34`
+`Status: 0.1.0-rc.4 (pre-release candidate)` · `License: Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Verified claims: 34 (hygiene 11 · inertness 13 · runtime 10)`
 
 ---
 
@@ -24,7 +24,7 @@ TCRN Workflow was built to close all three gaps at once. It treats agent-driven 
 | --- | --- |
 | **Deterministic file-native workspace** | An event-sourced local work graph (Initiative → Epic → Story → Subtask) stored as canonical JSON files with a hash chain — no database, no daemon, byte-reproducible exports. |
 | **Fail-closed verification chain** | One command (`pnpm verify:p1`) runs 20 gates: format, lint, typecheck, build, ~29 test files, trust matrix, archive/SBOM/license/vulnerability policy, source allowlist, offline boundary, privacy scan, CI hardening, verification map, and clean-history proof. Anything unexpected stops the chain. |
-| **Machine-readable claim ledger** | `verification-map.yaml` binds 34 capability claims to observable reason codes. If a claim's subject changes, its proof must re-run — overclaiming is a build failure, not a style issue. |
+| **Machine-readable claim ledger** | `verification-map.yaml` binds 34 claims — 11 framework-hygiene, 13 inertness-proof, 10 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run — overclaiming is a build failure, not a style issue. |
 | **Dual-host Agent App adapters** | Codex and Claude Code are the two officially supported V1 hosts, sharing byte-identical host-neutral machinery with a proven cross-host parity digest. Both adapters are **inert dry-run candidates**: they generate uninstalled template data only, and no live host support is asserted. |
 | **Offline-first, privacy-clean** | Development mode enforces a Node process network guard and zero telemetry. The privacy gate scans every tracked byte, all reachable git history, and the release archive for personal identifiers and machine paths. |
 | **Signed release trust** | Releases are bound by tag identity (commit, tree, tag object) and verified externally through an Ed25519 trust-root contract — see the companion `tcrn-workflow-helper` repository. |
@@ -102,7 +102,7 @@ This is the most common question, and the answer has three layers:
 
 1. **The storage layer is single-writer by design.** The workspace is an append-only, hash-chained event log on a plain filesystem. A hash chain has exactly one truthful successor per event — parallel writers would either corrupt the chain or require a consensus protocol that destroys the "audit it with `cat` and `sha256sum`" property. So the engine enforces **one writer at a time** through an exclusive lease with an on-disk recovery-claim protocol: a crashed writer's lease is quarantined and reclaimed fail-closed, and every acquisition is CAS-checked.
 2. **Reasoning parallelism lives above the storage layer.** Concurrency is still everywhere — but as *independent fresh-context sub-agent threads* (implementation workers, multi-role review boards, adversarial verifiers) whose conclusions come back as data. One canonical thread holds decision authority and writes the record; N sub-threads explore, review, and refute in parallel without contaminating each other's context or racing on state. You get the throughput of parallelism with a linear, auditable decision lineage.
-3. **Governance requires a serializable story.** When a release gate asks "who decided this and on what evidence?", a single canonical thread with receipts has one answer. A swarm of peer threads mutating shared state has none.
+3. **Governance requires a serializable story.** The single-writer chain gives a linear, tamper-evident *order* of decisions; binding each decision to an accountable actor and its evidence is carried by the governance thread's receipts today, and by the actor-attestation extension in the workspace chain when it is enabled. A swarm of peer threads mutating shared state has neither the order nor the binding.
 
 **The tests behind this answer** (all in `tests/p3-file-engine.test.mjs`, run by `pnpm verify:p3`):
 
@@ -132,7 +132,7 @@ A release is an immutable annotated tag plus a reproducible artifact set (canoni
 
 - **20 gates** in the `verify:p1` chain, each with a stable terminal reason code.
 - **~29 test files** covering the engine, knowledge core, artifact lifecycle, profiles, personas, context router, both adapters, exchange, compatibility, requirements ledger, release candidate, privacy boundary, proof-artifact generator, and trust matrix.
-- **34 machine-verified claims** in `verification-map.yaml`.
+- **34 machine-verified claims** in `verification-map.yaml`, partitioned as 11 framework-hygiene, 13 inertness-proof, and 10 runtime-capability — the runtime-capability third is the delivered product surface, stated honestly.
 - **64-permutation determinism proofs** in three independent layers (engine insertion orders, profile layer orders, adapter input orders).
 - **19-entry public AOS requirements ledger** (11 fixture-verified, 8 specified) — maturity is recorded per row, never inflated.
 - **Privacy gate** over ~200 tracked source files, ~1,470 git objects, full reachable history, and the release archive.
