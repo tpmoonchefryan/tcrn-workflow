@@ -70,6 +70,31 @@
       "id": "AOS-REQ-014",
       "subject": "p3-acceptance-marker-contract",
       "maturity": "specified"
+    },
+    {
+      "id": "AOS-REQ-015",
+      "subject": "conference-records",
+      "maturity": "specified"
+    },
+    {
+      "id": "AOS-REQ-016",
+      "subject": "dependency-records",
+      "maturity": "fixture_verified"
+    },
+    {
+      "id": "AOS-REQ-017",
+      "subject": "assignment-accountability",
+      "maturity": "specified"
+    },
+    {
+      "id": "AOS-REQ-018",
+      "subject": "gate-records",
+      "maturity": "specified"
+    },
+    {
+      "id": "AOS-REQ-019",
+      "subject": "budgeted-audited-retrieval",
+      "maturity": "specified"
     }
   ],
   "prohibitedClaims": [

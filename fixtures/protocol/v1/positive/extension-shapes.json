@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "tcrn.fixture.v1",
+  "aosFacing": true,
+  "note": "Additive V1 extension record shapes registered via extension-registration (appliesTo work, requiredByDefault false). AOS-REQ-019 (budgeted-audited-retrieval) is a semantic placeholder whose implementation belongs to the AOS knowledge-retrieval line; it is referenced here to keep the public requirement ledger closed.",
+  "requirementIds": [
+    "AOS-REQ-015",
+    "AOS-REQ-016",
+    "AOS-REQ-017",
+    "AOS-REQ-018",
+    "AOS-REQ-019"
+  ],
+  "registry": [
+    {
+      "id": "extension:conference",
+      "version": 1,
+      "requiredByDefault": false
+    },
+    {
+      "id": "extension:dependency",
+      "version": 1,
+      "requiredByDefault": false
+    },
+    {
+      "id": "extension:assignment",
+      "version": 1,
+      "requiredByDefault": false
+    },
+    {
+      "id": "extension:gate",
+      "version": 1,
+      "requiredByDefault": false
+    }
+  ],
+  "conferenceRequest": {
+    "schemaVersion": "tcrn.conference.v1.request",
+    "id": "conference:fixture",
+    "projectId": "project:fixture",
+    "type": "architecture",
+    "title": "fixture conference",
+    "linkedWorkIds": [
+      "work:fixture"
+    ],
+    "desiredOutcome": "record shape proven inert",
+    "participantIds": [
+      "actor:fixture"
+    ],
+    "status": "open",
+    "revision": 1,
+    "updatedAt": "2026-07-16T00:00:00Z",
+    "tombstone": false,
+    "extensions": {}
+  },
+  "dependency": {
+    "schemaVersion": "tcrn.dependency.v1",
+    "id": "dependency:fixture",
+    "projectId": "project:fixture",
+    "fromWorkId": "work:from",
+    "toWorkId": "work:to",
+    "kind": "blocks",
+    "status": "active",
+    "revision": 1,
+    "updatedAt": "2026-07-16T00:00:00Z",
+    "tombstone": false,
+    "extensions": {}
+  },
+  "assignment": {
+    "schemaVersion": "tcrn.assignment.v1",
+    "id": "assignment:fixture",
+    "projectId": "project:fixture",
+    "workId": "work:fixture",
+    "accountableActorId": "actor:fixture",
+    "status": "active",
+    "revision": 1,
+    "updatedAt": "2026-07-16T00:00:00Z",
+    "tombstone": false,
+    "extensions": {}
+  },
+  "gate": {
+    "schemaVersion": "tcrn.gate.v1",
+    "id": "gate:fixture",
+    "projectId": "project:fixture",
+    "workId": "work:fixture",
+    "title": "fixture gate",
+    "outcomeClass": "owner_intent_required",
+    "status": "pending",
+    "revision": 1,
+    "updatedAt": "2026-07-16T00:00:00Z",
+    "tombstone": false,
+    "extensions": {}
+  }
+}
