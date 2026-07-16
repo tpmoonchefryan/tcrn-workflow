@@ -87,3 +87,36 @@ filtering, bounded snippet read, explicit body read, freshness evaluation,
 promotion transition, and metadata-only checkpoint generation. CLI commands
 mirror these surfaces. `P4_KNOWLEDGE_CORE_VERIFIED` proves only this bounded
 file-native capability; it does not mark the graph work done or start RC2/P5/P6.
+
+## KR-05 fact-card mapping appendix (WS-F)
+
+This appendix aligns the AOS KR-05 fact-card entry convention with product
+`KnowledgeUnitMetadata`. It records the correspondence; it does not reconcile the
+two, and discrepancies are noted rather than silently normalized.
+
+KR-05 fact-card entry fields are defined by `Kr05SeedEntryCandidate` in the AOS
+repository (`packages/db/src/knowledge-seed-convention.ts`) as structured entry
+fields plus mandatory body sections — not document frontmatter. Product
+`KnowledgeUnitMetadata` is defined in `packages/core/src/knowledge-core.ts`.
+
+| KR-05 fact-card field | KnowledgeUnitMetadata field | Note |
+|---|---|---|
+| `id` | `id` | Both are stable identifiers. |
+| `title` | `subject` | Renamed; same role. |
+| `roleScope` | `roleScopes[]` | KR-05 single scope; product is a bounded array. |
+| `project` | `projectId` | Renamed. |
+| `category` | `category` | KR-05 uses a free string; product uses a closed 8-value enum. Discrepancy recorded. |
+| `knowledgeKind` | `kind` | KR-05 `fact_card_convention` vs the product closed kind enum (fact/guide/decision/reference/summary). Discrepancy recorded. |
+| `status` | `lifecycle` / `promotionState` | KR-05 `canonical`/… maps onto the product lifecycle and promotion vocabularies. Discrepancy recorded. |
+| `lastVerified` | `lastVerified` | Same field. |
+| `stalenessPolicy` | `stalenessPolicy` | KR-05 uses a string (`review_after_30_days`); product uses a structured object (`{maximumAgeDays, unknownDisposition}`). Discrepancy recorded. |
+| `sourceRef` | `sourceReferences[]` | KR-05 single ref; product is a bounded array. |
+| `sourceDigest` | `sourceDigest` | Same field. |
+| `tags` | `tags[]` | Same role. |
+| `summary` | `summary` | Same field. |
+| `body` (+ required sections) | `snippet` / explicit body read | Product separates a bounded snippet from an explicit body read; KR-05 mandatory body sections (invariants, settings_and_cross_module_interactions, gotchas, source_refs_with_digests) are body content. |
+
+The KR-05 required body sections have no dedicated `KnowledgeUnitMetadata` fields;
+they are body content governed by the product body/snippet budgets. This mapping
+is a documentation alignment for the shared knowledge-records requirement
+(AOS-REQ-006); it adds no schema surface and no engine code.
