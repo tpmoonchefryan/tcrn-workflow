@@ -29,7 +29,7 @@
     {
       "id": "AOS-REQ-006",
       "subject": "knowledge-records",
-      "maturity": "specified"
+      "maturity": "fixture_verified"
     },
     {
       "id": "AOS-REQ-007",

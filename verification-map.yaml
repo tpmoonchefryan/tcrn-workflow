@@ -401,7 +401,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "40b8d70fff3e058c17ca0a8775b3252933c7c8e7fba3839d308612b339158122",
+      "fixtureDigest": "3ecc6013ebb77bde42f58c3dd53d713d03ce46c45bc5218eb4a959bfef67b16a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -608,7 +608,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "3d4455c19052ce7db1679b2fc7184050e902be1b15773965cc25ba389f7488c9",
+      "fixtureDigest": "3acc7a649263a80b6134974664adacc4da352b2a1b72829c175d2d2ceb8a6671",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
