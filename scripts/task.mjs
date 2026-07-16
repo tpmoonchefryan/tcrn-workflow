@@ -314,6 +314,7 @@ async function runTests({
   p5Only = false,
   p6Only = false,
   p6AdapterOnly = false,
+  p6bAdapterOnly = false,
   p7Only = false,
   p7CompatibilityOnly = false,
   p7AosRequirementsOnly = false,
@@ -332,6 +333,7 @@ async function runTests({
     .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path))
     .filter((path) => !p6Only || ["tests/p6-context-router.test.mjs", "tests/p6-codex-adapter.test.mjs"].includes(path))
     .filter((path) => !p6AdapterOnly || path === "tests/p6-codex-adapter.test.mjs")
+    .filter((path) => !p6bAdapterOnly || path === "tests/p6b-claude-adapter.test.mjs")
     .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs")
@@ -355,6 +357,8 @@ async function runTests({
                 ? "P5_GENERIC_PROFILE_TESTS_VERIFIED"
                 : p6AdapterOnly
                   ? "P6_CODEX_ADAPTER_TESTS_VERIFIED"
+                : p6bAdapterOnly
+                  ? "P6B_CLAUDE_ADAPTER_TESTS_VERIFIED"
                 : p6Only
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
                   : p7CompatibilityOnly
@@ -775,6 +779,66 @@ async function verifyP6Adapter() {
     rc3: fixture.rc3,
     liveStore: fixture.liveStore,
     standalone: "inert-product-data-only-no-database-no-aos-no-network",
+  });
+}
+
+async function verifyP6b() {
+  const tests = await runTests({ p6bAdapterOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p6b-claude-adapter-cases.json");
+  const schemaPath = resolve(repositoryRoot, "packages/core/schema/claude-adapter-v1.schema.json");
+  const specPath = resolve(repositoryRoot, "packages/core/spec/claude-adapter-v1.md");
+  const codexAdapterPath = resolve(repositoryRoot, "packages/core/src/codex-adapter.ts");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.p6b-claude-adapter-cases.v1", "P6B_ADAPTER_FIXTURE_SCHEMA");
+  assertion(fixture.goldenCases === 8 && fixture.hostileCases === 31 && fixture.schemaParityCases === 8, "P6B_ADAPTER_HOSTILE_CORPUS");
+  assertion(fixture.pathFaultCases === 8 && fixture.rollbackCases === 14 && fixture.finalHopCases === 4 &&
+    fixture.canonicalTemplateCases === 3 && fixture.bundleOrderParityCases === 4 && fixture.bundleUnicodeParityCases === 8 &&
+    fixture.hostParityCases === 4 && fixture.lifecycleParityCases === 4 && fixture.installationAuthorityCases === 12 &&
+    fixture.installationCanonicalByteCases === 4,
+  "P6B_ADAPTER_SECURITY_CORPUS");
+  assertion(fixture.claudeFallbackCases === 8 && fixture.hostProductCases === 2 && fixture.fragmentReversibilityCases === 3 &&
+    fixture.fragmentHostileCases === 4 && fixture.forbiddenPathCases === 5, "P6B_ADAPTER_CLAUDE_SURFACE_CORPUS");
+  assertion(fixture.propertyPermutations === 64 && fixture.templateFiles === 4 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6B_ADAPTER_PROPERTY_CORPUS");
+  assertion(/^[a-f0-9]{64}$/u.test(fixture.parityNeutralProjectionDigest) && fixture.settingsFragmentReversible === true, "P6B_ADAPTER_PARITY_CORPUS");
+  assertion(fixture.coldStartCases === 1 && fixture.staticBoundaryCases === 1, "P6B_ADAPTER_STANDALONE_BOUNDARY");
+  assertion(fixture.adapter === "implemented_inert_templates_only" && fixture.hostProduct === "claude-code" && fixture.liveActivation === false && fixture.og04 === "unsatisfied" && fixture.rc3 === "unaccepted" && fixture.liveStore === "not-created", "P6B_ADAPTER_NO_OVERCLAIM");
+  return success("P6B_CLAUDE_ADAPTER_VERIFIED", {
+    tests: tests.reasonCode,
+    goldenCases: fixture.goldenCases,
+    hostileCases: fixture.hostileCases,
+    schemaParityCases: fixture.schemaParityCases,
+    pathFaultCases: fixture.pathFaultCases,
+    rollbackCases: fixture.rollbackCases,
+    canonicalTemplateCases: fixture.canonicalTemplateCases,
+    bundleOrderParityCases: fixture.bundleOrderParityCases,
+    bundleUnicodeParityCases: fixture.bundleUnicodeParityCases,
+    hostParityCases: fixture.hostParityCases,
+    lifecycleParityCases: fixture.lifecycleParityCases,
+    installationAuthorityCases: fixture.installationAuthorityCases,
+    installationCanonicalByteCases: fixture.installationCanonicalByteCases,
+    finalHopCases: fixture.finalHopCases,
+    claudeFallbackCases: fixture.claudeFallbackCases,
+    hostProductCases: fixture.hostProductCases,
+    fragmentReversibilityCases: fixture.fragmentReversibilityCases,
+    fragmentHostileCases: fixture.fragmentHostileCases,
+    forbiddenPathCases: fixture.forbiddenPathCases,
+    propertyPermutations: fixture.propertyPermutations,
+    templateFiles: fixture.templateFiles,
+    coldStartCases: fixture.coldStartCases,
+    staticBoundaryCases: fixture.staticBoundaryCases,
+    permutationCorpusDigest: fixture.permutationCorpusDigest,
+    parityNeutralProjectionDigest: fixture.parityNeutralProjectionDigest,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    codexAdapterParityDigest: (await fileRecord(codexAdapterPath)).sha256,
+    adapter: fixture.adapter,
+    hostProduct: fixture.hostProduct,
+    liveActivation: fixture.liveActivation,
+    og04: fixture.og04,
+    rc3: fixture.rc3,
+    liveStore: fixture.liveStore,
+    standalone: "inert-product-data-only-no-database-no-requirement-ledger-no-network",
   });
 }
 
@@ -1267,6 +1331,7 @@ const commandContracts = {
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
+  p6b: { exit: 0, reasonCode: "P6B_CLAUDE_ADAPTER_VERIFIED" },
   p7: { exit: 0, reasonCode: "P7_CANONICAL_EXCHANGE_VERIFIED" },
   "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
   "p7-aos-requirements": { exit: 0, reasonCode: "P7_PUBLIC_AOS_REQUIREMENTS_VERIFIED" },
@@ -1480,6 +1545,7 @@ const handlers = {
   p5: verifyP5,
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,
+  p6b: verifyP6b,
   p7: verifyP7,
   "p7-compatibility": verifyP7Compatibility,
   "p7-aos-requirements": verifyP7AosRequirements,
@@ -1525,6 +1591,9 @@ function evidencePhase(name) {
     return "p6";
   }
   if (name === "p6-adapter") {
+    return "p6";
+  }
+  if (name === "p6b") {
     return "p6";
   }
   if (name === "p7" || name === "p7-compatibility" || name === "p7-aos-requirements") {

@@ -5,9 +5,13 @@ evidence, and release verification. This repository contains the accepted P1
 framework bootstrap, the P2 V1 protocol/conformance basis, the accepted P3
 file-native engine, bounded P4 artifact-lifecycle and Knowledge Core candidates,
 bounded generic P5 profile-policy and Core Reference persona candidates, and a
-bounded P6 Context Router and inert Codex Adapter candidates. The canonical
-P3 capability marker and local graph are governed outside this product checkout;
-live integrations and release support remain intentionally unavailable.
+bounded P6 Context Router and inert Codex Adapter and inert Claude Code Adapter
+candidates. The two Agent App adapters (Codex and Claude Code) are the V1
+officially supported hosts; both remain inert dry-run candidates that generate
+uninstalled template data only. The canonical P3 capability marker and local
+graph are governed outside this product checkout; live integrations and release
+support remain intentionally unavailable, and no live Claude Code or Codex host
+support is asserted before its governed release route accepts.
 
 ## Modes
 
@@ -34,6 +38,7 @@ pnpm verify:p4:knowledge
 pnpm verify:p5
 pnpm verify:p6
 pnpm verify:p6:adapter
+pnpm verify:p6b
 pnpm verify:p7
 pnpm verify:p7:compatibility
 pnpm verify:p8
@@ -127,6 +132,15 @@ final-hop visibility, hostile corpus, and 64 real input/template orders. The
 templates are not installed or activated; OG-04 and RC3 remain
 unsatisfied, and no live context/profile/Knowledge/artifact store, hook, Skill,
 configuration, or owner-visible activation is created.
+
+`pnpm verify:p6b` proves the host-specific Claude Code Adapter over the same
+inert dry-run surface: a four-file `.claude/tcrn-workflow/` template bundle bound
+to a `claude-code` host identity and data-only version readback, a byte-reversible
+settings hook fragment that never clobbers user-owned `.claude/settings.json`,
+forbidden-path rejection of any user-level `.claude` location, a CLAUDE.md-only
+fallback mode, and a cross-host parity check proving the Codex and Claude adapters
+share host-neutral machinery byte-for-byte and diverge only at the enumerated host
+surface. It installs and activates nothing; no live Claude Code support is claimed.
 
 `pnpm verify:p8` is the release-candidate proof. It verifies one disposable
 dogfood fixture, the eight-record sanitized Core Reference projection, the
