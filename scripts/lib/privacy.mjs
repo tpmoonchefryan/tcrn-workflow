@@ -50,9 +50,11 @@ function privacyPatterns(owner) {
   const controlDirectory = [".", "context", "/"].join("");
   const agentDirectory = [".", "llm", "/"].join("");
   const localUserPath = ["/", "Users", "/[^/\\s]+/"].join("");
+  const linuxHomePath = ["/", "home", "/[^/\\s]+/"].join("");
   return [
     ["LOCAL_ABSOLUTE_PATH", new RegExp(localUserPath, "u")],
-    ["WINDOWS_USER_PATH", /[A-Za-z]:\\\\Users\\\\/u],
+    ["LINUX_HOME_PATH", new RegExp(linuxHomePath, "u")],
+    ["WINDOWS_USER_PATH", /[A-Za-z]:\\+Users\\+/u],
     ["THREAD_IDENTIFIER", /019[a-f0-9]{5}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/u],
     ["EMAIL_IDENTIFIER", /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu],
     ["PRIVATE_KEY", /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/u],

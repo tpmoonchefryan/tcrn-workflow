@@ -45,6 +45,8 @@ test("private/raw identifiers and common secret families fail closed", () => {
     ["authenticated URL", ["https://user", ":", "password", "@", "example.invalid/path"].join(""), "AUTHENTICATED_URL"],
     ["private key", ["-----BEGIN OPENSSH", " PRIVATE KEY-----"].join(""), "PRIVATE_KEY"],
     ["customer marker", ["tenant", "-", "export.csv"].join(""), "CUSTOMER_SOURCE_MARKER"],
+    ["linux home path", ["/", "home", "/", "user1", "/work"].join(""), "LINUX_HOME_PATH"],
+    ["raw windows path", ["C", ":", "\\", "Users", "\\", "user1"].join(""), "WINDOWS_USER_PATH"],
   ];
   for (const [label, content, reasonCode] of cases) {
     const findings = scanPrivacyEntries([{ label, kind: "source", content }], {

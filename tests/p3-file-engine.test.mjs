@@ -653,6 +653,29 @@ test("event stream and event IDs are bound to canonical Workspace metadata", asy
   }
 });
 
+test("a crashed dir-only lease is reclaimable once ttl of real time elapses, even when the injected event time predates the real clock", async () => {
+  const crashFixture = await workspaceFixture();
+  try {
+    await expectReasonAsync("WORKSPACE_FAULT_INJECTED", () => acquireWorkspaceLease(crashFixture.workspace, {
+      now: instant(1),
+      crashAfterLeaseDirectoryForTest: true,
+    }));
+    const incompleteLease = join(crashFixture.workspace, ".tcrn-workflow", "lease");
+    assert.deepEqual(await readdir(incompleteLease), []);
+    // Backdate the lease directory to a real-recent time well beyond the 30s ttl,
+    // WITHOUT year-2000 backdating. The injected event time (2026-07-11) predates
+    // the real machine clock, which is exactly the domain in which the previous
+    // injected-time grace produced a negative age and wedged the workspace forever.
+    // The real-clock grace correctly measures 60s of real elapsed time and reclaims.
+    await utimes(incompleteLease, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    const recovered = await acquireWorkspaceLease(crashFixture.workspace, { now: instant(2) });
+    assert.deepEqual(await readdir(incompleteLease), ["owner.json"]);
+    await recovered.release();
+  } finally {
+    await crashFixture.close();
+  }
+});
+
 test("lease creation crash and recovery-claim contention are recoverable and single-writer", async () => {
   const crashFixture = await workspaceFixture();
   try {

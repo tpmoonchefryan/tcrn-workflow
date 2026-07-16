@@ -247,6 +247,14 @@ export function validateP8ReleaseDocuments(documents) {
   const manifestBasis = { ...manifest };
   delete manifestBasis.manifestDigest;
   assertion(manifest.manifestDigest === sha256(Buffer.from(canonicalJson(manifestBasis), "utf8")), "P8_RELEASE_MANIFEST_DIGEST");
+  // Cross-bind the manifest's asserted per-artifact digests to the actual shipped
+  // document bytes, so the manifest cannot claim a size/digest that differs from
+  // what is shipped (an external consumer verifies against these records).
+  assertion(Array.isArray(manifest.artifacts) && manifest.artifacts.length > 0, "P8_RELEASE_MANIFEST_INVALID", "artifacts");
+  for (const artifact of manifest.artifacts) {
+    const bytes = documents.get(artifact.path);
+    assertion(Buffer.isBuffer(bytes) && artifact.sha256 === sha256(bytes) && artifact.size === bytes.length, "P8_RELEASE_MANIFEST_ARTIFACT_MISMATCH", String(artifact.path));
+  }
   const expected = new Map([...documents].filter(([path]) => path !== "checksums.txt").map(([path, bytes]) => [path, sha256(bytes)]));
   const lines = documents.get("checksums.txt").toString("utf8").trim().split("\n").filter(Boolean);
   assertion(lines.length === expected.size, "P8_RELEASE_CHECKSUMS_INVALID");
@@ -257,6 +265,12 @@ export function validateP8ReleaseDocuments(documents) {
   }
   const provenance = JSON.parse(documents.get("provenance.json").toString("utf8"));
   assertion(provenance?._type === "https://in-toto.io/Statement/v1" && provenance?.predicateType === "https://slsa.dev/provenance/v1" && provenance?.predicate?.buildDefinition?.externalParameters?.version === P8_VERSION, "P8_RELEASE_PROVENANCE_INVALID");
+  // Cross-bind the provenance subject digests to the actual shipped bytes.
+  assertion(Array.isArray(provenance.subject) && provenance.subject.length > 0, "P8_RELEASE_PROVENANCE_INVALID", "subject");
+  for (const subject of provenance.subject) {
+    const bytes = documents.get(subject.path);
+    assertion(Buffer.isBuffer(bytes) && subject.sha256 === sha256(bytes) && subject.size === bytes.length, "P8_RELEASE_PROVENANCE_SUBJECT_MISMATCH", String(subject.path));
+  }
   return { releaseStatus: "unpublished_candidate", supportedAosReleases: [], artifactCount: documents.size };
 }
 

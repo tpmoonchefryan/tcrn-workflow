@@ -1110,9 +1110,16 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
           fail("WORKSPACE_LOCKED", "workspace already has an active writer");
         }
       } else {
-        const nowMilliseconds = Number(nowNanoseconds / 1_000_000n);
-        const age = nowMilliseconds - initial.directoryModifiedMilliseconds;
-        if (age < ttl || age < 0) {
+        // The lease-directory mtime is a real-clock timestamp; the creation grace
+        // is a liveness guard (is another process mid-creating this lease?), so it
+        // is measured against the real wall clock, not the injected event time —
+        // consistent with the real-system processAlive probe above. A negative or
+        // future elapsed is treated as within grace (fail-closed: do not stomp).
+        // This bounds the grace to ttl of real time, so a crashed dir-only lease
+        // becomes reclaimable rather than wedging when the injected event time
+        // predates the real directory mtime.
+        const age = Date.now() - initial.directoryModifiedMilliseconds;
+        if (age < ttl) {
           fail("WORKSPACE_LOCKED", "incomplete lease is still within its creation grace period");
         }
       }
@@ -1126,9 +1133,10 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
           fail("WORKSPACE_LOCKED", "workspace gained an active writer before reclaim");
         }
       } else {
-        const nowMilliseconds = Number(nowNanoseconds / 1_000_000n);
-        const age = nowMilliseconds - observed.directoryModifiedMilliseconds;
-        if (age < ttl || age < 0) {
+        // Real-clock creation grace (see the first observation above): a crashed
+        // dir-only lease is reclaimable once ttl of real time has elapsed.
+        const age = Date.now() - observed.directoryModifiedMilliseconds;
+        if (age < ttl) {
           fail("WORKSPACE_LOCKED", "incomplete lease changed within its creation grace period");
         }
       }
