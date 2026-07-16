@@ -329,6 +329,43 @@ test("WSA-1: every mutation returns state identical to a fresh materialize (sing
   }
 });
 
+test("WSA-2: a 400-record deep-hierarchy build completes and exports deterministically", async () => {
+  // Under the pre-WSA-2 per-event full-graph validation this build was O(n^3) and
+  // exceeded the test-controller timeout. It must now simply finish.
+  const fixture = await workspaceFixture();
+  try {
+    const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(1) });
+    const at = (n) => new Date(Date.UTC(2026, 6, 11, 0, 0, 0) + n * 1000).toISOString().replace(/\.000Z$/u, "Z");
+    try {
+      let version = 0;
+      let state = await createProject(fixture.workspace, lease, { expectedVersion: version, occurredAt: at(version), externalKey: "PROJECT-DEEP", name: "Deep" });
+      version += 1;
+      const projectId = state.projects[0].id;
+      const chains = 100;
+      for (let i = 0; i < chains; i += 1) {
+        state = await createWork(fixture.workspace, lease, { expectedVersion: version, occurredAt: at(version), projectId, externalKey: `INITIATIVE-${i}`, kind: "Initiative", parentId: null });
+        const initiativeId = state.work.find((record) => record.externalKey === `INITIATIVE-${i}`).id;
+        version += 1;
+        state = await createWork(fixture.workspace, lease, { expectedVersion: version, occurredAt: at(version), projectId, externalKey: `EPIC-${i}`, kind: "Epic", parentId: initiativeId });
+        const epicId = state.work.find((record) => record.externalKey === `EPIC-${i}`).id;
+        version += 1;
+        state = await createWork(fixture.workspace, lease, { expectedVersion: version, occurredAt: at(version), projectId, externalKey: `STORY-${i}`, kind: "Story", parentId: epicId });
+        const storyId = state.work.find((record) => record.externalKey === `STORY-${i}`).id;
+        version += 1;
+        state = await createWork(fixture.workspace, lease, { expectedVersion: version, occurredAt: at(version), projectId, externalKey: `SUBTASK-${i}`, kind: "Subtask", parentId: storyId });
+        version += 1;
+      }
+      assert.equal(state.version, 1 + chains * 4);
+      assert.equal(state.work.length, chains * 4);
+      assert.equal(await exportWorkspace(fixture.workspace), await exportWorkspace(fixture.workspace));
+    } finally {
+      await lease.release();
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("single-writer lease, CAS, stale-lock recovery, and atomic crash points fail closed", async () => {
   const fixture = await workspaceFixture();
   try {
