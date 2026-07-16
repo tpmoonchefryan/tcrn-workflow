@@ -39,6 +39,15 @@ import {
   validateGenericStarterBundle,
   validateWorkspace,
   codexAdapterAuthorityEmptyFallback,
+  claudeAdapterAuthorityEmptyFallback,
+  generateClaudeAdapterBundle,
+  generateClaudeAdapterSettingsFragment,
+  mergeClaudeAdapterSettingsFragment,
+  planClaudeAdapterRollback,
+  readClaudeAdapterInstallationReceipt,
+  removeClaudeAdapterSettingsFragment,
+  simulateClaudeAdapterLifecycle,
+  validateClaudeAdapterBundle,
   dryRunCanonicalExchange,
   dryRunCompatibilityMode,
   generateCodexAdapterBundle,
@@ -59,6 +68,8 @@ import {
 import type {
   CodexAdapterHostContext,
   CodexAdapterInstallationFileIdentity,
+  ClaudeAdapterHostContext,
+  ClaudeAdapterInstallationFileIdentity,
   ExplicitRoot,
   ContextRouteAuthorityFileIdentity,
   GenericProfileAdmissionAuthority,
@@ -105,6 +116,8 @@ export interface CliIo {
   readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
   readonly codexAdapterHost?: CodexAdapterHostContext;
   readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
+  readonly claudeAdapterHost?: ClaudeAdapterHostContext;
+  readonly claudeAdapterInstallationAuthority?: ClaudeAdapterInstallationFileIdentity;
   readonly compatibilityAdmissionAuthority?: CompatibilityAdmissionAuthority;
 }
 
@@ -382,6 +395,56 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, ["bundle", "installation-receipt"]);
     const installation = await readCodexAdapterInstallationReceipt(values["installation-receipt"] ?? "", io.codexAdapterInstallationAuthority);
     io.write(canonicalJson(planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), installation)));
+    return;
+  }
+  if (command === "claude-adapter-generate") {
+    const values = parseArguments(rest, ["request"]);
+    required(values, ["request"]);
+    io.write(canonicalJson(generateClaudeAdapterBundle(jsonValue(values.request, "request"), io.claudeAdapterHost)));
+    return;
+  }
+  if (command === "claude-adapter-validate") {
+    const values = parseArguments(rest, ["bundle"]);
+    required(values, ["bundle"]);
+    const bundle = validateClaudeAdapterBundle(jsonValue(values.bundle, "bundle"));
+    io.write(canonicalJson({ reasonCode: "ADAPTER_VALIDATED", bundleDigest: bundle.bundleDigest, activation: false }));
+    return;
+  }
+  if (command === "claude-adapter-simulate") {
+    const values = parseArguments(rest, ["lifecycle"]);
+    required(values, ["lifecycle"]);
+    io.write(canonicalJson(simulateClaudeAdapterLifecycle(jsonValue(values.lifecycle, "lifecycle"))));
+    return;
+  }
+  if (command === "claude-adapter-fallback") {
+    const values = parseArguments(rest, ["input"]);
+    required(values, ["input"]);
+    io.write(canonicalJson(claudeAdapterAuthorityEmptyFallback(jsonValue(values.input, "input"))));
+    return;
+  }
+  if (command === "claude-adapter-rollback-plan") {
+    const values = parseArguments(rest, ["bundle", "installation-receipt"]);
+    required(values, ["bundle", "installation-receipt"]);
+    const installation = await readClaudeAdapterInstallationReceipt(values["installation-receipt"] ?? "", io.claudeAdapterInstallationAuthority);
+    io.write(canonicalJson(planClaudeAdapterRollback(jsonValue(values.bundle, "bundle"), installation)));
+    return;
+  }
+  if (command === "claude-adapter-settings-fragment") {
+    const values = parseArguments(rest, ["request"]);
+    required(values, ["request"]);
+    io.write(canonicalJson(generateClaudeAdapterSettingsFragment(jsonValue(values.request, "request"), io.claudeAdapterHost)));
+    return;
+  }
+  if (command === "claude-adapter-settings-merge") {
+    const values = parseArguments(rest, ["settings", "fragment"]);
+    required(values, ["settings", "fragment"]);
+    io.write(mergeClaudeAdapterSettingsFragment(values.settings ?? "", jsonValue(values.fragment, "fragment")));
+    return;
+  }
+  if (command === "claude-adapter-settings-remove") {
+    const values = parseArguments(rest, ["settings", "fragment"]);
+    required(values, ["settings", "fragment"]);
+    io.write(removeClaudeAdapterSettingsFragment(values.settings ?? "", jsonValue(values.fragment, "fragment")));
     return;
   }
   if (command === "init") {
