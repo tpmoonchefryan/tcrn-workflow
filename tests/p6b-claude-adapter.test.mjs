@@ -319,6 +319,10 @@ test("settings fragment merge and remove fail closed on clobber, noncanonical, a
     () => reason("ADAPTER_FRAGMENT_INVALID", () => mergeClaudeAdapterSettingsFragment('{ "model":"x" }', fragment)),
     () => reason("ADAPTER_FRAGMENT_IRREVERSIBLE", () => removeClaudeAdapterSettingsFragment(canonicalJson({ model: "x" }), fragment)),
     () => reason("ADAPTER_FRAGMENT_INVALID", () => validateClaudeAdapterSettingsFragment({ ...fragment, fragmentDigest: hash("wrong") })),
+    // A canonical settings input that is itself within budget but whose merged
+    // output would exceed it fails closed at merge, so any successful merge stays
+    // reversible by remove (remove enforces the same budget on the merged text).
+    () => reason("ADAPTER_BUDGET_EXCEEDED", () => mergeClaudeAdapterSettingsFragment(canonicalJson(Object.fromEntries(Array.from({ length: 10 }, (_, i) => ["k" + String(i).padStart(3, "0"), "x".repeat(6400)]))), fragment)),
   ];
   assert.equal(vectors.length, fixture.fragmentHostileCases);
   for (const operation of vectors) operation();

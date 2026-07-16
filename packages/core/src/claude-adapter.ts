@@ -443,8 +443,10 @@ export function simulateClaudeAdapterLifecycle(value: unknown): Readonly<Record<
 // Inert Claude Code settings-fragment: the four project-scoped hook entries that
 // a governed activation would merge into user-owned .claude/settings.json. The
 // fragment is data only; it is never written by this module. Merge and remove
-// are exact byte inverses over canonical settings text so a governed apply is
-// fully reversible and never clobbers pre-existing user content.
+// are exact byte inverses over canonical settings text: every merge that succeeds
+// (both inputs canonical and within the shared size budget) is reversible by
+// remove, which restores the original settings bytes, and never clobbers
+// pre-existing user content.
 export function generateClaudeAdapterSettingsFragment(value: unknown, host?: ClaudeAdapterHostContext): Readonly<Record<string, unknown>> {
   const request = validateClaudeAdapterRequest(value);
   const admitted = assertHost(request, host);
@@ -505,7 +507,11 @@ export function mergeClaudeAdapterSettingsFragment(settingsText: unknown, fragme
   const fragment = validateClaudeAdapterSettingsFragment(fragmentValue);
   const settings = canonicalSettingsObject(settingsText);
   if (Object.prototype.hasOwnProperty.call(settings, CLAUDE_ADAPTER_FRAGMENT_MERGE_KEY)) fail("ADAPTER_FRAGMENT_INVALID", "settings already carry the workflow fragment key");
-  return canonicalJson({ ...settings, [CLAUDE_ADAPTER_FRAGMENT_MERGE_KEY]: fragment });
+  const merged = canonicalJson({ ...settings, [CLAUDE_ADAPTER_FRAGMENT_MERGE_KEY]: fragment });
+  // Bound the merged output by the same budget the reverse path enforces, so every
+  // merge that succeeds is reversible by removeClaudeAdapterSettingsFragment.
+  if (Buffer.byteLength(merged, "utf8") > maximumSettingsBytes) fail("ADAPTER_BUDGET_EXCEEDED", "merged settings exceed the size budget");
+  return merged;
 }
 
 export function removeClaudeAdapterSettingsFragment(mergedText: unknown, fragmentValue: unknown): string {

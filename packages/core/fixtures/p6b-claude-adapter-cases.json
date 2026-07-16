@@ -20,7 +20,7 @@
   "claudeFallbackCases": 8,
   "hostProductCases": 2,
   "fragmentReversibilityCases": 3,
-  "fragmentHostileCases": 4,
+  "fragmentHostileCases": 5,
   "forbiddenPathCases": 5,
   "permutationCorpusDigest": "17157a4590fc7eff949b30a6fa83a4f4d1ea081a89ff3e4189ef36e4b3ddccf7",
   "parityNeutralProjectionDigest": "05c5ffaf0d481b6be87e634b74bc3a19f9c53d41999b7ec50de61eac03c39a87",

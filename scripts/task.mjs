@@ -809,7 +809,7 @@ async function verifyP6b() {
     fixture.installationCanonicalByteCases === 4,
   "P6B_ADAPTER_SECURITY_CORPUS");
   assertion(fixture.claudeFallbackCases === 8 && fixture.hostProductCases === 2 && fixture.fragmentReversibilityCases === 3 &&
-    fixture.fragmentHostileCases === 4 && fixture.forbiddenPathCases === 5, "P6B_ADAPTER_CLAUDE_SURFACE_CORPUS");
+    fixture.fragmentHostileCases === 5 && fixture.forbiddenPathCases === 5, "P6B_ADAPTER_CLAUDE_SURFACE_CORPUS");
   assertion(fixture.propertyPermutations === 64 && fixture.templateFiles === 4 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6B_ADAPTER_PROPERTY_CORPUS");
   assertion(/^[a-f0-9]{64}$/u.test(fixture.parityNeutralProjectionDigest) && fixture.settingsFragmentReversible === true, "P6B_ADAPTER_PARITY_CORPUS");
   assertion(fixture.coldStartCases === 1 && fixture.staticBoundaryCases === 1, "P6B_ADAPTER_STANDALONE_BOUNDARY");
@@ -896,6 +896,7 @@ async function verifyConference() {
   const fixture = await readJson(fixturePath);
   assertion(fixture.schemaVersion === "tcrn.conference-cases.v1", "CONFERENCE_FIXTURE_SCHEMA");
   assertion(fixture.positiveCases === 3 && fixture.hostileCases === 12 && fixture.schemaParityCases === 8, "CONFERENCE_CORE_CORPUS");
+  assertion(fixture.positionParityCases === 4 && fixture.minutesParityCases === 4, "CONFERENCE_SCHEMA_PARITY_CORPUS");
   assertion(fixture.operationCases === 6 && fixture.distillCases === 3, "CONFERENCE_OPERATION_CORPUS");
   assertion(fixture.registrationAppliesTo === "work" && fixture.requiredByDefault === false && fixture.ledgerRequirement === "AOS-REQ-015", "CONFERENCE_REGISTRATION");
   assertion(fixture.orchestration === "excluded" && fixture.search === "excluded" && fixture.liveStore === "not-created", "CONFERENCE_NO_OVERCLAIM");

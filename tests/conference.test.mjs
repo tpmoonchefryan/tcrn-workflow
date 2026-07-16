@@ -127,6 +127,30 @@ test("Draft 2020-12 schema and runtime agree", async () => {
     assert.equal(requestSchema(vector), false);
     assert.throws(() => validateConferenceRequest(vector));
   }
+
+  const positionJsonSchema = JSON.parse(await readFile(new URL("../schemas/conference-position-v1.schema.json", import.meta.url), "utf8"));
+  const positionSchema = ajv.compile(positionJsonSchema);
+  assert.equal(positionSchema(position()), true); validateConferencePosition(position());
+  const positionVectors = [
+    { ...position(), extra: true },
+    position({ evidenceIds: ["NotAnId"] }),
+    position({ risks: Array.from({ length: 33 }, () => "r") }),
+    position({ updatedAt: "2026-07-16" }),
+  ];
+  assert.equal(positionVectors.length, fixture.positionParityCases);
+  for (const vector of positionVectors) { assert.equal(positionSchema(vector), false); assert.throws(() => validateConferencePosition(vector)); }
+
+  const minutesJsonSchema = JSON.parse(await readFile(new URL("../schemas/conference-minutes-v1.schema.json", import.meta.url), "utf8"));
+  const minutesSchema = ajv.compile(minutesJsonSchema);
+  assert.equal(minutesSchema(minutes()), true); validateConferenceMinutes(minutes());
+  const minutesVectors = [
+    { ...minutes(), extra: true },
+    minutes({ outcomeClass: "final" }),
+    minutes({ decisions: Array.from({ length: 33 }, () => "d") }),
+    minutes({ revision: 0 }),
+  ];
+  assert.equal(minutesVectors.length, fixture.minutesParityCases);
+  for (const vector of minutesVectors) { assert.equal(minutesSchema(vector), false); assert.throws(() => validateConferenceMinutes(vector)); }
 });
 
 test("extension registration binds appliesTo work and the conference schema digest", async () => {
