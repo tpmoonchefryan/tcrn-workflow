@@ -291,6 +291,44 @@ test("project CRUD and Initiative-Epic-Story-Subtask operations materialize dete
   }
 });
 
+test("WSA-1: every mutation returns state identical to a fresh materialize (single-replay pipeline)", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(1) });
+    const projection = (state) => ({ version: state.version, headEventHash: state.headEventHash, projects: state.projects, work: state.work });
+    const assertFresh = async (returned) => {
+      const fresh = await materializeWorkspace(fixture.workspace);
+      assert.deepEqual(projection(returned), projection(fresh), "returned state must equal a fresh materialize");
+    };
+    try {
+      let state = await createProject(fixture.workspace, lease, { expectedVersion: 0, occurredAt: instant(1), externalKey: "PROJECT-ALPHA", name: "Alpha" });
+      await assertFresh(state);
+      const projectId = state.projects[0].id;
+      state = await createWork(fixture.workspace, lease, { expectedVersion: 1, occurredAt: instant(2), projectId, externalKey: "INITIATIVE-ONE", kind: "Initiative", parentId: null });
+      await assertFresh(state);
+      const initiativeId = state.work.find((record) => record.kind === "Initiative").id;
+      state = await createWork(fixture.workspace, lease, { expectedVersion: 2, occurredAt: instant(3), projectId, externalKey: "EPIC-ONE", kind: "Epic", parentId: initiativeId });
+      await assertFresh(state);
+      const epicId = state.work.find((record) => record.kind === "Epic").id;
+      state = await transitionWork(fixture.workspace, lease, { expectedVersion: 3, occurredAt: instant(4), id: epicId, status: "ready" });
+      await assertFresh(state);
+      state = await updateProject(fixture.workspace, lease, { expectedVersion: 4, occurredAt: instant(5), id: projectId, name: "Alpha Two" });
+      await assertFresh(state);
+      state = await deleteWork(fixture.workspace, lease, { expectedVersion: 5, occurredAt: instant(6), id: epicId });
+      await assertFresh(state);
+      state = await deleteWork(fixture.workspace, lease, { expectedVersion: 6, occurredAt: instant(7), id: initiativeId });
+      await assertFresh(state);
+      state = await deleteProject(fixture.workspace, lease, { expectedVersion: 7, occurredAt: instant(8), id: projectId });
+      await assertFresh(state);
+      assert.equal(state.version, 8);
+    } finally {
+      await lease.release();
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("single-writer lease, CAS, stale-lock recovery, and atomic crash points fail closed", async () => {
   const fixture = await workspaceFixture();
   try {

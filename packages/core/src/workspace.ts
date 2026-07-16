@@ -1308,7 +1308,17 @@ export async function validateWorkspace(workspaceRootInput: string, checkViews =
   return state;
 }
 
-async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, payload: JsonValue, options: WorkspaceMutationOptions): Promise<WorkspaceState> {
+// WSA-1: a mutation builder validates its input against the claim-fresh state and
+// returns both the event payload and the already-validated next-state record sets.
+// projects must be id-sorted and work must be validateWorkGraph output so the
+// constructed committed state is byte-identical to a fresh materialize.
+interface MutationDelta {
+  readonly payload: JsonValue;
+  readonly projects: readonly ProjectRecord[];
+  readonly work: readonly WorkRecord[];
+}
+
+async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, buildDelta: (state: WorkspaceState) => MutationDelta, options: WorkspaceMutationOptions): Promise<WorkspaceState> {
   assertStrictInstant(options.occurredAt);
   const workspace = await resolveWorkspace(workspaceRootInput);
   await assertLease(workspace.root, lease);
@@ -1316,10 +1326,13 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, pa
   try {
     await options.afterMutationClaimForTest?.();
     await assertLease(workspace.root, lease);
+    // WSA-1: the single full replay per mutation. Input validation runs against
+    // this claim-fresh state (via buildDelta), closing the entry-path TOCTOU gap.
     const state = materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
     if (!Number.isSafeInteger(options.expectedVersion) || options.expectedVersion !== state.version) {
       fail("WORKSPACE_CAS_MISMATCH", `expected=${String(options.expectedVersion)} actual=${state.version}`);
     }
+    const delta = buildDelta(state);
     assertWorkspaceRecordCount(state.version + 1);
     const sequence = state.version + 1;
     const streamId = workspaceStreamId(workspace.metadata);
@@ -1329,21 +1342,42 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, pa
       sequence,
       occurredAt: options.occurredAt,
       priorHash: state.headEventHash,
-      payload,
+      payload: delta.payload,
     });
     const segmentIndex = Math.floor((sequence - 1) / workspace.metadata.segmentEventLimit) + 1;
     const segmentPath = controlPath(workspace.root, `events/${String(segmentIndex).padStart(6, "0")}.json`);
     const current = sequence % workspace.metadata.segmentEventLimit === 1 && sequence !== 1
       ? []
       : state.events.slice((segmentIndex - 1) * workspace.metadata.segmentEventLimit);
-    await atomicWrite(segmentPath, canonicalJson([...current, event]), workspace.root, options.crashAt);
+    const segmentBytes = canonicalJson([...current, event]);
+    await atomicWrite(segmentPath, segmentBytes, workspace.root, options.crashAt);
     crash("after-event-commit", options.crashAt);
-    const committed = materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
+    // WSA-1: durability readback bounded to the just-committed segment replaces the
+    // full-chain re-materialize; atomicWrite already fsync+rename+identity-verified,
+    // and the chain was validated under this claim, so re-reading it wholesale was
+    // redundant. The committed state is applied from the validated delta, and equals
+    // a fresh materialize by construction.
+    const readback = await boundFile(segmentPath);
+    if (readback.toString("utf8") !== segmentBytes) {
+      fail("WORKSPACE_EVENT_CORRUPT", `segment ${segmentIndex} readback mismatch`);
+    }
+    const committed: WorkspaceState = {
+      metadata: workspace.metadata,
+      version: sequence,
+      headEventHash: event.eventHash,
+      projects: delta.projects,
+      work: delta.work,
+      events: [...state.events, event],
+    };
     await writeViews(workspace.root, committed, options.crashAt);
     return committed;
   } finally {
     await releaseMutationClaim(workspace.root, lease, claim);
   }
+}
+
+function sortedProjects(records: readonly ProjectRecord[]): readonly ProjectRecord[] {
+  return [...records].sort((left, right) => compareCanonicalText(left.id, right.id));
 }
 
 function projectById(state: WorkspaceState, id: string): ProjectRecord {
@@ -1366,47 +1400,50 @@ export async function createProject(workspaceRoot: string, lease: WorkspaceLease
   readonly externalKey: string;
   readonly name: string;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
-  const state = await materializeWorkspace(workspaceRoot);
   const externalKey = canonicalExternalKey(input.externalKey);
   const id = deriveStableId("project", externalKey);
-  if (state.projects.some((record) => record.id === id)) {
-    fail("WORKSPACE_INPUT_INVALID", `project ${id} already exists`);
-  }
-  const record = validateProject({
-    schemaVersion: "tcrn.project.v1",
-    id,
-    externalKey,
-    name: input.name,
-    revision: 1,
-    updatedAt: input.occurredAt,
-    tombstone: false,
-  }, "WORKSPACE_INPUT_INVALID");
-  return appendEvent(workspaceRoot, lease, { operation: "project.created", record }, input);
+  return appendEvent(workspaceRoot, lease, (state) => {
+    if (state.projects.some((record) => record.id === id)) {
+      fail("WORKSPACE_INPUT_INVALID", `project ${id} already exists`);
+    }
+    const record = validateProject({
+      schemaVersion: "tcrn.project.v1",
+      id,
+      externalKey,
+      name: input.name,
+      revision: 1,
+      updatedAt: input.occurredAt,
+      tombstone: false,
+    }, "WORKSPACE_INPUT_INVALID");
+    return { payload: { operation: "project.created", record }, projects: sortedProjects([...state.projects, record]), work: state.work };
+  }, input);
 }
 
 export async function updateProject(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly id: string;
   readonly name: string;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
-  const state = await materializeWorkspace(workspaceRoot);
-  const current = projectById(state, input.id);
-  const record = validateProject(
-    { ...current, name: input.name, revision: current.revision + 1, updatedAt: input.occurredAt },
-    "WORKSPACE_INPUT_INVALID",
-  );
-  return appendEvent(workspaceRoot, lease, { operation: "project.updated", record }, input);
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const current = projectById(state, input.id);
+    const record = validateProject(
+      { ...current, name: input.name, revision: current.revision + 1, updatedAt: input.occurredAt },
+      "WORKSPACE_INPUT_INVALID",
+    );
+    return { payload: { operation: "project.updated", record }, projects: sortedProjects(state.projects.map((entry) => entry.id === record.id ? record : entry)), work: state.work };
+  }, input);
 }
 
 export async function deleteProject(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly id: string;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
-  const state = await materializeWorkspace(workspaceRoot);
-  const current = projectById(state, input.id);
-  if (state.work.some((record) => record.projectId === current.id && !record.tombstone)) {
-    fail("WORKSPACE_INPUT_INVALID", `project ${current.id} still owns live work`);
-  }
-  const record = { ...current, revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true };
-  return appendEvent(workspaceRoot, lease, { operation: "project.deleted", record }, input);
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const current = projectById(state, input.id);
+    if (state.work.some((record) => record.projectId === current.id && !record.tombstone)) {
+      fail("WORKSPACE_INPUT_INVALID", `project ${current.id} still owns live work`);
+    }
+    const record = { ...current, revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true };
+    return { payload: { operation: "project.deleted", record }, projects: sortedProjects(state.projects.map((entry) => entry.id === record.id ? record : entry)), work: state.work };
+  }, input);
 }
 
 export async function createWork(workspaceRoot: string, lease: WorkspaceLease, input: {
@@ -1416,50 +1453,53 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
   readonly parentId: string | null;
   readonly status?: WorkStatus;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
-  const state = await materializeWorkspace(workspaceRoot);
-  projectById(state, input.projectId);
   const externalKey = canonicalExternalKey(input.externalKey);
   const id = deriveStableId("work", externalKey);
-  if (state.work.some((record) => record.id === id)) {
-    fail("WORKSPACE_INPUT_INVALID", `work ${id} already exists`);
-  }
-  const record: WorkRecord = {
-    schemaVersion: "tcrn.work.v1",
-    id,
-    externalKey,
-    projectId: input.projectId,
-    kind: input.kind,
-    parentId: input.parentId,
-    status: input.status ?? "planned",
-    revision: 1,
-    updatedAt: input.occurredAt,
-    tombstone: false,
-    extensions: {},
-  };
-  validateWorkGraph([...state.work, record]);
-  return appendEvent(workspaceRoot, lease, { operation: "work.created", record }, input);
+  return appendEvent(workspaceRoot, lease, (state) => {
+    projectById(state, input.projectId);
+    if (state.work.some((record) => record.id === id)) {
+      fail("WORKSPACE_INPUT_INVALID", `work ${id} already exists`);
+    }
+    const record: WorkRecord = {
+      schemaVersion: "tcrn.work.v1",
+      id,
+      externalKey,
+      projectId: input.projectId,
+      kind: input.kind,
+      parentId: input.parentId,
+      status: input.status ?? "planned",
+      revision: 1,
+      updatedAt: input.occurredAt,
+      tombstone: false,
+      extensions: {},
+    };
+    const work = validateWorkGraph([...state.work, record]);
+    return { payload: { operation: "work.created", record }, projects: state.projects, work };
+  }, input);
 }
 
 export async function transitionWork(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly id: string;
   readonly status: WorkStatus;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
-  const state = await materializeWorkspace(workspaceRoot);
-  const current = workById(state, input.id);
-  assertWorkTransition(current.status, input.status);
-  const record: WorkRecord = { ...current, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
-  validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
-  return appendEvent(workspaceRoot, lease, { operation: "work.updated", record }, input);
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const current = workById(state, input.id);
+    assertWorkTransition(current.status, input.status);
+    const record: WorkRecord = { ...current, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
+    const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
+    return { payload: { operation: "work.updated", record }, projects: state.projects, work };
+  }, input);
 }
 
 export async function deleteWork(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly id: string;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
-  const state = await materializeWorkspace(workspaceRoot);
-  const current = workById(state, input.id);
-  const record: WorkRecord = { ...current, revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true };
-  validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
-  return appendEvent(workspaceRoot, lease, { operation: "work.deleted", record }, input);
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const current = workById(state, input.id);
+    const record: WorkRecord = { ...current, revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true };
+    const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
+    return { payload: { operation: "work.deleted", record }, projects: state.projects, work };
+  }, input);
 }
 
 export async function rebuildWorkspaceViews(workspaceRoot: string, lease: WorkspaceLease): Promise<WorkspaceState> {
