@@ -5,6 +5,13 @@ Versioning after the first accepted release.
 
 ## Unreleased
 
+- Re-cut the MVP scope to two officially supported V1 Agent Apps (Codex and
+  Claude Code) for the `0.1.0-rc.4` unpublished local candidate: add the inert
+  Claude Code adapter (P6B), the additive `dependency-v1` extension, the
+  `conference-v1`/`assignment-v1`/`gate-v1` skeletons, the `work-log-v1` and
+  `settings-catalog-v1` documentation specs, and public requirement ledger
+  entries `AOS-REQ-015..019`. `work-model-v1`, `codex-adapter.ts`, and the
+  generic starter path are unchanged.
 - Repair the CI package-manager bootstrap with explicit online acquisition of
   pinned Node and pnpm, then retain frozen dependency acquisition and offline
   P1 verification for the `0.1.0-rc.3` unpublished local candidate.
