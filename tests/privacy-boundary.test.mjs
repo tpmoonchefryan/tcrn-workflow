@@ -47,6 +47,8 @@ test("public Git hosting identity is allowed only in commit metadata", () => {
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
     const findings = scanPrivacyEntries([{ label, kind: "source", content }], {
       owner: publicIdentity.login,
     });
