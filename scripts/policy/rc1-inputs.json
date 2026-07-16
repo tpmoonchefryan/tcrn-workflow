@@ -6,6 +6,7 @@
     "fixtures/protocol/v1/positive/canonical-vector.json",
     "fixtures/protocol/v1/positive/event-chain.json",
     "fixtures/protocol/v1/positive/exchange.json",
+    "fixtures/protocol/v1/positive/extension-shapes.json",
     "fixtures/protocol/v1/positive/extensions.json",
     "fixtures/protocol/v1/positive/models.json",
     "fixtures/protocol/v1/positive/planned-delivery.json",

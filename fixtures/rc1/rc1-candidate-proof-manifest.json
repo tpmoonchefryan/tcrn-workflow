@@ -2,12 +2,12 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "b7f1d36f6fcb430313c25e0ac78701324f5714abe042d39b9acc67238faaeb97",
+  "basisDigest": "7f1bd5c258449d8b23b90fb1f0e83863223b31e08dbca193275db9cb8c635c0e",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
-      "size": 1974,
-      "sha256": "70b3f4bcbae1e4a4921d2dfbbe2a7e176bca64e31fe15114d8f4542868599173"
+      "size": 2535,
+      "sha256": "7b31384b2e3d2df4361714e1a5f88f0ebd033948fce32abea61574004785de18"
     },
     {
       "path": "fixtures/isolated-proof/README.md",
@@ -33,6 +33,11 @@
       "path": "fixtures/protocol/v1/positive/exchange.json",
       "size": 372,
       "sha256": "03a30fe65961106311439d6346c8faf9bdac8ee24fffca3024ffcfa209120cbe"
+    },
+    {
+      "path": "fixtures/protocol/v1/positive/extension-shapes.json",
+      "size": 2459,
+      "sha256": "9c9d9f936c5963730bdc6781ae9e4e6c0a6a1ca633f956f217e9d7dd60f3b378"
     },
     {
       "path": "fixtures/protocol/v1/positive/extensions.json",
@@ -267,7 +272,7 @@
     {
       "path": "verification-map.yaml",
       "size": 52242,
-      "sha256": "f576fa72304705854a69df949e495c3ac12473aed2b808509be218e1a9a88201"
+      "sha256": "22e37465b79dee5fb757fc4ea3a22b068f5e872ea47606edc5dbe52cc54fc644"
     }
   ],
   "roleVerdictSlots": {
