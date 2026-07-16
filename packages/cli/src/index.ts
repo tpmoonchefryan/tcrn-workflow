@@ -498,9 +498,11 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "knowledge-init") {
-    const values = parseArguments(rest, ["workspace"]);
+    const values = parseArguments(rest, ["workspace", "acknowledge-disposable"]);
     required(values, ["workspace"]);
-    io.write(canonicalJson(await initializeKnowledgeStore(values.workspace ?? "")));
+    io.write(canonicalJson(await initializeKnowledgeStore(values.workspace ?? "", {
+      disposableAcknowledged: booleanValue(values["acknowledge-disposable"], "acknowledge-disposable"),
+    })));
     return;
   }
   if (command === "knowledge-validate") {

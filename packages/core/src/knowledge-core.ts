@@ -55,6 +55,7 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_CANONICAL_INVALID",
   "KNOWLEDGE_CAS_MISMATCH",
   "KNOWLEDGE_CHECKPOINT_READY",
+  "KNOWLEDGE_DISPOSABLE_ACK_REQUIRED",
   "KNOWLEDGE_DUPLICATE",
   "KNOWLEDGE_FAULT_INJECTED",
   "KNOWLEDGE_FRESHNESS_EVALUATED",
@@ -79,7 +80,6 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_STORE_INITIALIZED",
   "KNOWLEDGE_STORE_VALID",
   "KNOWLEDGE_UNIT_CREATED",
-  "KNOWLEDGE_WORKSPACE_NOT_DISPOSABLE",
 ] as const);
 
 export type KnowledgeReasonCode = typeof KNOWLEDGE_REASON_CODES[number];
@@ -912,10 +912,14 @@ async function writeIndex(scan: KnowledgeStoreScan, marker: KnowledgeStoreMarker
   await replaceRegularFile(resolve(scan.viewsRoot, "index.json"), canonicalJson(knowledgeIndex(marker, metadata)));
 }
 
-export async function initializeKnowledgeStore(workspaceRootInput: string): Promise<Readonly<Record<string, JsonValue>>> {
+export async function initializeKnowledgeStore(workspaceRootInput: string, options: { readonly disposableAcknowledged?: boolean } = {}): Promise<Readonly<Record<string, JsonValue>>> {
   const workspace = await materializeWorkspace(workspaceRootInput);
-  if (!workspace.metadata.externalKey.startsWith("FIXTURE-")) {
-    fail("KNOWLEDGE_WORKSPACE_NOT_DISPOSABLE", workspace.metadata.externalKey);
+  // WSC-1: fixture workspaces are admitted implicitly; every other workspace only
+  // under an explicit per-invocation disposability acknowledgment. The store stays
+  // a disposable derived index that is never the system of record.
+  const fixtureAdmission = workspace.metadata.externalKey.startsWith("FIXTURE-");
+  if (!fixtureAdmission && options.disposableAcknowledged !== true) {
+    fail("KNOWLEDGE_DISPOSABLE_ACK_REQUIRED", workspace.metadata.externalKey);
   }
   if (!workspace.headEventHash) {
     fail("KNOWLEDGE_HIGH_WATER_MISMATCH", "knowledge store requires a non-empty Workspace authority");
@@ -946,6 +950,7 @@ export async function initializeKnowledgeStore(workspaceRootInput: string): Prom
     version: marker.version,
     records: 0,
     bodyStorage: "separate-explicit-read-only",
+    admission: fixtureAdmission ? "fixture" : "acknowledged-disposable",
   };
 }
 
