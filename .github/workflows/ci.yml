@@ -25,6 +25,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Scope verification basis to the release ref
+        run: |
+          git for-each-ref --format='%(refname)' 'refs/remotes/origin/**' | grep -vx 'refs/remotes/origin/main' | xargs -r -n 1 git update-ref -d
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git reflog expire --expire=now --all
+          git gc --prune=now --quiet
+
       - name: Install pinned Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
