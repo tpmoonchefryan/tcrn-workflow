@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "tcrn.conference-cases.v1",
+  "positiveCases": 3,
+  "hostileCases": 12,
+  "schemaParityCases": 8,
+  "operationCases": 6,
+  "distillCases": 3,
+  "registrationAppliesTo": "work",
+  "requiredByDefault": false,
+  "ledgerRequirement": "AOS-REQ-015",
+  "orchestration": "excluded",
+  "search": "excluded",
+  "liveStore": "not-created"
+}

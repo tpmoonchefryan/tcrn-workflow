@@ -278,6 +278,48 @@ export type {
   DependencyKind,
   DependencyStatus,
 } from "./dependency.js";
+export {
+  CONFERENCE_REQUEST_VERSION,
+  CONFERENCE_POSITION_VERSION,
+  CONFERENCE_MINUTES_VERSION,
+  CONFERENCE_TYPES,
+  CONFERENCE_STATUSES,
+  CONFERENCE_OUTCOME_CLASSES,
+  CONFERENCE_REASON_CODES,
+  ConferenceError,
+  validateConferenceRequest,
+  validateConferencePosition,
+  validateConferenceMinutes,
+  openConference,
+  appendConferencePosition,
+  listConferencesByWorkItem,
+  closeConference,
+} from "./conference.js";
+export type {
+  ConferenceRequest,
+  ConferencePosition,
+  ConferenceMinutes,
+  ConferenceDecisionCandidate,
+  ConferenceReasonCode,
+} from "./conference.js";
+export {
+  ASSIGNMENT_VERSION,
+  GATE_VERSION,
+  ASSIGNMENT_STATUSES,
+  GATE_STATUSES,
+  GATE_OUTCOME_CLASSES,
+  ASSIGNMENT_GATE_REASON_CODES,
+  AssignmentGateError,
+  validateAssignmentRecord,
+  validateGateRecord,
+  listAssignmentsByWorkItem,
+  listGatesByWorkItem,
+} from "./assignment-gate.js";
+export type {
+  AssignmentRecord,
+  GateRecord,
+  AssignmentGateReasonCode,
+} from "./assignment-gate.js";
 export type {
   ContextBudgets,
   ContextExplicitReadCandidate,

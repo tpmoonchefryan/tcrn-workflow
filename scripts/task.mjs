@@ -316,6 +316,8 @@ async function runTests({
   p6AdapterOnly = false,
   p6bAdapterOnly = false,
   dependencyOnly = false,
+  conferenceOnly = false,
+  assignmentGateOnly = false,
   p7Only = false,
   p7CompatibilityOnly = false,
   p7AosRequirementsOnly = false,
@@ -336,6 +338,8 @@ async function runTests({
     .filter((path) => !p6AdapterOnly || path === "tests/p6-codex-adapter.test.mjs")
     .filter((path) => !p6bAdapterOnly || path === "tests/p6b-claude-adapter.test.mjs")
     .filter((path) => !dependencyOnly || path === "tests/dependency.test.mjs")
+    .filter((path) => !conferenceOnly || path === "tests/conference.test.mjs")
+    .filter((path) => !assignmentGateOnly || path === "tests/assignment-gate.test.mjs")
     .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs")
@@ -363,6 +367,10 @@ async function runTests({
                   ? "P6B_CLAUDE_ADAPTER_TESTS_VERIFIED"
                 : dependencyOnly
                   ? "DEPENDENCY_TESTS_VERIFIED"
+                : conferenceOnly
+                  ? "CONFERENCE_TESTS_VERIFIED"
+                : assignmentGateOnly
+                  ? "ASSIGNMENT_GATE_TESTS_VERIFIED"
                 : p6Only
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
                   : p7CompatibilityOnly
@@ -880,6 +888,62 @@ async function verifyDependency() {
   });
 }
 
+async function verifyConference() {
+  const tests = await runTests({ conferenceOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/conference-cases.json");
+  const schemaPath = resolve(repositoryRoot, "schemas/conference-request-v1.schema.json");
+  const specPath = resolve(repositoryRoot, "specs/conference-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.conference-cases.v1", "CONFERENCE_FIXTURE_SCHEMA");
+  assertion(fixture.positiveCases === 3 && fixture.hostileCases === 12 && fixture.schemaParityCases === 8, "CONFERENCE_CORE_CORPUS");
+  assertion(fixture.operationCases === 6 && fixture.distillCases === 3, "CONFERENCE_OPERATION_CORPUS");
+  assertion(fixture.registrationAppliesTo === "work" && fixture.requiredByDefault === false && fixture.ledgerRequirement === "AOS-REQ-015", "CONFERENCE_REGISTRATION");
+  assertion(fixture.orchestration === "excluded" && fixture.search === "excluded" && fixture.liveStore === "not-created", "CONFERENCE_NO_OVERCLAIM");
+  return success("CONFERENCE_VERIFIED", {
+    tests: tests.reasonCode,
+    positiveCases: fixture.positiveCases,
+    hostileCases: fixture.hostileCases,
+    schemaParityCases: fixture.schemaParityCases,
+    operationCases: fixture.operationCases,
+    distillCases: fixture.distillCases,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    registrationAppliesTo: fixture.registrationAppliesTo,
+    ledgerRequirement: fixture.ledgerRequirement,
+    liveStore: fixture.liveStore,
+    standalone: "inert-extension-skeleton-data-only-no-orchestration-no-search-no-store",
+  });
+}
+
+async function verifyAssignmentGate() {
+  const tests = await runTests({ assignmentGateOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/assignment-gate-cases.json");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.assignment-gate-cases.v1", "ASSIGNMENT_GATE_FIXTURE_SCHEMA");
+  assertion(fixture.assignmentPositiveCases === 3 && fixture.assignmentHostileCases === 6, "ASSIGNMENT_CORPUS");
+  assertion(fixture.gatePositiveCases === 4 && fixture.gateHostileCases === 7, "GATE_CORPUS");
+  assertion(fixture.schemaParityCases === 8 && fixture.listCases === 4, "ASSIGNMENT_GATE_PARITY_CORPUS");
+  assertion(fixture.registrationAppliesTo === "work" && fixture.requiredByDefault === false, "ASSIGNMENT_GATE_REGISTRATION");
+  assertion(fixture.assignmentLedgerRequirement === "AOS-REQ-017" && fixture.gateLedgerRequirement === "AOS-REQ-018" && fixture.liveStore === "not-created", "ASSIGNMENT_GATE_NO_OVERCLAIM");
+  return success("ASSIGNMENT_GATE_VERIFIED", {
+    tests: tests.reasonCode,
+    assignmentPositiveCases: fixture.assignmentPositiveCases,
+    assignmentHostileCases: fixture.assignmentHostileCases,
+    gatePositiveCases: fixture.gatePositiveCases,
+    gateHostileCases: fixture.gateHostileCases,
+    schemaParityCases: fixture.schemaParityCases,
+    listCases: fixture.listCases,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    assignmentSchemaDigest: (await fileRecord(resolve(repositoryRoot, "schemas/assignment-v1.schema.json"))).sha256,
+    gateSchemaDigest: (await fileRecord(resolve(repositoryRoot, "schemas/gate-v1.schema.json"))).sha256,
+    assignmentLedgerRequirement: fixture.assignmentLedgerRequirement,
+    gateLedgerRequirement: fixture.gateLedgerRequirement,
+    liveStore: fixture.liveStore,
+    standalone: "inert-extension-skeleton-data-only-no-lifecycle-no-store",
+  });
+}
+
 async function verifyP7() {
   const tests = await runTests({ p7Only: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p7-canonical-exchange-cases.json");
@@ -1371,6 +1435,8 @@ const commandContracts = {
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
   p6b: { exit: 0, reasonCode: "P6B_CLAUDE_ADAPTER_VERIFIED" },
   dep: { exit: 0, reasonCode: "DEPENDENCY_VERIFIED" },
+  conference: { exit: 0, reasonCode: "CONFERENCE_VERIFIED" },
+  "ext-ag": { exit: 0, reasonCode: "ASSIGNMENT_GATE_VERIFIED" },
   p7: { exit: 0, reasonCode: "P7_CANONICAL_EXCHANGE_VERIFIED" },
   "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
   "p7-aos-requirements": { exit: 0, reasonCode: "P7_PUBLIC_AOS_REQUIREMENTS_VERIFIED" },
@@ -1586,6 +1652,8 @@ const handlers = {
   "p6-adapter": verifyP6Adapter,
   p6b: verifyP6b,
   dep: verifyDependency,
+  conference: verifyConference,
+  "ext-ag": verifyAssignmentGate,
   p7: verifyP7,
   "p7-compatibility": verifyP7Compatibility,
   "p7-aos-requirements": verifyP7AosRequirements,
@@ -1637,6 +1705,12 @@ function evidencePhase(name) {
     return "p6";
   }
   if (name === "dep") {
+    return "p2";
+  }
+  if (name === "conference") {
+    return "p2";
+  }
+  if (name === "ext-ag") {
     return "p2";
   }
   if (name === "p7" || name === "p7-compatibility" || name === "p7-aos-requirements") {
