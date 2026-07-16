@@ -1454,6 +1454,7 @@ async function verifyMap() {
   const required = [
     "id",
     "phase",
+    "category",
     "status",
     "subject",
     "command",
@@ -1465,6 +1466,7 @@ async function verifyMap() {
     "evidencePath",
     "invalidationTriggers",
   ];
+  const claimCategories = ["framework-hygiene", "inertness-proof", "runtime-capability"];
   for (const claim of map.claims) {
     assertion(required.every((field) => Object.hasOwn(claim, field)), "VERIFICATION_MAP_FIELDS", claim.id ?? "unknown");
     assertion(!ids.has(claim.id), "VERIFICATION_MAP_DUPLICATE", claim.id);
@@ -1474,6 +1476,7 @@ async function verifyMap() {
     // mapping are added atomically with each phase's first claim (a phase cannot be
     // required-present before any claim exists) — see docs/hardening/rc1-map-regeneration.md.
     assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "ACT", "BK"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    assertion(claimCategories.includes(claim.category), "VERIFICATION_MAP_CATEGORY", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);
@@ -1500,11 +1503,26 @@ async function verifyMap() {
   for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
+  const categoryCounts = {
+    frameworkHygiene: map.claims.filter((claim) => claim.category === "framework-hygiene").length,
+    inertnessProof: map.claims.filter((claim) => claim.category === "inertness-proof").length,
+    runtimeCapability: map.claims.filter((claim) => claim.category === "runtime-capability").length,
+  };
+  // README drift is a build failure: the public claims badge must state the same
+  // partition the ledger computes (WSG-5 honest-counts charter).
+  const readme = await readText(resolve(repositoryRoot, "README.md"));
+  const badge = readme.match(/Verified claims: (\d+) \(hygiene (\d+) · inertness (\d+) · runtime (\d+)\)/u);
+  assertion(badge, "VERIFICATION_MAP_README_COUNTS", "badge absent");
+  assertion(Number(badge[1]) === map.claims.length, "VERIFICATION_MAP_README_COUNTS", "total");
+  assertion(Number(badge[2]) === categoryCounts.frameworkHygiene, "VERIFICATION_MAP_README_COUNTS", "hygiene");
+  assertion(Number(badge[3]) === categoryCounts.inertnessProof, "VERIFICATION_MAP_README_COUNTS", "inertness");
+  assertion(Number(badge[4]) === categoryCounts.runtimeCapability, "VERIFICATION_MAP_README_COUNTS", "runtime");
   return success("VERIFICATION_MAP_VERIFIED", {
     claims: map.claims.length,
     implemented: map.claims.filter((claim) => claim.status === "implemented").length,
     candidate: map.claims.filter((claim) => claim.status === "candidate").length,
     observableReasonCodes: map.claims.length,
+    ...categoryCounts,
   });
 }
 

@@ -93,7 +93,7 @@ async function fixture(context) {
     normativeInputs: ["extensions/aos-requirements-v1.json", "fixtures/protocol/example.json", "schemas/example.schema.json", "specs/example.md", "verification-map.yaml"].sort(),
   });
   const claim = {
-    id: "FIXTURE", phase: "P1", status: "implemented", subject: "fixture", command: "pnpm test", fixturePaths: ["package.json"], fixtureDigest: "0".repeat(64),
+    id: "FIXTURE", phase: "P1", category: "framework-hygiene", status: "implemented", subject: "fixture", command: "pnpm test", fixturePaths: ["package.json"], fixtureDigest: "0".repeat(64),
     environment: { node: "24.16.0", pnpm: "11.3.0", network: "offline" }, expectedExit: 0, expectedReasonCode: "FIXTURE", evidencePath: "dist/evidence.json", invalidationTriggers: ["fixture"],
   };
   const planned = { ...claim, id: "PLANNED", status: "planned", fixtureDigest: null };
@@ -135,8 +135,8 @@ test("proof-artifact generator fails closed for malformed, unknown, unsafe, dupl
   const cases = [
     ["malformed", async (root) => writeFile(resolve(root, "verification-map.yaml"), "{\n")],
     ["unknown field", async (root) => json(resolve(root, "scripts/policy/source-allowlist.json"), { allowedFiles: [], extra: true })],
-    ["traversal", async (root) => json(resolve(root, "verification-map.yaml"), { schemaVersion: "tcrn.verification-map.v1", claims: [{ id: "x", phase: "P1", status: "implemented", subject: "x", command: "x", fixturePaths: ["../package.json"], fixtureDigest: "0".repeat(64), environment: { node: "x", pnpm: "x", network: "x" }, expectedExit: 0, expectedReasonCode: "x", evidencePath: "x", invalidationTriggers: ["x"] }] })],
-    ["duplicate", async (root) => json(resolve(root, "verification-map.yaml"), { schemaVersion: "tcrn.verification-map.v1", claims: [{ id: "x", phase: "P1", status: "implemented", subject: "x", command: "x", fixturePaths: ["package.json", "package.json"], fixtureDigest: "0".repeat(64), environment: { node: "x", pnpm: "x", network: "x" }, expectedExit: 0, expectedReasonCode: "x", evidencePath: "x", invalidationTriggers: ["x"] }] })],
+    ["traversal", async (root) => json(resolve(root, "verification-map.yaml"), { schemaVersion: "tcrn.verification-map.v1", claims: [{ id: "x", phase: "P1", category: "framework-hygiene", status: "implemented", subject: "x", command: "x", fixturePaths: ["../package.json"], fixtureDigest: "0".repeat(64), environment: { node: "x", pnpm: "x", network: "x" }, expectedExit: 0, expectedReasonCode: "x", evidencePath: "x", invalidationTriggers: ["x"] }] })],
+    ["duplicate", async (root) => json(resolve(root, "verification-map.yaml"), { schemaVersion: "tcrn.verification-map.v1", claims: [{ id: "x", phase: "P1", category: "framework-hygiene", status: "implemented", subject: "x", command: "x", fixturePaths: ["package.json", "package.json"], fixtureDigest: "0".repeat(64), environment: { node: "x", pnpm: "x", network: "x" }, expectedExit: 0, expectedReasonCode: "x", evidencePath: "x", invalidationTriggers: ["x"] }] })],
     ["missing", async (root) => { await rm(resolve(root, "package.json")); }],
     ["unapproved", async (root) => writeFile(resolve(root, "unexpected.mjs"), "export {};\n")],
     ["symlink", async (root) => { await rm(resolve(root, "package.json")); await symlink("verification-map.yaml", resolve(root, "package.json")); }],
