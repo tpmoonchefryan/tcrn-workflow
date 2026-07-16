@@ -518,26 +518,56 @@ function payloadRecord(payload: JsonValue, operation: string): Readonly<Record<s
   return payload.record;
 }
 
+// WSA-2: the ancestor closure of a work record — the record plus every ancestor
+// reachable by walking parentId, bounded by the frozen four-level hierarchy. A
+// missing link stops the walk (validateWorkGraph then fails REFERENTIAL_INTEGRITY
+// on the record whose parent is absent); a cycle stops after both endpoints are
+// collected (validateWorkGraph then fails GRAPH_CYCLE).
+function collectWorkClosure(work: Map<string, WorkRecord>, record: WorkRecord): readonly WorkRecord[] {
+  const closure = new Map<string, WorkRecord>([[record.id, record]]);
+  let cursor: WorkRecord | undefined = record;
+  while (cursor && cursor.parentId !== null) {
+    const parent = work.get(cursor.parentId);
+    if (!parent || closure.has(parent.id)) {
+      break;
+    }
+    closure.set(parent.id, parent);
+    cursor = parent;
+  }
+  return [...closure.values()];
+}
+
+// WSA-2: O(delta) per-event relationship validation. Validates only the mutated
+// record's closure (record + ancestor chain) instead of the whole work graph,
+// which removes the per-event full validateWorkGraph that made materialize
+// quadratic. The terminal validateWorkGraph over the full set still runs once.
+// This catches prefix-invalid intermediate states (a child before its parent, a
+// live child of a just-tombstoned parent) that a terminal-only check would miss.
+function validateWorkClosure(work: Map<string, WorkRecord>, projects: Map<string, ProjectRecord>, record: WorkRecord): void {
+  const project = projects.get(record.projectId);
+  if (!project || (project.tombstone && !record.tombstone)) {
+    fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} references an unavailable project`);
+  }
+  try {
+    validateWorkGraph(collectWorkClosure(work, record));
+  } catch (error) {
+    if (error instanceof ProtocolError) {
+      fail("WORKSPACE_EVENT_CORRUPT", `${error.reasonCode}:${error.message}`);
+    }
+    throw error;
+  }
+  if (record.tombstone) {
+    for (const candidate of work.values()) {
+      if (!candidate.tombstone && candidate.parentId === record.id) {
+        fail("WORKSPACE_EVENT_CORRUPT", `TOMBSTONE_REFERENCED:${candidate.id}`);
+      }
+    }
+  }
+}
+
 function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]): WorkspaceState {
   const projects = new Map<string, ProjectRecord>();
   const work = new Map<string, WorkRecord>();
-  const validateRelationships = (): void => {
-    let ordered: readonly WorkRecord[];
-    try {
-      ordered = validateWorkGraph([...work.values()]);
-    } catch (error) {
-      if (error instanceof ProtocolError) {
-        fail("WORKSPACE_EVENT_CORRUPT", `${error.reasonCode}:${error.message}`);
-      }
-      throw error;
-    }
-    for (const record of ordered) {
-      const project = projects.get(record.projectId);
-      if (!project || (project.tombstone && !record.tombstone)) {
-        fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} references an unavailable project`);
-      }
-    }
-  };
   for (const event of events) {
     const payload = event.payload;
     if (payload === null || typeof payload !== "object" || Array.isArray(payload) || typeof payload.operation !== "string") {
@@ -561,7 +591,8 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         fail("WORKSPACE_EVENT_CORRUPT", `project ${record.id} deletion precedes its live work`);
       }
       projects.set(record.id, record);
-      validateRelationships();
+      // WSA-2: a project event does not change the work graph; the only work->project
+      // invariant it can break (a deleted project with live work) is checked above.
       continue;
     }
     if (workOperations.has(payload.operation)) {
@@ -590,7 +621,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         }
       }
       work.set(record.id, record);
-      validateRelationships();
+      validateWorkClosure(work, projects, record);
       continue;
     }
     fail("WORKSPACE_EVENT_CORRUPT", `unknown operation ${payload.operation}`);
