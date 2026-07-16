@@ -3,6 +3,8 @@
   "positiveCases": 3,
   "hostileCases": 12,
   "schemaParityCases": 8,
+  "positionParityCases": 4,
+  "minutesParityCases": 4,
   "operationCases": 6,
   "distillCases": 3,
   "registrationAppliesTo": "work",
