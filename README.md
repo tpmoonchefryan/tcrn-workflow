@@ -1,198 +1,187 @@
+**English** | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md) | [Français](./README.fr.md)
+
 # TCRN Workflow
 
-TCRN Workflow is an offline-first framework for deterministic work, context,
-evidence, and release verification. This repository contains the accepted P1
-framework bootstrap, the P2 V1 protocol/conformance basis, the accepted P3
-file-native engine, bounded P4 artifact-lifecycle and Knowledge Core candidates,
-bounded generic P5 profile-policy and Core Reference persona candidates, and a
-bounded P6 Context Router and inert Codex Adapter and inert Claude Code Adapter
-candidates. The two Agent App adapters (Codex and Claude Code) are the V1
-officially supported hosts; both remain inert dry-run candidates that generate
-uninstalled template data only. The canonical P3 capability marker and local
-graph are governed outside this product checkout; live integrations and release
-support remain intentionally unavailable, and no live Claude Code or Codex host
-support is asserted before its governed release route accepts.
+**A deterministic, offline-first framework for governed AI-agent work — where every capability is a machine-verified claim, not a promise.**
 
-## Modes
+`Status: 0.1.0-rc.4 (pre-release candidate)` · `License: Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Verified claims: 34`
 
-- `development` is the default. Project commands use offline defaults, a Node
-  process network guard, and no telemetry client; this is not an OS network
-  sandbox and does not assert release support.
-- `release` is fail-closed. It requires an explicit trust root located outside
-  the candidate checkout and a verified signed release bundle.
+---
 
-## Deterministic local workflow
+## Why this project exists
 
-Use Node 24.16.0 and pnpm 11.3.0. Dependency lifecycle scripts are disabled.
-After an explicit dependency acquisition step, all project verification runs
-offline:
+AI agents are increasingly asked to *deliver* — plan work, write code, review changes, cut releases. But most agent workflows share three structural weaknesses:
+
+1. **Unverifiable claims.** "The agent tested it" usually means a log line, not a proof. There is no machine-checkable link between what a workflow *says* it guarantees and what its code *actually* enforces.
+2. **Non-reproducible state.** Conversation-driven work leaves its history in opaque chat logs and mutable databases. When something goes wrong, there is no deterministic event record to replay, audit, or hand to a reviewer.
+3. **Supply-chain blindness.** Agent skills and workflows are installed from repositories with no release identity, no signature, no anti-rollback floor, and no way to prove the bytes you run are the bytes that were reviewed.
+
+TCRN Workflow was built to close all three gaps at once. It treats agent-driven delivery with the same rigor as a safety-critical software release: **every capability maps to a stable reason code proven by a hermetic, offline test**, every workspace mutation is an append-only hash-chained event, and every release is an immutable, reproducible, signed artifact set.
+
+## What you get
+
+| Capability | What it means in practice |
+| --- | --- |
+| **Deterministic file-native workspace** | An event-sourced local work graph (Initiative → Epic → Story → Subtask) stored as canonical JSON files with a hash chain — no database, no daemon, byte-reproducible exports. |
+| **Fail-closed verification chain** | One command (`pnpm verify:p1`) runs 20 gates: format, lint, typecheck, build, ~29 test files, trust matrix, archive/SBOM/license/vulnerability policy, source allowlist, offline boundary, privacy scan, CI hardening, verification map, and clean-history proof. Anything unexpected stops the chain. |
+| **Machine-readable claim ledger** | `verification-map.yaml` binds 34 capability claims to observable reason codes. If a claim's subject changes, its proof must re-run — overclaiming is a build failure, not a style issue. |
+| **Dual-host Agent App adapters** | Codex and Claude Code are the two officially supported V1 hosts, sharing byte-identical host-neutral machinery with a proven cross-host parity digest. Both adapters are **inert dry-run candidates**: they generate uninstalled template data only, and no live host support is asserted. |
+| **Offline-first, privacy-clean** | Development mode enforces a Node process network guard and zero telemetry. The privacy gate scans every tracked byte, all reachable git history, and the release archive for personal identifiers and machine paths. |
+| **Signed release trust** | Releases are bound by tag identity (commit, tree, tag object) and verified externally through an Ed25519 trust-root contract — see the companion `tcrn-workflow-helper` repository. |
+
+## Quick start
+
+Requires the pinned toolchain: **Node 24.16.0** and **pnpm 11.3.0** (dependency lifecycle scripts stay disabled).
 
 ```sh
+# 1. Acquire the single dev dependency (explicit, frozen, script-free)
 pnpm install --offline --frozen-lockfile --ignore-scripts
+
+# 2. Run the full verification gate (offline)
 pnpm verify:p1
-pnpm verify:p2
-pnpm verify:rc1
-pnpm verify:p3
-pnpm verify:p4
-pnpm verify:p4:knowledge
-pnpm verify:p5
-pnpm verify:p6
-pnpm verify:p6:adapter
-pnpm verify:p6b
-pnpm verify:p7
-pnpm verify:p7:compatibility
-pnpm verify:p8
-pnpm verify:p8
+
+# 3. Build, then use the governed CLI
+pnpm build
+node scripts/tcrn-workflow.mjs workspace --help
 ```
 
-The repository does not collect telemetry. Static checks, a process executable
-allowlist, and a Node network guard prove that P1 project code has no implicit
-network path. CI action startup and frozen dependency acquisition opt into
-network access explicitly. The offline vulnerability command verifies a dated
-local denylist only; a fresh external advisory scan remains a release boundary.
+Typical governed commands (all local, no network, no database):
 
-The workspace has one exact-pinned development dependency, `ajv@8.17.1`, used
-only for offline Draft 2020-12 protocol-schema proof. It was acquired through
-an explicit registry boundary with lifecycle scripts disabled; the frozen
-lockfile and dependency policy bind its integrity. `typecheck` and `build` use
-the pinned Node type-transform engine plus public-contract checks; runtime tests
-execute every emitted module. Any dependency change requires another explicit,
-reviewed acquisition and policy update.
+```sh
+# validate a workspace and materialize its deterministic views
+node scripts/tcrn-workflow.mjs workspace validate --workspace <dir> --now <iso-instant>
 
-The deterministic vulnerability command derives the complete direct and
-transitive graph from the frozen lockfile, requires exact identity/integrity
-closure against dependency policy, and checks every graph identity against the
-dated local denylist. It still does not claim a fresh advisory-service scan.
+# create and transition work records with CAS-checked versions
+node scripts/tcrn-workflow.mjs work-create ...
+node scripts/tcrn-workflow.mjs work-transition ...
 
-`pnpm verify:p2` checks the frozen Work, Knowledge, Event Integrity, Context,
-Exchange, Compatibility, Profile Trust, Receipt, extension-registration, and P3
-marker contracts; deterministic vectors and negative/property tests; the public
-AOS requirements ledger; exact-pinned meta-schema/local-reference evaluation;
-and the unaccepted RC1 candidate manifest. A green
-`pnpm verify:rc1` means only `RC1_CANDIDATE_READY`: all four role-verdict slots
-remain unresolved in the regenerated candidate proof. The accepted RC1 parent
-is recorded externally. `pnpm verify:p3` exercises the standalone file-native
-Workspace, leases/CAS, event recovery, migrations, deterministic views, and
-filesystem attack matrix, including identity-bound quarantine of ownerless
-stale lease generations. P3 acceptance and capability activation remain
-external control-plane facts. `pnpm verify:p4` checks artifact classification,
-doctor/size budgets, deterministic compact/archive projections, redaction,
-disposable-only archive apply/restore, and filesystem attack/fault vectors. It
-also runs the file-native Knowledge Core proof for closed metadata, separate
-explicit body reads, metadata-only surfaces that never open body files,
-accountable source/evidence provenance, strict UTF-8 byte budgets, freshness,
-promotion CAS, and 64 real-store insertion permutations with exact index/list/
-checkpoint parity, plus disposable-only initialization and filesystem/privacy
-faults. Promotion enum admission occurs before claim creation, and artifact
-transient/archive generation counts and cumulative storage are bounded before
-unbounded reads or writes.
-`pnpm verify:p7:compatibility` checks the offline-only compatibility manifest,
-authenticated pair-reference admission, anti-rollback policy floor, Workspace
-lock binding, descriptor-bound host-only authority receipts, recursive schema
-parity, canonical semantic sets, deterministic import/checkpoint/fallback/
-conflict/reconciliation plans, and exact field ownership. All live AOS/apply surfaces remain unavailable
-with zero network and zero mutation until a mutually supported release exists.
-`pnpm verify:p4:knowledge` exposes the narrower
-`P4_KNOWLEDGE_CORE_VERIFIED` reason code. Neither command mutates the live graph
-or starts P6.
+# knowledge core: metadata-first reads, explicit body access, promotion CAS
+node scripts/tcrn-workflow.mjs knowledge-list ...
+```
 
-`pnpm verify:p8` requires a clean candidate basis, runs the bounded release
-candidate and external-trust proof, independently rebuilds the canonical source
-archive, and writes a closed six-file unpublished candidate bundle through the
-governed output session. It does not publish, access AOS, or claim a supported
-release pair.
+Mutation commands require an explicit workspace path, a strict RFC 3339 timestamp, and an expected version — optimistic concurrency is enforced by the engine, not by convention.
 
-`pnpm verify:p5` proves the closed generic profile trust/binding model, a frozen
-framework-base digest, descriptor-bound independent admission receipts,
-an out-of-band governed path/file-digest authority anchor, complete request and
-effective-profile binding, authorization-time request re-resolution, fixed configuration precedence,
-exact field merge matrix, owner-rebind boundary, canonical profile/effective-
-policy digests, read-only CLI generation and validation, 64 actual layer-order
-permutations, and a disposable empty
-Workspace cold-start through Initiative → Epic → Story → Subtask. Generated
-material is inert data and carries no external project/persona, model, hook,
-thread, network, database, AOS, or absolute-path authority. The live Workspace
-has no profile store; persona admission remains separate from technical profile authority.
-The bounded Core Reference persona set generates exactly eight inert,
-source-manifest-bound public records and display-only release layers; it creates
-no live store, agent, hook, Skill, or authorization capability.
+## Architecture at a glance
 
-`pnpm verify:p6` proves the closed deterministic Context Router request,
-descriptor-bound out-of-band authority, admitted generic-profile re-resolution,
-exact scope/risk/budget controls, metadata-first selection, explicit
-body/procedure reads, privacy-minimal receipts, hostile prompt corpus, 64 actual
-candidate-order permutations, and bounded pinned-runtime latency observations.
-Those observations are local process measurements, not real-time guarantees.
-`pnpm verify:p6:adapter` separately proves the closed Context-result bridge,
-independently injected host binding, authority-empty raw-session fallback,
-deterministic four-file inert template bundle, identity/digest-bound rollback
-plan admitted from a pinned descriptor-verified installation-generation receipt,
-exact canonical template bytes, complete ordered bundle/schema parity,
-final-hop visibility, hostile corpus, and 64 real input/template orders. The
-templates are not installed or activated; OG-04 and RC3 remain
-unsatisfied, and no live context/profile/Knowledge/artifact store, hook, Skill,
-configuration, or owner-visible activation is created.
+```mermaid
+flowchart LR
+    subgraph Protocols["P2 · Frozen V1 protocols"]
+        WM[work-model-v1]
+        KM[knowledge-model-v1]
+        EX[exchange-v1]
+        XT[extensions:<br/>dependency · conference<br/>assignment · gate]
+    end
+    subgraph Engine["P3 · File-native engine"]
+        EV[hash-chained<br/>event log]
+        LS[single-writer lease +<br/>recovery claims]
+        VW[deterministic views]
+    end
+    subgraph Layers["P4-P7"]
+        KC[knowledge core]
+        PF[profiles & personas]
+        CR[context router]
+        CM[compatibility modes]
+    end
+    subgraph Hosts["P6/P6B · Agent App adapters (inert)"]
+        CX[Codex adapter]
+        CL[Claude Code adapter]
+    end
+    REL[P8 · reproducible<br/>signed release set]
+    Protocols --> Engine --> Layers --> Hosts
+    Engine --> REL
+    Layers --> REL
+```
 
-`pnpm verify:p6b` proves the host-specific Claude Code Adapter over the same
-inert dry-run surface: a four-file `.claude/tcrn-workflow/` template bundle bound
-to a `claude-code` host identity and data-only version readback, a byte-reversible
-settings hook fragment that never clobbers user-owned `.claude/settings.json`,
-forbidden-path rejection of any user-level `.claude` location, a CLAUDE.md-only
-fallback mode, and a cross-host parity check proving the Codex and Claude adapters
-share host-neutral machinery byte-for-byte and diverge only at the enumerated host
-surface. It installs and activates nothing; no live Claude Code support is claimed.
+The protocols are additive-only: `work-model-v1` is frozen, and every extension (dependency, conference, assignment, gate) registers itself without touching accepted schemas.
 
-`pnpm verify:p8` is the release-candidate proof. It verifies one disposable
-dogfood fixture, the eight-record sanitized Core Reference projection, the
-external-bootstrap release-trust negative matrix, exact `0.1.0-rc.4` package
-and framework versions, a reproducible canonical USTAR source archive, and a
-closed local release set containing source archive, SBOM, manifest, provenance,
-checksums, and release notes. Its candidate has `supportedAosReleases: []`,
-does not publish or push, and makes no graph, store, template, AOS, or network
-mutation claim.
+## Design Q&A
 
-After `pnpm build`, governed local commands are available through
-`node scripts/tcrn-workflow.mjs`. Mutation commands require an explicit
-Workspace, strict timestamp, and expected version; they contact neither AOS nor
-a database.
+### Why one canonical conversation thread with sub-agent threads, instead of multithreading?
 
-See `docs/architecture/root-model.md` and
-`docs/release-trust/external-release-trust-root-v1.md` for the bootstrap trust
-boundary.
+This is the most common question, and the answer has three layers:
 
-`pnpm verify:isolated` requires `TCRN_DEPENDENCY_MATERIALIZATION_ROOT` to name
-an external, lockfile-bound dependency materialization. Build it once with
-`node scripts/dependency-materialization.mjs --mode fetch --materialization
-<absolute-directory> --allow-network-fetch`; that explicit path is the only
-authorized registry-read phase. The isolated proof validates the manifest,
-copies its exact store inventory into a newly absent dedicated store, then
-installs offline with the frozen lockfile and ignored lifecycle scripts before
-running P1. It copies the exact current Git basis into a disposable checkout,
-retains the canonical origin without contacting it, validates declared
-evidence, and deletes the checkout.
+1. **The storage layer is single-writer by design.** The workspace is an append-only, hash-chained event log on a plain filesystem. A hash chain has exactly one truthful successor per event — parallel writers would either corrupt the chain or require a consensus protocol that destroys the "audit it with `cat` and `sha256sum`" property. So the engine enforces **one writer at a time** through an exclusive lease with an on-disk recovery-claim protocol: a crashed writer's lease is quarantined and reclaimed fail-closed, and every acquisition is CAS-checked.
+2. **Reasoning parallelism lives above the storage layer.** Concurrency is still everywhere — but as *independent fresh-context sub-agent threads* (implementation workers, multi-role review boards, adversarial verifiers) whose conclusions come back as data. One canonical thread holds decision authority and writes the record; N sub-threads explore, review, and refute in parallel without contaminating each other's context or racing on state. You get the throughput of parallelism with a linear, auditable decision lineage.
+3. **Governance requires a serializable story.** When a release gate asks "who decided this and on what evidence?", a single canonical thread with receipts has one answer. A swarm of peer threads mutating shared state has none.
 
-An accepted P1 proof runs from a clean Git checkout and holds an atomic
-repository-local output lock for the whole command. All reset and write helpers
-require that same session. This cross-platform lock prevents overlapping
-framework commands and the path checks reject pre-existing symlink, hardlink,
-and output redirection states. P1 intentionally assumes no concurrent hostile
-mutation of the exclusive checkout: Node does not expose a portable
-descriptor-relative `openat2`/rename boundary, so replacement of output parent
-components by an external attacker during the command is outside this
-milestone's threat model. A stale lock fails closed and must be removed only
-after confirming that no framework command is running.
+**The tests behind this answer** (all in `tests/p3-file-engine.test.mjs`, run by `pnpm verify:p3`):
 
-P1 retains four explicit external boundaries: cross-invocation `rootVersion`
-continuity requires an external prior-root or floor; there is no operating-system
-network sandbox; no fresh advisory or Codex Security scan is performed; and the
-privacy regex set is a focused policy control, not a general DLP system.
+- *Lease crash and recovery-claim contention are recoverable and single-writer* — a writer is crashed mid-creation, its stale lease is quarantined, contenders race and exactly one wins; the loser fails closed with a stable reason code.
+- *Delayed-creator eviction* — a paused lease creator whose directory was reclaimed must observe the active recovery claim and fail closed (`WORKSPACE_LEASE_INVALID`) instead of colonizing the fresh generation. This guards against inode-tuple reuse on filesystems that recycle inodes (found and fixed on Linux ext4 through real CI, then proven with a deterministic test).
+- *SIGKILL injection at every effective lifecycle point* — the engine's fault inventory is discovered from real operations, and a real `SIGKILL` is delivered at each point; recovery must converge to a clean state with zero residue.
+- *64 real insertion-order permutations* produce byte-identical indexes, lists, and checkpoints — determinism is proven, not assumed.
+- 4 concurrency cases, 57 negative cases, and a filesystem attack matrix (symlinks, hard links, special files, replacement races) round out the proof.
 
-## Status
+### Why files instead of a database?
 
-The public API is pre-release. Supported release mode is unavailable unless the
-external trust verifier succeeds. P2 claims specification and fixture maturity
-only; P3 is an unaccepted local-engine candidate; neither claims live
-external-runtime compatibility or a supported release pair. P4 Knowledge Core
-P5 generic profiles, and the P6 Context Router remain unaccepted bounded
-candidates and make no live knowledge/profile/context store, live-archive,
-Codex Adapter, database, AOS, or network claim.
+Because the trust boundary must be inspectable with standard tools. Every record is canonical JSON (sorted keys, one trailing LF), every event carries its `priorHash`/`eventHash`, and the whole store can be verified by any language in a few lines. A database would add a daemon, a binary format, and an implicit trust dependency — all liabilities for a framework whose core promise is *"you can check everything yourself, offline."*
+
+### Why offline-first and fail-closed?
+
+An agent framework that silently reaches the network is an exfiltration channel waiting to happen. Development mode installs a process-level network guard; the verification chain proves project code has no implicit network path; the only network steps (dependency acquisition, CI bootstrap) are explicit and pinned. Fail-closed means every validator throws a stable reason code on the first unexpected byte — there are no warnings that scroll by, only green or stopped.
+
+### Why are the Codex and Claude Code adapters "inert candidates"?
+
+Because claiming live host support before a governed release route has accepted it would be an overclaim — the exact failure mode this framework exists to prevent. The adapters generate deterministic, uninstalled template bundles (proven byte-exact, including a byte-reversible `.claude/settings.json` hook fragment that never clobbers user content and rejects every user-level `.claude` path). Activation is a separate, gated decision.
+
+### How is a release trusted?
+
+A release is an immutable annotated tag plus a reproducible artifact set (canonical USTAR source archive, SBOM, manifest, provenance, checksums, notes) rebuilt and byte-compared by `pnpm verify:p8`. External consumers verify through the companion **tcrn-workflow-helper**: an Ed25519-signed release manifest and policy with an anti-rollback epoch floor, validated by a dependency-free bootstrap before any Workflow code runs.
+
+### What do the tests actually prove — in numbers?
+
+- **20 gates** in the `verify:p1` chain, each with a stable terminal reason code.
+- **~29 test files** covering the engine, knowledge core, artifact lifecycle, profiles, personas, context router, both adapters, exchange, compatibility, requirements ledger, release candidate, privacy boundary, proof-artifact generator, and trust matrix.
+- **34 machine-verified claims** in `verification-map.yaml`.
+- **64-permutation determinism proofs** in three independent layers (engine insertion orders, profile layer orders, adapter input orders).
+- **19-entry public AOS requirements ledger** (11 fixture-verified, 8 specified) — maturity is recorded per row, never inflated.
+- **Privacy gate** over ~200 tracked source files, ~1,470 git objects, full reachable history, and the release archive.
+
+<details>
+<summary><b>Full verification-target reference</b> (click to expand)</summary>
+
+| Target | Proves |
+| --- | --- |
+| `verify:p1` | The complete 20-gate chain on a clean committed tree. |
+| `verify:p2` | Frozen V1 protocol contracts, deterministic vectors, negative/property tests, requirements ledger, closed schemas. |
+| `verify:p3` | File-native workspace: leases/CAS, crash recovery, quarantine, migrations, deterministic views, filesystem attack matrix. |
+| `verify:p4` / `verify:p4:knowledge` | Artifact lifecycle budgets, redaction, disposable archive apply/restore; knowledge core metadata/body separation, promotion CAS, 64-permutation parity. |
+| `verify:p5` | Closed generic-profile trust model, effective-policy digests, cold-start graph, eight inert Core Reference personas. |
+| `verify:p6` / `verify:p6:adapter` / `verify:p6b` | Context router scope/risk/budget controls and hostile corpus; Codex adapter bridge; Claude Code adapter (four-file template bundle, reversible settings fragment, forbidden-path rejection, CLAUDE.md fallback, cross-host parity digest). |
+| `verify:p7` / `verify:p7:compatibility` | Canonical exchange, compatibility manifest, anti-rollback floor, deterministic import/checkpoint/fallback plans. |
+| `verify:p8` | Reproducible release candidate: source archive rebuild + byte comparison, SBOM, provenance, checksums, six-file closed bundle, external trust negative matrix. |
+| `verify:privacy` | No personal identifiers or machine paths in any tracked byte, git object, or archive. |
+| `verify:isolated` | The same P1 chain from a hermetic dependency materialization (CI-gated). |
+
+Development mode is offline with a process network guard and zero telemetry. The workspace has exactly one dev dependency (`ajv@8.17.1`, for offline Draft 2020-12 schema parity), acquired through an explicit registry boundary with lifecycle scripts disabled. P1 retains four explicit external boundaries: cross-invocation `rootVersion` continuity requires an external floor; there is no OS-level network sandbox; no fresh external advisory scan is performed offline; the privacy regex set is a focused policy control, not general DLP.
+
+</details>
+
+## Repository layout
+
+| Path | Contents |
+| --- | --- |
+| `packages/core/` | Engine, adapters, knowledge core, profiles, router, exchange (TypeScript, built by the pinned Node type-transform engine). |
+| `schemas/` · `specs/` | Frozen V1 protocol schemas (closed, Draft 2020-12-parity-proven) and their normative specs. |
+| `tests/` | The hermetic proof suite. |
+| `scripts/` | Governed CLI, verification tasks, proof-artifact generator, privacy/policy gates. |
+| `fixtures/` | Deterministic protocol vectors, hostile corpora, requirements ledger references. |
+| `docs/` | Architecture, release trust, versioning, release notes. |
+| `verification-map.yaml` | The claim ledger — start here to see what is actually proven. |
+
+## Status, honestly
+
+- `0.1.0-rc.4` is a **pre-release candidate**. The public API is not yet stable.
+- Both host adapters are inert dry-run candidates; **no live Codex or Claude Code support is asserted**.
+- `supportedAosReleases` is empty: no external AOS compatibility is claimed.
+- Release mode is unavailable unless the external Ed25519 trust verification succeeds.
+
+## Contributing, support, security
+
+- Usage questions → GitHub Discussions. Reproducible defects → Issues (see `SUPPORT.md`).
+- Security reports → private vulnerability reporting per `SECURITY.md`.
+- Contributions must keep every gate green — see `CONTRIBUTING.md`. The bar is: *if your claim isn't in the verification map with a passing proof, it isn't claimed.*
+
+## License
+
+[Apache-2.0](./LICENSE)
