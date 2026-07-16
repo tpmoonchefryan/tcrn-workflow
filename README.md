@@ -144,7 +144,7 @@ surface. It installs and activates nothing; no live Claude Code support is claim
 
 `pnpm verify:p8` is the release-candidate proof. It verifies one disposable
 dogfood fixture, the eight-record sanitized Core Reference projection, the
-external-bootstrap release-trust negative matrix, exact `0.1.0-rc.3` package
+external-bootstrap release-trust negative matrix, exact `0.1.0-rc.4` package
 and framework versions, a reproducible canonical USTAR source archive, and a
 closed local release set containing source archive, SBOM, manifest, provenance,
 checksums, and release notes. Its candidate has `supportedAosReleases: []`,

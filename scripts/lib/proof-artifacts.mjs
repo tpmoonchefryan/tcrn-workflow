@@ -24,6 +24,7 @@ const routeAdditions = new Set([
   "scripts/lib/p8-workflow-rc.mjs",
   "docs/releases/0.1.0-rc.2.md",
   "docs/releases/0.1.0-rc.3.md",
+  "docs/releases/0.1.0-rc.4.md",
   "scripts/lib/scoped-strip-types.mjs",
   "scripts/test-controller-bootstrap.mjs",
   "scripts/test-controller-child-policy.mjs",
