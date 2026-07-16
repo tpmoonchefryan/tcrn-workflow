@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "tcrn.assignment-gate-cases.v1",
+  "assignmentPositiveCases": 3,
+  "assignmentHostileCases": 6,
+  "gatePositiveCases": 4,
+  "gateHostileCases": 7,
+  "schemaParityCases": 8,
+  "listCases": 4,
+  "registrationAppliesTo": "work",
+  "requiredByDefault": false,
+  "assignmentLedgerRequirement": "AOS-REQ-017",
+  "gateLedgerRequirement": "AOS-REQ-018",
+  "liveStore": "not-created"
+}

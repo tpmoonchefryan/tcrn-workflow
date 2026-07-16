@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "09d686b3e826263fb415ea02d1d8662a164f976788f616aeee34bcf80c96621d",
+  "basisDigest": "b7f1d36f6fcb430313c25e0ac78701324f5714abe042d39b9acc67238faaeb97",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -70,9 +70,29 @@
       "sha256": "e31e43b81940a7e13b9f4f2379b5c5a594b7df92545a17ff28e3aff5a4b7c72e"
     },
     {
+      "path": "schemas/assignment-v1.schema.json",
+      "size": 1412,
+      "sha256": "bf1eea36c44aafdc5b39325be8725c1bd8378ec5c3bc21b3ef84ba842f0f090f"
+    },
+    {
       "path": "schemas/compatibility-v1.schema.json",
       "size": 1058,
       "sha256": "5c0292f89ec40574f3dfb3380ad01edcd95632e7032c9600549bc5479d22c265"
+    },
+    {
+      "path": "schemas/conference-minutes-v1.schema.json",
+      "size": 1988,
+      "sha256": "fd37fc457839867be107a0a166514bc0d67859b744b647389225502db5f1c535"
+    },
+    {
+      "path": "schemas/conference-position-v1.schema.json",
+      "size": 2142,
+      "sha256": "719d14d5c2ed24d09d3ddfa2477190e89bb6465384ae518e65db90c9bb39b2af"
+    },
+    {
+      "path": "schemas/conference-request-v1.schema.json",
+      "size": 2155,
+      "sha256": "692e6861e0128b26b28008a54d8a1a1014b030acf3afef42cc189c0a3a2b7826"
     },
     {
       "path": "schemas/context-v1.schema.json",
@@ -98,6 +118,11 @@
       "path": "schemas/extension-registration-v1.schema.json",
       "size": 1131,
       "sha256": "e882479cad6b7e54017e063a42260c8cc3ddaa724dff492b92fa4c40d73a5ab1"
+    },
+    {
+      "path": "schemas/gate-v1.schema.json",
+      "size": 1678,
+      "sha256": "32126b7ee1f813cb4762bfd28758ff2b282297f655d5b65f0ed8b51e31ce4cce"
     },
     {
       "path": "schemas/knowledge-model-v1.schema.json",
@@ -145,9 +170,19 @@
       "sha256": "58d060244f65efede51dfacdc3ebc9006d8102a6a02fdc70992408fbc29eef14"
     },
     {
+      "path": "specs/assignment-v1.md",
+      "size": 1268,
+      "sha256": "27520a75b94729d63d369caf7ae7ed441b98d3efb941b05b7f8a0a97ecb6ba4e"
+    },
+    {
       "path": "specs/compatibility-v1.md",
       "size": 370,
       "sha256": "fd1380d2e808a785cea44152151e9e2cf733df191b8157e6b3e51915219a92c2"
+    },
+    {
+      "path": "specs/conference-v1.md",
+      "size": 3007,
+      "sha256": "d9fa1c4a586d491c0320dee5eac0e824df179d5f1760ba126060e0b7931b08ac"
     },
     {
       "path": "specs/context-v1.md",
@@ -173,6 +208,11 @@
       "path": "specs/extension-registration-v1.md",
       "size": 506,
       "sha256": "10c879dcc8cff41663c0e7e4d2b3100f5c95af85fa95bb322a4f42b0b468c6a1"
+    },
+    {
+      "path": "specs/gate-v1.md",
+      "size": 1372,
+      "sha256": "ebd424e01dae6be2ccbc085c1993fd50166048f6748a102617abc3b7d098d2b3"
     },
     {
       "path": "specs/knowledge-model-v1.md",
@@ -210,14 +250,24 @@
       "sha256": "7467d0b914356bffe620cd990ef90fcfecb12dbaba4f635b7ab2e3e052aeee33"
     },
     {
+      "path": "specs/settings-catalog-v1.md",
+      "size": 2378,
+      "sha256": "10e6cca0e364ea3aaad15b97fdecbd90e26377e65756e87aabd6666decda8895"
+    },
+    {
+      "path": "specs/work-log-v1.md",
+      "size": 1848,
+      "sha256": "b7478a09f582e319fd49fc546b401e11729cc891b322fdc68f993f0099d64916"
+    },
+    {
       "path": "specs/work-model-v1.md",
       "size": 965,
       "sha256": "92dbd467d5ca253e458206304aad68591d845b460fe5bfc485948887217a9d5a"
     },
     {
       "path": "verification-map.yaml",
-      "size": 46980,
-      "sha256": "3c784c0e7939b332de2c69e83e192ee722ee112dcc96e553667e248352e4c7d2"
+      "size": 52242,
+      "sha256": "f576fa72304705854a69df949e495c3ac12473aed2b808509be218e1a9a88201"
     }
   ],
   "roleVerdictSlots": {

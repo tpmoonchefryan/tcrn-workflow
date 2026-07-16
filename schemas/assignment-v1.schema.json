@@ -1,0 +1,56 @@
+{
+  "$id": "https://tcrn.dev/schemas/assignment-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Work Assignment V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "projectId",
+    "workId",
+    "accountableActorId",
+    "status",
+    "revision",
+    "updatedAt",
+    "tombstone",
+    "extensions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.assignment.v1"
+    },
+    "id": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "projectId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "workId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "accountableActorId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "status": {
+      "enum": [
+        "proposed",
+        "active",
+        "released"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updatedAt": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "tombstone": {
+      "type": "boolean"
+    },
+    "extensions": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/extensionMap"
+    }
+  }
+}

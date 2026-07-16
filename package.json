@@ -44,6 +44,8 @@
     "verify:p6:adapter": "node scripts/task.mjs p6-adapter",
     "verify:p6b": "node scripts/task.mjs p6b",
     "verify:dep": "node scripts/task.mjs dep",
+    "verify:conference": "node scripts/task.mjs conference",
+    "verify:ext-ag": "node scripts/task.mjs ext-ag",
     "verify:p7": "node scripts/task.mjs p7",
     "verify:p7:compatibility": "node scripts/task.mjs p7-compatibility",
     "verify:p7:aos-requirements": "node scripts/task.mjs p7-aos-requirements",

@@ -1,0 +1,76 @@
+{
+  "$id": "https://tcrn.dev/schemas/gate-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Gate V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "projectId",
+    "workId",
+    "title",
+    "outcomeClass",
+    "status",
+    "revision",
+    "updatedAt",
+    "tombstone",
+    "extensions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.gate.v1"
+    },
+    "id": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "projectId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "workId": {
+      "anyOf": [
+        {
+          "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "x-tcrn-maxUtf8Bytes": 2048
+    },
+    "outcomeClass": {
+      "enum": [
+        "discussion_only",
+        "recommendation",
+        "role_decision",
+        "blocked",
+        "owner_intent_required"
+      ]
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "satisfied",
+        "blocked"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updatedAt": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "tombstone": {
+      "type": "boolean"
+    },
+    "extensions": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/extensionMap"
+    }
+  }
+}

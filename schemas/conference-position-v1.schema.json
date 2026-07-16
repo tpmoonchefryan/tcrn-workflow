@@ -1,0 +1,86 @@
+{
+  "$id": "https://tcrn.dev/schemas/conference-position-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Conference Position V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "conferenceId",
+    "projectId",
+    "actorId",
+    "position",
+    "risks",
+    "recommendations",
+    "evidenceIds",
+    "revision",
+    "updatedAt",
+    "tombstone",
+    "extensions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.conference.v1.position"
+    },
+    "id": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "conferenceId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "projectId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "actorId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "position": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "x-tcrn-maxUtf8Bytes": 2048
+    },
+    "risks": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048,
+        "x-tcrn-maxUtf8Bytes": 2048
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048,
+        "x-tcrn-maxUtf8Bytes": 2048
+      }
+    },
+    "evidenceIds": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+      }
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updatedAt": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "tombstone": {
+      "type": "boolean"
+    },
+    "extensions": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/extensionMap"
+    }
+  }
+}
