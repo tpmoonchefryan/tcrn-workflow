@@ -1469,7 +1469,11 @@ async function verifyMap() {
     assertion(required.every((field) => Object.hasOwn(claim, field)), "VERIFICATION_MAP_FIELDS", claim.id ?? "unknown");
     assertion(!ids.has(claim.id), "VERIFICATION_MAP_DUPLICATE", claim.id);
     ids.add(claim.id);
-    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    // PRG-0: ACT (activation ladder) and BK (backup) are admitted here so hardening
+    // claims validate. Their completeness-loop entries below and the evidencePhase
+    // mapping are added atomically with each phase's first claim (a phase cannot be
+    // required-present before any claim exists) — see docs/hardening/rc1-map-regeneration.md.
+    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "ACT", "BK"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);

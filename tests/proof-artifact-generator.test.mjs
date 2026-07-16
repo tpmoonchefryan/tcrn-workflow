@@ -30,6 +30,10 @@ const routeFiles = [
   "tests/proof-artifact-generator.test.mjs",
   "tests/p8-workflow-rc.test.mjs",
   "tests/p8-workflow-rc.test.mjs",
+  "scripts/regen-rc1-inputs.mjs",
+  "scripts/lib/rc1-inputs.mjs",
+  "tests/regen-rc1-inputs.test.mjs",
+  "docs/hardening/rc1-map-regeneration.md",
 ];
 const roles = Object.fromEntries(["platform-workflow-architect", "workflow-verification-engineer", "security-risk-reviewer", "reality-checker"].map((role) => [role, { status: "unresolved", verdict: null, basisDigest: null }]));
 
@@ -67,7 +71,10 @@ async function fixture(context) {
     "tests/local-command-byte-fidelity.test.mjs": "// route fixture\n",
     "tests/proof-artifact-generator.test.mjs": "// route fixture\n",
     "tests/p8-workflow-rc.test.mjs": "// route fixture\n",
-    "tests/p8-workflow-rc.test.mjs": "// route fixture\n",
+    "scripts/regen-rc1-inputs.mjs": "// route fixture\n",
+    "scripts/lib/rc1-inputs.mjs": "// route fixture\n",
+    "tests/regen-rc1-inputs.test.mjs": "// route fixture\n",
+    "docs/hardening/rc1-map-regeneration.md": "# route fixture\n",
   };
   for (const [path, bytes] of Object.entries(files)) {
     await mkdir(resolve(root, path, ".."), { recursive: true });
