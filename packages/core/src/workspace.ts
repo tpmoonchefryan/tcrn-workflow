@@ -1158,6 +1158,25 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
       fail("WORKSPACE_FAULT_INJECTED", "injected crash after lease directory creation");
     }
     await options.beforeLeaseOwnerForTest?.();
+    if (created) {
+      // A reclaim that started after this creator observed its fresh directory
+      // may have quarantined and replaced that directory, and a removed
+      // directory's dev/ino tuple can recur on the replacement (the filesystem
+      // may reuse the tuple), so directory identity alone cannot prove
+      // generation continuity here. An active recovery claim is the durable
+      // witness of such a reclaim: fail closed instead of completing an owner
+      // file inside a possibly-replaced lease generation.
+      const claimPath = controlPath(workspaceRoot, "lease-recovery.claim");
+      try {
+        await lstat(claimPath);
+        await parseRecoveryClaim(claimPath);
+        fail("WORKSPACE_LEASE_INVALID", "lease creation overlaps an active recovery");
+      } catch (error) {
+        if (error instanceof WorkspaceError || (error as { code?: string }).code !== "ENOENT") {
+          throw error;
+        }
+      }
+    }
     const token = await createLeaseOwner(leasePath, workspaceRoot, leaseDirectoryIdentity, options.now, nowNanoseconds, ttl);
     let released = false;
     return {
