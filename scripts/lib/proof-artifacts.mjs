@@ -39,6 +39,8 @@ const routeAdditions = new Set([
   "scripts/lib/rc1-inputs.mjs",
   "tests/regen-rc1-inputs.test.mjs",
   "docs/hardening/rc1-map-regeneration.md",
+  "docs/activation/activation-ladder-v1.md",
+  "docs/adr/0002-snapshot-not-mirror-backup.md",
 ]);
 const claimFields = [
   "id", "phase", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
