@@ -35,6 +35,10 @@ const routeAdditions = new Set([
   "tests/proof-artifact-generator.test.mjs",
   "tests/p8-workflow-rc.test.mjs",
   "tests/ci-bootstrap.test.mjs",
+  "scripts/regen-rc1-inputs.mjs",
+  "scripts/lib/rc1-inputs.mjs",
+  "tests/regen-rc1-inputs.test.mjs",
+  "docs/hardening/rc1-map-regeneration.md",
 ]);
 const claimFields = [
   "id", "phase", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
