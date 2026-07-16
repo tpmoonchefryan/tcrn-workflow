@@ -156,6 +156,43 @@ function deterministicPermutations(values) {
   return result;
 }
 
+test("WSC-1: real workspace knowledge admission requires explicit disposability acknowledgment", async () => {
+  const fixture = await workspaceFixture({ externalKey: "REAL-WORKSPACE-ONE", initialize: false });
+  try {
+    await expectReason("KNOWLEDGE_DISPOSABLE_ACK_REQUIRED", () => initializeKnowledgeStore(fixture.workspace));
+    const result = await initializeKnowledgeStore(fixture.workspace, { disposableAcknowledged: true });
+    assert.equal(result.reasonCode, "KNOWLEDGE_STORE_INITIALIZED");
+    assert.equal(result.admission, "acknowledged-disposable");
+    assert.equal((await validateKnowledgeStore(fixture.workspace)).reasonCode, "KNOWLEDGE_STORE_VALID");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("WSC-1: fixture workspace admits with no flag and reports fixture admission", async () => {
+  const fixture = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-ADMISSION", initialize: false });
+  try {
+    const result = await initializeKnowledgeStore(fixture.workspace);
+    assert.equal(result.reasonCode, "KNOWLEDGE_STORE_INITIALIZED");
+    assert.equal(result.admission, "fixture");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("WSC-1: knowledge-init CLI round-trips the acknowledgment flag", async () => {
+  const fixture = await workspaceFixture({ externalKey: "REAL-WORKSPACE-CLI", initialize: false });
+  try {
+    let output = "";
+    await runCli(["knowledge-init", "--workspace", fixture.workspace, "--acknowledge-disposable", "true"], { write: (value) => { output += value; } });
+    const result = JSON.parse(output);
+    assert.equal(result.reasonCode, "KNOWLEDGE_STORE_INITIALIZED");
+    assert.equal(result.admission, "acknowledged-disposable");
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("empty Knowledge bootstrap is closed, schema-valid, deterministic, and body-free", async () => {
   const fixture = await workspaceFixture();
   try {
@@ -507,7 +544,7 @@ test("input, link, redaction, Unicode, body, summary, and snippet boundaries fai
   }
   const liveLike = await workspaceFixture({ externalKey: "LIVE-LIKE-KNOWLEDGE", initialize: false });
   try {
-    await expectReason("KNOWLEDGE_WORKSPACE_NOT_DISPOSABLE", () => initializeKnowledgeStore(liveLike.workspace));
+    await expectReason("KNOWLEDGE_DISPOSABLE_ACK_REQUIRED", () => initializeKnowledgeStore(liveLike.workspace));
   } finally {
     await liveLike.close();
   }

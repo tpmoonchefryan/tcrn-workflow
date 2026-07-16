@@ -82,7 +82,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "34bb4f7413003e5baad8705edc3ff51035d2522c46679424a5dc24c36e3a3c08",
+      "fixtureDigest": "aa6e25d9823d25ee5ba738f8dbfc7bd3110184d74e202f946728e34ffe79a84b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -156,7 +156,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "75ff04b558fc8ede6c51b49b0b7e9ea1aa8566fa4705e810b8abbaa7574cd90b",
+      "fixtureDigest": "e1235a6d9038b5897267f461282c1e86d3fc119d2a2b4eb595197e18e5ad9256",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -186,7 +186,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "16b728817a8a03d897491566c51e09e9c8cb6089ae05b6a5f521866e4ae9b7e9",
+      "fixtureDigest": "0317308a507300e32491c2cdea8c6fe55411f48f6e991767bd7c9d9cba0dad1f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -474,7 +474,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "8eef35be1d7ddb0fbdbef3906f13596e06acec50ea4bf72bd0896457fb3e9fe4",
+      "fixtureDigest": "7eaa44a48a6780c2003ac716faf0d0e1dcada9bcc88cdf726b0abd7e99d76d87",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -533,7 +533,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "dab6312c2a5608965991a8934440e8a4c9167b9c3efb7d04fbac9676378adac2",
+      "fixtureDigest": "5a305e0075a24827f212581d1c13b51909e2c26bf85e967723b9f180f972f857",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -564,7 +564,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "54d60bd1f75ae926e12ae297f411193e2c9afd4286a7661086b434b8e28efc0d",
+      "fixtureDigest": "549014ae76c91eeaddf07b60956df11f0b1d9bbd23695dbe04254f3f273ab11c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -592,7 +592,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "b5728060b65201fe30a5e4da0dc03b470fb81a8590c92d51e63c0ad722221ab3",
+      "fixtureDigest": "25f139a47243a126cb7b9cb795dbfbf18e1f4705b9a07666742db50d14b51558",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -610,7 +610,7 @@
       "phase": "P4",
       "category": "inertness-proof",
       "status": "implemented",
-      "subject": "P4 provides a disposable-only file-native Knowledge Core whose metadata surfaces never open body files, whose promotion state is validated before identity-bound claim admission and cleaned on ordinary errors, and whose accountable provenance, default checkpoints, strict instants, UTF-8 byte budgets, and 64 real-store insertion orders are deterministic without live-store, database, AOS, or network access.",
+      "subject": "P4 provides a file-native Knowledge Core (a disposable derived index admitted for fixture workspaces implicitly and any other workspace only under an explicit disposability acknowledgment) whose metadata surfaces never open body files, whose promotion state is validated before identity-bound claim admission and cleaned on ordinary errors, and whose accountable provenance, default checkpoints, strict instants, UTF-8 byte budgets, and 64 real-store insertion orders are deterministic without live-store, database, AOS, or network access.",
       "command": "pnpm verify:p4:knowledge",
       "fixturePaths": [
         "package.json",
@@ -628,7 +628,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "f6776f4a1d75f5a36265e7d29d5f62d0d1ae5334410a0ff2ea06c5e30ec971c2",
+      "fixtureDigest": "99da3151a0b40ae887717f969f50b5943b5638a1ea45b2988a926d7e7693cc67",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -639,6 +639,33 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Knowledge metadata/schema, P2 binding, body-open separation, promotion pre-claim admission or cleanup, accountable provenance, strict instant, selection/default/checkpoint policy, UTF-8 byte budget, real insertion corpus, locator redaction, limit, filesystem identity, fault, CLI, standalone, or live-store boundary changes"
+      ]
+    },
+    {
+      "id": "P4-KNOWLEDGE-REAL-WORKSPACE-ADMISSION",
+      "phase": "P4",
+      "category": "runtime-capability",
+      "status": "implemented",
+      "subject": "Real (non-fixture) workspaces initialize a Knowledge Core only under an explicit per-invocation disposability acknowledgment and fail closed with KNOWLEDGE_DISPOSABLE_ACK_REQUIRED otherwise; fixture workspaces remain admitted implicitly, and the admission mode is reported.",
+      "command": "pnpm verify:p4:knowledge",
+      "fixturePaths": [
+        "packages/core/src/knowledge-core.ts",
+        "packages/cli/src/index.ts",
+        "packages/core/spec/knowledge-core-v1.md",
+        "tests/p4-knowledge-core.test.mjs",
+        "scripts/task.mjs"
+      ],
+      "fixtureDigest": "4c203236e3b5d25db02dd2ddd22d92b1f3ef8b94e0450c8725dbcfe7ca9fcf83",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "evidencePath": "dist/evidence/p4/p4-knowledge.json",
+      "invalidationTriggers": [
+        "Knowledge store admission guard, disposability acknowledgment flag, admission-mode reporting, or the KNOWLEDGE_DISPOSABLE_ACK_REQUIRED reason code changes"
       ]
     },
     {
@@ -665,7 +692,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "74a275e1e87e92ef2a1c2eff24db1d5e2e61105d042966f73ac0156cdc9fd4c4",
+      "fixtureDigest": "f1b9e5e21b54dab0469fce95ec2da8a5c9e08cf546d24fa36398352cd07df31c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -729,7 +756,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "47594e88c1f300e7047b6177fd9a790e590e5bf10d4e4e76516b60b525749d00",
+      "fixtureDigest": "1ff3a0481987d74a915d50540271577bc7bb4ac5d77f69617c02ad05c9c5ae7b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -763,7 +790,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "b1c4f2b3e2accf31eab76a8867578636428f124543b507714f71e105010a767f",
+      "fixtureDigest": "a85cc4634de40f38ab08d7aeb244682f01a24e8a7a4e5009a61b37f912fb237d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -798,7 +825,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "f3af0359203139965ad9a64ef7556ac1a976f469d46e12c1a9d12e8f536a4363",
+      "fixtureDigest": "ac6a9e2c55bcc1fbf0d15a7a7d9166c1c89bcc3dc2c9f2edcb577ed5ab9b4451",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -959,7 +986,7 @@
         "tests/p7-canonical-exchange.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "92b72872ab066512771e88ccb8d9c3baa8e4c7c9010da0622476a5941fec6492",
+      "fixtureDigest": "012b2c8d619446b91e0ec92e23a85d5fed7b9ccf7e12c32897c138b16c7e3a1d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -990,7 +1017,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "0ab9165238604f8ffcb315807ab3fb4ba1c3a397e6fbad78c42cbecea88eef30",
+      "fixtureDigest": "d115a1b13d6267d6e9161c0b37e30fa6912aff51a9ae4c9aab474e1d56586f19",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1022,7 +1049,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "9abbb83d884a5d2e48eee958cf735b8a68cc6bda3b113d19e22b54e4a70bd912",
+      "fixtureDigest": "37eafb9c25d760c2835df97f738d1d0528d567a189dbbe9bdb5a9be93f9864e0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1066,7 +1093,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "4c76702f581f533c283b97cae10cf3cf69d313f5653d46714e3c95e2067f2726",
+      "fixtureDigest": "37ebd2b1f9b1d75bf8ad86839f27dcece0d274c7a99aeca46ae12ff4c3cd4fdf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

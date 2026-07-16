@@ -1,10 +1,12 @@
 # File-Native Knowledge Core V1
 
 P4 Knowledge Core is an offline, metadata-first store layered beside the P3
-Workspace authority. Initialization is clean and empty, and V1 admits only
-explicit synthetic Workspaces whose external key starts with `FIXTURE-`.
-Initialization never searches, imports, migrates, infers, or consults any
-predecessor knowledge or workflow source.
+Workspace authority. Initialization is clean and empty. It admits fixture
+Workspaces (external key prefixed `FIXTURE-`) implicitly, and any other Workspace
+only under an explicit per-invocation disposability acknowledgment; without it
+initialization fails closed. The store remains a disposable derived index that is
+never the system of record. Initialization never searches, imports, migrates,
+infers, or consults any predecessor knowledge or workflow source.
 
 ## Storage and authority
 
