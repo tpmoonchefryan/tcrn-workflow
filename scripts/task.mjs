@@ -315,6 +315,7 @@ async function runTests({
   p6Only = false,
   p6AdapterOnly = false,
   p6bAdapterOnly = false,
+  dependencyOnly = false,
   p7Only = false,
   p7CompatibilityOnly = false,
   p7AosRequirementsOnly = false,
@@ -334,6 +335,7 @@ async function runTests({
     .filter((path) => !p6Only || ["tests/p6-context-router.test.mjs", "tests/p6-codex-adapter.test.mjs"].includes(path))
     .filter((path) => !p6AdapterOnly || path === "tests/p6-codex-adapter.test.mjs")
     .filter((path) => !p6bAdapterOnly || path === "tests/p6b-claude-adapter.test.mjs")
+    .filter((path) => !dependencyOnly || path === "tests/dependency.test.mjs")
     .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs")
@@ -359,6 +361,8 @@ async function runTests({
                   ? "P6_CODEX_ADAPTER_TESTS_VERIFIED"
                 : p6bAdapterOnly
                   ? "P6B_CLAUDE_ADAPTER_TESTS_VERIFIED"
+                : dependencyOnly
+                  ? "DEPENDENCY_TESTS_VERIFIED"
                 : p6Only
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
                   : p7CompatibilityOnly
@@ -839,6 +843,40 @@ async function verifyP6b() {
     rc3: fixture.rc3,
     liveStore: fixture.liveStore,
     standalone: "inert-product-data-only-no-database-no-requirement-ledger-no-network",
+  });
+}
+
+async function verifyDependency() {
+  const tests = await runTests({ dependencyOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/dependency-cases.json");
+  const schemaPath = resolve(repositoryRoot, "schemas/dependency-v1.schema.json");
+  const specPath = resolve(repositoryRoot, "specs/dependency-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.dependency-cases.v1", "DEPENDENCY_FIXTURE_SCHEMA");
+  assertion(fixture.positiveCases === 6 && fixture.hostileCases === 16 && fixture.schemaParityCases === 8, "DEPENDENCY_CORE_CORPUS");
+  assertion(fixture.cycleCases === 5 && fixture.endpointCases === 6 && fixture.blockerReadCases === 3 && fixture.hashStabilityCases === 3, "DEPENDENCY_RULE_CORPUS");
+  assertion(fixture.orderingPermutations === 24 && /^[a-f0-9]{64}$/u.test(fixture.orderingCorpusDigest), "DEPENDENCY_ORDER_CORPUS");
+  assertion(fixture.registrationAppliesTo === "work" && fixture.requiredByDefault === false && fixture.ledgerRequirement === "AOS-REQ-016", "DEPENDENCY_REGISTRATION");
+  assertion(fixture.crossProjectEdges === "rejected" && fixture.liveStore === "not-created", "DEPENDENCY_NO_OVERCLAIM");
+  return success("DEPENDENCY_VERIFIED", {
+    tests: tests.reasonCode,
+    positiveCases: fixture.positiveCases,
+    hostileCases: fixture.hostileCases,
+    schemaParityCases: fixture.schemaParityCases,
+    cycleCases: fixture.cycleCases,
+    endpointCases: fixture.endpointCases,
+    blockerReadCases: fixture.blockerReadCases,
+    hashStabilityCases: fixture.hashStabilityCases,
+    orderingPermutations: fixture.orderingPermutations,
+    orderingCorpusDigest: fixture.orderingCorpusDigest,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    registrationAppliesTo: fixture.registrationAppliesTo,
+    ledgerRequirement: fixture.ledgerRequirement,
+    crossProjectEdges: fixture.crossProjectEdges,
+    liveStore: fixture.liveStore,
+    standalone: "inert-extension-record-data-only-no-store-no-network",
   });
 }
 
@@ -1332,6 +1370,7 @@ const commandContracts = {
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
   p6b: { exit: 0, reasonCode: "P6B_CLAUDE_ADAPTER_VERIFIED" },
+  dep: { exit: 0, reasonCode: "DEPENDENCY_VERIFIED" },
   p7: { exit: 0, reasonCode: "P7_CANONICAL_EXCHANGE_VERIFIED" },
   "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
   "p7-aos-requirements": { exit: 0, reasonCode: "P7_PUBLIC_AOS_REQUIREMENTS_VERIFIED" },
@@ -1546,6 +1585,7 @@ const handlers = {
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,
   p6b: verifyP6b,
+  dep: verifyDependency,
   p7: verifyP7,
   "p7-compatibility": verifyP7Compatibility,
   "p7-aos-requirements": verifyP7AosRequirements,
@@ -1595,6 +1635,9 @@ function evidencePhase(name) {
   }
   if (name === "p6b") {
     return "p6";
+  }
+  if (name === "dep") {
+    return "p2";
   }
   if (name === "p7" || name === "p7-compatibility" || name === "p7-aos-requirements") {
     return "p7";

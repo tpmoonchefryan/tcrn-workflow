@@ -1,0 +1,91 @@
+{
+  "$id": "https://tcrn.dev/schemas/dependency-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Work Dependency V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "projectId",
+    "fromWorkId",
+    "toWorkId",
+    "kind",
+    "status",
+    "revision",
+    "updatedAt",
+    "tombstone",
+    "extensions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.dependency.v1"
+    },
+    "id": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "projectId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "fromWorkId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "toWorkId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "kind": {
+      "enum": [
+        "blocks",
+        "informs"
+      ]
+    },
+    "status": {
+      "enum": [
+        "active",
+        "resolved",
+        "waived"
+      ]
+    },
+    "waivedReason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "x-tcrn-maxUtf8Bytes": 512
+    },
+    "waivedByActorId": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updatedAt": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/strictInstant"
+    },
+    "tombstone": {
+      "type": "boolean"
+    },
+    "extensions": {
+      "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/extensionMap"
+    }
+  },
+  "if": {
+    "properties": {
+      "status": {
+        "const": "waived"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "waivedReason",
+      "waivedByActorId"
+    ]
+  },
+  "else": {
+    "properties": {
+      "waivedReason": false,
+      "waivedByActorId": false
+    }
+  }
+}

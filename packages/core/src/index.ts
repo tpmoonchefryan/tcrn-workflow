@@ -257,6 +257,27 @@ export type {
   ClaudeAdapterReasonCode,
   ClaudeAdapterRequest,
 } from "./claude-adapter.js";
+export {
+  DEPENDENCY_VERSION,
+  DEPENDENCY_KINDS,
+  DEPENDENCY_STATUSES,
+  DEPENDENCY_REASON_CODES,
+  DependencyError,
+  validateDependencyRecord,
+  canonicalDependencyDigest,
+  assertDependencyEndpoints,
+  orderDependencies,
+  assertNoDependencyCycle,
+  listDependencyBlockers,
+  listDependenciesByWorkItem,
+} from "./dependency.js";
+export type {
+  DependencyRecord,
+  DependencyWorkReference,
+  DependencyReasonCode,
+  DependencyKind,
+  DependencyStatus,
+} from "./dependency.js";
 export type {
   ContextBudgets,
   ContextExplicitReadCandidate,

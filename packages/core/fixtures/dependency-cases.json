@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "tcrn.dependency-cases.v1",
+  "positiveCases": 6,
+  "hostileCases": 16,
+  "schemaParityCases": 8,
+  "cycleCases": 5,
+  "endpointCases": 6,
+  "blockerReadCases": 3,
+  "orderingPermutations": 24,
+  "hashStabilityCases": 3,
+  "orderingCorpusDigest": "82cf3a5db9bcc246364f43ab8b6e9fa500072989221d6bb4b0d8c34bf0401c2e",
+  "registrationAppliesTo": "work",
+  "requiredByDefault": false,
+  "ledgerRequirement": "AOS-REQ-016",
+  "crossProjectEdges": "rejected",
+  "liveStore": "not-created"
+}
