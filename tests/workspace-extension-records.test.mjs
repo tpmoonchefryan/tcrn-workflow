@@ -44,6 +44,10 @@ import { runCli } from "../dist/build/packages/cli/src/index.js";
 
 const instant = (second) => `2026-07-11T00:${String(Math.floor(second / 60)).padStart(2, "0")}:${String(second % 60).padStart(2, "0")}Z`;
 
+// WSD-4: a satisfaction evidence locator shares the suffix of the minutes id it
+// names — conference-minutes:<suffix> resolves to minutes:<suffix>.
+const minutesLocator = (minutesExternalKey) => `conference-minutes:${deriveStableId("minutes", minutesExternalKey).slice("minutes:".length)}`;
+
 async function workspaceFixture(context, options = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-ext-store-")));
   context.after(() => rm(base, { recursive: true, force: true }));
@@ -244,7 +248,7 @@ test("conference and gate mutations round-trip through the event log with chaine
     expectedVersion: 8, occurredAt: instant(9), id: gateId, status: "blocked",
   });
   state = await transitionGateInWorkspace(fx.workspace, fx.lease, {
-    expectedVersion: 9, occurredAt: instant(10), id: gateId, status: "satisfied",
+    expectedVersion: 9, occurredAt: instant(10), id: gateId, status: "satisfied", minutesLocator: minutesLocator("MINUTES-ALPHA"),
   });
   state = await createGateInWorkspace(fx.workspace, fx.lease, {
     expectedVersion: 10, occurredAt: instant(11), externalKey: "GATE-BETA", projectId: fx.projectId, workId: null,
@@ -272,6 +276,7 @@ test("conference and gate mutations round-trip through the event log with chaine
   const satisfied = state.gates.find((entry) => entry.id === gateId);
   assert.equal(satisfied.status, "satisfied");
   assert.equal(satisfied.revision, 3);
+  assert.deepEqual(satisfied.extensions, { "gate-evidence:conference-minutes": { required: false, value: minutesLocator("MINUTES-ALPHA") } }, "WSD-4: the resolving locator persists in the gate extensions");
   assert.equal(state.gates.find((entry) => entry.id === deletedGateId).tombstone, true);
   for (const collection of [state.conferences, state.conferencePositions, state.conferenceMinutes, state.gates]) {
     const sorted = [...collection].sort((left, right) =>
@@ -475,6 +480,42 @@ test("hand-crafted event logs fail replay closed: unknown operations, openness, 
         record({ operation: "gate.deleted", record: { ...gate, revision: 2, updatedAt: instant(4) } }, 4),
       ];
     }],
+    // WSD-4 replay parity: a log that drives a work item to done while a
+    // non-tombstoned pending gate anchors it fails materialize.
+    ["work driven to done past a pending gate", (fx) => {
+      const work = fx.state.work.find((entry) => entry.id === fx.workId);
+      const gate = gateRecord(fx.projectId, fx.workId, { updatedAt: instant(5) });
+      return [
+        record({ operation: "work.updated", record: { ...work, status: "ready", revision: 2, updatedAt: instant(3) } }, 3),
+        record({ operation: "work.updated", record: { ...work, status: "active", revision: 3, updatedAt: instant(4) } }, 4),
+        record({ operation: "gate.created", record: gate }, 5),
+        record({ operation: "work.updated", record: { ...work, status: "done", revision: 4, updatedAt: instant(6) } }, 6),
+      ];
+    }],
+    // WSD-4 replay parity: a gate.updated to satisfied re-resolves its persisted
+    // evidence — a log with no resolving minutes, no evidence entry, or an
+    // off-graph gate move all fail closed.
+    ["gate satisfied in a log without resolving minutes", (fx) => {
+      const gate = gateRecord(fx.projectId, fx.workId);
+      return [
+        record({ operation: "gate.created", record: gate }, 3),
+        record({ operation: "gate.updated", record: { ...gate, status: "satisfied", revision: 2, updatedAt: instant(4), extensions: { "gate-evidence:conference-minutes": { required: false, value: "conference-minutes:000000000000000000000000" } } } }, 4),
+      ];
+    }],
+    ["gate satisfied in a log without an evidence entry", (fx) => {
+      const gate = gateRecord(fx.projectId, fx.workId);
+      return [
+        record({ operation: "gate.created", record: gate }, 3),
+        record({ operation: "gate.updated", record: { ...gate, status: "satisfied", revision: 2, updatedAt: instant(4) } }, 4),
+      ];
+    }],
+    ["gate off-graph no-op transition pending to pending", (fx) => {
+      const gate = gateRecord(fx.projectId, fx.workId);
+      return [
+        record({ operation: "gate.created", record: gate }, 3),
+        record({ operation: "gate.updated", record: { ...gate, revision: 2, updatedAt: instant(4) } }, 4),
+      ];
+    }],
   ];
   for (const [name, forge] of cases) {
     await context.test(name, async (caseContext) => {
@@ -628,9 +669,10 @@ test("WSD-2: the eight governed verbs plus gate-delete mutate and read under lea
     "--external-key", "GATE-CLI-2", "--project-id", fx.projectId, "--work-id", fx.workId,
     "--title", "Second gate", "--outcome-class", "recommendation"]);
 
-  // gate-transition pending -> satisfied.
+  // gate-transition pending -> satisfied, carrying the resolving minutes locator.
   const transitionReceipt = assertCanonicalJson((await invokeCli(["gate-transition", "--workspace", ws,
-    "--expected-version", "9", "--at", instant(10), "--id", deriveStableId("gate", "GATE-CLI"), "--status", "satisfied"])).output);
+    "--expected-version", "9", "--at", instant(10), "--id", deriveStableId("gate", "GATE-CLI"), "--status", "satisfied",
+    "--minutes-locator", minutesLocator("MINUTES-CLI")])).output);
   assert.equal(transitionReceipt.version, 10);
   assert.equal(transitionReceipt.recordId, deriveStableId("gate", "GATE-CLI"));
 
@@ -688,4 +730,164 @@ test("WSD-2: every mutating verb fails closed on stale CAS, malformed enums pass
     "--outcome-class", "role_decision"]);
   assert.equal(contended.ok, false);
   assert.equal(contended.reasonCode, "WORKSPACE_LOCKED");
+});
+
+// WSD-4: a work item at active, the surface a pending gate governs on its way to done.
+async function activeGatedFixture(context) {
+  const fx = await seededFixture(context);
+  await transitionWork(fx.workspace, fx.lease, { expectedVersion: 2, occurredAt: instant(3), id: fx.workId, status: "ready" });
+  const state = await transitionWork(fx.workspace, fx.lease, { expectedVersion: 3, occurredAt: instant(4), id: fx.workId, status: "active" });
+  return { ...fx, state };
+}
+
+test("WSD-4: a pending gate fails a work transition to done closed at the verb and appends no event", async (context) => {
+  const fx = await activeGatedFixture(context);
+  const seeded = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), externalKey: "GATE-BLOCK", projectId: fx.projectId, workId: fx.workId,
+    title: "Decision gate", outcomeClass: "role_decision",
+  });
+  const version = seeded.version;
+  await expectReasonAsync("WORKSPACE_GATE_PENDING", () => transitionWork(fx.workspace, fx.lease, {
+    expectedVersion: version, occurredAt: instant(6), id: fx.workId, status: "done",
+  }));
+  assert.equal((await materializeWorkspace(fx.workspace)).version, version, "the blocked transition appended no event");
+});
+
+test("WSD-4: minutes-backed satisfaction unblocks the transition to done and the whole chain replays deterministically", async (context) => {
+  const fx = await activeGatedFixture(context);
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), externalKey: "CONF-SAT", projectId: fx.projectId, type: "architecture",
+    title: "Decide", linkedWorkIds: [fx.workId], desiredOutcome: "decide the gate", participantIds: [],
+  });
+  const conferenceId = state.conferences[0].id;
+  state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), conferenceId, minutesExternalKey: "MINUTES-SAT",
+    summary: "ratified", outcomeClass: "role_decision", decisions: ["proceed"], unresolvedIssues: [],
+  });
+  state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 6, occurredAt: instant(7), externalKey: "GATE-SAT", projectId: fx.projectId, workId: fx.workId,
+    title: "Decision gate", outcomeClass: "role_decision",
+  });
+  const gateId = state.gates[0].id;
+  // Still pending: the transition to done is blocked.
+  await expectReasonAsync("WORKSPACE_GATE_PENDING", () => transitionWork(fx.workspace, fx.lease, {
+    expectedVersion: 7, occurredAt: instant(8), id: fx.workId, status: "done",
+  }));
+  state = await transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 7, occurredAt: instant(8), id: gateId, status: "satisfied", minutesLocator: minutesLocator("MINUTES-SAT"),
+  });
+  state = await transitionWork(fx.workspace, fx.lease, {
+    expectedVersion: 8, occurredAt: instant(9), id: fx.workId, status: "done",
+  });
+  assert.equal(state.work.find((entry) => entry.id === fx.workId).status, "done");
+  const fresh = await materializeWorkspace(fx.workspace);
+  assert.deepEqual(fresh, state, "the committed delta equals a full replay");
+  assert.deepEqual(await materializeWorkspace(fx.workspace), fresh, "replay is deterministic");
+});
+
+test("WSD-4: the gate.deleted tombstone is the deadlock escape that lets a wedged work item reach done", async (context) => {
+  const fx = await activeGatedFixture(context);
+  let state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), externalKey: "GATE-DEL", projectId: fx.projectId, workId: fx.workId,
+    title: "Decision gate", outcomeClass: "role_decision",
+  });
+  const gateId = state.gates[0].id;
+  state = await deleteGateInWorkspace(fx.workspace, fx.lease, { expectedVersion: 5, occurredAt: instant(6), id: gateId });
+  state = await transitionWork(fx.workspace, fx.lease, { expectedVersion: 6, occurredAt: instant(7), id: fx.workId, status: "done" });
+  assert.equal(state.work.find((entry) => entry.id === fx.workId).status, "done");
+});
+
+test("WSD-4: the designated set is exactly done — a pending gate leaves other targets unaffected", async (context) => {
+  for (const target of ["blocked", "cancelled"]) {
+    await context.test(`active to ${target}`, async (caseContext) => {
+      const fx = await activeGatedFixture(caseContext);
+      await createGateInWorkspace(fx.workspace, fx.lease, {
+        expectedVersion: 4, occurredAt: instant(5), externalKey: `GATE-${target}`, projectId: fx.projectId, workId: fx.workId,
+        title: "Decision gate", outcomeClass: "role_decision",
+      });
+      const state = await transitionWork(fx.workspace, fx.lease, { expectedVersion: 5, occurredAt: instant(6), id: fx.workId, status: target });
+      assert.equal(state.work.find((entry) => entry.id === fx.workId).status, target);
+    });
+  }
+  await context.test("planned to ready", async (caseContext) => {
+    const fx = await seededFixture(caseContext);
+    await createGateInWorkspace(fx.workspace, fx.lease, {
+      expectedVersion: 2, occurredAt: instant(3), externalKey: "GATE-READY", projectId: fx.projectId, workId: fx.workId,
+      title: "Decision gate", outcomeClass: "role_decision",
+    });
+    const state = await transitionWork(fx.workspace, fx.lease, { expectedVersion: 3, occurredAt: instant(4), id: fx.workId, status: "ready" });
+    assert.equal(state.work.find((entry) => entry.id === fx.workId).status, "ready");
+  });
+});
+
+test("WSD-4: satisfaction fails closed when the locator resolves to no or non-anchoring minutes, appending no event", async (context) => {
+  const fx = await seededFixture(context);
+  // A second work item plus a conference anchored only to it, closed with minutes.
+  let state = await createWork(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), projectId: fx.projectId, externalKey: "INITIATIVE-OTHER", kind: "Initiative", parentId: null,
+  });
+  const otherWorkId = state.work.find((entry) => entry.id !== fx.workId).id;
+  state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 3, occurredAt: instant(4), externalKey: "CONF-OTHER", projectId: fx.projectId, type: "architecture",
+    title: "Other", linkedWorkIds: [otherWorkId], desiredOutcome: "decide elsewhere", participantIds: [],
+  });
+  const conferenceId = state.conferences[0].id;
+  state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), conferenceId, minutesExternalKey: "MINUTES-OTHER",
+    summary: "closed", outcomeClass: "role_decision", decisions: ["done"], unresolvedIssues: [],
+  });
+  // The gate anchors the FIRST work item, which those minutes do not cover.
+  state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), externalKey: "GATE-EV", projectId: fx.projectId, workId: fx.workId,
+    title: "Decision gate", outcomeClass: "role_decision",
+  });
+  const gateId = state.gates[0].id;
+  const version = state.version;
+  const unresolvable = [
+    minutesLocator("MINUTES-NONE"),              // no stored minutes share this suffix
+    minutesLocator("MINUTES-OTHER"),             // stored, but the conference anchors the other work item
+    "minutes:000000000000000000000000",          // wrong locator namespace
+    "conference-minutes:BAD SUFFIX",              // not a protocol id
+  ];
+  for (const locator of unresolvable) {
+    await expectReasonAsync("WORKSPACE_GATE_EVIDENCE_UNRESOLVED", () => transitionGateInWorkspace(fx.workspace, fx.lease, {
+      expectedVersion: version, occurredAt: instant(7), id: gateId, status: "satisfied", minutesLocator: locator,
+    }));
+  }
+  // An absent locator fails closed too.
+  await expectReasonAsync("WORKSPACE_GATE_EVIDENCE_UNRESOLVED", () => transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: version, occurredAt: instant(7), id: gateId, status: "satisfied",
+  }));
+  assert.equal((await materializeWorkspace(fx.workspace)).version, version, "no failed satisfaction appended an event");
+});
+
+test("WSD-4: the gate lifecycle graph is enforced at the verb — satisfied is terminal and a locator is rejected off the satisfied path", async (context) => {
+  const fx = await seededFixture(context);
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-GRAPH", projectId: fx.projectId, type: "architecture",
+    title: "Graph", linkedWorkIds: [fx.workId], desiredOutcome: "decide", participantIds: [],
+  });
+  const conferenceId = state.conferences[0].id;
+  state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 3, occurredAt: instant(4), conferenceId, minutesExternalKey: "MINUTES-GRAPH",
+    summary: "closed", outcomeClass: "role_decision", decisions: ["go"], unresolvedIssues: [],
+  });
+  state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), externalKey: "GATE-GRAPH", projectId: fx.projectId, workId: fx.workId,
+    title: "Decision gate", outcomeClass: "role_decision",
+  });
+  const gateId = state.gates[0].id;
+  // A minutes locator on a non-satisfied transition is rejected.
+  await expectReasonAsync("WORKSPACE_INPUT_INVALID", () => transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), id: gateId, status: "blocked", minutesLocator: minutesLocator("MINUTES-GRAPH"),
+  }));
+  state = await transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), id: gateId, status: "satisfied", minutesLocator: minutesLocator("MINUTES-GRAPH"),
+  });
+  // satisfied is terminal: no further status move is admissible.
+  const version = state.version;
+  await expectReasonAsync("WORKSPACE_INPUT_INVALID", () => transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: version, occurredAt: instant(7), id: gateId, status: "blocked",
+  }));
+  assert.equal((await materializeWorkspace(fx.workspace)).version, version, "the off-graph transition appended no event");
 });
