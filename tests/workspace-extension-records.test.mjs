@@ -732,6 +732,80 @@ test("WSD-2: every mutating verb fails closed on stale CAS, malformed enums pass
   assert.equal(contended.reasonCode, "WORKSPACE_LOCKED");
 });
 
+test("WSD-3: conference-close --distill governs each decision into a promotable knowledge candidate under one lease", async (context) => {
+  const fx = await cliSeededFixture(context);
+  const ws = fx.ws;
+
+  const conferenceId = JSON.parse((await invokeCli(["conference-open", "--workspace", ws, "--expected-version", "2", "--at", instant(3),
+    "--external-key", "CONF-DISTILL", "--project-id", fx.projectId, "--type", "architecture", "--title", "Distill design",
+    "--work-ids", fx.workId, "--desired-outcome", "pick route", "--participant-ids", "profile:architect-01"])).output).recordId;
+  // A position contributes an evidence:-prefixed id to the distilled provenance union.
+  await invokeCli(["conference-append-position", "--workspace", ws, "--expected-version", "3", "--at", instant(4),
+    "--conference-id", conferenceId, "--external-key", "POSITION-DISTILL-1", "--actor-id", "profile:architect-01",
+    "--position", "persist via log", "--risks", "drift", "--recommendations", "doc", "--evidence-ids", "evidence:position-01"]);
+
+  // The disposable knowledge store must exist before the close (non-fixture workspace
+  // -> explicit disposability acknowledgment).
+  const init = assertCanonicalJson((await invokeCli(["knowledge-init", "--workspace", ws, "--acknowledge-disposable", "true"])).output);
+  assert.equal(init.reasonCode, "KNOWLEDGE_STORE_INITIALIZED");
+
+  const decisions = ["adopt cross-host parity fixture", "keep host surface enumerated"];
+  const closeReceipt = assertCanonicalJson((await invokeCli(["conference-close", "--workspace", ws, "--expected-version", "head",
+    "--at", instant(5), "--conference-id", conferenceId, "--minutes-external-key", "MINUTES-DISTILL",
+    "--summary", "event-log persistence ratified", "--outcome-class", "role_decision",
+    "--decisions", decisions.join(","), "--unresolved-issues", "-",
+    "--distill", "true", "--accountable-owner-id", "owner:governance", "--stale-days", "90", "--evidence-ids", "evidence:close-01"])).output);
+  // The close event still advances the workspace version by exactly one, and the
+  // receipt names one created knowledge unit per decision.
+  assert.equal(closeReceipt.version, 5);
+  assert.equal(closeReceipt.recordId, deriveStableId("minutes", "MINUTES-DISTILL"));
+  assert.equal(closeReceipt.knowledgeUnitIds.length, decisions.length);
+
+  // Each candidate validates through the store, is unpromoted, carries the fixed
+  // conference tag set, the deduped evidence union, and a sourceDigest bound to the
+  // FULL untruncated basis (recomputed here).
+  const minutesId = deriveStableId("minutes", "MINUTES-DISTILL");
+  const expectedDigests = decisions.map((decision) => canonicalSha256({ title: "Distill design", decision, minutesId }));
+  const listing = assertCanonicalJson((await invokeCli(["knowledge-list", "--workspace", ws, "--at", instant(6), "--selection", "all"])).output);
+  assert.equal(listing.total, decisions.length);
+  for (const record of listing.records) {
+    assert.equal(record.promotionState, "candidate");
+    assert.deepEqual(record.tags, ["conference-decision", "distilled", "type-architecture"]);
+    assert.deepEqual(record.linkedEvidenceIds, ["evidence:close-01", "evidence:position-01"]);
+    assert.equal(Buffer.byteLength(record.subject, "utf8") <= 512, true);
+    assert.equal(expectedDigests.includes(record.sourceDigest), true);
+  }
+
+  // Promotable by construction: owner + evidence + tag + snippet clear the WSC-6 gates.
+  const first = listing.records[0];
+  const knowledgeVersion = assertCanonicalJson((await invokeCli(["knowledge-validate", "--workspace", ws])).output).version;
+  const promote = await invokeCli(["knowledge-promote", "--workspace", ws, "--expected-version", String(knowledgeVersion),
+    "--expected-revision", String(first.revision), "--at", instant(7), "--id", first.id, "--state", "promoted"]);
+  assert.equal(promote.ok, true);
+  assert.equal(assertCanonicalJson(promote.output).promotionState, "promoted");
+});
+
+test("WSD-3: --distill with no knowledge store fails closed BEFORE the close event is appended", async (context) => {
+  const fx = await cliSeededFixture(context);
+  const ws = fx.ws;
+  const conferenceId = JSON.parse((await invokeCli(["conference-open", "--workspace", ws, "--expected-version", "2", "--at", instant(3),
+    "--external-key", "CONF-NOSTORE", "--project-id", fx.projectId, "--type", "architecture", "--title", "No store",
+    "--work-ids", fx.workId, "--desired-outcome", "pick route", "--participant-ids", "-"])).output).recordId;
+  // No knowledge-init: the pre-close store read fails and no close event lands.
+  const close = await invokeCli(["conference-close", "--workspace", ws, "--expected-version", "3", "--at", instant(4),
+    "--conference-id", conferenceId, "--minutes-external-key", "MINUTES-NOSTORE", "--summary", "should not persist",
+    "--outcome-class", "role_decision", "--decisions", "unreachable", "--unresolved-issues", "-", "--distill", "true", "--stale-days", "30"]);
+  assert.equal(close.ok, false);
+  // Version is unchanged (open was version 3) — the conference is still open, provable
+  // by closing it again WITHOUT distillation.
+  assert.equal((await materializeWorkspace(ws)).version, 3);
+  const reclose = assertCanonicalJson((await invokeCli(["conference-close", "--workspace", ws, "--expected-version", "3", "--at", instant(5),
+    "--conference-id", conferenceId, "--minutes-external-key", "MINUTES-NOSTORE", "--summary", "plain close",
+    "--outcome-class", "role_decision", "--decisions", "adopt", "--unresolved-issues", "-"])).output);
+  assert.equal(reclose.version, 4);
+  assert.equal(reclose.knowledgeUnitIds, undefined);
+});
+
 // WSD-4: a work item at active, the surface a pending gate governs on its way to done.
 async function activeGatedFixture(context) {
   const fx = await seededFixture(context);

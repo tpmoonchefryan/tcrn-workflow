@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { canonicalSha256, assertProtocolId, compareCanonicalText, parseStrictInstant } from "../../protocol/src/index.js";
+import type { CreateKnowledgeUnitInput } from "./knowledge-core.js";
 
 export const CONFERENCE_REQUEST_VERSION = "tcrn.conference.v1.request" as const;
 export const CONFERENCE_POSITION_VERSION = "tcrn.conference.v1.position" as const;
@@ -276,4 +277,92 @@ export function closeConference(minutesValue: unknown, requestValue: unknown, po
     return deepFreeze({ ...basis, candidateDigest: canonicalSha256(basis) });
   });
   return deepFreeze({ minutes, request, candidates });
+}
+
+// WSD-3: truncate on a code-point boundary so the result is valid UTF-8 and its
+// byte length never exceeds the bound (a single code point is at most four bytes,
+// well under every cap here). Used for the subject/summary/snippet knowledge
+// fields, whose knowledge-core bounds are byte-measured while the protocol record
+// bound is code-point measured — a code-point-safe truncation satisfies both.
+function truncateOnCodePoint(value: string, maximumBytes: number): string {
+  if (Buffer.byteLength(value, "utf8") <= maximumBytes) return value;
+  let result = "";
+  for (const codePoint of value) {
+    if (Buffer.byteLength(result + codePoint, "utf8") > maximumBytes) break;
+    result += codePoint;
+  }
+  return result;
+}
+
+const maximumSubjectBytes = 512;
+const maximumSnippetBytes = 512;
+
+export interface DistillConferenceOptions {
+  readonly occurredAt: string;
+  readonly expectedVersionBase: number;
+  readonly stalenessDays: number;
+  readonly accountableOwnerId?: string;
+  readonly evidenceIds?: readonly string[];
+}
+
+// WSD-3 / SDC-6: transform closed conference minutes into governed knowledge
+// creation inputs — one candidate per minutes decision. Each input is a FULL
+// CreateKnowledgeUnitInput accepted by the unmodified fail-closed knowledge
+// creation contract (WSC-3 capture-cheap): provenance (accountable owner,
+// evidence) is optional at capture and enforced only at promotion, while the
+// vocabulary-conformant tag set and non-empty snippet make the candidate
+// promotable by construction under WSC-6's final promote gates. The external key
+// is hyphen-only (CONFERENCE-DECISION-<hex>-<hex>-<n>) so canonicalExternalKey
+// admits it; sourceDigest binds the FULL untruncated decision basis even when the
+// stored subject is byte-bounded. The transform is pure — no store access — and
+// the CLI performs the governed high-water rebind before feeding these inputs to
+// createKnowledgeUnit, whose own CAS advances expectedVersion from the base.
+export function distillConferenceKnowledge(minutesValue: unknown, requestValue: unknown, positionsValue: readonly unknown[] = [], options: DistillConferenceOptions): readonly CreateKnowledgeUnitInput[] {
+  const request = validateConferenceRequest(requestValue);
+  const minutes = validateConferenceMinutes(minutesValue);
+  if (minutes.conferenceId !== request.id || minutes.projectId !== request.projectId) fail("CONFERENCE_MINUTES_UNBOUND", minutes.id);
+  const positions = positionsValue.map((value) => {
+    const position = validateConferencePosition(value);
+    if (position.conferenceId !== request.id) fail("CONFERENCE_POSITION_UNBOUND", position.id);
+    return position;
+  });
+  const evidence = [...new Set([
+    ...positions.flatMap((position) => position.evidenceIds.filter((reference) => reference.startsWith("evidence:"))),
+    ...(options.evidenceIds ?? []).filter((reference) => reference.startsWith("evidence:")),
+  ])].sort(compareCanonicalText);
+  const requestSuffix = request.id.slice(request.id.indexOf(":") + 1);
+  const minutesSuffix = minutes.id.slice(minutes.id.indexOf(":") + 1);
+  // Fixed conference tag set (no per-store vocabulary.json exists): every tag
+  // matches the knowledge tag grammar and the set is non-empty, so the candidate
+  // clears the WSC-6 promote machine-check (>=1 tag) with no free-form drift.
+  const tags = ["conference-decision", "distilled", `type-${request.type}`].sort(compareCanonicalText);
+  const sourceReferences = [`conference:${requestSuffix}`, `conference-minutes:${minutesSuffix}`];
+  return minutes.decisions.map((decision, index): CreateKnowledgeUnitInput => ({
+    expectedVersion: options.expectedVersionBase + index,
+    occurredAt: options.occurredAt,
+    externalKey: `conference-decision-${requestSuffix}-${minutesSuffix}-${index + 1}`,
+    scope: "project",
+    projectId: request.projectId,
+    roleScopes: [],
+    category: "decision",
+    kind: "decision",
+    tags,
+    subject: truncateOnCodePoint(`${request.title}: ${decision}`, maximumSubjectBytes),
+    summary: truncateOnCodePoint(minutes.summary, maximumTextBytes),
+    snippet: truncateOnCodePoint(decision, maximumSnippetBytes),
+    accountableOwnerId: options.accountableOwnerId ?? "",
+    sourceReferences,
+    sourceDigest: canonicalSha256({ title: request.title, decision, minutesId: minutes.id }),
+    linkedWorkIds: request.linkedWorkIds,
+    linkedDecisionIds: [],
+    linkedGateIds: [],
+    linkedEvidenceIds: evidence,
+    lifecycle: "candidate",
+    retrievalDisposition: "default",
+    freshnessState: "unknown",
+    lastVerified: null,
+    stalenessPolicy: { maximumAgeDays: options.stalenessDays, unknownDisposition: "fail-closed" },
+    exportDisposition: "metadata-only",
+    body: decision,
+  }));
 }
