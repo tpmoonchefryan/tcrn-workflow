@@ -106,7 +106,10 @@ exact backup/rollback contract. Downgrades and unknown future versions fail
 closed. Every future apply must validate the exact target schema and full event
 chain after transformation. Real user-data migration apply is unavailable in P3; a future reviewed
 schema must add an exact backup, transformation, post-validation, and rollback
-implementation before apply can be admitted.
+implementation before apply can be admitted. Live compaction of the authoritative
+event chain is explicitly out of V1 scope and admissible only as a
+storage-version-2 migration bound to that same backup, transformation,
+post-validation, and rollback contract.
 
 ## Capability boundary
 

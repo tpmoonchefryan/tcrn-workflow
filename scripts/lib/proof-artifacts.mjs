@@ -61,6 +61,7 @@ const routeAdditions = new Set([
   "tests/act2-claude-activation.test.mjs",
   "packages/core/src/persona-render.ts",
   "tests/act3-persona-render.test.mjs",
+  "docs/2026-07-17-p3-compaction-deferral-decision.md",
 ]);
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
