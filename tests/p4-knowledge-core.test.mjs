@@ -546,6 +546,39 @@ test("WSC-3: provenance is enforced at promotion, not capture", async () => {
   }
 });
 
+test("WSC-6: promotion enforces machine checks for tags and snippet", async () => {
+  for (const [label, override] of [
+    ["no-tags", { tags: [] }],
+    ["empty-snippet", { snippet: "" }],
+  ]) {
+    const fixture = await workspaceFixture({ externalKey: `FIXTURE-PROMOTE-CHECK-${label.toUpperCase()}` });
+    try {
+      const created = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, `KNOWLEDGE-CHECK-${label.toUpperCase()}`, override));
+      await expectReason("KNOWLEDGE_PROMOTION_INVALID", () => transitionKnowledgePromotion(fixture.workspace, {
+        expectedVersion: 1, expectedRevision: 1, occurredAt: instant(11, 5), id: created.id, promotionState: "promoted",
+      }));
+      // rejecting never needs the promotion checks
+      const rejected = await transitionKnowledgePromotion(fixture.workspace, {
+        expectedVersion: 1, expectedRevision: 1, occurredAt: instant(11, 6), id: created.id, promotionState: "rejected",
+      });
+      assert.equal(rejected.reasonCode, "KNOWLEDGE_PROMOTION_UPDATED");
+    } finally {
+      await fixture.close();
+    }
+  }
+  // a fully-governed candidate promotes
+  const ok = await workspaceFixture({ externalKey: "FIXTURE-PROMOTE-CHECK-OK" });
+  try {
+    const created = await createKnowledgeUnit(ok.workspace, unitInput(ok, "KNOWLEDGE-CHECK-OK"));
+    const promoted = await transitionKnowledgePromotion(ok.workspace, {
+      expectedVersion: 1, expectedRevision: 1, occurredAt: instant(11, 5), id: created.id, promotionState: "promoted",
+    });
+    assert.equal(promoted.promotionState, "promoted");
+  } finally {
+    await ok.close();
+  }
+});
+
 test("WSC-5: retire and reverify lifecycle transitions fail closed", async () => {
   const fixture = await workspaceFixture({ externalKey: "FIXTURE-LIFECYCLE" });
   try {
