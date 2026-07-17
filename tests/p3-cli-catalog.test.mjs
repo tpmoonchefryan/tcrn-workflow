@@ -51,8 +51,10 @@ test("unknown verbs fail closed and every cataloged verb dispatches", async () =
   assert.equal((await invoke(["no-such-verb"])).reasonCode, "CLI_COMMAND_UNKNOWN");
   for (const entry of COMMAND_CATALOG) {
     const outcome = await invoke([entry.name]);
-    if (entry.name === "commands") {
-      assert.equal(outcome.ok, true, "commands resolves with no flags");
+    // WSG-4: persona-render, like commands, takes no flags and resolves — the Verity
+    // persona is a closed allowlist, not a configuration surface.
+    if (entry.name === "commands" || entry.name === "persona-render") {
+      assert.equal(outcome.ok, true, `${entry.name} resolves with no flags`);
       continue;
     }
     assert.equal(outcome.ok, false, `${entry.name} should reject with no flags`);

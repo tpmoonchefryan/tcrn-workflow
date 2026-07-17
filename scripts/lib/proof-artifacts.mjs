@@ -59,6 +59,8 @@ const routeAdditions = new Set([
   "packages/core/src/claude-adapter-activation.ts",
   "packages/core/src/claude-adapter-session-start.ts",
   "tests/act2-claude-activation.test.mjs",
+  "packages/core/src/persona-render.ts",
+  "tests/act3-persona-render.test.mjs",
 ]);
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",

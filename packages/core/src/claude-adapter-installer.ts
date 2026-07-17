@@ -32,6 +32,7 @@ import type {
 } from "./claude-adapter.js";
 import {
   CLAUDE_ADAPTER_INSTALLATION_V2_VERSION,
+  CLAUDE_ADAPTER_PERSONA_RENDER_PATH,
   CLAUDE_ADAPTER_SESSION_START_PATH,
   mergeClaudeAdapterActivationFragment,
   validateClaudeAdapterActivationFragment,
@@ -77,6 +78,11 @@ export interface ClaudeAdapterActivationInstallOptions {
   readonly bundleDigest: string;
   readonly fragment: unknown;
   readonly scriptSource: string;
+  // WSG-4 Step-3: the canonical persona render document. When present it is written
+  // to .claude/tcrn-workflow/persona-render.json (O_EXCL 0o600) and recorded as an
+  // additional receipt entry so the render rides the v2 receipt and WSG-2 rollback
+  // removes it byte-inverse; when absent the install is byte-identical to Step-2.
+  readonly renderSource?: string;
 }
 
 export interface ClaudeAdapterActivationInstallResult {
@@ -265,6 +271,8 @@ export async function installClaudeAdapterActivation(options: ClaudeAdapterActiv
   if (typeof generationId !== "string" || generationId.length === 0 || !generationId.isWellFormed()) fail("INSTALLER_ROOT_INVALID", "generation id");
   const bundleDigest = options.bundleDigest;
   if (typeof bundleDigest !== "string" || !shaPattern.test(bundleDigest)) fail("INSTALLER_ROOT_INVALID", "bundle digest");
+  const renderSource = options.renderSource;
+  if (renderSource !== undefined && (typeof renderSource !== "string" || renderSource.length === 0 || !renderSource.isWellFormed())) fail("INSTALLER_WRITE_FAILED", "persona render source");
 
   // The four Step-1 templates must already be present; record their current identity.
   const templateEntries: ClaudeAdapterActivationInstallationEntry[] = [];
@@ -285,8 +293,10 @@ export async function installClaudeAdapterActivation(options: ClaudeAdapterActiv
   const mergedSettings = mergeClaudeAdapterActivationFragment(currentSettings, fragment);
 
   const scriptTarget = resolve(installationRoot, ...CLAUDE_ADAPTER_SESSION_START_PATH.split("/"));
+  const renderTarget = resolve(installationRoot, ...CLAUDE_ADAPTER_PERSONA_RENDER_PATH.split("/"));
   const settingsTempPath = `${settingsPath}.tcrn-activation-tmp`;
   let scriptWritten = false;
+  let renderWritten = false;
   let receiptWritten = false;
   try {
     await writeExclusive(scriptTarget, Buffer.from(options.scriptSource, "utf8"), CLAUDE_ADAPTER_SESSION_START_PATH);
@@ -298,7 +308,22 @@ export async function installClaudeAdapterActivation(options: ClaudeAdapterActiv
       contentDigest: contentSha256(Buffer.from(options.scriptSource, "utf8")),
       identityDigest: identityDigest(scriptStat),
     };
-    const entries = [...templateEntries, scriptEntry].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+    const activationEntries = [...templateEntries, scriptEntry];
+    // WSG-4 Step-3: persist the persona render sibling and record its entry so it
+    // rides the same v2 receipt (reserved path) and rolls back byte-inverse.
+    if (renderSource !== undefined) {
+      const renderBytes = Buffer.from(renderSource, "utf8");
+      await writeExclusive(renderTarget, renderBytes, CLAUDE_ADAPTER_PERSONA_RENDER_PATH);
+      renderWritten = true;
+      const renderStat = await lstat(renderTarget);
+      activationEntries.push({
+        path: CLAUDE_ADAPTER_PERSONA_RENDER_PATH,
+        realpath: await realpath(renderTarget),
+        contentDigest: contentSha256(renderBytes),
+        identityDigest: identityDigest(renderStat),
+      });
+    }
+    const entries = activationEntries.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
     const basis = {
       schemaVersion: CLAUDE_ADAPTER_INSTALLATION_V2_VERSION,
       generationId,
@@ -325,6 +350,7 @@ export async function installClaudeAdapterActivation(options: ClaudeAdapterActiv
     return deepFreeze({ receipt, authority, sourceIdentityDigest, settingsPath });
   } catch (error) {
     if (scriptWritten) await unlink(scriptTarget).catch(() => undefined);
+    if (renderWritten) await unlink(renderTarget).catch(() => undefined);
     if (receiptWritten) await unlink(receiptPath).catch(() => undefined);
     await unlink(settingsTempPath).catch(() => undefined);
     throw error;
