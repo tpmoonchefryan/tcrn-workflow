@@ -35,10 +35,12 @@ import {
   assertCanonicalJson,
   canonicalJson,
   canonicalSha256,
+  compareCanonicalText,
   createEvent,
   deriveStableId,
   validateEventChain,
 } from "../dist/build/packages/protocol/src/index.js";
+import { runCli } from "../dist/build/packages/cli/src/index.js";
 
 const instant = (second) => `2026-07-11T00:${String(Math.floor(second / 60)).padStart(2, "0")}:${String(second % 60).padStart(2, "0")}Z`;
 
@@ -186,6 +188,26 @@ function gateRecord(projectId, workId, overrides = {}) {
 
 async function expectReasonAsync(reasonCode, operation) {
   await assert.rejects(operation, (error) => error?.reasonCode === reasonCode, reasonCode);
+}
+
+// WSD-2: drive runCli with a write-capture, the pattern the other CLI suites use.
+async function invokeCli(args) {
+  let output = "";
+  return runCli(args, { write: (value) => { output += value; } }).then(
+    () => ({ ok: true, output }),
+    (error) => ({ ok: false, reasonCode: error?.reasonCode }),
+  );
+}
+
+// The mutating verbs take no held lease into the fixture: they acquire their own
+// under withLease. Seed the project + Initiative anchor through the CLI itself so
+// the whole path — parse, lease, CAS, engine append, canonical receipt — is exercised.
+async function cliSeededFixture(context) {
+  const fx = await workspaceFixture(context);
+  const ws = fx.workspace;
+  const project = JSON.parse((await invokeCli(["project-create", "--workspace", ws, "--expected-version", "0", "--at", instant(1), "--external-key", "PROJECT-CLI", "--name", "CLI"])).output);
+  const work = JSON.parse((await invokeCli(["work-create", "--workspace", ws, "--expected-version", "1", "--at", instant(2), "--project-id", project.record.id, "--external-key", "INITIATIVE-CLI", "--kind", "Initiative"])).output);
+  return { ...fx, ws, projectId: project.record.id, workId: work.record.id };
 }
 
 test("conference and gate mutations round-trip through the event log with chained hashes, sorted collections, fresh views, and materialize parity", async (context) => {
@@ -543,4 +565,127 @@ test("a crash across conference.closed leaves the event durable and recover() re
       assert.equal(extensionsIndex.conferenceMinutes.length, 1);
     });
   }
+});
+
+test("WSD-2: the eight governed verbs plus gate-delete mutate and read under lease and CAS with canonical receipts and deterministic list ordering", async (context) => {
+  const fx = await cliSeededFixture(context);
+  const ws = fx.ws;
+
+  // conference-open — version 2 -> 3, receipt is canonical and names the new id.
+  const openResult = await invokeCli(["conference-open", "--workspace", ws, "--expected-version", "2", "--at", instant(3),
+    "--external-key", "CONF-CLI", "--project-id", fx.projectId, "--type", "architecture", "--title", "Store design",
+    "--work-ids", fx.workId, "--desired-outcome", "pick the persistence route", "--participant-ids", "profile:architect-01"]);
+  const openReceipt = assertCanonicalJson(openResult.output);
+  assert.equal(openReceipt.reasonCode, "WORKSPACE_COMMAND_COMPLETED");
+  assert.equal(openReceipt.version, 3);
+  assert.equal(openReceipt.recordId, deriveStableId("conference", "CONF-CLI"));
+  const conferenceId = openReceipt.recordId;
+
+  // conference-append-position — empty list flags via the "-" sentinel.
+  const positionReceipt = assertCanonicalJson((await invokeCli(["conference-append-position", "--workspace", ws,
+    "--expected-version", "3", "--at", instant(4), "--conference-id", conferenceId, "--external-key", "POSITION-CLI-1",
+    "--actor-id", "profile:architect-01", "--position", "persist through the workspace event log",
+    "--risks", "forward reads corruption", "--recommendations", "document the posture", "--evidence-ids", "-"])).output);
+  assert.equal(positionReceipt.version, 4);
+  assert.equal(positionReceipt.recordId, deriveStableId("position", "POSITION-CLI-1"));
+
+  // conference-close via the head sentinel — resolves to 4 under the lease, appends to 5.
+  const closeReceipt = assertCanonicalJson((await invokeCli(["conference-close", "--workspace", ws,
+    "--expected-version", "head", "--at", instant(5), "--conference-id", conferenceId, "--minutes-external-key", "MINUTES-CLI",
+    "--summary", "event-log persistence ratified", "--outcome-class", "role_decision",
+    "--decisions", "persist conference and gate records as event operations", "--unresolved-issues", "-"])).output);
+  assert.equal(closeReceipt.version, 5);
+  assert.equal(closeReceipt.recordId, deriveStableId("minutes", "MINUTES-CLI"));
+
+  // A second conference so conference-list-by-work returns more than one record to order.
+  await invokeCli(["conference-open", "--workspace", ws, "--expected-version", "5", "--at", instant(6),
+    "--external-key", "CONF-CLI-2", "--project-id", fx.projectId, "--type", "risk", "--title", "Risk review",
+    "--work-ids", fx.workId, "--desired-outcome", "accept residual risk", "--participant-ids", "-"]);
+
+  // conference-cancel — the second conference, recordId echoes the supplied id.
+  const cancelReceipt = assertCanonicalJson((await invokeCli(["conference-cancel", "--workspace", ws,
+    "--expected-version", "6", "--at", instant(7), "--conference-id", deriveStableId("conference", "CONF-CLI-2")])).output);
+  assert.equal(cancelReceipt.version, 7);
+  assert.equal(cancelReceipt.recordId, deriveStableId("conference", "CONF-CLI-2"));
+
+  // conference-list-by-work — no lease, byte-identical across invocations, cancelled
+  // conference excluded (list filters tombstone only, so the cancelled-but-not-tombstoned
+  // record is still present); assert deterministic bytes and projectId-then-id ordering.
+  const listConfA = (await invokeCli(["conference-list-by-work", "--workspace", ws, "--work-id", fx.workId])).output;
+  const listConfB = (await invokeCli(["conference-list-by-work", "--workspace", ws, "--work-id", fx.workId])).output;
+  assert.equal(listConfA, listConfB, "conference-list-by-work is byte-identical across invocations");
+  const conferences = JSON.parse(listConfA);
+  assert.deepEqual(conferences.map((entry) => entry.id), [...conferences.map((entry) => entry.id)]
+    .sort((left, right) => compareCanonicalText(left, right)));
+
+  // gate-create with a work anchor, then a second workspace-level gate ("-").
+  const gateReceipt = assertCanonicalJson((await invokeCli(["gate-create", "--workspace", ws, "--expected-version", "7",
+    "--at", instant(8), "--external-key", "GATE-CLI", "--project-id", fx.projectId, "--work-id", fx.workId,
+    "--title", "Decision gate", "--outcome-class", "role_decision"])).output);
+  assert.equal(gateReceipt.version, 8);
+  assert.equal(gateReceipt.recordId, deriveStableId("gate", "GATE-CLI"));
+  await invokeCli(["gate-create", "--workspace", ws, "--expected-version", "8", "--at", instant(9),
+    "--external-key", "GATE-CLI-2", "--project-id", fx.projectId, "--work-id", fx.workId,
+    "--title", "Second gate", "--outcome-class", "recommendation"]);
+
+  // gate-transition pending -> satisfied.
+  const transitionReceipt = assertCanonicalJson((await invokeCli(["gate-transition", "--workspace", ws,
+    "--expected-version", "9", "--at", instant(10), "--id", deriveStableId("gate", "GATE-CLI"), "--status", "satisfied"])).output);
+  assert.equal(transitionReceipt.version, 10);
+  assert.equal(transitionReceipt.recordId, deriveStableId("gate", "GATE-CLI"));
+
+  // gate-list — byte-identical across invocations, sorted by projectId then id.
+  const listGateA = (await invokeCli(["gate-list", "--workspace", ws, "--work-id", fx.workId])).output;
+  const listGateB = (await invokeCli(["gate-list", "--workspace", ws, "--work-id", fx.workId])).output;
+  assert.equal(listGateA, listGateB, "gate-list is byte-identical across invocations");
+  const gates = JSON.parse(listGateA);
+  assert.equal(gates.length, 2);
+  assert.deepEqual(gates.map((entry) => entry.id), [...gates.map((entry) => entry.id)]
+    .sort((left, right) => compareCanonicalText(left, right)));
+
+  // gate-delete (GAP-10) tombstones the gate; it then drops out of gate-list.
+  const deleteReceipt = assertCanonicalJson((await invokeCli(["gate-delete", "--workspace", ws, "--expected-version", "10",
+    "--at", instant(11), "--id", deriveStableId("gate", "GATE-CLI")])).output);
+  assert.equal(deleteReceipt.version, 11);
+  assert.equal(deleteReceipt.recordId, deriveStableId("gate", "GATE-CLI"));
+  const gatesAfterDelete = JSON.parse((await invokeCli(["gate-list", "--workspace", ws, "--work-id", fx.workId])).output);
+  assert.deepEqual(gatesAfterDelete.map((entry) => entry.id), [deriveStableId("gate", "GATE-CLI-2")]);
+});
+
+test("WSD-2: every mutating verb fails closed on stale CAS, malformed enums pass through to the engine, and contention reports WORKSPACE_LOCKED", async (context) => {
+  const fx = await cliSeededFixture(context);
+  const ws = fx.ws;
+
+  // CAS discipline: conference-open twice with the same expected-version. The second
+  // materialize sees version 3, not 2, and fails before the reducer runs.
+  await invokeCli(["conference-open", "--workspace", ws, "--expected-version", "2", "--at", instant(3),
+    "--external-key", "CONF-CAS", "--project-id", fx.projectId, "--type", "architecture", "--title", "CAS",
+    "--work-ids", fx.workId, "--desired-outcome", "prove CAS", "--participant-ids", "-"]);
+  const casReplay = await invokeCli(["conference-open", "--workspace", ws, "--expected-version", "2", "--at", instant(4),
+    "--external-key", "CONF-CAS-B", "--project-id", fx.projectId, "--type", "architecture", "--title", "CAS again",
+    "--work-ids", fx.workId, "--desired-outcome", "prove CAS", "--participant-ids", "-"]);
+  assert.equal(casReplay.ok, false);
+  assert.equal(casReplay.reasonCode, "WORKSPACE_CAS_MISMATCH");
+
+  // Fail-closed enum passthrough: a bogus --type surfaces the engine's verbatim code.
+  const badType = await invokeCli(["conference-open", "--workspace", ws, "--expected-version", "3", "--at", instant(5),
+    "--external-key", "CONF-BAD", "--project-id", fx.projectId, "--type", "not-a-type", "--title", "Bad",
+    "--work-ids", fx.workId, "--desired-outcome", "fail closed", "--participant-ids", "-"]);
+  assert.equal(badType.ok, false);
+  assert.equal(badType.reasonCode, "CONFERENCE_SCHEMA_INVALID");
+
+  const badGate = await invokeCli(["gate-create", "--workspace", ws, "--expected-version", "3", "--at", instant(6),
+    "--external-key", "GATE-BAD", "--project-id", fx.projectId, "--work-id", fx.workId, "--title", "Bad gate",
+    "--outcome-class", "not-a-class"]);
+  assert.equal(badGate.ok, false);
+  assert.equal(badGate.reasonCode, "GATE_SCHEMA_INVALID");
+
+  // Lease contention: hold the lease out of band, then a mutating verb cannot acquire it.
+  const held = await acquireWorkspaceLease(ws, { now: instant(7) });
+  context.after(() => held.release().catch(() => undefined));
+  const contended = await invokeCli(["gate-create", "--workspace", ws, "--expected-version", "3", "--at", instant(8),
+    "--external-key", "GATE-LOCKED", "--project-id", fx.projectId, "--work-id", fx.workId, "--title", "Locked",
+    "--outcome-class", "role_decision"]);
+  assert.equal(contended.ok, false);
+  assert.equal(contended.reasonCode, "WORKSPACE_LOCKED");
 });

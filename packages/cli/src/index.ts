@@ -4,6 +4,15 @@ import {
   acquireWorkspaceLease,
   breakWorkspaceLease,
   inspectWorkspaceLease,
+  openConferenceInWorkspace,
+  appendConferencePositionInWorkspace,
+  closeConferenceInWorkspace,
+  cancelConferenceInWorkspace,
+  listConferencesByWorkItem,
+  createGateInWorkspace,
+  transitionGateInWorkspace,
+  deleteGateInWorkspace,
+  listGatesByWorkItem,
   applyArtifactArchive,
   artifactArchiveDryRun,
   artifactCompactDryRun,
@@ -78,6 +87,9 @@ import {
   publicAosRequirementsValidReason,
 } from "../../core/src/index.js";
 import type {
+  ConferenceRequest,
+  ConferenceMinutes,
+  GateRecord,
   CodexAdapterHostContext,
   CodexAdapterInstallationFileIdentity,
   ClaudeAdapterHostContext,
@@ -322,6 +334,22 @@ function writeState(io: CliIo, state: Awaited<ReturnType<typeof validateWorkspac
   }));
 }
 
+// WSD-2: sibling receipt for the conference/gate event-log mutation verbs. It is
+// deliberately NOT writeState: those verbs mutate extension collections, not the
+// project/work counts writeState projects (whose shape existing tests pin), so the
+// receipt carries the mutated extension record's id as recordId instead. Every
+// mutation flows through withLease + the engine's expectedVersion CAS, so version
+// and headEventHash here are the post-append head.
+function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materializeWorkspace>>, recordId: string): void {
+  io.write(canonicalJson({
+    reasonCode: "WORKSPACE_COMMAND_COMPLETED",
+    workspaceId: state.metadata.workspaceId,
+    version: state.version,
+    headEventHash: state.headEventHash,
+    recordId,
+  }));
+}
+
 // WSB-3: the declarative command catalog — the machine-readable source of truth
 // for every dispatched verb and its flags, emitted by the `commands` discovery
 // verb. New verbs MUST ship a catalog entry (SDC-1); the p3-cli-catalog parity
@@ -355,12 +383,21 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "compatibility-plan", availability: "programmatic-only", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "compatibility-unavailable", availability: "cli", mutates: false, flags: [{ name: "surface", required: true, valueKind: "string" }] },
   { name: "compatibility-validate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
+  { name: "conference-append-position", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "actor-id", required: true, valueKind: "string" }, { name: "position", required: true, valueKind: "string" }, { name: "risks", required: true, valueKind: "list" }, { name: "recommendations", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }] },
+  { name: "conference-cancel", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }] },
+  { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }] },
+  { name: "conference-list-by-work", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
+  { name: "conference-open", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "type", required: true, valueKind: "string" }, { name: "title", required: true, valueKind: "string" }, { name: "work-ids", required: true, valueKind: "list" }, { name: "desired-outcome", required: true, valueKind: "string" }, { name: "participant-ids", required: true, valueKind: "list" }] },
   { name: "context-route", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "profile-receipt", required: true, valueKind: "string" }, { name: "authority", required: true, valueKind: "string" }] },
   { name: "context-validate", availability: "cli", mutates: false, flags: [{ name: "result", required: true, valueKind: "string" }] },
   { name: "exchange-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "output", required: true, valueKind: "string" }] },
   { name: "exchange-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "exchange-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "export", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "gate-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "title", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }] },
+  { name: "gate-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
+  { name: "gate-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
+  { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }] },
   { name: "init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "segment-events", required: false, valueKind: "integer" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }] },
   { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
@@ -1084,6 +1121,146 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       kind: "work",
       record: workSummary(record),
     }));
+    return;
+  }
+  // WSD-2: governed conference/gate verbs. Every mutating verb wraps its WSD-1
+  // engine call in withLease and, per SDC-1/SDC-2, appends a workspace event through
+  // the shared payload builder; expected-version carries the headSentinel and
+  // resolves under the held lease exactly as the project/work verbs do. Enum-valued
+  // flags (type/outcome-class/status) are passed through uncast so the engine's
+  // schema validators fail closed with their verbatim reason code (e.g.
+  // CONFERENCE_SCHEMA_INVALID / GATE_SCHEMA_INVALID). The two list verbs take no
+  // lease and read the materialized head, emitting the utf8-byte-ordered record array.
+  if (command === "conference-open") {
+    const values = parseArguments(rest, [...shared, "external-key", "project-id", "type", "title", "work-ids", "desired-outcome", "participant-ids"]);
+    required(values, [...shared, "external-key", "project-id", "type", "title", "work-ids", "desired-outcome", "participant-ids"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => openConferenceInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      externalKey: values["external-key"] ?? "",
+      projectId: values["project-id"] ?? "",
+      type: values.type as ConferenceRequest["type"],
+      title: values.title ?? "",
+      linkedWorkIds: listValue(values["work-ids"]),
+      desiredOutcome: values["desired-outcome"] ?? "",
+      participantIds: listValue(values["participant-ids"]),
+    }));
+    writeExtensionState(io, state, deriveStableId("conference", canonicalExternalKey(values["external-key"] ?? "")));
+    return;
+  }
+  if (command === "conference-append-position") {
+    const values = parseArguments(rest, [...shared, "conference-id", "external-key", "actor-id", "position", "risks", "recommendations", "evidence-ids"]);
+    required(values, [...shared, "conference-id", "external-key", "actor-id", "position", "risks", "recommendations", "evidence-ids"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => appendConferencePositionInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      conferenceId: values["conference-id"] ?? "",
+      externalKey: values["external-key"] ?? "",
+      actorId: values["actor-id"] ?? "",
+      position: values.position ?? "",
+      risks: listValue(values.risks),
+      recommendations: listValue(values.recommendations),
+      evidenceIds: listValue(values["evidence-ids"]),
+    }));
+    writeExtensionState(io, state, deriveStableId("position", canonicalExternalKey(values["external-key"] ?? "")));
+    return;
+  }
+  if (command === "conference-close") {
+    // Core-flag surface only: WSD-3 (Stage 5) owns the --distill/--accountable-owner-id
+    // /--stale-days/--evidence-ids knowledge-wiring flags and adds them to this allowlist.
+    const values = parseArguments(rest, [...shared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues"]);
+    required(values, [...shared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => closeConferenceInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      conferenceId: values["conference-id"] ?? "",
+      minutesExternalKey: values["minutes-external-key"] ?? "",
+      summary: values.summary ?? "",
+      outcomeClass: values["outcome-class"] as ConferenceMinutes["outcomeClass"],
+      decisions: listValue(values.decisions),
+      unresolvedIssues: listValue(values["unresolved-issues"]),
+    }));
+    writeExtensionState(io, state, deriveStableId("minutes", canonicalExternalKey(values["minutes-external-key"] ?? "")));
+    return;
+  }
+  if (command === "conference-cancel") {
+    const values = parseArguments(rest, [...shared, "conference-id"]);
+    required(values, [...shared, "conference-id"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => cancelConferenceInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      conferenceId: values["conference-id"] ?? "",
+    }));
+    writeExtensionState(io, state, values["conference-id"] ?? "");
+    return;
+  }
+  if (command === "conference-list-by-work") {
+    const values = parseArguments(rest, ["workspace", "work-id"]);
+    required(values, ["workspace", "work-id"]);
+    const state = await materializeWorkspace(values.workspace ?? "");
+    io.write(canonicalJson(listConferencesByWorkItem(values["work-id"] ?? "", state.conferences)));
+    return;
+  }
+  if (command === "gate-create") {
+    const values = parseArguments(rest, [...shared, "external-key", "project-id", "work-id", "title", "outcome-class"]);
+    required(values, [...shared, "external-key", "project-id", "work-id", "title", "outcome-class"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => createGateInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      externalKey: values["external-key"] ?? "",
+      projectId: values["project-id"] ?? "",
+      workId: nullableValue(values["work-id"]),
+      title: values.title ?? "",
+      outcomeClass: values["outcome-class"] as GateRecord["outcomeClass"],
+    }));
+    writeExtensionState(io, state, deriveStableId("gate", canonicalExternalKey(values["external-key"] ?? "")));
+    return;
+  }
+  if (command === "gate-transition") {
+    const values = parseArguments(rest, [...shared, "id", "status"]);
+    required(values, [...shared, "id", "status"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => transitionGateInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      id: values.id ?? "",
+      status: values.status as GateRecord["status"],
+    }));
+    writeExtensionState(io, state, values.id ?? "");
+    return;
+  }
+  if (command === "gate-delete") {
+    // GAP-10: the documented deadlock escape — the only route to tombstone a pending
+    // gate whose conference was cancelled, so a work item wedged by WSD-4 enforcement
+    // can reach done. Deletion is a revision-advancing tombstone, never a hard delete.
+    const values = parseArguments(rest, [...shared, "id"]);
+    required(values, [...shared, "id"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => deleteGateInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      id: values.id ?? "",
+    }));
+    writeExtensionState(io, state, values.id ?? "");
+    return;
+  }
+  if (command === "gate-list") {
+    const values = parseArguments(rest, ["workspace", "work-id"]);
+    required(values, ["workspace", "work-id"]);
+    const state = await materializeWorkspace(values.workspace ?? "");
+    io.write(canonicalJson(listGatesByWorkItem(values["work-id"] ?? "", state.gates)));
     return;
   }
   fail("CLI_COMMAND_UNKNOWN", command);
