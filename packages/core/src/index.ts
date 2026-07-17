@@ -55,6 +55,8 @@ export {
   acquireWorkspaceLease,
   applyWorkspaceMigration,
   assertSupportedWorkspaceFilesystem,
+  breakWorkspaceLease,
+  inspectWorkspaceLease,
   assertWorkspaceRecordCount,
   assertWorkspaceRelativePath,
   createProject,

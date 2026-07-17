@@ -25,6 +25,8 @@ import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
   WorkspaceError,
   acquireWorkspaceLease,
+  breakWorkspaceLease,
+  inspectWorkspaceLease,
   applyWorkspaceMigration,
   assertSupportedWorkspaceFilesystem,
   assertWorkspaceRecordCount,
@@ -286,6 +288,38 @@ test("project CRUD and Initiative-Epic-Story-Subtask operations materialize dete
     } finally {
       await lease.release();
     }
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("WSA-4: lease-inspect reports state and lease-break clears the pid-reuse wedge under token+expiry gates", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    // no lease yet
+    assert.deepEqual(await inspectWorkspaceLease(fixture.workspace, { now: instant(5) }), {
+      schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false,
+    });
+    const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(10) });
+    const inspected = await inspectWorkspaceLease(fixture.workspace, { now: instant(20) });
+    assert.equal(inspected.held, true);
+    assert.equal(inspected.token, lease.token);
+    assert.equal(inspected.expired, false);
+    // an unexpired lease cannot be broken, even with the right token
+    await expectReasonAsync("WORKSPACE_LOCKED", () => breakWorkspaceLease(fixture.workspace, { now: instant(20), ownerToken: lease.token }));
+    // expired now (ttl 30s from instant(10) => expires instant(40)); a wrong token still fails
+    assert.equal((await inspectWorkspaceLease(fixture.workspace, { now: instant(50) })).expired, true);
+    await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => breakWorkspaceLease(fixture.workspace, { now: instant(50), ownerToken: "0".repeat(48) }));
+    // correct token + expired => broken, bypassing the processAlive wedge (this test pid is alive)
+    const broken = await breakWorkspaceLease(fixture.workspace, { now: instant(50), ownerToken: lease.token });
+    assert.equal(broken.reasonCode, "WORKSPACE_LEASE_BROKEN");
+    assert.equal(broken.token, lease.token);
+    // the workspace is now acquirable again
+    const fresh = await acquireWorkspaceLease(fixture.workspace, { now: instant(51) });
+    await fresh.release();
+    assert.deepEqual(await inspectWorkspaceLease(fixture.workspace, { now: instant(52) }), {
+      schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false,
+    });
   } finally {
     await fixture.close();
   }

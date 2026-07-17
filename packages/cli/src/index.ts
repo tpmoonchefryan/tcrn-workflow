@@ -2,6 +2,8 @@
 
 import {
   acquireWorkspaceLease,
+  breakWorkspaceLease,
+  inspectWorkspaceLease,
   applyArtifactArchive,
   artifactArchiveDryRun,
   artifactCompactDryRun,
@@ -321,6 +323,8 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "knowledge-rebase", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "retire-invalid", required: false, valueKind: "boolean" }] },
   { name: "knowledge-snippet", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "knowledge-validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "lease-break", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "owner-token", required: true, valueKind: "string" }] },
+  { name: "lease-inspect", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "migration-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "target-version", required: true, valueKind: "string" }, { name: "dry-run", required: true, valueKind: "boolean" }] },
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
   { name: "persona-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
@@ -590,6 +594,18 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const values = parseArguments(rest, ["workspace"]);
     required(values, ["workspace"]);
     writeState(io, await materializeWorkspace(values.workspace ?? ""));
+    return;
+  }
+  if (command === "lease-inspect") {
+    const values = parseArguments(rest, ["workspace", "at"]);
+    required(values, ["workspace", "at"]);
+    io.write(canonicalJson(await inspectWorkspaceLease(values.workspace ?? "", { now: values.at ?? "" })));
+    return;
+  }
+  if (command === "lease-break") {
+    const values = parseArguments(rest, ["workspace", "at", "owner-token"]);
+    required(values, ["workspace", "at", "owner-token"]);
+    io.write(canonicalJson(await breakWorkspaceLease(values.workspace ?? "", { now: values.at ?? "", ownerToken: values["owner-token"] ?? "" })));
     return;
   }
   if (command === "export") {
