@@ -397,7 +397,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "gate-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "title", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }] },
   { name: "gate-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "gate-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
-  { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }] },
+  { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "minutes-locator", required: false, valueKind: "string" }] },
   { name: "init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "segment-events", required: false, valueKind: "integer" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }] },
   { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
@@ -1227,7 +1227,10 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "gate-transition") {
-    const values = parseArguments(rest, [...shared, "id", "status"]);
+    // WSD-4: --minutes-locator is required by the engine only when --status is
+    // satisfied (a conference-minutes:<suffix> id resolving to anchoring minutes);
+    // it is an optional flag here and the engine fails closed on absence/mismatch.
+    const values = parseArguments(rest, [...shared, "id", "status", "minutes-locator"]);
     required(values, [...shared, "id", "status"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
@@ -1236,6 +1239,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       occurredAt: at,
       id: values.id ?? "",
       status: values.status as GateRecord["status"],
+      minutesLocator: values["minutes-locator"],
     }));
     writeExtensionState(io, state, values.id ?? "");
     return;

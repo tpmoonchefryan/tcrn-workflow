@@ -19,6 +19,7 @@ import {
   PROTOCOL_LIMITS,
   ProtocolError,
   assertCanonicalJson,
+  assertProtocolId,
   assertStrictInstant,
   assertWorkTransition,
   canonicalExternalKey,
@@ -684,6 +685,78 @@ function requireOpenConference(conferences: Map<string, ConferenceRequest>, conf
   return conference;
 }
 
+// WSD-4: the gate lifecycle graph. Off-by-default enforcement: a gate carries no
+// meaning until created. pending<->blocked flip freely; pending/blocked reach
+// satisfied only with resolving conference-minutes evidence; satisfied is
+// terminal (the only exit is a gate.deleted tombstone, which is a separate
+// operation, not a status move). The same map gates the verb and the reducer.
+const GATE_TRANSITIONS: Record<GateRecord["status"], readonly GateRecord["status"][]> = Object.freeze({
+  pending: ["blocked", "satisfied"],
+  blocked: ["pending", "satisfied"],
+  satisfied: [],
+});
+// WSD-4: strong satisfaction binding. A gate becomes satisfied only when its
+// evidence locator resolves to stored, non-tombstoned conference minutes whose
+// conference anchors the gate's work item; the resolving locator is persisted in
+// the gate's own extensions map (a required:false entry that needs no registry
+// row), so the reducer re-resolves the identical evidence a hand-tampered log
+// cannot forge.
+const GATE_EVIDENCE_KEY = "gate-evidence:conference-minutes";
+const CONFERENCE_MINUTES_LOCATOR_NAMESPACE = "conference-minutes";
+
+function resolveGateEvidence(locator: string, gate: GateRecord, minutes: readonly ConferenceMinutes[], conferences: readonly ConferenceRequest[]): boolean {
+  const separator = locator.indexOf(":");
+  if (separator < 0 || locator.slice(0, separator) !== CONFERENCE_MINUTES_LOCATOR_NAMESPACE) {
+    return false;
+  }
+  try {
+    assertProtocolId(locator);
+  } catch {
+    return false;
+  }
+  const minutesId = `minutes:${locator.slice(separator + 1)}`;
+  const record = minutes.find((entry) => !entry.tombstone && entry.id === minutesId);
+  if (!record) {
+    return false;
+  }
+  if (gate.workId === null) {
+    return true;
+  }
+  const conference = conferences.find((entry) => entry.id === record.conferenceId);
+  return conference !== undefined && conference.linkedWorkIds.includes(gate.workId);
+}
+
+function gateEvidenceExtensions(base: Readonly<Record<string, unknown>>, locator: string): Readonly<Record<string, unknown>> {
+  return { ...base, [GATE_EVIDENCE_KEY]: { required: false, value: locator } };
+}
+
+function readGateEvidenceLocator(extensions: Readonly<Record<string, unknown>>): string | undefined {
+  const entry = extensions[GATE_EVIDENCE_KEY];
+  if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+    return undefined;
+  }
+  const value = (entry as Readonly<Record<string, unknown>>).value;
+  return typeof value === "string" ? value : undefined;
+}
+
+// WSD-4: the designated set is exactly "a transition whose target is done".
+// cancelled/blocked/ready targets are exempt so cleanup can never wedge. A
+// non-tombstoned pending gate anchored to the work item blocks the move. The
+// identical predicate runs on the verb (WORKSPACE_GATE_PENDING) and in replay
+// (WORKSPACE_EVENT_CORRUPT), so a hand-tampered log cannot bypass the live check.
+function assertGateClearance(gates: Iterable<GateRecord>, workId: string, targetStatus: string, reasonCode: WorkspaceReasonCode): void {
+  if (targetStatus !== "done") {
+    return;
+  }
+  const blocking = [...gates]
+    .filter((gate) => !gate.tombstone && gate.status === "pending" && gate.workId === workId)
+    .map((gate) => gate.id)
+    .sort(compareCanonicalText);
+  if (blocking.length > 0) {
+    fail(reasonCode, `work ${workId} is blocked by pending gate(s) ${blocking.join(",")}`);
+  }
+}
+
 function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]): WorkspaceState {
   recordFullMaterialize();
   const projects = new Map<string, ProjectRecord>();
@@ -743,6 +816,10 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
           }
           throw error;
         }
+        // WSD-4 replay parity: the gate precondition the verb enforces is
+        // re-checked against the gates materialized so far, so a hand-crafted log
+        // that drives a work item to done past a pending gate fails closed.
+        assertGateClearance(gates.values(), record.id, record.status, "WORKSPACE_EVENT_CORRUPT");
       }
       work.set(record.id, record);
       validateWorkClosure(work, projects, record);
@@ -832,10 +909,31 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         (payload.operation === "gate.updated" && record.tombstone) || (payload.operation === "gate.deleted" && !record.tombstone)) {
         fail("WORKSPACE_EVENT_CORRUPT", `invalid gate mutation ${record.id}`);
       }
+      // WSD-4: a gate.updated must walk the lifecycle graph, and a move to
+      // satisfied must carry evidence that re-resolves here (parity with the
+      // verb) and whose only extensions delta is the persisted locator entry.
+      // gate.deleted keeps mutating tombstone alone; every other move pins
+      // extensions, so a non-satisfied transition cannot smuggle in extensions.
+      let gateMutableFields: readonly string[] = payload.operation === "gate.updated" ? ["status", "revision", "updatedAt"] : ["tombstone", "revision", "updatedAt"];
+      if (payload.operation === "gate.updated") {
+        if (!GATE_TRANSITIONS[current.status].includes(record.status)) {
+          fail("WORKSPACE_EVENT_CORRUPT", `invalid gate transition ${record.id}`);
+        }
+        if (record.status === "satisfied") {
+          const locator = readGateEvidenceLocator(record.extensions);
+          if (locator === undefined || !resolveGateEvidence(locator, current, [...conferenceMinutes.values()], [...conferences.values()])) {
+            fail("WORKSPACE_EVENT_CORRUPT", `gate ${record.id} evidence does not resolve`);
+          }
+          if (canonicalJson(record.extensions) !== canonicalJson(gateEvidenceExtensions(current.extensions, locator))) {
+            fail("WORKSPACE_EVENT_CORRUPT", `gate ${record.id} evidence extensions are not exact`);
+          }
+          gateMutableFields = ["status", "revision", "updatedAt", "extensions"];
+        }
+      }
       assertPinnedExtensionFields(
         current as unknown as JsonValue,
         record as unknown as JsonValue,
-        payload.operation === "gate.updated" ? ["status", "revision", "updatedAt"] : ["tombstone", "revision", "updatedAt"],
+        gateMutableFields,
         `gate ${record.id}`,
       );
       recordExtensionClosureValidation(2);
@@ -1827,6 +1925,10 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
   return appendEvent(workspaceRoot, lease, (state) => {
     const current = workById(state, input.id);
     assertWorkTransition(current.status, input.status);
+    // WSD-4: a non-tombstoned pending gate anchored to this work item blocks a
+    // transition whose target is done (the designated set); the reducer replays
+    // the identical predicate as WORKSPACE_EVENT_CORRUPT.
+    assertGateClearance(state.gates, current.id, input.status, "WORKSPACE_GATE_PENDING");
     const record: WorkRecord = { ...current, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
     return { payload: { operation: "work.updated", record }, projects: state.projects, work };
@@ -2052,10 +2154,27 @@ export async function createGateInWorkspace(workspaceRoot: string, lease: Worksp
 export async function transitionGateInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly id: string;
   readonly status: GateRecord["status"];
+  readonly minutesLocator?: string;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
     const current = gateById(state, input.id);
-    const record = validateGateRecord({ ...current, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt });
+    // WSD-4: walk the gate lifecycle graph (satisfied is terminal), and require a
+    // resolving conference-minutes locator to reach satisfied — persisting it in
+    // the gate's extensions so replay re-resolves the identical evidence.
+    if (!GATE_TRANSITIONS[current.status].includes(input.status)) {
+      fail("WORKSPACE_INPUT_INVALID", `gate ${current.id} cannot transition ${current.status} to ${input.status}`);
+    }
+    let extensions = current.extensions;
+    if (input.status === "satisfied") {
+      const locator = input.minutesLocator;
+      if (locator === undefined || !resolveGateEvidence(locator, current, state.conferenceMinutes, state.conferences)) {
+        fail("WORKSPACE_GATE_EVIDENCE_UNRESOLVED", `gate ${current.id} evidence ${String(locator)} does not resolve to anchoring conference minutes`);
+      }
+      extensions = gateEvidenceExtensions(current.extensions, locator);
+    } else if (input.minutesLocator !== undefined) {
+      fail("WORKSPACE_INPUT_INVALID", `gate ${current.id} minutes locator applies only to a satisfied transition`);
+    }
+    const record = validateGateRecord({ ...current, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt, extensions });
     return {
       payload: buildEventPayload("gate.updated", record as unknown as JsonValue),
       projects: state.projects,
