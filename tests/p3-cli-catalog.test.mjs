@@ -95,6 +95,22 @@ test("WSB-4: exactly the nullable flags carry the '-' sentinel, and only knowled
   assert.deepEqual(aliasFlags, { "knowledge-create": ["last-verified", "project-id"] });
 });
 
+test("WSB-7: exactly the six workspace-event mutation verbs carry headSentinel, only on expected-version", () => {
+  const sentinelVerbs = [];
+  for (const entry of COMMAND_CATALOG) {
+    for (const flag of entry.flags) {
+      if (flag.headSentinel !== undefined) {
+        assert.equal(flag.headSentinel, true, `${entry.name}.${flag.name} headSentinel must be true`);
+        assert.equal(flag.name, "expected-version", `${entry.name}.${flag.name} may not carry headSentinel`);
+        sentinelVerbs.push(entry.name);
+      }
+    }
+  }
+  assert.deepEqual([...sentinelVerbs].sort(), [
+    "project-create", "project-delete", "project-update", "work-create", "work-delete", "work-transition",
+  ]);
+});
+
 test("WSB-5: exactly the authority-gated compatibility verbs are programmatic-only; every other verb is cli", () => {
   const bySurface = {};
   for (const entry of COMMAND_CATALOG) {

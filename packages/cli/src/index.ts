@@ -169,6 +169,22 @@ function expectedVersion(values: Readonly<Record<string, string>>): number {
   return version;
 }
 
+// WSB-7: opt-in lease-scoped expected-version derivation. The literal "head"
+// resolves, under the already-held workspace lease, to the current materialized
+// version. Lease acquisition plus the mutation claim serialize writers, so this
+// single in-lease read cannot race the append that follows it — derivation is
+// exact and needs no retry loop. Valid ONLY on the six workspace-event mutation
+// verbs (project-*/work-*); knowledge-marker mutations keep numeric-only
+// expectedVersion() and so reject "head" with CLI_ARGUMENT_MALFORMED by
+// construction. head forfeits intent-level lost-update detection (see WSB-6),
+// so numeric stays the documented default; cross-writer CAS is unweakened.
+async function resolveExpectedVersion(values: Readonly<Record<string, string>>, workspace: string): Promise<number> {
+  if (values["expected-version"] === "head") {
+    return (await materializeWorkspace(workspace)).version;
+  }
+  return expectedVersion(values);
+}
+
 function boundedInteger(values: Readonly<Record<string, string>>, name: string): number | undefined {
   const raw = values[name];
   if (raw === undefined) {
@@ -343,18 +359,18 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "profile-generate", availability: "cli", mutates: false, flags: [{ name: "mode", required: true, valueKind: "string" }] },
   { name: "profile-resolve", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }] },
   { name: "profile-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
-  { name: "project-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }] },
-  { name: "project-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
+  { name: "project-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }] },
+  { name: "project-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "project-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
-  { name: "project-update", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }] },
+  { name: "project-update", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }] },
   { name: "recover", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
-  { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-" }, { name: "status", required: false, valueKind: "string" }] },
-  { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
+  { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-" }, { name: "status", required: false, valueKind: "string" }] },
+  { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "work-show", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }] },
-  { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }] },
+  { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }] },
 ] as const);
 
 export async function runCli(arguments_: readonly string[], io: CliIo): Promise<void> {
@@ -844,8 +860,8 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, [...shared, "external-key", "name"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
-    const state = await withLease(workspace, at, (lease) => createProject(workspace, lease, {
-      expectedVersion: expectedVersion(values), occurredAt: at, externalKey: values["external-key"] ?? "", name: values.name ?? "",
+    const state = await withLease(workspace, at, async (lease) => createProject(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, externalKey: values["external-key"] ?? "", name: values.name ?? "",
     }));
     const id = deriveStableId("project", canonicalExternalKey(values["external-key"] ?? ""));
     writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === id)!));
@@ -856,8 +872,8 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, [...shared, "id", "name"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
-    const state = await withLease(workspace, at, (lease) => updateProject(workspace, lease, {
-      expectedVersion: expectedVersion(values), occurredAt: at, id: values.id ?? "", name: values.name ?? "",
+    const state = await withLease(workspace, at, async (lease) => updateProject(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "", name: values.name ?? "",
     }));
     writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === (values.id ?? ""))!));
     return;
@@ -867,8 +883,8 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, [...shared, "id"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
-    const state = await withLease(workspace, at, (lease) => deleteProject(workspace, lease, {
-      expectedVersion: expectedVersion(values), occurredAt: at, id: values.id ?? "",
+    const state = await withLease(workspace, at, async (lease) => deleteProject(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "",
     }));
     writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === (values.id ?? ""))!));
     return;
@@ -878,8 +894,8 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, [...shared, "project-id", "external-key", "kind"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
-    const state = await withLease(workspace, at, (lease) => createWork(workspace, lease, {
-      expectedVersion: expectedVersion(values),
+    const state = await withLease(workspace, at, async (lease) => createWork(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
       projectId: values["project-id"] ?? "",
       externalKey: values["external-key"] ?? "",
@@ -896,8 +912,8 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, [...shared, "id", "status"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
-    const state = await withLease(workspace, at, (lease) => transitionWork(workspace, lease, {
-      expectedVersion: expectedVersion(values), occurredAt: at, id: values.id ?? "", status: values.status as WorkStatus,
+    const state = await withLease(workspace, at, async (lease) => transitionWork(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "", status: values.status as WorkStatus,
     }));
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
     return;
@@ -907,8 +923,8 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, [...shared, "id"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
-    const state = await withLease(workspace, at, (lease) => deleteWork(workspace, lease, {
-      expectedVersion: expectedVersion(values), occurredAt: at, id: values.id ?? "",
+    const state = await withLease(workspace, at, async (lease) => deleteWork(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "",
     }));
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
     return;

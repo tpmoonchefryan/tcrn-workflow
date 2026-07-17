@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "2e7794e3b058d83d55a6b003ecff4c86f66630dea076a1e62587636293ec1c69",
+  "basisDigest": "51dfccc9f4f72cade230fbe3aeb98b70148d5c9e006d6439a8554609ff651ee3",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -86,8 +86,8 @@
     },
     {
       "path": "schemas/cli-catalog-v1.schema.json",
-      "size": 2223,
-      "sha256": "39c65c6278a26aaba8feea17be84afffe2b7333c74a17567e4bb654af184139a"
+      "size": 2308,
+      "sha256": "7d56d12cdbb31bafef78a7149a2cd1aa1f10501b0f0f40b816e3e3ef44e150d5"
     },
     {
       "path": "schemas/compatibility-v1.schema.json",
@@ -196,8 +196,8 @@
     },
     {
       "path": "specs/cli-catalog-v1.md",
-      "size": 2107,
-      "sha256": "f7c1c885e3b622dab2ed59c9119b1d4de6ad9968cbea682be3146ec069671aa3"
+      "size": 2564,
+      "sha256": "8bfe6b1ae9fb968b52215f9bc9f9a8339aeb465e7a55ec8ae848ee2eb968e069"
     },
     {
       "path": "specs/compatibility-v1.md",
@@ -291,8 +291,8 @@
     },
     {
       "path": "verification-map.yaml",
-      "size": 76589,
-      "sha256": "ff25a70203bdd8ad16b6dc67a816fbb01e7867902569713d113b2841e22d0ec4"
+      "size": 77974,
+      "sha256": "00d8c5b3d8c0b9e8bfc6633bd26be8259ce6466130f4455b8338beb598a3d078"
     }
   ],
   "roleVerdictSlots": {

@@ -397,6 +397,50 @@ test("WSB-4: work-create --parent-id '-' yields a null parent byte-identical to 
   }
 });
 
+test("WSB-7: --expected-version head derives the current version under the lease; numeric CAS still fails closed", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const run = async (args) => {
+      let output = "";
+      await runCli(args, { write: (value) => { output += value; } });
+      return JSON.parse(output);
+    };
+    const ws = ["--workspace", fixture.workspace];
+    // (a) head on a workspace at version 0 commits exactly version 1 with the correct record id.
+    const projectCreate = await run(["project-create", ...ws, "--expected-version", "head", "--at", instant(1), "--external-key", "PROJECT-B7", "--name", "B7"]);
+    assert.equal(projectCreate.version, 1);
+    assert.equal(projectCreate.record.id, deriveStableId("project", "PROJECT-B7"));
+    const projectId = projectCreate.record.id;
+    // (b) two further sequential head mutations commit versions 2 then 3 with no manual version tracking.
+    const workCreate = await run(["work-create", ...ws, "--expected-version", "head", "--at", instant(2), "--project-id", projectId, "--external-key", "INIT-B7", "--kind", "Initiative"]);
+    assert.equal(workCreate.version, 2);
+    assert.equal(workCreate.record.id, deriveStableId("work", "INIT-B7"));
+    const workId = workCreate.record.id;
+    const transitioned = await run(["work-transition", ...ws, "--expected-version", "head", "--at", instant(3), "--id", workId, "--status", "ready"]);
+    assert.equal(transitioned.version, 3);
+    assert.equal(transitioned.record.status, "ready");
+    // (d) a stale NUMERIC expected-version stays byte-identical to baseline and still fails closed.
+    await expectReasonAsync("WORKSPACE_CAS_MISMATCH", () => runCli(
+      ["project-create", ...ws, "--expected-version", "1", "--at", instant(4), "--external-key", "PROJECT-B7B", "--name", "B7B"],
+      { write: () => {} },
+    ));
+    // (e) near-miss spellings are not the head marker and fail malformed on an in-scope verb.
+    for (const spelling of ["HEAD", "latest"]) {
+      await expectReasonAsync("CLI_ARGUMENT_MALFORMED", () => runCli(
+        ["work-delete", ...ws, "--expected-version", spelling, "--at", instant(5), "--id", workId],
+        { write: () => {} },
+      ));
+    }
+    // (c) head is rejected on out-of-scope knowledge-marker mutations, which keep numeric-only expected-version.
+    await expectReasonAsync("CLI_ARGUMENT_MALFORMED", () => runCli(
+      ["knowledge-promote", ...ws, "--expected-version", "head", "--expected-revision", "1", "--at", instant(6), "--id", "irrelevant", "--state", "promoted"],
+      { write: () => {} },
+    ));
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("WSA-1: every mutation returns state identical to a fresh materialize (single-replay pipeline)", async () => {
   const fixture = await workspaceFixture();
   try {
