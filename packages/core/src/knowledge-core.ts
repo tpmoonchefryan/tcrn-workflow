@@ -559,6 +559,14 @@ function assertPromotableProvenance(metadata: KnowledgeUnitMetadata): void {
   if (!metadata.accountableOwnerId.startsWith("owner:") || metadata.sourceReferences.length === 0 || metadata.linkedEvidenceIds.length === 0) {
     fail("KNOWLEDGE_PROVENANCE_INVALID", `${metadata.id}:source, evidence, and accountable owner are required`);
   }
+  // WSC-6 / OD-18: unconditional promote-time machine checks — a promoted record
+  // must carry at least one retrieval tag, a non-empty snippet, and at least one
+  // backlink (the evidence requirement above already guarantees a backlink). These
+  // are the machine-checkable half of the promotion checklist; the judgment half
+  // (cross-work-item reuse, standalone-within-budget) stays in the skill prose.
+  if (metadata.tags.length === 0 || metadata.snippet.length === 0) {
+    fail("KNOWLEDGE_PROMOTION_INVALID", `${metadata.id}:promotion requires at least one tag and a non-empty snippet`);
+  }
 }
 
 function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, workspace: WorkspaceState, deferLinks = false): KnowledgeUnitMetadata {

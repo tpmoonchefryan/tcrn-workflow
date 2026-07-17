@@ -82,7 +82,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "8b5c26a82278673d20a70e6039338d1f4aee243de430e0b8b6757ab581f9427e",
+      "fixtureDigest": "22cc948369c7dafc4c0d27a3c81ba23a9e8068da27749be718bfe1a68d79e8f7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -156,7 +156,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "cd0084eae2670d837c7a346dcbb60e0b064b44a73a47d0889230a92bb3c5c0c7",
+      "fixtureDigest": "058ee9043e19fc83a45f2df7de03e390a335c79af914a384ec48cf71aea3677c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -186,7 +186,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "8e21bd5714e631874c6d76c109d37fb15098ab5bb9afe6a3a051d020d2df81cb",
+      "fixtureDigest": "896e9bb1a70de6cff4b0d908b3382a8460692fd20766e6e5141284bf493356e2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -719,7 +719,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "03f76e4e15429b85a84ac1ec41b836c66f56804a20640f2ed05f81514c6ca2ae",
+      "fixtureDigest": "ba43e7f6e44d2af38700044a3d84cd8bdf5d8bb767ab4e539beea2dba79afa29",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -783,7 +783,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "4b2258a708041637088c678c11ca1745ef0ea543f58b811a991bb050abb1c3e8",
+      "fixtureDigest": "e376cd1d3616bee8f5ffabf35a6e31b9c71e84ef9dba07cee26cde8b43b2e4be",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -810,7 +810,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f8e68be4c748e8770091a90e650146f01d98a5cf926cf859fd9d2eb367f6ef4f",
+      "fixtureDigest": "e46ae38e5a245265dcfc2c1cdcb811350923876fed234d255037b6726442fb9e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -837,7 +837,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f8e68be4c748e8770091a90e650146f01d98a5cf926cf859fd9d2eb367f6ef4f",
+      "fixtureDigest": "e46ae38e5a245265dcfc2c1cdcb811350923876fed234d255037b6726442fb9e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -862,7 +862,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "54873411dc90bc76f660d04d7e2f7afd92bee596e3a7157a0a42075117c48ebb",
+      "fixtureDigest": "7f6abc5d9879ffceb9d2f3c9eaeac99ad1a50107869dfe7c904387e638cd2436",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -889,7 +889,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f8e68be4c748e8770091a90e650146f01d98a5cf926cf859fd9d2eb367f6ef4f",
+      "fixtureDigest": "e46ae38e5a245265dcfc2c1cdcb811350923876fed234d255037b6726442fb9e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -916,7 +916,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f8e68be4c748e8770091a90e650146f01d98a5cf926cf859fd9d2eb367f6ef4f",
+      "fixtureDigest": "e46ae38e5a245265dcfc2c1cdcb811350923876fed234d255037b6726442fb9e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -927,6 +927,32 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Reverify/retire lifecycle transitions, the retired-allowance capacity rule, physical file bound, or lifecycle CAS/admission changes"
+      ]
+    },
+    {
+      "id": "P4-KNOWLEDGE-PROMOTION-CHECKS",
+      "phase": "P4",
+      "category": "runtime-capability",
+      "status": "implemented",
+      "subject": "Promotion enforces machine-checkable governance unconditionally: a record can be promoted only with at least one retrieval tag, a nonempty snippet, and (via the provenance evidence requirement) at least one backlink, failing closed KNOWLEDGE_PROMOTION_INVALID otherwise; rejecting a candidate requires none of these gates. The judgment half of the checklist stays in guiding prose.",
+      "command": "pnpm verify:p4:knowledge",
+      "fixturePaths": [
+        "packages/core/src/knowledge-core.ts",
+        "packages/core/spec/knowledge-core-v1.md",
+        "tests/p4-knowledge-core.test.mjs",
+        "scripts/task.mjs"
+      ],
+      "fixtureDigest": "de58bcb9efcb48a814587c21deeedfe24c98b674b99887348305a413a4e5da96",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "evidencePath": "dist/evidence/p4/p4-knowledge.json",
+      "invalidationTriggers": [
+        "Promote-time machine checks (tags, snippet, backlink), the promotion gate set, or reject exemption changes"
       ]
     },
     {
@@ -953,7 +979,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "f9a4305a519f775928c4a64435d1e7ad55a67dd5712c7ecae708de8107fda285",
+      "fixtureDigest": "81fda9ba735d099751d1bcc703b1bca0c47f48dafe3d25f294a2ac00cc409f46",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1017,7 +1043,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "94b45084264d832280076ff55fc366a42f98a3bf0d95ab8bc6625e9d5281e6fc",
+      "fixtureDigest": "2840f909df4e71d3ffdf9e50988b1cd144f34f8727af7fb60b9e1e5d21fc9f42",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1051,7 +1077,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "aedee61f4f4cf634bed774ee170d9ae8c47c1975d62d99d4717296ddf8c7aa3a",
+      "fixtureDigest": "d59bf89630a954639844daaefabac05d7fce122db496d8e205f4d337c49855e3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1086,7 +1112,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "0d96d023766ea521850c1549c5483e14ac2aaa4b5f2b9d443678eeb2f01683b2",
+      "fixtureDigest": "aee84554b9635354ea1199d20bb5bdc3dbe6049e639546770086935b38b666a4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1420,7 +1446,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "31193da0095ef0848808894a1d6fe81de756d495944176e760b6432ccf7014c0",
+      "fixtureDigest": "d313a81afecd977894a55c001db2fc65fb0df12240e28273200f1e984a1902bb",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

@@ -48,14 +48,19 @@ Freshness is evaluated at an explicit strict instant. Missing verification is
 fail closed by excluding stale and unknown records, candidates, rejected or
 retired records, non-default retrieval, and excluded export disposition.
 
-An explicit-current-source record requires a nonempty admitted source-reference
-set, nonempty linked-evidence set, and an `owner:*` accountable-owner reference
-at creation and again at promotion. The owner reference is provenance
-accountability only: it does not claim P5 profile admission or identity
-resolution. Creation always starts in `candidate` promotion state. The only V1 transitions
-are candidate to `promoted` or `rejected`; promoted and rejected states are
-terminal. Candidate bodies require an explicit override on the explicit body
-surface and are never checkpointed.
+Capture is cheap: a candidate is written without full provenance, and array
+fields are canonically sorted server-side. Promotion is the gate. A record can be
+promoted only when it carries a nonempty admitted source-reference set, a nonempty
+linked-evidence set, an `owner:*` accountable-owner reference, at least one
+retrieval tag, and a nonempty snippet — the machine-checkable half of the
+promotion checklist (the judgment half, cross-work-item reuse and
+standalone-within-budget, stays in the guiding skill prose). The owner reference
+is provenance accountability only: it does not claim P5 profile admission or
+identity resolution. Creation always starts in `candidate` promotion state; the
+only V1 transitions are candidate to `promoted` or `rejected`, and promoted and
+rejected states are terminal. Rejecting a candidate requires none of the
+promotion gates. Candidate bodies require an explicit override on the explicit
+body surface and are never checkpointed.
 
 Promotion input is admitted as exactly `promoted|rejected` before the mutation
 claim is acquired. Every non-crash error after claim acquisition releases only
