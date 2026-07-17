@@ -143,6 +143,7 @@ export {
   listKnowledgeMetadata,
   readKnowledgeBody,
   readKnowledgeSnippet,
+  rebaseKnowledgeStore,
   transitionKnowledgePromotion,
   validateKnowledgeStore,
 } from "./knowledge-core.js";

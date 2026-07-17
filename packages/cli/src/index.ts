@@ -26,6 +26,7 @@ import {
   readContextRouteAuthorityReceipt,
   readKnowledgeBody,
   readKnowledgeSnippet,
+  rebaseKnowledgeStore,
   recoverWorkspace,
   restoreArtifactArchive,
   resolveGenericProfile,
@@ -509,6 +510,16 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const values = parseArguments(rest, ["workspace"]);
     required(values, ["workspace"]);
     io.write(canonicalJson(await validateKnowledgeStore(values.workspace ?? "")));
+    return;
+  }
+  if (command === "knowledge-rebase") {
+    const values = parseArguments(rest, ["workspace", "expected-version", "at", "retire-invalid"]);
+    required(values, ["workspace", "expected-version", "at"]);
+    io.write(canonicalJson(await rebaseKnowledgeStore(values.workspace ?? "", {
+      expectedVersion: expectedVersion(values),
+      at: values.at ?? "",
+      retireInvalid: booleanValue(values["retire-invalid"], "retire-invalid"),
+    })));
     return;
   }
   if (command === "knowledge-create") {
