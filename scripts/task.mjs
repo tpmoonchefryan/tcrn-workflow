@@ -1772,9 +1772,45 @@ async function clean() {
   return success("OUTPUTS_CLEANED", result);
 }
 
+// WSG-7: report-only proof-to-product budget measurement. Proof mass = newline
+// count of tests/**/*.mjs plus scripts/**/*.mjs (scripts/policy JSON is excluded
+// by the .mjs filter); product mass = newline count of packages/*/src/**/*.ts.
+// Deliberately crude (blanks and comments included) so the number is deterministic
+// and not open to reformatting debate. This is a MEASUREMENT, not a claim: it is
+// intentionally absent from commandContracts and the verification map, because the
+// budget rule it implements forbids adding a new gate while the ratio exceeds 1.0.
+async function reportBudget() {
+  const files = await walkFiles();
+  let proofLines = 0;
+  let productLines = 0;
+  for (const absolute of files) {
+    const path = toPosixPath(relative(repositoryRoot, absolute));
+    const isProof = (path.startsWith("tests/") || path.startsWith("scripts/")) && path.endsWith(".mjs");
+    const isProduct = /^packages\/[^/]+\/src\//u.test(path) && path.endsWith(".ts");
+    if (!isProof && !isProduct) {
+      continue;
+    }
+    const content = await readSourceFile(absolute);
+    let newlines = 0;
+    for (const byte of content) {
+      if (byte === 0x0a) {
+        newlines += 1;
+      }
+    }
+    if (isProof) {
+      proofLines += newlines;
+    } else {
+      productLines += newlines;
+    }
+  }
+  const ratio = productLines === 0 ? 0 : Number((proofLines / productLines).toFixed(4));
+  return success("PROOF_BUDGET_REPORT", { proofLines, productLines, ratio });
+}
+
 const handlers = {
   aos: verifyAosRequirements,
   archive,
+  budget: reportBudget,
   build,
   ci: verifyCi,
   clean,
