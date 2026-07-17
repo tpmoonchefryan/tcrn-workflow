@@ -291,6 +291,51 @@ test("project CRUD and Initiative-Epic-Story-Subtask operations materialize dete
   }
 });
 
+test("WSB-1: mutation responses carry the created/mutated record identity", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const run = async (args) => {
+      let output = "";
+      await runCli(args, { write: (value) => { output += value; } });
+      return JSON.parse(output);
+    };
+    const ws = ["--workspace", fixture.workspace];
+    const projectCreate = await run(["project-create", ...ws, "--expected-version", "0", "--at", instant(1), "--external-key", "PROJECT-B1", "--name", "B1"]);
+    assert.equal(projectCreate.record.id, deriveStableId("project", "PROJECT-B1"));
+    assert.equal(projectCreate.record.revision, 1);
+    assert.equal(projectCreate.record.tombstone, false);
+    // pre-existing envelope keys remain present
+    assert.equal(projectCreate.reasonCode, "WORKSPACE_COMMAND_COMPLETED");
+    assert.equal(projectCreate.version, 1);
+    assert.equal(typeof projectCreate.headEventHash, "string");
+    const projectId = projectCreate.record.id;
+    const workCreate = await run(["work-create", ...ws, "--expected-version", "1", "--at", instant(2), "--project-id", projectId, "--external-key", "INIT-B1", "--kind", "Initiative"]);
+    assert.equal(workCreate.record.id, deriveStableId("work", "INIT-B1"));
+    assert.deepEqual({ kind: workCreate.record.kind, status: workCreate.record.status, projectId: workCreate.record.projectId, parentId: workCreate.record.parentId, revision: workCreate.record.revision, tombstone: workCreate.record.tombstone },
+      { kind: "Initiative", status: "planned", projectId, parentId: null, revision: 1, tombstone: false });
+    const workId = workCreate.record.id;
+    const transitioned = await run(["work-transition", ...ws, "--expected-version", "2", "--at", instant(3), "--id", workId, "--status", "ready"]);
+    assert.equal(transitioned.record.status, "ready");
+    assert.equal(transitioned.record.revision, 2);
+    const deleted = await run(["work-delete", ...ws, "--expected-version", "3", "--at", instant(4), "--id", workId]);
+    assert.equal(deleted.record.tombstone, true);
+    // byte-identical repeat on a fresh fixture
+    const other = await workspaceFixture();
+    try {
+      let a = "";
+      await runCli(["project-create", "--workspace", other.workspace, "--expected-version", "0", "--at", instant(1), "--external-key", "PROJECT-B1", "--name", "B1"], { write: (value) => { a += value; } });
+      let b = "";
+      await runCli(["project-create", "--workspace", fixture.workspace, "--expected-version", "4", "--at", instant(5), "--external-key", "PROJECT-B1B", "--name", "B1"], { write: (value) => { b += value; } });
+      assert.notEqual(a, b);
+      assert.equal(JSON.parse(a).record.id, deriveStableId("project", "PROJECT-B1"));
+    } finally {
+      await other.close();
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("WSA-1: every mutation returns state identical to a fresh materialize (single-replay pipeline)", async () => {
   const fixture = await workspaceFixture();
   try {
