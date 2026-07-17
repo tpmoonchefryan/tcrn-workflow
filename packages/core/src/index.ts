@@ -272,6 +272,19 @@ export {
   listDependencyBlockers,
   listDependenciesByWorkItem,
 } from "./dependency.js";
+export {
+  ACTOR_ATTESTATION_SCHEMA_VERSION,
+  ACTOR_ATTESTATION_ENABLE_OPERATION,
+  ACTOR_ATTESTATION_REGISTRATION_ID,
+  ACTOR_PREFIXES,
+  ACTOR_ATTESTATION_REASON_CODES,
+  ActorAttestationError,
+  assertActorId,
+  buildEventPayload,
+  buildActorAttestationEnableRecord,
+  validateActorAttestationEnableRecord,
+  buildActorAttestationRegistration,
+} from "./actor-attestation.js";
 export type {
   DependencyRecord,
   DependencyWorkReference,
