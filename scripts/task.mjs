@@ -326,6 +326,7 @@ async function runTests({
   p8Only = false,
   backupOnly = false,
   installerOnly = false,
+  activationOnly = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -351,7 +352,8 @@ async function runTests({
     .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs")
     .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path))
     .filter((path) => !backupOnly || path === "tests/backup-snapshot.test.mjs")
-    .filter((path) => !installerOnly || path === "tests/act1-claude-installer.test.mjs");
+    .filter((path) => !installerOnly || path === "tests/act1-claude-installer.test.mjs")
+    .filter((path) => !activationOnly || path === "tests/act2-claude-activation.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
@@ -359,6 +361,8 @@ async function runTests({
   return success(
     trustOnly
       ? "TRUST_NEGATIVE_MATRIX_VERIFIED"
+      : activationOnly
+      ? "ACT2_CLAUDE_SESSIONSTART_TESTS_VERIFIED"
       : installerOnly
       ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
@@ -1518,6 +1522,7 @@ const commandContracts = {
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
   backup: { exit: 0, reasonCode: "BACKUP_VERIFIED" },
   act1: { exit: 0, reasonCode: "ACT1_CLAUDE_INSTALLER_VERIFIED" },
+  act2: { exit: 0, reasonCode: "ACT2_CLAUDE_SESSIONSTART_VERIFIED" },
 };
 
 async function verifyMap() {
@@ -1550,7 +1555,7 @@ async function verifyMap() {
     // claims validate. Their completeness-loop entries below and the evidencePhase
     // mapping are added atomically with each phase's first claim (a phase cannot be
     // required-present before any claim exists) — see docs/hardening/rc1-map-regeneration.md.
-    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "ACT", "BK"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "ACT", "ACT2", "BK"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
     assertion(claimCategories.includes(claim.category), "VERIFICATION_MAP_CATEGORY", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
@@ -1579,7 +1584,11 @@ async function verifyMap() {
   // ACT stays admitted-only until WSG-2 lands the first activation claim.
   // WSG-2: ACT joins the completeness loop with its first activation-ladder claim
   // (ACT1-CLAUDE-INSTALLER); PRG-0 pre-admitted ACT to the per-claim allowlist only.
-  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "BK", "ACT"]) {
+  // WSG-3: ACT2 (the first non-inert activation surface — Step-2 SessionStart) is a
+  // NEW phase wired in this commit, exactly as BK/ACT were: admitted to the per-claim
+  // allowlist above and joined to this completeness loop with its first claims
+  // (ACT2-CLAUDE-SESSIONSTART, ACT2-FAIL-OPEN).
+  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "BK", "ACT", "ACT2"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   const categoryCounts = {
@@ -1679,6 +1688,11 @@ async function verifyBackup() {
 async function verifyAct1() {
   const result = await runTests({ installerOnly: true });
   return success("ACT1_CLAUDE_INSTALLER_VERIFIED", { tests: result.tests });
+}
+
+async function verifyAct2() {
+  const result = await runTests({ activationOnly: true });
+  return success("ACT2_CLAUDE_SESSIONSTART_VERIFIED", { tests: result.tests });
 }
 
 async function verifyCi() {
@@ -1796,6 +1810,7 @@ const handlers = {
   workspace: verifyWorkspace,
   backup: verifyBackup,
   act1: verifyAct1,
+  act2: verifyAct2,
 };
 
 function errorReason(error) {
@@ -1853,6 +1868,9 @@ function evidencePhase(name) {
   }
   if (name === "act1") {
     return "act";
+  }
+  if (name === "act2") {
+    return "act2";
   }
   if (name === "p8") {
     return "p8";

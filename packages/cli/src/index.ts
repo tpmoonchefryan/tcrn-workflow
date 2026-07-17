@@ -62,10 +62,16 @@ import {
   codexAdapterAuthorityEmptyFallback,
   claudeAdapterAuthorityEmptyFallback,
   executeClaudeAdapterRollback,
+  generateClaudeAdapterActivationFragment,
   generateClaudeAdapterBundle,
   generateClaudeAdapterSettingsFragment,
+  generateSessionStartScript,
+  installClaudeAdapterActivation,
   installClaudeAdapterBundle,
+  mergeClaudeAdapterActivationFragment,
   mergeClaudeAdapterSettingsFragment,
+  removeClaudeAdapterActivationFragment,
+  sessionStartScriptDigest,
   planClaudeAdapterRollback,
   readClaudeAdapterInstallationReceipt,
   removeClaudeAdapterSettingsFragment,
@@ -95,6 +101,7 @@ import type {
   CodexAdapterHostContext,
   CodexAdapterInstallationFileIdentity,
   ClaudeAdapterHostContext,
+  ClaudeAdapterActivationHostContext,
   ClaudeAdapterInstallationFileIdentity,
   ExplicitRoot,
   ContextRouteAuthorityFileIdentity,
@@ -143,6 +150,7 @@ export interface CliIo {
   readonly codexAdapterHost?: CodexAdapterHostContext;
   readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
   readonly claudeAdapterHost?: ClaudeAdapterHostContext;
+  readonly claudeAdapterActivationHost?: ClaudeAdapterActivationHostContext;
   readonly claudeAdapterInstallationAuthority?: ClaudeAdapterInstallationFileIdentity;
   readonly compatibilityAdmissionAuthority?: CompatibilityAdmissionAuthority;
 }
@@ -371,9 +379,12 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "artifact-doctor", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "warning-bytes", required: false, valueKind: "integer" }, { name: "critical-bytes", required: false, valueKind: "integer" }, { name: "warning-count", required: false, valueKind: "integer" }, { name: "critical-count", required: false, valueKind: "integer" }] },
   { name: "artifact-size", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }] },
+  { name: "claude-adapter-activation-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
+  { name: "claude-adapter-activation-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
+  { name: "claude-adapter-activation-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "claude-adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "claude-adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }] },
+  { name: "claude-adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "step2", required: false, valueKind: "boolean" }] },
   { name: "claude-adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }] },
   { name: "claude-adapter-settings-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-settings-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
@@ -615,15 +626,57 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     // WSG-2 / activation ladder Step 1: generate the inert bundle under the
     // independently governed host, then write it to disk and emit the canonical
     // installation-generation receipt. .claude/settings.json is untouched.
-    const values = parseArguments(rest, ["request", "installation-root", "generation-id", "receipt-out"]);
+    // WSG-3 --step2: additionally write the SessionStart handler, merge the v2
+    // activation fragment into .claude/settings.json (temp O_EXCL then rename), and
+    // emit the additive tcrn.claude-adapter-installation-generation.v2 receipt.
+    const values = parseArguments(rest, ["request", "installation-root", "generation-id", "receipt-out", "step2"]);
     required(values, ["request", "installation-root", "generation-id", "receipt-out"]);
-    const bundle = generateClaudeAdapterBundle(jsonValue(values.request, "request"), io.claudeAdapterHost);
+    const request = jsonValue(values.request, "request");
+    const bundle = generateClaudeAdapterBundle(request, io.claudeAdapterHost);
+    if (booleanValue(values.step2, "step2")) {
+      const scriptSource = generateSessionStartScript();
+      const scriptDigest = sessionStartScriptDigest(scriptSource);
+      const fragment = generateClaudeAdapterActivationFragment(request, io.claudeAdapterActivationHost, { scriptDigest });
+      const activation = await installClaudeAdapterActivation({
+        installationRoot: values["installation-root"] ?? "",
+        generationId: values["generation-id"] ?? "",
+        receiptPath: values["receipt-out"] ?? "",
+        bundleDigest: bundle.bundleDigest,
+        fragment,
+        scriptSource,
+      });
+      io.write(canonicalJson(activation.receipt));
+      return;
+    }
     const result = await installClaudeAdapterBundle(bundle, {
       installationRoot: values["installation-root"] ?? "",
       generationId: values["generation-id"] ?? "",
       receiptPath: values["receipt-out"] ?? "",
     });
     io.write(canonicalJson(result.receipt));
+    return;
+  }
+  if (command === "claude-adapter-activation-fragment") {
+    // WSG-3 Step-2: emit the v2 activation fragment digest-bound to the governed
+    // SessionStart handler under the independently governed activation host.
+    const values = parseArguments(rest, ["request"]);
+    required(values, ["request"]);
+    const scriptDigest = sessionStartScriptDigest(generateSessionStartScript());
+    io.write(canonicalJson(generateClaudeAdapterActivationFragment(jsonValue(values.request, "request"), io.claudeAdapterActivationHost, { scriptDigest })));
+    return;
+  }
+  if (command === "claude-adapter-activation-merge") {
+    // Prints the merged canonical settings text only; writing .claude/settings.json
+    // stays the installer's action (constraint 7).
+    const values = parseArguments(rest, ["settings", "fragment"]);
+    required(values, ["settings", "fragment"]);
+    io.write(mergeClaudeAdapterActivationFragment(values.settings ?? "", jsonValue(values.fragment, "fragment")));
+    return;
+  }
+  if (command === "claude-adapter-activation-remove") {
+    const values = parseArguments(rest, ["settings", "fragment"]);
+    required(values, ["settings", "fragment"]);
+    io.write(removeClaudeAdapterActivationFragment(values.settings ?? "", jsonValue(values.fragment, "fragment")));
     return;
   }
   if (command === "claude-adapter-validate") {
