@@ -30,6 +30,8 @@ import {
   readKnowledgeBody,
   readKnowledgeSnippet,
   rebaseKnowledgeStore,
+  retireKnowledgeUnit,
+  reverifyKnowledgeUnit,
   recoverWorkspace,
   restoreArtifactArchive,
   resolveGenericProfile,
@@ -321,6 +323,8 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "knowledge-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "knowledge-promote", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "expected-revision", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "state", required: true, valueKind: "string" }] },
   { name: "knowledge-rebase", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "retire-invalid", required: false, valueKind: "boolean" }] },
+  { name: "knowledge-retire", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "expected-revision", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
+  { name: "knowledge-reverify", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "expected-revision", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "knowledge-snippet", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "knowledge-validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "lease-break", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "owner-token", required: true, valueKind: "string" }] },
@@ -744,6 +748,28 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       occurredAt: values.at ?? "",
       id: values.id ?? "",
       promotionState: values.state as "promoted" | "rejected",
+    })));
+    return;
+  }
+  if (command === "knowledge-retire") {
+    const values = parseArguments(rest, ["workspace", "expected-version", "expected-revision", "at", "id"]);
+    required(values, ["workspace", "expected-version", "expected-revision", "at", "id"]);
+    io.write(canonicalJson(await retireKnowledgeUnit(values.workspace ?? "", {
+      expectedVersion: expectedVersion(values),
+      expectedRevision: Number(values["expected-revision"]),
+      occurredAt: values.at ?? "",
+      id: values.id ?? "",
+    })));
+    return;
+  }
+  if (command === "knowledge-reverify") {
+    const values = parseArguments(rest, ["workspace", "expected-version", "expected-revision", "at", "id"]);
+    required(values, ["workspace", "expected-version", "expected-revision", "at", "id"]);
+    io.write(canonicalJson(await reverifyKnowledgeUnit(values.workspace ?? "", {
+      expectedVersion: expectedVersion(values),
+      expectedRevision: Number(values["expected-revision"]),
+      occurredAt: values.at ?? "",
+      id: values.id ?? "",
     })));
     return;
   }
