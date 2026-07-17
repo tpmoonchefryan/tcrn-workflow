@@ -1008,8 +1008,11 @@ async function verifyActorAttestation() {
     requiredByDefault: false,
     actorPrefixes: ["agent", "owner", "profile"],
     ledgerRequirements: ["AOS-REQ-007", "AOS-REQ-017"],
-    enforcement: "contract-only-not-enforced",
-    standalone: "inert-extension-contract-data-only-no-store-no-network",
+    enforcement: "enabled-boundary-mandatory-actor-live-and-replay",
+    enableBoundary: "sequence>=enabledAtSequence-enabling-event-included",
+    reasonCodes: ["WORKSPACE_ACTOR_INVALID", "WORKSPACE_ACTOR_REQUIRED", "WORKSPACE_EVENT_CORRUPT"],
+    defaultBehaviour: "no-enable-event-byte-identical-to-rc4",
+    standalone: "extension-contract-plus-engine-enforcement-no-store-no-network",
   });
 }
 

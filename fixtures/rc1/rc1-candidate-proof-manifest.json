@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "0af8f6ca09f664bab71c7ec8ae4912d79050ad484b9c08ae7535cc80197d529f",
+  "basisDigest": "000bb76014de4460f31c2e6b4025976538d8de1a09ed92b271e760adbdc604c9",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -181,8 +181,8 @@
     },
     {
       "path": "specs/actor-attestation-v1.md",
-      "size": 1816,
-      "sha256": "52386ad97b014315cdb7fae53e97d97f237924e4e9efcc4ed92b9cbf21bcdf97"
+      "size": 3062,
+      "sha256": "a667a051ce780454f9c6925ffad2d3c053a5ced032149ad0e84109b4b1a77ea0"
     },
     {
       "path": "specs/aos-requirements-v1.md",
@@ -291,8 +291,8 @@
     },
     {
       "path": "verification-map.yaml",
-      "size": 90652,
-      "sha256": "402e8981f98bc1f8bf50518970e8ba4a04417641063c5ed7eafd2628c1755a76"
+      "size": 91401,
+      "sha256": "1c14bce2d8422e4695f877ab7e07e081d3f306e2ebb482c9db4414fff3180b48"
     }
   ],
   "roleVerdictSlots": {
