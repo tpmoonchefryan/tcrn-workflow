@@ -318,6 +318,7 @@ async function runTests({
   dependencyOnly = false,
   conferenceOnly = false,
   assignmentGateOnly = false,
+  actorOnly = false,
   p7Only = false,
   p7CompatibilityOnly = false,
   p7AosRequirementsOnly = false,
@@ -340,6 +341,7 @@ async function runTests({
     .filter((path) => !dependencyOnly || path === "tests/dependency.test.mjs")
     .filter((path) => !conferenceOnly || path === "tests/conference.test.mjs")
     .filter((path) => !assignmentGateOnly || path === "tests/assignment-gate.test.mjs")
+    .filter((path) => !actorOnly || path === "tests/actor-attestation.test.mjs")
     .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs")
@@ -371,6 +373,8 @@ async function runTests({
                   ? "CONFERENCE_TESTS_VERIFIED"
                 : assignmentGateOnly
                   ? "ASSIGNMENT_GATE_TESTS_VERIFIED"
+                : actorOnly
+                  ? "ACTOR_ATTESTATION_TESTS_VERIFIED"
                 : p6Only
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
                   : p7CompatibilityOnly
@@ -945,6 +949,23 @@ async function verifyAssignmentGate() {
   });
 }
 
+async function verifyActorAttestation() {
+  const tests = await runTests({ actorOnly: true });
+  const schemaPath = resolve(repositoryRoot, "schemas/actor-attestation-v1.schema.json");
+  const specPath = resolve(repositoryRoot, "specs/actor-attestation-v1.md");
+  return success("ACTOR_ATTESTATION_VERIFIED", {
+    tests: tests.reasonCode,
+    schemaDigest: (await fileRecord(schemaPath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    registrationAppliesTo: "event",
+    requiredByDefault: false,
+    actorPrefixes: ["agent", "owner", "profile"],
+    ledgerRequirements: ["AOS-REQ-007", "AOS-REQ-017"],
+    enforcement: "contract-only-not-enforced",
+    standalone: "inert-extension-contract-data-only-no-store-no-network",
+  });
+}
+
 async function verifyP7() {
   const tests = await runTests({ p7Only: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p7-canonical-exchange-cases.json");
@@ -1438,6 +1459,7 @@ const commandContracts = {
   dep: { exit: 0, reasonCode: "DEPENDENCY_VERIFIED" },
   conference: { exit: 0, reasonCode: "CONFERENCE_VERIFIED" },
   "ext-ag": { exit: 0, reasonCode: "ASSIGNMENT_GATE_VERIFIED" },
+  "ext-actor": { exit: 0, reasonCode: "ACTOR_ATTESTATION_VERIFIED" },
   p7: { exit: 0, reasonCode: "P7_CANONICAL_EXCHANGE_VERIFIED" },
   "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
   "p7-aos-requirements": { exit: 0, reasonCode: "P7_PUBLIC_AOS_REQUIREMENTS_VERIFIED" },
@@ -1677,6 +1699,7 @@ const handlers = {
   dep: verifyDependency,
   conference: verifyConference,
   "ext-ag": verifyAssignmentGate,
+  "ext-actor": verifyActorAttestation,
   p7: verifyP7,
   "p7-compatibility": verifyP7Compatibility,
   "p7-aos-requirements": verifyP7AosRequirements,
@@ -1734,6 +1757,9 @@ function evidencePhase(name) {
     return "p2";
   }
   if (name === "ext-ag") {
+    return "p2";
+  }
+  if (name === "ext-actor") {
     return "p2";
   }
   if (name === "p7" || name === "p7-compatibility" || name === "p7-aos-requirements") {

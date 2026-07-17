@@ -1,0 +1,30 @@
+{
+  "$id": "https://tcrn.dev/schemas/actor-attestation-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN Actor Attestation V1",
+  "x-tcrn-aos-requirementIds": [
+    "AOS-REQ-007",
+    "AOS-REQ-017"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.actor-attestation.v1"
+    },
+    "version": {
+      "const": 1
+    }
+  },
+  "$defs": {
+    "actorId": {
+      "type": "string",
+      "pattern": "^(owner|profile|agent):[a-z0-9][a-z0-9._-]{0,127}$",
+      "maxLength": 161
+    }
+  }
+}
