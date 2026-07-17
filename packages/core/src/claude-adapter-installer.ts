@@ -14,12 +14,13 @@
 
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, realpath, rm, rmdir, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, realpath, rename, rm, rmdir, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 
 import { canonicalJson, canonicalSha256 } from "../../protocol/src/index.js";
 import {
   CLAUDE_ADAPTER_INSTALLATION_VERSION,
+  CLAUDE_ADAPTER_TEMPLATE_PATHS,
   assertNoForbiddenClaudePaths,
   validateClaudeAdapterBundle,
 } from "./claude-adapter.js";
@@ -29,8 +30,19 @@ import type {
   ClaudeAdapterInstallationFileIdentity,
   ClaudeAdapterInstallationReceipt,
 } from "./claude-adapter.js";
+import {
+  CLAUDE_ADAPTER_INSTALLATION_V2_VERSION,
+  CLAUDE_ADAPTER_SESSION_START_PATH,
+  mergeClaudeAdapterActivationFragment,
+  validateClaudeAdapterActivationFragment,
+} from "./claude-adapter-activation.js";
+import type {
+  ClaudeAdapterActivationInstallationEntry,
+  ClaudeAdapterActivationInstallationReceipt,
+} from "./claude-adapter-activation.js";
 
 export const CLAUDE_ADAPTER_INSTALLER_REASON_CODES = Object.freeze([
+  "INSTALLER_ACTIVATION_PRECONDITION",
   "INSTALLER_RECEIPT_WRITTEN",
   "INSTALLER_ROLLBACK_EXECUTED",
   "INSTALLER_ROLLBACK_MISMATCH",
@@ -56,6 +68,22 @@ export interface ClaudeAdapterRollbackResult {
   readonly reasonCode: "INSTALLER_ROLLBACK_EXECUTED";
   readonly planDigest: string;
   readonly removedCount: number;
+}
+
+export interface ClaudeAdapterActivationInstallOptions {
+  readonly installationRoot: string;
+  readonly generationId: string;
+  readonly receiptPath: string;
+  readonly bundleDigest: string;
+  readonly fragment: unknown;
+  readonly scriptSource: string;
+}
+
+export interface ClaudeAdapterActivationInstallResult {
+  readonly receipt: ClaudeAdapterActivationInstallationReceipt;
+  readonly authority: ClaudeAdapterInstallationFileIdentity;
+  readonly sourceIdentityDigest: string;
+  readonly settingsPath: string;
 }
 
 const ROLLBACK_PLAN_VERSION = "tcrn.claude-adapter-rollback-plan.v1";
@@ -189,6 +217,116 @@ export async function installClaudeAdapterBundle(bundleValue: unknown, options: 
     // the directory subtree this call created before re-raising.
     for (const target of writtenTargets.reverse()) await unlink(target).catch(() => undefined);
     if (createdRoot !== undefined) await rm(createdRoot, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+// Read an already-installed Step-1 template file read-only and return its content
+// digest and stat identity. A missing or non-regular template means Step 1 was not
+// run against this root (INSTALLER_ACTIVATION_PRECONDITION) — no activation without
+// installation (OD-32).
+async function readInstalledTemplate(target: string, label: string): Promise<{ readonly contentDigest: string; readonly identityDigest: string; readonly realpath: string }> {
+  let stat: StatIdentity;
+  try {
+    stat = await lstat(target);
+  } catch {
+    fail("INSTALLER_ACTIVATION_PRECONDITION", label);
+  }
+  if (stat.isSymbolicLink() || stat.nlink !== 1 || !stat.isFile()) fail("INSTALLER_ACTIVATION_PRECONDITION", label);
+  let handle;
+  try {
+    handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch {
+    fail("INSTALLER_ACTIVATION_PRECONDITION", label);
+  }
+  let content: Buffer;
+  try {
+    content = await handle.readFile();
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+  return { contentDigest: contentSha256(content), identityDigest: identityDigest(stat), realpath: await realpath(target) };
+}
+
+// WSG-3 Step-2 activation installer. Assumes Step 1 already installed the four
+// inert templates under <root>/.claude/tcrn-workflow/. Writes session-start.mjs
+// (O_EXCL O_NOFOLLOW 0o600), merges the v2 fragment into <root>/.claude/settings.json
+// atomically (temp O_EXCL then rename), and emits the additive
+// tcrn.claude-adapter-installation-generation.v2 receipt covering every activation
+// file so the Step-2/3 install rolls back byte-inverse. The receipt lives OUTSIDE
+// .claude (admitReceiptPath) exactly like the v1 receipt.
+export async function installClaudeAdapterActivation(options: ClaudeAdapterActivationInstallOptions): Promise<ClaudeAdapterActivationInstallResult> {
+  const fragment = validateClaudeAdapterActivationFragment(options.fragment);
+  if (typeof options.scriptSource !== "string" || options.scriptSource.length === 0 || !options.scriptSource.isWellFormed()) fail("INSTALLER_WRITE_FAILED", "session-start script source");
+  if (fragment.scriptDigest !== contentSha256(Buffer.from(options.scriptSource, "utf8"))) fail("INSTALLER_ACTIVATION_PRECONDITION", "fragment is not digest-bound to the session-start script");
+  const installationRoot = await admitInstallationRoot(options.installationRoot);
+  const receiptPath = admitReceiptPath(installationRoot, options.receiptPath);
+  const generationId = options.generationId;
+  if (typeof generationId !== "string" || generationId.length === 0 || !generationId.isWellFormed()) fail("INSTALLER_ROOT_INVALID", "generation id");
+  const bundleDigest = options.bundleDigest;
+  if (typeof bundleDigest !== "string" || !shaPattern.test(bundleDigest)) fail("INSTALLER_ROOT_INVALID", "bundle digest");
+
+  // The four Step-1 templates must already be present; record their current identity.
+  const templateEntries: ClaudeAdapterActivationInstallationEntry[] = [];
+  for (const templatePath of CLAUDE_ADAPTER_TEMPLATE_PATHS) {
+    const target = resolve(installationRoot, templatePath);
+    const read = await readInstalledTemplate(target, templatePath);
+    templateEntries.push({ path: templatePath, realpath: read.realpath, contentDigest: read.contentDigest, identityDigest: read.identityDigest });
+  }
+
+  // Compute the merged settings before writing anything (pure, fail-closed).
+  const settingsPath = resolve(installationRoot, ".claude", "settings.json");
+  let currentSettings = "{}";
+  const existing = await readFile(settingsPath, "utf8").catch((error) => {
+    if (hasErrorCode(error, "ENOENT")) return undefined;
+    fail("INSTALLER_WRITE_FAILED", "settings read");
+  });
+  if (typeof existing === "string") currentSettings = existing;
+  const mergedSettings = mergeClaudeAdapterActivationFragment(currentSettings, fragment);
+
+  const scriptTarget = resolve(installationRoot, ...CLAUDE_ADAPTER_SESSION_START_PATH.split("/"));
+  const settingsTempPath = `${settingsPath}.tcrn-activation-tmp`;
+  let scriptWritten = false;
+  let receiptWritten = false;
+  try {
+    await writeExclusive(scriptTarget, Buffer.from(options.scriptSource, "utf8"), CLAUDE_ADAPTER_SESSION_START_PATH);
+    scriptWritten = true;
+    const scriptStat = await lstat(scriptTarget);
+    const scriptEntry: ClaudeAdapterActivationInstallationEntry = {
+      path: CLAUDE_ADAPTER_SESSION_START_PATH,
+      realpath: await realpath(scriptTarget),
+      contentDigest: contentSha256(Buffer.from(options.scriptSource, "utf8")),
+      identityDigest: identityDigest(scriptStat),
+    };
+    const entries = [...templateEntries, scriptEntry].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+    const basis = {
+      schemaVersion: CLAUDE_ADAPTER_INSTALLATION_V2_VERSION,
+      generationId,
+      bundleDigest,
+      fragmentDigest: fragment.fragmentDigest,
+      scriptDigest: fragment.scriptDigest,
+      installationRoot,
+      entries,
+    };
+    const receipt: ClaudeAdapterActivationInstallationReceipt = { ...basis, receiptDigest: canonicalSha256(basis) };
+    const receiptBytes = Buffer.from(canonicalJson(receipt), "utf8");
+    await writeExclusive(receiptPath, receiptBytes, "activation installation receipt");
+    receiptWritten = true;
+    // Atomic settings replace: exclusive temp write then rename over the target.
+    await writeExclusive(settingsTempPath, Buffer.from(mergedSettings, "utf8"), "activation settings temp");
+    try {
+      await rename(settingsTempPath, settingsPath);
+    } catch {
+      await unlink(settingsTempPath).catch(() => undefined);
+      fail("INSTALLER_WRITE_FAILED", "activation settings rename");
+    }
+    const authority: ClaudeAdapterInstallationFileIdentity = { expectedCanonicalPath: await realpath(receiptPath), expectedFileSha256: contentSha256(receiptBytes) };
+    const sourceIdentityDigest = identityDigest(await lstat(receiptPath));
+    return deepFreeze({ receipt, authority, sourceIdentityDigest, settingsPath });
+  } catch (error) {
+    if (scriptWritten) await unlink(scriptTarget).catch(() => undefined);
+    if (receiptWritten) await unlink(receiptPath).catch(() => undefined);
+    await unlink(settingsTempPath).catch(() => undefined);
     throw error;
   }
 }

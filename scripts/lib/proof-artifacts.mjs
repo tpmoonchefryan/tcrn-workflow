@@ -56,6 +56,9 @@ const routeAdditions = new Set([
   "docs/architecture/agent-integration-v1.md",
   "packages/core/src/claude-adapter-installer.ts",
   "tests/act1-claude-installer.test.mjs",
+  "packages/core/src/claude-adapter-activation.ts",
+  "packages/core/src/claude-adapter-session-start.ts",
+  "tests/act2-claude-activation.test.mjs",
 ]);
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",

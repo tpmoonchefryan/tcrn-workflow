@@ -51,6 +51,9 @@ const routeFiles = [
   "docs/architecture/agent-integration-v1.md",
   "packages/core/src/claude-adapter-installer.ts",
   "tests/act1-claude-installer.test.mjs",
+  "packages/core/src/claude-adapter-activation.ts",
+  "packages/core/src/claude-adapter-session-start.ts",
+  "tests/act2-claude-activation.test.mjs",
 ];
 const roles = Object.fromEntries(["platform-workflow-architect", "workflow-verification-engineer", "security-risk-reviewer", "reality-checker"].map((role) => [role, { status: "unresolved", verdict: null, basisDigest: null }]));
 
@@ -109,6 +112,9 @@ async function fixture(context) {
     "docs/architecture/agent-integration-v1.md": "# route fixture\n",
     "packages/core/src/claude-adapter-installer.ts": "// route fixture\n",
     "tests/act1-claude-installer.test.mjs": "// route fixture\n",
+    "packages/core/src/claude-adapter-activation.ts": "// route fixture\n",
+    "packages/core/src/claude-adapter-session-start.ts": "// route fixture\n",
+    "tests/act2-claude-activation.test.mjs": "// route fixture\n",
   };
   for (const [path, bytes] of Object.entries(files)) {
     await mkdir(resolve(root, path, ".."), { recursive: true });

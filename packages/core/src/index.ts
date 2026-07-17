@@ -283,14 +283,59 @@ export {
   CLAUDE_ADAPTER_INSTALLER_REASON_CODES,
   ClaudeAdapterInstallerError,
   executeClaudeAdapterRollback,
+  installClaudeAdapterActivation,
   installClaudeAdapterBundle,
 } from "./claude-adapter-installer.js";
 export type {
+  ClaudeAdapterActivationInstallOptions,
+  ClaudeAdapterActivationInstallResult,
   ClaudeAdapterInstallOptions,
   ClaudeAdapterInstallResult,
   ClaudeAdapterInstallerReasonCode,
   ClaudeAdapterRollbackResult,
 } from "./claude-adapter-installer.js";
+export {
+  CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND,
+  CLAUDE_ADAPTER_ACTIVATION_HOOK_EVENT,
+  CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY,
+  CLAUDE_ADAPTER_ACTIVATION_PATHS,
+  CLAUDE_ADAPTER_ACTIVATION_REASON_CODES,
+  CLAUDE_ADAPTER_FRAGMENT_V2_VERSION,
+  CLAUDE_ADAPTER_HOST_V2_VERSION,
+  CLAUDE_ADAPTER_INSTALLATION_V2_VERSION,
+  CLAUDE_ADAPTER_PERSONA_RENDER_PATH,
+  CLAUDE_ADAPTER_ROLLBACK_PLAN_VERSION,
+  CLAUDE_ADAPTER_SESSION_START_PATH,
+  ClaudeAdapterActivationError,
+  admitClaudeAdapterActivationHostInput,
+  generateClaudeAdapterActivationFragment,
+  generateClaudeAdapterActivationRollbackPlan,
+  mergeClaudeAdapterActivationFragment,
+  removeClaudeAdapterActivationFragment,
+  validateClaudeAdapterActivationFragment,
+  validateClaudeAdapterActivationInstallationReceipt,
+} from "./claude-adapter-activation.js";
+export type {
+  ClaudeAdapterActivationFragment,
+  ClaudeAdapterActivationHostContext,
+  ClaudeAdapterActivationHostInput,
+  ClaudeAdapterActivationInstallationEntry,
+  ClaudeAdapterActivationInstallationReceipt,
+  ClaudeAdapterActivationReasonCode,
+  ClaudeAdapterActivationScriptContext,
+} from "./claude-adapter-activation.js";
+export {
+  SESSION_START_INJECTION_BUDGET_BYTES,
+  SESSION_START_REASON_CODES,
+  SESSION_START_SCRIPT_VERSION,
+  SessionStartScriptError,
+  generateSessionStartScript,
+  sessionStartScriptDigest,
+} from "./claude-adapter-session-start.js";
+export type {
+  SessionStartReasonCode,
+  SessionStartScriptOptions,
+} from "./claude-adapter-session-start.js";
 export {
   DEPENDENCY_VERSION,
   DEPENDENCY_KINDS,
