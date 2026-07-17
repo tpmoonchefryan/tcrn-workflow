@@ -4,7 +4,7 @@
 
 **A deterministic, offline-first framework for governed AI-agent work — where every capability is a machine-verified claim, not a promise.**
 
-`Status: 0.1.0-rc.4 (pre-release candidate)` · `License: Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Verified claims: 57 (hygiene 12 · inertness 13 · runtime 32)`
+`Status: 0.1.0-rc.4 (pre-release candidate)` · `License: Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Verified claims: 58 (hygiene 12 · inertness 13 · runtime 33)`
 
 ---
 
@@ -132,7 +132,7 @@ A release is an immutable annotated tag plus a reproducible artifact set (canoni
 
 - **20 gates** in the `verify:p1` chain, each with a stable terminal reason code.
 - **~29 test files** covering the engine, knowledge core, artifact lifecycle, profiles, personas, context router, both adapters, exchange, compatibility, requirements ledger, release candidate, privacy boundary, proof-artifact generator, and trust matrix.
-- **57 machine-verified claims** in `verification-map.yaml`, partitioned as 12 framework-hygiene, 13 inertness-proof, and 32 runtime-capability — the runtime-capability third is the delivered product surface, stated honestly.
+- **58 machine-verified claims** in `verification-map.yaml`, partitioned as 12 framework-hygiene, 13 inertness-proof, and 33 runtime-capability — the runtime-capability third is the delivered product surface, stated honestly.
 - **64-permutation determinism proofs** in three independent layers (engine insertion orders, profile layer orders, adapter input orders).
 - **19-entry public AOS requirements ledger** (11 fixture-verified, 8 specified) — maturity is recorded per row, never inflated.
 - **Privacy gate** over ~200 tracked source files, ~1,470 git objects, full reachable history, and the release archive.

@@ -1526,3 +1526,86 @@ test("derived ordering, readback hashes, and export bytes remain deterministic a
     await fixture.close();
   }
 });
+
+async function readEventPayloads(workspace) {
+  const eventsRoot = join(workspace, ".tcrn-workflow", "events");
+  const names = (await readdir(eventsRoot)).filter((name) => /^\d{6}\.json$/u.test(name)).sort();
+  const events = [];
+  for (const name of names) {
+    events.push(...JSON.parse(await readFile(join(eventsRoot, name), "utf8")));
+  }
+  return events.map((event) => event.payload);
+}
+
+test("WSE-3: --actor threads through attestation-enable and the mutation verbs into the appended event payload, fail-closed after enable", async () => {
+  const fixture = await workspaceFixture({ externalKey: "WORKSPACE-WSE3" });
+  try {
+    const ws = ["--workspace", fixture.workspace];
+    const run = async (args) => {
+      let output = "";
+      await runCli(args, { write: (value) => { output += value; } });
+      return JSON.parse(output);
+    };
+    // The attestation.actor.enabled event is the boundary (sequence >= enabledAtSequence),
+    // so the enabling event itself carries a valid actor and every later mutation must too.
+    const enabled = await run(["attestation-enable", ...ws, "--expected-version", "0", "--at", instant(1), "--actor", "owner:release-gate"]);
+    assert.equal(enabled.reasonCode, "WORKSPACE_COMMAND_COMPLETED");
+    // Happy path: a mutation on an enabled workspace with a valid --actor succeeds and
+    // the actor string joins the hashed event payload (acceptance criterion 1).
+    const projectCreate = await run(["project-create", ...ws, "--expected-version", "1", "--at", instant(2), "--external-key", "PROJECT-WSE3", "--name", "WSE3", "--actor", "agent:builder-7"]);
+    assert.equal(projectCreate.reasonCode, "WORKSPACE_COMMAND_COMPLETED");
+    const projectId = projectCreate.record.id;
+    await run(["work-create", ...ws, "--expected-version", "2", "--at", instant(3), "--project-id", projectId, "--external-key", "INIT-WSE3", "--kind", "Initiative", "--actor", "owner:release-gate"]);
+    const payloads = await readEventPayloads(fixture.workspace);
+    assert.deepEqual(payloads.map((payload) => payload.operation), [
+      "attestation.actor.enabled", "project.created", "work.created",
+    ]);
+    assert.deepEqual(payloads.map((payload) => payload.actor), [
+      "owner:release-gate", "agent:builder-7", "owner:release-gate",
+    ]);
+    // Fail-closed: the engine (WSE-2), not the CLI, requires the actor once enabled —
+    // omitting --actor surfaces WORKSPACE_ACTOR_REQUIRED, not a CLI missing-argument.
+    await expectReasonAsync("WORKSPACE_ACTOR_REQUIRED", () => runCli(
+      ["project-create", ...ws, "--expected-version", "3", "--at", instant(4), "--external-key", "PROJECT-WSE3B", "--name", "WSE3B"],
+      { write: () => {} },
+    ));
+    // A supplied actor with an unlisted prefix is rejected by the engine's vocabulary
+    // (WORKSPACE_ACTOR_INVALID) — the CLI never duplicates the allowlist.
+    await expectReasonAsync("WORKSPACE_ACTOR_INVALID", () => runCli(
+      ["project-create", ...ws, "--expected-version", "3", "--at", instant(4), "--external-key", "PROJECT-WSE3B", "--name", "WSE3B", "--actor", "role:nope"],
+      { write: () => {} },
+    ));
+    // Re-enabling an already-attested workspace fails closed WORKSPACE_INPUT_INVALID.
+    await expectReasonAsync("WORKSPACE_INPUT_INVALID", () => runCli(
+      ["attestation-enable", ...ws, "--expected-version", "3", "--at", instant(4), "--actor", "owner:release-gate"],
+      { write: () => {} },
+    ));
+    // --actor stays unknown on read/non-mutation verbs (no sweep leakage): the flag
+    // grammar rejects it exactly as before this package.
+    await expectReasonAsync("CLI_ARGUMENT_UNKNOWN", () => runCli(
+      ["project-list", ...ws, "--actor", "owner:release-gate"],
+      { write: () => {} },
+    ));
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("WSE-3: legacy mutations without --actor on a non-enabled workspace never write an actor key (byte-identical to rc.4)", async () => {
+  const fixture = await workspaceFixture({ externalKey: "WORKSPACE-WSE3-LEGACY" });
+  try {
+    const ws = ["--workspace", fixture.workspace];
+    let output = "";
+    await runCli(["project-create", ...ws, "--expected-version", "0", "--at", instant(1), "--external-key", "PROJECT-LEGACY", "--name", "Legacy"], { write: (value) => { output += value; } });
+    assert.equal(JSON.parse(output).reasonCode, "WORKSPACE_COMMAND_COMPLETED");
+    // A supplied --actor before enablement is a no-op: no actor field enters the payload.
+    await runCli(["work-create", ...ws, "--expected-version", "1", "--at", instant(2), "--project-id", JSON.parse(output).record.id, "--external-key", "INIT-LEGACY", "--kind", "Initiative", "--actor", "owner:release-gate"], { write: () => {} });
+    const payloads = await readEventPayloads(fixture.workspace);
+    assert.deepEqual(payloads.map((payload) => payload.operation), ["project.created", "work.created"]);
+    for (const payload of payloads) {
+      assert.equal(Object.hasOwn(payload, "actor"), false, "no actor key before attestation is enabled");
+    }
+  } finally {
+    await fixture.close();
+  }
+});
