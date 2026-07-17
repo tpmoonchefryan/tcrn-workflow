@@ -47,6 +47,7 @@ const routeAdditions = new Set([
   "tests/p3-cli-catalog.test.mjs",
   "packages/core/src/workspace-perf-instrumentation.ts",
   "tests/p3-engine-complexity.test.mjs",
+  "tests/workspace-extension-records.test.mjs",
 ]);
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",

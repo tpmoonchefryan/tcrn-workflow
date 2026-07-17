@@ -11,6 +11,7 @@ import {
   ACTOR_ATTESTATION_REGISTRATION_ID,
   ACTOR_ATTESTATION_SCHEMA_VERSION,
   ACTOR_PREFIXES,
+  EVENT_PAYLOAD_OPERATION_EXTRAS,
   assertActorId,
   buildActorAttestationEnableRecord,
   buildActorAttestationRegistration,
@@ -36,6 +37,26 @@ test("buildEventPayload carries a validated actor only when supplied", () => {
   assert.deepEqual(buildEventPayload("work.created", { id: "x" }), { operation: "work.created", record: { id: "x" } });
   assert.deepEqual(buildEventPayload("work.created", { id: "x" }, "owner:alpha"), { operation: "work.created", record: { id: "x" }, actor: "owner:alpha" });
   reason("ACTOR_ID_INVALID", () => buildEventPayload("work.created", { id: "x" }, "role:alpha"));
+});
+
+// WSD-1 (SDC-2): the registered per-operation extras table — never ad-hoc
+// payload shapes. conference.closed must carry exactly the minutes extra; no
+// other operation may carry one; reserved keys stay unforgeable.
+test("buildEventPayload admits exactly the registered per-operation extras", () => {
+  assert.deepEqual(EVENT_PAYLOAD_OPERATION_EXTRAS, { "conference.closed": ["minutes"] });
+  assert.deepEqual(
+    buildEventPayload("conference.closed", { id: "x" }, undefined, { minutes: { id: "m" } }),
+    { operation: "conference.closed", record: { id: "x" }, minutes: { id: "m" } },
+  );
+  assert.deepEqual(
+    buildEventPayload("conference.closed", { id: "x" }, "owner:alpha", { minutes: { id: "m" } }),
+    { operation: "conference.closed", record: { id: "x" }, minutes: { id: "m" }, actor: "owner:alpha" },
+  );
+  reason("EVENT_PAYLOAD_EXTRA_INVALID", () => buildEventPayload("conference.closed", { id: "x" }));
+  reason("EVENT_PAYLOAD_EXTRA_INVALID", () => buildEventPayload("conference.closed", { id: "x" }, undefined, {}));
+  reason("EVENT_PAYLOAD_EXTRA_INVALID", () => buildEventPayload("conference.closed", { id: "x" }, undefined, { minutes: { id: "m" }, extra: true }));
+  reason("EVENT_PAYLOAD_EXTRA_INVALID", () => buildEventPayload("work.created", { id: "x" }, undefined, { minutes: { id: "m" } }));
+  reason("EVENT_PAYLOAD_EXTRA_INVALID", () => buildEventPayload("conference.created", { id: "x" }, undefined, { actor: "owner:alpha" }));
 });
 
 test("the enable record round-trips and validates fail-closed", () => {

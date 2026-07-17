@@ -40,7 +40,22 @@ import type {
 } from "../../protocol/src/index.js";
 import { assertDistinctRoots } from "./root-identity.js";
 import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
-import { recordClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
+import { recordClosureValidation, recordExtensionClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
+import { EVENT_PAYLOAD_OPERATION_EXTRAS, buildEventPayload } from "./actor-attestation.js";
+import {
+  CONFERENCE_MINUTES_VERSION,
+  CONFERENCE_POSITION_VERSION,
+  CONFERENCE_REQUEST_VERSION,
+  ConferenceError,
+  appendConferencePosition,
+  openConference,
+  validateConferenceMinutes,
+  validateConferencePosition,
+  validateConferenceRequest,
+} from "./conference.js";
+import { AssignmentGateError, GATE_VERSION, validateGateRecord } from "./assignment-gate.js";
+import type { ConferenceMinutes, ConferencePosition, ConferenceRequest } from "./conference.js";
+import type { GateRecord } from "./assignment-gate.js";
 import type { CanonicalRoot } from "./root-identity.js";
 import type { ExplicitRoot } from "./index.js";
 
@@ -50,9 +65,12 @@ export const WORKSPACE_CONTROL_DIRECTORY = ".tcrn-workflow" as const;
 export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_ALREADY_EXISTS",
   "WORKSPACE_CAS_MISMATCH",
+  "WORKSPACE_CONFERENCE_NOT_OPEN",
   "WORKSPACE_EVENT_CORRUPT",
   "WORKSPACE_FAULT_INJECTED",
   "WORKSPACE_FILESYSTEM_UNSUPPORTED",
+  "WORKSPACE_GATE_EVIDENCE_UNRESOLVED",
+  "WORKSPACE_GATE_PENDING",
   "WORKSPACE_INPUT_INVALID",
   "WORKSPACE_INPUT_OVERSIZED",
   "WORKSPACE_LEASE_BROKEN",
@@ -114,6 +132,13 @@ export interface WorkspaceState {
   readonly headEventHash: string | null;
   readonly projects: readonly ProjectRecord[];
   readonly work: readonly WorkRecord[];
+  // WSD-1: additive extension-record collections materialized from the same
+  // event chain, each sorted by projectId then id in utf8-byte-order-v1. Empty
+  // for every workspace that contains no conference/gate events.
+  readonly conferences: readonly ConferenceRequest[];
+  readonly conferencePositions: readonly ConferencePosition[];
+  readonly conferenceMinutes: readonly ConferenceMinutes[];
+  readonly gates: readonly GateRecord[];
   readonly events: readonly EventRecord[];
 }
 
@@ -158,6 +183,12 @@ const projectFields = ["schemaVersion", "id", "externalKey", "name", "revision",
 const rootFields = ["kind", "path", "canonicalPath", "portableIdentity"];
 const projectOperations = new Set(["project.created", "project.updated", "project.deleted"]);
 const workOperations = new Set(["work.created", "work.updated", "work.deleted"]);
+// WSD-1: conference/gate records persist as additive event-log operations. A
+// workspace that contains one of these events is unreadable by pre-WSD-1
+// binaries (they fail closed at the unknown-operation check below); workspaces
+// that never use them stay fully readable, and storageVersion stays 1.
+const conferenceOperations = new Set(["conference.created", "conference.updated", "conference.position.appended", "conference.closed"]);
+const gateOperations = new Set(["gate.created", "gate.updated", "gate.deleted"]);
 const metadataFields = [
   "schemaVersion",
   "storageVersion",
@@ -511,7 +542,10 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
 }
 
 function payloadRecord(payload: JsonValue, operation: string): Readonly<Record<string, JsonValue>> {
-  exactFields(payload, ["operation", "record"], "WORKSPACE_EVENT_CORRUPT", "event payload");
+  // WSD-1 (SDC-2): the payload field set is {operation, record} plus exactly the
+  // extras the shared table registers for this operation (conference.closed
+  // carries 'minutes'), so the read side mirrors the single payload constructor.
+  exactFields(payload, ["operation", "record", ...(EVENT_PAYLOAD_OPERATION_EXTRAS[operation] ?? [])], "WORKSPACE_EVENT_CORRUPT", "event payload");
   if (payload.operation !== operation) {
     fail("WORKSPACE_EVENT_CORRUPT", `expected ${operation}`);
   }
@@ -519,6 +553,51 @@ function payloadRecord(payload: JsonValue, operation: string): Readonly<Record<s
     fail("WORKSPACE_EVENT_CORRUPT", `${operation} record is invalid`);
   }
   return payload.record;
+}
+
+// WSD-1: the single-event atomic close payload — exactly {minutes, operation,
+// record} where record is the conference at status closed and minutes is the
+// revision-1 minutes record bound to it.
+function closePayload(payload: JsonValue): { readonly record: Readonly<Record<string, JsonValue>>; readonly minutes: JsonValue } {
+  const record = payloadRecord(payload, "conference.closed");
+  const minutes = (payload as Readonly<Record<string, JsonValue>>).minutes;
+  if (minutes === null || minutes === undefined || typeof minutes !== "object" || Array.isArray(minutes)) {
+    fail("WORKSPACE_EVENT_CORRUPT", "conference.closed minutes is invalid");
+  }
+  return { record, minutes };
+}
+
+// WSD-1: map extension-validator failures (ConferenceError/AssignmentGateError)
+// to the fail-closed replay reason so the unchanged record validators are reused
+// verbatim by the reducer.
+function extensionRecordOrCorrupt<T>(validate: () => T): T {
+  try {
+    return validate();
+  } catch (error) {
+    if (error instanceof ConferenceError || error instanceof AssignmentGateError) {
+      fail("WORKSPACE_EVENT_CORRUPT", `${error.reasonCode}:${error.message}`);
+    }
+    throw error;
+  }
+}
+
+// WSD-1: a mutated extension record must equal its current revision on every
+// field except the explicitly mutable ones — immutable identity and binding
+// fields (projectId, conferenceId, workId, ...) are pinned byte-exactly.
+function assertPinnedExtensionFields(current: JsonValue, next: JsonValue, mutableFields: readonly string[], label: string): void {
+  const currentRest: Record<string, unknown> = { ...(current as Readonly<Record<string, unknown>>) };
+  const nextRest: Record<string, unknown> = { ...(next as Readonly<Record<string, unknown>>) };
+  for (const field of mutableFields) {
+    delete currentRest[field];
+    delete nextRest[field];
+  }
+  if (canonicalJson(currentRest) !== canonicalJson(nextRest)) {
+    fail("WORKSPACE_EVENT_CORRUPT", `${label} mutates a pinned field`);
+  }
+}
+
+function sortExtensionRecords<T extends { readonly projectId: string; readonly id: string }>(records: Iterable<T>): readonly T[] {
+  return [...records].sort((left, right) => compareCanonicalText(left.projectId, right.projectId) || compareCanonicalText(left.id, right.id));
 }
 
 // WSA-2: the ancestor closure of a work record — the record plus every ancestor
@@ -570,10 +649,49 @@ function validateWorkClosure(work: Map<string, WorkRecord>, projects: Map<string
   }
 }
 
+// WSD-1: O(delta) referential checks for a conference/gate reducer arm — bounded
+// map lookups of the records the mutated record references (its project, its
+// linked work, its conference), never a scan of a whole collection per event
+// (SDC-3). The visit count feeds the extension closure counter.
+function requireLiveProject(projects: Map<string, ProjectRecord>, projectId: string, label: string): void {
+  const project = projects.get(projectId);
+  if (!project || project.tombstone) {
+    fail("WORKSPACE_EVENT_CORRUPT", `${label} references an unavailable project`);
+  }
+}
+
+function requireLiveWork(work: Map<string, WorkRecord>, projectId: string, workId: string, label: string): void {
+  const record = work.get(workId);
+  if (!record || record.tombstone || record.projectId !== projectId) {
+    fail("WORKSPACE_EVENT_CORRUPT", `${label} references unavailable work ${workId}`);
+  }
+}
+
+function requireEventBoundTimestamp(updatedAt: string, event: EventRecord, label: string): void {
+  if (updatedAt !== event.occurredAt) {
+    fail("WORKSPACE_EVENT_CORRUPT", `${label} timestamp is not event-bound`);
+  }
+}
+
+function requireOpenConference(conferences: Map<string, ConferenceRequest>, conferenceId: string, label: string): ConferenceRequest {
+  const conference = conferences.get(conferenceId);
+  if (!conference) {
+    fail("WORKSPACE_EVENT_CORRUPT", `${label} references an unknown conference`);
+  }
+  if (conference.status !== "open") {
+    fail("WORKSPACE_EVENT_CORRUPT", `${label} references a conference that is not open`);
+  }
+  return conference;
+}
+
 function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]): WorkspaceState {
   recordFullMaterialize();
   const projects = new Map<string, ProjectRecord>();
   const work = new Map<string, WorkRecord>();
+  const conferences = new Map<string, ConferenceRequest>();
+  const conferencePositions = new Map<string, ConferencePosition>();
+  const conferenceMinutes = new Map<string, ConferenceMinutes>();
+  const gates = new Map<string, GateRecord>();
   for (const event of events) {
     const payload = event.payload;
     if (payload === null || typeof payload !== "object" || Array.isArray(payload) || typeof payload.operation !== "string") {
@@ -630,6 +748,100 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       validateWorkClosure(work, projects, record);
       continue;
     }
+    if (conferenceOperations.has(payload.operation)) {
+      // WSD-1: conference reducer arms. Every check is a bounded lookup against
+      // the maps materialized so far — O(delta) per event, no collection scans,
+      // and no work-closure metrics (the closure counters stay work-only).
+      if (payload.operation === "conference.created") {
+        const record = extensionRecordOrCorrupt(() => openConference(payloadRecord(payload, payload.operation)));
+        requireEventBoundTimestamp(record.updatedAt, event, `conference ${record.id}`);
+        if (conferences.has(record.id) || record.revision !== 1 || record.tombstone) {
+          fail("WORKSPACE_EVENT_CORRUPT", `invalid conference create ${record.id}`);
+        }
+        requireLiveProject(projects, record.projectId, `conference ${record.id}`);
+        for (const workId of record.linkedWorkIds) {
+          requireLiveWork(work, record.projectId, workId, `conference ${record.id}`);
+        }
+        recordExtensionClosureValidation(2 + record.linkedWorkIds.length);
+        conferences.set(record.id, record);
+        continue;
+      }
+      if (payload.operation === "conference.updated") {
+        const record = extensionRecordOrCorrupt(() => validateConferenceRequest(payloadRecord(payload, payload.operation)));
+        requireEventBoundTimestamp(record.updatedAt, event, `conference ${record.id}`);
+        const current = requireOpenConference(conferences, record.id, `conference ${record.id}`);
+        if (record.status !== "cancelled" || record.tombstone || record.revision !== current.revision + 1) {
+          fail("WORKSPACE_EVENT_CORRUPT", `invalid conference mutation ${record.id}`);
+        }
+        assertPinnedExtensionFields(current as unknown as JsonValue, record as unknown as JsonValue, ["status", "revision", "updatedAt"], `conference ${record.id}`);
+        recordExtensionClosureValidation(2);
+        conferences.set(record.id, record);
+        continue;
+      }
+      if (payload.operation === "conference.position.appended") {
+        const record = extensionRecordOrCorrupt(() => validateConferencePosition(payloadRecord(payload, payload.operation)));
+        requireEventBoundTimestamp(record.updatedAt, event, `conference position ${record.id}`);
+        if (conferencePositions.has(record.id) || record.revision !== 1 || record.tombstone) {
+          fail("WORKSPACE_EVENT_CORRUPT", `invalid conference position ${record.id}`);
+        }
+        const conference = requireOpenConference(conferences, record.conferenceId, `conference position ${record.id}`);
+        if (record.projectId !== conference.projectId) {
+          fail("WORKSPACE_EVENT_CORRUPT", `conference position ${record.id} is not bound to its conference project`);
+        }
+        recordExtensionClosureValidation(2);
+        conferencePositions.set(record.id, record);
+        continue;
+      }
+      const parts = closePayload(payload);
+      const record = extensionRecordOrCorrupt(() => validateConferenceRequest(parts.record));
+      const minutes = extensionRecordOrCorrupt(() => validateConferenceMinutes(parts.minutes));
+      requireEventBoundTimestamp(record.updatedAt, event, `conference ${record.id}`);
+      requireEventBoundTimestamp(minutes.updatedAt, event, `conference minutes ${minutes.id}`);
+      const current = requireOpenConference(conferences, record.id, `conference ${record.id}`);
+      if (record.status !== "closed" || record.tombstone || record.revision !== current.revision + 1) {
+        fail("WORKSPACE_EVENT_CORRUPT", `invalid conference close ${record.id}`);
+      }
+      assertPinnedExtensionFields(current as unknown as JsonValue, record as unknown as JsonValue, ["status", "revision", "updatedAt"], `conference ${record.id}`);
+      if (conferenceMinutes.has(minutes.id) || minutes.revision !== 1 || minutes.tombstone ||
+        minutes.conferenceId !== record.id || minutes.projectId !== record.projectId) {
+        fail("WORKSPACE_EVENT_CORRUPT", `conference minutes ${minutes.id} are not bound to the closing conference`);
+      }
+      recordExtensionClosureValidation(3);
+      conferences.set(record.id, record);
+      conferenceMinutes.set(minutes.id, minutes);
+      continue;
+    }
+    if (gateOperations.has(payload.operation)) {
+      // WSD-1: gate reducer arms, O(delta) like the conference arms above.
+      const record = extensionRecordOrCorrupt(() => validateGateRecord(payloadRecord(payload, payload.operation)));
+      requireEventBoundTimestamp(record.updatedAt, event, `gate ${record.id}`);
+      if (payload.operation === "gate.created") {
+        if (gates.has(record.id) || record.revision !== 1 || record.tombstone || record.status !== "pending") {
+          fail("WORKSPACE_EVENT_CORRUPT", `invalid gate create ${record.id}`);
+        }
+        requireLiveProject(projects, record.projectId, `gate ${record.id}`);
+        if (record.workId !== null) {
+          requireLiveWork(work, record.projectId, record.workId, `gate ${record.id}`);
+        }
+        recordExtensionClosureValidation(2 + (record.workId === null ? 0 : 1));
+        gates.set(record.id, record);
+        continue;
+      }
+      const current = gates.get(record.id);
+      if (!current || current.tombstone || record.revision !== current.revision + 1 ||
+        (payload.operation === "gate.updated" && record.tombstone) || (payload.operation === "gate.deleted" && !record.tombstone)) {
+        fail("WORKSPACE_EVENT_CORRUPT", `invalid gate mutation ${record.id}`);
+      }
+      assertPinnedExtensionFields(
+        current as unknown as JsonValue,
+        record as unknown as JsonValue,
+        payload.operation === "gate.updated" ? ["status", "revision", "updatedAt"] : ["tombstone", "revision", "updatedAt"],
+        `gate ${record.id}`,
+      );
+      recordExtensionClosureValidation(2);
+      gates.set(record.id, record);
+      continue;
+    }
     fail("WORKSPACE_EVENT_CORRUPT", `unknown operation ${payload.operation}`);
   }
   const projectRecords = [...projects.values()].sort((left, right) => compareCanonicalText(left.id, right.id));
@@ -641,6 +853,10 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
     headEventHash: events.at(-1)?.eventHash ?? null,
     projects: projectRecords,
     work: workRecords,
+    conferences: sortExtensionRecords(conferences.values()),
+    conferencePositions: sortExtensionRecords(conferencePositions.values()),
+    conferenceMinutes: sortExtensionRecords(conferenceMinutes.values()),
+    gates: sortExtensionRecords(gates.values()),
     events,
   };
 }
@@ -670,11 +886,25 @@ function viewDocuments(state: WorkspaceState): Readonly<Record<string, string>> 
     "- Authority: derived and rebuildable from the event chain",
     "",
   ].join("\n");
-  return {
+  const views: Record<string, string> = {
     "STATUS.md": status,
     "index.json": canonicalJson({ schemaVersion: "tcrn.workspace-index.v1", projects: activeProjects, work: activeWork }),
     "readback.json": canonicalJson(readback),
   };
+  // WSD-1: the extension index is a fourth view emitted ONLY when the workspace
+  // holds at least one conference or gate record (positions and minutes cannot
+  // exist without their conference), so the three views above and the view set
+  // stay byte-identical for every workspace without extension records.
+  if (state.conferences.length + state.gates.length > 0) {
+    views["extensions.json"] = canonicalJson({
+      schemaVersion: "tcrn.workspace-extension-index.v1",
+      conferences: state.conferences,
+      conferencePositions: state.conferencePositions,
+      conferenceMinutes: state.conferenceMinutes,
+      gates: state.gates,
+    });
+  }
+  return views;
 }
 
 async function writeViews(workspaceRoot: string, state: WorkspaceState, crashAt?: WorkspaceCrashPoint): Promise<void> {
@@ -1417,6 +1647,13 @@ interface MutationDelta {
   readonly payload: JsonValue;
   readonly projects: readonly ProjectRecord[];
   readonly work: readonly WorkRecord[];
+  // WSD-1: extension collections flow through the delta additively; a builder
+  // that leaves one undefined keeps the claim-fresh state's collection, so the
+  // constructed committed state stays byte-identical to a fresh materialize.
+  readonly conferences?: readonly ConferenceRequest[];
+  readonly conferencePositions?: readonly ConferencePosition[];
+  readonly conferenceMinutes?: readonly ConferenceMinutes[];
+  readonly gates?: readonly GateRecord[];
 }
 
 async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, buildDelta: (state: WorkspaceState) => MutationDelta, options: WorkspaceMutationOptions): Promise<WorkspaceState> {
@@ -1468,6 +1705,10 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
       headEventHash: event.eventHash,
       projects: delta.projects,
       work: delta.work,
+      conferences: delta.conferences ?? state.conferences,
+      conferencePositions: delta.conferencePositions ?? state.conferencePositions,
+      conferenceMinutes: delta.conferenceMinutes ?? state.conferenceMinutes,
+      gates: delta.gates ?? state.gates,
       events: [...state.events, event],
     };
     await writeViews(workspace.root, committed, options.crashAt);
@@ -1603,6 +1844,242 @@ export async function deleteWork(workspaceRoot: string, lease: WorkspaceLease, i
   }, input);
 }
 
+// WSD-1: verb-side lookups for the extension collections. The referenced record
+// must exist; conference mutations additionally require the referenced
+// conference to be open, failing WORKSPACE_CONFERENCE_NOT_OPEN otherwise — the
+// same rule the reducer replays as WORKSPACE_EVENT_CORRUPT.
+function openConferenceById(state: WorkspaceState, id: string): ConferenceRequest {
+  const record = state.conferences.find((entry) => entry.id === id);
+  if (!record) {
+    fail("WORKSPACE_INPUT_INVALID", `conference ${id} is unavailable`);
+  }
+  if (record.status !== "open") {
+    fail("WORKSPACE_CONFERENCE_NOT_OPEN", `conference ${id} is ${record.status}`);
+  }
+  return record;
+}
+
+function gateById(state: WorkspaceState, id: string): GateRecord {
+  const record = state.gates.find((entry) => entry.id === id);
+  if (!record || record.tombstone) {
+    fail("WORKSPACE_INPUT_INVALID", `gate ${id} is unavailable`);
+  }
+  return record;
+}
+
+// WSD-1: the seven extension mutation verbs. Each derives its stable id from an
+// external key, validates its record through the unchanged conference/gate
+// validators (validator failures propagate verbatim for the CLI to surface),
+// and appends exactly one event through appendEvent and the shared SDC-2
+// payload constructor.
+export async function openConferenceInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly externalKey: string;
+  readonly projectId: string;
+  readonly type: ConferenceRequest["type"];
+  readonly title: string;
+  readonly linkedWorkIds: readonly string[];
+  readonly desiredOutcome: string;
+  readonly participantIds: readonly string[];
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  const id = deriveStableId("conference", canonicalExternalKey(input.externalKey));
+  return appendEvent(workspaceRoot, lease, (state) => {
+    projectById(state, input.projectId);
+    for (const workId of input.linkedWorkIds) {
+      if (workById(state, workId).projectId !== input.projectId) {
+        fail("WORKSPACE_INPUT_INVALID", `work ${workId} is outside project ${input.projectId}`);
+      }
+    }
+    if (state.conferences.some((entry) => entry.id === id)) {
+      fail("WORKSPACE_INPUT_INVALID", `conference ${id} already exists`);
+    }
+    const record = openConference({
+      schemaVersion: CONFERENCE_REQUEST_VERSION,
+      id,
+      projectId: input.projectId,
+      type: input.type,
+      title: input.title,
+      linkedWorkIds: input.linkedWorkIds,
+      desiredOutcome: input.desiredOutcome,
+      participantIds: input.participantIds,
+      status: "open",
+      revision: 1,
+      updatedAt: input.occurredAt,
+      tombstone: false,
+      extensions: {},
+    });
+    return {
+      payload: buildEventPayload("conference.created", record as unknown as JsonValue),
+      projects: state.projects,
+      work: state.work,
+      conferences: sortExtensionRecords([...state.conferences, record]),
+    };
+  }, input);
+}
+
+export async function appendConferencePositionInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly conferenceId: string;
+  readonly externalKey: string;
+  readonly actorId: string;
+  readonly position: string;
+  readonly risks: readonly string[];
+  readonly recommendations: readonly string[];
+  readonly evidenceIds: readonly string[];
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  const id = deriveStableId("position", canonicalExternalKey(input.externalKey));
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const conference = openConferenceById(state, input.conferenceId);
+    if (state.conferencePositions.some((entry) => entry.id === id)) {
+      fail("WORKSPACE_INPUT_INVALID", `conference position ${id} already exists`);
+    }
+    const record = appendConferencePosition({
+      schemaVersion: CONFERENCE_POSITION_VERSION,
+      id,
+      conferenceId: conference.id,
+      projectId: conference.projectId,
+      actorId: input.actorId,
+      position: input.position,
+      risks: input.risks,
+      recommendations: input.recommendations,
+      evidenceIds: input.evidenceIds,
+      revision: 1,
+      updatedAt: input.occurredAt,
+      tombstone: false,
+      extensions: {},
+    }, conference);
+    return {
+      payload: buildEventPayload("conference.position.appended", record as unknown as JsonValue),
+      projects: state.projects,
+      work: state.work,
+      conferencePositions: sortExtensionRecords([...state.conferencePositions, record]),
+    };
+  }, input);
+}
+
+export async function closeConferenceInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly conferenceId: string;
+  readonly minutesExternalKey: string;
+  readonly summary: string;
+  readonly outcomeClass: ConferenceMinutes["outcomeClass"];
+  readonly decisions: readonly string[];
+  readonly unresolvedIssues: readonly string[];
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  const minutesId = deriveStableId("minutes", canonicalExternalKey(input.minutesExternalKey));
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const conference = openConferenceById(state, input.conferenceId);
+    if (state.conferenceMinutes.some((entry) => entry.id === minutesId)) {
+      fail("WORKSPACE_INPUT_INVALID", `conference minutes ${minutesId} already exist`);
+    }
+    const record = validateConferenceRequest({ ...conference, status: "closed", revision: conference.revision + 1, updatedAt: input.occurredAt });
+    const minutes = validateConferenceMinutes({
+      schemaVersion: CONFERENCE_MINUTES_VERSION,
+      id: minutesId,
+      conferenceId: conference.id,
+      projectId: conference.projectId,
+      summary: input.summary,
+      outcomeClass: input.outcomeClass,
+      decisions: input.decisions,
+      unresolvedIssues: input.unresolvedIssues,
+      revision: 1,
+      updatedAt: input.occurredAt,
+      tombstone: false,
+      extensions: {},
+    });
+    // The single-event atomic close: the payload carries the closed conference
+    // as its record and the minutes as the registered per-operation extra.
+    return {
+      payload: buildEventPayload("conference.closed", record as unknown as JsonValue, undefined, { minutes: minutes as unknown as JsonValue }),
+      projects: state.projects,
+      work: state.work,
+      conferences: sortExtensionRecords(state.conferences.map((entry) => entry.id === record.id ? record : entry)),
+      conferenceMinutes: sortExtensionRecords([...state.conferenceMinutes, minutes]),
+    };
+  }, input);
+}
+
+export async function cancelConferenceInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly conferenceId: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const conference = openConferenceById(state, input.conferenceId);
+    const record = validateConferenceRequest({ ...conference, status: "cancelled", revision: conference.revision + 1, updatedAt: input.occurredAt });
+    return {
+      payload: buildEventPayload("conference.updated", record as unknown as JsonValue),
+      projects: state.projects,
+      work: state.work,
+      conferences: sortExtensionRecords(state.conferences.map((entry) => entry.id === record.id ? record : entry)),
+    };
+  }, input);
+}
+
+export async function createGateInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly externalKey: string;
+  readonly projectId: string;
+  readonly workId: string | null;
+  readonly title: string;
+  readonly outcomeClass: GateRecord["outcomeClass"];
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  const id = deriveStableId("gate", canonicalExternalKey(input.externalKey));
+  return appendEvent(workspaceRoot, lease, (state) => {
+    projectById(state, input.projectId);
+    if (input.workId !== null && workById(state, input.workId).projectId !== input.projectId) {
+      fail("WORKSPACE_INPUT_INVALID", `work ${input.workId} is outside project ${input.projectId}`);
+    }
+    if (state.gates.some((entry) => entry.id === id)) {
+      fail("WORKSPACE_INPUT_INVALID", `gate ${id} already exists`);
+    }
+    const record = validateGateRecord({
+      schemaVersion: GATE_VERSION,
+      id,
+      projectId: input.projectId,
+      workId: input.workId,
+      title: input.title,
+      outcomeClass: input.outcomeClass,
+      status: "pending",
+      revision: 1,
+      updatedAt: input.occurredAt,
+      tombstone: false,
+      extensions: {},
+    });
+    return {
+      payload: buildEventPayload("gate.created", record as unknown as JsonValue),
+      projects: state.projects,
+      work: state.work,
+      gates: sortExtensionRecords([...state.gates, record]),
+    };
+  }, input);
+}
+
+export async function transitionGateInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly id: string;
+  readonly status: GateRecord["status"];
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const current = gateById(state, input.id);
+    const record = validateGateRecord({ ...current, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt });
+    return {
+      payload: buildEventPayload("gate.updated", record as unknown as JsonValue),
+      projects: state.projects,
+      work: state.work,
+      gates: sortExtensionRecords(state.gates.map((entry) => entry.id === record.id ? record : entry)),
+    };
+  }, input);
+}
+
+export async function deleteGateInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly id: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const current = gateById(state, input.id);
+    const record = validateGateRecord({ ...current, revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true });
+    return {
+      payload: buildEventPayload("gate.deleted", record as unknown as JsonValue),
+      projects: state.projects,
+      work: state.work,
+      gates: sortExtensionRecords(state.gates.map((entry) => entry.id === record.id ? record : entry)),
+    };
+  }, input);
+}
+
 export async function rebuildWorkspaceViews(workspaceRoot: string, lease: WorkspaceLease): Promise<WorkspaceState> {
   const resolved = await boundDirectory(workspaceRoot);
   await assertLease(resolved, lease);
@@ -1632,6 +2109,18 @@ export async function recoverWorkspace(workspaceRoot: string, lease: WorkspaceLe
 
 export async function exportWorkspace(workspaceRoot: string): Promise<string> {
   const state = await materializeWorkspace(workspaceRoot);
+  // WSD-1: extension collections are exported ONLY when present so the export
+  // bytes (and the archive digest) stay identical for every workspace without
+  // conference/gate events. canonicalJson sorts keys, so conditional inclusion
+  // is byte-stable.
+  const extensionCollections = state.conferences.length + state.gates.length > 0
+    ? {
+      conferences: state.conferences,
+      conferencePositions: state.conferencePositions,
+      conferenceMinutes: state.conferenceMinutes,
+      gates: state.gates,
+    }
+    : {};
   return canonicalJson({
     schemaVersion: "tcrn.workspace-export.v1",
     workspaceId: state.metadata.workspaceId,
@@ -1639,6 +2128,7 @@ export async function exportWorkspace(workspaceRoot: string): Promise<string> {
     headEventHash: state.headEventHash,
     projects: state.projects,
     work: state.work,
+    ...extensionCollections,
     events: state.events,
   });
 }

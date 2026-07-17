@@ -49,6 +49,7 @@
     "verify:conference": "node scripts/task.mjs conference",
     "verify:ext-ag": "node scripts/task.mjs ext-ag",
     "verify:ext-actor": "node scripts/task.mjs ext-actor",
+    "verify:ext-store": "node scripts/task.mjs ext-store",
     "verify:p7": "node scripts/task.mjs p7",
     "verify:p7:compatibility": "node scripts/task.mjs p7-compatibility",
     "verify:p7:aos-requirements": "node scripts/task.mjs p7-aos-requirements",

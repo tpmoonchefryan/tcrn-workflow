@@ -219,6 +219,7 @@
     "tests/regen-rc1-inputs.test.mjs",
     "tests/release-trust.test.mjs",
     "tests/root-boundaries.test.mjs",
+    "tests/workspace-extension-records.test.mjs",
     "tsconfig.build.json",
     "tsconfig.json",
     "verification-map.yaml"

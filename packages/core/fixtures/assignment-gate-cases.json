@@ -10,5 +10,5 @@
   "requiredByDefault": false,
   "assignmentLedgerRequirement": "AOS-REQ-017",
   "gateLedgerRequirement": "AOS-REQ-018",
-  "liveStore": "not-created"
+  "liveStore": "workspace-event-log"
 }
