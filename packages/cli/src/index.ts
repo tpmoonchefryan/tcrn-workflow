@@ -34,6 +34,9 @@ import {
   retireKnowledgeUnit,
   reverifyKnowledgeUnit,
   recoverWorkspace,
+  createSnapshotManifest,
+  readSnapshotManifestFile,
+  verifySnapshotManifest,
   restoreArtifactArchive,
   resolveGenericProfile,
   routeContext,
@@ -382,6 +385,8 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "project-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "project-update", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }] },
   { name: "recover", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
+  { name: "snapshot-manifest", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
+  { name: "snapshot-verify", availability: "cli", mutates: false, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "manifest", required: true, valueKind: "string" }] },
   { name: "status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-" }, { name: "status", required: false, valueKind: "string" }] },
@@ -675,6 +680,27 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const at = values.at ?? "";
     const state = await withLease(workspace, at, (lease) => recoverWorkspace(workspace, lease));
     writeState(io, state);
+    return;
+  }
+  if (command === "snapshot-manifest") {
+    // WSF-2: read-only snapshot witness. The lease is the quiesce proof — withLease
+    // acquires it (fail-closed WORKSPACE_LOCKED on contention) and always releases
+    // it; the manifest is emitted verbatim to stdout as the receipt.
+    const values = parseArguments(rest, ["workspace", "at"]);
+    required(values, ["workspace", "at"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const manifest = await withLease(workspace, at, (lease) => createSnapshotManifest(workspace, lease));
+    io.write(manifest);
+    return;
+  }
+  if (command === "snapshot-verify") {
+    // WSF-2: recompute a copied control tree against a saved manifest receipt. No
+    // lease and no mutation — the target is a copy, not a live workspace.
+    const values = parseArguments(rest, ["root", "manifest"]);
+    required(values, ["root", "manifest"]);
+    const manifest = await readSnapshotManifestFile(values.manifest ?? "");
+    io.write(canonicalJson(await verifySnapshotManifest(values.root ?? "", manifest)));
     return;
   }
   if (command === "knowledge-init") {
