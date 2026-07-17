@@ -77,6 +77,7 @@ export {
   createWork,
   deleteProject,
   deleteWork,
+  enableActorAttestation,
   exportWorkspace,
   initializeWorkspace,
   materializeWorkspace,

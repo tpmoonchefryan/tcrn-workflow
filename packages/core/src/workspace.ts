@@ -42,7 +42,15 @@ import type {
 import { assertDistinctRoots } from "./root-identity.js";
 import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
 import { recordClosureValidation, recordExtensionClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
-import { EVENT_PAYLOAD_OPERATION_EXTRAS, buildEventPayload } from "./actor-attestation.js";
+import {
+  ACTOR_ATTESTATION_ENABLE_OPERATION,
+  ActorAttestationError,
+  EVENT_PAYLOAD_OPERATION_EXTRAS,
+  assertActorId,
+  buildActorAttestationEnableRecord,
+  buildEventPayload,
+  validateActorAttestationEnableRecord,
+} from "./actor-attestation.js";
 import {
   CONFERENCE_MINUTES_VERSION,
   CONFERENCE_POSITION_VERSION,
@@ -64,6 +72,8 @@ export const WORKSPACE_SCHEMA_VERSION = "tcrn.workspace.v1" as const;
 export const WORKSPACE_STORAGE_VERSION = 1 as const;
 export const WORKSPACE_CONTROL_DIRECTORY = ".tcrn-workflow" as const;
 export const WORKSPACE_REASON_CODES = Object.freeze([
+  "WORKSPACE_ACTOR_INVALID",
+  "WORKSPACE_ACTOR_REQUIRED",
   "WORKSPACE_ALREADY_EXISTS",
   "WORKSPACE_CAS_MISMATCH",
   "WORKSPACE_CONFERENCE_NOT_OPEN",
@@ -141,6 +151,12 @@ export interface WorkspaceState {
   readonly conferenceMinutes: readonly ConferenceMinutes[];
   readonly gates: readonly GateRecord[];
   readonly events: readonly EventRecord[];
+  // WSE-2: the sequence of the attestation.actor.enabled event once one has been
+  // replayed, else null. From this sequence onward (the enabling event itself
+  // included), every mutation payload MUST carry a valid actor; before it, and
+  // for every workspace that never enables attestation, actor stays absent and
+  // the derived state and export bytes are byte-identical to rc.4.
+  readonly attestationEnabledAtSequence: number | null;
 }
 
 export interface WorkspaceLease {
@@ -153,6 +169,11 @@ export interface WorkspaceLease {
 export interface WorkspaceMutationOptions {
   readonly expectedVersion: number;
   readonly occurredAt: string;
+  // WSE-2: the accountable actor for this mutation. Caller-supplied like
+  // occurredAt (no clock, no randomness — determinism preserved). Once
+  // attestation is enabled it is mandatory (WORKSPACE_ACTOR_REQUIRED) and
+  // validated (WORKSPACE_ACTOR_INVALID); the enabling event carries it too.
+  readonly actorId?: string;
   readonly crashAt?: WorkspaceCrashPoint;
   readonly afterMutationClaimForTest?: () => Promise<void>;
 }
@@ -542,11 +563,32 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
   }
 }
 
-function payloadRecord(payload: JsonValue, operation: string): Readonly<Record<string, JsonValue>> {
+function payloadRecord(payload: JsonValue, operation: string, actorRequired: boolean): Readonly<Record<string, JsonValue>> {
   // WSD-1 (SDC-2): the payload field set is {operation, record} plus exactly the
   // extras the shared table registers for this operation (conference.closed
   // carries 'minutes'), so the read side mirrors the single payload constructor.
-  exactFields(payload, ["operation", "record", ...(EVENT_PAYLOAD_OPERATION_EXTRAS[operation] ?? [])], "WORKSPACE_EVENT_CORRUPT", "event payload");
+  // WSE-2: from the attestation.actor.enabled event onward (that event included),
+  // actor joins the exact field set and is validated here, so the replay reducer
+  // enforces the same mandatory attestation as the live append path — a
+  // hand-tampered log that drops or forges actor after enable fails closed.
+  const extras = EVENT_PAYLOAD_OPERATION_EXTRAS[operation] ?? [];
+  if (actorRequired) {
+    const carriesActor = payload !== null && typeof payload === "object" && !Array.isArray(payload) && "actor" in payload;
+    if (!carriesActor) {
+      fail("WORKSPACE_ACTOR_REQUIRED", `${operation} requires an actor after attestation is enabled`);
+    }
+    exactFields(payload, ["operation", "record", "actor", ...extras], "WORKSPACE_EVENT_CORRUPT", "event payload");
+    try {
+      assertActorId((payload as Readonly<Record<string, JsonValue>>).actor);
+    } catch (error) {
+      if (error instanceof ActorAttestationError) {
+        fail("WORKSPACE_ACTOR_INVALID", `${operation} actor is invalid`);
+      }
+      throw error;
+    }
+  } else {
+    exactFields(payload, ["operation", "record", ...extras], "WORKSPACE_EVENT_CORRUPT", "event payload");
+  }
   if (payload.operation !== operation) {
     fail("WORKSPACE_EVENT_CORRUPT", `expected ${operation}`);
   }
@@ -559,8 +601,8 @@ function payloadRecord(payload: JsonValue, operation: string): Readonly<Record<s
 // WSD-1: the single-event atomic close payload — exactly {minutes, operation,
 // record} where record is the conference at status closed and minutes is the
 // revision-1 minutes record bound to it.
-function closePayload(payload: JsonValue): { readonly record: Readonly<Record<string, JsonValue>>; readonly minutes: JsonValue } {
-  const record = payloadRecord(payload, "conference.closed");
+function closePayload(payload: JsonValue, actorRequired: boolean): { readonly record: Readonly<Record<string, JsonValue>>; readonly minutes: JsonValue } {
+  const record = payloadRecord(payload, "conference.closed", actorRequired);
   const minutes = (payload as Readonly<Record<string, JsonValue>>).minutes;
   if (minutes === null || minutes === undefined || typeof minutes !== "object" || Array.isArray(minutes)) {
     fail("WORKSPACE_EVENT_CORRUPT", "conference.closed minutes is invalid");
@@ -765,13 +807,37 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
   const conferencePositions = new Map<string, ConferencePosition>();
   const conferenceMinutes = new Map<string, ConferenceMinutes>();
   const gates = new Map<string, GateRecord>();
+  let attestationEnabledAtSequence: number | null = null;
   for (const event of events) {
     const payload = event.payload;
     if (payload === null || typeof payload !== "object" || Array.isArray(payload) || typeof payload.operation !== "string") {
       fail("WORKSPACE_EVENT_CORRUPT", `event ${event.id} payload is invalid`);
     }
+    // WSE-2: the attestation.actor.enabled chain event turns mandatory actor
+    // attestation on for itself and every later event; it is a control event that
+    // touches no record graph, and a second one is a corrupt chain. Tracking it
+    // inside the single event loop keeps validation one-pass and replay-order
+    // exact — the enabling event carries the enabling actor and is the first that
+    // requires one, so actorRequired is derived after this branch has run.
+    if (payload.operation === ACTOR_ATTESTATION_ENABLE_OPERATION) {
+      if (attestationEnabledAtSequence !== null) {
+        fail("WORKSPACE_EVENT_CORRUPT", "duplicate attestation.actor.enabled event");
+      }
+      const record = payloadRecord(payload, ACTOR_ATTESTATION_ENABLE_OPERATION, true);
+      try {
+        validateActorAttestationEnableRecord(record);
+      } catch (error) {
+        if (error instanceof ActorAttestationError) {
+          fail("WORKSPACE_EVENT_CORRUPT", "attestation enable record is invalid");
+        }
+        throw error;
+      }
+      attestationEnabledAtSequence = event.sequence;
+      continue;
+    }
+    const actorRequired = attestationEnabledAtSequence !== null;
     if (projectOperations.has(payload.operation)) {
-      const record = validateProject(payloadRecord(payload, payload.operation));
+      const record = validateProject(payloadRecord(payload, payload.operation, actorRequired));
       const current = projects.get(record.id);
       if (record.updatedAt !== event.occurredAt) {
         fail("WORKSPACE_EVENT_CORRUPT", `project ${record.id} timestamp is not event-bound`);
@@ -793,7 +859,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       continue;
     }
     if (workOperations.has(payload.operation)) {
-      const record = payloadRecord(payload, payload.operation) as unknown as WorkRecord;
+      const record = payloadRecord(payload, payload.operation, actorRequired) as unknown as WorkRecord;
       const current = work.get(record.id);
       if (record.updatedAt !== event.occurredAt) {
         fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} timestamp is not event-bound`);
@@ -830,7 +896,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       // the maps materialized so far — O(delta) per event, no collection scans,
       // and no work-closure metrics (the closure counters stay work-only).
       if (payload.operation === "conference.created") {
-        const record = extensionRecordOrCorrupt(() => openConference(payloadRecord(payload, payload.operation)));
+        const record = extensionRecordOrCorrupt(() => openConference(payloadRecord(payload, payload.operation, actorRequired)));
         requireEventBoundTimestamp(record.updatedAt, event, `conference ${record.id}`);
         if (conferences.has(record.id) || record.revision !== 1 || record.tombstone) {
           fail("WORKSPACE_EVENT_CORRUPT", `invalid conference create ${record.id}`);
@@ -844,7 +910,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         continue;
       }
       if (payload.operation === "conference.updated") {
-        const record = extensionRecordOrCorrupt(() => validateConferenceRequest(payloadRecord(payload, payload.operation)));
+        const record = extensionRecordOrCorrupt(() => validateConferenceRequest(payloadRecord(payload, payload.operation, actorRequired)));
         requireEventBoundTimestamp(record.updatedAt, event, `conference ${record.id}`);
         const current = requireOpenConference(conferences, record.id, `conference ${record.id}`);
         if (record.status !== "cancelled" || record.tombstone || record.revision !== current.revision + 1) {
@@ -856,7 +922,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         continue;
       }
       if (payload.operation === "conference.position.appended") {
-        const record = extensionRecordOrCorrupt(() => validateConferencePosition(payloadRecord(payload, payload.operation)));
+        const record = extensionRecordOrCorrupt(() => validateConferencePosition(payloadRecord(payload, payload.operation, actorRequired)));
         requireEventBoundTimestamp(record.updatedAt, event, `conference position ${record.id}`);
         if (conferencePositions.has(record.id) || record.revision !== 1 || record.tombstone) {
           fail("WORKSPACE_EVENT_CORRUPT", `invalid conference position ${record.id}`);
@@ -869,7 +935,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         conferencePositions.set(record.id, record);
         continue;
       }
-      const parts = closePayload(payload);
+      const parts = closePayload(payload, actorRequired);
       const record = extensionRecordOrCorrupt(() => validateConferenceRequest(parts.record));
       const minutes = extensionRecordOrCorrupt(() => validateConferenceMinutes(parts.minutes));
       requireEventBoundTimestamp(record.updatedAt, event, `conference ${record.id}`);
@@ -890,7 +956,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
     }
     if (gateOperations.has(payload.operation)) {
       // WSD-1: gate reducer arms, O(delta) like the conference arms above.
-      const record = extensionRecordOrCorrupt(() => validateGateRecord(payloadRecord(payload, payload.operation)));
+      const record = extensionRecordOrCorrupt(() => validateGateRecord(payloadRecord(payload, payload.operation, actorRequired)));
       requireEventBoundTimestamp(record.updatedAt, event, `gate ${record.id}`);
       if (payload.operation === "gate.created") {
         if (gates.has(record.id) || record.revision !== 1 || record.tombstone || record.status !== "pending") {
@@ -956,6 +1022,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
     conferenceMinutes: sortExtensionRecords(conferenceMinutes.values()),
     gates: sortExtensionRecords(gates.values()),
     events,
+    attestationEnabledAtSequence,
   };
 }
 
@@ -1771,6 +1838,34 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
     const delta = buildDelta(state);
     assertWorkspaceRecordCount(state.version + 1);
     const sequence = state.version + 1;
+    // WSE-2: actor injection is single-sourced here so every mutation verb only
+    // forwards options.actorId (like occurredAt — no clock, no randomness). Once
+    // attestation is enabled, or on the enabling event itself, a valid actor is
+    // mandatory (WORKSPACE_ACTOR_REQUIRED) and validated (WORKSPACE_ACTOR_INVALID),
+    // and it joins the hashed payload. Before enablement no actor is written even
+    // when one is supplied — the default stays actor-optional and byte-identical
+    // to rc.4 — so the enable event is the boundary. The reducer re-derives that
+    // boundary and re-enforces the identical rule, so this write path cannot
+    // outrun replay.
+    const deltaPayload = delta.payload;
+    const isEnableEvent = deltaPayload !== null && typeof deltaPayload === "object" && !Array.isArray(deltaPayload) &&
+      deltaPayload.operation === ACTOR_ATTESTATION_ENABLE_OPERATION;
+    const actorRequired = state.attestationEnabledAtSequence !== null || isEnableEvent;
+    let payload: JsonValue = deltaPayload;
+    if (actorRequired) {
+      if (options.actorId === undefined) {
+        fail("WORKSPACE_ACTOR_REQUIRED", "a valid actor is mandatory once attestation is enabled");
+      }
+      try {
+        assertActorId(options.actorId);
+      } catch (error) {
+        if (error instanceof ActorAttestationError) {
+          fail("WORKSPACE_ACTOR_INVALID", options.actorId);
+        }
+        throw error;
+      }
+      payload = { ...(deltaPayload as Readonly<Record<string, JsonValue>>), actor: options.actorId };
+    }
     const streamId = workspaceStreamId(workspace.metadata);
     const event = createEvent({
       id: workspaceEventId(streamId, sequence),
@@ -1778,7 +1873,7 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
       sequence,
       occurredAt: options.occurredAt,
       priorHash: state.headEventHash,
-      payload: delta.payload,
+      payload,
     });
     const segmentIndex = Math.floor((sequence - 1) / workspace.metadata.segmentEventLimit) + 1;
     const segmentPath = controlPath(workspace.root, `events/${String(segmentIndex).padStart(6, "0")}.json`);
@@ -1808,6 +1903,7 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
       conferenceMinutes: delta.conferenceMinutes ?? state.conferenceMinutes,
       gates: delta.gates ?? state.gates,
       events: [...state.events, event],
+      attestationEnabledAtSequence: isEnableEvent ? sequence : state.attestationEnabledAtSequence,
     };
     await writeViews(workspace.root, committed, options.crashAt);
     return committed;
@@ -1943,6 +2039,23 @@ export async function deleteWork(workspaceRoot: string, lease: WorkspaceLease, i
     const record: WorkRecord = { ...current, revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true };
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
     return { payload: { operation: "work.deleted", record }, projects: state.projects, work };
+  }, input);
+}
+
+// WSE-2: turn on mandatory actor attestation for this workspace by appending the
+// attestation.actor.enabled chain event. It carries the enabling actor (injected
+// by appendEvent, which treats the enable event as actor-mandatory), touches no
+// record graph, and is one-way — v1 defines no disable operation. Re-enabling an
+// already-attested workspace fails closed WORKSPACE_INPUT_INVALID.
+export async function enableActorAttestation(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly actorId: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    if (state.attestationEnabledAtSequence !== null) {
+      fail("WORKSPACE_INPUT_INVALID", "actor attestation is already enabled");
+    }
+    const record = buildActorAttestationEnableRecord() as unknown as JsonValue;
+    return { payload: { operation: ACTOR_ATTESTATION_ENABLE_OPERATION, record }, projects: state.projects, work: state.work };
   }, input);
 }
 
