@@ -30,6 +30,7 @@
     "docs/architecture/agent-integration-v1.md",
     "docs/architecture/backup-git-tier.md",
     "docs/architecture/backup-restore-runbook.md",
+    "docs/architecture/rc5-compatibility.md",
     "docs/architecture/root-model.md",
     "docs/compatibility/supported-modes.md",
     "docs/hardening/rc1-map-regeneration.md",
