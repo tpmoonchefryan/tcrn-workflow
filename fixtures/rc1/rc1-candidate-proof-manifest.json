@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "556222fccf05fed7c4cc0b845904a6f17ce1a6fc167967a7239a5e3160ae4ef3",
+  "basisDigest": "8b3e099058ee674ba4c2dc947be934653f5c992f15c1e80abc34c900da98fe02",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -186,8 +186,8 @@
     },
     {
       "path": "specs/aos-requirements-v1.md",
-      "size": 551,
-      "sha256": "58d060244f65efede51dfacdc3ebc9006d8102a6a02fdc70992408fbc29eef14"
+      "size": 3834,
+      "sha256": "305fdd7f1612c5897f33ad4b070fcf34b88c95075d3bcd4e70f277383ccb722e"
     },
     {
       "path": "specs/assignment-v1.md",
@@ -201,8 +201,8 @@
     },
     {
       "path": "specs/compatibility-v1.md",
-      "size": 370,
-      "sha256": "fd1380d2e808a785cea44152151e9e2cf733df191b8157e6b3e51915219a92c2"
+      "size": 3380,
+      "sha256": "388ba7c14342a09a3c0cb91303713c67e72327719c072ee6f3b13cca6e874837"
     },
     {
       "path": "specs/conference-v1.md",
@@ -211,8 +211,8 @@
     },
     {
       "path": "specs/context-v1.md",
-      "size": 424,
-      "sha256": "8d75c4688180e8f0f2e48d5591ae95bd987fd8e2a550536530245cb2b5cc060d"
+      "size": 4679,
+      "sha256": "dddcd0c6ff4eeef7bc026214f02d54afbb7eeb4049650e8d99ed19a915da5eef"
     },
     {
       "path": "specs/dependency-v1.md",
@@ -226,13 +226,13 @@
     },
     {
       "path": "specs/exchange-v1.md",
-      "size": 618,
-      "sha256": "f231007aa43295f9525150347dd1788a245b1f89d43168858290260ca6d24c29"
+      "size": 4068,
+      "sha256": "6252d869cc39f5feeae4c1adcc2802da6e9bcba525c616fdf1f5e48f542e161f"
     },
     {
       "path": "specs/extension-registration-v1.md",
-      "size": 506,
-      "sha256": "10c879dcc8cff41663c0e7e4d2b3100f5c95af85fa95bb322a4f42b0b468c6a1"
+      "size": 3947,
+      "sha256": "f6b1e406828e056cb50f6d5b81653db3a3179eade868adfaf19349e94d349f26"
     },
     {
       "path": "specs/gate-v1.md",
@@ -246,13 +246,13 @@
     },
     {
       "path": "specs/p3-acceptance-marker-v1.md",
-      "size": 594,
-      "sha256": "3ca8567c94dcf35dbc163f6115d43aff7f6e192bac9f86ab00dd3bde910e8fc4"
+      "size": 3567,
+      "sha256": "3f084beba7082805c16af10b81f6d2dc6265518d8c985880eea17aa1bc96c36d"
     },
     {
       "path": "specs/profile-trust-v1.md",
-      "size": 689,
-      "sha256": "4fc9fbaf81cdc72bd54b4fdb4545c93abd27136f7e549d5e69bdfbbf6820ba01"
+      "size": 4039,
+      "sha256": "9fd7cfa6a9006d7c9536cfcc9b202b3ef4105ab00646214a76c26c84c6b36fc8"
     },
     {
       "path": "specs/protocol-common-v1.md",
@@ -266,8 +266,8 @@
     },
     {
       "path": "specs/receipt-v1.md",
-      "size": 424,
-      "sha256": "1e7d25bf31fe43c4a66ab3f91662c0b4dc7dbbd7d371826edbb0678bd69f3066"
+      "size": 4129,
+      "sha256": "a64bbcda694db2ccd90ebf812de5279b2b1a4102eb0d78a7ebfebe27fc5c98e6"
     },
     {
       "path": "specs/release-trust-v1.md",
@@ -297,7 +297,7 @@
     {
       "path": "verification-map.yaml",
       "size": 107838,
-      "sha256": "4b49e8f797637124230431142dc35e31b26dee328365a83b2fc3494384db9ca3"
+      "sha256": "ed38e2550bad2ece13b3ab352bda0311cb97d2997981db86117420c04f3d1b5f"
     }
   ],
   "roleVerdictSlots": {
