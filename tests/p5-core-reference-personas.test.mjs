@@ -18,6 +18,30 @@ test("exact eight-profile bundle is closed, schema-valid, source-bound, and dete
   reason("PROFILE_ADMISSION_REQUIRED", () => resolveGenericProfile({ schemaVersion: "tcrn.generic-profile-resolution-request.v1", layers: [generateCorePersonaReleaseLayers()[0]], ownerRebind: null }, null));
 });
 
+test("decision-owning personas advise convening a conference and name the stable gate/conference reason codes (WSD-5 stopgap trigger prose)", () => {
+  const bundle = generateCorePersonaBundle();
+  // Personas whose authorityBoundary grants a verdict/adjudication/decision outcome
+  // (role_decision or owner_intent_required). Arturo routes but "may not substitute
+  // for domain decisions" and Ilya "cannot accept its own work", so both are excluded.
+  const decisionOwners = ["Janus", "Mara", "Minerva", "Mneme", "Sable", "Verity"];
+  const nonDecisionOwners = ["Arturo", "Ilya"];
+  const byName = new Map(bundle.profiles.map((p) => [p.displayName, p]));
+  assert.equal(new Set([...decisionOwners, ...nonDecisionOwners]).size, 8);
+  const reasonCodes = ["WORKSPACE_CONFERENCE_NOT_OPEN", "WORKSPACE_GATE_PENDING", "WORKSPACE_GATE_EVIDENCE_UNRESOLVED"];
+  for (const name of decisionOwners) {
+    const profile = byName.get(name); assert.ok(profile, name);
+    assert.ok(profile.contactWhen.includes("convene a conference"), `${name} names conference trigger`);
+    for (const code of reasonCodes) assert.ok(profile.contactWhen.includes(code), `${name} names ${code}`);
+    // The prose is a stopgap trigger, not a control: it names the STABLE reason codes
+    // that the engine enforces, so drift stays load-bearing on those tokens alone.
+    assert.ok(Array.from(profile.contactWhen).length <= 512, `${name} contactWhen within bound`);
+  }
+  for (const name of nonDecisionOwners) {
+    const profile = byName.get(name); assert.ok(profile, name);
+    assert.equal(profile.contactWhen.includes("conference"), false, `${name} carries no conference trigger`);
+  }
+});
+
 test("forbidden, tampered, duplicate, unknown, and extended roster records fail closed", () => {
   const bundle = generateCorePersonaBundle(); const first = structuredClone(bundle.profiles[0]);
   const linuxPath = ["", "home", "alice", "private", "persona.json"].join("/");

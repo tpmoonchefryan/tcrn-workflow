@@ -1137,7 +1137,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "153868b1fa3df2b90cdb10a33bcc2f5899ccaab0ef26fb70eda53d80633cd4ce",
+      "fixtureDigest": "a2658a04f4158dc25815af0da89525db9ac54412eb2ce2e0665a78f02e2a652c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1165,7 +1165,7 @@
         "packages/core/fixtures/p5-generic-profile-cases.json",
         "tests/p5-generic-profile.test.mjs"
       ],
-      "fixtureDigest": "9450a4abc739b7010d86414f1f27d805efbac5a0bb8cd76d76e80728ecfe8cc4",
+      "fixtureDigest": "8faa9c6f6d05238e1e2df7d85a03a72d562864b1327900b91d478f3f8f453621",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
