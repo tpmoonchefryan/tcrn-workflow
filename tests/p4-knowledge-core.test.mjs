@@ -501,7 +501,9 @@ test("selection and strict evaluation instants fail before Knowledge-store scann
   }
 });
 
-test("explicit-current-source provenance requires source, evidence, and accountable owner", async () => {
+test("WSC-3: provenance is enforced at promotion, not capture", async () => {
+  // A candidate is cheap to write even without full provenance; promoting it then
+  // fails closed with KNOWLEDGE_PROVENANCE_INVALID.
   for (const [label, override] of [
     ["source", { sourceReferences: [] }],
     ["evidence", { linkedEvidenceIds: [] }],
@@ -510,28 +512,52 @@ test("explicit-current-source provenance requires source, evidence, and accounta
   ]) {
     const fixture = await workspaceFixture({ externalKey: `FIXTURE-PROVENANCE-${label.toUpperCase()}` });
     try {
-      await expectReason("KNOWLEDGE_PROVENANCE_INVALID", () => createKnowledgeUnit(
+      const created = await createKnowledgeUnit(
         fixture.workspace,
         unitInput(fixture, `KNOWLEDGE-PROVENANCE-${label.toUpperCase()}`, override),
-      ));
+      );
+      assert.equal(created.reasonCode, "KNOWLEDGE_UNIT_CREATED");
+      assert.equal(created.promotionState, "candidate");
+      // rejecting a candidate never needs provenance
+      const rejected = await transitionKnowledgePromotion(fixture.workspace, {
+        expectedVersion: 1, expectedRevision: 1, occurredAt: instant(12), id: created.id, promotionState: "rejected",
+      });
+      assert.equal(rejected.reasonCode, "KNOWLEDGE_PROMOTION_UPDATED");
     } finally {
       await fixture.close();
     }
   }
-  for (const field of ["sourceReferences", "linkedEvidenceIds", "accountableOwnerId"]) {
-    const fixture = await workspaceFixture({ externalKey: `FIXTURE-PROMOTION-${field.toUpperCase()}` });
+  for (const [label, override] of [
+    ["source", { sourceReferences: [] }],
+    ["evidence", { linkedEvidenceIds: [] }],
+    ["owner-empty", { accountableOwnerId: "" }],
+  ]) {
+    const fixture = await workspaceFixture({ externalKey: `FIXTURE-PROMOTE-BLOCK-${label.toUpperCase()}` });
     try {
-      const created = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, `KNOWLEDGE-PROMOTION-${field.toUpperCase()}`));
-      const metadataPath = join(fixture.store, "metadata", `${created.id}.json`);
-      const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-      metadata[field] = field === "accountableOwnerId" ? deriveStableId("profile", "UNADMITTED-OWNER") : [];
-      await writeFile(metadataPath, canonicalJson(metadata));
+      const created = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, `KNOWLEDGE-PROMOTE-BLOCK-${label.toUpperCase()}`, override));
       await expectReason("KNOWLEDGE_PROVENANCE_INVALID", () => transitionKnowledgePromotion(fixture.workspace, {
         expectedVersion: 1, expectedRevision: 1, occurredAt: instant(12), id: created.id, promotionState: "promoted",
       }));
     } finally {
       await fixture.close();
     }
+  }
+});
+
+test("WSC-3: knowledge-create accepts unsorted arrays and sorts them server-side", async () => {
+  const fixture = await workspaceFixture({ externalKey: "FIXTURE-CAPTURE-SORT" });
+  try {
+    const created = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, "KNOWLEDGE-SORT", {
+      tags: ["workflow", "knowledge", "architecture"],
+      roleScopes: [],
+    }));
+    assert.equal(created.reasonCode, "KNOWLEDGE_UNIT_CREATED");
+    const metadata = JSON.parse(await readFile(join(fixture.store, "metadata", `${created.id}.json`), "utf8"));
+    assert.deepEqual(metadata.tags, ["architecture", "knowledge", "workflow"]);
+    // the stored record is canonical and re-validates
+    assert.equal((await validateKnowledgeStore(fixture.workspace)).reasonCode, "KNOWLEDGE_STORE_VALID");
+  } finally {
+    await fixture.close();
   }
 });
 
