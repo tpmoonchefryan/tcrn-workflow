@@ -114,11 +114,16 @@ test("work-show returns one record and fails closed on unknown ids and malformed
   assert.equal(await reasonOf(["project-list", ...ws, "--offset", "-1"]), "CLI_ARGUMENT_MALFORMED");
 });
 
-test("read verbs fail closed when views are stale", async (context) => {
+test("read verbs and validate fail closed on stale views, but status reads authority", async (context) => {
   const fx = await fixture(context);
   const ws = ["--workspace", fx.workspace];
   await writeFile(join(fx.workspace, ".tcrn-workflow", "views", "index.json"), "{}\n");
   assert.equal(await reasonOf(["work-list", ...ws]), "WORKSPACE_VIEW_STALE");
   assert.equal(await reasonOf(["project-list", ...ws]), "WORKSPACE_VIEW_STALE");
   assert.equal(await reasonOf(["work-show", ...ws, "--id", fx.ids.epicA]), "WORKSPACE_VIEW_STALE");
+  assert.equal(await reasonOf(["validate", ...ws]), "WORKSPACE_VIEW_STALE");
+  // WSA-3 / SDC-10: status is authority-only and must survive stale views
+  const status = await run(["status", ...ws]);
+  assert.equal(status.reasonCode, "WORKSPACE_COMMAND_COMPLETED");
+  assert.equal(status.version, 7);
 });

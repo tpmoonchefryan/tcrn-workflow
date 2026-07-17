@@ -21,6 +21,7 @@ import {
   initializeKnowledgeStore,
   initializeWorkspace,
   listKnowledgeMetadata,
+  materializeWorkspace,
   planWorkspaceMigration,
   readGenericProfileAdmissionReceipt,
   readContextRouteAuthorityReceipt,
@@ -576,10 +577,19 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     writeState(io, state);
     return;
   }
-  if (command === "validate" || command === "status") {
+  if (command === "validate") {
     const values = parseArguments(rest, ["workspace"]);
     required(values, ["workspace"]);
     writeState(io, await validateWorkspace(values.workspace ?? ""));
+    return;
+  }
+  if (command === "status") {
+    // WSA-3 / SDC-10: status reads authority only and never staleness-fails, so an
+    // agent can always observe the head; `validate` and the read verbs remain
+    // view-verifying and fail closed with WORKSPACE_VIEW_STALE.
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    writeState(io, await materializeWorkspace(values.workspace ?? ""));
     return;
   }
   if (command === "export") {
