@@ -331,7 +331,7 @@ async function runTests({
     .filter((path) => !trustOnly || path === "tests/release-trust.test.mjs")
     .filter((path) => !rootOnly || path === "tests/root-boundaries.test.mjs")
     .filter((path) => !protocolOnly || path === "tests/protocol-v1.test.mjs")
-    .filter((path) => !p3Only || ["tests/p3-file-engine.test.mjs", "tests/p3-cli-read-surface.test.mjs"].includes(path))
+    .filter((path) => !p3Only || ["tests/p3-file-engine.test.mjs", "tests/p3-cli-read-surface.test.mjs", "tests/p3-cli-catalog.test.mjs"].includes(path))
     .filter((path) => !p4Only || ["tests/p4-artifact-lifecycle.test.mjs", "tests/p4-knowledge-core.test.mjs"].includes(path))
     .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs")
     .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path))

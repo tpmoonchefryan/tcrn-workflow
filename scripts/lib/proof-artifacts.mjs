@@ -44,6 +44,7 @@ const routeAdditions = new Set([
   "packages/core/src/actor-attestation.ts",
   "tests/actor-attestation.test.mjs",
   "tests/p3-cli-read-surface.test.mjs",
+  "tests/p3-cli-catalog.test.mjs",
 ]);
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
