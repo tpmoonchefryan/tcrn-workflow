@@ -325,3 +325,45 @@ test("WSF-3 case 10: restoring the tree to a different path fails WORKSPACE_SCHE
     (error) => error?.reasonCode === "WORKSPACE_SCHEMA_INVALID",
   );
 });
+
+// WSF-4: the git tier-2 guidance doc prescribes a .gitignore for a workspace-root
+// git repo. Its fenced `gitignore` block must name exactly the SDC-9 residue
+// taxonomy the snapshot witness excludes/fails-closed on, plus the two store-local
+// claim classes (knowledge released-*, artifact restore.claim / released-restore-*)
+// whose commit would resurrect a bricked store on clone. This array is kept
+// ADJACENT to the WSF-2 exclusion list documented in workspace-snapshot.ts so the
+// doc and the engine constants drift together loudly. Hermetic: no git is invoked.
+const GITIGNORE_EXPECTED = [
+  ".tcrn-workflow/lease/",
+  ".tcrn-workflow/lease-recovery.claim",
+  ".tcrn-workflow/knowledge/mutation.claim",
+  ".tcrn-workflow/knowledge/released-*",
+  ".tcrn-workflow/artifacts/restore.claim",
+  ".tcrn-workflow/artifacts/released-restore-*",
+  ".tcrn-workflow/stale-lease-*/",
+  ".tcrn-workflow/released-*",
+  ".tcrn-workflow/attempt-owned-*",
+  ".tcrn-workflow/**/.tmp-*",
+];
+
+test("WSF-4 case 11: backup-git-tier.md prescribes the exact SDC-9 residue .gitignore", async () => {
+  const doc = await readFile(new URL("../docs/architecture/backup-git-tier.md", import.meta.url), "utf8");
+  const fence = doc.match(/```gitignore\n([\s\S]*?)```/u);
+  assert.ok(fence, "the doc must carry a fenced gitignore block");
+  const lines = fence[1].split("\n").map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#"));
+  // The block is exactly the SDC-9 taxonomy — no more, no fewer patterns.
+  assert.deepEqual(lines, GITIGNORE_EXPECTED, "the gitignore fence must match the SDC-9 residue taxonomy exactly");
+  // Targeted invariants the verifier corrections require, stated independently of order:
+  assert.ok(lines.includes(".tcrn-workflow/lease/"), "must ignore the lease directory");
+  assert.ok(lines.includes(".tcrn-workflow/lease-recovery.claim"), "must ignore the recovery claim");
+  assert.ok(lines.includes(".tcrn-workflow/knowledge/mutation.claim"), "must ignore the knowledge mutation claim");
+  assert.ok(lines.includes(".tcrn-workflow/knowledge/released-*"), "must ignore the knowledge release quarantine");
+  assert.ok(lines.includes(".tcrn-workflow/artifacts/restore.claim"), "must ignore the artifact restore claim");
+  assert.ok(lines.includes(".tcrn-workflow/artifacts/released-restore-*"), "must ignore the artifact restore quarantine");
+  assert.ok(lines.some((line) => line.includes(".tmp-")), "must ignore atomic-write temporaries");
+  // The doc downgrades git to witness-only: it must route restores through the copy
+  // runbook and carry the quiesce-before-working-tree-ops and headEventHash-message conventions.
+  assert.ok(/backup-restore-runbook\.md/u.test(doc), "the doc cross-links the copy restore runbook");
+  assert.ok(/[Qq]uiesce/u.test(doc), "the doc carries the quiesce-before-git-working-tree-ops warning");
+  assert.ok(/headEventHash/u.test(doc), "the doc states the commit-message-carries-headEventHash convention");
+});

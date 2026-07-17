@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "d7f0537c72d392b6c0785bc84eed5b82af6fd508309f1444f975743db21513b7",
+      "fixtureDigest": "ea241e9f5ec460829155423adb6af6a9015e1aa626ceeebebb287da4fa72e2b7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -50,7 +50,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "c7bf587d6ce5f3e124cf3ada691feacc05bb77545ec5df4d9f888ea7e844d7c8",
+      "fixtureDigest": "fc98b61e46b4e57d5a1243fd5fd16295217194bc6bdcd0a70d53610ccef4a8c5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1573,7 +1573,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "45cdb190c6dcd78197bcbbbba207f402020d2b48a4dd54e01b4ad72511b48921",
+      "fixtureDigest": "66028cdd3e90f2837298853f62b07180e127da91dc60a433d7fd4ef6d5687610",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1617,7 +1617,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "58c37d4f666aa60bd276aafb41142627ead9e0a4606ca2d6dc567215c66df7f6",
+      "fixtureDigest": "f6789019db6fee7b4599c4441872375f72fb6f7a3b90bdcff06eaa35d23c2989",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1669,16 +1669,17 @@
       "phase": "BK",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "snapshot-manifest emits a deterministic canonical manifest (sorted per-file sha256 plus workspace headEventHash, version, and embedded validate result) only under a held workspace lease, excludes the lease and in-flight claim residue classes, fails closed on crashed-session quarantine residue, and performs zero writes outside the control directory; snapshot-verify recomputes a target tree and reports SNAPSHOT_VERIFIED or SNAPSHOT_MISMATCH; and the restore runbook round-trips snapshot then wipe then restore byte-identically at the original path while the two doctrine failure modes fail closed (partial restore leaves KNOWLEDGE_HIGH_WATER_MISMATCH; relocated restore raises WORKSPACE_SCHEMA_INVALID).",
+      "subject": "snapshot-manifest emits a deterministic canonical manifest (sorted per-file sha256 plus workspace headEventHash, version, and embedded validate result) only under a held workspace lease, excludes the lease and in-flight claim residue classes, fails closed on crashed-session quarantine residue, and performs zero writes outside the control directory; snapshot-verify recomputes a target tree and reports SNAPSHOT_VERIFIED or SNAPSHOT_MISMATCH; the restore runbook round-trips snapshot then wipe then restore byte-identically at the original path while the two doctrine failure modes fail closed (partial restore leaves KNOWLEDGE_HIGH_WATER_MISMATCH; relocated restore raises WORKSPACE_SCHEMA_INVALID); and the git tier-2 guidance prescribes a workspace-root .gitignore that masks exactly the SDC-9 residue taxonomy plus the knowledge and artifact release-claim classes, downgrading git to an integrity witness only while routing every restore through the copy runbook.",
       "command": "pnpm verify:backup",
       "fixturePaths": [
         "packages/core/src/workspace-snapshot.ts",
         "packages/core/schema/workspace-snapshot-manifest-v1.schema.json",
         "tests/backup-snapshot.test.mjs",
         "docs/adr/0002-snapshot-not-mirror-backup.md",
+        "docs/architecture/backup-git-tier.md",
         "docs/architecture/backup-restore-runbook.md"
       ],
-      "fixtureDigest": "1425d1235118a6f14f5c295f436ec4f6180a3a63ab0f7d99fac7dea6b9f19e45",
+      "fixtureDigest": "8e93d7ef2da47d1e0ccbfbaaa25c6a4dc7f368a79cdcd0e6c8350ae33dcb206a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1688,7 +1689,7 @@
       "expectedReasonCode": "BACKUP_VERIFIED",
       "evidencePath": "dist/evidence/bk/backup.json",
       "invalidationTriggers": [
-        "Snapshot manifest exclusion or residue taxonomy, workspace lease acquisition or owner.json format, control-tree walk or per-file digest semantics, workspace root-identity binding, knowledge high-water marker semantics, or ADR 0002 snapshot-not-mirror doctrine changes"
+        "Snapshot manifest exclusion or residue taxonomy, workspace lease acquisition or owner.json format, control-tree walk or per-file digest semantics, workspace root-identity binding, knowledge high-water marker semantics, ADR 0002 snapshot-not-mirror doctrine, or the git tier-2 .gitignore residue prescription changes"
       ]
     },
     {
