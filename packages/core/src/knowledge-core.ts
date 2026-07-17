@@ -40,7 +40,7 @@ export const KNOWLEDGE_LIMITS = Object.freeze({
   maximumSummaryBytes: 2_048,
   maximumSnippetBytes: 512,
   maximumMetadataBytes: 32_768,
-  maximumRecords: 16,
+  maximumRecords: 64,
   maximumQueryResults: 8,
   maximumAggregateBytes: 131_072,
   maximumLocators: 16,
@@ -195,6 +195,11 @@ export interface KnowledgeListQuery extends KnowledgeReadOptions {
   readonly tag?: string;
   readonly freshness?: KnowledgeFreshnessState;
   readonly promotionState?: KnowledgePromotionState;
+  // WSC-4: a bounded case-insensitive substring over subject and tags, and a
+  // budgeted window over the ordered result set.
+  readonly search?: string;
+  readonly limit?: number;
+  readonly offset?: number;
 }
 
 export interface KnowledgeBodyReadOptions extends KnowledgeReadOptions {
@@ -1120,25 +1125,49 @@ export async function listKnowledgeMetadata(workspaceRoot: string, query: Knowle
   assertEvaluationInstant(query.at);
   const selection = query.selection ?? "default";
   assertSelection(selection);
+  let search: string | undefined;
+  if (query.search !== undefined) {
+    if (typeof query.search !== "string" || query.search.length === 0 || query.search.length > 256 || !query.search.isWellFormed()) {
+      fail("KNOWLEDGE_INPUT_INVALID", "search term");
+    }
+    search = query.search.toLowerCase();
+  }
+  let limit = KNOWLEDGE_LIMITS.maximumQueryResults;
+  if (query.limit !== undefined) {
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > KNOWLEDGE_LIMITS.maximumRecords) {
+      fail("KNOWLEDGE_INPUT_INVALID", "limit");
+    }
+    limit = query.limit;
+  }
+  let offset = 0;
+  if (query.offset !== undefined) {
+    if (!Number.isSafeInteger(query.offset) || query.offset < 0) {
+      fail("KNOWLEDGE_INPUT_INVALID", "offset");
+    }
+    offset = query.offset;
+  }
   const scan = await scanKnowledgeStore(workspaceRoot, query, false, "metadata-only");
-  let records = scan.units.map((unit) => unit.metadata).filter((metadata) => {
+  const matched = scan.units.map((unit) => unit.metadata).filter((metadata) => {
     const freshness = computeFreshness(metadata, query.at);
     if (selection === "default" && !isDefaultSelectable(metadata, query.at)) return false;
     return (!query.projectId || metadata.projectId === query.projectId) &&
       (!query.roleScope || metadata.roleScopes.includes(query.roleScope)) &&
       (!query.category || metadata.category === query.category) && (!query.kind || metadata.kind === query.kind) &&
       (!query.tag || metadata.tags.includes(query.tag)) && (!query.freshness || freshness === query.freshness) &&
-      (!query.promotionState || metadata.promotionState === query.promotionState);
-  });
-  records = records.sort((left, right) => compareCanonicalText(left.id, right.id));
-  if (records.length > KNOWLEDGE_LIMITS.maximumQueryResults) {
-    fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge query results");
-  }
+      (!query.promotionState || metadata.promotionState === query.promotionState) &&
+      (search === undefined || metadata.subject.toLowerCase().includes(search) || metadata.tags.some((tag) => tag.includes(search)));
+  }).sort((left, right) => compareCanonicalText(left.id, right.id));
+  // WSC-4: truncate with a continuation window instead of failing when more than
+  // one page matches — the metadata-first surface stays usable past a single page.
+  const records = matched.slice(offset, offset + limit);
   return {
     schemaVersion: "tcrn.knowledge-list.v1",
     reasonCode: "KNOWLEDGE_LIST_READY",
     selection,
     at: query.at,
+    total: matched.length,
+    offset,
+    truncated: offset + records.length < matched.length,
     records: records as unknown as readonly JsonValue[],
     resultDigest: canonicalSha256(records),
   };
