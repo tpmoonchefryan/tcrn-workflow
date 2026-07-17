@@ -74,6 +74,9 @@
                 "nullSentinel": {
                   "const": "-"
                 },
+                "headSentinel": {
+                  "const": true
+                },
                 "deprecatedAliases": {
                   "type": "array",
                   "minItems": 1,

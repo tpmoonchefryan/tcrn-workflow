@@ -32,6 +32,12 @@ Each entry is `{name, availability, mutates, flags}`:
     slated for removal. Only `knowledge-create` `project-id`/`last-verified`
     carry it, each `["null"]`, preserving the pre-unification `"null"` spelling
     for external callers.
+  - `headSentinel` — always `true`, marking an `expected-version` flag that also
+    accepts the literal `head`, which the verb resolves to the current version
+    under the held workspace lease (opt-in optimistic-concurrency bypass). Present
+    only on the six workspace-event mutation verbs `project-create`/`-update`/
+    `-delete` and `work-create`/`-transition`/`-delete`; knowledge-marker
+    mutations reject `head` with `CLI_ARGUMENT_MALFORMED`.
 
 ## Parity and stability
 
