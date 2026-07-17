@@ -643,6 +643,59 @@ test("WSC-6: promotion enforces machine checks for tags and snippet", async () =
   }
 });
 
+test("WSE-5: a work-log candidate carrying an event reference and chain-matching accountable owner promotes unchanged", async () => {
+  // Rationale linkage (work-log-v1 Event linkage): the event -> work-log -> evidence
+  // audit walk is expressible today with zero schema or engine change. A work-log
+  // decision candidate that lists a covered event as an `event:<eventHash>` source
+  // reference, sets accountableOwnerId to the attested owner: actor, and carries the
+  // evidence link passes createKnowledgeUnit and the existing promotion validation.
+  const eventReference = (fixture, seed) => `event:${canonicalSha256({ workId: fixture.workId, seed })}`;
+  const agentActor = deriveStableId("agent", "WORK-LOG-AGENT");
+
+  for (const [label, override] of [
+    // owner: actor -> exact accountableOwnerId match, event reference only
+    ["owner-actor", (fixture) => ({ kind: "decision", sourceReferences: [eventReference(fixture, "owner")] })],
+    // profile:/agent: actor -> owning owner stays accountable, actor id rides in sourceReferences
+    ["agent-actor", (fixture) => ({ kind: "decision", sourceReferences: [eventReference(fixture, "agent"), agentActor] })],
+  ]) {
+    const fixture = await workspaceFixture({ externalKey: `FIXTURE-WORK-LOG-${label.toUpperCase()}` });
+    try {
+      const created = await createKnowledgeUnit(
+        fixture.workspace,
+        unitInput(fixture, `WORK-LOG-${label.toUpperCase()}`, override(fixture)),
+      );
+      assert.equal(created.reasonCode, "KNOWLEDGE_UNIT_CREATED");
+      // creation itself proves the event reference survives storage: a reference the
+      // source-reference grammar rejected or redaction rewrote would fail closed here.
+      assert.equal(created.promotionState, "candidate");
+      const promoted = await transitionKnowledgePromotion(fixture.workspace, {
+        expectedVersion: 1, expectedRevision: 1, occurredAt: instant(12), id: created.id, promotionState: "promoted",
+      });
+      assert.equal(promoted.promotionState, "promoted");
+    } finally {
+      await fixture.close();
+    }
+  }
+
+  // Negative: the evidence half is still enforced by the existing rule. An event
+  // reference present but linkedEvidenceIds empty fails closed
+  // KNOWLEDGE_PROVENANCE_INVALID at promotion, so the linkage convention opens no
+  // bypass of the evidence requirement.
+  const negative = await workspaceFixture({ externalKey: "FIXTURE-WORK-LOG-NO-EVIDENCE" });
+  try {
+    const created = await createKnowledgeUnit(negative.workspace, unitInput(negative, "WORK-LOG-NO-EVIDENCE", {
+      kind: "decision",
+      sourceReferences: [eventReference(negative, "no-evidence")],
+      linkedEvidenceIds: [],
+    }));
+    await expectReason("KNOWLEDGE_PROVENANCE_INVALID", () => transitionKnowledgePromotion(negative.workspace, {
+      expectedVersion: 1, expectedRevision: 1, occurredAt: instant(12), id: created.id, promotionState: "promoted",
+    }));
+  } finally {
+    await negative.close();
+  }
+});
+
 test("WSC-5: retire and reverify lifecycle transitions fail closed", async () => {
   const fixture = await workspaceFixture({ externalKey: "FIXTURE-LIFECYCLE" });
   try {

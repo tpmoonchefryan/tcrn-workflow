@@ -91,3 +91,13 @@ verify the caller against any admission receipt or profile authority, and the
 attestation records who a caller *claims* to be, not a proven identity. Binding
 `--actor` to the profile-admission authority is deliberately deferred to a future
 version with its own threat model.
+
+## Evidence linkage (WSE-5)
+
+Attestation answers "who acted" by binding each event to an accountable actor; the
+"on what evidence" half is carried by the work-log convention (work-log-v1, Event
+linkage) and is not duplicated here. A work-log knowledge candidate references its
+covered events by their `event:<eventHash>` form, sets `accountableOwnerId` to match
+the attested actor, and links the evidence through the existing knowledge promotion
+rules. The audit walk `payload.actor` -> work-log candidate -> linked evidence closes
+there; this spec adds no evidence rule of its own.

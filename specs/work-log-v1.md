@@ -29,6 +29,36 @@ candidates alongside other knowledge. High-frequency small records are bounded b
 the size cap and by candidate-not-promoted status so the knowledge budget is not
 flooded.
 
+## Event linkage
+
+A work-log candidate that closes out chain mutations binds itself to the events it
+covers, so the audit trail runs from an accountable actor through a decision to the
+evidence behind it. The linkage reuses fields the knowledge store already validates;
+it adds no schema and no engine hook.
+
+- Event references: each covered chain event is listed as a `sourceReferences`
+  entry of the form `event:<eventHash>`, where `<eventHash>` is that event's
+  `tcrn.event.v1` `eventHash` (lowercase hex). The form is a stableId-safe,
+  redaction-stable string, so it satisfies the source-reference grammar
+  knowledge-core already enforces — bounded, printable, sorted, unique, and left
+  unchanged by artifact redaction — with no new grammar.
+- Accountable owner: the candidate's `accountableOwnerId` matches the actor
+  attested on the covered events (actor-attestation-v1 `payload.actor`). When that
+  actor carries the `owner:` prefix the match is exact string equality. When the
+  attested actor is a `profile:` or `agent:` id, `accountableOwnerId` stays the
+  owning `owner:` id — as the knowledge promotion rule requires — and the
+  `profile:`/`agent:` actor id is carried as an additional `sourceReferences` entry.
+- Evidence links: `linkedEvidenceIds` (and `linkedGateIds` where a gate closed the
+  dispatch) carry the evidence knowledge ids exactly as today; promotion still fails
+  closed `KNOWLEDGE_PROVENANCE_INVALID` unless at least one evidence id is present.
+
+The resulting audit walk runs one direction only: `event.payload.actor` -> work-log
+candidate (found by its `event:<eventHash>` reference) -> `linkedEvidenceIds` /
+`linkedGateIds` -> evidence. Reference direction is event -> actor (attested in the
+chain) and work-log -> event; there is deliberately no event-side forward pointer to
+knowledge, which would require mutating an event after the knowledge unit exists —
+impossible on an append-only chain.
+
 ## Settings change as a decision record
 
 A settings change is recorded as a decision, using the same convention: a work-log
