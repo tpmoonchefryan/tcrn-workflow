@@ -342,6 +342,7 @@ export {
   appendConferencePosition,
   listConferencesByWorkItem,
   closeConference,
+  distillConferenceKnowledge,
 } from "./conference.js";
 export type {
   ConferenceRequest,
@@ -349,6 +350,7 @@ export type {
   ConferenceMinutes,
   ConferenceDecisionCandidate,
   ConferenceReasonCode,
+  DistillConferenceOptions,
 } from "./conference.js";
 export {
   ASSIGNMENT_VERSION,

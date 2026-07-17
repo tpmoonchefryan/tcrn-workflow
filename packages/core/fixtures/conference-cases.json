@@ -7,6 +7,7 @@
   "minutesParityCases": 4,
   "operationCases": 6,
   "distillCases": 3,
+  "distillKnowledgeCases": 13,
   "registrationAppliesTo": "work",
   "requiredByDefault": false,
   "ledgerRequirement": "AOS-REQ-015",

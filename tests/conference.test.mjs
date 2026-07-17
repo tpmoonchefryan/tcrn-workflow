@@ -12,12 +12,14 @@ import {
   CONFERENCE_REQUEST_VERSION,
   appendConferencePosition,
   closeConference,
+  distillConferenceKnowledge,
   listConferencesByWorkItem,
   openConference,
   validateConferenceMinutes,
   validateConferencePosition,
   validateConferenceRequest,
 } from "../dist/build/packages/core/src/index.js";
+import { canonicalExternalKey, canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
 const fixture = JSON.parse(await readFile(new URL("../packages/core/fixtures/conference-cases.json", import.meta.url), "utf8"));
 
@@ -83,6 +85,63 @@ test("close distils each decision into a knowledge candidate backlinking the con
   assert.equal(checks.length, fixture.distillCases);
   for (const check of checks) check();
   reason("CONFERENCE_MINUTES_UNBOUND", () => closeConference(minutes({ conferenceId: "conference:other" }), request()));
+});
+
+test("WSD-3: distillConferenceKnowledge emits one governed knowledge input per decision", () => {
+  const options = {
+    occurredAt: "2026-07-16T02:00:00Z",
+    expectedVersionBase: 3,
+    stalenessDays: 90,
+    accountableOwnerId: "owner:governance",
+    evidenceIds: ["evidence:extra", "work:notevidence"],
+  };
+  const inputs = distillConferenceKnowledge(minutes(), request(), [position()], options);
+  const checks = [
+    // One input per minutes decision, each a candidate carrying the base-relative CAS.
+    () => assert.equal(inputs.length, minutes().decisions.length),
+    () => assert.deepEqual(inputs.map((input) => input.expectedVersion), [3, 4]),
+    () => assert.equal(inputs.every((input) => input.lifecycle === "candidate" && input.category === "decision" && input.kind === "decision"), true),
+    // Hyphen-only external keys the canonicalizer admits (uppercased), unique per decision.
+    () => assert.deepEqual(inputs.map((input) => input.externalKey), ["conference-decision-one-one-1", "conference-decision-one-one-2"]),
+    () => assert.equal(inputs.every((input) => canonicalExternalKey(input.externalKey) === input.externalKey.toUpperCase()), true),
+    // Fixed conference tag set: non-empty and sorted so the WSC-6 promote check passes.
+    () => assert.deepEqual(inputs[0].tags, ["conference-decision", "distilled", "type-architecture"]),
+    () => assert.equal(inputs.every((input) => input.tags.length >= 1 && input.snippet.length > 0), true),
+    // sourceReferences backlink both records; buildMetadata sorts them server-side.
+    () => assert.deepEqual([...inputs[0].sourceReferences].sort(), ["conference-minutes:one", "conference:one"].sort()),
+    // sourceDigest binds the FULL untruncated basis, recomputed here.
+    () => assert.equal(inputs[0].sourceDigest, canonicalSha256({ title: request().title, decision: minutes().decisions[0], minutesId: "minutes:one" })),
+    // Evidence union: only evidence:-prefixed ids, deduped and sorted (position + supplement).
+    () => assert.deepEqual(inputs[0].linkedEvidenceIds, ["evidence:extra", "evidence:p6b"]),
+    // Provenance stays optional at capture, but supplying it here flows through.
+    () => assert.equal(inputs[0].accountableOwnerId, "owner:governance"),
+    () => assert.equal(inputs[0].stalenessPolicy.maximumAgeDays, 90),
+    () => assert.equal(inputs[0].scope === "project" && inputs[0].projectId === "project:alpha", true),
+  ];
+  assert.equal(checks.length, fixture.distillKnowledgeCases);
+  for (const check of checks) check();
+  reason("CONFERENCE_MINUTES_UNBOUND", () => distillConferenceKnowledge(minutes({ conferenceId: "conference:other" }), request(), [], options));
+});
+
+test("WSD-3: knowledge fields truncate on a code-point boundary without splitting a multi-byte code point", () => {
+  // A 4-byte code point straddling the 512-byte snippet bound: truncation must stop
+  // before it, leaving a well-formed string at or under the byte cap (no partial unit).
+  const decision = `${"a".repeat(510)}\u{1f600}tail`;
+  const inputs = distillConferenceKnowledge(minutes({ decisions: [decision] }), request(), [], {
+    occurredAt: "2026-07-16T02:00:00Z", expectedVersionBase: 0, stalenessDays: 30,
+  });
+  const [input] = inputs;
+  assert.equal(Buffer.byteLength(input.snippet, "utf8") <= 512, true);
+  assert.equal(input.snippet.isWellFormed(), true);
+  assert.equal(input.snippet, "a".repeat(510));
+  assert.equal(Buffer.byteLength(input.subject, "utf8") <= 512, true);
+  assert.equal(input.subject.isWellFormed(), true);
+  // summary passes through the 2048-byte cap unchanged and stays well-formed.
+  assert.equal(Buffer.byteLength(input.summary, "utf8") <= 2048, true);
+  assert.equal(input.summary.isWellFormed(), true);
+  // Provenance omitted stays empty (capture-cheap); evidence union is empty.
+  assert.equal(input.accountableOwnerId, "");
+  assert.deepEqual(input.linkedEvidenceIds, []);
 });
 
 test("hostile records fail closed", () => {

@@ -8,6 +8,7 @@ import {
   appendConferencePositionInWorkspace,
   closeConferenceInWorkspace,
   cancelConferenceInWorkspace,
+  distillConferenceKnowledge,
   listConferencesByWorkItem,
   createGateInWorkspace,
   transitionGateInWorkspace,
@@ -387,7 +388,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "compatibility-validate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "conference-append-position", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "actor-id", required: true, valueKind: "string" }, { name: "position", required: true, valueKind: "string" }, { name: "risks", required: true, valueKind: "list" }, { name: "recommendations", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }] },
   { name: "conference-cancel", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
-  { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }] },
+  { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "distill", required: false, valueKind: "boolean" }, { name: "accountable-owner-id", required: false, valueKind: "string" }, { name: "stale-days", required: false, valueKind: "integer" }, { name: "evidence-ids", required: false, valueKind: "list" }] },
   { name: "conference-list-by-work", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
   { name: "conference-open", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "type", required: true, valueKind: "string" }, { name: "title", required: true, valueKind: "string" }, { name: "work-ids", required: true, valueKind: "list" }, { name: "desired-outcome", required: true, valueKind: "string" }, { name: "participant-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }] },
   { name: "context-route", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "profile-receipt", required: true, valueKind: "string" }, { name: "authority", required: true, valueKind: "string" }] },
@@ -1203,24 +1204,75 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "conference-close") {
-    // Core-flag surface only: WSD-3 (Stage 5) owns the --distill/--accountable-owner-id
-    // /--stale-days/--evidence-ids knowledge-wiring flags and adds them to this allowlist.
-    const values = parseArguments(rest, [...shared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues", "actor"]);
+    // WSD-3 (Stage 5) adds the four knowledge-wiring flags to WSD-2's core surface,
+    // preserving --actor and every core flag. --distill is opt-in: absent/false is
+    // byte-identical to the WSD-2 close (no knowledge access), so a close on a
+    // workspace without an initialized knowledge store is never bricked. When set,
+    // the close event is appended FIRST, then the governed high-water rebind
+    // (rebaseKnowledgeStore) re-binds the disposable knowledge store to the advanced
+    // headEventHash — without it every subsequent knowledge call would fail
+    // KNOWLEDGE_HIGH_WATER_MISMATCH — then each minutes decision is captured as a
+    // knowledge candidate. Provenance stays optional at capture (WSC-3 capture-cheap);
+    // the whole flow runs under the held workspace lease so no concurrent append can
+    // desync the rebind before capture.
+    const values = parseArguments(rest, [...shared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues", "actor", "distill", "accountable-owner-id", "stale-days", "evidence-ids"]);
     required(values, [...shared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => closeConferenceInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace),
-      occurredAt: at,
-      conferenceId: values["conference-id"] ?? "",
-      minutesExternalKey: values["minutes-external-key"] ?? "",
-      summary: values.summary ?? "",
-      outcomeClass: values["outcome-class"] as ConferenceMinutes["outcomeClass"],
-      decisions: listValue(values.decisions),
-      unresolvedIssues: listValue(values["unresolved-issues"]),
-      ...(values.actor ? { actorId: values.actor } : {}),
+    const conferenceId = values["conference-id"] ?? "";
+    const minutesId = deriveStableId("minutes", canonicalExternalKey(values["minutes-external-key"] ?? ""));
+    const distill = booleanValue(values.distill, "distill");
+    const outcome = await withLease(workspace, at, async (lease) => {
+      // Read the knowledge marker version BEFORE the close, while the store's
+      // high-water still equals the workspace head — a missing/invalid store then
+      // fails closed BEFORE the close event is appended (version unchanged). The
+      // marker version is untouched by the close (which only appends a workspace
+      // event), so it is the exact CAS basis for the post-close rebind.
+      let knowledgeVersion = 0;
+      if (distill) knowledgeVersion = Number((await validateKnowledgeStore(workspace)).version);
+      const state = await closeConferenceInWorkspace(workspace, lease, {
+        expectedVersion: await resolveExpectedVersion(values, workspace),
+        occurredAt: at,
+        conferenceId,
+        minutesExternalKey: values["minutes-external-key"] ?? "",
+        summary: values.summary ?? "",
+        outcomeClass: values["outcome-class"] as ConferenceMinutes["outcomeClass"],
+        decisions: listValue(values.decisions),
+        unresolvedIssues: listValue(values["unresolved-issues"]),
+        ...(values.actor ? { actorId: values.actor } : {}),
+      });
+      if (!distill) return { state, knowledgeUnitIds: undefined };
+      const rebased = await rebaseKnowledgeStore(workspace, { expectedVersion: knowledgeVersion, at });
+      const candidates = distillConferenceKnowledge(
+        state.conferenceMinutes.find((entry) => entry.id === minutesId),
+        state.conferences.find((entry) => entry.id === conferenceId),
+        state.conferencePositions.filter((entry) => entry.conferenceId === conferenceId),
+        {
+          occurredAt: at,
+          expectedVersionBase: Number(rebased.version),
+          stalenessDays: boundedInteger(values, "stale-days") ?? 365,
+          ...(values["accountable-owner-id"] ? { accountableOwnerId: values["accountable-owner-id"] } : {}),
+          evidenceIds: listValue(values["evidence-ids"]),
+        },
+      );
+      const knowledgeUnitIds: string[] = [];
+      for (const candidate of candidates) {
+        knowledgeUnitIds.push(String((await createKnowledgeUnit(workspace, candidate)).id));
+      }
+      return { state, knowledgeUnitIds };
+    });
+    if (outcome.knowledgeUnitIds === undefined) {
+      writeExtensionState(io, outcome.state, minutesId);
+      return;
+    }
+    io.write(canonicalJson({
+      reasonCode: "WORKSPACE_COMMAND_COMPLETED",
+      workspaceId: outcome.state.metadata.workspaceId,
+      version: outcome.state.version,
+      headEventHash: outcome.state.headEventHash,
+      recordId: minutesId,
+      knowledgeUnitIds: outcome.knowledgeUnitIds,
     }));
-    writeExtensionState(io, state, deriveStableId("minutes", canonicalExternalKey(values["minutes-external-key"] ?? "")));
     return;
   }
   if (command === "conference-cancel") {

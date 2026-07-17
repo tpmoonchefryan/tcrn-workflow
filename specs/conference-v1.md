@@ -51,6 +51,27 @@ second knowledge store is created (single knowledge store). The raw positions an
 minutes remain size-budgeted records subject to the knowledge and archive
 lifecycle.
 
+The `distillConferenceKnowledge` transform turns the closed minutes into full
+`CreateKnowledgeUnitInput` records — one per decision — that the unmodified
+knowledge creation contract admits. Each record carries a hyphen-only external key
+`conference-decision-<hex>-<hex>-<n>` the canonicalizer accepts, `project` scope,
+`decision` category and kind, a fixed conference tag set and a non-empty snippet
+(so it is promotable by construction under the promote-time machine checks),
+`subject`/`summary`/`snippet` truncated on a code-point boundary to their byte
+caps, a `sourceDigest` bound to the full untruncated title/decision/minutes basis,
+both the conference and conference-minutes backlinks, and the deduped
+`evidence:`-prefixed union across positions and an optional supplement. Provenance
+(accountable owner, evidence) is optional at capture and enforced only at promote.
+
+The `conference-close --distill` verb wires this under one held workspace lease:
+it reads the knowledge marker version before the close — so a missing or invalid
+knowledge store fails closed BEFORE the close event is appended and the workspace
+version is unchanged — appends `conference.closed` (advancing the head), performs
+the governed high-water rebind so subsequent knowledge access does not fail on the
+advanced head, then creates one candidate per decision and names the created ids in
+its receipt. `--distill` is opt-in: absent or false, the close is byte-identical to
+a close with no knowledge access.
+
 ## Persistence
 
 Conference records persist as additive workspace event-log operations:
