@@ -5,6 +5,73 @@ Versioning after the first accepted release.
 
 ## Unreleased
 
+- Ship the governed conference and gate surface on the local candidate: nine
+  governed CLI verbs (`conference-open`/`-append-position`/`-close`/`-cancel`,
+  `gate-create`/`-transition`/`-delete`, `conference-list-by-work`, `gate-list`)
+  persist `conference.*`/`gate.*` records as additive hash-chained workspace
+  events through the single SDC-2 payload constructor, under a held lease and
+  the engine `expectedVersion` CAS, with byte-identical views/export/archive for
+  workspaces that carry no extension events and a conditional
+  `views/extensions.json` index.
+- Enforce fail-closed decision gates: a non-tombstoned pending gate anchored to a
+  work item blocks that item's transition to `done` with `WORKSPACE_GATE_PENDING`
+  at the verb and identically on replay (`WORKSPACE_EVENT_CORRUPT`), and a gate
+  reaches `satisfied` only against a resolvable `conference-minutes` locator whose
+  conference anchors the gate's work item; the frozen work status graph is
+  unchanged — the precondition only narrows admissible transitions.
+- Enforce actor attestation at the enable boundary: appending the one-way
+  `attestation.actor.enabled` chain event (`attestation-enable`) makes a valid
+  actor id mandatory from that sequence onward on both the live append path and
+  the replay reducer (`WORKSPACE_ACTOR_REQUIRED` / `WORKSPACE_ACTOR_INVALID`), a
+  duplicate enable fails `WORKSPACE_INPUT_INVALID`, and a workspace that never
+  enables it stays byte-identical to `0.1.0-rc.4`.
+- Land the three-step Claude Code activation ladder as gated, byte-reversible
+  capability: the Step-1 installer writes the four inert bundle templates under
+  `.claude/tcrn-workflow/` (O_EXCL/O_NOFOLLOW, never touching
+  `.claude/settings.json`), Step 2 merges exactly one fail-open `SessionStart`
+  hook (the sole authorized fail-open surface — any induced failure exits 0 as
+  plain Claude Code), and Step 3 renders the single advisory Verity persona
+  authority summary within the 1024-byte injection budget; nothing under
+  `~/.claude` is ever named or written and every step is exact byte-inverse on
+  rollback.
+- Add snapshot backup and a hermetic restore round-trip: a lease-held
+  `snapshot-manifest` emits a deterministic per-file manifest, `snapshot-verify`
+  reports `SNAPSHOT_VERIFIED`/`SNAPSHOT_MISMATCH`, the restore runbook
+  round-trips snapshot → wipe → restore byte-identically at the original path
+  with both doctrine failure modes failing closed, and an optional git tier-2
+  serves as an integrity witness only.
+- Extend the Knowledge Core: capture-cheap `knowledge-create`, governed
+  `knowledge-rebase` head re-binding (`KNOWLEDGE_REBASE_BLOCKED` on unresolved
+  references), the reverify/retire lifecycle under CAS
+  (`KNOWLEDGE_LIFECYCLE_INVALID`), unconditional promotion governance
+  (`KNOWLEDGE_PROMOTION_INVALID`), and close-time conference distillation of each
+  minutes decision into a backlinking knowledge candidate the unchanged creation
+  contract accepts.
+- Remove the quadratic replay cost: an n-event chain runs exactly one terminal
+  full-graph validation plus one ancestor-bounded O(delta) closure per work
+  event, proven by closed-form operation-count equality.
+- Document the agent-integration CLI consumption contract — envelopes, the retry
+  table for `WORKSPACE_VIEW_STALE`/`WORKSPACE_LOCKED`/`WORKSPACE_CAS_MISMATCH`
+  (plus the lease verbs, `WORKSPACE_GATE_PENDING`, and `SNAPSHOT_*` codes), the
+  `-`/`null`/`head` sentinels, and determinism guarantees — with a drift-guard
+  test binding the prose to the live command catalog.
+- Add opt-in, advisory time-attestation receipts via `--attest-dir` on every
+  workspace-event mutation verb: the engine reads no clock, receipts write only
+  outside the workspace root, embed no path or hostname, and carry no governance
+  weight; export and archive bytes are identical whether or not receipts exist.
+- Document the `settings-catalog-v1` conference and backup knobs, expand the
+  one-page protocol stub specs to normative weight, and record the
+  proof-to-product budget rule as a reviewer-enforced `CONTRIBUTING` policy.
+- Prove the flagship end-to-end governed loop: one hermetic replay of
+  initiative → epic → story → gate → conference → distill → promote → trace on a
+  real workspace, every tutorial command executed verbatim and every produced
+  digest traced to its producer (`pnpm verify:e2e`).
+- Add `docs/architecture/rc5-compatibility.md`: the rc.4 → rc.5 workspace
+  compatibility and migration matrix (intentional forward-incompatibility of
+  conference/gate/attestation events under `storageVersion 1`, the one-way
+  attestation boundary, and the disposable knowledge-store re-initialization
+  procedure).
+
 - Re-cut the MVP scope to two officially supported V1 Agent Apps (Codex and
   Claude Code) for the `0.1.0-rc.4` unpublished local candidate: add the inert
   Claude Code adapter (P6B), the additive `dependency-v1` extension, the
