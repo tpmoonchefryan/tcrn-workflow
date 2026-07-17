@@ -54,7 +54,9 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_FILESYSTEM_UNSUPPORTED",
   "WORKSPACE_INPUT_INVALID",
   "WORKSPACE_INPUT_OVERSIZED",
+  "WORKSPACE_LEASE_BROKEN",
   "WORKSPACE_LEASE_INVALID",
+  "WORKSPACE_LEASE_OBSERVED",
   "WORKSPACE_LOCKED",
   "WORKSPACE_MIGRATION_APPLY_UNAVAILABLE",
   "WORKSPACE_MIGRATION_DOWNGRADE",
@@ -1025,6 +1027,69 @@ async function reclaimObservedLease(leasePath: string, workspaceRoot: string, ob
   }
   await rm(quarantine, { recursive: true, force: true });
   await options.afterLeaseQuarantineForTest?.(captured);
+}
+
+// WSA-4: read-only lease report so an operator can see the wedge (an expired lease
+// whose pid was recycled by a live process, which the acquire path treats as
+// active). No mutation.
+export async function inspectWorkspaceLease(workspaceRootInput: string, options: { readonly now: string }): Promise<Readonly<Record<string, JsonValue>>> {
+  assertStrictInstant(options.now);
+  const nowNanoseconds = parseStrictInstant(options.now);
+  const workspaceRoot = await boundDirectory(workspaceRootInput);
+  await readMetadata(workspaceRoot);
+  const leasePath = controlPath(workspaceRoot, "lease");
+  let observed: LeaseObservation;
+  try {
+    observed = await observeLease(leasePath, workspaceRoot);
+  } catch (error) {
+    if (error instanceof WorkspaceError && error.reasonCode === "WORKSPACE_LEASE_INVALID") {
+      return { schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false };
+    }
+    throw error;
+  }
+  if (!observed.owner) {
+    return { schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false };
+  }
+  const pid = Number(observed.owner.pid);
+  return {
+    schemaVersion: "tcrn.workspace-lease-inspection.v1",
+    reasonCode: "WORKSPACE_LEASE_OBSERVED",
+    held: true,
+    token: String(observed.owner.token),
+    pid,
+    acquiredAt: String(observed.owner.acquiredAt),
+    expired: BigInt(String(observed.owner.expiresAtNanoseconds)) <= nowNanoseconds,
+    processAlive: processAlive(pid),
+  };
+}
+
+// WSA-4: operator-attested break for the pid-reuse wedge. Bypasses the processAlive
+// check the acquire path uses, but requires the exact current owner token (proving
+// the operator inspected it) AND an already-expired lease — so a live or valid
+// lease can never be broken. Fails closed otherwise.
+export async function breakWorkspaceLease(workspaceRootInput: string, options: { readonly now: string; readonly ownerToken: string }): Promise<Readonly<Record<string, JsonValue>>> {
+  assertStrictInstant(options.now);
+  const nowNanoseconds = parseStrictInstant(options.now);
+  const workspaceRoot = await boundDirectory(workspaceRootInput);
+  await readMetadata(workspaceRoot);
+  const leasePath = controlPath(workspaceRoot, "lease");
+  const observed = await observeLease(leasePath, workspaceRoot);
+  if (!observed.owner) {
+    fail("WORKSPACE_LEASE_INVALID", "no lease owner to break");
+  }
+  if (observed.owner.token !== options.ownerToken) {
+    fail("WORKSPACE_LEASE_INVALID", "break requires the current lease owner token");
+  }
+  if (BigInt(String(observed.owner.expiresAtNanoseconds)) > nowNanoseconds) {
+    fail("WORKSPACE_LOCKED", "an unexpired lease cannot be broken");
+  }
+  await reclaimObservedLease(leasePath, workspaceRoot, observed, {});
+  return {
+    schemaVersion: "tcrn.workspace-lease-break.v1",
+    reasonCode: "WORKSPACE_LEASE_BROKEN",
+    token: String(observed.owner.token),
+    pid: Number(observed.owner.pid),
+  };
 }
 
 async function createLeaseOwner(
