@@ -67,9 +67,13 @@ valid mutation.
 
 V1 limits body bytes to 8192, subject bytes to 512, summary bytes to 2048,
 snippet bytes to 512, each source-reference string to 512,
-metadata bytes to 32768, records to 16, query results to 8, aggregate store
+metadata bytes to 32768, records to 64 (a ratified Tier-0 limit revision from the
+fixture-scale 16), the default query page to 8 results, aggregate store
 bytes to 128 KiB, source locators to 16, each link class to 64, tags to 32, and
-role scopes to 16.
+role scopes to 16. Listing more matches than one page truncates with a
+`{total, offset, truncated}` continuation window rather than failing closed, and a
+bounded case-insensitive substring over subject and tags narrows results without
+loading bodies.
 
 These text budgets are UTF-8 byte budgets. Draft 2020-12 `maxLength` counts
 Unicode code points and is retained only as a structural bound. P4 schema proof

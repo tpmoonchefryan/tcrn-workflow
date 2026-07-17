@@ -544,6 +544,28 @@ test("WSC-3: provenance is enforced at promotion, not capture", async () => {
   }
 });
 
+test("WSC-4: knowledge-list supports bounded substring search over subject and tags", async () => {
+  const fixture = await workspaceFixture({ externalKey: "FIXTURE-SEARCH" });
+  try {
+    await createKnowledgeUnit(fixture.workspace, unitInput(fixture, "KNOWLEDGE-ALPHA", { expectedVersion: 0, occurredAt: instant(11, 3), subject: "Retry backoff policy", tags: ["knowledge", "resilience"] }));
+    await createKnowledgeUnit(fixture.workspace, unitInput(fixture, "KNOWLEDGE-BETA", { expectedVersion: 1, occurredAt: instant(11, 4), subject: "Cache invalidation rules", tags: ["knowledge", "caching"] }));
+    const bySubject = await listKnowledgeMetadata(fixture.workspace, { at: instant(12), selection: "all", search: "backoff" });
+    assert.equal(bySubject.total, 1);
+    assert.equal(bySubject.records[0].subject, "Retry backoff policy");
+    const byTag = await listKnowledgeMetadata(fixture.workspace, { at: instant(12), selection: "all", search: "caching" });
+    assert.equal(byTag.total, 1);
+    assert.equal(byTag.records[0].subject, "Cache invalidation rules");
+    const caseInsensitive = await listKnowledgeMetadata(fixture.workspace, { at: instant(12), selection: "all", search: "RETRY" });
+    assert.equal(caseInsensitive.total, 1);
+    const none = await listKnowledgeMetadata(fixture.workspace, { at: instant(12), selection: "all", search: "nonexistent-term" });
+    assert.equal(none.total, 0);
+    await expectReason("KNOWLEDGE_INPUT_INVALID", () => listKnowledgeMetadata(fixture.workspace, { at: instant(12), selection: "all", search: "x".repeat(300) }));
+    await expectReason("KNOWLEDGE_INPUT_INVALID", () => listKnowledgeMetadata(fixture.workspace, { at: instant(12), selection: "all", limit: 0 }));
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("WSC-3: knowledge-create accepts unsorted arrays and sorts them server-side", async () => {
   const fixture = await workspaceFixture({ externalKey: "FIXTURE-CAPTURE-SORT" });
   try {
@@ -817,7 +839,15 @@ test("record-count and query-result limits are executable", async () => {
         occurredAt: instant(11, 3 + index),
       }));
     }
-    await expectReason("KNOWLEDGE_LIMIT_EXCEEDED", () => listKnowledgeMetadata(query.workspace, { at: instant(12), selection: "all" }));
+    // WSC-4: more matches than one page truncates with a continuation window
+    // instead of failing closed.
+    const page = await listKnowledgeMetadata(query.workspace, { at: instant(12), selection: "all" });
+    assert.equal(page.total, KNOWLEDGE_LIMITS.maximumQueryResults + 1);
+    assert.equal(page.records.length, KNOWLEDGE_LIMITS.maximumQueryResults);
+    assert.equal(page.truncated, true);
+    const next = await listKnowledgeMetadata(query.workspace, { at: instant(12), selection: "all", offset: KNOWLEDGE_LIMITS.maximumQueryResults });
+    assert.equal(next.records.length, 1);
+    assert.equal(next.truncated, false);
   } finally {
     await query.close();
   }
