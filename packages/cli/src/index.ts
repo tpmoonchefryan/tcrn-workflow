@@ -136,13 +136,29 @@ function parseArguments(arguments_: readonly string[], allowed: readonly string[
     fail("CLI_INPUT_OVERSIZED", "CLI arguments exceed the local input limit");
   }
   const values: Record<string, string> = {};
-  for (let index = 0; index < arguments_.length; index += 2) {
-    const flag = arguments_[index];
-    const value = arguments_[index + 1];
-    if (!flag?.startsWith("--") || value === undefined || value.startsWith("--")) {
-      fail("CLI_ARGUMENT_MALFORMED", String(flag ?? "missing"));
+  let index = 0;
+  while (index < arguments_.length) {
+    const token = arguments_[index];
+    let name: string;
+    let value: string;
+    if (token !== undefined && token.startsWith("--") && token.includes("=")) {
+      // Attached form --flag=value: split on the FIRST "=" so the value may itself
+      // contain "=" or legitimately begin with "--" (unrepresentable in two-token form).
+      const equalsAt = token.indexOf("=");
+      name = token.slice(2, equalsAt);
+      value = token.slice(equalsAt + 1);
+      index += 1;
+    } else {
+      const next = arguments_[index + 1];
+      // Two-token form is unchanged: a value beginning with "--" is still rejected,
+      // which doubles as missing-value (undefined next) detection.
+      if (!token?.startsWith("--") || next === undefined || next.startsWith("--")) {
+        fail("CLI_ARGUMENT_MALFORMED", String(token ?? "missing"));
+      }
+      name = token.slice(2);
+      value = next;
+      index += 2;
     }
-    const name = flag.slice(2);
     if (!allowed.includes(name)) {
       fail("CLI_ARGUMENT_UNKNOWN", name);
     }
@@ -691,6 +707,21 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     ];
     const values = parseArguments(rest, names);
     required(values, names);
+    // Pre-validate enum-valued flags against their literal unions so an invalid
+    // value fails closed here naming the flag, rather than casting uncast into core.
+    const enumFlags: readonly (readonly [string, readonly string[]])[] = [
+      ["scope", ["workspace", "project", "role"]],
+      ["category", ["architecture", "domain", "implementation", "standards", "testing", "workflow", "decision", "evidence"]],
+      ["kind", ["fact", "guide", "decision", "reference", "summary"]],
+      ["lifecycle", ["candidate", "active", "retired"]],
+      ["retrieval", ["default", "explicit-only", "excluded"]],
+      ["freshness", ["fresh", "stale", "unknown"]],
+      ["export", ["metadata-only", "excluded"]],
+    ];
+    for (const [flag, admitted] of enumFlags) {
+      const provided = values[flag];
+      if (provided !== undefined && !admitted.includes(provided)) fail("CLI_ARGUMENT_MALFORMED", `${flag}=${provided}`);
+    }
     io.write(canonicalJson(await createKnowledgeUnit(values.workspace ?? "", {
       expectedVersion: expectedVersion(values),
       occurredAt: values.at ?? "",
@@ -892,6 +923,10 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   if (command === "work-create") {
     const values = parseArguments(rest, [...shared, "project-id", "external-key", "kind", "parent-id", "status"]);
     required(values, [...shared, "project-id", "external-key", "kind"]);
+    // Fail closed at the CLI boundary naming the offending flag/value, before the
+    // uncast enum reaches core and surfaces as an opaque RECORD_MALFORMED on the id.
+    if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
+    if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => createWork(workspace, lease, {
@@ -910,6 +945,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   if (command === "work-transition") {
     const values = parseArguments(rest, [...shared, "id", "status"]);
     required(values, [...shared, "id", "status"]);
+    if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => transitionWork(workspace, lease, {
