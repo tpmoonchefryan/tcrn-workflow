@@ -29,6 +29,7 @@ import {
   exportKnowledgeCheckpoint,
   exportWorkspace,
   generateCorePersonaBundle,
+  renderPersonaAuthoritySummary,
   authorizeGenericProfileOperation,
   generateGenericStarterBundle,
   initializeKnowledgeStore,
@@ -384,7 +385,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "claude-adapter-activation-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "claude-adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "claude-adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "step2", required: false, valueKind: "boolean" }] },
+  { name: "claude-adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "step2", required: false, valueKind: "boolean" }, { name: "step3", required: false, valueKind: "boolean" }] },
   { name: "claude-adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }] },
   { name: "claude-adapter-settings-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-settings-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
@@ -430,6 +431,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "lease-inspect", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "migration-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "target-version", required: true, valueKind: "string" }, { name: "dry-run", required: true, valueKind: "boolean" }] },
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
+  { name: "persona-render", availability: "cli", mutates: false, flags: [] },
   { name: "persona-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "profile-authorize", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "operation", required: true, valueKind: "string" }, { name: "workspace-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "command", required: true, valueKind: "json", nullSentinel: "-" }] },
   { name: "profile-generate", availability: "cli", mutates: false, flags: [{ name: "mode", required: true, valueKind: "string" }] },
@@ -526,6 +528,13 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const values = parseArguments(rest, ["set"]); required(values, ["set"]);
     if (values.set !== "core-reference") fail("PROFILE_INPUT_INVALID", "set");
     io.write(canonicalJson({ reasonCode: "PERSONA_BUNDLE_GENERATED", bundle: generateCorePersonaBundle() })); return;
+  }
+  if (command === "persona-render") {
+    // WSG-4 Step-3: render the single advisory persona (Verity, closed allowlist) into
+    // the bounded, digest-bound authority summary. Stdout only — the on-disk render is
+    // written by claude-adapter-install --step3, and this is the sole other reader of a
+    // render's .text (hygiene-tested). No flags: the persona is not a configuration surface.
+    io.write(canonicalJson(renderPersonaAuthoritySummary(generateCorePersonaBundle(), "profile:tcrn-verity-v1"))); return;
   }
   if (command === "persona-validate") {
     const values = parseArguments(rest, ["bundle"]); required(values, ["bundle"]);
@@ -629,12 +638,25 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     // WSG-3 --step2: additionally write the SessionStart handler, merge the v2
     // activation fragment into .claude/settings.json (temp O_EXCL then rename), and
     // emit the additive tcrn.claude-adapter-installation-generation.v2 receipt.
-    const values = parseArguments(rest, ["request", "installation-root", "generation-id", "receipt-out", "step2"]);
+    const values = parseArguments(rest, ["request", "installation-root", "generation-id", "receipt-out", "step2", "step3"]);
     required(values, ["request", "installation-root", "generation-id", "receipt-out"]);
     const request = jsonValue(values.request, "request");
     const bundle = generateClaudeAdapterBundle(request, io.claudeAdapterHost);
-    if (booleanValue(values.step2, "step2")) {
-      const scriptSource = generateSessionStartScript();
+    // WSG-4 Step-3 rides Step-2 activation: --step3 additionally renders the Verity
+    // persona summary, digest-binds the SessionStart handler to it, and persists
+    // persona-render.json on the same v2 receipt. --step3 without --step2 still runs
+    // the activation path (Step-3 is Step-2 plus the render). --step2 alone stays
+    // byte-identical to WSG-3 (no render digest, no render file).
+    const wantStep3 = booleanValue(values.step3, "step3");
+    if (wantStep3 || booleanValue(values.step2, "step2")) {
+      let renderSource: string | undefined;
+      const scriptSource = wantStep3
+        ? (() => {
+          const render = renderPersonaAuthoritySummary(generateCorePersonaBundle(), "profile:tcrn-verity-v1");
+          renderSource = canonicalJson(render);
+          return generateSessionStartScript({ personaRenderDigest: render.renderDigest });
+        })()
+        : generateSessionStartScript();
       const scriptDigest = sessionStartScriptDigest(scriptSource);
       const fragment = generateClaudeAdapterActivationFragment(request, io.claudeAdapterActivationHost, { scriptDigest });
       const activation = await installClaudeAdapterActivation({
@@ -644,6 +666,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
         bundleDigest: bundle.bundleDigest,
         fragment,
         scriptSource,
+        renderSource,
       });
       io.write(canonicalJson(activation.receipt));
       return;

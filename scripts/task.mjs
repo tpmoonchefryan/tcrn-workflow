@@ -327,6 +327,7 @@ async function runTests({
   backupOnly = false,
   installerOnly = false,
   activationOnly = false,
+  personaRenderOnly = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -353,7 +354,8 @@ async function runTests({
     .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path))
     .filter((path) => !backupOnly || path === "tests/backup-snapshot.test.mjs")
     .filter((path) => !installerOnly || path === "tests/act1-claude-installer.test.mjs")
-    .filter((path) => !activationOnly || path === "tests/act2-claude-activation.test.mjs");
+    .filter((path) => !activationOnly || path === "tests/act2-claude-activation.test.mjs")
+    .filter((path) => !personaRenderOnly || path === "tests/act3-persona-render.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
@@ -363,6 +365,8 @@ async function runTests({
       ? "TRUST_NEGATIVE_MATRIX_VERIFIED"
       : activationOnly
       ? "ACT2_CLAUDE_SESSIONSTART_TESTS_VERIFIED"
+      : personaRenderOnly
+      ? "ACT3_PERSONA_RENDER_TESTS_VERIFIED"
       : installerOnly
       ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
@@ -1523,6 +1527,7 @@ const commandContracts = {
   backup: { exit: 0, reasonCode: "BACKUP_VERIFIED" },
   act1: { exit: 0, reasonCode: "ACT1_CLAUDE_INSTALLER_VERIFIED" },
   act2: { exit: 0, reasonCode: "ACT2_CLAUDE_SESSIONSTART_VERIFIED" },
+  act3: { exit: 0, reasonCode: "ACT3_PERSONA_RENDER_VERIFIED" },
 };
 
 async function verifyMap() {
@@ -1695,6 +1700,11 @@ async function verifyAct2() {
   return success("ACT2_CLAUDE_SESSIONSTART_VERIFIED", { tests: result.tests });
 }
 
+async function verifyAct3() {
+  const result = await runTests({ personaRenderOnly: true });
+  return success("ACT3_PERSONA_RENDER_VERIFIED", { tests: result.tests });
+}
+
 async function verifyCi() {
   const linted = await lint();
   const workflow = await readText(resolve(repositoryRoot, ".github/workflows/ci.yml"));
@@ -1811,6 +1821,7 @@ const handlers = {
   backup: verifyBackup,
   act1: verifyAct1,
   act2: verifyAct2,
+  act3: verifyAct3,
 };
 
 function errorReason(error) {
@@ -1869,7 +1880,7 @@ function evidencePhase(name) {
   if (name === "act1") {
     return "act";
   }
-  if (name === "act2") {
+  if (name === "act2" || name === "act3") {
     return "act2";
   }
   if (name === "p8") {

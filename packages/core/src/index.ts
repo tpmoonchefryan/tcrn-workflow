@@ -337,6 +337,20 @@ export type {
   SessionStartScriptOptions,
 } from "./claude-adapter-session-start.js";
 export {
+  PERSONA_RENDER_ALLOWED_PROFILE_ID,
+  PERSONA_RENDER_BUDGET_BYTES,
+  PERSONA_RENDER_REASON_CODES,
+  PERSONA_RENDER_VERSION,
+  PersonaRenderError,
+  renderPersonaAuthoritySummary,
+  validatePersonaAuthorityRender,
+} from "./persona-render.js";
+export type {
+  PersonaAuthorityRender,
+  PersonaAuthorityRenderOptions,
+  PersonaRenderReasonCode,
+} from "./persona-render.js";
+export {
   DEPENDENCY_VERSION,
   DEPENDENCY_KINDS,
   DEPENDENCY_STATUSES,
