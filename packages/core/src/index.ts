@@ -279,6 +279,18 @@ export type {
   ClaudeAdapterRequest,
 } from "./claude-adapter.js";
 export {
+  CLAUDE_ADAPTER_INSTALLER_REASON_CODES,
+  ClaudeAdapterInstallerError,
+  executeClaudeAdapterRollback,
+  installClaudeAdapterBundle,
+} from "./claude-adapter-installer.js";
+export type {
+  ClaudeAdapterInstallOptions,
+  ClaudeAdapterInstallResult,
+  ClaudeAdapterInstallerReasonCode,
+  ClaudeAdapterRollbackResult,
+} from "./claude-adapter-installer.js";
+export {
   DEPENDENCY_VERSION,
   DEPENDENCY_KINDS,
   DEPENDENCY_STATUSES,

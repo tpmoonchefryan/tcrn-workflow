@@ -50,8 +50,10 @@ import {
   validateWorkspace,
   codexAdapterAuthorityEmptyFallback,
   claudeAdapterAuthorityEmptyFallback,
+  executeClaudeAdapterRollback,
   generateClaudeAdapterBundle,
   generateClaudeAdapterSettingsFragment,
+  installClaudeAdapterBundle,
   mergeClaudeAdapterSettingsFragment,
   planClaudeAdapterRollback,
   readClaudeAdapterInstallationReceipt,
@@ -340,11 +342,13 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "artifact-size", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "claude-adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "claude-adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
+  { name: "claude-adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }] },
   { name: "claude-adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }] },
   { name: "claude-adapter-settings-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-settings-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-settings-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "string" }] },
+  { name: "claude-adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }] },
   { name: "claude-adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "commands", availability: "cli", mutates: false, flags: [] },
   { name: "compatibility-dry-run", availability: "programmatic-only", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
@@ -567,6 +571,21 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     io.write(canonicalJson(generateClaudeAdapterBundle(jsonValue(values.request, "request"), io.claudeAdapterHost)));
     return;
   }
+  if (command === "claude-adapter-install") {
+    // WSG-2 / activation ladder Step 1: generate the inert bundle under the
+    // independently governed host, then write it to disk and emit the canonical
+    // installation-generation receipt. .claude/settings.json is untouched.
+    const values = parseArguments(rest, ["request", "installation-root", "generation-id", "receipt-out"]);
+    required(values, ["request", "installation-root", "generation-id", "receipt-out"]);
+    const bundle = generateClaudeAdapterBundle(jsonValue(values.request, "request"), io.claudeAdapterHost);
+    const result = await installClaudeAdapterBundle(bundle, {
+      installationRoot: values["installation-root"] ?? "",
+      generationId: values["generation-id"] ?? "",
+      receiptPath: values["receipt-out"] ?? "",
+    });
+    io.write(canonicalJson(result.receipt));
+    return;
+  }
   if (command === "claude-adapter-validate") {
     const values = parseArguments(rest, ["bundle"]);
     required(values, ["bundle"]);
@@ -578,6 +597,19 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const values = parseArguments(rest, ["lifecycle"]);
     required(values, ["lifecycle"]);
     io.write(canonicalJson(simulateClaudeAdapterLifecycle(jsonValue(values.lifecycle, "lifecycle"))));
+    return;
+  }
+  if (command === "claude-adapter-uninstall") {
+    // WSG-2: reverse of claude-adapter-install. The TOCTOU-hardened reader admits
+    // the receipt under the out-of-band authority, the planner derives the
+    // identity-gated removal set, and the executor unlinks only files whose bytes
+    // still match — a tampered file fails INSTALLER_ROLLBACK_MISMATCH untouched.
+    const values = parseArguments(rest, ["bundle", "installation-receipt"]);
+    required(values, ["bundle", "installation-receipt"]);
+    const installation = await readClaudeAdapterInstallationReceipt(values["installation-receipt"] ?? "", io.claudeAdapterInstallationAuthority);
+    const plan = planClaudeAdapterRollback(jsonValue(values.bundle, "bundle"), installation);
+    const result = await executeClaudeAdapterRollback(plan, values["installation-receipt"] ?? "");
+    io.write(canonicalJson({ reasonCode: result.reasonCode, planDigest: result.planDigest }));
     return;
   }
   if (command === "claude-adapter-fallback") {

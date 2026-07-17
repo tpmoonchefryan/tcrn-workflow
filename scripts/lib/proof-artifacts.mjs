@@ -51,6 +51,8 @@ const routeAdditions = new Set([
   "packages/core/src/workspace-snapshot.ts",
   "packages/core/schema/workspace-snapshot-manifest-v1.schema.json",
   "tests/backup-snapshot.test.mjs",
+  "packages/core/src/claude-adapter-installer.ts",
+  "tests/act1-claude-installer.test.mjs",
 ]);
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
