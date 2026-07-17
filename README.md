@@ -4,7 +4,7 @@
 
 **A deterministic, offline-first framework for governed AI-agent work — where every capability is a machine-verified claim, not a promise.**
 
-`Status: 0.1.0-rc.4 (pre-release candidate)` · `License: Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Verified claims: 35 (hygiene 11 · inertness 13 · runtime 11)`
+`Status: 0.1.0-rc.4 (pre-release candidate)` · `License: Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Verified claims: 36 (hygiene 11 · inertness 13 · runtime 12)`
 
 ---
 
@@ -24,7 +24,7 @@ TCRN Workflow was built to close all three gaps at once. It treats agent-driven 
 | --- | --- |
 | **Deterministic file-native workspace** | An event-sourced local work graph (Initiative → Epic → Story → Subtask) stored as canonical JSON files with a hash chain — no database, no daemon, byte-reproducible exports. |
 | **Fail-closed verification chain** | One command (`pnpm verify:p1`) runs 20 gates: format, lint, typecheck, build, ~29 test files, trust matrix, archive/SBOM/license/vulnerability policy, source allowlist, offline boundary, privacy scan, CI hardening, verification map, and clean-history proof. Anything unexpected stops the chain. |
-| **Machine-readable claim ledger** | `verification-map.yaml` binds 35 claims — 11 framework-hygiene, 13 inertness-proof, 11 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run — overclaiming is a build failure, not a style issue. |
+| **Machine-readable claim ledger** | `verification-map.yaml` binds 36 claims — 11 framework-hygiene, 13 inertness-proof, 12 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run — overclaiming is a build failure, not a style issue. |
 | **Dual-host Agent App adapters** | Codex and Claude Code are the two officially supported V1 hosts, sharing byte-identical host-neutral machinery with a proven cross-host parity digest. Both adapters are **inert dry-run candidates**: they generate uninstalled template data only, and no live host support is asserted. |
 | **Offline-first, privacy-clean** | Development mode enforces a Node process network guard and zero telemetry. The privacy gate scans every tracked byte, all reachable git history, and the release archive for personal identifiers and machine paths. |
 | **Signed release trust** | Releases are bound by tag identity (commit, tree, tag object) and verified externally through an Ed25519 trust-root contract — see the companion `tcrn-workflow-helper` repository. |
@@ -132,7 +132,7 @@ A release is an immutable annotated tag plus a reproducible artifact set (canoni
 
 - **20 gates** in the `verify:p1` chain, each with a stable terminal reason code.
 - **~29 test files** covering the engine, knowledge core, artifact lifecycle, profiles, personas, context router, both adapters, exchange, compatibility, requirements ledger, release candidate, privacy boundary, proof-artifact generator, and trust matrix.
-- **35 machine-verified claims** in `verification-map.yaml`, partitioned as 11 framework-hygiene, 13 inertness-proof, and 11 runtime-capability — the runtime-capability third is the delivered product surface, stated honestly.
+- **36 machine-verified claims** in `verification-map.yaml`, partitioned as 11 framework-hygiene, 13 inertness-proof, and 12 runtime-capability — the runtime-capability third is the delivered product surface, stated honestly.
 - **64-permutation determinism proofs** in three independent layers (engine insertion orders, profile layer orders, adapter input orders).
 - **19-entry public AOS requirements ledger** (11 fixture-verified, 8 specified) — maturity is recorded per row, never inflated.
 - **Privacy gate** over ~200 tracked source files, ~1,470 git objects, full reachable history, and the release archive.

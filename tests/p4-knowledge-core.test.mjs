@@ -28,6 +28,7 @@ import {
   createKnowledgeUnit,
   createProject,
   createWork,
+  deleteWork,
   evaluateKnowledgeFreshness,
   exportKnowledgeCheckpoint,
   initializeKnowledgeStore,
@@ -35,6 +36,7 @@ import {
   listKnowledgeMetadata,
   readKnowledgeBody,
   readKnowledgeSnippet,
+  rebaseKnowledgeStore,
   transitionKnowledgePromotion,
   validateKnowledgeStore,
 } from "../dist/build/packages/core/src/index.js";
@@ -188,6 +190,64 @@ test("WSC-1: knowledge-init CLI round-trips the acknowledgment flag", async () =
     const result = JSON.parse(output);
     assert.equal(result.reasonCode, "KNOWLEDGE_STORE_INITIALIZED");
     assert.equal(result.admission, "acknowledged-disposable");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("WSC-2: knowledge-rebase re-binds the store to an advanced workspace head", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(20, 1) });
+    try {
+      await createProject(fixture.workspace, lease, { expectedVersion: 2, occurredAt: instant(20, 2), externalKey: "FIXTURE-KNOWLEDGE-PROJECT-TWO", name: "Two" });
+    } finally {
+      await lease.release();
+    }
+    await expectReason("KNOWLEDGE_HIGH_WATER_MISMATCH", () => validateKnowledgeStore(fixture.workspace));
+    const result = await rebaseKnowledgeStore(fixture.workspace, { expectedVersion: 0, at: instant(20, 3), retireInvalid: false });
+    assert.equal(result.reasonCode, "KNOWLEDGE_STORE_REBASED");
+    assert.equal(result.retired, 0);
+    assert.deepEqual(result.offenders, []);
+    assert.equal((await validateKnowledgeStore(fixture.workspace)).reasonCode, "KNOWLEDGE_STORE_VALID");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("WSC-2: knowledge-rebase blocks on a link-invalid record and retires it under retire-invalid", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const created = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, "REBASE-OFFENDER", { expectedVersion: 0 }));
+    const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(21, 1) });
+    try {
+      await deleteWork(fixture.workspace, lease, { expectedVersion: 2, occurredAt: instant(21, 2), id: fixture.workId });
+    } finally {
+      await lease.release();
+    }
+    await expectReason("KNOWLEDGE_REBASE_BLOCKED", () => rebaseKnowledgeStore(fixture.workspace, { expectedVersion: 1, at: instant(21, 3), retireInvalid: false }));
+    const result = await rebaseKnowledgeStore(fixture.workspace, { expectedVersion: 1, at: instant(21, 3), retireInvalid: true });
+    assert.equal(result.reasonCode, "KNOWLEDGE_STORE_REBASED");
+    assert.equal(result.retired, 1);
+    assert.deepEqual(result.offenders, [created.id]);
+    assert.equal((await validateKnowledgeStore(fixture.workspace)).reasonCode, "KNOWLEDGE_STORE_VALID");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("WSC-2: knowledge-rebase enforces CAS and fails closed at fault points leaving the store locked", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(22, 1) });
+    try {
+      await createProject(fixture.workspace, lease, { expectedVersion: 2, occurredAt: instant(22, 2), externalKey: "FIXTURE-KNOWLEDGE-PROJECT-THREE", name: "Three" });
+    } finally {
+      await lease.release();
+    }
+    await expectReason("KNOWLEDGE_CAS_MISMATCH", () => rebaseKnowledgeStore(fixture.workspace, { expectedVersion: 9, at: instant(22, 3), retireInvalid: false }));
+    await expectReason("KNOWLEDGE_FAULT_INJECTED", () => rebaseKnowledgeStore(fixture.workspace, { expectedVersion: 0, at: instant(22, 4), retireInvalid: false }, { faultAt: "after-marker-write" }));
+    await expectReason("KNOWLEDGE_LOCKED", () => rebaseKnowledgeStore(fixture.workspace, { expectedVersion: 0, at: instant(22, 5), retireInvalid: false }));
   } finally {
     await fixture.close();
   }

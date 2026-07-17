@@ -72,12 +72,14 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_PROMOTION_INVALID",
   "KNOWLEDGE_PROMOTION_UPDATED",
   "KNOWLEDGE_PROVENANCE_INVALID",
+  "KNOWLEDGE_REBASE_BLOCKED",
   "KNOWLEDGE_RECORD_INVALID",
   "KNOWLEDGE_REDACTION_REQUIRED",
   "KNOWLEDGE_SELECTION_INVALID",
   "KNOWLEDGE_SOURCE_CHANGED",
   "KNOWLEDGE_SPECIAL_FILE",
   "KNOWLEDGE_STORE_INITIALIZED",
+  "KNOWLEDGE_STORE_REBASED",
   "KNOWLEDGE_STORE_VALID",
   "KNOWLEDGE_UNIT_CREATED",
 ] as const);
@@ -249,6 +251,10 @@ interface KnowledgeStoreScan {
   readonly workspace: WorkspaceState;
   readonly units: readonly ScannedKnowledgeUnit[];
   readonly index: Readonly<Record<string, JsonValue>>;
+  // WSC-2: in rebase mode, the id-sorted set of live (non-retired) records whose
+  // scope/project or linked-work references no longer resolve against the advanced
+  // workspace head. Empty (and absent from non-rebase scans) otherwise.
+  readonly linkInvalid: readonly string[];
 }
 
 const markerFields = ["schemaVersion", "workspaceId", "eventHighWaterDigest", "version", "disposable", "authority"];
@@ -542,7 +548,7 @@ function assertPromotableProvenance(metadata: KnowledgeUnitMetadata): void {
   }
 }
 
-function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, workspace: WorkspaceState): KnowledgeUnitMetadata {
+function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, workspace: WorkspaceState, deferLinks = false): KnowledgeUnitMetadata {
   exactFields(value, metadataFields, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID");
   exactFields(value.stalenessPolicy, stalenessFields, "knowledge staleness policy", "KNOWLEDGE_RECORD_INVALID");
   if (value.schemaVersion !== KNOWLEDGE_METADATA_SCHEMA_VERSION || typeof value.id !== "string" ||
@@ -604,6 +610,22 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
       fail("KNOWLEDGE_REDACTION_REQUIRED", `${metadata.id}:${String(error)}`);
     }
   }
+  // WSC-2: link liveness is validated separately so a rebase can tolerate it, and
+  // retired records skip it durably — they are tombstoned audit records whose
+  // backlinks into now-removed work are intentionally preserved.
+  if (!deferLinks && metadata.lifecycle !== "retired") {
+    validateMetadataLinks(metadata, workspace);
+  }
+  if ((metadata.freshnessState === "unknown") !== (metadata.lastVerified === null)) {
+    fail("KNOWLEDGE_RECORD_INVALID", `${metadata.id}:freshness`);
+  }
+  return metadata;
+}
+
+// WSC-2: scope/project liveness (KNOWLEDGE_LINK_INVALID:scope) and linked-work
+// liveness (KNOWLEDGE_LINK_INVALID:<workId>) — the two checks a rebase tolerates
+// (collecting offenders) and a retired record is durably exempt from.
+function validateMetadataLinks(metadata: KnowledgeUnitMetadata, workspace: WorkspaceState): void {
   const project = metadata.projectId === null ? undefined : workspace.projects.find((entry) => entry.id === metadata.projectId && !entry.tombstone);
   if ((metadata.scope === "workspace" && (metadata.projectId !== null || metadata.roleScopes.length !== 0)) ||
     (metadata.scope === "project" && (!project || metadata.roleScopes.length !== 0)) ||
@@ -617,10 +639,6 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
       fail("KNOWLEDGE_LINK_INVALID", `${metadata.id}:${workId}`);
     }
   }
-  if ((metadata.freshnessState === "unknown") !== (metadata.lastVerified === null)) {
-    fail("KNOWLEDGE_RECORD_INVALID", `${metadata.id}:freshness`);
-  }
-  return metadata;
 }
 
 function validateMetadataBody(metadata: KnowledgeUnitMetadata, body: Buffer, workspace: WorkspaceState): void {
@@ -685,6 +703,7 @@ async function scanKnowledgeStore(
   options: KnowledgeReadOptions = {},
   allowClaim = false,
   bodyMode: "full" | "metadata-only" = "full",
+  rebase = false,
 ): Promise<KnowledgeStoreScan> {
   const workspace = await materializeWorkspace(workspaceRootInput);
   const workspaceRoot = await boundDirectory(workspaceRootInput);
@@ -710,7 +729,9 @@ async function scanKnowledgeStore(
     "knowledge marker",
     "KNOWLEDGE_RECORD_INVALID",
   ));
-  if (marker.workspaceId !== workspace.metadata.workspaceId || marker.eventHighWaterDigest !== workspace.headEventHash) {
+  // WSC-2: a rebase deliberately runs against an advanced head, so it skips only
+  // the high-water equality; workspace identity binding stays mandatory.
+  if (marker.workspaceId !== workspace.metadata.workspaceId || (!rebase && marker.eventHighWaterDigest !== workspace.headEventHash)) {
     fail("KNOWLEDGE_HIGH_WATER_MISMATCH", marker.workspaceId);
   }
   const metadataNames = (await readdir(metadataRoot)).sort(compareCanonicalText);
@@ -725,15 +746,31 @@ async function scanKnowledgeStore(
     fail("KNOWLEDGE_PARTIAL_STATE", "knowledge metadata/body sets differ");
   }
   const units: ScannedKnowledgeUnit[] = [];
+  const linkInvalid: string[] = [];
   let aggregateBytes = markerBytes.length;
   for (const id of metadataIds) {
     const metadataPath = resolve(metadataRoot, `${id}.json`);
     const bodyPath = resolve(bodiesRoot, `${id}.body`);
     const metadataBytes = (await readBoundRegularFile(metadataPath, KNOWLEDGE_LIMITS.maximumMetadataBytes, options)).bytes;
+    // WSC-2: in rebase mode, shape is still fully validated but link liveness is
+    // deferred so a live record pointing at now-tombstoned work is recorded as an
+    // offender rather than failing the whole scan; retired records stay exempt.
     const metadata = validateMetadataShape(
       parseCanonicalObject(metadataBytes, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID"),
       workspace,
+      rebase,
     );
+    if (rebase && metadata.lifecycle !== "retired") {
+      try {
+        validateMetadataLinks(metadata, workspace);
+      } catch (error) {
+        if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_LINK_INVALID") {
+          linkInvalid.push(metadata.id);
+        } else {
+          throw error;
+        }
+      }
+    }
     const body = bodyMode === "full"
       ? (await readBoundRegularFile(bodyPath, KNOWLEDGE_LIMITS.maximumBodyBytes, options)).bytes
       : null;
@@ -763,12 +800,12 @@ async function scanKnowledgeStore(
   if (view !== canonicalJson(index)) {
     fail("KNOWLEDGE_PARTIAL_STATE", "knowledge index is stale");
   }
-  return { workspaceRoot, storeRoot, metadataRoot, bodiesRoot, viewsRoot, marker, workspace, units, index };
+  return { workspaceRoot, storeRoot, metadataRoot, bodiesRoot, viewsRoot, marker, workspace, units, index, linkInvalid: linkInvalid.sort(compareCanonicalText) };
 }
 
-async function mutationAdmissionScan(workspaceRoot: string, options: KnowledgeReadOptions): Promise<KnowledgeStoreScan> {
+async function mutationAdmissionScan(workspaceRoot: string, options: KnowledgeReadOptions, rebase = false): Promise<KnowledgeStoreScan> {
   try {
-    return await scanKnowledgeStore(workspaceRoot, options);
+    return await scanKnowledgeStore(workspaceRoot, options, false, "full", rebase);
   } catch (error) {
     if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_PARTIAL_STATE") {
       const root = resolve(workspaceRoot, ".tcrn-workflow/knowledge");
@@ -1015,6 +1052,58 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
     revision: metadata.revision,
     version: final.marker.version,
     promotionState: metadata.promotionState,
+  };
+}
+
+// WSC-2: re-bind the store to the advanced workspace head after full per-record
+// re-validation. Live records whose links no longer resolve block the rebase
+// unless retireInvalid retires them as tombstoned audit records (their dangling
+// backlinks are then durably tolerated). Single version step under a mutation claim.
+export async function rebaseKnowledgeStore(workspaceRoot: string, input: {
+  readonly expectedVersion: number;
+  readonly at: string;
+  readonly retireInvalid?: boolean;
+}, options: KnowledgeMutationOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) {
+    fail("KNOWLEDGE_INPUT_INVALID", "expected version");
+  }
+  assertStrictInstant(input.at);
+  const workspace = await materializeWorkspace(workspaceRoot);
+  const initial = await mutationAdmissionScan(workspaceRoot, options, true);
+  const claim = await acquireMutationClaim(initial);
+  const scan = await scanKnowledgeStore(workspaceRoot, options, true, "full", true);
+  if (scan.marker.version !== input.expectedVersion) {
+    await releaseMutationClaim(scan.storeRoot, claim);
+    fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
+  }
+  const offenders = scan.linkInvalid;
+  if (offenders.length > 0 && input.retireInvalid !== true) {
+    await releaseMutationClaim(scan.storeRoot, claim);
+    fail("KNOWLEDGE_REBASE_BLOCKED", offenders.join(","));
+  }
+  const offenderSet = new Set(offenders);
+  const marker: KnowledgeStoreMarker = { ...scan.marker, eventHighWaterDigest: workspace.headEventHash ?? scan.marker.eventHighWaterDigest, version: scan.marker.version + 1 };
+  const retire = (metadata: KnowledgeUnitMetadata): KnowledgeUnitMetadata =>
+    validateMetadataShape({ ...metadata, lifecycle: "retired", revision: metadata.revision + 1, updatedAt: input.at } as unknown as Readonly<Record<string, JsonValue>>, workspace);
+  const projectedMetadata = scan.units.map((unit) => offenderSet.has(unit.metadata.id) ? retire(unit.metadata) : unit.metadata);
+  for (const unit of scan.units) {
+    if (offenderSet.has(unit.metadata.id)) {
+      await replaceRegularFile(unit.metadataPath, canonicalJson(retire(unit.metadata)));
+    }
+  }
+  crash("after-metadata-write", options.faultAt);
+  await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+  crash("after-marker-write", options.faultAt);
+  await writeIndex(scan, marker, projectedMetadata);
+  await releaseMutationClaim(scan.storeRoot, claim);
+  const final = await scanKnowledgeStore(workspaceRoot, options);
+  return {
+    schemaVersion: "tcrn.knowledge-rebase-result.v1",
+    reasonCode: "KNOWLEDGE_STORE_REBASED",
+    version: final.marker.version,
+    eventHighWaterDigest: final.marker.eventHighWaterDigest,
+    retired: offenders.length,
+    offenders,
   };
 }
 

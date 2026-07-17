@@ -82,13 +82,32 @@ resolution, network access, database access, AOS access, or implicit process
 launch. Locators must already satisfy the accepted focused reference-redaction
 policy; this remains a bounded policy and is not a general DLP claim.
 
+## High-water rebase
+
+The store marker binds the workspace event head at which it was last consistent.
+Any workspace event advances that head, and every knowledge read then fails
+closed with `KNOWLEDGE_HIGH_WATER_MISMATCH` until a governed rebase re-binds the
+store. Rebase re-validates every record's full metadata shape, body binding, and
+scope/project/work links against the new workspace state. A live record whose
+scope/project or linked-work references no longer resolve is an offender: the
+rebase fails closed with `KNOWLEDGE_REBASE_BLOCKED` and a deterministic id-sorted
+offender list, unless `retire-invalid` is given, in which case exactly those
+records are retired (lifecycle `retired`, a tombstoned audit record whose dangling
+backlinks are then durably tolerated) and every retained record is byte-identical.
+Rebase is a single version step under the mutation claim; a fault at either write
+point leaves the claim present so the next admission fails closed
+(`KNOWLEDGE_PARTIAL_STATE`/`KNOWLEDGE_LOCKED`), never accepting a half-rebased
+marker. The store is not event-sourced, so rebase — not re-initialization — is the
+only path that preserves records across workspace events.
+
 ## Governed surfaces
 
 Core exports empty initialization/validation, creation, metadata listing and
 filtering, bounded snippet read, explicit body read, freshness evaluation,
-promotion transition, and metadata-only checkpoint generation. CLI commands
-mirror these surfaces. `P4_KNOWLEDGE_CORE_VERIFIED` proves only this bounded
-file-native capability; it does not mark the graph work done or start RC2/P5/P6.
+promotion transition, high-water rebase, and metadata-only checkpoint generation.
+CLI commands mirror these surfaces. `P4_KNOWLEDGE_CORE_VERIFIED` proves only this
+bounded file-native capability; it does not mark the graph work done or start
+RC2/P5/P6.
 
 ## KR-05 fact-card mapping appendix (WS-F)
 
