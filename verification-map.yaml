@@ -82,7 +82,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "d1ec821147179b24d35aecafd2da0799b2aa01dc32963d9fa9f3dc9d57f292a0",
+      "fixtureDigest": "e7fd2ae17f806a01df9c786af4fc580c405f41cb8a77fcf13e42b36f8984c813",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -156,7 +156,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "ba30fa5052eedd0d8abcd61ca5eda379876e50c38eba581883ecf23a51bf9adb",
+      "fixtureDigest": "e910abe271af9e2a40e22173b7a89c4068fb3075d519c543087b74ce39bd3a6c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -186,7 +186,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "7b79084d6fe1b4d4f3c5df23c0f78e5b0d8ee37796b77da4556dbf2c39fa89f8",
+      "fixtureDigest": "bce153224bb13fb1407e5315e036d08624bbb624694d8eb050b7da82a89c0dba",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -719,7 +719,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "a5e46710869d2e64ea5017c198a72994efdd9e54738d4bbfe3fd717be9d7703f",
+      "fixtureDigest": "abd03728f0f2c099e2d7a676015d9d30ad222796767ac9ebd402e5cac791190b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -783,7 +783,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "a17eeba13a4180f65d8581085404680ec5d9c04e37685997acfbab02a54d327b",
+      "fixtureDigest": "e9ea4792ef4e428aab5789d7b1bfa1a3c361b3f9a56fcea447a93930c720c162",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -810,7 +810,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "53cc0db3578c63ba264bd3585782296a167f4142b5c6871233882c7b9d4d2c5a",
+      "fixtureDigest": "a34875836d94d6ee4840a1389f3555d6b10f920f5d12fa688a109858a3d690da",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -837,7 +837,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "53cc0db3578c63ba264bd3585782296a167f4142b5c6871233882c7b9d4d2c5a",
+      "fixtureDigest": "a34875836d94d6ee4840a1389f3555d6b10f920f5d12fa688a109858a3d690da",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -848,6 +848,31 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Knowledge high-water binding, rebase re-validation, offender detection, retire-invalid semantics, retired-record link relaxation, or rebase fault/claim behavior changes"
+      ]
+    },
+    {
+      "id": "P4-KNOWLEDGE-CAPTURE-CHEAP",
+      "phase": "P4",
+      "category": "runtime-capability",
+      "status": "implemented",
+      "subject": "Knowledge capture is cheap: array fields (roleScopes, tags, sourceReferences, linked ids) are canonically sorted server-side so an agent never pre-sorts, and full provenance (owner:-prefixed accountable owner, non-empty source and evidence links) is enforced only at promotion, not at capture — a candidate is written without it and only a promoted record must carry it, with the promote path failing closed KNOWLEDGE_PROVENANCE_INVALID.",
+      "command": "pnpm verify:p4:knowledge",
+      "fixturePaths": [
+        "packages/core/src/knowledge-core.ts",
+        "tests/p4-knowledge-core.test.mjs",
+        "scripts/task.mjs"
+      ],
+      "fixtureDigest": "a8227edca0703a0a78a55223b4abdf71222fb93898c2cea2689b239cb40934d4",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "evidencePath": "dist/evidence/p4/p4-knowledge.json",
+      "invalidationTriggers": [
+        "Server-side array sorting at capture, promote-time provenance enforcement, or the capture/promote provenance boundary changes"
       ]
     },
     {
@@ -874,7 +899,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "76920ba911d717972b8f61378409d15869b42a6649c32d5d6b5c01eb858814b5",
+      "fixtureDigest": "6d5d90f030b210d3429db77d4629abc543f0e20a4fc2c304db81a2ce6f665b3d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -938,7 +963,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "4899e416c5f5a39b5be8985eaa1c4bc6906f7fe29c86814711a2554b4458372e",
+      "fixtureDigest": "05cfda9dd39e135e8cc46fe7155fb56f103b783e0dfc7ec02d117d281661f900",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -972,7 +997,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "f44b88eaa067dd3f5695b85051e6df1b85c0de7c760d3d9d3c8b7eae6c7badec",
+      "fixtureDigest": "262b886f2e0a15fd52cc54ea1b2c4501b1535786b3187fb443ddcf8bf8c48bb7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1007,7 +1032,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "ae88b767a7ff60f41c2c46c5d214f48d8f8553ffdc1ee998255effb66e5d26e6",
+      "fixtureDigest": "8dc4ed20232e32b8df39ff146f22383769ec07084f3140289d4135d8a32bff07",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1306,7 +1331,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "2f041b11817588e777407fb46abc773bbd1523703eb7a7235bb078e6d6f3c90c",
+      "fixtureDigest": "72a20059c39b92fd178ddfc1a6ee926e628b998d68e747a60e65578919cf05a7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

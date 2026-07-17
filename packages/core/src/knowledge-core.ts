@@ -599,7 +599,13 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
   assertLinkIds(metadata.linkedDecisionIds, "decision", "linked decision IDs");
   assertLinkIds(metadata.linkedGateIds, "gate", "linked gate IDs");
   assertLinkIds(metadata.linkedEvidenceIds, "evidence", "linked evidence IDs");
-  assertPromotableProvenance(metadata);
+  // WSC-3 / SDC-6: provenance (owner:-prefixed accountable owner, non-empty source
+  // and evidence links) is enforced at promotion, not capture — a candidate is
+  // cheap to write and only a promoted record must carry full provenance. The
+  // promote path re-validates via assertPromotableProvenance.
+  if (metadata.promotionState === "promoted") {
+    assertPromotableProvenance(metadata);
+  }
   for (const reference of metadata.sourceReferences) {
     try {
       if (redactArtifactReference(reference) !== reference) {
@@ -910,20 +916,23 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
     externalKey,
     scope: input.scope,
     projectId: input.projectId,
-    roleScopes: input.roleScopes,
+    // WSC-3: arrays are canonically sorted server-side so an agent never has to
+    // pre-sort them (the stored record stays canonical; validateMetadataShape
+    // still asserts the sorted invariant on read).
+    roleScopes: [...input.roleScopes].sort(compareCanonicalText),
     category: input.category,
     kind: input.kind,
-    tags: input.tags,
+    tags: [...input.tags].sort(compareCanonicalText),
     subject: input.subject,
     summary: input.summary,
     snippet: input.snippet,
     accountableOwnerId: input.accountableOwnerId,
-    sourceReferences: input.sourceReferences,
+    sourceReferences: [...input.sourceReferences].sort(compareCanonicalText),
     sourceDigest: input.sourceDigest,
-    linkedWorkIds: input.linkedWorkIds,
-    linkedDecisionIds: input.linkedDecisionIds,
-    linkedGateIds: input.linkedGateIds,
-    linkedEvidenceIds: input.linkedEvidenceIds,
+    linkedWorkIds: [...input.linkedWorkIds].sort(compareCanonicalText),
+    linkedDecisionIds: [...input.linkedDecisionIds].sort(compareCanonicalText),
+    linkedGateIds: [...input.linkedGateIds].sort(compareCanonicalText),
+    linkedEvidenceIds: [...input.linkedEvidenceIds].sort(compareCanonicalText),
     lifecycle: input.lifecycle,
     retrievalDisposition: input.retrievalDisposition,
     promotionState: "candidate",
@@ -1247,7 +1256,11 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
       revision: unit.metadata.revision + 1,
       updatedAt: input.occurredAt,
     };
-    assertPromotableProvenance(metadata);
+    // WSC-3 / SDC-6: full provenance is required only to promote; rejecting a
+    // candidate never requires it.
+    if (input.promotionState === "promoted") {
+      assertPromotableProvenance(metadata);
+    }
     const unitBody = requireBody(unit);
     const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace);
     validateMetadataBody(validated, unitBody, scan.workspace);
