@@ -343,7 +343,7 @@
         "tests/protocol-v1.test.mjs",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "2566345339cd8d3d2931c1e16e70476c7d26161b12c896d946da39ea6d660d2d",
+      "fixtureDigest": "9b014198ce7829cbe392a27e86769932b327ababb32c5e596686ab9af2ca4ebd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -378,7 +378,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-v1.test.mjs"
       ],
-      "fixtureDigest": "f8e7fdc7bf4a5a0b945e4ddbdeb7cc4d968faf94873ba896e6a37205f8ec7837",
+      "fixtureDigest": "1a48c960f03c3b667c1bf8ae8f852a09fe5007329747a020ee885933364ba2ce",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -414,7 +414,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "bcdaf4b0f9e1a9d2360e390690582b9762d61432abaf4df4c321c8516706d2e6",
+      "fixtureDigest": "29bfc7256d116871e4e49148a9a3a76426e709d91d4bef5514333a25fa1ddb98",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -443,7 +443,7 @@
         "scripts/lib/privacy.mjs",
         "tests/privacy-boundary.test.mjs"
       ],
-      "fixtureDigest": "35ff835aeeeadfec904689b8b4630197143ff148bec0ac74e256abcb07d1ffc1",
+      "fixtureDigest": "d4a65bd8593f7a962e8a5deaa44bccc94d55423516c7b2019c3a3c7bee8c45e8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
