@@ -9,3 +9,18 @@ dist/
 coverage/
 *.tgz
 *.tar
+
+# SDC-9 workspace control-tree residue: never track lease state or in-flight
+# claim/quarantine classes — a clone or checkout carrying them resurrects
+# crashed-session residue that the stores fail closed on (SNAPSHOT_RESIDUE_PRESENT,
+# KNOWLEDGE_PARTIAL_STATE, ARTIFACT_PARTIAL_STATE). See docs/architecture/backup-git-tier.md.
+.tcrn-workflow/lease/
+.tcrn-workflow/lease-recovery.claim
+.tcrn-workflow/knowledge/mutation.claim
+.tcrn-workflow/knowledge/released-*
+.tcrn-workflow/artifacts/restore.claim
+.tcrn-workflow/artifacts/released-restore-*
+.tcrn-workflow/stale-lease-*/
+.tcrn-workflow/released-*
+.tcrn-workflow/attempt-owned-*
+.tcrn-workflow/**/.tmp-*

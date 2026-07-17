@@ -51,6 +51,7 @@ const routeAdditions = new Set([
   "packages/core/src/workspace-snapshot.ts",
   "packages/core/schema/workspace-snapshot-manifest-v1.schema.json",
   "tests/backup-snapshot.test.mjs",
+  "docs/architecture/backup-git-tier.md",
   "docs/architecture/backup-restore-runbook.md",
   "packages/core/src/claude-adapter-installer.ts",
   "tests/act1-claude-installer.test.mjs",
