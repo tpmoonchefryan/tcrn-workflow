@@ -1145,7 +1145,18 @@ export async function rebaseKnowledgeStore(workspaceRoot: string, input: {
   };
 }
 
-export async function listKnowledgeMetadata(workspaceRoot: string, query: KnowledgeListQuery): Promise<Readonly<Record<string, JsonValue>>> {
+interface NormalizedListQuery {
+  readonly selection: "default" | "all";
+  readonly search: string | undefined;
+  readonly limit: number;
+  readonly offset: number;
+}
+
+// WSC-4 / WSC-7: the metadata selection is shared by listKnowledgeMetadata and the
+// knowledgeContextCandidates bridge so both surfaces select and page over the exact
+// same ordered corpus — divergence would let the bridge emit records the list view
+// hides (or the reverse).
+function normalizeListQuery(query: KnowledgeListQuery): NormalizedListQuery {
   assertEvaluationInstant(query.at);
   const selection = query.selection ?? "default";
   assertSelection(selection);
@@ -1170,8 +1181,12 @@ export async function listKnowledgeMetadata(workspaceRoot: string, query: Knowle
     }
     offset = query.offset;
   }
-  const scan = await scanKnowledgeStore(workspaceRoot, query, false, "metadata-only");
-  const matched = scan.units.map((unit) => unit.metadata).filter((metadata) => {
+  return { selection, search, limit, offset };
+}
+
+function selectKnowledgeMetadata(scan: KnowledgeStoreScan, query: KnowledgeListQuery, normalized: NormalizedListQuery): readonly KnowledgeUnitMetadata[] {
+  const { selection, search } = normalized;
+  return scan.units.map((unit) => unit.metadata).filter((metadata) => {
     const freshness = computeFreshness(metadata, query.at);
     if (selection === "default" && !isDefaultSelectable(metadata, query.at)) return false;
     return (!query.projectId || metadata.projectId === query.projectId) &&
@@ -1181,19 +1196,72 @@ export async function listKnowledgeMetadata(workspaceRoot: string, query: Knowle
       (!query.promotionState || metadata.promotionState === query.promotionState) &&
       (search === undefined || metadata.subject.toLowerCase().includes(search) || metadata.tags.some((tag) => tag.includes(search)));
   }).sort((left, right) => compareCanonicalText(left.id, right.id));
+}
+
+export async function listKnowledgeMetadata(workspaceRoot: string, query: KnowledgeListQuery): Promise<Readonly<Record<string, JsonValue>>> {
+  const normalized = normalizeListQuery(query);
+  const scan = await scanKnowledgeStore(workspaceRoot, query, false, "metadata-only");
+  const matched = selectKnowledgeMetadata(scan, query, normalized);
   // WSC-4: truncate with a continuation window instead of failing when more than
   // one page matches — the metadata-first surface stays usable past a single page.
-  const records = matched.slice(offset, offset + limit);
+  const records = matched.slice(normalized.offset, normalized.offset + normalized.limit);
   return {
     schemaVersion: "tcrn.knowledge-list.v1",
     reasonCode: "KNOWLEDGE_LIST_READY",
-    selection,
+    selection: normalized.selection,
     at: query.at,
     total: matched.length,
-    offset,
-    truncated: offset + records.length < matched.length,
+    offset: normalized.offset,
+    truncated: normalized.offset + records.length < matched.length,
     records: records as unknown as readonly JsonValue[],
     resultDigest: canonicalSha256(records),
+  };
+}
+
+// WSC-7: convert selected knowledge metadata into the tcrn.context-metadata-candidate.v1
+// basis that context-router.ts metadataCandidate() recomputes — the bridge that makes
+// the documented context-route pipeline buildable. The knowledge scope tier (workspace,
+// project, role) maps onto the context scope tier (workspace, project, work) which has no
+// role level, so role-scoped records map to "workspace" and — per the router's checkScope,
+// which requires workspace-scope candidates to carry projectId null && workId null — their
+// projectId is deliberately nulled (a documented lossy mapping; role records that carried a
+// live project reference lose that binding in the candidate). candidateDigest byte-matches
+// the router's own recomputation, so admitted candidates never trip CONTEXT_CANONICAL_INVALID.
+function knowledgeMetadataToContextCandidate(metadata: KnowledgeUnitMetadata, workspaceId: string, at: string): Readonly<Record<string, JsonValue>> {
+  const projectScoped = metadata.scope === "project";
+  const basis = {
+    schemaVersion: "tcrn.context-metadata-candidate.v1",
+    id: metadata.id,
+    kind: "metadata",
+    scope: projectScoped ? "project" : "workspace",
+    workspaceId,
+    projectId: projectScoped ? metadata.projectId : null,
+    workId: null,
+    freshness: computeFreshness(metadata, at),
+    title: metadata.subject,
+    summary: metadata.summary,
+    retentionClass: "metadata_only",
+  };
+  return { ...basis, candidateDigest: canonicalSha256(basis) };
+}
+
+export async function knowledgeContextCandidates(workspaceRoot: string, query: KnowledgeListQuery): Promise<Readonly<Record<string, JsonValue>>> {
+  const normalized = normalizeListQuery(query);
+  const scan = await scanKnowledgeStore(workspaceRoot, query, false, "metadata-only");
+  const matched = selectKnowledgeMetadata(scan, query, normalized);
+  const page = matched.slice(normalized.offset, normalized.offset + normalized.limit);
+  const workspaceId = scan.workspace.metadata.workspaceId;
+  const candidates = page.map((metadata) => knowledgeMetadataToContextCandidate(metadata, workspaceId, query.at));
+  return {
+    schemaVersion: "tcrn.knowledge-context-candidates.v1",
+    reasonCode: "KNOWLEDGE_LIST_READY",
+    selection: normalized.selection,
+    at: query.at,
+    total: matched.length,
+    offset: normalized.offset,
+    truncated: normalized.offset + page.length < matched.length,
+    candidates: candidates as unknown as readonly JsonValue[],
+    resultDigest: canonicalSha256(candidates),
   };
 }
 

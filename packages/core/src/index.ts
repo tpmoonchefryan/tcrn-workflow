@@ -149,6 +149,7 @@ export {
   evaluateKnowledgeFreshness,
   exportKnowledgeCheckpoint,
   initializeKnowledgeStore,
+  knowledgeContextCandidates,
   listKnowledgeMetadata,
   readKnowledgeBody,
   readKnowledgeSnippet,
