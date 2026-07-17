@@ -441,6 +441,51 @@ test("WSB-7: --expected-version head derives the current version under the lease
   }
 });
 
+test("WSB-8: --flag=value representability round-trips literal values and invalid enum flags fail closed naming flag=value", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const run = async (args) => {
+      let output = "";
+      await runCli(args, { write: (value) => { output += value; } });
+      return JSON.parse(output);
+    };
+    const ws = ["--workspace", fixture.workspace];
+    // A --name whose value begins with "--" is unrepresentable in the two-token form
+    // (the value would be rejected as a flag) but is expressible via the attached =
+    // form and round-trips byte-exactly onto disk.
+    const created = await run(["project-create", ...ws, "--expected-version", "0", "--at", instant(1), "--external-key", "PROJECT-B8", "--name=--leading-dashes"]);
+    assert.equal(created.version, 1);
+    const afterCreate = await materializeWorkspace(fixture.workspace);
+    assert.equal(afterCreate.projects.find((entry) => entry.id === created.record.id).name, "--leading-dashes");
+    // Split on the FIRST "=" only: a value carrying further "=" is preserved verbatim.
+    const updated = await run(["project-update", ...ws, "--expected-version", "1", "--at", instant(2), "--id", created.record.id, "--name=a=b=c"]);
+    const afterUpdate = await materializeWorkspace(fixture.workspace);
+    assert.equal(afterUpdate.projects.find((entry) => entry.id === updated.record.id).name, "a=b=c");
+    // A duplicate flag across the attached and two-token spellings still fails closed.
+    await expectReasonAsync("CLI_ARGUMENT_DUPLICATE", () => runCli(
+      ["status", `--workspace=${fixture.workspace}`, "--workspace", fixture.workspace],
+      { write() {} },
+    ));
+    // An invalid enum on a mutation verb fails at the CLI boundary naming flag=value
+    // (CLI_ARGUMENT_MALFORMED), never as an opaque core RECORD_MALFORMED on the id.
+    await assert.rejects(
+      () => runCli(
+        ["work-create", ...ws, "--expected-version", "1", "--at", instant(3), "--project-id", created.record.id, "--external-key", "INIT-B8", "--kind", "Task"],
+        { write() {} },
+      ),
+      (error) => error?.reasonCode === "CLI_ARGUMENT_MALFORMED" && error?.message === "kind=Task",
+      "invalid --kind names flag=value and is not RECORD_MALFORMED",
+    );
+    // A bare flag with no following value still fails CLI_ARGUMENT_MALFORMED.
+    await expectReasonAsync("CLI_ARGUMENT_MALFORMED", () => runCli(
+      ["status", "--workspace"],
+      { write() {} },
+    ));
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("WSA-1: every mutation returns state identical to a fresh materialize (single-replay pipeline)", async () => {
   const fixture = await workspaceFixture();
   try {
