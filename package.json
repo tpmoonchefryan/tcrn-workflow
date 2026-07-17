@@ -33,6 +33,7 @@
     "verify:act3": "node scripts/task.mjs act3",
     "verify:backup": "node scripts/task.mjs backup",
     "verify:ci": "node scripts/task.mjs ci",
+    "verify:e2e": "node scripts/task.mjs e2e",
     "verify:governance": "node scripts/task.mjs governance",
     "verify:history": "node scripts/task.mjs history",
     "verify:isolated": "node scripts/isolated-proof.mjs",
