@@ -94,3 +94,24 @@ test("WSB-4: exactly the nullable flags carry the '-' sentinel, and only knowled
   });
   assert.deepEqual(aliasFlags, { "knowledge-create": ["last-verified", "project-id"] });
 });
+
+test("WSB-5: exactly the authority-gated compatibility verbs are programmatic-only; every other verb is cli", () => {
+  const bySurface = {};
+  for (const entry of COMMAND_CATALOG) {
+    assert.ok(
+      entry.availability === "cli" || entry.availability === "programmatic-only",
+      `${entry.name} availability must be a known invocation surface`,
+    );
+    (bySurface[entry.availability] ??= []).push(entry.name);
+  }
+  for (const surface of Object.keys(bySurface)) bySurface[surface] = bySurface[surface].sort();
+  // The shipped binary constructs CliIo as {write} only, so these two verbs cannot
+  // obtain their required CompatibilityAdmissionAuthority and fail closed; the catalog
+  // records that programmatic-only surface (WSB-5).
+  assert.deepEqual(bySurface["programmatic-only"], ["compatibility-dry-run", "compatibility-plan"]);
+  assert.equal(
+    (bySurface["cli"]?.length ?? 0) + bySurface["programmatic-only"].length,
+    COMMAND_CATALOG.length,
+    "every catalog entry is partitioned into exactly one known surface",
+  );
+});

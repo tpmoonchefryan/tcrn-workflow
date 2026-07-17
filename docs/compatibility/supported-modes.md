@@ -34,3 +34,29 @@ P2 freezes Protocol V1 and provides offline conformance fixtures. This is not a
 supported live external-runtime pair. P3 local-work-graph capability remains
 unavailable until the canonical acceptance marker is created by a later accepted
 route.
+
+## Invocation surfaces
+
+The compatibility verbs split into two invocation surfaces. The distinction is a
+fail-closed security boundary, not a packaging accident.
+
+- `compatibility-validate` and `compatibility-unavailable` are binary-invocable:
+  the shipped binary `tcrn-workflow` can run them directly. They read no host
+  authority and change no state.
+- `compatibility-plan` and `compatibility-dry-run` are programmatic-only. They
+  require a host-supplied Compatibility Admission Authority delivered through the
+  typed programmatic `CliIo` channel. The shipped binary constructs that channel
+  with an output writer only, so both verbs MUST fail closed with reason code
+  `COMPATIBILITY_AUTHORITY_REQUIRED` and a non-zero exit from the binary.
+
+Authority identity material is never accepted on the argv command line: an
+`--authority` token is rejected as an unknown argument before the authority gate
+is reached. Passing an admission path or digest as plaintext arguments is a
+rejected design — it would place authority-binding identity on the process
+command line, where it can leak into shells, logs, and process tables. A host
+that must plan or dry-run compatibility embeds the CLI and injects the authority
+programmatically, never through the published binary.
+
+The command catalog (`commands` verb) records this boundary: `compatibility-plan`
+and `compatibility-dry-run` carry availability `programmatic-only`; every other
+verb carries `cli`.
