@@ -16,6 +16,7 @@ export const ACTOR_PREFIXES = Object.freeze(["owner", "profile", "agent"] as con
 export const ACTOR_ATTESTATION_REASON_CODES = Object.freeze([
   "ACTOR_ATTESTATION_INVALID",
   "ACTOR_ID_INVALID",
+  "EVENT_PAYLOAD_EXTRA_INVALID",
 ] as const);
 export type ActorAttestationReasonCode = typeof ACTOR_ATTESTATION_REASON_CODES[number];
 
@@ -51,15 +52,41 @@ export function assertActorId(value: unknown): asserts value is string {
   }
 }
 
+// WSD-1 (SDC-2): the registered per-operation extras table. An event payload may
+// carry a top-level key beyond {operation, record, actor} ONLY when this table
+// registers that key for the payload's operation, and a registered operation MUST
+// carry exactly its registered extras — never an ad-hoc shape. conference.closed
+// carries the closing minutes so a close is one atomic event.
+export const EVENT_PAYLOAD_OPERATION_EXTRAS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  "conference.closed": Object.freeze(["minutes"]),
+});
+
+const reservedPayloadKeys = new Set(["operation", "record", "actor"]);
+
 // The single event-payload constructor WS-D operations must reuse: {operation,
-// record} before attestation is enabled, {operation, record, actor} after. The
-// actor, when present, is validated here so no operation can bypass it.
-export function buildEventPayload(operation: string, record: JsonValue, actor?: string): Readonly<Record<string, JsonValue>> {
+// record} before attestation is enabled, {operation, record, actor} after, plus
+// exactly the extras the table above registers for the operation. The actor,
+// when present, is validated here so no operation can bypass it.
+export function buildEventPayload(operation: string, record: JsonValue, actor?: string, extras?: Readonly<Record<string, JsonValue>>): Readonly<Record<string, JsonValue>> {
+  const registered = EVENT_PAYLOAD_OPERATION_EXTRAS[operation] ?? [];
+  const supplied = Object.keys(extras ?? {}).sort();
+  if (JSON.stringify(supplied) !== JSON.stringify([...registered].sort())) {
+    fail("EVENT_PAYLOAD_EXTRA_INVALID", `${operation} extras must be exactly [${registered.join(",")}]`);
+  }
+  const payload: Record<string, JsonValue> = { operation, record };
+  for (const key of registered) {
+    const value = extras?.[key];
+    if (reservedPayloadKeys.has(key) || value === undefined) {
+      fail("EVENT_PAYLOAD_EXTRA_INVALID", `${operation} extra ${key} is invalid`);
+    }
+    payload[key] = value;
+  }
   if (actor === undefined) {
-    return { operation, record };
+    return payload;
   }
   assertActorId(actor);
-  return { operation, record, actor };
+  payload.actor = actor;
+  return payload;
 }
 
 // The enable event's record: {schemaVersion, version:1}. Appending it through the

@@ -319,6 +319,7 @@ async function runTests({
   conferenceOnly = false,
   assignmentGateOnly = false,
   actorOnly = false,
+  extensionStoreOnly = false,
   p7Only = false,
   p7CompatibilityOnly = false,
   p7AosRequirementsOnly = false,
@@ -342,6 +343,7 @@ async function runTests({
     .filter((path) => !conferenceOnly || path === "tests/conference.test.mjs")
     .filter((path) => !assignmentGateOnly || path === "tests/assignment-gate.test.mjs")
     .filter((path) => !actorOnly || path === "tests/actor-attestation.test.mjs")
+    .filter((path) => !extensionStoreOnly || path === "tests/workspace-extension-records.test.mjs")
     .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs")
@@ -375,6 +377,8 @@ async function runTests({
                   ? "ASSIGNMENT_GATE_TESTS_VERIFIED"
                 : actorOnly
                   ? "ACTOR_ATTESTATION_TESTS_VERIFIED"
+                : extensionStoreOnly
+                  ? "EXT_STORE_TESTS_VERIFIED"
                 : p6Only
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
                   : p7CompatibilityOnly
@@ -903,7 +907,9 @@ async function verifyConference() {
   assertion(fixture.positionParityCases === 4 && fixture.minutesParityCases === 4, "CONFERENCE_SCHEMA_PARITY_CORPUS");
   assertion(fixture.operationCases === 6 && fixture.distillCases === 3, "CONFERENCE_OPERATION_CORPUS");
   assertion(fixture.registrationAppliesTo === "work" && fixture.requiredByDefault === false && fixture.ledgerRequirement === "AOS-REQ-015", "CONFERENCE_REGISTRATION");
-  assertion(fixture.orchestration === "excluded" && fixture.search === "excluded" && fixture.liveStore === "not-created", "CONFERENCE_NO_OVERCLAIM");
+  // WSD-1: conference records now persist through the governed workspace
+  // event-log store (proved by verify:ext-store); orchestration and search stay excluded.
+  assertion(fixture.orchestration === "excluded" && fixture.search === "excluded" && fixture.liveStore === "workspace-event-log", "CONFERENCE_NO_OVERCLAIM");
   return success("CONFERENCE_VERIFIED", {
     tests: tests.reasonCode,
     positiveCases: fixture.positiveCases,
@@ -917,7 +923,7 @@ async function verifyConference() {
     registrationAppliesTo: fixture.registrationAppliesTo,
     ledgerRequirement: fixture.ledgerRequirement,
     liveStore: fixture.liveStore,
-    standalone: "inert-extension-skeleton-data-only-no-orchestration-no-search-no-store",
+    standalone: "inert-extension-record-validation-no-orchestration-no-search-store-in-workspace-event-log",
   });
 }
 
@@ -930,7 +936,9 @@ async function verifyAssignmentGate() {
   assertion(fixture.gatePositiveCases === 4 && fixture.gateHostileCases === 7, "GATE_CORPUS");
   assertion(fixture.schemaParityCases === 8 && fixture.listCases === 4, "ASSIGNMENT_GATE_PARITY_CORPUS");
   assertion(fixture.registrationAppliesTo === "work" && fixture.requiredByDefault === false, "ASSIGNMENT_GATE_REGISTRATION");
-  assertion(fixture.assignmentLedgerRequirement === "AOS-REQ-017" && fixture.gateLedgerRequirement === "AOS-REQ-018" && fixture.liveStore === "not-created", "ASSIGNMENT_GATE_NO_OVERCLAIM");
+  // WSD-1: gate records now persist through the governed workspace event-log
+  // store (proved by verify:ext-store); assignments remain store-less.
+  assertion(fixture.assignmentLedgerRequirement === "AOS-REQ-017" && fixture.gateLedgerRequirement === "AOS-REQ-018" && fixture.liveStore === "workspace-event-log", "ASSIGNMENT_GATE_NO_OVERCLAIM");
   return success("ASSIGNMENT_GATE_VERIFIED", {
     tests: tests.reasonCode,
     assignmentPositiveCases: fixture.assignmentPositiveCases,
@@ -945,7 +953,38 @@ async function verifyAssignmentGate() {
     assignmentLedgerRequirement: fixture.assignmentLedgerRequirement,
     gateLedgerRequirement: fixture.gateLedgerRequirement,
     liveStore: fixture.liveStore,
-    standalone: "inert-extension-skeleton-data-only-no-lifecycle-no-store",
+    standalone: "inert-extension-record-validation-no-lifecycle-assignment-store-less-gate-store-in-workspace-event-log",
+  });
+}
+
+// WSD-1: the conference/gate workspace-event-log store proof. The record-shape
+// corpora stay under verify:conference / verify:ext-ag; this task proves the
+// persistence semantics (operations, binding rules, openness/tombstone rules,
+// legacy byte-stability, replay determinism) end to end and offline.
+async function verifyExtStore() {
+  const tests = await runTests({ extensionStoreOnly: true });
+  const specDigests = await Promise.all([
+    fileRecord(resolve(repositoryRoot, "specs/conference-v1.md")),
+    fileRecord(resolve(repositoryRoot, "specs/gate-v1.md")),
+  ]);
+  return success("EXT_STORE_VERIFIED", {
+    tests: tests.reasonCode,
+    operations: [
+      "conference.created",
+      "conference.updated",
+      "conference.position.appended",
+      "conference.closed",
+      "gate.created",
+      "gate.updated",
+      "gate.deleted",
+    ],
+    store: "workspace-event-log",
+    storageVersion: 1,
+    atomicClose: "single-event-payload-minutes-operation-record",
+    legacyViews: "byte-stable-when-no-extension-records",
+    forwardCompatibility: "old-binaries-fail-closed-unknown-operation",
+    conferenceSpecDigest: specDigests[0].sha256,
+    gateSpecDigest: specDigests[1].sha256,
   });
 }
 
@@ -1460,6 +1499,7 @@ const commandContracts = {
   conference: { exit: 0, reasonCode: "CONFERENCE_VERIFIED" },
   "ext-ag": { exit: 0, reasonCode: "ASSIGNMENT_GATE_VERIFIED" },
   "ext-actor": { exit: 0, reasonCode: "ACTOR_ATTESTATION_VERIFIED" },
+  "ext-store": { exit: 0, reasonCode: "EXT_STORE_VERIFIED" },
   p7: { exit: 0, reasonCode: "P7_CANONICAL_EXCHANGE_VERIFIED" },
   "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
   "p7-aos-requirements": { exit: 0, reasonCode: "P7_PUBLIC_AOS_REQUIREMENTS_VERIFIED" },
@@ -1700,6 +1740,7 @@ const handlers = {
   conference: verifyConference,
   "ext-ag": verifyAssignmentGate,
   "ext-actor": verifyActorAttestation,
+  "ext-store": verifyExtStore,
   p7: verifyP7,
   "p7-compatibility": verifyP7Compatibility,
   "p7-aos-requirements": verifyP7AosRequirements,
@@ -1760,6 +1801,9 @@ function evidencePhase(name) {
     return "p2";
   }
   if (name === "ext-actor") {
+    return "p2";
+  }
+  if (name === "ext-store") {
     return "p2";
   }
   if (name === "p7" || name === "p7-compatibility" || name === "p7-aos-requirements") {

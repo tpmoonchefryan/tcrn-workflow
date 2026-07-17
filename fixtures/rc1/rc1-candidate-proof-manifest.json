@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "c8f884e29f4917983991f0cad312a17f75762a8e43cdaf7ee06861ba26524e6c",
+  "basisDigest": "8d60725668f1181dfb143fb731bc7c8e440b8a076f0b26138b1d9ecc96f24b21",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -206,8 +206,8 @@
     },
     {
       "path": "specs/conference-v1.md",
-      "size": 3007,
-      "sha256": "d9fa1c4a586d491c0320dee5eac0e824df179d5f1760ba126060e0b7931b08ac"
+      "size": 4708,
+      "sha256": "de1ec6b03241118f914e2e94ca084b8a643493ce6fb4880aca7b29eb76bd6ea0"
     },
     {
       "path": "specs/context-v1.md",
@@ -236,8 +236,8 @@
     },
     {
       "path": "specs/gate-v1.md",
-      "size": 1372,
-      "sha256": "ebd424e01dae6be2ccbc085c1993fd50166048f6748a102617abc3b7d098d2b3"
+      "size": 2681,
+      "sha256": "0499cc3faa0e077e2b855c5b1c4c3062159a87878f55c5c12492a39fdde232eb"
     },
     {
       "path": "specs/knowledge-model-v1.md",
@@ -291,8 +291,8 @@
     },
     {
       "path": "verification-map.yaml",
-      "size": 68339,
-      "sha256": "ecba7f238c0035be790df71bf06430a875b7883b09f1c34daa03bb89a712ae38"
+      "size": 70791,
+      "sha256": "cc5c93db4e03f2e02f648179cb14d14697bac88733e2e3195d21483086a1bcbe"
     }
   ],
   "roleVerdictSlots": {

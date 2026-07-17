@@ -12,5 +12,5 @@
   "ledgerRequirement": "AOS-REQ-015",
   "orchestration": "excluded",
   "search": "excluded",
-  "liveStore": "not-created"
+  "liveStore": "workspace-event-log"
 }

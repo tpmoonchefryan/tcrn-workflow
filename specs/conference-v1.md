@@ -51,8 +51,37 @@ second knowledge store is created (single knowledge store). The raw positions an
 minutes remain size-budgeted records subject to the knowledge and archive
 lifecycle.
 
+## Persistence
+
+Conference records persist as additive workspace event-log operations:
+`conference.created`, `conference.updated`, `conference.position.appended`, and
+`conference.closed`. Every event is built through the shared attested payload
+constructor; `conference.closed` carries the minutes under the registered
+per-operation extra key `minutes`, so a close is one atomic event whose payload
+is exactly `{minutes, operation, record}`.
+
+Event binding: every persisted record's `updatedAt` equals its event's
+`occurredAt`; a create carries `revision` 1 and `tombstone` false and its id must
+be new; a mutation carries `revision` exactly one above the current record and
+pins every field it does not explicitly mutate (identity and `projectId` never
+change). `conference.created` requires status `open`, a live (non-tombstoned)
+project, and live same-project work for every `linkedWorkIds` entry.
+`conference.position.appended` and `conference.closed` require the referenced
+conference to be `open` and project-bound; `conference.updated` is the cancel
+route (`open` to `cancelled` only). The closing minutes are revision-1 records
+bound by `conferenceId` and `projectId`. Violations fail closed:
+`WORKSPACE_CONFERENCE_NOT_OPEN` at mutation time, `WORKSPACE_EVENT_CORRUPT` at
+replay time.
+
+Workspaces containing a conference event additionally emit a
+`views/extensions.json` index; workspaces without extension records keep their
+views, export, and archive bytes unchanged. `storageVersion` stays 1: an old
+binary reading a workspace that contains these events fails closed with
+`WORKSPACE_EVENT_CORRUPT` (unknown operation), and a workspace that never uses
+them stays fully readable by old binaries.
+
 ## Residuals
 
-There is no live store, scheduler, participant notification, cross-project
-conference, or automated action item. Records are inert product data validated
-offline; hub integration and promotion require separate governed routes.
+There is no scheduler, participant notification, cross-project conference, or
+automated action item. Record validation remains offline and store-independent;
+hub integration and promotion require separate governed routes.

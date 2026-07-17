@@ -8,10 +8,15 @@ import test from "node:test";
 
 import {
   acquireWorkspaceLease,
+  appendConferencePositionInWorkspace,
+  closeConferenceInWorkspace,
+  createGateInWorkspace,
   createProject,
   createWork,
   initializeWorkspace,
   materializeWorkspace,
+  openConferenceInWorkspace,
+  transitionGateInWorkspace,
 } from "../dist/build/packages/core/src/index.js";
 import * as publicCore from "../dist/build/packages/core/src/index.js";
 import { withWorkspacePerfInstrumentation } from "../dist/build/packages/core/src/workspace-perf-instrumentation.js";
@@ -82,4 +87,48 @@ test("WSA-5: the perf instrumentation is absent from the public package surface"
   assert.equal(publicCore.recordFullMaterialize, undefined);
   assert.equal(publicCore.recordClosureValidation, undefined);
   assert.equal(publicCore.recordTerminalGraphValidation, undefined);
+  assert.equal(publicCore.recordExtensionClosureValidation, undefined);
+});
+
+// WSD-1 (SDC-3/CONF-4): conference/gate reducer arms validate O(delta) per event
+// through their own counter — bounded lookups of the records each event
+// references — and never touch the work-closure counters, so the WSA-2 work-only
+// equalities above stay exact on mixed histories.
+test("WSD-1: extension reducer arms are O(delta) with exact per-operation counts and leave work-closure counters untouched", async (context) => {
+  const fx = await fixture(context, 4);
+  try {
+    let version = fx.version;
+    const at = () => instant(version + 2);
+    const anchorId = (await materializeWorkspace(fx.workspace)).work.find((r) => r.externalKey === "INITIATIVE-0").id;
+    let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+      expectedVersion: version, occurredAt: at(), externalKey: "CONF-COMPLEXITY", projectId: fx.projectId, type: "architecture",
+      title: "Complexity", linkedWorkIds: [anchorId], desiredOutcome: "prove O(delta)", participantIds: [],
+    }); version += 1;
+    const conferenceId = state.conferences[0].id;
+    state = await appendConferencePositionInWorkspace(fx.workspace, fx.lease, {
+      expectedVersion: version, occurredAt: at(), conferenceId, externalKey: "POSITION-COMPLEXITY", actorId: "profile:counter-01",
+      position: "Count the visits.", risks: [], recommendations: [], evidenceIds: [],
+    }); version += 1;
+    state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
+      expectedVersion: version, occurredAt: at(), conferenceId, minutesExternalKey: "MINUTES-COMPLEXITY",
+      summary: "Counted.", outcomeClass: "role_decision", decisions: ["count"], unresolvedIssues: [],
+    }); version += 1;
+    state = await createGateInWorkspace(fx.workspace, fx.lease, {
+      expectedVersion: version, occurredAt: at(), externalKey: "GATE-COMPLEXITY", projectId: fx.projectId, workId: anchorId,
+      title: "Counter gate", outcomeClass: "role_decision",
+    }); version += 1;
+    await transitionGateInWorkspace(fx.workspace, fx.lease, {
+      expectedVersion: version, occurredAt: at(), id: state.gates[0].id, status: "blocked",
+    }); version += 1;
+    const { metrics } = await withWorkspacePerfInstrumentation(() => materializeWorkspace(fx.workspace));
+    assert.equal(metrics.fullMaterialize, 1);
+    assert.equal(metrics.terminalGraphValidation, 1);
+    assert.equal(metrics.closureValidation, fx.workEvents, "work-closure counts ignore extension events");
+    // Exact closed form: created 2+linked(1)=3, position 2, closed 3, gate
+    // created 2+anchor(1)=3, gate updated 2 — one bounded validation per event.
+    assert.equal(metrics.extensionClosureValidation, 5);
+    assert.equal(metrics.extensionClosureRecordsVisited, 13);
+  } finally {
+    await fx.lease.release();
+  }
 });
