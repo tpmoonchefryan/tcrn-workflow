@@ -22,7 +22,16 @@ Each entry is `{name, availability, mutates, flags}`:
   invoked from the binary).
 - `mutates` — whether the verb appends a workspace event or writes store state.
 - `flags` — each `{name, required, valueKind}`, where `valueKind` is one of
-  `string`, `integer`, `boolean`, `json`, `list`, `instant`, `enum`.
+  `string`, `integer`, `boolean`, `json`, `list`, `instant`, `enum`. A flag that
+  accepts an explicit null carries two optional descriptive fields:
+  - `nullSentinel` — always `"-"`, the canonical spelling that means null (an
+    omitted optional flag is also null). Present on `knowledge-create`
+    `project-id`/`last-verified`, `work-create` `parent-id`, and
+    `profile-authorize` `workspace-id`/`project-id`/`command`.
+  - `deprecatedAliases` — additional spellings still accepted this release but
+    slated for removal. Only `knowledge-create` `project-id`/`last-verified`
+    carry it, each `["null"]`, preserving the pre-unification `"null"` spelling
+    for external callers.
 
 ## Parity and stability
 
