@@ -76,6 +76,47 @@ CLI invocation from an overlay value; it never grants the engine a new read.
     default — ratify distillation as mandatory-with-opt-out with accountable-owner
     enforcement deferred to promote.
 
+## Catalogued keys — backup preferences (`backup.*`)
+
+- **Key:** `backup.cadence`
+  - **Tier:** 2 (conversational preference).
+  - **Default:** `gate-close`.
+  - **Bounds:** the closed enum `{gate-close, session-end, manual}`.
+  - **Mechanism:** a workspace overlay layer value, read by the agent only when
+    the helper backup-elicitation flow composes an explicit snapshot invocation.
+    Advisory only: no engine scheduler exists and none is claimed — the cadence
+    informs when the agent proposes a backup, never an automatic trigger, so the
+    zero-engine-code posture stated above is preserved.
+  - **Decision record:** OD-31 (WSF-5/WSF-6 backup keys), resolved to its
+    recommended default — sign the key with cadence default `gate-close`. Admitted
+    under the new-key rule (default, bounds, tier, and this record).
+
+- **Key:** `backup.destination`
+  - **Tier:** 2 (conversational preference).
+  - **Default:** none — always elicit an explicit path; there is no implicit
+    fallback and no managed default location.
+  - **Bounds:** an absolute filesystem path that is NOT inside the workspace root,
+    NOT inside the workspace control directory `.tcrn-workflow`
+    (`WORKSPACE_CONTROL_DIRECTORY`), NOT inside the helper's managed trust-state
+    root `~/.tcrn-workflow` (a distinct tree from the workspace control dir despite
+    the shared basename — it holds the anti-rollback state the helper marks
+    machine-bound), and NOT inside any live host skills directory
+    (`~/.claude/skills` or a project's `.claude/skills`) — the same location
+    hygiene the first-run wizard enforces for the state root. A destination on a
+    synced or cloud-backed filesystem means workspace data leaves the machine and
+    requires the explicit off-machine approval language from the elicitation flow
+    before it is accepted.
+  - **Mechanism:** a workspace overlay layer value, read by the agent only when
+    the helper backup-elicitation flow composes an explicit snapshot destination
+    argument. The CLI always takes the destination explicitly; the overlay informs
+    the agent's suggested value and never reaches the engine.
+  - **Decision record:** OD-31 (WSF-5/WSF-6 backup keys), resolved to its
+    recommended default — always-elicit a path with a suggested location OUTSIDE
+    both the workspace control dir and the helper trust-state root, rather than a
+    managed default inside the state root (which would collide with the
+    machine-bound anti-rollback state). Admitted under the new-key rule (default,
+    bounds, tier, and this record).
+
 ## Non-knob declarations
 
 Some behaviors that look adjustable are frozen protocol (Tier-0) or engine
@@ -110,4 +151,7 @@ mistakenly applied to them.
 
 Zero new ledger entries: the overlay semantics are already covered by the
 profile-trust-without-release-elevation requirement. This catalog adds no
-protocol surface and no engine code.
+protocol surface and no engine code. The `backup.*` keys catalogued above add no
+engine code and no new ledger entries either: they are advisory overlay
+preferences that inform how the agent composes explicit snapshot invocations,
+preserving this section's zero-engine-code claim.

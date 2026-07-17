@@ -1818,9 +1818,10 @@
         "tests/backup-snapshot.test.mjs",
         "docs/adr/0002-snapshot-not-mirror-backup.md",
         "docs/architecture/backup-git-tier.md",
-        "docs/architecture/backup-restore-runbook.md"
+        "docs/architecture/backup-restore-runbook.md",
+        "specs/settings-catalog-v1.md"
       ],
-      "fixtureDigest": "8e93d7ef2da47d1e0ccbfbaaa25c6a4dc7f368a79cdcd0e6c8350ae33dcb206a",
+      "fixtureDigest": "23e97b202dd6f300df53374691646dc81625dff887fba804c9ac6ddede6211c0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
