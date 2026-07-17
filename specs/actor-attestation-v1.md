@@ -51,3 +51,43 @@ byte-identical to a pre-attestation workspace.
 The dependency, conference, gate, and other WS-D event operations append through
 the same event log and the shared payload constructor, so they inherit actor
 enforcement without defining their own mechanism.
+
+## CLI surface (WSE-3)
+
+The CLI exposes the attestation contract through two additions, both over the
+WSE-2 engine exports; the CLI adds no actor vocabulary of its own.
+
+- `attestation-enable --workspace <root> --expected-version <n|head> --at <instant>
+  --actor <stableId>` appends the one-way `attestation.actor.enabled` chain event
+  under a held lease. All four flags are required. The `--actor` supplied here is
+  the enabling actor carried by the enabling event itself (the boundary event).
+  Re-running it on an already-attested workspace fails closed
+  `WORKSPACE_INPUT_INVALID`.
+- `--actor <stableId>` is an optional flag on every workspace-event mutation verb
+  — `project-create`/`-update`/`-delete`, `work-create`/`-transition`/`-delete`,
+  and the conference/gate verbs `conference-open`/`-append-position`/`-close`/
+  `-cancel`, `gate-create`/`-transition`/`-delete`. It is declared
+  catalog-optional (`required: false`) because before enablement it is genuinely
+  optional and after enablement the engine — not the CLI — makes it mandatory. The
+  static command catalog cannot express "required only after the enable event", so
+  the CLI never marks `--actor` required and never duplicates the enforcement:
+  omitting it on an attested workspace surfaces the engine's
+  `WORKSPACE_ACTOR_REQUIRED`, and an unlisted prefix surfaces the engine's
+  `WORKSPACE_ACTOR_INVALID`. A supplied `--actor` on a non-enabled workspace is a
+  no-op, so legacy no-actor invocations stay byte-identical.
+
+`conference-append-position` additionally carries `--actor-id`, the conference
+position's author recorded in the position document. That is a distinct field
+from `--actor`, the acting identity attested on the event. The two reach the core
+through one shared `actorId` slot, so on this verb the default path (no `--actor`)
+keeps the position author as the acting identity unchanged, and a supplied
+`--actor` takes precedence as the acting identity.
+
+### Non-claim
+
+`--actor` is an asserted identity that is format-checked against the prefix
+allowlist only. It is **not** an authenticated identity in v1: the CLI does not
+verify the caller against any admission receipt or profile authority, and the
+attestation records who a caller *claims* to be, not a proven identity. Binding
+`--actor` to the profile-admission authority is deliberately deferred to a future
+version with its own threat model.
