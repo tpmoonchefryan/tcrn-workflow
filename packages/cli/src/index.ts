@@ -22,6 +22,7 @@ import {
   generateGenericStarterBundle,
   initializeKnowledgeStore,
   initializeWorkspace,
+  knowledgeContextCandidates,
   listKnowledgeMetadata,
   materializeWorkspace,
   planWorkspaceMigration,
@@ -355,6 +356,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "export", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "segment-events", required: false, valueKind: "integer" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }] },
+  { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "knowledge-checkpoint", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "knowledge-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "scope", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "role-scopes", required: true, valueKind: "list" }, { name: "category", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "tags", required: true, valueKind: "list" }, { name: "subject", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "snippet", required: true, valueKind: "string" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "source-references", required: true, valueKind: "list" }, { name: "source-digest", required: true, valueKind: "string" }, { name: "work-ids", required: true, valueKind: "list" }, { name: "decision-ids", required: true, valueKind: "list" }, { name: "gate-ids", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "lifecycle", required: true, valueKind: "string" }, { name: "retrieval", required: true, valueKind: "string" }, { name: "freshness", required: true, valueKind: "string" }, { name: "last-verified", required: true, valueKind: "instant", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "stale-days", required: true, valueKind: "integer" }, { name: "export", required: true, valueKind: "string" }, { name: "body", required: true, valueKind: "string" }] },
   { name: "knowledge-freshness", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
@@ -756,6 +758,28 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const values = parseArguments(rest, ["workspace", "at", "selection", "project-id", "role-scope", "category", "kind", "tag", "freshness", "promotion", "search", "limit", "offset"]);
     required(values, ["workspace", "at"]);
     io.write(canonicalJson(await listKnowledgeMetadata(values.workspace ?? "", {
+      at: values.at ?? "",
+      ...(values.selection ? { selection: values.selection as "default" | "all" } : {}),
+      ...(values["project-id"] ? { projectId: values["project-id"] } : {}),
+      ...(values["role-scope"] ? { roleScope: values["role-scope"] } : {}),
+      ...(values.category ? { category: values.category as KnowledgeCategory } : {}),
+      ...(values.kind ? { kind: values.kind as KnowledgeKind } : {}),
+      ...(values.tag ? { tag: values.tag } : {}),
+      ...(values.freshness ? { freshness: values.freshness as KnowledgeFreshnessState } : {}),
+      ...(values.promotion ? { promotionState: values.promotion as KnowledgePromotionState } : {}),
+      ...(values.search ? { search: values.search } : {}),
+      ...(values.limit ? { limit: Number(values.limit) } : {}),
+      ...(values.offset !== undefined ? { offset: Number(values.offset) } : {}),
+    })));
+    return;
+  }
+  if (command === "knowledge-candidates") {
+    // WSC-7: emit the selected knowledge metadata already shaped as
+    // tcrn.context-metadata-candidate.v1 records — the output candidates array is
+    // consumable directly as a context-route request metadataCandidates entry.
+    const values = parseArguments(rest, ["workspace", "at", "selection", "project-id", "role-scope", "category", "kind", "tag", "freshness", "promotion", "search", "limit", "offset"]);
+    required(values, ["workspace", "at"]);
+    io.write(canonicalJson(await knowledgeContextCandidates(values.workspace ?? "", {
       at: values.at ?? "",
       ...(values.selection ? { selection: values.selection as "default" | "all" } : {}),
       ...(values["project-id"] ? { projectId: values["project-id"] } : {}),

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { link, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -16,9 +16,16 @@ import {
   GENERIC_PROFILE_ADMISSION_RECEIPT_VERSION,
   GENERIC_PROFILE_BASE_DIGEST,
   GENERIC_PROFILE_OPERATIONS,
+  acquireWorkspaceLease,
   calculateContextRouteRequestDigest,
   calculateGenericProfileAdmissionClaims,
+  createKnowledgeUnit,
+  createProject,
+  createWork,
   generateCorePersonaReleaseLayers,
+  initializeKnowledgeStore,
+  initializeWorkspace,
+  knowledgeContextCandidates,
   generateGenericStarterBundle,
   readContextRouteAuthorityReceipt,
   readGenericProfileAdmissionReceipt,
@@ -27,7 +34,7 @@ import {
   validateContextRouteRequest,
   validateContextRouteResult,
 } from "../dist/build/packages/core/src/index.js";
-import { canonicalJson, canonicalSha256, compareCanonicalText } from "../dist/build/packages/protocol/src/index.js";
+import { canonicalJson, canonicalSha256, compareCanonicalText, deriveStableId } from "../dist/build/packages/protocol/src/index.js";
 
 const fixture = JSON.parse(await readFile(new URL("../packages/core/fixtures/p6-context-router-cases.json", import.meta.url), "utf8"));
 const clone = (value) => structuredClone(value);
@@ -54,14 +61,14 @@ function display(label) {
   return { label, description: `${label} inert display metadata.`, examples: [`${label.toLowerCase()}-example`], presentation: { category: "context", audience: "workspace-owner" } };
 }
 
-function ownerFields() {
-  return { activeBinding: { mode: "workspace", workspaceId, projectId: null, command: null }, roleReplacement: null, projectAuthority: projectId, escalationOwner: "owner:context-fixture" };
+function ownerFields(bind = { workspaceId, projectId }) {
+  return { activeBinding: { mode: "workspace", workspaceId: bind.workspaceId, projectId: null, command: null }, roleReplacement: null, projectAuthority: bind.projectId, escalationOwner: "owner:context-fixture" };
 }
 
-function profileRequest(personaIndex) {
+function profileRequest(personaIndex, bind = { workspaceId, projectId }) {
   const base = generateGenericStarterBundle().layers[0];
   const persona = generateCorePersonaReleaseLayers()[personaIndex];
-  const replacement = ownerFields();
+  const replacement = ownerFields(bind);
   const workspace = { schemaVersion: "tcrn.generic-profile.v1", layerId: "profile-layer:context-workspace", layerKind: "workspace_configuration", trustLevel: "user_owned_overlay", releaseVerificationDigest: null, fields: { ownerRebindOnly: replacement, displayOnly: display("Context Workspace") } };
   return { schemaVersion: "tcrn.generic-profile-resolution-request.v1", layers: [base, persona, workspace], ownerRebind: { schemaVersion: "tcrn.generic-profile-owner-rebind.v1", approved: true, ownerId: "owner:context-fixture", targetLayerId: workspace.layerId, replacement } };
 }
@@ -508,4 +515,121 @@ test("Context Router implementation is storeless and contains no legacy, network
   const forbidden = [["node", ":", "http"], ["node", ":", "https"], ["process", ".", "env"], ["legacy", "/"], ["hooks", "/"], ["skills", "/"], ["session", "Id"], ["thread", "Id"], ["model", "Id"], ["context", "Store"]].map((parts) => parts.join(""));
   for (const token of forbidden) assert.equal(source.includes(token), false, token);
   assert.equal(CONTEXT_ROUTE_LIMITS.metadataCandidates, 128);
+});
+
+// WSC-7: build a real knowledge store so the bridge (knowledgeContextCandidates) is
+// proven end-to-end against the live P6 router rather than against a hand-shaped fixture.
+const knowledgeInstant = (day, second = 0) => `2026-07-${String(day).padStart(2, "0")}T14:00:${String(second).padStart(2, "0")}Z`;
+
+async function knowledgeBridgeFixture() {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "workflow-context-bridge-")));
+  const roots = [];
+  for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
+    const path = join(base, kind);
+    await mkdir(path);
+    roots.push({ kind, path });
+  }
+  const workspace = join(base, "workspace");
+  const externalKey = "FIXTURE-WSC7-P6-BRIDGE";
+  await initializeWorkspace({ roots, externalKey, createdAt: knowledgeInstant(11), segmentEventLimit: 64 });
+  const lease = await acquireWorkspaceLease(workspace, { now: knowledgeInstant(11, 1) });
+  let state;
+  try {
+    state = await createProject(workspace, lease, { expectedVersion: 0, occurredAt: knowledgeInstant(11, 1), externalKey: "FIXTURE-WSC7-P6-PROJECT", name: "Bridge" });
+    state = await createWork(workspace, lease, { expectedVersion: 1, occurredAt: knowledgeInstant(11, 2), projectId: state.projects[0].id, externalKey: "FIXTURE-WSC7-P6-WORK", kind: "Initiative", parentId: null, status: "active" });
+  } finally {
+    await lease.release();
+  }
+  await initializeKnowledgeStore(workspace);
+  const projectId = state.projects[0].id;
+  const workId = state.work[0].id;
+  const unit = (key, overrides) => ({
+    expectedVersion: overrides.expectedVersion,
+    occurredAt: overrides.occurredAt,
+    externalKey: key,
+    scope: "project",
+    projectId,
+    roleScopes: [],
+    category: "implementation",
+    kind: "guide",
+    tags: ["knowledge", "workflow"],
+    subject: overrides.subject,
+    summary: overrides.summary,
+    snippet: `Snippet ${key}`,
+    accountableOwnerId: deriveStableId("owner", `${key}-OWNER`),
+    sourceReferences: [`evidence://fixture/${key.toLowerCase()}`],
+    sourceDigest: canonicalSha256({ key, source: "current-explicit" }),
+    linkedWorkIds: [workId],
+    linkedDecisionIds: [deriveStableId("decision", `${key}-DECISION`)],
+    linkedGateIds: [deriveStableId("gate", `${key}-GATE`)],
+    linkedEvidenceIds: [deriveStableId("evidence", `${key}-EVIDENCE`)],
+    lifecycle: "active",
+    retrievalDisposition: "default",
+    freshnessState: overrides.freshnessState ?? "fresh",
+    lastVerified: knowledgeInstant(11, 2),
+    stalenessPolicy: { maximumAgeDays: 30, unknownDisposition: "fail-closed" },
+    exportDisposition: "metadata-only",
+    body: `Body ${key}`,
+  });
+  const fresh = await createKnowledgeUnit(workspace, unit("WSC7-P6-FRESH", { expectedVersion: 0, occurredAt: knowledgeInstant(11, 3), subject: "Fresh bridge subject", summary: "Fresh bridge summary." }));
+  const stale = await createKnowledgeUnit(workspace, unit("WSC7-P6-STALE", { expectedVersion: 1, occurredAt: knowledgeInstant(11, 4), subject: "Stale bridge subject", summary: "Stale bridge summary.", freshnessState: "stale" }));
+  return {
+    workspace,
+    workspaceId: deriveStableId("workspace", externalKey),
+    projectId,
+    workId,
+    freshId: fresh.id,
+    staleId: stale.id,
+    close: () => rm(base, { recursive: true, force: true }),
+  };
+}
+
+test("WSC-7: knowledge-candidates bridge routes end-to-end through the P6 router with freshness exclusion", async () => {
+  const bridge = await knowledgeBridgeFixture();
+  try {
+    const at = "2026-07-12T00:00:00Z";
+    const output = await knowledgeContextCandidates(bridge.workspace, { at, selection: "all" });
+    assert.equal(output.reasonCode, "KNOWLEDGE_LIST_READY");
+    assert.equal(output.candidates.length, 2);
+    const resolution = profileRequest(0, { workspaceId: bridge.workspaceId, projectId: bridge.projectId });
+    const { claims } = profileReceipt(resolution);
+    const request = {
+      schemaVersion: "tcrn.context-route-request.v1",
+      verificationTime: "2026-07-12T05:30:00Z",
+      workspaceId: bridge.workspaceId,
+      projectId: bridge.projectId,
+      workId: bridge.workId,
+      taskKind: "implementation",
+      riskTier: "high",
+      profileResolution: resolution,
+      expectedEffectiveDigest: claims.effectiveDigest,
+      budgets: clone(defaultBudgets),
+      query: "Route knowledge bridge candidates.",
+      metadataCandidates: output.candidates,
+      explicitReadCandidates: [],
+      explicitReadRequests: [],
+    };
+    // Digest parity: the router's own metadataCandidate() recomputation admits every
+    // bridged candidate unmodified — no CONTEXT_CANONICAL_INVALID, no CONTEXT_BINDING_MISMATCH.
+    assert.equal(validateContextRouteRequest(request).metadataCandidates.length, 2);
+    const admitted = await admittedFixture(0, {
+      request,
+      authorityOverrides: { workspaceId: bridge.workspaceId, projectId: bridge.projectId, workId: bridge.workId, allowedExplicitReadIds: [] },
+    });
+    try {
+      const result = routeContext(admitted.request, admitted.profileAdmission, admitted.contextAdmission);
+      assert.equal(result.reasonCode, "CONTEXT_ROUTED");
+      // The fresh candidate is admitted; the stale one is excluded with the freshness
+      // reason carried straight from knowledge computeFreshness into the receipt.
+      assert.deepEqual(result.context.metadata.map((entry) => entry.id), [bridge.freshId]);
+      assert.deepEqual(result.receipt.exclusions, [{ id: bridge.staleId, reasonCode: "CONTEXT_STALE_EXCLUDED" }]);
+      const freshCandidate = output.candidates.find((entry) => entry.id === bridge.freshId);
+      assert.deepEqual(result.receipt.selectedMetadataDigests, [freshCandidate.candidateDigest]);
+      assert.equal(validateContextRouteResult(result).contextDigest, result.contextDigest);
+    } finally {
+      await admitted.close();
+    }
+  } finally {
+    await bridge.close();
+  }
 });
