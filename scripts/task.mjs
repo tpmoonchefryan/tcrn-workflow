@@ -325,6 +325,7 @@ async function runTests({
   p7AosRequirementsOnly = false,
   p8Only = false,
   backupOnly = false,
+  installerOnly = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -349,7 +350,8 @@ async function runTests({
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs")
     .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path))
-    .filter((path) => !backupOnly || path === "tests/backup-snapshot.test.mjs");
+    .filter((path) => !backupOnly || path === "tests/backup-snapshot.test.mjs")
+    .filter((path) => !installerOnly || path === "tests/act1-claude-installer.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
@@ -357,6 +359,8 @@ async function runTests({
   return success(
     trustOnly
       ? "TRUST_NEGATIVE_MATRIX_VERIFIED"
+      : installerOnly
+      ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
       ? "BACKUP_SNAPSHOT_TESTS_VERIFIED"
       : rootOnly
@@ -1510,6 +1514,7 @@ const commandContracts = {
   p8: { exit: 0, reasonCode: "P8_WORKFLOW_RC_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
   backup: { exit: 0, reasonCode: "BACKUP_VERIFIED" },
+  act1: { exit: 0, reasonCode: "ACT1_CLAUDE_INSTALLER_VERIFIED" },
 };
 
 async function verifyMap() {
@@ -1569,7 +1574,9 @@ async function verifyMap() {
   }
   // WSF-2: BK joins the completeness loop with its first claim (BK-SNAPSHOT-WITNESS);
   // ACT stays admitted-only until WSG-2 lands the first activation claim.
-  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "BK"]) {
+  // WSG-2: ACT joins the completeness loop with its first activation-ladder claim
+  // (ACT1-CLAUDE-INSTALLER); PRG-0 pre-admitted ACT to the per-claim allowlist only.
+  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "BK", "ACT"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   const categoryCounts = {
@@ -1660,6 +1667,15 @@ async function verifyRoots() {
 async function verifyBackup() {
   const result = await runTests({ backupOnly: true });
   return success("BACKUP_VERIFIED", { tests: result.tests });
+}
+
+// WSG-2: the Step-1 governed installer gate (ACT phase, first activation-ladder
+// claim). The suite proves the governed on-disk install, receipt round-trip
+// through the unmodified TOCTOU reader, identity-digest-gated rollback execution,
+// and the fail-closed target/root/tamper negatives.
+async function verifyAct1() {
+  const result = await runTests({ installerOnly: true });
+  return success("ACT1_CLAUDE_INSTALLER_VERIFIED", { tests: result.tests });
 }
 
 async function verifyCi() {
@@ -1776,6 +1792,7 @@ const handlers = {
   vulnerabilities: verifyVulnerabilities,
   workspace: verifyWorkspace,
   backup: verifyBackup,
+  act1: verifyAct1,
 };
 
 function errorReason(error) {
@@ -1830,6 +1847,9 @@ function evidencePhase(name) {
   }
   if (name === "backup") {
     return "bk";
+  }
+  if (name === "act1") {
+    return "act";
   }
   if (name === "p8") {
     return "p8";
