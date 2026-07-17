@@ -194,6 +194,7 @@
     "tests/local-command-byte-fidelity.test.mjs",
     "tests/offline-boundary.test.mjs",
     "tests/output-session-lifecycle.test.mjs",
+    "tests/p3-cli-read-surface.test.mjs",
     "tests/p3-file-engine.test.mjs",
     "tests/p4-artifact-lifecycle.test.mjs",
     "tests/p4-knowledge-core.test.mjs",

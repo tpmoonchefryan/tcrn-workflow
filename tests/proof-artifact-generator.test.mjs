@@ -38,6 +38,7 @@ const routeFiles = [
   "docs/adr/0002-snapshot-not-mirror-backup.md",
   "packages/core/src/actor-attestation.ts",
   "tests/actor-attestation.test.mjs",
+  "tests/p3-cli-read-surface.test.mjs",
 ];
 const roles = Object.fromEntries(["platform-workflow-architect", "workflow-verification-engineer", "security-risk-reviewer", "reality-checker"].map((role) => [role, { status: "unresolved", verdict: null, basisDigest: null }]));
 
@@ -83,6 +84,7 @@ async function fixture(context) {
     "docs/adr/0002-snapshot-not-mirror-backup.md": "# route fixture\n",
     "packages/core/src/actor-attestation.ts": "// route fixture\n",
     "tests/actor-attestation.test.mjs": "// route fixture\n",
+    "tests/p3-cli-read-surface.test.mjs": "// route fixture\n",
   };
   for (const [path, bytes] of Object.entries(files)) {
     await mkdir(resolve(root, path, ".."), { recursive: true });

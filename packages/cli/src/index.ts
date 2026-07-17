@@ -237,6 +237,29 @@ function workSummary(record: WorkRecord): Readonly<Record<string, string | numbe
   return { id: record.id, kind: record.kind, status: record.status, projectId: record.projectId, parentId: record.parentId, revision: record.revision, tombstone: record.tombstone };
 }
 
+// WSB-2: governed, budgeted read window over already-materialized, view-verified
+// state. offset is >=0, limit >=1; both fail closed with the flag name on malformed input.
+function paginate(state: Awaited<ReturnType<typeof validateWorkspace>>, kind: string, records: readonly unknown[], values: Readonly<Record<string, string>>): Readonly<Record<string, unknown>> {
+  const limit = boundedInteger(values, "limit");
+  let offset = 0;
+  if (values.offset !== undefined) {
+    const parsed = Number(values.offset);
+    if (!Number.isSafeInteger(parsed) || parsed < 0) fail("CLI_ARGUMENT_MALFORMED", "offset");
+    offset = parsed;
+  }
+  const windowed = limit === undefined ? records.slice(offset) : records.slice(offset, offset + limit);
+  return {
+    reasonCode: "WORKSPACE_LIST_READY",
+    workspaceId: state.metadata.workspaceId,
+    version: state.version,
+    headEventHash: state.headEventHash,
+    kind,
+    total: records.length,
+    truncated: offset + windowed.length < records.length,
+    records: windowed,
+  };
+}
+
 function writeState(io: CliIo, state: Awaited<ReturnType<typeof validateWorkspace>>, record?: Readonly<Record<string, unknown>>): void {
   io.write(canonicalJson({
     reasonCode: "WORKSPACE_COMMAND_COMPLETED",
@@ -752,6 +775,45 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       expectedVersion: expectedVersion(values), occurredAt: at, id: values.id ?? "",
     }));
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
+    return;
+  }
+  if (command === "project-list") {
+    const values = parseArguments(rest, ["workspace", "limit", "offset"]);
+    required(values, ["workspace"]);
+    const state = await validateWorkspace(values.workspace ?? "");
+    const records = state.projects.filter((entry) => !entry.tombstone).map(projectSummary);
+    io.write(canonicalJson(paginate(state, "project", records, values)));
+    return;
+  }
+  if (command === "work-list") {
+    const values = parseArguments(rest, ["workspace", "project-id", "kind", "status", "parent-id", "limit", "offset"]);
+    required(values, ["workspace"]);
+    if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
+    if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
+    const state = await validateWorkspace(values.workspace ?? "");
+    const records = state.work.filter((entry) => !entry.tombstone &&
+      (values["project-id"] === undefined || entry.projectId === values["project-id"]) &&
+      (values.kind === undefined || entry.kind === values.kind) &&
+      (values.status === undefined || entry.status === values.status) &&
+      (values["parent-id"] === undefined || (values["parent-id"] === "-" ? entry.parentId === null : entry.parentId === values["parent-id"])))
+      .map(workSummary);
+    io.write(canonicalJson(paginate(state, "work", records, values)));
+    return;
+  }
+  if (command === "work-show") {
+    const values = parseArguments(rest, ["workspace", "id"]);
+    required(values, ["workspace", "id"]);
+    const state = await validateWorkspace(values.workspace ?? "");
+    const record = state.work.find((entry) => entry.id === values.id && !entry.tombstone);
+    if (!record) fail("WORKSPACE_INPUT_INVALID", `work ${values.id ?? ""} is unavailable`);
+    io.write(canonicalJson({
+      reasonCode: "WORKSPACE_RECORD_READY",
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      kind: "work",
+      record: workSummary(record),
+    }));
     return;
   }
   fail("CLI_COMMAND_UNKNOWN", command);
