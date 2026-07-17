@@ -88,6 +88,9 @@ test("WSB-4: exactly the nullable flags carry the '-' sentinel, and only knowled
     for (const name of Object.keys(record)) record[name] = record[name].sort();
   }
   assert.deepEqual(sentinelFlags, {
+    // WSD-2: gate-create's --work-id is nullable ("-" for a workspace-level gate with
+    // no work anchor); it carries the "-" sentinel but no deprecated "null" alias.
+    "gate-create": ["work-id"],
     "knowledge-create": ["last-verified", "project-id"],
     "profile-authorize": ["command", "project-id", "workspace-id"],
     "work-create": ["parent-id"],
@@ -95,7 +98,7 @@ test("WSB-4: exactly the nullable flags carry the '-' sentinel, and only knowled
   assert.deepEqual(aliasFlags, { "knowledge-create": ["last-verified", "project-id"] });
 });
 
-test("WSB-7: exactly the six workspace-event mutation verbs carry headSentinel, only on expected-version", () => {
+test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel, only on expected-version", () => {
   const sentinelVerbs = [];
   for (const entry of COMMAND_CATALOG) {
     for (const flag of entry.flags) {
@@ -106,7 +109,12 @@ test("WSB-7: exactly the six workspace-event mutation verbs carry headSentinel, 
       }
     }
   }
+  // WSD-2 adds the seven conference/gate event-log mutation verbs to the six
+  // original project/work verbs; head resolves under the held lease for all of
+  // them and is still rejected on knowledge-marker verbs by construction.
   assert.deepEqual([...sentinelVerbs].sort(), [
+    "conference-append-position", "conference-cancel", "conference-close", "conference-open",
+    "gate-create", "gate-delete", "gate-transition",
     "project-create", "project-delete", "project-update", "work-create", "work-delete", "work-transition",
   ]);
 });
