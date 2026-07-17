@@ -48,6 +48,7 @@ const routeFiles = [
   "tests/backup-snapshot.test.mjs",
   "docs/architecture/backup-git-tier.md",
   "docs/architecture/backup-restore-runbook.md",
+  "docs/architecture/agent-integration-v1.md",
   "packages/core/src/claude-adapter-installer.ts",
   "tests/act1-claude-installer.test.mjs",
 ];
@@ -105,6 +106,7 @@ async function fixture(context) {
     "tests/backup-snapshot.test.mjs": "// route fixture\n",
     "docs/architecture/backup-git-tier.md": "# route fixture\n",
     "docs/architecture/backup-restore-runbook.md": "# route fixture\n",
+    "docs/architecture/agent-integration-v1.md": "# route fixture\n",
     "packages/core/src/claude-adapter-installer.ts": "// route fixture\n",
     "tests/act1-claude-installer.test.mjs": "// route fixture\n",
   };

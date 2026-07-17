@@ -53,6 +53,7 @@ const routeAdditions = new Set([
   "tests/backup-snapshot.test.mjs",
   "docs/architecture/backup-git-tier.md",
   "docs/architecture/backup-restore-runbook.md",
+  "docs/architecture/agent-integration-v1.md",
   "packages/core/src/claude-adapter-installer.ts",
   "tests/act1-claude-installer.test.mjs",
 ]);
