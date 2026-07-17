@@ -40,6 +40,7 @@ import type {
 } from "../../protocol/src/index.js";
 import { assertDistinctRoots } from "./root-identity.js";
 import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
+import { recordClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
 import type { CanonicalRoot } from "./root-identity.js";
 import type { ExplicitRoot } from "./index.js";
 
@@ -550,8 +551,10 @@ function validateWorkClosure(work: Map<string, WorkRecord>, projects: Map<string
   if (!project || (project.tombstone && !record.tombstone)) {
     fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} references an unavailable project`);
   }
+  const closure = collectWorkClosure(work, record);
+  recordClosureValidation(closure.length);
   try {
-    validateWorkGraph(collectWorkClosure(work, record));
+    validateWorkGraph(closure);
   } catch (error) {
     if (error instanceof ProtocolError) {
       fail("WORKSPACE_EVENT_CORRUPT", `${error.reasonCode}:${error.message}`);
@@ -568,6 +571,7 @@ function validateWorkClosure(work: Map<string, WorkRecord>, projects: Map<string
 }
 
 function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]): WorkspaceState {
+  recordFullMaterialize();
   const projects = new Map<string, ProjectRecord>();
   const work = new Map<string, WorkRecord>();
   for (const event of events) {
@@ -629,6 +633,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
     fail("WORKSPACE_EVENT_CORRUPT", `unknown operation ${payload.operation}`);
   }
   const projectRecords = [...projects.values()].sort((left, right) => compareCanonicalText(left.id, right.id));
+  recordTerminalGraphValidation();
   const workRecords = validateWorkGraph([...work.values()]);
   return {
     metadata,
