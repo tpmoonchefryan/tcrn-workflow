@@ -113,7 +113,10 @@ import type {
   KnowledgePromotionState,
   CompatibilityAdmissionAuthority,
 } from "../../core/src/index.js";
-import { canonicalExternalKey, canonicalJson, deriveStableId } from "../../protocol/src/index.js";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
+
+import { assertStrictInstant, canonicalExternalKey, canonicalJson, deriveStableId } from "../../protocol/src/index.js";
 import type { PlannedDeliveryKind, ProjectRecord, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
 
 export const RELEASE_REQUIRED_ARGUMENTS = [
@@ -146,6 +149,14 @@ export class WorkflowCliError extends Error {
 
 export interface CliIo {
   write(value: string): void;
+  // WSE-4: an injectable wall-clock reader, present only when the invoking process
+  // chooses to. The production bin supplies () => new Date().toISOString() at the
+  // outermost layer; hermetic runs inject a fixed instant or omit it entirely.
+  // --attest-dir with no clock fails closed (CLI_ARGUMENT_MISSING) so library code
+  // can never fall through to an implicit Date. It is ADVISORY local-clock evidence,
+  // never a real-time guarantee, and never reaches the engine (the chain proves
+  // ordering, not wall-clock truth — see specs/time-attestation-v1.md).
+  readonly clock?: () => string;
   readonly profileAdmissionAuthority?: GenericProfileAdmissionAuthority;
   readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
   readonly codexAdapterHost?: CodexAdapterHostContext;
@@ -333,6 +344,53 @@ function paginate(state: Awaited<ReturnType<typeof validateWorkspace>>, kind: st
   };
 }
 
+// WSE-4: lowercase SHA-256 digest shape, duplicated locally rather than imported
+// from the protocol internals (assertSha256 is unexported), matching the adapter
+// duplication discipline.
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
+
+// WSE-4: the workspace-root containment idiom, duplicated from workspace.ts (never
+// imported from codex-adapter). A time-attestation receipt directory MUST resolve
+// OUTSIDE the workspace root so the advisory, unauthenticated receipt can never be
+// mistaken for an in-workspace attested artifact.
+function insideWorkspace(parent: string, candidate: string): boolean {
+  const relation = relative(parent, candidate);
+  return relation === "" || (!relation.startsWith("..") && !relation.startsWith(sep));
+}
+
+// WSE-4: the receipt shape. schemaVersion is a CLI artifact tag, NOT a registered
+// protocol extension: it is deliberately kept out of extension-registration and out
+// of the workspace trust boundary. Both instants are validated (occurredAt is the
+// caller-asserted event time; observedAt is the local clock reading) and eventHash
+// is checked against the digest shape before one byte is written. It carries no path
+// or hostname (GAP-5 privacy): only a digest and two instants.
+function buildTimeAttestationReceipt(eventHash: string, occurredAt: string, observedAt: string): string {
+  if (!SHA256_PATTERN.test(eventHash)) fail("CLI_ARGUMENT_MALFORMED", "time-attestation eventHash is not a sha-256 digest");
+  assertStrictInstant(occurredAt);
+  assertStrictInstant(observedAt);
+  return canonicalJson({ schemaVersion: "tcrn.time-attestation.v1", eventHash, observedAt, occurredAt });
+}
+
+// WSE-4: opt-in advisory time attestation. Runs AFTER a successful mutation. When
+// --attest-dir is absent this is a no-op, so every legacy invocation stays exactly
+// byte-identical to rc.4 (the engine never sees a clock). When set: fail closed if
+// no clock was injected (never an implicit Date), fail closed if the directory
+// resolves inside the workspace root, then write one canonical receipt named
+// <eventHash>.json. The write is best-effort local-clock evidence outside the
+// lease/mutation claim: the event is already committed, so a failure here loses only
+// the advisory receipt, never workspace state.
+async function emitTimeAttestation(io: CliIo, values: Readonly<Record<string, string>>, headEventHash: string): Promise<void> {
+  const attestDir = values["attest-dir"];
+  if (attestDir === undefined) return;
+  if (io.clock === undefined) fail("CLI_ARGUMENT_MISSING", "--attest-dir requires an injected clock; refusing an implicit local Date");
+  const workspaceRoot = resolve(values.workspace ?? "");
+  const directory = resolve(attestDir);
+  if (insideWorkspace(workspaceRoot, directory)) fail("CLI_ARGUMENT_MALFORMED", "--attest-dir must resolve outside the workspace root");
+  const receipt = buildTimeAttestationReceipt(headEventHash, values.at ?? "", io.clock());
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, `${headEventHash}.json`), receipt);
+}
+
 function writeState(io: CliIo, state: Awaited<ReturnType<typeof validateWorkspace>>, record?: Readonly<Record<string, unknown>>): void {
   io.write(canonicalJson({
     reasonCode: "WORKSPACE_COMMAND_COMPLETED",
@@ -379,7 +437,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "artifact-compact-dry-run", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "artifact-doctor", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "warning-bytes", required: false, valueKind: "integer" }, { name: "critical-bytes", required: false, valueKind: "integer" }, { name: "warning-count", required: false, valueKind: "integer" }, { name: "critical-count", required: false, valueKind: "integer" }] },
   { name: "artifact-size", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
-  { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }] },
+  { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "claude-adapter-activation-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-activation-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-activation-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
@@ -398,21 +456,21 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "compatibility-plan", availability: "programmatic-only", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "compatibility-unavailable", availability: "cli", mutates: false, flags: [{ name: "surface", required: true, valueKind: "string" }] },
   { name: "compatibility-validate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "conference-append-position", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "actor-id", required: true, valueKind: "string" }, { name: "position", required: true, valueKind: "string" }, { name: "risks", required: true, valueKind: "list" }, { name: "recommendations", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }] },
-  { name: "conference-cancel", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
-  { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "distill", required: false, valueKind: "boolean" }, { name: "accountable-owner-id", required: false, valueKind: "string" }, { name: "stale-days", required: false, valueKind: "integer" }, { name: "evidence-ids", required: false, valueKind: "list" }] },
+  { name: "conference-append-position", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "actor-id", required: true, valueKind: "string" }, { name: "position", required: true, valueKind: "string" }, { name: "risks", required: true, valueKind: "list" }, { name: "recommendations", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "conference-cancel", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "distill", required: false, valueKind: "boolean" }, { name: "accountable-owner-id", required: false, valueKind: "string" }, { name: "stale-days", required: false, valueKind: "integer" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "conference-list-by-work", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
-  { name: "conference-open", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "type", required: true, valueKind: "string" }, { name: "title", required: true, valueKind: "string" }, { name: "work-ids", required: true, valueKind: "list" }, { name: "desired-outcome", required: true, valueKind: "string" }, { name: "participant-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }] },
+  { name: "conference-open", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "type", required: true, valueKind: "string" }, { name: "title", required: true, valueKind: "string" }, { name: "work-ids", required: true, valueKind: "list" }, { name: "desired-outcome", required: true, valueKind: "string" }, { name: "participant-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "context-route", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "profile-receipt", required: true, valueKind: "string" }, { name: "authority", required: true, valueKind: "string" }] },
   { name: "context-validate", availability: "cli", mutates: false, flags: [{ name: "result", required: true, valueKind: "string" }] },
   { name: "exchange-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "output", required: true, valueKind: "string" }] },
   { name: "exchange-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "exchange-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "export", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
-  { name: "gate-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "title", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
-  { name: "gate-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
+  { name: "gate-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "title", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "gate-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "gate-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
-  { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "minutes-locator", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
+  { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "minutes-locator", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "segment-events", required: false, valueKind: "integer" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }] },
   { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
@@ -437,20 +495,20 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "profile-generate", availability: "cli", mutates: false, flags: [{ name: "mode", required: true, valueKind: "string" }] },
   { name: "profile-resolve", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }] },
   { name: "profile-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
-  { name: "project-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
-  { name: "project-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
+  { name: "project-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "project-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "project-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
-  { name: "project-update", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
+  { name: "project-update", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "recover", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "snapshot-manifest", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "snapshot-verify", availability: "cli", mutates: false, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "manifest", required: true, valueKind: "string" }] },
   { name: "status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
-  { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-" }, { name: "status", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
-  { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
+  { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-" }, { name: "status", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "work-show", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }] },
-  { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }] },
+  { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
 ] as const);
 
 export async function runCli(arguments_: readonly string[], io: CliIo): Promise<void> {
@@ -1083,7 +1141,17 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     )));
     return;
   }
-  const shared = ["workspace", "expected-version", "at"];
+  // requiredShared is the mandatory trio every workspace-event mutation verb demands
+  // via required(); shared is the ALLOWED-flag list those verbs pass to parseArguments.
+  // WSE-4: --attest-dir joins shared (allowed) but NOT requiredShared, so it is a
+  // catalog-OPTIONAL flag on every mutation verb. After a successful mutation each verb
+  // calls emitTimeAttestation(io, values, <post-mutation headEventHash>), a no-op unless
+  // --attest-dir is set. Read verbs (validate/status/list) never spread shared, so the
+  // flag is unknown there and no receipt is ever written off a read. The receipt is
+  // advisory local-clock evidence, opt-in, and lives OUTSIDE the workspace root — the
+  // chain still proves only ordering.
+  const requiredShared = ["workspace", "expected-version", "at"];
+  const shared = [...requiredShared, "attest-dir"];
   // WSE-3: attestation-enable appends the one-way attestation.actor.enabled chain
   // event (WSE-2 enableActorAttestation) under a held lease; from that sequence on
   // the engine makes a valid --actor mandatory. --actor itself is catalog-OPTIONAL
@@ -1093,18 +1161,19 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   // keeping legacy no-actor invocations on non-enabled workspaces byte-identical.
   if (command === "attestation-enable") {
     const values = parseArguments(rest, [...shared, "actor"]);
-    required(values, [...shared, "actor"]);
+    required(values, [...requiredShared, "actor"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => enableActorAttestation(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, actorId: values.actor ?? "",
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeState(io, state);
     return;
   }
   if (command === "project-create") {
     const values = parseArguments(rest, [...shared, "external-key", "name", "actor"]);
-    required(values, [...shared, "external-key", "name"]);
+    required(values, [...requiredShared, "external-key", "name"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => createProject(workspace, lease, {
@@ -1112,36 +1181,39 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     const id = deriveStableId("project", canonicalExternalKey(values["external-key"] ?? ""));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === id)!));
     return;
   }
   if (command === "project-update") {
     const values = parseArguments(rest, [...shared, "id", "name", "actor"]);
-    required(values, [...shared, "id", "name"]);
+    required(values, [...requiredShared, "id", "name"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => updateProject(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "", name: values.name ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
   if (command === "project-delete") {
     const values = parseArguments(rest, [...shared, "id", "actor"]);
-    required(values, [...shared, "id"]);
+    required(values, [...requiredShared, "id"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => deleteProject(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
   if (command === "work-create") {
     const values = parseArguments(rest, [...shared, "project-id", "external-key", "kind", "parent-id", "status", "actor"]);
-    required(values, [...shared, "project-id", "external-key", "kind"]);
+    required(values, [...requiredShared, "project-id", "external-key", "kind"]);
     // Fail closed at the CLI boundary naming the offending flag/value, before the
     // uncast enum reaches core and surfaces as an opaque RECORD_MALFORMED on the id.
     if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
@@ -1159,12 +1231,13 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     const id = deriveStableId("work", canonicalExternalKey(values["external-key"] ?? ""));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === id)!));
     return;
   }
   if (command === "work-transition") {
     const values = parseArguments(rest, [...shared, "id", "status", "actor"]);
-    required(values, [...shared, "id", "status"]);
+    required(values, [...requiredShared, "id", "status"]);
     if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
@@ -1172,18 +1245,20 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "", status: values.status as WorkStatus,
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
   if (command === "work-delete") {
     const values = parseArguments(rest, [...shared, "id", "actor"]);
-    required(values, [...shared, "id"]);
+    required(values, [...requiredShared, "id"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => deleteWork(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
@@ -1236,7 +1311,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   // lease and read the materialized head, emitting the utf8-byte-ordered record array.
   if (command === "conference-open") {
     const values = parseArguments(rest, [...shared, "external-key", "project-id", "type", "title", "work-ids", "desired-outcome", "participant-ids", "actor"]);
-    required(values, [...shared, "external-key", "project-id", "type", "title", "work-ids", "desired-outcome", "participant-ids"]);
+    required(values, [...requiredShared, "external-key", "project-id", "type", "title", "work-ids", "desired-outcome", "participant-ids"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => openConferenceInWorkspace(workspace, lease, {
@@ -1251,6 +1326,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       participantIds: listValue(values["participant-ids"]),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeExtensionState(io, state, deriveStableId("conference", canonicalExternalKey(values["external-key"] ?? "")));
     return;
   }
@@ -1261,7 +1337,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     // author flowing as the attestation actor exactly as before (byte-identical);
     // when --actor is supplied it takes precedence via the shared trailing spread.
     const values = parseArguments(rest, [...shared, "conference-id", "external-key", "actor-id", "position", "risks", "recommendations", "evidence-ids", "actor"]);
-    required(values, [...shared, "conference-id", "external-key", "actor-id", "position", "risks", "recommendations", "evidence-ids"]);
+    required(values, [...requiredShared, "conference-id", "external-key", "actor-id", "position", "risks", "recommendations", "evidence-ids"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => appendConferencePositionInWorkspace(workspace, lease, {
@@ -1276,6 +1352,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       evidenceIds: listValue(values["evidence-ids"]),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeExtensionState(io, state, deriveStableId("position", canonicalExternalKey(values["external-key"] ?? "")));
     return;
   }
@@ -1292,7 +1369,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     // the whole flow runs under the held workspace lease so no concurrent append can
     // desync the rebind before capture.
     const values = parseArguments(rest, [...shared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues", "actor", "distill", "accountable-owner-id", "stale-days", "evidence-ids"]);
-    required(values, [...shared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues"]);
+    required(values, [...requiredShared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const conferenceId = values["conference-id"] ?? "";
@@ -1337,6 +1414,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       }
       return { state, knowledgeUnitIds };
     });
+    await emitTimeAttestation(io, values, outcome.state.headEventHash);
     if (outcome.knowledgeUnitIds === undefined) {
       writeExtensionState(io, outcome.state, minutesId);
       return;
@@ -1353,7 +1431,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   }
   if (command === "conference-cancel") {
     const values = parseArguments(rest, [...shared, "conference-id", "actor"]);
-    required(values, [...shared, "conference-id"]);
+    required(values, [...requiredShared, "conference-id"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => cancelConferenceInWorkspace(workspace, lease, {
@@ -1362,6 +1440,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       conferenceId: values["conference-id"] ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeExtensionState(io, state, values["conference-id"] ?? "");
     return;
   }
@@ -1374,7 +1453,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   }
   if (command === "gate-create") {
     const values = parseArguments(rest, [...shared, "external-key", "project-id", "work-id", "title", "outcome-class", "actor"]);
-    required(values, [...shared, "external-key", "project-id", "work-id", "title", "outcome-class"]);
+    required(values, [...requiredShared, "external-key", "project-id", "work-id", "title", "outcome-class"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => createGateInWorkspace(workspace, lease, {
@@ -1387,6 +1466,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       outcomeClass: values["outcome-class"] as GateRecord["outcomeClass"],
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeExtensionState(io, state, deriveStableId("gate", canonicalExternalKey(values["external-key"] ?? "")));
     return;
   }
@@ -1395,7 +1475,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     // satisfied (a conference-minutes:<suffix> id resolving to anchoring minutes);
     // it is an optional flag here and the engine fails closed on absence/mismatch.
     const values = parseArguments(rest, [...shared, "id", "status", "minutes-locator", "actor"]);
-    required(values, [...shared, "id", "status"]);
+    required(values, [...requiredShared, "id", "status"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => transitionGateInWorkspace(workspace, lease, {
@@ -1406,6 +1486,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       minutesLocator: values["minutes-locator"],
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeExtensionState(io, state, values.id ?? "");
     return;
   }
@@ -1414,7 +1495,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     // gate whose conference was cancelled, so a work item wedged by WSD-4 enforcement
     // can reach done. Deletion is a revision-advancing tombstone, never a hard delete.
     const values = parseArguments(rest, [...shared, "id", "actor"]);
-    required(values, [...shared, "id"]);
+    required(values, [...requiredShared, "id"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => deleteGateInWorkspace(workspace, lease, {
@@ -1423,6 +1504,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       id: values.id ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
+    await emitTimeAttestation(io, values, state.headEventHash);
     writeExtensionState(io, state, values.id ?? "");
     return;
   }

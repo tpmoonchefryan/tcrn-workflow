@@ -192,6 +192,7 @@
     "specs/receipt-v1.md",
     "specs/release-trust-v1.md",
     "specs/settings-catalog-v1.md",
+    "specs/time-attestation-v1.md",
     "specs/work-log-v1.md",
     "specs/work-model-v1.md",
     "tests/act1-claude-installer.test.mjs",
