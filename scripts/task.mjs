@@ -328,6 +328,7 @@ async function runTests({
   installerOnly = false,
   activationOnly = false,
   personaRenderOnly = false,
+  e2eOnly = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -355,13 +356,16 @@ async function runTests({
     .filter((path) => !backupOnly || path === "tests/backup-snapshot.test.mjs")
     .filter((path) => !installerOnly || path === "tests/act1-claude-installer.test.mjs")
     .filter((path) => !activationOnly || path === "tests/act2-claude-activation.test.mjs")
-    .filter((path) => !personaRenderOnly || path === "tests/act3-persona-render.test.mjs");
+    .filter((path) => !personaRenderOnly || path === "tests/act3-persona-render.test.mjs")
+    .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
   });
   return success(
-    trustOnly
+    e2eOnly
+      ? "E2E_GOVERNED_LOOP_TESTS_VERIFIED"
+      : trustOnly
       ? "TRUST_NEGATIVE_MATRIX_VERIFIED"
       : activationOnly
       ? "ACT2_CLAUDE_SESSIONSTART_TESTS_VERIFIED"
@@ -1528,6 +1532,7 @@ const commandContracts = {
   act1: { exit: 0, reasonCode: "ACT1_CLAUDE_INSTALLER_VERIFIED" },
   act2: { exit: 0, reasonCode: "ACT2_CLAUDE_SESSIONSTART_VERIFIED" },
   act3: { exit: 0, reasonCode: "ACT3_PERSONA_RENDER_VERIFIED" },
+  e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
 };
 
 async function verifyMap() {
@@ -1560,7 +1565,7 @@ async function verifyMap() {
     // claims validate. Their completeness-loop entries below and the evidencePhase
     // mapping are added atomically with each phase's first claim (a phase cannot be
     // required-present before any claim exists) — see docs/hardening/rc1-map-regeneration.md.
-    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "ACT", "ACT2", "BK"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "ACT", "ACT2", "BK", "E2E"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
     assertion(claimCategories.includes(claim.category), "VERIFICATION_MAP_CATEGORY", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
@@ -1593,7 +1598,11 @@ async function verifyMap() {
   // NEW phase wired in this commit, exactly as BK/ACT were: admitted to the per-claim
   // allowlist above and joined to this completeness loop with its first claims
   // (ACT2-CLAUDE-SESSIONSTART, ACT2-FAIL-OPEN).
-  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "BK", "ACT", "ACT2"]) {
+  // WSG-6: E2E (the flagship end-to-end governed loop) is a NEW phase wired in this
+  // commit the same way — admitted to the per-claim allowlist above and joined to
+  // this completeness loop atomically with its first and only claim
+  // (E2E-GOVERNED-LOOP), plus the evidencePhase mapping below.
+  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "BK", "ACT", "ACT2", "E2E"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   const categoryCounts = {
@@ -1703,6 +1712,26 @@ async function verifyAct2() {
 async function verifyAct3() {
   const result = await runTests({ personaRenderOnly: true });
   return success("ACT3_PERSONA_RENDER_VERIFIED", { tests: result.tests });
+}
+
+// WSG-6: the flagship end-to-end governed-loop gate (E2E phase). Two obligations
+// bind here in one command: (1) run the hermetic proof, which replays the whole
+// loop — initiative through trace — through the CLI surface on a real workspace
+// and asserts the unbroken trace digest chain; and (2) enforce doc/proof lockstep
+// by diffing the tutorial's fenced commands against the single storyline source of
+// truth, canonicalized on both sides, so the narrated tutorial cannot drift from
+// the proof (acceptance criterion 2).
+async function verifyE2eGovernedLoop() {
+  const result = await runTests({ e2eOnly: true });
+  const storyline = await import(pathToFileURL(resolve(repositoryRoot, "tests/e2e-governed-loop-commands.mjs")).href);
+  const tutorial = await readText(resolve(repositoryRoot, "docs/tutorial/governed-loop.md"));
+  const documented = storyline.extractTutorialCommands(tutorial).map(storyline.canonicalizeCommand);
+  const authored = storyline.expectedTutorialCommands().map(storyline.canonicalizeCommand);
+  assertion(documented.length === authored.length, "E2E_TUTORIAL_COMMAND_COUNT", `${documented.length}/${authored.length}`);
+  for (let index = 0; index < authored.length; index += 1) {
+    assertion(documented[index] === authored[index], "E2E_TUTORIAL_COMMAND_DRIFT", String(index));
+  }
+  return success("E2E_GOVERNED_LOOP_VERIFIED", { tests: result.tests, storylineCommands: authored.length });
 }
 
 async function verifyCi() {
@@ -1858,6 +1887,7 @@ const handlers = {
   act1: verifyAct1,
   act2: verifyAct2,
   act3: verifyAct3,
+  e2e: verifyE2eGovernedLoop,
 };
 
 function errorReason(error) {
@@ -1918,6 +1948,9 @@ function evidencePhase(name) {
   }
   if (name === "act2" || name === "act3") {
     return "act2";
+  }
+  if (name === "e2e") {
+    return "e2e";
   }
   if (name === "p8") {
     return "p8";

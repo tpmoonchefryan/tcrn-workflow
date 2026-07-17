@@ -4,7 +4,7 @@
 
 **Un cadre déterministe et hors-ligne d'abord pour le travail gouverné des agents IA — où chaque capacité est une affirmation vérifiée par la machine, pas une promesse.**
 
-`Statut : 0.1.0-rc.4 (candidat de pré-version)` · `Licence : Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Affirmations vérifiées : 64`
+`Statut : 0.1.0-rc.4 (candidat de pré-version)` · `Licence : Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Affirmations vérifiées : 65`
 
 ---
 
@@ -24,7 +24,7 @@ TCRN Workflow a été construit pour combler ces trois lacunes à la fois. Il tr
 | --- | --- |
 | **Espace de travail déterministe natif fichiers** | Un graphe de travail local à événements (Initiative → Epic → Story → Subtask) stocké en fichiers JSON canoniques avec chaîne de hachage — pas de base de données, pas de démon, exports reproductibles à l'octet près. |
 | **Chaîne de vérification fail-closed** | Une commande (`pnpm verify:p1`) exécute 20 portes : format, lint, vérification de types, build, ~29 fichiers de tests, matrice de confiance, politiques d'archive/SBOM/licence/vulnérabilités, liste d'autorisation des sources, frontière hors ligne, analyse de confidentialité, durcissement CI, carte de vérification et preuve d'historique propre. Tout imprévu arrête la chaîne. |
-| **Registre d'affirmations lisible par machine** | `verification-map.yaml` lie 64 affirmations de capacités à des codes de raison observables. Si le sujet d'une affirmation change, sa preuve doit être rejouée — la surenchère est un échec de build, pas une question de style. |
+| **Registre d'affirmations lisible par machine** | `verification-map.yaml` lie 65 affirmations de capacités à des codes de raison observables. Si le sujet d'une affirmation change, sa preuve doit être rejouée — la surenchère est un échec de build, pas une question de style. |
 | **Adaptateurs Agent App bi-hôtes** | Codex et Claude Code sont les deux hôtes officiellement pris en charge en V1, partageant une mécanique neutre identique à l'octet près, prouvée par un condensat de parité inter-hôtes. Les deux adaptateurs sont des **candidats inertes en simulation** : ils ne génèrent que des données de gabarits non installés, et aucune prise en charge d'hôte en production n'est revendiquée. |
 | **Hors ligne d'abord, confidentialité propre** | Le mode développement impose un garde réseau au niveau du processus Node et zéro télémétrie. La porte de confidentialité analyse chaque octet suivi, tout l'historique git accessible et l'archive de version à la recherche d'identifiants personnels et de chemins machine. |
 | **Confiance de version signée** | Les versions sont liées par identité de tag (commit, tree, tag object) et vérifiées en externe par un contrat de racine de confiance Ed25519 — voir le dépôt compagnon `tcrn-workflow-helper`. |
@@ -132,7 +132,7 @@ Une version est un tag annoté immuable plus un ensemble d'artefacts reproductib
 
 - **20 portes** dans la chaîne `verify:p1`, chacune avec un code de raison terminal stable.
 - **~29 fichiers de tests** couvrant le moteur, le noyau de connaissances, le cycle de vie des artefacts, les profils, les personas, le routeur de contexte, les deux adaptateurs, l'échange, la compatibilité, le registre d'exigences, le candidat de version, la frontière de confidentialité, le générateur d'artefacts de preuve et la matrice de confiance.
-- **64 affirmations vérifiées par machine** dans `verification-map.yaml`.
+- **65 affirmations vérifiées par machine** dans `verification-map.yaml`.
 - **Preuves de déterminisme à 64 permutations** dans trois couches indépendantes (ordres d'insertion du moteur, ordres de couches de profils, ordres d'entrée des adaptateurs).
 - **Registre public d'exigences AOS à 19 lignes** (11 vérifiées par fixtures, 8 spécifiées) — la maturité est consignée ligne par ligne, jamais gonflée.
 - **Porte de confidentialité** sur ~200 fichiers sources suivis, ~1 470 objets git, tout l'historique accessible et l'archive de version.

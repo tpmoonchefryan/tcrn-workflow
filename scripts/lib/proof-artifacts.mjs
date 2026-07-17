@@ -62,6 +62,9 @@ const routeAdditions = new Set([
   "packages/core/src/persona-render.ts",
   "tests/act3-persona-render.test.mjs",
   "docs/2026-07-17-p3-compaction-deferral-decision.md",
+  "docs/tutorial/governed-loop.md",
+  "tests/e2e-governed-loop-commands.mjs",
+  "tests/e2e-governed-loop.test.mjs",
 ]);
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",

@@ -57,6 +57,9 @@ const routeFiles = [
   "packages/core/src/persona-render.ts",
   "tests/act3-persona-render.test.mjs",
   "docs/2026-07-17-p3-compaction-deferral-decision.md",
+  "docs/tutorial/governed-loop.md",
+  "tests/e2e-governed-loop-commands.mjs",
+  "tests/e2e-governed-loop.test.mjs",
 ];
 const roles = Object.fromEntries(["platform-workflow-architect", "workflow-verification-engineer", "security-risk-reviewer", "reality-checker"].map((role) => [role, { status: "unresolved", verdict: null, basisDigest: null }]));
 
@@ -121,6 +124,9 @@ async function fixture(context) {
     "packages/core/src/persona-render.ts": "// route fixture\n",
     "tests/act3-persona-render.test.mjs": "// route fixture\n",
     "docs/2026-07-17-p3-compaction-deferral-decision.md": "# route fixture\n",
+    "docs/tutorial/governed-loop.md": "# route fixture\n",
+    "tests/e2e-governed-loop-commands.mjs": "// route fixture\n",
+    "tests/e2e-governed-loop.test.mjs": "// route fixture\n",
   };
   for (const [path, bytes] of Object.entries(files)) {
     await mkdir(resolve(root, path, ".."), { recursive: true });
