@@ -68,3 +68,29 @@ test("required flags in the catalog match the dispatcher's missing-argument fail
     assert.equal(outcome.reasonCode, "CLI_ARGUMENT_MISSING", `${entry.name} with no flags must report missing arguments`);
   }
 });
+
+test("WSB-4: exactly the nullable flags carry the '-' sentinel, and only knowledge-create flags carry the 'null' alias", () => {
+  const sentinelFlags = {};
+  const aliasFlags = {};
+  for (const entry of COMMAND_CATALOG) {
+    for (const flag of entry.flags) {
+      if (flag.nullSentinel !== undefined) {
+        assert.equal(flag.nullSentinel, "-", `${entry.name}.${flag.name} null sentinel must be "-"`);
+        (sentinelFlags[entry.name] ??= []).push(flag.name);
+      }
+      if (flag.deprecatedAliases !== undefined) {
+        assert.deepEqual([...flag.deprecatedAliases], ["null"], `${entry.name}.${flag.name} deprecated alias set`);
+        (aliasFlags[entry.name] ??= []).push(flag.name);
+      }
+    }
+  }
+  for (const record of [sentinelFlags, aliasFlags]) {
+    for (const name of Object.keys(record)) record[name] = record[name].sort();
+  }
+  assert.deepEqual(sentinelFlags, {
+    "knowledge-create": ["last-verified", "project-id"],
+    "profile-authorize": ["command", "project-id", "workspace-id"],
+    "work-create": ["parent-id"],
+  });
+  assert.deepEqual(aliasFlags, { "knowledge-create": ["last-verified", "project-id"] });
+});

@@ -477,6 +477,69 @@ test("governed Knowledge CLI exposes init, validate, create, list, snippet, body
   }
 });
 
+test("WSB-4: knowledge-create null sentinel '-' round-trips to null and the deprecated 'null' alias is byte-equivalent", async () => {
+  const sentinelInput = (fixture) => unitInput(fixture, "KNOWLEDGE-SENTINEL", {
+    expectedVersion: 0,
+    scope: "workspace",
+    projectId: null,
+    roleScopes: [],
+    linkedWorkIds: [],
+    freshnessState: "unknown",
+    lastVerified: null,
+  });
+  const listFlag = (values) => (values.length === 0 ? "-" : values.join(","));
+  const createArguments = (fixture, projectSpelling, lastVerifiedSpelling) => {
+    const input = sentinelInput(fixture);
+    return [
+      "knowledge-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", input.occurredAt,
+      "--external-key", input.externalKey, "--scope", input.scope, "--project-id", projectSpelling,
+      "--role-scopes", "-", "--category", input.category, "--kind", input.kind, "--tags", listFlag(input.tags),
+      "--subject", input.subject, "--summary", input.summary, "--snippet", input.snippet,
+      "--accountable-owner-id", input.accountableOwnerId,
+      "--source-references", listFlag(input.sourceReferences), "--source-digest", input.sourceDigest,
+      "--work-ids", listFlag(input.linkedWorkIds), "--decision-ids", listFlag(input.linkedDecisionIds),
+      "--gate-ids", listFlag(input.linkedGateIds), "--evidence-ids", listFlag(input.linkedEvidenceIds),
+      "--lifecycle", input.lifecycle, "--retrieval", input.retrievalDisposition, "--freshness", input.freshnessState,
+      "--last-verified", lastVerifiedSpelling, "--stale-days", String(input.stalenessPolicy.maximumAgeDays),
+      "--export", input.exportDisposition, "--body", input.body,
+    ];
+  };
+  const storedRecord = async (fixture, created) => {
+    const view = JSON.parse(await readFile(join(fixture.store, "views", "index.json"), "utf8"));
+    return view.records.find((entry) => entry.id === created.id);
+  };
+  const createViaCli = async (projectSpelling, lastVerifiedSpelling) => {
+    const fixture = await workspaceFixture({ initialize: false, externalKey: "FIXTURE-KNOWLEDGE-SENTINEL" });
+    await runCli(["knowledge-init", "--workspace", fixture.workspace], { write() {} });
+    let output = "";
+    await runCli(createArguments(fixture, projectSpelling, lastVerifiedSpelling), { write: (value) => { output += value; } });
+    const created = JSON.parse(output);
+    return { fixture, created, output, record: await storedRecord(fixture, created) };
+  };
+
+  const dash = await createViaCli("-", "-");
+  const alias = await createViaCli("null", "null");
+  const programmatic = await workspaceFixture({ initialize: false, externalKey: "FIXTURE-KNOWLEDGE-SENTINEL" });
+  try {
+    assert.equal(dash.created.reasonCode, "KNOWLEDGE_UNIT_CREATED");
+    // '-' is the canonical null spelling for both flags.
+    assert.equal(dash.record.projectId, null);
+    assert.equal(dash.record.lastVerified, null);
+    // Deprecated 'null' alias produces a byte-identical committed record and envelope.
+    assert.equal(alias.output, dash.output);
+    assert.deepEqual(alias.record, dash.record);
+    // The CLI '-' spelling round-trips to the same stored record as programmatic explicit nulls.
+    await initializeKnowledgeStore(programmatic.workspace);
+    const direct = await createKnowledgeUnit(programmatic.workspace, sentinelInput(programmatic));
+    const directRecord = await storedRecord(programmatic, direct);
+    assert.deepEqual(directRecord, dash.record);
+  } finally {
+    await dash.fixture.close();
+    await alias.fixture.close();
+    await programmatic.close();
+  }
+});
+
 test("selection and strict evaluation instants fail before Knowledge-store scanning", async () => {
   const empty = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-VALIDATION-ORDER" });
   try {

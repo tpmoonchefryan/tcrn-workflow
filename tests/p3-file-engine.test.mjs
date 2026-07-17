@@ -370,6 +370,33 @@ test("WSB-1: mutation responses carry the created/mutated record identity", asyn
   }
 });
 
+test("WSB-4: work-create --parent-id '-' yields a null parent byte-identical to omitting the flag", async () => {
+  const createRoot = async (fixture, parentFlag) => {
+    let projectOut = "";
+    await runCli(["project-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", instant(1), "--external-key", "PROJECT-B4", "--name", "B4"], { write: (value) => { projectOut += value; } });
+    const projectId = JSON.parse(projectOut).record.id;
+    let workOut = "";
+    await runCli([
+      "work-create", "--workspace", fixture.workspace, "--expected-version", "1", "--at", instant(2),
+      "--project-id", projectId, "--external-key", "INIT-B4", "--kind", "Initiative", ...parentFlag,
+    ], { write: (value) => { workOut += value; } });
+    return JSON.parse(workOut);
+  };
+  const dashFixture = await workspaceFixture();
+  const omitFixture = await workspaceFixture();
+  try {
+    const dash = await createRoot(dashFixture, ["--parent-id", "-"]);
+    const omit = await createRoot(omitFixture, []);
+    assert.equal(dash.record.parentId, null);
+    // '-' is the explicit null spelling; omitting the flag is the historical null. Both are byte-identical.
+    assert.deepEqual(dash.record, omit.record);
+    assert.equal(dash.headEventHash, omit.headEventHash);
+  } finally {
+    await dashFixture.close();
+    await omitFixture.close();
+  }
+});
+
 test("WSA-1: every mutation returns state identical to a fresh materialize (single-replay pipeline)", async () => {
   const fixture = await workspaceFixture();
   try {
