@@ -370,6 +370,106 @@ test("WSB-1: mutation responses carry the created/mutated record identity", asyn
   }
 });
 
+test("WSE-4: --attest-dir writes one deterministic advisory receipt outside the workspace, opt-in and clock-gated", async () => {
+  const observed = "2026-07-11T09:15:30Z";
+  // Happy path with an injected FIXED clock (hermetic — no real clock is read): the
+  // receipt is exactly {schemaVersion, eventHash, observedAt, occurredAt} in canonical
+  // JSON, named <headEventHash>.json, written to a directory OUTSIDE the workspace.
+  const runReceipt = async (fixture) => {
+    const attestDir = join(fixture.base, "receipts");
+    let output = "";
+    await runCli(
+      ["project-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", instant(1),
+        "--external-key", "PROJECT-T1", "--name", "T1", "--attest-dir", attestDir],
+      { write: (value) => { output += value; }, clock: () => observed },
+    );
+    const parsed = JSON.parse(output);
+    const entries = await readdir(attestDir);
+    assert.deepEqual(entries, [`${parsed.headEventHash}.json`], "exactly one receipt named <headEventHash>.json");
+    const receipt = await readFile(join(attestDir, entries[0]), "utf8");
+    assert.equal(receipt, canonicalJson({
+      schemaVersion: "tcrn.time-attestation.v1",
+      eventHash: parsed.headEventHash,
+      observedAt: observed,
+      occurredAt: instant(1),
+    }), "receipt is canonical JSON of the four advisory fields");
+    // GAP-5 privacy: the receipt embeds no filesystem path and no hostname.
+    assert.ok(!receipt.includes(fixture.base) && !receipt.includes(attestDir), "receipt carries no raw paths");
+    return receipt;
+  };
+  const first = await workspaceFixture();
+  const second = await workspaceFixture();
+  try {
+    const a = await runReceipt(first);
+    const b = await runReceipt(second);
+    assert.equal(a, b, "a fixed injected clock makes the receipt byte-deterministic across fixtures");
+  } finally {
+    await first.close();
+    await second.close();
+  }
+});
+
+test("WSE-4: --attest-dir fails closed inside the workspace root and with no injected clock, writing nothing", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    // Containment: a directory resolving INSIDE the workspace root is rejected and no
+    // receipt is written (the advisory receipt must never masquerade as in-workspace).
+    const insideDir = join(fixture.workspace, "attest-inside");
+    await expectReasonAsync("CLI_ARGUMENT_MALFORMED", () => runCli(
+      ["project-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", instant(1),
+        "--external-key", "PROJECT-T2", "--name", "T2", "--attest-dir", insideDir],
+      { write: () => {}, clock: () => "2026-07-11T09:15:30Z" },
+    ));
+    await assert.rejects(readdir(insideDir), (error) => error.code === "ENOENT", "no receipt directory is created on containment rejection");
+    // Missing clock: --attest-dir with no injected clock fails closed rather than
+    // falling through to an implicit Date. The event committed above (version 1), so a
+    // fresh mutation here targets version 1 and an OUTSIDE directory to isolate the
+    // clock-absence path from the containment path.
+    const outsideDir = join(fixture.base, "receipts-noclock");
+    await expectReasonAsync("CLI_ARGUMENT_MISSING", () => runCli(
+      ["project-create", "--workspace", fixture.workspace, "--expected-version", "1", "--at", instant(2),
+        "--external-key", "PROJECT-T3", "--name", "T3", "--attest-dir", outsideDir],
+      { write: () => {} },
+    ));
+    await assert.rejects(readdir(outsideDir), (error) => error.code === "ENOENT", "no receipt directory is created when the clock is absent");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("WSE-4: export and archive bytes are identical with and without attestation receipts", async () => {
+  const withAttest = await workspaceFixture();
+  const without = await workspaceFixture();
+  try {
+    const mutate = async (fixture, attest) => {
+      const attestFlag = attest ? ["--attest-dir", join(fixture.base, "receipts")] : [];
+      const io = attest ? { write: () => {}, clock: () => "2026-07-11T09:15:30Z" } : { write: () => {} };
+      await runCli(["project-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", instant(1),
+        "--external-key", "PROJECT-EXP", "--name", "EXP", ...attestFlag], io);
+      await runCli(["work-create", "--workspace", fixture.workspace, "--expected-version", "1", "--at", instant(2),
+        "--project-id", deriveStableId("project", "PROJECT-EXP"), "--external-key", "INIT-EXP", "--kind", "Initiative", ...attestFlag], io);
+    };
+    await mutate(withAttest, true);
+    await mutate(without, false);
+    // The receipt exists for the attested run, proving attestation actually happened.
+    assert.deepEqual((await readdir(join(withAttest.base, "receipts"))).length, 2, "one receipt per mutation");
+    // exportWorkspace and createWorkspaceArchive read only the chain, so the advisory
+    // receipts outside the workspace leave both byte-identical.
+    assert.equal(await exportWorkspace(withAttest.workspace), await exportWorkspace(without.workspace), "export bytes unchanged by receipts");
+    assert.equal(
+      Buffer.compare(
+        await createWorkspaceArchive(withAttest.workspace),
+        await createWorkspaceArchive(without.workspace),
+      ),
+      0,
+      "archive bytes unchanged by receipts",
+    );
+  } finally {
+    await withAttest.close();
+    await without.close();
+  }
+});
+
 test("WSB-4: work-create --parent-id '-' yields a null parent byte-identical to omitting the flag", async () => {
   const createRoot = async (fixture, parentFlag) => {
     let projectOut = "";
