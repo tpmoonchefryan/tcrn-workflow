@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFile, link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import Ajv2020 from "ajv/dist/2020.js";
 
@@ -14,6 +16,7 @@ import {
   COMPATIBILITY_LIMITS,
   calculateCompatibilityEffectivePlanDigest,
   dryRunCompatibilityMode,
+  initializeWorkspace,
   parseWorkflowCompatibilityManifest,
   planCompatibilityMode,
   readCompatibilityAdmissionReceipt,
@@ -435,5 +438,60 @@ test("all live surfaces remain exactly unavailable without network or mutation",
     const result = unavailableCompatibilityCapability(surface);
     assert.equal(result.reasonCode, "COMPATIBILITY_CAPABILITY_UNAVAILABLE"); assert.equal(result.disposition, "capability_unavailable_until_mutual_release");
     assert.deepEqual({ supported: result.supportedAosReleases, mutation: result.mutation, network: result.network }, { supported: [], mutation: false, network: false });
+  }
+});
+
+// WSB-5: first-ever coverage of the shipped bin "tcrn-workflow" (scripts/tcrn-workflow.mjs).
+// The wrapper constructs CliIo as {write} only, so the authority-gated compatibility
+// verbs cannot obtain a CompatibilityAdmissionAuthority and MUST fail closed; a read
+// verb over the same wrapper pins its stdout/exit contract. Hermetic: node spawns node
+// against a repo-local script, no network, using the dist/ build the test gate guarantees.
+const shippedWorkflowBinary = fileURLToPath(new URL("../scripts/tcrn-workflow.mjs", import.meta.url));
+
+function runShippedWorkflowBinary(arguments_) {
+  return spawnSync(process.execPath, [shippedWorkflowBinary, ...arguments_], { encoding: "utf8" });
+}
+
+async function initializedWrapperWorkspace() {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "workflow-p7b-wrapper-")));
+  const roots = [];
+  for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
+    const path = join(base, kind); await mkdir(path); roots.push({ kind, path });
+  }
+  await initializeWorkspace({ roots, externalKey: "WORKSPACE-WRAPPER", createdAt: "2026-07-12T00:00:00Z", segmentEventLimit: 2 });
+  return { base, workspace: join(base, "workspace"), close: () => rm(base, { recursive: true, force: true }) };
+}
+
+test("WSB-5: the shipped binary fails compatibility-plan/dry-run closed with COMPATIBILITY_AUTHORITY_REQUIRED and refuses argv authority", () => {
+  const { request } = documents();
+  const requestJson = canonicalJson(request);
+  for (const verb of ["compatibility-plan", "compatibility-dry-run"]) {
+    const result = runShippedWorkflowBinary([verb, "--request", requestJson]);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.stdout, "", `${verb} emits no plan without host-supplied authority`);
+    const envelope = JSON.parse(result.stderr);
+    assert.deepEqual(
+      { ok: envelope.ok, reasonCode: envelope.reasonCode },
+      { ok: false, reasonCode: "COMPATIBILITY_AUTHORITY_REQUIRED" },
+    );
+  }
+  // Authority identity material can never arrive on argv: an --authority token is
+  // rejected as unknown before the authority gate, preserving the programmatic-only boundary.
+  const forged = runShippedWorkflowBinary(["compatibility-plan", "--request", requestJson, "--authority", "/tmp/forged.json"]);
+  assert.equal(forged.status, 1, forged.stderr);
+  assert.equal(JSON.parse(forged.stderr).reasonCode, "CLI_ARGUMENT_UNKNOWN");
+});
+
+test("WSB-5: the shipped binary completes the status read verb with exit 0 and WORKSPACE_COMMAND_COMPLETED", async () => {
+  const fixture = await initializedWrapperWorkspace();
+  try {
+    const result = runShippedWorkflowBinary(["status", "--workspace", fixture.workspace]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, "", "a successful read emits nothing on stderr");
+    const envelope = JSON.parse(result.stdout);
+    assert.equal(envelope.reasonCode, "WORKSPACE_COMMAND_COMPLETED");
+    assert.equal(envelope.version, 0);
+  } finally {
+    await fixture.close();
   }
 });

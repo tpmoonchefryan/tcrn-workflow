@@ -389,7 +389,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   if (command === "compatibility-plan" || command === "compatibility-dry-run") {
     const values = parseArguments(rest, ["request"]);
     required(values, ["request"]);
-    if (!io.compatibilityAdmissionAuthority) fail("COMPATIBILITY_AUTHORITY_REQUIRED", "governed compatibility admission authority is required");
+    if (!io.compatibilityAdmissionAuthority) fail("COMPATIBILITY_AUTHORITY_REQUIRED", "governed compatibility admission authority is required; compatibility-plan and compatibility-dry-run are programmatic-only from the shipped binary (see docs/compatibility/supported-modes.md)");
     const request = compatibilityJson(values.request, "request");
     const admission = await readCompatibilityAdmissionReceipt(io.compatibilityAdmissionAuthority.expectedCanonicalPath, io.compatibilityAdmissionAuthority);
     io.write(canonicalJson(command === "compatibility-plan"
