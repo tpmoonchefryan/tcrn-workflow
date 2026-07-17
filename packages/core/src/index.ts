@@ -47,6 +47,14 @@ export function admitDevelopment(): DevelopmentAdmission {
 export { assertDistinctRoots, RootIdentityError } from "./root-identity.js";
 export type { CanonicalRoot } from "./root-identity.js";
 export {
+  SNAPSHOT_REASON_CODES,
+  SnapshotError,
+  createSnapshotManifest,
+  readSnapshotManifestFile,
+  verifySnapshotManifest,
+} from "./workspace-snapshot.js";
+export type { SnapshotReasonCode } from "./workspace-snapshot.js";
+export {
   WORKSPACE_CONTROL_DIRECTORY,
   WORKSPACE_REASON_CODES,
   WORKSPACE_SCHEMA_VERSION,

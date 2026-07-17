@@ -43,6 +43,9 @@ const routeFiles = [
   "packages/core/src/workspace-perf-instrumentation.ts",
   "tests/p3-engine-complexity.test.mjs",
   "tests/workspace-extension-records.test.mjs",
+  "packages/core/src/workspace-snapshot.ts",
+  "packages/core/schema/workspace-snapshot-manifest-v1.schema.json",
+  "tests/backup-snapshot.test.mjs",
 ];
 const roles = Object.fromEntries(["platform-workflow-architect", "workflow-verification-engineer", "security-risk-reviewer", "reality-checker"].map((role) => [role, { status: "unresolved", verdict: null, basisDigest: null }]));
 
@@ -93,6 +96,9 @@ async function fixture(context) {
     "packages/core/src/workspace-perf-instrumentation.ts": "// route fixture\n",
     "tests/p3-engine-complexity.test.mjs": "// route fixture\n",
     "tests/workspace-extension-records.test.mjs": "// route fixture\n",
+    "packages/core/src/workspace-snapshot.ts": "// route fixture\n",
+    "packages/core/schema/workspace-snapshot-manifest-v1.schema.json": "{}\n",
+    "tests/backup-snapshot.test.mjs": "// route fixture\n",
   };
   for (const [path, bytes] of Object.entries(files)) {
     await mkdir(resolve(root, path, ".."), { recursive: true });

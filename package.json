@@ -27,6 +27,7 @@
     "sbom": "node scripts/task.mjs sbom",
     "test": "node scripts/task.mjs test",
     "typecheck": "node scripts/task.mjs typecheck",
+    "verify:backup": "node scripts/task.mjs backup",
     "verify:ci": "node scripts/task.mjs ci",
     "verify:governance": "node scripts/task.mjs governance",
     "verify:history": "node scripts/task.mjs history",

@@ -324,6 +324,7 @@ async function runTests({
   p7CompatibilityOnly = false,
   p7AosRequirementsOnly = false,
   p8Only = false,
+  backupOnly = false,
 } = {}) {
   await build();
   const tests = (await walkFiles())
@@ -347,7 +348,8 @@ async function runTests({
     .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p7AosRequirementsOnly || path === "tests/p7-public-aos-requirements.test.mjs")
-    .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path));
+    .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path))
+    .filter((path) => !backupOnly || path === "tests/backup-snapshot.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
@@ -355,6 +357,8 @@ async function runTests({
   return success(
     trustOnly
       ? "TRUST_NEGATIVE_MATRIX_VERIFIED"
+      : backupOnly
+      ? "BACKUP_SNAPSHOT_TESTS_VERIFIED"
       : rootOnly
         ? "ROOT_BOUNDARIES_VERIFIED"
         : protocolOnly
@@ -1505,6 +1509,7 @@ const commandContracts = {
   "p7-aos-requirements": { exit: 0, reasonCode: "P7_PUBLIC_AOS_REQUIREMENTS_VERIFIED" },
   p8: { exit: 0, reasonCode: "P8_WORKFLOW_RC_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
+  backup: { exit: 0, reasonCode: "BACKUP_VERIFIED" },
 };
 
 async function verifyMap() {
@@ -1562,7 +1567,9 @@ async function verifyMap() {
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
   }
-  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1"]) {
+  // WSF-2: BK joins the completeness loop with its first claim (BK-SNAPSHOT-WITNESS);
+  // ACT stays admitted-only until WSG-2 lands the first activation claim.
+  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "BK"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   const categoryCounts = {
@@ -1645,6 +1652,14 @@ async function verifyWorkspace() {
 async function verifyRoots() {
   const result = await runTests({ rootOnly: true });
   return success("ROOT_BOUNDARIES_VERIFIED", { tests: result.tests });
+}
+
+// WSF-2: the snapshot-witness gate (BK phase). The suite proves manifest
+// determinism, quiesce enforcement, residue fail-close, exclusion correctness,
+// schema validity, out-of-root read-only behavior, and tamper detection.
+async function verifyBackup() {
+  const result = await runTests({ backupOnly: true });
+  return success("BACKUP_VERIFIED", { tests: result.tests });
 }
 
 async function verifyCi() {
@@ -1760,6 +1775,7 @@ const handlers = {
   "verify-p1": verifyP1,
   vulnerabilities: verifyVulnerabilities,
   workspace: verifyWorkspace,
+  backup: verifyBackup,
 };
 
 function errorReason(error) {
@@ -1811,6 +1827,9 @@ function evidencePhase(name) {
   }
   if (name === "rc1") {
     return "rc1";
+  }
+  if (name === "backup") {
+    return "bk";
   }
   if (name === "p8") {
     return "p8";

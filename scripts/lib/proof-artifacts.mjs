@@ -48,6 +48,9 @@ const routeAdditions = new Set([
   "packages/core/src/workspace-perf-instrumentation.ts",
   "tests/p3-engine-complexity.test.mjs",
   "tests/workspace-extension-records.test.mjs",
+  "packages/core/src/workspace-snapshot.ts",
+  "packages/core/schema/workspace-snapshot-manifest-v1.schema.json",
+  "tests/backup-snapshot.test.mjs",
 ]);
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
