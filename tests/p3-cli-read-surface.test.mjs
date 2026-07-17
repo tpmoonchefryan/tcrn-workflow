@@ -3,10 +3,11 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { runCli } from "../dist/build/packages/cli/src/index.js";
+import { COMMAND_CATALOG, runCli } from "../dist/build/packages/cli/src/index.js";
 import {
   acquireWorkspaceLease,
   createProject,
@@ -126,4 +127,32 @@ test("read verbs and validate fail closed on stale views, but status reads autho
   const status = await run(["status", ...ws]);
   assert.equal(status.reasonCode, "WORKSPACE_COMMAND_COMPLETED");
   assert.equal(status.version, 7);
+});
+
+test("WSB-6: the agent-integration reference stays in drift-guarded agreement with the catalog", async () => {
+  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const docText = await readFile(join(repoRoot, "docs/architecture/agent-integration-v1.md"), "utf8");
+
+  // The three retry reason codes with undocumented semantics that motivated the
+  // doc must each appear (relaxed to at-least-once per the verifier correction,
+  // since the error-envelope and retry-table sections both name CAS_MISMATCH).
+  for (const code of ["WORKSPACE_VIEW_STALE", "WORKSPACE_LOCKED", "WORKSPACE_CAS_MISMATCH"]) {
+    assert.ok(docText.includes(code), `retry table must name ${code}`);
+  }
+
+  // Bidirectional drift guard: the doc's enumerated programmatic-only block must
+  // equal exactly the live COMMAND_CATALOG programmatic-only surface.
+  const liveProgrammaticOnly = COMMAND_CATALOG.filter((entry) => entry.availability === "programmatic-only")
+    .map((entry) => entry.name)
+    .sort();
+  const block = docText.match(/```\nprogrammatic-only\n([\s\S]*?)```/);
+  assert.ok(block, "doc must carry a fenced programmatic-only enumeration block");
+  const documented = block[1].trim().split("\n").map((line) => line.trim()).filter(Boolean).sort();
+  assert.deepEqual(documented, liveProgrammaticOnly);
+
+  // Coverage direction restated verb-by-verb so a newly programmatic-only verb
+  // that slips the block still fails loudly.
+  for (const name of liveProgrammaticOnly) {
+    assert.ok(docText.includes(name), `doc must mention programmatic-only verb ${name}`);
+  }
 });
