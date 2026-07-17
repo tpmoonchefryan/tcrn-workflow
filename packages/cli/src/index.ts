@@ -80,8 +80,8 @@ import type {
   KnowledgePromotionState,
   CompatibilityAdmissionAuthority,
 } from "../../core/src/index.js";
-import { canonicalJson } from "../../protocol/src/index.js";
-import type { PlannedDeliveryKind, WorkStatus } from "../../protocol/src/index.js";
+import { canonicalExternalKey, canonicalJson, deriveStableId } from "../../protocol/src/index.js";
+import type { PlannedDeliveryKind, ProjectRecord, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
 
 export const RELEASE_REQUIRED_ARGUMENTS = [
   "trust-root",
@@ -227,14 +227,25 @@ async function withLease<T>(workspace: string, at: string, operation: (lease: Aw
   }
 }
 
-function writeState(io: CliIo, state: Awaited<ReturnType<typeof validateWorkspace>>): void {
+// WSB-1: the mutated record's identity, projected additively so agents never have
+// to read views/index.json off-disk to learn the id they just created.
+function projectSummary(record: ProjectRecord): Readonly<Record<string, string | number | boolean>> {
+  return { id: record.id, revision: record.revision, tombstone: record.tombstone };
+}
+
+function workSummary(record: WorkRecord): Readonly<Record<string, string | number | boolean | null>> {
+  return { id: record.id, kind: record.kind, status: record.status, projectId: record.projectId, parentId: record.parentId, revision: record.revision, tombstone: record.tombstone };
+}
+
+function writeState(io: CliIo, state: Awaited<ReturnType<typeof validateWorkspace>>, record?: Readonly<Record<string, unknown>>): void {
   io.write(canonicalJson({
     reasonCode: "WORKSPACE_COMMAND_COMPLETED",
     workspaceId: state.metadata.workspaceId,
     version: state.version,
     headEventHash: state.headEventHash,
-    projects: state.projects.filter((record) => !record.tombstone).length,
-    work: state.work.filter((record) => !record.tombstone).length,
+    projects: state.projects.filter((entry) => !entry.tombstone).length,
+    work: state.work.filter((entry) => !entry.tombstone).length,
+    ...(record ? { record } : {}),
   }));
 }
 
@@ -677,7 +688,8 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const state = await withLease(workspace, at, (lease) => createProject(workspace, lease, {
       expectedVersion: expectedVersion(values), occurredAt: at, externalKey: values["external-key"] ?? "", name: values.name ?? "",
     }));
-    writeState(io, state);
+    const id = deriveStableId("project", canonicalExternalKey(values["external-key"] ?? ""));
+    writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === id)!));
     return;
   }
   if (command === "project-update") {
@@ -688,7 +700,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const state = await withLease(workspace, at, (lease) => updateProject(workspace, lease, {
       expectedVersion: expectedVersion(values), occurredAt: at, id: values.id ?? "", name: values.name ?? "",
     }));
-    writeState(io, state);
+    writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
   if (command === "project-delete") {
@@ -699,7 +711,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const state = await withLease(workspace, at, (lease) => deleteProject(workspace, lease, {
       expectedVersion: expectedVersion(values), occurredAt: at, id: values.id ?? "",
     }));
-    writeState(io, state);
+    writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
   if (command === "work-create") {
@@ -716,7 +728,8 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       parentId: values["parent-id"] ?? null,
       ...(values.status ? { status: values.status as WorkStatus } : {}),
     }));
-    writeState(io, state);
+    const id = deriveStableId("work", canonicalExternalKey(values["external-key"] ?? ""));
+    writeState(io, state, workSummary(state.work.find((entry) => entry.id === id)!));
     return;
   }
   if (command === "work-transition") {
@@ -727,7 +740,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const state = await withLease(workspace, at, (lease) => transitionWork(workspace, lease, {
       expectedVersion: expectedVersion(values), occurredAt: at, id: values.id ?? "", status: values.status as WorkStatus,
     }));
-    writeState(io, state);
+    writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
   if (command === "work-delete") {
@@ -738,7 +751,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const state = await withLease(workspace, at, (lease) => deleteWork(workspace, lease, {
       expectedVersion: expectedVersion(values), occurredAt: at, id: values.id ?? "",
     }));
-    writeState(io, state);
+    writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
   fail("CLI_COMMAND_UNKNOWN", command);
