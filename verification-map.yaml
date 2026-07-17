@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "7427d05c15322e5d58212770349da975b5babe1539e4d2fd653c08e25bfa8348",
+      "fixtureDigest": "d7f0537c72d392b6c0785bc84eed5b82af6fd508309f1444f975743db21513b7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -50,7 +50,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "bdd5cf91142ccb1d012bd1a071ce5c3ae6bd93f8a31a1048d810b2c59d67d616",
+      "fixtureDigest": "c7bf587d6ce5f3e124cf3ada691feacc05bb77545ec5df4d9f888ea7e844d7c8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1573,7 +1573,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "79fbcce4770a3afc3c6bd04102f50437f7eb3d996c3cb45339338360a82950a6",
+      "fixtureDigest": "45cdb190c6dcd78197bcbbbba207f402020d2b48a4dd54e01b4ad72511b48921",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1617,7 +1617,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "69c0ee3b4b9357a94337815c89f5b57eab6fe94a0a61d8bc401f482675b05973",
+      "fixtureDigest": "58c37d4f666aa60bd276aafb41142627ead9e0a4606ca2d6dc567215c66df7f6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1669,15 +1669,16 @@
       "phase": "BK",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "snapshot-manifest emits a deterministic canonical manifest (sorted per-file sha256 plus workspace headEventHash, version, and embedded validate result) only under a held workspace lease, excludes the lease and in-flight claim residue classes, fails closed on crashed-session quarantine residue, and performs zero writes outside the control directory; snapshot-verify recomputes a target tree and reports SNAPSHOT_VERIFIED or SNAPSHOT_MISMATCH.",
+      "subject": "snapshot-manifest emits a deterministic canonical manifest (sorted per-file sha256 plus workspace headEventHash, version, and embedded validate result) only under a held workspace lease, excludes the lease and in-flight claim residue classes, fails closed on crashed-session quarantine residue, and performs zero writes outside the control directory; snapshot-verify recomputes a target tree and reports SNAPSHOT_VERIFIED or SNAPSHOT_MISMATCH; and the restore runbook round-trips snapshot then wipe then restore byte-identically at the original path while the two doctrine failure modes fail closed (partial restore leaves KNOWLEDGE_HIGH_WATER_MISMATCH; relocated restore raises WORKSPACE_SCHEMA_INVALID).",
       "command": "pnpm verify:backup",
       "fixturePaths": [
         "packages/core/src/workspace-snapshot.ts",
         "packages/core/schema/workspace-snapshot-manifest-v1.schema.json",
         "tests/backup-snapshot.test.mjs",
-        "docs/adr/0002-snapshot-not-mirror-backup.md"
+        "docs/adr/0002-snapshot-not-mirror-backup.md",
+        "docs/architecture/backup-restore-runbook.md"
       ],
-      "fixtureDigest": "8d1a8dcd0df33fb1220cd6fd4da3170c329ce5b0a456b6cff036d33153de59e6",
+      "fixtureDigest": "1425d1235118a6f14f5c295f436ec4f6180a3a63ab0f7d99fac7dea6b9f19e45",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1687,7 +1688,7 @@
       "expectedReasonCode": "BACKUP_VERIFIED",
       "evidencePath": "dist/evidence/bk/backup.json",
       "invalidationTriggers": [
-        "Snapshot manifest exclusion or residue taxonomy, workspace lease acquisition or owner.json format, control-tree walk or per-file digest semantics, or ADR 0002 snapshot-not-mirror doctrine changes"
+        "Snapshot manifest exclusion or residue taxonomy, workspace lease acquisition or owner.json format, control-tree walk or per-file digest semantics, workspace root-identity binding, knowledge high-water marker semantics, or ADR 0002 snapshot-not-mirror doctrine changes"
       ]
     },
     {

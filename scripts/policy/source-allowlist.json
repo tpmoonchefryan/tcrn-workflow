@@ -26,6 +26,7 @@
     "docs/activation/activation-ladder-v1.md",
     "docs/adr/0001-clean-history-offline-bootstrap.md",
     "docs/adr/0002-snapshot-not-mirror-backup.md",
+    "docs/architecture/backup-restore-runbook.md",
     "docs/architecture/root-model.md",
     "docs/compatibility/supported-modes.md",
     "docs/hardening/rc1-map-regeneration.md",

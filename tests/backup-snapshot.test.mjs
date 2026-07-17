@@ -12,11 +12,18 @@ import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
   SnapshotError,
   acquireWorkspaceLease,
+  createKnowledgeUnit,
   createProject,
   createSnapshotManifest,
-  verifySnapshotManifest,
+  createWork,
+  initializeKnowledgeStore,
   initializeWorkspace,
+  rebaseKnowledgeStore,
+  validateKnowledgeStore,
+  validateWorkspace,
+  verifySnapshotManifest,
 } from "../dist/build/packages/core/src/index.js";
+import { canonicalSha256, deriveStableId } from "../dist/build/packages/protocol/src/index.js";
 
 const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
 
@@ -178,5 +185,143 @@ test("WSF-2 case 7: snapshot-verify fails SNAPSHOT_MISMATCH naming a tampered se
   await assert.rejects(
     verifySnapshotManifest(target, manifest),
     (error) => error instanceof SnapshotError && error.reasonCode === "SNAPSHOT_MISMATCH" && error.message.includes("events/000001.json"),
+  );
+});
+
+// WSF-3: a workspace fixture carrying BOTH stores — a workspace event log advanced
+// past project+work and an initialized knowledge store with one unit bound to the
+// current head. The round-trip and doctrine-failure cases below all restore the
+// whole control tree (or deliberately break lockstep) from this state.
+function knowledgeInput({ projectId, workId }) {
+  return {
+    expectedVersion: 0,
+    occurredAt: instant(5),
+    externalKey: "KNOWLEDGE-BK-ROUNDTRIP",
+    scope: "project",
+    projectId,
+    roleScopes: [],
+    category: "implementation",
+    kind: "guide",
+    tags: ["backup", "workflow"],
+    subject: "Backup round-trip subject",
+    summary: "Backup round-trip summary",
+    snippet: "Backup round-trip snippet",
+    accountableOwnerId: deriveStableId("owner", "BK-ROUNDTRIP-OWNER"),
+    sourceReferences: ["evidence://fixture/bk-roundtrip"],
+    sourceDigest: canonicalSha256({ key: "BK-ROUNDTRIP", source: "current" }),
+    linkedWorkIds: [workId],
+    linkedDecisionIds: [deriveStableId("decision", "BK-ROUNDTRIP-DECISION")],
+    linkedGateIds: [deriveStableId("gate", "BK-ROUNDTRIP-GATE")],
+    linkedEvidenceIds: [deriveStableId("evidence", "BK-ROUNDTRIP-EVIDENCE")],
+    lifecycle: "active",
+    retrievalDisposition: "default",
+    freshnessState: "fresh",
+    lastVerified: instant(4),
+    stalenessPolicy: { maximumAgeDays: 30, unknownDisposition: "fail-closed" },
+    exportDisposition: "metadata-only",
+    body: "Backup round-trip body",
+  };
+}
+
+async function roundTripFixture() {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-bk-rt-")));
+  const roots = [];
+  for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
+    const path = join(base, kind);
+    await mkdir(path);
+    roots.push({ kind, path });
+  }
+  const workspace = join(base, "workspace");
+  await initializeWorkspace({ roots, externalKey: "WORKSPACE-BK-RT", createdAt: instant(0), segmentEventLimit: 2 });
+  const lease = await acquireWorkspaceLease(workspace, { now: instant(1) });
+  let projectId;
+  let workId;
+  try {
+    const withProject = await createProject(workspace, lease, { externalKey: "PROJ-ALPHA", name: "Alpha", expectedVersion: 0, occurredAt: instant(2) });
+    projectId = withProject.projects[0].id;
+    const withWork = await createWork(workspace, lease, { expectedVersion: 1, occurredAt: instant(3), projectId, externalKey: "WORK-ALPHA", kind: "Initiative", parentId: null, status: "active" });
+    workId = withWork.work[0].id;
+  } finally {
+    await lease.release();
+  }
+  await initializeKnowledgeStore(workspace, { disposableAcknowledged: true });
+  await createKnowledgeUnit(workspace, knowledgeInput({ projectId, workId }));
+  return {
+    base,
+    workspace,
+    control: join(workspace, ".tcrn-workflow"),
+    async close() {
+      await rm(base, { recursive: true, force: true });
+    },
+  };
+}
+
+test("WSF-3 case 8: snapshot then wipe then restore round-trips the whole control tree byte-identically", async (t) => {
+  const fixture = await roundTripFixture();
+  t.after(() => fixture.close());
+  const manifest = await manifestUnderLease(fixture.workspace, 10, (lease) => createSnapshotManifest(fixture.workspace, lease));
+  assert.equal(JSON.parse(manifest).validate.knowledge, "valid", "the manifest embeds a valid knowledge store");
+  const copy = join(fixture.base, "snapshot-copy");
+  await cp(fixture.control, join(copy, ".tcrn-workflow"), { recursive: true });
+  // Wipe the live control tree entirely, then restore it from the copy in place.
+  await rm(fixture.control, { recursive: true, force: true });
+  await cp(join(copy, ".tcrn-workflow"), fixture.control, { recursive: true });
+  // The restored copy verifies byte-for-byte against the manifest receipt.
+  assert.equal((await verifySnapshotManifest(fixture.workspace, manifest)).reasonCode, "SNAPSHOT_VERIFIED");
+  // Both stores validate green after restore, and the workspace head is unchanged.
+  const state = await validateWorkspace(fixture.workspace);
+  assert.equal(state.headEventHash, JSON.parse(manifest).headEventHash);
+  assert.equal((await validateKnowledgeStore(fixture.workspace)).reasonCode, "KNOWLEDGE_STORE_VALID");
+  // Byte-identity: a fresh manifest of the restored tree equals the original,
+  // proving the per-file sha256 set, head hash, and version all round-tripped.
+  const remanifest = await manifestUnderLease(fixture.workspace, 11, (lease) => createSnapshotManifest(fixture.workspace, lease));
+  assert.equal(remanifest, manifest, "the restored tree re-manifests byte-identically");
+});
+
+test("WSF-3 case 9: partial restore leaving a newer knowledge store fails KNOWLEDGE_HIGH_WATER_MISMATCH", async (t) => {
+  const fixture = await roundTripFixture();
+  t.after(() => fixture.close());
+  // Save only the workspace portion (state A): events/, views/, workspace.json.
+  const backup = join(fixture.base, "ws-backup");
+  await mkdir(backup);
+  await cp(join(fixture.control, "events"), join(backup, "events"), { recursive: true });
+  await cp(join(fixture.control, "views"), join(backup, "views"), { recursive: true });
+  await cp(join(fixture.control, "workspace.json"), join(backup, "workspace.json"));
+  // Advance the workspace head, then rebase the knowledge store onto the new head
+  // so the knowledge marker is strictly NEWER than the saved workspace state.
+  const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(7) });
+  try {
+    await createProject(fixture.workspace, lease, { externalKey: "PROJ-GAMMA", name: "Gamma", expectedVersion: 2, occurredAt: instant(8) });
+  } finally {
+    await lease.release();
+  }
+  const marker = JSON.parse(await readFile(join(fixture.control, "knowledge", "store.json"), "utf8"));
+  await rebaseKnowledgeStore(fixture.workspace, { expectedVersion: marker.version, at: instant(9), retireInvalid: false });
+  // Partial restore: return only the workspace portion to state A, keep the newer store.
+  for (const relative of ["events", "views"]) {
+    await rm(join(fixture.control, relative), { recursive: true, force: true });
+    await cp(join(backup, relative), join(fixture.control, relative), { recursive: true });
+  }
+  await rm(join(fixture.control, "workspace.json"), { force: true });
+  await cp(join(backup, "workspace.json"), join(fixture.control, "workspace.json"));
+  await assert.rejects(
+    validateKnowledgeStore(fixture.workspace),
+    (error) => error?.reasonCode === "KNOWLEDGE_HIGH_WATER_MISMATCH",
+  );
+});
+
+test("WSF-3 case 10: restoring the tree to a different path fails WORKSPACE_SCHEMA_INVALID", async (t) => {
+  const fixture = await roundTripFixture();
+  t.after(() => fixture.close());
+  const alternate = await realpath(await mkdtemp(join(tmpdir(), "tcrn-bk-alt-")));
+  t.after(() => rm(alternate, { recursive: true, force: true }));
+  const relocated = join(alternate, "workspace");
+  await mkdir(relocated);
+  await cp(fixture.control, join(relocated, ".tcrn-workflow"), { recursive: true });
+  // The original fixture stays intact so root recanonicalization succeeds and the
+  // only failure is the same-path identity mismatch — proving the doctrine is real.
+  await assert.rejects(
+    validateWorkspace(relocated),
+    (error) => error?.reasonCode === "WORKSPACE_SCHEMA_INVALID",
   );
 });

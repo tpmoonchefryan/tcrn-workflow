@@ -46,6 +46,7 @@ const routeFiles = [
   "packages/core/src/workspace-snapshot.ts",
   "packages/core/schema/workspace-snapshot-manifest-v1.schema.json",
   "tests/backup-snapshot.test.mjs",
+  "docs/architecture/backup-restore-runbook.md",
   "packages/core/src/claude-adapter-installer.ts",
   "tests/act1-claude-installer.test.mjs",
 ];
@@ -101,6 +102,7 @@ async function fixture(context) {
     "packages/core/src/workspace-snapshot.ts": "// route fixture\n",
     "packages/core/schema/workspace-snapshot-manifest-v1.schema.json": "{}\n",
     "tests/backup-snapshot.test.mjs": "// route fixture\n",
+    "docs/architecture/backup-restore-runbook.md": "# route fixture\n",
     "packages/core/src/claude-adapter-installer.ts": "// route fixture\n",
     "tests/act1-claude-installer.test.mjs": "// route fixture\n",
   };
