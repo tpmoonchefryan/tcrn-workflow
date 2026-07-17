@@ -37,6 +37,8 @@ import {
   readKnowledgeBody,
   readKnowledgeSnippet,
   rebaseKnowledgeStore,
+  retireKnowledgeUnit,
+  reverifyKnowledgeUnit,
   transitionKnowledgePromotion,
   validateKnowledgeStore,
 } from "../dist/build/packages/core/src/index.js";
@@ -544,6 +546,29 @@ test("WSC-3: provenance is enforced at promotion, not capture", async () => {
   }
 });
 
+test("WSC-5: retire and reverify lifecycle transitions fail closed", async () => {
+  const fixture = await workspaceFixture({ externalKey: "FIXTURE-LIFECYCLE" });
+  try {
+    // retire: a candidate is retired and drops out of default selection; re-retire fails
+    const candidate = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, "KNOWLEDGE-RETIRE-ME", { expectedVersion: 0, occurredAt: instant(11, 3) }));
+    const retired = await retireKnowledgeUnit(fixture.workspace, { expectedVersion: 1, expectedRevision: 1, occurredAt: instant(11, 4), id: candidate.id });
+    assert.equal(retired.reasonCode, "KNOWLEDGE_RETIRED");
+    const listed = await listKnowledgeMetadata(fixture.workspace, { at: instant(12), selection: "default" });
+    assert.equal(listed.records.some((r) => r.id === candidate.id), false);
+    await expectReason("KNOWLEDGE_LIFECYCLE_INVALID", () => retireKnowledgeUnit(fixture.workspace, { expectedVersion: 2, expectedRevision: 2, occurredAt: instant(11, 5), id: candidate.id }));
+
+    // reverify: promoted record can be re-verified; a candidate cannot
+    const promotable = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, "KNOWLEDGE-REVERIFY-ME", { expectedVersion: 2, occurredAt: instant(11, 6) }));
+    await expectReason("KNOWLEDGE_LIFECYCLE_INVALID", () => reverifyKnowledgeUnit(fixture.workspace, { expectedVersion: 3, expectedRevision: 1, occurredAt: instant(11, 7), id: promotable.id }));
+    await transitionKnowledgePromotion(fixture.workspace, { expectedVersion: 3, expectedRevision: 1, occurredAt: instant(11, 8), id: promotable.id, promotionState: "promoted" });
+    const reverified = await reverifyKnowledgeUnit(fixture.workspace, { expectedVersion: 4, expectedRevision: 2, occurredAt: instant(13, 9), id: promotable.id });
+    assert.equal(reverified.reasonCode, "KNOWLEDGE_REVERIFIED");
+    assert.equal(reverified.lastVerified, instant(13, 9));
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("WSC-4: knowledge-list supports bounded substring search over subject and tags", async () => {
   const fixture = await workspaceFixture({ externalKey: "FIXTURE-SEARCH" });
   try {
@@ -822,7 +847,7 @@ test("link, special-file, source-replacement, unknown-field, and partial-state a
 test("record-count and query-result limits are executable", async () => {
   const count = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-COUNT" });
   try {
-    for (let index = 0; index <= KNOWLEDGE_LIMITS.maximumRecords; index += 1) {
+    for (let index = 0; index <= KNOWLEDGE_LIMITS.maximumRecords + KNOWLEDGE_LIMITS.maximumRetiredRecords; index += 1) {
       const id = `knowledge:${index.toString(16).padStart(24, "0")}`;
       await writeFile(join(count.store, "metadata", `${id}.json`), "{}");
       await writeFile(join(count.store, "bodies", `${id}.body`), "");

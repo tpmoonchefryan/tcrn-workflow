@@ -153,6 +153,8 @@ export {
   readKnowledgeBody,
   readKnowledgeSnippet,
   rebaseKnowledgeStore,
+  retireKnowledgeUnit,
+  reverifyKnowledgeUnit,
   transitionKnowledgePromotion,
   validateKnowledgeStore,
 } from "./knowledge-core.js";

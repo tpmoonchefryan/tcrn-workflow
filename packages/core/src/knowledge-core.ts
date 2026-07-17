@@ -41,6 +41,11 @@ export const KNOWLEDGE_LIMITS = Object.freeze({
   maximumSnippetBytes: 512,
   maximumMetadataBytes: 32_768,
   maximumRecords: 64,
+  // WSC-5: retired records are tombstoned audit entries that no longer occupy a
+  // live-record slot; the physical file bound exceeds the live cap by this
+  // allowance so retire genuinely frees a create slot without the store ever
+  // scanning as over-limit.
+  maximumRetiredRecords: 64,
   maximumQueryResults: 8,
   maximumAggregateBytes: 131_072,
   maximumLocators: 16,
@@ -61,6 +66,7 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_FRESHNESS_EVALUATED",
   "KNOWLEDGE_HIGH_WATER_MISMATCH",
   "KNOWLEDGE_INPUT_INVALID",
+  "KNOWLEDGE_LIFECYCLE_INVALID",
   "KNOWLEDGE_LIMIT_EXCEEDED",
   "KNOWLEDGE_LINK_INVALID",
   "KNOWLEDGE_LINK_UNSAFE",
@@ -75,6 +81,8 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_REBASE_BLOCKED",
   "KNOWLEDGE_RECORD_INVALID",
   "KNOWLEDGE_REDACTION_REQUIRED",
+  "KNOWLEDGE_RETIRED",
+  "KNOWLEDGE_REVERIFIED",
   "KNOWLEDGE_SELECTION_INVALID",
   "KNOWLEDGE_SOURCE_CHANGED",
   "KNOWLEDGE_SPECIAL_FILE",
@@ -747,7 +755,10 @@ async function scanKnowledgeStore(
   }
   const metadataNames = (await readdir(metadataRoot)).sort(compareCanonicalText);
   const bodyNames = (await readdir(bodiesRoot)).sort(compareCanonicalText);
-  if (metadataNames.length > KNOWLEDGE_LIMITS.maximumRecords || bodyNames.length > KNOWLEDGE_LIMITS.maximumRecords) {
+  // WSC-5: the physical file bound is the live cap plus the retired allowance, so
+  // a store at the live cap with retired records still scans cleanly.
+  const maximumStoredRecords = KNOWLEDGE_LIMITS.maximumRecords + KNOWLEDGE_LIMITS.maximumRetiredRecords;
+  if (metadataNames.length > maximumStoredRecords || bodyNames.length > maximumStoredRecords) {
     fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge record count");
   }
   const metadataIds = metadataNames.map((name) => name.endsWith(".json") ? name.slice(0, -5) : "");
@@ -1040,8 +1051,13 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
     Buffer.byteLength(canonicalJson(knowledgeIndex(marker, projectedMetadata)), "utf8") +
     scan.units.reduce((total, unit) => total + Buffer.byteLength(canonicalJson(unit.metadata), "utf8") + requireBody(unit).length, 0) +
     metadataBytes.length + body.length;
-  if (metadataBytes.length > KNOWLEDGE_LIMITS.maximumMetadataBytes || scan.units.length >= KNOWLEDGE_LIMITS.maximumRecords ||
-    projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
+  // WSC-5: only live (non-retired) records count against the create cap, so
+  // retiring a record genuinely frees a create slot; the physical file total is
+  // still bounded by the live cap plus the retired allowance.
+  const liveRecords = scan.units.filter((unit) => unit.metadata.lifecycle !== "retired").length;
+  const maximumStoredRecords = KNOWLEDGE_LIMITS.maximumRecords + KNOWLEDGE_LIMITS.maximumRetiredRecords;
+  if (metadataBytes.length > KNOWLEDGE_LIMITS.maximumMetadataBytes || liveRecords >= KNOWLEDGE_LIMITS.maximumRecords ||
+    scan.units.length >= maximumStoredRecords || projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
     await releaseMutationClaim(scan.storeRoot, claim);
     fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge create budget");
   }
@@ -1315,6 +1331,129 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
       reasonCode: "KNOWLEDGE_PROMOTION_UPDATED",
       id: metadata.id,
       promotionState: metadata.promotionState,
+      revision: metadata.revision,
+      version: marker.version,
+    };
+  } finally {
+    if (!released) await releaseMutationClaim(initial.storeRoot, claim);
+  }
+}
+
+// WSC-5: retire a record — it becomes a tombstoned audit entry (lifecycle
+// "retired") that no longer occupies a live-record slot, and its dangling
+// backlinks are durably tolerated (WSC-2). One version step under the claim.
+export async function retireKnowledgeUnit(workspaceRoot: string, input: {
+  readonly expectedVersion: number;
+  readonly expectedRevision: number;
+  readonly occurredAt: string;
+  readonly id: string;
+}, options: KnowledgeMutationOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
+  try {
+    assertProtocolId(input.id);
+    assertStrictInstant(input.occurredAt);
+  } catch (error) {
+    fail("KNOWLEDGE_INPUT_INVALID", String(error));
+  }
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0 ||
+    !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
+    fail("KNOWLEDGE_INPUT_INVALID", "retire versions");
+  }
+  const initial = await mutationAdmissionScan(workspaceRoot, options);
+  const claim = await acquireMutationClaim(initial);
+  let released = false;
+  try {
+    const scan = await scanKnowledgeStore(workspaceRoot, options, true);
+    if (scan.marker.version !== input.expectedVersion) {
+      fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
+    }
+    const unit = scan.units.find((entry) => entry.metadata.id === input.id);
+    if (!unit) fail("KNOWLEDGE_NOT_FOUND", input.id);
+    if (unit.metadata.revision !== input.expectedRevision) {
+      fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedRevision}:${unit.metadata.revision}`);
+    }
+    if (unit.metadata.lifecycle === "retired") {
+      fail("KNOWLEDGE_LIFECYCLE_INVALID", "record is already retired");
+    }
+    const metadata: KnowledgeUnitMetadata = { ...unit.metadata, lifecycle: "retired", revision: unit.metadata.revision + 1, updatedAt: input.occurredAt };
+    const unitBody = requireBody(unit);
+    const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace);
+    validateMetadataBody(validated, unitBody, scan.workspace);
+    const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
+    const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
+    await replaceRegularFile(unit.metadataPath, canonicalJson(metadata));
+    crash("after-metadata-write", options.faultAt);
+    await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+    crash("after-marker-write", options.faultAt);
+    await writeIndex(scan, marker, projectedMetadata);
+    await releaseMutationClaim(scan.storeRoot, claim);
+    released = true;
+    await scanKnowledgeStore(workspaceRoot, options);
+    return {
+      schemaVersion: "tcrn.knowledge-retire-result.v1",
+      reasonCode: "KNOWLEDGE_RETIRED",
+      id: metadata.id,
+      revision: metadata.revision,
+      version: marker.version,
+    };
+  } finally {
+    if (!released) await releaseMutationClaim(initial.storeRoot, claim);
+  }
+}
+
+// WSC-5: re-verify a promoted record — touch lastVerified to the given instant and
+// restore a fresh posture, so promoted knowledge does not decay irreversibly out
+// of default selection. Admitted for promoted records only (OD-17).
+export async function reverifyKnowledgeUnit(workspaceRoot: string, input: {
+  readonly expectedVersion: number;
+  readonly expectedRevision: number;
+  readonly occurredAt: string;
+  readonly id: string;
+}, options: KnowledgeMutationOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
+  try {
+    assertProtocolId(input.id);
+    assertStrictInstant(input.occurredAt);
+  } catch (error) {
+    fail("KNOWLEDGE_INPUT_INVALID", String(error));
+  }
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0 ||
+    !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
+    fail("KNOWLEDGE_INPUT_INVALID", "reverify versions");
+  }
+  const initial = await mutationAdmissionScan(workspaceRoot, options);
+  const claim = await acquireMutationClaim(initial);
+  let released = false;
+  try {
+    const scan = await scanKnowledgeStore(workspaceRoot, options, true);
+    if (scan.marker.version !== input.expectedVersion) {
+      fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
+    }
+    const unit = scan.units.find((entry) => entry.metadata.id === input.id);
+    if (!unit) fail("KNOWLEDGE_NOT_FOUND", input.id);
+    if (unit.metadata.revision !== input.expectedRevision) {
+      fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedRevision}:${unit.metadata.revision}`);
+    }
+    if (unit.metadata.promotionState !== "promoted" || unit.metadata.lifecycle === "retired") {
+      fail("KNOWLEDGE_LIFECYCLE_INVALID", "only a promoted, non-retired record can be re-verified");
+    }
+    const metadata: KnowledgeUnitMetadata = { ...unit.metadata, lastVerified: input.occurredAt, freshnessState: "fresh", revision: unit.metadata.revision + 1, updatedAt: input.occurredAt };
+    const unitBody = requireBody(unit);
+    const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace);
+    validateMetadataBody(validated, unitBody, scan.workspace);
+    const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
+    const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
+    await replaceRegularFile(unit.metadataPath, canonicalJson(metadata));
+    crash("after-metadata-write", options.faultAt);
+    await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+    crash("after-marker-write", options.faultAt);
+    await writeIndex(scan, marker, projectedMetadata);
+    await releaseMutationClaim(scan.storeRoot, claim);
+    released = true;
+    await scanKnowledgeStore(workspaceRoot, options);
+    return {
+      schemaVersion: "tcrn.knowledge-reverify-result.v1",
+      reasonCode: "KNOWLEDGE_REVERIFIED",
+      id: metadata.id,
+      lastVerified: metadata.lastVerified,
       revision: metadata.revision,
       version: marker.version,
     };

@@ -104,14 +104,30 @@ point leaves the claim present so the next admission fails closed
 marker. The store is not event-sourced, so rebase — not re-initialization — is the
 only path that preserves records across workspace events.
 
+## Lifecycle
+
+A promoted record can be re-verified: `reverify` touches `lastVerified` to the
+supplied instant and restores a fresh posture under CAS, so promoted knowledge
+does not decay irreversibly out of default selection; only a promoted, non-retired
+record admits it. A record of any lifecycle can be `retire`d — it becomes a
+tombstoned audit entry (lifecycle `retired`) whose dangling backlinks are durably
+tolerated and which leaves default selection. Retiring frees a live create slot:
+only non-retired records count against the live record cap, and the physical
+file bound exceeds that cap by a retired allowance so the store never scans as
+over-limit after a retire-then-create. The aggregate-byte budget is a separate,
+tighter constraint that a retired record does not relieve (its bytes remain on
+disk), so for records of realistic size the byte budget, not the record count,
+binds first — retire relieves count pressure, checkpoint/compaction relieves byte
+pressure.
+
 ## Governed surfaces
 
 Core exports empty initialization/validation, creation, metadata listing and
 filtering, bounded snippet read, explicit body read, freshness evaluation,
-promotion transition, high-water rebase, and metadata-only checkpoint generation.
-CLI commands mirror these surfaces. `P4_KNOWLEDGE_CORE_VERIFIED` proves only this
-bounded file-native capability; it does not mark the graph work done or start
-RC2/P5/P6.
+promotion transition, re-verify, retire, high-water rebase, and metadata-only
+checkpoint generation. CLI commands mirror these surfaces.
+`P4_KNOWLEDGE_CORE_VERIFIED` proves only this bounded file-native capability; it
+does not mark the graph work done or start RC2/P5/P6.
 
 ## KR-05 fact-card mapping appendix (WS-F)
 
