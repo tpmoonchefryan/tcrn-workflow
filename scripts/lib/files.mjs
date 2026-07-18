@@ -28,10 +28,6 @@ export function isInside(parent, candidate) {
   return relation === "" || (!relation.startsWith("..") && !relation.startsWith(sep));
 }
 
-export async function resolveRealPath(value) {
-  return realpath(resolve(value));
-}
-
 export async function walkFiles(root = repositoryRoot) {
   const files = [];
 
@@ -67,11 +63,6 @@ export async function walkFiles(root = repositoryRoot) {
 
 export async function readJson(path) {
   return JSON.parse((await readSourceFile(path)).toString("utf8"));
-}
-
-export async function sha256File(path) {
-  const content = await readSourceFile(path);
-  return createHash("sha256").update(content).digest("hex");
 }
 
 export async function fileRecord(path, root = repositoryRoot) {

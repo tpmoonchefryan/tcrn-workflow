@@ -101,19 +101,6 @@ export function buildCanonicalUstar(records) {
   return Buffer.concat([...normalized.map(tarEntry), Buffer.alloc(1024, 0)]);
 }
 
-export function buildDeterministicSourceArchive(records) {
-  assertion(Array.isArray(records) && records.length > 0, "P8_ARCHIVE_RECORDS_INVALID");
-  for (const record of records) {
-    assertion(record && Buffer.isBuffer(record.content) && typeof record.executable === "boolean", "P8_ARCHIVE_RECORD_INVALID");
-    assertion(record.singleLink === true, "P8_ARCHIVE_LINK_INVALID", record.path ?? "unknown");
-  }
-  return buildCanonicalUstar(records.map((record) => ({
-    path: record.path,
-    bytes: record.content,
-    mode: record.executable ? 0o755 : 0o644,
-  })));
-}
-
 export async function releaseSourceRecords(repositoryRoot, allowedFiles) {
   assertion(Array.isArray(allowedFiles) && allowedFiles.length > 0, "P8_RELEASE_ALLOWLIST_INVALID");
   const root = resolve(repositoryRoot);
@@ -178,64 +165,8 @@ export async function rebuildP8SourceArchiveInIndependentRoots({ repositoryRoot,
   }
 }
 
-export async function assertP8Versions(repositoryRoot) {
-  const root = resolve(repositoryRoot);
-  const manifests = ["package.json", "packages/core/package.json", "packages/cli/package.json", "packages/protocol/package.json"];
-  const versions = await Promise.all(manifests.map(async (path) => {
-    const value = JSON.parse((await readFile(resolve(root, path), "utf8")));
-    return { path, version: value.version };
-  }));
-  assertion(versions.every((entry) => entry.version === P8_VERSION), "P8_VERSION_MISMATCH", JSON.stringify(versions));
-  const coreIndex = await readFile(resolve(root, "packages/core/src/index.ts"), "utf8");
-  assertion(coreIndex.includes(`FRAMEWORK_VERSION = \"${P8_VERSION}\"`), "P8_FRAMEWORK_VERSION_MISMATCH");
-  return versions;
-}
-
 function documentRecord(path, bytes) {
   return { path, size: bytes.length, sha256: sha256(bytes) };
-}
-
-export async function buildP8ReleaseDocuments({ repositoryRoot, allowedFiles }) {
-  await assertP8Versions(repositoryRoot);
-  const archive = buildCanonicalUstar(await releaseSourceRecords(repositoryRoot, allowedFiles));
-  const sourcePath = P8_RELEASE_ARTIFACTS[0];
-  const sbom = Buffer.from(`${JSON.stringify({ bomFormat: "CycloneDX", specVersion: "1.6", serialNumber: `urn:uuid:${sha256(archive).slice(0, 8)}-${sha256(archive).slice(8, 12)}-4000-8000-${sha256(archive).slice(12, 24)}`, version: 1, metadata: { component: { type: "application", name: P8_REPOSITORY, version: P8_VERSION }, properties: [{ name: "tcrn:supported-aos-releases", value: "[]" }] }, components: [] }, null, 2)}\n`, "utf8");
-  const notes = Buffer.from(`# TCRN Workflow ${P8_VERSION}\n\nThis is an immutable unpublished local release candidate. It supports no AOS releases, performs no publication, and is not a supported release.\n`, "utf8");
-  const manifestBasis = {
-    schemaVersion: "tcrn.workflow-release-candidate-manifest.v1",
-    repository: P8_REPOSITORY,
-    workflow: P8_WORKFLOW,
-    version: P8_VERSION,
-    tag: P8_TAG,
-    releaseStatus: "unpublished_candidate",
-    supportedAosReleases: P8_SUPPORTED_AOS_RELEASES,
-    artifacts: [documentRecord(sourcePath, archive), documentRecord("sbom.cdx.json", sbom), documentRecord("release-notes.md", notes)],
-  };
-  const manifest = Buffer.from(`${canonicalJson({ ...manifestBasis, manifestDigest: sha256(Buffer.from(canonicalJson(manifestBasis), "utf8")) })}\n`, "utf8");
-  const provenanceBasis = {
-    _type: "https://in-toto.io/Statement/v1",
-    predicateType: "https://slsa.dev/provenance/v1",
-    subject: [documentRecord(sourcePath, archive)],
-    predicate: {
-      buildType: "tcrn.workflow.local-unpublished-candidate.v1",
-      buildDefinition: { externalParameters: { version: P8_VERSION, tag: P8_TAG, supportedAosReleases: P8_SUPPORTED_AOS_RELEASES }, resolvedDependencies: [documentRecord("release-manifest.json", manifest)] },
-      runDetails: { builder: { id: "tcrn-workflow-local" }, metadata: { invocationId: sha256(manifest), startedOn: "1970-01-01T00:00:00.000Z", finishedOn: "1970-01-01T00:00:00.000Z" } },
-    },
-  };
-  const provenance = Buffer.from(`${canonicalJson(provenanceBasis)}\n`, "utf8");
-  const checksummed = [
-    documentRecord(sourcePath, archive),
-    documentRecord("sbom.cdx.json", sbom),
-    documentRecord("release-manifest.json", manifest),
-    documentRecord("provenance.json", provenance),
-    documentRecord("release-notes.md", notes),
-  ].sort((left, right) => compareCanonicalText(left.path, right.path));
-  const checksums = Buffer.from(checksummed.map((record) => `${record.sha256}  ${record.path}`).join("\n") + "\n", "utf8");
-  const documents = new Map([
-    [sourcePath, archive], ["sbom.cdx.json", sbom], ["release-manifest.json", manifest], ["provenance.json", provenance], ["checksums.txt", checksums], ["release-notes.md", notes],
-  ]);
-  validateP8ReleaseDocuments(documents);
-  return { documents, sourceArchiveSha256: sha256(archive), manifestDigest: sha256(manifest), provenanceDigest: sha256(provenance) };
 }
 
 export function validateP8ReleaseDocuments(documents) {
@@ -334,24 +265,4 @@ export function sanitizedCoreReferenceProjection(bundle) {
   const text = canonicalJson(profiles);
   assertion(!/(?:\.context|legacy|transcript|credential|\/Users\/|AOS)/iu.test(text), "P8_SANITIZED_CORE_PRIVATE_CONTENT");
   return output;
-}
-
-export function sanitizeCoreReference(profiles) {
-  assertion(Array.isArray(profiles) && profiles.length === 8, "P8_CORE_REFERENCE_COUNT");
-  const expectedFields = ["displayName", "jobTitle", "mission", "profileDigest", "profileId"];
-  const projected = profiles.map((profile) => {
-    assertion(profile && typeof profile === "object" && !Array.isArray(profile), "P8_CORE_REFERENCE_FIELDS");
-    assertion(JSON.stringify(Object.keys(profile).sort(compareCanonicalText)) === JSON.stringify(expectedFields), "P8_CORE_REFERENCE_FIELDS");
-    assertion(expectedFields.every((field) => typeof profile[field] === "string" && profile[field].length > 0), "P8_CORE_REFERENCE_FIELDS");
-    return Object.fromEntries(expectedFields.map((field) => [field, profile[field]]));
-  }).sort((left, right) => compareCanonicalText(left.profileId, right.profileId));
-  assertion(new Set(projected.map((profile) => profile.profileId)).size === 8, "P8_CORE_REFERENCE_DUPLICATE");
-  const output = {
-    schemaVersion: "tcrn.p8-sanitized-core-reference.v1",
-    profiles: projected,
-    supportedAosReleases: P8_SUPPORTED_AOS_RELEASES,
-  };
-  const text = canonicalJson(projected);
-  assertion(!/(?:\.context|legacy|transcript|credential|\/Users\/|AOS)/iu.test(text), "P8_CORE_REFERENCE_PRIVATE_CONTENT");
-  return { ...output, bundleIdentity: sha256(Buffer.from(text, "utf8")) };
 }
