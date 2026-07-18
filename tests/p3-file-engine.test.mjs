@@ -1392,6 +1392,31 @@ test("unsafe or active recovery claims fail closed", async () => {
     await fixture.close();
   }
 
+  // WSA-7: the counterpart of the case above. A claim whose writer is provably gone --
+  // expired TTL and a dead pid -- must be reclaimed, or a single SIGKILL during recovery
+  // leaves the Workspace unopenable forever with no verb able to clear it. The lease
+  // directory is backdated past the creation grace so recovery actually engages.
+  const staleClaim = await workspaceFixture();
+  try {
+    const control = join(staleClaim.workspace, ".tcrn-workflow");
+    const leasePath = join(control, "lease");
+    await mkdir(leasePath, { mode: 0o700 });
+    const backdated = new Date(Date.now() - 600_000);
+    await utimes(leasePath, backdated, backdated);
+    await writeFile(join(control, "lease-recovery.claim"), canonicalJson({
+      schemaVersion: "tcrn.workspace-lease-recovery.v1",
+      token: "b".repeat(48),
+      pid: 999_999,
+      acquiredAt: instant(1),
+      expiresAtNanoseconds: "1",
+    }), { mode: 0o600 });
+    const recovered = await acquireWorkspaceLease(staleClaim.workspace, { now: instant(2) });
+    await recovered.release();
+    assert.equal((await readdir(control)).includes("lease-recovery.claim"), false);
+  } finally {
+    await staleClaim.close();
+  }
+
   const malformedOwner = await workspaceFixture();
   try {
     const leasePath = join(malformedOwner.workspace, ".tcrn-workflow", "lease");
