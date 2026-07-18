@@ -3,6 +3,7 @@
 import {
   acquireWorkspaceLease,
   breakWorkspaceLease,
+  breakWorkspaceRecoveryClaim,
   inspectWorkspaceLease,
   openConferenceInWorkspace,
   appendConferencePositionInWorkspace,
@@ -487,6 +488,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "knowledge-validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "lease-break", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "owner-token", required: true, valueKind: "string" }] },
   { name: "lease-inspect", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
+  { name: "lease-recovery-break", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "claim-token", required: true, valueKind: "string" }] },
   { name: "migration-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "target-version", required: true, valueKind: "string" }, { name: "dry-run", required: true, valueKind: "boolean" }] },
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
   { name: "persona-render", availability: "cli", mutates: false, flags: [] },
@@ -862,6 +864,12 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const values = parseArguments(rest, ["workspace", "at", "owner-token"]);
     required(values, ["workspace", "at", "owner-token"]);
     io.write(canonicalJson(await breakWorkspaceLease(values.workspace ?? "", { now: values.at ?? "", ownerToken: values["owner-token"] ?? "" })));
+    return;
+  }
+  if (command === "lease-recovery-break") {
+    const values = parseArguments(rest, ["workspace", "at", "claim-token"]);
+    required(values, ["workspace", "at", "claim-token"]);
+    io.write(canonicalJson(await breakWorkspaceRecoveryClaim(values.workspace ?? "", { now: values.at ?? "", claimToken: values["claim-token"] ?? "" })));
     return;
   }
   if (command === "export") {

@@ -1464,6 +1464,41 @@ async function reclaimObservedLease(leasePath: string, workspaceRoot: string, ob
   await options.afterLeaseQuarantineForTest?.(captured);
 }
 
+// WSA-7: read-only view of the recovery claim, so an operator can obtain the token that
+// breakWorkspaceRecoveryClaim demands. Reports rather than throws: a malformed or unsafe
+// claim is exactly what the operator needs to be told about, so it becomes an observation
+// with a reason, not an exception. No mutation.
+async function observeRecoveryClaim(workspaceRoot: string, nowNanoseconds: bigint): Promise<Readonly<Record<string, JsonValue>> | null> {
+  const path = controlPath(workspaceRoot, "lease-recovery.claim");
+  // Absence is probed before parsing: parseRecoveryClaim wraps every failure, ENOENT
+  // included, into WORKSPACE_LEASE_INVALID, so "no claim" and "unsafe claim" are
+  // indistinguishable downstream of it.
+  if (await lstat(path).then(() => false).catch(() => true)) {
+    return null;
+  }
+  try {
+    const existing = await parseRecoveryClaim(path);
+    const pid = Number(existing.owner.pid);
+    const expired = BigInt(String(existing.owner.expiresAtNanoseconds)) <= nowNanoseconds;
+    const alive = processAlive(pid);
+    return {
+      token: String(existing.owner.token),
+      pid,
+      acquiredAt: String(existing.owner.acquiredAt),
+      expired,
+      processAlive: alive,
+      // The acquire path reclaims this automatically; only the pid-reuse wedge
+      // (expired but apparently alive) needs breakWorkspaceRecoveryClaim.
+      selfReclaiming: expired && !alive,
+    };
+  } catch (error) {
+    if (error instanceof WorkspaceError) {
+      return { unsafe: true, reasonCode: error.reasonCode, detail: error.message };
+    }
+    throw error;
+  }
+}
+
 // WSA-4: read-only lease report so an operator can see the wedge (an expired lease
 // whose pid was recycled by a live process, which the acquire path treats as
 // active). No mutation.
@@ -1472,18 +1507,19 @@ export async function inspectWorkspaceLease(workspaceRootInput: string, options:
   const nowNanoseconds = parseStrictInstant(options.now);
   const workspaceRoot = await boundDirectory(workspaceRootInput);
   await readMetadata(workspaceRoot);
+  const recoveryClaim = await observeRecoveryClaim(workspaceRoot, nowNanoseconds);
   const leasePath = controlPath(workspaceRoot, "lease");
   let observed: LeaseObservation;
   try {
     observed = await observeLease(leasePath, workspaceRoot);
   } catch (error) {
     if (error instanceof WorkspaceError && error.reasonCode === "WORKSPACE_LEASE_INVALID") {
-      return { schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false };
+      return { schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false, recoveryClaim };
     }
     throw error;
   }
   if (!observed.owner) {
-    return { schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false };
+    return { schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false, recoveryClaim };
   }
   const pid = Number(observed.owner.pid);
   return {
@@ -1495,6 +1531,7 @@ export async function inspectWorkspaceLease(workspaceRootInput: string, options:
     acquiredAt: String(observed.owner.acquiredAt),
     expired: BigInt(String(observed.owner.expiresAtNanoseconds)) <= nowNanoseconds,
     processAlive: processAlive(pid),
+    recoveryClaim,
   };
 }
 
@@ -1524,6 +1561,40 @@ export async function breakWorkspaceLease(workspaceRootInput: string, options: {
     reasonCode: "WORKSPACE_LEASE_BROKEN",
     token: String(observed.owner.token),
     pid: Number(observed.owner.pid),
+  };
+}
+
+// WSA-7: the recovery-claim counterpart of breakWorkspaceLease, for the one wedge that
+// survives automatic reclaim. createRecoveryClaim reclaims a claim only when it has
+// expired AND its pid is dead; a recycled pid reads as alive, so an expired claim from a
+// long-dead writer can still wedge the Workspace. This verb bypasses the liveness probe
+// exactly as the lease break does, and demands the same proof of operator attention: the
+// exact current claim token, which is only obtainable by inspecting the claim. An
+// unexpired claim is never breakable, so a live recoverer cannot be stolen from.
+export async function breakWorkspaceRecoveryClaim(workspaceRootInput: string, options: { readonly now: string; readonly claimToken: string }): Promise<Readonly<Record<string, JsonValue>>> {
+  assertStrictInstant(options.now);
+  const nowNanoseconds = parseStrictInstant(options.now);
+  const workspaceRoot = await boundDirectory(workspaceRootInput);
+  await readMetadata(workspaceRoot);
+  const path = controlPath(workspaceRoot, "lease-recovery.claim");
+  // See observeRecoveryClaim: absence must be probed before parsing, which folds ENOENT
+  // into the same reason code as a genuinely unsafe claim.
+  if (await lstat(path).then(() => false).catch(() => true)) {
+    fail("WORKSPACE_LEASE_INVALID", "no recovery claim to break");
+  }
+  const existing = await parseRecoveryClaim(path);
+  if (existing.owner.token !== options.claimToken) {
+    fail("WORKSPACE_LEASE_INVALID", "break requires the current recovery claim token");
+  }
+  if (BigInt(String(existing.owner.expiresAtNanoseconds)) > nowNanoseconds) {
+    fail("WORKSPACE_LOCKED", "an unexpired recovery claim cannot be broken");
+  }
+  await reclaimStaleRecoveryClaim(workspaceRoot, path, existing);
+  return {
+    schemaVersion: "tcrn.workspace-recovery-claim-break.v1",
+    reasonCode: "WORKSPACE_RECOVERY_CLAIM_BROKEN",
+    token: String(existing.owner.token),
+    pid: Number(existing.owner.pid),
   };
 }
 

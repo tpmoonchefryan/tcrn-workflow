@@ -26,6 +26,7 @@ import {
   WorkspaceError,
   acquireWorkspaceLease,
   breakWorkspaceLease,
+  breakWorkspaceRecoveryClaim,
   inspectWorkspaceLease,
   applyWorkspaceMigration,
   assertSupportedWorkspaceFilesystem,
@@ -298,7 +299,7 @@ test("WSA-4: lease-inspect reports state and lease-break clears the pid-reuse we
   try {
     // no lease yet
     assert.deepEqual(await inspectWorkspaceLease(fixture.workspace, { now: instant(5) }), {
-      schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false,
+      schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false, recoveryClaim: null,
     });
     const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(10) });
     const inspected = await inspectWorkspaceLease(fixture.workspace, { now: instant(20) });
@@ -318,10 +319,63 @@ test("WSA-4: lease-inspect reports state and lease-break clears the pid-reuse we
     const fresh = await acquireWorkspaceLease(fixture.workspace, { now: instant(51) });
     await fresh.release();
     assert.deepEqual(await inspectWorkspaceLease(fixture.workspace, { now: instant(52) }), {
-      schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false,
+      schemaVersion: "tcrn.workspace-lease-inspection.v1", reasonCode: "WORKSPACE_LEASE_OBSERVED", held: false, recoveryClaim: null,
     });
   } finally {
     await fixture.close();
+  }
+});
+
+test("WSA-7: lease-inspect surfaces the recovery claim and lease-recovery-break clears the pid-reuse residue", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const control = join(fixture.workspace, ".tcrn-workflow");
+    const claimPath = join(control, "lease-recovery.claim");
+    // A claim whose pid is this live process: automatic reclaim refuses it (that is the
+    // pid-reuse residue), so it is exactly what the operator verb exists for.
+    const token = "c".repeat(48);
+    await writeFile(claimPath, canonicalJson({
+      schemaVersion: "tcrn.workspace-lease-recovery.v1",
+      token,
+      pid: process.pid,
+      acquiredAt: instant(1),
+      expiresAtNanoseconds: "1",
+    }), { mode: 0o600 });
+
+    const inspected = await inspectWorkspaceLease(fixture.workspace, { now: instant(5) });
+    assert.equal(inspected.recoveryClaim.token, token);
+    assert.equal(inspected.recoveryClaim.expired, true);
+    assert.equal(inspected.recoveryClaim.processAlive, true);
+    // Not self-reclaiming: the acquire path will not clear this one.
+    assert.equal(inspected.recoveryClaim.selfReclaiming, false);
+
+    // A wrong token fails even though the claim is expired.
+    await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => breakWorkspaceRecoveryClaim(fixture.workspace, { now: instant(5), claimToken: "0".repeat(48) }));
+    const broken = await breakWorkspaceRecoveryClaim(fixture.workspace, { now: instant(5), claimToken: token });
+    assert.equal(broken.reasonCode, "WORKSPACE_RECOVERY_CLAIM_BROKEN");
+    assert.equal((await readdir(control)).includes("lease-recovery.claim"), false);
+    // Nothing left to break, and a fresh lease is obtainable again.
+    await expectReasonAsync("WORKSPACE_LEASE_INVALID", () => breakWorkspaceRecoveryClaim(fixture.workspace, { now: instant(6), claimToken: token }));
+    const fresh = await acquireWorkspaceLease(fixture.workspace, { now: instant(7) });
+    await fresh.release();
+  } finally {
+    await fixture.close();
+  }
+
+  // An unexpired claim is never breakable, even with the exact token.
+  const active = await workspaceFixture();
+  try {
+    const token = "d".repeat(48);
+    await writeFile(join(active.workspace, ".tcrn-workflow", "lease-recovery.claim"), canonicalJson({
+      schemaVersion: "tcrn.workspace-lease-recovery.v1",
+      token,
+      pid: process.pid,
+      acquiredAt: instant(1),
+      expiresAtNanoseconds: "9999999999999999999",
+    }), { mode: 0o600 });
+    await expectReasonAsync("WORKSPACE_LOCKED", () => breakWorkspaceRecoveryClaim(active.workspace, { now: instant(2), claimToken: token }));
+  } finally {
+    await active.close();
   }
 });
 
