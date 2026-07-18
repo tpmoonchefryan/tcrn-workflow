@@ -127,7 +127,7 @@ test("WSB-5: exactly the authority-gated compatibility verbs are programmatic-on
   const bySurface = {};
   for (const entry of COMMAND_CATALOG) {
     assert.ok(
-      entry.availability === "cli" || entry.availability === "programmatic-only",
+      entry.availability === "cli" || entry.availability === "programmatic-only" || entry.availability === "fixture-only",
       `${entry.name} availability must be a known invocation surface`,
     );
     (bySurface[entry.availability] ??= []).push(entry.name);
@@ -137,8 +137,16 @@ test("WSB-5: exactly the authority-gated compatibility verbs are programmatic-on
   // obtain their required CompatibilityAdmissionAuthority and fail closed; the catalog
   // records that programmatic-only surface (WSB-5).
   assert.deepEqual(bySurface["programmatic-only"], ["compatibility-dry-run", "compatibility-plan"]);
+  // OD-18: assertDisposable (artifact-lifecycle.ts) admits a store only when the marker
+  // carries disposable and the Workspace external key starts with FIXTURE-, and
+  // initializeArtifactStore refuses to set disposable on anything else. So these two
+  // verbs can never succeed against a live Workspace -- which the spec states outright
+  // ("The live local graph is therefore ineligible"). The catalog now says so too:
+  // a caller planning work from it would otherwise budget for a verb that is designed
+  // to fail for them.
+  assert.deepEqual(bySurface["fixture-only"], ["artifact-archive-apply", "artifact-archive-restore"]);
   assert.equal(
-    (bySurface["cli"]?.length ?? 0) + bySurface["programmatic-only"].length,
+    (bySurface["cli"]?.length ?? 0) + bySurface["programmatic-only"].length + bySurface["fixture-only"].length,
     COMMAND_CATALOG.length,
     "every catalog entry is partitioned into exactly one known surface",
   );

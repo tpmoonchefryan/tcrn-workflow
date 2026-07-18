@@ -16,10 +16,14 @@ of entries. Output is byte-identical across invocations.
 Each entry is `{name, availability, mutates, flags}`:
 
 - `name` — the dispatched verb.
-- `availability` — `"cli"` for verbs invokable from the shipped binary, or
+- `availability` — `"cli"` for verbs invokable from the shipped binary,
   `"programmatic-only"` for verbs whose handler requires an injected authority the
   shipped binary does not supply (they fail with their authority reason code when
-  invoked from the binary).
+  invoked from the binary), or `"fixture-only"` for verbs the binary dispatches but
+  which can only succeed against a synthetic Workspace. A caller reading this
+  catalog to plan work needs to know the difference: a `fixture-only` verb invoked
+  against a live Workspace fails by design, not by misuse, and no flag the caller
+  can supply changes that.
 - `mutates` — whether the verb appends a workspace event or writes store state.
 - `flags` — each `{name, required, valueKind}`, where `valueKind` is one of
   `string`, `integer`, `boolean`, `json`, `list`, `instant`, `enum`. A flag that

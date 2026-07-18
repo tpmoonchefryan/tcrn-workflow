@@ -36,7 +36,8 @@
           "availability": {
             "enum": [
               "cli",
-              "programmatic-only"
+              "programmatic-only",
+              "fixture-only"
             ]
           },
           "mutates": {
