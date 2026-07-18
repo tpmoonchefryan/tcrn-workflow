@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, chmod, link, mkdir, mkdtemp, readFile, realpath, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -518,6 +518,53 @@ test("trusted admission rejects forged trust, malformed receipts, and standalone
     "recomputed-forged-effective-object",
   ];
   assert.deepEqual(fixture.trustAdmissionNegativeCases, selfTrustCases);
+});
+
+test("profile admission reads reject directories, mode races and unbounded growth", async () => {
+  const baseRequest = request([generateGenericStarterBundle().layers[0]]);
+
+  // A directory has nlink >= 2, so the pre-unification reader classified it as
+  // PROFILE_ADMISSION_LINK. The shared reader gates isFile() before nlink, so a
+  // directory now reports the special-file code (OD-6).
+  const special = await admissionFixture(baseRequest);
+  try {
+    const directoryPath = join(special.directory, "special");
+    await mkdir(directoryPath);
+    await expectReasonAsync("PROFILE_ADMISSION_SPECIAL_FILE", () => readGenericProfileAdmissionReceipt(directoryPath, {
+      authority: { expectedCanonicalPath: directoryPath, expectedFileSha256: special.authority.expectedFileSha256 },
+    }));
+  } finally { await special.close(); }
+
+  // mode joined the descriptor identity, so a concurrent chmod is now visible.
+  const modeRace = await admissionFixture(baseRequest);
+  try {
+    await expectReasonAsync("PROFILE_ADMISSION_CHANGED", () => readGenericProfileAdmissionReceipt(modeRace.path, {
+      authority: modeRace.authority,
+      afterOpenForTest: async () => { await chmod(modeRace.path, 0o640); },
+    }));
+  } finally { await modeRace.close(); }
+
+  // The read is chunk-bounded rather than a single unbounded readFile().
+  const sparse = await admissionFixture(baseRequest); let sparseRead = 0;
+  try {
+    await expectReasonAsync("PROFILE_ADMISSION_MALFORMED", () => readGenericProfileAdmissionReceipt(sparse.path, {
+      authority: sparse.authority,
+      afterOpenForTest: async () => { await truncate(sparse.path, 32 * 1024 * 1024); },
+      observeReadBytesForTest: (bytes) => { sparseRead = bytes; },
+    }));
+    assert.equal(sparseRead, 65_537);
+  } finally { await sparse.close(); }
+
+  const growing = await admissionFixture(baseRequest); let growingRead = 0; let growthRounds = 0;
+  try {
+    await expectReasonAsync("PROFILE_ADMISSION_MALFORMED", () => readGenericProfileAdmissionReceipt(growing.path, {
+      authority: growing.authority,
+      observeReadBytesForTest: (bytes) => { growingRead = bytes; },
+      afterReadChunkForTest: async () => { growthRounds += 1; await appendFile(growing.path, "x".repeat(16_384)); },
+    }));
+    assert.equal(growingRead, 65_537);
+    assert.ok(growthRounds >= 4);
+  } finally { await growing.close(); }
 });
 
 test("profile admission receipts require exactly one canonical terminal LF", async () => {

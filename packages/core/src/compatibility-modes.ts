@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import { lstat, open, realpath } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
-
 import {
   assertProtocolId,
   canonicalJson,
@@ -12,6 +7,8 @@ import {
   compareCanonicalText,
   parseStrictInstant,
 } from "../../protocol/src/index.js";
+import { readAuthorityFile } from "./authority-file-reader.js";
+import type { AuthorityFileReasonCodes } from "./authority-file-reader.js";
 
 export const COMPATIBILITY_MANIFEST_VERSION = "tcrn.workflow-compatibility-manifest.v1" as const;
 export const COMPATIBILITY_RECEIPT_VERSION = "tcrn.compatibility-pair-receipt.v1" as const;
@@ -450,11 +447,6 @@ function validateAdmissionReceipt(value: unknown): CompatibilityAdmissionReceipt
   return { ...normalized, admissionDigest: input.admissionDigest as string };
 }
 
-function sameFileIdentity(left: Awaited<ReturnType<typeof lstat>>, right: Awaited<ReturnType<typeof lstat>>): boolean {
-  return left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.mode === right.mode &&
-    left.nlink === right.nlink && left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs;
-}
-
 function deepFreeze<T>(value: T): T {
   if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
     for (const child of Object.values(value as Readonly<Record<string, unknown>>)) deepFreeze(child);
@@ -463,90 +455,41 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-async function readBoundedAuthorityBytes(
-  handle: Awaited<ReturnType<typeof open>>,
-  path: string,
-  options: CompatibilityAdmissionReadOptions,
-): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  let totalBytesRead = 0;
-  while (true) {
-    const remaining = maximumAdmissionReceiptBytes + 1 - totalBytesRead;
-    if (remaining <= 0) fail("COMPATIBILITY_LIMIT_EXCEEDED", path);
-    const buffer = Buffer.allocUnsafe(Math.min(16_384, remaining));
-    let bytesRead: number;
-    try {
-      ({ bytesRead } = await handle.read(buffer, 0, buffer.length, null));
-    } catch {
-      fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
-    }
-    if (bytesRead === 0) break;
-    totalBytesRead += bytesRead;
-    options.observeReadBytesForTest?.(totalBytesRead);
-    if (totalBytesRead > maximumAdmissionReceiptBytes) fail("COMPATIBILITY_LIMIT_EXCEEDED", path);
-    chunks.push(buffer.subarray(0, bytesRead));
-    await options.afterReadChunkForTest?.(totalBytesRead);
-  }
-  return Buffer.concat(chunks, totalBytesRead);
-}
+const compatibilityAuthorityCodes: AuthorityFileReasonCodes<CompatibilityReasonCode> = Object.freeze({
+  required: "COMPATIBILITY_AUTHORITY_REQUIRED",
+  path: "COMPATIBILITY_AUTHORITY_PATH",
+  digest: "COMPATIBILITY_AUTHORITY_DIGEST",
+  changed: "COMPATIBILITY_AUTHORITY_CHANGED",
+  link: "COMPATIBILITY_AUTHORITY_LINK",
+  specialFile: "COMPATIBILITY_AUTHORITY_SPECIAL_FILE",
+  limitExceeded: "COMPATIBILITY_LIMIT_EXCEEDED",
+  notUtf8: "COMPATIBILITY_AUTHORITY_CANONICAL_INVALID",
+  notJson: "COMPATIBILITY_AUTHORITY_CANONICAL_INVALID",
+  notCanonical: "COMPATIBILITY_AUTHORITY_CANONICAL_INVALID",
+});
 
 export async function readCompatibilityAdmissionReceipt(
   path: string,
   authority: CompatibilityAdmissionAuthority | undefined,
   options: CompatibilityAdmissionReadOptions = {},
 ): Promise<CompatibilityAdmissionContext> {
-  if (!authority || typeof authority.expectedCanonicalPath !== "string" || typeof authority.expectedFileSha256 !== "string") {
-    fail("COMPATIBILITY_AUTHORITY_REQUIRED", "Out-of-band path and digest authority is required");
-  }
-  if (!isAbsolute(authority.expectedCanonicalPath) || resolve(authority.expectedCanonicalPath) !== authority.expectedCanonicalPath || path !== authority.expectedCanonicalPath) fail("COMPATIBILITY_AUTHORITY_PATH", path);
-  if (!/^[a-f0-9]{64}$/u.test(authority.expectedFileSha256)) fail("COMPATIBILITY_AUTHORITY_DIGEST", "expectedFileSha256");
-  let before;
-  try { before = await lstat(path, { bigint: true }); } catch { fail("COMPATIBILITY_AUTHORITY_CHANGED", path); }
-  if (before.isSymbolicLink()) fail("COMPATIBILITY_AUTHORITY_LINK", path);
-  if (!before.isFile()) fail("COMPATIBILITY_AUTHORITY_SPECIAL_FILE", path);
-  if (before.nlink !== 1n) fail("COMPATIBILITY_AUTHORITY_LINK", path);
-  if (before.size < 2n || before.size > BigInt(maximumAdmissionReceiptBytes)) fail("COMPATIBILITY_LIMIT_EXCEEDED", path);
-  await options.afterLstatForTest?.();
-  let handle;
-  try { handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); } catch (error) {
-    if ((error as { code?: string }).code === "ELOOP") fail("COMPATIBILITY_AUTHORITY_LINK", path);
-    fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
-  }
-  let content: Buffer;
-  try {
-    const opened = await handle.stat({ bigint: true });
-    if (!opened.isFile() || opened.nlink !== 1n || !sameFileIdentity(before, opened)) fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
-    await options.afterOpenForTest?.();
-    content = await readBoundedAuthorityBytes(handle, path, options);
-    const afterRead = await handle.stat({ bigint: true });
-    let named;
-    try { named = await lstat(path, { bigint: true }); } catch { fail("COMPATIBILITY_AUTHORITY_CHANGED", path); }
-    if (!sameFileIdentity(opened, afterRead) || !sameFileIdentity(afterRead, named) || BigInt(content.length) !== afterRead.size) fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
-  } catch (error) {
-    if (error instanceof CompatibilityError) throw error;
-    fail("COMPATIBILITY_AUTHORITY_CHANGED", path);
-  } finally { await handle.close(); }
-  const sourceText = content.toString("utf8");
-  if (!Buffer.from(sourceText, "utf8").equals(content)) fail("COMPATIBILITY_AUTHORITY_CANONICAL_INVALID", path);
-  let canonicalPath;
-  try { canonicalPath = await realpath(path); } catch { fail("COMPATIBILITY_AUTHORITY_CHANGED", path); }
-  if (canonicalPath !== path) fail("COMPATIBILITY_AUTHORITY_PATH", path);
-  const fileSha256 = createHash("sha256").update(content).digest("hex");
-  if (fileSha256 !== authority.expectedFileSha256) fail("COMPATIBILITY_AUTHORITY_DIGEST", path);
-  let parsed: unknown;
-  try { parsed = JSON.parse(sourceText); } catch { fail("COMPATIBILITY_AUTHORITY_CANONICAL_INVALID", path); }
-  let canonicalSource: string;
-  try { canonicalSource = canonicalJson(parsed); } catch { fail("COMPATIBILITY_AUTHORITY_CANONICAL_INVALID", path); }
-  if (canonicalSource !== sourceText) fail("COMPATIBILITY_AUTHORITY_CANONICAL_INVALID", path);
-  const receipt = deepFreeze(validateAdmissionReceipt(parsed));
+  const source = await readAuthorityFile(path, authority, {
+    maximumBytes: maximumAdmissionReceiptBytes,
+    codes: compatibilityAuthorityCodes,
+    details: {
+      required: "Out-of-band path and digest authority is required",
+      expectedDigest: "expectedFileSha256",
+    },
+    fail,
+    isOwnError: (error) => error instanceof CompatibilityError,
+    hooks: options,
+  });
+  const receipt = deepFreeze(validateAdmissionReceipt(source.parsed));
   const context = deepFreeze({
     receipt,
     sourcePath: path,
-    authorityFileSha256: fileSha256,
-    sourceIdentityDigest: canonicalSha256({
-      dev: before.dev.toString(), ino: before.ino.toString(), size: before.size.toString(), mode: before.mode.toString(),
-      mtimeNs: before.mtimeNs.toString(), ctimeNs: before.ctimeNs.toString(),
-    }),
+    authorityFileSha256: source.fileSha256,
+    sourceIdentityDigest: source.sourceIdentityDigest,
   });
   admittedContexts.add(context);
   return context;

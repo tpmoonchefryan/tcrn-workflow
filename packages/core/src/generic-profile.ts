@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { constants } from "node:fs";
-import { createHash } from "node:crypto";
-import { lstat, open, realpath } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
-
 import {
   ProtocolError,
   assertProtocolId,
@@ -12,6 +7,8 @@ import {
   canonicalSha256,
   compareCanonicalText,
 } from "../../protocol/src/index.js";
+import { readAuthorityFile } from "./authority-file-reader.js";
+import type { AuthorityFileReasonCodes } from "./authority-file-reader.js";
 
 export const GENERIC_PROFILE_VERSION = "tcrn.generic-profile.v1" as const;
 export const GENERIC_PROFILE_BUNDLE_VERSION = "tcrn.generic-profile-starter-bundle.v1" as const;
@@ -222,6 +219,8 @@ export interface GenericProfileAdmissionReadOptions {
   readonly authority?: GenericProfileAdmissionAuthority;
   readonly afterLstatForTest?: () => Promise<void>;
   readonly afterOpenForTest?: () => Promise<void>;
+  readonly afterReadChunkForTest?: (totalBytesRead: number) => Promise<void>;
+  readonly observeReadBytesForTest?: (totalBytesRead: number) => void;
 }
 
 export interface GenericProfileStarterBundle {
@@ -699,11 +698,6 @@ function validateAdmissionReceipt(value: unknown): GenericProfileAdmissionReceip
   return { ...basis, receiptDigest: document.receiptDigest };
 }
 
-function sameFileIdentity(left: Awaited<ReturnType<typeof lstat>>, right: Awaited<ReturnType<typeof lstat>>): boolean {
-  return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode && left.nlink === right.nlink &&
-    left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs;
-}
-
 function deepFreeze<T>(value: T): T {
   if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
     for (const child of Object.values(value as Readonly<Record<string, unknown>>)) deepFreeze(child);
@@ -712,96 +706,40 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+const profileAdmissionCodes: AuthorityFileReasonCodes<GenericProfileReasonCode> = Object.freeze({
+  required: "PROFILE_ADMISSION_AUTHORITY_REQUIRED",
+  path: "PROFILE_ADMISSION_AUTHORITY_PATH",
+  digest: "PROFILE_ADMISSION_AUTHORITY_DIGEST",
+  changed: "PROFILE_ADMISSION_CHANGED",
+  link: "PROFILE_ADMISSION_LINK",
+  specialFile: "PROFILE_ADMISSION_SPECIAL_FILE",
+  limitExceeded: "PROFILE_ADMISSION_MALFORMED",
+  notUtf8: "PROFILE_ADMISSION_MALFORMED",
+  notJson: "PROFILE_ADMISSION_MALFORMED",
+  notCanonical: "PROFILE_ADMISSION_CANONICAL_INVALID",
+});
+
 export async function readGenericProfileAdmissionReceipt(
   path: string,
   options: GenericProfileAdmissionReadOptions = {},
 ): Promise<GenericProfileAdmissionContext> {
-  const authority = options.authority;
-  if (!authority || typeof authority.expectedCanonicalPath !== "string" ||
-    typeof authority.expectedFileSha256 !== "string") {
-    fail("PROFILE_ADMISSION_AUTHORITY_REQUIRED", "Out-of-band path and digest authority is required");
-  }
-  if (!isAbsolute(authority.expectedCanonicalPath) || resolve(authority.expectedCanonicalPath) !== authority.expectedCanonicalPath ||
-    path !== authority.expectedCanonicalPath) {
-    fail("PROFILE_ADMISSION_AUTHORITY_PATH", path);
-  }
-  if (!/^[a-f0-9]{64}$/u.test(authority.expectedFileSha256)) {
-    fail("PROFILE_ADMISSION_AUTHORITY_DIGEST", "Expected receipt digest must be lowercase SHA-256");
-  }
-  let before;
-  try {
-    before = await lstat(path);
-  } catch {
-    fail("PROFILE_ADMISSION_CHANGED", path);
-  }
-  if (before.isSymbolicLink() || before.nlink !== 1) fail("PROFILE_ADMISSION_LINK", path);
-  if (!before.isFile()) fail("PROFILE_ADMISSION_SPECIAL_FILE", path);
-  if (before.size < 2 || before.size > maximumAdmissionReceiptBytes) fail("PROFILE_ADMISSION_MALFORMED", path);
-  await options.afterLstatForTest?.();
-  let handle;
-  try {
-    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  } catch (error) {
-    if ((error as { code?: string }).code === "ELOOP") fail("PROFILE_ADMISSION_LINK", path);
-    fail("PROFILE_ADMISSION_CHANGED", path);
-  }
-  let content: Buffer;
-  try {
-    const opened = await handle.stat();
-    if (!opened.isFile() || opened.nlink !== 1 || !sameFileIdentity(before, opened)) {
-      fail("PROFILE_ADMISSION_CHANGED", path);
-    }
-    await options.afterOpenForTest?.();
-    content = await handle.readFile();
-    const afterRead = await handle.stat();
-    let named;
-    try {
-      named = await lstat(path);
-    } catch {
-      fail("PROFILE_ADMISSION_CHANGED", path);
-    }
-    if (!sameFileIdentity(opened, afterRead) || !sameFileIdentity(afterRead, named) || content.length !== afterRead.size) {
-      fail("PROFILE_ADMISSION_CHANGED", path);
-    }
-  } finally {
-    await handle.close();
-  }
-  const text = content.toString("utf8");
-  if (!Buffer.from(text, "utf8").equals(content)) fail("PROFILE_ADMISSION_MALFORMED", path);
-  let canonicalPath;
-  try {
-    canonicalPath = await realpath(path);
-  } catch {
-    fail("PROFILE_ADMISSION_CHANGED", path);
-  }
-  if (canonicalPath !== authority.expectedCanonicalPath) fail("PROFILE_ADMISSION_AUTHORITY_PATH", path);
-  const fileSha256 = createHash("sha256").update(content).digest("hex");
-  if (fileSha256 !== authority.expectedFileSha256) fail("PROFILE_ADMISSION_AUTHORITY_DIGEST", path);
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    fail("PROFILE_ADMISSION_MALFORMED", path);
-  }
-  let canonical: string;
-  try {
-    canonical = canonicalJson(parsed);
-  } catch {
-    fail("PROFILE_ADMISSION_CANONICAL_INVALID", path);
-  }
-  if (text !== canonical) fail("PROFILE_ADMISSION_CANONICAL_INVALID", path);
-  const receipt = deepFreeze(validateAdmissionReceipt(parsed));
+  const source = await readAuthorityFile(path, options.authority, {
+    maximumBytes: maximumAdmissionReceiptBytes,
+    codes: profileAdmissionCodes,
+    details: {
+      required: "Out-of-band path and digest authority is required",
+      expectedDigest: "Expected receipt digest must be lowercase SHA-256",
+    },
+    fail,
+    isOwnError: (error) => error instanceof GenericProfileError,
+    hooks: options,
+  });
+  const receipt = deepFreeze(validateAdmissionReceipt(source.parsed));
   const context = deepFreeze({
     receipt,
     sourcePath: path,
-    authorityFileSha256: fileSha256,
-    sourceIdentityDigest: canonicalSha256({
-      dev: String(before.dev),
-      ino: String(before.ino),
-      size: String(before.size),
-      mtimeMs: String(before.mtimeMs),
-      ctimeMs: String(before.ctimeMs),
-    }),
+    authorityFileSha256: source.fileSha256,
+    sourceIdentityDigest: source.sourceIdentityDigest,
   });
   admittedContexts.add(context);
   return context;
