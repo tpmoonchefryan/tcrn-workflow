@@ -83,6 +83,9 @@ export interface ClaudeAdapterActivationInstallOptions {
   // additional receipt entry so the render rides the v2 receipt and WSG-2 rollback
   // removes it byte-inverse; when absent the install is byte-identical to Step-2.
   readonly renderSource?: string;
+  // Fires between the settings merge and the rename that commits it, so the
+  // interference recheck below has an executable window to be tested through.
+  readonly beforeSettingsCommitForTest?: () => Promise<void>;
 }
 
 export interface ClaudeAdapterActivationInstallResult {
@@ -337,7 +340,29 @@ export async function installClaudeAdapterActivation(options: ClaudeAdapterActiv
     const receiptBytes = Buffer.from(canonicalJson(receipt), "utf8");
     await writeExclusive(receiptPath, receiptBytes, "activation installation receipt");
     receiptWritten = true;
-    // Atomic settings replace: exclusive temp write then rename over the target.
+    // Everything that can still fail happens before the commit point. These two reads
+    // used to sit after the rename, where a failure left settings.json already carrying
+    // the SessionStart hook while the cleanup below deleted the script it points at --
+    // an activated install referencing a missing file, with the merge key permanently
+    // blocking retries via ACTIVATION_FRAGMENT_CONFLICT and no verb able to undo it.
+    // The cleanup can only remove files this call created; it can never put the user's
+    // previous settings back, so nothing failable may follow the rename.
+    const authority: ClaudeAdapterInstallationFileIdentity = { expectedCanonicalPath: await realpath(receiptPath), expectedFileSha256: contentSha256(receiptBytes) };
+    const sourceIdentityDigest = identityDigest(await lstat(receiptPath));
+    // Atomic settings replace, and the sole commit point: exclusive temp write then
+    // rename over the target. mergedSettings was derived from a read taken before the
+    // bundle was written, so re-read first: the rename replaces the file wholesale and
+    // would otherwise discard, without a word, whatever the user or another tool wrote
+    // in between. Every other reader in this family triple-stats for exactly this class
+    // of interference.
+    await options.beforeSettingsCommitForTest?.();
+    const settingsBeforeCommit = await readFile(settingsPath, "utf8").catch((error) => {
+      if ((error as { code?: string }).code === "ENOENT") return undefined;
+      throw error;
+    });
+    if ((settingsBeforeCommit ?? "{}") !== currentSettings) {
+      fail("INSTALLER_WRITE_FAILED", "settings.json changed while the activation was being prepared");
+    }
     await writeExclusive(settingsTempPath, Buffer.from(mergedSettings, "utf8"), "activation settings temp");
     try {
       await rename(settingsTempPath, settingsPath);
@@ -345,8 +370,6 @@ export async function installClaudeAdapterActivation(options: ClaudeAdapterActiv
       await unlink(settingsTempPath).catch(() => undefined);
       fail("INSTALLER_WRITE_FAILED", "activation settings rename");
     }
-    const authority: ClaudeAdapterInstallationFileIdentity = { expectedCanonicalPath: await realpath(receiptPath), expectedFileSha256: contentSha256(receiptBytes) };
-    const sourceIdentityDigest = identityDigest(await lstat(receiptPath));
     return deepFreeze({ receipt, authority, sourceIdentityDigest, settingsPath });
   } catch (error) {
     if (scriptWritten) await unlink(scriptTarget).catch(() => undefined);
