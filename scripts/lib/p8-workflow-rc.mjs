@@ -9,8 +9,8 @@ import { canonicalJson } from "./canonical-json.mjs";
 import { compareCanonicalText } from "./canonical-order.mjs";
 import { readBoundRegularFile } from "./safe-io.mjs";
 
-export const P8_VERSION = "0.1.0-rc.4";
-export const P8_TAG = "v0.1.0-rc.4";
+export const P8_VERSION = "0.1.0-rc.5";
+export const P8_TAG = "v0.1.0-rc.5";
 export const P8_REPOSITORY = "tcrn-workflow";
 export const P8_WORKFLOW = "release";
 export const P8_SUPPORTED_AOS_RELEASES = Object.freeze([]);

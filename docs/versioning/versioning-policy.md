@@ -1,6 +1,6 @@
 # Versioning Policy
 
-The current package version is `0.1.0-rc.4`, an immutable unpublished local
+The current package version is `0.1.0-rc.5`, an immutable unpublished local
 candidate with no supported public API or supported AOS release. Accepted
 releases will use Semantic Versioning. Schemas and trust contracts use explicit
 versioned identifiers independent of package versions.
