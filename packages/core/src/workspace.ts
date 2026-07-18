@@ -2249,7 +2249,12 @@ export async function openConferenceInWorkspace(workspaceRoot: string, lease: Wo
 export async function appendConferencePositionInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly conferenceId: string;
   readonly externalKey: string;
-  readonly actorId: string;
+  // WSE-3 correction: this is the position's author, which is a different thing from the
+  // attestation actor that WorkspaceMutationOptions carries. Both used to be spelled
+  // actorId, and because this type intersects with those options the two collapsed into
+  // one property -- so supplying an attestation actor silently overwrote the author of
+  // the record being written, with no error and no way for a caller to express both.
+  readonly authorActorId: string;
   readonly position: string;
   readonly risks: readonly string[];
   readonly recommendations: readonly string[];
@@ -2266,7 +2271,7 @@ export async function appendConferencePositionInWorkspace(workspaceRoot: string,
       id,
       conferenceId: conference.id,
       projectId: conference.projectId,
-      actorId: input.actorId,
+      actorId: input.authorActorId,
       position: input.position,
       risks: input.risks,
       recommendations: input.recommendations,

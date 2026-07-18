@@ -432,7 +432,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }] },
-  { name: "adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "string" }] },
+  { name: "adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
   { name: "adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "aos-requirements-readback", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
   { name: "aos-requirements-validate", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
@@ -453,7 +453,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "claude-adapter-settings-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-settings-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-settings-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
-  { name: "claude-adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "string" }] },
+  { name: "claude-adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
   { name: "claude-adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }] },
   { name: "claude-adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "commands", availability: "cli", mutates: false, flags: [] },
@@ -470,7 +470,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "context-validate", availability: "cli", mutates: false, flags: [{ name: "result", required: true, valueKind: "string" }] },
   { name: "exchange-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "output", required: true, valueKind: "string" }] },
   { name: "exchange-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "exchange-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
+  { name: "exchange-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "string" }] },
   { name: "export", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "gate-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "title", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "gate-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -497,7 +497,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
   { name: "persona-render", availability: "cli", mutates: false, flags: [] },
   { name: "persona-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
-  { name: "profile-authorize", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "operation", required: true, valueKind: "string" }, { name: "workspace-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "command", required: true, valueKind: "json", nullSentinel: "-" }] },
+  { name: "profile-authorize", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "operation", required: true, valueKind: "string" }, { name: "workspace-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "command", required: true, valueKind: "string", nullSentinel: "-" }] },
   { name: "profile-generate", availability: "cli", mutates: false, flags: [{ name: "mode", required: true, valueKind: "string" }] },
   { name: "profile-resolve", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }] },
   { name: "profile-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
@@ -1344,10 +1344,11 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   }
   if (command === "conference-append-position") {
     // WSE-3: --actor-id is the position author (a conference-position record field);
-    // --actor is the attestation acting identity. The core input reuses one actorId
-    // slot for both, so this verb's default path (no --actor) keeps the position
-    // author flowing as the attestation actor exactly as before (byte-identical);
-    // when --actor is supplied it takes precedence via the shared trailing spread.
+    // --actor is the attestation acting identity. These are now separate core fields.
+    // They previously shared one actorId slot, so --actor overwrote the author of the
+    // record -- a required flag's value discarded in silence. The default path (no
+    // --actor) still lets the author stand in as the attestation actor, which keeps
+    // existing invocations byte-identical.
     const values = parseArguments(rest, [...shared, "conference-id", "external-key", "actor-id", "position", "risks", "recommendations", "evidence-ids", "actor"]);
     required(values, [...requiredShared, "conference-id", "external-key", "actor-id", "position", "risks", "recommendations", "evidence-ids"]);
     const workspace = values.workspace ?? "";
@@ -1357,12 +1358,12 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       occurredAt: at,
       conferenceId: values["conference-id"] ?? "",
       externalKey: values["external-key"] ?? "",
-      actorId: values["actor-id"] ?? "",
+      authorActorId: values["actor-id"] ?? "",
       position: values.position ?? "",
       risks: listValue(values.risks),
       recommendations: listValue(values.recommendations),
       evidenceIds: listValue(values["evidence-ids"]),
-      ...(values.actor ? { actorId: values.actor } : {}),
+      actorId: values.actor ?? values["actor-id"] ?? "",
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
     writeExtensionState(io, state, deriveStableId("position", canonicalExternalKey(values["external-key"] ?? "")));

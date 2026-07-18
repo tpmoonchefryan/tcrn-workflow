@@ -223,7 +223,7 @@ test("conference and gate mutations round-trip through the event log with chaine
   const conferenceId = state.conferences[0].id;
   assert.equal(conferenceId, deriveStableId("conference", "CONF-ALPHA"));
   state = await appendConferencePositionInWorkspace(fx.workspace, fx.lease, {
-    expectedVersion: 3, occurredAt: instant(4), conferenceId, externalKey: "POSITION-ALPHA-1", actorId: "profile:architect-01",
+    expectedVersion: 3, occurredAt: instant(4), conferenceId, externalKey: "POSITION-ALPHA-1", authorActorId: "profile:architect-01",
     position: "Persist through the workspace event log.", risks: ["forward-compat reads as corruption"], recommendations: ["document the posture"], evidenceIds: [],
   });
   state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {

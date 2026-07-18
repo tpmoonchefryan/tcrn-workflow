@@ -106,7 +106,7 @@ test("WSD-1: extension reducer arms are O(delta) with exact per-operation counts
     }); version += 1;
     const conferenceId = state.conferences[0].id;
     state = await appendConferencePositionInWorkspace(fx.workspace, fx.lease, {
-      expectedVersion: version, occurredAt: at(), conferenceId, externalKey: "POSITION-COMPLEXITY", actorId: "profile:counter-01",
+      expectedVersion: version, occurredAt: at(), conferenceId, externalKey: "POSITION-COMPLEXITY", authorActorId: "profile:counter-01",
       position: "Count the visits.", risks: [], recommendations: [], evidenceIds: [],
     }); version += 1;
     state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
