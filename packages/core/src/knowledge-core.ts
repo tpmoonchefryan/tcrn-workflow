@@ -1048,50 +1048,68 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
   const metadata = buildMetadata(input, body, workspace);
   const initial = await mutationAdmissionScan(workspaceRoot, options);
   const claim = await acquireMutationClaim(initial);
-  const scan = await scanKnowledgeStore(workspaceRoot, options, true);
-  if (scan.marker.version !== input.expectedVersion) {
+  // WSC-6: every escape from the claim-held region that leaves this process alive must
+  // give the claim back. scanKnowledgeStore alone raises eight distinct reason codes, and
+  // one leaked claim bricks the store for good: each later mutationAdmissionScan re-maps
+  // the resulting partial state to KNOWLEDGE_LOCKED, and no verb can clear it.
+  //
+  // The KNOWLEDGE_FAULT_INJECTED exemption is deliberate. A real SIGKILL never runs a
+  // finally block, so a retained claim is the operating system's doing, not ours, and it
+  // is the signal that the store is mid-write. crash() is the only executable proxy for
+  // that scenario; releasing on it would turn the fault-injection tests into a weaker
+  // duplicate of the ordinary-error path and leave "a crash leaves the store claim-held"
+  // with no executable expression anywhere. This is why the promote/retire/reverify
+  // finallys below are NOT the model to copy here.
+  let released = false;
+  try {
+    const scan = await scanKnowledgeStore(workspaceRoot, options, true);
+    if (scan.marker.version !== input.expectedVersion) {
+      fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
+    }
+    const metadataBytes = Buffer.from(canonicalJson(metadata), "utf8");
+    const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
+    const projectedMetadata = [...scan.units.map((unit) => unit.metadata), metadata];
+    const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
+      Buffer.byteLength(canonicalJson(knowledgeIndex(marker, projectedMetadata)), "utf8") +
+      scan.units.reduce((total, unit) => total + Buffer.byteLength(canonicalJson(unit.metadata), "utf8") + requireBody(unit).length, 0) +
+      metadataBytes.length + body.length;
+    // WSC-5: only live (non-retired) records count against the create cap, so
+    // retiring a record genuinely frees a create slot; the physical file total is
+    // still bounded by the live cap plus the retired allowance.
+    const liveRecords = scan.units.filter((unit) => unit.metadata.lifecycle !== "retired").length;
+    const maximumStoredRecords = KNOWLEDGE_LIMITS.maximumRecords + KNOWLEDGE_LIMITS.maximumRetiredRecords;
+    if (metadataBytes.length > KNOWLEDGE_LIMITS.maximumMetadataBytes || liveRecords >= KNOWLEDGE_LIMITS.maximumRecords ||
+      scan.units.length >= maximumStoredRecords || projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
+      fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge create budget");
+    }
+    if (scan.units.some((unit) => unit.metadata.id === metadata.id || unit.metadata.externalKey === metadata.externalKey)) {
+      fail("KNOWLEDGE_DUPLICATE", metadata.id);
+    }
+    await writeExclusiveFile(resolve(scan.bodiesRoot, `${metadata.id}.body`), body);
+    crash("after-body-write", options.faultAt);
+    await writeExclusiveFile(resolve(scan.metadataRoot, `${metadata.id}.json`), metadataBytes);
+    crash("after-metadata-write", options.faultAt);
+    await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+    crash("after-marker-write", options.faultAt);
+    await writeIndex(scan, marker, projectedMetadata);
     await releaseMutationClaim(scan.storeRoot, claim);
-    fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
+    released = true;
+    const final = await scanKnowledgeStore(workspaceRoot, options);
+    return {
+      schemaVersion: "tcrn.knowledge-create-result.v1",
+      reasonCode: "KNOWLEDGE_UNIT_CREATED",
+      id: metadata.id,
+      externalKey: metadata.externalKey,
+      revision: metadata.revision,
+      version: final.marker.version,
+      promotionState: metadata.promotionState,
+    };
+  } catch (error) {
+    if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_FAULT_INJECTED") released = true;
+    throw error;
+  } finally {
+    if (!released) await releaseMutationClaim(initial.storeRoot, claim);
   }
-  const metadataBytes = Buffer.from(canonicalJson(metadata), "utf8");
-  const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
-  const projectedMetadata = [...scan.units.map((unit) => unit.metadata), metadata];
-  const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
-    Buffer.byteLength(canonicalJson(knowledgeIndex(marker, projectedMetadata)), "utf8") +
-    scan.units.reduce((total, unit) => total + Buffer.byteLength(canonicalJson(unit.metadata), "utf8") + requireBody(unit).length, 0) +
-    metadataBytes.length + body.length;
-  // WSC-5: only live (non-retired) records count against the create cap, so
-  // retiring a record genuinely frees a create slot; the physical file total is
-  // still bounded by the live cap plus the retired allowance.
-  const liveRecords = scan.units.filter((unit) => unit.metadata.lifecycle !== "retired").length;
-  const maximumStoredRecords = KNOWLEDGE_LIMITS.maximumRecords + KNOWLEDGE_LIMITS.maximumRetiredRecords;
-  if (metadataBytes.length > KNOWLEDGE_LIMITS.maximumMetadataBytes || liveRecords >= KNOWLEDGE_LIMITS.maximumRecords ||
-    scan.units.length >= maximumStoredRecords || projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
-    await releaseMutationClaim(scan.storeRoot, claim);
-    fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge create budget");
-  }
-  if (scan.units.some((unit) => unit.metadata.id === metadata.id || unit.metadata.externalKey === metadata.externalKey)) {
-    await releaseMutationClaim(scan.storeRoot, claim);
-    fail("KNOWLEDGE_DUPLICATE", metadata.id);
-  }
-  await writeExclusiveFile(resolve(scan.bodiesRoot, `${metadata.id}.body`), body);
-  crash("after-body-write", options.faultAt);
-  await writeExclusiveFile(resolve(scan.metadataRoot, `${metadata.id}.json`), metadataBytes);
-  crash("after-metadata-write", options.faultAt);
-  await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
-  crash("after-marker-write", options.faultAt);
-  await writeIndex(scan, marker, projectedMetadata);
-  await releaseMutationClaim(scan.storeRoot, claim);
-  const final = await scanKnowledgeStore(workspaceRoot, options);
-  return {
-    schemaVersion: "tcrn.knowledge-create-result.v1",
-    reasonCode: "KNOWLEDGE_UNIT_CREATED",
-    id: metadata.id,
-    externalKey: metadata.externalKey,
-    revision: metadata.revision,
-    version: final.marker.version,
-    promotionState: metadata.promotionState,
-  };
 }
 
 // WSC-2: re-bind the store to the advanced workspace head after full per-record
@@ -1110,40 +1128,52 @@ export async function rebaseKnowledgeStore(workspaceRoot: string, input: {
   const workspace = await materializeWorkspace(workspaceRoot);
   const initial = await mutationAdmissionScan(workspaceRoot, options, true);
   const claim = await acquireMutationClaim(initial);
-  const scan = await scanKnowledgeStore(workspaceRoot, options, true, "full", true);
-  if (scan.marker.version !== input.expectedVersion) {
-    await releaseMutationClaim(scan.storeRoot, claim);
-    fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
-  }
-  const offenders = scan.linkInvalid;
-  if (offenders.length > 0 && input.retireInvalid !== true) {
-    await releaseMutationClaim(scan.storeRoot, claim);
-    fail("KNOWLEDGE_REBASE_BLOCKED", offenders.join(","));
-  }
-  const offenderSet = new Set(offenders);
-  const marker: KnowledgeStoreMarker = { ...scan.marker, eventHighWaterDigest: workspace.headEventHash ?? scan.marker.eventHighWaterDigest, version: scan.marker.version + 1 };
-  const retire = (metadata: KnowledgeUnitMetadata): KnowledgeUnitMetadata =>
-    validateMetadataShape({ ...metadata, lifecycle: "retired", revision: metadata.revision + 1, updatedAt: input.at } as unknown as Readonly<Record<string, JsonValue>>, workspace);
-  const projectedMetadata = scan.units.map((unit) => offenderSet.has(unit.metadata.id) ? retire(unit.metadata) : unit.metadata);
-  for (const unit of scan.units) {
-    if (offenderSet.has(unit.metadata.id)) {
-      await replaceRegularFile(unit.metadataPath, canonicalJson(retire(unit.metadata)));
+  // WSC-6: see createKnowledgeUnit for the full rationale, including why
+  // KNOWLEDGE_FAULT_INJECTED is exempt. The sharpest leak on this path was
+  // deterministic rather than racy: retire() runs validateMetadataShape, which throws
+  // KNOWLEDGE_RECORD_INVALID on each offender the shape validator rejects, escaping the
+  // claim-held region with no release.
+  let released = false;
+  try {
+    const scan = await scanKnowledgeStore(workspaceRoot, options, true, "full", true);
+    if (scan.marker.version !== input.expectedVersion) {
+      fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
     }
+    const offenders = scan.linkInvalid;
+    if (offenders.length > 0 && input.retireInvalid !== true) {
+      fail("KNOWLEDGE_REBASE_BLOCKED", offenders.join(","));
+    }
+    const offenderSet = new Set(offenders);
+    const marker: KnowledgeStoreMarker = { ...scan.marker, eventHighWaterDigest: workspace.headEventHash ?? scan.marker.eventHighWaterDigest, version: scan.marker.version + 1 };
+    const retire = (metadata: KnowledgeUnitMetadata): KnowledgeUnitMetadata =>
+      validateMetadataShape({ ...metadata, lifecycle: "retired", revision: metadata.revision + 1, updatedAt: input.at } as unknown as Readonly<Record<string, JsonValue>>, workspace);
+    const projectedMetadata = scan.units.map((unit) => offenderSet.has(unit.metadata.id) ? retire(unit.metadata) : unit.metadata);
+    for (const unit of scan.units) {
+      if (offenderSet.has(unit.metadata.id)) {
+        await replaceRegularFile(unit.metadataPath, canonicalJson(retire(unit.metadata)));
+      }
+    }
+    crash("after-metadata-write", options.faultAt);
+    await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+    crash("after-marker-write", options.faultAt);
+    await writeIndex(scan, marker, projectedMetadata);
+    await releaseMutationClaim(scan.storeRoot, claim);
+    released = true;
+    const final = await scanKnowledgeStore(workspaceRoot, options);
+    return {
+      schemaVersion: "tcrn.knowledge-rebase-result.v1",
+      reasonCode: "KNOWLEDGE_STORE_REBASED",
+      version: final.marker.version,
+      eventHighWaterDigest: final.marker.eventHighWaterDigest,
+      retired: offenders.length,
+      offenders,
+    };
+  } catch (error) {
+    if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_FAULT_INJECTED") released = true;
+    throw error;
+  } finally {
+    if (!released) await releaseMutationClaim(initial.storeRoot, claim);
   }
-  crash("after-metadata-write", options.faultAt);
-  await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
-  crash("after-marker-write", options.faultAt);
-  await writeIndex(scan, marker, projectedMetadata);
-  await releaseMutationClaim(scan.storeRoot, claim);
-  const final = await scanKnowledgeStore(workspaceRoot, options);
-  return {
-    schemaVersion: "tcrn.knowledge-rebase-result.v1",
-    reasonCode: "KNOWLEDGE_STORE_REBASED",
-    version: final.marker.version,
-    eventHighWaterDigest: final.marker.eventHighWaterDigest,
-    retired: offenders.length,
-    offenders,
-  };
 }
 
 interface NormalizedListQuery {
