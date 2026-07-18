@@ -65,6 +65,7 @@ export {
   applyWorkspaceMigration,
   assertSupportedWorkspaceFilesystem,
   breakWorkspaceLease,
+  breakWorkspaceRecoveryClaim,
   cancelConferenceInWorkspace,
   closeConferenceInWorkspace,
   createGateInWorkspace,

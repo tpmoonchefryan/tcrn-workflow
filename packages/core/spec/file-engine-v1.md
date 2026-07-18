@@ -87,9 +87,15 @@ inside it cannot carry into the new generation. Owner creation also binds the
 directory identity captured by that creator, so a delayed creator cannot attach
 an owner to a replacement generation. Concurrent recoverers admit one
 winner; delayed contenders cannot remove the winner's claim or lease. Normal
-claim cleanup is identity-bound. A malformed, linked, special, colliding, or
-crash-retained recovery claim fails closed and requires operator verification;
-it is never silently replaced.
+claim cleanup is identity-bound. A malformed, linked, special, or colliding
+recovery claim fails closed and requires operator verification; it is never
+silently replaced. A crash-retained claim is reclaimed automatically only when
+its writer is provably gone — the claim has expired AND its recorded pid is
+dead — under the same identity-bound rename-verify-remove discipline; a
+recycled pid reads as alive, so reclaim refuses and the claim stands. The
+residue of that rule, an expired claim whose pid appears alive, is cleared by
+an operator-attested break carrying the exact current claim token, which is
+obtainable only by inspecting the claim. An unexpired claim is never breakable.
 
 ## Work model
 
