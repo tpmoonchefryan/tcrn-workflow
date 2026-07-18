@@ -112,7 +112,7 @@ async function boundReadDirectory(path: string): Promise<string> {
   return resolved;
 }
 
-async function boundReadFileBytes(path: string, maximumBytes = PROTOCOL_LIMITS.maxCanonicalBytes): Promise<Buffer> {
+async function boundReadFileBytes(path: string, maximumBytes: number = PROTOCOL_LIMITS.maxCanonicalBytes): Promise<Buffer> {
   let before;
   try {
     before = await lstat(path);

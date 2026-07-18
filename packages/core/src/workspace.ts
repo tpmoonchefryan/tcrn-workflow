@@ -301,7 +301,7 @@ async function boundDirectory(path: string, workspaceRoot?: string): Promise<str
   return resolved;
 }
 
-async function boundFile(path: string, maximumBytes = PROTOCOL_LIMITS.maxCanonicalBytes): Promise<Buffer> {
+async function boundFile(path: string, maximumBytes: number = PROTOCOL_LIMITS.maxCanonicalBytes): Promise<Buffer> {
   let before;
   try {
     before = await lstat(path);
@@ -1106,6 +1106,15 @@ function processAlive(pid: number): boolean {
   } catch (error) {
     return (error as { code?: string }).code === "EPERM";
   }
+}
+
+// The dev/ino pair that binds a path to the file it resolved to. Used by every
+// rename-verify-remove sequence in this module and referenced by the lease helpers
+// below, which assumed the name was in scope when they were written -- it was not,
+// so this file never compiled under a real tsc.
+interface FileIdentity {
+  readonly dev: number | bigint;
+  readonly ino: number | bigint;
 }
 
 interface RecoveryClaim {
