@@ -691,7 +691,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "packages/cli/src/index.ts"
       ],
-      "fixtureDigest": "f4f376c4b21ac9005adfd4b13498549285687606efad3331e389eb93c0f56581",
+      "fixtureDigest": "83118c1aeda21ce0eef2c24cb7f9b8d8339e3a0b5327b30d9dae590e32f2f776",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
