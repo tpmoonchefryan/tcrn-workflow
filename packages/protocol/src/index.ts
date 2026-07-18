@@ -408,7 +408,11 @@ function validatedExtensionRegistry(registry: unknown): ReadonlyMap<string, Exte
   return registrations;
 }
 
-function validateExtensionMap(extensions: unknown, registry: unknown, label: string): void {
+// Takes the already-validated registry rather than the raw one so callers that run this
+// per record validate the registry once instead of once per record. Deliberately not
+// memoized on the raw array: a caller could mutate it between calls and a cached result
+// would then admit entries that were never checked.
+function validateExtensionMap(extensions: unknown, registrations: ReadonlyMap<string, ExtensionRegistration>, label: string): void {
   if (!isPlainObject(extensions)) {
     fail("RECORD_MALFORMED", `${label} extensions`);
   }
@@ -424,7 +428,6 @@ function validateExtensionMap(extensions: unknown, registry: unknown, label: str
   if (ids.length > PROTOCOL_LIMITS.maxExtensions) {
     fail("INPUT_OVERSIZED", `${label} extensions`);
   }
-  const registrations = validatedExtensionRegistry(registry);
   for (const id of ids) {
     canonicalStringLength(id);
     assertProtocolId(id);
@@ -454,7 +457,7 @@ export function validateKnowledgeRecord(record: KnowledgeRecord, registry: reado
   assertProtocolId(record.id);
   assertProtocolId(record.projectId);
   assertStrictInstant(record.updatedAt);
-  validateExtensionMap(record.extensions, registry, record.id);
+  validateExtensionMap(record.extensions, validatedExtensionRegistry(registry), record.id);
   return record;
 }
 
@@ -480,7 +483,7 @@ export function validateContextDocument(
   assertStrictInstant(document.generatedAt);
   assertSortedUnique(document.workIds, "workIds");
   assertSortedUnique(document.knowledgeIds, "knowledgeIds");
-  validateExtensionMap(document.extensions, registry, document.id);
+  validateExtensionMap(document.extensions, validatedExtensionRegistry(registry), document.id);
   validateWorkGraph(workRecords, registry);
   for (const record of knowledgeRecords) {
     validateKnowledgeRecord(record, registry);
@@ -518,7 +521,7 @@ export function validateExchangeEnvelope(envelope: ExchangeEnvelope, registry: r
   }
   assertProtocolId(envelope.id);
   assertStrictInstant(envelope.createdAt);
-  validateExtensionMap(envelope.extensions, registry, envelope.id);
+  validateExtensionMap(envelope.extensions, validatedExtensionRegistry(registry), envelope.id);
   let previous: string | null = null;
   for (const entry of envelope.entries) {
     assertExactFields(entry, ["path", "mediaType", "size", "sha256"], "Exchange entries");
@@ -588,7 +591,7 @@ export function validateReceipt(
   assertProtocolId(document.exchangeId);
   assertStrictInstant(document.receivedAt);
   assertSha256(document.subjectDigest);
-  validateExtensionMap(document.extensions, registry, document.id);
+  validateExtensionMap(document.extensions, validatedExtensionRegistry(registry), document.id);
   return document;
 }
 
@@ -619,9 +622,12 @@ export function validateWorkGraph(records: readonly WorkRecord[], registry: read
     fail("INPUT_OVERSIZED", String(records.length));
   }
   const byId = new Map<string, WorkRecord>();
+  // Hoisted: the registry is a single input to the whole graph, so validating it per record
+  // re-parsed and re-indexed the same entries once for every record in the graph.
+  const registrations = validatedExtensionRegistry(registry);
   for (const record of records) {
     assertWorkRecordShape(record);
-    validateExtensionMap(record.extensions, registry, record.id);
+    validateExtensionMap(record.extensions, registrations, record.id);
     if (byId.has(record.id)) {
       fail("DUPLICATE_ID", record.id);
     }
@@ -756,6 +762,11 @@ export function validateEventChain(events: readonly EventRecord[]): readonly Eve
   if (events.length > PROTOCOL_LIMITS.maxRecords) {
     fail("INPUT_OVERSIZED", "Event chain");
   }
+  // Each record is rebuilt once and the result kept: the second pass compares against the
+  // same reconstruction it used to recompute, which costs two canonical serializations and
+  // two SHA-256 rounds per event. Validation stays in this first pass so a malformed record
+  // is still reported before the ordering checks below see it.
+  const rebuilt = new Map<EventRecord, EventRecord>();
   for (const event of events) {
     assertExactFields(
       event,
@@ -767,32 +778,26 @@ export function validateEventChain(events: readonly EventRecord[]): readonly Eve
     }
     assertSha256(event.payloadHash);
     assertSha256(event.eventHash);
-    createEvent({
+    rebuilt.set(event, createEvent({
       id: event.id,
       streamId: event.streamId,
       sequence: event.sequence,
       occurredAt: event.occurredAt,
       priorHash: event.priorHash,
       payload: event.payload,
-    });
+    }));
   }
   const ordered = [...events].sort((left, right) => left.sequence - right.sequence || compareCanonicalText(left.id, right.id));
+  const headStreamId = ordered[0]?.streamId;
   const ids = new Set<string>();
   for (const [index, event] of ordered.entries()) {
     if (ids.has(event.id) || event.sequence !== index + 1) {
       fail("EVENT_REPLAY", event.id);
     }
     ids.add(event.id);
-    const expected = createEvent({
-      id: event.id,
-      streamId: event.streamId,
-      sequence: event.sequence,
-      occurredAt: event.occurredAt,
-      priorHash: event.priorHash,
-      payload: event.payload,
-    });
+    const expected = rebuilt.get(event) as EventRecord;
     const prior = ordered[index - 1];
-    if (event.streamId !== ordered[0]?.streamId || event.payloadHash !== expected.payloadHash || event.eventHash !== expected.eventHash ||
+    if (event.streamId !== headStreamId || event.payloadHash !== expected.payloadHash || event.eventHash !== expected.eventHash ||
       event.priorHash !== (prior?.eventHash ?? null)) {
       fail("EVENT_CHAIN_CORRUPT", event.id);
     }
