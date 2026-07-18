@@ -1323,31 +1323,39 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
   }
   entries.push(...await archiveEntryIfPresent());
 
-  const objectIds = run("git", ["cat-file", "--batch-all-objects", "--batch-check=%(objectname)"])
-    .split("\n")
-    .filter(Boolean);
+  // One streaming pass over the whole object database. This previously spawned two git
+  // processes per object -- one for the type, one for the content -- which on this
+  // repository meant roughly five thousand spawnSync calls and dominated the gate's wall
+  // clock. --batch emits "<oid> <type> <size>\n" followed by exactly <size> bytes and a
+  // trailing newline, so the payload stays binary-safe: the length comes from the header,
+  // never from scanning for a delimiter.
+  // spawnSync defaults to a 1 MiB buffer, which the per-object form never approached and
+  // this one immediately exceeds: the whole object stream is ~28 MiB here. The cap is
+  // deliberately explicit and bounded rather than unlimited, and it fails closed -- a
+  // repository that outgrows it gets COMMAND_FAILED, not a silently truncated scan.
+  const privacyBatchMaximumBytes = 512 * 1024 * 1024;
+  const batch = run("git", ["cat-file", "--batch-all-objects", "--batch"], { raw: true, maxBuffer: privacyBatchMaximumBytes });
   const historyRecords = [];
-  for (const object of objectIds) {
-    const type = run("git", ["cat-file", "-t", object]);
-    if (["blob", "commit", "tag"].includes(type)) {
-      const content = run("git", ["cat-file", type, object], { raw: true });
-      historyRecords.push({ path: `${type}:${object}`, content });
-      entries.push({
-        label: `git-${type}:${object}`,
-        kind: type,
-        content: decodePrivacyScanBytes(content),
-      });
-    } else if (type === "tree") {
-      const content = run("git", ["cat-file", "tree", object], { raw: true });
-      historyRecords.push({ path: `tree:${object}`, content });
-      entries.push({
-        label: `git-tree:${object}`,
-        kind: "tree",
-        content: decodePrivacyScanBytes(content),
-      });
-    } else {
-      fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:${type}`);
-    }
+  let cursor = 0;
+  let objectCount = 0;
+  while (cursor < batch.length) {
+    const headerEnd = batch.indexOf(0x0a, cursor);
+    if (headerEnd === -1) fail("PRIVACY_GIT_OBJECT_TYPE", "unterminated cat-file header");
+    const [object, type, sizeText] = batch.subarray(cursor, headerEnd).toString("utf8").split(" ");
+    const size = Number(sizeText);
+    if (!["blob", "commit", "tag", "tree"].includes(type)) fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:${type}`);
+    if (!Number.isSafeInteger(size) || size < 0) fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:size`);
+    const start = headerEnd + 1;
+    const content = batch.subarray(start, start + size);
+    if (content.length !== size) fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:truncated`);
+    cursor = start + size + 1;
+    objectCount += 1;
+    historyRecords.push({ path: `${type}:${object}`, content });
+    entries.push({
+      label: `git-${type}:${object}`,
+      kind: type,
+      content: decodePrivacyScanBytes(content),
+    });
   }
   const buildRoot = resolve(repositoryRoot, "dist/build");
   const sourceArchivePath = resolve(repositoryRoot, "dist/source/tcrn-workflow-source.tar");
@@ -1393,7 +1401,7 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
   const source = await verifySource();
   return success("PRIVACY_SOURCE_CLEAN", {
     scannedEntries: entries.length,
-    gitObjects: objectIds.length,
+    gitObjects: objectCount,
     historicalCommits: commits.length,
     historicalFullPaths: historicalPaths,
     archiveScanned: entries.some((entry) => entry.kind === "archive"),
