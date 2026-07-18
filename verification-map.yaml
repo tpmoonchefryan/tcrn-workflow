@@ -823,7 +823,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "14ce4ebaf9ce85ffaae9579b163f8aa5b7fd570cd4fa7799a1a6c5c85b74aaa2",
+      "fixtureDigest": "bdc8dfc0f1d52d52212c963261b52dd5a5c23e2e0033d42a064214fd4a2ecf34",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -851,7 +851,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "d08122b61bd2e05bb65760458d301876445b0d08c8d0ccd4a8302f5b5bdfc8cb",
+      "fixtureDigest": "d91ccfb83d46d7a258b4faf7c560d64b5138810796bb1e1832889504779b3fad",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -887,7 +887,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "e5db13ce10501733806241f3679e22ab8f54624b5aa05c84e2c8d2edfb9a32e0",
+      "fixtureDigest": "1e65f39302a8f3d22674564e8ec4b6324421bcf7a8ddb9ff39252bb0628e79ca",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -916,7 +916,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "da0c8c8089e12fbc21c9271a96b676ae56f73f3ff82f5f58183e9c37aefa4c8a",
+      "fixtureDigest": "701ccfa52cd22be536acde039d6a2ace03d8787adc38c2e59439d2158f311374",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

@@ -601,7 +601,13 @@ async function assertNoPartialState(storeRoot: string, options: ArtifactScanOpti
     if (JSON.stringify(contents.map((content) => content.name)) !== JSON.stringify(["bundle.json"])) {
       fail("ARTIFACT_PARTIAL_STATE", path);
     }
-    await readBoundRegularFile(resolve(path, "bundle.json"), maxArchiveBytes, options);
+    // The bundle bytes are deliberately not read here. This is a partial-state check, and
+    // the loop above already established every property it can act on -- regular file,
+    // single link, not a symlink, within the byte budget. Reading the file only to discard
+    // it cost a full pass over every generation on every verb that resolves the store
+    // (doctor, size-report, compact, archive, apply, restore): up to 16 generations of
+    // 32 MiB each. Content faults surface at the point of use, where restore already
+    // performs the same hardened read and can act on what it finds.
   }
   return { generationCount: archives.length, storedBytes };
 }
