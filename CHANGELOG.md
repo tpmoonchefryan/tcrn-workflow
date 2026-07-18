@@ -5,6 +5,8 @@ Versioning after the first accepted release.
 
 ## Unreleased
 
+## 0.1.0-rc.5 — 2026-07-18
+
 - Ship the governed conference and gate surface on the local candidate: nine
   governed CLI verbs (`conference-open`/`-append-position`/`-close`/`-cancel`,
   `gate-create`/`-transition`/`-delete`, `conference-list-by-work`, `gate-list`)

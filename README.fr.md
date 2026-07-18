@@ -4,7 +4,7 @@
 
 **Un cadre déterministe et hors-ligne d'abord pour le travail gouverné des agents IA — où chaque capacité est une affirmation vérifiée par la machine, pas une promesse.**
 
-`Statut : 0.1.0-rc.4 (candidat de pré-version)` · `Licence : Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Affirmations vérifiées : 65`
+`Statut : 0.1.0-rc.5 (candidat de pré-version)` · `Licence : Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Affirmations vérifiées : 65`
 
 ---
 
@@ -176,7 +176,7 @@ Le mode développement est hors ligne avec un garde réseau de processus et zér
 
 ## Statut, honnêtement
 
-- `0.1.0-rc.4` est un **candidat de pré-version**. L'API publique n'est pas encore stable.
+- `0.1.0-rc.5` est un **candidat de pré-version**. L'API publique n'est pas encore stable.
 - Les deux adaptateurs d'hôtes sont des candidats inertes en simulation ; **aucune prise en charge en production de Codex ou Claude Code n'est revendiquée**.
 - `supportedAosReleases` est vide : aucune compatibilité AOS externe n'est revendiquée.
 - Le mode version est indisponible tant que la vérification de confiance Ed25519 externe ne réussit pas.

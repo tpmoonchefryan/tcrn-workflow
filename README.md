@@ -4,7 +4,7 @@
 
 **A deterministic, offline-first framework for governed AI-agent work — where every capability is a machine-verified claim, not a promise.**
 
-`Status: 0.1.0-rc.4 (pre-release candidate)` · `License: Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
+`Status: 0.1.0-rc.5 (pre-release candidate)` · `License: Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
 
 ---
 
@@ -176,7 +176,7 @@ Development mode is offline with a process network guard and zero telemetry. The
 
 ## Status, honestly
 
-- `0.1.0-rc.4` is a **pre-release candidate**. The public API is not yet stable.
+- `0.1.0-rc.5` is a **pre-release candidate**. The public API is not yet stable.
 - Both host adapters are inert dry-run candidates; **no live Codex or Claude Code support is asserted**.
 - `supportedAosReleases` is empty: no external AOS compatibility is claimed.
 - Release mode is unavailable unless the external Ed25519 trust verification succeeds.
