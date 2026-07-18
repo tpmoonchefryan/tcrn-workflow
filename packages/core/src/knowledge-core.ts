@@ -1441,6 +1441,11 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
       revision: metadata.revision,
       version: marker.version,
     };
+  } catch (error) {
+    // WSC-6: same crash exemption as createKnowledgeUnit -- a simulated crash must leave
+    // the claim exactly where a real SIGKILL would, since finally never runs for one.
+    if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_FAULT_INJECTED") released = true;
+    throw error;
   } finally {
     if (!released) await releaseMutationClaim(initial.storeRoot, claim);
   }
@@ -1502,6 +1507,11 @@ export async function retireKnowledgeUnit(workspaceRoot: string, input: {
       revision: metadata.revision,
       version: marker.version,
     };
+  } catch (error) {
+    // WSC-6: same crash exemption as createKnowledgeUnit -- a simulated crash must leave
+    // the claim exactly where a real SIGKILL would, since finally never runs for one.
+    if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_FAULT_INJECTED") released = true;
+    throw error;
   } finally {
     if (!released) await releaseMutationClaim(initial.storeRoot, claim);
   }
@@ -1564,6 +1574,11 @@ export async function reverifyKnowledgeUnit(workspaceRoot: string, input: {
       revision: metadata.revision,
       version: marker.version,
     };
+  } catch (error) {
+    // WSC-6: same crash exemption as createKnowledgeUnit -- a simulated crash must leave
+    // the claim exactly where a real SIGKILL would, since finally never runs for one.
+    if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_FAULT_INJECTED") released = true;
+    throw error;
   } finally {
     if (!released) await releaseMutationClaim(initial.storeRoot, claim);
   }

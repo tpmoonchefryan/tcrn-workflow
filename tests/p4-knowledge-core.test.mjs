@@ -999,6 +999,34 @@ test("link, special-file, source-replacement, unknown-field, and partial-state a
       await fixture.close();
     }
   }
+
+  // WSC-6: promote, retire, and reverify carry the same crash points, and until now no
+  // test ever triggered one -- their crash(...) calls were unreachable proof. A simulated
+  // crash must retain the claim exactly as create and rebase do, because a real SIGKILL
+  // never runs the finally that would release it.
+  for (const verb of ["promote", "retire", "reverify"]) {
+    const fixture = await workspaceFixture({ externalKey: `FIXTURE-KNOWLEDGE-SIBLING-${verb.toUpperCase()}` });
+    try {
+      const unit = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, `KNOWLEDGE-SIBLING-${verb.toUpperCase()}`));
+      let version = 1;
+      let revision = 1;
+      if (verb === "reverify") {
+        await transitionKnowledgePromotion(fixture.workspace, { expectedVersion: 1, expectedRevision: 1, occurredAt: instant(12, 1), id: unit.id, promotionState: "promoted" });
+        version = 2;
+        revision = 2;
+      }
+      const run = () => {
+        const common = { expectedVersion: version, expectedRevision: revision, occurredAt: instant(12, 5), id: unit.id };
+        if (verb === "promote") return transitionKnowledgePromotion(fixture.workspace, { ...common, promotionState: "promoted" }, { faultAt: "after-metadata-write" });
+        if (verb === "retire") return retireKnowledgeUnit(fixture.workspace, common, { faultAt: "after-metadata-write" });
+        return reverifyKnowledgeUnit(fixture.workspace, common, { faultAt: "after-metadata-write" });
+      };
+      await expectReason("KNOWLEDGE_FAULT_INJECTED", run);
+      assert.equal((await readdir(fixture.store)).includes("mutation.claim"), true, `${verb} must retain the claim after a simulated crash`);
+    } finally {
+      await fixture.close();
+    }
+  }
 });
 
 test("record-count and query-result limits are executable", async () => {
