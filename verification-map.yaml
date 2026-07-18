@@ -82,7 +82,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "6b7c8a6072e82ff629b015c33887cf6582c79d4454fd89717dcc6b13c4ba1899",
+      "fixtureDigest": "02efaf3c2b1bef79f5ff92f2d730783c341ff2bc7080729b242da1d3c2dfe8a9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -302,7 +302,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "565c9f9c44bc17358391718162df7c3de7f40134211cc38647665e0333919389",
+      "fixtureDigest": "a437f9a5e1751171a428b36a4fab7fa21b4c4c2c57ed6f7a98db3d12a31418b1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

@@ -35,6 +35,10 @@ function object(value) {
 }
 
 function optionsIndex(name, arguments_) {
+  // The sync exec pair takes the same positions as its async twin minus the callback,
+  // so options are always in the optional slot and never a function.
+  if (name === "execSync") return 1;
+  if (name === "execFileSync") return Array.isArray(arguments_[1]) ? 2 : 1;
   if (name === "spawn" || name === "spawnSync" || name === "execFile" || name === "fork") {
     // Node accepts an explicitly undefined optional arguments array, with the
     // options object still supplied in the third position. Normalize that
@@ -60,7 +64,18 @@ function optionsFor(name, arguments_) {
 }
 
 function isNodeExecutable(command) {
-  return command === process.execPath || command === "node" || command === "nodejs";
+  if (typeof command !== "string") return false;
+  if (command === process.execPath || command === "node" || command === "nodejs") return true;
+  // exec and its sync twin take a whole command line rather than an argv[0], so an
+  // exact match never fired for them and `exec("node child.js", { env })` started an
+  // unpreloaded child whenever the caller supplied an env of their own. Match the
+  // leading word, optionally quoted or path-qualified.
+  const leading = command.trimStart().match(/^"([^"]+)"|^'([^']+)'|^(\S+)/u);
+  const executable = leading?.[1] ?? leading?.[2] ?? leading?.[3];
+  if (executable === undefined) return false;
+  const base = executable.split(/[/\\]/u).pop();
+  return executable === process.execPath || base === "node" || base === "nodejs" ||
+    base === "node.exe" || base === "nodejs.exe";
 }
 
 function taskEntrypointArguments(arguments_) {
@@ -123,14 +138,29 @@ function rejectDetached(name, arguments_) {
     error.code = "TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN";
     throw error;
   }
-  if (options?.stdio === "inherit") {
+  if (inheritsStdio(options?.stdio)) {
     const error = new Error("TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN");
     error.code = "TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN";
     throw error;
   }
 }
 
-for (const name of ["spawn", "spawnSync", "exec", "execFile", "fork"]) {
+// The string form is only the shorthand. `stdio: ["inherit", "inherit", "inherit"]`,
+// `[0, 1, 2]`, and an array carrying the parent's own streams all hand the child the
+// same descriptors, so matching the shorthand alone left the guarantee open to a
+// caller who simply spelled it the long way.
+function inheritsStdio(stdio) {
+  if (stdio === "inherit") return true;
+  if (!Array.isArray(stdio)) return false;
+  return stdio.some((entry) => entry === "inherit" ||
+    (typeof entry === "number" && entry >= 0 && entry <= 2) ||
+    entry === process.stdin || entry === process.stdout || entry === process.stderr);
+}
+
+// execSync and execFileSync were absent from this list, so they spawned children under
+// no policy at all -- neither the detached/stdio refusals nor the preload propagation
+// reached them. They take the same (command, options) shape as their async twins.
+for (const name of ["spawn", "spawnSync", "exec", "execFile", "execSync", "execFileSync", "fork"]) {
   const original = childProcess[name];
   childProcess[name] = function guardedChildProcess(...arguments_) {
     rejectDetached(name, arguments_);
