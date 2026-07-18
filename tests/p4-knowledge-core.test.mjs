@@ -249,7 +249,14 @@ test("WSC-2: knowledge-rebase enforces CAS and fails closed at fault points leav
       await lease.release();
     }
     await expectReason("KNOWLEDGE_CAS_MISMATCH", () => rebaseKnowledgeStore(fixture.workspace, { expectedVersion: 9, at: instant(22, 3), retireInvalid: false }));
+    // WSC-6: the two claim-state assertions below are the executable form of the crash
+    // contract. A failure that leaves the process alive must give the claim back, so the
+    // store stays usable; a simulated crash must NOT, because a real SIGKILL cannot run a
+    // finally block and the retained claim is what marks the store as mid-write. Removing
+    // the KNOWLEDGE_FAULT_INJECTED exemption from the mutation finallys flips the second.
+    assert.equal((await readdir(fixture.store)).includes("mutation.claim"), false);
     await expectReason("KNOWLEDGE_FAULT_INJECTED", () => rebaseKnowledgeStore(fixture.workspace, { expectedVersion: 0, at: instant(22, 4), retireInvalid: false }, { faultAt: "after-marker-write" }));
+    assert.equal((await readdir(fixture.store)).includes("mutation.claim"), true);
     await expectReason("KNOWLEDGE_LOCKED", () => rebaseKnowledgeStore(fixture.workspace, { expectedVersion: 0, at: instant(22, 5), retireInvalid: false }));
   } finally {
     await fixture.close();
