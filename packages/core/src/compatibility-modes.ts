@@ -600,8 +600,16 @@ function deriveEffectivePlan(request: CompatibilityRequest): CompatibilityEffect
   if (checkpoint && checkpoint.instanceId !== request.manifest.instanceId) fail("COMPATIBILITY_INSTANCE_MISMATCH", "checkpoint instance");
   if (checkpoint && checkpoint.dataEpoch !== request.manifest.dataEpoch) fail("COMPATIBILITY_DATA_EPOCH_MISMATCH", "checkpoint data epoch");
   if (["fallback_delta", "reconciliation_dry_run"].includes(request.operation) && (!checkpoint || checkpoint.version < request.manifest.policyVersion)) fail("COMPATIBILITY_CHECKPOINT_STALE", "checkpoint version");
+  // Disjoint by construction: validateWorkflowCompatibilityManifest rejects a manifest
+  // whose workflowOwnedFields and aosOwnedOperationalFields intersect, and the ownership
+  // check above confines each actual key set to its own allowed set. An overlap here is
+  // therefore unreachable, which also means the conflict_plan and reconciliation_dry_run
+  // exemption that used to guard this line could never fire and a "conflicts_planned"
+  // plan could never carry a conflict. Asserted rather than exempted so that relaxing
+  // either premise fails loudly instead of silently emitting a plan whose conflicts list
+  // is wrong. The field itself stays in the plan: it is part of the hashed output shape.
   const conflicts = workflowKeys.filter((key) => operationalKeys.includes(key)).sort(compareCanonicalText);
-  if (conflicts.length && request.operation !== "conflict_plan" && request.operation !== "reconciliation_dry_run") fail("COMPATIBILITY_FIELD_OWNERSHIP_CONFLICT", "overlapping conflict");
+  if (conflicts.length) fail("COMPATIBILITY_FIELD_OWNERSHIP_CONFLICT", "overlapping conflict");
   const state = request.operation === "portable_checkpoint" ? "checkpoint_planned" : request.operation.startsWith("fallback_") ? "fallback_planned" : request.operation === "conflict_plan" ? "conflicts_planned" : request.operation === "reconciliation_dry_run" ? "reconciliation_planned" : "planned";
   const effective = {
     operation: request.operation,

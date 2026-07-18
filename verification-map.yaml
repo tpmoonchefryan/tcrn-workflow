@@ -1656,7 +1656,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "0a3ff5334a603ac69d791c2c43d75eac31a75dca7563beb50871205251887fdd",
+      "fixtureDigest": "c358e3375b0de236ba8b4bb18283948aeaaf8fe839c074cf9fdfceb342fb4a63",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
