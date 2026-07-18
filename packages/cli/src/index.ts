@@ -118,7 +118,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
 import { assertStrictInstant, canonicalExternalKey, canonicalJson, deriveStableId } from "../../protocol/src/index.js";
-import type { PlannedDeliveryKind, ProjectRecord, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
+import type { PlannedDeliveryKind, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
+// ProjectRecord is a core type, not a protocol one. The protocol package never exported
+// it, so this import resolved to nothing; import elision hid the mistake from every
+// runtime check the repo had.
+import type { ProjectRecord } from "../../core/src/index.js";
 
 export const RELEASE_REQUIRED_ARGUMENTS = [
   "trust-root",
