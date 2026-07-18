@@ -334,3 +334,40 @@ test("[BLOCKER] step-2 install writes session-start.mjs + merges settings, and r
     await rm(base, { recursive: true, force: true });
   }
 });
+
+test("WSG-9: a settings.json edit landing before the commit is refused, not silently overwritten", async () => {
+  const { base, workflowDir } = await tempRoot();
+  try {
+    await mkdir(workflowDir, { recursive: true });
+    const bundle = generateClaudeAdapterBundle(request(), hostFor(request()));
+    for (const file of bundle.files) {
+      await writeFile(join(base, ...file.path.split("/")), file.content, { mode: 0o600 });
+    }
+    const settingsPath = join(base, ".claude", "settings.json");
+    const userSettings = canonicalJson({ hooks: {} });
+    await writeFile(settingsPath, userSettings, { mode: 0o600 });
+
+    const scriptSource = generateSessionStartScript();
+    const req = request();
+    const fragment = generateClaudeAdapterActivationFragment(req, activationHostFor(req), { scriptDigest: sessionStartScriptDigest(scriptSource) });
+    // The hook fires after the merge is prepared and before the rename commits it,
+    // which is exactly the window a concurrent editor occupies.
+    const concurrent = canonicalJson({ hooks: { PostToolUse: [{ matcher: "", hooks: [{ type: "command", command: "echo concurrent" }] }] } });
+    await assert.rejects(installClaudeAdapterActivation({
+      installationRoot: base,
+      generationId: "activation-generation:fixture",
+      receiptPath: join(base, "activation-generation.json"),
+      bundleDigest: bundle.bundleDigest,
+      fragment,
+      scriptSource,
+      beforeSettingsCommitForTest: async () => {
+        await writeFile(settingsPath, concurrent, { mode: 0o600 });
+      },
+    }), (error) => error.reasonCode === "INSTALLER_WRITE_FAILED");
+    // The concurrent edit is intact and the activation did not land.
+    assert.equal(await readFile(settingsPath, "utf8"), concurrent);
+    await assert.rejects(stat(join(workflowDir, "session-start.mjs")), "the install rolled back its own files");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
