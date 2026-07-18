@@ -545,7 +545,8 @@ export function validateCompatibility(document: Readonly<Record<string, unknown>
   assertExactFields(document, ["schemaVersion", "profileId", "protocolVersion", "minimumProtocolVersion", "maximumProtocolVersion", "maturity"], "Compatibility documents");
   if (document.schemaVersion !== "tcrn.compatibility.v1" || typeof document.profileId !== "string" ||
     typeof document.protocolVersion !== "number" || typeof document.minimumProtocolVersion !== "number" ||
-    typeof document.maximumProtocolVersion !== "number" || !["specified", "fixture_verified"].includes(String(document.maturity))) {
+    typeof document.maximumProtocolVersion !== "number" || typeof document.maturity !== "string" ||
+    !["specified", "fixture_verified"].includes(document.maturity)) {
     fail("RECORD_MALFORMED", "compatibility");
   }
   assertProtocolId(document.profileId);
@@ -579,8 +580,8 @@ export function validateReceipt(
 ): Readonly<Record<string, unknown>> {
   assertExactFields(document, ["schemaVersion", "id", "exchangeId", "receivedAt", "status", "subjectDigest", "extensions"], "Receipts");
   if (document.schemaVersion !== "tcrn.receipt.v1" || typeof document.id !== "string" || typeof document.exchangeId !== "string" ||
-    typeof document.receivedAt !== "string" || !["accepted", "rejected"].includes(String(document.status)) ||
-    typeof document.subjectDigest !== "string") {
+    typeof document.receivedAt !== "string" || typeof document.status !== "string" ||
+    !["accepted", "rejected"].includes(document.status) || typeof document.subjectDigest !== "string") {
     fail("RECORD_MALFORMED", "receipt");
   }
   assertProtocolId(document.id);
@@ -601,7 +602,10 @@ export function validateExtensionRegistration(document: Readonly<Record<string, 
   assertProtocolId(document.id);
   assertSha256(document.schemaDigest);
   const allowed = new Set(["work", "knowledge", "event", "context", "exchange", "receipt"]);
-  if (new Set(document.appliesTo).size !== document.appliesTo.length || document.appliesTo.some((value) => !allowed.has(String(value)))) {
+  // The string check must precede the duplicate check: Set membership is identity-based for
+  // objects, so two distinct ["work"] arrays never collide and would slip past the dedupe.
+  if (document.appliesTo.some((value) => typeof value !== "string" || !allowed.has(value)) ||
+    new Set(document.appliesTo).size !== document.appliesTo.length) {
     fail("RECORD_MALFORMED", document.id);
   }
   return document;

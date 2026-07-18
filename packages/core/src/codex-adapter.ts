@@ -253,7 +253,8 @@ export function calculateCodexAdapterRequestDigest(value: unknown): string {
 export function admitCodexAdapterHostInput(value: unknown): CodexAdapterHostContext {
   const document = record(value, "adapter host input");
   exact(document, ["schemaVersion", "requestDigest", "contextDigest", "workspaceId", "projectId", "workId", "governedAction", "contextIssuedAt", "contextExpiresAt", "verificationTime", "installationTarget", "activationAllowed", "hostDigest"], "adapter host input");
-  if (document.schemaVersion !== CODEX_ADAPTER_HOST_VERSION || !["generate", "validate", "simulate"].includes(String(document.governedAction)) ||
+  if (document.schemaVersion !== CODEX_ADAPTER_HOST_VERSION || typeof document.governedAction !== "string" ||
+    !["generate", "validate", "simulate"].includes(document.governedAction) ||
     document.installationTarget !== "inert_bundle_only" || document.activationAllowed !== false) fail("ADAPTER_SCHEMA_INVALID", "adapter host header");
   const basis = {
     schemaVersion: CODEX_ADAPTER_HOST_VERSION,

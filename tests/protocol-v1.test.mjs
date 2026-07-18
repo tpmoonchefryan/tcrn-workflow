@@ -278,6 +278,32 @@ test("work graph and protocol negatives return exact frozen reason codes", async
   assert.deepEqual([...covered].sort(compareCanonicalText), [...PROTOCOL_REASON_CODES].sort(compareCanonicalText));
 });
 
+test("enum admission rejects values that coerce to a legal member instead of being one", async () => {
+  const models = await fixture("positive/models.json");
+  // Vectors chosen from the actual defect: String(["specified"]) === "specified", and any object
+  // whose toString yields a member, coerce INTO the enum. Numbers, null, and plain objects were
+  // already rejected before this guard existed, so they are regression anchors only -- asserting
+  // on them alone would pass with or without the fix.
+  const coercing = [["specified"], { toString: () => "specified" }, new String("specified")];
+  for (const maturity of coercing) {
+    expectReason("RECORD_MALFORMED", () => validateCompatibility({ ...models.compatibility, maturity }));
+  }
+  for (const status of [["accepted"], { toString: () => "accepted" }, new String("accepted")]) {
+    expectReason("RECORD_MALFORMED", () => validateReceipt({ ...models.receipt, status }));
+  }
+  for (const anchor of [1, null, {}, true]) {
+    expectReason("RECORD_MALFORMED", () => validateCompatibility({ ...models.compatibility, maturity: anchor }));
+  }
+
+  // appliesTo carries a second defect: Set dedupe is identity-based, so two distinct ["work"]
+  // arrays satisfy both the membership test and the duplicate test.
+  for (const appliesTo of [[["work"], ["work"]], [["work"]], [{ toString: () => "work" }]]) {
+    expectReason("RECORD_MALFORMED", () => validateExtensionRegistration({ ...models.extensionRegistration, appliesTo }));
+  }
+  expectReason("RECORD_MALFORMED", () => validateExtensionRegistration({ ...models.extensionRegistration, appliesTo: ["work", "work"] }));
+  assert.equal(validateExtensionRegistration({ ...models.extensionRegistration, appliesTo: ["work"] }).schemaVersion, "tcrn.extension-registration.v1");
+});
+
 test("determinism properties hold across 128 reproducible permutations", async () => {
   const planned = await fixture("positive/planned-delivery.json");
   const property = await fixture("property/determinism.json");

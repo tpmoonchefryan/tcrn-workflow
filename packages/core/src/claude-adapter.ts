@@ -301,7 +301,8 @@ export function calculateClaudeAdapterRequestDigest(value: unknown): string {
 export function admitClaudeAdapterHostInput(value: unknown): ClaudeAdapterHostContext {
   const document = record(value, "adapter host input");
   exact(document, ["schemaVersion", "requestDigest", "contextDigest", "workspaceId", "projectId", "workId", "governedAction", "hostProduct", "hostVersionReadback", "contextIssuedAt", "contextExpiresAt", "verificationTime", "installationTarget", "activationAllowed", "hostDigest"], "adapter host input");
-  if (document.schemaVersion !== CLAUDE_ADAPTER_HOST_VERSION || !["generate", "validate", "simulate"].includes(String(document.governedAction)) ||
+  if (document.schemaVersion !== CLAUDE_ADAPTER_HOST_VERSION || typeof document.governedAction !== "string" ||
+    !["generate", "validate", "simulate"].includes(document.governedAction) ||
     document.installationTarget !== "inert_bundle_only" || document.activationAllowed !== false) fail("ADAPTER_SCHEMA_INVALID", "adapter host header");
   if (document.hostProduct !== CLAUDE_ADAPTER_HOST_PRODUCT) fail("ADAPTER_HOST_PRODUCT_MISMATCH", "host product");
   const basis = {
