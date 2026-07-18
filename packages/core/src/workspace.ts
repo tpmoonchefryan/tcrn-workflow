@@ -1161,7 +1161,33 @@ async function parseRecoveryClaim(path: string): Promise<{ readonly owner: Reado
   }
 }
 
-async function createRecoveryClaim(workspaceRoot: string, now: string, nowNanoseconds: bigint, ttl: number): Promise<RecoveryClaim> {
+// WSA-7: a recovery claim whose writer is provably gone is reclaimable. The claim records
+// pid and expiresAtNanoseconds precisely so this decision can be made, but nothing read
+// them until now, so every SIGKILL left a claim that no code path could clear and the
+// Workspace could never be opened again. Reclaim uses the same rename-verify-remove
+// discipline as releaseRecoveryClaim so a concurrent reclaimer loses the rename instead of
+// racing us. Deliberately fail-closed: the writer counts as gone only when the claim has
+// expired AND its pid is dead, matching the lease-owner probe. Both directions of pid reuse
+// are safe -- a recycled pid reads as alive and we refuse.
+async function reclaimStaleRecoveryClaim(
+  workspaceRoot: string,
+  path: string,
+  existing: { readonly owner: Readonly<Record<string, JsonValue>>; readonly identity: { readonly dev: number | bigint; readonly ino: number | bigint } },
+): Promise<void> {
+  const quarantine = controlPath(workspaceRoot, `stale-recovery-${String(existing.owner.token)}`);
+  try {
+    await rename(path, quarantine);
+  } catch {
+    fail("WORKSPACE_LOCKED", "stale recovery claim was not exclusively reclaimable");
+  }
+  const moved = await lstat(quarantine);
+  if (!sameIdentity(moved, existing.identity) || !moved.isFile() || moved.nlink !== 1) {
+    fail("WORKSPACE_LEASE_INVALID", "stale recovery claim identity changed during reclaim");
+  }
+  await rm(quarantine);
+}
+
+async function createRecoveryClaim(workspaceRoot: string, now: string, nowNanoseconds: bigint, ttl: number, reclaimed = false): Promise<RecoveryClaim> {
   const path = controlPath(workspaceRoot, "lease-recovery.claim");
   const token = randomBytes(24).toString("hex");
   let handle;
@@ -1189,8 +1215,17 @@ async function createRecoveryClaim(workspaceRoot: string, now: string, nowNanose
   } catch (error) {
     await handle?.close();
     if ((error as { code?: string }).code === "EEXIST") {
-      await parseRecoveryClaim(path);
-      fail("WORKSPACE_LOCKED", "another lease recovery owns the Workspace");
+      const existing = await parseRecoveryClaim(path);
+      const expiresAtNanoseconds = BigInt(String(existing.owner.expiresAtNanoseconds));
+      const pid = Number(existing.owner.pid);
+      // A malformed, linked, or special-file claim never reaches here: parseRecoveryClaim
+      // fails closed on it first, so those still demand operator attention.
+      if (reclaimed || expiresAtNanoseconds > nowNanoseconds || processAlive(pid)) {
+        fail("WORKSPACE_LOCKED", "another lease recovery owns the Workspace");
+      }
+      await reclaimStaleRecoveryClaim(workspaceRoot, path, existing);
+      // One retry only: if the slot is taken again we lost a race with a live writer.
+      return await createRecoveryClaim(workspaceRoot, now, nowNanoseconds, ttl, true);
     }
     if (error instanceof WorkspaceError) {
       throw error;
