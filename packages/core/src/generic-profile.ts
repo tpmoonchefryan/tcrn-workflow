@@ -1141,8 +1141,8 @@ export function validateEffectiveGenericProfile(value: unknown): EffectiveGeneri
       "displayOnly", "baseDigest", "profileDigests", "overlayDigest", "effectivePolicyDigest", "effectiveDigest"],
     "effective profile",
   );
-  if (document.schemaVersion !== GENERIC_PROFILE_EFFECTIVE_VERSION ||
-    !["bound", "unbound_read_only", "cold_standby"].includes(String(document.resolution))) {
+  if (document.schemaVersion !== GENERIC_PROFILE_EFFECTIVE_VERSION || typeof document.resolution !== "string" ||
+    !["bound", "unbound_read_only", "cold_standby"].includes(document.resolution)) {
     fail("PROFILE_SCHEMA_INVALID", "effective profile header");
   }
   if (!Array.isArray(document.sourceLayerIds) || document.sourceLayerIds.length === 0 || document.sourceLayerIds.length > 6) {

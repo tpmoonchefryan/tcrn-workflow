@@ -295,9 +295,12 @@ function metadataCandidate(value: unknown): ContextMetadataCandidate {
   const document = asRecord(value, "metadata candidate");
   const fields = ["schemaVersion", "id", "kind", "scope", "workspaceId", "projectId", "workId", "freshness", "title", "summary", "retentionClass", "candidateDigest"];
   exactFields(document, fields, "metadata candidate");
-  if (document.schemaVersion !== "tcrn.context-metadata-candidate.v1" || !["metadata", "summary", "reference"].includes(String(document.kind)) ||
-    !["workspace", "project", "work"].includes(String(document.scope)) || !["fresh", "stale", "unknown"].includes(String(document.freshness)) ||
-    !["metadata_only", "ephemeral"].includes(String(document.retentionClass))) fail("CONTEXT_SCHEMA_INVALID", "metadata candidate header");
+  if (document.schemaVersion !== "tcrn.context-metadata-candidate.v1" ||
+    typeof document.kind !== "string" || !["metadata", "summary", "reference"].includes(document.kind) ||
+    typeof document.scope !== "string" || !["workspace", "project", "work"].includes(document.scope) ||
+    typeof document.freshness !== "string" || !["fresh", "stale", "unknown"].includes(document.freshness) ||
+    typeof document.retentionClass !== "string" ||
+    !["metadata_only", "ephemeral"].includes(document.retentionClass)) fail("CONTEXT_SCHEMA_INVALID", "metadata candidate header");
   const basis = {
     schemaVersion: "tcrn.context-metadata-candidate.v1" as const,
     id: protocolId(document.id, "metadata candidate id"),
@@ -319,8 +322,10 @@ function explicitCandidate(value: unknown): ContextExplicitReadCandidate {
   const document = asRecord(value, "explicit read candidate");
   const fields = ["schemaVersion", "id", "kind", "scope", "workspaceId", "projectId", "workId", "freshness", "content", "retentionClass", "candidateDigest"];
   exactFields(document, fields, "explicit read candidate");
-  if (document.schemaVersion !== "tcrn.context-explicit-read-candidate.v1" || !["body", "procedure"].includes(String(document.kind)) ||
-    !["workspace", "project", "work"].includes(String(document.scope)) || !["fresh", "stale", "unknown"].includes(String(document.freshness)) ||
+  if (document.schemaVersion !== "tcrn.context-explicit-read-candidate.v1" ||
+    typeof document.kind !== "string" || !["body", "procedure"].includes(document.kind) ||
+    typeof document.scope !== "string" || !["workspace", "project", "work"].includes(document.scope) ||
+    typeof document.freshness !== "string" || !["fresh", "stale", "unknown"].includes(document.freshness) ||
     document.retentionClass !== "ephemeral") fail("CONTEXT_SCHEMA_INVALID", "explicit read candidate header");
   const basis = {
     schemaVersion: "tcrn.context-explicit-read-candidate.v1" as const,
@@ -670,7 +675,8 @@ export function validateContextRouteResult(value: unknown): Readonly<Record<stri
     const exclusion = asRecord(entry, `context receipt exclusions[${index}]`);
     exactFields(exclusion, ["id", "reasonCode"], `context receipt exclusions[${index}]`);
     const id = protocolId(exclusion.id, `context receipt exclusions[${index}].id`);
-    if (!["CONTEXT_STALE_EXCLUDED", "CONTEXT_UNKNOWN_FRESHNESS_EXCLUDED"].includes(String(exclusion.reasonCode))) fail("CONTEXT_SCHEMA_INVALID", `context receipt exclusions[${index}].reasonCode`);
+    if (typeof exclusion.reasonCode !== "string" ||
+      !["CONTEXT_STALE_EXCLUDED", "CONTEXT_UNKNOWN_FRESHNESS_EXCLUDED"].includes(exclusion.reasonCode)) fail("CONTEXT_SCHEMA_INVALID", `context receipt exclusions[${index}].reasonCode`);
     return id;
   });
   if (canonicalJson(exclusionIds) !== canonicalJson([...exclusionIds].sort(compareCanonicalText))) fail("CONTEXT_CANONICAL_INVALID", "context receipt exclusions");

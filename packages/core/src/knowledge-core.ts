@@ -573,7 +573,8 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
   exactFields(value, metadataFields, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID");
   exactFields(value.stalenessPolicy, stalenessFields, "knowledge staleness policy", "KNOWLEDGE_RECORD_INVALID");
   if (value.schemaVersion !== KNOWLEDGE_METADATA_SCHEMA_VERSION || typeof value.id !== "string" ||
-    typeof value.externalKey !== "string" || !["workspace", "project", "role"].includes(String(value.scope)) ||
+    typeof value.externalKey !== "string" || typeof value.scope !== "string" ||
+    !["workspace", "project", "role"].includes(value.scope) ||
     (value.projectId !== null && typeof value.projectId !== "string") || typeof value.category !== "string" ||
     !["architecture", "domain", "implementation", "standards", "testing", "workflow", "decision", "evidence"].includes(value.category) ||
     typeof value.kind !== "string" || !["fact", "guide", "decision", "reference", "summary"].includes(value.kind) ||

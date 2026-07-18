@@ -225,7 +225,8 @@ function bindingFromResult(result: Readonly<Record<string, unknown>>): Readonly<
 export function admitClaudeAdapterActivationHostInput(value: unknown): ClaudeAdapterActivationHostContext {
   const document = record(value, "activation host input");
   exact(document, ["schemaVersion", "requestDigest", "contextDigest", "workspaceId", "projectId", "workId", "governedAction", "hostProduct", "hostVersionReadback", "contextIssuedAt", "contextExpiresAt", "verificationTime", "installationTarget", "activationAllowed", "installationReceiptDigest", "hostDigest"], "activation host input");
-  if (document.schemaVersion !== CLAUDE_ADAPTER_HOST_V2_VERSION || !["generate", "validate", "simulate"].includes(String(document.governedAction)) ||
+  if (document.schemaVersion !== CLAUDE_ADAPTER_HOST_V2_VERSION || typeof document.governedAction !== "string" ||
+    !["generate", "validate", "simulate"].includes(document.governedAction) ||
     document.installationTarget !== "project_local_activation" || document.activationAllowed !== true) fail("ACTIVATION_SCHEMA_INVALID", "activation host header");
   if (document.hostProduct !== CLAUDE_ADAPTER_HOST_PRODUCT) fail("ACTIVATION_HOST_PRODUCT_MISMATCH", "host product");
   const basis = {
