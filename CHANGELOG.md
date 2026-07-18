@@ -5,6 +5,28 @@ Versioning after the first accepted release.
 
 ## Unreleased
 
+- Unify the three drifted copies of the hardened authority-receipt reader onto a
+  single shared implementation (`packages/core/src/authority-file-reader.ts`)
+  carrying the strongest variant of each check: nanosecond `bigint` stat
+  precision, `mode` in both the descriptor-identity recheck and the
+  `sourceIdentityDigest`, a chunk-bounded read in place of an unbounded
+  `readFile()`, `ELOOP` classified as a link rather than a generic change, and a
+  guarded post-read `lstat` so unexpected filesystem errors can no longer escape
+  untyped. Each caller keeps its own error class, reason-code family, post-read
+  validator and admission branding; the shared reader takes an injected `fail`,
+  a reason-code map and an `isOwnError` predicate. The Context Router and generic
+  profile readers gain the mode, nanosecond, bounded-read and `ELOOP`
+  protections they previously lacked.
+- Normalise directory-as-authority reporting (OD-6): the Context Router and
+  generic profile readers now report `CONTEXT_AUTHORITY_SPECIAL_FILE` and
+  `PROFILE_ADMISSION_SPECIAL_FILE` for a directory, where they previously
+  reported the `*_LINK` code because the `nlink` gate preceded the `isFile()`
+  gate. Compatibility modes already reported the special-file code and is
+  unchanged. `sourceIdentityDigest` values move for the Context Router and
+  generic profile readers; the digest is derived from live inode data and was
+  never reproducible across machines, checkouts or copies, so no stored value
+  could have pinned it.
+
 ## 0.1.0-rc.5 — 2026-07-18
 
 - Ship the governed conference and gate surface on the local candidate: nine

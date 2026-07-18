@@ -100,6 +100,7 @@
     "packages/core/src/actor-attestation.ts",
     "packages/core/src/artifact-lifecycle.ts",
     "packages/core/src/assignment-gate.ts",
+    "packages/core/src/authority-file-reader.ts",
     "packages/core/src/canonical-exchange.ts",
     "packages/core/src/claude-adapter-activation.ts",
     "packages/core/src/claude-adapter-installer.ts",

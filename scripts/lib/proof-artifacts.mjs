@@ -67,6 +67,7 @@ const routeAdditions = new Set([
   "docs/tutorial/governed-loop.md",
   "tests/e2e-governed-loop-commands.mjs",
   "tests/e2e-governed-loop.test.mjs",
+  "packages/core/src/authority-file-reader.ts",
 ]);
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",

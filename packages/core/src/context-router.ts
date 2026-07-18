@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import { lstat, open, realpath } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import {
@@ -13,6 +9,8 @@ import {
   compareCanonicalText,
   parseStrictInstant,
 } from "../../protocol/src/index.js";
+import { readAuthorityFile } from "./authority-file-reader.js";
+import type { AuthorityFileReasonCodes } from "./authority-file-reader.js";
 import {
   authorizeGenericProfileOperation,
   resolveGenericProfile,
@@ -158,6 +156,13 @@ export interface ContextRouteAuthorityReceipt {
 export interface ContextRouteAuthorityFileIdentity {
   readonly expectedCanonicalPath: string;
   readonly expectedFileSha256: string;
+}
+
+export interface ContextRouteAuthorityReadOptions {
+  readonly afterLstatForTest?: () => Promise<void>;
+  readonly afterOpenForTest?: () => Promise<void>;
+  readonly afterReadChunkForTest?: (totalBytesRead: number) => Promise<void>;
+  readonly observeReadBytesForTest?: (totalBytesRead: number) => void;
 }
 
 export interface ContextRouteAuthorityContext {
@@ -426,49 +431,40 @@ export function validateContextRouteAuthorityReceipt(value: unknown): ContextRou
   return validateAuthorityReceipt(value);
 }
 
-function sameIdentity(left: Awaited<ReturnType<typeof lstat>>, right: Awaited<ReturnType<typeof lstat>>): boolean {
-  return left.dev === right.dev && left.ino === right.ino && left.nlink === right.nlink && left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs;
-}
+const contextAuthorityCodes: AuthorityFileReasonCodes<ContextRouteReasonCode> = Object.freeze({
+  required: "CONTEXT_AUTHORITY_REQUIRED",
+  path: "CONTEXT_AUTHORITY_PATH",
+  digest: "CONTEXT_AUTHORITY_DIGEST",
+  changed: "CONTEXT_AUTHORITY_CHANGED",
+  link: "CONTEXT_AUTHORITY_LINK",
+  specialFile: "CONTEXT_AUTHORITY_SPECIAL_FILE",
+  limitExceeded: "CONTEXT_AUTHORITY_MALFORMED",
+  notUtf8: "CONTEXT_AUTHORITY_MALFORMED",
+  notJson: "CONTEXT_AUTHORITY_MALFORMED",
+  notCanonical: "CONTEXT_AUTHORITY_CANONICAL_INVALID",
+});
 
 export async function readContextRouteAuthorityReceipt(
   path: string,
   authority?: ContextRouteAuthorityFileIdentity,
+  options: ContextRouteAuthorityReadOptions = {},
 ): Promise<ContextRouteAuthorityContext> {
-  if (!authority) fail("CONTEXT_AUTHORITY_REQUIRED", "Out-of-band context authority is required");
-  if (!isAbsolute(authority.expectedCanonicalPath) || resolve(authority.expectedCanonicalPath) !== authority.expectedCanonicalPath || path !== authority.expectedCanonicalPath) fail("CONTEXT_AUTHORITY_PATH", path);
-  if (!/^[a-f0-9]{64}$/u.test(authority.expectedFileSha256)) fail("CONTEXT_AUTHORITY_DIGEST", path);
-  let before;
-  try { before = await lstat(path); } catch { fail("CONTEXT_AUTHORITY_CHANGED", path); }
-  if (before.isSymbolicLink() || before.nlink !== 1) fail("CONTEXT_AUTHORITY_LINK", path);
-  if (!before.isFile()) fail("CONTEXT_AUTHORITY_SPECIAL_FILE", path);
-  if (before.size < 2 || before.size > CONTEXT_ROUTE_LIMITS.receiptBytes) fail("CONTEXT_AUTHORITY_MALFORMED", path);
-  let handle;
-  try { handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); } catch { fail("CONTEXT_AUTHORITY_CHANGED", path); }
-  let content: Buffer;
-  try {
-    const opened = await handle.stat();
-    if (!opened.isFile() || opened.nlink !== 1 || !sameIdentity(before, opened)) fail("CONTEXT_AUTHORITY_CHANGED", path);
-    content = await handle.readFile();
-    const after = await handle.stat();
-    const named = await lstat(path);
-    if (!sameIdentity(opened, after) || !sameIdentity(after, named) || content.length !== after.size) fail("CONTEXT_AUTHORITY_CHANGED", path);
-  } finally { await handle.close(); }
-  const canonicalPath = await realpath(path).catch(() => fail("CONTEXT_AUTHORITY_CHANGED", path));
-  if (canonicalPath !== authority.expectedCanonicalPath) fail("CONTEXT_AUTHORITY_PATH", path);
-  const fileSha256 = createHash("sha256").update(content).digest("hex");
-  if (fileSha256 !== authority.expectedFileSha256) fail("CONTEXT_AUTHORITY_DIGEST", path);
-  const text = content.toString("utf8");
-  if (!Buffer.from(text, "utf8").equals(content)) fail("CONTEXT_AUTHORITY_MALFORMED", path);
-  let parsed: unknown;
-  try { parsed = JSON.parse(text); } catch { fail("CONTEXT_AUTHORITY_MALFORMED", path); }
-  let canonical: string;
-  try { canonical = canonicalJson(parsed); } catch { fail("CONTEXT_AUTHORITY_CANONICAL_INVALID", path); }
-  if (canonical !== text) fail("CONTEXT_AUTHORITY_CANONICAL_INVALID", path);
+  const source = await readAuthorityFile(path, authority, {
+    maximumBytes: CONTEXT_ROUTE_LIMITS.receiptBytes,
+    codes: contextAuthorityCodes,
+    details: {
+      required: "Out-of-band context authority is required",
+      expectedDigest: path,
+    },
+    fail,
+    isOwnError: (error) => error instanceof ContextRouteError,
+    hooks: options,
+  });
   const context = deepFreeze({
-    receipt: validateAuthorityReceipt(parsed),
+    receipt: validateAuthorityReceipt(source.parsed),
     sourcePath: path,
-    authorityFileSha256: fileSha256,
-    sourceIdentityDigest: canonicalSha256({ dev: String(before.dev), ino: String(before.ino), size: String(before.size), mtimeMs: String(before.mtimeMs), ctimeMs: String(before.ctimeMs) }),
+    authorityFileSha256: source.fileSha256,
+    sourceIdentityDigest: source.sourceIdentityDigest,
   });
   authorityContexts.add(context);
   return context;

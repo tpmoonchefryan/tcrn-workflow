@@ -24,6 +24,7 @@ import {
   validateCompatibilityRequest,
   validateWorkflowCompatibilityManifest,
 } from "../dist/build/packages/core/src/index.js";
+import { readAuthorityFile } from "../dist/build/packages/core/src/authority-file-reader.js";
 import { canonicalJson, canonicalSha256, compareCanonicalText } from "../dist/build/packages/protocol/src/index.js";
 
 const fixture = JSON.parse(await readFile(new URL("../packages/core/fixtures/p7-compatibility-modes-cases.json", import.meta.url), "utf8"));
@@ -314,6 +315,67 @@ test("authority reads stay bounded under sparse and continuous same-inode growth
     assert.equal(overRead, 0);
     await assert.rejects(runCli(["compatibility-plan", "--request", canonicalJson(request)], { compatibilityAdmissionAuthority: { expectedCanonicalPath: overPath, expectedFileSha256: sha256(overBytes) }, write() {} }), (error) => error.reasonCode === "COMPATIBILITY_LIMIT_EXCEEDED");
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("shared authority reader propagates caller errors and normalizes foreign errors to the changed code", async () => {
+  const { request } = documents();
+  const admitted = await authorityFile(request);
+
+  class SentinelError extends Error {
+    constructor(reasonCode) { super(reasonCode); this.name = "SentinelError"; this.reasonCode = reasonCode; }
+  }
+  const codes = {
+    required: "SENTINEL_REQUIRED", path: "SENTINEL_PATH", digest: "SENTINEL_DIGEST",
+    changed: "SENTINEL_CHANGED", link: "SENTINEL_LINK", specialFile: "SENTINEL_SPECIAL_FILE",
+    limitExceeded: "SENTINEL_LIMIT", notUtf8: "SENTINEL_UTF8", notJson: "SENTINEL_JSON",
+    notCanonical: "SENTINEL_CANONICAL",
+  };
+  const parameters = (overrides = {}) => ({
+    maximumBytes: 65_536,
+    codes,
+    details: { required: "authority required", expectedDigest: "expectedFileSha256" },
+    fail: (reasonCode, detail) => { throw new SentinelError(reasonCode, detail); },
+    isOwnError: (error) => error instanceof SentinelError,
+    ...overrides,
+  });
+
+  try {
+    // The caller's own typed failure, raised from inside the read block, must
+    // reach the caller unwrapped rather than being relabelled as changed.
+    const ownError = new SentinelError("SENTINEL_CALLER_SPECIFIC");
+    await assert.rejects(
+      readAuthorityFile(admitted.path, admitted.authority, parameters({
+        hooks: { afterOpenForTest: async () => { throw ownError; } },
+      })),
+      (error) => error === ownError,
+      "caller error must propagate unwrapped",
+    );
+
+    // A foreign error from the same position is normalized into the caller's
+    // changed code, so unexpected filesystem faults never escape untyped.
+    await assert.rejects(
+      readAuthorityFile(admitted.path, admitted.authority, parameters({
+        hooks: { afterOpenForTest: async () => { throw new TypeError("foreign failure"); } },
+      })),
+      (error) => error instanceof SentinelError && error.reasonCode === "SENTINEL_CHANGED",
+      "foreign error must normalize to the changed code",
+    );
+
+    // The reader stops at verified canonical bytes and hands the caller the
+    // parsed value plus the unified source identity digest.
+    const result = await readAuthorityFile(admitted.path, admitted.authority, parameters());
+    assert.equal(result.fileSha256, admitted.authority.expectedFileSha256);
+    assert.equal(result.canonicalPath, admitted.path);
+    assert.equal(result.sourceText, admitted.bytes);
+    assert.match(result.sourceIdentityDigest, /^[a-f0-9]{64}$/u);
+    assert.equal(typeof result.parsed, "object");
+
+    // Every reason-code slot is caller-supplied, not baked into the reader.
+    await reasonAsync("SENTINEL_REQUIRED", () => readAuthorityFile(admitted.path, undefined, parameters()));
+    const directoryPath = join(admitted.directory, "reader-special");
+    await mkdir(directoryPath);
+    await reasonAsync("SENTINEL_SPECIAL_FILE", () => readAuthorityFile(directoryPath, { expectedCanonicalPath: directoryPath, expectedFileSha256: admitted.authority.expectedFileSha256 }, parameters()));
+  } finally { await admitted.close(); }
 });
 
 test("anchored receipt binds request, plan, release pair, lock, policy, replay and revocation", async () => {

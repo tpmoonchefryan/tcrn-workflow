@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, chmod, link, mkdir, mkdtemp, readFile, realpath, rm, symlink, truncate, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -337,6 +337,70 @@ test("risk, stale authority, authority file identity, and governed CLI admission
     await runCli(["context-route", "--request", canonicalJson(admitted.request), "--profile-receipt", admitted.profilePath, "--authority", admitted.authorityPath], { write: (value) => { output = value; }, profileAdmissionAuthority: admitted.profileFileAuthority, contextRouteAuthority: admitted.contextFileAuthority });
     assert.equal(JSON.parse(output).reasonCode, "CONTEXT_ROUTED");
     await reasonAsync("CONTEXT_AUTHORITY_REQUIRED", () => runCli(["context-route", "--request", canonicalJson(admitted.request), "--profile-receipt", admitted.profilePath, "--authority", admitted.authorityPath], { write: () => {}, profileAdmissionAuthority: admitted.profileFileAuthority }));
+  } finally { await admitted.close(); }
+});
+
+test("context authority reads reject directories, post-lstat link swaps, mode races and unbounded growth", async () => {
+  // A directory has nlink >= 2, so the pre-unification reader classified it as
+  // CONTEXT_AUTHORITY_LINK. The shared reader gates isFile() before nlink, so a
+  // directory now reports the special-file code (OD-6).
+  const special = await admittedFixture();
+  try {
+    const directoryPath = join(special.directory, "special");
+    await mkdir(directoryPath);
+    await reasonAsync("CONTEXT_AUTHORITY_SPECIAL_FILE", () => readContextRouteAuthorityReceipt(directoryPath, { expectedCanonicalPath: directoryPath, expectedFileSha256: special.contextFileAuthority.expectedFileSha256 }));
+  } finally { await special.close(); }
+
+  // A symlink swapped in between the lstat gate and the O_NOFOLLOW open used to
+  // surface as CONTEXT_AUTHORITY_CHANGED; ELOOP is now classified as a link.
+  const loop = await admittedFixture();
+  try {
+    const target = join(loop.directory, "loop-target.json");
+    await writeFile(target, canonicalJson(loop.authorityDocument));
+    await reasonAsync("CONTEXT_AUTHORITY_LINK", () => readContextRouteAuthorityReceipt(loop.authorityPath, loop.contextFileAuthority, {
+      afterLstatForTest: async () => { await unlink(loop.authorityPath); await symlink(target, loop.authorityPath); },
+    }));
+  } finally { await loop.close(); }
+
+  // mode joined the descriptor identity, so a concurrent chmod is now visible.
+  const modeRace = await admittedFixture();
+  try {
+    await reasonAsync("CONTEXT_AUTHORITY_CHANGED", () => readContextRouteAuthorityReceipt(modeRace.authorityPath, modeRace.contextFileAuthority, {
+      afterOpenForTest: async () => { await chmod(modeRace.authorityPath, 0o640); },
+    }));
+  } finally { await modeRace.close(); }
+
+  // The read is chunk-bounded rather than a single unbounded readFile().
+  const sparse = await admittedFixture(); let sparseRead = 0;
+  try {
+    await reasonAsync("CONTEXT_AUTHORITY_MALFORMED", () => readContextRouteAuthorityReceipt(sparse.authorityPath, sparse.contextFileAuthority, {
+      afterOpenForTest: async () => { await truncate(sparse.authorityPath, 32 * 1024 * 1024); },
+      observeReadBytesForTest: (bytes) => { sparseRead = bytes; },
+    }));
+    assert.equal(sparseRead, CONTEXT_ROUTE_LIMITS.receiptBytes + 1);
+  } finally { await sparse.close(); }
+
+  const growing = await admittedFixture(); let growingRead = 0; let growthRounds = 0;
+  try {
+    await reasonAsync("CONTEXT_AUTHORITY_MALFORMED", () => readContextRouteAuthorityReceipt(growing.authorityPath, growing.contextFileAuthority, {
+      observeReadBytesForTest: (bytes) => { growingRead = bytes; },
+      afterReadChunkForTest: async () => { growthRounds += 1; await appendFile(growing.authorityPath, "x".repeat(16_384)); },
+    }));
+    assert.equal(growingRead, CONTEXT_ROUTE_LIMITS.receiptBytes + 1);
+    assert.ok(growthRounds >= 4);
+  } finally { await growing.close(); }
+});
+
+test("context authority source identity digest is stable within a checkout and moves with mode", async () => {
+  const admitted = await admittedFixture();
+  try {
+    const first = await readContextRouteAuthorityReceipt(admitted.authorityPath, admitted.contextFileAuthority);
+    const second = await readContextRouteAuthorityReceipt(admitted.authorityPath, admitted.contextFileAuthority);
+    assert.equal(first.sourceIdentityDigest, second.sourceIdentityDigest);
+    assert.match(first.sourceIdentityDigest, /^[a-f0-9]{64}$/u);
+    await chmod(admitted.authorityPath, 0o640);
+    const afterChmod = await readContextRouteAuthorityReceipt(admitted.authorityPath, admitted.contextFileAuthority);
+    assert.notEqual(afterChmod.sourceIdentityDigest, first.sourceIdentityDigest);
   } finally { await admitted.close(); }
 });
 
