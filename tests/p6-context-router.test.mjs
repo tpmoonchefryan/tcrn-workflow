@@ -697,3 +697,103 @@ test("WSC-7: knowledge-candidates bridge routes end-to-end through the P6 router
     await bridge.close();
   }
 });
+
+// CQ-02c. The candidate admission headers carried the same coercing membership test that
+// CQ-02 and CQ-02b closed elsewhere: String(["fresh"]) === "fresh", so a single-element
+// array, a plain object with a toString, and a boxed String all passed the enum gate and
+// were then written into the digest basis through an `as` assertion. The digest is
+// recomputed over that same raw value, so an honest caller's digest still matched and the
+// record was ADMITTED with a non-string sitting in a field the exported type calls an enum.
+test("CQ-02c: context candidate and receipt enums refuse values that only coerce to a member", () => {
+  const coercibleTo = (member) => [
+    ["single-element array", [member]],
+    ["plain object with toString", { toString: () => member }],
+    ["boxed String", new String(member)],
+  ];
+  // Already refused before the guards landed; carried here only so the anchors are not
+  // silently recounted as this package's proof.
+  const anchors = [["anchor number", 1], ["anchor null", null], ["anchor plain object", {}]];
+
+  const reseal = (candidate) => {
+    const basis = Object.fromEntries(Object.entries(candidate).filter(([key]) => key !== "candidateDigest"));
+    // The coercible shapes are not canonical values, so their digest cannot be computed.
+    // The header guard is reached before the digest check either way.
+    try {
+      return { ...basis, candidateDigest: canonicalSha256(basis) };
+    } catch {
+      return { ...basis, candidateDigest: "0".repeat(64) };
+    }
+  };
+  const refuses = (label, build) => {
+    assert.throws(() => validateContextRouteRequest(build()), (error) => {
+      assert.equal(error.reasonCode, "CONTEXT_SCHEMA_INVALID", `${label}: got ${error?.reasonCode}`);
+      return true;
+    }, label);
+  };
+
+  const base = routeRequest();
+  // Metadata candidate header: kind, scope, freshness, retentionClass.
+  const metadataFields = { kind: "metadata", scope: "workspace", freshness: "fresh", retentionClass: "metadata_only" };
+  for (const [field, member] of Object.entries(metadataFields)) {
+    for (const [label, value] of [...coercibleTo(member), ...anchors]) {
+      refuses(`metadataCandidates[0].${field} ${label}`, () => ({
+        ...base,
+        metadataCandidates: [reseal({ ...base.metadataCandidates[0], [field]: value })],
+      }));
+    }
+  }
+
+  // Explicit read candidate header: kind, scope, freshness.
+  const explicitFields = { kind: "body", scope: "work", freshness: "fresh" };
+  for (const [field, member] of Object.entries(explicitFields)) {
+    for (const [label, value] of [...coercibleTo(member), ...anchors]) {
+      refuses(`explicitReadCandidates[0].${field} ${label}`, () => ({
+        ...base,
+        explicitReadCandidates: [reseal({ ...base.explicitReadCandidates[0], [field]: value })],
+      }));
+    }
+  }
+
+  // The guards must not have closed the legal values.
+  assert.doesNotThrow(() => validateContextRouteRequest(base));
+});
+
+// CQ-02c, eighth site: the receipt's exclusion reason codes carried the same coercing
+// membership test. This one sits on a validator of a receipt the router itself produced,
+// so the vector has to be injected into an otherwise valid result and the receipt digest
+// resealed around it, or the digest check fires before the header guard is reached.
+test("CQ-02c: context receipt exclusion reason codes refuse values that only coerce to a member", async () => {
+  const admitted = await admittedFixture(0);
+  const result = routeContext(admitted.request, admitted.profileAdmission, admitted.contextAdmission);
+  const member = result.receipt.exclusions[0].reasonCode;
+  assert.equal(member, "CONTEXT_STALE_EXCLUDED");
+
+  const withReasonCode = (value) => {
+    const exclusions = result.receipt.exclusions.map((entry, index) => (index === 0 ? { ...entry, reasonCode: value } : entry));
+    const receipt = { ...result.receipt, exclusions };
+    delete receipt.receiptDigest;
+    let receiptDigest;
+    try {
+      receiptDigest = canonicalSha256(receipt);
+    } catch {
+      receiptDigest = "0".repeat(64);
+    }
+    return { ...result, receipt: { ...receipt, receiptDigest } };
+  };
+  const vectors = [
+    ["single-element array", [member]],
+    ["plain object with toString", { toString: () => member }],
+    ["boxed String", new String(member)],
+    // Regression anchors only.
+    ["anchor number", 1],
+    ["anchor null", null],
+    ["anchor plain object", {}],
+  ];
+  for (const [label, value] of vectors) {
+    assert.throws(() => validateContextRouteResult(withReasonCode(value)), (error) => {
+      assert.equal(error.reasonCode, "CONTEXT_SCHEMA_INVALID", `${label}: got ${error?.reasonCode}`);
+      return true;
+    }, label);
+  }
+  assert.doesNotThrow(() => validateContextRouteResult(result));
+});
