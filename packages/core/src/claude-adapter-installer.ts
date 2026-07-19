@@ -14,7 +14,7 @@
 
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, readFile, realpath, rename, rm, rmdir, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, realpath, rename, rm, rmdir, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 
 import { canonicalJson, canonicalSha256 } from "../../protocol/src/index.js";
@@ -48,6 +48,10 @@ export const CLAUDE_ADAPTER_INSTALLER_REASON_CODES = Object.freeze([
   "INSTALLER_ROLLBACK_EXECUTED",
   "INSTALLER_ROLLBACK_MISMATCH",
   "INSTALLER_ROOT_INVALID",
+  // Terminal, not transient: .claude/settings.json is a symlink or hardlink, or it
+  // changed identity/bytes between the merge and the commit. Retrying never helps —
+  // the operator must resolve the link or the concurrent edit first.
+  "INSTALLER_SETTINGS_INTERFERENCE",
   "INSTALLER_TARGET_EXISTS",
   "INSTALLER_WRITE_FAILED",
 ] as const);
@@ -86,6 +90,9 @@ export interface ClaudeAdapterActivationInstallOptions {
   // Fires between the settings merge and the rename that commits it, so the
   // interference recheck below has an executable window to be tested through.
   readonly beforeSettingsCommitForTest?: () => Promise<void>;
+  // Fires between the settings lstat and the open that follows it, so the identity
+  // recheck inside readSettingsIdentity has an executable window too.
+  readonly afterSettingsLstatForTest?: () => Promise<void>;
 }
 
 export interface ClaudeAdapterActivationInstallResult {
@@ -257,6 +264,80 @@ async function readInstalledTemplate(target: string, label: string): Promise<{ r
   return { contentDigest: contentSha256(content), identityDigest: identityDigest(stat), realpath: await realpath(target) };
 }
 
+interface SettingsSnapshot {
+  readonly content: string;
+  readonly identity: StatIdentity;
+}
+
+// Hardened read of .claude/settings.json. This replaces a bare
+// readFile(settingsPath) which had no lstat, no O_NOFOLLOW and captured no
+// identity: it read straight through a symlink, and the rename below then
+// silently replaced that symlink with a regular file — data loss for anyone
+// managing .claude with stow or chezmoi. The sequence mirrors the reader in
+// claude-adapter.ts: lstat -> open O_NOFOLLOW -> fstat identity -> read ->
+// fstat + by-name lstat recheck, so an in-place swap during the read and a
+// by-name rename during the read are both caught. A symlinked or hardlinked
+// settings.json is now refused outright rather than followed.
+async function readSettingsIdentity(settingsPath: string, afterSettingsLstat?: () => Promise<void>): Promise<SettingsSnapshot | undefined> {
+  let before: StatIdentity;
+  try {
+    before = await lstat(settingsPath);
+  } catch (error) {
+    // Only ENOENT means absent; every other errno is interference, never "no file".
+    if (hasErrorCode(error, "ENOENT")) return undefined;
+    fail("INSTALLER_SETTINGS_INTERFERENCE", "settings stat");
+  }
+  if (before.isSymbolicLink() || !before.isFile() || before.nlink !== 1) fail("INSTALLER_SETTINGS_INTERFERENCE", "settings.json is not a single-linked regular file");
+  if (afterSettingsLstat !== undefined) await afterSettingsLstat();
+  let handle;
+  try {
+    handle = await open(settingsPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch {
+    fail("INSTALLER_SETTINGS_INTERFERENCE", "settings open");
+  }
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.nlink !== 1 || opened.dev !== before.dev || opened.ino !== before.ino) fail("INSTALLER_SETTINGS_INTERFERENCE", "settings identity moved between stat and open");
+    const content = await handle.readFile();
+    const after = await handle.stat();
+    const named = await lstat(settingsPath);
+    if (after.dev !== opened.dev || after.ino !== opened.ino || named.dev !== after.dev || named.ino !== after.ino || content.length !== after.size) {
+      fail("INSTALLER_SETTINGS_INTERFERENCE", "settings identity changed during read");
+    }
+    return { content: content.toString("utf8"), identity: after };
+  } catch (error) {
+    if (error instanceof ClaudeAdapterInstallerError) throw error;
+    fail("INSTALLER_SETTINGS_INTERFERENCE", "settings read");
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
+
+// Re-verify immediately before the commit that nothing landed in settings.json
+// since the merge input was captured. Bytes are compared, not only stat identity:
+// identityDigest hashes dev/ino/size/mtimeMs/ctimeMs, so a same-length in-place
+// rewrite inside one timestamp tick is invisible to identity alone.
+async function assertSettingsUnchanged(settingsPath: string, before: SettingsSnapshot | undefined): Promise<void> {
+  let current: StatIdentity | undefined;
+  try {
+    current = await lstat(settingsPath);
+  } catch (error) {
+    // Fail-closed: only ENOENT may be read as absent. Collapsing EACCES/EIO/ELOOP
+    // into "still missing, unchanged" would commit the rename over a file this
+    // process can no longer describe — the exact opposite of this recheck's purpose.
+    if (!hasErrorCode(error, "ENOENT")) fail("INSTALLER_SETTINGS_INTERFERENCE", "settings recheck");
+  }
+  if (before === undefined) {
+    if (current !== undefined) fail("INSTALLER_SETTINGS_INTERFERENCE", "settings.json appeared while the activation was being prepared");
+    return;
+  }
+  if (current === undefined) fail("INSTALLER_SETTINGS_INTERFERENCE", "settings.json disappeared while the activation was being prepared");
+  const now = await readSettingsIdentity(settingsPath);
+  if (now === undefined || now.content !== before.content || now.identity.dev !== before.identity.dev || now.identity.ino !== before.identity.ino) {
+    fail("INSTALLER_SETTINGS_INTERFERENCE", "settings.json changed while the activation was being prepared");
+  }
+}
+
 // WSG-3 Step-2 activation installer. Assumes Step 1 already installed the four
 // inert templates under <root>/.claude/tcrn-workflow/. Writes session-start.mjs
 // (O_EXCL O_NOFOLLOW 0o600), merges the v2 fragment into <root>/.claude/settings.json
@@ -287,13 +368,9 @@ export async function installClaudeAdapterActivation(options: ClaudeAdapterActiv
 
   // Compute the merged settings before writing anything (pure, fail-closed).
   const settingsPath = resolve(installationRoot, ".claude", "settings.json");
-  let currentSettings = "{}";
-  const existing = await readFile(settingsPath, "utf8").catch((error) => {
-    if (hasErrorCode(error, "ENOENT")) return undefined;
-    fail("INSTALLER_WRITE_FAILED", "settings read");
-  });
-  if (typeof existing === "string") currentSettings = existing;
-  const mergedSettings = mergeClaudeAdapterActivationFragment(currentSettings, fragment);
+  const settingsBefore = await readSettingsIdentity(settingsPath, options.afterSettingsLstatForTest);
+  // "{}" preserves, byte for byte, the absent-file input the merge saw before.
+  const mergedSettings = mergeClaudeAdapterActivationFragment(settingsBefore?.content ?? "{}", fragment);
 
   const scriptTarget = resolve(installationRoot, ...CLAUDE_ADAPTER_SESSION_START_PATH.split("/"));
   const renderTarget = resolve(installationRoot, ...CLAUDE_ADAPTER_PERSONA_RENDER_PATH.split("/"));
@@ -356,13 +433,7 @@ export async function installClaudeAdapterActivation(options: ClaudeAdapterActiv
     // in between. Every other reader in this family triple-stats for exactly this class
     // of interference.
     await options.beforeSettingsCommitForTest?.();
-    const settingsBeforeCommit = await readFile(settingsPath, "utf8").catch((error) => {
-      if ((error as { code?: string }).code === "ENOENT") return undefined;
-      throw error;
-    });
-    if ((settingsBeforeCommit ?? "{}") !== currentSettings) {
-      fail("INSTALLER_WRITE_FAILED", "settings.json changed while the activation was being prepared");
-    }
+    await assertSettingsUnchanged(settingsPath, settingsBefore);
     await writeExclusive(settingsTempPath, Buffer.from(mergedSettings, "utf8"), "activation settings temp");
     try {
       await rename(settingsTempPath, settingsPath);
