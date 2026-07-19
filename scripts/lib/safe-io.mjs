@@ -1252,10 +1252,18 @@ export async function withExclusiveOutputSession(repositoryPath, operation) {
   }
 }
 
+// `allowHardlinks` exists for exactly one class of caller: a file this repository does
+// not own, read from a package manager's tree. pnpm's store is content-addressable and
+// hardlinks into node_modules by design, so `nlink === 1` there asserts a property of
+// someone else's storage layout rather than anything about our bytes. Every other guard
+// stays on -- symlink refusal, O_NOFOLLOW, and the dev/ino identity carried through open
+// and read, which is what actually closes the TOCTOU window. The default is false and
+// must stay false: for a tracked source file, a second link IS the finding.
 export async function readBoundRegularFile(path, {
   reasonCode,
   hardlinkReasonCode,
   pathChangedReasonCode = "INPUT_PATH_CHANGED",
+  allowHardlinks = false,
   afterOpen,
 } = {}) {
   const inputReason = reasonCode ?? "INPUT_INVALID";
@@ -1265,7 +1273,7 @@ export async function readBoundRegularFile(path, {
   if (before.isSymbolicLink() || !before.isFile()) {
     fail(inputReason, `${lexicalPath} must be a regular non-symlink file`);
   }
-  if (before.nlink !== 1) {
+  if (!allowHardlinks && before.nlink !== 1) {
     fail(hardlinkReason, `${lexicalPath} must have exactly one filesystem link`);
   }
   if (typeof constants.O_NOFOLLOW !== "number") {
@@ -1284,7 +1292,7 @@ export async function readBoundRegularFile(path, {
     if (!opened.isFile() || !sameIdentity(before, opened)) {
       fail(pathChangedReasonCode, `${lexicalPath} changed while opening`);
     }
-    if (opened.nlink !== 1) {
+    if (!allowHardlinks && opened.nlink !== 1) {
       fail(hardlinkReason, `${lexicalPath} must have exactly one filesystem link`);
     }
     if (afterOpen) {
@@ -1292,7 +1300,7 @@ export async function readBoundRegularFile(path, {
     }
     const content = await handle.readFile();
     const afterRead = await handle.stat();
-    if (!sameIdentity(opened, afterRead) || afterRead.nlink !== 1) {
+    if (!sameIdentity(opened, afterRead) || (!allowHardlinks && afterRead.nlink !== 1)) {
       fail(pathChangedReasonCode, `${lexicalPath} changed while reading`);
     }
     const pathAfter = await pathMetadata(lexicalPath, pathChangedReasonCode);

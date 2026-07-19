@@ -91,6 +91,15 @@
       "replace": "`stale-recovery-${",
       "expectedMatches": 2,
       "test": "tests/p3-file-engine.test.mjs"
+    },
+    {
+      "id": "CI-hardlink-scope-of-source-reader",
+      "rationale": "readSourceFile asserts nlink === 1, which is right for tracked source and a category error for a package manager's tree: pnpm hardlinks from a content-addressable store, so every CI runner failed SOURCE_HARDLINK while a cross-filesystem local store stayed green. The relaxation is scoped to a caller that names it; this entry pins that removing the scope reddens.",
+      "file": "scripts/lib/safe-io.mjs",
+      "find": "if (!allowHardlinks && before.nlink !== 1) {",
+      "replace": "if (before.nlink !== 1) {",
+      "expectedMatches": 1,
+      "test": "tests/io-boundaries.test.mjs"
     }
   ]
 }
