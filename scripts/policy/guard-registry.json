@@ -100,6 +100,15 @@
       "replace": "if (before.nlink !== 1) {",
       "expectedMatches": 1,
       "test": "tests/io-boundaries.test.mjs"
+    },
+    {
+      "id": "CI-dependency-manifest-scope",
+      "rationale": "The hardlink relaxation is scoped to a package manager tree. As first written that scope was a comment, so a later caller could aim the reader at a tracked source file and drop the guard for that read with nothing to say so -- documented, not enforced, in the very function added to fix a misapplied guard.",
+      "file": "scripts/lib/files.mjs",
+      "find": "if (!isInside(resolve(repositoryRoot, \"node_modules\"), resolved)) {",
+      "replace": "if (false) {",
+      "expectedMatches": 1,
+      "test": "tests/io-boundaries.test.mjs"
     }
   ]
 }

@@ -15,9 +15,19 @@ version: 2
 # to skim past red in a repository whose entire premise is that red means stopped.
 #
 # What replaces it: Dependabot alerts and security updates are enabled at the repository
-# level. Those fire on an advisory rather than on a calendar, so when npm dependencies do
-# raise a pull request it is worth the interrupt -- and it will still be red for the same
-# structural reason, which is the correct signal at that point rather than noise.
+# level. Those fire on an advisory rather than on a calendar.
+#
+# Be precise about what that is worth, because the first version of this comment was not.
+# The ALERT is the signal. The pull request an alert raises will be red for the same
+# structural reason as any other npm bump, so it is still an artifact to be worked rather
+# than merged -- just rare enough to be worth the interrupt, which the weekly one was not.
+#
+# And this was never the only backstop. verify:p1 runs the vulnerability gate, and
+# scripts/policy/vulnerability-policy.json carries maxAgeDays: 30, so a snapshot older
+# than a month fails VULNERABILITY_POLICY_STALE and stops the gate outright. Refreshing it
+# means looking at advisories. That pull check was already forcing a monthly review before
+# any of this changed; the alerts are an improvement on its latency, not a rescue from
+# having nothing.
 #
 # Routine bumps are done by hand as governed work: update all three pinned surfaces
 # together, regenerate, and record why the version moved.
