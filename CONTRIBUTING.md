@@ -40,6 +40,31 @@ not proof scaffolding.
 (corrected baseline, with the `packages/protocol` package included in product
 mass per its definition), well above the `1.0` threshold, so the rule binds.
 
+**Recorded exception — OD-21, 2026-07-19, `pnpm guard-check`.** The Owner grants
+one written exception for the guard registry and its mutation checker
+(`scripts/guard-check.mjs`, `scripts/policy/guard-registry.json`).
+
+The exception is recorded here rather than avoided, and the distinction matters.
+The checker could have been shipped as a standalone npm script — the shape
+`push-gate` already uses — and then argued to fall outside the rule's three named
+forms. That argument holds for `push-gate`, which checks release consistency and
+adds no proof surface. It does not hold here: a mutation checker is proof
+scaffolding by any reading, and routing around the rule on a narrow textual
+reading would be the governance form of the exact substitution this repository's
+own audit caught in its code.
+
+What the exception buys: the rc.6 program twice landed a guard whose proof was
+never written, and the consequence was that reverting the guard reddened nothing.
+The correction was a discipline recorded in commit messages — revert each guard,
+observe red, restore. This makes that discipline a machine judgement. It declares
+no new capability; it tests whether existing proof still bites.
+
+Scope: `guard-check` stays a standalone script wired into `push-gate`. It is
+deliberately **not** folded into `verify:p1`, because each entry costs a build
+plus a test run (~4-5s measured) and ten entries would push the P1 wall clock
+toward the 180s escalation trigger that protects the "run it on every change"
+discipline.
+
 **Current.** After the rc.6 fix and optimization program the measured figure is
 `{proofLines: 25602, productLines: 16011, ratio: 1.599}`. The program added
 proof to fixes that had shipped without it and retired four dead release

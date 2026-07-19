@@ -195,9 +195,18 @@ Le mode développement est hors ligne avec un garde réseau de processus et zér
 | `docs/` | Architecture, confiance de version, gestion des versions, notes de version. |
 | `verification-map.yaml` | Le registre des affirmations — commencez ici pour voir ce qui est réellement prouvé. |
 
+## Ce que ce cadre ne gouverne pas
+
+Chacune des garanties ci-dessus a une portée, et ces portées se lisent facilement trop largement. Les quatre limites suivantes sont énoncées positivement parce qu'un lecteur ayant ce document entier sous les yeux a tout de même lu les deux premières trop largement.
+
+- **L'arbre source de votre produit.** Le bail à écrivain unique gouverne la chaîne d'événements de l'espace de travail. Deux agents modifiant `src/foo.ts` en même temps ne sont protégés par rien ici — utilisez l'isolation par worktree, ou faites passer ces modifications par l'espace de travail vous-même.
+- **La chaîne d'approvisionnement de votre produit.** Le garde réseau couvre le processus qui exécute les commandes projet P1. Le shell de votre propre agent, et la construction de votre produit, sont en dehors. Zéro dépendance d'exécution est une propriété de **ce cadre**, pas de ce que vous construisez avec.
+- **La correction de votre code.** Le registre de revendications garantit qu'une capacité **déclarée** conserve une preuve exécutable, et que la surdéclaration fait échouer la construction. Il ne peut pas vous dire que l'ensemble des revendications est le bon. Choisir quoi revendiquer relève irréductiblement du jugement humain, et aucune provenance ne s'y substitue.
+- **L'identité et le temps.** L'attestation d'acteur enregistre un identifiant d'acteur **déclaré**, non authentifié, et la chaîne prouve l'ordre, non la vérité de l'horloge murale. La chaîne est inviolable de manière détectable en son sein ; elle n'est pas ancrée en dehors du système de fichiers où elle réside.
+
 ## Statut, honnêtement
 
-- `0.1.0-rc.5` est un **candidat de pré-version**. L'API publique n'est pas encore stable.
+- `0.1.0-rc.6` est un **candidat de pré-version**. L'API publique n'est pas encore stable.
 - Les deux adaptateurs d'hôtes sont des candidats inertes en simulation ; **aucune prise en charge en production de Codex ou Claude Code n'est revendiquée**.
 - `supportedAosReleases` est vide : aucune compatibilité AOS externe n'est revendiquée.
 
