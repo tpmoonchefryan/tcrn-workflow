@@ -40,6 +40,13 @@ not proof scaffolding.
 (corrected baseline, with the `packages/protocol` package included in product
 mass per its definition), well above the `1.0` threshold, so the rule binds.
 
+**Current.** After the rc.6 fix and optimization program the measured figure is
+`{proofLines: 25602, productLines: 16011, ratio: 1.599}`. The program added
+proof to fixes that had shipped without it and retired four dead release
+helpers, and the ratio moved from `1.62` to `1.60` — it did not approach `1.0`,
+so the rule still binds and no gate in that program needed the exception clause.
+Re-measure rather than quote this number; it is a snapshot, not a pin.
+
 **Measurement.** Run the report-only command:
 
 ```sh
