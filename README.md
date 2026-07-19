@@ -2,7 +2,9 @@
 
 # TCRN Workflow
 
-**Governed delivery for AI agents — where every capability is a machine-verified claim, not a promise.**
+### Your AI agents say "done." This framework makes them prove it.
+
+**Governed delivery for AI agents — every capability is a machine-verified claim, not a promise.**
 
 English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
@@ -10,7 +12,7 @@ English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
-[Why](#why-this-project-exists) · [Who it is for](#who-this-is-for) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Verification](#verification) · [License](#license)
+[Why](#why-this-project-exists) · [Is this for you?](#is-this-for-you) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Plain answers](#plain-answers-to-fair-questions) · [License](#license)
 
 `Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
 
@@ -18,64 +20,83 @@ English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [
 
 ---
 
+> **The whole idea in one sentence:** every guarantee this framework makes is written in a machine-readable ledger, tied to a test you can run yourself on your own machine — and the moment a guarantee stops being true, **the build fails**.
+
 ## Why this project exists
 
-You can already get an agent to write code. What you cannot easily get is **a reason to believe it did what it says it did.**
+Getting an AI agent to write code is easy now. Getting **a reason to believe what it tells you** is not.
 
-Three gaps show up in almost every agent workflow:
+If you have worked with agents, you have met all three of these:
 
-1. **Claims nobody can check.** "The agent tested it" usually means a log line. Nothing connects what a workflow *claims* to guarantee with what its code *actually* enforces, so the guarantee degrades silently as the code changes.
-2. **History you cannot replay.** Conversation-driven work leaves its record in chat logs and mutable state. When something goes wrong at 2am, there is no deterministic event chain to replay, diff, or hand a reviewer.
-3. **Installs made blind.** Skills and workflows arrive from repositories with no release identity and no way to prove the bytes you run are the bytes that were reviewed.
+1. **"Trust me, I tested it."** The agent says the tests pass. What you actually have is a line of text in a chat window. Nothing connects what the workflow *claims* to what its code *enforces* — and as the code changes, the claim quietly goes stale.
+2. **History that vanishes.** The decisions live in a scrolled-away conversation and mutable files. When something breaks at 2 a.m., there is nothing to replay, nothing to diff, nothing to hand a reviewer.
+3. **Installs on faith.** A skill or workflow arrives from a repository, and nothing proves the bytes you are about to run are the bytes somebody actually reviewed.
 
-TCRN Workflow closes all three. It treats agent-driven delivery the way a safety-critical release is treated: **every capability maps to a stable reason code proven by a hermetic offline test**, every workspace mutation is an append-only hash-chained event, and every release is reproducible byte-for-byte.
+TCRN Workflow closes all three — by treating agent-driven delivery the way a safety-critical release is treated:
 
-The test of that discipline is blunt — **overclaiming is a build failure, not a style issue.** Change what a claim covers without re-proving it and the chain stops.
+- **Every capability is a claim in a ledger**, and every claim is tied to a stable error name (a *reason code*) proven by a test that runs offline.
+- **Every change to your workspace is an entry in a tamper-evident journal** — each entry is cryptographically chained to the one before it, so history cannot be quietly rewritten, only appended.
+- **Every release can be rebuilt byte-for-byte** and checked against published digests.
 
-## Who this is for
+One rule holds the whole thing together, and it is the part people find hardest to believe until they try it: **overclaiming is a build failure, not a style issue.** Change what a claim covers without re-proving it, and the chain stops.
 
-**A good fit if you** run agents on work that has consequences — production code, regulated or audited delivery, multi-agent handoffs where nobody remembers who decided what — and you need an artifact a reviewer can check rather than a transcript they must trust. Also if you want agent work to stay on your machine: no database, no daemon, no network, no telemetry.
+## Is this for you?
 
-**Probably not for you if** you want a chat-based assistant with zero setup, you need cloud sync or a hosted dashboard, or your work is exploratory enough that an append-only audit trail is friction rather than value. The rigor here is not free — it is a deliberate trade for evidence.
+| | |
+| --- | --- |
+| ✅ **Yes, if** | you run agents on work that has consequences — production code, regulated or audited delivery, multi-agent handoffs where nobody remembers who decided what. You want an artifact a reviewer can *check*, not a transcript they must *trust*. You want everything to stay on your machine: no database, no daemon, no network, no telemetry. |
+| ❌ **Probably not, if** | you want a zero-setup chat assistant, you need cloud sync or a hosted dashboard, or your work is exploratory enough that an append-only audit trail is friction rather than value. The rigor here is not free — it is a deliberate trade for evidence. |
 
 ## What you get
 
 | Capability | What it means in practice |
 | --- | --- |
-| **Deterministic file-native workspace** | An event-sourced local work graph (Initiative → Epic → Story → Subtask) stored as canonical JSON files with a hash chain — no database, no daemon, byte-reproducible exports. |
-| **Fail-closed verification chain** | One command (`pnpm verify:p1`) runs 20 gates: format, lint, typecheck, build, ~40 test files, trust matrix, archive/SBOM/license/vulnerability policy, source allowlist, offline boundary, privacy scan, CI hardening, verification map, and clean-history proof. Anything unexpected stops the chain. |
-| **Machine-readable claim ledger** | `verification-map.yaml` binds 65 claims — 13 framework-hygiene, 13 inertness-proof, 39 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run — overclaiming is a build failure, not a style issue. |
-| **Governed deliberation, gates & distillation** | Nine governed CLI verbs run pre-commitment conferences and decision gates as additive hash-chained events, and closing a conference distills each minutes decision into a knowledge candidate backlinking it. Gate enforcement is fail-closed: a pending gate blocks its work item's transition to `done` (`WORKSPACE_GATE_PENDING`, at the verb and again on replay), and a gate reaches `satisfied` only against resolvable conference-minutes evidence. |
-| **Actor attestation, enforced at the boundary** | Appending the one-way `attestation.actor.enabled` event makes an actor id mandatory on every later mutation — live append and replay both fail closed `WORKSPACE_ACTOR_REQUIRED` on any event that omits one. Workspaces that never enable it stay byte-identical to before; once enabled it cannot be turned off. |
-| **Opt-in activation ladder** | Three explicit, byte-reversible steps turn the inert Claude Code bundle into a live governed session: install the four-file template (Step 1), merge exactly one fail-open `SessionStart` hook (Step 2), and render the single advisory Verity persona within a 1024-byte budget (Step 3). The handler is the sole authorized fail-open surface — any error exits 0 as plain Claude Code — and nothing under `~/.claude` is ever named or written. |
-| **Snapshot backup & hermetic restore** | A lease-held `snapshot-manifest` emits a deterministic per-file manifest; the runbook round-trips snapshot → wipe → restore byte-identically at the original path, with the two doctrine failure modes (partial or relocated restore) failing closed. An optional git tier-2 serves as an integrity witness only. |
-| **Dual-host Agent App adapters** | Codex and Claude Code are the two officially supported V1 hosts, sharing byte-identical host-neutral machinery with a proven cross-host parity digest. Both adapters are **inert dry-run candidates by default**: they generate uninstalled template data only, and live host support is reached only through the opt-in, gated activation ladder above. |
-| **Offline-first, privacy-clean** | Development mode enforces a Node process network guard and zero telemetry. The privacy gate scans every tracked byte, all reachable git history, and the release archive for personal identifiers and machine paths. |
-| **Verifiable release trust** | Releases are bound by tag identity (commit, tree, tag object) — git object ids are content hashes, so the binding is self-authenticating. External consumers verify through the companion `tcrn-workflow-helper`, whose bootstrap digest is published independently and whose accepted release digests are compiled into it. |
+| **A workspace that is just files** | Your whole work graph (Initiative → Epic → Story → Subtask) lives in plain, canonically formatted JSON files with a hash chain — no database, no daemon. You can audit it with `cat` and `sha256sum`, and exports are byte-reproducible. |
+| **One command, 20 gates** | `pnpm verify:p1` runs the entire verification chain: format, lint, typecheck, build, ~40 test files, trust matrix, archive/SBOM/license/vulnerability policy, source allowlist, offline boundary, privacy scan, CI hardening, verification map, and clean-history proof. Anything unexpected stops the chain. |
+| **A claim ledger a machine can read** | `verification-map.yaml` binds 65 claims — 13 framework-hygiene, 13 inertness-proof, 39 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run. |
+| **Guards that prove they still bite** | `pnpm guard-check` mutates each registered guard out of the source and requires its named test to go red — 12 guards, verified before every push. A protection that nothing would notice losing is not a protection. |
+| **Deliberation on the record** | Conferences and decision gates are appended to the same tamper-evident journal. A pending gate *blocks* its work item from reaching `done` (`WORKSPACE_GATE_PENDING`) — at the command and again on replay — and closing a conference distills each decision into a knowledge candidate that links back to it. |
+| **Every decision gets a name** | Enable actor attestation and every later mutation must declare who acted — the engine and its replay both fail closed on any event that omits an actor id. Workspaces that never enable it stay byte-identical to before. |
+| **Activation you can undo** | Three explicit, byte-reversible steps turn the inert Claude Code bundle into a live governed session — and any error in the session hook exits cleanly back to plain Claude Code. Nothing under `~/.claude` is ever named or written by the inert bundle. |
+| **Backups that prove themselves** | A snapshot emits a deterministic per-file manifest; the runbook round-trips snapshot → wipe → restore byte-identically, and the two failure modes that matter (partial or relocated restore) fail closed. |
+| **Two hosts, one truth** | Codex and Claude Code adapters share byte-identical host-neutral machinery with a proven cross-host parity digest. Both are **inert dry-run candidates by default** — they generate uninstalled template data only. |
+| **Offline by construction** | Development mode installs a process-level network guard and sends zero telemetry. The privacy gate scans every tracked byte, all reachable git history, and the release archive for personal identifiers and machine paths. |
+| **Releases you can re-derive** | A release is an immutable tag plus a reproducible artifact set, rebuilt and byte-compared by `pnpm verify:p8`. External consumers verify through the companion `tcrn-workflow-helper`, whose own digest is published where you can check it independently. |
+
+<details>
+<summary><b>Five terms, in plain words</b> (click to expand)</summary>
+
+- **Fail-closed** — when anything looks wrong, the system stops with a stable error name instead of guessing and carrying on. There are no warnings that scroll by: only green, or stopped.
+- **Hash chain** — every journal entry contains a fingerprint of the previous entry. Rewriting history would change the fingerprints, and the replay would refuse it.
+- **Reason code** — a stable, machine-readable error name (like `WORKSPACE_GATE_PENDING`). Tools and agents can branch on it; prose error text is never the contract.
+- **Hermetic** — a test that runs entirely from local, pinned inputs. Same inputs, same result, on any machine.
+- **CAS / expected version** — every write states which version it expects to be building on. If someone else wrote first, the write is refused instead of silently overwriting.
+
+</details>
 
 ## Quick start
 
-Requires the pinned toolchain: **Node 24.16.0** and **pnpm 11.3.0** (dependency lifecycle scripts stay disabled).
+You need the pinned toolchain: **Node 24.16.0** and **pnpm 11.3.0**. Dependency lifecycle scripts stay disabled — nothing runs code on install.
 
 ```sh
-# 1. Acquire the single dev dependency (explicit, frozen, script-free)
+# 1. Install the pinned dev dependencies (explicit, frozen, script-free)
 pnpm install --offline --frozen-lockfile --ignore-scripts
 
-# 2. Run the full verification gate (offline)
+# 2. Watch the framework prove itself (20 gates, fully offline)
 pnpm verify:p1
 
-# 3. Build, then use the governed CLI
+# 3. Build, then drive the governed CLI
 pnpm build
 node scripts/tcrn-workflow.mjs workspace --help
 ```
 
-Typical governed commands (all local, no network, no database):
+Typical governed commands — all local, no network, no database:
 
 ```sh
 # validate a workspace and materialize its deterministic views
 node scripts/tcrn-workflow.mjs workspace validate --workspace <dir> --now <iso-instant>
 
-# create and transition work records with CAS-checked versions
+# create and transition work records with version-checked writes
 node scripts/tcrn-workflow.mjs work-create ...
 node scripts/tcrn-workflow.mjs work-transition ...
 
@@ -83,9 +104,9 @@ node scripts/tcrn-workflow.mjs work-transition ...
 node scripts/tcrn-workflow.mjs knowledge-list ...
 ```
 
-Mutation commands require an explicit workspace path, a strict RFC 3339 timestamp, and an expected version — optimistic concurrency is enforced by the engine, not by convention.
+Every mutation requires an explicit workspace path, a strict RFC 3339 timestamp, and an expected version — concurrency safety is enforced by the engine, not by convention.
 
-## Architecture at a glance
+## Architecture in 60 seconds
 
 ```mermaid
 flowchart LR
@@ -116,25 +137,28 @@ flowchart LR
     Layers --> REL
 ```
 
-The protocols are additive-only: `work-model-v1` is frozen, and every extension (dependency, conference, assignment, gate) registers itself without touching accepted schemas.
+Frozen protocols at the bottom, a file-native engine above them, capability layers above that, and inert host adapters at the top. The protocols are additive-only: `work-model-v1` is frozen, and every extension registers itself without touching accepted schemas.
 
-## Design Q&A
+## Plain answers to fair questions
 
-### Why one canonical conversation thread with sub-agent threads, instead of multithreading?
+### Why one writer at a time, when agents love parallelism?
 
-This is the most common question, and the answer has three layers:
+Because the storage layer and the reasoning layer answer different questions:
 
-1. **The storage layer is single-writer by design.** The workspace is an append-only, hash-chained event log on a plain filesystem. A hash chain has exactly one truthful successor per event — parallel writers would either corrupt the chain or require a consensus protocol that destroys the "audit it with `cat` and `sha256sum`" property. So the engine enforces **one writer at a time** through an exclusive lease with an on-disk recovery-claim protocol: a crashed writer's lease is quarantined and reclaimed fail-closed, and every acquisition is CAS-checked.
-2. **Reasoning parallelism lives above the storage layer.** Concurrency is still everywhere — but as *independent fresh-context sub-agent threads* (implementation workers, multi-role review boards, adversarial verifiers) whose conclusions come back as data. One canonical thread holds decision authority and writes the record; N sub-threads explore, review, and refute in parallel without contaminating each other's context or racing on state. You get the throughput of parallelism with a linear, auditable decision lineage.
-3. **Governance requires a serializable story.** The single-writer chain gives a linear, tamper-evident *order* of decisions, and binding each decision to an accountable actor is now enforced: once a workspace enables the actor-attestation extension, every event the chain admits must declare an actor id — the engine and its replay both fail closed on any event that omits one — so an attested workspace binds every decision to a declared, auditable actor. That is a declared identity written into the ordered record, not a claim of authenticated identity or wall-clock truth; workspaces that leave attestation disabled behave exactly as before and rest accountability on the governance thread's receipts. A swarm of peer threads mutating shared state has neither the order nor the binding.
+1. **The storage layer is single-writer by design.** A hash chain has exactly one truthful successor per event — parallel writers would either corrupt the chain or require a consensus protocol that destroys the "audit it with `cat` and `sha256sum`" property. So the engine enforces one writer at a time through an exclusive lease with an on-disk recovery protocol: a crashed writer's lease is quarantined and reclaimed fail-closed, and every acquisition is version-checked.
+2. **Parallelism lives above the storage layer.** Run as many independent, fresh-context sub-agent threads as you like — implementation workers, review boards, adversarial verifiers. Their conclusions come back as data; one canonical thread holds decision authority and writes the record. You get the throughput of parallelism *and* a linear, auditable decision lineage.
+3. **Governance needs a serializable story.** The chain gives a linear, tamper-evident order of decisions, and — once a workspace enables actor attestation — every decision is bound to a declared, auditable actor. That is a declared identity written into the ordered record, not a claim of authenticated identity or wall-clock truth. A swarm of peers mutating shared state has neither the order nor the binding.
 
-**The tests behind this answer** (all in `tests/p3-file-engine.test.mjs`, run by `pnpm verify:p3`):
+<details>
+<summary><b>The tests behind this answer</b> (all in <code>tests/p3-file-engine.test.mjs</code>, run by <code>pnpm verify:p3</code>)</summary>
 
 - *Lease crash and recovery-claim contention are recoverable and single-writer* — a writer is crashed mid-creation, its stale lease is quarantined, contenders race and exactly one wins; the loser fails closed with a stable reason code.
-- *Delayed-creator eviction* — a paused lease creator whose directory was reclaimed must observe the active recovery claim and fail closed (`WORKSPACE_LEASE_INVALID`) instead of colonizing the fresh generation. This guards against inode-tuple reuse on filesystems that recycle inodes (found and fixed on Linux ext4 through real CI, then proven with a deterministic test).
+- *Delayed-creator eviction* — a paused lease creator whose directory was reclaimed must observe the active recovery claim and fail closed (`WORKSPACE_LEASE_INVALID`) instead of colonizing the fresh generation. Found and fixed on Linux ext4 through real CI, then proven with a deterministic test.
 - *SIGKILL injection at every effective lifecycle point* — the engine's fault inventory is discovered from real operations, and a real `SIGKILL` is delivered at each point; recovery must converge to a clean state with zero residue.
 - *64 real insertion-order permutations* produce byte-identical indexes, lists, and checkpoints — determinism is proven, not assumed.
 - 4 concurrency cases, 57 negative cases, and a filesystem attack matrix (symlinks, hard links, special files, replacement races) round out the proof.
+
+</details>
 
 ### Why files instead of a database?
 
@@ -142,25 +166,27 @@ Because the trust boundary must be inspectable with standard tools. Every record
 
 ### Why offline-first and fail-closed?
 
-An agent framework that silently reaches the network is an exfiltration channel waiting to happen. Development mode installs a process-level network guard; the verification chain proves project code has no implicit network path; the only network steps (dependency acquisition, CI bootstrap) are explicit and pinned. Fail-closed means every validator throws a stable reason code on the first unexpected byte — there are no warnings that scroll by, only green or stopped.
+An agent framework that silently reaches the network is an exfiltration channel waiting to happen. Development mode installs a process-level network guard; the verification chain proves project code has no implicit network path; the only network steps (dependency acquisition, CI bootstrap) are explicit and pinned. Fail-closed means every validator stops with a stable reason code on the first unexpected byte.
 
 ### Why are the Codex and Claude Code adapters "inert candidates"?
 
-Because claiming live host support before a governed release route has accepted it would be an overclaim — the exact failure mode this framework exists to prevent. The adapters generate deterministic, uninstalled template bundles (proven byte-exact, including a byte-reversible `.claude/settings.json` hook fragment that never clobbers user content and rejects every user-level `.claude` path). Activation is a separate, gated decision.
+Because claiming live host support before a governed release route has accepted it would be an overclaim — the exact failure mode this framework exists to prevent. The adapters generate deterministic, uninstalled template bundles (proven byte-exact, including a byte-reversible `.claude/settings.json` hook fragment that never clobbers user content). Activation is a separate, gated decision.
 
 ### How is a release trusted?
 
-A release is an immutable annotated tag plus a reproducible artifact set (canonical USTAR source archive, SBOM, provenance, checksums, notes) rebuilt and byte-compared by `pnpm verify:p8`. External consumers verify through the companion **tcrn-workflow-helper**: a dependency-free bootstrap, whose own SHA-256 is published where you can check it independently of the download, refuses any release whose bytes do not match the digests compiled into it — before any Workflow code runs.
+A release is an immutable annotated tag plus a reproducible artifact set (canonical source archive, SBOM, provenance, checksums, notes), rebuilt and byte-compared by `pnpm verify:p8`. External consumers verify through the companion **tcrn-workflow-helper**: a dependency-free bootstrap, whose own SHA-256 is published where you can check it independently of the download, refuses any release whose bytes do not match the digests compiled into it — before any Workflow code runs.
 
-### What do the tests actually prove — in numbers?
+## Numbers that are checked, not promised
+
+Every number below is enforced by a gate — if one drifts, a build fails somewhere.
 
 - **20 gates** in the `verify:p1` chain, each with a stable terminal reason code.
-- **~40 test files** covering the engine, knowledge core, artifact lifecycle, profiles, personas, context router, both adapters, exchange, compatibility, requirements ledger, release candidate, privacy boundary, proof-artifact generator, trust matrix, the conference/gate event-log store and fail-closed gate enforcement, actor attestation, snapshot backup and restore, the activation ladder, and the end-to-end governed loop.
-- **1 end-to-end flagship proof** (`pnpm verify:e2e`) — one hermetic replay of the full governed loop (initiative → epic → story → gate → conference → distill → promote → trace), every tutorial command executed verbatim and every produced digest traced to its producer.
-- **65 machine-verified claims** in `verification-map.yaml`, partitioned as 13 framework-hygiene, 13 inertness-proof, and 39 runtime-capability — the runtime-capability third is the delivered product surface, stated honestly.
-- **64-permutation determinism proofs** in three independent layers (engine insertion orders, profile layer orders, adapter input orders).
+- **65 machine-verified claims** in `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 39 runtime-capability. The claims badge above is parsed and compared against the ledger on every run.
+- **12 registered guards**, each proven to still bite by mutating it out and watching its test go red.
+- **~40 hermetic test files**, including real `SIGKILL` fault injection, 64-permutation determinism proofs in three independent layers, and a filesystem attack matrix.
+- **1 end-to-end flagship proof** (`pnpm verify:e2e`) — a hermetic replay of the full governed loop (initiative → epic → story → gate → conference → distill → promote → trace), every tutorial command executed verbatim.
 - **19-entry public AOS requirements ledger** (11 fixture-verified, 8 specified) — maturity is recorded per row, never inflated.
-- **Privacy gate** over ~200 tracked source files, ~1,470 git objects, full reachable history, and the release archive.
+- **Privacy gate** over all 250 allowlisted source files (an exact-match list — one file added or removed fails the gate), every reachable git object, and the release archive.
 
 <details>
 <summary><b>Full verification-target reference</b> (click to expand)</summary>
@@ -178,7 +204,7 @@ A release is an immutable annotated tag plus a reproducible artifact set (canoni
 | `verify:privacy` | No personal identifiers or machine paths in any tracked byte, git object, or archive. |
 | `verify:isolated` | The same P1 chain from a hermetic dependency materialization (CI-gated). |
 
-Development mode is offline with a process network guard and zero telemetry. The workspace has exactly one dev dependency (`ajv@8.17.1`, for offline Draft 2020-12 schema parity), acquired through an explicit registry boundary with lifecycle scripts disabled. P1 retains four explicit external boundaries: cross-invocation `rootVersion` continuity requires an external floor; there is no OS-level network sandbox; no fresh external advisory scan is performed offline; the privacy regex set is a focused policy control, not general DLP.
+Development mode is offline with a process network guard and zero telemetry. The workspace has exactly three dev dependencies (`ajv@8.17.1` for offline Draft 2020-12 schema parity, `typescript@5.9.3` as the pinned type gate, `@types/node@24.13.2`), each acquired through an explicit registry boundary with lifecycle scripts disabled. P1 retains four explicit external boundaries: cross-invocation `rootVersion` continuity requires an external floor; there is no OS-level network sandbox; no fresh external advisory scan is performed offline; the privacy regex set is a focused policy control, not general DLP.
 
 </details>
 
@@ -186,36 +212,22 @@ Development mode is offline with a process network guard and zero telemetry. The
 
 | Path | Contents |
 | --- | --- |
-| `packages/core/` | Engine, adapters, knowledge core, profiles, router, exchange (TypeScript, built by the pinned Node type-transform engine). |
+| `packages/core/` | Engine, adapters, knowledge core, profiles, router, exchange (TypeScript, checked by the pinned compiler). |
 | `schemas/` · `specs/` | Frozen V1 protocol schemas (closed, Draft 2020-12-parity-proven) and their normative specs. |
 | `tests/` | The hermetic proof suite. |
-| `scripts/` | Governed CLI, verification tasks, proof-artifact generator, privacy/policy gates. |
+| `scripts/` | Governed CLI, verification tasks, guard checker, proof-artifact generator, privacy/policy gates. |
 | `fixtures/` | Deterministic protocol vectors, hostile corpora, requirements ledger references. |
 | `docs/` | Architecture, release trust, versioning, release notes. |
 | `verification-map.yaml` | The claim ledger — start here to see what is actually proven. |
 
 ## What this does not govern
 
-Each guarantee above is scoped, and the scopes are easy to over-read. These four
-boundaries are stated positively because a reader who had this entire document in
-front of them still over-read the first two.
+Most projects hide their edges. Ours are load-bearing — the same discipline that proves the claims above also requires stating exactly where they stop. These four boundaries are written down because a careful reader still over-read the first two:
 
-- **Your product's source tree.** The single-writer lease governs the workspace
-  event chain. Two agents editing `src/foo.ts` at the same time are not protected
-  by anything here — use worktree isolation or route those edits through the
-  workspace yourself.
-- **Your product's supply chain.** The network guard covers the process running
-  P1 project commands. Your agent's own shell, and your product's build, are
-  outside it. Zero runtime dependencies is a property of *this* framework, not of
-  what you build with it.
-- **Whether your code is correct.** The claim ledger guarantees that a *declared*
-  capability keeps an executable proof, and that overclaiming fails the build. It
-  cannot tell you the claim set is the right one. Choosing what to claim is
-  irreducibly a human judgement, and no amount of provenance substitutes for it.
-- **Identity and time.** Actor attestation records a *declared* actor id, not an
-  authenticated one, and the chain proves ordering, not wall-clock truth. The
-  chain is tamper-evident against edits within it; it is not anchored outside the
-  filesystem it lives on.
+- **Your product's source tree.** The single-writer lease governs the workspace event chain. Two agents editing `src/foo.ts` at the same time are not protected by anything here — use worktree isolation or route those edits through the workspace yourself.
+- **Your product's supply chain.** The network guard covers the process running P1 project commands. Your agent's own shell, and your product's build, are outside it. Zero runtime dependencies is a property of *this* framework, not of what you build with it.
+- **Whether your code is correct.** The claim ledger guarantees that a *declared* capability keeps an executable proof, and that overclaiming fails the build. It cannot tell you the claim set is the right one. Choosing what to claim is irreducibly a human judgement, and no amount of provenance substitutes for it.
+- **Identity and time.** Actor attestation records a *declared* actor id, not an authenticated one, and the chain proves ordering, not wall-clock truth. The chain is tamper-evident against edits within it; it is not anchored outside the filesystem it lives on.
 
 ## Status, honestly
 

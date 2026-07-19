@@ -2,7 +2,9 @@
 
 # TCRN Workflow
 
-**La livraison gouvernée pour les agents IA — où chaque capacité est une affirmation vérifiée par la machine, pas une promesse.**
+### Vos agents IA disent « c'est fait ». Ce cadre les oblige à le prouver.
+
+**Une livraison gouvernée pour les agents IA — chaque capacité est une revendication vérifiée par la machine, pas une promesse.**
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · Français
 
@@ -10,73 +12,91 @@
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
-[Pourquoi](#why-this-project-exists) · [Pour qui](#who-this-is-for) · [Ce que vous obtenez](#what-you-get) · [Démarrage rapide](#quick-start) · [Vérification](#verification) · [Licence](#license)
+[Pourquoi ce projet existe](#pourquoi-ce-projet-existe) · [Est-ce fait pour vous](#est-ce-fait-pour-vous) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrage rapide](#démarrage-rapide) · [Réponses directes](#réponses-directes) · [Licence](#licence)
 
 `Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
-
 
 </div>
 
 ---
 
+> **Toute l'idée en une phrase :** chaque garantie que ce cadre énonce est inscrite dans un registre lisible par machine, liée à un test que vous pouvez exécuter vous-même sur votre propre machine — et dès qu'une garantie cesse d'être vraie, **la compilation échoue**.
+
 ## Pourquoi ce projet existe
 
-Faire écrire du code par un agent, c'est déjà acquis. Ce qui reste hors de portée, c'est **une raison de croire qu'il a fait ce qu'il prétend avoir fait.**
+Faire écrire du code à un agent IA est devenu facile. Obtenir **une raison de croire ce qu'il vous dit** ne l'est pas.
 
-Trois manques reviennent dans presque tous les workflows d'agents :
+Si vous avez travaillé avec des agents, vous avez rencontré les trois :
 
-1. **Des affirmations que personne ne peut vérifier.** « L'agent l'a testé » se réduit d'ordinaire à une ligne de journal. Rien ne relie ce qu'un workflow *prétend* garantir à ce que son code *impose* réellement : la garantie se dégrade en silence à mesure que le code évolue.
-2. **Un historique impossible à rejouer.** Le travail piloté par conversation laisse sa trace dans des journaux de discussion et de l'état mutable. Quand tout dérape à 2 h du matin, il n'existe aucune chaîne d'événements déterministe à rejouer, à comparer ou à remettre à un relecteur.
-3. **Des installations à l'aveugle.** Compétences et workflows arrivent de dépôts sans identité de version, sans aucun moyen de prouver que les octets exécutés sont bien les octets relus.
+1. **« Faites-moi confiance, j'ai testé. »** L'agent dit que les tests passent. Ce que vous avez réellement, c'est une ligne de texte dans une fenêtre de chat. Rien ne relie ce que le workflow *prétend* garantir à ce que son code *impose réellement* — et à mesure que le code évolue, la revendication se périme en silence.
+2. **Un historique qui s'évapore.** Les décisions vivent dans une conversation défilée et des fichiers mutables. Quand quelque chose casse à deux heures du matin, il n'y a rien à rejouer, rien à comparer, rien à remettre à un relecteur.
+3. **Des installations à l'aveugle.** Une compétence ou un workflow arrive d'un dépôt, et rien ne prouve que les octets que vous allez exécuter sont ceux que quelqu'un a réellement relus.
 
-TCRN Workflow comble les trois. Il traite la livraison pilotée par agents comme on traite une version critique pour la sécurité : **chaque capacité correspond à un code de raison stable prouvé par un test hermétique hors ligne**, chaque mutation d'espace de travail est un événement en append-only chaîné par hachage, et chaque version est reproductible à l'octet près.
+TCRN Workflow ferme ces trois brèches — en traitant la livraison pilotée par agents comme on traite une release critique pour la sécurité :
 
-Le test de cette discipline est sans nuance : **la surenchère est un échec de build, pas une question de style.** Modifiez la portée d'une affirmation sans la reprouver, et la chaîne s'arrête.
+- **Chaque capacité est une revendication dans un registre**, et chaque revendication est liée à un nom d'erreur stable (*reason code*) prouvé par un test qui s'exécute hors ligne.
+- **Chaque modification de votre espace de travail est une entrée dans un journal inviolable** — chaque entrée est chaînée cryptographiquement à la précédente, de sorte que l'historique ne peut être que complété, jamais réécrit discrètement.
+- **Chaque release peut être reconstruite octet pour octet** et confrontée aux empreintes publiées.
 
-## Pour qui
+Une seule règle tient l'ensemble, et c'est la partie que l'on croit le moins avant de l'avoir essayée : **la surdéclaration est un échec de compilation, pas une question de style.** Changez ce que couvre une revendication sans la reprouver, et la chaîne s'arrête.
 
-**C'est fait pour vous si** vous faites travailler des agents sur des sujets qui ont des conséquences — code en production, livraison régulée ou auditée, passages de relais entre agents où plus personne ne sait qui a décidé quoi — et qu'il vous faut un artefact qu'un relecteur peut vérifier plutôt qu'une transcription qu'il doit croire. Également si vous voulez que le travail des agents reste sur votre machine : pas de base de données, pas de démon, pas de réseau, pas de télémétrie.
+## Est-ce fait pour vous
 
-**Ce n'est sans doute pas pour vous si** vous cherchez un assistant conversationnel sans configuration, s'il vous faut une synchronisation cloud ou un tableau de bord hébergé, ou si votre travail est suffisamment exploratoire pour qu'une piste d'audit en append-only soit une gêne plutôt qu'un atout. La rigueur a ici un coût : c'est un choix assumé, payé en preuves.
+| | |
+| --- | --- |
+| ✅ **Oui, si** | vous faites travailler des agents sur des sujets à conséquences — code de production, livraison régulée ou auditée, passages de relais multi-agents où plus personne ne se souvient qui a décidé quoi. Vous voulez un artefact qu'un relecteur peut *vérifier*, pas une transcription qu'il doit *croire*. Et vous voulez que tout reste sur votre machine : pas de base de données, pas de démon, pas de réseau, pas de télémétrie. |
+| ❌ **Probablement pas, si** | vous voulez un assistant conversationnel sans configuration, vous avez besoin de synchronisation cloud ou d'un tableau de bord hébergé, ou votre travail est assez exploratoire pour qu'une piste d'audit en ajout seul soit une friction plutôt qu'une valeur. La rigueur ici n'est pas gratuite — c'est un échange délibéré : du confort contre des preuves. |
 
 ## Ce que vous obtenez
 
-| Capacité | Ce que cela signifie en pratique |
+| Capacité | Ce que cela signifie concrètement |
 | --- | --- |
-| **Espace de travail déterministe natif fichiers** | Un graphe de travail local à événements (Initiative → Epic → Story → Subtask) stocké en fichiers JSON canoniques avec chaîne de hachage — pas de base de données, pas de démon, exports reproductibles à l'octet près. |
-| **Chaîne de vérification fail-closed** | Une commande (`pnpm verify:p1`) exécute 20 portes : format, lint, vérification de types, build, ~40 fichiers de tests, matrice de confiance, politiques d'archive/SBOM/licence/vulnérabilités, liste d'autorisation des sources, frontière hors ligne, analyse de confidentialité, durcissement CI, carte de vérification et preuve d'historique propre. Tout imprévu arrête la chaîne. |
-| **Registre d'affirmations lisible par machine** | `verification-map.yaml` lie 65 affirmations — 13 d'hygiène du cadre, 13 de preuve d'inertie, 39 de capacité d'exécution — à des codes de raison observables. Si le sujet d'une affirmation change, sa preuve doit être rejouée — la surenchère est un échec de build, pas une question de style. |
-| **Délibération, portes et distillation gouvernées** | Neuf verbes CLI gouvernés animent des conférences de pré-engagement et des portes de décision sous forme d'événements additifs chaînés par hachage, et la clôture d'une conférence distille chaque décision du procès-verbal en une fiche de connaissance qui la rétro-lie. L'application des portes est fail-closed : une porte en attente bloque la transition de son élément de travail vers `done` (`WORKSPACE_GATE_PENDING`, au verbe puis de nouveau au rejeu), et une porte n'atteint `satisfied` que face à une preuve de procès-verbal de conférence résoluble. |
-| **Attestation d'acteur, imposée à la frontière** | L'ajout de l'événement à sens unique `attestation.actor.enabled` rend un identifiant d'acteur obligatoire sur chaque mutation ultérieure — l'ajout en direct comme le rejeu échouent fail-closed `WORKSPACE_ACTOR_REQUIRED` sur tout événement qui l'omet. Les espaces de travail qui ne l'activent jamais restent identiques à l'octet près ; une fois activée, elle ne peut plus être désactivée. |
-| **Échelle d'activation optionnelle** | Trois étapes explicites et réversibles à l'octet transforment le lot Claude Code inerte en une session gouvernée active : installer le gabarit à quatre fichiers (étape 1), fusionner exactement un hook `SessionStart` fail-open (étape 2) et rendre l'unique persona consultatif Verity dans un budget de 1024 octets (étape 3). Le gestionnaire est la seule surface fail-open autorisée — toute erreur sort en 0 comme un Claude Code ordinaire — et rien sous `~/.claude` n'est jamais nommé ni écrit. |
-| **Sauvegarde par instantané et restauration hermétique** | Un `snapshot-manifest` tenu sous bail émet un manifeste déterministe par fichier ; le runbook effectue un aller-retour instantané → effacement → restauration identique à l'octet près au chemin d'origine, les deux modes d'échec doctrinaux (restauration partielle ou relocalisée) échouant fail-closed. Un niveau git tier-2 optionnel ne sert que de témoin d'intégrité. |
-| **Adaptateurs Agent App bi-hôtes** | Codex et Claude Code sont les deux hôtes officiellement pris en charge en V1, partageant une mécanique neutre identique à l'octet près, prouvée par un condensat de parité inter-hôtes. Les deux adaptateurs sont par défaut des **candidats inertes en simulation** : ils ne génèrent que des données de gabarits non installés, et la prise en charge d'hôte en production ne s'atteint que par l'échelle d'activation optionnelle et gouvernée ci-dessus. |
-| **Hors ligne d'abord, confidentialité propre** | Le mode développement impose un garde réseau au niveau du processus Node et zéro télémétrie. La porte de confidentialité analyse chaque octet suivi, tout l'historique git accessible et l'archive de version à la recherche d'identifiants personnels et de chemins machine. |
-| **Confiance de version vérifiable** | Les versions sont liées par identité de tag (commit, tree, tag object) — les identifiants d'objets git sont des hachages de contenu, la liaison s'authentifie donc elle-même. Les consommateurs externes vérifient via le compagnon `tcrn-workflow-helper`, dont le condensat d'amorceur est publié indépendamment et dans lequel sont compilés les condensats des versions acceptées. |
+| **Un espace de travail qui n'est que des fichiers** | Tout votre graphe de travail (Initiative → Epic → Story → Subtask) vit dans des fichiers JSON simples et canoniques avec une chaîne de hachage — pas de base de données, pas de démon. Vous pouvez l'auditer avec `cat` et `sha256sum`, et les exports sont reproductibles octet pour octet. |
+| **Une commande, vingt portes** | `pnpm verify:p1` exécute toute la chaîne de vérification : format, lint, typage, build, ~40 fichiers de tests, matrice de confiance, politiques archive/SBOM/licences/vulnérabilités, liste blanche des sources, frontière hors ligne, analyse de confidentialité, durcissement CI, carte de vérification et preuve d'historique propre. La moindre surprise arrête la chaîne. |
+| **Un registre de revendications lisible par machine** | `verification-map.yaml` lie 65 revendications — 13 framework-hygiene, 13 inertness-proof, 39 runtime-capability — à des reason codes observables. Si le sujet d'une revendication change, sa preuve doit être rejouée. |
+| **Des gardes qui prouvent qu'ils mordent encore** | `pnpm guard-check` retire par mutation chaque garde enregistrée du code source et exige que le test qui la couvre passe au rouge — 12 gardes, vérifiées avant chaque push. Une protection dont la disparition ne serait remarquée par personne n'est pas une protection. |
+| **Des délibérations au dossier** | Conférences et portes de décision sont ajoutées au même journal inviolable. Une porte non satisfaite *bloque* le passage de son élément de travail à `done` (`WORKSPACE_GATE_PENDING`) — à la commande, puis de nouveau au rejeu — et clore une conférence distille chaque décision en une candidate de connaissance qui y renvoie. |
+| **Chaque décision reçoit un nom** | Activez l'attestation d'acteur et chaque modification ultérieure doit déclarer qui a agi — le moteur et son rejeu échouent tous deux en fermeture sur tout événement dépourvu d'identifiant d'acteur. Les espaces de travail qui ne l'activent jamais restent identiques octet pour octet. |
+| **Une activation réversible** | Trois étapes explicites et réversibles octet pour octet transforment le bundle Claude Code inerte en une session gouvernée active — et toute erreur du hook de session ressort proprement en Claude Code ordinaire. Le bundle inerte ne nomme ni n'écrit jamais quoi que ce soit sous `~/.claude`. |
+| **Des sauvegardes qui se prouvent elles-mêmes** | Un instantané produit un manifeste déterministe fichier par fichier ; le runbook boucle instantané → effacement → restauration à l'octet près, et les deux modes d'échec qui comptent (restauration partielle ou déplacée) échouent en fermeture. |
+| **Deux hôtes, une seule vérité** | Les adaptateurs Codex et Claude Code partagent une mécanique neutre identique octet pour octet, avec une empreinte de parité inter-hôtes prouvée. Les deux sont par défaut des **candidats inertes en simulation** — ils ne génèrent que des données de gabarit non installées. |
+| **Hors ligne par construction** | Le mode développement installe une garde réseau au niveau du processus et n'émet aucune télémétrie. La porte de confidentialité balaie chaque octet suivi, tout l'historique git atteignable et l'archive de release à la recherche d'identifiants personnels et de chemins machine. |
+| **Des releases que vous pouvez redériver** | Une release est une étiquette immuable plus un ensemble d'artefacts reproductibles, reconstruits et comparés octet par octet par `pnpm verify:p8`. Les consommateurs externes vérifient via le projet compagnon `tcrn-workflow-helper`, dont l'empreinte est publiée là où vous pouvez la contrôler indépendamment. |
+
+<details>
+<summary><b>Cinq termes, en clair</b> (cliquer pour déplier)</summary>
+
+- **Échec en fermeture (fail-closed)** — dès que quelque chose paraît anormal, le système s'arrête avec un nom d'erreur stable plutôt que de deviner et de continuer. Il n'y a pas d'avertissements qui défilent : soit vert, soit arrêté.
+- **Chaîne de hachage** — chaque entrée du journal contient l'empreinte de la précédente. Réécrire l'historique changerait les empreintes, et le rejeu le refuserait.
+- **reason code** — un nom d'erreur stable et lisible par machine (par exemple `WORKSPACE_GATE_PENDING`). Outils et agents peuvent brancher dessus ; le texte d'erreur en prose n'est jamais le contrat.
+- **Hermétique** — un test qui s'exécute entièrement à partir d'entrées locales et épinglées. Mêmes entrées, même résultat, sur n'importe quelle machine.
+- **CAS / version attendue** — chaque écriture déclare sur quelle version elle croit s'appuyer. Si quelqu'un a écrit avant, l'écriture est refusée au lieu d'écraser en silence.
+
+</details>
 
 ## Démarrage rapide
 
-Nécessite la chaîne d'outils épinglée : **Node 24.16.0** et **pnpm 11.3.0** (les scripts de cycle de vie des dépendances restent désactivés).
+Il vous faut la chaîne d'outils épinglée : **Node 24.16.0** et **pnpm 11.3.0**. Les scripts de cycle de vie des dépendances restent désactivés — rien n'exécute de code à l'installation.
 
 ```sh
-# 1. Acquire the single dev dependency (explicit, frozen, script-free)
+# 1. Install the pinned dev dependencies (explicit, frozen, script-free)
 pnpm install --offline --frozen-lockfile --ignore-scripts
 
-# 2. Run the full verification gate (offline)
+# 2. Watch the framework prove itself (20 gates, fully offline)
 pnpm verify:p1
 
-# 3. Build, then use the governed CLI
+# 3. Build, then drive the governed CLI
 pnpm build
 node scripts/tcrn-workflow.mjs workspace --help
 ```
 
-Commandes gouvernées typiques (tout en local, sans réseau, sans base de données) :
+Commandes gouvernées typiques — toutes locales, sans réseau, sans base de données :
 
 ```sh
 # validate a workspace and materialize its deterministic views
 node scripts/tcrn-workflow.mjs workspace validate --workspace <dir> --now <iso-instant>
 
-# create and transition work records with CAS-checked versions
+# create and transition work records with version-checked writes
 node scripts/tcrn-workflow.mjs work-create ...
 node scripts/tcrn-workflow.mjs work-transition ...
 
@@ -84,9 +104,9 @@ node scripts/tcrn-workflow.mjs work-transition ...
 node scripts/tcrn-workflow.mjs knowledge-list ...
 ```
 
-Les commandes de mutation exigent un chemin d'espace de travail explicite, un horodatage RFC 3339 strict et une version attendue — la concurrence optimiste est imposée par le moteur, pas par convention.
+Chaque modification exige un chemin d'espace de travail explicite, un horodatage RFC 3339 strict et une version attendue — la sûreté concurrente est imposée par le moteur, pas par convention.
 
-## L'architecture en un coup d'œil
+## L'architecture en soixante secondes
 
 ```mermaid
 flowchart LR
@@ -117,51 +137,56 @@ flowchart LR
     Layers --> REL
 ```
 
-Les protocoles n'évoluent que par ajout : `work-model-v1` est gelé, et chaque extension (dependency, conference, assignment, gate) s'enregistre sans toucher aux schémas acceptés.
+Des protocoles gelés à la base, un moteur natif fichiers au-dessus, des couches de capacités par-dessus, et des adaptateurs d'hôtes inertes au sommet. Les protocoles sont en ajout seul : `work-model-v1` est gelé, et chaque extension s'enregistre sans toucher aux schémas acceptés.
 
-## Questions-réponses de conception
+## Réponses directes
 
-### Pourquoi un fil de conversation canonique unique avec des fils de sous-agents, plutôt que du multithreading ?
+### Pourquoi un seul rédacteur à la fois, alors que les agents adorent le parallélisme
 
-C'est la question la plus fréquente, et la réponse a trois niveaux :
+Parce que la couche de stockage et la couche de raisonnement répondent à des questions différentes :
 
-1. **La couche de stockage est à écrivain unique par conception.** L'espace de travail est un journal d'événements append-only chaîné par hachage sur un simple système de fichiers. Une chaîne de hachage n'a exactement qu'un successeur véridique par événement — des écrivains parallèles corrompraient la chaîne, ou exigeraient un protocole de consensus qui détruirait la propriété « auditable avec `cat` et `sha256sum` ». Le moteur impose donc **un seul écrivain à la fois** via un bail exclusif et un protocole de revendication de reprise sur disque : le bail d'un écrivain planté est mis en quarantaine et récupéré en fail-closed, et chaque acquisition est contrôlée par CAS.
-2. **Le parallélisme du raisonnement vit au-dessus de la couche de stockage.** La concurrence est partout — mais sous forme de *fils de sous-agents indépendants à contexte neuf* (exécutants d'implémentation, comités de relecture multi-rôles, vérificateurs adverses) dont les conclusions reviennent comme des données. Un fil canonique détient l'autorité de décision et écrit l'enregistrement ; N sous-fils explorent, relisent et réfutent en parallèle sans contaminer leurs contextes ni se disputer l'état. Vous obtenez le débit du parallélisme avec une lignée de décision linéaire et auditable.
-3. **La gouvernance exige un récit sérialisable.** La chaîne à écrivain unique fournit un *ordre* linéaire et infalsifiable des décisions, et lier chaque décision à un acteur responsable est désormais imposé : dès qu'un espace de travail active l'extension d'attestation d'acteur, chaque événement admis par la chaîne doit déclarer un identifiant d'acteur — le moteur et sa relecture échouent tous deux en fermeture sur tout événement qui en omet un — de sorte qu'un espace de travail attesté lie chaque décision à un acteur déclaré et auditable. Il s'agit d'une identité déclarée inscrite dans l'enregistrement ordonné, non d'une affirmation d'identité authentifiée ni de vérité d'horloge murale ; les espaces de travail qui laissent l'attestation désactivée se comportent exactement comme avant et font reposer la responsabilité sur les reçus du fil de gouvernance. Un essaim de fils pairs mutant un état partagé n'a ni l'ordre ni la liaison.
+1. **La couche de stockage est mono-rédacteur par conception.** Une chaîne de hachage n'a qu'un seul successeur véridique par événement — des rédacteurs parallèles corrompraient la chaîne ou exigeraient un protocole de consensus qui détruirait la propriété « auditable avec `cat` et `sha256sum` ». Le moteur impose donc un rédacteur à la fois via un bail exclusif doublé d'un protocole de reprise sur disque : le bail d'un rédacteur planté est mis en quarantaine et récupéré en fermeture, et chaque acquisition est vérifiée en version.
+2. **Le parallélisme vit au-dessus de la couche de stockage.** Lancez autant de fils sous-agents indépendants et à contexte neuf que vous voulez — ouvriers d'implémentation, comités de relecture, vérificateurs adverses. Leurs conclusions reviennent sous forme de données ; un fil canonique détient l'autorité de décision et écrit le registre. Vous obtenez le débit du parallélisme *et* une lignée de décisions linéaire et auditable.
+3. **La gouvernance exige un récit sérialisable.** La chaîne donne un ordre des décisions linéaire et inviolable, et — dès qu'un espace de travail active l'attestation d'acteur — chaque décision est liée à un acteur déclaré et auditable. C'est une identité *déclarée* inscrite dans un registre ordonné, pas une affirmation d'identité authentifiée ni de vérité d'horloge murale. Une nuée de fils pairs modifiant un état partagé n'a ni l'ordre ni le lien.
 
-**Les tests derrière cette réponse** (tous dans `tests/p3-file-engine.test.mjs`, exécutés par `pnpm verify:p3`) :
+<details>
+<summary><b>Les tests derrière cette réponse</b> (tous dans <code>tests/p3-file-engine.test.mjs</code>, exécutés par <code>pnpm verify:p3</code>)</summary>
 
-- *Le plantage de bail et la contention des revendications de reprise sont récupérables et à écrivain unique* — un écrivain est planté en pleine création, son bail périmé est mis en quarantaine, les concurrents s'affrontent et exactement un gagne ; le perdant échoue fermé avec un code de raison stable.
-- *Éviction du créateur retardé* — un créateur de bail en pause dont le répertoire a été récupéré doit observer la revendication de reprise active et échouer fermé (`WORKSPACE_LEASE_INVALID`) au lieu de coloniser la nouvelle génération. Cela protège de la réutilisation des tuples d'inodes sur les systèmes de fichiers qui recyclent les inodes (découvert et corrigé sur Linux ext4 via la vraie CI, puis prouvé par un test déterministe).
-- *Injection de SIGKILL à chaque point de cycle de vie effectif* — l'inventaire des fautes du moteur est découvert à partir d'opérations réelles, et un vrai `SIGKILL` est délivré à chaque point ; la reprise doit converger vers un état propre sans résidu.
-- *64 permutations réelles d'ordre d'insertion* produisent des index, listes et points de contrôle identiques à l'octet — le déterminisme est prouvé, pas supposé.
-- 4 cas de concurrence, 57 cas négatifs et une matrice d'attaques du système de fichiers (liens symboliques, liens durs, fichiers spéciaux, courses au remplacement) complètent la preuve.
+- *Le plantage de bail et la contention sur reprise sont récupérables et mono-rédacteur* — un rédacteur est planté en pleine création, son bail périmé est mis en quarantaine, les concurrents s'affrontent et exactement un l'emporte ; le perdant échoue en fermeture avec un reason code stable.
+- *Éviction du créateur retardé* — un créateur de bail suspendu dont le répertoire a été récupéré doit observer la reprise active et échouer en fermeture (`WORKSPACE_LEASE_INVALID`) au lieu de coloniser la nouvelle génération. Trouvé et corrigé sur Linux ext4 en CI réelle, puis prouvé par un test déterministe.
+- *Injection de SIGKILL à chaque point effectif du cycle de vie* — l'inventaire des pannes du moteur est découvert à partir d'opérations réelles, et un vrai `SIGKILL` est délivré à chaque point ; la reprise doit converger vers un état propre, sans résidu.
+- *64 permutations réelles d'ordre d'insertion* produisent des index, listes et points de contrôle identiques octet pour octet — le déterminisme est prouvé, pas supposé.
+- 4 cas de concurrence, 57 cas négatifs et une matrice d'attaques du système de fichiers (liens symboliques, liens physiques, fichiers spéciaux, courses au remplacement) complètent la preuve.
 
-### Pourquoi des fichiers plutôt qu'une base de données ?
+</details>
 
-Parce que la frontière de confiance doit être inspectable avec des outils standard. Chaque enregistrement est du JSON canonique (clés triées, un LF final), chaque événement porte son `priorHash`/`eventHash`, et tout le magasin peut être vérifié dans n'importe quel langage en quelques lignes. Une base de données ajouterait un démon, un format binaire et une dépendance de confiance implicite — autant de passifs pour un cadre dont la promesse centrale est *« vous pouvez tout vérifier vous-même, hors ligne »*.
+### Pourquoi des fichiers plutôt qu'une base de données
 
-### Pourquoi hors ligne d'abord et fail-closed ?
+Parce que la frontière de confiance doit rester inspectable avec des outils standards. Chaque enregistrement est du JSON canonique (clés triées, un LF final), chaque événement porte ses `priorHash`/`eventHash`, et tout le magasin se vérifie en quelques lignes dans n'importe quel langage. Une base de données ajouterait un démon, un format binaire et une dépendance de confiance implicite — autant de passifs pour un cadre dont la promesse centrale est *« vous pouvez tout vérifier vous-même, hors ligne »*.
 
-Un cadre d'agents qui atteint silencieusement le réseau est un canal d'exfiltration en puissance. Le mode développement installe un garde réseau au niveau du processus ; la chaîne de vérification prouve que le code du projet n'a aucun chemin réseau implicite ; les seules étapes réseau (acquisition des dépendances, amorçage CI) sont explicites et épinglées. Fail-closed signifie que chaque validateur lève un code de raison stable au premier octet inattendu — pas d'avertissements qui défilent, seulement vert ou arrêt.
+### Pourquoi hors ligne d'abord et échec en fermeture
 
-### Pourquoi les adaptateurs Codex et Claude Code sont-ils des « candidats inertes » ?
+Un cadre d'agents qui atteint le réseau en silence est un canal d'exfiltration qui n'attend qu'à servir. Le mode développement installe une garde réseau au niveau du processus ; la chaîne de vérification prouve que le code du projet n'a aucun chemin réseau implicite ; les seules étapes réseau (acquisition des dépendances, amorçage CI) sont explicites et épinglées. Échouer en fermeture signifie que chaque validateur s'arrête avec un reason code stable au premier octet inattendu.
 
-Parce que revendiquer une prise en charge d'hôte en production avant qu'une route de version gouvernée ne l'accepte serait une surenchère — exactement le mode d'échec que ce cadre existe pour empêcher. Les adaptateurs génèrent des lots de gabarits déterministes non installés (prouvés à l'octet près, y compris un fragment de hook `.claude/settings.json` réversible qui n'écrase jamais le contenu utilisateur et rejette tout chemin `.claude` de niveau utilisateur). L'activation est une décision distincte et gardée.
+### Pourquoi les adaptateurs Codex et Claude Code sont-ils des « candidats inertes »
 
-### Comment une version est-elle digne de confiance ?
+Parce que revendiquer une prise en charge d'hôte active avant qu'une route de release gouvernée ne l'ait acceptée serait une surdéclaration — précisément le mode d'échec que ce cadre existe pour prévenir. Les adaptateurs produisent des bundles de gabarits déterministes et non installés (prouvés exacts à l'octet, y compris un fragment de hook `.claude/settings.json` réversible qui n'écrase jamais le contenu de l'utilisateur). L'activation est une décision distincte et encadrée.
 
-Une version est un tag annoté immuable plus un ensemble d'artefacts reproductible (archive source USTAR canonique, SBOM, provenance, sommes de contrôle, notes), reconstruit et comparé à l'octet par `pnpm verify:p8`. Les consommateurs externes vérifient via le compagnon **tcrn-workflow-helper** : un amorceur sans dépendances, dont le propre SHA-256 est publié là où vous pouvez le contrôler indépendamment du téléchargement, et qui refuse toute version dont les octets ne correspondent pas aux condensats compilés en son sein — avant l'exécution de tout code Workflow.
+### Comment une release devient-elle digne de confiance
 
-### Que prouvent réellement les tests — en chiffres ?
+Une release est une étiquette annotée immuable plus un ensemble d'artefacts reproductibles (archive source canonique, SBOM, provenance, sommes de contrôle, notes), reconstruits et comparés octet par octet par `pnpm verify:p8`. Les consommateurs externes vérifient via le compagnon **tcrn-workflow-helper** : un amorceur sans dépendances, dont le SHA-256 est publié là où vous pouvez le contrôler indépendamment du téléchargement, et qui refuse toute release dont les octets ne correspondent pas aux empreintes compilées en lui — avant qu'une seule ligne de Workflow ne s'exécute.
 
-- **20 portes** dans la chaîne `verify:p1`, chacune avec un code de raison terminal stable.
-- **~40 fichiers de tests** couvrant le moteur, le noyau de connaissances, le cycle de vie des artefacts, les profils, les personas, le routeur de contexte, les deux adaptateurs, l'échange, la compatibilité, le registre d'exigences, le candidat de version, la frontière de confidentialité, le générateur d'artefacts de preuve, la matrice de confiance, le magasin d'événements conférence/porte et l'application fail-closed des portes, l'attestation d'acteur, la sauvegarde et la restauration par instantané, l'échelle d'activation et la boucle gouvernée de bout en bout.
-- **1 preuve phare de bout en bout** (`pnpm verify:e2e`) — un rejeu hermétique de la boucle gouvernée complète (initiative → epic → story → porte → conférence → distillation → promotion → traçage), chaque commande du tutoriel exécutée mot pour mot et chaque condensat produit tracé jusqu'à son producteur.
-- **65 affirmations vérifiées par machine** dans `verification-map.yaml`, réparties en 13 d'hygiène du cadre, 13 de preuve d'inertie et 39 de capacité d'exécution — ce dernier tiers est la surface produit livrée, énoncée honnêtement.
-- **Preuves de déterminisme à 64 permutations** dans trois couches indépendantes (ordres d'insertion du moteur, ordres de couches de profils, ordres d'entrée des adaptateurs).
-- **Registre public d'exigences AOS à 19 lignes** (11 vérifiées par fixtures, 8 spécifiées) — la maturité est consignée ligne par ligne, jamais gonflée.
-- **Porte de confidentialité** sur ~200 fichiers sources suivis, ~1 470 objets git, tout l'historique accessible et l'archive de version.
+## Des chiffres vérifiés, pas promis
+
+Chaque chiffre ci-dessous est imposé par une porte — si l'un dérive, une compilation échoue quelque part.
+
+- **20 portes** dans la chaîne `verify:p1`, chacune avec un reason code terminal stable.
+- **65 revendications vérifiées par la machine** dans `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 39 runtime-capability. Le badge de revendications ci-dessus est analysé et confronté au registre à chaque exécution.
+- **12 gardes enregistrées**, chacune prouvée encore mordante en la retirant par mutation et en observant son test passer au rouge.
+- **~40 fichiers de tests hermétiques**, dont une injection de panne `SIGKILL` réelle, des preuves de déterminisme à 64 permutations dans trois couches indépendantes, et une matrice d'attaques du système de fichiers.
+- **1 preuve phare de bout en bout** (`pnpm verify:e2e`) — un rejeu hermétique de la boucle gouvernée complète (initiative → epic → story → gate → conference → distill → promote → trace), chaque commande du tutoriel exécutée mot pour mot.
+- **19 entrées au registre public des exigences AOS** (11 vérifiées par fixture, 8 spécifiées) — la maturité est consignée ligne par ligne, jamais gonflée.
+- **Porte de confidentialité** sur les 250 fichiers sources de la liste blanche (une liste à correspondance exacte — un fichier ajouté ou retiré fait échouer la porte), chaque objet git atteignable et l'archive de release.
 
 <details>
 <summary><b>Référence complète des cibles de vérification</b> (cliquer pour déplier)</summary>
@@ -169,17 +194,17 @@ Une version est un tag annoté immuable plus un ensemble d'artefacts reproductib
 | Cible | Ce qu'elle prouve |
 | --- | --- |
 | `verify:p1` | La chaîne complète de 20 portes sur un arbre committé propre. |
-| `verify:p2` | Contrats de protocoles V1 gelés, vecteurs déterministes, tests négatifs/de propriétés, registre d'exigences, schémas fermés. |
+| `verify:p2` | Contrats de protocoles V1 gelés, vecteurs déterministes, tests négatifs/de propriétés, registre d'exigences, schémas clos. |
 | `verify:p3` | Espace de travail natif fichiers : baux/CAS, reprise après plantage, quarantaine, migrations, vues déterministes, matrice d'attaques du système de fichiers. |
-| `verify:p4` / `verify:p4:knowledge` | Budgets de cycle de vie des artefacts, caviardage, application/restauration d'archives jetables ; séparation métadonnées/corps du noyau de connaissances, promotion CAS, parité à 64 permutations. |
-| `verify:p5` | Modèle de confiance des profils génériques fermé, condensats de politique effective, graphe de démarrage à froid, huit personas Core Reference inertes. |
-| `verify:p6` / `verify:p6:adapter` / `verify:p6b` | Contrôles portée/risque/budget du routeur de contexte et corpus hostile ; pont de l'adaptateur Codex ; adaptateur Claude Code (lot de gabarits à quatre fichiers, fragment de réglages réversible, rejet des chemins interdits, repli CLAUDE.md, condensat de parité inter-hôtes). |
-| `verify:p7` / `verify:p7:compatibility` | Échange canonique, manifeste de compatibilité, plancher anti-retour-arrière, plans déterministes d'import/point de contrôle/repli. |
-| `verify:p8` | Candidat de version reproductible : reconstruction de l'archive source + comparaison à l'octet, SBOM, provenance, sommes de contrôle, lot fermé de six fichiers, matrice négative de confiance externe. |
-| `verify:privacy` | Aucun identifiant personnel ni chemin machine dans aucun octet suivi, objet git ou archive. |
-| `verify:isolated` | La même chaîne P1 depuis une matérialisation hermétique des dépendances (portée CI). |
+| `verify:p4` / `verify:p4:knowledge` | Budgets du cycle de vie des artefacts, caviardage, apply/restore d'archive jetable ; séparation métadonnées/corps du noyau de connaissances, CAS de promotion, parité à 64 permutations. |
+| `verify:p5` | Modèle de confiance de profil générique clos, empreintes de politique effective, graphe de démarrage à froid, huit personas Core Reference inertes. |
+| `verify:p6` / `verify:p6:adapter` / `verify:p6b` | Contrôles de portée/risque/budget du routeur de contexte et corpus hostile ; pont de l'adaptateur Codex ; adaptateur Claude Code (bundle de gabarit à quatre fichiers, fragment de settings réversible, rejet des chemins interdits, repli CLAUDE.md, empreinte de parité inter-hôtes). |
+| `verify:p7` / `verify:p7:compatibility` | Échange canonique, manifeste de compatibilité, plancher anti-retour, plans déterministes d'import/point de contrôle/repli. |
+| `verify:p8` | Candidat de release reproductible : reconstruction de l'archive source et comparaison octet par octet, SBOM, provenance, sommes de contrôle, bundle clos de six fichiers, matrice négative de confiance externe. |
+| `verify:privacy` | Aucun identifiant personnel ni chemin machine dans le moindre octet suivi, objet git ou archive. |
+| `verify:isolated` | La même chaîne P1 depuis une matérialisation hermétique des dépendances (contrôlée en CI). |
 
-Le mode développement est hors ligne avec un garde réseau de processus et zéro télémétrie. L'espace de travail n'a qu'une seule dépendance de développement (`ajv@8.17.1`, pour la preuve de parité de schémas Draft 2020-12 hors ligne), acquise via une frontière de registre explicite avec scripts de cycle de vie désactivés. P1 conserve quatre frontières externes explicites : la continuité du `rootVersion` entre invocations exige un plancher externe ; il n'y a pas de bac à sable réseau au niveau OS ; aucune analyse d'avis externe fraîche n'est effectuée hors ligne ; le jeu d'expressions régulières de confidentialité est un contrôle de politique ciblé, pas un DLP généraliste.
+Le mode développement est hors ligne avec une garde réseau au niveau du processus et zéro télémétrie. L'espace de travail compte exactement trois dépendances de développement (`ajv@8.17.1` pour la parité de schémas Draft 2020-12 hors ligne, `typescript@5.9.3` comme porte de typage épinglée, `@types/node@24.13.2`), chacune acquise via une frontière de registre explicite avec scripts de cycle de vie désactivés. P1 conserve quatre frontières externes explicites : la continuité de `rootVersion` entre invocations requiert un plancher externe ; il n'y a pas de bac à sable réseau au niveau du système ; aucune analyse externe fraîche d'avis de sécurité n'est effectuée hors ligne ; l'ensemble d'expressions régulières de confidentialité est un contrôle de politique ciblé, pas un DLP généraliste.
 
 </details>
 
@@ -187,34 +212,35 @@ Le mode développement est hors ligne avec un garde réseau de processus et zér
 
 | Chemin | Contenu |
 | --- | --- |
-| `packages/core/` | Moteur, adaptateurs, noyau de connaissances, profils, routeur, échange (TypeScript, construit par le moteur de transformation de types Node épinglé). |
-| `schemas/` · `specs/` | Schémas de protocoles V1 gelés (fermés, parité Draft 2020-12 prouvée) et leurs spécifications normatives. |
+| `packages/core/` | Moteur, adaptateurs, noyau de connaissances, profils, routeur, échange (TypeScript, contrôlé par le compilateur épinglé). |
+| `schemas/` · `specs/` | Schémas de protocoles V1 gelés (clos, parité Draft 2020-12 prouvée) et leurs spécifications normatives. |
 | `tests/` | La suite de preuves hermétique. |
-| `scripts/` | CLI gouvernée, tâches de vérification, générateur d'artefacts de preuve, portes de confidentialité/politique. |
+| `scripts/` | CLI gouvernée, tâches de vérification, vérificateur de gardes, générateur d'artefacts de preuve, portes de confidentialité et de politique. |
 | `fixtures/` | Vecteurs de protocole déterministes, corpus hostiles, références du registre d'exigences. |
-| `docs/` | Architecture, confiance de version, gestion des versions, notes de version. |
-| `verification-map.yaml` | Le registre des affirmations — commencez ici pour voir ce qui est réellement prouvé. |
+| `docs/` | Architecture, confiance de release, versionnage, notes de version. |
+| `verification-map.yaml` | Le registre des revendications — commencez ici pour voir ce qui est réellement prouvé. |
 
 ## Ce que ce cadre ne gouverne pas
 
-Chacune des garanties ci-dessus a une portée, et ces portées se lisent facilement trop largement. Les quatre limites suivantes sont énoncées positivement parce qu'un lecteur ayant ce document entier sous les yeux a tout de même lu les deux premières trop largement.
+La plupart des projets cachent leurs limites. Les nôtres sont porteuses — la discipline même qui prouve les revendications ci-dessus exige aussi de dire précisément où elles s'arrêtent. Ces quatre frontières sont écrites parce qu'un lecteur attentif a tout de même lu les deux premières trop largement :
 
-- **L'arbre source de votre produit.** Le bail à écrivain unique gouverne la chaîne d'événements de l'espace de travail. Deux agents modifiant `src/foo.ts` en même temps ne sont protégés par rien ici — utilisez l'isolation par worktree, ou faites passer ces modifications par l'espace de travail vous-même.
-- **La chaîne d'approvisionnement de votre produit.** Le garde réseau couvre le processus qui exécute les commandes projet P1. Le shell de votre propre agent, et la construction de votre produit, sont en dehors. Zéro dépendance d'exécution est une propriété de **ce cadre**, pas de ce que vous construisez avec.
-- **La correction de votre code.** Le registre de revendications garantit qu'une capacité **déclarée** conserve une preuve exécutable, et que la surdéclaration fait échouer la construction. Il ne peut pas vous dire que l'ensemble des revendications est le bon. Choisir quoi revendiquer relève irréductiblement du jugement humain, et aucune provenance ne s'y substitue.
-- **L'identité et le temps.** L'attestation d'acteur enregistre un identifiant d'acteur **déclaré**, non authentifié, et la chaîne prouve l'ordre, non la vérité de l'horloge murale. La chaîne est inviolable de manière détectable en son sein ; elle n'est pas ancrée en dehors du système de fichiers où elle réside.
+- **L'arbre source de votre produit.** Le bail mono-rédacteur gouverne la chaîne d'événements de l'espace de travail. Deux agents modifiant `src/foo.ts` en même temps ne sont protégés par rien ici — utilisez l'isolation par worktree, ou faites passer ces modifications par l'espace de travail vous-même.
+- **La chaîne d'approvisionnement de votre produit.** La garde réseau couvre le processus qui exécute les commandes projet P1. Le shell de votre propre agent, et la construction de votre produit, sont en dehors. Zéro dépendance d'exécution est une propriété de *ce* cadre, pas de ce que vous construisez avec.
+- **La correction de votre code.** Le registre garantit qu'une capacité *déclarée* conserve une preuve exécutable, et que la surdéclaration fait échouer la compilation. Il ne peut pas vous dire que l'ensemble des revendications est le bon. Choisir quoi revendiquer relève irréductiblement du jugement humain, et aucune provenance ne s'y substitue.
+- **L'identité et le temps.** L'attestation d'acteur enregistre un identifiant d'acteur *déclaré*, non authentifié, et la chaîne prouve l'ordre, non la vérité de l'horloge murale. La chaîne est inviolable de manière détectable en son sein ; elle n'est pas ancrée en dehors du système de fichiers où elle réside.
 
 ## Statut, honnêtement
 
 - `0.1.0-rc.6` est un **candidat de pré-version**. L'API publique n'est pas encore stable.
-- Les deux adaptateurs d'hôtes sont des candidats inertes en simulation ; **aucune prise en charge en production de Codex ou Claude Code n'est revendiquée**.
+- Les deux adaptateurs d'hôtes sont des candidats inertes en simulation ; **aucune prise en charge active de Codex ou Claude Code n'est affirmée**.
 - `supportedAosReleases` est vide : aucune compatibilité AOS externe n'est revendiquée.
+- Le mode release exige que le compagnon accepte les octets : son empreinte d'amorceur est publiée indépendamment, et les empreintes de release acceptées y sont compilées.
 
 ## Contribution, support, sécurité
 
 - Questions d'usage → GitHub Discussions. Défauts reproductibles → Issues (voir `SUPPORT.md`).
-- Rapports de sécurité → signalement privé de vulnérabilités selon `SECURITY.md`.
-- Les contributions doivent garder toutes les portes au vert — voir `CONTRIBUTING.md`. La règle : *si votre affirmation n'est pas dans la carte de vérification avec une preuve qui passe, elle n'est pas affirmée.*
+- Rapports de sécurité → signalement privé de vulnérabilité selon `SECURITY.md`.
+- Les contributions doivent garder toutes les portes au vert — voir `CONTRIBUTING.md`. Le critère est : *si votre revendication n'est pas dans la carte de vérification avec une preuve qui passe, elle n'est pas revendiquée.*
 
 ## Licence
 
