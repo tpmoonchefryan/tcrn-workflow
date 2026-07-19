@@ -3,7 +3,113 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
-## Unreleased
+## 0.1.0-rc.6 — 2026-07-19
+
+### Fixed — data loss and permanent-lockout defects
+
+- **Knowledge stores no longer brick on a rejected mutation.** `createKnowledgeUnit`
+  and `rebaseKnowledgeStore` held the mutation claim across a failable region with
+  no `finally`, so every failure that left the process alive leaked the claim and
+  each later mutation answered `KNOWLEDGE_LOCKED` forever, with no verb able to
+  clear it. A simulated crash still retains the claim, because a real SIGKILL never
+  runs a `finally` and the retained claim is what marks the store mid-write; that
+  exemption is now explicit and covered by a test in every mutation verb.
+- **A crash during lease recovery no longer makes a Workspace unopenable.** The
+  recovery claim recorded `pid` and `expiresAtNanoseconds` that nothing ever read,
+  so `acquire` refused unconditionally on EEXIST. A claim is now reclaimed when it
+  has expired *and* its pid is dead — the same probe the lease owner already used,
+  and fail-closed in both directions of pid reuse. Malformed, linked, and
+  special-file claims still fail closed.
+- **`conference-append-position` no longer discards its author.** The core input
+  reused one `actorId` slot for the position author and the attestation actor, so
+  supplying `--actor` silently overwrote a required flag's value. The author is now
+  its own field.
+
+### Fixed — admission holes
+
+- **Enum fields no longer admit values that merely coerce to a member.** Fourteen
+  membership tests across protocol, the adapters, the Context Router, the Knowledge
+  Core and the generic profile compared `String(value)` against the allowed list, so
+  `["specified"]`, an object carrying `toString`, and a boxed `String` all passed.
+  Numbers, `null`, and plain objects were always rejected — only those three shapes
+  ever got through, and the negative cases now test exactly those.
+- **`extension-registration.appliesTo` no longer accepts duplicate entries.** `Set`
+  dedupe is identity-based, so two distinct `["work"]` arrays satisfied both the
+  membership test and the duplicate test.
+
+### Fixed — sandbox escapes
+
+- **Six ways out of the offline guard and child-process policy are closed.** The
+  guard patched CommonJS module objects only, so an ESM named import kept the
+  original function; `net.Socket.prototype.connect`, `dns.promises`,
+  `node:dns/promises` and `http2` were never patched at all. The child policy
+  refused `stdio: "inherit"` only in that exact spelling, missing array, descriptor
+  and stream forms, and `isNodeExecutable` never matched for `exec`, which takes a
+  command line rather than an argv[0]. `execSync` and `execFileSync` were absent
+  from the guarded API list entirely — the widest of the gaps, and one the original
+  review did not name.
+
+### Fixed — activation and installer
+
+- **The settings rename is now the sole commit point of an activation install.**
+  Two failable reads sat after it; either throwing left `settings.json` carrying a
+  hook that pointed at a script the cleanup had just deleted, with the merge key
+  blocking every retry and nothing able to restore the user's previous settings.
+- **A concurrent `settings.json` edit is no longer overwritten in silence.** The
+  merge was computed from a read taken before the bundle was written and applied
+  wholesale; the bytes are now re-read and compared immediately before the commit.
+
+### Performance
+
+- **`verify:privacy` 56.6s to 2.4s (23.9x).** The object database was walked with
+  two `spawnSync` git calls per object, roughly five thousand processes; it is now
+  one `cat-file --batch-all-objects --batch` stream. `verify:p1` overall fell from
+  133s to 81s. Scanned-entry and object counts are identical to the baseline.
+- **`validateEventChain` no longer rebuilds every event twice** (392ms to 238ms on
+  3000 1 KiB events), and `validateWorkGraph` validates the extension registry once
+  per graph instead of once per record (559ms to 50ms on 5000 records against a
+  64-entry registry).
+- **Archive verbs no longer read every bundle only to discard it** — up to 512 MiB
+  of I/O per store-resolving verb, for a partial-state check the surrounding lstat
+  gates already answered.
+
+### Changed — contracts and catalog
+
+- Four `COMMAND_CATALOG` `valueKind` entries were wrong: `exchange-validate --bundle`
+  is a path not JSON, both `adapter-simulate --lifecycle` flags are JSON not strings,
+  and `profile-authorize --command` is a command id not JSON. An agent obeying the
+  machine-readable contract would have failed on all four.
+- `artifact-archive-apply` and `artifact-archive-restore` now declare
+  `availability: "fixture-only"`. The spec always restricted them to `FIXTURE-`
+  Workspaces — "the live local graph is therefore ineligible" — but the catalog did
+  not say so, so an agent planning from it would schedule a verb designed to fail.
+- `lease-recovery-break` and recovery-claim reporting in `lease-inspect` build the
+  operator path `file-engine-v1.md` already promised; that spec clause is narrowed
+  to match what the code now does.
+- `docs/architecture/agent-integration-v1.md` gains a behaviour-delta section: ten
+  observable changes since rc.5, two of which are admissions that used to succeed.
+
+### Fixed — governance tooling
+
+- `regen-rc1-inputs` treated every argument that was not `--check` as a request to
+  write, so a typo silently rewrote the pinned RC1 proof basis. Unknown arguments
+  now fail closed.
+- Four dead release helpers and two dead `files.mjs` exports are retired. The
+  `routeAdditions` prune this package also planned was attempted and reverted: the
+  premise was verified circularly against the generator's own output, and the
+  generator test proved the ledger still admits paths the declared set does not
+  carry.
+- Three type errors that made `workspace.ts` and the CLI uncompilable under a real
+  `tsc` are fixed — `FileIdentity` was used eight times and declared nowhere, the
+  CLI imported a `ProjectRecord` the protocol package never exported, and two
+  parameters took their type from a default value. A first real `tsc` run reports
+  167 errors, not the 126 previously recorded; the remaining 153 are known debt.
+
+### Documentation
+
+- Both READMEs lead with the problem rather than a capability inventory, and each
+  names who the project is *not* for. All four translations are rebuilt from the
+  corrected English.
 
 - Make the replay complexity proof see the reducer's full-collection scans
   (CQ-10b). `materializeWorkspace` performs four scans inside its per-event loop
