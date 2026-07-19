@@ -77,11 +77,20 @@ for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.
   // before the delimiter and a letter after it. The span never closes and the reader gets
   // four asterisks. Latin text rarely trips it, which is exactly why it went unnoticed:
   // the English original was always fine.
+  // Code is not prose. A document explaining this very rule writes `**一句话。**下一句`
+  // inside backticks, and a checker that reads through code spans pairs that example's
+  // delimiters with the real ones around it and reports a defect in correct text. Found
+  // by running this check over the handoff that documents it. Fenced blocks are dropped
+  // wholesale and inline spans are blanked in place, so column-free line numbers survive.
+  let fenced = false;
   body.split("\n").forEach((line, index) => {
-    for (const match of line.matchAll(/\*\*([^*]+)\*\*/gu)) {
+    if (/^\s*(?:```|~~~)/u.test(line)) { fenced = !fenced; return; }
+    if (fenced) return;
+    const prose = line.replace(/`[^`]*`/gu, (span) => " ".repeat(span.length));
+    for (const match of prose.matchAll(/\*\*([^*]+)\*\*/gu)) {
       const closeAt = match.index + match[0].length - 2;
-      const before = line[closeAt - 1];
-      const after = line[closeAt + 2];
+      const before = prose[closeAt - 1];
+      const after = prose[closeAt + 2];
       if (before === undefined || whitespace.test(before) || !punctuation.test(before)) continue;
       if (after === undefined || whitespace.test(after) || punctuation.test(after)) continue;
       fail("PUSH_GATE_EMPHASIS_UNCLOSED", `${document}:${index + 1}: ${match[0].slice(0, 40)}`);
