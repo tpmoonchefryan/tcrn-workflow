@@ -557,3 +557,41 @@ test("WSB-5: the shipped binary completes the status read verb with exit 0 and W
     await fixture.close();
   }
 });
+
+// CQ-08b. `conflicts` is provably always empty: the Workflow-owned and AOS-owned field
+// sets are disjoint by manifest validation, so the filter at compatibility-modes.ts:554
+// cannot produce an entry. The exemption that used to sit on :555 was therefore dead code.
+// It is now an unconditional fail-closed assertion, which is defence in depth against a
+// future relaxation of the ownership checks upstream.
+test("CQ-08b: the conflicts list is empty for every operation and conflicts_planned stays reachable", async () => {
+  const operations = ["initial_import", "portable_checkpoint", "fallback_admission", "fallback_delta", "conflict_plan", "reconciliation_dry_run"];
+  const states = new Map();
+  for (const operation of operations) {
+    const { request } = documents(operation);
+    const admitted = await authorityFile(request);
+    try {
+      const plan = planCompatibilityMode(request, admitted.context);
+      const dry = dryRunCompatibilityMode(request, admitted.context);
+      // The invariant, asserted unconditionally -- no operation is exempt.
+      assert.deepEqual(plan.conflicts, [], `${operation} plan conflicts`);
+      assert.deepEqual(dry.conflicts, [], `${operation} dry-run conflicts`);
+      // The field is retained as the witness of the guarantee, so it must still be present
+      // in the canonical plan bytes. Removing it would change effectivePlanDigest.
+      assert.ok(Object.hasOwn(plan, "conflicts"), `${operation} conflicts field retained`);
+      assert.equal(plan.effectivePlanDigest, admitted.receipt.expectedEffectivePlanDigest, operation);
+      states.set(operation, plan.state);
+    } finally {
+      await admitted.close();
+    }
+  }
+  // Reachability regression. The state is derived from request.operation, NOT from the
+  // conflicts list, so "conflicts_planned" is reachable even though conflicts is always
+  // empty. This assertion exists to stop a future reader concluding from the empty list
+  // that the operation or the state label is dead and deleting either -- both are part of
+  // the canonical plan bytes and removing them breaks effectivePlanDigest.
+  assert.equal(states.get("conflict_plan"), "conflicts_planned");
+  assert.deepEqual([...states.values()].sort(), [
+    "checkpoint_planned", "conflicts_planned", "fallback_planned", "fallback_planned",
+    "planned", "reconciliation_planned",
+  ]);
+});
