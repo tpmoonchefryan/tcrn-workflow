@@ -1077,3 +1077,39 @@ test("profile runtime remains standalone and imports only frozen local protocol 
   }
   assert.deepEqual(GENERIC_PROFILE_OPERATIONS, fixture.operationCases);
 });
+
+// CQ-02c, last of the eight sites. `resolution` was admitted through a coercing membership
+// test while `operation()` in this same file (generic-profile.ts:434-439) already did the
+// typeof check first -- the correct shape was sitting two hundred lines away from the
+// broken one.
+test("CQ-02c: effective profile resolution refuses values that only coerce to a member", async () => {
+  const bundle = fullPermutationLayers();
+  const resolutionRequest = request(bundle.layers, bundle);
+  const effective = await resolveAdmitted(resolutionRequest);
+  const member = effective.resolution;
+  assert.equal(typeof member, "string");
+
+  const vectors = [
+    ["single-element array", [member]],
+    ["plain object with toString", { toString: () => member }],
+    ["boxed String", new String(member)],
+    // Regression anchors only -- already refused before the guard existed.
+    ["anchor number", 1],
+    ["anchor null", null],
+    ["anchor plain object", {}],
+  ];
+  // The reason code alone cannot prove this guard: a coercible value that slips past the
+  // header is caught two hundred lines later by the resolution/binding mismatch at
+  // generic-profile.ts:1139, which fails with the SAME PROFILE_SCHEMA_INVALID code. The
+  // failure label is what distinguishes the admission guard from that downstream backstop,
+  // so it is pinned here. Asserting the code only would pass with the defect reintroduced.
+  for (const [label, resolution] of vectors) {
+    assert.throws(() => validateEffectiveGenericProfile({ ...effective, resolution }), (error) => {
+      assert.equal(error?.reasonCode, "PROFILE_SCHEMA_INVALID", `${label}: got ${error?.reasonCode}`);
+      assert.equal(error?.message, "effective profile header", `${label}: refused downstream, not at the header`);
+      return true;
+    }, label);
+  }
+  // The guard must not have closed the legal value.
+  assert.deepEqual(validateEffectiveGenericProfile(effective), effective);
+});

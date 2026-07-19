@@ -284,23 +284,45 @@ test("enum admission rejects values that coerce to a legal member instead of bei
   // whose toString yields a member, coerce INTO the enum. Numbers, null, and plain objects were
   // already rejected before this guard existed, so they are regression anchors only -- asserting
   // on them alone would pass with or without the fix.
-  const coercing = [["specified"], { toString: () => "specified" }, new String("specified")];
-  for (const maturity of coercing) {
-    expectReason("RECORD_MALFORMED", () => validateCompatibility({ ...models.compatibility, maturity }));
+  const coercibleTo = (member) => [["single-element array", [member]],
+    ["plain object with toString", { toString: () => member }],
+    ["boxed String", new String(member)]];
+  // The anchors run against ALL THREE validators, not compatibility alone. Scoring them
+  // once and folding the other two validators into the coercing loop would quietly recount
+  // anchor coverage as proof of this guard.
+  const anchors = [["number", 1], ["null", null], ["plain object", {}], ["boolean", true]];
+  const rejects = (label, operation) => {
+    assert.throws(operation, (error) => error.reasonCode === "RECORD_MALFORMED", `admitted ${label}`);
+  };
+
+  for (const [label, maturity] of [...coercibleTo("specified"), ...anchors]) {
+    rejects(`compatibility.maturity ${label}`, () => validateCompatibility({ ...models.compatibility, maturity }));
   }
-  for (const status of [["accepted"], { toString: () => "accepted" }, new String("accepted")]) {
-    expectReason("RECORD_MALFORMED", () => validateReceipt({ ...models.receipt, status }));
+  for (const [label, status] of [...coercibleTo("accepted"), ...anchors]) {
+    rejects(`receipt.status ${label}`, () => validateReceipt({ ...models.receipt, status }));
   }
-  for (const anchor of [1, null, {}, true]) {
-    expectReason("RECORD_MALFORMED", () => validateCompatibility({ ...models.compatibility, maturity: anchor }));
+  for (const [label, entry] of [...coercibleTo("work"), ...anchors]) {
+    rejects(`appliesTo entry ${label}`, () => validateExtensionRegistration({ ...models.extensionRegistration, appliesTo: [entry] }));
   }
 
   // appliesTo carries a second defect: Set dedupe is identity-based, so two distinct ["work"]
-  // arrays satisfy both the membership test and the duplicate test.
-  for (const appliesTo of [[["work"], ["work"]], [["work"]], [{ toString: () => "work" }]]) {
-    expectReason("RECORD_MALFORMED", () => validateExtensionRegistration({ ...models.extensionRegistration, appliesTo }));
+  // arrays satisfy both the membership test and the duplicate test. All three coercible shapes
+  // form such a pair -- the boxed String and toString pairs share the array's root cause and
+  // must be pinned with it, or the fix is only proven for one of the three.
+  const duplicatePairs = [
+    ["array pair", [["work"], ["work"]]],
+    ["boxed String pair", [new String("work"), new String("work")]],
+    ["toString pair", [{ toString: () => "work" }, { toString: () => "work" }]],
+  ];
+  for (const [label, appliesTo] of duplicatePairs) {
+    rejects(label, () => validateExtensionRegistration({ ...models.extensionRegistration, appliesTo }));
   }
-  expectReason("RECORD_MALFORMED", () => validateExtensionRegistration({ ...models.extensionRegistration, appliesTo: ["work", "work"] }));
+  rejects("plain duplicate strings", () => validateExtensionRegistration({ ...models.extensionRegistration, appliesTo: ["work", "work"] }));
+
+  // One positive assertion per validator: the guards must not have closed the legal values.
+  assert.doesNotThrow(() => validateCompatibility({ ...models.compatibility, maturity: "specified" }));
+  assert.doesNotThrow(() => validateReceipt({ ...models.receipt, status: "accepted" }));
+  assert.doesNotThrow(() => validateExtensionRegistration({ ...models.extensionRegistration, appliesTo: ["work"] }));
   assert.equal(validateExtensionRegistration({ ...models.extensionRegistration, appliesTo: ["work"] }).schemaVersion, "tcrn.extension-registration.v1");
 });
 
