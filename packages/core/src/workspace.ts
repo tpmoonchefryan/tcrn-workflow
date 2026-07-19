@@ -1212,7 +1212,18 @@ async function reclaimStaleRecoveryClaim(
   path: string,
   existing: { readonly owner: Readonly<Record<string, JsonValue>>; readonly identity: { readonly dev: number | bigint; readonly ino: number | bigint } },
 ): Promise<void> {
-  const quarantine = controlPath(workspaceRoot, `stale-recovery-${String(existing.owner.token)}`);
+  // The prefix must match RESIDUE_PREFIX (workspace-snapshot.ts) and .gitignore, or a leaked
+  // quarantine file is invisible to the residue gate, lands in the backup manifest, and can be
+  // committed and shipped on clone. releaseRecoveryClaim already uses this prefix; both recovery
+  // quarantines share it deliberately, and their tokens keep them distinct.
+  const quarantine = controlPath(workspaceRoot, `released-recovery-${String(existing.owner.token)}`);
+  // Re-verify immediately before the rename, as releaseRecoveryClaim does. Without this the
+  // identity read that authorized the reclaim can be arbitrarily stale, so a claim recreated by a
+  // live writer in the interval would be renamed away on the strength of a dead writer's stat.
+  const current = await lstat(path).catch(() => fail("WORKSPACE_LOCKED", "stale recovery claim disappeared before reclaim"));
+  if (!current.isFile() || current.isSymbolicLink() || current.nlink !== 1 || !sameIdentity(current, existing.identity)) {
+    fail("WORKSPACE_LOCKED", "recovery claim changed before reclaim");
+  }
   try {
     await rename(path, quarantine);
   } catch {
@@ -1220,7 +1231,16 @@ async function reclaimStaleRecoveryClaim(
   }
   const moved = await lstat(quarantine);
   if (!sameIdentity(moved, existing.identity) || !moved.isFile() || moved.nlink !== 1) {
-    fail("WORKSPACE_LEASE_INVALID", "stale recovery claim identity changed during reclaim");
+    // We renamed something other than the claim we checked -- a live writer recreated it in the
+    // window. Put it back and report a lost race, not corruption: leaving a foreign live claim
+    // displaced in quarantine under a non-retriable code is the double-reclaim the claim exists
+    // to prevent. Restore failure is the genuinely unrecoverable case and keeps the hard code.
+    try {
+      await rename(quarantine, path);
+    } catch {
+      fail("WORKSPACE_LEASE_INVALID", "displaced recovery claim could not be restored");
+    }
+    fail("WORKSPACE_LOCKED", "recovery claim was recreated during reclaim");
   }
   await rm(quarantine);
 }

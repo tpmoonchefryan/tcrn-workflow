@@ -379,6 +379,29 @@ test("WSA-7: lease-inspect surfaces the recovery claim and lease-recovery-break 
   }
 });
 
+test("WSA-7b: a reclaimed recovery claim quarantines under a residue-visible prefix", async () => {
+  // R2-NEW-1. The reclaim path once wrote `stale-recovery-`, which matches neither RESIDUE_PREFIX
+  // nor .gitignore, so a leaked quarantine file was invisible to the residue gate, entered the
+  // backup manifest, and could be committed and shipped on clone. Assert the prefix the residue
+  // gate actually recognises, so reintroducing the divergence reddens here.
+  // The quarantine file is transient on the success path, so assert the source text instead of
+  // racing to observe it: every recovery-quarantine name the engine can construct must begin with
+  // a prefix RESIDUE_PREFIX recognises. This reddens the moment either side drifts.
+  const engineSource = await readFile(new URL("../packages/core/src/workspace.ts", import.meta.url), "utf8");
+  const residueSource = await readFile(new URL("../packages/core/src/workspace-snapshot.ts", import.meta.url), "utf8");
+  const residuePrefixes = [...residueSource.matchAll(/RESIDUE_PREFIX = \/\^\(\?:([^)]+)\)/gu)][0][1].split("|");
+  assert.ok(residuePrefixes.length >= 3, "residue prefixes were not parsed");
+  const quarantineNames = [...engineSource.matchAll(/controlPath\([^,]+, `([a-z-]+)\$\{/gu)].map((match) => match[1]);
+  const recoveryQuarantines = quarantineNames.filter((name) => name.includes("recovery-"));
+  assert.ok(recoveryQuarantines.length >= 2, "both recovery quarantine sites should be found");
+  for (const name of recoveryQuarantines) {
+    assert.ok(
+      residuePrefixes.some((prefix) => name.startsWith(prefix)),
+      `${name} is invisible to the residue gate, the backup manifest, and .gitignore`,
+    );
+  }
+});
+
 test("WSB-1: mutation responses carry the created/mutated record identity", async () => {
   const fixture = await workspaceFixture();
   try {
