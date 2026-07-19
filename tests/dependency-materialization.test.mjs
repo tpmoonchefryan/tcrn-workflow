@@ -34,7 +34,7 @@ async function materializationFixture(context) {
 test("materialization binds a complete store inventory to the exact frozen lockfile and populates only an absent target", async (context) => {
   const [source, materialization] = await Promise.all([sourceFixture(context), materializationFixture(context)]);
   const created = await createDependencyMaterialization(source, materialization);
-  assert.equal(created.packages.length, 5);
+  assert.equal(created.packages.length, 8);
   assert.equal((await verifyDependencyMaterialization(source, materialization)).store.length, 2);
   const targetParent = await mkdtemp(join(tmpdir(), "tcrn-dependency-materialization-target-"));
   context.after(() => rm(targetParent, { recursive: true, force: true }));

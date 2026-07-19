@@ -21,13 +21,18 @@ async function dependencyInputs() {
 
 test("the exact frozen dependency graph has complete policy and integrity closure", async () => {
   const graph = validateFrozenDependencyGraph(await dependencyInputs());
-  assert.equal(graph.records.length, 5);
-  assert.deepEqual(graph.directIdentities, ["ajv@8.17.1"]);
+  assert.equal(graph.records.length, 8);
+  assert.deepEqual(graph.directIdentities, [
+    "@types/node@24.13.2",
+    "ajv@8.17.1",
+    "typescript@5.9.3",
+  ]);
   assert.deepEqual(graph.transitiveIdentities, [
     "fast-deep-equal@3.1.3",
     "fast-uri@3.1.3",
     "json-schema-traverse@1.0.0",
     "require-from-string@2.0.2",
+    "undici-types@7.18.2",
   ]);
 });
 
@@ -67,4 +72,17 @@ test("unapproved lock packages and integrity drift fail closed", async () => {
     () => validateFrozenDependencyGraph({ ...inputs, lockContent: importerDrift }),
     (error) => error instanceof DependencyGraphError && error.reasonCode === "DEPENDENCY_LOCK_IMPORTER_NOT_EXACT",
   );
+});
+
+test("a scoped lock identity parses through its surrounding pnpm quotes", async () => {
+  const inputs = await dependencyInputs();
+  // pnpm quotes every lock key beginning with "@". Before the identity match stripped
+  // those quotes the version pattern saw a trailing quote and the whole graph failed to
+  // parse, so no scoped dependency could be admitted at all.
+  assert.match(inputs.lockContent, /^ {2}'@types\/node@24\.13\.2':$/mu);
+  const graph = validateFrozenDependencyGraph(inputs);
+  assert.ok(graph.directIdentities.includes("@types/node@24.13.2"));
+  const scoped = graph.records.find((record) => record.identity === "@types/node@24.13.2");
+  assert.equal(scoped.name, "@types/node");
+  assert.equal(scoped.version, "24.13.2");
 });
