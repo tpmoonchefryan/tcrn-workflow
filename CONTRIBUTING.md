@@ -65,12 +65,14 @@ plus a test run (~4-5s measured) and ten entries would push the P1 wall clock
 toward the 180s escalation trigger that protects the "run it on every change"
 discipline.
 
-**Current.** After the rc.6 fix and optimization program the measured figure is
-`{proofLines: 25602, productLines: 16011, ratio: 1.599}`. The program added
-proof to fixes that had shipped without it and retired four dead release
-helpers, and the ratio moved from `1.62` to `1.60` — it did not approach `1.0`,
-so the rule still binds and no gate in that program needed the exception clause.
-Re-measure rather than quote this number; it is a snapshot, not a pin.
+**Current.** `{proofLines: 25905, productLines: 16011, ratio: 1.618}`. The rc.6
+fix and optimization program moved this from `1.62` to `1.599` — it added proof
+to fixes that had shipped without it and retired four dead release helpers, and
+no package in it needed the exception clause. The OD-21 guard checker above then
+moved it back to `1.618`, which is the cost that exception bought and is recorded
+here rather than left implicit. The ratio did not approach `1.0` at any point, so
+the rule still binds. Re-measure rather than quote this number; it is a snapshot,
+not a pin.
 
 **Measurement.** Run the report-only command:
 
