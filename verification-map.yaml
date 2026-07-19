@@ -273,7 +273,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "fabfa2ee74b43d3d562f36dc2f51291ce6248c395dd97829f0e2edac98c5e7d1",
+      "fixtureDigest": "2c028bf4f4793208e3879aa69a7aa4c8fd1d7f09ad41be64bc746432ebcbd07c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1761,7 +1761,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "fa1b802d1169ffff5b3313676126da7fd4fb5ae3d6cb7a3be988ea76740e8bf6",
+      "fixtureDigest": "8fd3849c34ab39041d31286ac970f982b6f9574388f931907279a327f38039e3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
