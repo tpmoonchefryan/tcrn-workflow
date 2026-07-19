@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -104,6 +105,19 @@ test("check reports staleness without writing", async (context) => {
   const onDisk = await readFile(resolve(root, rc1InputsPolicyPath), "utf8");
   assert.equal(onDisk, `${JSON.stringify({ normativeInputs: [] }, null, 2)}\n`);
 });
+
+// CQ-00 PATCH 9 proof: the wrapper's mode arbitration guards a DESTRUCTIVE write path
+// (no argument rewrites the pinned RC1 basis in place). A mistyped mode flag must be an
+// explicit usage failure, never a silent fall-through to write. Spawning the real CLI is
+// the only way to exercise the arbitration, which lives in the wrapper, not the library.
+for (const argument of ["--chck", "check", "-check", "--write"]) {
+  test(`regen-rc1-inputs rejects the unknown argument ${argument} without writing`, () => {
+    const result = spawnSync(process.execPath, [resolve(repositoryRoot, "scripts/regen-rc1-inputs.mjs"), argument], { encoding: "utf8" });
+    assert.equal(result.status, 1);
+    assert.equal(JSON.parse(result.stderr).reasonCode, "RC1_INPUTS_MODE_INVALID");
+    assert.equal(result.stdout, "");
+  });
+}
 
 test("committed rc1-inputs policy is canonical and complete", async () => {
   // Guards against drift: the checked-in normative-input set must equal a fresh

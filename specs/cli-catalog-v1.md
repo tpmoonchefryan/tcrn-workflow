@@ -30,12 +30,15 @@ Each entry is `{name, availability, mutates, flags}`:
   accepts an explicit null carries two optional descriptive fields:
   - `nullSentinel` — always `"-"`, the canonical spelling that means null (an
     omitted optional flag is also null). Present on `knowledge-create`
-    `project-id`/`last-verified`, `work-create` `parent-id`, and
-    `profile-authorize` `workspace-id`/`project-id`/`command`.
+    `project-id`/`last-verified`, `work-create` `parent-id`, `gate-create`
+    `work-id`, and `profile-authorize` `workspace-id`/`project-id`/`command`.
   - `deprecatedAliases` — additional spellings still accepted this release but
-    slated for removal. Only `knowledge-create` `project-id`/`last-verified`
-    carry it, each `["null"]`, preserving the pre-unification `"null"` spelling
-    for external callers.
+    slated for removal. Carried by `knowledge-create` `project-id`/`last-verified`,
+    `work-create` `parent-id`, and `gate-create` `work-id`, each `["null"]`,
+    preserving the pre-unification `"null"` spelling for external callers. These
+    are exactly the flags whose dispatcher accepts the `"null"` alias, so a caller
+    can decide from the catalog alone which spellings a flag admits, and `work-list`
+    `parent-id` resolves both spellings identically when filtering.
   - `headSentinel` — always `true`, marking an `expected-version` flag that also
     accepts the literal `head`, which the verb resolves to the current version
     under the held workspace lease (opt-in optimistic-concurrency bypass). Present
