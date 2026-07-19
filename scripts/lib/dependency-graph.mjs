@@ -78,7 +78,11 @@ function parseLock(lockContent) {
       currentIdentity = null;
       continue;
     }
-    const identityMatch = line.match(/^  ([^\s].+):(?: \{\})?$/u);
+    // pnpm quotes any lock key that YAML would otherwise misread, which is every scoped
+    // identity because it begins with "@". Strip the surrounding quotes here so the
+    // identity matches the unquoted form used in package.json and the dependency policy;
+    // unquoted keys are captured exactly as before.
+    const identityMatch = line.match(/^  ['"]?([^'"\s][^'"]*)['"]?:(?: \{\})?$/u);
     if (identityMatch && ["packages", "snapshots"].includes(section)) {
       currentIdentity = identityMatch[1];
       splitIdentity(currentIdentity);
