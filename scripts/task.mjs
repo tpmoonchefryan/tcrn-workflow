@@ -3,7 +3,7 @@
 
 import { createHash } from "node:crypto";
 import { lstat, writeFile } from "node:fs/promises";
-import { dirname, extname, relative, resolve } from "node:path";
+import { extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 
@@ -26,6 +26,7 @@ import {
   aggregatePrivacySurface,
   decodeGitMetadataBytes,
   decodePrivacyScanBytes,
+  parseGitObjectBatch,
   parseHistoricalTreePaths,
   scanPrivacyEntries,
 } from "./lib/privacy.mjs";
@@ -1389,26 +1390,30 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
   // clock. --batch emits "<oid> <type> <size>\n" followed by exactly <size> bytes and a
   // trailing newline, so the payload stays binary-safe: the length comes from the header,
   // never from scanning for a delimiter.
-  // spawnSync defaults to a 1 MiB buffer, which the per-object form never approached and
-  // this one immediately exceeds: the whole object stream is ~28 MiB here. The cap is
-  // deliberately explicit and bounded rather than unlimited, and it fails closed -- a
-  // repository that outgrows it gets COMMAND_FAILED, not a silently truncated scan.
-  const privacyBatchMaximumBytes = 512 * 1024 * 1024;
-  const batch = run("git", ["cat-file", "--batch-all-objects", "--batch"], { raw: true, maxBuffer: privacyBatchMaximumBytes });
+  // A batch-check pass runs first and declares every object in exactly the header form
+  // the batch pass emits, so the total stream length is known before the capture: the
+  // batch-check bytes plus, per object, the declared size and one framing newline.
+  // spawnSync's 1 MiB default is far below the ~28 MiB stream here, so maxBuffer is set
+  // to that exact length. Both drift directions then fail closed rather than yielding a
+  // short stream whose unscanned tail would leave the gate green: a repository that
+  // grows between the passes overflows the cap (COMMAND_OUTPUT_OVERFLOW), and one that
+  // shrinks trips the length-equality backstop inside parseGitObjectBatch.
+  const batchCheck = run(
+    "git",
+    ["cat-file", "--batch-all-objects", "--batch-check=%(objectname) %(objecttype) %(objectsize)"],
+    { raw: true, maxBuffer: 64 * 1024 * 1024 },
+  );
+  let expectedStreamBytes = batchCheck.length;
+  for (const line of decodeGitMetadataBytes(batchCheck, "PRIVACY_GIT_OBJECT_INDEX_UTF8_INVALID").split("\n")) {
+    if (line === "") continue;
+    const declaredSize = Number(line.split(" ")[2]);
+    assertion(Number.isSafeInteger(declaredSize) && declaredSize >= 0, "PRIVACY_GIT_OBJECT_TYPE", line);
+    expectedStreamBytes += declaredSize + 1;
+  }
+  const batch = run("git", ["cat-file", "--batch-all-objects", "--batch"], { raw: true, maxBuffer: expectedStreamBytes + 1 });
   const historyRecords = [];
-  let cursor = 0;
   let objectCount = 0;
-  while (cursor < batch.length) {
-    const headerEnd = batch.indexOf(0x0a, cursor);
-    if (headerEnd === -1) fail("PRIVACY_GIT_OBJECT_TYPE", "unterminated cat-file header");
-    const [object, type, sizeText] = batch.subarray(cursor, headerEnd).toString("utf8").split(" ");
-    const size = Number(sizeText);
-    if (!["blob", "commit", "tag", "tree"].includes(type)) fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:${type}`);
-    if (!Number.isSafeInteger(size) || size < 0) fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:size`);
-    const start = headerEnd + 1;
-    const content = batch.subarray(start, start + size);
-    if (content.length !== size) fail("PRIVACY_GIT_OBJECT_TYPE", `${object}:truncated`);
-    cursor = start + size + 1;
+  for (const { object, type, content } of parseGitObjectBatch(batch, expectedStreamBytes)) {
     objectCount += 1;
     historyRecords.push({ path: `${type}:${object}`, content });
     entries.push({

@@ -128,6 +128,55 @@ export function scanPrivacyEntries(entries, { owner }) {
   return findings;
 }
 
+const gitObjectBatchHeader = /^([a-f0-9]{40,64}) (blob|commit|tag|tree) (0|[1-9][0-9]*)$/u;
+
+// `git cat-file --batch` frames each object as "<oid> SP <type> SP <size> LF <bytes> LF".
+// Extraction is length-defined: the payload is a zero-copy subarray sized by the declared
+// header count and is never decoded, so it is bit-identical to a per-object raw capture
+// even for binary, NUL-bearing and invalid-UTF-8 blobs.
+//
+// `expectedBytes` is the total stream length implied by the batch-check pass. The
+// equality check is an independent backstop against a truncated capture: a short stream
+// parses cleanly right up to the cut and would silently drop every object past it,
+// leaving the privacy gate green over unscanned history. It holds even if the
+// COMMAND_OUTPUT_OVERFLOW guard in local-command.mjs is reverted.
+export function parseGitObjectBatch(stream, expectedBytes) {
+  if (!Buffer.isBuffer(stream)) {
+    throw new Error("PRIVACY_GIT_OBJECT_STREAM_INVALID");
+  }
+  if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 0) {
+    throw new Error("PRIVACY_GIT_OBJECT_STREAM_INVALID");
+  }
+  if (stream.length !== expectedBytes) {
+    throw new Error("PRIVACY_GIT_OBJECT_STREAM_INCOMPLETE");
+  }
+  const records = [];
+  let cursor = 0;
+  while (cursor < stream.length) {
+    const headerEnd = stream.indexOf(0x0a, cursor);
+    if (headerEnd === -1) {
+      throw new Error("PRIVACY_GIT_OBJECT_TYPE");
+    }
+    const match = stream.subarray(cursor, headerEnd).toString("utf8").match(gitObjectBatchHeader);
+    if (!match) {
+      throw new Error("PRIVACY_GIT_OBJECT_TYPE");
+    }
+    const [, object, type, sizeText] = match;
+    const size = Number(sizeText);
+    if (!Number.isSafeInteger(size)) {
+      throw new Error("PRIVACY_GIT_OBJECT_TYPE");
+    }
+    const start = headerEnd + 1;
+    const content = stream.subarray(start, start + size);
+    if (content.length !== size || stream[start + size] !== 0x0a) {
+      throw new Error("PRIVACY_GIT_OBJECT_TYPE");
+    }
+    cursor = start + size + 1;
+    records.push({ object, type, content });
+  }
+  return records;
+}
+
 export function parseHistoricalTreePaths(content) {
   if (content === "") {
     return [];

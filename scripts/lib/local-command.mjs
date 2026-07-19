@@ -71,14 +71,25 @@ export function runLocalCommand(executable, arguments_, options = {}) {
   };
   if (!raw) executionOptions.encoding = "utf8";
   const result = spawnSync(executable, arguments_, executionOptions);
-  const stdout = diagnosticText(result.stdout);
-  const stderr = diagnosticText(result.stderr);
+  // A maxBuffer overflow is reported through `error` while `status` stays at 0 or null
+  // depending on child exit timing, so a status-only guard admits silently truncated
+  // stdout as success. Capture-bound faults fail closed here instead.
+  //
+  // Gate on ENOBUFS only. A blanket `if (result.error)` would reclassify ENOENT /
+  // EAGAIN / ETIMEDOUT away from COMMAND_FAILED, a behaviour change with no motivation.
+  if (result.error?.code === "ENOBUFS") {
+    fail("COMMAND_OUTPUT_OVERFLOW", `${executable} ${arguments_.join(" ")}\nENOBUFS`);
+  }
   if (result.status !== 0) {
+    // stdout is decoded only on the failure path. Decoding it eagerly turns every
+    // large raw capture into a discarded multi-megabyte decode, and above
+    // MAX_STRING_LENGTH the RangeError escapes the typed failure contract entirely.
     fail(
       "COMMAND_FAILED",
-      `${executable} ${arguments_.join(" ")}\n${stdout}${stderr}${result.error?.message ?? ""}`,
+      `${executable} ${arguments_.join(" ")}\n${diagnosticText(result.stdout)}${diagnosticText(result.stderr)}${result.error?.message ?? ""}`,
     );
   }
+  const stderr = diagnosticText(result.stderr);
   if (stderr.trim() !== "") {
     fail("COMMAND_UNEXPECTED_STDERR", `${executable} ${arguments_.join(" ")}\n${stderr}`);
   }
