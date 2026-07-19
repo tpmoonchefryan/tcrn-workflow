@@ -228,6 +228,39 @@ function fail(reasonCode: WorkspaceReasonCode, message: string): never {
   throw new WorkspaceError(reasonCode, message);
 }
 
+// WSA-1 typing: JsonValue's object arm is an index-signature type, and the
+// built-in Array.isArray guard only removes the mutable-array form, so an
+// inline `typeof v === "object" && !Array.isArray(v)` chain leaves the readonly
+// array arm in the union and every field read fails. This predicate states the
+// same runtime test once and reports the narrowing the test really proves.
+function isJsonObject(value: JsonValue | undefined): value is { readonly [key: string]: JsonValue } {
+  return value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value);
+}
+
+// WSA-1 typing: the record interfaces are structurally JSON objects, but
+// TypeScript grants an implicit index signature only to anonymous object types,
+// so an interface never satisfies JsonValue by plain assignment. This
+// homomorphic mapped type restates a record's own fields as an anonymous type,
+// which does carry that index signature. Nothing is asserted away: the compiler
+// still checks every field of T against JsonValue at the use site, and a record
+// that gained a non-JSON field would still be rejected. The recursion covers the
+// nested case (ExtensionValue inside WorkRecord.extensions has the same missing
+// index signature); a field that already is a JsonValue is kept verbatim rather
+// than restated, so its check is the compiler's, not this type's.
+type JsonFields<T> = T extends JsonValue ? T : { readonly [K in keyof T]: JsonFields<T[K]> };
+
+// These two are identity at run time. They exist so the restatement above is
+// instantiated at a concrete record type, where the compiler verifies the record
+// really does satisfy it -- no assertion is involved, and a record field that
+// stopped being JSON would fail here.
+function projectJsonFields(record: ProjectRecord): JsonFields<ProjectRecord> {
+  return record;
+}
+
+function workJsonFields(record: WorkRecord): JsonFields<WorkRecord> {
+  return record;
+}
+
 function exactFields(value: unknown, expected: readonly string[], reasonCode: WorkspaceReasonCode, label: string): asserts value is Readonly<Record<string, unknown>> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail(reasonCode, `${label} must be an object`);
@@ -592,10 +625,11 @@ function payloadRecord(payload: JsonValue, operation: string, actorRequired: boo
   if (payload.operation !== operation) {
     fail("WORKSPACE_EVENT_CORRUPT", `expected ${operation}`);
   }
-  if (payload.record === null || typeof payload.record !== "object" || Array.isArray(payload.record)) {
+  const record = payload.record;
+  if (!isJsonObject(record)) {
     fail("WORKSPACE_EVENT_CORRUPT", `${operation} record is invalid`);
   }
-  return payload.record;
+  return record;
 }
 
 // WSD-1: the single-event atomic close payload — exactly {minutes, operation,
@@ -824,16 +858,19 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
   let attestationEnabledAtSequence: number | null = null;
   for (const event of events) {
     const payload = event.payload;
-    if (payload === null || typeof payload !== "object" || Array.isArray(payload) || typeof payload.operation !== "string") {
+    if (!isJsonObject(payload) || typeof payload.operation !== "string") {
       fail("WORKSPACE_EVENT_CORRUPT", `event ${event.id} payload is invalid`);
     }
+    // The operation is bound once so the string narrowing above survives into the
+    // extension-record closures below, which re-read it.
+    const operation: string = payload.operation;
     // WSE-2: the attestation.actor.enabled chain event turns mandatory actor
     // attestation on for itself and every later event; it is a control event that
     // touches no record graph, and a second one is a corrupt chain. Tracking it
     // inside the single event loop keeps validation one-pass and replay-order
     // exact — the enabling event carries the enabling actor and is the first that
     // requires one, so actorRequired is derived after this branch has run.
-    if (payload.operation === ACTOR_ATTESTATION_ENABLE_OPERATION) {
+    if (operation === ACTOR_ATTESTATION_ENABLE_OPERATION) {
       if (attestationEnabledAtSequence !== null) {
         fail("WORKSPACE_EVENT_CORRUPT", "duplicate attestation.actor.enabled event");
       }
@@ -850,21 +887,21 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       continue;
     }
     const actorRequired = attestationEnabledAtSequence !== null;
-    if (projectOperations.has(payload.operation)) {
-      const record = validateProject(payloadRecord(payload, payload.operation, actorRequired));
+    if (projectOperations.has(operation)) {
+      const record = validateProject(payloadRecord(payload, operation, actorRequired));
       const current = projects.get(record.id);
       if (record.updatedAt !== event.occurredAt) {
         fail("WORKSPACE_EVENT_CORRUPT", `project ${record.id} timestamp is not event-bound`);
       }
-      if (payload.operation === "project.created") {
+      if (operation === "project.created") {
         if (current || record.revision !== 1 || record.tombstone) {
           fail("WORKSPACE_EVENT_CORRUPT", `invalid project create ${record.id}`);
         }
       } else if (!current || current.tombstone || record.revision !== current.revision + 1 || record.externalKey !== current.externalKey ||
-        (payload.operation === "project.updated" && record.tombstone) || (payload.operation === "project.deleted" && !record.tombstone)) {
+        (operation === "project.updated" && record.tombstone) || (operation === "project.deleted" && !record.tombstone)) {
         fail("WORKSPACE_EVENT_CORRUPT", `invalid project mutation ${record.id}`);
       }
-      if (payload.operation === "project.deleted") {
+      if (operation === "project.deleted") {
         // CQ-10b: counted full scan. Fires only on project.deleted, which is rare
         // and few in number, so its measured contribution is nil.
         recordCollectionScan(work.size);
@@ -877,22 +914,22 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       // invariant it can break (a deleted project with live work) is checked above.
       continue;
     }
-    if (workOperations.has(payload.operation)) {
-      const record = payloadRecord(payload, payload.operation, actorRequired) as unknown as WorkRecord;
+    if (workOperations.has(operation)) {
+      const record = payloadRecord(payload, operation, actorRequired) as unknown as WorkRecord;
       const current = work.get(record.id);
       if (record.updatedAt !== event.occurredAt) {
         fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} timestamp is not event-bound`);
       }
-      if (payload.operation === "work.created") {
+      if (operation === "work.created") {
         if (current || record.revision !== 1 || record.tombstone) {
           fail("WORKSPACE_EVENT_CORRUPT", `invalid work create ${record.id}`);
         }
       } else if (!current || current.tombstone || record.revision !== current.revision + 1 || record.externalKey !== current.externalKey ||
         record.projectId !== current.projectId || record.kind !== current.kind || record.parentId !== current.parentId ||
-        (payload.operation === "work.updated" && record.tombstone) || (payload.operation === "work.deleted" && !record.tombstone)) {
+        (operation === "work.updated" && record.tombstone) || (operation === "work.deleted" && !record.tombstone)) {
         fail("WORKSPACE_EVENT_CORRUPT", `invalid work mutation ${record.id}`);
       }
-      if (payload.operation === "work.updated" && current) {
+      if (operation === "work.updated" && current) {
         try {
           assertWorkTransition(current.status, record.status);
         } catch (error) {
@@ -910,15 +947,15 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       validateWorkClosure(work, projects, record);
       continue;
     }
-    if (conferenceOperations.has(payload.operation)) {
+    if (conferenceOperations.has(operation)) {
       // WSD-1: conference reducer arms. Every check here is a bounded lookup
       // against the maps materialized so far — O(delta) per event, and no
       // work-closure metrics (the closure counters stay work-only).
       // CQ-10b correction: the gate arm below is not scan-free. A gate.satisfied
       // transition copies the whole conference and minutes maps to resolve its
       // evidence; that copy is counted by recordCollectionScan.
-      if (payload.operation === "conference.created") {
-        const record = extensionRecordOrCorrupt(() => openConference(payloadRecord(payload, payload.operation, actorRequired)));
+      if (operation === "conference.created") {
+        const record = extensionRecordOrCorrupt(() => openConference(payloadRecord(payload, operation, actorRequired)));
         requireEventBoundTimestamp(record.updatedAt, event, `conference ${record.id}`);
         if (conferences.has(record.id) || record.revision !== 1 || record.tombstone) {
           fail("WORKSPACE_EVENT_CORRUPT", `invalid conference create ${record.id}`);
@@ -931,8 +968,8 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         conferences.set(record.id, record);
         continue;
       }
-      if (payload.operation === "conference.updated") {
-        const record = extensionRecordOrCorrupt(() => validateConferenceRequest(payloadRecord(payload, payload.operation, actorRequired)));
+      if (operation === "conference.updated") {
+        const record = extensionRecordOrCorrupt(() => validateConferenceRequest(payloadRecord(payload, operation, actorRequired)));
         requireEventBoundTimestamp(record.updatedAt, event, `conference ${record.id}`);
         const current = requireOpenConference(conferences, record.id, `conference ${record.id}`);
         if (record.status !== "cancelled" || record.tombstone || record.revision !== current.revision + 1) {
@@ -943,8 +980,8 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         conferences.set(record.id, record);
         continue;
       }
-      if (payload.operation === "conference.position.appended") {
-        const record = extensionRecordOrCorrupt(() => validateConferencePosition(payloadRecord(payload, payload.operation, actorRequired)));
+      if (operation === "conference.position.appended") {
+        const record = extensionRecordOrCorrupt(() => validateConferencePosition(payloadRecord(payload, operation, actorRequired)));
         requireEventBoundTimestamp(record.updatedAt, event, `conference position ${record.id}`);
         if (conferencePositions.has(record.id) || record.revision !== 1 || record.tombstone) {
           fail("WORKSPACE_EVENT_CORRUPT", `invalid conference position ${record.id}`);
@@ -976,11 +1013,11 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       conferenceMinutes.set(minutes.id, minutes);
       continue;
     }
-    if (gateOperations.has(payload.operation)) {
+    if (gateOperations.has(operation)) {
       // WSD-1: gate reducer arms, O(delta) like the conference arms above.
-      const record = extensionRecordOrCorrupt(() => validateGateRecord(payloadRecord(payload, payload.operation, actorRequired)));
+      const record = extensionRecordOrCorrupt(() => validateGateRecord(payloadRecord(payload, operation, actorRequired)));
       requireEventBoundTimestamp(record.updatedAt, event, `gate ${record.id}`);
-      if (payload.operation === "gate.created") {
+      if (operation === "gate.created") {
         if (gates.has(record.id) || record.revision !== 1 || record.tombstone || record.status !== "pending") {
           fail("WORKSPACE_EVENT_CORRUPT", `invalid gate create ${record.id}`);
         }
@@ -994,7 +1031,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       }
       const current = gates.get(record.id);
       if (!current || current.tombstone || record.revision !== current.revision + 1 ||
-        (payload.operation === "gate.updated" && record.tombstone) || (payload.operation === "gate.deleted" && !record.tombstone)) {
+        (operation === "gate.updated" && record.tombstone) || (operation === "gate.deleted" && !record.tombstone)) {
         fail("WORKSPACE_EVENT_CORRUPT", `invalid gate mutation ${record.id}`);
       }
       // WSD-4: a gate.updated must walk the lifecycle graph, and a move to
@@ -1002,8 +1039,8 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       // verb) and whose only extensions delta is the persisted locator entry.
       // gate.deleted keeps mutating tombstone alone; every other move pins
       // extensions, so a non-satisfied transition cannot smuggle in extensions.
-      let gateMutableFields: readonly string[] = payload.operation === "gate.updated" ? ["status", "revision", "updatedAt"] : ["tombstone", "revision", "updatedAt"];
-      if (payload.operation === "gate.updated") {
+      let gateMutableFields: readonly string[] = operation === "gate.updated" ? ["status", "revision", "updatedAt"] : ["tombstone", "revision", "updatedAt"];
+      if (operation === "gate.updated") {
         if (!GATE_TRANSITIONS[current.status].includes(record.status)) {
           fail("WORKSPACE_EVENT_CORRUPT", `invalid gate transition ${record.id}`);
         }
@@ -1035,7 +1072,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       gates.set(record.id, record);
       continue;
     }
-    fail("WORKSPACE_EVENT_CORRUPT", `unknown operation ${payload.operation}`);
+    fail("WORKSPACE_EVENT_CORRUPT", `unknown operation ${operation}`);
   }
   const projectRecords = [...projects.values()].sort((left, right) => compareCanonicalText(left.id, right.id));
   recordTerminalGraphValidation();
@@ -1658,7 +1695,6 @@ export async function breakWorkspaceRecoveryClaim(workspaceRootInput: string, op
 
 async function createLeaseOwner(
   leasePath: string,
-  workspaceRoot: string,
   expectedDirectoryIdentity: FileIdentity,
   now: string,
   nowNanoseconds: bigint,
@@ -1837,13 +1873,17 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
         }
       }
     }
-    const token = await createLeaseOwner(leasePath, workspaceRoot, leaseDirectoryIdentity, options.now, nowNanoseconds, ttl);
+    const token = await createLeaseOwner(leasePath, leaseDirectoryIdentity, options.now, nowNanoseconds, ttl);
     let released = false;
     return {
       workspaceRoot,
       token,
       acquiredAt: options.now,
-      async release(): Promise<void> {
+      // The `this` parameter is erased at run time; it only states what the
+      // method already relies on -- release is called as a member of the lease it
+      // was returned on, which is what assertLease re-verifies below. Without it
+      // `this` picks up the awaited return type's contextual union.
+      async release(this: WorkspaceLease): Promise<void> {
         if (released) {
           return;
         }
@@ -2012,8 +2052,7 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
     // boundary and re-enforces the identical rule, so this write path cannot
     // outrun replay.
     const deltaPayload = delta.payload;
-    const isEnableEvent = deltaPayload !== null && typeof deltaPayload === "object" && !Array.isArray(deltaPayload) &&
-      deltaPayload.operation === ACTOR_ATTESTATION_ENABLE_OPERATION;
+    const isEnableEvent = isJsonObject(deltaPayload) && deltaPayload.operation === ACTOR_ATTESTATION_ENABLE_OPERATION;
     const actorRequired = state.attestationEnabledAtSequence !== null || isEnableEvent;
     let payload: JsonValue = deltaPayload;
     if (actorRequired) {
@@ -2115,7 +2154,7 @@ export async function createProject(workspaceRoot: string, lease: WorkspaceLease
       updatedAt: input.occurredAt,
       tombstone: false,
     }, "WORKSPACE_INPUT_INVALID");
-    return { payload: { operation: "project.created", record }, projects: sortedProjects([...state.projects, record]), work: state.work };
+    return { payload: { operation: "project.created", record: projectJsonFields(record) }, projects: sortedProjects([...state.projects, record]), work: state.work };
   }, input);
 }
 
@@ -2129,7 +2168,7 @@ export async function updateProject(workspaceRoot: string, lease: WorkspaceLease
       { ...current, name: input.name, revision: current.revision + 1, updatedAt: input.occurredAt },
       "WORKSPACE_INPUT_INVALID",
     );
-    return { payload: { operation: "project.updated", record }, projects: sortedProjects(state.projects.map((entry) => entry.id === record.id ? record : entry)), work: state.work };
+    return { payload: { operation: "project.updated", record: projectJsonFields(record) }, projects: sortedProjects(state.projects.map((entry) => entry.id === record.id ? record : entry)), work: state.work };
   }, input);
 }
 
@@ -2142,7 +2181,7 @@ export async function deleteProject(workspaceRoot: string, lease: WorkspaceLease
       fail("WORKSPACE_INPUT_INVALID", `project ${current.id} still owns live work`);
     }
     const record = { ...current, revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true };
-    return { payload: { operation: "project.deleted", record }, projects: sortedProjects(state.projects.map((entry) => entry.id === record.id ? record : entry)), work: state.work };
+    return { payload: { operation: "project.deleted", record: projectJsonFields(record) }, projects: sortedProjects(state.projects.map((entry) => entry.id === record.id ? record : entry)), work: state.work };
   }, input);
 }
 
@@ -2174,7 +2213,7 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
       extensions: {},
     };
     const work = validateWorkGraph([...state.work, record]);
-    return { payload: { operation: "work.created", record }, projects: state.projects, work };
+    return { payload: { operation: "work.created", record: workJsonFields(record) }, projects: state.projects, work };
   }, input);
 }
 
@@ -2191,7 +2230,7 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
     assertGateClearance(state.gates, current.id, input.status, "WORKSPACE_GATE_PENDING");
     const record: WorkRecord = { ...current, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
-    return { payload: { operation: "work.updated", record }, projects: state.projects, work };
+    return { payload: { operation: "work.updated", record: workJsonFields(record) }, projects: state.projects, work };
   }, input);
 }
 
@@ -2202,7 +2241,7 @@ export async function deleteWork(workspaceRoot: string, lease: WorkspaceLease, i
     const current = workById(state, input.id);
     const record: WorkRecord = { ...current, revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true };
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
-    return { payload: { operation: "work.deleted", record }, projects: state.projects, work };
+    return { payload: { operation: "work.deleted", record: workJsonFields(record) }, projects: state.projects, work };
   }, input);
 }
 

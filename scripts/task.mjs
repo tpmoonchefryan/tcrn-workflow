@@ -267,21 +267,81 @@ async function lint() {
   return success("LINT_VERIFIED", { modules: moduleFiles.length });
 }
 
+// The typecheck gate is memoized for the lifetime of the process. verify:p1
+// invokes it directly and also reaches it through build and workspace; without
+// this the pinned compiler would run four times per suite for one answer. Each
+// command still typechecks when run on its own, because a fresh process starts
+// with an empty cache.
+let memoizedTypecheck = null;
+
 async function typecheck() {
+  if (memoizedTypecheck === null) memoizedTypecheck = runTypecheck();
+  return memoizedTypecheck;
+}
+
+async function pathExists(path) {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function runTypecheck() {
   await verifyRuntime();
   const files = (await walkFiles()).filter((path) => path.endsWith(".ts"));
   for (const path of files) {
     const content = await readText(path);
-    stripTypesWithScopedExperimentalWarning(content, { mode: "transform", sourceMap: false });
     assertion(
       !/function\s+\w+\s*\([^)]*\)\s*\{/u.test(content),
       "TYPECHECK_RETURN_TYPE_REQUIRED",
       toPosixPath(relative(repositoryRoot, path)),
     );
   }
+  // A tree carrying TypeScript must carry the project that governs it. This is
+  // asserted before the skip below, so deleting tsconfig.json can never be a way
+  // to walk past the compiler — it fails the gate instead of silencing it.
+  const projectPath = resolve(repositoryRoot, "tsconfig.json");
+  const projectPresent = await pathExists(projectPath);
+  assertion(files.length === 0 || projectPresent, "TYPECHECK_PROJECT_MISSING", "tsconfig.json");
+  // A tree with no TypeScript at all — the disposable task-entrypoint fixtures
+  // are the only such tree here — has nothing for the compiler to check.
+  if (!projectPresent) {
+    return success("TYPECHECK_VERIFIED", { files: 0, engine: "no-typescript-sources" });
+  }
+  // SDC-4: the gate must run the version this repository pins, never whatever a
+  // caller happens to have resolved. Both facts are read and compared here.
+  const manifest = await readJson(resolve(repositoryRoot, "package.json"));
+  const pinnedVersion = manifest.devDependencies?.typescript ?? "";
+  assertion(/^\d+\.\d+\.\d+$/u.test(pinnedVersion), "TYPECHECK_COMPILER_NOT_PINNED", pinnedVersion);
+  const compilerPackage = await readJson(resolve(repositoryRoot, "node_modules/typescript/package.json"));
+  assertion(
+    compilerPackage.version === pinnedVersion,
+    "TYPECHECK_COMPILER_VERSION_MISMATCH",
+    `${compilerPackage.version} != ${pinnedVersion}`,
+  );
+  const compiler = resolve(repositoryRoot, "node_modules/typescript/lib/tsc.js");
+  // Zero tolerance, per the push-gate hardening: --pretty false gives one
+  // machine-readable diagnostic per line, and ANY line at all fails the gate.
+  // Nothing here distinguishes an error from a warning or a suggestion.
+  const invocation = [compiler, "--noEmit", "--pretty", "false", "--project", "tsconfig.json"];
+  let diagnostics = "";
+  try {
+    diagnostics = run(process.execPath, invocation);
+  } catch (error) {
+    if (!(error instanceof LocalCommandError)) throw error;
+    diagnostics = error.message;
+  }
+  const reported = diagnostics
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith(`${process.execPath} ${compiler}`));
+  assertion(reported.length === 0, "TYPECHECK_DIAGNOSTIC", reported.join(" | "));
   return success("TYPECHECK_VERIFIED", {
     files: files.length,
-    engine: "node-strip-types-and-p1-contracts",
+    engine: `typescript-${pinnedVersion}`,
   });
 }
 

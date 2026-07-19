@@ -22,7 +22,10 @@ export class CorePersonaError extends Error {
   readonly reasonCode: CorePersonaReasonCode;
   constructor(reasonCode: CorePersonaReasonCode, message: string) { super(message); this.name = "CorePersonaError"; this.reasonCode = reasonCode; }
 }
-const fail = (reasonCode: CorePersonaReasonCode, message: string): never => { throw new CorePersonaError(reasonCode, message); };
+// Explicitly annotated: the compiler only applies never-returning-call control
+// flow analysis when the callee is a const carrying an explicit type.
+const fail: (reasonCode: CorePersonaReasonCode, message: string) => never =
+  (reasonCode, message) => { throw new CorePersonaError(reasonCode, message); };
 
 export interface CorePersonaProfile {
   readonly schemaVersion: typeof CORE_PERSONA_PROFILE_VERSION;
@@ -58,7 +61,12 @@ const semanticProfiles = [
 ] as const;
 
 const semanticBasis = (p: typeof semanticProfiles[number]) => ({ schemaVersion: CORE_PERSONA_PROFILE_VERSION, profileId: p[0], displayName: p[1], jobTitle: p[2], mission: p[3], authorityBoundary: p[4], contactWhen: p[5], requiredInputs: p[6], deliverables: p[7], refusals: p[8], successCriteria: p[9], collaborationRelationships: p[10] });
-const exactSourceDigests = new Map(semanticProfiles.map((profile) => [profile[0], canonicalSha256(semanticBasis(profile))]));
+// Keyed by plain string on purpose: this table is looked up with a caller-supplied
+// profileId to decide membership, so a miss returning undefined is a real outcome
+// rather than a type error.
+const exactSourceDigests = new Map<string, string>(
+  semanticProfiles.map((profile) => [profile[0], canonicalSha256(semanticBasis(profile))]),
+);
 
 const exactFields = ["schemaVersion", "profileId", "displayName", "jobTitle", "mission", "authorityBoundary", "contactWhen", "requiredInputs", "deliverables", "refusals", "successCriteria", "collaborationRelationships", "profileDigest"];
 const roster = new Set(["Arturo", "Mara", "Minerva", "Ilya", "Verity", "Sable", "Janus", "Mneme"]);

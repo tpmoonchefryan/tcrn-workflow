@@ -152,6 +152,7 @@
     "scripts/generate-proof-artifacts.mjs",
     "scripts/isolated-proof.mjs",
     "scripts/lib/canonical-json.mjs",
+    "scripts/lib/canonical-order.d.mts",
     "scripts/lib/canonical-order.mjs",
     "scripts/lib/dependency-graph.mjs",
     "scripts/lib/dependency-materialization.mjs",

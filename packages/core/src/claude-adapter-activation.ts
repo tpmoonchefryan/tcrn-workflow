@@ -30,8 +30,6 @@
 // executeClaudeAdapterRollback empties .claude/tcrn-workflow byte-inverse instead
 // of orphaning the step-2/3 files.
 
-import { createHash } from "node:crypto";
-
 import { canonicalJson, canonicalSha256, assertProtocolId, compareCanonicalText, parseStrictInstant } from "../../protocol/src/index.js";
 import {
   CLAUDE_ADAPTER_HOST_PRODUCT,

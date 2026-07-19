@@ -334,7 +334,12 @@ async function readDirectoryBound(path: string, maximumEntries: number): Promise
     return entries.sort(compareCanonicalText);
   } catch (error) {
     if (error instanceof CanonicalExchangeError) throw error;
-    fail("EXCHANGE_FILE_INVALID", `${path}:${String(error)}`);
+    // Thrown inline rather than through fail(): TypeScript's reachability
+    // analysis stops honouring a never-returning call in a catch clause once the
+    // statement carries a finally block, so routing through fail() here would
+    // make the function look like it can fall off the end. This is exactly what
+    // fail() does.
+    throw new CanonicalExchangeError("EXCHANGE_FILE_INVALID", `${path}:${String(error)}`);
   } finally {
     await directory?.close().catch((error: unknown) => {
       if ((error as { code?: string }).code !== "ERR_DIR_CLOSED") fail("EXCHANGE_FILE_INVALID", `${path}:${String(error)}`);
@@ -558,7 +563,7 @@ export async function readCanonicalExchangeBundle(bundleRoot: string, options: C
   if (JSON.stringify(actualFiles) !== JSON.stringify(expectedFiles)) fail(actualFiles.length < expectedFiles.length ? "EXCHANGE_CHUNK_MISSING" : "EXCHANGE_INCOMPLETE", "stored chunks");
   const chunks = [];
   let totalBytes = 0;
-  for (const [position, record] of manifest.chunks.entries()) {
+  for (const record of manifest.chunks) {
     if (totalBytes + record.size > CANONICAL_EXCHANGE_LIMITS.maximumTotalBytes) fail("EXCHANGE_LIMIT_EXCEEDED", "stored total bytes");
     await options.beforeChunkOpenForTest?.(join(bundleRoot, record.storedPath));
     const bytes = await readBound(join(bundleRoot, record.storedPath), CANONICAL_EXCHANGE_LIMITS.maximumChunkBytes, options);

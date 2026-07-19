@@ -154,7 +154,12 @@ function isPlainObject(value: unknown): value is Readonly<Record<string, unknown
   return prototype === Object.prototype || prototype === null;
 }
 
-function assertExactFields(value: unknown, expected: readonly string[], label: string): asserts value is Readonly<Record<string, unknown>> {
+// Generic in the input so a caller that already holds a typed record keeps its field
+// types after the assertion. The guarantee this adds is "the key set is exactly
+// `expected`", which is orthogonal to whatever the caller already knew; intersecting
+// preserves both instead of discarding the caller's type. For an `unknown` input the
+// intersection collapses to Readonly<Record<string, unknown>>, i.e. the previous behaviour.
+function assertExactFields<T>(value: T, expected: readonly string[], label: string): asserts value is T & Readonly<Record<string, unknown>> {
   if (!isPlainObject(value)) {
     fail("RECORD_MALFORMED", `${label} requires the exact V1 field set`);
   }
@@ -172,6 +177,20 @@ function assertExactFields(value: unknown, expected: readonly string[], label: s
     }
     throw error;
   }
+}
+
+// `Array.isArray` widens an unchecked input to a loosely-typed element array, which
+// silently disables checking of every element read that follows. This guard performs the
+// identical runtime test while keeping elements unchecked-by-type, so each element must be
+// validated before it is used.
+function isUnknownArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value);
+}
+
+// Same runtime test as the bare Number.isSafeInteger call it replaces, expressed as a
+// guard so a subsequent numeric comparison on the same reference is type-checked.
+function isSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value);
 }
 
 function assertSha256(value: unknown): asserts value is string {
@@ -193,8 +212,8 @@ function canonicalStringLength(value: string): number {
 }
 
 function assertSortedUnique(values: unknown, label: string): asserts values is readonly string[] {
-  if (!Array.isArray(values) || values.length > PROTOCOL_LIMITS.maxRecords || new Set(values).size !== values.length) {
-    if (Array.isArray(values) && values.length > PROTOCOL_LIMITS.maxRecords) {
+  if (!isUnknownArray(values) || values.length > PROTOCOL_LIMITS.maxRecords || new Set(values).size !== values.length) {
+    if (isUnknownArray(values) && values.length > PROTOCOL_LIMITS.maxRecords) {
       fail("INPUT_OVERSIZED", label);
     }
     fail("RECORD_MALFORMED", label);
@@ -224,7 +243,7 @@ function canonicalValue(value: unknown, depth: number): string {
     }
     return JSON.stringify(value);
   }
-  if (Array.isArray(value)) {
+  if (isUnknownArray(value)) {
     if (value.length > PROTOCOL_LIMITS.maxRecords) {
       fail("INPUT_OVERSIZED", "Canonical arrays may not exceed the record limit");
     }
@@ -386,8 +405,18 @@ function assertWorkRecordShape(record: WorkRecord): void {
   }
 }
 
+// Narrows the entry object itself, not merely its property references, so a validated
+// entry can be stored as an ExtensionRegistration without a cast. The runtime checks are
+// the ones this replaced inline; the leading `id` check is already guaranteed by the
+// assertProtocolId call at the sole call site and can never fire.
+function assertExtensionRegistrationShape(entry: Readonly<Record<string, unknown>>): asserts entry is Readonly<Record<string, unknown>> & ExtensionRegistration {
+  if (typeof entry.id !== "string" || !isSafeInteger(entry.version) || entry.version < 1 || typeof entry.requiredByDefault !== "boolean") {
+    fail("RECORD_MALFORMED", String(entry.id));
+  }
+}
+
 function validatedExtensionRegistry(registry: unknown): ReadonlyMap<string, ExtensionRegistration> {
-  if (!Array.isArray(registry)) {
+  if (!isUnknownArray(registry)) {
     fail("RECORD_MALFORMED", "Extension registry");
   }
   if (registry.length > PROTOCOL_LIMITS.maxExtensions) {
@@ -400,10 +429,10 @@ function validatedExtensionRegistry(registry: unknown): ReadonlyMap<string, Exte
     if (registrations.has(entry.id)) {
       fail("DUPLICATE_ID", entry.id);
     }
-    if (!Number.isSafeInteger(entry.version) || entry.version < 1 || typeof entry.requiredByDefault !== "boolean") {
-      fail("RECORD_MALFORMED", entry.id);
-    }
-    registrations.set(entry.id, entry as unknown as ExtensionRegistration);
+    assertExtensionRegistrationShape(entry);
+    // No cast: `entry` is now narrowed to something that structurally satisfies
+    // ExtensionRegistration, and the stored value is still the caller's own object.
+    registrations.set(entry.id, entry);
   }
   return registrations;
 }
@@ -431,7 +460,10 @@ function validateExtensionMap(extensions: unknown, registrations: ReadonlyMap<st
   for (const id of ids) {
     canonicalStringLength(id);
     assertProtocolId(id);
-    const extension = extensions[id];
+    // Annotated because an `asserts` call cannot narrow a reference whose declared type
+    // would itself have to be inferred from that call. `unknown` is the true type here:
+    // `extensions` is only known to be a plain object at this point.
+    const extension: unknown = extensions[id];
     assertExactFields(extension, ["required", "value"], "Extension values");
     if (typeof extension.required !== "boolean") {
       fail("RECORD_MALFORMED", `${label}:${id}`);
@@ -599,7 +631,7 @@ export function validateExtensionRegistration(document: Readonly<Record<string, 
   assertExactFields(document, ["schemaVersion", "id", "version", "requiredByDefault", "appliesTo", "schemaDigest"], "Extension registrations");
   if (document.schemaVersion !== "tcrn.extension-registration.v1" || typeof document.id !== "string" ||
     !Number.isSafeInteger(document.version) || Number(document.version) < 1 || typeof document.requiredByDefault !== "boolean" ||
-    !Array.isArray(document.appliesTo) || document.appliesTo.length < 1 || typeof document.schemaDigest !== "string") {
+    !isUnknownArray(document.appliesTo) || document.appliesTo.length < 1 || typeof document.schemaDigest !== "string") {
     fail("RECORD_MALFORMED", "extension-registration");
   }
   assertProtocolId(document.id);

@@ -384,13 +384,18 @@ function buildTimeAttestationReceipt(eventHash: string, occurredAt: string, obse
 // <eventHash>.json. The write is best-effort local-clock evidence outside the
 // lease/mutation claim: the event is already committed, so a failure here loses only
 // the advisory receipt, never workspace state.
-async function emitTimeAttestation(io: CliIo, values: Readonly<Record<string, string>>, headEventHash: string): Promise<void> {
+async function emitTimeAttestation(io: CliIo, values: Readonly<Record<string, string>>, headEventHash: string | null): Promise<void> {
   const attestDir = values["attest-dir"];
   if (attestDir === undefined) return;
   if (io.clock === undefined) fail("CLI_ARGUMENT_MISSING", "--attest-dir requires an injected clock; refusing an implicit local Date");
   const workspaceRoot = resolve(values.workspace ?? "");
   const directory = resolve(attestDir);
   if (insideWorkspace(workspaceRoot, directory)) fail("CLI_ARGUMENT_MALFORMED", "--attest-dir must resolve outside the workspace root");
+  // headEventHash is null only on a workspace whose chain holds no events; every
+  // caller here runs after a committed mutation, so the head is always a digest.
+  // Retained as an explicit closed failure with the same reason code and message
+  // the digest-shape check below would have produced, keeping behaviour unchanged.
+  if (headEventHash === null) fail("CLI_ARGUMENT_MALFORMED", "time-attestation eventHash is not a sha-256 digest");
   const receipt = buildTimeAttestationReceipt(headEventHash, values.at ?? "", io.clock());
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, `${headEventHash}.json`), receipt);
@@ -730,7 +735,9 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
         bundleDigest: bundle.bundleDigest,
         fragment,
         scriptSource,
-        renderSource,
+        // renderSource is set only on the Step-3 path; the installer reads it as
+        // `!== undefined`, so omitting the key is byte-equivalent to passing undefined.
+        ...(renderSource === undefined ? {} : { renderSource }),
       });
       io.write(canonicalJson(activation.receipt));
       return;
@@ -1496,7 +1503,9 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       occurredAt: at,
       id: values.id ?? "",
       status: values.status as GateRecord["status"],
-      minutesLocator: values["minutes-locator"],
+      // The flag is optional; the engine reads minutesLocator as `!== undefined`, so
+      // omitting the key when unset is byte-equivalent to passing undefined.
+      ...(values["minutes-locator"] === undefined ? {} : { minutesLocator: values["minutes-locator"] }),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     await emitTimeAttestation(io, values, state.headEventHash);

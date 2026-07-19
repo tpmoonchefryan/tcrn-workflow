@@ -58,7 +58,10 @@ function fail(reasonCode: SnapshotReasonCode, message: string): never {
   throw new SnapshotError(reasonCode, message);
 }
 
-function isJsonObject(value: JsonValue): value is { readonly [key: string]: JsonValue } {
+// The parameter admits undefined because a field read off a JSON object is
+// `JsonValue | undefined` -- an absent field is not an object, which is exactly
+// what the existing `typeof value === "object"` test already reports.
+function isJsonObject(value: JsonValue | undefined): value is { readonly [key: string]: JsonValue } {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 

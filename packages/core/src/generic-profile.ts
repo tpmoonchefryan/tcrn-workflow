@@ -676,9 +676,14 @@ function validateAdmissionReceipt(value: unknown): GenericProfileAdmissionReceip
     ? null
     : validateOwnerRebindAdmission(document.ownerRebindAdmission);
   const governedActions = validateGovernedActions(document.governedActions);
-  if (document.resolutionDisposition !== "normal" && document.resolutionDisposition !== "cold_standby") {
-    fail("PROFILE_ADMISSION_MALFORMED", "profile admission resolutionDisposition");
-  }
+  // Same accept/reject decision as before, written so the annotated union type
+  // reaches the basis object literal instead of widening to string there.
+  const resolutionDisposition: GenericProfileAdmissionReceipt["resolutionDisposition"] =
+    document.resolutionDisposition === "normal"
+      ? "normal"
+      : document.resolutionDisposition === "cold_standby"
+        ? "cold_standby"
+        : fail("PROFILE_ADMISSION_MALFORMED", "profile admission resolutionDisposition");
   assertSha256(document.requestDigest, "profile admission requestDigest");
   assertSha256(document.effectiveDigest, "profile admission effectiveDigest");
   assertSha256(document.receiptDigest, "profile admission receiptDigest");
@@ -688,7 +693,7 @@ function validateAdmissionReceipt(value: unknown): GenericProfileAdmissionReceip
     layerAdmissions: sortedAdmissions,
     ownerRebindAdmission,
     governedActions,
-    resolutionDisposition: document.resolutionDisposition,
+    resolutionDisposition,
     requestDigest: document.requestDigest,
     effectiveDigest: document.effectiveDigest,
   };
@@ -896,8 +901,12 @@ export function resolveGenericProfile(
     return rank === 0 ? compareCanonicalText(left.layerId, right.layerId) : rank;
   });
   const baseLayers = sorted.filter((layer) => layer.layerKind === "framework_defaults");
-  if (baseLayers.length !== 1) fail("PROFILE_PRECEDENCE_AMBIGUOUS", "one framework_defaults layer is required");
   const base = baseLayers[0];
+  // base === undefined is exactly the length-zero case, so it is already covered
+  // by the length check; naming it lets the compiler see the element is present.
+  if (baseLayers.length !== 1 || base === undefined) {
+    fail("PROFILE_PRECEDENCE_AMBIGUOUS", "one framework_defaults layer is required");
+  }
   if (canonicalSha256(base) !== GENERIC_PROFILE_BASE_DIGEST ||
     base.fields.ownerRebindOnly?.activeBinding.mode !== "unbound_read_only" ||
     base.fields.ownerRebindOnly.roleReplacement !== null || base.fields.ownerRebindOnly.projectAuthority !== null ||
@@ -986,7 +995,9 @@ export function resolveGenericProfile(
     };
   }
   if (ownerRebind !== null && !rebindApplied) fail("PROFILE_OWNER_REBIND_INVALID", ownerRebind.targetLayerId);
-  const resolution = ownerRebindOnly.activeBinding.mode === "cold_standby"
+  // Annotated so the literal union survives into the object literal below,
+  // where an unannotated binding would widen to string.
+  const resolution: EffectiveGenericProfile["resolution"] = ownerRebindOnly.activeBinding.mode === "cold_standby"
     ? "cold_standby"
     : ownerRebindOnly.activeBinding.mode === "unbound_read_only"
       ? "unbound_read_only"
