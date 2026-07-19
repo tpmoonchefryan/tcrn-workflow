@@ -866,7 +866,12 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       roots,
       externalKey: values["external-key"] ?? "",
       createdAt: values.at ?? "",
-      ...(values["segment-events"] ? { segmentEventLimit: Number(values["segment-events"]) } : {}),
+      // WSB-2: the truthy guard dropped `--segment-events=` on the floor and initialized
+      // the workspace as if no limit had been asked for; `!== undefined` makes the empty
+      // string behave like the 0 it parses to, and integerValue names the flag when the
+      // value is not an integer at all. The 2-1024 window stays core's call
+      // (WORKSPACE_SCHEMA_INVALID), which is why no minimum is passed here.
+      ...(values["segment-events"] !== undefined ? { segmentEventLimit: integerValue(values, "segment-events") } : {}),
     });
     writeState(io, state);
     return;
@@ -1040,8 +1045,14 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       ...(values.freshness ? { freshness: values.freshness as KnowledgeFreshnessState } : {}),
       ...(values.promotion ? { promotionState: values.promotion as KnowledgePromotionState } : {}),
       ...(values.search ? { search: values.search } : {}),
-      ...(values.limit !== undefined ? { limit: Number(values.limit) } : {}),
-      ...(values.offset !== undefined ? { offset: Number(values.offset) } : {}),
+      // WSB-2: integerValue is the single arbiter of INTEGER-ness here, exactly as it is
+      // for target-version. Bare Number() sent NaN into core, which then reported a
+      // typo as KNOWLEDGE_INPUT_INVALID "limit" -- a syntax error dressed as a range
+      // judgement. The minimum stays unbounded on purpose: core holds the real window
+      // rule (>= 1, <= maximumRecords, offset >= 0 at knowledge-core.ts:1262/:1270), and
+      // a CLI-side floor would pre-empt half of it while silently keeping the ceiling.
+      ...(values.limit !== undefined ? { limit: integerValue(values, "limit") } : {}),
+      ...(values.offset !== undefined ? { offset: integerValue(values, "offset") } : {}),
     })));
     return;
   }
@@ -1062,8 +1073,9 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       ...(values.freshness ? { freshness: values.freshness as KnowledgeFreshnessState } : {}),
       ...(values.promotion ? { promotionState: values.promotion as KnowledgePromotionState } : {}),
       ...(values.search ? { search: values.search } : {}),
-      ...(values.limit !== undefined ? { limit: Number(values.limit) } : {}),
-      ...(values.offset !== undefined ? { offset: Number(values.offset) } : {}),
+      // WSB-2: same arbiter, same reasoning as knowledge-list above.
+      ...(values.limit !== undefined ? { limit: integerValue(values, "limit") } : {}),
+      ...(values.offset !== undefined ? { offset: integerValue(values, "offset") } : {}),
     })));
     return;
   }

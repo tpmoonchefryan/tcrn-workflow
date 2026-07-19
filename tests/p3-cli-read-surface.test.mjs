@@ -233,6 +233,65 @@ test("R2-NEW-7: empty-string integer flags are rejected, not silently dropped", 
   }
 });
 
+// CQ-05(c): the knowledge verbs were the last two pagination sites still handing a bare
+// Number() to core, so `--limit abc` arrived as NaN and came back as
+// KNOWLEDGE_INPUT_INVALID "limit" — core answering a range question that was never asked,
+// about a value that is not a number. The sibling project-list/work-list flags of the same
+// name and the same catalog valueKind answered CLI_ARGUMENT_MALFORMED. Restoring either
+// bare Number() turns this red.
+test("CQ-05: malformed knowledge pagination flags are syntax errors, not range refusals", async (context) => {
+  const fx = await fixture(context);
+  const ws = ["--workspace", fx.workspace, "--at", instant(33)];
+  for (const verb of ["knowledge-list", "knowledge-candidates"]) {
+    for (const flag of ["limit", "offset"]) {
+      for (const value of ["abc", "2.5", "1e400"]) {
+        const reason = await reasonOf([verb, ...ws, `--${flag}`, value]);
+        assert.equal(reason, "CLI_ARGUMENT_MALFORMED", `${verb} --${flag} ${value} is malformed syntax`);
+      }
+    }
+  }
+
+  // The other half of the contract, and the reason no minimum is passed at the CLI: every
+  // value that IS an integer must still reach core, so core keeps the whole window rule
+  // (>= 1, <= maximumRecords, offset >= 0) rather than half of it. A CLI-side floor would
+  // silently take the lower bound and leave the ceiling behind.
+  for (const [flag, value] of [["limit", "0"], ["offset", "-1"], ["limit", "1000000"]]) {
+    const reason = await reasonOf(["knowledge-list", ...ws, `--${flag}`, value]);
+    assert.equal(reason, "KNOWLEDGE_INPUT_INVALID", `--${flag} ${value} stays core's judgement`);
+  }
+});
+
+// The same defect on the init path. The plan dropped --segment-events after probing "abc",
+// "0", "-3", "2.5" and "1e400" and finding core guarded all of them — but it never probed
+// the EMPTY string, and the truthy guard dropped that one on the floor, initializing the
+// workspace as if no segment limit had been supplied at all.
+test("CQ-05: an empty --segment-events is a supplied value, not an omitted flag", async (context) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-cli-init-")));
+  context.after(() => rm(base, { recursive: true, force: true }));
+  // Every init needs its own untouched roots, so each probe gets a numbered set.
+  let generation = 0;
+  const initArguments = async (...extra) => {
+    const home = join(base, `gen-${generation += 1}`);
+    const flags = [];
+    for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
+      const path = join(home, kind);
+      await mkdir(path, { recursive: true });
+      flags.push(`--${kind}`, path);
+    }
+    return ["init", ...flags, "--external-key", "SEGMENT-PROBE", "--at", instant(34), ...extra];
+  };
+
+  // Omitted: initialization succeeds under the default segment limit. reasonOf answers
+  // null on success, and that null is the baseline the empty string must NOT match.
+  assert.equal(await reasonOf(await initArguments()), null);
+  // Supplied-but-empty parses to 0, which core refuses exactly as it refuses an explicit 0.
+  const empty = await reasonOf(await initArguments("--segment-events="));
+  assert.equal(empty, await reasonOf(await initArguments("--segment-events", "0")));
+  assert.notEqual(empty, null, "--segment-events= must not initialize as if omitted");
+  // And a value that is not an integer is now named as such instead of reaching core.
+  assert.equal(await reasonOf(await initArguments("--segment-events", "abc")), "CLI_ARGUMENT_MALFORMED");
+});
+
 test("WSB-6: the agent-integration reference stays in drift-guarded agreement with the catalog", async () => {
   const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
   const docText = await readFile(join(repoRoot, "docs/architecture/agent-integration-v1.md"), "utf8");
