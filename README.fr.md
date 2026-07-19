@@ -1,22 +1,40 @@
-[English](./README.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md) | **Français**
+<div align="center">
 
 # TCRN Workflow
 
-**Un cadre déterministe et hors-ligne d'abord pour le travail gouverné des agents IA — où chaque capacité est une affirmation vérifiée par la machine, pas une promesse.**
+**La livraison gouvernée pour les agents IA — où chaque capacité est une affirmation vérifiée par la machine, pas une promesse.**
 
-`Statut : 0.1.0-rc.5 (candidat de pré-version)` · `Licence : Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Affirmations vérifiées : 65`
+[English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · Français
+
+![status](https://img.shields.io/badge/status-0.1.0--rc.5-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-65-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+
+![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
+
+[Pourquoi](#why-this-project-exists) · [Pour qui](#who-this-is-for) · [Ce que vous obtenez](#what-you-get) · [Démarrage rapide](#quick-start) · [Vérification](#verification) · [Licence](#license)
+
+</div>
 
 ---
 
 ## Pourquoi ce projet existe
 
-On demande de plus en plus aux agents IA de *livrer* : planifier le travail, écrire du code, relire des changements, produire des versions. Mais la plupart des workflows d'agents partagent trois faiblesses structurelles :
+Faire écrire du code par un agent, c'est déjà acquis. Ce qui reste hors de portée, c'est **une raison de croire qu'il a fait ce qu'il prétend avoir fait.**
 
-1. **Des affirmations invérifiables.** « L'agent l'a testé » signifie en général une ligne de journal, pas une preuve. Il n'existe aucun lien vérifiable par machine entre ce qu'un workflow *dit* garantir et ce que son code *impose* réellement.
-2. **Un état non reproductible.** Le travail piloté par conversation laisse son historique dans des journaux de discussion opaques et des bases de données mutables. Quand quelque chose tourne mal, il n'existe aucun enregistrement d'événements déterministe à rejouer, auditer ou remettre à un relecteur.
-3. **Un angle mort de chaîne d'approvisionnement.** Les compétences et workflows d'agents s'installent depuis des dépôts sans identité de version, sans signature, sans plancher anti-retour-arrière, et sans moyen de prouver que les octets exécutés sont les octets relus.
+Trois manques reviennent dans presque tous les workflows d'agents :
 
-TCRN Workflow a été construit pour combler ces trois lacunes à la fois. Il traite la livraison pilotée par agents avec la même rigueur qu'une version logicielle critique : **chaque capacité correspond à un code de raison stable prouvé par un test hermétique hors ligne**, chaque mutation d'espace de travail est un événement en append-only chaîné par hachage, et chaque version est un ensemble d'artefacts immuable, reproductible et signé.
+1. **Des affirmations que personne ne peut vérifier.** « L'agent l'a testé » se réduit d'ordinaire à une ligne de journal. Rien ne relie ce qu'un workflow *prétend* garantir à ce que son code *impose* réellement : la garantie se dégrade en silence à mesure que le code évolue.
+2. **Un historique impossible à rejouer.** Le travail piloté par conversation laisse sa trace dans des journaux de discussion et de l'état mutable. Quand tout dérape à 2 h du matin, il n'existe aucune chaîne d'événements déterministe à rejouer, à comparer ou à remettre à un relecteur.
+3. **Des installations à l'aveugle.** Compétences et workflows arrivent de dépôts sans identité de version, sans aucun moyen de prouver que les octets exécutés sont bien les octets relus.
+
+TCRN Workflow comble les trois. Il traite la livraison pilotée par agents comme on traite une version critique pour la sécurité : **chaque capacité correspond à un code de raison stable prouvé par un test hermétique hors ligne**, chaque mutation d'espace de travail est un événement en append-only chaîné par hachage, et chaque version est reproductible à l'octet près.
+
+Le test de cette discipline est sans nuance : **la surenchère est un échec de build, pas une question de style.** Modifiez la portée d'une affirmation sans la reprouver, et la chaîne s'arrête.
+
+## Pour qui
+
+**C'est fait pour vous si** vous faites travailler des agents sur des sujets qui ont des conséquences — code en production, livraison régulée ou auditée, passages de relais entre agents où plus personne ne sait qui a décidé quoi — et qu'il vous faut un artefact qu'un relecteur peut vérifier plutôt qu'une transcription qu'il doit croire. Également si vous voulez que le travail des agents reste sur votre machine : pas de base de données, pas de démon, pas de réseau, pas de télémétrie.
+
+**Ce n'est sans doute pas pour vous si** vous cherchez un assistant conversationnel sans configuration, s'il vous faut une synchronisation cloud ou un tableau de bord hébergé, ou si votre travail est suffisamment exploratoire pour qu'une piste d'audit en append-only soit une gêne plutôt qu'un atout. La rigueur a ici un coût : c'est un choix assumé, payé en preuves.
 
 ## Ce que vous obtenez
 
@@ -24,27 +42,27 @@ TCRN Workflow a été construit pour combler ces trois lacunes à la fois. Il tr
 | --- | --- |
 | **Espace de travail déterministe natif fichiers** | Un graphe de travail local à événements (Initiative → Epic → Story → Subtask) stocké en fichiers JSON canoniques avec chaîne de hachage — pas de base de données, pas de démon, exports reproductibles à l'octet près. |
 | **Chaîne de vérification fail-closed** | Une commande (`pnpm verify:p1`) exécute 20 portes : format, lint, vérification de types, build, ~40 fichiers de tests, matrice de confiance, politiques d'archive/SBOM/licence/vulnérabilités, liste d'autorisation des sources, frontière hors ligne, analyse de confidentialité, durcissement CI, carte de vérification et preuve d'historique propre. Tout imprévu arrête la chaîne. |
-| **Registre d'affirmations lisible par machine** | `verification-map.yaml` lie 65 affirmations de capacités à des codes de raison observables. Si le sujet d'une affirmation change, sa preuve doit être rejouée — la surenchère est un échec de build, pas une question de style. |
+| **Registre d'affirmations lisible par machine** | `verification-map.yaml` lie 65 affirmations — 13 d'hygiène du cadre, 13 de preuve d'inertie, 39 de capacité d'exécution — à des codes de raison observables. Si le sujet d'une affirmation change, sa preuve doit être rejouée — la surenchère est un échec de build, pas une question de style. |
 | **Délibération, portes et distillation gouvernées** | Neuf verbes CLI gouvernés animent des conférences de pré-engagement et des portes de décision sous forme d'événements additifs chaînés par hachage, et la clôture d'une conférence distille chaque décision du procès-verbal en une fiche de connaissance qui la rétro-lie. L'application des portes est fail-closed : une porte en attente bloque la transition de son élément de travail vers `done` (`WORKSPACE_GATE_PENDING`, au verbe puis de nouveau au rejeu), et une porte n'atteint `satisfied` que face à une preuve de procès-verbal de conférence résoluble. |
 | **Attestation d'acteur, imposée à la frontière** | L'ajout de l'événement à sens unique `attestation.actor.enabled` rend un identifiant d'acteur obligatoire sur chaque mutation ultérieure — l'ajout en direct comme le rejeu échouent fail-closed `WORKSPACE_ACTOR_REQUIRED` sur tout événement qui l'omet. Les espaces de travail qui ne l'activent jamais restent identiques à l'octet près ; une fois activée, elle ne peut plus être désactivée. |
 | **Échelle d'activation optionnelle** | Trois étapes explicites et réversibles à l'octet transforment le lot Claude Code inerte en une session gouvernée active : installer le gabarit à quatre fichiers (étape 1), fusionner exactement un hook `SessionStart` fail-open (étape 2) et rendre l'unique persona consultatif Verity dans un budget de 1024 octets (étape 3). Le gestionnaire est la seule surface fail-open autorisée — toute erreur sort en 0 comme un Claude Code ordinaire — et rien sous `~/.claude` n'est jamais nommé ni écrit. |
 | **Sauvegarde par instantané et restauration hermétique** | Un `snapshot-manifest` tenu sous bail émet un manifeste déterministe par fichier ; le runbook effectue un aller-retour instantané → effacement → restauration identique à l'octet près au chemin d'origine, les deux modes d'échec doctrinaux (restauration partielle ou relocalisée) échouant fail-closed. Un niveau git tier-2 optionnel ne sert que de témoin d'intégrité. |
 | **Adaptateurs Agent App bi-hôtes** | Codex et Claude Code sont les deux hôtes officiellement pris en charge en V1, partageant une mécanique neutre identique à l'octet près, prouvée par un condensat de parité inter-hôtes. Les deux adaptateurs sont par défaut des **candidats inertes en simulation** : ils ne génèrent que des données de gabarits non installés, et la prise en charge d'hôte en production ne s'atteint que par l'échelle d'activation optionnelle et gouvernée ci-dessus. |
 | **Hors ligne d'abord, confidentialité propre** | Le mode développement impose un garde réseau au niveau du processus Node et zéro télémétrie. La porte de confidentialité analyse chaque octet suivi, tout l'historique git accessible et l'archive de version à la recherche d'identifiants personnels et de chemins machine. |
-| **Confiance de version signée** | Les versions sont liées par identité de tag (commit, tree, tag object) et vérifiées en externe par un contrat de racine de confiance Ed25519 — voir le dépôt compagnon `tcrn-workflow-helper`. |
+| **Confiance de version vérifiable** | Les versions sont liées par identité de tag (commit, tree, tag object) — les identifiants d'objets git sont des hachages de contenu, la liaison s'authentifie donc elle-même. Les consommateurs externes vérifient via le compagnon `tcrn-workflow-helper`, dont le condensat d'amorceur est publié indépendamment et dans lequel sont compilés les condensats des versions acceptées. |
 
 ## Démarrage rapide
 
 Nécessite la chaîne d'outils épinglée : **Node 24.16.0** et **pnpm 11.3.0** (les scripts de cycle de vie des dépendances restent désactivés).
 
 ```sh
-# 1. Acquérir l'unique dépendance de développement (explicite, gelée, sans scripts)
+# 1. Acquire the single dev dependency (explicit, frozen, script-free)
 pnpm install --offline --frozen-lockfile --ignore-scripts
 
-# 2. Exécuter la porte de vérification complète (hors ligne)
+# 2. Run the full verification gate (offline)
 pnpm verify:p1
 
-# 3. Construire, puis utiliser la CLI gouvernée
+# 3. Build, then use the governed CLI
 pnpm build
 node scripts/tcrn-workflow.mjs workspace --help
 ```
@@ -52,14 +70,14 @@ node scripts/tcrn-workflow.mjs workspace --help
 Commandes gouvernées typiques (tout en local, sans réseau, sans base de données) :
 
 ```sh
-# valider un espace de travail et matérialiser ses vues déterministes
-node scripts/tcrn-workflow.mjs workspace validate --workspace <dir> --now <instant-iso>
+# validate a workspace and materialize its deterministic views
+node scripts/tcrn-workflow.mjs workspace validate --workspace <dir> --now <iso-instant>
 
-# créer et faire évoluer des enregistrements de travail avec contrôle CAS des versions
+# create and transition work records with CAS-checked versions
 node scripts/tcrn-workflow.mjs work-create ...
 node scripts/tcrn-workflow.mjs work-transition ...
 
-# noyau de connaissances : lecture métadonnées d'abord, accès explicite au corps, promotion CAS
+# knowledge core: metadata-first reads, explicit body access, promotion CAS
 node scripts/tcrn-workflow.mjs knowledge-list ...
 ```
 
@@ -69,28 +87,28 @@ Les commandes de mutation exigent un chemin d'espace de travail explicite, un ho
 
 ```mermaid
 flowchart LR
-    subgraph Protocols["P2 · Protocoles V1 gelés"]
+    subgraph Protocols["P2 · Frozen V1 protocols"]
         WM[work-model-v1]
         KM[knowledge-model-v1]
         EX[exchange-v1]
-        XT[extensions :<br/>dependency · conference<br/>assignment · gate]
+        XT[extensions:<br/>dependency · conference<br/>assignment · gate]
     end
-    subgraph Engine["P3 · Moteur natif fichiers"]
-        EV[journal d'événements<br/>chaîné par hachage]
-        LS[bail à écrivain unique +<br/>revendications de reprise]
-        VW[vues déterministes]
+    subgraph Engine["P3 · File-native engine"]
+        EV[hash-chained<br/>event log]
+        LS[single-writer lease +<br/>recovery claims]
+        VW[deterministic views]
     end
     subgraph Layers["P4-P7"]
-        KC[noyau de connaissances]
-        PF[profils & personas]
-        CR[routeur de contexte]
-        CM[modes de compatibilité]
+        KC[knowledge core]
+        PF[profiles & personas]
+        CR[context router]
+        CM[compatibility modes]
     end
-    subgraph Hosts["P6/P6B · Adaptateurs Agent App (inertes)"]
-        CX[Adaptateur Codex]
-        CL[Adaptateur Claude Code]
+    subgraph Hosts["P6/P6B · Agent App adapters (inert)"]
+        CX[Codex adapter]
+        CL[Claude Code adapter]
     end
-    REL[P8 · ensemble de version<br/>signé et reproductible]
+    REL[P8 · reproducible<br/>release set]
     Protocols --> Engine --> Layers --> Hosts
     Engine --> REL
     Layers --> REL
@@ -110,9 +128,9 @@ C'est la question la plus fréquente, et la réponse a trois niveaux :
 
 **Les tests derrière cette réponse** (tous dans `tests/p3-file-engine.test.mjs`, exécutés par `pnpm verify:p3`) :
 
-- *Le plantage de création de bail et la contention des revendications de reprise sont récupérables et à écrivain unique* — un écrivain est planté en pleine création, son bail périmé est mis en quarantaine, les concurrents s'affrontent et exactement un gagne ; le perdant échoue fermé avec un code de raison stable.
-- *Éviction du créateur retardé* — un créateur de bail en pause dont le répertoire a été récupéré doit observer la revendication de reprise active et échouer fermé (`WORKSPACE_LEASE_INVALID`) au lieu de coloniser la nouvelle génération. Cela protège de la réutilisation des tuples d'inodes sur les systèmes de fichiers qui recyclent les inodes (découvert et corrigé sur Linux ext4 via la vraie CI, puis fixé par un test déterministe).
-- *Injection de SIGKILL réels à chaque point de cycle de vie effectif* — l'inventaire des fautes est découvert à partir d'opérations réelles, et un vrai `SIGKILL` est délivré à chaque point ; la reprise doit converger vers un état propre sans résidu.
+- *Le plantage de bail et la contention des revendications de reprise sont récupérables et à écrivain unique* — un écrivain est planté en pleine création, son bail périmé est mis en quarantaine, les concurrents s'affrontent et exactement un gagne ; le perdant échoue fermé avec un code de raison stable.
+- *Éviction du créateur retardé* — un créateur de bail en pause dont le répertoire a été récupéré doit observer la revendication de reprise active et échouer fermé (`WORKSPACE_LEASE_INVALID`) au lieu de coloniser la nouvelle génération. Cela protège de la réutilisation des tuples d'inodes sur les systèmes de fichiers qui recyclent les inodes (découvert et corrigé sur Linux ext4 via la vraie CI, puis prouvé par un test déterministe).
+- *Injection de SIGKILL à chaque point de cycle de vie effectif* — l'inventaire des fautes du moteur est découvert à partir d'opérations réelles, et un vrai `SIGKILL` est délivré à chaque point ; la reprise doit converger vers un état propre sans résidu.
 - *64 permutations réelles d'ordre d'insertion* produisent des index, listes et points de contrôle identiques à l'octet — le déterminisme est prouvé, pas supposé.
 - 4 cas de concurrence, 57 cas négatifs et une matrice d'attaques du système de fichiers (liens symboliques, liens durs, fichiers spéciaux, courses au remplacement) complètent la preuve.
 
@@ -130,14 +148,14 @@ Parce que revendiquer une prise en charge d'hôte en production avant qu'une rou
 
 ### Comment une version est-elle digne de confiance ?
 
-Une version est un tag annoté immuable plus un ensemble d'artefacts reproductible (archive source USTAR canonique, SBOM, manifeste, provenance, sommes de contrôle, notes), reconstruit et comparé à l'octet par `pnpm verify:p8`. Les consommateurs externes vérifient via le compagnon **tcrn-workflow-helper** : un manifeste et une politique de version signés Ed25519 avec un plancher d'époque anti-retour-arrière, validés par un amorceur sans dépendances avant l'exécution de tout code Workflow.
+Une version est un tag annoté immuable plus un ensemble d'artefacts reproductible (archive source USTAR canonique, SBOM, provenance, sommes de contrôle, notes), reconstruit et comparé à l'octet par `pnpm verify:p8`. Les consommateurs externes vérifient via le compagnon **tcrn-workflow-helper** : un amorceur sans dépendances, dont le propre SHA-256 est publié là où vous pouvez le contrôler indépendamment du téléchargement, et qui refuse toute version dont les octets ne correspondent pas aux condensats compilés en son sein — avant l'exécution de tout code Workflow.
 
 ### Que prouvent réellement les tests — en chiffres ?
 
 - **20 portes** dans la chaîne `verify:p1`, chacune avec un code de raison terminal stable.
 - **~40 fichiers de tests** couvrant le moteur, le noyau de connaissances, le cycle de vie des artefacts, les profils, les personas, le routeur de contexte, les deux adaptateurs, l'échange, la compatibilité, le registre d'exigences, le candidat de version, la frontière de confidentialité, le générateur d'artefacts de preuve, la matrice de confiance, le magasin d'événements conférence/porte et l'application fail-closed des portes, l'attestation d'acteur, la sauvegarde et la restauration par instantané, l'échelle d'activation et la boucle gouvernée de bout en bout.
 - **1 preuve phare de bout en bout** (`pnpm verify:e2e`) — un rejeu hermétique de la boucle gouvernée complète (initiative → epic → story → porte → conférence → distillation → promotion → traçage), chaque commande du tutoriel exécutée mot pour mot et chaque condensat produit tracé jusqu'à son producteur.
-- **65 affirmations vérifiées par machine** dans `verification-map.yaml`.
+- **65 affirmations vérifiées par machine** dans `verification-map.yaml`, réparties en 13 d'hygiène du cadre, 13 de preuve d'inertie et 39 de capacité d'exécution — ce dernier tiers est la surface produit livrée, énoncée honnêtement.
 - **Preuves de déterminisme à 64 permutations** dans trois couches indépendantes (ordres d'insertion du moteur, ordres de couches de profils, ordres d'entrée des adaptateurs).
 - **Registre public d'exigences AOS à 19 lignes** (11 vérifiées par fixtures, 8 spécifiées) — la maturité est consignée ligne par ligne, jamais gonflée.
 - **Porte de confidentialité** sur ~200 fichiers sources suivis, ~1 470 objets git, tout l'historique accessible et l'archive de version.
@@ -179,7 +197,6 @@ Le mode développement est hors ligne avec un garde réseau de processus et zér
 - `0.1.0-rc.5` est un **candidat de pré-version**. L'API publique n'est pas encore stable.
 - Les deux adaptateurs d'hôtes sont des candidats inertes en simulation ; **aucune prise en charge en production de Codex ou Claude Code n'est revendiquée**.
 - `supportedAosReleases` est vide : aucune compatibilité AOS externe n'est revendiquée.
-- Le mode version est indisponible tant que la vérification de confiance Ed25519 externe ne réussit pas.
 
 ## Contribution, support, sécurité
 
