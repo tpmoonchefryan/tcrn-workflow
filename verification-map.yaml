@@ -1761,7 +1761,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "bb981da314f96ad8d49cf1ea92462df3fecdd3e690d558c74da064c2e8307608",
+      "fixtureDigest": "012bd921f3f425f6ef924eb4928c5d548e60e33526e8080023d3edc53fe968f1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
