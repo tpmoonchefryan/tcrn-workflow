@@ -102,8 +102,12 @@ Versioning after the first accepted release.
 - Three type errors that made `workspace.ts` and the CLI uncompilable under a real
   `tsc` are fixed — `FileIdentity` was used eight times and declared nowhere, the
   CLI imported a `ProjectRecord` the protocol package never exported, and two
-  parameters took their type from a default value. A first real `tsc` run reports
-  167 errors, not the 126 previously recorded; the remaining 153 are known debt.
+  parameters took their type from a default value. A first real `tsc` run reported
+  147 errors across 14 files, not the 126 previously recorded and not the 167 an
+  earlier draft of this entry claimed; both were estimates taken before a compiler
+  was pinned. All 147 are now fixed, and the `typecheck` gate runs the pinned
+  TypeScript 5.9.3 against the repository `tsconfig.json`, failing on any
+  diagnostic. No type error is carried as debt.
 
 ### Documentation
 

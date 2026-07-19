@@ -67,7 +67,10 @@ const frozenRequirements = [
   { requirementId: "aos-requirement:release-manifest-readback", discoveredInPhase: "P7-C", workflowBehavior: "compare public release manifest and compatibility readback", aosCapabilityNeeded: "public release manifest readback", protocolVersion: 1, requiredForMode: "offline_reference", acceptanceFixture: "fixture.release-manifest-readback", securityBoundary: "offline read-only only", status: "candidate", maturity: "fixture_verified" },
   { requirementId: "aos-requirement:trusted-role-actor-binding", discoveredInPhase: "P7-C", workflowBehavior: "bind trusted role and actor assertions", aosCapabilityNeeded: "trusted actor binding", protocolVersion: 1, requiredForMode: "offline_reference", acceptanceFixture: "fixture.trusted-role-actor", securityBoundary: "no credential or live identity lookup", status: "candidate", maturity: "fixture_verified" },
 ] as const satisfies readonly Omit<PublicAosRequirement, "schemaVersion">[];
-const frozenRequirementSourceDigests = new Map(frozenRequirements.map((requirement) => [
+// Keyed by string, not by the frozen literal union: every lookup below is made
+// with a requirementId parsed from untrusted input, which is exactly what the
+// has/get membership checks exist to reject.
+const frozenRequirementSourceDigests = new Map<string, string>(frozenRequirements.map((requirement) => [
   requirement.requirementId,
   canonicalSha256({ schemaVersion: PUBLIC_AOS_REQUIREMENTS_VERSION, ...requirement }),
 ]));

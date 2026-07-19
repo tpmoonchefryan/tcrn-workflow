@@ -96,7 +96,11 @@ async function readBoundedAuthorityBytes<Code extends string>(
   path: string,
   parameters: AuthorityFileParameters<Code>,
 ): Promise<Buffer> {
-  const { maximumBytes, codes, fail, hooks } = parameters;
+  const { maximumBytes, codes, hooks } = parameters;
+  // Explicitly annotated so the compiler applies never-returning-call control
+  // flow analysis: it only does so for a const with an explicit type, which a
+  // destructured binding cannot carry.
+  const fail: (reasonCode: Code, detail: string) => never = parameters.fail;
   const chunks: Buffer[] = [];
   let totalBytesRead = 0;
   while (true) {
@@ -124,7 +128,10 @@ export async function readAuthorityFile<Code extends string>(
   authority: AuthorityFileExpectation | undefined,
   parameters: AuthorityFileParameters<Code>,
 ): Promise<AuthorityFileResult> {
-  const { maximumBytes, codes, details, fail, isOwnError, hooks } = parameters;
+  const { maximumBytes, codes, details, isOwnError, hooks } = parameters;
+  // See the note in readBoundedAuthorityBytes: the explicit annotation is what
+  // lets the compiler treat every fail(...) call as terminating this flow.
+  const fail: (reasonCode: Code, detail: string) => never = parameters.fail;
   if (!authority || typeof authority.expectedCanonicalPath !== "string" || typeof authority.expectedFileSha256 !== "string") {
     fail(codes.required, details.required);
   }

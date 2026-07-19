@@ -317,12 +317,6 @@ function exactFields(value: unknown, expected: readonly string[], label: string,
   }
 }
 
-function assertDigest(value: unknown, label: string, reasonCode: KnowledgeReasonCode): asserts value is string {
-  if (typeof value !== "string" || !/^[a-f0-9]{64}$/u.test(value)) {
-    fail(reasonCode, `${label} must be a lowercase SHA-256 digest`);
-  }
-}
-
 function assertBoundedString(value: unknown, maximumBytes: number, label: string): asserts value is string {
   if (typeof value !== "string") {
     fail("KNOWLEDGE_INPUT_INVALID", `${label} must be a string`);
@@ -437,7 +431,12 @@ async function readBoundRegularFile(path: string, maximumBytes: number, options:
     if (error instanceof KnowledgeCoreError) {
       throw error;
     }
-    fail("KNOWLEDGE_SOURCE_CHANGED", `${path}:${String(error)}`);
+    // Thrown inline rather than through fail(): TypeScript's reachability
+    // analysis stops honouring a never-returning call in a catch clause once the
+    // statement carries a finally block, so routing through fail() here would
+    // make the function look like it can fall off the end. This is exactly what
+    // fail() does.
+    throw new KnowledgeCoreError("KNOWLEDGE_SOURCE_CHANGED", `${path}:${String(error)}`);
   } finally {
     await handle?.close();
   }
@@ -1198,7 +1197,9 @@ function normalizeListQuery(query: KnowledgeListQuery): NormalizedListQuery {
     }
     search = query.search.toLowerCase();
   }
-  let limit = KNOWLEDGE_LIMITS.maximumQueryResults;
+  // Annotated because the default comes from a literal-typed limits constant; the
+  // variable really holds whichever caller-supplied page size is within bounds.
+  let limit: number = KNOWLEDGE_LIMITS.maximumQueryResults;
   if (query.limit !== undefined) {
     if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > KNOWLEDGE_LIMITS.maximumRecords) {
       fail("KNOWLEDGE_INPUT_INVALID", "limit");

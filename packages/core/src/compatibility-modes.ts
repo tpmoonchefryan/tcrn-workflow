@@ -249,7 +249,7 @@ function exact(value: Readonly<Record<string, unknown>>, expected: readonly stri
   if (missing.length) fail("COMPATIBILITY_INPUT_INVALID", `${label}:${missing.join(",")}`);
 }
 
-function text(value: unknown, label: string, maximumBytes = COMPATIBILITY_LIMITS.maximumStringBytes): string {
+function text(value: unknown, label: string, maximumBytes: number = COMPATIBILITY_LIMITS.maximumStringBytes): string {
   if (typeof value !== "string" || !value.isWellFormed()) fail("COMPATIBILITY_UNICODE_INVALID", label);
   if (value.length === 0 || Buffer.byteLength(value, "utf8") > maximumBytes) fail("COMPATIBILITY_LIMIT_EXCEEDED", label);
   return value;
@@ -553,7 +553,9 @@ function deriveEffectivePlan(request: CompatibilityRequest): CompatibilityEffect
   // is wrong. The field itself stays in the plan: it is part of the hashed output shape.
   const conflicts = workflowKeys.filter((key) => operationalKeys.includes(key)).sort(compareCanonicalText);
   if (conflicts.length) fail("COMPATIBILITY_FIELD_OWNERSHIP_CONFLICT", "overlapping conflict");
-  const state = request.operation === "portable_checkpoint" ? "checkpoint_planned" : request.operation.startsWith("fallback_") ? "fallback_planned" : request.operation === "conflict_plan" ? "conflicts_planned" : request.operation === "reconciliation_dry_run" ? "reconciliation_planned" : "planned";
+  // Annotated so the literal union survives into the plan object literal below,
+  // where an unannotated binding would widen to string.
+  const state: CompatibilityEffectivePlan["state"] = request.operation === "portable_checkpoint" ? "checkpoint_planned" : request.operation.startsWith("fallback_") ? "fallback_planned" : request.operation === "conflict_plan" ? "conflicts_planned" : request.operation === "reconciliation_dry_run" ? "reconciliation_planned" : "planned";
   const effective = {
     operation: request.operation,
     workspaceId: request.workspaceId,

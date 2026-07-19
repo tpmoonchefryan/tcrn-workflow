@@ -326,7 +326,10 @@ async function boundDirectory(path: string, parent?: string): Promise<string> {
   return canonical;
 }
 
-async function readBoundRegularFile(path: string, maximumBytes = maxSourceBytes, options: ArtifactScanOptions = {}): Promise<BoundBytes> {
+// maximumBytes is annotated rather than inferred from its default: maxSourceBytes
+// is a literal-typed constant, so the inferred parameter type would be that one
+// number and would reject every other byte cap the callers pass.
+async function readBoundRegularFile(path: string, maximumBytes: number = maxSourceBytes, options: ArtifactScanOptions = {}): Promise<BoundBytes> {
   let before;
   try {
     before = await lstat(path, { bigint: true });
@@ -379,7 +382,12 @@ async function readBoundRegularFile(path: string, maximumBytes = maxSourceBytes,
     if (error instanceof ArtifactLifecycleError) {
       throw error;
     }
-    fail("ARTIFACT_SOURCE_CHANGED", `${path}:${String(error)}`);
+    // Thrown inline rather than through fail(): TypeScript's reachability
+    // analysis stops honouring a never-returning call in a catch clause once the
+    // statement carries a finally block, so routing through fail() here would
+    // make the function look like it can fall off the end. This is exactly what
+    // fail() does.
+    throw new ArtifactLifecycleError("ARTIFACT_SOURCE_CHANGED", `${path}:${String(error)}`);
   } finally {
     await handle?.close();
   }
@@ -841,7 +849,37 @@ export async function artifactDoctor(workspaceRoot: string, budgets: ArtifactDoc
   };
 }
 
-function publicProjection(scan: ArtifactStoreScan): Readonly<Record<string, JsonValue>> {
+type PublicProjectionRetained = {
+  readonly id: string;
+  readonly kind: ArtifactKind;
+  readonly state: "active" | "terminal";
+  readonly classification: ArtifactClassification;
+  readonly path: string;
+  readonly size: number;
+  readonly sha256: string;
+}
+
+type PublicProjectionDropped = {
+  readonly path: string;
+  readonly classification: ArtifactClassification;
+  readonly reason: string;
+}
+
+// The return type is written out rather than widened to a string-keyed record:
+// the callers below read projection.retained and projection.dropped by name, and
+// a bare index signature makes every such read optional. This shape is still a
+// JSON object, which is what the exported dry-run signature requires.
+type PublicProjection = {
+  readonly schemaVersion: string;
+  readonly workspaceId: string;
+  readonly eventHighWaterDigest: string;
+  readonly retained: readonly PublicProjectionRetained[];
+  readonly dropped: readonly PublicProjectionDropped[];
+  readonly mutationApplied: boolean;
+  readonly projectionDigest: string;
+}
+
+function publicProjection(scan: ArtifactStoreScan): PublicProjection {
   const retained = scan.records
     .filter((entry) => !entry.classification.startsWith("transient-"))
     .map((entry) => ({

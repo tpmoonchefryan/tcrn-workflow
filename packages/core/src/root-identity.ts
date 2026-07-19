@@ -92,7 +92,10 @@ export async function assertDistinctRoots(roots: readonly ExplicitRoot[]): Promi
     try {
       metadata = await lstat(root.path);
     } catch {
-      await classifyMissingCaseAlias(root.path);
+      // classifyMissingCaseAlias is declared Promise<never> and throws on every
+      // path, so this return is unreachable at runtime; returning it lets the
+      // compiler see that metadata is assigned on every path that continues.
+      return await classifyMissingCaseAlias(root.path);
     }
     if (metadata.isSymbolicLink()) {
       fail("ROOT_PATH_SYMLINK", `${root.kind} must not be a symlink`);
