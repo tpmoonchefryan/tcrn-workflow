@@ -67,6 +67,22 @@ step's code merges.
   wrapped so every failure path (missing/malformed `project.json`, over-budget
   text, any thrown error) prints nothing and exits 0; the session proceeds as
   plain Claude Code. `ACT2-FAIL-OPEN` makes this a proven property.
+- **Settings admission (installer, not handler)**: the Step-2 installer reads
+  `.claude/settings.json` under the same hardened sequence the receipt readers use
+  (`lstat` → `open` `O_NOFOLLOW` → `fstat` identity → read → `fstat` + by-name
+  `lstat` recheck), and re-verifies the file's bytes and identity immediately
+  before the `rename` that commits the merge. Three cases now fail with the
+  terminal `INSTALLER_SETTINGS_INTERFERENCE` (alongside the existing
+  `INSTALLER_TARGET_EXISTS` / `INSTALLER_ROOT_INVALID`): a **symlinked or
+  hardlinked** `.claude/settings.json`, an identity swap during the read, and any
+  concurrent edit landing between the merge and the commit. The symlink rejection
+  is a deliberate behaviour change — previously the bare read followed the link and
+  the `rename` then replaced it with a regular file, destroying a stow/chezmoi-style
+  dotfile link without a word. The code is terminal, not transient: retrying a
+  symlinked `settings.json` never succeeds; the operator must resolve the link (or
+  the competing edit) first. The `rename` is the sole commit point — nothing
+  failable follows it, so no crash can leave an activated hook pointing at a script
+  the cleanup deleted.
 - **Rollback**: `removeClaudeAdapterSettingsFragment` (`:512`) is the byte-inverse
   of `mergeClaudeAdapterSettingsFragment` (`:506`); removal restores
   `.claude/settings.json` byte-for-byte, preserving any pre-existing user hooks.
