@@ -9,6 +9,21 @@ updates:
     groups:
       development-dependencies:
         dependency-type: development
+    # Major bumps of the compiler and its type definitions are not routine maintenance
+    # here, and proposing them weekly makes them look like it. `typescript` is pinned by
+    # the verify:p1 type gate, which reads the exact version out of this manifest and
+    # refuses to run any other; moving it across a major reopens the whole diagnostic
+    # surface that 147 fixes just closed. `@types/node` is worse than churn: which major
+    # to pin is an open Owner decision (OD-4), and a pull request cannot settle it.
+    #
+    # Minor and patch updates still arrive, including for these two, so a security fix is
+    # not silenced -- only the majors that need a decision this file cannot make. Delete
+    # these entries once OD-4 is recorded.
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
