@@ -98,6 +98,34 @@ for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.
   });
 }
 
+// 2b. The version in prose, not just in the badge.
+//
+//     The badge check above was written after a release cut left it reading rc.5, and it
+//     was too narrow: the same cut left `0.1.0-rc.5` in the "Status, honestly" section of
+//     all five READMEs, in the first sentence of the versioning policy, and twice in the
+//     compatibility notes. Seven statements of the current version, none of them derived
+//     from the source, none of them checked -- including one in a section whose title
+//     promises honesty.
+//
+//     The rule cannot be "never mention an old version": release notes, the changelog and
+//     the rc.5 compatibility record must be free to reference history. It is scoped
+//     instead to documents that speak in the present tense about *this* version, which are
+//     enumerated here. A document that joins that set must be added to this list.
+const currentVersionDocuments = [
+  "README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md",
+  "docs/versioning/versioning-policy.md",
+  "docs/compatibility/supported-modes.md",
+];
+for (const document of currentVersionDocuments) {
+  const body = await read(document);
+  body.split("\n").forEach((line, index) => {
+    for (const match of line.matchAll(/\b\d+\.\d+\.\d+-rc\.\d+\b/gu)) {
+      if (match[0] === P8_VERSION) continue;
+      fail("PUSH_GATE_STALE_VERSION_PROSE", `${document}:${index + 1}: ${match[0]} != ${P8_VERSION}`);
+    }
+  });
+}
+
 // 3. The two prose announcements of the version.
 const changelog = await read("CHANGELOG.md");
 if (!new RegExp(`^## ${P8_VERSION.replaceAll(".", "\\.")}\\b`, "mu").test(changelog)) {

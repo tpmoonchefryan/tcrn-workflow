@@ -194,9 +194,32 @@ Development mode is offline with a process network guard and zero telemetry. The
 | `docs/` | Architecture, release trust, versioning, release notes. |
 | `verification-map.yaml` | The claim ledger — start here to see what is actually proven. |
 
+## What this does not govern
+
+Each guarantee above is scoped, and the scopes are easy to over-read. These four
+boundaries are stated positively because a reader who had this entire document in
+front of them still over-read the first two.
+
+- **Your product's source tree.** The single-writer lease governs the workspace
+  event chain. Two agents editing `src/foo.ts` at the same time are not protected
+  by anything here — use worktree isolation or route those edits through the
+  workspace yourself.
+- **Your product's supply chain.** The network guard covers the process running
+  P1 project commands. Your agent's own shell, and your product's build, are
+  outside it. Zero runtime dependencies is a property of *this* framework, not of
+  what you build with it.
+- **Whether your code is correct.** The claim ledger guarantees that a *declared*
+  capability keeps an executable proof, and that overclaiming fails the build. It
+  cannot tell you the claim set is the right one. Choosing what to claim is
+  irreducibly a human judgement, and no amount of provenance substitutes for it.
+- **Identity and time.** Actor attestation records a *declared* actor id, not an
+  authenticated one, and the chain proves ordering, not wall-clock truth. The
+  chain is tamper-evident against edits within it; it is not anchored outside the
+  filesystem it lives on.
+
 ## Status, honestly
 
-- `0.1.0-rc.5` is a **pre-release candidate**. The public API is not yet stable.
+- `0.1.0-rc.6` is a **pre-release candidate**. The public API is not yet stable.
 - Both host adapters are inert dry-run candidates; **no live Codex or Claude Code support is asserted**.
 - `supportedAosReleases` is empty: no external AOS compatibility is claimed.
 - Release mode requires the companion helper to accept the bytes: its bootstrap digest is published independently, and the accepted release digests are compiled into it.
