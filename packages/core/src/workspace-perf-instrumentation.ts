@@ -20,6 +20,16 @@ export interface WorkspacePerfMetrics {
   // closed-form equalities above stay exact.
   extensionClosureValidation: number;
   extensionClosureRecordsVisited: number;
+  // WSA-5 (CQ-10b): full-collection scans performed inside the per-event reducer
+  // loop, with the summed record count they visit. The closure counters above
+  // count only ancestor-bounded walks, so before this counter existed the four
+  // scanning arms (work delete, project delete, done-transition gate clearance,
+  // gate-satisfied evidence resolution) were invisible to the proof: their cost
+  // could grow without moving one number the tests assert on. These are the
+  // quadratic terms in replay. They are measured-small, not absent, so they are
+  // counted and bounded rather than removed.
+  collectionScan: number;
+  collectionScanRecordsVisited: number;
 }
 
 const store = new AsyncLocalStorage<WorkspacePerfMetrics>();
@@ -32,6 +42,8 @@ export async function withWorkspacePerfInstrumentation<T>(operation: () => Promi
     closureRecordsVisited: 0,
     extensionClosureValidation: 0,
     extensionClosureRecordsVisited: 0,
+    collectionScan: 0,
+    collectionScanRecordsVisited: 0,
   };
   const result = await store.run(metrics, operation);
   return { result, metrics };
@@ -60,5 +72,16 @@ export function recordExtensionClosureValidation(recordsVisited: number): void {
   if (metrics) {
     metrics.extensionClosureValidation += 1;
     metrics.extensionClosureRecordsVisited += recordsVisited;
+  }
+}
+
+// WSA-5 (CQ-10b): one call per full-collection scan inside the per-event loop.
+// recordsVisited is the size of the collection scanned, so a regression that adds
+// a scan, or widens an existing one, moves a number the complexity proof asserts.
+export function recordCollectionScan(recordsVisited: number): void {
+  const metrics = store.getStore();
+  if (metrics) {
+    metrics.collectionScan += 1;
+    metrics.collectionScanRecordsVisited += recordsVisited;
   }
 }
