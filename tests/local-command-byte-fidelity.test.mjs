@@ -131,6 +131,41 @@ test("raw ls-tree and for-each-ref callers use explicit strict metadata decoding
   assert.throws(() => parseHistoricalTreePaths("malformed"), /PRIVACY_TREE_RECORD_INVALID/u);
 });
 
+test("a capture-bound overflow is its own typed failure and does not reclassify other spawn faults", async (context) => {
+  const payloadBytes = 64 * 1024;
+  const emit = ["-e", `process.stdout.write(Buffer.alloc(${payloadBytes}, 0x61))`];
+  // spawnSync signals a maxBuffer overflow through `error.code` while handing back a
+  // truncated stdout, and `status` is 0 or null depending on child exit timing. A
+  // status-only guard therefore admits a silently shortened capture as success. The
+  // overflow gets its own reason code so a caller cannot mistake a bounded capture that
+  // did not fit for a command that ran and failed.
+  for (const maxBuffer of [payloadBytes - 1, 1]) {
+    assert.throws(
+      () => runLocalCommand(process.execPath, emit, { cwd: process.cwd(), raw: true, maxBuffer }),
+      (error) => error instanceof LocalCommandError && error.reasonCode === "COMMAND_OUTPUT_OVERFLOW",
+      `maxBuffer ${maxBuffer}`,
+    );
+  }
+  const withinBound = runLocalCommand(process.execPath, emit, { cwd: process.cwd(), raw: true, maxBuffer: payloadBytes + 1 });
+  assert.equal(withinBound.length, payloadBytes, "the same capture inside its bound stays whole");
+
+  // The gate is ENOBUFS-specific on purpose: every other spawn-level fault keeps the
+  // COMMAND_FAILED classification callers already branch on.
+  const absentCwd = join(await realpath(await mkdtemp(join(tmpdir(), "tcrn-absent-cwd-"))), "gone");
+  context.after(async () => rm(join(absentCwd, ".."), { recursive: true, force: true }));
+  const otherFaults = [
+    ["ETIMEDOUT", ["-e", "setTimeout(() => {}, 60000)"], { cwd: process.cwd(), timeout: 250 }],
+    ["ENOENT", ["-e", ""], { cwd: absentCwd }],
+  ];
+  for (const [label, arguments_, options] of otherFaults) {
+    assert.throws(
+      () => runLocalCommand(process.execPath, arguments_, options),
+      (error) => error instanceof LocalCommandError && error.reasonCode === "COMMAND_FAILED",
+      label,
+    );
+  }
+});
+
 test("text behavior and stderr fail-closed semantics remain unchanged", () => {
   assert.equal(
     runLocalCommand(process.execPath, ["-e", "process.stdout.write('  text output  \\n')"], { cwd: process.cwd() }),

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { chmod, link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -13,7 +14,7 @@ import {
   safeWriteOutput,
   withExclusiveOutputSession,
 } from "../scripts/lib/safe-io.mjs";
-import { walkFiles } from "../scripts/lib/files.mjs";
+import { fileRecord, fileRecordMemoEntriesForTest, walkFiles } from "../scripts/lib/files.mjs";
 
 test("bound reads reject source hardlinks", async (context) => {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), "tcrn-source-link-")));
@@ -100,6 +101,47 @@ test("exclusive output session preserves a foreign lock whose identity is outsid
     withExclusiveOutputSession(temporary, async () => undefined),
     (error) => error.reasonCode === "OUTPUT_SESSION_RECOVERY_IDENTITY",
   );
+});
+
+test("the file-record memo is keyed on identity that a rewrite cannot reuse", async (context) => {
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), "tcrn-file-record-memo-")));
+  context.after(() => rm(temporary, { recursive: true, force: true }));
+  const path = resolve(temporary, "record.txt");
+  await writeFile(path, "aaaaaaaa\n");
+
+  const first = await fileRecord(path, temporary);
+  const second = await fileRecord(path, temporary);
+  assert.deepEqual(second, first, "a repeated read inside one process must be byte-identical");
+  assert.equal(first.path, "record.txt");
+
+  // A same-size in-place rewrite keeps dev and ino, so a memo keyed on inode alone would
+  // keep serving the stale digest for the life of the process -- and proof-artifacts'
+  // record() would carry it straight into fixture digest generation.
+  await writeFile(path, "bbbbbbbb\n");
+  const rewritten = await fileRecord(path, temporary);
+  assert.equal(rewritten.size, first.size);
+  assert.notEqual(rewritten.sha256, first.sha256, "a same-size rewrite must not be served from the memo");
+  assert.equal(rewritten.sha256, createHash("sha256").update("bbbbbbbb\n").digest("hex"));
+
+  // A rewrite that lands while the read is in flight leaves the pre-read key describing
+  // state the returned bytes never had. The record is still correct for what was read,
+  // but it must not be cached under that key.
+  const racedPath = resolve(temporary, "raced.txt");
+  await writeFile(racedPath, "dddddddd\n");
+  const before = fileRecordMemoEntriesForTest();
+  const raced = await fileRecord(racedPath, temporary, {
+    afterOpen: async () => {
+      await writeFile(racedPath, "cccccccc\n");
+    },
+  });
+  assert.equal(raced.sha256, createHash("sha256").update("cccccccc\n").digest("hex"));
+  assert.equal(fileRecordMemoEntriesForTest(), before, "a read whose identity moved must not be cached");
+
+  // Control: an undisturbed read of the same file does populate the memo, so the
+  // assertion above is measuring the guard and not a memo that never caches anything.
+  const settled = await fileRecord(racedPath, temporary);
+  assert.equal(settled.sha256, raced.sha256);
+  assert.equal(fileRecordMemoEntriesForTest(), before + 1);
 });
 
 test("source read errors fail closed", async (context) => {

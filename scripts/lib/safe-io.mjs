@@ -444,10 +444,6 @@ async function validateRecoveryClaim(path, expectedIdentity, expectedBytes, reas
   return claim;
 }
 
-async function readBoundFile(path, reasonCode) {
-  return readBoundClaim(path, reasonCode);
-}
-
 export async function readBoundClaim(path, reasonCode) {
   const before = await pathMetadata(path, reasonCode);
   if (before.isSymbolicLink() || !before.isFile() || before.nlink < 1 || before.uid !== process.getuid?.() || (before.mode & 0o777) !== 0o600 || before.size > maximumRecoveryClaimBytes) {
@@ -799,7 +795,7 @@ async function clearDeadStageOnlyOrphans(gitDirectory, claimPath) {
       fail("OUTPUT_SESSION_RECOVERY_CONCURRENT", stagePath);
     }
     assertDeadProcess(Number(match[1]), "OUTPUT_SESSION_RECOVERY_CLAIM_LIVE", "OUTPUT_SESSION_RECOVERY_CLAIM_LIVENESS_UNKNOWN");
-    const bound = await readBoundFile(stagePath, "OUTPUT_SESSION_RECOVERY_CLAIM_INVALID");
+    const bound = await readBoundClaim(stagePath, "OUTPUT_SESSION_RECOVERY_CLAIM_INVALID");
     if (!sameIdentity(bound.metadata, stage) || bound.metadata.nlink !== 1) fail("OUTPUT_SESSION_RECOVERY_CLAIM_CHANGED", stagePath);
     if (!(await isExactPrepublicationRecoveryClaimPrefix(gitDirectory, stagePath, stage, bound.bytes))) {
       parseRecoveryClaim(bound.bytes, bound.metadata, resolve(gitDirectory, outputLockName), "OUTPUT_SESSION_RECOVERY_CLAIM_INVALID", {
@@ -1375,7 +1371,7 @@ async function ensureDirectory(path, repositoryReal, isDist) {
   return realPath;
 }
 
-export async function ensureSafeOutputDirectory(repositoryPath, relativeDirectory = "dist") {
+async function ensureSafeOutputDirectory(repositoryPath, relativeDirectory = "dist") {
   const segments = outputSegments(relativeDirectory === "dist" ? "dist/.sentinel" : `${relativeDirectory}/.sentinel`).slice(0, -1);
   const repository = await requireOutputSession(repositoryPath);
   let current = repository.realPath;
