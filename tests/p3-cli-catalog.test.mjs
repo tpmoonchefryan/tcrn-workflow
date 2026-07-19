@@ -91,13 +91,25 @@ test("WSB-4: exactly the nullable flags carry the '-' sentinel, and only knowled
   }
   assert.deepEqual(sentinelFlags, {
     // WSD-2: gate-create's --work-id is nullable ("-" for a workspace-level gate with
-    // no work anchor); it carries the "-" sentinel but no deprecated "null" alias.
+    // no work anchor).
     "gate-create": ["work-id"],
     "knowledge-create": ["last-verified", "project-id"],
     "profile-authorize": ["command", "project-id", "workspace-id"],
     "work-create": ["parent-id"],
   });
-  assert.deepEqual(aliasFlags, { "knowledge-create": ["last-verified", "project-id"] });
+  // CQ-05(c2) / OD-5 option 1: the alias inventory is exactly the set of flags whose
+  // dispatcher routes through nullableValue, which accepts BOTH "-" and "null". This
+  // previously listed only knowledge-create, so gate-create --work-id and work-create
+  // --parent-id accepted "null" without declaring it — the catalog is the machine-readable
+  // discovery surface, so an accepted-but-undeclared spelling is a catalog that lies.
+  // profile-authorize's three sentinel flags are NOT here: they do not use nullableValue.
+  // tests/p3-cli-read-surface.test.mjs binds this inventory to the dispatcher's actual
+  // behaviour, so the two can no longer drift apart silently.
+  assert.deepEqual(aliasFlags, {
+    "gate-create": ["work-id"],
+    "knowledge-create": ["last-verified", "project-id"],
+    "work-create": ["parent-id"],
+  });
 });
 
 test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel, only on expected-version", () => {

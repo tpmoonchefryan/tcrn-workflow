@@ -129,6 +129,110 @@ test("read verbs and validate fail closed on stale views, but status reads autho
   assert.equal(status.version, 7);
 });
 
+// CQ-05(c2) proof. Before this guard the round trip was BROKEN, not merely inconsistent:
+// work-create routed --parent-id through nullableValue (which accepts "-" and the
+// deprecated alias "null"), while the work-list filter compared with a bare === "-" and
+// so treated "null" as a literal parent id. An agent could create a root work item with
+// --parent-id null and then get total=0 back for the identical spelling — a silent wrong
+// answer. Reverting the filter to === "-" turns the "null" assertions below red.
+test("CQ-05(c2): the null sentinel round-trips through work-create and work-list for every accepted spelling", async (context) => {
+  const fx = await fixture(context);
+  const ws = ["--workspace", fx.workspace];
+  const created = await run(["work-create", ...ws, "--expected-version", "7", "--at", instant(30),
+    "--project-id", fx.ids.projectA, "--external-key", "ROOT-VIA-NULL", "--kind", "Initiative", "--parent-id", "null"]);
+  assert.equal(created.record.parentId, null, "the deprecated alias must be stored as null, not as a literal id");
+  const rootId = created.record.id;
+
+  // The writer accepted "null"; the reader must find it back under that same spelling.
+  const viaNull = await run(["work-list", ...ws, "--parent-id", "null"]);
+  assert.ok(viaNull.records.some((r) => r.id === rootId), "--parent-id null must find the record --parent-id null created");
+  assert.equal(viaNull.records.some((r) => r.id === fx.ids.epicA), false, "the null filter must not admit parented work");
+
+  // Canonical spelling must return the identical set — the two spellings are aliases,
+  // so any divergence between them is itself the defect.
+  const viaDash = await run(["work-list", ...ws, "--parent-id", "-"]);
+  assert.deepEqual(viaNull.records.map((r) => r.id).sort(), viaDash.records.map((r) => r.id).sort());
+  assert.deepEqual(viaDash.records.map((r) => r.id).sort(), [fx.ids.initA, fx.ids.initB, rootId].sort());
+
+  // A real id must still be matched literally, so the alias handling cannot have
+  // collapsed into "treat every value as null".
+  const viaParent = await run(["work-list", ...ws, "--parent-id", fx.ids.initA]);
+  assert.deepEqual(viaParent.records.map((r) => r.id), [fx.ids.epicA]);
+});
+
+// CQ-05(c2) contract half: the catalog is the machine-readable discovery surface, so a
+// spelling the dispatcher accepts but the catalog does not declare is a catalog that
+// lies. These are exactly the flags routed through nullableValue.
+test("CQ-05(c2): every nullableValue flag declares its sentinel and its deprecated alias", () => {
+  const flagOf = (verb, flag) => COMMAND_CATALOG.find((entry) => entry.name === verb)?.flags.find((f) => f.name === flag);
+  for (const [verb, flag] of [["knowledge-create", "project-id"], ["knowledge-create", "last-verified"],
+    ["work-create", "parent-id"], ["gate-create", "work-id"]]) {
+    const declared = flagOf(verb, flag);
+    assert.ok(declared, `${verb} must declare the flag ${flag}`);
+    assert.equal(declared.nullSentinel, "-", `${verb}.${flag} must declare the canonical null sentinel`);
+    assert.deepEqual([...(declared.deprecatedAliases ?? [])], ["null"], `${verb}.${flag} must declare the "null" alias its dispatcher accepts`);
+  }
+});
+
+// CQ-05(c) proof for integerValue. Each of these used to reach core as NaN and come back
+// under a SEMANTIC reason code that misdescribed a syntax error — most starkly
+// `migration-plan --target-version abc` answering WORKSPACE_MIGRATION_DOWNGRADE "NaN".
+// Removing integerValue (restoring the bare Number(...) calls) turns these red.
+test("CQ-05(c): malformed integer flags fail at the CLI boundary naming the flag", async (context) => {
+  const fx = await fixture(context);
+  const ws = ["--workspace", fx.workspace];
+  const malformed = async (args, flag) => {
+    const error = await runCli(args, { write() {} }).then(() => null, (caught) => caught);
+    assert.ok(error, `${flag} must fail closed`);
+    assert.equal(error.reasonCode, "CLI_ARGUMENT_MALFORMED");
+    assert.equal(error.message.includes(flag), true, `the failure must name ${flag}, got ${error.message}`);
+    return error;
+  };
+  await malformed(["migration-plan", ...ws, "--target-version", "abc", "--dry-run", "true"], "target-version");
+  await malformed(["migration-plan", ...ws, "--target-version", "2.5", "--dry-run", "true"], "target-version");
+  await malformed(["knowledge-promote", ...ws, "--expected-version", "7", "--expected-revision", "abc",
+    "--at", instant(31), "--id", "knowledge:0000000000000000000000000000000000000000", "--state", "promoted"], "expected-revision");
+
+  // The minimum is deliberately unbounded below: 0 and negatives are LEGITIMATE downgrade
+  // requests that core must still judge. A positive minimum here would pre-empt the very
+  // judgement this patch exists to protect, so assert the flag reaches core untouched.
+  for (const target of ["0", "-1"]) {
+    const reason = await reasonOf(["migration-plan", ...ws, "--target-version", target, "--dry-run", "true"]);
+    assert.equal(reason, "WORKSPACE_MIGRATION_DOWNGRADE", `--target-version ${target} must still be judged by core`);
+  }
+});
+
+// R2-NEW-7 proof: within one verb, `limit` used a truthy guard and `offset` used
+// `!== undefined`, so the two flags disagreed about the empty string — `--limit=` was
+// silently dropped and the command answered as if no limit had been asked for, while
+// `--offset=` was passed through. Restoring the truthy guard turns the limit case red.
+test("R2-NEW-7: empty-string integer flags are rejected, not silently dropped", async (context) => {
+  const fx = await fixture(context);
+  const ws = ["--workspace", fx.workspace, "--at", instant(32)];
+  for (const verb of ["knowledge-list", "knowledge-candidates"]) {
+    // Baseline: with the flag omitted the verb gets past pagination entirely and fails
+    // later, on the absent knowledge store. "Silently dropped" means indistinguishable
+    // from this, which is precisely what the truthy guard did to --limit=.
+    const omitted = await reasonOf([verb, ...ws]);
+    assert.equal(omitted, "KNOWLEDGE_PATH_INVALID");
+
+    for (const flag of ["limit", "offset"]) {
+      // The empty string is a SUPPLIED value, so it must be handed to core verbatim and
+      // behave exactly like the explicit "0" it parses to — the same rule offset already
+      // followed and limit did not. Equality against the explicit-zero run is the whole
+      // point: it is what makes the two flags agree.
+      const empty = await reasonOf([verb, ...ws, `--${flag}=`]);
+      const zero = await reasonOf([verb, ...ws, `--${flag}`, "0"]);
+      assert.equal(empty, zero, `${verb} --${flag}= must behave as the supplied value 0`);
+    }
+
+    // Direction check: limit=0 is refused by core, so an empty --limit must NOT look like
+    // an omitted --limit. This is the assertion the truthy guard reddens.
+    assert.equal(await reasonOf([verb, ...ws, "--limit="]), "KNOWLEDGE_INPUT_INVALID");
+    assert.notEqual(await reasonOf([verb, ...ws, "--limit="]), omitted);
+  }
+});
+
 test("WSB-6: the agent-integration reference stays in drift-guarded agreement with the catalog", async () => {
   const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
   const docText = await readFile(join(repoRoot, "docs/architecture/agent-integration-v1.md"), "utf8");
