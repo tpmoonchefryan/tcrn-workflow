@@ -12,6 +12,9 @@
 
 [なぜ](#why-this-project-exists) · [対象読者](#who-this-is-for) · [得られるもの](#what-you-get) · [クイックスタート](#quick-start) · [検証](#verification) · [ライセンス](#license)
 
+`Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
+
+
 </div>
 
 ---

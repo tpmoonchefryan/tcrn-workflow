@@ -12,6 +12,8 @@ English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [
 
 [Why](#why-this-project-exists) · [Who it is for](#who-this-is-for) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Verification](#verification) · [License](#license)
 
+`Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
+
 </div>
 
 ---
