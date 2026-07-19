@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import dgram from "node:dgram";
 import dns from "node:dns";
 import dnsPromises from "node:dns/promises";
 import http from "node:http";
@@ -59,11 +60,27 @@ export function installNoNetworkGuard() {
     surface.resolve4 = blockedAsync;
     surface.resolve6 = blockedAsync;
   }
-  dns.Resolver.prototype.resolve = blocked;
-  dns.Resolver.prototype.resolve4 = blocked;
-  dns.Resolver.prototype.resolve6 = blocked;
+  // Resolver is a class, so patching the module surfaces above leaves every instance
+  // untouched. The callback and promise modules export *different* Resolver classes:
+  // sealing dns.Resolver alone left `new dnsPromises.Resolver().resolve4()` running the
+  // real system resolver (measured: real ENOTFOUND rather than OFFLINE_NETWORK_BLOCKED).
+  for (const resolverPrototype of [dns.Resolver.prototype, dnsPromises.Resolver.prototype]) {
+    resolverPrototype.resolve = blocked;
+    resolverPrototype.resolve4 = blocked;
+    resolverPrototype.resolve6 = blocked;
+  }
+
+  // UDP egress. dgram is normally blocked in passing because send() routes literal
+  // addresses through dns.lookup, but a caller-supplied `lookup` option skips that
+  // entirely and the datagram reaches the wire (measured end to end: a receiver on
+  // loopback got the payload). Seal the socket transport itself rather than relying on
+  // the resolver detour. bind/receive is left alone; it is not egress.
+  dgram.Socket.prototype.send = blocked;
+  dgram.Socket.prototype.connect = blocked;
 
   // A third transport with its own connect, unreachable from the http/https patches.
+  // Defence in depth only: http2.connect routes through the patched net.connect and
+  // already throws OFFLINE_NETWORK_BLOCKED without this line.
   http2.connect = blocked;
 
   // Every patch above mutates the CommonJS module object. ESM named imports

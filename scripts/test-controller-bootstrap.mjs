@@ -143,12 +143,20 @@ const stdoutPath = join(outputDirectory, "stdout");
 const stderrPath = join(outputDirectory, "stderr");
 const stdoutFile = await open(stdoutPath, "w", 0o600);
 const stderrFile = await open(stderrPath, "w", 0o600);
+// INVARIANT: this file MUST NOT be preloaded with test-controller-child-policy.mjs.
+// This detached spawn is the proof -- that policy refuses `detached: true`
+// unconditionally, so preloading it here would refuse the reaper before it starts.
 const reaper = spawn(process.execPath, [reaperPath, String(process.pid), String(process.pid), outputDirectory], {
   detached: true,
   stdio: ["ignore", "ignore", "ignore", "ipc"],
 });
 try {
   await waitForReaperMessage(reaper, "ready");
+  // INVARIANT: this file MUST NOT be preloaded with test-controller-child-policy.mjs.
+  // These are private regular-file descriptors, not inherited controller output, but
+  // the policy's stdio allowlist cannot tell the difference without an fstat on a hot
+  // path, so it would refuse this spawn. The allowlist stays fail-closed deliberately;
+  // the detached reaper spawn above proves this file runs unpreloaded.
   const testController = spawn(process.execPath, ["--import", childPolicyImport, ...testArguments], {
     stdio: ["ignore", stdoutFile.fd, stderrFile.fd],
     env: { ...process.env, TCRN_TEST_CONTROLLER_PROCESS_GROUP: String(process.pid) },
