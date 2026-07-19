@@ -1,6 +1,13 @@
 {
   "schemaVersion": "tcrn.dependency-policy.v1",
   "dependencies": {
+    "@types/node@24.13.2": {
+      "direct": true,
+      "license": "MIT",
+      "integrity": "sha512-fRa09kZTgu8o71KFcDjUFuc7F+dEbZYZmkI0mg5YBTRs0yMKjYHsq/c0urDKeDb+D5qVgXOdFcuu+DZPKOITwA==",
+      "purpose": "Node 24 standard library declarations for the pinned typecheck gate",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
     "ajv@8.17.1": {
       "direct": true,
       "license": "MIT",
@@ -34,6 +41,20 @@
       "license": "MIT",
       "integrity": "sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==",
       "purpose": "exact Ajv transitive dependency",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "typescript@5.9.3": {
+      "direct": true,
+      "license": "Apache-2.0",
+      "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+      "purpose": "pinned compiler for the typecheck gate",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "undici-types@7.18.2": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==",
+      "purpose": "exact @types/node transitive dependency",
       "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
     }
   }

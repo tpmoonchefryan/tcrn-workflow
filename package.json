@@ -71,6 +71,8 @@
     "verify:workspace": "node scripts/task.mjs workspace"
   },
   "devDependencies": {
-    "ajv": "8.17.1"
+    "@types/node": "24.13.2",
+    "ajv": "8.17.1",
+    "typescript": "5.9.3"
   }
 }

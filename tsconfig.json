@@ -5,6 +5,9 @@
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
+    "lib": [
+      "ES2024"
+    ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noEmit": true,
@@ -15,7 +18,11 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "strict": true,
-    "target": "ES2024"
+    "target": "ES2024",
+    "types": [
+      "node"
+    ],
+    "verbatimModuleSyntax": true
   },
   "include": [
     "packages/*/src/**/*.ts"
