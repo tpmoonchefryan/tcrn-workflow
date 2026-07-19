@@ -5,6 +5,29 @@ Versioning after the first accepted release.
 
 ## Unreleased
 
+- Make the replay complexity proof see the reducer's full-collection scans
+  (CQ-10b). `materializeWorkspace` performs four scans inside its per-event loop
+  — the whole work map on `work.deleted` and on `project.deleted`, the whole gate
+  collection on a work transition to `done`, and full copies of the conference
+  and minutes maps on a `gate.updated` to `satisfied` — and none of them
+  incremented a counter the WSA-5 proof asserts on. New `collectionScan` and
+  `collectionScanRecordsVisited` metrics count every one, and three new fixtures
+  in `tests/p3-engine-complexity.test.mjs` (delete-bearing, done-transition,
+  gate-satisfied) pin each arm's exact closed form. The existing append-only
+  fixture now asserts zero scans. Behaviour is unchanged: counting only, replay
+  bytes, record order, digests and reason codes are identical.
+- Correct the P3 compaction-deferral proof, which stated "there is no quadratic
+  term". That was false — the four scans above are quadratic terms. The document
+  now names each arm, records the measured paired A/B (removing all four scans is
+  4.0% of replay at the reachable ceiling, state byte-identical), and notes that
+  the binding constraint is the 1 MiB canonical view-document limit reached at
+  ~2,000–3,000 work records, not the 10,000-event cap.
+- Decline OD-15 option 1 as measured: the four scans are retained rather than
+  replaced by incrementally maintained indices. Three of them are fail-closed
+  corruption checks, the shape that would exercise them is unreachable before the
+  view-serialization limit bricks the workspace, and the measured upper bound on
+  the whole change is 4%. The dominant replay cost is the one full replay per
+  mutation (WSA-1, by design), which is roughly 40x larger.
 - Unify the three drifted copies of the hardened authority-receipt reader onto a
   single shared implementation (`packages/core/src/authority-file-reader.ts`)
   carrying the strongest variant of each check: nanosecond `bigint` stat

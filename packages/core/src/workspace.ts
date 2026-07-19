@@ -41,7 +41,7 @@ import type {
 } from "../../protocol/src/index.js";
 import { assertDistinctRoots } from "./root-identity.js";
 import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
-import { recordClosureValidation, recordExtensionClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
+import { recordClosureValidation, recordCollectionScan, recordExtensionClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
 import {
   ACTOR_ATTESTATION_ENABLE_OPERATION,
   ActorAttestationError,
@@ -662,12 +662,15 @@ function collectWorkClosure(work: Map<string, WorkRecord>, record: WorkRecord): 
   return [...closure.values()];
 }
 
-// WSA-2: O(delta) per-event relationship validation. Validates only the mutated
-// record's closure (record + ancestor chain) instead of the whole work graph,
-// which removes the per-event full validateWorkGraph that made materialize
-// quadratic. The terminal validateWorkGraph over the full set still runs once.
-// This catches prefix-invalid intermediate states (a child before its parent, a
-// live child of a just-tombstoned parent) that a terminal-only check would miss.
+// WSA-2: per-event relationship validation. Validates only the mutated record's
+// closure (record + ancestor chain) instead of the whole work graph, which
+// removes the per-event full validateWorkGraph that made materialize quadratic.
+// The terminal validateWorkGraph over the full set still runs once. This catches
+// prefix-invalid intermediate states (a child before its parent, a live child of
+// a just-tombstoned parent) that a terminal-only check would miss.
+// CQ-10b correction: the ancestor walk is O(delta), but the delete arm below is a
+// full scan of the work map, so this function is NOT O(delta) on a work.deleted
+// event. The scan is counted by recordCollectionScan so the proof can bound it.
 function validateWorkClosure(work: Map<string, WorkRecord>, projects: Map<string, ProjectRecord>, record: WorkRecord): void {
   const project = projects.get(record.projectId);
   if (!project || (project.tombstone && !record.tombstone)) {
@@ -684,6 +687,12 @@ function validateWorkClosure(work: Map<string, WorkRecord>, projects: Map<string
     throw error;
   }
   if (record.tombstone) {
+    // CQ-10b: this is a full scan of the work map, not part of the ancestor-bounded
+    // closure above, and it runs once per work delete. It is counted separately so
+    // the proof sees it; measurement (4% of replay at the reachable ceiling) says
+    // leave it as a scan rather than trade a fail-closed corruption check for an
+    // incrementally maintained live-children index.
+    recordCollectionScan(work.size);
     for (const candidate of work.values()) {
       if (!candidate.tombstone && candidate.parentId === record.id) {
         fail("WORKSPACE_EVENT_CORRUPT", `TOMBSTONE_REFERENCED:${candidate.id}`);
@@ -790,7 +799,12 @@ function assertGateClearance(gates: Iterable<GateRecord>, workId: string, target
   if (targetStatus !== "done") {
     return;
   }
-  const blocking = [...gates]
+  const candidates = [...gates];
+  // CQ-10b: counted full scan of the gate collection. The early return above means
+  // it runs only on a transition whose target is done, and done is terminal, so it
+  // fires at most once per work record rather than once per work.updated.
+  recordCollectionScan(candidates.length);
+  const blocking = candidates
     .filter((gate) => !gate.tombstone && gate.status === "pending" && gate.workId === workId)
     .map((gate) => gate.id)
     .sort(compareCanonicalText);
@@ -850,8 +864,13 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         (payload.operation === "project.updated" && record.tombstone) || (payload.operation === "project.deleted" && !record.tombstone)) {
         fail("WORKSPACE_EVENT_CORRUPT", `invalid project mutation ${record.id}`);
       }
-      if (payload.operation === "project.deleted" && [...work.values()].some((entry) => entry.projectId === record.id && !entry.tombstone)) {
-        fail("WORKSPACE_EVENT_CORRUPT", `project ${record.id} deletion precedes its live work`);
+      if (payload.operation === "project.deleted") {
+        // CQ-10b: counted full scan. Fires only on project.deleted, which is rare
+        // and few in number, so its measured contribution is nil.
+        recordCollectionScan(work.size);
+        if ([...work.values()].some((entry) => entry.projectId === record.id && !entry.tombstone)) {
+          fail("WORKSPACE_EVENT_CORRUPT", `project ${record.id} deletion precedes its live work`);
+        }
       }
       projects.set(record.id, record);
       // WSA-2: a project event does not change the work graph; the only work->project
@@ -892,9 +911,12 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       continue;
     }
     if (conferenceOperations.has(payload.operation)) {
-      // WSD-1: conference reducer arms. Every check is a bounded lookup against
-      // the maps materialized so far — O(delta) per event, no collection scans,
-      // and no work-closure metrics (the closure counters stay work-only).
+      // WSD-1: conference reducer arms. Every check here is a bounded lookup
+      // against the maps materialized so far — O(delta) per event, and no
+      // work-closure metrics (the closure counters stay work-only).
+      // CQ-10b correction: the gate arm below is not scan-free. A gate.satisfied
+      // transition copies the whole conference and minutes maps to resolve its
+      // evidence; that copy is counted by recordCollectionScan.
       if (payload.operation === "conference.created") {
         const record = extensionRecordOrCorrupt(() => openConference(payloadRecord(payload, payload.operation, actorRequired)));
         requireEventBoundTimestamp(record.updatedAt, event, `conference ${record.id}`);
@@ -987,6 +1009,13 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         }
         if (record.status === "satisfied") {
           const locator = readGateEvidenceLocator(record.extensions);
+          // CQ-10b: counted collection copy. Two full copies fed to array .find while
+          // the Maps are in hand; runs once per gate-satisfied transition, and only
+          // once a locator is present (the undefined case short-circuits before the
+          // copies are built, so it must not be counted).
+          if (locator !== undefined) {
+            recordCollectionScan(conferenceMinutes.size + conferences.size);
+          }
           if (locator === undefined || !resolveGateEvidence(locator, current, [...conferenceMinutes.values()], [...conferences.values()])) {
             fail("WORKSPACE_EVENT_CORRUPT", `gate ${record.id} evidence does not resolve`);
           }

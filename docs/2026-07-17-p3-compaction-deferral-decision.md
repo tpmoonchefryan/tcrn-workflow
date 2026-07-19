@@ -39,7 +39,8 @@ engine default). Per committed mutation:
 | --- | --- | --- |
 | Full chain replay (`fullMaterialize`) | 1 | reads `ceil(n / 64)` segment files, hashing every event for genesis-anchored chain verification |
 | Terminal full-graph validation (`terminalGraphValidation`) | 1 | O(active records) |
-| Per-event closure validation (`closureValidation`) | one per work event | each O(delta), ancestor-bounded to ≤ 4 records visited |
+| Per-event closure validation (`closureValidation`) | one per work event | the ancestor walk is O(delta), bounded to ≤ 4 records visited |
+| Per-event collection scan (`collectionScan`) | one per work delete, project delete, done transition, and gate satisfaction | each O(collection size) — see the correction below |
 | View rewrite | 1 | O(active records) |
 
 Segment files read per replay, `ceil(n / 64)`:
@@ -50,9 +51,54 @@ Segment files read per replay, `ceil(n / 64)`:
 | 5,000 | 79 | 0 (one terminal only) |
 | 10,000 (cap) | 157 | 0 (one terminal only) |
 
-The per-mutation cost is therefore strictly linear in `n` plus a term linear in
-the active-record count — there is no quadratic term. At the ceiling this is a few
-hundred small canonical-JSON reads and one terminal validation per mutation.
+At the ceiling this is a few hundred small canonical-JSON reads and one terminal
+validation per mutation.
+
+### Correction (CQ-10b, 2026-07-19): "there is no quadratic term" was false
+
+This section previously claimed the per-mutation cost is "strictly linear in `n`
+plus a term linear in the active-record count — there is no quadratic term". That
+was wrong, and the instrumentation could not have detected that it was wrong.
+
+Four reducer arms perform full-collection scans inside the per-event loop, so a
+replay carrying `d` such events over a collection of size `m` costs `d · m`:
+
+| Arm | Site | Scans |
+| --- | --- | --- |
+| `work.deleted` (`TOMBSTONE_REFERENCED`) | `packages/core/src/workspace.ts` `validateWorkClosure` | the whole work map, once per delete |
+| `project.deleted` (live-work check) | the project reducer arm | the whole work map, once per project delete |
+| work transition to `done` (`assertGateClearance`) | `assertGateClearance` | the whole gate collection, at most once per work record (`done` is terminal) |
+| `gate.updated` to `satisfied` | the gate reducer arm | full copies of the conference and minutes maps, once per satisfaction |
+
+The proof was blind to all four: only the ancestor-bounded closure walk fed
+`closureRecordsVisited`, and the fixtures were append-only, never deleted a
+record, and transitioned their gate to `blocked` rather than `satisfied`. The
+`collectionScan` / `collectionScanRecordsVisited` counters and three new fixtures
+in `tests/p3-engine-complexity.test.mjs` now pin the exact closed form of each arm.
+
+**Measured, not estimated.** The quadratic terms are real but their constants sit
+far below the per-event linear term (segment read, canonical JSON, SHA-256 chain
+verification, view rewrite). A paired A/B at the reachable ceiling — 2,000 work
+records, 4,001 events, replaying identical on-disk bytes through the stock engine
+and through a copy with all four scans removed — measured 246.6 ms vs 236.7 ms:
+**4.0%**, with materialized state byte-identical. That is the theoretical maximum
+any indexing of these arms could ever buy, so the arms are retained as written
+rather than traded for incrementally maintained indices; three of them are
+fail-closed corruption checks and the exchange is not worth the correctness risk.
+
+**The binding constraint is not the event cap.** These scans cannot become
+user-visible, because a workspace bricks before they matter: `viewDocuments`
+serializes the view through `canonicalJson`, whose 1 MiB canonical limit is
+reached between 2,000 and 4,000 work records and fails `INPUT_OVERSIZED` — well
+below `PROTOCOL_LIMITS.maxRecords = 10_000`. The `n = 5,000` and `n = 10,000` rows
+in the table above therefore describe states unreachable for record-heavy
+workspaces.
+
+**The real latency cost is elsewhere.** `appendEvent` performs one full replay per
+mutation (WSA-1, by design), so mutation latency is 280–416 ms at 2,500–4,000
+events and grows linearly, making workspace construction O(n²) overall. That term
+is roughly 40× larger than everything the four scans contribute. Any future work
+on replay latency should target it, not these arms.
 
 **Conclusion.** 10,000 events is serviceable for a single MVP workspace without
 compaction. Compaction reclaims chain budget; it does not lower per-mutation
