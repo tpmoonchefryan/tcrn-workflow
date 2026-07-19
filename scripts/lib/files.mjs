@@ -171,7 +171,16 @@ export async function readSourceFile(path) {
 // the same commit asserted nlink on typescript's package.json while executing
 // lib/tsc.js from that same package with no check at all.
 export async function readDependencyManifest(path) {
-  const content = (await readBoundRegularFile(path, {
+  // The paragraph above said where this reader may point. Saying it is not enforcing it:
+  // as first written, the only thing stopping a later caller from aiming this at a tracked
+  // source file -- and silently dropping the hardlink guard for that read -- was a comment.
+  // This repository's whole argument is that prose discipline rots and has to become a
+  // gate, so the scope is a check.
+  const resolved = resolve(path);
+  if (!isInside(resolve(repositoryRoot, "node_modules"), resolved)) {
+    throw new BoundaryError("DEPENDENCY_MANIFEST_OUTSIDE_TREE", `${toPosixPath(relative(repositoryRoot, resolved))} is not inside node_modules`);
+  }
+  const content = (await readBoundRegularFile(resolved, {
     reasonCode: "DEPENDENCY_MANIFEST_INVALID",
     pathChangedReasonCode: "DEPENDENCY_MANIFEST_CHANGED",
     allowHardlinks: true,

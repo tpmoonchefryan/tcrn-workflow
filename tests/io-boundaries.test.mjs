@@ -160,7 +160,7 @@ test("source read errors fail closed", async (context) => {
 // stayed green -- a cross-filesystem pnpm store copies instead of linking, so the local
 // nlink was 1. The environment difference hid a category error: node_modules is in
 // excludedDirectories precisely because the source walk must never enter it.
-test("dependency manifests may be hardlinked; tracked source still may not", async (context) => {
+test("hardlinked bytes are readable only when a caller names the relaxation", async (context) => {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), "tcrn-dep-link-")));
   context.after(() => rm(temporary, { recursive: true, force: true }));
   const manifest = resolve(temporary, "package.json");
@@ -169,12 +169,12 @@ test("dependency manifests may be hardlinked; tracked source still may not", asy
   // leaves behind and what the runner actually had.
   await link(manifest, resolve(temporary, "store-copy.json"));
 
-  const parsed = await readDependencyManifest(manifest);
-  assert.equal(parsed.version, "5.9.3", "a hardlinked dependency manifest must be readable");
+  const relaxed = await readBoundRegularFile(manifest, { reasonCode: "DEPENDENCY_MANIFEST_INVALID", allowHardlinks: true });
+  assert.equal(JSON.parse(relaxed.content.toString("utf8")).version, "5.9.3");
 
-  // The same bytes through the source reader must still be refused. The relaxation is
-  // scoped to a caller that names it, not a weakening of the source boundary -- if this
-  // assertion ever goes green, the guard has been dropped rather than scoped.
+  // The same bytes with the default must still be refused. The relaxation is opt-in per
+  // caller, not a weakening of the boundary -- if this assertion ever goes green, the
+  // guard has been dropped rather than scoped.
   await assert.rejects(
     readBoundRegularFile(manifest, { reasonCode: "SOURCE_FILE_INVALID", hardlinkReasonCode: "SOURCE_HARDLINK" }),
     (error) => error.reasonCode === "SOURCE_HARDLINK",
@@ -184,5 +184,28 @@ test("dependency manifests may be hardlinked; tracked source still may not", asy
   // COUNT, not the file-type guard that keeps a read from following a pointer elsewhere.
   const pointer = resolve(temporary, "pointer.json");
   await symlink(manifest, pointer);
-  await assert.rejects(readDependencyManifest(pointer), (error) => error.reasonCode === "DEPENDENCY_MANIFEST_INVALID");
+  await assert.rejects(
+    readBoundRegularFile(pointer, { reasonCode: "DEPENDENCY_MANIFEST_INVALID", allowHardlinks: true }),
+    (error) => error.reasonCode === "DEPENDENCY_MANIFEST_INVALID",
+  );
+});
+// The scope of the hardlink relaxation was, as first written, a paragraph of comment.
+// A later caller aiming this reader at a tracked source file would have dropped the guard
+// for that read and nothing would have said so -- which is the "documented, not enforced"
+// shape that this repository builds gates to avoid, in the very function added to fix a
+// guard that had been misapplied.
+test("the dependency-manifest reader refuses a path outside node_modules", async (context) => {
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), "tcrn-dep-scope-")));
+  context.after(() => rm(temporary, { recursive: true, force: true }));
+  const outside = resolve(temporary, "package.json");
+  await writeFile(outside, JSON.stringify({ version: "1.0.0" }));
+  await assert.rejects(
+    readDependencyManifest(outside),
+    (error) => error.reasonCode === "DEPENDENCY_MANIFEST_OUTSIDE_TREE",
+  );
+
+  // And the real caller still works, so the check is a boundary rather than a blanket
+  // refusal: this is the exact path verify:p1 reads to compare the compiler against its pin.
+  const pinned = await readDependencyManifest(resolve(process.cwd(), "node_modules/typescript/package.json"));
+  assert.match(pinned.version, /^\d+\.\d+\.\d+$/u);
 });
