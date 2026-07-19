@@ -54,14 +54,39 @@ const status = run("git", ["status", "--porcelain=v1", "--untracked-files=all"])
 if (!status.ok) fail("PUSH_GATE_GIT_UNAVAILABLE", status.output.trim().slice(0, 200));
 else if (status.output.trim() !== "") fail("PUSH_GATE_TREE_DIRTY", status.output.trim().split("\n").slice(0, 5).join(" | "));
 
-// 2. The version as the reader sees it. The badge encodes a dot as `--`, which is why a
-//    naive substring search for the version misses the drift this check exists for.
+// 2. The version as the reader sees it, and whether the reader sees prose at all.
+//
+//    Nothing else in this repository reads the translations. verifyMap parses the claim
+//    badge out of README.md and stops there, so a translated document could say anything,
+//    in any state of repair, and every gate would stay green. Two defects shipped through
+//    that hole in one release: a status badge left at the previous version in all five
+//    files, and eighteen emphasis spans that render as literal asterisks in Chinese and
+//    Japanese.
 const badgeVersion = P8_VERSION.replaceAll("-", "--");
+const punctuation = /[\p{P}\p{S}]/u;
+const whitespace = /\s/u;
 for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
   const body = await read(document);
   const published = [...body.matchAll(/status-([0-9][^-\s)]*(?:--[^-\s)]+)*)-blue/gu)].map((match) => match[1]);
   if (published.length === 0) fail("PUSH_GATE_STATUS_BADGE_MISSING", document);
   else if (!published.every((value) => value === badgeVersion)) fail("PUSH_GATE_STATUS_BADGE_STALE", `${document}: ${published.join(", ")} != ${badgeVersion}`);
+
+  // A closing `**` must be right-flanking: not preceded by whitespace, and -- when
+  // preceded by punctuation -- followed by whitespace or punctuation. CJK prose walks
+  // into that rule constantly, because `**一句话。**下一句` puts an ideographic full stop
+  // before the delimiter and a letter after it. The span never closes and the reader gets
+  // four asterisks. Latin text rarely trips it, which is exactly why it went unnoticed:
+  // the English original was always fine.
+  body.split("\n").forEach((line, index) => {
+    for (const match of line.matchAll(/\*\*([^*]+)\*\*/gu)) {
+      const closeAt = match.index + match[0].length - 2;
+      const before = line[closeAt - 1];
+      const after = line[closeAt + 2];
+      if (before === undefined || whitespace.test(before) || !punctuation.test(before)) continue;
+      if (after === undefined || whitespace.test(after) || punctuation.test(after)) continue;
+      fail("PUSH_GATE_EMPHASIS_UNCLOSED", `${document}:${index + 1}: ${match[0].slice(0, 40)}`);
+    }
+  });
 }
 
 // 3. The two prose announcements of the version.
