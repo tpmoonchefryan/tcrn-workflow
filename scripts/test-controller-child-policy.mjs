@@ -78,9 +78,21 @@ function isNodeExecutable(command) {
     base === "node.exe" || base === "nodejs.exe";
 }
 
-function taskEntrypointArguments(arguments_) {
+// Anchor on the path segment boundary, not a literal leading slash. `endsWith` missed
+// the bare relative form (`node scripts/task.mjs`), so the governed entrypoint was
+// handed the controller preload; its bootstrap then spawns a recorded detached group,
+// which this very policy refuses. Absolute, `./`-prefixed and bare relative must all
+// match, while a lookalike such as `other-scripts/task.mjs` must not.
+const taskEntrypointPattern = /(?:^|[\s/])scripts\/task\.mjs(?:\s|$)/u;
+
+function taskEntrypointArguments(name, arguments_) {
+  // exec receives a whole command line in the first position; the direct APIs receive
+  // an argv array whose first entry is the script path.
+  if (name === "exec" || name === "execSync") {
+    return typeof arguments_[0] === "string" && taskEntrypointPattern.test(arguments_[0]);
+  }
   const argumentsForCommand = Array.isArray(arguments_[1]) ? arguments_[1] : [];
-  return typeof argumentsForCommand[0] === "string" && argumentsForCommand[0].endsWith("/scripts/task.mjs");
+  return typeof argumentsForCommand[0] === "string" && taskEntrypointPattern.test(argumentsForCommand[0]);
 }
 
 function environmentWithoutPolicy(environment) {
@@ -92,10 +104,18 @@ function environmentWithoutPolicy(environment) {
 }
 
 function propagatePolicyToNodeChild(name, arguments_) {
-  // fork always creates Node. For the other direct APIs, only rewrite a known
-  // Node executable; ordinary supported child processes retain their exact
-  // caller-supplied options and environment.
-  if (name !== "fork" && !isNodeExecutable(arguments_[0])) return arguments_;
+  // fork always creates Node. The exec pair takes a shell command line rather than an
+  // executable, and its leading token can be quoted, wrapped (`env node`, `FOO=1 node`)
+  // or reached through `sh -c`, so no parse of it is trustworthy -- each of those three
+  // forms was measured starting an unpreloaded child that then spawned a detached
+  // grandchild. Propagate unconditionally for them. A child that is not Node ignores
+  // NODE_OPTIONS, which makes the fail-closed choice the cheap one here.
+  // For the remaining direct APIs, argv[0] is a real executable path, so only rewrite a
+  // known Node executable; those ordinary child processes retain their exact
+  // caller-supplied options and environment. That guarantee no longer holds for exec
+  // and execSync, which now always receive a NODE_OPTIONS entry.
+  const takesCommandLine = name === "exec" || name === "execSync";
+  if (name !== "fork" && !takesCommandLine && !isNodeExecutable(arguments_[0])) return arguments_;
   const index = optionsIndex(name, arguments_);
   const options = index === undefined ? {} : object(arguments_[index]) ?? {};
   const environment = object(options.env) ?? process.env;
@@ -105,7 +125,7 @@ function propagatePolicyToNodeChild(name, arguments_) {
     // bootstrap creates the recorded detached process group. It must start
     // without this test-controller preload; every Node child it later owns is
     // governed by that fresh controller boundary instead.
-    env: taskEntrypointArguments(arguments_)
+    env: taskEntrypointArguments(name, arguments_)
       ? environmentWithoutPolicy(environment)
       : { ...environment, NODE_OPTIONS: nodeOptionsWithPolicy(environment.NODE_OPTIONS) },
   };
@@ -138,23 +158,34 @@ function rejectDetached(name, arguments_) {
     error.code = "TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN";
     throw error;
   }
-  if (inheritsStdio(options?.stdio)) {
+  if (inheritsStdioForCall(name, options)) {
     const error = new Error("TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN");
     error.code = "TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN";
     throw error;
   }
 }
 
-// The string form is only the shorthand. `stdio: ["inherit", "inherit", "inherit"]`,
-// `[0, 1, 2]`, and an array carrying the parent's own streams all hand the child the
-// same descriptors, so matching the shorthand alone left the guarantee open to a
-// caller who simply spelled it the long way.
+// An allowlist, not a denylist. Enumerating the inheriting spellings is unbounded:
+// besides "inherit", [0,1,2] and the parent's own stream objects, any descriptor number
+// above 2 can be a dup of the controller's output (measured: ["ignore", fd, "ignore"]
+// with fd from openSync was admitted). Only these entries are known not to hand the
+// child a descriptor of ours; everything else is refused.
+const nonInheritingStdio = new Set(["pipe", "ignore", "overlapped", "ipc", null, undefined]);
+
 function inheritsStdio(stdio) {
-  if (stdio === "inherit") return true;
-  if (!Array.isArray(stdio)) return false;
-  return stdio.some((entry) => entry === "inherit" ||
-    (typeof entry === "number" && entry >= 0 && entry <= 2) ||
-    entry === process.stdin || entry === process.stdout || entry === process.stderr);
+  if (stdio === undefined || stdio === null) return false;
+  if (Array.isArray(stdio)) return stdio.some((entry) => !nonInheritingStdio.has(entry));
+  return !nonInheritingStdio.has(stdio);
+}
+
+// fork resolves a missing stdio to ['inherit','inherit','inherit','ipc'] *inside* Node,
+// after this policy has inspected the caller's options, so an absent stdio reads as
+// non-inheriting while the child actually writes to the controller's stderr (measured:
+// bare `fork(path)` was admitted and its output appeared on our stderr). `silent: true`
+// is the documented way to ask for pipes, so only a falsy silent inherits.
+function inheritsStdioForCall(name, options) {
+  if (name === "fork" && options?.stdio === undefined && !options?.silent) return true;
+  return inheritsStdio(options?.stdio);
 }
 
 // execSync and execFileSync were absent from this list, so they spawned children under

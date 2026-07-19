@@ -2817,6 +2817,163 @@ test("the controller child policy normalizes every supported undefined optional-
   ]);
 });
 
+test("the controller child policy admits only the enumerated non-inheriting stdio forms", () => {
+  const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
+  // A denylist cannot enumerate the inheriting spellings: any descriptor number above 2
+  // may be a dup of the controller's own output, and an unrecognized entry is unknown
+  // rather than safe. Only the allowlisted entries may pass.
+  const source = [
+    'import { spawnSync } from "node:child_process";',
+    'import { openSync } from "node:fs";',
+    'const duplicated = openSync("/dev/null", "w");',
+    'const refused = [',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: "inherit" }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: ["inherit", "inherit", "inherit"] }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: [0, 1, 2] }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: ["ignore", "inherit", "ignore"] }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: ["ignore", process.stdout, process.stderr] }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: ["ignore", duplicated, "ignore"] }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: ["ignore", "bogus", "ignore"] }),',
+    '];',
+    'const admitted = [',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: "pipe" }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: "ignore" }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: ["ignore", "pipe", "pipe"] }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: ["ignore", "ignore", "ignore"] }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: ["pipe", "pipe", "pipe"] }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], { stdio: [null, null, null] }),',
+    '  () => spawnSync(process.execPath, ["--eval", ""], {}),',
+    '];',
+    'const refusedCodes = refused.map((attempt) => { try { attempt(); return "escaped"; } catch (error) { return error.code; } });',
+    'const admittedCodes = admitted.map((attempt) => { try { attempt(); return "admitted"; } catch (error) { return `refused:${error.code}`; } });',
+    'process.stdout.write(JSON.stringify({ refusedCodes, admittedCodes }));',
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.deepEqual(JSON.parse(result.stdout), {
+    refusedCodes: Array(7).fill("TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN"),
+    admittedCodes: Array(7).fill("admitted"),
+  });
+});
+
+test("the controller child policy refuses a fork that inherits through its default silent option", () => {
+  const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
+  // Node resolves a missing fork stdio to ['inherit','inherit','inherit','ipc'] inside
+  // fork itself, after this policy has read the caller's options, so the absent stdio
+  // read as non-inheriting while the child wrote to the controller's stderr.
+  const source = [
+    'import { fork } from "node:child_process";',
+    'const attempts = [',
+    '  ["refused", () => fork("ignored.mjs")],',
+    '  ["refused", () => fork("ignored.mjs", [])],',
+    '  ["refused", () => fork("ignored.mjs", { silent: false })],',
+    '  ["refused", () => fork("ignored.mjs", [], { silent: false })],',
+    '  ["admitted", () => fork("ignored.mjs", { silent: true, stdio: undefined })],',
+    '  ["admitted", () => fork("ignored.mjs", [], { stdio: ["ignore", "pipe", "pipe", "ipc"] })],',
+    '];',
+    'const codes = attempts.map(([expectation, attempt]) => {',
+    '  let child;',
+    '  try { child = attempt(); } catch (error) { return error.code === "TEST_CONTROLLER_INHERITED_STDIO_FORBIDDEN" ? "refused" : `unexpected:${error.code}`; }',
+    '  try { child.kill(); } catch { /* the escape is the finding, not the cleanup */ }',
+    '  return expectation === "admitted" ? "admitted" : "escaped";',
+    '});',
+    'process.stdout.write(JSON.stringify(codes));',
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), ["refused", "refused", "refused", "refused", "admitted", "admitted"]);
+});
+
+test("the controller child policy propagates through exec command lines no parse could classify", async (context) => {
+  const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
+  const root = await mkdtemp(join(tmpdir(), "tcrn-exec-policy-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  // The leading token of a command line may be quoted, wrapped in `env`, preceded by a
+  // variable assignment, or hidden behind `sh -c`. Each of those was measured starting
+  // an unpreloaded child that then spawned a detached grandchild, so the only sound
+  // policy is to propagate unconditionally rather than to parse.
+  const grandchild = resolve(root, "grandchild.mjs");
+  await writeFile(grandchild, [
+    'import { spawn } from "node:child_process";',
+    'try { const child = spawn(process.execPath, ["--eval", ""], { detached: true, stdio: "ignore" }); child.unref(); process.stdout.write("DETACH-ESCAPED"); }',
+    'catch (error) { process.stdout.write(error.code ?? "unexpected"); }',
+    "",
+  ].join("\n"), { mode: 0o600 });
+  const source = [
+    'import { exec, execSync } from "node:child_process";',
+    `const grandchild = ${JSON.stringify(grandchild)};`,
+    'const environment = { PATH: process.env.PATH };',
+    'const commandLines = [',
+    '  `${process.execPath} ${grandchild}`,',
+    '  `node ${grandchild}`,',
+    '  `env node ${grandchild}`,',
+    '  `FOO=1 node ${grandchild}`,',
+    '  `sh -c \'node ${grandchild}\'`,',
+    '];',
+    'const asynchronous = await Promise.all(commandLines.map((commandLine) => new Promise((resolveOutcome) => {',
+    '  exec(commandLine, { env: environment }, (error, stdout) => resolveOutcome(stdout.trim() || `error:${error && error.code}`));',
+    '})));',
+    'const synchronous = commandLines.map((commandLine) => {',
+    '  try { return execSync(commandLine, { env: environment, encoding: "utf8" }).trim(); }',
+    '  catch (error) { return `error:${error.code}`; }',
+    '});',
+    'process.stdout.write(JSON.stringify({ asynchronous, synchronous }));',
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const refusals = Array(5).fill("TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN");
+  assert.deepEqual(JSON.parse(result.stdout), { asynchronous: refusals, synchronous: refusals });
+});
+
+test("the task entrypoint exemption is anchored on the path segment, not a leading slash", async (context) => {
+  const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
+  const root = await mkdtemp(join(tmpdir(), "tcrn-task-exemption-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  // task.mjs is the separately governed entrypoint and must start unpreloaded; its own
+  // bootstrap spawns the recorded detached group, which this policy refuses. Requiring
+  // a literal leading slash missed the bare relative form, so the governed entrypoint
+  // received the preload. A lookalike segment must still not be exempted.
+  await mkdir(resolve(root, "scripts"));
+  await mkdir(resolve(root, "other-scripts"));
+  // The reporter must test for THIS POLICY in NODE_OPTIONS, not for NODE_OPTIONS being
+  // defined at all. Under `pnpm test` the suite already runs with
+  // NODE_OPTIONS=--import=<no-network guard> (scripts/task.mjs:423), so a child that was
+  // correctly exempted still has a defined NODE_OPTIONS carrying the offline guard. A
+  // definedness check reported every exempted child as "preloaded" and only passed when
+  // this file was run standalone with an empty environment.
+  const reporter = 'process.stdout.write((process.env.NODE_OPTIONS ?? "").includes("test-controller-child-policy") ? "preloaded" : "unpreloaded");\n';
+  await writeFile(resolve(root, "scripts/task.mjs"), reporter, { mode: 0o600 });
+  await writeFile(resolve(root, "other-scripts/task.mjs"), reporter, { mode: 0o600 });
+  const source = [
+    'import { execSync, spawnSync } from "node:child_process";',
+    `const root = ${JSON.stringify(root)};`,
+    'const read = (result) => (result.stdout ?? "").toString().trim() || `error:${result.status}`;',
+    'const direct = (script) => read(spawnSync(process.execPath, [script], { cwd: root, encoding: "utf8" }));',
+    'const shell = (commandLine) => { try { return execSync(commandLine, { cwd: root, encoding: "utf8" }).trim(); } catch (error) { return `error:${error.code}`; } };',
+    'process.stdout.write(JSON.stringify({',
+    '  directAbsolute: direct(`${root}/scripts/task.mjs`),',
+    '  directDotSlash: direct("./scripts/task.mjs"),',
+    '  directBareRelative: direct("scripts/task.mjs"),',
+    '  directLookalike: direct("other-scripts/task.mjs"),',
+    '  execAbsolute: shell(`${process.execPath} ${root}/scripts/task.mjs`),',
+    '  execBareRelative: shell(`${process.execPath} scripts/task.mjs`),',
+    '  execLookalike: shell(`${process.execPath} other-scripts/task.mjs`),',
+    '}));',
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    directAbsolute: "unpreloaded",
+    directDotSlash: "unpreloaded",
+    directBareRelative: "unpreloaded",
+    directLookalike: "preloaded",
+    execAbsolute: "unpreloaded",
+    execBareRelative: "unpreloaded",
+    execLookalike: "preloaded",
+  });
+});
+
 test("the controller child policy propagates to a Node relay even when it supplies an empty environment", () => {
   const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
   const relay = [
