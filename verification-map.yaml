@@ -273,7 +273,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "3c675471368ef578e0df3bf7717922358baa6e1581f8c8d7082f8f2fa397efdd",
+      "fixtureDigest": "411cf0592d1b846a2dcf148a5db8c116a250bd8003b8fc00532d8a7706df6529",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
