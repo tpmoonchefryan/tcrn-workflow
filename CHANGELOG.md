@@ -86,8 +86,25 @@ Versioning after the first accepted release.
 - `lease-recovery-break` and recovery-claim reporting in `lease-inspect` build the
   operator path `file-engine-v1.md` already promised; that spec clause is narrowed
   to match what the code now does.
-- `docs/architecture/agent-integration-v1.md` gains a behaviour-delta section: ten
-  observable changes since rc.5, two of which are admissions that used to succeed.
+- A malformed integer flag is now a syntax error naming the flag, not a semantic
+  refusal. `--target-version abc` answered `WORKSPACE_MIGRATION_DOWNGRADE` with the
+  message `"NaN"`; `--expected-revision`, `--stale-days`, and the knowledge
+  `--limit`/`--offset` pair each handed their `NaN` to core and reported whatever
+  judgement came back. All answer `CLI_ARGUMENT_MALFORMED` now. Every value that
+  *is* an integer still reaches core, so no range or downgrade judgement moved —
+  `--target-version 0` and `-1` are still core's call.
+- A supplied-but-empty flag is no longer dropped on the floor. `--limit=` and
+  `--segment-events=` were swallowed by a truthy guard and the verb answered as if
+  the flag had been omitted; they now behave as the `0` they parse to.
+- `work-list --parent-id null` finds the record `work-create --parent-id null`
+  made. `work-create` accepted both sentinel spellings and `work-list` compared
+  against only one, so an agent could create a root work item and never find it
+  again with the identical spelling. That was a silent wrong answer.
+- `docs/architecture/agent-integration-v1.md` gains a behaviour-delta section:
+  seventeen observable changes since rc.5, two of which are admissions that used to
+  succeed, and one of which changes retriability — an authority receipt that grows
+  past its ceiling mid-read now reports a terminal limit code instead of the
+  retriable `*_CHANGED`.
 
 ### Fixed — governance tooling
 
@@ -108,6 +125,14 @@ Versioning after the first accepted release.
   was pinned. All 147 are now fixed, and the `typecheck` gate runs the pinned
   TypeScript 5.9.3 against the repository `tsconfig.json`, failing on any
   diagnostic. No type error is carried as debt.
+- `pnpm push-gate` refuses a push whose version is announced inconsistently. This
+  release cut advanced `package.json` and `FRAMEWORK_VERSION`, which `verify:p8`
+  checks, and left the status badge in all five READMEs reading rc.5, which nothing
+  checked — the gate exists for that class, the consequence of a change rather than
+  the change itself. It runs `verify:p1` and `verify:p8`, treats any warning as a
+  failure, and refuses a push whose version is already tagged at a different commit.
+  It adds no `task.mjs` handler, no `verify:*` script, and no claim, so it is not a
+  new gate under the proof-budget rule.
 
 ### Documentation
 
