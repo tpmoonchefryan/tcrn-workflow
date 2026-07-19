@@ -161,9 +161,16 @@ if (tagged.ok) {
 // 5-6. The gates themselves, in the order the plan fixes: p1 carries the pinned compiler
 //      and the zero-warning rule, p8 carries the release identity and the reproducible
 //      source archive. Both require a clean basis, which check 1 established.
+//
+//      guard-check is here rather than inside verify:p1 on purpose. Each registry entry
+//      costs a build plus a test run, and ten entries measure ~107s; folded into P1 that
+//      would push the wall clock at the 180s escalation trigger which exists to protect
+//      the "run it on every change" discipline. Before a push is the right frequency for
+//      a check that asks whether the proofs still bite.
 for (const [reasonCode, script] of [
   ["PUSH_GATE_P1_FAILED", "verify:p1"],
   ["PUSH_GATE_P8_FAILED", "verify:p8"],
+  ["PUSH_GATE_GUARDS_UNPROVEN", "guard-check"],
 ]) {
   const result = run("pnpm", ["run", "--silent", script]);
   if (!result.ok) fail(reasonCode, result.output.trim().split("\n").slice(-3).join(" | ").slice(0, 300));

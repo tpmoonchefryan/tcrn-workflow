@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "tcrn.guard-registry.v1",
+  "note": "Each entry names a guard and the mutation that removes it. guard-check applies the mutation and requires the named test to go RED. A surviving mutation means the guard has no proof, which is the condition the rc.6 audit found twice and this registry exists to make a machine judgement. expectedMatches is also the drift detector: if a guard gains or loses a site, the count stops matching and the entry fails before the mutation is applied.",
+  "guards": [
+    {
+      "id": "CQ-05-knowledge-limit-arbiter",
+      "rationale": "integerValue is the single arbiter of integer-ness for the knowledge pagination flags. Bare Number() sent NaN into core, which reported a typo as a range refusal.",
+      "file": "packages/cli/src/index.ts",
+      "find": "{ limit: integerValue(values, \"limit\") }",
+      "replace": "{ limit: Number(values.limit) }",
+      "expectedMatches": 2,
+      "test": "tests/p3-cli-read-surface.test.mjs"
+    },
+    {
+      "id": "CQ-05-knowledge-offset-arbiter",
+      "rationale": "Same arbiter on the sibling flag. Held separately because a fix that covered only one of the pair would otherwise pass.",
+      "file": "packages/cli/src/index.ts",
+      "find": "{ offset: integerValue(values, \"offset\") }",
+      "replace": "{ offset: Number(values.offset) }",
+      "expectedMatches": 2,
+      "test": "tests/p3-cli-read-surface.test.mjs"
+    },
+    {
+      "id": "CQ-05-segment-events-supplied-value",
+      "rationale": "A truthy guard cannot tell an empty flag value from an absent one, and swallowed --segment-events= entirely.",
+      "file": "packages/cli/src/index.ts",
+      "find": "values[\"segment-events\"] !== undefined ? { segmentEventLimit: integerValue(values, \"segment-events\") }",
+      "replace": "values[\"segment-events\"] ? { segmentEventLimit: Number(values[\"segment-events\"]) }",
+      "expectedMatches": 1,
+      "test": "tests/p3-cli-read-surface.test.mjs"
+    },
+    {
+      "id": "CQ-05-target-version-arbiter",
+      "rationale": "migration-plan --target-version abc answered WORKSPACE_MIGRATION_DOWNGRADE with the message NaN: a syntax error dressed as a judgement about versions.",
+      "file": "packages/cli/src/index.ts",
+      "find": "integerValue(values, \"target-version\")",
+      "replace": "Number(values[\"target-version\"])",
+      "expectedMatches": 1,
+      "test": "tests/p3-cli-read-surface.test.mjs"
+    },
+    {
+      "id": "CQ-05-expected-revision-arbiter",
+      "rationale": "Same class on the knowledge marker verbs, which reported the NaN as a promotion-version refusal without naming the flag.",
+      "file": "packages/cli/src/index.ts",
+      "find": "expectedRevision: integerValue(values, \"expected-revision\")",
+      "replace": "expectedRevision: Number(values[\"expected-revision\"])",
+      "expectedMatches": 3,
+      "test": "tests/p3-cli-read-surface.test.mjs"
+    },
+    {
+      "id": "CQ-02-codex-governed-action-typeof",
+      "rationale": "includes(String(x)) admits a single-element array, a toString object, and a boxed String onto a legal enum member. This is the site that required an Owner exemption to Constraint 1. The mutation restores the exact pre-fix text from 6cf5c70 rather than simply deleting the typeof check: deleting it leaves governedAction as unknown and the pinned compiler rejects the file, which would prove the compiler bites and say nothing about whether the test does.",
+      "file": "packages/core/src/codex-adapter.ts",
+      "find": "typeof document.governedAction !== \"string\" ||\n    ![\"generate\", \"validate\", \"simulate\"].includes(document.governedAction) ||",
+      "replace": "![\"generate\", \"validate\", \"simulate\"].includes(String(document.governedAction)) ||",
+      "expectedMatches": 1,
+      "test": "tests/p6-codex-adapter.test.mjs"
+    },
+    {
+      "id": "CQ-02-extension-applies-to-typeof",
+      "rationale": "extension-registration appliesTo admitted [[\"work\"],[\"work\"]] through both the membership test and the duplicate test, because Set dedupe is identity-based.",
+      "file": "packages/protocol/src/index.ts",
+      "find": "typeof value !== \"string\" || !allowed.has(value)",
+      "replace": "!allowed.has(String(value))",
+      "expectedMatches": 1,
+      "test": "tests/protocol-v1.test.mjs"
+    },
+    {
+      "id": "CQ-09-enobufs-gate",
+      "rationale": "Batching the privacy scan introduced an explicit maxBuffer, and an overflow there had to stay distinguishable from a command that simply failed. A blanket result.error check would reclassify ENOENT and ETIMEDOUT.",
+      "file": "scripts/lib/local-command.mjs",
+      "find": "result.error?.code === \"ENOBUFS\"",
+      "replace": "false",
+      "expectedMatches": 1,
+      "test": "tests/local-command-byte-fidelity.test.mjs"
+    },
+    {
+      "id": "CQ-01-knowledge-crash-exemption",
+      "rationale": "The mutation claim is released at every non-crash escape. The crash point keeps the claim on purpose, because a real SIGKILL never runs a finally and the retained claim is what marks the store mid-write.",
+      "file": "packages/core/src/knowledge-core.ts",
+      "find": "fail(\"KNOWLEDGE_FAULT_INJECTED\", point);",
+      "replace": "if (point !== point) fail(\"KNOWLEDGE_FAULT_INJECTED\", point);",
+      "expectedMatches": 1,
+      "test": "tests/p4-knowledge-core.test.mjs"
+    },
+    {
+      "id": "R2-NEW-1-recovery-quarantine-prefix",
+      "rationale": "The quarantine name must start with a prefix the residue gate recognises. stale-recovery- matched neither RESIDUE_PREFIX nor .gitignore, so a leaked quarantine file was invisible to the residue gate, entered the backup manifest, and could be committed and shipped to every cloner.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "`released-recovery-${",
+      "replace": "`stale-recovery-${",
+      "expectedMatches": 2,
+      "test": "tests/p3-file-engine.test.mjs"
+    }
+  ]
+}
