@@ -1,22 +1,40 @@
-**English** | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md) | [Français](./README.fr.md)
+<div align="center">
 
 # TCRN Workflow
 
-**A deterministic, offline-first framework for governed AI-agent work — where every capability is a machine-verified claim, not a promise.**
+**Governed delivery for AI agents — where every capability is a machine-verified claim, not a promise.**
 
-`Status: 0.1.0-rc.5 (pre-release candidate)` · `License: Apache-2.0` · `Node 24.16.0` · `pnpm 11.3.0` · `Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
+English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
+
+![status](https://img.shields.io/badge/status-0.1.0--rc.5-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-65-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+
+![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
+
+[Why](#why-this-project-exists) · [Who it is for](#who-this-is-for) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Verification](#verification) · [License](#license)
+
+</div>
 
 ---
 
 ## Why this project exists
 
-AI agents are increasingly asked to *deliver* — plan work, write code, review changes, cut releases. But most agent workflows share three structural weaknesses:
+You can already get an agent to write code. What you cannot easily get is **a reason to believe it did what it says it did.**
 
-1. **Unverifiable claims.** "The agent tested it" usually means a log line, not a proof. There is no machine-checkable link between what a workflow *says* it guarantees and what its code *actually* enforces.
-2. **Non-reproducible state.** Conversation-driven work leaves its history in opaque chat logs and mutable databases. When something goes wrong, there is no deterministic event record to replay, audit, or hand to a reviewer.
-3. **Supply-chain blindness.** Agent skills and workflows are installed from repositories with no release identity, no signature, no anti-rollback floor, and no way to prove the bytes you run are the bytes that were reviewed.
+Three gaps show up in almost every agent workflow:
 
-TCRN Workflow was built to close all three gaps at once. It treats agent-driven delivery with the same rigor as a safety-critical software release: **every capability maps to a stable reason code proven by a hermetic, offline test**, every workspace mutation is an append-only hash-chained event, and every release is an immutable, reproducible, signed artifact set.
+1. **Claims nobody can check.** "The agent tested it" usually means a log line. Nothing connects what a workflow *claims* to guarantee with what its code *actually* enforces, so the guarantee degrades silently as the code changes.
+2. **History you cannot replay.** Conversation-driven work leaves its record in chat logs and mutable state. When something goes wrong at 2am, there is no deterministic event chain to replay, diff, or hand a reviewer.
+3. **Installs made blind.** Skills and workflows arrive from repositories with no release identity and no way to prove the bytes you run are the bytes that were reviewed.
+
+TCRN Workflow closes all three. It treats agent-driven delivery the way a safety-critical release is treated: **every capability maps to a stable reason code proven by a hermetic offline test**, every workspace mutation is an append-only hash-chained event, and every release is reproducible byte-for-byte.
+
+The test of that discipline is blunt — **overclaiming is a build failure, not a style issue.** Change what a claim covers without re-proving it and the chain stops.
+
+## Who this is for
+
+**A good fit if you** run agents on work that has consequences — production code, regulated or audited delivery, multi-agent handoffs where nobody remembers who decided what — and you need an artifact a reviewer can check rather than a transcript they must trust. Also if you want agent work to stay on your machine: no database, no daemon, no network, no telemetry.
+
+**Probably not for you if** you want a chat-based assistant with zero setup, you need cloud sync or a hosted dashboard, or your work is exploratory enough that an append-only audit trail is friction rather than value. The rigor here is not free — it is a deliberate trade for evidence.
 
 ## What you get
 
@@ -31,7 +49,7 @@ TCRN Workflow was built to close all three gaps at once. It treats agent-driven 
 | **Snapshot backup & hermetic restore** | A lease-held `snapshot-manifest` emits a deterministic per-file manifest; the runbook round-trips snapshot → wipe → restore byte-identically at the original path, with the two doctrine failure modes (partial or relocated restore) failing closed. An optional git tier-2 serves as an integrity witness only. |
 | **Dual-host Agent App adapters** | Codex and Claude Code are the two officially supported V1 hosts, sharing byte-identical host-neutral machinery with a proven cross-host parity digest. Both adapters are **inert dry-run candidates by default**: they generate uninstalled template data only, and live host support is reached only through the opt-in, gated activation ladder above. |
 | **Offline-first, privacy-clean** | Development mode enforces a Node process network guard and zero telemetry. The privacy gate scans every tracked byte, all reachable git history, and the release archive for personal identifiers and machine paths. |
-| **Signed release trust** | Releases are bound by tag identity (commit, tree, tag object) and verified externally through an Ed25519 trust-root contract — see the companion `tcrn-workflow-helper` repository. |
+| **Verifiable release trust** | Releases are bound by tag identity (commit, tree, tag object) — git object ids are content hashes, so the binding is self-authenticating. External consumers verify through the companion `tcrn-workflow-helper`, whose bootstrap digest is published independently and whose accepted release digests are compiled into it. |
 
 ## Quick start
 
@@ -90,7 +108,7 @@ flowchart LR
         CX[Codex adapter]
         CL[Claude Code adapter]
     end
-    REL[P8 · reproducible<br/>signed release set]
+    REL[P8 · reproducible<br/>release set]
     Protocols --> Engine --> Layers --> Hosts
     Engine --> REL
     Layers --> REL
@@ -130,7 +148,7 @@ Because claiming live host support before a governed release route has accepted 
 
 ### How is a release trusted?
 
-A release is an immutable annotated tag plus a reproducible artifact set (canonical USTAR source archive, SBOM, manifest, provenance, checksums, notes) rebuilt and byte-compared by `pnpm verify:p8`. External consumers verify through the companion **tcrn-workflow-helper**: an Ed25519-signed release manifest and policy with an anti-rollback epoch floor, validated by a dependency-free bootstrap before any Workflow code runs.
+A release is an immutable annotated tag plus a reproducible artifact set (canonical USTAR source archive, SBOM, provenance, checksums, notes) rebuilt and byte-compared by `pnpm verify:p8`. External consumers verify through the companion **tcrn-workflow-helper**: a dependency-free bootstrap, whose own SHA-256 is published where you can check it independently of the download, refuses any release whose bytes do not match the digests compiled into it — before any Workflow code runs.
 
 ### What do the tests actually prove — in numbers?
 
@@ -179,7 +197,7 @@ Development mode is offline with a process network guard and zero telemetry. The
 - `0.1.0-rc.5` is a **pre-release candidate**. The public API is not yet stable.
 - Both host adapters are inert dry-run candidates; **no live Codex or Claude Code support is asserted**.
 - `supportedAosReleases` is empty: no external AOS compatibility is claimed.
-- Release mode is unavailable unless the external Ed25519 trust verification succeeds.
+- Release mode requires the companion helper to accept the bytes: its bootstrap digest is published independently, and the accepted release digests are compiled into it.
 
 ## Contributing, support, security
 
