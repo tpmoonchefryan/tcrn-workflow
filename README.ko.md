@@ -12,6 +12,9 @@
 
 [왜 만들었나](#why-this-project-exists) · [누구를 위한 것인가](#who-this-is-for) · [무엇을 얻는가](#what-you-get) · [빠른 시작](#quick-start) · [검증](#verification) · [라이선스](#license)
 
+`Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
+
+
 </div>
 
 ---

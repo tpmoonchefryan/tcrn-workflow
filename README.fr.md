@@ -12,6 +12,9 @@
 
 [Pourquoi](#why-this-project-exists) · [Pour qui](#who-this-is-for) · [Ce que vous obtenez](#what-you-get) · [Démarrage rapide](#quick-start) · [Vérification](#verification) · [Licence](#license)
 
+`Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
+
+
 </div>
 
 ---

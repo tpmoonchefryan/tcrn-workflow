@@ -12,6 +12,9 @@
 
 [为什么做这个项目](#why-this-project-exists) · [适合谁用](#who-this-is-for) · [你会得到什么](#what-you-get) · [快速开始](#quick-start) · [验证](#verification) · [许可证](#license)
 
+`Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
+
+
 </div>
 
 ---
