@@ -169,6 +169,7 @@
     "scripts/lib/scoped-strip-types.mjs",
     "scripts/no-network.mjs",
     "scripts/policy/dependency-policy.json",
+    "scripts/policy/failure-pattern-register.json",
     "scripts/policy/guard-registry.json",
     "scripts/policy/history-policy.json",
     "scripts/policy/rc1-inputs.json",

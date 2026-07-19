@@ -133,3 +133,38 @@ code or an admission outcome may need to adjust.
 | `work-list --parent-id null` | `total=0` — the record created by `work-create --parent-id null` was unfindable by the identical spelling | Matches, exactly as `--parent-id -` does | `work-create` accepted both sentinel spellings and `work-list` compared against only one. This was a silent wrong answer, not an inconsistency. |
 | `verifyPrivacy` when the git object stream overflows its buffer | `COMMAND_FAILED` | `COMMAND_OUTPUT_OVERFLOW`, with `PRIVACY_GIT_OBJECT_STREAM_INCOMPLETE` for a short stream | Batching the scan introduced an explicit `maxBuffer`, and an overflow there had to be distinguishable from a command that simply failed. `ENOENT` and `ETIMEDOUT` still report `COMMAND_FAILED`. |
 | `P8_VERSION_MISMATCH`, `P8_ARCHIVE_*`, `P8_CORE_REFERENCE_*` (8 codes) | Emitted by four release helpers | Removed | The helpers were dead — no gate, no script, and no test reached them. No caller could observe these codes, which is why they are listed here as a removal rather than a migration. |
+
+## 8. Two rules for an agent reporting on this repository
+
+These are not style advice. Each was observed twice in this repository's own work, by the
+agents building it, and each survived review the first time because the conclusion it
+supported happened to be correct. They are tracked in
+`scripts/policy/failure-pattern-register.json`, which is a counter rather than an essay:
+one occurrence records, two promote to this section.
+
+**Do not argue from a gate you have not checked.** "The gate is green" is a claim about
+output you have read or a command you have run. Neither the presence of a gate nor its
+absence may be asserted from memory or inferred from a name. The two occurrences: a
+dependency decision was framed as "otherwise there is no visibility at all" without reading
+`vulnerability-policy.json`, which carries `maxAgeDays: 30` and had been forcing a monthly
+review the whole time; and `core-reference-personas.ts` was asserted to be an RC1 normative
+input in order to argue against editing it, when the RC1 input set contains no persona
+entry at all. Both conclusions held. Both arguments were unfounded, and the second one two
+models then reasoned from for a full round.
+
+The reason this is a rule rather than a preference: an unchecked gate cited as evidence is
+indistinguishable, in a transcript, from a checked one. It is the same failure as reading
+"all tests passing" out of an agent's own prose — only the agent doing it is you.
+
+**A scope must be a check, not a paragraph.** When you narrow a guard, relax an invariant,
+or restrict where something may be used, the restriction goes in the code path. A comment
+describing the intended boundary is a description of a boundary that does not exist. The
+two occurrences: `readDependencyManifest` shipped with its `node_modules` scope written as
+a comment and no path constraint in the body — inside the function added to fix a guard
+that had been misapplied for exactly this kind of reason; and a prose register of these
+very patterns was proposed one message after establishing that prose discipline rots, which
+is the same defect one layer up.
+
+The corollary is the one that costs something: if the restriction genuinely cannot be
+expressed as a check, say so where the residual is recorded, and do not let the surrounding
+fix read as though it closed.

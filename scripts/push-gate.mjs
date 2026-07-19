@@ -126,6 +126,41 @@ for (const document of currentVersionDocuments) {
   });
 }
 
+// 2c. The failure-pattern register has to stay data. A register that drifts out of sync
+//     with itself is worse than none: it would be cited as a count when it is no longer
+//     counting. The check is small on purpose -- it does not judge whether a pattern is
+//     real, only that the file still says what it claims to say.
+const registerPath = "scripts/policy/failure-pattern-register.json";
+let register = null;
+try {
+  register = JSON.parse(await read(registerPath));
+} catch (error) {
+  fail("PUSH_GATE_REGISTER_UNPARSEABLE", `${registerPath}: ${error.message.slice(0, 120)}`);
+}
+if (register !== null) {
+  const layers = new Set(Object.keys(register.layers ?? {}));
+  const audiences = new Set(Object.keys(register.audiences ?? {}));
+  for (const pattern of register.patterns ?? []) {
+    const occurrences = Array.isArray(pattern.occurrences) ? pattern.occurrences.length : -1;
+    // The count is the whole point of the file -- promotion is decided by it -- so a count
+    // that disagrees with the list it summarises is the one corruption that matters.
+    if (pattern.occurrenceCount !== occurrences) {
+      fail("PUSH_GATE_REGISTER_COUNT_DRIFTED", `${pattern.id}: declares ${pattern.occurrenceCount}, lists ${occurrences}`);
+    }
+    if (!layers.has(pattern.layer)) fail("PUSH_GATE_REGISTER_LAYER_UNKNOWN", `${pattern.id}: ${pattern.layer}`);
+    if (!audiences.has(pattern.audience)) fail("PUSH_GATE_REGISTER_AUDIENCE_UNKNOWN", `${pattern.id}: ${pattern.audience}`);
+    // A "gated" entry claims something is already machine-judged. If it names no gate, the
+    // register is asserting coverage it cannot point at, which is the pattern the file
+    // itself calls argument-from-unchecked-gate.
+    if (pattern.disposition === "gated" && (typeof pattern.gate !== "string" || pattern.gate === "")) {
+      fail("PUSH_GATE_REGISTER_GATE_UNNAMED", pattern.id);
+    }
+    if (pattern.disposition !== "gated" && pattern.gate !== null) {
+      fail("PUSH_GATE_REGISTER_GATE_UNEXPECTED", `${pattern.id}: ${String(pattern.gate)}`);
+    }
+  }
+}
+
 // 3. The two prose announcements of the version.
 const changelog = await read("CHANGELOG.md");
 if (!new RegExp(`^## ${P8_VERSION.replaceAll(".", "\\.")}\\b`, "mu").test(changelog)) {

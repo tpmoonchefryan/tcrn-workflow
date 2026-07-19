@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "tcrn.failure-pattern-register.v1",
+  "note": "A counter, not an essay. Every pattern here was observed in this repository's own work, and the occurrence list is what decides whether something is a pattern or a single accident. It is data with a gate rather than a document with goodwill, because the alternative was proposed and rejected: a prose register would have re-enacted, one layer up, the exact defect it exists to track -- documented, not enforced.",
+  "layers": {
+    "universal": "A failure any agent doing governed engineering can make. Belongs in a rule.",
+    "host": "A difference between Claude Code and Codex. Belongs in an adapter, not a rule.",
+    "environment": "A difference between two machines running the same code. The answer is a test that constructs the other machine's condition -- never a rule, because a rule cannot make a laptop behave like a runner."
+  },
+  "audiences": {
+    "developer": "Constrains whoever builds this framework. Home is CONTRIBUTING.md, the G gates, push-gate.",
+    "product": "Constrains an agent using this framework. Home is docs/architecture/agent-integration-v1.md."
+  },
+  "promotion": "One occurrence records. Two independent occurrences promote to the audience's rule surface. A pattern that became a gate stops accruing occurrences -- the gate is the stronger statement, and the entry stays as the index of what is already machine-judged.",
+  "patterns": [
+    {
+      "id": "narrower-check-substituted",
+      "statement": "A narrower check is run in place of the required one, with a reason that sounds adequate at the time.",
+      "layer": "universal",
+      "audience": "developer",
+      "disposition": "gated",
+      "gate": "pnpm guard-check + G-4 push-gate full-suite rule",
+      "occurrenceCount": 2,
+      "occurrences": [
+        {
+          "date": "2026-07-19",
+          "evidence": "helper 70aa47e: `pnpm verify` run in place of the suite; artifact validation says nothing about provenance agreeing with IDENTITY. 22 of 72 tests were red inside a tag."
+        },
+        {
+          "date": "2026-07-19",
+          "evidence": "R2 audit: CQ-07 planned +150 proof lines and delivered 0, CQ-09 planned +55 and delivered 0. Reverting either guard reddened nothing."
+        }
+      ]
+    },
+    {
+      "id": "claim-without-execution",
+      "statement": "A guard is landed and its proof is described rather than written, so reverting the guard reddens nothing.",
+      "layer": "universal",
+      "audience": "developer",
+      "disposition": "gated",
+      "gate": "pnpm guard-check",
+      "occurrenceCount": 2,
+      "occurrences": [
+        {
+          "date": "2026-07-19",
+          "evidence": "CQ-02b and CQ-02c shipped product patches with zero tests; the enum guards were unproven until 597d71a."
+        },
+        {
+          "date": "2026-07-19",
+          "evidence": "The correction itself was a discipline in commit messages -- revert each guard, observe red, restore -- which is prose, not a gate. OD-21 exists to close that."
+        }
+      ]
+    },
+    {
+      "id": "argument-from-unchecked-gate",
+      "statement": "A gate is cited as evidence, or its absence assumed, without running it or reading its output.",
+      "layer": "universal",
+      "audience": "product",
+      "disposition": "documented",
+      "gate": null,
+      "occurrenceCount": 2,
+      "occurrences": [
+        {
+          "date": "2026-07-19",
+          "evidence": "The dependabot choice was framed as 'otherwise no npm visibility at all' without checking vulnerability-policy.json, which carries maxAgeDays 30 and already bricked verify:p1 monthly via VULNERABILITY_POLICY_STALE. Conclusion held; the argument for it did not."
+        },
+        {
+          "date": "2026-07-19",
+          "evidence": "core-reference-personas.ts was asserted to be an RC1 normative input to argue against editing it. It is not: zero persona entries among the 59 normativeInputs. Two models then reasoned a full round on that premise."
+        }
+      ]
+    },
+    {
+      "id": "scope-that-lives-only-in-prose",
+      "statement": "A boundary is stated in a comment or a document and enforced by nothing.",
+      "layer": "universal",
+      "audience": "product",
+      "disposition": "documented",
+      "gate": null,
+      "occurrenceCount": 2,
+      "occurrences": [
+        {
+          "date": "2026-07-19",
+          "evidence": "readDependencyManifest shipped with its node_modules scope written as a comment and zero path constraint in the body -- inside the function added to fix a misapplied guard. Closed by DEPENDENCY_MANIFEST_OUTSIDE_TREE and guard registry entry 12."
+        },
+        {
+          "date": "2026-07-19",
+          "evidence": "A markdown failure register was proposed in the same breath as 'prose discipline rots', which is this pattern at the meta level. It became this file instead."
+        }
+      ]
+    },
+    {
+      "id": "invariant-applied-outside-its-domain",
+      "statement": "A rule that is correct for one class of object is asserted against a different class that never promised it.",
+      "layer": "universal",
+      "audience": "developer",
+      "disposition": "gated",
+      "gate": "guard registry entries CI-hardlink-scope-of-source-reader, CI-dependency-manifest-scope",
+      "occurrenceCount": 1,
+      "occurrences": [
+        {
+          "date": "2026-07-19",
+          "evidence": "readSourceFile's nlink === 1 assertion, correct for tracked source, applied to node_modules/typescript/package.json. pnpm's store hardlinks by design, and node_modules is in excludedDirectories precisely because the source walk must never enter it."
+        }
+      ]
+    },
+    {
+      "id": "self-report-taken-as-evidence",
+      "statement": "A claim made by the thing being evaluated is accepted without independent confirmation.",
+      "layer": "universal",
+      "audience": "product",
+      "disposition": "open",
+      "gate": null,
+      "occurrenceCount": 2,
+      "occurrences": [
+        {
+          "date": "2026-07-19",
+          "evidence": "ajv 8.20.0 was recommended on the strength of a changelog headline naming a prototype pollution fix. Checking reachability showed the vector needs `format` with a $data reference and this repository uses neither."
+        },
+        {
+          "date": "2026-07-19",
+          "evidence": "The action bump SHAs were about to be taken from the Dependabot branches that wanted to change them; they were instead resolved against the upstream v7.0.0 tags."
+        }
+      ]
+    },
+    {
+      "id": "confirmed-residual-left-unregistered",
+      "statement": "A gap is identified in passing, correctly, and then recorded nowhere -- so the surrounding fix reads as though it closed.",
+      "layer": "universal",
+      "audience": "developer",
+      "disposition": "documented",
+      "gate": null,
+      "occurrenceCount": 1,
+      "occurrences": [
+        {
+          "date": "2026-07-19",
+          "evidence": "0a8bfeb named the old guard incoherent for asserting nlink on typescript's package.json while executing lib/tsc.js unchecked, fixed the manifest half, and registered the execution half nowhere. Now in the architecture handoff section 3c."
+        }
+      ]
+    },
+    {
+      "id": "environment-difference-mistaken-for-code",
+      "statement": "A check passes on one machine and fails on another, and the difference is treated as a rule to write rather than a condition to construct in a test.",
+      "layer": "environment",
+      "audience": "developer",
+      "disposition": "gated",
+      "gate": "tests/io-boundaries.test.mjs (link() constructs the runner's condition)",
+      "occurrenceCount": 1,
+      "occurrences": [
+        {
+          "date": "2026-07-19",
+          "evidence": "SOURCE_HARDLINK was green locally and red on every runner because a cross-filesystem pnpm store copies instead of linking. The answer was a test calling link() to build the runner's nlink, not a rule about runners."
+        }
+      ]
+    }
+  ]
+}
