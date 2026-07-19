@@ -98,15 +98,27 @@ const releaseNote = await read(`docs/releases/${P8_VERSION}.md`).catch(() => nul
 if (releaseNote === null) fail("PUSH_GATE_RELEASE_NOTE_MISSING", `docs/releases/${P8_VERSION}.md`);
 else if (!releaseNote.includes(P8_VERSION)) fail("PUSH_GATE_RELEASE_NOTE_UNVERSIONED", `docs/releases/${P8_VERSION}.md`);
 
-// 4. A tag names bytes. If this version is already tagged, the tag must name the bytes
-//    being pushed -- otherwise the push either contradicts a published tag or is about to
-//    be tagged over one.
+// 4. A tag names bytes, permanently. If this version is already tagged, HEAD must be that
+//    commit or a descendant of it.
+//
+//    The first draft of this check demanded HEAD *equal* the tag, and it blocked the first
+//    documentation fix landed after the release -- correctly refusing, for the wrong
+//    reason. A tag marks a release; the branch goes on past it. What must never happen is
+//    a push that contradicts a published tag: a HEAD on a different line of history, which
+//    means the tag is about to be moved or has already been rewritten underneath. That is
+//    an ancestry test, not equality.
+//
+//    Downstream makes the stakes concrete. The helper repository pins this one by commit,
+//    tree, AND annotated tag object, so a moved tag does not merely confuse a reader -- it
+//    invalidates another repository's compiled-in identity.
+//
+//    This check never proved a tag names *judged* bytes. Running the suites below before
+//    every push is what does that; this proves only that the tag is not being contradicted.
 const tag = `v${P8_VERSION}`;
 const tagged = run("git", ["rev-list", "-n", "1", tag]);
 if (tagged.ok) {
-  const head = run("git", ["rev-parse", "HEAD"]);
-  if (!head.ok) fail("PUSH_GATE_GIT_UNAVAILABLE", "HEAD");
-  else if (head.output.trim() !== tagged.output.trim()) fail("PUSH_GATE_TAG_DISAGREES_WITH_HEAD", `${tag} -> ${tagged.output.trim().slice(0, 12)}, HEAD ${head.output.trim().slice(0, 12)}`);
+  const descends = run("git", ["merge-base", "--is-ancestor", tagged.output.trim(), "HEAD"]);
+  if (!descends.ok) fail("PUSH_GATE_HEAD_CONTRADICTS_TAG", `HEAD does not descend from ${tag} (${tagged.output.trim().slice(0, 12)})`);
 }
 
 // 5-6. The gates themselves, in the order the plan fixes: p1 carries the pinned compiler
