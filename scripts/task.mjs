@@ -10,6 +10,7 @@ import { spawn } from "node:child_process";
 import {
   fileRecord,
   repositoryRoot,
+  readDependencyManifest,
   readJson,
   readSourceFile,
   toPosixPath,
@@ -317,7 +318,7 @@ async function runTypecheck() {
   const manifest = await readJson(resolve(repositoryRoot, "package.json"));
   const pinnedVersion = manifest.devDependencies?.typescript ?? "";
   assertion(/^\d+\.\d+\.\d+$/u.test(pinnedVersion), "TYPECHECK_COMPILER_NOT_PINNED", pinnedVersion);
-  const compilerPackage = await readJson(resolve(repositoryRoot, "node_modules/typescript/package.json"));
+  const compilerPackage = await readDependencyManifest(resolve(repositoryRoot, "node_modules/typescript/package.json"));
   assertion(
     compilerPackage.version === pinnedVersion,
     "TYPECHECK_COMPILER_VERSION_MISMATCH",

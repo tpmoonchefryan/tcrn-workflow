@@ -14,7 +14,7 @@ import {
   safeWriteOutput,
   withExclusiveOutputSession,
 } from "../scripts/lib/safe-io.mjs";
-import { fileRecord, fileRecordMemoEntriesForTest, walkFiles } from "../scripts/lib/files.mjs";
+import { fileRecord, fileRecordMemoEntriesForTest, readDependencyManifest, walkFiles } from "../scripts/lib/files.mjs";
 
 test("bound reads reject source hardlinks", async (context) => {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), "tcrn-source-link-")));
@@ -151,4 +151,38 @@ test("source read errors fail closed", async (context) => {
   await writeFile(path, "private\n");
   await chmod(path, 0o000);
   await assert.rejects(walkFiles(temporary), (error) => error.reasonCode === "SOURCE_FILE_INVALID");
+});
+
+// The CI failure this pins was mine. Pinning a real TypeScript compiler made
+// verify:p1 read node_modules/typescript/package.json through readSourceFile, which
+// asserts nlink === 1. pnpm's store is content-addressable and hardlinks into
+// node_modules, so every CI runner failed SOURCE_HARDLINK in 20 seconds while my machine
+// stayed green -- a cross-filesystem pnpm store copies instead of linking, so the local
+// nlink was 1. The environment difference hid a category error: node_modules is in
+// excludedDirectories precisely because the source walk must never enter it.
+test("dependency manifests may be hardlinked; tracked source still may not", async (context) => {
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), "tcrn-dep-link-")));
+  context.after(() => rm(temporary, { recursive: true, force: true }));
+  const manifest = resolve(temporary, "package.json");
+  await writeFile(manifest, JSON.stringify({ version: "5.9.3" }));
+  // Reproduce the store layout: a second link to the same inode, which is what pnpm
+  // leaves behind and what the runner actually had.
+  await link(manifest, resolve(temporary, "store-copy.json"));
+
+  const parsed = await readDependencyManifest(manifest);
+  assert.equal(parsed.version, "5.9.3", "a hardlinked dependency manifest must be readable");
+
+  // The same bytes through the source reader must still be refused. The relaxation is
+  // scoped to a caller that names it, not a weakening of the source boundary -- if this
+  // assertion ever goes green, the guard has been dropped rather than scoped.
+  await assert.rejects(
+    readBoundRegularFile(manifest, { reasonCode: "SOURCE_FILE_INVALID", hardlinkReasonCode: "SOURCE_HARDLINK" }),
+    (error) => error.reasonCode === "SOURCE_HARDLINK",
+  );
+
+  // A symlink is still refused with hardlinks allowed: the relaxation drops the link
+  // COUNT, not the file-type guard that keeps a read from following a pointer elsewhere.
+  const pointer = resolve(temporary, "pointer.json");
+  await symlink(manifest, pointer);
+  await assert.rejects(readDependencyManifest(pointer), (error) => error.reasonCode === "DEPENDENCY_MANIFEST_INVALID");
 });

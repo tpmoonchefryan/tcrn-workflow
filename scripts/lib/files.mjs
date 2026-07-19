@@ -161,3 +161,20 @@ export async function readSourceFile(path) {
     pathChangedReasonCode: "SOURCE_PATH_CHANGED",
   })).content;
 }
+
+// For a manifest inside a package manager's tree, which this repository does not own.
+// `node_modules` is in excludedDirectories above precisely because the source walk must
+// never enter it, so pointing readSourceFile at a path under it was always a category
+// error: it asserts nlink === 1 against a content-addressable store that hardlinks by
+// design. It passed locally only because a cross-filesystem pnpm store copies instead,
+// and failed on every CI runner. The guard it dropped also bought nothing coherent --
+// the same commit asserted nlink on typescript's package.json while executing
+// lib/tsc.js from that same package with no check at all.
+export async function readDependencyManifest(path) {
+  const content = (await readBoundRegularFile(path, {
+    reasonCode: "DEPENDENCY_MANIFEST_INVALID",
+    pathChangedReasonCode: "DEPENDENCY_MANIFEST_CHANGED",
+    allowHardlinks: true,
+  })).content;
+  return JSON.parse(content.toString("utf8"));
+}
