@@ -32,6 +32,16 @@ digests. A checkpoint used for fallback delta or
 reconciliation must match instance/data epoch and meet the policy-version
 floor. External-effect identifiers are unique.
 
+Because the Workflow-owned and AOS-owned field sets are disjoint, a plan's
+`conflicts` list is normatively always empty, for every operation including
+`conflict_plan`. The field is retained as the witness of that guarantee and is
+part of the canonical plan bytes; it is not a reporting channel. An overlap
+between the two sets is a manifest violation, not a plan outcome, and is
+refused unconditionally with `COMPATIBILITY_FIELD_OWNERSHIP_CONFLICT` rather
+than being reported in `conflicts`. The `conflict_plan` operation and the
+`conflicts_planned` state remain reachable: the state is derived from the
+requested operation, not from `conflicts`, and neither may be removed.
+
 The live state-changing surfaces `aos_primary`, `fallback_activation`,
 `import_apply` and `reconciliation_apply` return exactly
 `capability_unavailable_until_mutual_release`. P7-B has an empty supported-AOS
