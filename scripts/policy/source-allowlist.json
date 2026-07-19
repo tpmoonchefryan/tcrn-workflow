@@ -172,6 +172,7 @@
     "scripts/policy/rc1-inputs.json",
     "scripts/policy/source-allowlist.json",
     "scripts/policy/vulnerability-policy.json",
+    "scripts/push-gate.mjs",
     "scripts/regen-rc1-inputs.mjs",
     "scripts/task.mjs",
     "scripts/tcrn-workflow.mjs",
