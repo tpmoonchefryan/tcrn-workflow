@@ -160,6 +160,7 @@ export {
   exportKnowledgeCheckpoint,
   initializeKnowledgeStore,
   knowledgeContextCandidates,
+  knowledgeLinkIndexCountsForTest,
   listKnowledgeMetadata,
   readKnowledgeBody,
   readKnowledgeSnippet,

@@ -26,6 +26,7 @@ import {
   KnowledgeCoreError,
   acquireWorkspaceLease,
   createKnowledgeUnit,
+  knowledgeLinkIndexCountsForTest,
   createProject,
   createWork,
   deleteWork,
@@ -1192,6 +1193,120 @@ test("WSC-7: knowledge metadata maps to digest-valid context-metadata candidates
     const cli = JSON.parse(output);
     assert.equal(cli.reasonCode, "KNOWLEDGE_LIST_READY");
     assert.deepEqual(cli.candidates, JSON.parse(canonicalJson(result.candidates)));
+  } finally {
+    await fixture.close();
+  }
+});
+
+// CQ-02c. `scope` was the one enum in this header still admitted through a coercing
+// membership test, two lines above `category`, which was already written correctly. A
+// caller of the programmatic createKnowledgeUnit API passes `scope` straight through to
+// the persisted metadata (knowledge-core.ts:941), so a coercible value was written to disk
+// in a field the exported type declares as an enum.
+test("CQ-02c: knowledge metadata scope refuses values that only coerce to a member", async () => {
+  const fixture = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-SCOPE-COERCION" });
+  try {
+    const vectors = [
+      ["single-element array", ["project"]],
+      ["plain object with toString", { toString: () => "project" }],
+      ["boxed String", new String("project")],
+      // Regression anchors only -- already refused before the guard existed.
+      ["anchor number", 1],
+      ["anchor null", null],
+      ["anchor plain object", {}],
+    ];
+    for (const [label, scope] of vectors) {
+      await assert.rejects(
+        // The override is applied AFTER unitInput, whose `options.scope ?? "project"`
+        // would otherwise silently substitute a legal value for the null anchor.
+        () => createKnowledgeUnit(fixture.workspace, { ...unitInput(fixture, `SCOPE-${label.replace(/[^A-Za-z]/gu, "").toUpperCase()}`), scope }),
+        (error) => {
+          assert.equal(error?.reasonCode, "KNOWLEDGE_RECORD_INVALID", `${label}: got ${error?.reasonCode}`);
+          return true;
+        },
+        label,
+      );
+    }
+    // The guard must not have closed the legal values. Each scope carries its own link
+    // shape: workspace scope admits no project or work links, role scope carries role
+    // scopes. Rejected creates do not advance the store version, so the successful ones
+    // number from zero.
+    const legalScopes = [
+      ["workspace", { projectId: null, roleScopes: [], linkedWorkIds: [] }],
+      ["project", { projectId: fixture.projectId, roleScopes: [] }],
+      ["role", { projectId: fixture.projectId, roleScopes: ["reviewer"] }],
+    ];
+    for (const [index, [scope, shape]] of legalScopes.entries()) {
+      const created = await createKnowledgeUnit(fixture.workspace, {
+        ...unitInput(fixture, `SCOPE-OK-${scope.toUpperCase()}`, { ...shape, expectedVersion: index }),
+        scope,
+      });
+      assert.equal(created.reasonCode, "KNOWLEDGE_UNIT_CREATED", scope);
+    }
+    // Read the scopes back off disk: the create result does not carry `scope`, so this is
+    // what actually shows the legal values survived the guard as strings.
+    const listed = await listKnowledgeMetadata(fixture.workspace, { at: instant(12), selection: "all" });
+    const persisted = listed.records.filter((record) => record.externalKey.startsWith("SCOPE-OK-"));
+    assert.deepEqual(persisted.map((record) => record.scope).sort(), ["project", "role", "workspace"]);
+    for (const record of persisted) assert.equal(typeof record.scope, "string");
+  } finally {
+    await fixture.close();
+  }
+});
+
+// CQ-10, knowledge-core half. Link liveness ran `workspace.projects.find` once per record
+// and `workspace.work.find` once per linked work id, so a scan of R records paid R linear
+// passes over the workspace. The lookups are now served by maps memoized on the workspace
+// state. Per the plan's acceptance criterion 3 this is asserted as a DETERMINISTIC COUNT,
+// not as a timing, because a timing assertion is noise on a shared machine and a
+// performance regression is invisible to every other gate.
+test("CQ-10: knowledge link liveness builds one index per workspace state, not one per record", async () => {
+  const fixture = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-LINK-INDEX" });
+  try {
+    const recordCount = 6;
+    for (let index = 0; index < recordCount; index += 1) {
+      await createKnowledgeUnit(fixture.workspace, unitInput(fixture, `LINK-INDEX-${index}`, { expectedVersion: index }));
+    }
+    const before = knowledgeLinkIndexCountsForTest();
+    const listed = await listKnowledgeMetadata(fixture.workspace, { at: instant(12), selection: "all" });
+    const scanned = listed.records.filter((record) => record.externalKey.startsWith("LINK-INDEX-"));
+    assert.equal(scanned.length, recordCount, "the fixture must actually exercise multiple records");
+    const after = knowledgeLinkIndexCountsForTest();
+    const builds = after.builds - before.builds;
+    const lookups = after.lookups - before.lookups;
+    // Builds are bounded by the number of materialized workspace states the read path
+    // walks, NOT by the number of records. A per-record rebuild shows up here as >= 6.
+    assert.ok(builds < recordCount, `link index built ${builds} times for ${recordCount} records`);
+    // And the index must actually be the thing answering the lookups. Without this, a call
+    // site reverted to `workspace.*.find` would leave the build count untouched and this
+    // test would pass with the defect fully reintroduced.
+    assert.ok(lookups >= recordCount, `link index served only ${lookups} lookups for ${recordCount} records`);
+  } finally {
+    await fixture.close();
+  }
+});
+
+// The index replaces `find`. This pins the lookup-miss behaviours: an id that is absent
+// from the index must still be refused, for both the project and the linked-work lookup.
+//
+// Two related properties are deliberately NOT claimed here, to keep this test honest about
+// what it proves. (1) Tombstone exclusion is already pinned by the existing WSC-2 rebase
+// test at :222 -- dropping `!entry.tombstone` from the index builder reddens that test, so
+// re-asserting it here would add proof mass without adding coverage. (2) The builder is
+// first-wins to match `find`, but a materialized workspace has unique record ids, so no
+// test can distinguish first-wins from last-wins; that choice rests on review, not proof.
+test("CQ-10: the link index still refuses links that are absent from the workspace", async () => {
+  const fixture = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-LINK-SEMANTICS" });
+  try {
+    await expectReason("KNOWLEDGE_LINK_INVALID", () => createKnowledgeUnit(fixture.workspace, unitInput(fixture, "LINK-UNKNOWN-WORK", {
+      linkedWorkIds: [deriveStableId("work", "NO-SUCH-WORK")],
+    })));
+    await expectReason("KNOWLEDGE_LINK_INVALID", () => createKnowledgeUnit(fixture.workspace, unitInput(fixture, "LINK-UNKNOWN-PROJECT", {
+      projectId: deriveStableId("project", "NO-SUCH-PROJECT"),
+    })));
+    // The live link still resolves.
+    const created = await createKnowledgeUnit(fixture.workspace, unitInput(fixture, "LINK-LIVE"));
+    assert.equal(created.reasonCode, "KNOWLEDGE_UNIT_CREATED");
   } finally {
     await fixture.close();
   }

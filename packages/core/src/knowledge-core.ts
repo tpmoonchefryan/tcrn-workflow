@@ -26,10 +26,10 @@ import {
   parseStrictInstant,
   validateKnowledgeRecord,
 } from "../../protocol/src/index.js";
-import type { JsonValue, KnowledgeRecord } from "../../protocol/src/index.js";
+import type { JsonValue, KnowledgeRecord, WorkRecord } from "../../protocol/src/index.js";
 import { redactArtifactReference } from "./artifact-lifecycle.js";
 import { materializeWorkspace } from "./workspace.js";
-import type { WorkspaceState } from "./workspace.js";
+import type { ProjectRecord, WorkspaceState } from "./workspace.js";
 
 export const KNOWLEDGE_CORE_VERSION = "tcrn.knowledge-core.v1" as const;
 export const KNOWLEDGE_STORE_SCHEMA_VERSION = "tcrn.knowledge-store.v1" as const;
@@ -649,11 +649,69 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
   return metadata;
 }
 
+// CQ-10: link liveness used to run `workspace.projects.find` once per record and
+// `workspace.work.find` once per linked work id, so a scan of R records over a workspace
+// of P projects and W work items cost O(R*P + R*L*W) linear scans. The lookups are now
+// served by maps built once per workspace state and memoized on it, which is a constant
+// factor change only -- no reason code, ordering, or result changes.
+//
+// The maps are FIRST-WINS, because they replace `find`, which returns the first match.
+// A last-wins map would silently change which duplicate id a lookup resolves to. No test
+// can distinguish the two -- a materialized workspace has unique record ids -- so this is
+// a review-level choice, not a proven one.
+//
+// The lookups are exposed as functions rather than as the raw maps so that the counters
+// below sit ON the lookup path. A counter that only tallied index BUILDS would stay green
+// if the call sites reverted to `workspace.*.find`, since the index would still be built
+// and then ignored -- that is exactly the empty proof this package exists to avoid.
+interface KnowledgeLinkIndex {
+  readonly liveProject: (id: string) => ProjectRecord | undefined;
+  readonly liveWork: (id: string) => WorkRecord | undefined;
+}
+
+const knowledgeLinkIndexes = new WeakMap<WorkspaceState, KnowledgeLinkIndex>();
+let knowledgeLinkIndexBuilds = 0;
+let knowledgeLinkIndexLookups = 0;
+
+function knowledgeLinkIndexFor(workspace: WorkspaceState): KnowledgeLinkIndex {
+  const cached = knowledgeLinkIndexes.get(workspace);
+  if (cached !== undefined) return cached;
+  knowledgeLinkIndexBuilds += 1;
+  const projects = new Map<string, ProjectRecord>();
+  for (const entry of workspace.projects) {
+    if (!entry.tombstone && !projects.has(entry.id)) projects.set(entry.id, entry);
+  }
+  const work = new Map<string, WorkRecord>();
+  for (const entry of workspace.work) {
+    if (!entry.tombstone && !work.has(entry.id)) work.set(entry.id, entry);
+  }
+  const index: KnowledgeLinkIndex = {
+    liveProject: (id) => {
+      knowledgeLinkIndexLookups += 1;
+      return projects.get(id);
+    },
+    liveWork: (id) => {
+      knowledgeLinkIndexLookups += 1;
+      return work.get(id);
+    },
+  };
+  knowledgeLinkIndexes.set(workspace, index);
+  return index;
+}
+
+// Test seam: the deterministic counts CQ-10 is asserted against, per the plan's acceptance
+// criterion 3 (assert counts, not timings). A per-record linear scan shows up as one build
+// per record; a call site that bypasses the index shows up as zero lookups.
+export function knowledgeLinkIndexCountsForTest(): { readonly builds: number; readonly lookups: number } {
+  return { builds: knowledgeLinkIndexBuilds, lookups: knowledgeLinkIndexLookups };
+}
+
 // WSC-2: scope/project liveness (KNOWLEDGE_LINK_INVALID:scope) and linked-work
 // liveness (KNOWLEDGE_LINK_INVALID:<workId>) — the two checks a rebase tolerates
 // (collecting offenders) and a retired record is durably exempt from.
 function validateMetadataLinks(metadata: KnowledgeUnitMetadata, workspace: WorkspaceState): void {
-  const project = metadata.projectId === null ? undefined : workspace.projects.find((entry) => entry.id === metadata.projectId && !entry.tombstone);
+  const index = knowledgeLinkIndexFor(workspace);
+  const project = metadata.projectId === null ? undefined : index.liveProject(metadata.projectId);
   if ((metadata.scope === "workspace" && (metadata.projectId !== null || metadata.roleScopes.length !== 0)) ||
     (metadata.scope === "project" && (!project || metadata.roleScopes.length !== 0)) ||
     (metadata.scope === "role" && metadata.roleScopes.length === 0) ||
@@ -661,7 +719,7 @@ function validateMetadataLinks(metadata: KnowledgeUnitMetadata, workspace: Works
     fail("KNOWLEDGE_LINK_INVALID", `${metadata.id}:scope`);
   }
   for (const workId of metadata.linkedWorkIds) {
-    const work = workspace.work.find((entry) => entry.id === workId && !entry.tombstone);
+    const work = index.liveWork(workId);
     if (!work || metadata.projectId === null || work.projectId !== metadata.projectId) {
       fail("KNOWLEDGE_LINK_INVALID", `${metadata.id}:${workId}`);
     }
