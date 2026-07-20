@@ -5,7 +5,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { canonicalJson } from "../scripts/lib/canonical-json.mjs";
+import { canonicalJson as protocolCanonicalJson } from "../dist/build/packages/protocol/src/index.js";
+import { canonicalDocumentBytes, canonicalJson, canonicalJsonBytes } from "../scripts/lib/canonical-json.mjs";
 import {
   ProtocolProofError,
   canonicalProofBytes,
@@ -120,6 +121,53 @@ test("RC1 candidate and verdict slots enforce exact field sets", async () => {
     assert.throws(
       () => validateRc1ManifestShape(candidate),
       (error) => error instanceof ProtocolProofError && error.reasonCode === "RC1_VERDICT_SLOT_FIELDS",
+    );
+  }
+});
+
+// CQ/OD-16 F1. Two functions named `canonicalJson` exist -- the protocol package's
+// (product) and this repository's tooling copy -- and they are NOT interchangeable.
+// The product's emits its trailing newline inside the function; the tooling's does not,
+// so every tooling caller that needs the product's byte contract had to remember to
+// append one. That was spelled three different ways: `canonicalProofBytes` appended it,
+// `proof-artifacts` hand-concatenated a Buffer, and `canonicalJsonBytes` deliberately
+// omitted it. Three spellings of one contract, differing by a single trailing byte, is
+// how a wrong digest gets produced silently. These tests pin what each name means.
+test("canonical text and canonical document are distinct, named byte contracts", () => {
+  const value = { b: 1, a: "x" };
+  const text = canonicalJson(value);
+
+  // The tooling serializer returns TEXT: no trailing newline, ever.
+  assert.equal(text, '{"a":"x","b":1}');
+  assert.equal(text.endsWith("\n"), false);
+  assert.equal(canonicalJsonBytes(value).toString("utf8"), text);
+
+  // The document contract is the text plus exactly one trailing newline, and it is a
+  // named function rather than a thing each caller remembers to do.
+  assert.equal(canonicalDocumentBytes(value).toString("utf8"), `${text}\n`);
+  assert.equal(canonicalDocumentBytes(value).length, canonicalJsonBytes(value).length + 1);
+
+  // The RC1 proof wrapper is the same bytes; it adds a reason code, not a byte.
+  assert.deepEqual(canonicalProofBytes(value), canonicalDocumentBytes(value));
+});
+
+test("the product and tooling serializers agree byte-for-byte, modulo the document newline", () => {
+  // Only values the PRODUCT admits are compared: it rejects non-integer numbers,
+  // `undefined`, and over-deep structures on purpose, and the tooling copy is a
+  // JSON.stringify-compatible serializer that accepts them (pinned above). That
+  // admission difference is deliberate on both sides. What must never drift is the
+  // agreement on values both accept -- key order, escaping, and integer spelling.
+  for (const value of [
+    {}, [], "x", 42, true, null, 0, "",
+    { b: 1, a: 2 }, { "é": 1, e: 2 }, { 10: 1, 2: 2 },
+    { z: [1, { y: 2 }], a: null }, { nested: { deep: { deeper: [1, 2, { k: "v" }] } } },
+    [" "], { k: "v\nw" }, { "\u{1f600}": 1 }, [[[[1]]]], { "": 1 },
+    Number.MAX_SAFE_INTEGER, -Number.MAX_SAFE_INTEGER,
+  ]) {
+    assert.equal(
+      canonicalDocumentBytes(value).toString("utf8"),
+      protocolCanonicalJson(value),
+      `tooling document bytes must equal product canonicalJson for ${JSON.stringify(value) ?? String(value)}`,
     );
   }
 });

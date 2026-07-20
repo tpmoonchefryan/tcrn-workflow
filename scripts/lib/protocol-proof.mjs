@@ -6,7 +6,7 @@ import { relative, resolve } from "node:path";
 
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { CanonicalJsonError, canonicalJson } from "./canonical-json.mjs";
+import { CanonicalJsonError, canonicalDocumentBytes, canonicalJson } from "./canonical-json.mjs";
 import { compareCanonicalText } from "./canonical-order.mjs";
 import { fileRecord, readJson, readSourceFile, repositoryRoot, toPosixPath, walkFiles } from "./files.mjs";
 
@@ -50,7 +50,9 @@ function sha256(content) {
 
 export function canonicalProofBytes(value) {
   try {
-    return Buffer.from(`${canonicalJson(value)}\n`, "utf8");
+    // OD-16 F1: the trailing newline is `canonicalDocumentBytes`'s business now. This
+    // wrapper adds an RC1 reason code, not a byte.
+    return canonicalDocumentBytes(value);
   } catch (error) {
     if (error instanceof CanonicalJsonError) {
       fail("RC1_CANONICAL_VALUE_INVALID", error.message);

@@ -72,3 +72,21 @@ export function canonicalJson(value) {
 export function canonicalJsonBytes(value) {
   return Buffer.from(canonicalJson(value), "utf8");
 }
+
+// OD-16 F1. The product's canonical form ends in a newline: the protocol package's
+// `canonicalJson` appends one inside the function, so the bytes it hands out are a
+// document. This module's `canonicalJson` returns text without it, which is the right
+// split -- a signature covers text, a file on disk is a document -- but it left the
+// newline as something each caller had to remember. Three call sites spelled that one
+// contract three ways: `canonicalProofBytes` appended it, `generateBasisDigest`
+// concatenated a Buffer by hand, and `canonicalJsonBytes` deliberately omitted it.
+// Two of those names differ by one trailing byte and by nothing else a reader can see,
+// and picking the wrong one produces a wrong digest with no error anywhere.
+//
+// So the newline belongs to a name now, not to caller discipline. Callers that need the
+// product's byte contract say `canonicalDocumentBytes`; callers that genuinely mean the
+// unterminated text (release-trust's signature basis) keep saying `canonicalJsonBytes`,
+// and that choice is now legible at the call site instead of implied by its absence.
+export function canonicalDocumentBytes(value) {
+  return Buffer.from(`${canonicalJson(value)}\n`, "utf8");
+}
