@@ -20,6 +20,7 @@
     "regen:rc1-inputs": "node scripts/regen-rc1-inputs.mjs",
     "report:budget": "node scripts/task.mjs budget",
     "guard-check": "node scripts/guard-check.mjs",
+    "host-evidence": "node scripts/host-evidence.mjs",
     "push-gate": "node scripts/push-gate.mjs",
     "archive": "node scripts/task.mjs archive",
     "build": "node scripts/task.mjs build",
