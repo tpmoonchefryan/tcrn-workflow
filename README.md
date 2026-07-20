@@ -57,9 +57,9 @@ One rule holds the whole thing together, and it is the part people find hardest 
 | **Guards that prove they still bite** | `pnpm guard-check` mutates each registered guard out of the source and requires its named test to go red — 12 guards, verified before every push. A protection that nothing would notice losing is not a protection. |
 | **Deliberation on the record** | Conferences and decision gates are appended to the same tamper-evident journal. A pending gate *blocks* its work item from reaching `done` (`WORKSPACE_GATE_PENDING`) — at the command and again on replay — and closing a conference distills each decision into a knowledge candidate that links back to it. |
 | **Every decision gets a name** | Enable actor attestation and every later mutation must declare who acted — the engine and its replay both fail closed on any event that omits an actor id. Workspaces that never enable it stay byte-identical to before. |
-| **Activation you can undo** | Three explicit, byte-reversible steps turn the inert Claude Code bundle into a live governed session — and any error in the session hook exits cleanly back to plain Claude Code. Nothing under `~/.claude` is ever named or written by the inert bundle. |
+| **Activation you can undo** | Three explicit steps turn the inert Claude Code bundle into a live governed session, and uninstalling restores `.claude/settings.json` byte for byte — observed on a real host, alongside a user's own pre-existing hook, which keeps working throughout. Any error in the session hook exits cleanly back to plain Claude Code. Nothing under `~/.claude` is ever named or written. |
 | **Backups that prove themselves** | A snapshot emits a deterministic per-file manifest; the runbook round-trips snapshot → wipe → restore byte-identically, and the two failure modes that matter (partial or relocated restore) fail closed. |
-| **Two hosts, one truth** | Codex and Claude Code adapters share byte-identical host-neutral machinery with a proven cross-host parity digest. Both are **inert dry-run candidates by default** — they generate uninstalled template data only. |
+| **Two hosts, one truth** | Codex and Claude Code adapters share byte-identical host-neutral machinery with a proven cross-host parity digest. Both generate uninstalled template data by default; **Claude Code can then be activated, Codex cannot** — see "Status, honestly". |
 | **Offline by construction** | Development mode installs a process-level network guard and sends zero telemetry. The privacy gate scans every tracked byte, all reachable git history, and the release archive for personal identifiers and machine paths. |
 | **Releases you can re-derive** | A release is an immutable tag plus a reproducible artifact set, rebuilt and byte-compared by `pnpm verify:p8`. External consumers verify through the companion `tcrn-workflow-helper`, whose own digest is published where you can check it independently. |
 
@@ -127,7 +127,7 @@ flowchart LR
         CR[context router]
         CM[compatibility modes]
     end
-    subgraph Hosts["P6/P6B · Agent App adapters (inert)"]
+    subgraph Hosts["P6/P6B · Agent App adapters"]
         CX[Codex adapter]
         CL[Claude Code adapter]
     end
@@ -137,7 +137,7 @@ flowchart LR
     Layers --> REL
 ```
 
-Frozen protocols at the bottom, a file-native engine above them, capability layers above that, and inert host adapters at the top. The protocols are additive-only: `work-model-v1` is frozen, and every extension registers itself without touching accepted schemas.
+Frozen protocols at the bottom, a file-native engine above them, capability layers above that, and host adapters at the top — inert until activation, which only Claude Code has. The protocols are additive-only: `work-model-v1` is frozen, and every extension registers itself without touching accepted schemas.
 
 ## Plain answers to fair questions
 
@@ -168,9 +168,13 @@ Because the trust boundary must be inspectable with standard tools. Every record
 
 An agent framework that silently reaches the network is an exfiltration channel waiting to happen. Development mode installs a process-level network guard; the verification chain proves project code has no implicit network path; the only network steps (dependency acquisition, CI bootstrap) are explicit and pinned. Fail-closed means every validator stops with a stable reason code on the first unexpected byte.
 
-### Why are the Codex and Claude Code adapters "inert candidates"?
+### What does "live" mean for the Claude Code adapter?
 
-Because claiming live host support before a governed release route has accepted it would be an overclaim — the exact failure mode this framework exists to prevent. The adapters generate deterministic, uninstalled template bundles (proven byte-exact, including a byte-reversible `.claude/settings.json` hook fragment that never clobbers user content). Activation is a separate, gated decision.
+That a real Claude Code session receives a read-only summary of the workspace's governing authority, and nothing beyond it. It was measured rather than assumed: the summary was confirmed to reach the model by asking a session for a value that existed only in that summary, with every tool disabled so it could not have been read from disk instead.
+
+Everything else stays deliberately out. The framework does not adjudicate the host's tool use, does not suppress or rewrite responses, never writes under `~/.claude`, does not promote knowledge without an explicit action, and does not orchestrate sessions. A hook that fails prints nothing and the session continues as plain Claude Code — the one place this codebase fails open rather than closed, because a governance layer that can break a session is worse than one that goes quiet.
+
+Codex has no equivalent. Its adapter generates and simulates; it does not install, and nothing here writes to a Codex host.
 
 ### How is a release trusted?
 
@@ -232,7 +236,9 @@ Most projects hide their edges. Ours are load-bearing — the same discipline th
 ## Status, honestly
 
 - `0.1.0-rc.6` is a **pre-release candidate**. The public API is not yet stable.
-- Both host adapters are inert dry-run candidates; **no live Codex or Claude Code support is asserted**.
+- **Claude Code activation is live and has been observed on a real host.** Steps 1–3 install, activate and uninstall against Claude Code `2.1.201`; nine observations were recorded, including that the authority summary actually arrives in the model's context. What it does when live is inject a read-only summary at session start, nothing more — see the boundary list above for what it deliberately does not do. Receipt: `docs/verification/host/claude-code.json`.
+- **Codex stops at read-only.** `adapter-generate`, `-validate`, `-simulate`, `-fallback` and `-rollback-plan` are real, deterministic, host-neutral tooling. There is no Codex installer and no Codex activation, so nothing is written to a Codex host by anything here.
+- **Scale.** A workspace becomes perceptibly slower somewhere in the low thousands of events, and a single command crosses one second at roughly 6,600 (extrapolated from measurement on an Apple M3; `docs/verification/2026-07-20-event-chain-ceiling-samples.json`). It affects reads as much as writes. Partition workspaces per project or initiative rather than running one chain for an organisation.
 - `supportedAosReleases` is empty: no external AOS compatibility is claimed.
 - Release mode requires the companion helper to accept the bytes: its bootstrap digest is published independently, and the accepted release digests are compiled into it.
 

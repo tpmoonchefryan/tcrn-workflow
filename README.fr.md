@@ -57,9 +57,9 @@ Une seule règle tient l'ensemble, et c'est la partie que l'on croit le moins av
 | **Des gardes qui prouvent qu'ils mordent encore** | `pnpm guard-check` retire par mutation chaque garde enregistrée du code source et exige que le test qui la couvre passe au rouge — 12 gardes, vérifiées avant chaque push. Une protection dont la disparition ne serait remarquée par personne n'est pas une protection. |
 | **Des délibérations au dossier** | Conférences et portes de décision sont ajoutées au même journal inviolable. Une porte non satisfaite *bloque* le passage de son élément de travail à `done` (`WORKSPACE_GATE_PENDING`) — à la commande, puis de nouveau au rejeu — et clore une conférence distille chaque décision en une candidate de connaissance qui y renvoie. |
 | **Chaque décision reçoit un nom** | Activez l'attestation d'acteur et chaque modification ultérieure doit déclarer qui a agi — le moteur et son rejeu échouent tous deux en fermeture sur tout événement dépourvu d'identifiant d'acteur. Les espaces de travail qui ne l'activent jamais restent identiques octet pour octet. |
-| **Une activation réversible** | Trois étapes explicites et réversibles octet pour octet transforment le bundle Claude Code inerte en une session gouvernée active — et toute erreur du hook de session ressort proprement en Claude Code ordinaire. Le bundle inerte ne nomme ni n'écrit jamais quoi que ce soit sous `~/.claude`. |
+| **Une activation réversible** | Trois étapes explicites transforment le bundle Claude Code inerte en une session gouvernée active, et la désinstallation restaure `.claude/settings.json` octet pour octet — observé sur un hôte réel, aux côtés d'un hook préexistant de l'utilisateur qui continue de fonctionner. Toute erreur du hook de session ressort proprement en Claude Code ordinaire. Rien sous `~/.claude` n'est jamais nommé ni écrit. |
 | **Des sauvegardes qui se prouvent elles-mêmes** | Un instantané produit un manifeste déterministe fichier par fichier ; le runbook boucle instantané → effacement → restauration à l'octet près, et les deux modes d'échec qui comptent (restauration partielle ou déplacée) échouent en fermeture. |
-| **Deux hôtes, une seule vérité** | Les adaptateurs Codex et Claude Code partagent une mécanique neutre identique octet pour octet, avec une empreinte de parité inter-hôtes prouvée. Les deux sont par défaut des **candidats inertes en simulation** — ils ne génèrent que des données de gabarit non installées. |
+| **Deux hôtes, une seule vérité** | Les adaptateurs Codex et Claude Code partagent une mécanique neutre identique octet pour octet, avec une empreinte de parité inter-hôtes prouvée. Les deux ne génèrent par défaut que des données de gabarit non installées ; **Claude Code peut ensuite être activé, Codex non** — voir « Statut, honnêtement ». |
 | **Hors ligne par construction** | Le mode développement installe une garde réseau au niveau du processus et n'émet aucune télémétrie. La porte de confidentialité balaie chaque octet suivi, tout l'historique git atteignable et l'archive de release à la recherche d'identifiants personnels et de chemins machine. |
 | **Des releases que vous pouvez redériver** | Une release est une étiquette immuable plus un ensemble d'artefacts reproductibles, reconstruits et comparés octet par octet par `pnpm verify:p8`. Les consommateurs externes vérifient via le projet compagnon `tcrn-workflow-helper`, dont l'empreinte est publiée là où vous pouvez la contrôler indépendamment. |
 
@@ -127,7 +127,7 @@ flowchart LR
         CR[context router]
         CM[compatibility modes]
     end
-    subgraph Hosts["P6/P6B · Agent App adapters (inert)"]
+    subgraph Hosts["P6/P6B · Agent App adapters"]
         CX[Codex adapter]
         CL[Claude Code adapter]
     end
@@ -137,7 +137,7 @@ flowchart LR
     Layers --> REL
 ```
 
-Des protocoles gelés à la base, un moteur natif fichiers au-dessus, des couches de capacités par-dessus, et des adaptateurs d'hôtes inertes au sommet. Les protocoles sont en ajout seul : `work-model-v1` est gelé, et chaque extension s'enregistre sans toucher aux schémas acceptés.
+Des protocoles gelés à la base, un moteur natif fichiers au-dessus, des couches de capacités par-dessus, et des adaptateurs d'hôtes au sommet — inertes jusqu'à l'activation, que seul Claude Code possède. Les protocoles sont en ajout seul : `work-model-v1` est gelé, et chaque extension s'enregistre sans toucher aux schémas acceptés.
 
 ## Réponses directes
 
@@ -168,9 +168,13 @@ Parce que la frontière de confiance doit rester inspectable avec des outils sta
 
 Un cadre d'agents qui atteint le réseau en silence est un canal d'exfiltration qui n'attend qu'à servir. Le mode développement installe une garde réseau au niveau du processus ; la chaîne de vérification prouve que le code du projet n'a aucun chemin réseau implicite ; les seules étapes réseau (acquisition des dépendances, amorçage CI) sont explicites et épinglées. Échouer en fermeture signifie que chaque validateur s'arrête avec un reason code stable au premier octet inattendu.
 
-### Pourquoi les adaptateurs Codex et Claude Code sont-ils des « candidats inertes »
+### Que signifie « active » pour l'adaptateur Claude Code
 
-Parce que revendiquer une prise en charge d'hôte active avant qu'une route de release gouvernée ne l'ait acceptée serait une surdéclaration — précisément le mode d'échec que ce cadre existe pour prévenir. Les adaptateurs produisent des bundles de gabarits déterministes et non installés (prouvés exacts à l'octet, y compris un fragment de hook `.claude/settings.json` réversible qui n'écrase jamais le contenu de l'utilisateur). L'activation est une décision distincte et encadrée.
+Qu'une véritable session Claude Code reçoit un **résumé en lecture seule** de l'autorité qui gouverne l'espace de travail, et rien au-delà. Cela a été mesuré et non supposé : on a demandé à une session une valeur qui n'existait que dans ce résumé, tous les outils désactivés, afin qu'elle n'ait pas pu la lire sur le disque.
+
+Tout le reste est délibérément laissé dehors. Le framework n'arbitre **pas** l'usage des outils de l'hôte, ne supprime ni ne réécrit **aucune** réponse, n'écrit **jamais** sous `~/.claude`, ne promeut **pas** de connaissance sans action explicite et n'orchestre **pas** les sessions. Un hook qui échoue n'imprime rien et la session continue en Claude Code ordinaire — le seul endroit où ce dépôt échoue en s'ouvrant plutôt qu'en se fermant, parce qu'une couche de gouvernance capable de casser une session est pire qu'une couche qui se tait.
+
+Codex n'a pas d'équivalent. Son adaptateur génère et simule ; il n'installe pas, et rien ici n'écrit sur un hôte Codex.
 
 ### Comment une release devient-elle digne de confiance
 
@@ -232,7 +236,9 @@ La plupart des projets cachent leurs limites. Les nôtres sont porteuses — la 
 ## Statut, honnêtement
 
 - `0.1.0-rc.6` est un **candidat de pré-version**. L'API publique n'est pas encore stable.
-- Les deux adaptateurs d'hôtes sont des candidats inertes en simulation ; **aucune prise en charge active de Codex ou Claude Code n'est affirmée**.
+- **L'activation de Claude Code est active et a été observée sur un hôte réel**. Les étapes 1 à 3 installent, activent et désinstallent face à Claude Code `2.1.201` ; neuf observations ont été consignées, dont le fait que le résumé d'autorité parvient réellement au contexte du modèle. Une fois active, elle injecte un résumé en lecture seule au démarrage de la session, rien de plus — ce qu'elle s'interdit délibérément figure dans la liste des limites ci-dessus. Reçu : `docs/verification/host/claude-code.json`.
+- **Codex s'arrête à la lecture seule**. `adapter-generate`, `-validate`, `-simulate`, `-fallback` et `-rollback-plan` sont un outillage réel, déterministe et neutre vis-à-vis de l'hôte. Il n'existe ni installateur ni activation Codex, donc rien ici n'écrit sur un hôte Codex.
+- **Échelle**. Un espace de travail devient perceptiblement plus lent dès **quelques milliers** d'événements, et une commande unique franchit la seconde vers **6 600** (extrapolé d'une mesure sur Apple M3 ; `docs/verification/2026-07-20-event-chain-ceiling-samples.json`). Cela touche les lectures autant que les écritures. **Découpez les espaces de travail par projet ou par initiative** plutôt que de faire tourner une organisation entière sur une seule chaîne.
 - `supportedAosReleases` est vide : aucune compatibilité AOS externe n'est revendiquée.
 - Le mode release exige que le compagnon accepte les octets : son empreinte d'amorceur est publiée indépendamment, et les empreintes de release acceptées y sont compilées.
 
