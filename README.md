@@ -44,7 +44,7 @@ One rule holds the whole thing together, and it is the part people find hardest 
 
 | | |
 | --- | --- |
-| ✅ **Yes, if** | you run agents on work that has consequences — production code, regulated or audited delivery, multi-agent handoffs where nobody remembers who decided what. You want an artifact a reviewer can *check*, not a transcript they must *trust*. You want everything to stay on your machine: no database, no daemon, no network, no telemetry. |
+| ✅ **Yes, if** | you run agents on work that has consequences — production code, regulated or audited delivery, multi-agent handoffs where nobody remembers who decided what. You want an artifact a reviewer can *check*, not a transcript they must *trust*. You want everything to stay on your machine: no database, no daemon, no network, no telemetry. And your agents are frontier-class enough to follow a strict discipline — see "Known limits". |
 | ❌ **Probably not, if** | you want a zero-setup chat assistant, you need cloud sync or a hosted dashboard, or your work is exploratory enough that an append-only audit trail is friction rather than value. The rigor here is not free — it is a deliberate trade for evidence. |
 
 ## What you get
@@ -254,6 +254,12 @@ The four boundaries above are permanent design decisions. The limits below are t
 **Tested envelope**
 
 - **One OS user, local filesystem.** That is where every test and every real-host observation ran. Cross-user sharing and network filesystems are untested and therefore unclaimed.
+
+**Driver assumptions**
+
+- **Integrity does not depend on the driving model; progress does.** Fail-closed turns a weak driver's every boundary miss into a refusal, so the chain cannot be dirtied — a below-baseline agent thrashes on reason codes instead of corrupting anything. What does scale with model capability: making progress under the discipline, heeding the injected authority summary (proven to arrive; never claimed to be obeyed), and the quality of what gets recorded — well-formed garbage is faithfully preserved, because the ledger proves who said what, not that it was right.
+- **The framework assumes a driver that can:** branch on reason codes rather than interpret prose; re-read then retry after a CAS refusal, never blind-replay; treat a red gate as stop-and-report, not retry-until-green; produce strict RFC 3339 instants, follow regeneration order, and never hand-edit generated files or digests; keep one writer per workspace. Every item is testable against your own agent.
+- **No compatible-model list is published, because none was measured.** The only measured driving configuration is a frontier Claude model on Claude Code 2.1.201 (receipt: `docs/verification/host/claude-code.json`). Below the assumptions above, expect thrash, not corruption — an endless stream of refusal codes is the signature of a driver below baseline, not of a framework defect.
 
 **Governance surface**
 

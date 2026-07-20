@@ -44,7 +44,7 @@ Une seule règle tient l'ensemble, et c'est la partie que l'on croit le moins av
 
 | | |
 | --- | --- |
-| ✅ **Oui, si** | vous faites travailler des agents sur des sujets à conséquences — code de production, livraison régulée ou auditée, passages de relais multi-agents où plus personne ne se souvient qui a décidé quoi. Vous voulez un artefact qu'un relecteur peut *vérifier*, pas une transcription qu'il doit *croire*. Et vous voulez que tout reste sur votre machine : pas de base de données, pas de démon, pas de réseau, pas de télémétrie. |
+| ✅ **Oui, si** | vous faites travailler des agents sur des sujets à conséquences — code de production, livraison régulée ou auditée, passages de relais multi-agents où plus personne ne se souvient qui a décidé quoi. Vous voulez un artefact qu'un relecteur peut *vérifier*, pas une transcription qu'il doit *croire*. Et vous voulez que tout reste sur votre machine : pas de base de données, pas de démon, pas de réseau, pas de télémétrie. Et vos agents sont d'un niveau frontière, capables de suivre une discipline stricte — voir « Limites connues ». |
 | ❌ **Probablement pas, si** | vous voulez un assistant conversationnel sans configuration, vous avez besoin de synchronisation cloud ou d'un tableau de bord hébergé, ou votre travail est assez exploratoire pour qu'une piste d'audit en ajout seul soit une friction plutôt qu'une valeur. La rigueur ici n'est pas gratuite — c'est un échange délibéré : du confort contre des preuves. |
 
 ## Ce que vous obtenez
@@ -254,6 +254,12 @@ Les quatre frontières ci-dessus sont des décisions de conception permanentes. 
 **Périmètre testé**
 
 - **Un utilisateur OS, un système de fichiers local.** C'est là que chaque test et chaque observation sur hôte réel ont eu lieu. Le partage entre utilisateurs et les systèmes de fichiers réseau ne sont pas testés, donc pas revendiqués.
+
+**Hypothèses sur le pilote**
+
+- **L'intégrité ne dépend pas de la capacité du modèle pilote ; la progression, si.** Le fail-closed transforme chaque écart d'un pilote faible en refus : la chaîne ne peut pas être salie — un agent sous le niveau requis patine sur des reason codes au lieu de corrompre quoi que ce soit. Ce qui varie avec la capacité du modèle : progresser sous cette discipline, tenir compte du résumé d'autorité injecté (prouvé arrivé ; jamais prétendu obéi), et la qualité de ce qui est consigné — des déchets bien formés sont fidèlement conservés, car le registre prouve qui a dit quoi et quand, pas que c'était juste.
+- **Le framework suppose un pilote capable de :** brancher sur les reason codes plutôt qu'interpréter la prose ; relire puis réessayer après un refus CAS, jamais rejouer à l'aveugle ; traiter une porte rouge comme « s'arrêter et rapporter », pas comme « relancer jusqu'au vert » ; produire des instants RFC 3339 stricts, respecter l'ordre de régénération, ne jamais éditer à la main les fichiers générés ni les empreintes ; garder un seul rédacteur par espace de travail. Chaque point se teste contre votre propre agent.
+- **Aucune liste de modèles compatibles n'est publiée, car aucun n'a été mesuré.** La seule configuration de pilotage mesurée est un modèle Claude de niveau frontière sur Claude Code 2.1.201 (reçu : `docs/verification/host/claude-code.json`). Sous les hypothèses ci-dessus, attendez-vous à du patinage, pas à de la corruption — un flot sans fin de codes de refus est la signature d'un pilote sous le niveau requis, pas celle d'un défaut du framework.
 
 **Surface de gouvernance**
 
