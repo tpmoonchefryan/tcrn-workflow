@@ -87,14 +87,14 @@ pnpm verify:p1
 
 # 3. Build, then drive the governed CLI
 pnpm build
-node scripts/tcrn-workflow.mjs workspace --help
+node scripts/tcrn-workflow.mjs commands
 ```
 
 典型的受治理命令——全部本地执行，无网络，无数据库：
 
 ```sh
 # validate a workspace and materialize its deterministic views
-node scripts/tcrn-workflow.mjs workspace validate --workspace <dir> --now <iso-instant>
+node scripts/tcrn-workflow.mjs validate --workspace <dir>
 
 # create and transition work records with version-checked writes
 node scripts/tcrn-workflow.mjs work-create ...
