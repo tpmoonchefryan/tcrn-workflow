@@ -1,6 +1,6 @@
 {
   "schema": "tcrn.host-evidence.v1",
-  "status": "GROUP A COMPLETE — group B absent",
+  "status": "COMPLETE — group A and group B both observed",
   "observedAt": "2026-07-20",
   "host": {
     "product": "Claude Code",
@@ -28,7 +28,7 @@
         "id": "obs-4-merge-accepted",
         "claim": "The real installer's merged settings.json is accepted, and the user's hook and the TCRN hook both fire",
         "result": "PASS",
-        "evidence": "user marker written; handler atime 1784542033375.2126 -> 1784542033854.8894",
+        "evidence": "user marker written; handler atime 1784542680287.2085 -> 1784542685119.6655",
         "releaseBlocking": true
       },
       {
@@ -61,7 +61,7 @@
         "id": "obs-5-uninstall",
         "claim": "After removal the TCRN handler no longer runs and the user's hook still fires",
         "result": "PASS",
-        "evidence": "user marker written; handler atime 1784542033854.8894 -> 1784542033854.8894",
+        "evidence": "user marker written; handler atime 1784542685119.6655 -> 1784542685119.6655",
         "releaseBlocking": true
       },
       {
@@ -74,14 +74,18 @@
   },
   "groupB": {
     "description": "requires a credentialed session; must be run by the Owner",
-    "status": "ABSENT",
+    "status": "OBSERVED",
     "observations": [
       {
         "id": "obs-1-summary-reaches-model",
         "claim": "The emitted summary actually reaches the model as developer context",
-        "result": "NOT OBSERVED",
-        "runbook": "In a project with the payload installed run: claude -p \"What workspace id is mentioned in your session context?\" — an answer naming the installed workspace id proves it. Record who ran it and where."
+        "result": "PASS",
+        "evidence": "expected workspace id workspace:hev-912de54ac784df07; model answered: The workspace id is `workspace:hev-912de54ac784df07`.",
+        "runner": "ryanlan (Owner), macOS local shell, Claude Code 2.1.201",
+        "releaseBlocking": false
       }
-    ]
+    ],
+    "expectedWorkspaceId": "workspace:hev-912de54ac784df07",
+    "probeRoot": "dist/host-evidence-group-b"
   }
 }
