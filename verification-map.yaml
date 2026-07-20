@@ -116,7 +116,7 @@
         "tests/release-trust.test.mjs",
         "fixtures/release-trust/README.md"
       ],
-      "fixtureDigest": "8e461a931a6a8e1b565e13ba7bce316020259488a5a0e4894ae581742108e9c7",
+      "fixtureDigest": "46867c0dabac5dc6da0e1eab74ddedc9561f376bea9aa0747e780ab74b7c330a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1761,7 +1761,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "172ce2b0e246e2477528aab3dcba185ebb914dc59fd113ed86702e4def6a42fc",
+      "fixtureDigest": "7b3300e0f70fce4a37bfbeee4cd050a857d294c80f65ec187b0fb1c972427962",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
