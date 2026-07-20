@@ -65,20 +65,16 @@ plus a test run (~4-5s measured) and the registry's twelve entries would push th
 P1 wall clock toward the 180s escalation trigger that protects the "run it on
 every change" discipline.
 
-**Current.** `{proofLines: 26196, productLines: 16011, ratio: 1.6361}`, measured
-2026-07-20. The rc.6 fix and optimization program moved this from `1.62` to
-`1.599` — it added proof to fixes that had shipped without it and retired four
-dead release helpers, and no package in it needed the exception clause. The
-OD-21 guard checker above then moved it back to `1.618`, which is the cost that
-exception bought. The post-release hardening that followed — guard registry
-entries eleven and twelve, and the failure-pattern register with its push-gate
-checks — took it to `1.6269`, and the OD-16 duplication work added the last
-`147` lines: the tests pinning what `canonicalDocumentBytes` means and the corpus
-holding the two strict RFC 3339 parsers to one grammar. Both are proof against
-drift in bytes that are already shipping, which is what this budget is for. The
-ratio did not approach `1.0` at any point, so the rule still binds. Re-measure
-rather than quote this number; it is a snapshot, not a pin, and it was once found
-stale by 144 lines.
+**Current.** `{proofLines: 26538, productLines: 16011, ratio: 1.6575}`, measured
+2026-07-20. **Re-measure rather than quote this number.** It is a snapshot, not a
+pin: it has been found stale by 144 lines once already, and every entry in the
+running commentary that used to live here went stale the moment the next change
+landed — a paragraph that says which work added "the last" lines is wrong as soon
+as there is a later one. The ratio has moved between `1.535` and `1.6575` across
+the rc.6 program, the OD-21 guard checker, the post-release hardening, the OD-16
+duplication work, and `host-evidence`; **git log on this file is the history, and
+it does not go stale.** What matters here is the current value, the rule above,
+and that the ratio has never approached `1.0`, so the rule still binds.
 
 **Measurement.** Run the report-only command:
 

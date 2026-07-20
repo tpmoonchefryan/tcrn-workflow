@@ -156,7 +156,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "f97471ed41e8c5c8ebaf56a26d9b2514d0e8a4d79d6520a8ce19e493233a66de",
+      "fixtureDigest": "7747ebe85c84d3d6d3d4992f29d281f9e92961661a5e11734d2243031db4e01f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
