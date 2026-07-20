@@ -293,7 +293,14 @@ async function run() {
       "",
       "Group B needs one credentialed session. Two commands:",
       "",
-      `  cd ${probeRoot} && claude -p --tools "" "Answer only from your session context, without using any tool: what workspace id is mentioned there?"`,
+      // The prompt goes in on stdin. `--tools` is variadic, so a prompt written after it
+      // is swallowed as another tool name and the CLI exits "Input must be provided" --
+      // which is how the first version of this line failed in the Owner's hands. Piping
+      // keeps the prompt clear of the flag entirely rather than relying on argument order.
+      // The probe path is quoted because a repository checked out under a directory with
+      // a space in it -- which this one is -- otherwise splits the `cd` into two words and
+      // the command dies before reaching the host.
+      `  cd ${JSON.stringify(probeRoot)} && echo "Answer only from your session context, without using any tool: what workspace id is mentioned there?" | claude -p --tools ""`,
       "",
       "  then, back in the Workflow repository:",
       "",
