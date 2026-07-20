@@ -65,7 +65,7 @@ plus a test run (~4-5s measured) and the registry's twelve entries would push th
 P1 wall clock toward the 180s escalation trigger that protects the "run it on
 every change" discipline.
 
-**Current.** `{proofLines: 26538, productLines: 16011, ratio: 1.6575}`, measured
+**Current.** `{proofLines: 26631, productLines: 16011, ratio: 1.6633}`, measured
 2026-07-20. **Re-measure rather than quote this number.** It is a snapshot, not a
 pin: it has been found stale by 144 lines once already, and every entry in the
 running commentary that used to live here went stale the moment the next change
