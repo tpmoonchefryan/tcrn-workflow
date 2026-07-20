@@ -119,6 +119,11 @@ pnpm host-evidence --prepare-group-b     # installs a probe, prints what to run
 pnpm host-evidence --record-group-b --observed "<the answer>" --runner "<who>"
 ```
 
+The printed command pipes its prompt in on stdin. `--tools` is variadic, so a
+prompt written after it is consumed as another tool name and the CLI refuses with
+"Input must be provided" — the first version of this shipped that way, because the
+flag was checked in `--help` and the composed command was never actually run.
+
 The question asks the model which workspace id its session context mentions, and
 the answer is the observation — which is why `--record-group-b` checks it against
 the installed id rather than accepting a verdict. A reply that does not name it
