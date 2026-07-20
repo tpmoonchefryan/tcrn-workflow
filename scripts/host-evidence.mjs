@@ -26,6 +26,55 @@ import { fileURLToPath } from "node:url";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const receiptPath = resolve(repositoryRoot, "docs/verification/host/claude-code.json");
 
+// Group B needs a credentialed session, which the group-A run cannot supply — hooks fire
+// before authentication, so everything above works unauthenticated and this one thing
+// does not. Rather than leave the Owner to reconstruct a probe by hand, `--prepare-group-b`
+// leaves one installed and prints the exact command, and `--record-group-b` writes what
+// came back into the receipt. The two halves are separate invocations because the human
+// step happens between them.
+const argv = process.argv.slice(2);
+const flag = (name) => {
+  const index = argv.indexOf(name);
+  return index === -1 ? undefined : argv[index + 1] ?? "";
+};
+const mode = argv.includes("--prepare-group-b") ? "prepare-group-b"
+  : argv.includes("--record-group-b") ? "record-group-b" : "group-a";
+const groupBProbe = resolve(repositoryRoot, "dist/host-evidence-group-b");
+
+// Recording is pure bookkeeping over an existing receipt: no host, no install, no build.
+if (mode === "record-group-b") {
+  const observed = flag("--observed");
+  const runner = flag("--runner");
+  if (!observed || !runner) {
+    process.stdout.write(`${JSON.stringify({ ok: false, reasonCode: "HOST_EVIDENCE_GROUP_B_INPUT_MISSING", detail: "--observed and --runner are both required" })}\n`);
+    process.exit(1);
+  }
+  const document = JSON.parse(await readFile(receiptPath, "utf8"));
+  const expected = document.groupB?.expectedWorkspaceId;
+  if (typeof expected !== "string") {
+    process.stdout.write(`${JSON.stringify({ ok: false, reasonCode: "HOST_EVIDENCE_GROUP_B_NOT_PREPARED", detail: "run --prepare-group-b first" })}\n`);
+    process.exit(1);
+  }
+  // The model naming the workspace id is the proof: it could only have learned it from
+  // the summary the hook emitted. Judging that here rather than trusting a human verdict
+  // is the difference between evidence and a self-report.
+  const reached = observed.includes(expected);
+  document.groupB.status = reached ? "OBSERVED" : "CONTRADICTED";
+  document.groupB.observations = [{
+    id: "obs-1-summary-reaches-model",
+    claim: "The emitted summary actually reaches the model as developer context",
+    result: reached ? "PASS" : "FAIL",
+    evidence: `expected workspace id ${expected}; model answered: ${observed.slice(0, 400)}`,
+    runner,
+    releaseBlocking: false,
+  }];
+  await writeFile(receiptPath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
+  process.stdout.write(`${JSON.stringify(reached
+    ? { ok: true, reasonCode: "HOST_EVIDENCE_GROUP_B_OBSERVED", runner }
+    : { ok: false, reasonCode: "HOST_EVIDENCE_GROUP_B_CONTRADICTED", expected })}\n`);
+  process.exit(reached ? 0 : 1);
+}
+
 const core = await import(`${repositoryRoot}/dist/build/packages/core/src/index.js`);
 const protocol = await import(`${repositoryRoot}/dist/build/packages/protocol/src/index.js`);
 const { runCli } = await import(`${repositoryRoot}/dist/build/packages/cli/src/index.js`);
@@ -59,7 +108,17 @@ const hostVersionReadback = `claude-code/${versionSelfReport}`;
 
 // A symlinked installation root is refused (INSTALLER_ROOT_INVALID), and on macOS the
 // system temp directory reaches through /var -> private/var, so resolve it first.
-const probeRoot = await realpath(await mkdtemp(resolve(await realpath(tmpdir()), "tcrn-host-evidence-")));
+// Group A tears its probe down; the group-B probe has to survive until a human has run a
+// session in it, so it lives at a stable path under dist/ (already ignored, never shipped).
+async function makeProbeRoot() {
+  if (mode !== "prepare-group-b") {
+    return realpath(await mkdtemp(resolve(await realpath(tmpdir()), "tcrn-host-evidence-")));
+  }
+  await rm(groupBProbe, { recursive: true, force: true });
+  await mkdir(groupBProbe, { recursive: true });
+  return realpath(groupBProbe);
+}
+const probeRoot = await makeProbeRoot();
 const userMarker = resolve(probeRoot, "user-hook-fired.txt");
 const handlerPath = resolve(probeRoot, ".claude/tcrn-workflow/session-start.mjs");
 const settingsPath = resolve(probeRoot, ".claude/settings.json");
@@ -187,7 +246,8 @@ async function session() {
   return { userHookFired: await exists(userMarker), handlerBefore: before, handlerAfter: await atime(handlerPath) };
 }
 
-try {
+let keepProbe = false;
+async function run() {
   process.stderr.write(`host: claude ${versionSelfReport}\nprobe: ${probeRoot}\n`);
 
   // A user's pre-existing hook, written in canonical bytes because the activation
@@ -212,6 +272,35 @@ try {
   await install("step1");
   await install("step2", ["--step2", "true"]);
   const settingsActivated = await readFile(settingsPath, "utf8");
+
+  // Prepare mode stops here: the payload is installed and the probe stays put. What the
+  // Owner runs next is printed rather than described, and the expected answer is written
+  // into the receipt so that judging the reply is not left to whoever reads it.
+  if (mode === "prepare-group-b") {
+    const document = JSON.parse(await readFile(receiptPath, "utf8"));
+    document.groupB.status = "PREPARED — awaiting a credentialed run";
+    document.groupB.expectedWorkspaceId = workspaceId;
+    document.groupB.probeRoot = probeRoot;
+    await writeFile(receiptPath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
+    process.stdout.write([
+      "",
+      "Group B needs one credentialed session. Two commands:",
+      "",
+      `  cd ${probeRoot} && claude -p "What workspace id is mentioned in your session context?"`,
+      "",
+      "  then, back in the Workflow repository:",
+      "",
+      `  pnpm host-evidence --record-group-b --observed "<paste the answer>" --runner "<your name>"`,
+      "",
+      `The answer proves the summary reached the model only if it names ${workspaceId} —`,
+      "the model has no other way to know it. --record-group-b checks that rather than",
+      "taking anyone's word, and writes the result and the runner into the receipt.",
+      "",
+    ].join("\n"));
+    process.exitCode = 0;
+    keepProbe = true;
+    return;
+  }
 
   const active = await session();
   record("obs-4-merge-accepted",
@@ -325,6 +414,10 @@ try {
     ? { ok: true, reasonCode: "HOST_EVIDENCE_RECORDED", host: versionSelfReport, groupB: "ABSENT" }
     : { ok: false, reasonCode: "HOST_EVIDENCE_BLOCKING_OBSERVATION_FAILED", failed: failed.map((entry) => entry.id) })}\n`);
   process.exitCode = failed.length === 0 ? 0 : 1;
+}
+
+try {
+  await run();
 } finally {
-  await rm(probeRoot, { recursive: true, force: true });
+  if (!keepProbe) await rm(probeRoot, { recursive: true, force: true });
 }

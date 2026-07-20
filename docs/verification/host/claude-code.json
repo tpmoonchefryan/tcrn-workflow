@@ -28,7 +28,7 @@
         "id": "obs-4-merge-accepted",
         "claim": "The real installer's merged settings.json is accepted, and the user's hook and the TCRN hook both fire",
         "result": "PASS",
-        "evidence": "user marker written; handler atime 1784535223503.0298 -> 1784535223943.7473",
+        "evidence": "user marker written; handler atime 1784539348287.23 -> 1784539348987.0225",
         "releaseBlocking": true
       },
       {
@@ -61,7 +61,7 @@
         "id": "obs-5-uninstall",
         "claim": "After removal the TCRN handler no longer runs and the user's hook still fires",
         "result": "PASS",
-        "evidence": "user marker written; handler atime 1784535223943.7473 -> 1784535223943.7473",
+        "evidence": "user marker written; handler atime 1784539348987.0225 -> 1784539348987.0225",
         "releaseBlocking": true
       },
       {
