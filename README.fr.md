@@ -12,7 +12,7 @@
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
-[Pourquoi ce projet existe](#pourquoi-ce-projet-existe) · [Est-ce fait pour vous](#est-ce-fait-pour-vous) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrage rapide](#démarrage-rapide) · [Réponses directes](#réponses-directes) · [Licence](#licence)
+[Pourquoi ce projet existe](#pourquoi-ce-projet-existe) · [Est-ce fait pour vous](#est-ce-fait-pour-vous) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrage rapide](#démarrage-rapide) · [Réponses directes](#réponses-directes) · [Limites connues](#limites-connues) · [Licence](#licence)
 
 `Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
 
@@ -233,13 +233,39 @@ La plupart des projets cachent leurs limites. Les nôtres sont porteuses — la 
 - **La correction de votre code.** Le registre garantit qu'une capacité *déclarée* conserve une preuve exécutable, et que la surdéclaration fait échouer la compilation. Il ne peut pas vous dire que l'ensemble des revendications est le bon. Choisir quoi revendiquer relève irréductiblement du jugement humain, et aucune provenance ne s'y substitue.
 - **L'identité et le temps.** L'attestation d'acteur enregistre un identifiant d'acteur *déclaré*, non authentifié, et la chaîne prouve l'ordre, non la vérité de l'horloge murale. La chaîne est inviolable de manière détectable en son sein ; elle n'est pas ancrée en dehors du système de fichiers où elle réside.
 
+## Limites connues
+
+Les quatre frontières ci-dessus sont des décisions de conception permanentes. Les limites ci-dessous sont les faits opérationnels de cette version : chacune est imposée par un reason code, fixée par une mesure, ou déclarée franchement comme un territoire non testé.
+
+**Topologie des espaces de travail et échelle**
+
+- **Un seul rédacteur par espace de travail.** Chaque mutation se sérialise sur un bail à l'intérieur de l'arbre de contrôle ; les concurrents échouent en se fermant puis réessaient. Le parallélisme appartient au-dessus de la couche de stockage : multipliez les espaces de travail, pas les rédacteurs.
+- **Découpez les espaces de travail par projet ou par initiative.** Un espace de travail ralentit perceptiblement dès quelques milliers d'événements, et une commande unique franchit la seconde vers 6 600 (Apple M3, extrapolé ; échantillons bruts dans `docs/verification/2026-07-20-event-chain-ceiling-samples.json`). Les lectures paient le même prix que les écritures et la chaîne n'a pas de compaction — un espace de travail à l'échelle d'une organisation est exactement la forme punie.
+- **Partager un espace de travail entre plusieurs projets déployés séparément va contre la conception.** Mécaniquement, cela fonctionne — chaque verbe prend un chemin absolu explicite — mais tous les rédacteurs font la queue sur un seul bail, chaque accédant doit présenter des chemins canoniques identiques pour les cinq racines (`WORKSPACE_SCHEMA_INVALID` sinon), et l'historique fusionné atteint la limite d'échelle plus tôt. Servir plusieurs projets est le travail d'une couche au-dessus de celle-ci ; le contrat AOS livré ici n'est qu'un registre de nommage et de liaison, et `supportedAosReleases` est vide.
+- **Plusieurs espaces de travail côte à côte : c'est la forme prise en charge.** Rien ne les enregistre ni ne les découvre ; chacun est un domaine indépendant à rédacteur unique, et ils peuvent partager un même checkout du framework et une même racine de confiance de release.
+
+**Sauvegarde et portabilité**
+
+- **La restauration est même-chemin-uniquement.** L'identité des cinq racines est fixée à l'init et revérifiée à chaque resolve (`WORKSPACE_SCHEMA_INVALID`) ; restaurer vers un autre chemin ou une autre machine est hors du périmètre V1 (`WORKSPACE_MIGRATION_APPLY_UNAVAILABLE`). Sauvegardez où vous voulez ; restaurez sur place.
+- **Restaurez l'arbre de contrôle entier, ou rien.** Les magasins de connaissance et d'artefacts sont liés à l'empreinte de plus haute marque de la chaîne d'événements ; un magasin restauré seul se brique (`KNOWLEDGE_HIGH_WATER_MISMATCH`).
+- **git est un témoin d'intégrité, pas un outil de restauration.** Un dépôt à la racine de l'espace de travail avec la liste d'exclusion documentée vous donne un second témoin ; les restaurations réelles passent par le manifeste de snapshot, car git ne peut pas recréer les répertoires vides que les magasins exigent.
+- **Ne copiez jamais les fichiers d'un magasin entre espaces de travail.** Chaque magasin est lié à l'historique de son propre espace. Le déplacement inter-espaces est aujourd'hui une surface de planification : `exchange-plan`, `exchange-dry-run` et `exchange-validate` existent ; un verbe d'application n'existe pas.
+
+**Périmètre testé**
+
+- **Un utilisateur OS, un système de fichiers local.** C'est là que chaque test et chaque observation sur hôte réel ont eu lieu. Le partage entre utilisateurs et les systèmes de fichiers réseau ne sont pas testés, donc pas revendiqués.
+
+**Surface de gouvernance**
+
+- **Douze verbes gouvernés n'ont pas encore de point d'entrée opérateur.** L'admission de profil, le routage de contexte, la planification de compatibilité et les familles d'adaptateurs exigent des autorités hors-bande que la CLI livrée ne peut pas accepter ; depuis un shell ils s'arrêtent sur des codes comme `ADAPTER_HOST_REQUIRED`. Les reçus d'activation sont réels — le harnais de preuve fournit ces autorités par programme — et une version ultérieure ajoutera le mécanisme opérateur.
+- **La maintenance destructrice des artefacts est réservée aux fixtures.** `artifact-archive-apply` et `artifact-archive-restore` sont marqués fixture-only dans le catalogue lisible par machine ; les espaces réels n'ont que des dry-runs, donc les magasins d'artefacts grossissent jusqu'à ce qu'une compaction gouvernée soit livrée.
+- **Le magasin de connaissance doit être explicitement reconnu comme jetable.** Sur les espaces non-fixture, il ne s'initialise qu'avec un acquittement explicite par invocation (`KNOWLEDGE_DISPOSABLE_ACK_REQUIRED`) : c'est un index dérivé, jamais la source de vérité.
+
 ## Statut, honnêtement
 
 - `0.1.0-rc.6` est un **candidat de pré-version**. L'API publique n'est pas encore stable.
 - **L'activation de Claude Code est active et a été observée sur un hôte réel**. Les étapes 1 à 3 installent, activent et désinstallent face à Claude Code `2.1.201` ; neuf observations ont été consignées, dont le fait que le résumé d'autorité parvient réellement au contexte du modèle. Une fois active, elle injecte un résumé en lecture seule au démarrage de la session, rien de plus — ce qu'elle s'interdit délibérément figure dans la liste des limites ci-dessus. Reçu : `docs/verification/host/claude-code.json`.
-- **L'activation n'a pas encore de chemin de commande destiné à l'utilisateur**. Ces étapes ont été pilotées par le harnais de preuve, qui fournit le contexte d'hôte gouverné par programme. La CLI livrée ne le fournit pas : lancer `claude-adapter-install` depuis un shell s'arrête sur `ADAPTER_HOST_REQUIRED`. La capacité et ses reçus sont réels ; c'est le point d'entrée pour l'opérateur qui n'est pas construit. Une version ultérieure l'ajoutera.
 - **Codex s'arrête à la lecture seule**. `adapter-generate`, `-validate`, `-simulate`, `-fallback` et `-rollback-plan` sont un outillage réel, déterministe et neutre vis-à-vis de l'hôte. Il n'existe ni installateur ni activation Codex, donc rien ici n'écrit sur un hôte Codex.
-- **Échelle**. Un espace de travail devient perceptiblement plus lent dès **quelques milliers** d'événements, et une commande unique franchit la seconde vers **6 600** (extrapolé d'une mesure sur Apple M3 ; `docs/verification/2026-07-20-event-chain-ceiling-samples.json`). Cela touche les lectures autant que les écritures. **Découpez les espaces de travail par projet ou par initiative** plutôt que de faire tourner une organisation entière sur une seule chaîne.
 - `supportedAosReleases` est vide : aucune compatibilité AOS externe n'est revendiquée.
 - Le mode release exige que le compagnon accepte les octets : son empreinte d'amorceur est publiée indépendamment, et les empreintes de release acceptées y sont compilées.
 
