@@ -20,7 +20,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,6 +60,14 @@ if (mode === "record-group-b") {
   // is the difference between evidence and a self-report.
   const reached = observed.includes(expected);
   document.groupB.status = reached ? "OBSERVED" : "CONTRADICTED";
+  // The top-line status is written by the group-A run, which cannot know that group B was
+  // recorded afterwards. Leaving it saying "group B absent" next to a recorded group B
+  // would make the receipt contradict itself, and the top line is the part a release note
+  // quotes without reading further.
+  const groupAComplete = String(document.status ?? "").startsWith("GROUP A COMPLETE");
+  document.status = groupAComplete && reached ? "COMPLETE — group A and group B both observed"
+    : groupAComplete ? "GROUP A COMPLETE — group B CONTRADICTED"
+      : `${document.status} — group B ${reached ? "observed" : "CONTRADICTED"}`;
   document.groupB.observations = [{
     id: "obs-1-summary-reaches-model",
     claim: "The emitted summary actually reaches the model as developer context",
@@ -287,7 +295,11 @@ async function run() {
     const document = JSON.parse(await readFile(receiptPath, "utf8"));
     document.groupB.status = "PREPARED — awaiting a credentialed run";
     document.groupB.expectedWorkspaceId = workspaceId;
-    document.groupB.probeRoot = probeRoot;
+    // Repository-relative, never absolute: this receipt is a committed, publishable
+    // artefact, and an absolute probe path carries the machine's directory layout and the
+    // operator's username into it. The privacy gate refuses exactly that, correctly — it
+    // caught this line the first time it shipped.
+    document.groupB.probeRoot = relative(repositoryRoot, probeRoot);
     await writeFile(receiptPath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
     process.stdout.write([
       "",
