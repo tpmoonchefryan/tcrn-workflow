@@ -116,7 +116,7 @@
         "tests/release-trust.test.mjs",
         "fixtures/release-trust/README.md"
       ],
-      "fixtureDigest": "46867c0dabac5dc6da0e1eab74ddedc9561f376bea9aa0747e780ab74b7c330a",
+      "fixtureDigest": "cb4725c1a7a9e340226069d3371f2593f9e72b64751339c03057802095d5a34b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -343,7 +343,7 @@
         "tests/protocol-v1.test.mjs",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "de3076a76aac1101be69f876deb297c14aaf4de97fd7fbdd2d81ada096157042",
+      "fixtureDigest": "0c7c2f02ca79495598885c333b96e57cf871420993a564823add056e899f1aa6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -414,7 +414,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "095101bfc951cf5b6a926d7f01793e35712f5fccb187954007c2e0e9c24d8778",
+      "fixtureDigest": "0dd42448fc2f9dea98a68d784496c63c946abf5dfaadd068cea4ceb2731c605f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1761,7 +1761,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "7b3300e0f70fce4a37bfbeee4cd050a857d294c80f65ec187b0fb1c972427962",
+      "fixtureDigest": "907d8fb5589cbdf508f2e7cbd33f1193d01925c54720e83b870ef4217c7fcbe6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1795,7 +1795,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "d91fdab997bd6ccf1bb0f7dd150f433e122411e7bdc14283015d067f3a5816b9",
+      "fixtureDigest": "8870253649cf8ca896814adaa2076358cd9dbe2b8f4103a40024a6841d2840ee",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

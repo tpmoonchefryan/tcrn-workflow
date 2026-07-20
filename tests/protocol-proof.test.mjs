@@ -151,6 +151,13 @@ test("canonical text and canonical document are distinct, named byte contracts",
   assert.deepEqual(canonicalProofBytes(value), canonicalDocumentBytes(value));
 });
 
+// This test reads product bytes out of dist/build while its claim's fixturePaths do not
+// list the protocol source, so editing the product does not invalidate this claim's
+// digest. That is a deliberate choice, not an oversight: the protocol source is pinned by
+// ten other claims, and the guard here is the assertion itself -- `runTests` builds before
+// running, so any protocol edit is compared against freshly compiled bytes on every full
+// run. Adding the protocol source to this claim's fixturePaths would churn its digest on
+// every protocol edit and buy nothing the assertion does not already catch.
 test("the product and tooling serializers agree byte-for-byte, modulo the document newline", () => {
   // Only values the PRODUCT admits are compared: it rejects non-integer numbers,
   // `undefined`, and over-deep structures on purpose, and the tooling copy is a

@@ -404,6 +404,11 @@ test("CLI rejects missing, duplicate, and unknown arguments", () => {
 // The helper repository's `cliNow` is deliberately NOT in scope. It accepts a narrower
 // grammar on purpose -- Z only, exactly three fractional digits -- and pinning it to this
 // corpus would convert a designed restriction into a reported defect.
+// As with the serializer pin in protocol-proof.test.mjs: this reads the product parser
+// from dist/build while this claim's fixturePaths list only the release-trust side, so a
+// protocol edit does not invalidate this claim's digest. Deliberate -- the protocol source
+// carries ten claims of its own, and the equivalence assertion below is the guard, run
+// against freshly built bytes on every full suite run.
 test("both strict RFC 3339 implementations accept and reject exactly the same grammar", async () => {
   const { parseStrictInstant } = await import("../dist/build/packages/protocol/src/index.js");
 
