@@ -8,7 +8,7 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · 한국어 · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.1.0--rc.6-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-65-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.1.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-65-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -269,7 +269,7 @@ Codex에는 이에 해당하는 것이 없습니다. 그 어댑터는 생성과 
 
 ## 상태, 정직하게
 
-- `0.1.0-rc.6`는 **프리릴리스 후보**입니다. 공개 API는 아직 안정적이지 않습니다.
+- `0.1.0`은 **첫 정식 릴리스**입니다. 시맨틱 버저닝이 적용되며, 0.x 범위에서는 공개 API가 마이너 버전 사이에 바뀔 수 있습니다.
 - **Claude Code 활성화는 라이브이며, 실제 호스트에서 관측되었습니다**. 1–3단계가 Claude Code `2.1.201`을 상대로 설치·활성화·제거를 수행했고, 권위 요약이 실제로 모델의 컨텍스트에 도달했다는 것을 포함해 아홉 건의 관측이 기록되었습니다. 라이브 상태에서 하는 일은 세션 시작 시 읽기 전용 요약을 주입하는 것뿐이며, 그 이상은 없습니다 — 의도적으로 하지 않는 일은 위의 경계 목록을 보십시오. 영수증: `docs/verification/host/claude-code.json`.
 - **Codex는 읽기 전용에서 멈춥니다**. `adapter-generate`·`-validate`·`-simulate`·`-fallback`·`-rollback-plan`은 실재하는 결정적 호스트 중립 도구입니다. Codex 설치 프로그램도 Codex 활성화도 없으며, 따라서 여기 있는 어떤 것도 Codex 호스트에 쓰지 않습니다.
 - `supportedAosReleases`는 비어 있습니다: 외부 AOS 호환성은 주장하지 않습니다.

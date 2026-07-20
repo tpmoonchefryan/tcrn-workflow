@@ -8,7 +8,7 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · Français
 
-![status](https://img.shields.io/badge/status-0.1.0--rc.6-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-65-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.1.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-65-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -269,7 +269,7 @@ Les quatre frontières ci-dessus sont des décisions de conception permanentes. 
 
 ## Statut, honnêtement
 
-- `0.1.0-rc.6` est un **candidat de pré-version**. L'API publique n'est pas encore stable.
+- `0.1.0` est la **première version acceptée**. Le versionnage sémantique s'applique ; dans la plage 0.x, l'API publique peut encore changer entre versions mineures.
 - **L'activation de Claude Code est active et a été observée sur un hôte réel**. Les étapes 1 à 3 installent, activent et désinstallent face à Claude Code `2.1.201` ; neuf observations ont été consignées, dont le fait que le résumé d'autorité parvient réellement au contexte du modèle. Une fois active, elle injecte un résumé en lecture seule au démarrage de la session, rien de plus — ce qu'elle s'interdit délibérément figure dans la liste des limites ci-dessus. Reçu : `docs/verification/host/claude-code.json`.
 - **Codex s'arrête à la lecture seule**. `adapter-generate`, `-validate`, `-simulate`, `-fallback` et `-rollback-plan` sont un outillage réel, déterministe et neutre vis-à-vis de l'hôte. Il n'existe ni installateur ni activation Codex, donc rien ici n'écrit sur un hôte Codex.
 - `supportedAosReleases` est vide : aucune compatibilité AOS externe n'est revendiquée.

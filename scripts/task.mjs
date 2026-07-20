@@ -518,7 +518,7 @@ async function verifyP8() {
     network: false,
     mutation: false,
     publication: false,
-    releaseStatus: "unpublished_candidate",
+    releaseStatus: "accepted_release",
     privacy: privacy.reasonCode,
     reproducibility: {
       sha256: independentlyRebuilt.sha256,

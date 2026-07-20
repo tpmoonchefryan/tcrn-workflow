@@ -9,8 +9,8 @@ import { canonicalJson } from "./canonical-json.mjs";
 import { compareCanonicalText } from "./canonical-order.mjs";
 import { readBoundRegularFile } from "./safe-io.mjs";
 
-export const P8_VERSION = "0.1.0-rc.6";
-export const P8_TAG = "v0.1.0-rc.6";
+export const P8_VERSION = "0.1.0";
+export const P8_TAG = "v0.1.0";
 export const P8_REPOSITORY = "tcrn-workflow";
 export const P8_WORKFLOW = "release";
 export const P8_SUPPORTED_AOS_RELEASES = Object.freeze([]);
@@ -174,7 +174,7 @@ export function validateP8ReleaseDocuments(documents) {
   assertion(JSON.stringify([...documents.keys()].sort(compareCanonicalText)) === JSON.stringify([...P8_RELEASE_ARTIFACTS].sort(compareCanonicalText)), "P8_RELEASE_DOCUMENT_SET");
   for (const path of P8_RELEASE_ARTIFACTS) assertion(Buffer.isBuffer(documents.get(path)), "P8_RELEASE_DOCUMENT_INVALID", path);
   const manifest = JSON.parse(documents.get("release-manifest.json").toString("utf8"));
-  assertion(manifest.schemaVersion === "tcrn.workflow-release-candidate-manifest.v1" && manifest.repository === P8_REPOSITORY && manifest.workflow === P8_WORKFLOW && manifest.version === P8_VERSION && manifest.tag === P8_TAG && manifest.releaseStatus === "unpublished_candidate" && JSON.stringify(manifest.supportedAosReleases) === "[]", "P8_RELEASE_MANIFEST_INVALID");
+  assertion(manifest.schemaVersion === "tcrn.workflow-release-candidate-manifest.v1" && manifest.repository === P8_REPOSITORY && manifest.workflow === P8_WORKFLOW && manifest.version === P8_VERSION && manifest.tag === P8_TAG && manifest.releaseStatus === "accepted_release" && JSON.stringify(manifest.supportedAosReleases) === "[]", "P8_RELEASE_MANIFEST_INVALID");
   const manifestBasis = { ...manifest };
   delete manifestBasis.manifestDigest;
   assertion(manifest.manifestDigest === sha256(Buffer.from(canonicalJson(manifestBasis), "utf8")), "P8_RELEASE_MANIFEST_DIGEST");
@@ -202,7 +202,7 @@ export function validateP8ReleaseDocuments(documents) {
     const bytes = documents.get(subject.path);
     assertion(Buffer.isBuffer(bytes) && subject.sha256 === sha256(bytes) && subject.size === bytes.length, "P8_RELEASE_PROVENANCE_SUBJECT_MISMATCH", String(subject.path));
   }
-  return { releaseStatus: "unpublished_candidate", supportedAosReleases: [], artifactCount: documents.size };
+  return { releaseStatus: "accepted_release", supportedAosReleases: [], artifactCount: documents.size };
 }
 
 export function buildP8ReleaseArtifacts({ sourceArchive, sbom }) {
@@ -215,7 +215,7 @@ export function buildP8ReleaseArtifacts({ sourceArchive, sbom }) {
     workflow: P8_WORKFLOW,
     version: P8_VERSION,
     tag: P8_TAG,
-    releaseStatus: "unpublished_candidate",
+    releaseStatus: "accepted_release",
     supportedAosReleases: P8_SUPPORTED_AOS_RELEASES,
     artifacts: [documentRecord(sourcePath, sourceArchive), documentRecord("sbom.cdx.json", sbom), documentRecord("release-notes.md", notes)],
   };

@@ -18,14 +18,14 @@ back, or claim-mismatched trust input is rejected.
 
 P1 defines and tests this admission boundary. It does not publish a release.
 
-## Unpublished P8 Candidate
+## P8 Release
 
-`0.1.0-rc.6` is an immutable local candidate only. Its compatibility manifest
-declares `supportedAosReleases: []`; it is not a supported AOS release pair and
-must not be published, pushed, or treated as a public release. P8 produces
-deterministic local source and release artifacts solely for later gate review.
+`0.1.0` is an accepted release. Its compatibility manifest declares
+`supportedAosReleases: []`; it is not a supported AOS release pair. P8 produces
+deterministic source and release artifacts; publication is the Owner-signed
+annotated tag and the GitHub Release that carries them.
 
-The local `0.1.0-rc.6` candidate records `supportedAosReleases: []`; it does not
+The `0.1.0` release records `supportedAosReleases: []`; it does not
 enable a live compatibility pair, connected mode, or AOS mutation.
 
 ## Protocol V1
