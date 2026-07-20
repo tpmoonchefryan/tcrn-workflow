@@ -3,6 +3,45 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.1.0 — 2026-07-21
+
+First accepted release. Everything below is relative to `0.1.0-rc.6`; the full
+narrative is `docs/releases/0.1.0.md`.
+
+### Added — evidence against a real host
+
+- **`pnpm host-evidence`**: a productionised harness that observes the Claude
+  Code activation ladder against a real host binary — eight credential-free
+  group-A observations plus a credentialed group-B readback proving the
+  injected authority summary reaches the model's context. Receipt:
+  `docs/verification/host/claude-code.json` (Claude Code `2.1.201`).
+- **Event-chain ceiling measurement**: single-command latency crosses one
+  second around ~6,600 events (Apple M3, extrapolated); raw samples in
+  `docs/verification/2026-07-20-event-chain-ceiling-samples.json`.
+- **`canonicalDocumentBytes`**: the text-plus-trailing-newline byte contract
+  gets a name; `canonicalJsonBytes` remains the release-trust signature basis.
+- **Shared RFC 3339 corpus** pinning `parseStrictInstant` and
+  `strictRfc3339Instant` to each other, accept and reject sides both.
+- **`pnpm guard-check`**: reverting a registered guard and watching its named
+  test go red is now a machine judgement over a 12-entry registry.
+
+### Changed — documentation now states what was measured
+
+- All five READMEs rewritten: measured activation status (live on Claude Code,
+  no operator command path yet — `ADAPTER_HOST_REQUIRED` from a shell), a
+  twelve-entry **Known limits** section, and a **Driver assumptions** group
+  (integrity does not depend on the driving model; progress does).
+- The recovery stress test asserts what the implementation promises — at most
+  one winner plus liveness — instead of exactly-one, which a green rerun on
+  identical bytes had shown to be over-claimed.
+- CI actions pinned to v7 line; npm version updates are advisory-driven.
+
+### Release
+
+- Version `0.1.0`; `releaseStatus` moves from `unpublished_candidate` to
+  `accepted_release`; the compatibility manifest still declares
+  `supportedAosReleases: []` — no AOS pair, no connected mode.
+
 ## 0.1.0-rc.6 — 2026-07-19
 
 ### Fixed — data loss and permanent-lockout defects

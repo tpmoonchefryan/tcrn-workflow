@@ -8,7 +8,7 @@
 
 English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.1.0--rc.6-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-65-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.1.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-65-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -269,7 +269,7 @@ The four boundaries above are permanent design decisions. The limits below are t
 
 ## Status, honestly
 
-- `0.1.0-rc.6` is a **pre-release candidate**. The public API is not yet stable.
+- `0.1.0` is the **first accepted release**. Semantic Versioning applies; in the 0.x range the public API may still change between minor versions.
 - **Claude Code activation is live and has been observed on a real host.** Steps 1–3 install, activate and uninstall against Claude Code `2.1.201`; nine observations were recorded, including that the authority summary actually arrives in the model's context. What it does when live is inject a read-only summary at session start, nothing more — see the boundary list above for what it deliberately does not do. Receipt: `docs/verification/host/claude-code.json`.
 - **Codex stops at read-only.** `adapter-generate`, `-validate`, `-simulate`, `-fallback` and `-rollback-plan` are real, deterministic, host-neutral tooling. There is no Codex installer and no Codex activation, so nothing is written to a Codex host by anything here.
 - `supportedAosReleases` is empty: no external AOS compatibility is claimed.
