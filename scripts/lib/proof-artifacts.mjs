@@ -5,7 +5,7 @@ import { constants } from "node:fs";
 import { lstat, open, readdir, realpath, rename, rm } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
-import { canonicalJsonBytes } from "./canonical-json.mjs";
+import { canonicalDocumentBytes } from "./canonical-json.mjs";
 import { compareCanonicalText } from "./canonical-order.mjs";
 import { fileRecord, readSourceFile, repositoryRoot, toPosixPath, walkFiles } from "./files.mjs";
 import { readBoundRegularFile } from "./safe-io.mjs";
@@ -254,7 +254,9 @@ async function rebuiltManifest(root, virtual) {
   validateManifest(manifest);
   const inputs = await Promise.all((await normativePaths(root)).map((path) => record(root, path, virtual)));
   inputs.sort((left, right) => compareCanonicalText(left.path, right.path));
-  return { ...manifest, basisDigest: sha256(Buffer.concat([canonicalJsonBytes(inputs), Buffer.from("\n", "utf8")])), inputs };
+  // OD-16 F1: this was `Buffer.concat([canonicalJsonBytes(inputs), Buffer.from("\n")])`
+  // -- the document contract, spelled by hand. Same bytes, one name.
+  return { ...manifest, basisDigest: sha256(canonicalDocumentBytes(inputs)), inputs };
 }
 
 async function assertNoTemporaryResidue(root) {
