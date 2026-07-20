@@ -61,18 +61,20 @@ no new capability; it tests whether existing proof still bites.
 
 Scope: `guard-check` stays a standalone script wired into `push-gate`. It is
 deliberately **not** folded into `verify:p1`, because each entry costs a build
-plus a test run (~4-5s measured) and ten entries would push the P1 wall clock
-toward the 180s escalation trigger that protects the "run it on every change"
-discipline.
+plus a test run (~4-5s measured) and the registry's twelve entries would push the
+P1 wall clock toward the 180s escalation trigger that protects the "run it on
+every change" discipline.
 
-**Current.** `{proofLines: 25905, productLines: 16011, ratio: 1.618}`. The rc.6
-fix and optimization program moved this from `1.62` to `1.599` — it added proof
-to fixes that had shipped without it and retired four dead release helpers, and
-no package in it needed the exception clause. The OD-21 guard checker above then
-moved it back to `1.618`, which is the cost that exception bought and is recorded
-here rather than left implicit. The ratio did not approach `1.0` at any point, so
-the rule still binds. Re-measure rather than quote this number; it is a snapshot,
-not a pin.
+**Current.** `{proofLines: 26049, productLines: 16011, ratio: 1.6269}`, measured
+2026-07-20. The rc.6 fix and optimization program moved this from `1.62` to
+`1.599` — it added proof to fixes that had shipped without it and retired four
+dead release helpers, and no package in it needed the exception clause. The
+OD-21 guard checker above then moved it back to `1.618`, which is the cost that
+exception bought. The post-release hardening that followed — guard registry
+entries eleven and twelve, and the failure-pattern register with its push-gate
+checks — accounts for the remainder. The ratio did not approach `1.0` at any
+point, so the rule still binds. Re-measure rather than quote this number; it is a
+snapshot, not a pin, and it was already stale by 144 lines when re-measured.
 
 **Measurement.** Run the report-only command:
 
