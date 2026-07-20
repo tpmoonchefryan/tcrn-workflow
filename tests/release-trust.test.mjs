@@ -392,3 +392,80 @@ test("CLI rejects missing, duplicate, and unknown arguments", () => {
     assert.equal(JSON.parse(result.stderr).reasonCode, reasonCode);
   }
 });
+
+// OD-16 F7. Two strict RFC 3339 parsers exist and neither is going away: the protocol
+// package's `parseStrictInstant` (integer civil arithmetic, used by the product) and
+// this module's `strictRfc3339Instant` (Date arithmetic, reachable from the published
+// `tcrn-workflow-release-verify` bin, which must run with no build step). The 2026-07-18
+// audit recorded them as "equivalent today, will drift on the next edit" and nothing was
+// checking that. This corpus is the check: one grammar, two implementations, and any edit
+// that moves one and not the other turns it red.
+//
+// The helper repository's `cliNow` is deliberately NOT in scope. It accepts a narrower
+// grammar on purpose -- Z only, exactly three fractional digits -- and pinning it to this
+// corpus would convert a designed restriction into a reported defect.
+test("both strict RFC 3339 implementations accept and reject exactly the same grammar", async () => {
+  const { parseStrictInstant } = await import("../dist/build/packages/protocol/src/index.js");
+
+  const accepted = [
+    "2026-07-11T12:00:00Z",
+    "2026-07-11T12:00:00.1Z",
+    "2026-07-11T12:00:00.123Z",
+    "2026-07-11T12:00:00.123456789Z",
+    "2026-07-11T12:00:00+08:00",
+    "2026-07-11T12:00:00-05:30",
+    "2026-07-11T12:00:00.5+00:00",
+    "2024-02-29T00:00:00Z",
+    "2000-02-29T23:59:59Z",
+    "1970-01-01T00:00:00Z",
+    "2026-12-31T23:59:59.999999999-12:00",
+  ];
+  const rejected = [
+    "2026-07-11",
+    "July 11, 2026 12:00:00",
+    "2026-02-30T00:00:00Z",
+    "2023-02-29T00:00:00Z",
+    "1900-02-29T00:00:00Z",
+    "2026-13-01T00:00:00Z",
+    "2026-00-10T00:00:00Z",
+    "2026-07-00T00:00:00Z",
+    "2026-07-11T24:00:00Z",
+    "2026-07-11T12:60:00Z",
+    "2026-07-11T12:00:60Z",
+    "2026-07-11t12:00:00z",
+    "2026-07-11T12:00:00",
+    "2026-07-11T12:00:00.1234567890Z",
+    "2026-07-11T12:00:00.Z",
+    "2026-07-11T12:00:00+24:00",
+    "2026-07-11T12:00:00+08:60",
+    "2026-07-11T12:00:00 Z",
+    " 2026-07-11T12:00:00Z",
+    "",
+  ];
+
+  const admits = (parse, value) => {
+    try { parse(value); return true; } catch { return false; }
+  };
+
+  for (const value of accepted) {
+    assert.equal(admits((v) => strictRfc3339Instant(v, "TIME", "value"), value), true, `release-trust must accept ${value}`);
+    assert.equal(admits(parseStrictInstant, value), true, `protocol must accept ${value}`);
+    // Agreeing on admission is not enough: they must agree on the instant itself, or a
+    // receipt verified by one and produced by the other silently disagrees about when.
+    assert.equal(
+      strictRfc3339Instant(value, "TIME", "value"),
+      parseStrictInstant(value),
+      `both implementations must derive the same nanoseconds for ${value}`,
+    );
+  }
+  for (const value of rejected) {
+    assert.equal(admits((v) => strictRfc3339Instant(v, "TIME", "value"), value), false, `release-trust must reject ${value}`);
+    assert.equal(admits(parseStrictInstant, value), false, `protocol must reject ${value}`);
+  }
+
+  // Non-strings are refused by both rather than coerced.
+  for (const value of [null, undefined, 42, {}, [], new Date()]) {
+    assert.equal(admits((v) => strictRfc3339Instant(v, "TIME", "value"), value), false);
+    assert.equal(admits(parseStrictInstant, value), false);
+  }
+});
