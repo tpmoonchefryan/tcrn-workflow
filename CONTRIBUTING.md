@@ -110,3 +110,18 @@ credentialed session and is the Owner's to run. **When group B has not been run
 the receipt must show it as absent rather than omit it**: a receipt that lists
 only what was checked reads as complete, and group A going green is exactly the
 result that would otherwise be mistaken for the whole thing.
+
+Group B is two commands, not a procedure to reconstruct:
+
+```sh
+pnpm host-evidence --prepare-group-b     # installs a probe, prints what to run
+# run the printed `claude -p …` in the probe, then:
+pnpm host-evidence --record-group-b --observed "<the answer>" --runner "<who>"
+```
+
+The question asks the model which workspace id its session context mentions. It
+can only know that from the summary the hook emitted, so the answer is the
+observation — which is why `--record-group-b` checks the answer against the
+installed id itself rather than accepting a verdict. A reply that does not name
+it is recorded as `CONTRADICTED`, not quietly dropped, and the runner's name goes
+in the receipt beside the result.
