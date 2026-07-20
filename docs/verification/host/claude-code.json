@@ -1,0 +1,87 @@
+{
+  "schema": "tcrn.host-evidence.v1",
+  "status": "GROUP A COMPLETE — group B absent",
+  "observedAt": "2026-07-20",
+  "host": {
+    "product": "Claude Code",
+    "versionSelfReport": "2.1.201",
+    "versionFromTranscript": "2.1.201",
+    "versionSourcesAgree": true,
+    "note": "hostVersionReadback is asserted by the installer's caller, not read back: the SessionStart payload carries no version field (OD-C4)."
+  },
+  "method": {
+    "installer": "real, two phases (bundle, then --step2 activation)",
+    "detection": "filesystem side effects and atime, never session stdout",
+    "contextResult": "constructed directly; `context-route` needs a profile admission receipt, which has no producing CLI verb",
+    "atimeCaveat": "a filesystem mounted noatime cannot show the handler ran; obs-4 would read FAIL there and the run should be treated as inconclusive rather than as a defect"
+  },
+  "groupA": {
+    "description": "observable without credentials",
+    "observations": [
+      {
+        "id": "ladder-binding",
+        "claim": "Activation against a root with no Step-1 install is refused",
+        "result": "PASS",
+        "evidence": "INSTALLER_ACTIVATION_PRECONDITION"
+      },
+      {
+        "id": "obs-4-merge-accepted",
+        "claim": "The real installer's merged settings.json is accepted, and the user's hook and the TCRN hook both fire",
+        "result": "PASS",
+        "evidence": "user marker written; handler atime 1784535223503.0298 -> 1784535223943.7473",
+        "releaseBlocking": true
+      },
+      {
+        "id": "baseline",
+        "claim": "With a valid project.json the installed handler emits the authority summary",
+        "result": "PASS",
+        "evidence": "exit 0, 273 bytes emitted"
+      },
+      {
+        "id": "obs-2-fail-open",
+        "claim": "A corrupted project.json makes the handler emit nothing and still exit 0",
+        "result": "PASS",
+        "evidence": "exit 0, 0 bytes emitted",
+        "releaseBlocking": true
+      },
+      {
+        "id": "obs-3-over-budget",
+        "claim": "A summary over the 1024-byte budget is suppressed entirely, not truncated",
+        "result": "PASS",
+        "evidence": "exit 0, 0 bytes emitted"
+      },
+      {
+        "id": "obs-5-byte-reversal",
+        "claim": "Removing the activation restores settings.json byte for byte",
+        "result": "PASS",
+        "evidence": "identical to the pre-install bytes",
+        "releaseBlocking": true
+      },
+      {
+        "id": "obs-5-uninstall",
+        "claim": "After removal the TCRN handler no longer runs and the user's hook still fires",
+        "result": "PASS",
+        "evidence": "user marker written; handler atime 1784535223943.7473 -> 1784535223943.7473",
+        "releaseBlocking": true
+      },
+      {
+        "id": "obs-6-host-version",
+        "claim": "The host version is recorded from out-of-band sources that agree",
+        "result": "PASS",
+        "evidence": "self-report 2.1.201; transcript 2.1.201"
+      }
+    ]
+  },
+  "groupB": {
+    "description": "requires a credentialed session; must be run by the Owner",
+    "status": "ABSENT",
+    "observations": [
+      {
+        "id": "obs-1-summary-reaches-model",
+        "claim": "The emitted summary actually reaches the model as developer context",
+        "result": "NOT OBSERVED",
+        "runbook": "In a project with the payload installed run: claude -p \"What workspace id is mentioned in your session context?\" — an answer naming the installed workspace id proves it. Record who ran it and where."
+      }
+    ]
+  }
+}

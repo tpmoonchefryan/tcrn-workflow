@@ -91,3 +91,26 @@ and always exits `0`. The command is a measurement, not a gate: it is
 intentionally absent from the verification map and from continuous integration,
 precisely so the budget rule does not itself add the kind of gate it governs.
 The rule binds reviewers and the Owner gate, not CI.
+
+## Evidence is not a gate — `pnpm host-evidence` (OD-C3, 2026-07-20)
+
+`scripts/host-evidence.mjs` drives the real Claude Code binary against a real
+installation of the adapter payload and writes
+`docs/verification/host/claude-code.json`. It is **release evidence, not a
+verification gate**, and the distinction decides three things about it:
+
+- It is **not** in the `verify:*` namespace, **not** in the verification map,
+  and **no** gate or CI job depends on it. The budget rule's ban on new gates is
+  therefore not engaged and no exception was needed.
+- It cannot run where Claude Code is absent. A check nobody can reproduce becomes
+  a check everybody learns to skip, which is how a gate starts lying.
+- Its **absence blocks a release**; its exit code blocks nothing. Those are
+  different mechanisms and are deliberately not expressed by the same one.
+
+The receipt is written in two groups because they need different runners. Group A
+is observable without credentials — hooks fire before authentication, so a
+sandboxed session that dies at 401 has still run them. Group B needs a
+credentialed session and is the Owner's to run. **When group B has not been run
+the receipt must show it as absent rather than omit it**: a receipt that lists
+only what was checked reads as complete, and group A going green is exactly the
+result that would otherwise be mistaken for the whole thing.
