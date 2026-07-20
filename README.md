@@ -12,7 +12,7 @@ English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
-[Why](#why-this-project-exists) · [Is this for you?](#is-this-for-you) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Plain answers](#plain-answers-to-fair-questions) · [License](#license)
+[Why](#why-this-project-exists) · [Is this for you?](#is-this-for-you) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Plain answers](#plain-answers-to-fair-questions) · [Known limits](#known-limits) · [License](#license)
 
 `Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
 
@@ -233,13 +233,39 @@ Most projects hide their edges. Ours are load-bearing — the same discipline th
 - **Whether your code is correct.** The claim ledger guarantees that a *declared* capability keeps an executable proof, and that overclaiming fails the build. It cannot tell you the claim set is the right one. Choosing what to claim is irreducibly a human judgement, and no amount of provenance substitutes for it.
 - **Identity and time.** Actor attestation records a *declared* actor id, not an authenticated one, and the chain proves ordering, not wall-clock truth. The chain is tamper-evident against edits within it; it is not anchored outside the filesystem it lives on.
 
+## Known limits
+
+The four boundaries above are permanent design decisions. The limits below are the operational facts of this release: each one is enforced by a reason code, pinned by a measurement, or stated plainly as an untested area.
+
+**Workspace topology and scale**
+
+- **One writer per workspace.** Every mutation serializes on a lease inside the workspace's control tree; competitors fail closed and retry. Parallelism belongs above the storage layer: many workspaces, not many writers.
+- **Partition workspaces per project or initiative.** A workspace slows perceptibly in the low thousands of events, and a single command crosses one second around 6,600 (Apple M3, extrapolated; raw samples in `docs/verification/2026-07-20-event-chain-ceiling-samples.json`). Reads pay the same cost as writes, and the chain has no compaction — one organisation-wide workspace is exactly the shape this punishes.
+- **Sharing one workspace across separately-deployed projects fights the design.** It works mechanically, since every verb takes an explicit absolute path — but all writers queue on a single lease, every accessor must present identical canonical paths for all five roots (`WORKSPACE_SCHEMA_INVALID` otherwise), and the merged history reaches the scale limit sooner. Serving many projects is a job for a layer above this one; the AOS contract shipped here is a naming-and-linkage ledger only, and `supportedAosReleases` is empty.
+- **Many side-by-side workspaces are the supported shape.** Nothing registers or discovers them; each is an independent single-writer domain, and they may share one framework checkout and one release-trust root.
+
+**Backup and portability**
+
+- **Restore is same-path-only.** All five root identities are pinned at init and re-checked on every resolve (`WORKSPACE_SCHEMA_INVALID`); restoring to another path or machine is out of scope for V1 (`WORKSPACE_MIGRATION_APPLY_UNAVAILABLE`). Back up anywhere; restore in place.
+- **Restore the whole control tree or nothing.** The knowledge and artifact stores bind the event chain's high-water digest, so a store restored on its own bricks (`KNOWLEDGE_HIGH_WATER_MISMATCH`).
+- **git is an integrity witness, not a restore tool.** A repository at the workspace root with the documented ignore list gives you a second witness; actual restores go through the snapshot manifest, because git cannot recreate the empty directories the stores require.
+- **Never copy store files between workspaces.** Each store is bound to its own workspace's history. Cross-workspace movement is a planning surface today: `exchange-plan`, `exchange-dry-run` and `exchange-validate` exist, and an applying verb does not.
+
+**Tested envelope**
+
+- **One OS user, local filesystem.** That is where every test and every real-host observation ran. Cross-user sharing and network filesystems are untested and therefore unclaimed.
+
+**Governance surface**
+
+- **Twelve governed verbs have no operator entry point yet.** Profile admission, context routing, compatibility planning and the adapter families require out-of-band authorities that the shipped CLI cannot accept; from a shell they stop at codes like `ADAPTER_HOST_REQUIRED`. The activation receipts are real — the evidence harness supplies those authorities programmatically — and a later release adds the operator mechanism.
+- **Destructive artifact maintenance is fixture-only.** `artifact-archive-apply` and `artifact-archive-restore` are marked fixture-only in the machine-readable catalog; real workspaces get dry-runs only, so artifact stores grow until governed compaction ships.
+- **The knowledge store must be acknowledged as disposable.** On non-fixture workspaces it initializes only under an explicit per-invocation acknowledgment (`KNOWLEDGE_DISPOSABLE_ACK_REQUIRED`): it is a derived index, never the system of record.
+
 ## Status, honestly
 
 - `0.1.0-rc.6` is a **pre-release candidate**. The public API is not yet stable.
 - **Claude Code activation is live and has been observed on a real host.** Steps 1–3 install, activate and uninstall against Claude Code `2.1.201`; nine observations were recorded, including that the authority summary actually arrives in the model's context. What it does when live is inject a read-only summary at session start, nothing more — see the boundary list above for what it deliberately does not do. Receipt: `docs/verification/host/claude-code.json`.
-- **Activation has no user-facing command path yet.** Those steps were driven by the evidence harness, which supplies the governed host context programmatically. The shipped CLI does not, so running `claude-adapter-install` from a shell stops at `ADAPTER_HOST_REQUIRED`. The capability and its receipts are real; the operator entry point is not built. A later release adds it.
 - **Codex stops at read-only.** `adapter-generate`, `-validate`, `-simulate`, `-fallback` and `-rollback-plan` are real, deterministic, host-neutral tooling. There is no Codex installer and no Codex activation, so nothing is written to a Codex host by anything here.
-- **Scale.** A workspace becomes perceptibly slower somewhere in the low thousands of events, and a single command crosses one second at roughly 6,600 (extrapolated from measurement on an Apple M3; `docs/verification/2026-07-20-event-chain-ceiling-samples.json`). It affects reads as much as writes. Partition workspaces per project or initiative rather than running one chain for an organisation.
 - `supportedAosReleases` is empty: no external AOS compatibility is claimed.
 - Release mode requires the companion helper to accept the bytes: its bootstrap digest is published independently, and the accepted release digests are compiled into it.
 
