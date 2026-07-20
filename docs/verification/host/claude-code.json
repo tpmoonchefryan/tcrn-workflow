@@ -28,7 +28,7 @@
         "id": "obs-4-merge-accepted",
         "claim": "The real installer's merged settings.json is accepted, and the user's hook and the TCRN hook both fire",
         "result": "PASS",
-        "evidence": "user marker written; handler atime 1784539348287.23 -> 1784539348987.0225",
+        "evidence": "user marker written; handler atime 1784541049049.97 -> 1784541051216.0571",
         "releaseBlocking": true
       },
       {
@@ -61,7 +61,7 @@
         "id": "obs-5-uninstall",
         "claim": "After removal the TCRN handler no longer runs and the user's hook still fires",
         "result": "PASS",
-        "evidence": "user marker written; handler atime 1784539348987.0225 -> 1784539348987.0225",
+        "evidence": "user marker written; handler atime 1784541051216.0571 -> 1784541051216.0571",
         "releaseBlocking": true
       },
       {
@@ -80,7 +80,7 @@
         "id": "obs-1-summary-reaches-model",
         "claim": "The emitted summary actually reaches the model as developer context",
         "result": "NOT OBSERVED",
-        "runbook": "In a project with the payload installed run: claude -p \"What workspace id is mentioned in your session context?\" — an answer naming the installed workspace id proves it. Record who ran it and where."
+        "runbook": "Run pnpm host-evidence --prepare-group-b; it mints a nonce workspace id, installs the payload, and prints the exact tool-disabled command. Then pnpm host-evidence --record-group-b --observed \"<answer>\" --runner \"<who>\"."
       }
     ]
   }

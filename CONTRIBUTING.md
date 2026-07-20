@@ -119,9 +119,23 @@ pnpm host-evidence --prepare-group-b     # installs a probe, prints what to run
 pnpm host-evidence --record-group-b --observed "<the answer>" --runner "<who>"
 ```
 
-The question asks the model which workspace id its session context mentions. It
-can only know that from the summary the hook emitted, so the answer is the
-observation — which is why `--record-group-b` checks the answer against the
-installed id itself rather than accepting a verdict. A reply that does not name
-it is recorded as `CONTRADICTED`, not quietly dropped, and the runner's name goes
-in the receipt beside the result.
+The question asks the model which workspace id its session context mentions, and
+the answer is the observation — which is why `--record-group-b` checks it against
+the installed id rather than accepting a verdict. A reply that does not name it
+is recorded as `CONTRADICTED`, not quietly dropped, and the runner's name goes in
+the receipt beside the result.
+
+**Two properties make that answer evidence rather than a coincidence, and both
+are required.** The workspace id is a nonce minted per preparation, so it cannot
+be guessed from the probe's path or from anything the model saw before. And the
+printed command passes `--tools ""`, so the id cannot be read out of
+`project.json` — which is sitting right there and cannot be removed, because the
+handler reads it. Drop either one and a correct answer becomes compatible with
+the summary never having reached the model at all, which is the single thing this
+observation exists to establish.
+
+A group-A run rewrites the receipt, but **it carries a recorded group B forward
+rather than resetting it**, marking it as taken against earlier bytes. Group B
+costs a human a session; regenerating group A must never be able to silently
+spend that. Stale provenance stated is recoverable — a blank where an observation
+used to be is not.

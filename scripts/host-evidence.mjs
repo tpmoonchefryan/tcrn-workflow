@@ -124,7 +124,14 @@ const handlerPath = resolve(probeRoot, ".claude/tcrn-workflow/session-start.mjs"
 const settingsPath = resolve(probeRoot, ".claude/settings.json");
 
 const sha = (label) => canonicalSha256(label);
-const workspaceId = "workspace:host-evidence";
+// Group B asks the model which workspace id its context mentions, and the answer only
+// proves anything if the id could not have come from anywhere else. A fixed, semantic id
+// fails that twice over: it is guessable from the probe's own path, and it is sitting in
+// project.json for any Read tool to fetch. The id is therefore a nonce, and the printed
+// command disables tools — nonce against guessing, no tools against reading. Either one
+// alone leaves a way to answer correctly without the summary ever reaching the model.
+const nonce = createHash("sha256").update(`${Date.now()}:${process.pid}:${Math.random()}`).digest("hex").slice(0, 16);
+const workspaceId = mode === "group-a" ? "workspace:host-evidence" : `workspace:hev-${nonce}`;
 const projectId = "project:host-evidence";
 
 // The context route result is constructed here rather than obtained from `context-route`,
@@ -286,15 +293,18 @@ async function run() {
       "",
       "Group B needs one credentialed session. Two commands:",
       "",
-      `  cd ${probeRoot} && claude -p "What workspace id is mentioned in your session context?"`,
+      `  cd ${probeRoot} && claude -p --tools "" "Answer only from your session context, without using any tool: what workspace id is mentioned there?"`,
       "",
       "  then, back in the Workflow repository:",
       "",
       `  pnpm host-evidence --record-group-b --observed "<paste the answer>" --runner "<your name>"`,
       "",
-      `The answer proves the summary reached the model only if it names ${workspaceId} —`,
-      "the model has no other way to know it. --record-group-b checks that rather than",
-      "taking anyone's word, and writes the result and the runner into the receipt.",
+      `The answer proves the summary reached the model only if it names ${workspaceId},`,
+      "which is a nonce minted for this probe. `--tools \"\"` disables every tool, so the",
+      "id cannot be read out of project.json either — without both, an answer could be",
+      "correct while the summary never reached the model at all, which is the one thing",
+      "this observation exists to establish. --record-group-b checks the answer against",
+      "the nonce rather than taking anyone's word, and records the runner beside it.",
       "",
     ].join("\n"));
     process.exitCode = 0;
@@ -404,6 +414,20 @@ async function run() {
       }],
     },
   };
+  // A group-A run rewrites the receipt, and a recorded group B is a human's observation
+  // that rerunning anything here cannot regenerate. Resetting it to ABSENT would silently
+  // destroy the more expensive half of the evidence, so it is carried forward and marked
+  // as taken against earlier bytes: stated stale provenance is recoverable, a blank where
+  // an observation used to be is not.
+  const carried = await readFile(receiptPath, "utf8")
+    .then((text) => JSON.parse(text).groupB).catch(() => null);
+  const carriedStatus = String(carried?.status ?? "ABSENT");
+  if (carried && !carriedStatus.startsWith("ABSENT") && !carriedStatus.startsWith("PREPARED")) {
+    receipt.groupB = {
+      ...carried,
+      status: `${carriedStatus} — carried forward from an earlier payload; re-run --prepare-group-b to observe it against these bytes`,
+    };
+  }
   await mkdir(dirname(receiptPath), { recursive: true });
   // The repository formats tracked JSON at two-space indent; the receipt is a committed
   // document, not a digest input, so it follows that rather than the canonical form.
@@ -411,7 +435,7 @@ async function run() {
 
   const failed = blocking.filter((entry) => entry.result !== "PASS");
   process.stdout.write(`${JSON.stringify(failed.length === 0
-    ? { ok: true, reasonCode: "HOST_EVIDENCE_RECORDED", host: versionSelfReport, groupB: "ABSENT" }
+    ? { ok: true, reasonCode: "HOST_EVIDENCE_RECORDED", host: versionSelfReport, groupB: receipt.groupB.status }
     : { ok: false, reasonCode: "HOST_EVIDENCE_BLOCKING_OBSERVATION_FAILED", failed: failed.map((entry) => entry.id) })}\n`);
   process.exitCode = failed.length === 0 ? 0 : 1;
 }
