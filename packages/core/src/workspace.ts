@@ -65,8 +65,8 @@ import {
 import { AssignmentGateError, GATE_VERSION, validateGateRecord } from "./assignment-gate.js";
 import type { ConferenceMinutes, ConferencePosition, ConferenceRequest } from "./conference.js";
 import type { GateRecord } from "./assignment-gate.js";
-import { permitsGateOutcome } from "./gate-identity.js";
-import type { GateIdentityAuthorityContext } from "./gate-identity.js";
+import { GateIdentityError, gateIdentityDecision, permitsGateOutcome, validateGateIdentityDecision } from "./gate-identity.js";
+import type { GateIdentityAuthorityContext, GateIdentityDecision } from "./gate-identity.js";
 import type { CanonicalRoot } from "./root-identity.js";
 import type { ExplicitRoot } from "./index.js";
 
@@ -655,7 +655,7 @@ function extensionRecordOrCorrupt<T>(validate: () => T): T {
   try {
     return validate();
   } catch (error) {
-    if (error instanceof ConferenceError || error instanceof AssignmentGateError) {
+    if (error instanceof ConferenceError || error instanceof AssignmentGateError || error instanceof GateIdentityError) {
       fail("WORKSPACE_EVENT_CORRUPT", `${error.reasonCode}:${error.message}`);
     }
     throw error;
@@ -791,6 +791,15 @@ const GATE_TRANSITIONS: Record<GateRecord["status"], readonly GateRecord["status
 // row), so the reducer re-resolves the identical evidence a hand-tampered log
 // cannot forge.
 const GATE_EVIDENCE_KEY = "gate-evidence:conference-minutes";
+// gate-v1: what the identity check decided, written down so an auditor can see which
+// roster was in force when this gate closed. It is deliberately self-contained -- the
+// acting actor and the roster's digest, nothing that has to be fetched to be read.
+//
+// Replay checks this entry's shape and never re-reads the roster. That is the whole
+// point: a chain whose readability depended on an external file still being present
+// would brick on ordinary key rotation, or on a restore onto a machine that never had
+// it. The digest here is a record of what was checked, not something to check against.
+const GATE_IDENTITY_KEY = "gate-identity:decision";
 const CONFERENCE_MINUTES_LOCATOR_NAMESPACE = "conference-minutes";
 
 function resolveGateEvidence(locator: string, gate: GateRecord, minutes: readonly ConferenceMinutes[], conferences: readonly ConferenceRequest[]): boolean {
@@ -817,6 +826,10 @@ function resolveGateEvidence(locator: string, gate: GateRecord, minutes: readonl
 
 function gateEvidenceExtensions(base: Readonly<Record<string, unknown>>, locator: string): Readonly<Record<string, unknown>> {
   return { ...base, [GATE_EVIDENCE_KEY]: { required: false, value: locator } };
+}
+
+function gateIdentityExtensions(base: Readonly<Record<string, unknown>>, decision: GateIdentityDecision): Readonly<Record<string, unknown>> {
+  return { ...base, [GATE_IDENTITY_KEY]: { required: false, value: { actorId: decision.actorId, authorityFileSha256: decision.authorityFileSha256 } } };
 }
 
 function readGateEvidenceLocator(extensions: Readonly<Record<string, unknown>>): string | undefined {
@@ -1060,7 +1073,33 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
           if (locator === undefined || !resolveGateEvidence(locator, current, [...conferenceMinutes.values()], [...conferences.values()])) {
             fail("WORKSPACE_EVENT_CORRUPT", `gate ${record.id} evidence does not resolve`);
           }
-          if (canonicalJson(record.extensions) !== canonicalJson(gateEvidenceExtensions(current.extensions, locator))) {
+          // The identity entry is optional here and stays optional forever: replay has
+          // no roster and cannot know whether one was required when this event was
+          // written. What it can do without reading anything external is insist the
+          // entry is well formed, and that the actor it names is the actor the event
+          // was signed with -- a record that disagrees with itself is corrupt whoever
+          // wrote it.
+          let expectedExtensions = gateEvidenceExtensions(current.extensions, locator);
+          const identityEntry = record.extensions[GATE_IDENTITY_KEY];
+          if (identityEntry !== undefined) {
+            const decision = extensionRecordOrCorrupt(() => validateGateIdentityDecision(
+              (identityEntry as { readonly value?: unknown } | null)?.value,
+            ));
+            const signer = payload !== null && typeof payload === "object" && !Array.isArray(payload)
+              ? (payload as Readonly<Record<string, JsonValue>>).actor
+              : undefined;
+            // Before attestation is enabled the payload carries no actor, so there is
+            // nothing to contradict and the entry stands uncorroborated. That is worth
+            // knowing rather than papering over: on such a chain the decision names an
+            // actor the event itself does not, and only a deployment that enables
+            // attestation gets the cross-check. Attestation stays a separate opt-in --
+            // gating one irreversible setting behind another would be a worse trade.
+            if (signer !== undefined && signer !== decision.actorId) {
+              fail("WORKSPACE_EVENT_CORRUPT", `gate ${record.id} identity decision names ${decision.actorId} but the event was signed by ${String(signer)}`);
+            }
+            expectedExtensions = gateIdentityExtensions(expectedExtensions, decision);
+          }
+          if (canonicalJson(record.extensions) !== canonicalJson(expectedExtensions)) {
             fail("WORKSPACE_EVENT_CORRUPT", `gate ${record.id} evidence extensions are not exact`);
           }
           gateMutableFields = ["status", "revision", "updatedAt", "extensions"];
@@ -2532,6 +2571,9 @@ export async function transitionGateInWorkspace(workspaceRoot: string, lease: Wo
         fail("WORKSPACE_GATE_EVIDENCE_UNRESOLVED", `gate ${current.id} evidence ${String(locator)} does not resolve to anchoring conference minutes`);
       }
       extensions = gateEvidenceExtensions(current.extensions, locator);
+      if (input.identityAuthority !== undefined && input.actorId !== undefined) {
+        extensions = gateIdentityExtensions(extensions, gateIdentityDecision(input.identityAuthority, input.actorId));
+      }
     } else if (input.minutesLocator !== undefined) {
       fail("WORKSPACE_INPUT_INVALID", `gate ${current.id} minutes locator applies only to a satisfied transition`);
     }
