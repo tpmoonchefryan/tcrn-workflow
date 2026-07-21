@@ -176,6 +176,29 @@ function fail(reasonCode: string, message: string): never {
   throw new WorkflowCliError(reasonCode, message);
 }
 
+// A pins-track authority is an out-of-band constant the caller already holds, so the
+// caller states it at the call site and the reader verifies it against the bytes on
+// disk -- the shape --expected-plan-digest already uses. That is what terminates the
+// trust regress: no registry and no trusted config to bootstrap, because the chain
+// ends at whoever read the published digest.
+//
+// Injected and flag-supplied authority are mutually exclusive. Two sources for one
+// authority is ambiguity, and picking a winner would silently ignore the other.
+//
+// Under flag supply the reader's path cross-check is vacuous by construction (both
+// strings come from the same caller); the digest comparison is what binds, and the
+// reader still enforces absoluteness and canonicality on the path it is handed.
+function suppliedAuthority<T extends { readonly expectedCanonicalPath: string; readonly expectedFileSha256: string }>(
+  injected: T | undefined,
+  path: string | undefined,
+  digest: string | undefined,
+): T | undefined {
+  if (digest === undefined) return injected;
+  if (injected !== undefined) fail("CLI_AUTHORITY_AMBIGUOUS", "authority supplied by both host and flag");
+  if (!/^[a-f0-9]{64}$/u.test(digest)) fail("CLI_ARGUMENT_MALFORMED", "authority digest");
+  return { expectedCanonicalPath: path ?? "", expectedFileSha256: digest } as unknown as T;
+}
+
 function parseArguments(arguments_: readonly string[], allowed: readonly string[]): Readonly<Record<string, string>> {
   if (arguments_.some((value) => value.length > 65_536)) {
     fail("CLI_INPUT_OVERSIZED", "CLI arguments exceed the local input limit");
@@ -457,7 +480,7 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
 export const COMMAND_CATALOG = Object.freeze([
   { name: "adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }] },
+  { name: "adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
   { name: "adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "aos-requirements-readback", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
@@ -475,12 +498,12 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "claude-adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "claude-adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "step2", required: false, valueKind: "boolean" }, { name: "step3", required: false, valueKind: "boolean" }] },
-  { name: "claude-adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }] },
+  { name: "claude-adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "claude-adapter-settings-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-settings-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-settings-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
-  { name: "claude-adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }] },
+  { name: "claude-adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "claude-adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "commands", availability: "cli", mutates: false, flags: [] },
   { name: "compatibility-dry-run", availability: "programmatic-only", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
@@ -492,7 +515,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "distill", required: false, valueKind: "boolean" }, { name: "accountable-owner-id", required: false, valueKind: "string" }, { name: "stale-days", required: false, valueKind: "integer" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "conference-list-by-work", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
   { name: "conference-open", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "type", required: true, valueKind: "string" }, { name: "title", required: true, valueKind: "string" }, { name: "work-ids", required: true, valueKind: "list" }, { name: "desired-outcome", required: true, valueKind: "string" }, { name: "participant-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "context-route", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "profile-receipt", required: true, valueKind: "string" }, { name: "authority", required: true, valueKind: "string" }] },
+  { name: "context-route", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "profile-receipt", required: true, valueKind: "string" }, { name: "authority", required: true, valueKind: "string" }, { name: "profile-receipt-digest", required: false, valueKind: "string" }, { name: "authority-digest", required: false, valueKind: "string" }] },
   { name: "context-validate", availability: "cli", mutates: false, flags: [{ name: "result", required: true, valueKind: "string" }] },
   { name: "exchange-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "output", required: true, valueKind: "string" }] },
   { name: "exchange-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
@@ -523,9 +546,9 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
   { name: "persona-render", availability: "cli", mutates: false, flags: [] },
   { name: "persona-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
-  { name: "profile-authorize", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "operation", required: true, valueKind: "string" }, { name: "workspace-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "command", required: true, valueKind: "string", nullSentinel: "-" }] },
+  { name: "profile-authorize", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "operation", required: true, valueKind: "string" }, { name: "workspace-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "command", required: true, valueKind: "string", nullSentinel: "-" }, { name: "receipt-digest", required: false, valueKind: "string" }] },
   { name: "profile-generate", availability: "cli", mutates: false, flags: [{ name: "mode", required: true, valueKind: "string" }] },
-  { name: "profile-resolve", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }] },
+  { name: "profile-resolve", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "receipt-digest", required: false, valueKind: "string" }] },
   { name: "profile-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "project-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "project-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -643,18 +666,20 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "profile-resolve") {
-    const values = parseArguments(rest, ["request", "receipt"]);
+    const values = parseArguments(rest, ["request", "receipt", "receipt-digest"]);
     required(values, ["request", "receipt"]);
+    const profileAuthority = suppliedAuthority(io.profileAdmissionAuthority, values.receipt, values["receipt-digest"]);
     const admission = await readGenericProfileAdmissionReceipt(values.receipt ?? "",
-      io.profileAdmissionAuthority ? { authority: io.profileAdmissionAuthority } : {});
+      profileAuthority ? { authority: profileAuthority } : {});
     io.write(canonicalJson(resolveGenericProfile(jsonValue(values.request, "request"), admission)));
     return;
   }
   if (command === "profile-authorize") {
-    const values = parseArguments(rest, ["request", "receipt", "operation", "workspace-id", "project-id", "command"]);
+    const values = parseArguments(rest, ["request", "receipt", "operation", "workspace-id", "project-id", "command", "receipt-digest"]);
     required(values, ["request", "receipt", "operation", "workspace-id", "project-id", "command"]);
+    const profileAuthority = suppliedAuthority(io.profileAdmissionAuthority, values.receipt, values["receipt-digest"]);
     const admission = await readGenericProfileAdmissionReceipt(values.receipt ?? "",
-      io.profileAdmissionAuthority ? { authority: io.profileAdmissionAuthority } : {});
+      profileAuthority ? { authority: profileAuthority } : {});
     io.write(canonicalJson(authorizeGenericProfileOperation(
       jsonValue(values.request, "request"),
       admission,
@@ -668,11 +693,13 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "context-route") {
-    const values = parseArguments(rest, ["request", "profile-receipt", "authority"]);
+    const values = parseArguments(rest, ["request", "profile-receipt", "authority", "profile-receipt-digest", "authority-digest"]);
     required(values, ["request", "profile-receipt", "authority"]);
+    const profileAuthority = suppliedAuthority(io.profileAdmissionAuthority, values["profile-receipt"], values["profile-receipt-digest"]);
+    const routeAuthority = suppliedAuthority(io.contextRouteAuthority, values.authority, values["authority-digest"]);
     const profileAdmission = await readGenericProfileAdmissionReceipt(values["profile-receipt"] ?? "",
-      io.profileAdmissionAuthority ? { authority: io.profileAdmissionAuthority } : {});
-    const contextAuthority = await readContextRouteAuthorityReceipt(values.authority ?? "", io.contextRouteAuthority);
+      profileAuthority ? { authority: profileAuthority } : {});
+    const contextAuthority = await readContextRouteAuthorityReceipt(values.authority ?? "", routeAuthority);
     io.write(canonicalJson(routeContext(jsonValue(values.request, "request"), profileAdmission, contextAuthority)));
     return;
   }
@@ -709,9 +736,10 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "adapter-rollback-plan") {
-    const values = parseArguments(rest, ["bundle", "installation-receipt"]);
+    const values = parseArguments(rest, ["bundle", "installation-receipt", "installation-receipt-digest"]);
     required(values, ["bundle", "installation-receipt"]);
-    const installation = await readCodexAdapterInstallationReceipt(values["installation-receipt"] ?? "", io.codexAdapterInstallationAuthority);
+    const installation = await readCodexAdapterInstallationReceipt(values["installation-receipt"] ?? "",
+      suppliedAuthority(io.codexAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]));
     io.write(canonicalJson(planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), installation)));
     return;
   }
@@ -812,9 +840,10 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     // the receipt under the out-of-band authority, the planner derives the
     // identity-gated removal set, and the executor unlinks only files whose bytes
     // still match — a tampered file fails INSTALLER_ROLLBACK_MISMATCH untouched.
-    const values = parseArguments(rest, ["bundle", "installation-receipt"]);
+    const values = parseArguments(rest, ["bundle", "installation-receipt", "installation-receipt-digest"]);
     required(values, ["bundle", "installation-receipt"]);
-    const installation = await readClaudeAdapterInstallationReceipt(values["installation-receipt"] ?? "", io.claudeAdapterInstallationAuthority);
+    const installation = await readClaudeAdapterInstallationReceipt(values["installation-receipt"] ?? "",
+      suppliedAuthority(io.claudeAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]));
     const plan = planClaudeAdapterRollback(jsonValue(values.bundle, "bundle"), installation);
     const result = await executeClaudeAdapterRollback(plan, values["installation-receipt"] ?? "");
     io.write(canonicalJson({ reasonCode: result.reasonCode, planDigest: result.planDigest }));
@@ -827,9 +856,10 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "claude-adapter-rollback-plan") {
-    const values = parseArguments(rest, ["bundle", "installation-receipt"]);
+    const values = parseArguments(rest, ["bundle", "installation-receipt", "installation-receipt-digest"]);
     required(values, ["bundle", "installation-receipt"]);
-    const installation = await readClaudeAdapterInstallationReceipt(values["installation-receipt"] ?? "", io.claudeAdapterInstallationAuthority);
+    const installation = await readClaudeAdapterInstallationReceipt(values["installation-receipt"] ?? "",
+      suppliedAuthority(io.claudeAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]));
     io.write(canonicalJson(planClaudeAdapterRollback(jsonValue(values.bundle, "bundle"), installation)));
     return;
   }
