@@ -1223,3 +1223,180 @@ test("gate-v1: a decision that disagrees with its own event is corrupt", async (
     return true;
   }, "a self-contradicting decision must not replay");
 });
+
+test("gate-v1: the roster reaches gate-transition through the CLI, and every refusal leaves the chain alone", async (context) => {
+  // STORY-009 proved the engine; this proves the path an operator actually takes.
+  // A flag that reached the wrong place, or reached nowhere, would pass every engine
+  // test ever written, so the refusals are exercised through argv and each one is
+  // checked to have appended nothing.
+  // cliSeededFixture, not seededFixture: the engine-level one holds a lease, and the
+  // CLI acquires its own.
+  const fx = await cliSeededFixture(context);
+  const ws = fx.ws;
+  const roster = {
+    schemaVersion: "tcrn.gate-identity-authority.v1",
+    permits: [{ actorId: "owner:governance", outcomeClasses: ["owner_intent_required"] }],
+  };
+  const rosterPath = join(fx.base, "cli-roster.json");
+  await writeFile(rosterPath, canonicalJson(roster), { encoding: "utf8", mode: 0o600 });
+  const rosterDigest = canonicalSha256(roster);
+
+  // invokeCli swallows failures, so a silent setup miss would surface as a confusing
+  // assertion three steps later. Each step is checked where it happens.
+  const step = async (label, args) => {
+    const outcome = await invokeCli(args);
+    assert.equal(outcome.ok, true, `${label} failed: ${outcome.reasonCode}`);
+    return outcome;
+  };
+  await step("attestation-enable", ["attestation-enable", "--workspace", ws, "--expected-version", "2", "--at", instant(3), "--actor", "owner:governance"]);
+  await invokeCli(["conference-open", "--workspace", ws, "--expected-version", "3", "--at", instant(4),
+    "--external-key", "CONF-CLI-ID", "--project-id", fx.projectId, "--type", "architecture", "--title", "Ruling",
+    "--work-ids", fx.workId, "--desired-outcome", "rule", "--participant-ids", "-", "--actor", "owner:governance"]);
+  await step("conference-close", ["conference-close", "--workspace", ws, "--expected-version", "4", "--at", instant(5),
+    "--conference-id", deriveStableId("conference", "CONF-CLI-ID"), "--minutes-external-key", "MINUTES-CLI-ID",
+    "--summary", "Ruled.", "--outcome-class", "owner_intent_required", "--decisions", "ruled",
+    "--unresolved-issues", "-", "--actor", "owner:governance"]);
+  await invokeCli(["gate-create", "--workspace", ws, "--expected-version", "5", "--at", instant(6),
+    "--external-key", "GATE-CLI-ID", "--project-id", fx.projectId, "--work-id", fx.workId,
+    "--title", "Owner gate", "--outcome-class", "owner_intent_required", "--actor", "owner:governance"]);
+
+  const gateId = deriveStableId("gate", "GATE-CLI-ID");
+  const satisfy = (extra) => invokeCli(["gate-transition", "--workspace", ws, "--expected-version", "6",
+    "--at", instant(7), "--id", gateId, "--status", "satisfied",
+    "--minutes-locator", minutesLocator("MINUTES-CLI-ID"), ...extra]);
+  const refused = async (code, extra) => {
+    const outcome = await satisfy(extra);
+    assert.equal(outcome.ok, false, `expected ${code}`);
+    assert.equal(outcome.reasonCode, code);
+    assert.equal((await materializeWorkspace(fx.workspace)).version, 6, `${code} appended an event`);
+  };
+
+  // No roster: the class demands one and argv did not carry it.
+  await refused("WORKSPACE_GATE_IDENTITY_REQUIRED", ["--actor", "owner:governance"]);
+  // A path with no digest is not a stated pin, and guessing one would defeat the point.
+  await refused("CLI_ARGUMENT_MISSING", ["--actor", "owner:governance", "--identity-authority", rosterPath]);
+  // A wrong digest stops at the digest, so the flag is verified rather than accepted.
+  await refused("GATE_IDENTITY_AUTHORITY_DIGEST", ["--actor", "owner:governance",
+    "--identity-authority", rosterPath, "--identity-authority-digest", "b".repeat(64)]);
+  // A roster that does not name this actor refuses it by name.
+  await refused("WORKSPACE_GATE_IDENTITY_REFUSED", ["--actor", "agent:opus",
+    "--identity-authority", rosterPath, "--identity-authority-digest", rosterDigest]);
+
+  const receipt = assertCanonicalJson((await satisfy(["--actor", "owner:governance",
+    "--identity-authority", rosterPath, "--identity-authority-digest", rosterDigest])).output);
+  assert.equal(receipt.version, 7);
+  const state = await materializeWorkspace(fx.workspace);
+  assert.deepEqual(state.gates.find((entry) => entry.id === gateId).extensions["gate-identity:decision"], {
+    required: false, value: { actorId: "owner:governance", authorityFileSha256: rosterDigest },
+  });
+});
+
+test("gate-v1: a chain written before gate-v1 still replays, owner gates and all", async (context) => {
+  // The state under test can no longer be produced by the verb -- that is the point of
+  // gate-v1 -- so it is written onto the log directly, which is exactly how it got
+  // there on the chains that predate this feature. Two production chains carry five
+  // such gates between them; if replay rejected them the feature would have bricked
+  // every workspace that ever used owner_intent_required.
+  const fx = await seededFixture(context);
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-LEGACY", projectId: fx.projectId, type: "architecture",
+    title: "Legacy", linkedWorkIds: [fx.workId], desiredOutcome: "rule", participantIds: [],
+  });
+  const conferenceId = state.conferences[0].id;
+  state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 3, occurredAt: instant(4), conferenceId, minutesExternalKey: "MINUTES-LEGACY",
+    summary: "Ruled.", outcomeClass: "owner_intent_required", decisions: ["ruled"], unresolvedIssues: [],
+  });
+  state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), externalKey: "GATE-LEGACY", projectId: fx.projectId, workId: fx.workId,
+    title: "Legacy owner gate", outcomeClass: "owner_intent_required",
+  });
+  const gate = state.gates[0];
+
+  // The verb refuses this now, which is why the event is written by hand.
+  await assert.rejects(transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), id: gate.id, status: "satisfied",
+    minutesLocator: minutesLocator("MINUTES-LEGACY"),
+  }), (error) => error?.reasonCode === "WORKSPACE_GATE_IDENTITY_REQUIRED");
+
+  const eventsDirectory = join(fx.workspace, ".tcrn-workflow", "events");
+  const segments = (await readdir(eventsDirectory)).sort();
+  const lastPath = join(eventsDirectory, segments[segments.length - 1]);
+  const lastSegment = JSON.parse(await readFile(lastPath, "utf8"));
+  const previous = lastSegment[lastSegment.length - 1];
+  const payload = {
+    operation: "gate.updated",
+    record: {
+      ...gate, status: "satisfied", revision: gate.revision + 1, updatedAt: instant(6),
+      extensions: { "gate-evidence:conference-minutes": { required: false, value: minutesLocator("MINUTES-LEGACY") } },
+    },
+  };
+  const payloadHash = canonicalSha256(payload);
+  const basis = {
+    schemaVersion: "tcrn.event.v1", id: `event:${canonicalSha256({ schemaVersion: "tcrn.workspace-event-identity.v1", streamId: previous.streamId, sequence: previous.sequence + 1 }).slice(0, 24)}`,
+    streamId: previous.streamId,
+    sequence: previous.sequence + 1, occurredAt: instant(6), priorHash: previous.eventHash, payload, payloadHash,
+  };
+  lastSegment.push({ ...basis, eventHash: canonicalSha256(basis) });
+  await writeFile(lastPath, canonicalJson(lastSegment), "utf8");
+
+  const replayed = await materializeWorkspace(fx.workspace);
+  assert.equal(replayed.version, 6, "a pre-gate-v1 owner gate must not brick the chain");
+  assert.equal(replayed.gates[0].status, "satisfied");
+  assert.deepEqual(Object.keys(replayed.gates[0].extensions), ["gate-evidence:conference-minutes"]);
+});
+
+test("gate-v1: replay accepts a forged tail-append, and this is proved rather than admitted", async (context) => {
+  // The boundary gate-v1 does not cross. Event hashes are unkeyed, so anyone who can
+  // write the log can compute a consistent event and replay will take it. Stating that
+  // in prose costs nothing and could quietly stop being true; a test that fails the day
+  // it stops being true is the only version worth having.
+  //
+  // If this case ever goes red, the boundary has moved and the written statement in
+  // docs/architecture/agent-integration-v1.md must move with it.
+  const fx = await seededFixture(context);
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-FORGE", projectId: fx.projectId, type: "architecture",
+    title: "Forge", linkedWorkIds: [fx.workId], desiredOutcome: "rule", participantIds: [],
+  });
+  const conferenceId = state.conferences[0].id;
+  state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 3, occurredAt: instant(4), conferenceId, minutesExternalKey: "MINUTES-FORGE",
+    summary: "Ruled.", outcomeClass: "owner_intent_required", decisions: ["ruled"], unresolvedIssues: [],
+  });
+  state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), externalKey: "GATE-FORGE", projectId: fx.projectId, workId: fx.workId,
+    title: "Forge gate", outcomeClass: "owner_intent_required",
+  });
+  const gate = state.gates[0];
+
+  // No roster is consulted, no CLI is run, no permission is held. Only bytes.
+  const eventsDirectory = join(fx.workspace, ".tcrn-workflow", "events");
+  const segments = (await readdir(eventsDirectory)).sort();
+  const lastPath = join(eventsDirectory, segments[segments.length - 1]);
+  const lastSegment = JSON.parse(await readFile(lastPath, "utf8"));
+  const previous = lastSegment[lastSegment.length - 1];
+  const payload = {
+    operation: "gate.updated",
+    record: {
+      ...gate, status: "satisfied", revision: gate.revision + 1, updatedAt: instant(6),
+      extensions: { "gate-evidence:conference-minutes": { required: false, value: minutesLocator("MINUTES-FORGE") } },
+    },
+  };
+  const payloadHash = canonicalSha256(payload);
+  const basis = {
+    schemaVersion: "tcrn.event.v1",
+    id: `event:${canonicalSha256({ schemaVersion: "tcrn.workspace-event-identity.v1", streamId: previous.streamId, sequence: previous.sequence + 1 }).slice(0, 24)}`,
+    streamId: previous.streamId, sequence: previous.sequence + 1, occurredAt: instant(6),
+    priorHash: previous.eventHash, payload, payloadHash,
+  };
+  lastSegment.push({ ...basis, eventHash: canonicalSha256(basis) });
+  await writeFile(lastPath, canonicalJson(lastSegment), "utf8");
+
+  const replayed = await materializeWorkspace(fx.workspace);
+  assert.equal(replayed.gates[0].status, "satisfied",
+    "replay accepts a forged satisfied gate -- gate-v1 is a decision-point control, not a chain-integrity invariant");
+  // Views are skipped: a hand-append does not refresh them, and view freshness is not
+  // what this case is about. The chain itself validates, which is the whole worry.
+  assert.equal((await validateWorkspace(fx.workspace, false)).version, 6);
+});
