@@ -19,6 +19,7 @@ import {
   cancelConferenceInWorkspace,
   closeConferenceInWorkspace,
   createGateInWorkspace,
+  enableActorAttestation,
   readGateIdentityAuthority,
   createProject,
   createWork,
@@ -1080,4 +1081,145 @@ test("gate-v1: a supplied roster is honoured for every class, and no class but o
     minutesLocator: minutesLocator("MINUTES-ROLE"),
   });
   assert.equal(state.gates[0].status, "satisfied");
+});
+
+test("gate-v1: the identity decision is written down, and replay judges it without the roster", async (context) => {
+  // The decision has to survive as a record, because "which roster was in force when
+  // this closed" is the question an auditor asks and the roster itself may be long
+  // gone. What replay must NOT do is depend on it still existing, so everything below
+  // is checked from the log alone.
+  const fx = await seededFixture(context);
+  const roster = {
+    schemaVersion: "tcrn.gate-identity-authority.v1",
+    permits: [{ actorId: "owner:governance", outcomeClasses: ["owner_intent_required"] }],
+  };
+  const rosterPath = join(fx.base, "decision-roster.json");
+  await writeFile(rosterPath, canonicalJson(roster), { encoding: "utf8", mode: 0o600 });
+  const admitted = await readGateIdentityAuthority(rosterPath, {
+    expectedCanonicalPath: rosterPath, expectedFileSha256: canonicalSha256(roster),
+  });
+
+  // Identity gating only means something on a chain that records who acted, so this
+  // is the configuration the feature is for.
+  await enableActorAttestation(fx.workspace, fx.lease, { expectedVersion: 2, occurredAt: instant(3), actorId: "owner:governance" });
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 3, occurredAt: instant(4), externalKey: "CONF-DEC", projectId: fx.projectId, type: "architecture",
+    title: "Decision", linkedWorkIds: [fx.workId], desiredOutcome: "rule", participantIds: [], actorId: "owner:governance",
+  });
+  const conferenceId = state.conferences[0].id;
+  state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), conferenceId, minutesExternalKey: "MINUTES-DEC",
+    summary: "Ruled.", outcomeClass: "owner_intent_required", decisions: ["ruled"], unresolvedIssues: [], actorId: "owner:governance",
+  });
+  state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), externalKey: "GATE-DEC", projectId: fx.projectId, workId: fx.workId,
+    title: "Decision gate", outcomeClass: "owner_intent_required", actorId: "owner:governance",
+  });
+  const gateId = state.gates[0].id;
+  state = await transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 6, occurredAt: instant(7), id: gateId, status: "satisfied",
+    minutesLocator: minutesLocator("MINUTES-DEC"), identityAuthority: admitted, actorId: "owner:governance",
+  });
+
+  assert.deepEqual(state.gates[0].extensions["gate-identity:decision"], {
+    required: false,
+    value: { actorId: "owner:governance", authorityFileSha256: canonicalSha256(roster) },
+  });
+
+  // The roster goes away, the way a rotated key or a fresh machine would take it.
+  await rm(rosterPath);
+  const replayed = await materializeWorkspace(fx.workspace);
+  assert.equal(replayed.version, 7, "replay does not need the roster it recorded");
+  assert.deepEqual(replayed.gates[0].extensions, state.gates[0].extensions);
+  // validate also rebuilds the materialised views, so this proves the recorded
+  // decision round-trips through them without the roster too.
+  assert.equal((await validateWorkspace(fx.workspace)).version, 7);
+});
+
+test("gate-v1: a decision that disagrees with its own event is corrupt", async (context) => {
+  // Replay cannot tell a forged event from a real one -- unkeyed hashes see to that --
+  // but it can refuse one that contradicts itself. A decision naming an actor the
+  // event was not signed with is exactly that contradiction, and catching it costs
+  // nothing external.
+  const fx = await seededFixture(context);
+  const roster = {
+    schemaVersion: "tcrn.gate-identity-authority.v1",
+    permits: [{ actorId: "owner:governance", outcomeClasses: ["owner_intent_required"] }],
+  };
+  const rosterPath = join(fx.base, "mismatch-roster.json");
+  await writeFile(rosterPath, canonicalJson(roster), { encoding: "utf8", mode: 0o600 });
+  const admitted = await readGateIdentityAuthority(rosterPath, {
+    expectedCanonicalPath: rosterPath, expectedFileSha256: canonicalSha256(roster),
+  });
+
+  // Identity gating only means something on a chain that records who acted, so this
+  // is the configuration the feature is for.
+  await enableActorAttestation(fx.workspace, fx.lease, { expectedVersion: 2, occurredAt: instant(3), actorId: "owner:governance" });
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 3, occurredAt: instant(4), externalKey: "CONF-MIS", projectId: fx.projectId, type: "architecture",
+    title: "Mismatch", linkedWorkIds: [fx.workId], desiredOutcome: "rule", participantIds: [], actorId: "owner:governance",
+  });
+  const conferenceId = state.conferences[0].id;
+  state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), conferenceId, minutesExternalKey: "MINUTES-MIS",
+    summary: "Ruled.", outcomeClass: "owner_intent_required", decisions: ["ruled"], unresolvedIssues: [], actorId: "owner:governance",
+  });
+  state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), externalKey: "GATE-MIS", projectId: fx.projectId, workId: fx.workId,
+    title: "Mismatch gate", outcomeClass: "owner_intent_required", actorId: "owner:governance",
+  });
+  const gateId = state.gates[0].id;
+  await transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 6, occurredAt: instant(7), id: gateId, status: "satisfied",
+    minutesLocator: minutesLocator("MINUTES-MIS"), identityAuthority: admitted, actorId: "owner:governance",
+  });
+
+  // Rewrite the tail event so the decision names someone else. The hashes are
+  // recomputed the way any forger would, so only the self-consistency check can see it.
+  const eventsDirectory = join(fx.workspace, ".tcrn-workflow", "events");
+  let segment;
+  let events;
+  let tail;
+  for (const name of (await readdir(eventsDirectory)).sort()) {
+    const candidatePath = join(eventsDirectory, name);
+    const candidates = JSON.parse(await readFile(candidatePath, "utf8"));
+    const match = candidates.find((entry) => entry.payload?.record?.extensions?.["gate-identity:decision"] !== undefined);
+    if (match) { segment = candidatePath; events = candidates; tail = match; break; }
+  }
+  assert.ok(tail, "the satisfied transition must be on the log for the tamper to mean anything");
+  tail.payload.record.extensions["gate-identity:decision"].value.actorId = "agent:impostor";
+  // Rehashed exactly the way the engine would, because a forger with write access has
+  // the same formula. If this were wrong the event would fail on its hash and the test
+  // would pass for the wrong reason -- so the refusal is asserted by message too.
+  tail.payloadHash = canonicalSha256(tail.payload);
+  tail.eventHash = canonicalSha256({
+    schemaVersion: tail.schemaVersion, id: tail.id, streamId: tail.streamId, sequence: tail.sequence,
+    occurredAt: tail.occurredAt, priorHash: tail.priorHash, payload: tail.payload, payloadHash: tail.payloadHash,
+  });
+  await writeFile(segment, canonicalJson(events), "utf8");
+
+  // A decision that is not even shaped like one must go the same way. Without this the
+  // shape check could be removed and every other case here would still pass.
+  const malformed = JSON.parse(JSON.stringify(events));
+  const malformedTail = malformed.find((entry) => entry.payload?.record?.extensions?.["gate-identity:decision"] !== undefined);
+  malformedTail.payload.record.extensions["gate-identity:decision"].value = { actorId: "owner:governance", authorityFileSha256: "not-a-digest" };
+  malformedTail.payloadHash = canonicalSha256(malformedTail.payload);
+  malformedTail.eventHash = canonicalSha256({
+    schemaVersion: malformedTail.schemaVersion, id: malformedTail.id, streamId: malformedTail.streamId,
+    sequence: malformedTail.sequence, occurredAt: malformedTail.occurredAt, priorHash: malformedTail.priorHash,
+    payload: malformedTail.payload, payloadHash: malformedTail.payloadHash,
+  });
+  await writeFile(segment, canonicalJson(malformed), "utf8");
+  await assert.rejects(materializeWorkspace(fx.workspace), (error) => {
+    assert.equal(error?.reasonCode, "WORKSPACE_EVENT_CORRUPT");
+    return true;
+  }, "a malformed decision must not replay");
+
+  await writeFile(segment, canonicalJson(events), "utf8");
+  await assert.rejects(materializeWorkspace(fx.workspace), (error) => {
+    assert.equal(error?.reasonCode, "WORKSPACE_EVENT_CORRUPT");
+    assert.match(String(error?.message), /identity decision names agent:impostor/u,
+      "must be refused for the contradiction, not for a hash the forger would have got right");
+    return true;
+  }, "a self-contradicting decision must not replay");
 });
