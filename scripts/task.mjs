@@ -17,6 +17,7 @@ import {
   walkFiles,
 } from "./lib/files.mjs";
 import { compareCanonicalText } from "./lib/canonical-order.mjs";
+import { codeOnly } from "./lib/code-only.mjs";
 import { LocalCommandError, runLocalCommand } from "./lib/local-command.mjs";
 import {
   DependencyGraphError,
@@ -251,9 +252,11 @@ async function lint() {
   }
   for (const path of files.filter((candidate) => candidate.endsWith(".ts"))) {
     const content = await readText(path);
-    assertion(!/\bany\b/u.test(content), "LINT_EXPLICIT_ANY", toPosixPath(relative(repositoryRoot, path)));
+    const code = codeOnly(content);
+    assertion(!/\bany\b/u.test(code), "LINT_EXPLICIT_ANY", toPosixPath(relative(repositoryRoot, path)));
+    // @ts-ignore is a comment by construction, so this one keeps reading the whole file.
     assertion(!content.includes("@ts-ignore"), "LINT_TS_IGNORE", toPosixPath(relative(repositoryRoot, path)));
-    assertion(!/\beval\s*\(/u.test(content), "LINT_EVAL", toPosixPath(relative(repositoryRoot, path)));
+    assertion(!/\beval\s*\(/u.test(code), "LINT_EVAL", toPosixPath(relative(repositoryRoot, path)));
   }
   for (const path of files.filter((candidate) => candidate.includes("/.github/workflows/") && candidate.endsWith(".yml"))) {
     const content = await readText(path);
