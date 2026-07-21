@@ -474,7 +474,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "36a6ce7df20cda563fc0301c23c62ebda0e12f820714e9b98e2038c6301485eb",
+      "fixtureDigest": "c4b28d50b7f191a03a4fdf410c3aeaf78e9ad687715db1679385ead7432d5027",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -502,7 +502,7 @@
         "tests/p3-file-engine.test.mjs",
         "tests/p3-cli-catalog.test.mjs"
       ],
-      "fixtureDigest": "fbf20ccedbd7f413ff98bdbc78a295410126b77b85c4d291b2be07b11f2554d0",
+      "fixtureDigest": "9ff2caebf1f5370923d39e8d85f9b6f087244aea18b7d0ece1198b27472fbf54",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -528,7 +528,7 @@
         "tests/p3-file-engine.test.mjs",
         "tests/p3-cli-catalog.test.mjs"
       ],
-      "fixtureDigest": "f859551b5cb76f029bcb64c423a3914a604b9ddcf2aaf9832f99ee64e33aae04",
+      "fixtureDigest": "c2d121ade508270ed0dcd1b98c95304960aacd1791e4c91d8e5582e19dd857c4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -554,7 +554,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "e98e5d0db5d48c7349a600181f2a0e0a7715ef349a1807f0297bf608ca506fa1",
+      "fixtureDigest": "c2f82be15b12b083f8e217f091c436d861242ac06123d226f424e40c6814a075",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -587,7 +587,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "e38387739092deb831f0f32817824ef637b367f9438c97008e561d056b7a8254",
+      "fixtureDigest": "6de1f09bb7b251aee2ecf84dc24b86668e6e9fc2cf87de3da411d81d7db4adba",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -612,7 +612,7 @@
         "packages/protocol/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "0bc9768b88be996c732e68d53dc071b744b953fe5d9cd707c2efeaa3d700cb1f",
+      "fixtureDigest": "d86ca7429f975e1a0015aac74a3c2d10f8b2aeddfa74ff599cc18db313dfd55c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -639,7 +639,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d5ec462e57f8444f2b1731bea7a5eba40ad7db32686fc7f21509b4f4d322a627",
+      "fixtureDigest": "fa3c254cb4ff8e298ec99a01a4986df1527516b25833985459eac1b88654fc10",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -666,7 +666,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "18c69fb78c4873f55aa73fd8fbed57408b63d44dd923783f9ac9d1510a211478",
+      "fixtureDigest": "7209c64f196153292efdcdc70c0e0d97bb16d36a80b61d653ac461eee30edf24",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -691,7 +691,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "packages/cli/src/index.ts"
       ],
-      "fixtureDigest": "34e271ccd1d44fd756f2389a5ba56a0cdbeaa9f742eaf8c46f6728d76e7a6029",
+      "fixtureDigest": "bf17fada480f805f671a8dfeff3e525dd861144b7e6f6dbe415e3896e18e2669",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -715,7 +715,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "be87d5e6a2f9f5db60e62e96f115cad2ffc735e7534233f488dfc1d8f1a4c5a4",
+      "fixtureDigest": "19e79afeca6ade80f7994692e0f9359af9915a6084ae297688beb2dae46c7fd3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -740,7 +740,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "10821498b54445f3e57fbbbbf5de916cc923570b68d584d04c685de2f457a3f9",
+      "fixtureDigest": "79c9f5405095581eb699140de8d045a7d50382d2b644a6d1e3841b8bd36f4b07",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -766,7 +766,7 @@
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "eefae092f1103fbc0ee2a88128f521a4e63cba6b3248fcfffff1a73e075de7dd",
+      "fixtureDigest": "391701e849a6831a0677275c2d708483522cb8b09f89027f9e63e5836b75784c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -792,7 +792,7 @@
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "eefae092f1103fbc0ee2a88128f521a4e63cba6b3248fcfffff1a73e075de7dd",
+      "fixtureDigest": "391701e849a6831a0677275c2d708483522cb8b09f89027f9e63e5836b75784c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -823,7 +823,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "7fe5d9d21f7519e253d481d967f1f1a79a631d2333b183be7760eb6f40dcb82e",
+      "fixtureDigest": "7674e561c94083fa34113ef9af9318490f8f70cbf8eafe8555cb60ffc08f7f1c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -851,7 +851,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "5bb9ccd840a3d393c7828b70fafab49f347ce1efe9a827ec0568a6e03bce375e",
+      "fixtureDigest": "70f80fd7965581e54b28a90a87c539bbb2b8c80ce4078b49b38619a724df1065",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -887,7 +887,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "e5b012597c2463e5de7b7ab12d678b7ba91fde70e257de7c4eeaeb28256ae0d7",
+      "fixtureDigest": "5b1e71c661a617df2c16ab1dc3e6f2ba942431e9138678049755612b0ecfa5a1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -943,7 +943,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "adfe7fae6cef5b426cd6bc7bfffcfaeb96353bf41531ea7daa7ebcc1a1913372",
+      "fixtureDigest": "de86e5b85e54ef3a3ac003b2de0eebe258d91f16fb7ff4e85a7d6982ae0a1b3e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -970,7 +970,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "adfe7fae6cef5b426cd6bc7bfffcfaeb96353bf41531ea7daa7ebcc1a1913372",
+      "fixtureDigest": "de86e5b85e54ef3a3ac003b2de0eebe258d91f16fb7ff4e85a7d6982ae0a1b3e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1022,7 +1022,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "adfe7fae6cef5b426cd6bc7bfffcfaeb96353bf41531ea7daa7ebcc1a1913372",
+      "fixtureDigest": "de86e5b85e54ef3a3ac003b2de0eebe258d91f16fb7ff4e85a7d6982ae0a1b3e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1049,7 +1049,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "adfe7fae6cef5b426cd6bc7bfffcfaeb96353bf41531ea7daa7ebcc1a1913372",
+      "fixtureDigest": "de86e5b85e54ef3a3ac003b2de0eebe258d91f16fb7ff4e85a7d6982ae0a1b3e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1100,7 +1100,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "3fc933732f08a4a606c2c491d82ae640372c34134a83e0010c197e6b336d5bef",
+      "fixtureDigest": "8c3c96c5274abe81e984ddf471b2d8ee21c90fc0ff698b8acf5d5ecbedb88246",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1138,7 +1138,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "d697791613c481da8bfefd08bb37a11aaa5d632ac8b0a0187f0fb98601d74639",
+      "fixtureDigest": "2cea9d283fab3dc8dcab7045f12e3965b45d24eeb942449effa84b365a54357e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1166,7 +1166,7 @@
         "packages/core/fixtures/p5-generic-profile-cases.json",
         "tests/p5-generic-profile.test.mjs"
       ],
-      "fixtureDigest": "3c190775301c53bfb55b836fa50a6e3fbdcc627d12e51986cd438c524a97d549",
+      "fixtureDigest": "40645ace18c5454cfbead38b5fe7a0bc0d0c5abcb08988e34802c33f00d4e85d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1203,7 +1203,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "b0f5c82d05823743c8424eb1094e75dd5f567a44ea885ce4a8f256cd23d71075",
+      "fixtureDigest": "ba6b07b8b74b67af741ee6c1907ea24d26a32323c1e71d6ab90066a9a60b85bb",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1235,7 +1235,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "a51f6203192d63121687733724cdcbb1c8e196440de64957604e5f3e3c45d84c",
+      "fixtureDigest": "9fd6cee3ba6aacc38735e65204106313ac487793d4d2af2032479397b075c1df",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1269,7 +1269,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "ad15c1e1feccce81d4287892e66c709a53929a526c3b24647ed12405fa52792d",
+      "fixtureDigest": "93628aa9a50df753515345bbbb46835232169dad7f0d3c53e99c8812a444038e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1304,7 +1304,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "b1a57810dee6d98747a9bcf49ff2aabec02118bb62467868a672e4fe72188068",
+      "fixtureDigest": "50c2ec4c5a6bb413880ac482e1ff491b3056667d44d21fa01721092a96e57e2e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1371,7 +1371,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "cbaa88fbf9be8975f6dcb2df60819f79c7f470972833316b1b22ce439c91859b",
+      "fixtureDigest": "5ca3fad909db358164d57c7a05ca1ee5126f598d6ef44d3cce8528c6a052d4d0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1436,7 +1436,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1503a6d9739192b320d96c9af21d9bd237fa8d7ee284e8e5b842b7a5c34ec619",
+      "fixtureDigest": "5768b4f0ae8d2c324ef580dd8b9a0e344a6c631e3af9075824ff4ffea962ae0e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1468,7 +1468,7 @@
         "tests/actor-attestation.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "27de21c37f4bcb1816629e8fea32c7bf0fcd593f2ebc66f4fb1ed3006cabb5b0",
+      "fixtureDigest": "86905844236e3028c288111a05fe334425686fdc1f998ffd92e4ba9eb2a58ddb",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1502,7 +1502,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "78f008007e761f02f537b42c0d5c98c3cde581cb309f2384270537eb3f9ecc6c",
+      "fixtureDigest": "56530aca3cf0d366ee440c285b2027b2cf2dcb105ee5fa295f048a94afb274cf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1533,7 +1533,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "cd7cb0acfe60c12441bcea2501fa3b83bbb516a80512264a7ade54b4ce2dae18",
+      "fixtureDigest": "a05c972867bd0102ca3ba92f3a1129e65f7260b8b97772c12532a8cf550c495e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1564,7 +1564,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "3295f7fc63bf228f22155277a5c929a3fba1fb09b3f6fa724b8fe67e83762e2f",
+      "fixtureDigest": "335ac12aa68c6cd5dd9ea18907288501a9d2894d5504cceb3b9410e9eab59d38",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1596,7 +1596,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "347cd5b4306028f99188e69bc2a578eda988101bfdf93d93009a8234c840668e",
+      "fixtureDigest": "890723e4b4e7a68f863915bf853b1a5d001c39510594fc44f37bd0240944fef9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1627,7 +1627,7 @@
         "tests/p7-canonical-exchange.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "adec7fccff34bbdf9400a226676138e3b702a8f62b6aed96bb00b45a8e5a293a",
+      "fixtureDigest": "1f650ae460c16319987c9b70903b3b6dc7d2e137c66e734526ca2e16445fac2a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1659,7 +1659,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "24fe64f7bb2e705867deb8de700ba35395ed733f4ffb6a41ab6eee9a903221fe",
+      "fixtureDigest": "0ea462652a2e0e8a243a1b3997165c554b06ec9f30e12eca446cd2186221cb62",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1685,7 +1685,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "docs/compatibility/supported-modes.md"
       ],
-      "fixtureDigest": "2b59e0b190ac22a80cd1894045987ed460fac95a4fbc3d0f9154669bc4a7f052",
+      "fixtureDigest": "06d621613c37f7827af16161127ae5ccc4574a8990a01ad568e8515065cd5170",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1717,7 +1717,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "c037a4407acacb84be667fd5076e917b4aa598f7db9fe597fc2e89ac045f59dc",
+      "fixtureDigest": "526108e717fe5d83b990cdc7ebe15258fafa221465f5ea2fe47d5c7754b55517",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1852,7 +1852,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "2f1274077bd654bab15774de4eb480635b648ad196f4cd633608b1611f539b4a",
+      "fixtureDigest": "bbf773c66f6e078139ad3140b0ea97d0c05b1938884558d7e80ece5044fa9a47",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1881,7 +1881,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "5deabfa59b93664a4cf20810e520aacd4d26414f3b7f099a475ec14d91a8a007",
+      "fixtureDigest": "81970dfe2ddbb2c36eca740e8f1f454bbe04556c3327613aeabf60f46a29be3e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1910,7 +1910,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "5deabfa59b93664a4cf20810e520aacd4d26414f3b7f099a475ec14d91a8a007",
+      "fixtureDigest": "81970dfe2ddbb2c36eca740e8f1f454bbe04556c3327613aeabf60f46a29be3e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1940,7 +1940,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "7c5cc2012f51c88ea5ed19b13838111da837386257d5fd3aec707d286954f187",
+      "fixtureDigest": "1779c0ebc11b4894d49dad75184b63c9887294097929242a68f01db534e446e1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1967,7 +1967,7 @@
         "packages/core/src/index.ts",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "4e74f6f97794f80f18ee2615edaaac43f15cc95355bc8da625eb11b0f65e390f",
+      "fixtureDigest": "2573a0c742eb3494ab8826f7aee868c8b63b0580c082a52f24fd6f31c7020893",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
