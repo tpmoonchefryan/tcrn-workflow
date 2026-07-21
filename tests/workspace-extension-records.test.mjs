@@ -19,6 +19,7 @@ import {
   cancelConferenceInWorkspace,
   closeConferenceInWorkspace,
   createGateInWorkspace,
+  readGateIdentityAuthority,
   createProject,
   createWork,
   deleteGateInWorkspace,
@@ -964,4 +965,119 @@ test("WSD-4: the gate lifecycle graph is enforced at the verb — satisfied is t
     expectedVersion: version, occurredAt: instant(7), id: gateId, status: "blocked",
   }));
   assert.equal((await materializeWorkspace(fx.workspace)).version, version, "the off-graph transition appended no event");
+});
+
+test("gate-v1: an owner_intent_required gate cannot be satisfied without a roster that names the actor", async (context) => {
+  // The class is the opt-in. A gate created as owner_intent_required declares that
+  // closing it takes owner intent, and until gate-v1 that declaration was inert. What
+  // these cases pin is that it now costs something to close one, and that the cost is
+  // paid in the right currency: a roster read from disk under a stated digest, plus a
+  // named actor the roster actually permits.
+  const fx = await seededFixture(context);
+  const roster = {
+    schemaVersion: "tcrn.gate-identity-authority.v1",
+    permits: [{ actorId: "owner:governance", outcomeClasses: ["owner_intent_required"] }],
+  };
+  const rosterPath = join(fx.base, "gate-identity-authority.json");
+  const rosterBytes = canonicalJson(roster);
+  await writeFile(rosterPath, rosterBytes, { encoding: "utf8", mode: 0o600 });
+  const admitted = await readGateIdentityAuthority(rosterPath, {
+    expectedCanonicalPath: rosterPath,
+    expectedFileSha256: canonicalSha256(roster),
+  });
+
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-OWNER", projectId: fx.projectId, type: "architecture",
+    title: "Owner ruling", linkedWorkIds: [fx.workId], desiredOutcome: "rule", participantIds: [],
+  });
+  const conferenceId = state.conferences[0].id;
+  state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 3, occurredAt: instant(4), conferenceId, minutesExternalKey: "MINUTES-OWNER",
+    summary: "Ruled.", outcomeClass: "owner_intent_required", decisions: ["ruled"], unresolvedIssues: [],
+  });
+  state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), externalKey: "GATE-OWNER", projectId: fx.projectId, workId: fx.workId,
+    title: "Owner gate", outcomeClass: "owner_intent_required",
+  });
+  const gateId = state.gates[0].id;
+  const satisfy = (extra) => transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), id: gateId, status: "satisfied",
+    minutesLocator: minutesLocator("MINUTES-OWNER"), ...extra,
+  });
+  const refused = async (code, extra) => {
+    await assert.rejects(satisfy(extra), (error) => {
+      assert.equal(error?.reasonCode, code, `expected ${code}, got ${error?.reasonCode}`);
+      return true;
+    }, code);
+    // A refused transition must not have advanced the chain -- otherwise the gate is
+    // closed to the reader and merely undocumented.
+    assert.equal((await materializeWorkspace(fx.workspace)).version, 5, `${code} appended an event`);
+  };
+
+  // Evidence alone used to be enough. It is not any more.
+  await refused("WORKSPACE_GATE_IDENTITY_REQUIRED", {});
+  // A roster without a named actor cannot answer "who", so it is not an answer.
+  await refused("WORKSPACE_GATE_IDENTITY_REQUIRED", { identityAuthority: admitted });
+  // A named actor with no roster is a claim, which is what gate-v1 exists to stop.
+  await refused("WORKSPACE_GATE_IDENTITY_REQUIRED", { actorId: "owner:governance" });
+  // An actor the roster does not name is refused by name, not ignored.
+  await refused("WORKSPACE_GATE_IDENTITY_REFUSED", { identityAuthority: admitted, actorId: "agent:opus" });
+
+  state = await satisfy({ identityAuthority: admitted, actorId: "owner:governance" });
+  assert.equal(state.gates[0].status, "satisfied");
+  assert.equal(state.version, 6);
+});
+
+test("gate-v1: a supplied roster is honoured for every class, and no class but owner_intent_required demands one", async (context) => {
+  // Two halves of the same rule. Asking for the check and having it skipped would be
+  // the worst outcome, so a roster supplied against a role_decision gate still binds;
+  // and a deployment that wants none of this keeps working by choosing another class.
+  const fx = await seededFixture(context);
+  const roster = {
+    schemaVersion: "tcrn.gate-identity-authority.v1",
+    permits: [{ actorId: "owner:governance", outcomeClasses: ["owner_intent_required"] }],
+  };
+  const rosterPath = join(fx.base, "roster.json");
+  const rosterBytes = canonicalJson(roster);
+  await writeFile(rosterPath, rosterBytes, { encoding: "utf8", mode: 0o600 });
+  const admitted = await readGateIdentityAuthority(rosterPath, {
+    expectedCanonicalPath: rosterPath,
+    expectedFileSha256: canonicalSha256(roster),
+  });
+
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-ROLE", projectId: fx.projectId, type: "risk",
+    title: "Role call", linkedWorkIds: [fx.workId], desiredOutcome: "decide", participantIds: [],
+  });
+  const conferenceId = state.conferences[0].id;
+  state = await closeConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 3, occurredAt: instant(4), conferenceId, minutesExternalKey: "MINUTES-ROLE",
+    summary: "Decided.", outcomeClass: "role_decision", decisions: ["decided"], unresolvedIssues: [],
+  });
+  state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), externalKey: "GATE-ROLE", projectId: fx.projectId, workId: fx.workId,
+    title: "Role gate", outcomeClass: "role_decision",
+  });
+  const gateId = state.gates[0].id;
+
+  // Supplied against a class the roster does not grant: still refused.
+  await assert.rejects(transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), id: gateId, status: "satisfied",
+    minutesLocator: minutesLocator("MINUTES-ROLE"), identityAuthority: admitted, actorId: "owner:governance",
+  }), (error) => error?.reasonCode === "WORKSPACE_GATE_IDENTITY_REFUSED");
+
+  // Supplied without an actor, on a class that does not itself demand one. The
+  // roster still cannot answer "who", and answering anyway would be the skip.
+  await assert.rejects(transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), id: gateId, status: "satisfied",
+    minutesLocator: minutesLocator("MINUTES-ROLE"), identityAuthority: admitted,
+  }), (error) => error?.reasonCode === "WORKSPACE_GATE_IDENTITY_REQUIRED");
+  assert.equal((await materializeWorkspace(fx.workspace)).version, 5, "the refusal appended no event");
+
+  // Not supplied against a non-owner class: unchanged from before gate-v1.
+  state = await transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 5, occurredAt: instant(6), id: gateId, status: "satisfied",
+    minutesLocator: minutesLocator("MINUTES-ROLE"),
+  });
+  assert.equal(state.gates[0].status, "satisfied");
 });

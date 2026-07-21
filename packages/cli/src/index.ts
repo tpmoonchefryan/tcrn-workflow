@@ -13,6 +13,7 @@ import {
   listConferencesByWorkItem,
   createGateInWorkspace,
   transitionGateInWorkspace,
+  readGateIdentityAuthority,
   deleteGateInWorkspace,
   listGatesByWorkItem,
   applyArtifactArchive,
@@ -100,6 +101,7 @@ import type {
   ConferenceRequest,
   ConferenceMinutes,
   GateRecord,
+  GateIdentityAuthorityFileIdentity,
   CodexAdapterHostContext,
   CodexAdapterInstallationFileIdentity,
   ClaudeAdapterHostContext,
@@ -524,7 +526,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "gate-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "title", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "gate-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "gate-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
-  { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "minutes-locator", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "minutes-locator", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "identity-authority", required: false, valueKind: "string" }, { name: "identity-authority-digest", required: false, valueKind: "string" }] },
   { name: "init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "segment-events", required: false, valueKind: "integer" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }] },
   { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
@@ -1564,10 +1566,23 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     // WSD-4: --minutes-locator is required by the engine only when --status is
     // satisfied (a conference-minutes:<suffix> id resolving to anchoring minutes);
     // it is an optional flag here and the engine fails closed on absence/mismatch.
-    const values = parseArguments(rest, [...shared, "id", "status", "minutes-locator", "actor"]);
+    const values = parseArguments(rest, [...shared, "id", "status", "minutes-locator", "actor", "identity-authority", "identity-authority-digest"]);
     required(values, [...requiredShared, "id", "status"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    // gate-v1: the roster is a pins-track authority like every other, so the caller
+    // states the digest it already holds and the reader checks it against the bytes.
+    // Read before the lease is taken -- a filesystem refusal should not have held a
+    // workspace lock while it happened.
+    const identityIdentity = suppliedAuthority<GateIdentityAuthorityFileIdentity>(
+      undefined, values["identity-authority"], values["identity-authority-digest"],
+    );
+    if (values["identity-authority"] !== undefined && identityIdentity === undefined) {
+      fail("CLI_ARGUMENT_MISSING", "identity-authority-digest");
+    }
+    const identityAuthority = identityIdentity === undefined
+      ? undefined
+      : await readGateIdentityAuthority(values["identity-authority"] ?? "", identityIdentity);
     const state = await withLease(workspace, at, async (lease) => transitionGateInWorkspace(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
@@ -1576,6 +1591,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       // The flag is optional; the engine reads minutesLocator as `!== undefined`, so
       // omitting the key when unset is byte-equivalent to passing undefined.
       ...(values["minutes-locator"] === undefined ? {} : { minutesLocator: values["minutes-locator"] }),
+      ...(identityAuthority === undefined ? {} : { identityAuthority }),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     await emitTimeAttestation(io, values, state.headEventHash);

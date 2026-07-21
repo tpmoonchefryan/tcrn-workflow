@@ -65,6 +65,8 @@ import {
 import { AssignmentGateError, GATE_VERSION, validateGateRecord } from "./assignment-gate.js";
 import type { ConferenceMinutes, ConferencePosition, ConferenceRequest } from "./conference.js";
 import type { GateRecord } from "./assignment-gate.js";
+import { permitsGateOutcome } from "./gate-identity.js";
+import type { GateIdentityAuthorityContext } from "./gate-identity.js";
 import type { CanonicalRoot } from "./root-identity.js";
 import type { ExplicitRoot } from "./index.js";
 
@@ -81,6 +83,8 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_FAULT_INJECTED",
   "WORKSPACE_FILESYSTEM_UNSUPPORTED",
   "WORKSPACE_GATE_EVIDENCE_UNRESOLVED",
+  "WORKSPACE_GATE_IDENTITY_REFUSED",
+  "WORKSPACE_GATE_IDENTITY_REQUIRED",
   "WORKSPACE_GATE_PENDING",
   "WORKSPACE_INPUT_INVALID",
   "WORKSPACE_INPUT_OVERSIZED",
@@ -2476,6 +2480,7 @@ export async function transitionGateInWorkspace(workspaceRoot: string, lease: Wo
   readonly id: string;
   readonly status: GateRecord["status"];
   readonly minutesLocator?: string;
+  readonly identityAuthority?: GateIdentityAuthorityContext;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
     const current = gateById(state, input.id);
@@ -2487,6 +2492,41 @@ export async function transitionGateInWorkspace(workspaceRoot: string, lease: Wo
     }
     let extensions = current.extensions;
     if (input.status === "satisfied") {
+      // gate-v1: a gate created as owner_intent_required declares that closing it takes
+      // owner intent. Until now that declaration was inert -- whichever actor ran the
+      // command could satisfy it. The class is the opt-in: a deployment that does not
+      // want identity checked has four other classes to choose from, and the choice is
+      // made per gate by whoever creates it, so no chain-wide switch is needed.
+      //
+      // Enforcement lives here, at the verb, and deliberately not on replay. Replay must
+      // rebuild a chain on a machine that has never seen the roster -- a clone, a restore
+      // years later, an auditor's laptop -- and a chain whose readability depended on an
+      // external file still being present would brick on ordinary key rotation.
+      //
+      // What that costs is stated rather than implied: this is a decision-point control,
+      // not a chain-integrity invariant. Event hashes are unkeyed, so whoever can write
+      // the log can append a satisfied gate that replays clean, and no check that reads
+      // only the log can tell that from a genuine one.
+      if (current.outcomeClass === "owner_intent_required") {
+        if (input.identityAuthority === undefined) {
+          fail("WORKSPACE_GATE_IDENTITY_REQUIRED", `gate ${current.id} is ${current.outcomeClass} and requires an out-of-band identity authority`);
+        }
+        if (input.actorId === undefined) {
+          // Refusing an unnamed actor is not pedantry: permitting is a statement about
+          // who, and there is no who to check.
+          fail("WORKSPACE_GATE_IDENTITY_REQUIRED", `gate ${current.id} is ${current.outcomeClass} and requires a named actor`);
+        }
+      }
+      if (input.identityAuthority !== undefined) {
+        // Supplied for any class means checked for that class -- asking for the check and
+        // then having it skipped would be the worst of both.
+        if (input.actorId === undefined) {
+          fail("WORKSPACE_GATE_IDENTITY_REQUIRED", `gate ${current.id} identity authority supplied without a named actor`);
+        }
+        if (!permitsGateOutcome(input.identityAuthority, input.actorId, current.outcomeClass)) {
+          fail("WORKSPACE_GATE_IDENTITY_REFUSED", `${input.actorId} may not satisfy ${current.outcomeClass} gate ${current.id}`);
+        }
+      }
       const locator = input.minutesLocator;
       if (locator === undefined || !resolveGateEvidence(locator, current, state.conferenceMinutes, state.conferences)) {
         fail("WORKSPACE_GATE_EVIDENCE_UNRESOLVED", `gate ${current.id} evidence ${String(locator)} does not resolve to anchoring conference minutes`);
