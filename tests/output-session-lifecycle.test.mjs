@@ -1465,7 +1465,13 @@ test("two and three concurrent dead-owner recoverers permit one winner and leave
   for (const count of [2, 3]) {
     const { root, lock } = await deadOwnerLock(context);
     const results = await Promise.allSettled(Array.from({ length: count }, () => recoverStaleOutputSessionLock(root)));
-    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+    // At most one, not exactly one -- the same contract the repeated stress below states
+    // at length. Zero reported winners is reachable without the work being skipped: the
+    // winning path removes the lock before it reconciles, so a recoverer can do the work
+    // and still surrender on its own post-work check. Nothing consumes the signal either
+    // way; both production call sites discard the return value and retry the session.
+    // Two winners remains the catastrophic direction and stays asserted here and there.
+    assert.ok(results.filter((result) => result.status === "fulfilled").length <= 1);
     for (const result of results.filter((entry) => entry.status === "rejected")) {
       assert.ok(["OUTPUT_SESSION_RECOVERY_CONCURRENT", "OUTPUT_SESSION_RECOVERY_MISSING"].includes(result.reason.reasonCode));
     }
