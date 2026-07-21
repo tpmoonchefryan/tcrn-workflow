@@ -691,7 +691,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "packages/cli/src/index.ts"
       ],
-      "fixtureDigest": "bf17fada480f805f671a8dfeff3e525dd861144b7e6f6dbe415e3896e18e2669",
+      "fixtureDigest": "428c998d3c9027b18b9cbab2e635ad41f2831f3dfd3931a0de724f139c45e006",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1371,7 +1371,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "519bc889bec0d26fb92da42c24bb50763f36c1f7d695102e1576c5203d81f1aa",
+      "fixtureDigest": "a96e65450cc5c7ae9e4a58c18fe778918623bf62add625aa0c90ae61a377caa6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1436,7 +1436,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1d83eb35ff5ff1386dace6d589d5567aaf89b24549022c018d166b8a06bafd65",
+      "fixtureDigest": "50785c2ecf996fa6b838a72f8f765f944d97479c55253aa14fc47907642349ee",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1502,7 +1502,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "c0ac851b365150e3097f56b23ba2bd9db1740de9dfa81bb54055222b7434d818",
+      "fixtureDigest": "95173906db2d20c3dfe52bcd30d6812791ea04a9a61d6170cdbaae19fec8d448",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1533,7 +1533,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "338d8ccd670aca97342c77b65a82c7a97ab120c2c08bfa330b36112b51f478e1",
+      "fixtureDigest": "6b5a58bae5082a3dbf0bde904a7008a9b0ac78902b5adee5f38ada57972478e7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1564,7 +1564,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f4046f1e8fb7744e0a35edd37a060078c1aed22f89f77126f6c21304858c690d",
+      "fixtureDigest": "6b573fa99bf2a333337663c042fb4e87e8605bcd35d39771597b4d22291c3703",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1596,7 +1596,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "0528fcd4bb048dcda4bfe6bef0e3612af5e6a5c14cb846baa441164d9bf5b5b3",
+      "fixtureDigest": "de44ab40ed30948c20c20a8c88126d9c25873fe0a45ffbd9a72e42feb6052043",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

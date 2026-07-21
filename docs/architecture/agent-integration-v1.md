@@ -168,3 +168,31 @@ is the same defect one layer up.
 The corollary is the one that costs something: if the restriction genuinely cannot be
 expressed as a check, say so where the residual is recorded, and do not let the surrounding
 fix read as though it closed.
+
+## 9. What gate identity does and does not deliver
+
+A gate whose `outcomeClass` is `owner_intent_required` cannot reach `satisfied` without an
+out-of-band roster naming which actors may close which classes, supplied to
+`gate-transition` as a path plus the digest the caller already holds, and a named actor
+that roster permits. The class is the opt-in, chosen per gate at creation: the other four
+classes are unaffected, and a roster supplied against one of them is honoured there too.
+
+Three statements bound what that buys, and they are load-bearing rather than cautious.
+
+**It delivers authorization, not authentication.** The roster says which identities are
+permitted. Nothing here establishes who ran the command. `--actor` is an assertion by the
+caller, as it has always been.
+
+**Replay does not defend against a forged tail-append.** Enforcement happens at the verb.
+Replay checks that a recorded decision is well formed and does not contradict the actor its
+event was signed with, and it deliberately never re-reads the roster — a chain whose
+readability depended on an external file still being present would brick on ordinary key
+rotation, or on a restore onto a machine that never had it.
+
+**No non-cryptographic replay check could defend against it either.** Event hashes are
+unkeyed, so anyone who can write the log can compute a consistent event that replays clean,
+and every input such a check could read is derivable from the same machine. This is not a
+gap left for later within gate identity; closing it is the external-anchor programme, which
+is a different design with a different trust story. The property is pinned by a test that
+appends a forged satisfied gate and asserts replay accepts it, so the day the boundary
+moves, this section fails with it.
