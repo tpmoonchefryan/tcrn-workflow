@@ -3,6 +3,48 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.2.0 — 2026-07-21
+
+Gate identity. The full narrative is `docs/releases/0.2.0.md`.
+
+### Changed — a behaviour change, hence the minor bump
+
+- **Satisfying an `owner_intent_required` gate now requires an out-of-band
+  roster and a named actor the roster permits.** On `0.1.0` anchoring minutes
+  alone sufficed; the same transition without a roster now refuses with
+  `WORKSPACE_GATE_IDENTITY_REQUIRED`, and an unpermitted actor with
+  `WORKSPACE_GATE_IDENTITY_REFUSED`. The class is the per-gate opt-in; the
+  other four outcome classes are unchanged. Chains written under `0.1.0`
+  replay unchanged.
+
+### Added
+
+- **`gate-identity` module**: canonical roster document
+  (`tcrn.gate-identity-authority.v1`), TOCTOU-hardened reader on the shared
+  authority-file primitive, brand-guarded permission checks, and a
+  self-contained decision record (`gate-identity:decision` in the gate's
+  extensions) that replay shape-checks without ever re-reading the roster.
+- **`gate-transition --identity-authority` / `--identity-authority-digest`**:
+  the roster reaches the CLI as a stated pin.
+- **Digest flags on six pins-track verbs** (`profile-resolve`,
+  `profile-authorize`, `context-route`, `adapter-rollback-plan`,
+  `claude-adapter-rollback-plan`, `claude-adapter-uninstall`): the caller
+  states the digest it already holds; wrong digests stop at the digest; dual
+  supply fails closed as `CLI_AUTHORITY_AMBIGUOUS`. Host-context verbs
+  deliberately gained nothing.
+- **Boundary section** `docs/architecture/agent-integration-v1.md` §9, its
+  third statement pinned by a test that asserts replay accepts a forged
+  tail-append.
+
+### Fixed
+
+- The recovery stress test demanded exactly one winner where the
+  implementation promises at most one; the stronger assertion was the flake.
+- Source lints (`LINT_EXPLICIT_ANY`, `LINT_EVAL`) judge code with comments and
+  string literals blanked, instead of biting prose.
+- Guard-check names the case that catches its two slowest mutations; the push
+  gate runs in ~134s against ~205s.
+
 ## 0.1.0 — 2026-07-21
 
 First accepted release. Everything below is relative to `0.1.0-rc.6`; the full
