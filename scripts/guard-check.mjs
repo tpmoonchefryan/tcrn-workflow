@@ -80,7 +80,15 @@ for (const guard of registry.guards) {
       // than counting it as a kill.
       fail("GUARD_CHECK_MUTATION_UNBUILDABLE", guard.id, build.output.trim().split("\n").slice(-2).join(" | ").slice(0, 200));
     } else {
-      const test = run("node", ["--test", guard.test]);
+      // testName narrows the run to the case that was observed to catch this mutation.
+      // Two entries account for three quarters of the wall clock by running whole
+      // suites to observe one failure, and naming the case is also stricter than the
+      // file: it pins which test does the catching, so a mutation that starts being
+      // caught somewhere else is a change worth seeing rather than a silent pass.
+      // A pattern that matches nothing runs no tests and exits 0, which lands on the
+      // survived branch below -- narrowing can only fail loudly, never silently pass.
+      const pattern = guard.testName === undefined ? [] : ["--test-name-pattern", `^${guard.testName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}$`];
+      const test = run("node", ["--test", ...pattern, guard.test]);
       if (test.ok) fail("GUARD_CHECK_MUTATION_SURVIVED", guard.id, `${guard.test} still passes with the guard removed`);
       else checked.push(guard.id);
     }
