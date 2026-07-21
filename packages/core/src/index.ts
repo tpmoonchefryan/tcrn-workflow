@@ -431,6 +431,27 @@ export type {
   GateRecord,
   AssignmentGateReasonCode,
 } from "./assignment-gate.js";
+export {
+  GATE_IDENTITY_AUTHORITY_VERSION,
+  GATE_IDENTITY_REASON_CODES,
+  GATE_IDENTITY_LIMITS,
+  GateIdentityError,
+  validateGateIdentityAuthorityDocument,
+  readGateIdentityAuthority,
+  permitsGateOutcome,
+  assertGateOutcomePermitted,
+  gateIdentityDecision,
+  validateGateIdentityDecision,
+  canonicalGateIdentityAuthority,
+} from "./gate-identity.js";
+export type {
+  GateIdentityAuthorityContext,
+  GateIdentityAuthorityDocument,
+  GateIdentityAuthorityFileIdentity,
+  GateIdentityDecision,
+  GateIdentityPermit,
+  GateIdentityReasonCode,
+} from "./gate-identity.js";
 export type {
   ContextBudgets,
   ContextExplicitReadCandidate,
