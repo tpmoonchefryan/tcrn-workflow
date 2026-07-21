@@ -2,9 +2,9 @@
 
 // Gate identity authority (gate-v1, E02/STORY-008). Gates already bind evidence: a
 // transition to satisfied must cite conference minutes anchored to the gate's work
-// item. They do not bind identity -- whichever actor runs the command may execute
-// that transition, and "owner intent required" survives only as an outcomeClass
-// string plus whatever the cited minutes happen to say.
+// item. They do not bind identity -- any actor may execute that transition, and
+// "owner intent required" survives only as an outcomeClass string plus whatever the
+// cited minutes happen to say.
 //
 // This module supplies the missing half as a pins-track authority: an out-of-band
 // document naming which actor ids may satisfy which outcome classes, read through the
@@ -64,8 +64,8 @@ function fail(reasonCode: GateIdentityReasonCode, message: string): never {
 }
 
 // Bounded so a hostile authority file cannot turn a permission lookup into a denial of
-// service. The ceiling is generous against a realistic roster and small enough that
-// the whole document is read and canonicalised in one pass.
+// service. The ceiling is generous against any real roster and small enough that the
+// whole document is read and canonicalised in one pass.
 export const GATE_IDENTITY_LIMITS = Object.freeze({
   documentBytes: 65_536,
   permits: 256,
