@@ -462,3 +462,30 @@ test("CQ-02b: admitCodexAdapterHostInput refuses governedAction values that only
     assert.equal(typeof admitted.input.governedAction, "string");
   }
 });
+
+test("E01/STORY-005: the codex installation authority reaches the CLI as a stated pin", async () => {
+  // The Codex side shares the contract but not the reader, so proving it on the
+  // Claude side proves nothing here. Wrong pin and right pin have to land apart.
+  const input = request(), bundle = generateCodexAdapterBundle(input, hostFor(input));
+  const valid = await installationFixture(bundle);
+  try {
+    await cliReason("ADAPTER_INSTALLATION_REQUIRED", ["adapter-rollback-plan",
+      "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath]);
+
+    await cliReason("ADAPTER_INSTALLATION_DIGEST", ["adapter-rollback-plan",
+      "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath,
+      "--installation-receipt-digest", "b".repeat(64)]);
+
+    let output = "";
+    await runCli(["adapter-rollback-plan",
+      "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath,
+      "--installation-receipt-digest", valid.authority.expectedFileSha256,
+    ], { write: (value) => { output = value; } });
+    assert.equal(JSON.parse(output).reasonCode, "ADAPTER_ROLLBACK_PLANNED");
+
+    await cliReason("CLI_AUTHORITY_AMBIGUOUS", ["adapter-rollback-plan",
+      "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath,
+      "--installation-receipt-digest", valid.authority.expectedFileSha256,
+    ], { codexAdapterInstallationAuthority: valid.authority });
+  } finally { await valid.close(); }
+});

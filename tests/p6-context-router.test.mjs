@@ -797,3 +797,42 @@ test("CQ-02c: context receipt exclusion reason codes refuse values that only coe
   }
   assert.doesNotThrow(() => validateContextRouteResult(result));
 });
+
+test("E01/STORY-005: context-route accepts both stated pins and refuses a half-supplied pair", async () => {
+  // context-route is the only verb gated by two authorities at once, so it is the
+  // one place where "supplied" is not a single boolean. Each pin has to be carried
+  // separately, and satisfying one must not carry the other along.
+  const admitted = await admittedFixture(0);
+  try {
+    let output = "";
+    await runCli(["context-route",
+      "--request", canonicalJson(admitted.request),
+      "--profile-receipt", admitted.profilePath, "--authority", admitted.authorityPath,
+      "--profile-receipt-digest", admitted.profileFileAuthority.expectedFileSha256,
+      "--authority-digest", admitted.contextFileAuthority.expectedFileSha256,
+    ], { write: (value) => { output = value; } });
+    assert.equal(JSON.parse(output).reasonCode, "CONTEXT_ROUTED");
+
+    // Profile pin stated, context pin absent: the second gate still closes.
+    await reasonAsync("CONTEXT_AUTHORITY_REQUIRED", () => runCli(["context-route",
+      "--request", canonicalJson(admitted.request),
+      "--profile-receipt", admitted.profilePath, "--authority", admitted.authorityPath,
+      "--profile-receipt-digest", admitted.profileFileAuthority.expectedFileSha256,
+    ], { write: () => {} }));
+
+    // Context pin stated, profile pin absent: the first gate still closes.
+    await reasonAsync("PROFILE_ADMISSION_AUTHORITY_REQUIRED", () => runCli(["context-route",
+      "--request", canonicalJson(admitted.request),
+      "--profile-receipt", admitted.profilePath, "--authority", admitted.authorityPath,
+      "--authority-digest", admitted.contextFileAuthority.expectedFileSha256,
+    ], { write: () => {} }));
+
+    // Each pin binds to its own file: a wrong context pin cannot ride a right profile one.
+    await reasonAsync("CONTEXT_AUTHORITY_DIGEST", () => runCli(["context-route",
+      "--request", canonicalJson(admitted.request),
+      "--profile-receipt", admitted.profilePath, "--authority", admitted.authorityPath,
+      "--profile-receipt-digest", admitted.profileFileAuthority.expectedFileSha256,
+      "--authority-digest", "b".repeat(64),
+    ], { write: () => {} }));
+  } finally { await admitted.close(); }
+});
