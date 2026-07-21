@@ -81,7 +81,8 @@
       "find": "fail(\"KNOWLEDGE_FAULT_INJECTED\", point);",
       "replace": "if (point !== point) fail(\"KNOWLEDGE_FAULT_INJECTED\", point);",
       "expectedMatches": 1,
-      "test": "tests/p4-knowledge-core.test.mjs"
+      "test": "tests/p4-knowledge-core.test.mjs",
+      "testName": "WSC-2: knowledge-rebase enforces CAS and fails closed at fault points leaving the store locked"
     },
     {
       "id": "R2-NEW-1-recovery-quarantine-prefix",
@@ -90,7 +91,8 @@
       "find": "`released-recovery-${",
       "replace": "`stale-recovery-${",
       "expectedMatches": 2,
-      "test": "tests/p3-file-engine.test.mjs"
+      "test": "tests/p3-file-engine.test.mjs",
+      "testName": "WSA-7b: a reclaimed recovery claim quarantines under a residue-visible prefix"
     },
     {
       "id": "CI-hardlink-scope-of-source-reader",
