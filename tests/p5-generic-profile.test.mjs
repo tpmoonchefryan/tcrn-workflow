@@ -1149,6 +1149,20 @@ test("E01/STORY-004: flag-supplied authority binds by digest and refuses a secon
       "--receipt", admitted.path, "--receipt-digest", admitted.authority.expectedFileSha256,
     ], { write: () => {}, profileAdmissionAuthority: admitted.authority }));
 
+    // profile-authorize carries its own copy of the supply call, so profile-resolve
+    // passing says nothing about it. Past the gate it fails on binding, not authority.
+    const authorizeArguments = (digest) => [
+      "profile-authorize", "--request", canonicalJson(supplyRequest), "--receipt", admitted.path,
+      "--operation", "project.create", "--workspace-id", "-", "--project-id", "-", "--command", "-",
+      ...(digest === undefined ? [] : ["--receipt-digest", digest]),
+    ];
+    await expectReasonAsync("PROFILE_BINDING_REQUIRED", () =>
+      runCli(authorizeArguments(admitted.authority.expectedFileSha256), { write: () => {} }));
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_DIGEST", () =>
+      runCli(authorizeArguments("b".repeat(64)), { write: () => {} }));
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_REQUIRED", () =>
+      runCli(authorizeArguments(undefined), { write: () => {} }));
+
     // A digest-shaped argument is the only thing accepted as a digest.
     await expectReasonAsync("CLI_ARGUMENT_MALFORMED", () => runCli([
       "profile-resolve", "--request", canonicalJson(supplyRequest),

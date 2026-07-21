@@ -594,3 +594,40 @@ test("CQ-02b: admitClaudeAdapterHostInput refuses governedAction values that onl
     assert.equal(typeof admitted.input.governedAction, "string");
   }
 });
+
+test("E01/STORY-005: the installation authority reaches the CLI as a stated pin", async () => {
+  // Same contract the injected authority already satisfies, reached the other way:
+  // the caller states the digest it holds out of band. The pair that matters is the
+  // last two -- a wrong digest must stop at the digest, and a right one must plan --
+  // because only the difference between them shows the pin is being compared rather
+  // than merely accepted.
+  const input = request(), bundle = generateClaudeAdapterBundle(input, hostFor(input));
+  const valid = await installationFixture(bundle);
+  try {
+    await cliReason("ADAPTER_INSTALLATION_REQUIRED", ["claude-adapter-rollback-plan",
+      "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath]);
+
+    await cliReason("ADAPTER_INSTALLATION_DIGEST", ["claude-adapter-rollback-plan",
+      "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath,
+      "--installation-receipt-digest", "b".repeat(64)]);
+
+    let output = "";
+    await runCli(["claude-adapter-rollback-plan",
+      "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath,
+      "--installation-receipt-digest", valid.authority.expectedFileSha256,
+    ], { write: (value) => { output = value; } });
+    assert.equal(JSON.parse(output).reasonCode, "ADAPTER_ROLLBACK_PLANNED");
+
+    await assert.rejects(() => runCli(["claude-adapter-rollback-plan",
+      "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath,
+      "--installation-receipt-digest", valid.authority.expectedFileSha256,
+    ], { write: () => {}, claudeAdapterInstallationAuthority: valid.authority }),
+      (error) => error?.reasonCode === "CLI_AUTHORITY_AMBIGUOUS");
+
+    // The mutating sibling reads through the same flag, so a wrong pin must refuse
+    // there too -- and refuse before anything is unlinked.
+    await cliReason("ADAPTER_INSTALLATION_DIGEST", ["claude-adapter-uninstall",
+      "--bundle", canonicalJson(bundle), "--installation-receipt", valid.receiptPath,
+      "--installation-receipt-digest", "b".repeat(64)]);
+  } finally { await valid.close(); }
+});
