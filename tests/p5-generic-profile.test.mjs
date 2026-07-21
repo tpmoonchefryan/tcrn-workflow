@@ -1113,3 +1113,48 @@ test("CQ-02c: effective profile resolution refuses values that only coerce to a 
   // The guard must not have closed the legal value.
   assert.deepEqual(validateEffectiveGenericProfile(effective), effective);
 });
+
+test("E01/STORY-004: flag-supplied authority binds by digest and refuses a second source", async () => {
+  // The out-of-band pin can reach the CLI as an argument, the way --expected-plan-digest
+  // already does. What must hold is that the flag is not a way to *skip* the authority:
+  // the digest still has to match the bytes on disk, and a wrong one must fail on the
+  // digest rather than sail through. Reason codes alone would not show that -- the
+  // wrong-digest and correct-digest cases have to land in different places.
+  const supplyRequest = request([generateGenericStarterBundle().layers[0]]);
+  const admitted = await admissionFixture(supplyRequest, { skipRead: true });
+  try {
+    // Correct digest: past the authority gate entirely, into resolution.
+    let output = "";
+    await runCli([
+      "profile-resolve", "--request", canonicalJson(supplyRequest),
+      "--receipt", admitted.path, "--receipt-digest", admitted.authority.expectedFileSha256,
+    ], { write: (value) => { output = value; } });
+    assert.equal(JSON.parse(output).schemaVersion, "tcrn.generic-profile-effective.v1");
+
+    // Wrong digest: the pin binds against the bytes, so this stops at the digest.
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_DIGEST", () => runCli([
+      "profile-resolve", "--request", canonicalJson(supplyRequest),
+      "--receipt", admitted.path, "--receipt-digest", "b".repeat(64),
+    ], { write: () => {} }));
+
+    // No supply at all stays exactly as it was before the flag existed.
+    await expectReasonAsync("PROFILE_ADMISSION_AUTHORITY_REQUIRED", () => runCli([
+      "profile-resolve", "--request", canonicalJson(supplyRequest), "--receipt", admitted.path,
+    ], { write: () => {} }));
+
+    // Two sources for one authority is ambiguity. Picking a winner would silently
+    // ignore the other, so both-supplied fails closed even when they agree.
+    await expectReasonAsync("CLI_AUTHORITY_AMBIGUOUS", () => runCli([
+      "profile-resolve", "--request", canonicalJson(supplyRequest),
+      "--receipt", admitted.path, "--receipt-digest", admitted.authority.expectedFileSha256,
+    ], { write: () => {}, profileAdmissionAuthority: admitted.authority }));
+
+    // A digest-shaped argument is the only thing accepted as a digest.
+    await expectReasonAsync("CLI_ARGUMENT_MALFORMED", () => runCli([
+      "profile-resolve", "--request", canonicalJson(supplyRequest),
+      "--receipt", admitted.path, "--receipt-digest", "not-a-digest",
+    ], { write: () => {} }));
+  } finally {
+    await admitted.close();
+  }
+});
