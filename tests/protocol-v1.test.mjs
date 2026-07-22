@@ -260,6 +260,13 @@ test("work graph and protocol negatives return exact frozen reason codes", async
     ["missing-parent", () => validateWorkGraph([
       work({ id: "work:epic-a", externalKey: "EPIC-A", kind: "Epic", parentId: "work:missing" }),
     ])],
+    // The mapped-kind dangling parent above goes through the first branch; this pins the
+    // else-if branch that resolves parents for the four kinds outside the planning tree.
+    // Without it a refactor could drop that branch and let a dangling-parent Incident
+    // materialize silently. Proven against the shipped engine (scratch replay refuses it).
+    ["missing-parent-unmapped-kind", () => validateWorkGraph([
+      work({ id: "work:incident-a", externalKey: "BUG-A", kind: "Incident", parentId: "work:missing" }),
+    ])],
   ]);
 
   const declared = await fixture("negative/cases.json");

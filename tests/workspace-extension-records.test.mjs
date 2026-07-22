@@ -1486,3 +1486,47 @@ test("E05: a forged work.annotated event fails replay closed on a status change 
     return { ...record, extensions: rest };
   }));
 });
+
+test("INIT-004: the CLI opens Incident for creation and it materializes outside the planning tree", async (context) => {
+  // Incident has been a valid record kind since v0.1.0; only the CLI create whitelist
+  // blocked it. This is the operating surface catching up with the protocol. The bug
+  // hangs off the Story it was found in — a resolving parent is safe (a dangling one is
+  // refused by the graph validator, which the protocol suite pins for unmapped kinds).
+  const fx = await cliSeededFixture(context);
+  const ws = fx.ws;
+  const story = JSON.parse((await invokeCli(["work-create", "--workspace", ws, "--expected-version", "2",
+    "--at", instant(3), "--project-id", fx.projectId, "--external-key", "EPIC-X", "--kind", "Epic",
+    "--parent-id", fx.workId])).output);
+  const st = JSON.parse((await invokeCli(["work-create", "--workspace", ws, "--expected-version", "3",
+    "--at", instant(4), "--project-id", fx.projectId, "--external-key", "STORY-X", "--kind", "Story",
+    "--parent-id", story.record.id])).output);
+
+  // Incident, found in that Story, via the CLI.
+  const incident = await invokeCli(["work-create", "--workspace", ws, "--expected-version", "4",
+    "--at", instant(5), "--project-id", fx.projectId, "--external-key", "BUG-1", "--kind", "Incident",
+    "--parent-id", st.record.id]);
+  assert.equal(incident.ok, true, `incident create failed: ${incident.reasonCode}`);
+  const rec = JSON.parse(incident.output).record;
+  assert.equal(rec.kind, "Incident");
+
+  // It materializes, and list ordering stays deterministic with a non-planning kind present.
+  const state = await materializeWorkspace(fx.workspace);
+  const inc = state.work.find((w) => w.id === rec.id);
+  assert.equal(inc.kind, "Incident");
+  assert.equal(inc.parentId, st.record.id);
+  assert.equal((await validateWorkspace(fx.workspace, false)).version, 5);
+
+  // A parentless Incident is equally valid (found nowhere in particular).
+  const orphan = await invokeCli(["work-create", "--workspace", ws, "--expected-version", "5",
+    "--at", instant(6), "--project-id", fx.projectId, "--external-key", "BUG-2", "--kind", "Incident",
+    "--parent-id", "-"]);
+  assert.equal(orphan.ok, true, `parentless incident failed: ${orphan.reasonCode}`);
+
+  // The three kinds still closed at the CLI stay closed.
+  for (const closed of ["Review", "Release", "Knowledge"]) {
+    const r = await invokeCli(["work-create", "--workspace", ws, "--expected-version", "6",
+      "--at", instant(7), "--project-id", fx.projectId, "--external-key", `X-${closed}`, "--kind", closed]);
+    assert.equal(r.ok, false);
+    assert.equal(r.reasonCode, "CLI_ARGUMENT_MALFORMED", `${closed} should stay closed at the CLI`);
+  }
+});
