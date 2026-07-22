@@ -3,6 +3,36 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.3.2 — 2026-07-23
+
+Knowledge-store curation headroom and the Incident create path. The full
+narrative is `docs/releases/0.3.2.md`.
+
+### Added
+
+- **The CLI create path admits the `Incident` kind.** The protocol has carried
+  eight work kinds since `0.1.0`, but `work-create` only opened the four
+  planning kinds; a defect could therefore only be recorded as a `Story`.
+  `Incident` is now creatable (with or without a parent), while `Review`,
+  `Release`, and `Knowledge` stay closed to creation.
+
+### Changed
+
+- **The knowledge aggregate cap no longer double-charges the derived index.**
+  The store index re-serializes the very metadata already counted, so the cap
+  taxed every record roughly twice and a store of ~30 tiny records scanned at
+  97% while holding almost no body content. The cap now bounds only the
+  source-of-truth bytes (marker + Σ metadata + Σ body) across scan, create, and
+  promotion; the index is still validated byte-for-byte.
+- **Retiring a knowledge record reclaims its body.** A retired record's body is
+  already unreadable, so retire now deletes it as its final durable step;
+  retire frees bytes, not merely a live-record slot. A live record still
+  requires its body, and the store stays valid without a retired one.
+- **Knowledge search matches summaries, not only subject and tags**, so a
+  curated card is findable by the substance in its summary.
+
+Chains written under `0.3.1` replay unchanged.
+
 ## 0.3.1 — 2026-07-22
 
 Release-machinery completion. The full narrative is `docs/releases/0.3.1.md`.
