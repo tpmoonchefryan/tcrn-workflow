@@ -12,7 +12,7 @@ English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
-[Why](#why-this-project-exists) · [Is this for you?](#is-this-for-you) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Plain answers](#plain-answers-to-fair-questions) · [Known limits](#known-limits) · [License](#license)
+[Why](#why-this-project-exists) · [Is this for you?](#is-this-for-you) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Using it](#using-it-for-real-work) · [Plain answers](#plain-answers-to-fair-questions) · [Known limits](#known-limits) · [License](#license)
 
 `Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
 
@@ -105,6 +105,23 @@ node scripts/tcrn-workflow.mjs knowledge-list ...
 ```
 
 Every mutation requires an explicit workspace path, a strict RFC 3339 timestamp, and an expected version — concurrency safety is enforced by the engine, not by convention.
+
+## Using it for real work
+
+The quick start above proves the framework. Using it is a different activity — and it is deliberately not command-typing.
+
+**To see the whole governed loop once, by hand** — workspace → initiative → epic → story → gate → conference → distilled knowledge → trace — follow [the tutorial](docs/tutorial/governed-loop.md). Every command in it is executed verbatim by `pnpm verify:e2e`, so it cannot silently rot.
+
+**For real work, your agent drives and you decide.** The intended operator is an AI agent — Claude Code or Codex — with the companion **tcrn-workflow-helper** Skill (published alongside this repository) placed in its skills folder. The Skill carries the operating discipline: a first-run wizard that sets up trust and the workspace with plain-language explanations, routing guidance that maps a working moment to the verb that records it, and a recording discipline whose one hard rule is that nothing is written without your explicit yes.
+
+A working session then looks like this:
+
+1. **You discuss direction with your agent as usual.** When the conversation produces something with consequences — a decision, a decomposition, a completed deliverable — the agent *offers* to record it, naming the record and the verb. Your yes writes it; your no drops it.
+2. **Contested "done" gets a gate.** A pending gate refuses the transition — at the command and again on replay — until it is satisfied by citing closed conference minutes, and an `owner_intent_required` gate additionally refuses any actor your out-of-band roster does not permit.
+3. **Deliberations are conferences.** Positions are carried verbatim under each actor's id, minutes settle them, and closed decisions can distill into curated knowledge.
+4. **Between sessions, the record is the memory.** `status` and the list verbs read it back, `work-show` carries each item's advisory scope and the minutes that decided it, and snapshots protect the chain at the cadence you chose.
+
+You stay the decision-maker; the engine enforces what was decided; the chain is the proof. An agent below the discipline thrashes on reason codes instead of corrupting anything — "Known limits" states exactly what the discipline requires.
 
 ## Architecture in 60 seconds
 

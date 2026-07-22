@@ -12,7 +12,7 @@
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
-[Pourquoi ce projet existe](#pourquoi-ce-projet-existe) · [Est-ce fait pour vous](#est-ce-fait-pour-vous) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrage rapide](#démarrage-rapide) · [Réponses directes](#réponses-directes) · [Limites connues](#limites-connues) · [Licence](#licence)
+[Pourquoi ce projet existe](#pourquoi-ce-projet-existe) · [Est-ce fait pour vous](#est-ce-fait-pour-vous) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrage rapide](#démarrage-rapide) · [L'utiliser](#lutiliser-pour-de-vrai) · [Réponses directes](#réponses-directes) · [Limites connues](#limites-connues) · [Licence](#licence)
 
 `Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
 
@@ -105,6 +105,23 @@ node scripts/tcrn-workflow.mjs knowledge-list ...
 ```
 
 Chaque modification exige un chemin d'espace de travail explicite, un horodatage RFC 3339 strict et une version attendue — la sûreté concurrente est imposée par le moteur, pas par convention.
+
+## L'utiliser pour de vrai
+
+Le démarrage rapide ci-dessus prouve le framework. L'*utiliser* est une autre activité — et ce n'est délibérément pas taper des commandes.
+
+**Pour parcourir une fois la boucle gouvernée entière, à la main** — espace de travail → initiative → épopée → récit → porte → conférence → savoir distillé → traçage — suivez [le tutoriel](docs/tutorial/governed-loop.md). Chaque commande y est exécutée mot pour mot par `pnpm verify:e2e`, elle ne peut donc pas pourrir en silence.
+
+**Pour le vrai travail, votre agent tient la plume et vous décidez.** L'opérateur prévu est un agent IA — Claude Code ou Codex — avec la Skill compagnon **tcrn-workflow-helper** (publiée aux côtés de ce dépôt) placée dans son dossier de skills. Cette Skill porte la discipline d'exploitation : un assistant de première exécution qui met en place la confiance et l'espace de travail en expliquant chaque étape en langage clair, un guidage qui fait correspondre chaque moment de travail au verbe qui l'enregistre, et une discipline d'enregistrement traversée par une règle dure — **rien ne s'écrit sans votre oui explicite**.
+
+Une session de travail ressemble alors à ceci :
+
+1. **Vous discutez de la direction avec votre agent, comme d'habitude.** Quand la conversation produit quelque chose qui porte à conséquence — une décision, une décomposition, un livrable achevé — l'agent *propose* de l'enregistrer, en nommant l'enregistrement et le verbe. Votre oui l'écrit ; votre non l'abandonne.
+2. **Un « terminé » contesté passe par une porte.** Une porte en attente refuse la transition — à la commande, puis encore au rejeu — jusqu'à sa satisfaction par la citation d'un compte rendu de conférence clos ; une porte `owner_intent_required` refuse en outre tout acteur que votre registre hors bande ne permet pas.
+3. **Les délibérations sont des conférences.** Les positions sont consignées mot pour mot sous l'id de chaque acteur, les comptes rendus les tranchent, et les décisions closes peuvent se distiller en savoir organisé.
+4. **Entre les sessions, le dossier est la mémoire.** `status` et les verbes de liste le relisent, `work-show` porte la portée faisant autorité de chaque élément et le compte rendu qui l'a décidée, et les instantanés protègent la chaîne au rythme que vous avez choisi.
+
+Vous restez le décideur ; le moteur applique ce qui a été décidé ; la chaîne en est la preuve. Un agent en deçà de la discipline patine sur les codes de raison au lieu de rien corrompre — « Limites connues » énonce exactement ce que la discipline exige.
 
 ## L'architecture en soixante secondes
 
