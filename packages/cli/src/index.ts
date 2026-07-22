@@ -1315,7 +1315,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, [...requiredShared, "project-id", "external-key", "kind"]);
     // Fail closed at the CLI boundary naming the offending flag/value, before the
     // uncast enum reaches core and surfaces as an opaque RECORD_MALFORMED on the id.
-    if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
+    if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
     if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
@@ -1390,7 +1390,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   if (command === "work-list") {
     const values = parseArguments(rest, ["workspace", "project-id", "kind", "status", "parent-id", "limit", "offset"]);
     required(values, ["workspace"]);
-    if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
+    if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
     if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const state = await validateWorkspace(values.workspace ?? "");
     const records = state.work.filter((entry) => !entry.tombstone &&

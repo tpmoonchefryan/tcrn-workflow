@@ -85,6 +85,10 @@
     {
       "id": "missing-parent",
       "expectedReasonCode": "REFERENTIAL_INTEGRITY"
+    },
+    {
+      "id": "missing-parent-unmapped-kind",
+      "expectedReasonCode": "REFERENTIAL_INTEGRITY"
     }
   ]
 }
