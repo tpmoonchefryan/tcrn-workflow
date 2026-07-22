@@ -151,8 +151,8 @@ test("P8 creates a closed unpublished release candidate without supported AOS re
   const sbom = Buffer.from('{"bomFormat":"CycloneDX"}\n', "utf8");
   const artifacts = buildP8ReleaseArtifacts({ sourceArchive: source, sbom });
   assert.deepEqual([...artifacts.keys()].sort(), [...P8_RELEASE_ARTIFACTS].sort());
-  assert.equal(P8_VERSION, "0.2.0");
-  assert.equal(P8_TAG, "v0.2.0");
+  assert.equal(P8_VERSION, "0.3.1");
+  assert.equal(P8_TAG, "v0.3.1");
   assert.deepEqual(P8_SUPPORTED_AOS_RELEASES, []);
   const manifest = JSON.parse(artifacts.get("release-manifest.json").toString("utf8"));
   assert.equal(manifest.releaseStatus, "accepted_release");
