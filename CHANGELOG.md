@@ -3,6 +3,35 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.3.0 — 2026-07-22
+
+Advisory scope on the record. The full narrative is `docs/releases/0.3.0.md`.
+
+### Added — a new additive operation, hence the minor bump
+
+- **`work-annotate`**: attach non-binding advisory fields to a work record
+  without changing its status. `--scope` records an authoritative scope/intent
+  line; `--decided-by` backlinks the governing conference minutes. Both land as
+  `required:false` extensions (`advisory:scope`, `advisory:decided-by`) — no
+  registry row, they never gate a transition or block `done`. The engine appends
+  a new `work.annotated` operation; a workspace that uses it is unreadable by a
+  binary predating it (the WSD-1 additive-operation contract), while workspaces
+  that never annotate stay byte-identical and `storageVersion` stays 1.
+- **`work-show` advisory projection**: an annotated record surfaces its advisory
+  fields under `advisory`; an un-annotated record's output is byte-identical to
+  before.
+- **Event-chain scaling advisory evidence**: the raw samples behind the README
+  "Known limits" ceiling figures now ship at
+  `docs/verification/2026-07-20-event-chain-ceiling-samples.json`, so the
+  citation resolves in a standalone clone.
+
+### Guarantees
+
+- The reducer accepts a `work.annotated` event only if it changes exactly the
+  advisory keys and nothing else. A forged annotation that smuggles a status
+  change or a foreign extension fails closed `WORKSPACE_EVENT_CORRUPT` — pinned
+  by three forge tests. Chains written under `0.2.0` replay unchanged.
+
 ## 0.2.0 — 2026-07-21
 
 Gate identity. The full narrative is `docs/releases/0.2.0.md`.

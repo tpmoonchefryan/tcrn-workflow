@@ -208,7 +208,11 @@ const supportedFilesystemTypes = new Set([
 const projectFields = ["schemaVersion", "id", "externalKey", "name", "revision", "updatedAt", "tombstone"];
 const rootFields = ["kind", "path", "canonicalPath", "portableIdentity"];
 const projectOperations = new Set(["project.created", "project.updated", "project.deleted"]);
-const workOperations = new Set(["work.created", "work.updated", "work.deleted"]);
+// work.annotated (E05): an additive operation that attaches non-binding advisory
+// extensions to a live work record without changing its status. It follows the WSD-1
+// contract -- a workspace that uses it is unreadable by a binary predating it, while
+// workspaces that never annotate stay fully readable and storageVersion stays 1.
+const workOperations = new Set(["work.created", "work.updated", "work.deleted", "work.annotated"]);
 // WSD-1: conference/gate records persist as additive event-log operations. A
 // workspace that contains one of these events is unreadable by pre-WSD-1
 // binaries (they fail closed at the unknown-operation check below); workspaces
@@ -841,6 +845,101 @@ function readGateEvidenceLocator(extensions: Readonly<Record<string, unknown>>):
   return typeof value === "string" ? value : undefined;
 }
 
+// E05 (advisory scope-on-record): non-binding advisory fields on a work record,
+// written by the additive work.annotated operation. Both are required:false extensions
+// -- no registry row, they never gate a transition or block done, and a binary
+// predating them still reads any workspace that never annotates. advisory:scope is an
+// authoritative one-line scope/intent statement; advisory:decided-by backlinks the
+// governing conference minutes, so an executor reads a work item's scope off the record
+// itself rather than reconstructing it from a compressed external key.
+const ADVISORY_SCOPE_KEY = "advisory:scope";
+const ADVISORY_DECIDED_BY_KEY = "advisory:decided-by";
+const ADVISORY_KEYS: readonly string[] = [ADVISORY_SCOPE_KEY, ADVISORY_DECIDED_BY_KEY];
+
+function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisory: {
+  readonly scope?: string;
+  readonly decidedBy?: readonly string[];
+}): Readonly<Record<string, unknown>> {
+  const next: Record<string, unknown> = { ...base };
+  if (advisory.scope !== undefined) {
+    next[ADVISORY_SCOPE_KEY] = { required: false, value: advisory.scope };
+  }
+  if (advisory.decidedBy !== undefined) {
+    next[ADVISORY_DECIDED_BY_KEY] = { required: false, value: [...advisory.decidedBy] };
+  }
+  return next;
+}
+
+function isMinutesId(value: unknown): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const separator = value.indexOf(":");
+  if (separator < 0 || value.slice(0, separator) !== "minutes") {
+    return false;
+  }
+  try {
+    assertProtocolId(value);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+// Defence in depth on the advisory value shape. The terminal validateWorkGraph over the
+// whole materialized set already proves each advisory entry is a required:false
+// {required, value} pair under a valid protocol-id key (a required:true key would fail
+// UNKNOWN_REQUIRED_EXTENSION because advisory keys carry no registry row); this adds the
+// value semantics the extension map is deliberately agnostic about.
+function assertAdvisoryEntryShape(key: string, entry: unknown, id: string): void {
+  if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+    fail("WORKSPACE_EVENT_CORRUPT", `work ${id} advisory ${key} is malformed`);
+  }
+  const value = (entry as Readonly<Record<string, unknown>>).value;
+  if (key === ADVISORY_SCOPE_KEY) {
+    if (typeof value !== "string" || value.length === 0) {
+      fail("WORKSPACE_EVENT_CORRUPT", `work ${id} advisory scope must be a non-empty string`);
+    }
+    return;
+  }
+  if (!Array.isArray(value) || value.length === 0 || !value.every((item) => isMinutesId(item))) {
+    fail("WORKSPACE_EVENT_CORRUPT", `work ${id} advisory decided-by must be a non-empty list of minutes ids`);
+  }
+}
+
+// Replay guard for work.annotated: only the advisory keys may differ from the prior
+// revision, and at least one must. Every other extension entry stays byte-identical, so
+// an annotation can neither introduce a foreign extension, drop one, nor alter it -- the
+// same anti-smuggling shape the gate evidence path enforces with an exact comparison.
+function assertWorkAnnotationExtensions(
+  current: Readonly<Record<string, unknown>>,
+  next: Readonly<Record<string, unknown>>,
+  id: string,
+): void {
+  const advisory = new Set(ADVISORY_KEYS);
+  const keys = new Set([...Object.keys(current), ...Object.keys(next)]);
+  let changed = false;
+  for (const key of keys) {
+    const before = canonicalJson((current[key] ?? null) as JsonValue);
+    const after = canonicalJson((next[key] ?? null) as JsonValue);
+    if (!advisory.has(key)) {
+      if (before !== after) {
+        fail("WORKSPACE_EVENT_CORRUPT", `work ${id} annotation changed non-advisory extension ${key}`);
+      }
+      continue;
+    }
+    if (before !== after) {
+      changed = true;
+    }
+    if (Object.hasOwn(next, key)) {
+      assertAdvisoryEntryShape(key, next[key], id);
+    }
+  }
+  if (!changed) {
+    fail("WORKSPACE_EVENT_CORRUPT", `work ${id} annotation changed no advisory field`);
+  }
+}
+
 // WSD-4: the designated set is exactly "a transition whose target is done".
 // cancelled/blocked/ready targets are exempt so cleanup can never wedge. A
 // non-tombstoned pending gate anchored to the work item blocks the move. The
@@ -943,7 +1042,8 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         }
       } else if (!current || current.tombstone || record.revision !== current.revision + 1 || record.externalKey !== current.externalKey ||
         record.projectId !== current.projectId || record.kind !== current.kind || record.parentId !== current.parentId ||
-        (operation === "work.updated" && record.tombstone) || (operation === "work.deleted" && !record.tombstone)) {
+        (operation === "work.updated" && record.tombstone) || (operation === "work.deleted" && !record.tombstone) ||
+        (operation === "work.annotated" && record.tombstone)) {
         fail("WORKSPACE_EVENT_CORRUPT", `invalid work mutation ${record.id}`);
       }
       if (operation === "work.updated" && current) {
@@ -959,6 +1059,16 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         // re-checked against the gates materialized so far, so a hand-crafted log
         // that drives a work item to done past a pending gate fails closed.
         assertGateClearance(gates.values(), record.id, record.status, "WORKSPACE_EVENT_CORRUPT");
+      }
+      // work.annotated (E05): not a transition -- status is unchanged and the only
+      // extension delta is the advisory keys. Both invariants replay as
+      // WORKSPACE_EVENT_CORRUPT so a hand-crafted annotation cannot smuggle a status
+      // change or a foreign extension past the reducer.
+      if (operation === "work.annotated" && current) {
+        if (record.status !== current.status) {
+          fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} annotation changed status`);
+        }
+        assertWorkAnnotationExtensions(current.extensions, record.extensions, record.id);
       }
       work.set(record.id, record);
       validateWorkClosure(work, projects, record);
@@ -2274,6 +2384,44 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
     const record: WorkRecord = { ...current, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
     return { payload: { operation: "work.updated", record: workJsonFields(record) }, projects: state.projects, work };
+  }, input);
+}
+
+// E05 (scope-on-record): attach non-binding advisory fields to a live work record. It
+// never changes status and never touches a gate, so it stays entirely clear of the
+// transition and gate-clearance machinery -- an annotation cannot advance, block, or
+// unblock work. validateWorkGraph re-validates the merged extensions (rejecting a
+// required:true advisory key, which carries no registry row), and the reducer replays
+// the advisory-only delta as WORKSPACE_EVENT_CORRUPT.
+export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly id: string;
+  readonly scope?: string;
+  readonly decidedBy?: readonly string[];
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const current = workById(state, input.id);
+    if (current.tombstone) {
+      fail("WORKSPACE_INPUT_INVALID", `work ${input.id} is deleted`);
+    }
+    if (input.scope === undefined && input.decidedBy === undefined) {
+      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope or decided-by");
+    }
+    if (input.scope !== undefined && input.scope.length === 0) {
+      fail("WORKSPACE_INPUT_INVALID", "advisory scope must be a non-empty string");
+    }
+    if (input.decidedBy !== undefined && (input.decidedBy.length === 0 || !input.decidedBy.every((item) => isMinutesId(item)))) {
+      fail("WORKSPACE_INPUT_INVALID", "advisory decided-by must be a non-empty list of minutes ids");
+    }
+    const extensions = workAdvisoryExtensions(current.extensions, {
+      ...(input.scope !== undefined ? { scope: input.scope } : {}),
+      ...(input.decidedBy !== undefined ? { decidedBy: input.decidedBy } : {}),
+    });
+    if (canonicalJson(extensions as JsonValue) === canonicalJson(current.extensions as unknown as JsonValue)) {
+      fail("WORKSPACE_INPUT_INVALID", "annotation does not change any advisory field");
+    }
+    const record: WorkRecord = { ...current, extensions: extensions as WorkRecord["extensions"], revision: current.revision + 1, updatedAt: input.occurredAt };
+    const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
+    return { payload: { operation: "work.annotated", record: workJsonFields(record) }, projects: state.projects, work };
   }, input);
 }
 
