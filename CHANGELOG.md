@@ -3,6 +3,22 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.3.1 — 2026-07-22
+
+Release-machinery completion. The full narrative is `docs/releases/0.3.1.md`.
+
+### Fixed
+
+- **The P8 release pins missed the 0.3.0 version sweep.** `P8_VERSION` /
+  `P8_TAG` in `scripts/lib/p8-workflow-rc.mjs` still said `0.2.0`, so the
+  `v0.3.0` tree fails its own `verify:p8` with `P8_PACKAGE_VERSION_MISMATCH`
+  and can never produce its release artifacts — which is why the `v0.3.0`
+  GitHub Release carries no source tar, provenance, SBOM, or checksums. This
+  release moves the pins (and registers the release notes in the proof route
+  lists) so the P8 ceremony completes. No engine behaviour changes;
+  `work-annotate` and every other verb are byte-for-byte the `0.3.0`
+  behaviour.
+
 ## 0.3.0 — 2026-07-22
 
 Advisory scope on the record. The full narrative is `docs/releases/0.3.0.md`.
