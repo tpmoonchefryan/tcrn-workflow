@@ -1366,3 +1366,26 @@ test("TCRN-CROSS-STORY-025: search matches the summary, not only subject and tag
     assert.equal(miss.records.length, 0, "a term present nowhere must not match");
   } finally { await fx.close(); }
 });
+
+test("TCRN-CROSS-STORY-024: retiring reclaims the body, keeps the store valid, and still requires a live body", async () => {
+  const fx = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-S024" });
+  try {
+    const bodiesDir = join(fx.workspace, ".tcrn-workflow/knowledge/bodies");
+    const created = await createKnowledgeUnit(fx.workspace, unitInput(fx, "S024-RECLAIM", {
+      expectedVersion: 0, occurredAt: instant(11, 3), body: "x".repeat(7_500),
+    }));
+    const bodyFile = join(bodiesDir, `${created.id}.body`);
+    assert.equal((await readFile(bodyFile)).length, 7_500, "body present before retire");
+    // Retire reclaims the body file, and the store is still valid without it.
+    await retireKnowledgeUnit(fx.workspace, { expectedVersion: 1, expectedRevision: 1, occurredAt: instant(11, 4), id: created.id });
+    await assert.rejects(readFile(bodyFile), "retired body must be deleted");
+    assert.equal((await validateKnowledgeStore(fx.workspace)).reasonCode, "KNOWLEDGE_STORE_VALID");
+    // The retired record survives as a metadata-only audit entry.
+    const all = await listKnowledgeMetadata(fx.workspace, { at: instant(12), selection: "all" });
+    assert.equal(all.records.some((r) => r.id === created.id), true, "retired record kept as audit entry");
+    // Integrity still fires: a LIVE record missing its body corrupts the store.
+    const live = await createKnowledgeUnit(fx.workspace, unitInput(fx, "S024-LIVE", { expectedVersion: 2, occurredAt: instant(11, 5) }));
+    await rm(join(bodiesDir, `${live.id}.body`));
+    await expectReason("KNOWLEDGE_PARTIAL_STATE", () => validateKnowledgeStore(fx.workspace));
+  } finally { await fx.close(); }
+});

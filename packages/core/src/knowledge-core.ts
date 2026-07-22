@@ -829,8 +829,16 @@ async function scanKnowledgeStore(
   }
   const metadataIds = metadataNames.map((name) => name.endsWith(".json") ? name.slice(0, -5) : "");
   const bodyIds = bodyNames.map((name) => name.endsWith(".body") ? name.slice(0, -5) : "");
+  const bodyIdSet = new Set(bodyIds);
+  const metadataIdSet = new Set(metadataIds);
+  // TCRN-CROSS-STORY-024: retiring a record reclaims its body (a retired body is
+  // already unreadable through readKnowledgeBody), so a retired record may lack a
+  // body file. The invariant is no longer set-equality but: every body has a
+  // matching metadata (no orphan bodies) and both id sets are well-formed; the
+  // "every live record has a body" half is enforced per-record below, once the
+  // lifecycle is known.
   if (metadataIds.some((id) => !/^knowledge:[a-f0-9]{24}$/u.test(id)) || bodyIds.some((id) => !/^knowledge:[a-f0-9]{24}$/u.test(id)) ||
-    JSON.stringify(metadataIds) !== JSON.stringify(bodyIds)) {
+    bodyIds.some((id) => !metadataIdSet.has(id))) {
     fail("KNOWLEDGE_PARTIAL_STATE", "knowledge metadata/body sets differ");
   }
   const units: ScannedKnowledgeUnit[] = [];
@@ -859,7 +867,13 @@ async function scanKnowledgeStore(
         }
       }
     }
-    const body = bodyMode === "full"
+    // TCRN-CROSS-STORY-024: a live record must still carry its body; a retired
+    // record's body may have been reclaimed and is read as absent.
+    const hasBody = bodyIdSet.has(id);
+    if (metadata.lifecycle !== "retired" && !hasBody) {
+      fail("KNOWLEDGE_PARTIAL_STATE", `${id}:live record is missing its body`);
+    }
+    const body = bodyMode === "full" && hasBody
       ? (await readBoundRegularFile(bodyPath, KNOWLEDGE_LIMITS.maximumBodyBytes, options)).bytes
       : null;
     if (body !== null) validateMetadataBody(metadata, body, workspace);
@@ -1136,7 +1150,7 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
     // marker + Σ metadata + Σ body are charged; the derived index is not, so it no
     // longer double-taxes every record (see scanKnowledgeStore).
     const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
-      scan.units.reduce((total, unit) => total + Buffer.byteLength(canonicalJson(unit.metadata), "utf8") + requireBody(unit).length, 0) +
+      scan.units.reduce((total, unit) => total + Buffer.byteLength(canonicalJson(unit.metadata), "utf8") + (unit.body?.length ?? 0), 0) +
       metadataBytes.length + body.length;
     // WSC-5: only live (non-retired) records count against the create cap, so
     // retiring a record genuinely frees a create slot; the physical file total is
@@ -1470,6 +1484,11 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
     if (unit.metadata.promotionState !== "candidate") {
       fail("KNOWLEDGE_PROMOTION_INVALID", unit.metadata.promotionState);
     }
+    // TCRN-CROSS-STORY-024: a retired record has no body to promote against; block
+    // it explicitly rather than let requireBody fail with an opaque reason.
+    if (unit.metadata.lifecycle === "retired") {
+      fail("KNOWLEDGE_LIFECYCLE_INVALID", "a retired record cannot be promoted");
+    }
     const metadata: KnowledgeUnitMetadata = {
       ...unit.metadata,
       promotionState: input.promotionState,
@@ -1489,7 +1508,7 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
     // TCRN-CROSS-STORY-023: same cap as scan/create — index bytes are not charged.
     const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
       scan.units.reduce((total, entry) => total +
-        Buffer.byteLength(canonicalJson(entry.metadata.id === metadata.id ? metadata : entry.metadata), "utf8") + requireBody(entry).length, 0);
+        Buffer.byteLength(canonicalJson(entry.metadata.id === metadata.id ? metadata : entry.metadata), "utf8") + (entry.body?.length ?? 0), 0);
     if (projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
       fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge promotion aggregate bytes");
     }
@@ -1565,6 +1584,11 @@ export async function retireKnowledgeUnit(workspaceRoot: string, input: {
     await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
     crash("after-marker-write", options.faultAt);
     await writeIndex(scan, marker, projectedMetadata);
+    // TCRN-CROSS-STORY-024: reclaim the retired record's body as the final step,
+    // after the retire is durably committed. A crash before this leaves a valid
+    // retired-with-body record (tolerated by the scan); after it, a valid
+    // retired-without-body one — either way the store stays consistent.
+    await rm(unit.bodyPath, { force: true });
     await releaseMutationClaim(scan.storeRoot, claim);
     released = true;
     await scanKnowledgeStore(workspaceRoot, options);
