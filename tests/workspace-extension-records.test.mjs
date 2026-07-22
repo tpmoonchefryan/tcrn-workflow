@@ -15,6 +15,7 @@ import test from "node:test";
 import {
   EVENT_PAYLOAD_OPERATION_EXTRAS,
   acquireWorkspaceLease,
+  annotateWork,
   appendConferencePositionInWorkspace,
   cancelConferenceInWorkspace,
   closeConferenceInWorkspace,
@@ -1399,4 +1400,89 @@ test("gate-v1: replay accepts a forged tail-append, and this is proved rather th
   // Views are skipped: a hand-append does not refresh them, and view freshness is not
   // what this case is about. The chain itself validates, which is the whole worry.
   assert.equal((await validateWorkspace(fx.workspace, false)).version, 6);
+});
+
+// E05 (advisory scope-on-record): work.annotated attaches non-binding advisory fields
+// to a work record. These cases prove the round-trip and replay parity, the verb-side
+// input rules, and that the reducer refuses a forged annotation that smuggles a status
+// change or a foreign extension past the advisory-only delta.
+test("E05: work-annotate attaches advisory extensions, round-trips, replays, and merges without replacing", async (context) => {
+  const fx = await seededFixture(context);
+  const workId = fx.workId;
+  const minutesId = deriveStableId("minutes", "MINUTES-FORGED");
+
+  let state = await annotateWork(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), id: workId,
+    scope: "carry the authoritative scope on the record", decidedBy: [minutesId],
+  });
+  const annotated = state.work.find((entry) => entry.id === workId);
+  assert.equal(annotated.status, "planned", "an annotation never changes status");
+  assert.equal(annotated.revision, 2);
+  assert.deepEqual(annotated.extensions["advisory:scope"], { required: false, value: "carry the authoritative scope on the record" });
+  assert.deepEqual(annotated.extensions["advisory:decided-by"], { required: false, value: [minutesId] });
+
+  const replayed = await materializeWorkspace(fx.workspace);
+  assert.equal(replayed.version, 3);
+  assert.deepEqual(replayed.work.find((entry) => entry.id === workId).extensions, annotated.extensions, "replay reproduces the advisory extensions exactly");
+
+  // A scope-only annotation updates scope and leaves the earlier decided-by in place.
+  state = await annotateWork(fx.workspace, fx.lease, {
+    expectedVersion: 3, occurredAt: instant(4), id: workId, scope: "revised scope",
+  });
+  const merged = state.work.find((entry) => entry.id === workId);
+  assert.equal(merged.revision, 3);
+  assert.equal(merged.extensions["advisory:scope"].value, "revised scope");
+  assert.deepEqual(merged.extensions["advisory:decided-by"].value, [minutesId], "a scope-only annotation preserves decided-by");
+});
+
+test("E05: work-annotate fails closed at the verb on empty, malformed, or no-op input, appending nothing", async (context) => {
+  const fx = await seededFixture(context);
+  const workId = fx.workId;
+  const good = deriveStableId("minutes", "MINUTES-FORGED");
+
+  for (const bad of [
+    {},
+    { scope: "" },
+    { decidedBy: [] },
+    { decidedBy: ["not-a-minutes-id"] },
+    { decidedBy: ["gate:abc123"] },
+  ]) {
+    await expectReasonAsync("WORKSPACE_INPUT_INVALID", () => annotateWork(fx.workspace, fx.lease, {
+      expectedVersion: 2, occurredAt: instant(3), id: workId, ...bad,
+    }));
+  }
+  assert.equal((await materializeWorkspace(fx.workspace)).version, 2, "no rejected annotation appended an event");
+
+  // One real annotation, then a byte-identical repeat is refused as a no-op.
+  await annotateWork(fx.workspace, fx.lease, { expectedVersion: 2, occurredAt: instant(3), id: workId, scope: "s", decidedBy: [good] });
+  await expectReasonAsync("WORKSPACE_INPUT_INVALID", () => annotateWork(fx.workspace, fx.lease, {
+    expectedVersion: 3, occurredAt: instant(4), id: workId, scope: "s", decidedBy: [good],
+  }));
+});
+
+test("E05: a forged work.annotated event fails replay closed on a status change or a smuggled extension", async (context) => {
+  const forge = async (context, mutateRecord) => {
+    const fx = await seededFixture(context);
+    const workId = fx.workId;
+    await annotateWork(fx.workspace, fx.lease, {
+      expectedVersion: 2, occurredAt: instant(3), id: workId, scope: "s", decidedBy: [deriveStableId("minutes", "MINUTES-FORGED")],
+    });
+    assert.equal((await materializeWorkspace(fx.workspace)).version, 3, "the honest chain replays");
+    await rewriteEventChain(fx.workspace, (events) => events.map((event) => event.payload.operation === "work.annotated"
+      ? { ...event, payload: { ...event.payload, record: mutateRecord(event.payload.record) } }
+      : event));
+    await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(fx.workspace));
+  };
+
+  // A status change smuggled through an annotation.
+  await context.test("status change", (sub) => forge(sub, (record) => ({ ...record, status: "ready" })));
+  // A foreign (valid, required:false) extension smuggled alongside the advisory keys.
+  await context.test("smuggled extension", (sub) => forge(sub, (record) => ({
+    ...record, extensions: { ...record.extensions, "custom:smuggled": { required: false, value: "x" } },
+  })));
+  // An annotation that changes no advisory field at all.
+  await context.test("empty delta", (sub) => forge(sub, (record) => {
+    const { "advisory:scope": _scope, "advisory:decided-by": _decided, ...rest } = record.extensions;
+    return { ...record, extensions: rest };
+  }));
 });

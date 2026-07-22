@@ -56,6 +56,7 @@ import {
   routeContext,
   transitionKnowledgePromotion,
   transitionWork,
+  annotateWork,
   updateProject,
   validateKnowledgeStore,
   validateCorePersonaBundle,
@@ -372,6 +373,19 @@ function workSummary(record: WorkRecord): Readonly<Record<string, string | numbe
   return { id: record.id, kind: record.kind, status: record.status, projectId: record.projectId, parentId: record.parentId, revision: record.revision, tombstone: record.tombstone };
 }
 
+// E05 read surface: project the non-binding advisory fields off a work record for
+// work-show. Returns null when the record carries neither, so an un-annotated record's
+// work-show output stays byte-identical to before this verb existed.
+function workAdvisory(record: WorkRecord): Readonly<Record<string, unknown>> | null {
+  const scope = record.extensions["advisory:scope"] as { readonly value: unknown } | undefined;
+  const decidedBy = record.extensions["advisory:decided-by"] as { readonly value: unknown } | undefined;
+  if (scope === undefined && decidedBy === undefined) return null;
+  return {
+    ...(scope !== undefined ? { scope: scope.value } : {}),
+    ...(decidedBy !== undefined ? { decidedBy: decidedBy.value } : {}),
+  };
+}
+
 // WSB-2: governed, budgeted read window over already-materialized, view-verified
 // state. offset is >=0, limit >=1; both fail closed with the flag name on malformed input.
 function paginate(state: Awaited<ReturnType<typeof validateWorkspace>>, kind: string, records: readonly unknown[], values: Readonly<Record<string, string>>): Readonly<Record<string, unknown>> {
@@ -561,6 +575,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "snapshot-verify", availability: "cli", mutates: false, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "manifest", required: true, valueKind: "string" }] },
   { name: "status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
@@ -1333,6 +1348,24 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
+  if (command === "work-annotate") {
+    // E05: attach non-binding advisory fields to a work record. At least one of --scope
+    // or --decided-by must be present; the core rejects an empty or no-op annotation.
+    const values = parseArguments(rest, [...shared, "id", "scope", "decided-by", "actor"]);
+    required(values, [...requiredShared, "id"]);
+    if (values.scope === undefined && values["decided-by"] === undefined) fail("CLI_ARGUMENT_MALFORMED", "scope-or-decided-by");
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => annotateWork(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "",
+      ...(values.scope !== undefined ? { scope: values.scope } : {}),
+      ...(values["decided-by"] !== undefined ? { decidedBy: listValue(values["decided-by"]) } : {}),
+      ...(values.actor ? { actorId: values.actor } : {}),
+    }));
+    await emitTimeAttestation(io, values, state.headEventHash);
+    writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
+    return;
+  }
   if (command === "work-delete") {
     const values = parseArguments(rest, [...shared, "id", "actor"]);
     required(values, [...requiredShared, "id"]);
@@ -1382,6 +1415,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const state = await validateWorkspace(values.workspace ?? "");
     const record = state.work.find((entry) => entry.id === values.id && !entry.tombstone);
     if (!record) fail("WORKSPACE_INPUT_INVALID", `work ${values.id ?? ""} is unavailable`);
+    const advisory = workAdvisory(record);
     io.write(canonicalJson({
       reasonCode: "WORKSPACE_RECORD_READY",
       workspaceId: state.metadata.workspaceId,
@@ -1389,6 +1423,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       headEventHash: state.headEventHash,
       kind: "work",
       record: workSummary(record),
+      ...(advisory !== null ? { advisory } : {}),
     }));
     return;
   }

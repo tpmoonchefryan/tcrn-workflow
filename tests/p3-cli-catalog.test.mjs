@@ -125,13 +125,14 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
   }
   // WSD-2 adds the seven conference/gate event-log mutation verbs to the six
   // original project/work verbs; WSE-3 adds attestation-enable (the one-way
-  // attestation.actor.enabled appender). Head resolves under the held lease for
-  // all of them and is still rejected on knowledge-marker verbs by construction.
+  // attestation.actor.enabled appender); E05 adds work-annotate (the advisory
+  // scope-on-record appender). Head resolves under the held lease for all of
+  // them and is still rejected on knowledge-marker verbs by construction.
   assert.deepEqual([...sentinelVerbs].sort(), [
     "attestation-enable",
     "conference-append-position", "conference-cancel", "conference-close", "conference-open",
     "gate-create", "gate-delete", "gate-transition",
-    "project-create", "project-delete", "project-update", "work-create", "work-delete", "work-transition",
+    "project-create", "project-delete", "project-update", "work-annotate", "work-create", "work-delete", "work-transition",
   ]);
 });
 
