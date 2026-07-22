@@ -879,11 +879,17 @@ async function scanKnowledgeStore(
   if (JSON.stringify(viewEntries.sort(compareCanonicalText)) !== JSON.stringify(["index.json"])) {
     fail("KNOWLEDGE_PARTIAL_STATE", "knowledge views are not exact");
   }
-  const viewBytes = (await readBoundRegularFile(viewPath, KNOWLEDGE_LIMITS.maximumAggregateBytes, options)).bytes;
-  aggregateBytes += viewBytes.length;
-  if (aggregateBytes > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
-    fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge aggregate bytes");
-  }
+  // TCRN-CROSS-STORY-023: the index is a derived rebuildable view whose `records`
+  // array is a re-serialization of the very metadata already counted above, so
+  // charging its bytes against the cap taxes every record roughly twice and made a
+  // store of ~30 small records scan at 97% while holding almost no body content.
+  // The aggregate now bounds only the source-of-truth bytes (marker + Σ metadata +
+  // Σ body); the index is still validated byte-for-byte against the canonical
+  // rebuild below, and its read stays bounded — at the cap plus one metadata's
+  // worth of envelope headroom, since a legitimate index equals Σ metadata (≤ cap)
+  // plus its small fixed envelope, so the old cap-tight bound could reject a valid
+  // near-full store on the read alone.
+  const viewBytes = (await readBoundRegularFile(viewPath, KNOWLEDGE_LIMITS.maximumAggregateBytes + KNOWLEDGE_LIMITS.maximumMetadataBytes, options)).bytes;
   const view = viewBytes.toString("utf8");
   if (view !== canonicalJson(index)) {
     fail("KNOWLEDGE_PARTIAL_STATE", "knowledge index is stale");
@@ -1126,8 +1132,10 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
     const metadataBytes = Buffer.from(canonicalJson(metadata), "utf8");
     const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
     const projectedMetadata = [...scan.units.map((unit) => unit.metadata), metadata];
+    // TCRN-CROSS-STORY-023: the create projection mirrors the scan's cap — only
+    // marker + Σ metadata + Σ body are charged; the derived index is not, so it no
+    // longer double-taxes every record (see scanKnowledgeStore).
     const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
-      Buffer.byteLength(canonicalJson(knowledgeIndex(marker, projectedMetadata)), "utf8") +
       scan.units.reduce((total, unit) => total + Buffer.byteLength(canonicalJson(unit.metadata), "utf8") + requireBody(unit).length, 0) +
       metadataBytes.length + body.length;
     // WSC-5: only live (non-retired) records count against the create cap, so
@@ -1284,7 +1292,8 @@ function selectKnowledgeMetadata(scan: KnowledgeStoreScan, query: KnowledgeListQ
       (!query.category || metadata.category === query.category) && (!query.kind || metadata.kind === query.kind) &&
       (!query.tag || metadata.tags.includes(query.tag)) && (!query.freshness || freshness === query.freshness) &&
       (!query.promotionState || metadata.promotionState === query.promotionState) &&
-      (search === undefined || metadata.subject.toLowerCase().includes(search) || metadata.tags.some((tag) => tag.includes(search)));
+      (search === undefined || metadata.subject.toLowerCase().includes(search) ||
+        metadata.summary.toLowerCase().includes(search) || metadata.tags.some((tag) => tag.includes(search)));
   }).sort((left, right) => compareCanonicalText(left.id, right.id));
 }
 
@@ -1477,8 +1486,8 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
     validateMetadataBody(validated, unitBody, scan.workspace);
     const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
     const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
+    // TCRN-CROSS-STORY-023: same cap as scan/create — index bytes are not charged.
     const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
-      Buffer.byteLength(canonicalJson(knowledgeIndex(marker, projectedMetadata)), "utf8") +
       scan.units.reduce((total, entry) => total +
         Buffer.byteLength(canonicalJson(entry.metadata.id === metadata.id ? metadata : entry.metadata), "utf8") + requireBody(entry).length, 0);
     if (projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {

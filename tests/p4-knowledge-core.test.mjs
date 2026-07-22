@@ -1311,3 +1311,58 @@ test("CQ-10: the link index still refuses links that are absent from the workspa
     await fixture.close();
   }
 });
+
+test("TCRN-CROSS-STORY-023: the aggregate cap counts marker+metadata+body but not the derived index, and still fires", async () => {
+  // Regression guard for the double-count that made ~30 tiny records scan at 97%.
+  // Fill a store with large-body records until the cap rejects one, then prove two
+  // things at the admitted count: (1) the store fits under the new accounting
+  // (marker + Σ metadata + Σ body), and (2) the SAME records would have exceeded
+  // the cap under the old accounting (which also charged the index) — so the fix
+  // genuinely raised headroom rather than removing the bound. The final create
+  // failing with KNOWLEDGE_LIMIT_EXCEEDED proves the cap still fires.
+  const fx = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-S023" });
+  try {
+    const storeRoot = join(fx.workspace, ".tcrn-workflow/knowledge");
+    let admitted = 0, rejected = false;
+    for (let i = 0; i < KNOWLEDGE_LIMITS.maximumRecords; i += 1) {
+      try {
+        await createKnowledgeUnit(fx.workspace, unitInput(fx, `S023-${i}`, {
+          expectedVersion: i, occurredAt: instant(11, 3 + i), body: "x".repeat(7_500),
+        }));
+        admitted += 1;
+      } catch (error) {
+        assert.equal(error.reasonCode, "KNOWLEDGE_LIMIT_EXCEEDED"); // the cap still fires
+        rejected = true; break;
+      }
+    }
+    assert.equal(rejected, true, "the cap must still reject once the source-of-truth bytes exceed it");
+    let sumMeta = 0, sumBody = 0;
+    for (const n of await readdir(join(storeRoot, "metadata"))) sumMeta += (await readFile(join(storeRoot, "metadata", n))).length;
+    for (const n of await readdir(join(storeRoot, "bodies"))) sumBody += (await readFile(join(storeRoot, "bodies", n))).length;
+    const marker = (await readFile(join(storeRoot, "store.json"))).length;
+    const index = (await readFile(join(storeRoot, "views/index.json"))).length;
+    const cap = KNOWLEDGE_LIMITS.maximumAggregateBytes;
+    const current = marker + sumMeta + sumBody;
+    assert.ok(current <= cap, `admitted records must fit the new cap: ${current} <= ${cap}`);
+    assert.ok(current + index > cap, `the same records would have exceeded the old index-inclusive cap: ${current + index} > ${cap}`);
+    assert.equal((await validateKnowledgeStore(fx.workspace)).reasonCode, "KNOWLEDGE_STORE_VALID");
+  } finally { await fx.close(); }
+});
+
+test("TCRN-CROSS-STORY-025: search matches the summary, not only subject and tags", async () => {
+  // A curated card's searchable substance lives in its summary; a machine-shaped
+  // subject is not what a reader searches for. Before this, search scanned only
+  // subject+tags, so a term present only in the summary was unfindable.
+  const fx = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-S025" });
+  try {
+    await createKnowledgeUnit(fx.workspace, unitInput(fx, "S025-CARD", {
+      subject: "Subject S025-CARD",
+      summary: "Layout-thrashing animations reflow every frame; animate transform and opacity instead.",
+      tags: ["knowledge", "workflow"],
+    }));
+    const hit = await listKnowledgeMetadata(fx.workspace, { at: instant(12), selection: "all", search: "layout-thrashing" });
+    assert.equal(hit.records.length, 1, "a summary-only term must be found");
+    const miss = await listKnowledgeMetadata(fx.workspace, { at: instant(12), selection: "all", search: "nonexistent-token-zzz" });
+    assert.equal(miss.records.length, 0, "a term present nowhere must not match");
+  } finally { await fx.close(); }
+});
