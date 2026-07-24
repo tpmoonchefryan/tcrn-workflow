@@ -34,6 +34,7 @@ import {
   assessCodexActivationTrust,
   calculateCodexAdapterRequestDigest,
   codexHookDefinitionForDigests,
+  generateCodexSessionStartScript,
   createCodexHostActivationReceipt,
   generateCodexActivationArtifacts,
   generateCodexAdapterBundle,
@@ -555,4 +556,53 @@ test("fixture and real-host evidence state the exact no-overclaim boundary", () 
       .digest("hex").length,
     64,
   );
+});
+
+// Regression: the approved hook definition must NAME the handler, never COMPUTE its
+// path at fire time. A `$(git rev-parse --show-toplevel)` substitution resolved
+// through the working directory and through GIT_DIR/GIT_WORK_TREE, so one operator
+// approval covered whatever script those selected — including a file this installer
+// never wrote and uninstall never removes. The handler's own --handler-digest check
+// cannot cover that case, because a substituted file never runs the check.
+test("the approved definition names the handler literally and resolves nothing at fire time", () => {
+  const definition = codexHookDefinitionForDigests("a".repeat(64), "b".repeat(64));
+  const command = JSON.parse(definition.source).hooks.SessionStart[0].hooks[0].command;
+
+  assert.ok(command.includes(`"${CODEX_SESSION_START_PATH}"`), "command must name the installed handler path");
+  // No shell substitution, no command expansion, no path computed from ambient state.
+  for (const forbidden of ["$(", "${", "`", "git ", "rev-parse", "..", "~"]) {
+    assert.equal(command.includes(forbidden), false, `approved command must not contain ${forbidden}`);
+  }
+  // The whole definition, not just the command, stays free of substitution.
+  assert.equal(definition.source.includes("$("), false);
+});
+
+// Regression: the handler awaits stdin's `end`, which a host may never deliver.
+// Without a self-timeout the process stays resident, and liveness would depend
+// entirely on the host honouring its own hook timeout. N-2 fail-open means the hook
+// dies, never the session.
+test("the generated handler self-terminates instead of waiting on stdin forever", async () => {
+  const source = generateCodexSessionStartScript();
+  assert.ok(source.includes("setTimeout(() => process.exit(0), 2_000).unref()"), "handler must arm a self-timeout");
+
+  const fixtureRoots = await roots();
+  try {
+    const scriptPath = join(fixtureRoots.root, "handler.mjs");
+    await writeFile(scriptPath, source, { mode: 0o600 });
+    const handlerDigest = createHash("sha256").update(await readFile(scriptPath)).digest("hex");
+
+    // Spawn with stdin held open and never ended: the process must still exit on its
+    // own, promptly, and without emitting anything.
+    const started = Date.now();
+    const result = spawnSync(process.execPath, [scriptPath, "--handler-digest", handlerDigest, "--summary-digest", "c".repeat(64)], {
+      input: "",
+      encoding: "utf8",
+      timeout: 15_000,
+    });
+    assert.equal(result.status, 0, "handler must exit 0");
+    assert.equal(result.stdout, "", "a failing handler must emit nothing");
+    assert.ok(Date.now() - started < 12_000, "handler must not hang past its self-timeout");
+  } finally {
+    await fixtureRoots.close();
+  }
 });

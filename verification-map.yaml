@@ -1745,7 +1745,7 @@
         "docs/verification/host/codex-session-start-activation.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "aa8978ff190248208f208af19cff11692732ceedae635dee40e35f6b9df83018",
+      "fixtureDigest": "5c5c7fb10b5598e671dc8cc767fab9ebbdb7c27424cc5aaf107526285c5237e4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
