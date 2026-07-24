@@ -40,7 +40,7 @@
     "compatibility-dry-run",
     "compatibility-plan"
   ],
-  "authorityPositiveCases": 3,
+  "authorityPositiveCases": 4,
   "authorityHostileCases": 10,
   "mcpPositiveCases": 8,
   "mcpHostileCases": 5,

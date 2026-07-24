@@ -538,7 +538,7 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
 // verb. New verbs MUST ship a catalog entry (SDC-1); the p3-cli-catalog parity
 // test enforces two-way name equality with the dispatcher.
 export const COMMAND_CATALOG = Object.freeze([
-  { name: "adapter-activate", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "capability-manifest-digest", required: true, valueKind: "string" }, { name: "step3", required: false, valueKind: "boolean" }] },
+  { name: "adapter-activate", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "capability-manifest-digest", required: true, valueKind: "string" }, { name: "step3", required: false, valueKind: "boolean" }] },
   { name: "adapter-activation-assess", availability: "cli", mutates: false, flags: [{ name: "binding", required: true, valueKind: "json" }, { name: "approved-definition-digests", required: true, valueKind: "json" }] },
   { name: "adapter-activation-record", availability: "cli", mutates: false, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }, { name: "approved-definition-digests", required: true, valueKind: "json" }, { name: "observation", required: true, valueKind: "json" }] },
   { name: "adapter-deactivate", availability: "cli", mutates: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }] },
@@ -795,7 +795,6 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       "installation-root",
       "generation-id",
       "installation-receipt",
-      "installation-receipt-digest",
       "receipt-out",
       "capability-manifest-digest",
     ]);

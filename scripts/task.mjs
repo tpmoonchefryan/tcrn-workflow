@@ -1086,7 +1086,7 @@ async function verifyOperatorAuthorityMcp() {
   assertion(JSON.stringify(fixture.operatorAuthorityResolvedVerbs) ===
     JSON.stringify(fixture.currentIoBlockedVerbsBeforeEpic022),
   "OPERATOR_AUTHORITY_REACHABILITY");
-  assertion(fixture.authorityPositiveCases === 3 &&
+  assertion(fixture.authorityPositiveCases === 4 &&
     fixture.authorityHostileCases === 10 &&
     fixture.mcpPositiveCases === 8 &&
     fixture.mcpHostileCases === 5,
