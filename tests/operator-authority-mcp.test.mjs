@@ -560,6 +560,92 @@ test("shipped operator wrapper supplies a request-bound Codex host and rejects p
   }
 });
 
+test("pinned operator authority activates Codex without a duplicate receipt-digest authority source", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "workflow-codex-operator-activate-")),
+  );
+  const request = adapterRequest();
+  const inertReceiptPath = join(root, "inert-receipt.json");
+  const activationReceiptPath = join(root, "activation-receipt.json");
+  const installAuthority = await authorityFixture({
+    hostInputs: { codexAdapter: codexHostInput(request) },
+  });
+  let activationAuthority;
+  try {
+    let inertOutput = "";
+    await runOperatorCli([
+      "--authority-pins",
+      installAuthority.pinsPath,
+      "--authority-pins-digest",
+      installAuthority.pinsDigest,
+      "adapter-install",
+      "--request",
+      JSON.stringify(request),
+      "--installation-root",
+      root,
+      "--generation-id",
+      "generation:operator-authority-inert",
+      "--receipt-out",
+      inertReceiptPath,
+    ], {
+      write(value) { inertOutput += value; },
+      clock: () => NOW,
+    });
+    const inertReceipt = JSON.parse(inertOutput);
+    const inertReceiptBytes = await readFile(inertReceiptPath);
+    activationAuthority = await authorityFixture({
+      fileAuthorities: {
+        codexAdapterInstallation: {
+          expectedCanonicalPath: inertReceiptPath,
+          expectedFileSha256: rawSha(inertReceiptBytes),
+        },
+      },
+      hostInputs: {
+        codexAdapter: codexHostInput(request),
+        codexAdapterActivation: codexActivationHostInput(request, {
+          inertInstallationReceiptDigest: inertReceipt.receiptDigest,
+        }),
+      },
+    });
+
+    let activationOutput = "";
+    await runOperatorCli([
+      "--authority-pins",
+      activationAuthority.pinsPath,
+      "--authority-pins-digest",
+      activationAuthority.pinsDigest,
+      "adapter-activate",
+      "--request",
+      JSON.stringify(request),
+      "--installation-root",
+      root,
+      "--generation-id",
+      "generation:operator-authority-step3",
+      "--installation-receipt",
+      inertReceiptPath,
+      "--receipt-out",
+      activationReceiptPath,
+      "--capability-manifest-digest",
+      hash("capability-manifest"),
+      "--step3",
+      "true",
+    ], {
+      write(value) { activationOutput += value; },
+      clock: () => NOW,
+    });
+    const activationReceipt = JSON.parse(activationOutput);
+    assert.equal(activationReceipt.activationState, "pending_host_approval");
+    const hooks = JSON.parse(
+      await readFile(join(root, ".codex", "hooks.json"), "utf8"),
+    );
+    assert.deepEqual(Object.keys(hooks.hooks), ["SessionStart"]);
+  } finally {
+    await installAuthority.close();
+    if (activationAuthority !== undefined) await activationAuthority.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("MCP derives structured read-only tools from the catalog and preserves JSON values", async () => {
   const workspace = await workspaceFixture();
   try {
@@ -775,7 +861,7 @@ test("MCP rejects unknown fields, malformed typed arguments, calls before initia
 });
 
 test("fixture counts and boundaries remain exact", async () => {
-  assert.equal(cases.authorityPositiveCases, 3);
+  assert.equal(cases.authorityPositiveCases, 4);
   assert.equal(cases.authorityHostileCases, 10);
   assert.equal(cases.mcpPositiveCases, 8);
   assert.equal(cases.mcpHostileCases, 5);
