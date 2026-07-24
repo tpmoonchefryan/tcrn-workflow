@@ -151,6 +151,16 @@
       "expectedMatches": 1,
       "test": "tests/workspace-extension-records.test.mjs",
       "testName": "sprint: a valid sprint annotation is stored and round-trips"
+    },
+    {
+      "id": "SPRINT-03-create-advisory-shape",
+      "rationale": "The work.created reducer branch re-validates advisory value-shape so a forged/tail-appended create cannot smuggle a malformed advisory:* value past the envelope-only graph validator (the annotate path already validates; this closes the create door). Load-bearing for tamper-log integrity of every advisory key.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "assertAdvisoryEntryShape(key, (record.extensions as Readonly<Record<string, unknown>>)[key], record.id);",
+      "replace": "void key;",
+      "expectedMatches": 1,
+      "test": "tests/workspace-extension-records.test.mjs",
+      "testName": "sprint: a forged work.created carrying a malformed advisory value fails replay closed"
     }
   ]
 }

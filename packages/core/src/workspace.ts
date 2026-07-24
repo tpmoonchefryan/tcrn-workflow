@@ -877,8 +877,11 @@ export interface SprintReference {
 
 function isSprintReference(value: unknown): value is SprintReference {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const keys = Object.keys(value as Record<string, unknown>).sort(compareCanonicalText);
-  if (keys.length !== 2 || keys[0] !== "workId" || keys[1] !== "workspaceId") return false;
+  // Membership check without a comparator: compareCanonicalText throws
+  // CanonicalOrderError on an ill-formed-Unicode key, and this predicate must return
+  // false for any bad shape rather than throw a foreign error at a direct caller.
+  const keys = Object.keys(value as Record<string, unknown>);
+  if (keys.length !== 2 || !Object.hasOwn(value as object, "workId") || !Object.hasOwn(value as object, "workspaceId")) return false;
   const { workspaceId, workId } = value as { readonly workspaceId: unknown; readonly workId: unknown };
   if (typeof workspaceId !== "string" || !/^workspace:[a-f0-9]{24}$/u.test(workspaceId)) return false;
   if (typeof workId !== "string" || workId.slice(0, workId.indexOf(":")) !== "work") return false;
@@ -1083,6 +1086,17 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       if (operation === "work.created") {
         if (current || record.revision !== 1 || record.tombstone) {
           fail("WORKSPACE_EVENT_CORRUPT", `invalid work create ${record.id}`);
+        }
+        // The honest createWork writes no advisory extension, but a hand-crafted or
+        // tail-appended work.created could plant a malformed advisory:* value that the
+        // envelope-only terminal graph validator would admit while the annotate path
+        // rejects the identical bytes. Re-run the advisory value-shape check here so
+        // create and annotate enforce one invariant and no forged create can smuggle a
+        // bad advisory value in through the one door that used to skip it.
+        for (const key of ADVISORY_KEYS) {
+          if (Object.hasOwn(record.extensions, key)) {
+            assertAdvisoryEntryShape(key, (record.extensions as Readonly<Record<string, unknown>>)[key], record.id);
+          }
         }
       } else if (!current || current.tombstone || record.revision !== current.revision + 1 || record.externalKey !== current.externalKey ||
         record.projectId !== current.projectId || record.kind !== current.kind || record.parentId !== current.parentId ||

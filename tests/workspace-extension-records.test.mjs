@@ -1603,6 +1603,19 @@ test("sprint: a forged advisory:sprint value fails replay closed", async (contex
   await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(fx.workspace));
 });
 
+test("sprint: a forged work.created carrying a malformed advisory value fails replay closed", async (context) => {
+  // Red-proof for guard SPRINT-03. The honest createWork writes no advisory extension, so
+  // the annotate path's value-shape check used to be the only one — a hand-crafted
+  // work.created could plant a bad advisory:sprint that the envelope-only graph validator
+  // would admit. The create-path check now closes that door.
+  const fx = await seededFixture(context);
+  await rewriteEventChain(fx.workspace, (events) => events.map((event) => event.payload.operation === "work.created" && event.payload.record.kind === "Initiative"
+    ? { ...event, payload: { ...event.payload, record: { ...event.payload.record,
+        extensions: { ...event.payload.record.extensions, "advisory:sprint": { required: false, value: "not-a-qualified-reference" } } } } }
+    : event));
+  await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(fx.workspace));
+});
+
 test("sprint: the CLI opens Release create and work-list --sprint filters members", async (context) => {
   const fx = await cliSeededFixture(context);
   const ws = fx.ws;
@@ -1627,4 +1640,11 @@ test("sprint: the CLI opens Release create and work-list --sprint filters member
   const bad = await invokeCli(["work-annotate", "--workspace", ws, "--expected-version", "4", "--at", instant(5), "--id", fx.workId, "--sprint", "no-hash-here"]);
   assert.equal(bad.ok, false);
   assert.equal(bad.reasonCode, "CLI_ARGUMENT_MALFORMED");
+  // work-show projects the sprint tag as the qualified object.
+  const shown = JSON.parse((await invokeCli(["work-show", "--workspace", ws, "--id", fx.workId])).output);
+  assert.deepEqual(shown.advisory.sprint, { workspaceId, workId: sprintId });
+  // A byte-identical sprint-only re-annotation is refused as a no-op.
+  const noop = await invokeCli(["work-annotate", "--workspace", ws, "--expected-version", "4", "--at", instant(6), "--id", fx.workId, "--sprint", qualified]);
+  assert.equal(noop.ok, false);
+  assert.equal(noop.reasonCode, "WORKSPACE_INPUT_INVALID");
 });
