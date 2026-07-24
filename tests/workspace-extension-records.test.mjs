@@ -1522,11 +1522,109 @@ test("INIT-004: the CLI opens Incident for creation and it materializes outside 
     "--parent-id", "-"]);
   assert.equal(orphan.ok, true, `parentless incident failed: ${orphan.reasonCode}`);
 
-  // The three kinds still closed at the CLI stay closed.
-  for (const closed of ["Review", "Release", "Knowledge"]) {
+  // The two kinds still closed at the CLI stay closed. (Release was opened in 0.5.0 for
+  // sprints / release trains — see the sprint tests below.)
+  for (const closed of ["Review", "Knowledge"]) {
     const r = await invokeCli(["work-create", "--workspace", ws, "--expected-version", "6",
       "--at", instant(7), "--project-id", fx.projectId, "--external-key", `X-${closed}`, "--kind", closed]);
     assert.equal(r.ok, false);
     assert.equal(r.reasonCode, "CLI_ARGUMENT_MALFORMED", `${closed} should stay closed at the CLI`);
   }
+});
+
+// INIT-008: the sprint / release-train mechanism — a Release is a top-level batch
+// container (parentless, like an Initiative) and members attach by the member-side
+// advisory:sprint annotation carrying a qualified {workspaceId, workId} reference.
+test("sprint: a Release is created parentless", async (context) => {
+  // Load-bearing red-proof for guard SPRINT-01. A Release is enforced parentless; if this
+  // ever fails, the parentage rule that keeps the timebox axis from entangling the scope
+  // tree has been dropped.
+  const fx = await seededFixture(context);
+  const state = await createWork(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), projectId: fx.projectId, externalKey: "SPRINT-W31", kind: "Release", parentId: null,
+  });
+  const sprint = state.work.find((entry) => entry.externalKey === "SPRINT-W31");
+  assert.equal(sprint.kind, "Release");
+  assert.equal(sprint.parentId, null);
+  assert.equal(sprint.status, "planned");
+});
+
+test("sprint: a Release cannot take a parent", async (context) => {
+  const fx = await seededFixture(context);
+  await expectReasonAsync("GRAPH_PARENT_KIND_INVALID", () => createWork(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), projectId: fx.projectId, externalKey: "SPRINT-BAD", kind: "Release", parentId: fx.workId,
+  }));
+});
+
+test("sprint: a valid sprint annotation is stored and round-trips", async (context) => {
+  // Load-bearing red-proof for guard SPRINT-02. A member (the Initiative) is tagged onto a
+  // sprint by a qualified reference to the sprint's Release record.
+  const fx = await seededFixture(context);
+  const workspaceId = fx.state.metadata.workspaceId;
+  let state = await createWork(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), projectId: fx.projectId, externalKey: "SPRINT-W31", kind: "Release", parentId: null,
+  });
+  const sprintId = state.work.find((entry) => entry.externalKey === "SPRINT-W31").id;
+  const ref = { workspaceId, workId: sprintId };
+  state = await annotateWork(fx.workspace, fx.lease, { expectedVersion: 3, occurredAt: instant(4), id: fx.workId, sprint: ref });
+  const member = state.work.find((entry) => entry.id === fx.workId);
+  assert.deepEqual(member.extensions["advisory:sprint"], { required: false, value: ref });
+  assert.equal(member.status, "planned", "a sprint annotation never changes status");
+  const replayed = await materializeWorkspace(fx.workspace);
+  assert.deepEqual(replayed.work.find((entry) => entry.id === fx.workId).extensions["advisory:sprint"], { required: false, value: ref });
+});
+
+test("sprint: a malformed sprint reference fails closed at the verb", async (context) => {
+  const fx = await seededFixture(context);
+  for (const bad of [
+    { workspaceId: "not-a-workspace", workId: "work:abc" },
+    { workspaceId: "workspace:7732a51de4c38afb83bb77cf", workId: "notwork:abc" },
+    { workspaceId: "workspace:7732a51de4c38afb83bb77cf" },
+  ]) {
+    await expectReasonAsync("WORKSPACE_INPUT_INVALID", () => annotateWork(fx.workspace, fx.lease, {
+      expectedVersion: 2, occurredAt: instant(3), id: fx.workId, sprint: bad,
+    }));
+  }
+  assert.equal((await materializeWorkspace(fx.workspace)).version, 2, "no rejected annotation appended an event");
+});
+
+test("sprint: a forged advisory:sprint value fails replay closed", async (context) => {
+  const fx = await seededFixture(context);
+  let state = await createWork(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), projectId: fx.projectId, externalKey: "SPRINT-W31", kind: "Release", parentId: null,
+  });
+  const ref = { workspaceId: fx.state.metadata.workspaceId, workId: state.work.find((e) => e.externalKey === "SPRINT-W31").id };
+  await annotateWork(fx.workspace, fx.lease, { expectedVersion: 3, occurredAt: instant(4), id: fx.workId, sprint: ref });
+  assert.equal((await materializeWorkspace(fx.workspace)).version, 4, "the honest chain replays");
+  await rewriteEventChain(fx.workspace, (events) => events.map((event) => event.payload.operation === "work.annotated"
+    ? { ...event, payload: { ...event.payload, record: { ...event.payload.record,
+        extensions: { ...event.payload.record.extensions, "advisory:sprint": { required: false, value: { workspaceId: "bad", workId: ref.workId } } } } } }
+    : event));
+  await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(fx.workspace));
+});
+
+test("sprint: the CLI opens Release create and work-list --sprint filters members", async (context) => {
+  const fx = await cliSeededFixture(context);
+  const ws = fx.ws;
+  const workspaceId = (await validateWorkspace(ws)).metadata.workspaceId;
+  // Release is now creatable at the CLI (parentless).
+  const sprint = await invokeCli(["work-create", "--workspace", ws, "--expected-version", "2",
+    "--at", instant(3), "--project-id", fx.projectId, "--external-key", "SPRINT-W31", "--kind", "Release", "--parent-id", "-"]);
+  assert.equal(sprint.ok, true, `release create failed: ${sprint.reasonCode}`);
+  const sprintId = JSON.parse(sprint.output).record.id;
+  const qualified = `${workspaceId}#${sprintId}`;
+  // Annotate the Initiative into the sprint through the CLI.
+  const annotated = await invokeCli(["work-annotate", "--workspace", ws, "--expected-version", "3",
+    "--at", instant(4), "--id", fx.workId, "--sprint", qualified]);
+  assert.equal(annotated.ok, true, `sprint annotate failed: ${annotated.reasonCode}`);
+  // work-list --sprint returns exactly the member; a different sprint ref returns none.
+  const listed = JSON.parse((await invokeCli(["work-list", "--workspace", ws, "--sprint", qualified])).output);
+  assert.equal(listed.records.length, 1);
+  assert.equal(listed.records[0].id, fx.workId);
+  const other = JSON.parse((await invokeCli(["work-list", "--workspace", ws, "--sprint", `${workspaceId}#work:000000000000000000000000`])).output);
+  assert.equal(other.records.length, 0);
+  // A malformed --sprint spelling fails closed at the CLI.
+  const bad = await invokeCli(["work-annotate", "--workspace", ws, "--expected-version", "4", "--at", instant(5), "--id", fx.workId, "--sprint", "no-hash-here"]);
+  assert.equal(bad.ok, false);
+  assert.equal(bad.reasonCode, "CLI_ARGUMENT_MALFORMED");
 });

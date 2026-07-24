@@ -854,11 +854,46 @@ function readGateEvidenceLocator(extensions: Readonly<Record<string, unknown>>):
 // itself rather than reconstructing it from a compressed external key.
 const ADVISORY_SCOPE_KEY = "advisory:scope";
 const ADVISORY_DECIDED_BY_KEY = "advisory:decided-by";
-const ADVISORY_KEYS: readonly string[] = [ADVISORY_SCOPE_KEY, ADVISORY_DECIDED_BY_KEY];
+// INIT-008: advisory:sprint is the member-side tag that puts a work record on a
+// sprint / release-train batch. Its value is a QUALIFIED reference to the sprint
+// (a Release record) -- {workspaceId, workId} of full protocol ids -- so a member
+// on one partition can point at a sprint on another (the cross partition). It is
+// additive exactly like the other advisory keys: no new operation, no registry
+// row, and a workspace that never sprints is byte-identical. The one caveat is the
+// same as every advisory key and work.annotated itself -- a binary predating this
+// key fails the closed anti-smuggling replay guard on a chain that USES it, which
+// is why it ships in a minor release (0.5.0) that readers of such chains must pin.
+const ADVISORY_SPRINT_KEY = "advisory:sprint";
+const ADVISORY_KEYS: readonly string[] = [ADVISORY_SCOPE_KEY, ADVISORY_DECIDED_BY_KEY, ADVISORY_SPRINT_KEY];
+
+// A sprint reference is a qualified cross-partition pointer: the workspaceId (derived,
+// so `workspace:` + 24 hex) plus the work id of the sprint's Release record. Both halves
+// are whole protocol ids re-validatable on their own -- the advisory:decided-by
+// convention of carrying full ids, never a packed/compressed form.
+export interface SprintReference {
+  readonly workspaceId: string;
+  readonly workId: string;
+}
+
+function isSprintReference(value: unknown): value is SprintReference {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const keys = Object.keys(value as Record<string, unknown>).sort(compareCanonicalText);
+  if (keys.length !== 2 || keys[0] !== "workId" || keys[1] !== "workspaceId") return false;
+  const { workspaceId, workId } = value as { readonly workspaceId: unknown; readonly workId: unknown };
+  if (typeof workspaceId !== "string" || !/^workspace:[a-f0-9]{24}$/u.test(workspaceId)) return false;
+  if (typeof workId !== "string" || workId.slice(0, workId.indexOf(":")) !== "work") return false;
+  try {
+    assertProtocolId(workId);
+  } catch {
+    return false;
+  }
+  return true;
+}
 
 function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisory: {
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
+  readonly sprint?: SprintReference;
 }): Readonly<Record<string, unknown>> {
   const next: Record<string, unknown> = { ...base };
   if (advisory.scope !== undefined) {
@@ -866,6 +901,9 @@ function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisor
   }
   if (advisory.decidedBy !== undefined) {
     next[ADVISORY_DECIDED_BY_KEY] = { required: false, value: [...advisory.decidedBy] };
+  }
+  if (advisory.sprint !== undefined) {
+    next[ADVISORY_SPRINT_KEY] = { required: false, value: { workspaceId: advisory.sprint.workspaceId, workId: advisory.sprint.workId } };
   }
   return next;
 }
@@ -899,6 +937,12 @@ function assertAdvisoryEntryShape(key: string, entry: unknown, id: string): void
   if (key === ADVISORY_SCOPE_KEY) {
     if (typeof value !== "string" || value.length === 0) {
       fail("WORKSPACE_EVENT_CORRUPT", `work ${id} advisory scope must be a non-empty string`);
+    }
+    return;
+  }
+  if (key === ADVISORY_SPRINT_KEY) {
+    if (!isSprintReference(value)) {
+      fail("WORKSPACE_EVENT_CORRUPT", `work ${id} advisory sprint must be a {workspaceId, workId} qualified reference`);
     }
     return;
   }
@@ -2397,14 +2441,15 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
   readonly id: string;
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
+  readonly sprint?: SprintReference;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
     const current = workById(state, input.id);
     if (current.tombstone) {
       fail("WORKSPACE_INPUT_INVALID", `work ${input.id} is deleted`);
     }
-    if (input.scope === undefined && input.decidedBy === undefined) {
-      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope or decided-by");
+    if (input.scope === undefined && input.decidedBy === undefined && input.sprint === undefined) {
+      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, or sprint");
     }
     if (input.scope !== undefined && input.scope.length === 0) {
       fail("WORKSPACE_INPUT_INVALID", "advisory scope must be a non-empty string");
@@ -2412,9 +2457,13 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
     if (input.decidedBy !== undefined && (input.decidedBy.length === 0 || !input.decidedBy.every((item) => isMinutesId(item)))) {
       fail("WORKSPACE_INPUT_INVALID", "advisory decided-by must be a non-empty list of minutes ids");
     }
+    if (input.sprint !== undefined && !isSprintReference(input.sprint)) {
+      fail("WORKSPACE_INPUT_INVALID", "advisory sprint must be a {workspaceId, workId} qualified reference");
+    }
     const extensions = workAdvisoryExtensions(current.extensions, {
       ...(input.scope !== undefined ? { scope: input.scope } : {}),
       ...(input.decidedBy !== undefined ? { decidedBy: input.decidedBy } : {}),
+      ...(input.sprint !== undefined ? { sprint: input.sprint } : {}),
     });
     if (canonicalJson(extensions as JsonValue) === canonicalJson(current.extensions as unknown as JsonValue)) {
       fail("WORKSPACE_INPUT_INVALID", "annotation does not change any advisory field");

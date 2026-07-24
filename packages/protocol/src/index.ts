@@ -665,14 +665,20 @@ export function validateWorkGraph(records: readonly WorkRecord[], registry: read
     }
     byId.set(record.id, record);
   }
-  const expectedParent = new Map<PlannedDeliveryKind, PlannedDeliveryKind | null>([
+  const expectedParent = new Map<WorkKind, PlannedDeliveryKind | null>([
     ["Initiative", null],
     ["Epic", "Initiative"],
     ["Story", "Epic"],
     ["Subtask", "Story"],
+    // A Release (a sprint / release-train batch) is a top-level container, structurally
+    // parallel to an Initiative: it owns no parent, and its members attach by the
+    // member-side advisory:sprint annotation rather than parentage. Enforce parentless so
+    // the timebox axis (sprint) and the scope axis (the work tree) never entangle. Incident
+    // is deliberately absent here -- it is creatable with or without a parent.
+    ["Release", null],
   ]);
   for (const record of records) {
-    const expected = expectedParent.get(record.kind as PlannedDeliveryKind);
+    const expected = expectedParent.get(record.kind as WorkKind);
     if (expected === null && record.parentId !== null) {
       fail("GRAPH_PARENT_KIND_INVALID", record.id);
     }

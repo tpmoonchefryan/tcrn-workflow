@@ -117,6 +117,7 @@ export {
 } from "./workspace.js";
 export type {
   ProjectRecord,
+  SprintReference,
   WorkspaceCrashPoint,
   WorkspaceLease,
   WorkspaceMetadata,
