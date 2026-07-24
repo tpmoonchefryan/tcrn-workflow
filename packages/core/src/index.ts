@@ -55,6 +55,28 @@ export {
 } from "./workspace-snapshot.js";
 export type { SnapshotReasonCode } from "./workspace-snapshot.js";
 export {
+  BACKGROUND_RESOURCE_LIMITS,
+  BACKGROUND_RESOURCE_REASON_CODES,
+  BACKGROUND_RESOURCE_REGISTRATION_VERSION,
+  BACKGROUND_RESOURCE_RESIDUE_VERSION,
+  BackgroundResourceError,
+  buildRegistrationLine,
+  buildResidueReport,
+  detectResidue,
+  parseProcessTable,
+  parseRegistrationLine,
+  parseRegistry,
+} from "./background-resource.js";
+export type {
+  BackgroundResourceReasonCode,
+  ProcessRow,
+  ResidueEntry,
+  ResidueReason,
+  ResidueReport,
+  ResidueStatus,
+  SpawnRegistration,
+} from "./background-resource.js";
+export {
   WORKSPACE_CONTROL_DIRECTORY,
   WORKSPACE_REASON_CODES,
   WORKSPACE_SCHEMA_VERSION,
