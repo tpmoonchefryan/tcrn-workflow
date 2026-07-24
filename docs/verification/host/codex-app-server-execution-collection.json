@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "tcrn.codex-app-server-execution-schema-evidence.v1",
+  "status": "SCHEMA-SHAPE VERIFIED — supplied-stream collector; no host-driven subagent invocation",
+  "observedAt": "2026-07-25",
+  "host": {
+    "product": "Codex CLI",
+    "version": "0.139.0",
+    "command": "codex app-server generate-ts --out <disposable-dir>"
+  },
+  "wireMethods": [
+    "thread/started",
+    "turn/started",
+    "turn/completed",
+    "item/completed"
+  ],
+  "correlationFields": {
+    "thread": [
+      "id",
+      "sessionId",
+      "parentThreadId",
+      "threadSource",
+      "createdAt"
+    ],
+    "turnNotification": [
+      "threadId",
+      "turn.id",
+      "turn.startedAt",
+      "turn.completedAt"
+    ],
+    "spawnItem": [
+      "id",
+      "type=collabAgentToolCall",
+      "tool=spawnAgent",
+      "status",
+      "senderThreadId",
+      "receiverThreadIds",
+      "prompt"
+    ],
+    "finalItem": [
+      "id",
+      "type=agentMessage",
+      "text"
+    ]
+  },
+  "correction": {
+    "previousObserverVocabulary": "Pascal-case pseudo-methods such as Thread/started",
+    "wireVocabulary": "lower-case JSON-RPC methods such as thread/started",
+    "effect": "the ACT8 observer vocabulary and tests are corrected in the S054 change"
+  },
+  "boundary": {
+    "readOnly": true,
+    "drivesHost": false,
+    "liveAttachClaimed": false,
+    "liveSubagentReceiptClaimed": false,
+    "reason": "the Observer may not create/fork/start threads or turns under GD-1; a future externally produced stream can be passed to the collector without changing this module",
+    "coverage": "absence of a notification is not evidence the action did not occur"
+  }
+}

@@ -400,6 +400,8 @@ async function runTests({
   observeHookOnly = false,
   executionCollectionOnly = false,
   appServerObserverOnly = false,
+  codexActivationOnly = false,
+  codexExecutionCollectionOnly = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -436,6 +438,8 @@ async function runTests({
     .filter((path) => !observeHookOnly || path === "tests/act6-observe-hook.test.mjs")
     .filter((path) => !executionCollectionOnly || path === "tests/act7-execution-collection.test.mjs")
     .filter((path) => !appServerObserverOnly || path === "tests/act8-app-server-observer.test.mjs")
+    .filter((path) => !codexActivationOnly || path === "tests/act9-codex-activation.test.mjs")
+    .filter((path) => !codexExecutionCollectionOnly || path === "tests/act10-codex-execution-collection.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -460,6 +464,10 @@ async function runTests({
       ? "ACT7_EXECUTION_COLLECTION_TESTS_VERIFIED"
       : appServerObserverOnly
       ? "ACT8_APP_SERVER_OBSERVER_TESTS_VERIFIED"
+      : codexActivationOnly
+      ? "ACT9_CODEX_ACTIVATION_TESTS_VERIFIED"
+      : codexExecutionCollectionOnly
+      ? "ACT10_CODEX_EXECUTION_COLLECTION_TESTS_VERIFIED"
       : installerOnly
       ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
@@ -1708,6 +1716,8 @@ const commandContracts = {
   act6: { exit: 0, reasonCode: "ACT6_OBSERVE_HOOK_VERIFIED" },
   act7: { exit: 0, reasonCode: "ACT7_EXECUTION_COLLECTION_VERIFIED" },
   act8: { exit: 0, reasonCode: "ACT8_APP_SERVER_OBSERVER_VERIFIED" },
+  act9: { exit: 0, reasonCode: "ACT9_CODEX_ACTIVATION_VERIFIED" },
+  act10: { exit: 0, reasonCode: "ACT10_CODEX_EXECUTION_COLLECTION_VERIFIED" },
   e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
 };
 
@@ -1908,6 +1918,55 @@ async function verifyAct8() {
     protocolDigest: fixture.protocolDigest,
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
     liveAttachProof: fixture.liveAttachProof,
+    standalone: fixture.standalone,
+  });
+}
+
+// EPIC-023 S066/S067: the single Codex SessionStart activation rung. The gate
+// distinguishes local installation from the independently observed host approval
+// and fire, and pins Codex's non-exported trust hash as an explicit boundary.
+async function verifyAct9() {
+  const result = await runTests({ codexActivationOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act9-codex-activation-cases.json");
+  const evidencePath = resolve(repositoryRoot, "docs/verification/host/codex-session-start-activation.json");
+  const fixture = await readJson(fixturePath);
+  const evidence = await readJson(evidencePath);
+  assertion(fixture.schemaVersion === "tcrn.act9-codex-activation-cases.v1", "ACT9_FIXTURE_SCHEMA");
+  assertion(fixture.activationFiles === 3 && fixture.hookEvents.length === 1 && fixture.hookEvents[0] === "SessionStart", "ACT9_CLOSED_SURFACE");
+  assertion(fixture.driftCases === 3 && fixture.refusalCases === 6, "ACT9_CORPUS");
+  assertion(fixture.failOpen === true && fixture.installationClaimsHostActivation === false && fixture.approvedSetInitiallyEmpty === true, "ACT9_TRUST_DISCIPLINE");
+  assertion(fixture.hostTrustHashRepresentation === "opaque_not_exported", "ACT9_OPAQUE_HOST_HASH");
+  assertion(evidence.observation.hookFired === true && evidence.driftProbe.changedDefinitionFired === false, "ACT9_LIVE_HOST_RECEIPT");
+  return success("ACT9_CODEX_ACTIVATION_VERIFIED", {
+    tests: result.tests,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    hostEvidenceDigest: (await fileRecord(evidencePath)).sha256,
+    liveHostProof: fixture.liveHostProof,
+    installationClaimsHostActivation: fixture.installationClaimsHostActivation,
+    standalone: fixture.standalone,
+  });
+}
+
+// EPIC-020 S054: correlate current Codex App Server spawn/thread/turn/item shapes
+// into host-neutral execution receipts without driving the host. A live subagent
+// receipt is deliberately not claimed: GD-1 keeps the Observer read-only.
+async function verifyAct10() {
+  const result = await runTests({ codexExecutionCollectionOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act10-codex-execution-collection-cases.json");
+  const evidencePath = resolve(repositoryRoot, "docs/verification/host/codex-app-server-execution-collection.json");
+  const fixture = await readJson(fixturePath);
+  const evidence = await readJson(evidencePath);
+  assertion(fixture.schemaVersion === "tcrn.act10-codex-execution-collection-cases.v1", "ACT10_FIXTURE_SCHEMA");
+  assertion(fixture.readOnly === true && fixture.drivesHost === false, "ACT10_READ_ONLY");
+  assertion(fixture.unavailableCases === 5 && fixture.refusalCases === 4, "ACT10_CORPUS");
+  assertion(fixture.transcriptsSigned === false && fixture.attributionNotIdentity === true, "ACT10_NO_OVERCLAIM");
+  assertion(fixture.bindings.includes("sessionId") && fixture.bindings.includes("threadId") && fixture.bindings.includes("turnId"), "ACT10_BINDINGS");
+  assertion(evidence.boundary.liveAttachClaimed === false && evidence.boundary.liveSubagentReceiptClaimed === false, "ACT10_LIVE_BOUNDARY");
+  return success("ACT10_CODEX_EXECUTION_COLLECTION_VERIFIED", {
+    tests: result.tests,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    schemaEvidenceDigest: (await fileRecord(evidencePath)).sha256,
+    liveHostProof: fixture.liveHostProof,
     standalone: fixture.standalone,
   });
 }
@@ -2168,6 +2227,8 @@ const handlers = {
   act6: verifyAct6,
   act7: verifyAct7,
   act8: verifyAct8,
+  act9: verifyAct9,
+  act10: verifyAct10,
   e2e: verifyE2eGovernedLoop,
 };
 
@@ -2233,7 +2294,7 @@ function evidencePhase(name) {
   if (name === "act1") {
     return "act";
   }
-  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act8") {
+  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act8" || name === "act9" || name === "act10") {
     return "act2";
   }
   if (name === "e2e") {

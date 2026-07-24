@@ -8,13 +8,13 @@
 
 [English](./README.md) · 简体中文 · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-72-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-74-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [为什么做这个项目](#为什么做这个项目) · [这是否适合你](#这是否适合你) · [你会得到什么](#你会得到什么) · [快速开始](#快速开始) · [真正用起来](#真正用起来) · [直白的回答](#直白的回答) · [已知限制](#已知限制) · [许可证](#许可证)
 
-`Verified claims: 72 (hygiene 13 · inertness 13 · runtime 46)`
+`Verified claims: 74 (hygiene 13 · inertness 13 · runtime 48)`
 
 </div>
 
@@ -53,13 +53,13 @@ TCRN Workflow 把这三个缺口一并补上——办法是用对待安全关键
 | --- | --- |
 | **一个就是文件的工作区** | 你的整张工作图谱（Initiative → Epic → Story → Subtask）以规范化的纯 JSON 文件加哈希链存放——无数据库，无守护进程。你可以用 `cat` 和 `sha256sum` 审计它，导出结果逐字节可复现。 |
 | **一条命令，20 道门** | `pnpm verify:p1` 跑完整条验证链：格式、lint、类型检查、构建、约 40 个测试文件、信任矩阵、归档/SBOM/许可证/漏洞策略、源文件白名单、离线边界、隐私扫描、CI 加固、验证映射、干净历史证明。任何意料之外的东西都会让链条停下。 |
-| **一份机器能读的声明账本** | `verification-map.yaml` 把 72 条声明——13 条 framework-hygiene、13 条 inertness-proof、46 条 runtime-capability——绑定到可观测的 reason code。一条声明的主语变了，它的证明就必须重跑。 |
+| **一份机器能读的声明账本** | `verification-map.yaml` 把 74 条声明——13 条 framework-hygiene、13 条 inertness-proof、48 条 runtime-capability——绑定到可观测的 reason code。一条声明的主语变了，它的证明就必须重跑。 |
 | **会自证仍然有效的守卫** | `pnpm guard-check` 把每一条已登记的守卫从源码中变异掉，并要求它命名的测试变红——17 条守卫，每次推送前验证。一个丢掉了也没人会察觉的保护，不算保护。 |
 | **记录在案的审议** | 会议与决策门被追加到同一条防篡改日志上。一个未满足的门会*阻止*其工作项到达 `done`（`WORKSPACE_GATE_PENDING`）——在命令处，重放时再来一次——而关闭一次会议会把每条决策蒸馏成一条回链的知识候选。 |
 | **每个决策都有名字** | 启用执行者留痕后，之后每一次改动都必须声明是谁在操作——引擎及其重放都会对任何缺失执行者 ID 的事件失败即关闭。从未启用它的工作区，行为与从前逐字节一致。 |
-| **可以撤销的激活** | 三个显式步骤把惰性的 Claude Code 包变成一次实时受治理会话，而卸载会把 `.claude/settings.json` 逐字节还原——这已在真实宿主上被观测，且用户自己既有的钩子全程照常工作。会话钩子中的任何错误都会干净退出，回落为普通的 Claude Code。从不命名或写入 `~/.claude` 下的任何东西。 |
+| **可以撤销的激活** | Claude Code 保留已实测的三阶可逆激活；Codex 现在也有对等的窄阶梯：单个 fail-open 的项目级 `SessionStart` hook、摘要与处理器摘要绑定、显式 `/hooks` 审批，以及先解除注册再退回惰性安装的停用路径。安装回执永不冒充宿主激活证据。 |
 | **能自我证明的备份** | 快照会产出确定性的逐文件清单；运行手册可以完成"快照 → 清空 → 恢复"的逐字节往返，而真正要紧的两种失败模式（部分恢复、异地恢复）都失败即关闭。 |
-| **两个宿主，同一份真相** | Codex 与 Claude Code 适配器共享逐字节一致的宿主中立机制，并有一个已证明的跨宿主一致性摘要。两者默认都只生成未安装的模板数据；**Claude Code 随后可被激活，Codex 不能**——见「状态，如实相告」。 |
+| **两个宿主，同一份真相** | Codex 与 Claude Code 适配器共享宿主中立的 authority 与回执机制。两者默认都保持惰性，也都有窄化的 fail-open SessionStart 激活；Codex 额外记录逐定义审批边界，并明确不声称能读取宿主内部的不透明信任哈希。 |
 | **构造上就离线** | 开发模式安装一道进程级网络守卫，且零遥测。隐私门会扫描每一个被跟踪的字节、全部可达的 git 历史，以及发布归档，寻找个人标识与机器路径。 |
 | **可以自己重新推导的发布** | 一次发布是一个不可变标签加一组可复现产物，由 `pnpm verify:p8` 重建并逐字节比对。外部使用者通过配套的 `tcrn-workflow-helper` 校验，而它自身的摘要发布在你可以独立获取的地方。 |
 | **缺陷是一等公民** | 创建路径接纳 `Incident` 类型，于是一个缺陷会拿到自己的记录与谱系，而不必伪装成一个 `Story`；`Review`、`Release` 与 `Knowledge` 对直接创建仍然关闭。退役一条知识记录会回收其正文，而搜索匹配的是摘要，因此这个经策展的库保持精简、可检索。 |
@@ -194,7 +194,12 @@ flowchart LR
 
 其余一切刻意留在外面。本框架**不**裁决宿主的工具使用、**不**抑制或改写回复、**从不**写入 `~/.claude`、**不**在没有显式动作时晋升知识、也**不**编排会话。钩子失败时不打印任何东西，会话作为普通 Claude Code 继续——这是本代码库唯一一处刻意 fail-open 而非 fail-closed 的地方，因为一个能弄坏会话的治理层，比一个会安静下来的治理层更糟。
 
-Codex 没有对应能力。它的适配器只做生成与仿真，不做安装，本仓也不会向 Codex 宿主写入任何东西。
+Codex 现在有刻意收窄的对应能力：`adapter-install` 仍只做惰性安装，
+`adapter-activate` 只增加一个项目级 `SessionStart` notify hook，并把处理器与
+1024 字节摘要逐字节绑定。是否运行仍由 Codex 决定：操作者必须通过
+`/hooks` 批准当前精确定义，定义一变就必须重批，安装回执始终停在
+`pending_host_approval`。`adapter-deactivate` 会先解除注册再退回惰性阶梯。
+这里不声称 PreToolUse/审批 enforce，也不声称存在主动 App Server Controller。
 
 ### 一次发布是如何被信任的
 
@@ -205,7 +210,7 @@ Codex 没有对应能力。它的适配器只做生成与仿真，不做安装�
 下面每一个数字都由一道门强制——任何一个漂移，某处的构建就会失败。
 
 - **20 道门**在 `verify:p1` 链中，每一道都有稳定的终态 reason code。
-- **72 条机器验证的声明**在 `verification-map.yaml` 中——13 条 framework-hygiene、13 条 inertness-proof、46 条 runtime-capability。上方的声明徽章每次运行都会被解析并与账本比对。
+- **74 条机器验证的声明**在 `verification-map.yaml` 中——13 条 framework-hygiene、13 条 inertness-proof、48 条 runtime-capability。上方的声明徽章每次运行都会被解析并与账本比对。
 - **17 条已登记的守卫**，每一条都通过把它变异掉、观察其测试变红，来证明它仍然在咬。
 - **约 40 个密封测试文件**，包含真实的 `SIGKILL` 故障注入、三个独立层各自的 64 种排列确定性证明，以及一套文件系统攻击矩阵。
 - **1 个端到端旗舰证明**（`pnpm verify:e2e`）——对完整受治理闭环（initiative → epic → story → gate → conference → distill → promote → trace）的一次密封重放，每一条教程命令都被逐字执行。
@@ -223,6 +228,7 @@ Codex 没有对应能力。它的适配器只做生成与仿真，不做安装�
 | `verify:p4` / `verify:p4:knowledge` | 制品生命周期预算、脱敏、一次性归档 apply/restore；知识核心的元数据/正文分离、晋升 CAS、64 排列一致性。 |
 | `verify:p5` | 封闭的通用 profile 信任模型、有效策略摘要、冷启动图、八个惰性 Core Reference 角色。 |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | 上下文路由器的范围/风险/预算控制与敌意语料；Codex 适配器桥接；Claude Code 适配器（四文件模板包、可逆 settings 片段、禁止路径拒绝、CLAUDE.md 回退、跨宿主一致性摘要）。 |
+| `verify:act4` / `verify:act9` / `verify:act10` | Codex 惰性安装；单一 SessionStart 激活与逐定义信任漂移；只读 supplied-stream 子代理/thread/turn 采集、真实 session 绑定与诚实的 unavailable 降级。 |
 | `verify:p7` / `verify:p7:compatibility` | 规范化交换、兼容性清单、防回滚下限、确定性的导入/检查点/回退计划。 |
 | `verify:authority-mcp` | 带外钉扎的操作者授权、轮换/撤销拒绝，以及宿主中立的结构化 MCP 读写。 |
 | `verify:p8` | 可复现的发布候选：源码归档重建 + 逐字节比对、SBOM、provenance、校验和、六文件封闭包、外部信任负例矩阵。 |
@@ -293,7 +299,7 @@ Codex 没有对应能力。它的适配器只做生成与仿真，不做安装�
 - `0.1.0` 是**首个正式接受的发布**。适用语义化版本；0.x 区间内公共 API 仍可能在次要版本之间变化。
 - **此后又发布了五个次要版本，当前是 `0.5.0`。** `0.2.0` 让门身份成真（经名册校验的 `owner_intent_required`），`0.3.0` 为记录增加了咨询式范围（`work-annotate`），`0.3.2` 打开了 `Incident` 创建路径，并为知识库腾出策展余量，`0.4.0` 增加了后台资源残余治理，`0.5.0` 增加了 sprint / 发布列车机制。每一个都是一个不可变标签，附一组可复现的产物；`CHANGELOG.md` 记着完整的账本。
 - **Claude Code 的激活是实时的，并已在真实宿主上被观测**。步骤 1–3 针对 Claude Code `2.1.201` 完成安装、激活与卸载；共记录九条观测，其中包括权威摘要确实抵达了模型的上下文。它实时运行时所做的，就是在会话开始时注入一段只读摘要，仅此而已——它刻意不做的事，见上面的边界清单。收据：`docs/verification/host/claude-code.json`。
-- **Codex 止步于只读**。`adapter-generate`、`-validate`、`-simulate`、`-fallback`、`-rollback-plan` 是真实、确定性的宿主中立工具。这里没有 Codex 安装器，也没有 Codex 激活，因此本仓的任何东西都不会写入 Codex 宿主。
+- **Codex 激活是窄化且按证据分级的。** 惰性安装可逆；激活只注册 `SessionStart`、fail-open，并要求 Codex 对当前精确定义做操作者审批。一次 Codex `0.139.0` 临时项目探针记录了已审批后触发一次、定义变化后跳过。生成的 TCRN 处理器由 hermetic 测试证明，但不声称这些精确生成字节已在真实宿主触发。App Server 采集只消费外部提供的通知流，绝不启动或驱动子代理。这些是 `0.5.0` 之后的源码树能力，不是对已接受 `0.5.0` 发布字节的声明。
 - `supportedAosReleases` 为空：不声称任何外部 AOS 兼容性。
 - 发布模式要求配套的 helper 接受这些字节：它的引导程序摘要独立发布，而被接受的发布摘要编译在它内部。
 

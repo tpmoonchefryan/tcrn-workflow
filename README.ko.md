@@ -8,13 +8,13 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · 한국어 · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-72-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-74-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [이 프로젝트가 존재하는 이유](#이-프로젝트가-존재하는-이유) · [당신에게 맞는가](#당신에게-맞는가) · [무엇을 얻는가](#무엇을-얻는가) · [빠른 시작](#빠른-시작) · [실제로 사용하기](#실제로-사용하기) · [솔직한 답변](#솔직한-답변) · [알려진 한계](#알려진-한계) · [라이선스](#라이선스)
 
-`Verified claims: 72 (hygiene 13 · inertness 13 · runtime 46)`
+`Verified claims: 74 (hygiene 13 · inertness 13 · runtime 48)`
 
 </div>
 
@@ -53,13 +53,13 @@ TCRN Workflow는 이 세 가지를 한꺼번에 막습니다 — 에이전트 �
 | --- | --- |
 | **그냥 파일인 워크스페이스** | 작업 그래프 전체(Initiative → Epic → Story → Subtask)가 정규화된 평범한 JSON 파일과 해시 체인으로 존재합니다 — 데이터베이스도 데몬도 없습니다. `cat`과 `sha256sum`으로 감사할 수 있고, 내보내기는 바이트 단위로 재현 가능합니다. |
 | **명령 하나, 게이트 20개** | `pnpm verify:p1`이 검증 사슬 전체를 실행합니다: 포맷, lint, 타입 검사, 빌드, 약 40개 테스트 파일, 신뢰 매트릭스, 아카이브/SBOM/라이선스/취약점 정책, 소스 허용 목록, 오프라인 경계, 프라이버시 스캔, CI 하드닝, 검증 맵, 클린 히스토리 증명. 예상 밖의 것이 하나라도 있으면 사슬이 멈춥니다. |
-| **기계가 읽는 주장 원장** | `verification-map.yaml`이 72개 주장 — framework-hygiene 13개, inertness-proof 13개, runtime-capability 46개 — 을 관측 가능한 reason code에 결속합니다. 주장의 주어가 바뀌면 그 증명은 다시 실행되어야 합니다. |
+| **기계가 읽는 주장 원장** | `verification-map.yaml`이 74개 주장 — framework-hygiene 13개, inertness-proof 13개, runtime-capability 48개 — 을 관측 가능한 reason code에 결속합니다. 주장의 주어가 바뀌면 그 증명은 다시 실행되어야 합니다. |
 | **여전히 작동함을 스스로 보이는 가드** | `pnpm guard-check`는 등록된 각 가드를 소스에서 변이 제거하고, 지정된 테스트가 빨간불이 되기를 요구합니다 — 가드 17개, 푸시할 때마다 검증. 사라져도 아무도 알아채지 못할 보호는 보호가 아닙니다. |
 | **기록에 남는 숙의** | 콘퍼런스와 결정 게이트는 같은 변조 탐지 저널에 추가됩니다. 충족되지 않은 게이트는 해당 작업 항목이 `done`에 도달하는 것을 *막습니다*(`WORKSPACE_GATE_PENDING`) — 명령 시점에도, 재생 시점에도 다시 — 그리고 콘퍼런스를 닫으면 각 결정이 역링크된 지식 후보로 증류됩니다. |
 | **모든 결정에 이름이 붙는다** | 액터 어테스테이션을 켜면 이후 모든 변경이 누가 행했는지 선언해야 합니다 — 엔진과 그 재생 모두 액터 ID가 빠진 이벤트에 대해 페일클로즈합니다. 켜지 않은 워크스페이스는 이전과 바이트 단위로 동일하게 동작합니다. |
 | **되돌릴 수 있는 활성화** | 명시적인 세 단계가 비활성 Claude Code 번들을 살아 있는 통제 세션으로 바꾸고, 제거는 `.claude/settings.json`을 바이트 단위로 복원합니다 — 실제 호스트에서 관측되었고, 그동안 사용자가 이미 가지고 있던 훅은 계속 동작했습니다. 세션 훅의 어떤 오류든 평범한 Claude Code로 깨끗하게 빠져나갑니다. `~/.claude` 아래의 무언가를 지목하거나 쓰는 일은 결코 없습니다. |
 | **스스로를 증명하는 백업** | 스냅샷은 결정적인 파일별 매니페스트를 냅니다. 런북은 스냅샷 → 삭제 → 복원을 바이트 단위로 왕복시키고, 정말 중요한 두 실패 모드(부분 복원, 다른 위치 복원)는 페일클로즈합니다. |
-| **두 호스트, 하나의 진실** | Codex와 Claude Code 어댑터는 바이트 단위로 동일한 호스트 중립 기계를 공유하며, 호스트 간 일치 다이제스트로 증명됩니다. 둘 다 기본적으로는 설치되지 않은 템플릿 데이터만 생성합니다. **Claude Code는 그 뒤 활성화할 수 있고, Codex는 할 수 없습니다** — 「상태, 정직하게」를 보십시오. |
+| **두 호스트, 하나의 진실** | Codex와 Claude Code는 호스트 중립 authority/receipt 메커니즘을 공유합니다. 둘 다 기본적으로 inert 상태이며 좁은 fail-open SessionStart activation을 갖습니다. Codex는 exact-definition 승인 경계를 기록하고 내부 opaque trust hash를 읽을 수 있다고 주장하지 않습니다. |
 | **구조적으로 오프라인** | 개발 모드는 프로세스 수준 네트워크 가드를 설치하고 텔레메트리는 0입니다. 프라이버시 게이트는 추적되는 모든 바이트, 도달 가능한 모든 git 히스토리, 릴리스 아카이브를 개인 식별자와 머신 경로에 대해 훑습니다. |
 | **직접 다시 도출할 수 있는 릴리스** | 릴리스는 불변 태그와 재현 가능한 산출물 묶음이며, `pnpm verify:p8`이 재구축해 바이트 비교합니다. 외부 사용자는 동반 프로젝트 `tcrn-workflow-helper`를 통해 검증하고, 그 다이제스트 자체는 독립적으로 확인할 수 있는 곳에 공개됩니다. |
 | **결함은 일급 시민** | 생성 경로가 `Incident` 종류를 허용하므로, 결함은 `Story`인 척하는 대신 자기만의 레코드와 계보를 가집니다. `Review`, `Release`, `Knowledge`는 직접 생성에 대해 닫힌 채로 남습니다. 지식 레코드를 폐기하면 그 본문이 회수되고 검색은 요약과 매칭되므로, 큐레이션된 저장소는 군더더기 없이 찾기 쉬운 상태로 유지됩니다. |
@@ -194,7 +194,12 @@ flowchart LR
 
 나머지는 의도적으로 밖에 둡니다. 이 프레임워크는 호스트의 도구 사용을 재정하지 **않고**, 응답을 억제하거나 고쳐 쓰지 **않으며**, `~/.claude` 아래에는 **결코** 쓰지 않고, 명시적 행위 없이 지식을 승격하지 **않으며**, 세션을 편성하지도 **않습니다**. 훅이 실패하면 아무것도 출력하지 않고 세션은 평범한 Claude Code로 계속됩니다 — 이 코드베이스에서 의도적으로 fail-closed가 아니라 fail-open인 유일한 지점인데, 세션을 망가뜨릴 수 있는 통치 계층은 조용해지는 통치 계층보다 나쁘기 때문입니다.
 
-Codex에는 이에 해당하는 것이 없습니다. 그 어댑터는 생성과 시뮬레이션만 하고 설치는 하지 않으며, 여기 있는 어떤 것도 Codex 호스트에 쓰지 않습니다.
+Codex에도 의도적으로 좁은 대응 기능이 있습니다. `adapter-install`은 inert
+상태를 유지하고, `adapter-activate`는 digest-bound handler와 1024-byte
+summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. 실행은
+`/hooks`의 exact-definition operator 승인이 필요하며 definition 변경 시
+재승인해야 합니다. 설치 receipt는 `pending_host_approval`로 남고,
+`adapter-deactivate`는 hook 등록부터 제거합니다.
 
 ### 릴리스는 어떻게 신뢰되는가
 
@@ -205,7 +210,7 @@ Codex에는 이에 해당하는 것이 없습니다. 그 어댑터는 생성과 
 아래 모든 숫자는 게이트가 강제합니다 — 하나라도 어긋나면 어딘가에서 빌드가 실패합니다.
 
 - `verify:p1` 사슬의 **게이트 20개**, 각각 안정적인 종단 reason code를 가집니다.
-- `verification-map.yaml`의 **기계 검증 주장 72개** — framework-hygiene 13개, inertness-proof 13개, runtime-capability 46개. 위의 주장 배지는 실행할 때마다 파싱되어 원장과 대조됩니다.
+- `verification-map.yaml`의 **기계 검증 주장 74개** — framework-hygiene 13개, inertness-proof 13개, runtime-capability 48개. 위의 주장 배지는 실행할 때마다 파싱되어 원장과 대조됩니다.
 - **등록된 가드 17개**, 각각 변이 제거 후 테스트가 빨간불이 되는지 확인해 여전히 작동함을 증명합니다.
 - **밀폐 테스트 파일 약 40개**. 진짜 `SIGKILL` 결함 주입, 독립된 세 계층에서의 64순열 결정성 증명, 파일시스템 공격 매트릭스를 포함합니다.
 - **엔드투엔드 대표 증명 1개**(`pnpm verify:e2e`) — 통제 루프 전체(initiative → epic → story → gate → conference → distill → promote → trace)의 밀폐 재생으로, 튜토리얼의 모든 명령을 문자 그대로 실행합니다.
@@ -223,6 +228,7 @@ Codex에는 이에 해당하는 것이 없습니다. 그 어댑터는 생성과 
 | `verify:p4` / `verify:p4:knowledge` | 산출물 라이프사이클 예산, 비식별화, 일회용 아카이브 apply/restore; 지식 코어의 메타데이터/본문 분리, 승격 CAS, 64순열 일치. |
 | `verify:p5` | 닫힌 범용 프로파일 신뢰 모델, 실효 정책 다이제스트, 콜드스타트 그래프, 여덟 개의 비활성 Core Reference 페르소나. |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | 컨텍스트 라우터의 범위/위험/예산 제어와 적대적 코퍼스; Codex 어댑터 브리지; Claude Code 어댑터(네 파일 템플릿 번들, 가역 settings 조각, 금지 경로 거부, CLAUDE.md 폴백, 호스트 간 일치 다이제스트). |
+| `verify:act4` / `verify:act9` / `verify:act10` | Codex inert 설치, 단일 SessionStart activation과 exact-definition drift, read-only supplied-stream subagent/thread/turn collection 및 정직한 unavailable fallback. |
 | `verify:p7` / `verify:p7:compatibility` | 정규 교환, 호환성 매니페스트, 롤백 방지 하한, 결정적 임포트/체크포인트/폴백 계획. |
 | `verify:authority-mcp` | 대역 외 고정 운영자 권위, 회전/폐기 거부, 호스트 중립 구조화 MCP 읽기/쓰기. |
 | `verify:p8` | 재현 가능한 릴리스 후보: 소스 아카이브 재구축과 바이트 비교, SBOM, provenance, 체크섬, 여섯 파일 닫힌 번들, 외부 신뢰 부정 매트릭스. |
@@ -293,7 +299,7 @@ Codex에는 이에 해당하는 것이 없습니다. 그 어댑터는 생성과 
 - `0.1.0`은 **첫 정식 릴리스**입니다. 시맨틱 버저닝이 적용되며, 0.x 범위에서는 공개 API가 마이너 버전 사이에 바뀔 수 있습니다.
 - **그 이후 다섯 개의 마이너 릴리스가 배포되었고, 지금은 `0.5.0`입니다.** `0.2.0`은 게이트 신원을 실현했고(명부로 검사되는 `owner_intent_required`), `0.3.0`은 레코드에 어드바이저리 범위를 추가했으며(`work-annotate`), `0.3.2`는 `Incident` 생성 경로를 열고 지식 저장소에 큐레이션 여유를 주었으며, `0.4.0`은 백그라운드 자원 잔여물 통치를 추가했고, `0.5.0`은 스프린트 / 릴리스 트레인 메커니즘을 추가했습니다. 각각은 재현 가능한 산출물 묶음을 가진 불변 태그이며, `CHANGELOG.md`가 전체 원장을 담고 있습니다.
 - **Claude Code 활성화는 라이브이며, 실제 호스트에서 관측되었습니다**. 1–3단계가 Claude Code `2.1.201`을 상대로 설치·활성화·제거를 수행했고, 권위 요약이 실제로 모델의 컨텍스트에 도달했다는 것을 포함해 아홉 건의 관측이 기록되었습니다. 라이브 상태에서 하는 일은 세션 시작 시 읽기 전용 요약을 주입하는 것뿐이며, 그 이상은 없습니다 — 의도적으로 하지 않는 일은 위의 경계 목록을 보십시오. 영수증: `docs/verification/host/claude-code.json`.
-- **Codex는 읽기 전용에서 멈춥니다**. `adapter-generate`·`-validate`·`-simulate`·`-fallback`·`-rollback-plan`은 실재하는 결정적 호스트 중립 도구입니다. Codex 설치 프로그램도 Codex 활성화도 없으며, 따라서 여기 있는 어떤 것도 Codex 호스트에 쓰지 않습니다.
+- **Codex activation은 좁고 증거 등급을 명시합니다.** 가역 inert 설치 위에 `SessionStart`만 fail-open으로 등록하고 Codex의 exact-definition 승인을 요구합니다. Codex `0.139.0` disposable probe는 승인 뒤 한 번의 실행과 definition 변경 뒤 skip을 기록했습니다. App Server collection은 supplied notification stream만 읽고 subagent를 시작하거나 조종하지 않습니다. 이는 `0.5.0` 이후 source-tree capability이며 accepted `0.5.0` release bytes에 대한 주장이 아닙니다.
 - `supportedAosReleases`는 비어 있습니다: 외부 AOS 호환성은 주장하지 않습니다.
 - 릴리스 모드는 동반 헬퍼가 그 바이트를 수용할 것을 요구합니다: 부트스트랩 다이제스트는 독립적으로 공개되고, 수용되는 릴리스 다이제스트는 그 안에 컴파일되어 있습니다.
 

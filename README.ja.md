@@ -8,13 +8,13 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · 日本語 · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-72-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-74-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [なぜこのプロジェクトが存在するのか](#なぜこのプロジェクトが存在するのか) · [あなたに向いているか](#あなたに向いているか) · [得られるもの](#得られるもの) · [クイックスタート](#クイックスタート) · [実際に使う](#実際に使う) · [率直な回答](#率直な回答) · [既知の限界](#既知の限界) · [ライセンス](#ライセンス)
 
-`Verified claims: 72 (hygiene 13 · inertness 13 · runtime 46)`
+`Verified claims: 74 (hygiene 13 · inertness 13 · runtime 48)`
 
 </div>
 
@@ -53,13 +53,13 @@ TCRN Workflow はこの三つをまとめて塞ぎます——エージェント
 | --- | --- |
 | **ただのファイルであるワークスペース** | 作業グラフ全体（Initiative → Epic → Story → Subtask）が、正規化された素の JSON ファイルとハッシュチェーンとして存在します——データベースもデーモンもありません。`cat` と `sha256sum` で監査でき、エクスポートはバイト単位で再現可能です。 |
 | **一つのコマンド、20 のゲート** | `pnpm verify:p1` が検証チェーン全体を実行します：フォーマット、lint、型チェック、ビルド、約 40 のテストファイル、トラストマトリクス、アーカイブ/SBOM/ライセンス/脆弱性ポリシー、ソース許可リスト、オフライン境界、プライバシースキャン、CI ハードニング、検証マップ、クリーン履歴の証明。想定外のものがあればチェーンは止まります。 |
-| **機械が読めるクレーム台帳** | `verification-map.yaml` が 72 のクレーム——13 の framework-hygiene、13 の inertness-proof、46 の runtime-capability——を観測可能な reason code に束縛します。クレームの主語が変われば、その証明は再実行されなければなりません。 |
+| **機械が読めるクレーム台帳** | `verification-map.yaml` が 74 のクレーム——13 の framework-hygiene、13 の inertness-proof、48 の runtime-capability——を観測可能な reason code に束縛します。クレームの主語が変われば、その証明は再実行されなければなりません。 |
 | **効き目が残っていることを自ら示すガード** | `pnpm guard-check` は登録済みの各ガードをソースから変異除去し、指定されたテストが赤になることを要求します——17 のガードを、プッシュのたびに検証。失われても誰も気づかない保護は、保護ではありません。 |
 | **記録される熟議** | カンファレンスと決定ゲートは、同じ改竄検知可能なジャーナルに追記されます。未充足のゲートは対象作業項目が `done` に到達するのを*ブロック*し（`WORKSPACE_GATE_PENDING`）——コマンド時点でも、リプレイ時にも——カンファレンスを閉じると各決定が逆リンク付きの知識候補へ蒸留されます。 |
 | **すべての決定に名前がつく** | アクター署名を有効にすると、以降のすべての変更が誰の行為かを宣言しなければなりません——エンジンもそのリプレイも、アクター ID を欠く事象に対してフェイルクローズします。有効化しないワークスペースは、従来とバイト単位で同一のままです。 |
 | **取り消せるアクティベーション** | 三つの明示的な手順が、不活性な Claude Code バンドルをライブな統制セッションに変え、アンインストールは `.claude/settings.json` をバイト単位で復元します——実機ホスト上で観測済みで、その間ユーザー自身の既存フックは動き続けました。セッションフックのいかなるエラーも、素の Claude Code としてクリーンに終了します。`~/.claude` 配下を名指ししたり書き込んだりすることは決してありません。 |
 | **自らを証明するバックアップ** | スナップショットは決定的なファイル単位マニフェストを出力し、ランブックは「スナップショット → 消去 → リストア」をバイト単位で往復させます。そして本当に重要な二つの失敗モード（部分リストア、別の場所へのリストア）はフェイルクローズします。 |
-| **二つのホスト、一つの真実** | Codex と Claude Code のアダプターは、バイト単位で同一のホスト中立機構を共有し、ホスト間一致 digest によって証明されています。どちらも既定では未インストールのテンプレートデータのみを生成します。**Claude Code はその後アクティベートでき、Codex はできません**——「ステータス、正直に」をご覧ください。 |
+| **二つのホスト、一つの真実** | Codex と Claude Code はホスト中立の authority／receipt 機構を共有します。どちらも既定では inert のままで、狭い fail-open SessionStart activation を持ちます。Codex は exact-definition approval 境界を記録し、ホスト内部の opaque trust hash を読めるとは主張しません。 |
 | **構造としてのオフライン** | 開発モードはプロセスレベルのネットワークガードを導入し、テレメトリはゼロです。プライバシーゲートは、追跡されるすべてのバイト、到達可能なすべての git 履歴、そしてリリースアーカイブを、個人識別子とマシンパスについて走査します。 |
 | **自分で導き直せるリリース** | リリースは不変タグと再現可能な成果物一式であり、`pnpm verify:p8` が再構築してバイト比較します。外部の利用者は付属の `tcrn-workflow-helper` 経由で検証し、その digest 自体は独立に入手できる場所で公開されています。 |
 | **不具合は第一級市民** | 作成経路が `Incident` 種別を受理するため、不具合は `Story` を装うのではなく自身のレコードと系譜を持ちます。`Review`・`Release`・`Knowledge` は直接作成に対して閉じたままです。ナレッジレコードを退役させるとその本文が回収され、検索はサマリーに一致するため、キュレーションされたストアは無駄なく見つけやすいまま保たれます。 |
@@ -194,7 +194,12 @@ flowchart LR
 
 それ以外は意図的に外に置かれています。本フレームワークはホストのツール使用を裁定**せず**、応答を抑制も書き換えも**せず**、`~/.claude` 配下へは**決して**書き込まず、明示的な操作なしにナレッジを昇格**させず**、セッションを編成も**しません**。フックが失敗したときは何も出力せず、セッションは通常の Claude Code として続行します——これは本コードベースで唯一、意図的に fail-closed ではなく fail-open にしている箇所です。セッションを壊しうる統治レイヤーは、黙るだけの統治レイヤーより悪いからです。
 
-Codex に相当する機能はありません。そのアダプターは生成とシミュレーションのみを行い、インストールは行わず、ここにあるものが Codex ホストへ書き込むこともありません。
+Codex にも意図的に狭い同等機能があります。`adapter-install` は inert の
+まま、`adapter-activate` は digest-bound な handler と 1024-byte summary
+を持つ project-local `SessionStart` hook を一つだけ追加します。実行には
+`/hooks` で exact definition の operator approval が必要で、definition
+変更時は再承認が必要です。install receipt は
+`pending_host_approval` のままで、`adapter-deactivate` は hook を先に解除します。
 
 ### リリースはどのように信頼されるのか
 
@@ -205,7 +210,7 @@ Codex に相当する機能はありません。そのアダプターは生成�
 以下の数字はすべてゲートによって強制されます——どれか一つでも漂流すれば、どこかでビルドが失敗します。
 
 - **20 のゲート**が `verify:p1` チェーンにあり、それぞれが安定した終端 reason code を持ちます。
-- **72 の機械検証済みクレーム**が `verification-map.yaml` にあります——13 の framework-hygiene、13 の inertness-proof、46 の runtime-capability。上部のクレームバッジは毎回解析され、台帳と照合されます。
+- **74 の機械検証済みクレーム**が `verification-map.yaml` にあります——13 の framework-hygiene、13 の inertness-proof、48 の runtime-capability。上部のクレームバッジは毎回解析され、台帳と照合されます。
 - **17 の登録済みガード**。それぞれ変異除去してテストが赤になることを確認し、今も効いていることを証明しています。
 - **約 40 の密閉テストファイル**。本物の `SIGKILL` 障害注入、三つの独立レイヤーでの 64 通り並べ替え決定性証明、ファイルシステム攻撃マトリクスを含みます。
 - **1 つのエンドツーエンド旗艦証明**（`pnpm verify:e2e`）——統制ループ全体（initiative → epic → story → gate → conference → distill → promote → trace）の密閉リプレイで、チュートリアルの全コマンドを逐語的に実行します。
@@ -223,6 +228,7 @@ Codex に相当する機能はありません。そのアダプターは生成�
 | `verify:p4` / `verify:p4:knowledge` | 成果物ライフサイクルの予算、秘匿化、使い捨てアーカイブの apply/restore；ナレッジコアのメタデータ/本文分離、昇格 CAS、64 並べ替え一致。 |
 | `verify:p5` | 閉じた汎用プロファイル信頼モデル、実効ポリシー digest、コールドスタートグラフ、八つの不活性 Core Reference ペルソナ。 |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | コンテキストルーターのスコープ/リスク/予算制御と敵対コーパス；Codex アダプターブリッジ；Claude Code アダプター（四ファイルのテンプレートバンドル、可逆な settings フラグメント、禁止パス拒否、CLAUDE.md フォールバック、ホスト間一致 digest）。 |
+| `verify:act4` / `verify:act9` / `verify:act10` | Codex inert install、単一 SessionStart activation と exact-definition drift、read-only supplied-stream の subagent/thread/turn collection と honest unavailable fallback。 |
 | `verify:p7` / `verify:p7:compatibility` | 正規化交換、互換性マニフェスト、ロールバック防止の下限、決定的なインポート/チェックポイント/フォールバック計画。 |
 | `verify:authority-mcp` | 帯域外でピン留めされた操作者権威、ローテーション／失効の拒否、ホスト中立な構造化 MCP 読み書き。 |
 | `verify:p8` | 再現可能なリリース候補：ソースアーカイブ再構築とバイト比較、SBOM、provenance、チェックサム、六ファイルの閉じたバンドル、外部信頼の否定マトリクス。 |
@@ -293,7 +299,7 @@ Codex に相当する機能はありません。そのアダプターは生成�
 - `0.1.0` は**最初の正式リリース**です。セマンティックバージョニングが適用され、0.x の間は公開 API がマイナーバージョン間で変わる可能性があります。
 - **以来、五つのマイナーリリースが出荷され、これが `0.5.0` です。** `0.2.0` はゲートの同一性を実体のあるものにし（名簿照合された `owner_intent_required`）、`0.3.0` はレコード上に助言的スコープを追加し（`work-annotate`）、`0.3.2` は `Incident` 作成経路を開いてナレッジストアにキュレーションの余地を与え、`0.4.0` はバックグラウンドリソースの残渣統治を追加し、`0.5.0` はスプリント／リリーストレインの機構を追加しました。それぞれが再現可能な成果物一式を伴う不変タグであり、`CHANGELOG.md` が完全な台帳を携えています。
 - **Claude Code のアクティベーションはライブであり、実機ホスト上で観測済みです**。ステップ 1–3 は Claude Code `2.1.201` に対してインストール・アクティベート・アンインストールを行い、九件の観測を記録しました。その中には、権威サマリーが実際にモデルのコンテキストへ到達したことも含まれます。ライブ時にそれが行うのはセッション開始時に読み取り専用のサマリーを注入することだけであり、それ以上は何もしません——意図的に行わないことは上の境界一覧をご覧ください。レシート：`docs/verification/host/claude-code.json`。
-- **Codex は読み取り専用で止まります**。`adapter-generate`・`-validate`・`-simulate`・`-fallback`・`-rollback-plan` は実在する決定的なホスト中立ツールです。Codex 用のインストーラーもアクティベーションも存在せず、したがってここにあるものが Codex ホストへ書き込むことはありません。
+- **Codex activation は狭く、証拠レベルを明示します。** 可逆な inert install の上に `SessionStart` だけを fail-open で登録し、Codex による exact-definition approval を要求します。Codex `0.139.0` の disposable probe は承認後の一回の発火と definition 変更後の skip を記録しました。App Server collection は supplied notification stream だけを読み、subagent を開始・操作しません。これは `0.5.0` 後の source-tree capability であり、accepted `0.5.0` release bytes の claim ではありません。
 - `supportedAosReleases` は空です：外部 AOS 互換性は主張しません。
 - リリースモードは、付属ヘルパーがそのバイト列を受理することを要求します：ブートストラップ digest は独立に公開され、受理されるリリース digest はその中にコンパイルされています。
 

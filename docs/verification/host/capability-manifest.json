@@ -1,7 +1,7 @@
 {
   "schema": "tcrn.capability-manifest.v1",
-  "purpose": "EPIC-021 minimal cross-host capability manifest. It records, per host, what surface each capability has, through what channel it would be reached, and the governance level TCRN can honestly claim over it TODAY. It is derived from the two host-fact receipts and deliberately reports mostly 'unavailable' / 'invoke-only', because no adapter governs either host's lifecycle yet — establishing that baseline is the point.",
-  "observedAt": "2026-07-24",
+  "purpose": "EPIC-021 minimal cross-host capability manifest, updated through INIT-009 EPIC-022/023/026 and INIT-010 EPIC-020. It records, per host, what surface each capability has, through what channel it is reached, and the governance level TCRN can honestly claim today. A level describes the shipped boundary, not whether an operator has installed or registered it in a particular host.",
+  "observedAt": "2026-07-25",
   "governanceLevels": {
     "enforce": "TCRN can block or gate the capability before it takes effect",
     "observe": "TCRN records the capability fail-open, without blocking",
@@ -24,8 +24,8 @@
       "codex": {
         "surface": "app",
         "channel": "hook:SessionStart",
-        "governance": "unavailable",
-        "note": "hooks feature is stable+enabled, but no TCRN installer/activation exists (EPIC-023)"
+        "governance": "observe",
+        "note": "single project-local startup|resume notify hook; fail-open, 1024-byte digest-bound summary, exact-definition operator approval required; install receipt remains pending until a separate approval-and-fire observation (ACT9)"
       }
     },
     {
@@ -40,7 +40,7 @@
         "surface": "app",
         "channel": "hook:PostToolUse",
         "governance": "unavailable",
-        "note": "documented event; no adapter, and the per-hash trust ceremony is unexercised"
+        "note": "observe handler exists, but Codex activation deliberately registers only SessionStart; PostToolUse remains gated per hook"
       }
     },
     {
@@ -55,7 +55,7 @@
         "surface": "app",
         "channel": "app-server:*Approval",
         "governance": "invoke-only",
-        "note": "the App Server protocol exposes ExecCommand/ApplyPatch/FileChange/Permissions approvals, but no observer or gate attaches to them yet"
+        "note": "the App Server protocol exposes ExecCommand/ApplyPatch/FileChange/Permissions approvals; the shipped Observer never responds to them and no enforce gate exists"
       }
     },
     {
@@ -68,9 +68,9 @@
       },
       "codex": {
         "surface": "app",
-        "channel": "app-server:Thread/*",
-        "governance": "invoke-only",
-        "note": "Thread read/list/resume/fork/rollback/compact/goal/inject observed in the protocol schema; an Observer (EPIC-026) is not built, and active orchestration is out of scope pending GD-1 re-litigation (S079)"
+        "channel": "app-server supplied notification stream",
+        "governance": "observe",
+        "note": "the read-only Observer and S054 collector bind supplied spawn/thread/turn/final-message notifications to session/thread/turn receipts; no live attach or active Thread request is performed, and missing fields downgrade to unavailable"
       }
     },
     {
@@ -78,14 +78,14 @@
       "claude": {
         "surface": "cli",
         "channel": "mcp",
-        "governance": "unavailable",
-        "note": "host-neutral Workflow MCP server not built (EPIC-022)"
+        "governance": "enforce",
+        "note": "the host-neutral Workflow MCP server gates mutations through pinned operator authority; host registration remains an operator action"
       },
       "codex": {
         "surface": "cli",
         "channel": "mcp (codex mcp / mcp-server)",
-        "governance": "unavailable",
-        "note": "registration channel exists; the server itself is EPIC-022"
+        "governance": "enforce",
+        "note": "the same host-neutral Workflow MCP server gates mutations through pinned operator authority; Codex registration remains an operator action"
       }
     },
     {
@@ -98,9 +98,9 @@
       },
       "codex": {
         "surface": "app",
-        "channel": "none",
-        "governance": "unavailable",
-        "note": "no installer or activation exists (EPIC-023)"
+        "channel": "installer+.codex/hooks.json+/hooks approval",
+        "governance": "observe",
+        "note": "install/deactivate are identity-gated; activation is one fail-open SessionStart hook. Installation alone never claims host activation, Codex's trust hash is opaque, and exact-definition changes require reapproval"
       }
     }
   ],
@@ -123,7 +123,7 @@
         "surface": "CLI",
         "codex": "yes (codex, mcp, mcp-server)",
         "claude": "yes (claude, MCP)",
-        "tcrnGoverned": "no (MCP server unbuilt)"
+        "tcrnGoverned": "yes at the Workflow MCP boundary; host registration is operator-owned"
       },
       {
         "surface": "IDE",
@@ -135,13 +135,14 @@
         "surface": "App / desktop",
         "codex": "yes (codex app, app-server)",
         "claude": "yes (desktop / web)",
-        "tcrnGoverned": "claude SessionStart only (observe)"
+        "tcrnGoverned": "Claude and Codex SessionStart (observe); Codex App Server supplied streams (observe, no live attach)"
       }
     ]
   },
   "notClaimed": [
-    "no enforce-level governance exists on either host",
-    "no capability is governed on Codex at all yet",
-    "governance levels are a snapshot of 2026-07-24 against Codex 0.139.0 and the measured Claude Code 2.1.201 activation; they move as EPIC-022/023/024 build the integrations"
+    "no enforce-level host lifecycle or host-tool governance exists; enforce is limited to Workflow MCP mutations at the server boundary",
+    "no host approval or internal trust hash is inferred from a Codex installation receipt",
+    "no live App Server attach, subagent invocation, Controller, or approval responder is claimed",
+    "governance levels are a snapshot of 2026-07-25 against Codex 0.139.0 and the measured Claude Code 2.1.201 activation"
   ]
 }

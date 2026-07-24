@@ -281,6 +281,45 @@ export type {
   CodexAdapterRequest,
 } from "./codex-adapter.js";
 export {
+  CODEX_ACTIVATION_INERT_PREREQUISITE_PATHS,
+  CODEX_ACTIVATION_PATHS,
+  CODEX_ACTIVATION_REASON_CODES,
+  CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
+  CODEX_ADAPTER_ACTIVATION_VERSION,
+  CODEX_ADAPTER_HOST_ACTIVATION_RECEIPT_VERSION,
+  CODEX_HOOKS_PATH,
+  CODEX_SESSION_START_INJECTION_BUDGET_BYTES,
+  CODEX_SESSION_START_PATH,
+  CODEX_SESSION_START_SCRIPT_VERSION,
+  CODEX_SESSION_SUMMARY_PATH,
+  CODEX_SESSION_SUMMARY_VERSION,
+  CodexActivationError,
+  assertCodexActivationReceiptContext,
+  assessCodexActivationTrust,
+  codexHookDefinitionForDigests,
+  createCodexHostActivationReceipt,
+  generateCodexActivationArtifacts,
+  generateCodexSessionStartScript,
+  generateCodexSessionSummary,
+  readCodexActivationInstallationReceipt,
+  validateCodexActivationArtifacts,
+  validateCodexActivationInstallationReceipt,
+  validateCodexSessionSummary,
+} from "./codex-adapter-activation.js";
+export type {
+  CodexActivationArtifacts,
+  CodexActivationBinding,
+  CodexActivationInstallationEntry,
+  CodexActivationInstallationReceipt,
+  CodexActivationReasonCode,
+  CodexActivationReceiptContext,
+  CodexActivationStage,
+  CodexActivationTrustAssessment,
+  CodexHostActivationObservation,
+  CodexHostActivationReceipt,
+  CodexSessionSummary,
+} from "./codex-adapter-activation.js";
+export {
   APP_SERVER_OBSERVER_VERSION,
   OBSERVED_EVENT_GROUPS,
   OBSERVED_EVENT_METHODS,
@@ -316,6 +355,23 @@ export type {
   CollectionResult,
   ObservedInvocation,
 } from "./execution-collection.js";
+export {
+  CODEX_EXECUTION_COLLECTION_VERSION,
+  CODEX_EXECUTION_REASON_CODES,
+  CODEX_EXECUTION_TRANSCRIPT_VERSION,
+  CodexExecutionCollectionError,
+  collectCodexAppServerExecutions,
+  collectCodexExecutionReceipt,
+} from "./codex-execution-collection.js";
+export type {
+  CodexExecutionCollection,
+  CodexExecutionObservationInput,
+  CodexExecutionReasonCode,
+  CodexExecutionRecord,
+  CodexExecutionTranscript,
+  CodexObservedExecution,
+  CodexUnavailableExecution,
+} from "./codex-execution-collection.js";
 export {
   OBSERVE_HANDLER_PATH,
   OBSERVE_HANDLER_REASON_CODES,
@@ -365,9 +421,14 @@ export {
   CODEX_ADAPTER_INSTALLER_REASON_CODES,
   CodexAdapterInstallerError,
   executeCodexAdapterRollback,
+  installCodexAdapterActivation,
   installCodexAdapterBundle,
+  uninstallCodexAdapterActivation,
 } from "./codex-adapter-installer.js";
 export type {
+  CodexAdapterActivationInstallOptions,
+  CodexAdapterActivationInstallResult,
+  CodexAdapterActivationUninstallResult,
   CodexAdapterInstallOptions,
   CodexAdapterInstallResult,
   CodexAdapterInstallerReasonCode,

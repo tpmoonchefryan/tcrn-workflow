@@ -37,12 +37,12 @@ export const OBSERVED_PROTOCOL_HOST = "Codex CLI 0.139.0" as const;
 // Notification methods observed in the real protocol schema. Grouped by what a
 // governance reader cares about rather than by protocol layering.
 export const OBSERVED_EVENT_GROUPS = Object.freeze({
-  thread: Object.freeze(["Thread/started", "Thread/status/changed", "Thread/archived", "Thread/unarchived", "Thread/closed"]),
-  turn: Object.freeze(["Turn/started", "Turn/completed", "Turn/diff/updated", "Turn/plan/updated"]),
-  item: Object.freeze(["Item/started", "Item/completed", "Item/autoApprovalReview/started", "Item/autoApprovalReview/completed"]),
-  command: Object.freeze(["Command/exec/outputDelta", "Item/commandExecution/outputDelta", "Process/exited"]),
-  fileChange: Object.freeze(["Item/fileChange/outputDelta"]),
-  hook: Object.freeze(["Hook/started", "Hook/completed"]),
+  thread: Object.freeze(["thread/started", "thread/status/changed", "thread/archived", "thread/unarchived", "thread/closed"]),
+  turn: Object.freeze(["turn/started", "turn/completed", "turn/diff/updated", "turn/plan/updated"]),
+  item: Object.freeze(["item/started", "item/completed", "item/autoApprovalReview/started", "item/autoApprovalReview/completed"]),
+  command: Object.freeze(["command/exec/outputDelta", "item/commandExecution/outputDelta", "process/exited"]),
+  fileChange: Object.freeze(["item/fileChange/outputDelta"]),
+  hook: Object.freeze(["hook/started", "hook/completed"]),
 });
 
 export const OBSERVED_EVENT_METHODS = Object.freeze(

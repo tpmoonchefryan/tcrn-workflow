@@ -100,6 +100,11 @@ export interface CollectionContext {
   readonly sessionId: string;
   readonly conferenceId: string;
   readonly availability: HostExecutionReceipt["availability"];
+  // Host-neutral optional bindings. Claude's current observe log does not expose
+  // them and therefore leaves both null; Codex App Server notifications do expose
+  // stable thread/turn ids, so S054 supplies them instead of discarding evidence.
+  readonly threadId?: string | null;
+  readonly turnId?: string | null;
 }
 
 const shaPattern = /^[a-f0-9]{64}$/u;
@@ -152,6 +157,14 @@ export function collectExecutionReceipt(
 ): CollectedReceipt {
   const observed = validateObserved(observedValue, "observed invocation");
   const contextDocument = record(context, "collection context");
+  const threadId =
+    contextDocument.threadId === undefined || contextDocument.threadId === null
+      ? null
+      : text(contextDocument.threadId, "threadId");
+  const turnId =
+    contextDocument.turnId === undefined || contextDocument.turnId === null
+      ? null
+      : text(contextDocument.turnId, "turnId");
   const receipt = validateHostExecutionReceipt({
     schemaVersion: HOST_EXECUTION_RECEIPT_VERSION,
     id: text(receiptId, "receiptId"),
@@ -160,8 +173,8 @@ export function collectExecutionReceipt(
     hostProduct: text(contextDocument.hostProduct, "hostProduct"),
     hostVersion: text(contextDocument.hostVersion, "hostVersion"),
     sessionId: text(contextDocument.sessionId, "sessionId"),
-    threadId: null,
-    turnId: null,
+    threadId,
+    turnId,
     agentInvocationId: observed.agentInvocationId,
     freshContext: observed.freshContext,
     invokedAt: observed.startedAt,
