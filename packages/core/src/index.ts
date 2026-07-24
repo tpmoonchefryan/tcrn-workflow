@@ -438,6 +438,27 @@ export type {
   DistillConferenceOptions,
 } from "./conference.js";
 export {
+  EXECUTION_MODES,
+  HOST_EXECUTION_RECEIPT_VERSION,
+  EXECUTION_MODE_EXTENSION_KEY,
+  EXECUTION_RECEIPT_EXTENSION_KEY,
+  MULTI_AGENT_DEFAULT_TYPES,
+  EXECUTION_AVAILABILITY,
+  EXECUTION_REASON_CODES,
+  ExecutionError,
+  validateHostExecutionReceipt,
+  readExecutionMode,
+  classifyConferenceExecution,
+} from "./conference-execution.js";
+export type {
+  ExecutionMode,
+  ExecutionReasonCode,
+  HostExecutionReceipt,
+  ExecutionModeDeclaration,
+  ExecutionClassification,
+  ClassifyInput,
+} from "./conference-execution.js";
+export {
   ASSIGNMENT_VERSION,
   GATE_VERSION,
   ASSIGNMENT_STATUSES,

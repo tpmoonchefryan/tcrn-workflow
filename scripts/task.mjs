@@ -382,6 +382,7 @@ async function runTests({
   p6bAdapterOnly = false,
   dependencyOnly = false,
   conferenceOnly = false,
+  executionOnly = false,
   assignmentGateOnly = false,
   actorOnly = false,
   extensionStoreOnly = false,
@@ -411,6 +412,7 @@ async function runTests({
     .filter((path) => !p6bAdapterOnly || path === "tests/p6b-claude-adapter.test.mjs")
     .filter((path) => !dependencyOnly || path === "tests/dependency.test.mjs")
     .filter((path) => !conferenceOnly || path === "tests/conference.test.mjs")
+    .filter((path) => !executionOnly || path === "tests/conference-execution.test.mjs")
     .filter((path) => !assignmentGateOnly || path === "tests/assignment-gate.test.mjs")
     .filter((path) => !actorOnly || path === "tests/actor-attestation.test.mjs")
     .filter((path) => !extensionStoreOnly || path === "tests/workspace-extension-records.test.mjs")
@@ -1012,6 +1014,29 @@ async function verifyConference() {
   });
 }
 
+async function verifyExecution() {
+  const tests = await runTests({ executionOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/conference-execution-cases.json");
+  const specPath = resolve(repositoryRoot, "specs/conference-execution-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.conference-execution-cases.v1", "EXECUTION_FIXTURE_SCHEMA");
+  assertion(fixture.receiptPositiveCases === 3 && fixture.receiptHostileCases === 10, "EXECUTION_RECEIPT_CORPUS");
+  assertion(fixture.modePositiveCases === 4 && fixture.modeHostileCases === 4, "EXECUTION_MODE_CORPUS");
+  assertion(fixture.classifyPositiveCases === 6 && fixture.classifyHostileCases === 9, "EXECUTION_CLASSIFY_CORPUS");
+  assertion(fixture.hostExecutionReceiptVersion === "tcrn.host-execution-receipt.v1", "EXECUTION_RECEIPT_SCHEMA");
+  assertion(fixture.attribution === "content-digest-binding-not-identity-proof", "EXECUTION_NO_OVERCLAIM");
+  assertion(fixture.collection === "excluded-epic-020" && fixture.orchestration === "excluded", "EXECUTION_SCOPE");
+  return success("EXECUTION_VERIFIED", {
+    tests: tests.reasonCode,
+    receiptCases: fixture.receiptPositiveCases + fixture.receiptHostileCases,
+    modeCases: fixture.modePositiveCases + fixture.modeHostileCases,
+    classifyCases: fixture.classifyPositiveCases + fixture.classifyHostileCases,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    standalone: fixture.standalone,
+  });
+}
+
 async function verifyAssignmentGate() {
   const tests = await runTests({ assignmentGateOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/assignment-gate-cases.json");
@@ -1597,6 +1622,7 @@ const commandContracts = {
   p6b: { exit: 0, reasonCode: "P6B_CLAUDE_ADAPTER_VERIFIED" },
   dep: { exit: 0, reasonCode: "DEPENDENCY_VERIFIED" },
   conference: { exit: 0, reasonCode: "CONFERENCE_VERIFIED" },
+  "ext-execution": { exit: 0, reasonCode: "EXECUTION_VERIFIED" },
   "ext-ag": { exit: 0, reasonCode: "ASSIGNMENT_GATE_VERIFIED" },
   "ext-actor": { exit: 0, reasonCode: "ACTOR_ATTESTATION_VERIFIED" },
   "ext-store": { exit: 0, reasonCode: "EXT_STORE_VERIFIED" },
@@ -1938,6 +1964,7 @@ const handlers = {
   p6b: verifyP6b,
   dep: verifyDependency,
   conference: verifyConference,
+  "ext-execution": verifyExecution,
   "ext-ag": verifyAssignmentGate,
   "ext-actor": verifyActorAttestation,
   "ext-store": verifyExtStore,
@@ -2000,6 +2027,9 @@ function evidencePhase(name) {
     return "p2";
   }
   if (name === "conference") {
+    return "p2";
+  }
+  if (name === "ext-execution") {
     return "p2";
   }
   if (name === "ext-ag") {
