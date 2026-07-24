@@ -1,0 +1,147 @@
+{
+  "schema": "tcrn.capability-manifest.v1",
+  "purpose": "EPIC-021 minimal cross-host capability manifest. It records, per host, what surface each capability has, through what channel it would be reached, and the governance level TCRN can honestly claim over it TODAY. It is derived from the two host-fact receipts and deliberately reports mostly 'unavailable' / 'invoke-only', because no adapter governs either host's lifecycle yet — establishing that baseline is the point.",
+  "observedAt": "2026-07-24",
+  "governanceLevels": {
+    "enforce": "TCRN can block or gate the capability before it takes effect",
+    "observe": "TCRN records the capability fail-open, without blocking",
+    "invoke-only": "the capability can be called, but TCRN cannot yet observe or gate it",
+    "unavailable": "no TCRN integration exists for this capability on this host yet"
+  },
+  "evidence": {
+    "codex": "docs/verification/host/codex-0.139.0-facts.json",
+    "claude": "docs/verification/host/claude-code.json (activation) and claude-code-facts.json (surface)"
+  },
+  "capabilities": [
+    {
+      "id": "session-start-context-injection",
+      "claude": {
+        "surface": "app",
+        "channel": "hook:SessionStart",
+        "governance": "observe",
+        "note": "live and measured: reversible, fail-open, 1024-byte read-only summary (claude-code.json)"
+      },
+      "codex": {
+        "surface": "app",
+        "channel": "hook:SessionStart",
+        "governance": "unavailable",
+        "note": "hooks feature is stable+enabled, but no TCRN installer/activation exists (EPIC-023)"
+      }
+    },
+    {
+      "id": "tool-lifecycle-observe",
+      "claude": {
+        "surface": "app",
+        "channel": "hook:PostToolUse",
+        "governance": "unavailable",
+        "note": "surface exists; any hook beyond SessionStart is gated on the N-2 amendment (S072) before it may be added"
+      },
+      "codex": {
+        "surface": "app",
+        "channel": "hook:PostToolUse",
+        "governance": "unavailable",
+        "note": "documented event; no adapter, and the per-hash trust ceremony is unexercised"
+      }
+    },
+    {
+      "id": "tool-approval-gate",
+      "claude": {
+        "surface": "app",
+        "channel": "hook:PreToolUse/PermissionRequest",
+        "governance": "unavailable",
+        "note": "enforce-class; gated on S072 N-2 amendment and a failure-policy ruling"
+      },
+      "codex": {
+        "surface": "app",
+        "channel": "app-server:*Approval",
+        "governance": "invoke-only",
+        "note": "the App Server protocol exposes ExecCommand/ApplyPatch/FileChange/Permissions approvals, but no observer or gate attaches to them yet"
+      }
+    },
+    {
+      "id": "thread-turn-control",
+      "claude": {
+        "surface": "n/a",
+        "channel": "none",
+        "governance": "unavailable",
+        "note": "no measured equivalent control plane"
+      },
+      "codex": {
+        "surface": "app",
+        "channel": "app-server:Thread/*",
+        "governance": "invoke-only",
+        "note": "Thread read/list/resume/fork/rollback/compact/goal/inject observed in the protocol schema; an Observer (EPIC-026) is not built, and active orchestration is out of scope pending GD-1 re-litigation (S079)"
+      }
+    },
+    {
+      "id": "workflow-mcp-tools",
+      "claude": {
+        "surface": "cli",
+        "channel": "mcp",
+        "governance": "unavailable",
+        "note": "host-neutral Workflow MCP server not built (EPIC-022)"
+      },
+      "codex": {
+        "surface": "cli",
+        "channel": "mcp (codex mcp / mcp-server)",
+        "governance": "unavailable",
+        "note": "registration channel exists; the server itself is EPIC-022"
+      }
+    },
+    {
+      "id": "adapter-activation",
+      "claude": {
+        "surface": "app",
+        "channel": "installer+settings-fragment",
+        "governance": "observe",
+        "note": "install/activate/uninstall measured and byte-reversible (claude-code.json)"
+      },
+      "codex": {
+        "surface": "app",
+        "channel": "none",
+        "governance": "unavailable",
+        "note": "no installer or activation exists (EPIC-023)"
+      }
+    }
+  ],
+  "sessionBinding": {
+    "note": "the minimal binding a live session must carry, defined here as the contract EPIC-022's MCP admission and any observer receipt will populate. Attribution is not identity proof.",
+    "requiredFields": [
+      "hostProduct",
+      "hostVersion",
+      "capabilityManifestDigest",
+      "workspaceId",
+      "sessionId",
+      "boundAt"
+    ],
+    "digestOf": "the canonical bytes of this manifest's `capabilities` array, so a session declares which capability baseline it was admitted against"
+  },
+  "compatibilityMatrix": {
+    "note": "which surfaces each host exposes, and whether TCRN reaches them today. 'yes' means a surface exists to integrate; the governance level per capability above says whether that integration is built.",
+    "rows": [
+      {
+        "surface": "CLI",
+        "codex": "yes (codex, mcp, mcp-server)",
+        "claude": "yes (claude, MCP)",
+        "tcrnGoverned": "no (MCP server unbuilt)"
+      },
+      {
+        "surface": "IDE",
+        "codex": "unknown (not probed)",
+        "claude": "yes (VS Code / JetBrains extensions)",
+        "tcrnGoverned": "no"
+      },
+      {
+        "surface": "App / desktop",
+        "codex": "yes (codex app, app-server)",
+        "claude": "yes (desktop / web)",
+        "tcrnGoverned": "claude SessionStart only (observe)"
+      }
+    ]
+  },
+  "notClaimed": [
+    "no enforce-level governance exists on either host",
+    "no capability is governed on Codex at all yet",
+    "governance levels are a snapshot of 2026-07-24 against Codex 0.139.0 and the measured Claude Code 2.1.201 activation; they move as EPIC-022/023/024 build the integrations"
+  ]
+}
