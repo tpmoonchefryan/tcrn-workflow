@@ -395,6 +395,7 @@ async function runTests({
   installerOnly = false,
   activationOnly = false,
   personaRenderOnly = false,
+  codexInstallerOnly = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -426,6 +427,7 @@ async function runTests({
     .filter((path) => !installerOnly || path === "tests/act1-claude-installer.test.mjs")
     .filter((path) => !activationOnly || path === "tests/act2-claude-activation.test.mjs")
     .filter((path) => !personaRenderOnly || path === "tests/act3-persona-render.test.mjs")
+    .filter((path) => !codexInstallerOnly || path === "tests/act4-codex-installer.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -440,6 +442,8 @@ async function runTests({
       ? "ACT2_CLAUDE_SESSIONSTART_TESTS_VERIFIED"
       : personaRenderOnly
       ? "ACT3_PERSONA_RENDER_TESTS_VERIFIED"
+      : codexInstallerOnly
+      ? "ACT4_CODEX_INSTALLER_TESTS_VERIFIED"
       : installerOnly
       ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
@@ -1683,6 +1687,7 @@ const commandContracts = {
   act1: { exit: 0, reasonCode: "ACT1_CLAUDE_INSTALLER_VERIFIED" },
   act2: { exit: 0, reasonCode: "ACT2_CLAUDE_SESSIONSTART_VERIFIED" },
   act3: { exit: 0, reasonCode: "ACT3_PERSONA_RENDER_VERIFIED" },
+  act4: { exit: 0, reasonCode: "ACT4_CODEX_INSTALLER_VERIFIED" },
   e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
 };
 
@@ -1865,6 +1870,24 @@ async function verifyAct3() {
   return success("ACT3_PERSONA_RENDER_VERIFIED", { tests: result.tests });
 }
 
+// EPIC-023 Step 1: the Codex project-local inert installer, proven against a real
+// filesystem. The fixture's declared boundary is asserted here so the gate itself
+// refuses to report success while claiming a live host was involved.
+async function verifyAct4() {
+  const result = await runTests({ codexInstallerOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act4-codex-installer-cases.json");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.act4-codex-installer-cases.v1", "ACT4_FIXTURE_SCHEMA");
+  assertion(fixture.templateFiles === 4 && fixture.hostileRootCases === 6, "ACT4_CORPUS");
+  assertion(fixture.hostConfigTouched === false && fixture.hookRegistered === false && fixture.trustCeremonyExercised === false, "ACT4_NO_OVERCLAIM");
+  return success("ACT4_CODEX_INSTALLER_VERIFIED", {
+    tests: result.tests,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    activation: fixture.activation,
+    standalone: fixture.standalone,
+  });
+}
+
 // WSG-6: the flagship end-to-end governed-loop gate (E2E phase). Two obligations
 // bind here in one command: (1) run the hermetic proof, which replays the whole
 // loop — initiative through trace — through the CLI surface on a real workspace
@@ -2040,6 +2063,7 @@ const handlers = {
   act1: verifyAct1,
   act2: verifyAct2,
   act3: verifyAct3,
+  act4: verifyAct4,
   e2e: verifyE2eGovernedLoop,
 };
 
@@ -2105,7 +2129,7 @@ function evidencePhase(name) {
   if (name === "act1") {
     return "act";
   }
-  if (name === "act2" || name === "act3") {
+  if (name === "act2" || name === "act3" || name === "act4") {
     return "act2";
   }
   if (name === "e2e") {

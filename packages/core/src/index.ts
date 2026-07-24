@@ -281,6 +281,18 @@ export type {
   CodexAdapterRequest,
 } from "./codex-adapter.js";
 export {
+  CODEX_ADAPTER_INSTALLER_REASON_CODES,
+  CodexAdapterInstallerError,
+  executeCodexAdapterRollback,
+  installCodexAdapterBundle,
+} from "./codex-adapter-installer.js";
+export type {
+  CodexAdapterInstallOptions,
+  CodexAdapterInstallResult,
+  CodexAdapterInstallerReasonCode,
+  CodexAdapterRollbackResult,
+} from "./codex-adapter-installer.js";
+export {
   CLAUDE_ADAPTER_BUNDLE_VERSION,
   CLAUDE_ADAPTER_FALLBACK_VERSION,
   CLAUDE_ADAPTER_FRAGMENT_VERSION,
@@ -356,6 +368,7 @@ export {
   generateClaudeAdapterActivationFragment,
   generateClaudeAdapterActivationRollbackPlan,
   mergeClaudeAdapterActivationFragment,
+  readClaudeAdapterActivationReceipt,
   removeClaudeAdapterActivationFragment,
   validateClaudeAdapterActivationFragment,
   validateClaudeAdapterActivationInstallationReceipt,
@@ -367,6 +380,8 @@ export type {
   ClaudeAdapterActivationInstallationEntry,
   ClaudeAdapterActivationInstallationReceipt,
   ClaudeAdapterActivationReasonCode,
+  ClaudeAdapterActivationReceiptContext,
+  ClaudeAdapterActivationReceiptFileIdentity,
   ClaudeAdapterActivationScriptContext,
 } from "./claude-adapter-activation.js";
 export {

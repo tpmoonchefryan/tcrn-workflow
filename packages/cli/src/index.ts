@@ -88,6 +88,10 @@ import {
   planCompatibilityMode,
   planCodexAdapterRollback,
   readCodexAdapterInstallationReceipt,
+  installCodexAdapterBundle,
+  executeCodexAdapterRollback,
+  generateClaudeAdapterActivationRollbackPlan,
+  readClaudeAdapterActivationReceipt,
   simulateCodexAdapterLifecycle,
   validateCodexAdapterBundle,
   validateCanonicalExchangeBundle,
@@ -525,8 +529,10 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
 export const COMMAND_CATALOG = Object.freeze([
   { name: "adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
+  { name: "adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }] },
   { name: "adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
+  { name: "adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "aos-requirements-readback", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
   { name: "aos-requirements-validate", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
@@ -540,6 +546,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "claude-adapter-activation-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-activation-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-activation-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
+  { name: "claude-adapter-activation-uninstall", availability: "cli", mutates: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }] },
   { name: "claude-adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "claude-adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "step2", required: false, valueKind: "boolean" }, { name: "step3", required: false, valueKind: "boolean" }] },
@@ -781,12 +788,43 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     io.write(canonicalJson(codexAdapterAuthorityEmptyFallback(jsonValue(values.input, "input"))));
     return;
   }
+  if (command === "adapter-install") {
+    // EPIC-023 Step 1: generate the inert bundle under the independently governed
+    // host, write it beneath <root>/.codex/tcrn-workflow/, and emit the canonical
+    // installation receipt. No Codex host configuration is read or written and no
+    // hook is registered -- activation is a separate step that needs a real host and
+    // the operator's per-hash trust approval.
+    const values = parseArguments(rest, ["request", "installation-root", "generation-id", "receipt-out"]);
+    required(values, ["request", "installation-root", "generation-id", "receipt-out"]);
+    const bundle = generateCodexAdapterBundle(jsonValue(values.request, "request"), io.codexAdapterHost);
+    const result = await installCodexAdapterBundle(bundle, {
+      installationRoot: values["installation-root"] ?? "",
+      generationId: values["generation-id"] ?? "",
+      receiptPath: values["receipt-out"] ?? "",
+    });
+    io.write(canonicalJson(result.receipt));
+    return;
+  }
   if (command === "adapter-rollback-plan") {
     const values = parseArguments(rest, ["bundle", "installation-receipt", "installation-receipt-digest"]);
     required(values, ["bundle", "installation-receipt"]);
     const installation = await readCodexAdapterInstallationReceipt(values["installation-receipt"] ?? "",
       suppliedAuthority(io.codexAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]));
     io.write(canonicalJson(planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), installation)));
+    return;
+  }
+  if (command === "adapter-uninstall") {
+    // Reverse of adapter-install. The TOCTOU-hardened reader admits the receipt under
+    // the out-of-band authority, the planner derives the identity-gated removal set,
+    // and the executor unlinks only files whose bytes still match -- a tampered file
+    // fails INSTALLER_ROLLBACK_MISMATCH with nothing removed.
+    const values = parseArguments(rest, ["bundle", "installation-receipt", "installation-receipt-digest"]);
+    required(values, ["bundle", "installation-receipt"]);
+    const installation = await readCodexAdapterInstallationReceipt(values["installation-receipt"] ?? "",
+      suppliedAuthority(io.codexAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]));
+    const plan = planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), installation);
+    const result = await executeCodexAdapterRollback(plan, values["installation-receipt"] ?? "");
+    io.write(canonicalJson({ reasonCode: result.reasonCode, planDigest: result.planDigest }));
     return;
   }
   if (command === "claude-adapter-generate") {
@@ -866,6 +904,31 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const values = parseArguments(rest, ["settings", "fragment"]);
     required(values, ["settings", "fragment"]);
     io.write(removeClaudeAdapterActivationFragment(values.settings ?? "", jsonValue(values.fragment, "fragment")));
+    return;
+  }
+  if (command === "claude-adapter-activation-uninstall") {
+    // S082: the operator entry point the v2 activation ladder was missing. Step-2/3
+    // installs emit a tcrn.claude-adapter-installation-generation.v2 receipt covering
+    // the four templates PLUS session-start.mjs (and persona-render.json when present),
+    // which the v1 uninstall path cannot read -- so an activated project had no way to
+    // be uninstalled from a shell. The receipt is read under its out-of-band digest,
+    // the plan is bound to the receipt's own on-disk identity, and the shared executor
+    // removes only byte-and-identity matching files.
+    //
+    // Settings are NOT touched here: .claude/settings.json is restored byte-for-byte by
+    // claude-adapter-activation-remove, which owns the merge it reverses. Removing the
+    // files first would leave the hook pointing at a missing script, so the documented
+    // order is activation-remove, then this verb.
+    const values = parseArguments(rest, ["activation-receipt", "activation-receipt-digest"]);
+    required(values, ["activation-receipt", "activation-receipt-digest"]);
+    const receiptPath = values["activation-receipt"] ?? "";
+    const context = await readClaudeAdapterActivationReceipt(receiptPath, {
+      expectedCanonicalPath: receiptPath,
+      expectedFileSha256: values["activation-receipt-digest"] ?? "",
+    });
+    const plan = generateClaudeAdapterActivationRollbackPlan(context.receipt, context.sourceIdentityDigest);
+    const result = await executeClaudeAdapterRollback(plan, receiptPath);
+    io.write(canonicalJson({ reasonCode: result.reasonCode, planDigest: result.planDigest, removedCount: result.removedCount }));
     return;
   }
   if (command === "claude-adapter-validate") {

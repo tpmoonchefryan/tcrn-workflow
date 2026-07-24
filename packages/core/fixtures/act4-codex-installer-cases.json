@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "tcrn.act4-codex-installer-cases.v1",
+  "templateFiles": 4,
+  "hostileRootCases": 6,
+  "roundTripCases": 2,
+  "tamperCases": 1,
+  "activation": "not-installed-no-host-config-touched",
+  "hostConfigTouched": false,
+  "hookRegistered": false,
+  "trustCeremonyExercised": false,
+  "standalone": "project-local-inert-install-and-byte-inverse-uninstall-only-no-live-host"
+}

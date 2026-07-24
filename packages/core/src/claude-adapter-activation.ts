@@ -31,6 +31,8 @@
 // of orphaning the step-2/3 files.
 
 import { canonicalJson, canonicalSha256, assertProtocolId, compareCanonicalText, parseStrictInstant } from "../../protocol/src/index.js";
+import { readAuthorityFile } from "./authority-file-reader.js";
+import type { AuthorityFileReasonCodes } from "./authority-file-reader.js";
 import {
   CLAUDE_ADAPTER_HOST_PRODUCT,
   CLAUDE_ADAPTER_SETTINGS_TARGET,
@@ -464,6 +466,59 @@ export function validateClaudeAdapterActivationInstallationReceipt(value: unknow
 // covering EVERY installed activation entry, so WSG-2's executeClaudeAdapterRollback
 // removes the four templates AND session-start.mjs (AND persona-render.json when
 // present) and then empties the .claude/tcrn-workflow directory byte-inverse.
+export interface ClaudeAdapterActivationReceiptFileIdentity {
+  readonly expectedCanonicalPath: string;
+  readonly expectedFileSha256: string;
+}
+
+export interface ClaudeAdapterActivationReceiptContext {
+  readonly receipt: ClaudeAdapterActivationInstallationReceipt;
+  readonly sourcePath: string;
+  readonly authorityFileSha256: string;
+  readonly sourceIdentityDigest: string;
+}
+
+const activationReceiptCodes: AuthorityFileReasonCodes<ClaudeAdapterActivationReasonCode> = Object.freeze({
+  required: "ACTIVATION_RECEIPT_INVALID",
+  path: "ACTIVATION_RECEIPT_INVALID",
+  digest: "ACTIVATION_RECEIPT_INVALID",
+  changed: "ACTIVATION_RECEIPT_INVALID",
+  link: "ACTIVATION_RECEIPT_INVALID",
+  specialFile: "ACTIVATION_RECEIPT_INVALID",
+  limitExceeded: "ACTIVATION_BUDGET_EXCEEDED",
+  notUtf8: "ACTIVATION_UNICODE_INVALID",
+  notJson: "ACTIVATION_RECEIPT_INVALID",
+  notCanonical: "ACTIVATION_CANONICAL_INVALID",
+});
+
+// S082: read a v2 activation installation receipt under an out-of-band digest, the
+// same TOCTOU-hardened path every other authority file takes (O_NOFOLLOW, single
+// link, identity rechecked across the read, canonical-byte equality). The returned
+// sourceIdentityDigest is what generateClaudeAdapterActivationRollbackPlan binds
+// into its plan, so the plan can only be built from a receipt that was actually read
+// off disk at its pinned digest — never from a caller-assembled object.
+export async function readClaudeAdapterActivationReceipt(
+  path: string,
+  authority?: ClaudeAdapterActivationReceiptFileIdentity,
+): Promise<ClaudeAdapterActivationReceiptContext> {
+  const source = await readAuthorityFile(path, authority, {
+    maximumBytes: maximumSettingsBytes,
+    codes: activationReceiptCodes,
+    details: {
+      required: "Out-of-band activation receipt authority is required",
+      expectedDigest: path,
+    },
+    fail,
+    isOwnError: (error) => error instanceof ClaudeAdapterActivationError,
+  });
+  return deepFreeze({
+    receipt: validateClaudeAdapterActivationInstallationReceipt(source.parsed),
+    sourcePath: path,
+    authorityFileSha256: source.fileSha256,
+    sourceIdentityDigest: source.sourceIdentityDigest,
+  });
+}
+
 export function generateClaudeAdapterActivationRollbackPlan(receiptValue: unknown, sourceIdentityDigest: string): Readonly<Record<string, unknown>> {
   const receipt = validateClaudeAdapterActivationInstallationReceipt(receiptValue);
   const removals = receipt.entries.map((entry) => ({ path: entry.path, realpath: entry.realpath, contentDigest: entry.contentDigest, identityDigest: entry.identityDigest }));
