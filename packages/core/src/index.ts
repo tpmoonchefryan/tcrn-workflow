@@ -281,6 +281,21 @@ export type {
   CodexAdapterRequest,
 } from "./codex-adapter.js";
 export {
+  OBSERVE_HANDLER_PATH,
+  OBSERVE_HANDLER_REASON_CODES,
+  OBSERVE_HANDLER_VERSION,
+  OBSERVE_LOG_PATH,
+  ObserveHandlerError,
+  generateObserveHookHandler,
+  observeHookHandlerDigest,
+  parseObserveLog,
+} from "./observe-hook-handler.js";
+export type {
+  ObserveHandlerOptions,
+  ObserveHandlerReasonCode,
+  ObserveLogLine,
+} from "./observe-hook-handler.js";
+export {
   OBSERVE_HOOK_EVENTS,
   RECEIPT_ANCHOR_VERSION,
   RECEIPT_BATCH_VERSION,

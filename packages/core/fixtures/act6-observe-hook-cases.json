@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "tcrn.act6-observe-hook-cases.v1",
+  "observeEvents": [
+    "PostToolUse",
+    "SessionEnd",
+    "PreCompact",
+    "PostCompact",
+    "SubagentStart",
+    "SubagentStop"
+  ],
+  "refusedEventCases": 5,
+  "generationRefusalCases": 5,
+  "alwaysExitsZero": true,
+  "neverWritesStdout": true,
+  "neverBlocks": true,
+  "payloadRetainedAsDigestOnly": true,
+  "driftSelfCheckFallsSilent": true,
+  "noAmbientEnvironmentTrust": true,
+  "liveHostProof": "not-claimed-per-min-046",
+  "standalone": "generated-handler-executed-as-child-process-no-host-registration"
+}

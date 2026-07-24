@@ -397,6 +397,7 @@ async function runTests({
   personaRenderOnly = false,
   codexInstallerOnly = false,
   receiptSidecarOnly = false,
+  observeHookOnly = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -430,6 +431,7 @@ async function runTests({
     .filter((path) => !personaRenderOnly || path === "tests/act3-persona-render.test.mjs")
     .filter((path) => !codexInstallerOnly || path === "tests/act4-codex-installer.test.mjs")
     .filter((path) => !receiptSidecarOnly || path === "tests/act5-receipt-sidecar.test.mjs")
+    .filter((path) => !observeHookOnly || path === "tests/act6-observe-hook.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -448,6 +450,8 @@ async function runTests({
       ? "ACT4_CODEX_INSTALLER_TESTS_VERIFIED"
       : receiptSidecarOnly
       ? "ACT5_RECEIPT_SIDECAR_TESTS_VERIFIED"
+      : observeHookOnly
+      ? "ACT6_OBSERVE_HOOK_TESTS_VERIFIED"
       : installerOnly
       ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
@@ -1693,6 +1697,7 @@ const commandContracts = {
   act3: { exit: 0, reasonCode: "ACT3_PERSONA_RENDER_VERIFIED" },
   act4: { exit: 0, reasonCode: "ACT4_CODEX_INSTALLER_VERIFIED" },
   act5: { exit: 0, reasonCode: "ACT5_RECEIPT_SIDECAR_VERIFIED" },
+  act6: { exit: 0, reasonCode: "ACT6_OBSERVE_HOOK_VERIFIED" },
   e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
 };
 
@@ -1878,6 +1883,26 @@ async function verifyAct3() {
 // EPIC-023 Step 1: the Codex project-local inert installer, proven against a real
 // filesystem. The fixture's declared boundary is asserted here so the gate itself
 // refuses to report success while claiming a live host was involved.
+// EPIC-024 S069-S071: the observe hook handler, executed as a real child process.
+// The gate asserts the fail-open discipline and that no live-host claim rides here.
+async function verifyAct6() {
+  const result = await runTests({ observeHookOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act6-observe-hook-cases.json");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.act6-observe-hook-cases.v1", "ACT6_FIXTURE_SCHEMA");
+  assertion(fixture.observeEvents.length === 6 && fixture.refusedEventCases === 5, "ACT6_CLOSED_SURFACE");
+  assertion(fixture.alwaysExitsZero === true && fixture.neverWritesStdout === true && fixture.neverBlocks === true, "ACT6_FAIL_OPEN");
+  assertion(fixture.driftSelfCheckFallsSilent === true && fixture.noAmbientEnvironmentTrust === true, "ACT6_DRIFT_DEFENCE");
+  assertion(fixture.liveHostProof === "not-claimed-per-min-046", "ACT6_NO_OVERCLAIM");
+  return success("ACT6_OBSERVE_HOOK_VERIFIED", {
+    tests: result.tests,
+    observeEvents: fixture.observeEvents.length,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    liveHostProof: fixture.liveHostProof,
+    standalone: fixture.standalone,
+  });
+}
+
 // EPIC-024 S068: the observe-receipt sidecar. The gate asserts the coverage
 // discipline MIN-046 bound into the design -- an unsealed batch can never claim
 // complete coverage, and no live-host claim rides on this proof.
@@ -2090,6 +2115,7 @@ const handlers = {
   act3: verifyAct3,
   act4: verifyAct4,
   act5: verifyAct5,
+  act6: verifyAct6,
   e2e: verifyE2eGovernedLoop,
 };
 
@@ -2155,7 +2181,7 @@ function evidencePhase(name) {
   if (name === "act1") {
     return "act";
   }
-  if (name === "act2" || name === "act3" || name === "act4" || name === "act5") {
+  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6") {
     return "act2";
   }
   if (name === "e2e") {
