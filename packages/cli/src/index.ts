@@ -1366,8 +1366,8 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "work-annotate") {
-    // E05: attach non-binding advisory fields to a work record. At least one of --scope
-    // or --decided-by must be present; the core rejects an empty or no-op annotation.
+    // E05 + INIT-008: attach non-binding advisory fields to a work record. At least one of
+    // --scope, --decided-by, or --sprint must be present; the core rejects an empty or no-op annotation.
     const values = parseArguments(rest, [...shared, "id", "scope", "decided-by", "sprint", "actor"]);
     required(values, [...requiredShared, "id"]);
     if (values.scope === undefined && values["decided-by"] === undefined && values.sprint === undefined) fail("CLI_ARGUMENT_MALFORMED", "scope-or-decided-by-or-sprint");
