@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "tcrn.conference-execution-cases.v1",
+  "receiptPositiveCases": 3,
+  "receiptHostileCases": 10,
+  "modePositiveCases": 4,
+  "modeHostileCases": 4,
+  "classifyPositiveCases": 6,
+  "classifyHostileCases": 9,
+  "executionModes": [
+    "synthesis-only",
+    "multi-agent-deliberative"
+  ],
+  "hostExecutionReceiptVersion": "tcrn.host-execution-receipt.v1",
+  "attribution": "content-digest-binding-not-identity-proof",
+  "legacyRead": "conferences-without-execution-mode-extension-read-as-legacy-unverified-never-multi-agent",
+  "defaultMultiAgentTypes": [
+    "architecture",
+    "strategy"
+  ],
+  "orchestration": "excluded",
+  "collection": "excluded-epic-020",
+  "standalone": "additive-conference-extension-validation-only-no-store-no-collection"
+}

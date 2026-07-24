@@ -56,6 +56,7 @@
     "verify:p6b": "node scripts/task.mjs p6b",
     "verify:dep": "node scripts/task.mjs dep",
     "verify:conference": "node scripts/task.mjs conference",
+    "verify:ext-execution": "node scripts/task.mjs ext-execution",
     "verify:ext-ag": "node scripts/task.mjs ext-ag",
     "verify:ext-actor": "node scripts/task.mjs ext-actor",
     "verify:ext-store": "node scripts/task.mjs ext-store",
