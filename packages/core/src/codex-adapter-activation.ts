@@ -424,6 +424,13 @@ export function generateCodexSessionStartScript(): string {
     "  process.stdin.on(\"error\", reject);",
     "});",
     "",
+    "// Self-timeout: the stdin promise settles only on `end`, so a host that does",
+    "// not deliver it -- or does not enforce its own hook timeout -- would otherwise",
+    "// leave this process resident. Unref'd so it never delays the success path, and",
+    "// exit 0 so the session is never wedged: N-2 fail-open means the hook dies, not",
+    "// the session. Found by adversarial review (handler still resident after 4s).",
+    "setTimeout(() => process.exit(0), 2_000).unref();",
+    "",
     "try {",
     "  const ownBytes = readFileSync(fileURLToPath(import.meta.url));",
     "  if (digest(ownBytes) !== argument(\"--handler-digest\")) throw new Error(\"handler drift\");",
@@ -459,8 +466,18 @@ function hookDocument(
 ): Readonly<Record<string, unknown>> {
   const handlerDigest = sha(handlerDigestValue, "handlerDigest");
   const summaryFileDigest = sha(summaryFileDigestValue, "summaryFileDigest");
+  // The definition names the file literally. It must never COMPUTE the path at fire
+  // time: `$(git rev-parse --show-toplevel)` resolves through the working directory
+  // and through GIT_DIR/GIT_WORK_TREE, so a one-time operator approval would cover
+  // whatever script those happened to select — including a `.codex/tcrn-workflow/`
+  // file committed into an ancestor repository that this installer never wrote and
+  // uninstall never removes. The handler's own --handler-digest self-check cannot
+  // save that case, because a substituted file simply does not run the check.
+  // Found by adversarial review of the S066/S067 rung, with both hijacks
+  // demonstrated; the Claude peer already uses a literal path for the same reason
+  // (CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND).
   const command = [
-    'node "$(git rev-parse --show-toplevel)/.codex/tcrn-workflow/session-start.mjs"',
+    `node "${CODEX_SESSION_START_PATH}"`,
     `--handler-digest ${handlerDigest}`,
     `--summary-digest ${summaryFileDigest}`,
   ].join(" ");
