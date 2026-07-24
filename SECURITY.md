@@ -2,9 +2,10 @@
 
 ## Supported versions
 
-Only the current default branch is eligible for security fixes during the
-pre-release bootstrap. `0.1.0-rc.5` is an immutable unpublished candidate, not
-a supported release. There is no supported release until a release bundle is
+Security fixes target the current default branch and the latest tagged release
+(`0.5.0`). In the `0.x` range there is no back-port lane: upgrade to the latest
+minor to receive fixes. Earlier minor releases and any pre-release candidate are
+not separately maintained. A release is supported only once its bundle is
 verified against an external trust root and separately accepted.
 
 ## Reporting a vulnerability

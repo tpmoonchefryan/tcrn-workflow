@@ -21,9 +21,16 @@
 //     Check 4 refuses to approve a push whose version already has a tag pointing
 //     somewhere else.
 //
+//   * All five READMEs fell a full minor version behind on capabilities while the badge
+//     stayed current, and four human-facing root docs had no translation at all. Check 2d
+//     holds the current version in prose (not only the badge); check 2e requires every
+//     declared translation to exist and pins each translated root doc to the SHA-256 of its
+//     English source, so English cannot move ahead of a stale mirror unnoticed.
+//
 // Warnings are failures here. There is no --force.
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,6 +54,33 @@ function run(command, argv) {
   return { ok: result.status === 0, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
 }
 
+// A closing `**` must be right-flanking (CommonMark): not preceded by whitespace, and --
+// when preceded by punctuation -- followed by whitespace or punctuation. CJK prose walks
+// into that rule constantly, because `**一句话。**下一句` puts an ideographic full stop
+// before the delimiter and a letter after it; the span never closes and the reader gets
+// four literal asterisks. Latin text rarely trips it, which is why it went unnoticed. Code
+// is not prose: fenced blocks are dropped wholesale and inline spans are blanked in place,
+// so a document explaining this very rule in backticks is not mistaken for a defect, and
+// column-free line numbers survive.
+function checkCjkEmphasis(document, body) {
+  const punctuation = /[\p{P}\p{S}]/u;
+  const whitespace = /\s/u;
+  let fenced = false;
+  body.split("\n").forEach((line, index) => {
+    if (/^\s*(?:```|~~~)/u.test(line)) { fenced = !fenced; return; }
+    if (fenced) return;
+    const prose = line.replace(/`[^`]*`/gu, (span) => " ".repeat(span.length));
+    for (const match of prose.matchAll(/\*\*([^*]+)\*\*/gu)) {
+      const closeAt = match.index + match[0].length - 2;
+      const before = prose[closeAt - 1];
+      const after = prose[closeAt + 2];
+      if (before === undefined || whitespace.test(before) || !punctuation.test(before)) continue;
+      if (after === undefined || whitespace.test(after) || punctuation.test(after)) continue;
+      fail("PUSH_GATE_EMPHASIS_UNCLOSED", `${document}:${index + 1}: ${match[0].slice(0, 40)}`);
+    }
+  });
+}
+
 // 1. A dirty tree means the bytes that pass the gate are not the bytes that get pushed.
 //    verify:p1 and verify:p8 refuse a dirty basis themselves, but they say so in the
 //    middle of a long run; saying it first is worth the duplicated git call.
@@ -63,39 +97,12 @@ else if (status.output.trim() !== "") fail("PUSH_GATE_TREE_DIRTY", status.output
 //    files, and eighteen emphasis spans that render as literal asterisks in Chinese and
 //    Japanese.
 const badgeVersion = P8_VERSION.replaceAll("-", "--");
-const punctuation = /[\p{P}\p{S}]/u;
-const whitespace = /\s/u;
 for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
   const body = await read(document);
   const published = [...body.matchAll(/status-([0-9][^-\s)]*(?:--[^-\s)]+)*)-blue/gu)].map((match) => match[1]);
   if (published.length === 0) fail("PUSH_GATE_STATUS_BADGE_MISSING", document);
   else if (!published.every((value) => value === badgeVersion)) fail("PUSH_GATE_STATUS_BADGE_STALE", `${document}: ${published.join(", ")} != ${badgeVersion}`);
-
-  // A closing `**` must be right-flanking: not preceded by whitespace, and -- when
-  // preceded by punctuation -- followed by whitespace or punctuation. CJK prose walks
-  // into that rule constantly, because `**一句话。**下一句` puts an ideographic full stop
-  // before the delimiter and a letter after it. The span never closes and the reader gets
-  // four asterisks. Latin text rarely trips it, which is exactly why it went unnoticed:
-  // the English original was always fine.
-  // Code is not prose. A document explaining this very rule writes `**一句话。**下一句`
-  // inside backticks, and a checker that reads through code spans pairs that example's
-  // delimiters with the real ones around it and reports a defect in correct text. Found
-  // by running this check over the handoff that documents it. Fenced blocks are dropped
-  // wholesale and inline spans are blanked in place, so column-free line numbers survive.
-  let fenced = false;
-  body.split("\n").forEach((line, index) => {
-    if (/^\s*(?:```|~~~)/u.test(line)) { fenced = !fenced; return; }
-    if (fenced) return;
-    const prose = line.replace(/`[^`]*`/gu, (span) => " ".repeat(span.length));
-    for (const match of prose.matchAll(/\*\*([^*]+)\*\*/gu)) {
-      const closeAt = match.index + match[0].length - 2;
-      const before = prose[closeAt - 1];
-      const after = prose[closeAt + 2];
-      if (before === undefined || whitespace.test(before) || !punctuation.test(before)) continue;
-      if (after === undefined || whitespace.test(after) || punctuation.test(after)) continue;
-      fail("PUSH_GATE_EMPHASIS_UNCLOSED", `${document}:${index + 1}: ${match[0].slice(0, 40)}`);
-    }
-  });
+  checkCjkEmphasis(document, body);
 }
 
 // 2b. The version in prose, not just in the badge.
@@ -158,6 +165,45 @@ if (register !== null) {
     if (pattern.disposition !== "gated" && pattern.gate !== null) {
       fail("PUSH_GATE_REGISTER_GATE_UNEXPECTED", `${pattern.id}: ${String(pattern.gate)}`);
     }
+  }
+}
+
+// 2d. The version in the "Status" prose, not only in the badge. (INIT-011 S086)
+//     Check 2 pins the badge; a reader also takes the current version from the Status
+//     section. The stale-version scan (2b) only matches `-rc.` strings, so a release-to-
+//     release lag in prose -- exactly the debt that left all five READMEs a version behind
+//     on capabilities -- sails through it. Require the current version to appear in prose,
+//     with the status badge stripped first so the badge alone cannot satisfy the check.
+for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
+  const prose = (await read(document)).replaceAll(/status-[0-9][^)\s]*-blue/gu, "");
+  if (!prose.includes(P8_VERSION)) fail("PUSH_GATE_STATUS_VERSION_ABSENT", `${document}: "${P8_VERSION}" appears only in the badge, not in prose`);
+}
+
+// 2e. A convenience translation of a root document must stay pinned to the English bytes it
+//     was translated from. (INIT-011 S087/S088) The five READMEs are held current by the
+//     badge and prose-version checks above; the smaller root docs each carry a synced-to pin
+//     equal to the SHA-256 of their English source, so English can never move ahead of a
+//     stale mirror without this failing closed. Coverage is declared in doc-coverage.json,
+//     so a missing language is a failure rather than a silent gap, and the same CJK emphasis
+//     rule runs over every mirror. LICENSE, NOTICE, CHANGELOG and SUPPORT are English-only by
+//     policy and are listed there, not mirrored.
+const coverage = JSON.parse(await read("scripts/policy/doc-coverage.json"));
+for (const [source, spec] of Object.entries(coverage.sources)) {
+  if (spec.kind !== "rootdoc") continue;
+  const dot = source.lastIndexOf(".");
+  const base = source.slice(0, dot);
+  const ext = source.slice(dot + 1);
+  const englishDigest = createHash("sha256").update(await readFile(resolve(repositoryRoot, source))).digest("hex");
+  for (const language of coverage.languages) {
+    const mirror = `${base}.${language}.${ext}`;
+    let body;
+    try { body = await read(mirror); } catch { fail("PUSH_GATE_TRANSLATION_MISSING", mirror); continue; }
+    checkCjkEmphasis(mirror, body);
+    if (!spec.pinned) continue;
+    const pin = body.match(/<!--\s*tcrn-doc-synced-to:\s*(\S+)\s+([0-9a-f]{64})\s*-->/u);
+    if (!pin) fail("PUSH_GATE_TRANSLATION_PIN_MISSING", mirror);
+    else if (pin[1] !== source) fail("PUSH_GATE_TRANSLATION_PIN_SOURCE", `${mirror}: pins ${pin[1]}, expected ${source}`);
+    else if (pin[2] !== englishDigest) fail("PUSH_GATE_TRANSLATION_PIN_STALE", `${mirror}: ${pin[2].slice(0, 12)} != ${englishDigest.slice(0, 12)}`);
   }
 }
 

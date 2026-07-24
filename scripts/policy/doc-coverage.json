@@ -1,0 +1,37 @@
+{
+  "comment": "INIT-011 EPIC-028: which human-facing root documents are mirrored into which languages, and how each mirror stays honest. READMEs are held current by the push-gate status-badge and version-in-prose checks; the smaller root docs carry a synced-to digest pin equal to the SHA-256 of their English source, so a translation cannot silently drift from the bytes it was translated from. LICENSE and NOTICE are the authoritative legal texts and are deliberately NOT translated; CHANGELOG.md and SUPPORT.md are English-only for now.",
+  "languages": [
+    "zh-CN",
+    "ja",
+    "ko",
+    "fr"
+  ],
+  "sources": {
+    "README.md": {
+      "kind": "readme",
+      "pinned": false
+    },
+    "SECURITY.md": {
+      "kind": "rootdoc",
+      "pinned": true
+    },
+    "CONTRIBUTING.md": {
+      "kind": "rootdoc",
+      "pinned": true
+    },
+    "CODE_OF_CONDUCT.md": {
+      "kind": "rootdoc",
+      "pinned": true
+    },
+    "PRIVACY.md": {
+      "kind": "rootdoc",
+      "pinned": true
+    }
+  },
+  "untranslated": [
+    "LICENSE",
+    "NOTICE",
+    "CHANGELOG.md",
+    "SUPPORT.md"
+  ]
+}
