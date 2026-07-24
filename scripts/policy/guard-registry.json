@@ -116,8 +116,8 @@
       "id": "BR-01-orphan-pattern-backstop",
       "rationale": "The ppid===1 orphan-pattern branch catches a leaked load whose process-group leader already exited and whose pgid is a defunct group we never see registered live — the exact 2026-07-24 shape (35 yes orphans reparented to init). Without it, that class of orphan goes undetected.",
       "file": "packages/core/src/background-resource.ts",
-      "find": "if (row.ppid === 1) {",
-      "replace": "if (row.ppid === -1) {",
+      "find": "const orphaned = row.ppid === 1 || !livePids.has(row.ppid);",
+      "replace": "const orphaned = row.pid === -1 && livePids.has(row.ppid);",
       "expectedMatches": 1,
       "test": "tests/background-resource.test.mjs",
       "testName": "BR: the orphan-pattern backstop catches orphans whose group was never registered"

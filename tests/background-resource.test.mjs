@@ -101,6 +101,34 @@ test("BR: a registered group with a live non-orphan member is residue", () => {
   assert.ok(report.residue.every((entry) => entry.reason === "registered-group-alive"));
 });
 
+test("BR: an orphan reparented to an absent parent is detected (broadened backstop)", () => {
+  // A leaked load whose parent has exited but which reparented to a subreaper/session
+  // ancestor NOT visible in this snapshot (ppid !== 1, parent pid absent). The
+  // ppid===1-only backstop would miss it; the parent-absent broadening catches it.
+  const rows = parseProcessTable("8001 8000 4242 88.0 yes\n");
+  const registrations = [{ pgid: 55555, pattern: "yes", purpose: "cpu-stress", spawnedAt: "2026-07-24T00:13:00Z" }];
+  const report = detectResidue(registrations, rows, NOW);
+  assert.equal(report.status, "residue-present");
+  assert.equal(report.residueCount, 1);
+  assert.equal(report.residue[0].reason, "orphaned-pattern-match");
+});
+
+test("BR: a matching process whose parent IS present is not an orphan (no misfire)", () => {
+  // Parent pid 4242 is present in the snapshot, ppid !== 1, pgid not registered:
+  // not an orphan, so the pattern backstop must not fire (the reliable path is to
+  // register its pgid — a live subreaper defeats the backstop by design).
+  const rows = parseProcessTable("8001 8000 4242 88.0 yes\n4242 4242 900 0.1 supervisor\n");
+  const registrations = [{ pgid: 55555, pattern: "yes", purpose: "cpu-stress", spawnedAt: "2026-07-24T00:13:00Z" }];
+  assert.equal(detectResidue(registrations, rows, NOW).status, "clean");
+});
+
+test("BR: parseProcessTable rejects an out-of-safe-range pid fail-closed", () => {
+  assert.throws(
+    () => parseProcessTable("99999999999999999999 7 1 0.0 yes\n"),
+    (error) => error instanceof BackgroundResourceError && error.reasonCode === "BACKGROUND_RESOURCE_INPUT_INVALID",
+  );
+});
+
 test("BR: a non-matching orphan is not misattributed", () => {
   // An init-reparented process whose command matches no registered pattern must be
   // left alone — the detector reports the session's own leaks, not every orphan.

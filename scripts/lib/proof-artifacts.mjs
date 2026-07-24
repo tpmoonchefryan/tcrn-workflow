@@ -60,6 +60,8 @@ const routeAdditions = new Set([
   "packages/core/src/background-resource.ts",
   "scripts/spawn-guard.mjs",
   "tests/background-resource.test.mjs",
+  "tests/spawn-guard.test.mjs",
+  "docs/architecture/background-resource-governance.md",
   "docs/architecture/backup-git-tier.md",
   "docs/architecture/backup-restore-runbook.md",
   "docs/architecture/agent-integration-v1.md",
