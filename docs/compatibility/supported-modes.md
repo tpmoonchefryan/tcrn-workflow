@@ -37,26 +37,24 @@ route.
 
 ## Invocation surfaces
 
-The compatibility verbs split into two invocation surfaces. The distinction is a
-fail-closed security boundary, not a packaging accident.
+All compatibility verbs are binary-invocable. Their authority requirements still
+form a fail-closed security boundary.
 
 - `compatibility-validate` and `compatibility-unavailable` are binary-invocable:
   the shipped binary `tcrn-workflow` can run them directly. They read no host
   authority and change no state.
-- `compatibility-plan` and `compatibility-dry-run` are programmatic-only. They
-  require a host-supplied Compatibility Admission Authority delivered through the
-  typed programmatic `CliIo` channel. The shipped binary constructs that channel
-  with an output writer only, so both verbs MUST fail closed with reason code
-  `COMPATIBILITY_AUTHORITY_REQUIRED` and a non-zero exit from the binary.
+- `compatibility-plan` and `compatibility-dry-run` require a Compatibility
+  Admission Authority. A programmatic embedder may still deliver it through typed
+  `CliIo`. The shipped binary delivers it through the host-neutral operator-pins
+  bundle, supplied before the command as `--authority-pins <absolute-path>` and
+  `--authority-pins-digest <sha256>`. Without a valid pair both verbs fail closed.
 
-Authority identity material is never accepted on the argv command line: an
-`--authority` token is rejected as an unknown argument before the authority gate
-is reached. Passing an admission path or digest as plaintext arguments is a
-rejected design — it would place authority-binding identity on the process
-command line, where it can leak into shells, logs, and process tables. A host
-that must plan or dry-run compatibility embeds the CLI and injects the authority
-programmatically, never through the published binary.
+The two global values are public trust pins, not credentials. They bind a
+canonical pins document whose digest, generation floor and revocation set bind a
+separate authority bundle. A command-local `--authority` token remains unknown.
+No receipt body, secret or ambient authority is accepted from argv, prompt text
+or environment variables. Operators that do not want paths and public digests in
+shell history use the structured `tcrn-workflow-mcp` stdio surface.
 
-The command catalog (`commands` verb) records this boundary: `compatibility-plan`
-and `compatibility-dry-run` carry availability `programmatic-only`; every other
-verb carries `cli`.
+The command catalog (`commands` verb) records both planning verbs as `cli`.
+Fixture-only artifact maintenance remains the only non-CLI surface.

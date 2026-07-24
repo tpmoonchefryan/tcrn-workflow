@@ -8,13 +8,13 @@
 
 [English](./README.md) · 简体中文 · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-65-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-67-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [为什么做这个项目](#为什么做这个项目) · [这是否适合你](#这是否适合你) · [你会得到什么](#你会得到什么) · [快速开始](#快速开始) · [真正用起来](#真正用起来) · [直白的回答](#直白的回答) · [已知限制](#已知限制) · [许可证](#许可证)
 
-`Verified claims: 65 (hygiene 13 · inertness 13 · runtime 39)`
+`Verified claims: 67 (hygiene 13 · inertness 13 · runtime 41)`
 
 </div>
 
@@ -53,7 +53,7 @@ TCRN Workflow 把这三个缺口一并补上——办法是用对待安全关键
 | --- | --- |
 | **一个就是文件的工作区** | 你的整张工作图谱（Initiative → Epic → Story → Subtask）以规范化的纯 JSON 文件加哈希链存放——无数据库，无守护进程。你可以用 `cat` 和 `sha256sum` 审计它，导出结果逐字节可复现。 |
 | **一条命令，20 道门** | `pnpm verify:p1` 跑完整条验证链：格式、lint、类型检查、构建、约 40 个测试文件、信任矩阵、归档/SBOM/许可证/漏洞策略、源文件白名单、离线边界、隐私扫描、CI 加固、验证映射、干净历史证明。任何意料之外的东西都会让链条停下。 |
-| **一份机器能读的声明账本** | `verification-map.yaml` 把 65 条声明——13 条 framework-hygiene、13 条 inertness-proof、39 条 runtime-capability——绑定到可观测的 reason code。一条声明的主语变了，它的证明就必须重跑。 |
+| **一份机器能读的声明账本** | `verification-map.yaml` 把 67 条声明——13 条 framework-hygiene、13 条 inertness-proof、41 条 runtime-capability——绑定到可观测的 reason code。一条声明的主语变了，它的证明就必须重跑。 |
 | **会自证仍然有效的守卫** | `pnpm guard-check` 把每一条已登记的守卫从源码中变异掉，并要求它命名的测试变红——17 条守卫，每次推送前验证。一个丢掉了也没人会察觉的保护，不算保护。 |
 | **记录在案的审议** | 会议与决策门被追加到同一条防篡改日志上。一个未满足的门会*阻止*其工作项到达 `done`（`WORKSPACE_GATE_PENDING`）——在命令处，重放时再来一次——而关闭一次会议会把每条决策蒸馏成一条回链的知识候选。 |
 | **每个决策都有名字** | 启用执行者留痕后，之后每一次改动都必须声明是谁在操作——引擎及其重放都会对任何缺失执行者 ID 的事件失败即关闭。从未启用它的工作区，行为与从前逐字节一致。 |
@@ -205,7 +205,7 @@ Codex 没有对应能力。它的适配器只做生成与仿真，不做安装�
 下面每一个数字都由一道门强制——任何一个漂移，某处的构建就会失败。
 
 - **20 道门**在 `verify:p1` 链中，每一道都有稳定的终态 reason code。
-- **65 条机器验证的声明**在 `verification-map.yaml` 中——13 条 framework-hygiene、13 条 inertness-proof、39 条 runtime-capability。上方的声明徽章每次运行都会被解析并与账本比对。
+- **67 条机器验证的声明**在 `verification-map.yaml` 中——13 条 framework-hygiene、13 条 inertness-proof、41 条 runtime-capability。上方的声明徽章每次运行都会被解析并与账本比对。
 - **17 条已登记的守卫**，每一条都通过把它变异掉、观察其测试变红，来证明它仍然在咬。
 - **约 40 个密封测试文件**，包含真实的 `SIGKILL` 故障注入、三个独立层各自的 64 种排列确定性证明，以及一套文件系统攻击矩阵。
 - **1 个端到端旗舰证明**（`pnpm verify:e2e`）——对完整受治理闭环（initiative → epic → story → gate → conference → distill → promote → trace）的一次密封重放，每一条教程命令都被逐字执行。
@@ -224,6 +224,7 @@ Codex 没有对应能力。它的适配器只做生成与仿真，不做安装�
 | `verify:p5` | 封闭的通用 profile 信任模型、有效策略摘要、冷启动图、八个惰性 Core Reference 角色。 |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | 上下文路由器的范围/风险/预算控制与敌意语料；Codex 适配器桥接；Claude Code 适配器（四文件模板包、可逆 settings 片段、禁止路径拒绝、CLAUDE.md 回退、跨宿主一致性摘要）。 |
 | `verify:p7` / `verify:p7:compatibility` | 规范化交换、兼容性清单、防回滚下限、确定性的导入/检查点/回退计划。 |
+| `verify:authority-mcp` | 带外钉扎的操作者授权、轮换/撤销拒绝，以及宿主中立的结构化 MCP 读写。 |
 | `verify:p8` | 可复现的发布候选：源码归档重建 + 逐字节比对、SBOM、provenance、校验和、六文件封闭包、外部信任负例矩阵。 |
 | `verify:privacy` | 任何被跟踪的字节、git 对象或归档中都没有个人标识与机器路径。 |
 | `verify:isolated` | 从一次密封的依赖物化中跑出的同一条 P1 链（CI 门控）。 |
@@ -283,7 +284,7 @@ Codex 没有对应能力。它的适配器只做生成与仿真，不做安装�
 
 **治理面**
 
-- **十二个受治理动词还没有操作者入口**。profile 准入、上下文路由、兼容规划与适配器各族需要发行 CLI 尚不能接受的带外授权；从 shell 调用会停在 `ADAPTER_HOST_REQUIRED` 一类的 reason code 上。激活收据是真实的——证据装具以程序方式供给这些授权——操作者机制由后续版本补上。
+- **受治理的操作者操作面已在源码中完成，但尚未进入已接受的 `0.5.0` 版本。** 历史上的十二个 IO 阻塞动词先由直接摘要参数缩减为七个；当前源码再通过「绝对路径 + SHA-256」pins 文档供给这七个动词，并把同一命令目录暴露为结构化、宿主中立的 MCP 工具。已发布的 `0.5.0` 二进制仍会停在 `ADAPTER_HOST_REQUIRED` 等 reason code 上。
 - **破坏性的制品维护仅限 FIXTURE**。`artifact-archive-apply` 与 `artifact-archive-restore` 在机器可读目录里标为 fixture-only；真实工作区只有 dry-run，所以制品库会持续增长，直到受治理的压缩能力发布。
 - **知识库必须被显式确认为可弃**。在非 FIXTURE 工作区上，它只在每次调用附带显式确认时才初始化（`KNOWLEDGE_DISPOSABLE_ACK_REQUIRED`）：它是派生索引，永远不是事实来源。
 

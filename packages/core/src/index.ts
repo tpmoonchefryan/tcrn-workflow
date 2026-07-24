@@ -214,6 +214,25 @@ export type {
   KnowledgeUnitMetadata,
 } from "./knowledge-core.js";
 export {
+  OPERATOR_AUTHORITY_BUNDLE_VERSION,
+  OPERATOR_AUTHORITY_PINS_VERSION,
+  OPERATOR_AUTHORITY_REASON_CODES,
+  OperatorAuthorityError,
+  assertOperatorMcpWriteGranted,
+  readOperatorAuthority,
+  validateOperatorAuthorityBundle,
+  validateOperatorAuthorityPins,
+} from "./operator-authority.js";
+export type {
+  OperatorAuthorityBundle,
+  OperatorAuthorityContext,
+  OperatorAuthorityFileGrants,
+  OperatorAuthorityHostInputs,
+  OperatorAuthorityMcpGrant,
+  OperatorAuthorityPins,
+  OperatorAuthorityReasonCode,
+} from "./operator-authority.js";
+export {
   CONTEXT_ROUTE_AUTHORITY_VERSION,
   CONTEXT_ROUTE_LIMITS,
   CONTEXT_ROUTE_REASON_CODES,
