@@ -695,8 +695,21 @@ test("fixture and real-host evidence state the exact no-overclaim boundary", () 
   assert.equal(hostEvidence.observation.hookFired, true);
   assert.equal(hostEvidence.driftProbe.changedDefinitionFired, false);
   assert.equal(
+    hostEvidence.generatedAdapterObservation.result,
+    "HOOK_CONTEXT_PRESENT",
+  );
+  assert.equal(
+    hostEvidence.generatedAdapterObservation.injectionField,
+    "hookSpecificOutput.additionalContext",
+  );
+  assert.equal(hostEvidence.generatedAdapterObservation.toolCalls, 0);
+  assert.match(
+    hostEvidence.generatedAdapterObservation.classification,
+    /not an accepted release/u,
+  );
+  assert.equal(
     hostEvidence.boundary.codexInternalTrustHash,
-    "opaque-not-exported",
+    "observed-out-of-band-but-semantics-opaque-and-not-exported-by-tcrn-receipt",
   );
   assert.equal(
     createHash("sha256")

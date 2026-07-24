@@ -34,9 +34,11 @@ that correlation against the generated 0.139.0 TypeScript schema shapes without
 starting or steering an agent.
 
 `pnpm verify:act11` closes the cross-host acceptance and hostile matrix around
-that boundary. It explicitly leaves the live multi-agent/App-visible receipt
-comparison incomplete; unavailable cells are a recorded result, not an
-all-green live-host claim.
+that boundary. A 2026-07-25 Codex Desktop run now supplies real App-visible
+`sub_agent_activity` records and completed subagent rollouts, recorded in
+`codex-live-integration-2026-07-25.json`. Those rollout records are not the
+pinned App Server notification stream this collector accepts, so the Workflow
+receipt comparison remains incomplete; no frame conversion is inferred.
 
 ## S079 — Controller feasibility on Codex
 
@@ -60,9 +62,10 @@ problem:
    for blocking hooks — declared blast radius, an owner-tested kill switch reachable
    without the mechanism, fail-closed behaviour proven on a live host — applies at
    least as strongly here, and none of it exists for this surface.
-3. **No live evidence.** Nothing in this repository has ever attached to a running
-   App Server. A controller built on an unexercised protocol would be a claim about
-   a surface we have only read the schema of.
+3. **No live App Server evidence.** Real Codex Desktop subagents have now run, but
+   nothing in this repository has attached to a running App Server. A controller
+   built on an unexercised protocol would still be a claim about a control surface
+   we have only read the schema of.
 
 **Recommendation: do not open a Controller initiative now.** The honest next step is
 the one the observer already takes — read a real stream from a real session and find
@@ -98,7 +101,8 @@ live attach that has not happened.
 
 ## What this document does not claim
 
-- That any App Server was attached, or that any Codex session was observed.
+- That any App Server was attached, or that a Codex session was observed through
+  the S054 App Server collector.
 - That the notification vocabulary is complete for versions other than 0.139.0 — a
   stream from a different protocol digest is admitted as `unpinned`, and the receipt
   says so.

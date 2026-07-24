@@ -1,0 +1,165 @@
+{
+  "schemaVersion": "tcrn.codex-live-integration-evidence.v1",
+  "status": "LIVE PARTIAL — exact SessionStart active; Workflow MCP registered and directly exercised; Codex Desktop multi-agent records observed; Desktop hot-load and App Server receipt collection remain unproved",
+  "observedAt": "2026-07-25",
+  "candidate": {
+    "classification": "local development candidate, not an accepted release",
+    "acceptedRelease": "v0.5.0",
+    "commit": "66c9d451db166f609f0821a5d9f79cbe124366d0",
+    "tree": "362fe49ae1c961addfa474be783747862d2aa238",
+    "describe": "v0.5.0-14-g66c9d45",
+    "mcpEntrypointDigest": "7a07324cae3aee237ae179a0741e34305cf052e7b6e612b5223080f131a35b4d"
+  },
+  "sessionStart": {
+    "hostProduct": "Codex CLI",
+    "hostVersion": "0.139.0",
+    "activationState": "host_observed_active",
+    "installedFiles": [
+      {
+        "path": ".codex/hooks.json",
+        "digest": "46c92578f335545a4f67bd6a5e56bc27723064cac07092cd6057cfa41b2f3531"
+      },
+      {
+        "path": ".codex/tcrn-workflow/session-start.mjs",
+        "digest": "fd01154b3e6f04409cd6b71ab4b36594f84e6a91ea8c3807fe3802f5abc636ee"
+      },
+      {
+        "path": ".codex/tcrn-workflow/session-summary.json",
+        "digest": "355eb52d181543c3c58f281d3a486f8236589c090f8940d5a022c60b74499f2b"
+      }
+    ],
+    "hostTrust": {
+      "currentDefinitionEnabled": true,
+      "trustedHash": "sha256:0f8c529354e5482bc0b8db4531427cb1529dbbf4cab5e65d1913821dc3b2a114",
+      "semanticBoundary": "host-owned opaque trust value; no equality with a TCRN file or definition digest is asserted"
+    },
+    "receipts": {
+      "inertInstallationReceiptDigest": "bbabf5e57d9b9bbcd94a471cdad3f2db22a35be032f13c9c804491a6a2c63e44",
+      "activationInstallationReceiptDigest": "98520eaadc7626fccc617b34d1c5f3707a10865ff5f930d146693fa5b8aa961a",
+      "hostActivationReceiptDigest": "841b42b93f6aa975aa45a7965c5622d26d55a66d2777e07864b2188778fad47d",
+      "hostActivationReceiptFileDigest": "50d96fe472aa02fd48fc077a597d4ae50ba506fdf9f7582c8391dd4600992977"
+    },
+    "liveFire": {
+      "sessionIdDigest": "93f05373ff0e7bb1fa678faced09ecdbeef0aabcb720d1dfa9718eb89af980b4",
+      "rolloutLocation": "out-of-tree Codex session store",
+      "rolloutDigest": "690229d2e070220a99e99ad4d762b1e4d187ff2d11e5c9be272cd033cd8a9eae",
+      "injectedThrough": "hookSpecificOutput.additionalContext",
+      "contextMarkers": [
+        "Advisory persona: Verity",
+        "capability-manifest"
+      ],
+      "result": "HOOK_CONTEXT_PRESENT",
+      "resultFileDigest": "713e766dca37eec4edb505df960ecfdcebd138631ed446b6c7c2b92655486283",
+      "toolCalls": 0
+    },
+    "rollbackRehearsal": {
+      "activationRemovalReasonCode": "INSTALLER_ROLLBACK_EXECUTED",
+      "activationFilesRemoved": 3,
+      "inertRollbackReasonCode": "INSTALLER_ROLLBACK_EXECUTED",
+      "inertRollbackPlanDigest": "2e92c81f965d92276225ba54b9266da4fb60e4f1608be7041ecb6a4b5da81f80",
+      "result": "the prior candidate was removed before the exact current candidate was installed; the current candidate remains active"
+    }
+  },
+  "workflowMcp": {
+    "hostProduct": "Codex CLI",
+    "hostVersion": "0.139.0",
+    "registration": {
+      "name": "tcrn-workflow",
+      "transport": "stdio",
+      "enabled": true,
+      "defaultToolsApprovalMode": "prompt",
+      "discovery": [
+        "codex mcp get tcrn-workflow --json",
+        "codex mcp list"
+      ]
+    },
+    "authority": {
+      "pinsFileDigest": "9a610dd32a794d6d91c928ea3fc658dddd767deac536af5b0385b8831b8ebaac",
+      "minimumGeneration": 3,
+      "mutatingCommandGrants": 37
+    },
+    "directExactServerProbe": {
+      "protocolVersion": "2025-06-18",
+      "serverName": "tcrn-workflow",
+      "serverReportedVersion": "0.5.0",
+      "toolCount": 93,
+      "readTool": {
+        "name": "tcrn_workflow_status",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "result": {
+          "workspaceId": "workspace:7732a51de4c38afb83bb77cf",
+          "version": 936,
+          "headEventHash": "0e557945c4bfd6fbab3a98b83f205f15e29987bd60266636249c392576c1425a"
+        }
+      },
+      "writeToolListedButNotCalled": {
+        "name": "tcrn_workflow_conference_open",
+        "readOnlyHint": false,
+        "destructiveHint": true
+      }
+    },
+    "freshHostRoutingAttempt": {
+      "threadIdDigest": "cafd7a7d7512fdd1bd8aca44c9ddaeafb6f9db2b63350bae974dfdc23c4f23d5",
+      "result": "unavailable",
+      "reasonCode": "HOST_USAGE_LIMIT",
+      "boundary": "the turn failed before a model tool call, so it is not evidence that Codex routed the MCP tool"
+    },
+    "desktopHotLoad": {
+      "currentTaskToolVisible": false,
+      "freshSubagentToolVisible": false,
+      "freshSubagentThreadIdDigest": "0ebee3129623c3a1b174853e51ae58fdf14bfeb4cb25c929432e2415b6c517e3",
+      "callableToolCount": 53,
+      "matchingToolCount": 0,
+      "boundary": "registration and direct server execution do not prove that an already-running Codex Desktop process hot-loaded the new MCP server"
+    }
+  },
+  "multiAgent": {
+    "hostProduct": "Codex Desktop",
+    "hostVersion": "0.146.0-alpha.3.1",
+    "parentThreadIdDigest": "d40b426bfdfbda809c0714d00d44e888da3d5dbcbb5a507872e7392e8220bb6a",
+    "appVisibleStartRecords": 3,
+    "parallelReadOnlyProbes": [
+      {
+        "agentPath": "hook_probe",
+        "threadIdDigest": "4b98f66c476881d43a4d06fe6052226220c10c276157d83a2a556befc72ddbfe",
+        "forkedFromParent": true,
+        "rolloutLocation": "out-of-tree Codex session store",
+        "rolloutDigest": "b63b51dadf2b55c566331b5496220e4dae88429f47b8ba46c4fd9056ba860df5",
+        "result": "exact installed Hook bytes and host-activation receipt verified"
+      },
+      {
+        "agentPath": "mcp_probe",
+        "threadIdDigest": "208c592a3c1a5751d1e4fb0fca951f41bfd8ed1b5d8c799348af4c33a80b24d6",
+        "forkedFromParent": true,
+        "rolloutLocation": "out-of-tree Codex session store",
+        "rolloutDigest": "0297cabc3333d289d49b82c8adaff10a70356c87b92e3a96ddb5dd617dd4df3f",
+        "result": "MCP registration, exact stdio server, tool catalog and read status verified"
+      }
+    ],
+    "freshToolVisibilityProbe": {
+      "agentPath": "fresh_tool_probe",
+      "threadIdDigest": "0ebee3129623c3a1b174853e51ae58fdf14bfeb4cb25c929432e2415b6c517e3",
+      "forkedFromId": null,
+      "priorParentTurnsIncluded": false,
+      "rolloutLocation": "out-of-tree Codex session store",
+      "rolloutDigest": "21e5a50085948e15d7ce85c3e5afc3af8600949afc1617bfce39defeb650626d",
+      "result": "no TCRN Workflow MCP tool was visible in the fresh subagent tool catalog"
+    },
+    "collectorBoundary": {
+      "appServerAttached": false,
+      "workflowExecutionReceiptProduced": false,
+      "appVisibleReceiptCompared": false,
+      "parallelPairFreshContextClaimed": false,
+      "reason": "Codex Desktop rollout sub_agent_activity/session metadata is live host evidence, but it is not the pinned App Server notification stream accepted by the S054 collector; the parallel pair inherited parent turns"
+    }
+  },
+  "notClaimed": [
+    "the local development candidate is not an accepted Workflow release",
+    "the current Codex Desktop task did not hot-load the newly registered MCP server",
+    "no successful host-routed Workflow MCP tool call is claimed",
+    "no live App Server attach or Controller operation is claimed",
+    "no Workflow execution receipt was produced from the Desktop multi-agent records",
+    "no host signature, actor identity, complete event coverage, enforce hook, approval responder or Stop blocker is claimed"
+  ]
+}

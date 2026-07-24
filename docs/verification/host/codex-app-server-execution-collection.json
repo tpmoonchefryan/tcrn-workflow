@@ -65,5 +65,11 @@
     "freshContextIsHostSigned": false,
     "finalMessageIsHostSigned": false,
     "coverage": "absence of a notification is not evidence the action did not occur"
+  },
+  "relatedLiveObservation": {
+    "source": "docs/verification/host/codex-live-integration-2026-07-25.json",
+    "result": "Codex Desktop emitted App-visible sub_agent_activity and completed real subagent rollouts",
+    "acceptedByThisCollector": false,
+    "reason": "Desktop rollout records are not the pinned App Server notification stream this collector admits; no frame conversion or receipt was fabricated"
   }
 }

@@ -74,6 +74,7 @@
     "docs/verification/host/claude-code.json",
     "docs/verification/host/codex-0.139.0-facts.json",
     "docs/verification/host/codex-app-server-execution-collection.json",
+    "docs/verification/host/codex-live-integration-2026-07-25.json",
     "docs/verification/host/codex-session-start-activation.json",
     "docs/verification/host/controller-feasibility.md",
     "docs/versioning/versioning-policy.md",

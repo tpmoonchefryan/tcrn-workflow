@@ -1,7 +1,7 @@
 {
   "schemaVersion": "tcrn.codex-session-start-host-probe.v1",
-  "status": "MEASURED IN A DISPOSABLE PROJECT — operator approval, one fire, then definition-drift skip",
-  "observedAt": "2026-07-24",
+  "status": "COMPLETE — disposable trust/drift behavior and exact generated TCRN live fire observed",
+  "observedAt": "2026-07-25",
   "host": {
     "product": "Codex CLI",
     "version": "0.139.0",
@@ -45,12 +45,30 @@
     "fireCountAfterChangedDefinitionSession": 1,
     "result": "the changed definition was skipped pending a new approval"
   },
+  "generatedAdapterObservation": {
+    "classification": "local development candidate, not an accepted release",
+    "candidateCommit": "66c9d451db166f609f0821a5d9f79cbe124366d0",
+    "hookDefinitionDigest": "sha256:46c92578f335545a4f67bd6a5e56bc27723064cac07092cd6057cfa41b2f3531",
+    "handlerDigest": "sha256:fd01154b3e6f04409cd6b71ab4b36594f84e6a91ea8c3807fe3802f5abc636ee",
+    "summaryFileDigest": "sha256:355eb52d181543c3c58f281d3a486f8236589c090f8940d5a022c60b74499f2b",
+    "hostActivationReceiptDigest": "sha256:841b42b93f6aa975aa45a7965c5622d26d55a66d2777e07864b2188778fad47d",
+    "sessionIdDigest": "sha256:93f05373ff0e7bb1fa678faced09ecdbeef0aabcb720d1dfa9718eb89af980b4",
+    "rolloutDigest": "sha256:690229d2e070220a99e99ad4d762b1e4d187ff2d11e5c9be272cd033cd8a9eae",
+    "injectionField": "hookSpecificOutput.additionalContext",
+    "contextMarkers": [
+      "Advisory persona: Verity",
+      "capability-manifest"
+    ],
+    "result": "HOOK_CONTEXT_PRESENT",
+    "toolCalls": 0,
+    "source": "docs/verification/host/codex-live-integration-2026-07-25.json"
+  },
   "boundary": {
-    "codexInternalTrustHash": "opaque-not-exported",
+    "codexInternalTrustHash": "observed-out-of-band-but-semantics-opaque-and-not-exported-by-tcrn-receipt",
     "localDigestEqualityClaim": false,
     "installationReceiptProvesActivation": false,
     "receiptMeaning": "operator-observed attribution evidence for this exact disposable-host probe, not host identity proof and not a signature",
-    "scope": "this proves the Codex trust/reapproval mechanism and SessionStart payload shape; generated TCRN adapter bytes are verified separately by pnpm verify:act9"
+    "scope": "the disposable probe proves Codex trust/reapproval behavior; the generated-adapter observation proves the exact v2 TCRN handler, summary and approved definition reached a real Codex 0.139.0 model context. Neither receipt proves host identity or signs the transcript"
   },
   "evidenceDigest": "560424f8f884c5e6286981a1936625b1e74ebe69c34db7a023f080d38228b62d"
 }

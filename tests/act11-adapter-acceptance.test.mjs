@@ -47,6 +47,15 @@ const capabilityManifest = JSON.parse(
     "utf8",
   ),
 );
+const liveIntegration = JSON.parse(
+  await readFile(
+    new URL(
+      "../docs/verification/host/codex-live-integration-2026-07-25.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+);
 
 function digest(value) {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -108,11 +117,20 @@ test("the acceptance matrix is closed, cross-host, and synchronized with the cap
   }
 });
 
-test("unavailable and mechanism-only cells cannot be promoted into live exact or host-enforce claims", () => {
+test("live evidence upgrades only the exact surfaces it measured", () => {
   const byId = new Map(matrix.surfaces.map((entry) => [entry.id, entry]));
   const activation = byId.get("adapter-activation");
-  assert.equal(activation.codex.evidenceClass, "live_mechanism_only");
-  assert.equal(activation.codex.exactGeneratedBytesLiveMeasured, false);
+  const sessionStart = byId.get("session-start-context-injection");
+  const workflowMcp = byId.get("workflow-mcp-tools");
+  const execution = byId.get("execution-collection");
+  assert.equal(activation.codex.evidenceClass, "live_exact");
+  assert.equal(activation.codex.exactGeneratedBytesLiveMeasured, true);
+  assert.equal(sessionStart.codex.evidenceClass, "live_exact");
+  assert.equal(sessionStart.codex.exactGeneratedBytesLiveMeasured, true);
+  assert.equal(workflowMcp.codex.evidenceClass, "live_mechanism_only");
+  assert.equal(workflowMcp.codex.exactGeneratedBytesLiveMeasured, true);
+  assert.equal(execution.codex.evidenceClass, "live_mechanism_only");
+  assert.equal(execution.codex.exactGeneratedBytesLiveMeasured, false);
   assert.equal(activation.claude.evidenceClass, "live_exact");
 
   for (const id of ["tool-approval-gate", "final-hop-stop-gate"]) {
@@ -121,9 +139,21 @@ test("unavailable and mechanism-only cells cannot be promoted into live exact or
     assert.notEqual(surface.claude.governance, "enforce");
   }
   assert.equal(fixture.enforceHostSurfacesAuthorized, 0);
-  assert.equal(fixture.codexExactGeneratedHookLiveFires, 0);
+  assert.equal(fixture.codexExactGeneratedHookLiveFires, 1);
+  assert.equal(fixture.liveWorkflowMcpRegistrations, 1);
+  assert.equal(fixture.liveWorkflowMcpDirectHandshakes, 1);
+  assert.equal(fixture.liveDesktopMultiAgentRuns, 1);
   assert.equal(fixture.liveAppServerAttaches, 0);
   assert.equal(fixture.liveMultiAgentReceiptComparisons, 0);
+  assert.equal(liveIntegration.sessionStart.liveFire.result, "HOOK_CONTEXT_PRESENT");
+  assert.equal(liveIntegration.workflowMcp.registration.enabled, true);
+  assert.equal(liveIntegration.workflowMcp.directExactServerProbe.toolCount, 93);
+  assert.equal(liveIntegration.multiAgent.appVisibleStartRecords, 3);
+  assert.equal(liveIntegration.multiAgent.collectorBoundary.appServerAttached, false);
+  assert.equal(
+    liveIntegration.multiAgent.collectorBoundary.workflowExecutionReceiptProduced,
+    false,
+  );
   assert.ok(
     matrix.notClaimed.some((claim) =>
       claim.includes("No live App Server attach"),
@@ -283,7 +313,7 @@ test("collected receipts bind bytes and invocations but deliberately do not prov
   );
 });
 
-test("story dispositions separate completed evidence work from the missing live multi-agent comparison", () => {
+test("story dispositions separate the live App record from the missing Workflow receipt comparison", () => {
   assert.equal(matrix.storyAcceptance.S076, fixture.s076);
   assert.equal(matrix.storyAcceptance.S080, fixture.s080);
   assert.equal(matrix.storyAcceptance.S057, fixture.s057);
@@ -291,6 +321,6 @@ test("story dispositions separate completed evidence work from the missing live 
   assert.equal(fixture.s080, "accepted_with_explicit_unavailable_cells");
   assert.equal(
     fixture.s057,
-    "partial_live_multi_agent_positive_probe_missing",
+    "partial_live_app_record_observed_receipt_comparison_missing",
   );
 });

@@ -12,7 +12,7 @@
   "hostTrustHashRepresentation": "opaque_not_exported",
   "driftCases": 3,
   "refusalCases": 6,
-  "liveHostProof": "operator-approved-and-fired-in-disposable-codex-0.139.0-project",
+  "liveHostProof": "disposable-trust-drift-plus-exact-generated-tcrn-live-fire-on-codex-0.139.0",
   "liveHostEvidence": "docs/verification/host/codex-session-start-activation.json",
   "standalone": "project-local-single-SessionStart-hook-no-enforce-surface"
 }

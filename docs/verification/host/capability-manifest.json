@@ -9,7 +9,7 @@
     "unavailable": "no TCRN integration exists for this capability on this host yet"
   },
   "evidence": {
-    "codex": "docs/verification/host/codex-0.139.0-facts.json",
+    "codex": "docs/verification/host/codex-0.139.0-facts.json and codex-live-integration-2026-07-25.json",
     "claude": "docs/verification/host/claude-code.json (activation) and claude-code-facts.json (surface)"
   },
   "capabilities": [
@@ -25,7 +25,7 @@
         "surface": "app",
         "channel": "hook:SessionStart",
         "governance": "observe",
-        "note": "single project-local startup|resume notify hook; fail-open, 1024-byte digest-bound summary, exact-definition operator approval required; install receipt remains pending until a separate approval-and-fire observation (ACT9)"
+        "note": "live and measured on Codex CLI 0.139.0: one project-local startup|resume fail-open hook injected the exact digest-bound v2 Verity/capability summary through hookSpecificOutput.additionalContext; installation receipt remains pending while a separate host-activation receipt records approval and fire"
       }
     },
     {
@@ -70,7 +70,7 @@
         "surface": "app",
         "channel": "app-server supplied notification stream",
         "governance": "observe",
-        "note": "the read-only Observer and S054 collector bind supplied spawn/thread/turn/final-message notifications to session/thread/turn receipts; fresh context is derived only from a non-forked thread created after the spawn completes, and only an in-turn phase=final_answer item is accepted. No live attach or active Thread request is performed, and missing fields downgrade to unavailable"
+        "note": "the read-only Observer and S054 collector bind supplied spawn/thread/turn/final-message notifications to session/thread/turn receipts. A real Codex Desktop 0.146.0-alpha.3.1 run now proves App-visible sub_agent_activity and completed subagent rollouts, but those rollout records are not the pinned App Server notification stream; no live attach or Workflow receipt comparison is claimed"
       }
     },
     {
@@ -85,7 +85,7 @@
         "surface": "cli",
         "channel": "mcp (codex mcp / mcp-server)",
         "governance": "enforce",
-        "note": "the same host-neutral Workflow MCP server gates mutations through pinned operator authority; Codex registration remains an operator action"
+        "note": "the host-neutral server is registered and enabled, and the exact candidate completed direct initialize, tools/list and read-only status with pinned authority; mutations remain gated. The running Desktop process did not hot-load it and a fresh CLI host-routed attempt hit the account usage limit before a tool call"
       }
     },
     {
@@ -100,7 +100,7 @@
         "surface": "app",
         "channel": "installer+.codex/hooks.json+/hooks approval",
         "governance": "observe",
-        "note": "install/deactivate are identity-gated; activation is one fail-open SessionStart hook and requires an independently admitted authority binding the exact request, context, inert receipt, manifest and rung before any activation write. Installation alone never claims host activation, Codex's trust hash is opaque, and exact-definition changes require reapproval"
+        "note": "install/deactivate are identity-gated; the exact current development candidate was installed, separately approved and live-fired after a governed rollback rehearsal. Installation alone never claims host activation, Codex's trust hash is opaque, and exact-definition changes require reapproval"
       }
     }
   ],
@@ -135,15 +135,16 @@
         "surface": "App / desktop",
         "codex": "yes (codex app, app-server)",
         "claude": "yes (desktop / web)",
-        "tcrnGoverned": "Claude and Codex SessionStart (observe); Codex App Server supplied streams (observe, no live attach)"
+        "tcrnGoverned": "Claude and Codex SessionStart (live observe); Codex Desktop subagents are App-visible, while the App Server collector remains supplied-stream only"
       }
     ]
   },
   "notClaimed": [
     "no enforce-level host lifecycle or host-tool governance exists; enforce is limited to Workflow MCP mutations at the server boundary",
     "no host approval or internal trust hash is inferred from a Codex installation receipt",
-    "no live App Server attach, subagent invocation, Controller, or approval responder is claimed",
-    "no App-visible multi-agent record has been compared with a Workflow execution receipt",
+    "no live App Server attach, Controller, or approval responder is claimed",
+    "App-visible Codex Desktop multi-agent records exist but have not been converted to or compared with a Workflow execution receipt",
+    "no hot-load into the running Codex Desktop process or successful host-routed Workflow MCP call is claimed",
     "governance levels are a snapshot of 2026-07-25 against Codex 0.139.0 and the measured Claude Code 2.1.201 activation"
   ]
 }
