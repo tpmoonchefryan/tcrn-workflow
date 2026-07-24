@@ -111,6 +111,26 @@
       "replace": "if (false) {",
       "expectedMatches": 1,
       "test": "tests/io-boundaries.test.mjs"
+    },
+    {
+      "id": "BR-01-orphan-pattern-backstop",
+      "rationale": "The ppid===1 orphan-pattern branch catches a leaked load whose process-group leader already exited and whose pgid is a defunct group we never see registered live — the exact 2026-07-24 shape (35 yes orphans reparented to init). Without it, that class of orphan goes undetected.",
+      "file": "packages/core/src/background-resource.ts",
+      "find": "if (row.ppid === 1) {",
+      "replace": "if (row.ppid === -1) {",
+      "expectedMatches": 1,
+      "test": "tests/background-resource.test.mjs",
+      "testName": "BR: the orphan-pattern backstop catches orphans whose group was never registered"
+    },
+    {
+      "id": "BR-02-registered-group-detection",
+      "rationale": "The registered-group branch reports any process still alive in a group the session declared it owns, including non-orphan members whose leader is still running (a dev server left behind). Without it, only reparented orphans are caught and a still-parented leak escapes.",
+      "file": "packages/core/src/background-resource.ts",
+      "find": "if (groupPurpose.has(row.pgid)) {",
+      "replace": "if (groupPurpose.has(-row.pgid)) {",
+      "expectedMatches": 1,
+      "test": "tests/background-resource.test.mjs",
+      "testName": "BR: a registered group with a live non-orphan member is residue"
     }
   ]
 }
