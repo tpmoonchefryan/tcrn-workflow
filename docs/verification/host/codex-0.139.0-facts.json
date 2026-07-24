@@ -1,0 +1,115 @@
+{
+  "schema": "tcrn.host-facts.v1",
+  "status": "SURFACE OBSERVED — capability discovery only; no adapter installed or activated",
+  "observedAt": "2026-07-24",
+  "host": {
+    "product": "Codex CLI",
+    "versionSelfReport": "0.139.0",
+    "versionSource": "codex --version"
+  },
+  "method": {
+    "kind": "read-only surface discovery of the installed binary; no session was started, nothing was installed, and no host state was mutated",
+    "reproducibility": "every digest below is regenerable on Codex 0.139.0 with the stated command; a different version is expected to differ, so this receipt is version-pinned evidence, not a version-independent claim",
+    "boundary": "this establishes what surfaces exist (EPIC-021 host facts). It does NOT exercise them: no hook fired, no plugin was installed, no App Server round-trip was performed, and no TCRN adapter exists for Codex yet (EPIC-023)."
+  },
+  "observed": {
+    "featureFlags": {
+      "command": "codex features list",
+      "digest": "sha256:55dc3c9346d56687e97a44bb65b6de9c",
+      "totalFlags": 81,
+      "stableEnabledGovernanceRelevant": [
+        "hooks",
+        "multi_agent",
+        "apps",
+        "plugins",
+        "plugin_sharing",
+        "guardian_approval",
+        "browser_use",
+        "computer_use",
+        "in_app_browser",
+        "shell_tool",
+        "unified_exec",
+        "tool_call_mcp_elicitation",
+        "goals"
+      ],
+      "note": "the 'hooks' feature reports stage=stable, effective=true on this install; this confirms the feature exists and is on, not that any specific hook event fired"
+    },
+    "appServerProtocol": {
+      "command": "codex app-server generate-json-schema --out <dir>",
+      "aggregateSchemaDigest": "sha256:4c47a458f57d09cbbf50bf2f58b38f4e",
+      "schemaFileCount": 37,
+      "threadControlOperations": [
+        "Thread/read",
+        "Thread/list",
+        "Thread/resume",
+        "Thread/fork",
+        "Thread/rollback",
+        "Thread/archive",
+        "Thread/compact/start",
+        "Thread/injectItems",
+        "Thread/metadata/update",
+        "Thread/name/set",
+        "Thread/goal/set",
+        "Thread/goal/get",
+        "Thread/goal/clear"
+      ],
+      "approvalSurface": [
+        "ExecCommandApproval",
+        "CommandExecutionRequestApproval",
+        "ApplyPatchApproval",
+        "FileChangeRequestApproval",
+        "PermissionsRequestApproval",
+        "GranularAskForApproval",
+        "approveGuardianDeniedActionRequest"
+      ],
+      "elicitation": [
+        "McpServerElicitationRequest",
+        "ToolRequestUserInput"
+      ],
+      "note": "the App Server exposes Thread lifecycle control and an approval surface as a JSON-RPC protocol (JSONRPCMessage/Request/Response/Notification). This is the read-only control plane EPIC-026's Observer would attach to; nothing here was invoked."
+    },
+    "pluginSurface": {
+      "command": "codex plugin --help",
+      "subcommands": [
+        "add",
+        "list",
+        "marketplace",
+        "remove"
+      ],
+      "note": "plugins install from configured marketplace snapshots; the 'plugins' and 'plugin_sharing' feature flags are stable+enabled"
+    },
+    "mcpSurface": {
+      "commands": [
+        "codex mcp (manage external MCP servers)",
+        "codex mcp-server (run Codex as an MCP server, stdio)"
+      ],
+      "note": "a host-neutral Workflow MCP server (EPIC-022) would register through 'codex mcp'; Codex can itself act as an MCP server"
+    }
+  },
+  "documentedNotExercised": {
+    "source": "learn.chatgpt.com/docs/hooks (documentation, not this binary's output)",
+    "hookEvents": [
+      "SessionStart",
+      "SessionEnd",
+      "UserPromptSubmit",
+      "PreToolUse",
+      "PostToolUse",
+      "PermissionRequest",
+      "PreCompact",
+      "PostCompact",
+      "SubagentStart",
+      "SubagentStop",
+      "Stop"
+    ],
+    "trustModel": "the docs state a non-managed command hook must be reviewed and trusted against its current hash before it runs, and a changed hook definition requires re-approval; this per-hash trust gate was NOT exercised here",
+    "caveat": "these events and the trust gate are documentation claims. They are recorded separately from 'observed' precisely because this receipt did not fire a hook or run the trust ceremony."
+  },
+  "notVerified": [
+    "any hook actually firing (SessionStart, SessionEnd, PreToolUse, etc.)",
+    "the per-hash trust-and-re-approval ceremony",
+    "SessionEnd firing semantics and tool coverage",
+    "an App Server initialize/turn round-trip",
+    "plugin loading of a real bundle",
+    "any TCRN adapter install or activation on Codex (no such adapter exists yet; EPIC-023)"
+  ]
+}

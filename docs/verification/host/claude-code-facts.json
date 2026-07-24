@@ -1,0 +1,46 @@
+{
+  "schema": "tcrn.host-facts.v1",
+  "status": "SURFACE DOCUMENTED — refreshes the host-fact baseline; activation evidence stays in claude-code.json",
+  "observedAt": "2026-07-24",
+  "host": {
+    "product": "Claude Code",
+    "measuredActivationVersion": "2.1.201",
+    "measuredActivationReceipt": "docs/verification/host/claude-code.json",
+    "note": "the adapter install/activate/uninstall round-trip and the summary-reaches-model observation were measured on 2.1.201; this facts file only refreshes the capability surface that the AC-1 four-event view had gone stale against, and pins nothing about a live version it did not measure"
+  },
+  "documentedSurface": {
+    "source": "code.claude.com/docs/hooks (documentation, not a measured round-trip)",
+    "hookEventFamiliesObserved": [
+      "SessionStart",
+      "SessionEnd",
+      "UserPromptSubmit",
+      "Stop",
+      "PreToolUse",
+      "PostToolUse",
+      "PermissionRequest",
+      "SubagentStart",
+      "SubagentStop",
+      "PreCompact",
+      "PostCompact",
+      "Notification"
+    ],
+    "surfaceIsWiderThanBaseline": "the v1 adapter modelled four hook events (SessionStart, UserPromptSubmit, PreToolUse, Stop) as inert data descriptors; the documented surface is now 30+ events across session/turn/tool/subagent/compact/worktree families",
+    "trustModel": "no per-hook hash-trust gate; from v2.1.218 project-subagent frontmatter hooks run only after the workspace trust dialog is accepted. This is a coarser trust boundary than Codex's per-hash re-approval, and the asymmetry is recorded so no claim of equivalence is made.",
+    "configLocations": [
+      ".claude/settings.json (project)",
+      "~/.claude/settings.json (user, never written by TCRN)",
+      "plugin hooks/hooks.json"
+    ]
+  },
+  "crossHostContrast": {
+    "purpose": "the EPIC-021 capability manifest assigns governance levels per host; the two trust models differ and must not be flattened",
+    "codexTrust": "per-hook-definition hash review and re-approval (learn.chatgpt.com/docs/hooks)",
+    "claudeTrust": "one-time workspace trust dialog; no per-hash gate",
+    "sharedFloor": "for both hosts the durable drift defence is the session-start verify-installed-copy, not a host trust gate"
+  },
+  "notVerified": [
+    "any hook firing on the current session's version (only 2.1.201 activation was ever measured, in claude-code.json)",
+    "the workspace-trust dialog behaviour for frontmatter hooks",
+    "whether the wider event surface changes the single-SessionStart activation contract (it does not, by design: N-2 keeps SessionStart the sole fail-open surface until an amendment)"
+  ]
+}
