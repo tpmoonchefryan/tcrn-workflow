@@ -396,6 +396,7 @@ async function runTests({
   activationOnly = false,
   personaRenderOnly = false,
   codexInstallerOnly = false,
+  receiptSidecarOnly = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -428,6 +429,7 @@ async function runTests({
     .filter((path) => !activationOnly || path === "tests/act2-claude-activation.test.mjs")
     .filter((path) => !personaRenderOnly || path === "tests/act3-persona-render.test.mjs")
     .filter((path) => !codexInstallerOnly || path === "tests/act4-codex-installer.test.mjs")
+    .filter((path) => !receiptSidecarOnly || path === "tests/act5-receipt-sidecar.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -444,6 +446,8 @@ async function runTests({
       ? "ACT3_PERSONA_RENDER_TESTS_VERIFIED"
       : codexInstallerOnly
       ? "ACT4_CODEX_INSTALLER_TESTS_VERIFIED"
+      : receiptSidecarOnly
+      ? "ACT5_RECEIPT_SIDECAR_TESTS_VERIFIED"
       : installerOnly
       ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
@@ -1688,6 +1692,7 @@ const commandContracts = {
   act2: { exit: 0, reasonCode: "ACT2_CLAUDE_SESSIONSTART_VERIFIED" },
   act3: { exit: 0, reasonCode: "ACT3_PERSONA_RENDER_VERIFIED" },
   act4: { exit: 0, reasonCode: "ACT4_CODEX_INSTALLER_VERIFIED" },
+  act5: { exit: 0, reasonCode: "ACT5_RECEIPT_SIDECAR_VERIFIED" },
   e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
 };
 
@@ -1873,6 +1878,26 @@ async function verifyAct3() {
 // EPIC-023 Step 1: the Codex project-local inert installer, proven against a real
 // filesystem. The fixture's declared boundary is asserted here so the gate itself
 // refuses to report success while claiming a live host was involved.
+// EPIC-024 S068: the observe-receipt sidecar. The gate asserts the coverage
+// discipline MIN-046 bound into the design -- an unsealed batch can never claim
+// complete coverage, and no live-host claim rides on this proof.
+async function verifyAct5() {
+  const result = await runTests({ receiptSidecarOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act5-receipt-sidecar-cases.json");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.act5-receipt-sidecar-cases.v1", "ACT5_FIXTURE_SCHEMA");
+  assertion(fixture.observeEvents.length === 6 && fixture.enforceEventsRefused === true, "ACT5_CLOSED_SURFACE");
+  assertion(fixture.completeRequiresSeal === true && fixture.missingReceiptIsNotMissingEvent === true, "ACT5_COVERAGE_DISCIPLINE");
+  assertion(fixture.liveHostProof === "not-claimed-per-min-046", "ACT5_NO_OVERCLAIM");
+  return success("ACT5_RECEIPT_SIDECAR_VERIFIED", {
+    tests: result.tests,
+    observeEvents: fixture.observeEvents.length,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    liveHostProof: fixture.liveHostProof,
+    standalone: fixture.standalone,
+  });
+}
+
 async function verifyAct4() {
   const result = await runTests({ codexInstallerOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act4-codex-installer-cases.json");
@@ -2064,6 +2089,7 @@ const handlers = {
   act2: verifyAct2,
   act3: verifyAct3,
   act4: verifyAct4,
+  act5: verifyAct5,
   e2e: verifyE2eGovernedLoop,
 };
 
@@ -2129,7 +2155,7 @@ function evidencePhase(name) {
   if (name === "act1") {
     return "act";
   }
-  if (name === "act2" || name === "act3" || name === "act4") {
+  if (name === "act2" || name === "act3" || name === "act4" || name === "act5") {
     return "act2";
   }
   if (name === "e2e") {
