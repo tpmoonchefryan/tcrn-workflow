@@ -1745,7 +1745,7 @@
         "docs/verification/host/codex-session-start-activation.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7b79e91d216ea031891bc4b2ce1409696200af965c2d62e5481ee0359e0a8cc8",
+      "fixtureDigest": "d8932a24153ef5d12c74aaa98a5bb0e63b6298eb81f307f562b291039e9d44f7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1811,7 +1811,7 @@
         "docs/verification/host/adapter-acceptance-matrix.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "bfc35c25a7a98a5a077ec4d8042a18a5701e41d74b025b57b95c23baca1c171d",
+      "fixtureDigest": "30ce4abebbbdb9b2e6314878029e0465f2ee5ce20a9d4a92ec6a6f782e2f746f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
