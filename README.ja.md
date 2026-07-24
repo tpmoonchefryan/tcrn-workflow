@@ -8,13 +8,13 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · 日本語 · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-74-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-75-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [なぜこのプロジェクトが存在するのか](#なぜこのプロジェクトが存在するのか) · [あなたに向いているか](#あなたに向いているか) · [得られるもの](#得られるもの) · [クイックスタート](#クイックスタート) · [実際に使う](#実際に使う) · [率直な回答](#率直な回答) · [既知の限界](#既知の限界) · [ライセンス](#ライセンス)
 
-`Verified claims: 74 (hygiene 13 · inertness 13 · runtime 48)`
+`Verified claims: 75 (hygiene 13 · inertness 13 · runtime 49)`
 
 </div>
 
@@ -53,7 +53,7 @@ TCRN Workflow はこの三つをまとめて塞ぎます——エージェント
 | --- | --- |
 | **ただのファイルであるワークスペース** | 作業グラフ全体（Initiative → Epic → Story → Subtask）が、正規化された素の JSON ファイルとハッシュチェーンとして存在します——データベースもデーモンもありません。`cat` と `sha256sum` で監査でき、エクスポートはバイト単位で再現可能です。 |
 | **一つのコマンド、20 のゲート** | `pnpm verify:p1` が検証チェーン全体を実行します：フォーマット、lint、型チェック、ビルド、約 40 のテストファイル、トラストマトリクス、アーカイブ/SBOM/ライセンス/脆弱性ポリシー、ソース許可リスト、オフライン境界、プライバシースキャン、CI ハードニング、検証マップ、クリーン履歴の証明。想定外のものがあればチェーンは止まります。 |
-| **機械が読めるクレーム台帳** | `verification-map.yaml` が 74 のクレーム——13 の framework-hygiene、13 の inertness-proof、48 の runtime-capability——を観測可能な reason code に束縛します。クレームの主語が変われば、その証明は再実行されなければなりません。 |
+| **機械が読めるクレーム台帳** | `verification-map.yaml` が 75 のクレーム——13 の framework-hygiene、13 の inertness-proof、49 の runtime-capability——を観測可能な reason code に束縛します。クレームの主語が変われば、その証明は再実行されなければなりません。 |
 | **効き目が残っていることを自ら示すガード** | `pnpm guard-check` は登録済みの各ガードをソースから変異除去し、指定されたテストが赤になることを要求します——17 のガードを、プッシュのたびに検証。失われても誰も気づかない保護は、保護ではありません。 |
 | **記録される熟議** | カンファレンスと決定ゲートは、同じ改竄検知可能なジャーナルに追記されます。未充足のゲートは対象作業項目が `done` に到達するのを*ブロック*し（`WORKSPACE_GATE_PENDING`）——コマンド時点でも、リプレイ時にも——カンファレンスを閉じると各決定が逆リンク付きの知識候補へ蒸留されます。 |
 | **すべての決定に名前がつく** | アクター署名を有効にすると、以降のすべての変更が誰の行為かを宣言しなければなりません——エンジンもそのリプレイも、アクター ID を欠く事象に対してフェイルクローズします。有効化しないワークスペースは、従来とバイト単位で同一のままです。 |
@@ -210,7 +210,7 @@ Codex にも意図的に狭い同等機能があります。`adapter-install` �
 以下の数字はすべてゲートによって強制されます——どれか一つでも漂流すれば、どこかでビルドが失敗します。
 
 - **20 のゲート**が `verify:p1` チェーンにあり、それぞれが安定した終端 reason code を持ちます。
-- **74 の機械検証済みクレーム**が `verification-map.yaml` にあります——13 の framework-hygiene、13 の inertness-proof、48 の runtime-capability。上部のクレームバッジは毎回解析され、台帳と照合されます。
+- **75 の機械検証済みクレーム**が `verification-map.yaml` にあります——13 の framework-hygiene、13 の inertness-proof、49 の runtime-capability。上部のクレームバッジは毎回解析され、台帳と照合されます。
 - **17 の登録済みガード**。それぞれ変異除去してテストが赤になることを確認し、今も効いていることを証明しています。
 - **約 40 の密閉テストファイル**。本物の `SIGKILL` 障害注入、三つの独立レイヤーでの 64 通り並べ替え決定性証明、ファイルシステム攻撃マトリクスを含みます。
 - **1 つのエンドツーエンド旗艦証明**（`pnpm verify:e2e`）——統制ループ全体（initiative → epic → story → gate → conference → distill → promote → trace）の密閉リプレイで、チュートリアルの全コマンドを逐語的に実行します。
@@ -228,7 +228,7 @@ Codex にも意図的に狭い同等機能があります。`adapter-install` �
 | `verify:p4` / `verify:p4:knowledge` | 成果物ライフサイクルの予算、秘匿化、使い捨てアーカイブの apply/restore；ナレッジコアのメタデータ/本文分離、昇格 CAS、64 並べ替え一致。 |
 | `verify:p5` | 閉じた汎用プロファイル信頼モデル、実効ポリシー digest、コールドスタートグラフ、八つの不活性 Core Reference ペルソナ。 |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | コンテキストルーターのスコープ/リスク/予算制御と敵対コーパス；Codex アダプターブリッジ；Claude Code アダプター（四ファイルのテンプレートバンドル、可逆な settings フラグメント、禁止パス拒否、CLAUDE.md フォールバック、ホスト間一致 digest）。 |
-| `verify:act4` / `verify:act9` / `verify:act10` | Codex inert install、単一 SessionStart activation と exact-definition drift、read-only supplied-stream の subagent/thread/turn collection と honest unavailable fallback。 |
+| `verify:act4` / `verify:act9` / `verify:act10` / `verify:act11` | Codex inert install、独立に認可された単一 SessionStart activation と exact-definition drift、read-only supplied-stream の subagent/thread/turn collection、明示的な unavailable セルを保持するクロスホスト acceptance/hostile matrix。 |
 | `verify:p7` / `verify:p7:compatibility` | 正規化交換、互換性マニフェスト、ロールバック防止の下限、決定的なインポート/チェックポイント/フォールバック計画。 |
 | `verify:authority-mcp` | 帯域外でピン留めされた操作者権威、ローテーション／失効の拒否、ホスト中立な構造化 MCP 読み書き。 |
 | `verify:p8` | 再現可能なリリース候補：ソースアーカイブ再構築とバイト比較、SBOM、provenance、チェックサム、六ファイルの閉じたバンドル、外部信頼の否定マトリクス。 |

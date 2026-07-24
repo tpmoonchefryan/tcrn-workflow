@@ -46,10 +46,12 @@ import {
   CODEX_HOOKS_PATH,
   CODEX_SESSION_START_PATH,
   CODEX_SESSION_SUMMARY_PATH,
+  assertCodexAdapterActivationHost,
   assertCodexActivationReceiptContext,
   validateCodexActivationArtifacts,
 } from "./codex-adapter-activation.js";
 import type {
+  CodexAdapterActivationHostContext,
   CodexActivationArtifacts,
   CodexActivationInstallationEntry,
   CodexActivationInstallationReceipt,
@@ -292,6 +294,7 @@ export async function installCodexAdapterActivation(
   bundleValue: unknown,
   inertInstallation: CodexAdapterInstallationContext,
   artifactsValue: unknown,
+  activationHost: CodexAdapterActivationHostContext | undefined,
   options: CodexAdapterActivationInstallOptions,
 ): Promise<CodexAdapterActivationInstallResult> {
   const bundle = validateCodexAdapterBundle(bundleValue);
@@ -300,6 +303,12 @@ export async function installCodexAdapterActivation(
   planCodexAdapterRollback(bundle, inertInstallation);
   const artifacts: CodexActivationArtifacts =
     validateCodexActivationArtifacts(artifactsValue);
+  const admittedActivation = assertCodexAdapterActivationHost(
+    bundle,
+    inertInstallation.receipt,
+    artifacts,
+    activationHost,
+  );
   const installationRoot = await admitInstallationRoot(options.installationRoot);
   const receiptPath = admitReceiptPath(installationRoot, options.receiptPath);
   if (inertInstallation.receipt.installationRoot !== installationRoot) {
@@ -356,6 +365,7 @@ export async function installCodexAdapterActivation(
       bundleDigest: bundle.bundleDigest,
       inertInstallationReceiptDigest:
         inertInstallation.receipt.receiptDigest,
+      activationAuthorityDigest: admittedActivation.hostDigest,
       installationRoot,
       artifactsDigest: artifacts.artifactsDigest,
       binding: artifacts.binding,

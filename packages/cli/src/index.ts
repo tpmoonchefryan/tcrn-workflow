@@ -116,6 +116,7 @@ import type {
   ConferenceMinutes,
   GateRecord,
   GateIdentityAuthorityFileIdentity,
+  CodexAdapterActivationHostContext,
   CodexAdapterHostContext,
   CodexAdapterInstallationFileIdentity,
   ClaudeAdapterHostContext,
@@ -181,6 +182,7 @@ export interface CliIo {
   readonly profileAdmissionAuthority?: GenericProfileAdmissionAuthority;
   readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
   readonly codexAdapterHost?: CodexAdapterHostContext;
+  readonly codexAdapterActivationHost?: CodexAdapterActivationHostContext;
   readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
   readonly claudeAdapterHost?: ClaudeAdapterHostContext;
   readonly claudeAdapterActivationHost?: ClaudeAdapterActivationHostContext;
@@ -192,6 +194,7 @@ const AUTHORITY_IO_FIELDS = Object.freeze([
   "profileAdmissionAuthority",
   "contextRouteAuthority",
   "codexAdapterHost",
+  "codexAdapterActivationHost",
   "codexAdapterInstallationAuthority",
   "claudeAdapterHost",
   "claudeAdapterActivationHost",
@@ -818,6 +821,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       bundle,
       inertInstallation,
       artifacts,
+      io.codexAdapterActivationHost,
       {
         installationRoot: values["installation-root"] ?? "",
         generationId: values["generation-id"] ?? "",
@@ -1990,6 +1994,12 @@ export async function runOperatorCli(
     ...(context.codexAdapterHost === undefined
       ? {}
       : { codexAdapterHost: context.codexAdapterHost }),
+    ...(context.codexAdapterActivationHost === undefined
+      ? {}
+      : {
+        codexAdapterActivationHost:
+          context.codexAdapterActivationHost,
+      }),
     ...(context.codexAdapterInstallationAuthority === undefined
       ? {}
       : {

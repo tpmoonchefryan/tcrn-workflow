@@ -37,6 +37,7 @@ import {
 import type {
   CodexAdapterBundle,
   CodexAdapterInstallationFileIdentity,
+  CodexAdapterInstallationReceipt,
 } from "./codex-adapter.js";
 import { generateCorePersonaBundle } from "./core-reference-personas.js";
 import {
@@ -45,6 +46,8 @@ import {
 } from "./persona-render.js";
 
 export const CODEX_ADAPTER_ACTIVATION_VERSION = "tcrn.codex-adapter-activation.v1" as const;
+export const CODEX_ADAPTER_ACTIVATION_HOST_VERSION =
+  "tcrn.codex-adapter-activation-host.v1" as const;
 export const CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION =
   "tcrn.codex-adapter-activation-installation.v1" as const;
 export const CODEX_ADAPTER_HOST_ACTIVATION_RECEIPT_VERSION =
@@ -69,8 +72,12 @@ export const CODEX_ACTIVATION_REASON_CODES = Object.freeze([
   "CODEX_ACTIVATION_APPROVAL_REQUIRED",
   "CODEX_ACTIVATION_BUDGET_EXCEEDED",
   "CODEX_ACTIVATION_CANONICAL_INVALID",
+  "CODEX_ACTIVATION_CONTEXT_STALE",
   "CODEX_ACTIVATION_DRIFTED",
+  "CODEX_ACTIVATION_HOST_MISMATCH",
   "CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED",
+  "CODEX_ACTIVATION_HOST_PRODUCT_MISMATCH",
+  "CODEX_ACTIVATION_HOST_REQUIRED",
   "CODEX_ACTIVATION_RECEIPT_INVALID",
   "CODEX_ACTIVATION_SCHEMA_INVALID",
   "CODEX_ACTIVATION_UNICODE_INVALID",
@@ -126,6 +133,7 @@ function deepFreeze<T>(value: T): T {
 
 const shaPattern = /^[a-f0-9]{64}$/u;
 const maximumReceiptBytes = 65_536;
+const activationHostContexts = new WeakSet<object>();
 const activationReceiptContexts = new WeakSet<object>();
 
 function sha(value: unknown, label: string): string {
@@ -154,6 +162,10 @@ function id(value: unknown, label: string): string {
   return value as string;
 }
 
+function nullableId(value: unknown, label: string): string | null {
+  return value === null ? null : id(value, label);
+}
+
 function instant(value: unknown, label: string): string {
   try {
     parseStrictInstant(value);
@@ -161,6 +173,126 @@ function instant(value: unknown, label: string): string {
     fail("CODEX_ACTIVATION_SCHEMA_INVALID", label);
   }
   return value as string;
+}
+
+export interface CodexAdapterActivationHostInput {
+  readonly schemaVersion: typeof CODEX_ADAPTER_ACTIVATION_HOST_VERSION;
+  readonly requestDigest: string;
+  readonly contextDigest: string;
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly workId: string | null;
+  readonly governedAction: "activate";
+  readonly hostProduct: "Codex CLI";
+  readonly hostVersionReadback: string;
+  readonly contextIssuedAt: string;
+  readonly contextExpiresAt: string;
+  readonly verificationTime: string;
+  readonly installationTarget: "project_local_activation";
+  readonly activationAllowed: true;
+  readonly inertInstallationReceiptDigest: string;
+  readonly capabilityManifestDigest: string;
+  readonly stage: CodexActivationStage;
+  readonly hostDigest: string;
+}
+
+export interface CodexAdapterActivationHostContext {
+  readonly input: CodexAdapterActivationHostInput;
+}
+
+// The active rung gets its own authority document. Reusing the Step-1 host input
+// would be contradictory: that document is intentionally bound to
+// `inert_bundle_only` and `activationAllowed=false`. This admission record binds the
+// request, context, inert installation receipt, capability manifest and exact rung
+// before any host-registration file is written.
+export function admitCodexAdapterActivationHostInput(
+  value: unknown,
+): CodexAdapterActivationHostContext {
+  const document = record(value, "activation host input");
+  exact(
+    document,
+    [
+      "schemaVersion",
+      "requestDigest",
+      "contextDigest",
+      "workspaceId",
+      "projectId",
+      "workId",
+      "governedAction",
+      "hostProduct",
+      "hostVersionReadback",
+      "contextIssuedAt",
+      "contextExpiresAt",
+      "verificationTime",
+      "installationTarget",
+      "activationAllowed",
+      "inertInstallationReceiptDigest",
+      "capabilityManifestDigest",
+      "stage",
+      "hostDigest",
+    ],
+    "activation host input",
+  );
+  if (
+    document.schemaVersion !== CODEX_ADAPTER_ACTIVATION_HOST_VERSION ||
+    document.governedAction !== "activate" ||
+    document.installationTarget !== "project_local_activation" ||
+    document.activationAllowed !== true ||
+    (document.stage !== "step2" && document.stage !== "step3")
+  ) {
+    fail("CODEX_ACTIVATION_SCHEMA_INVALID", "activation host header");
+  }
+  if (document.hostProduct !== "Codex CLI") {
+    fail("CODEX_ACTIVATION_HOST_PRODUCT_MISMATCH", "hostProduct");
+  }
+  const basis = {
+    schemaVersion: CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
+    requestDigest: sha(document.requestDigest, "requestDigest"),
+    contextDigest: sha(document.contextDigest, "contextDigest"),
+    workspaceId: id(document.workspaceId, "workspaceId"),
+    projectId: id(document.projectId, "projectId"),
+    workId: nullableId(document.workId, "workId"),
+    governedAction: "activate" as const,
+    hostProduct: "Codex CLI" as const,
+    hostVersionReadback: text(
+      document.hostVersionReadback,
+      "hostVersionReadback",
+      512,
+    ),
+    contextIssuedAt: instant(document.contextIssuedAt, "contextIssuedAt"),
+    contextExpiresAt: instant(document.contextExpiresAt, "contextExpiresAt"),
+    verificationTime: instant(document.verificationTime, "verificationTime"),
+    installationTarget: "project_local_activation" as const,
+    activationAllowed: true as const,
+    inertInstallationReceiptDigest: sha(
+      document.inertInstallationReceiptDigest,
+      "inertInstallationReceiptDigest",
+    ),
+    capabilityManifestDigest: sha(
+      document.capabilityManifestDigest,
+      "capabilityManifestDigest",
+    ),
+    stage: document.stage as CodexActivationStage,
+  };
+  if (
+    parseStrictInstant(basis.contextIssuedAt) >
+      parseStrictInstant(basis.verificationTime) ||
+    parseStrictInstant(basis.verificationTime) >=
+      parseStrictInstant(basis.contextExpiresAt)
+  ) {
+    fail("CODEX_ACTIVATION_CONTEXT_STALE", "activation context validity window");
+  }
+  if (sha(document.hostDigest, "hostDigest") !== canonicalSha256(basis)) {
+    fail("CODEX_ACTIVATION_CANONICAL_INVALID", "hostDigest");
+  }
+  const context = deepFreeze({
+    input: {
+      ...basis,
+      hostDigest: document.hostDigest as string,
+    },
+  });
+  activationHostContexts.add(context);
+  return context;
 }
 
 function rawSha256(value: string | Buffer): string {
@@ -640,6 +772,39 @@ export function validateCodexActivationArtifacts(
   });
 }
 
+export function assertCodexAdapterActivationHost(
+  bundle: CodexAdapterBundle,
+  inertInstallation: CodexAdapterInstallationReceipt,
+  artifacts: CodexActivationArtifacts,
+  host: CodexAdapterActivationHostContext | undefined,
+): CodexAdapterActivationHostInput {
+  if (!host || !activationHostContexts.has(host)) {
+    fail(
+      "CODEX_ACTIVATION_HOST_REQUIRED",
+      "independently governed activation host input required",
+    );
+  }
+  const input = host.input;
+  const summary = artifacts.summary;
+  if (
+    input.requestDigest !== bundle.requestDigest ||
+    input.contextDigest !== bundle.contextDigest ||
+    input.workspaceId !== summary.workspaceId ||
+    input.projectId !== summary.projectId ||
+    input.workId !== summary.workId ||
+    input.inertInstallationReceiptDigest !==
+      inertInstallation.receiptDigest ||
+    input.capabilityManifestDigest !== summary.capabilityManifestDigest ||
+    input.stage !== summary.stage
+  ) {
+    fail(
+      "CODEX_ACTIVATION_HOST_MISMATCH",
+      "request, context, installation receipt, manifest, or rung",
+    );
+  }
+  return input;
+}
+
 function approvedSet(value: unknown): readonly string[] {
   if (!Array.isArray(value)) {
     fail("CODEX_ACTIVATION_SCHEMA_INVALID", "approved definition set");
@@ -720,6 +885,7 @@ export interface CodexActivationInstallationReceipt {
   readonly generationId: string;
   readonly bundleDigest: string;
   readonly inertInstallationReceiptDigest: string;
+  readonly activationAuthorityDigest: string;
   readonly installationRoot: string;
   readonly artifactsDigest: string;
   readonly binding: CodexActivationBinding;
@@ -742,6 +908,7 @@ export function validateCodexActivationInstallationReceipt(
       "generationId",
       "bundleDigest",
       "inertInstallationReceiptDigest",
+      "activationAuthorityDigest",
       "installationRoot",
       "artifactsDigest",
       "binding",
@@ -835,6 +1002,10 @@ export function validateCodexActivationInstallationReceipt(
     inertInstallationReceiptDigest: sha(
       document.inertInstallationReceiptDigest,
       "inertInstallationReceiptDigest",
+    ),
+    activationAuthorityDigest: sha(
+      document.activationAuthorityDigest,
+      "activationAuthorityDigest",
     ),
     installationRoot: text(document.installationRoot, "installationRoot", 4_096),
     artifactsDigest: sha(document.artifactsDigest, "artifactsDigest"),

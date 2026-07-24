@@ -49,6 +49,7 @@ export const CODEX_EXECUTION_TRANSCRIPT_VERSION =
 export const CODEX_EXECUTION_REASON_CODES = Object.freeze([
   "CODEX_EXECUTION_DUPLICATE_EVENT",
   "CODEX_EXECUTION_FINAL_MESSAGE_UNAVAILABLE",
+  "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
   "CODEX_EXECUTION_OBSERVED",
   "CODEX_EXECUTION_PROMPT_UNAVAILABLE",
   "CODEX_EXECUTION_PROTOCOL_UNPINNED",
@@ -131,6 +132,8 @@ interface ThreadFact {
   readonly id: string;
   readonly sessionId: string;
   readonly parentThreadId: string;
+  readonly forkedFromId: string | null;
+  readonly ephemeral: boolean;
   readonly createdAt: number;
 }
 
@@ -139,6 +142,7 @@ interface SpawnFact {
   readonly senderThreadId: string;
   readonly receiverThreadId: string;
   readonly prompt: string | null;
+  readonly completedAtMs: number;
 }
 
 interface TurnFact {
@@ -153,6 +157,8 @@ interface MessageFact {
   readonly threadId: string;
   readonly turnId: string;
   readonly text: string;
+  readonly phase: "commentary" | "final_answer" | null;
+  readonly completedAtMs: number;
 }
 
 export interface CodexExecutionTranscript {
@@ -163,7 +169,11 @@ export interface CodexExecutionTranscript {
   readonly turnId: string;
   readonly spawnItemId: string;
   readonly promptDigest: string;
+  readonly spawnCompletedAt: string;
+  readonly threadCreatedAt: string;
+  readonly freshContextBasis: "new_subagent_thread_not_forked_after_spawn";
   readonly finalMessageItemId: string;
+  readonly finalMessageCompletedAt: string;
   readonly outputDigest: string;
   readonly startedAt: string;
   readonly endedAt: string;
@@ -190,6 +200,7 @@ export interface CodexUnavailableExecution {
   readonly reasonCode:
     | "CODEX_EXECUTION_PROMPT_UNAVAILABLE"
     | "CODEX_EXECUTION_FINAL_MESSAGE_UNAVAILABLE"
+    | "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE"
     | "CODEX_EXECUTION_THREAD_UNAVAILABLE"
     | "CODEX_EXECUTION_TURN_UNAVAILABLE";
   readonly sessionId: string;
@@ -278,6 +289,25 @@ function nullableSeconds(value: unknown, label: string): number | null {
     fail("CODEX_EXECUTION_SCHEMA_INVALID", label);
   }
   return value;
+}
+
+function milliseconds(value: unknown, label: string): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > 8_640_000_000_000_000
+  ) {
+    fail("CODEX_EXECUTION_SCHEMA_INVALID", label);
+  }
+  return value;
+}
+
+function nullableString(
+  value: unknown,
+  label: string,
+): string | null {
+  return value === null ? null : stringValue(value, label, 512);
 }
 
 // Consume current Codex v2 notification shapes. Only the fields needed for the
@@ -377,7 +407,17 @@ export function collectCodexAppServerExecutions(
             "thread.parentThreadId",
             512,
           ),
-          createdAt: nullableSeconds(thread.createdAt, "thread.createdAt") ?? 0,
+          forkedFromId: nullableString(
+            thread.forkedFromId,
+            "thread.forkedFromId",
+          ),
+          ephemeral:
+            typeof thread.ephemeral === "boolean"
+              ? thread.ephemeral
+              : fail("CODEX_EXECUTION_SCHEMA_INVALID", "thread.ephemeral"),
+          createdAt:
+            nullableSeconds(thread.createdAt, "thread.createdAt") ??
+            fail("CODEX_EXECUTION_SCHEMA_INVALID", "thread.createdAt"),
         },
         "thread/started",
       );
@@ -405,6 +445,10 @@ export function collectCodexAppServerExecutions(
 
     const threadId = stringValue(params.threadId, "item.threadId", 512);
     const turnId = stringValue(params.turnId, "item.turnId", 512);
+    const completedAtMs = milliseconds(
+      params.completedAtMs,
+      "item.completedAtMs",
+    );
     const item = record(params.item, "item/completed.params.item");
     const itemId = stringValue(item.id, "item.id", 512);
     const itemKey = `${threadId}\u0000${turnId}\u0000${itemId}`;
@@ -441,6 +485,7 @@ export function collectCodexAppServerExecutions(
           senderThreadId,
           receiverThreadId,
           prompt,
+          completedAtMs,
         });
         spawnsByReceiver.set(receiverThreadId, facts);
       }
@@ -450,6 +495,13 @@ export function collectCodexAppServerExecutions(
         threadId,
         turnId,
         text: stringValue(item.text, "agentMessage.text", 65_536),
+        phase:
+          item.phase === null
+            ? null
+            : item.phase === "commentary" || item.phase === "final_answer"
+              ? item.phase
+              : fail("CODEX_EXECUTION_SCHEMA_INVALID", "agentMessage.phase"),
+        completedAtMs,
       };
       const key = `${threadId}\u0000${turnId}`;
       const messages = messagesByTurn.get(key) ?? [];
@@ -518,7 +570,28 @@ export function collectCodexAppServerExecutions(
       continue;
     }
     const spawn = spawns[0] as SpawnFact & { readonly prompt: string };
-    const messages = messagesByTurn.get(turnKey) ?? [];
+    const freshContext =
+      thread.forkedFromId === null &&
+      thread.createdAt * 1_000 >= spawn.completedAtMs;
+    if (!freshContext) {
+      records.push(
+        unavailable(
+          "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
+          sessionId,
+          thread,
+          firstTurn.id,
+          spawn.id,
+        ),
+      );
+      continue;
+    }
+    const messages = (messagesByTurn.get(turnKey) ?? [])
+      .filter((message) => message.phase === "final_answer")
+      .sort((left, right) =>
+        left.completedAtMs === right.completedAtMs
+          ? compareCanonicalText(left.id, right.id)
+          : left.completedAtMs - right.completedAtMs,
+      );
     const finalMessage = messages[messages.length - 1];
     if (finalMessage === undefined) {
       records.push(
@@ -537,6 +610,15 @@ export function collectCodexAppServerExecutions(
     if (endedAt < startedAt) {
       fail("CODEX_EXECUTION_SCHEMA_INVALID", `turn order:${firstTurn.id}`);
     }
+    if (
+      finalMessage.completedAtMs < started.startedAt * 1_000 ||
+      finalMessage.completedAtMs > firstTurn.completedAt * 1_000
+    ) {
+      fail(
+        "CODEX_EXECUTION_SCHEMA_INVALID",
+        `final message order:${finalMessage.id}`,
+      );
+    }
     const promptDigest = digest(spawn.prompt);
     const transcript: CodexExecutionTranscript = deepFreeze({
       schemaVersion: CODEX_EXECUTION_TRANSCRIPT_VERSION,
@@ -546,7 +628,17 @@ export function collectCodexAppServerExecutions(
       turnId: firstTurn.id,
       spawnItemId: spawn.id,
       promptDigest,
+      spawnCompletedAt: new Date(spawn.completedAtMs).toISOString(),
+      threadCreatedAt: instantFromSeconds(
+        thread.createdAt,
+        "threadCreatedAt",
+      ),
+      freshContextBasis:
+        "new_subagent_thread_not_forked_after_spawn" as const,
       finalMessageItemId: finalMessage.id,
+      finalMessageCompletedAt: new Date(
+        finalMessage.completedAtMs,
+      ).toISOString(),
       outputDigest: digest(finalMessage.text),
       startedAt,
       endedAt,
@@ -556,7 +648,7 @@ export function collectCodexAppServerExecutions(
       agentInvocationId: spawn.id,
       startedAt,
       endedAt,
-      freshContext: true,
+      freshContext,
       promptDigest,
       finalMessage: finalMessage.text,
       transcriptPath: `codex-app-server:${sessionId}/${thread.id}/${firstTurn.id}`,

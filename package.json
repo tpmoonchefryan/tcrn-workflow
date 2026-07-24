@@ -42,6 +42,7 @@
     "verify:act8": "node scripts/task.mjs act8",
     "verify:act9": "node scripts/task.mjs act9",
     "verify:act10": "node scripts/task.mjs act10",
+    "verify:act11": "node scripts/task.mjs act11",
     "verify:backup": "node scripts/task.mjs backup",
     "verify:ci": "node scripts/task.mjs ci",
     "verify:e2e": "node scripts/task.mjs e2e",

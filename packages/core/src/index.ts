@@ -284,6 +284,7 @@ export {
   CODEX_ACTIVATION_INERT_PREREQUISITE_PATHS,
   CODEX_ACTIVATION_PATHS,
   CODEX_ACTIVATION_REASON_CODES,
+  CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
   CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
   CODEX_ADAPTER_ACTIVATION_VERSION,
   CODEX_ADAPTER_HOST_ACTIVATION_RECEIPT_VERSION,
@@ -294,6 +295,8 @@ export {
   CODEX_SESSION_SUMMARY_PATH,
   CODEX_SESSION_SUMMARY_VERSION,
   CodexActivationError,
+  admitCodexAdapterActivationHostInput,
+  assertCodexAdapterActivationHost,
   assertCodexActivationReceiptContext,
   assessCodexActivationTrust,
   codexHookDefinitionForDigests,
@@ -307,6 +310,8 @@ export {
   validateCodexSessionSummary,
 } from "./codex-adapter-activation.js";
 export type {
+  CodexAdapterActivationHostContext,
+  CodexAdapterActivationHostInput,
   CodexActivationArtifacts,
   CodexActivationBinding,
   CodexActivationInstallationEntry,

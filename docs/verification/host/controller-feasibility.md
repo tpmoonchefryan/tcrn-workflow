@@ -22,13 +22,21 @@ S054 adds a consumer of that same supplied stream:
 `packages/core/src/codex-execution-collection.ts` correlates the lower-case wire
 methods `item/completed`, `thread/started`, `turn/started` and `turn/completed`.
 When a completed `collabAgentToolCall`/`spawnAgent` can be bound to a subagent
-thread, its first turn and a final `agentMessage`, the collector emits an
-`observe` record with real session/thread/turn ids and prompt/output digests.
-Missing fields, an unpinned protocol or incomplete lifecycle return
-`unavailable`; nothing is inferred. The resulting transcript projection is
-unsigned attribution evidence, not identity proof. `pnpm verify:act10` proves
+thread, its first turn and a phase-tagged final `agentMessage`, the collector
+emits an `observe` record with real session/thread/turn ids and prompt/output
+digests. `freshContext` is derived only when `forkedFromId` is null and the
+thread was created after the matching spawn completed. The final output is the
+last `phase=final_answer` item by completion time inside that turn; commentary
+is never promoted. Missing fields, an unpinned protocol or incomplete lifecycle
+return `unavailable`; nothing is inferred. The resulting transcript projection
+is unsigned attribution evidence, not identity proof. `pnpm verify:act10` proves
 that correlation against the generated 0.139.0 TypeScript schema shapes without
 starting or steering an agent.
+
+`pnpm verify:act11` closes the cross-host acceptance and hostile matrix around
+that boundary. It explicitly leaves the live multi-agent/App-visible receipt
+comparison incomplete; unavailable cells are a recorded result, not an
+all-green live-host claim.
 
 ## S079 — Controller feasibility on Codex
 

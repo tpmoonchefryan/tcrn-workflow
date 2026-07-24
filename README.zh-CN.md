@@ -8,13 +8,13 @@
 
 [English](./README.md) · 简体中文 · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-74-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-75-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [为什么做这个项目](#为什么做这个项目) · [这是否适合你](#这是否适合你) · [你会得到什么](#你会得到什么) · [快速开始](#快速开始) · [真正用起来](#真正用起来) · [直白的回答](#直白的回答) · [已知限制](#已知限制) · [许可证](#许可证)
 
-`Verified claims: 74 (hygiene 13 · inertness 13 · runtime 48)`
+`Verified claims: 75 (hygiene 13 · inertness 13 · runtime 49)`
 
 </div>
 
@@ -53,7 +53,7 @@ TCRN Workflow 把这三个缺口一并补上——办法是用对待安全关键
 | --- | --- |
 | **一个就是文件的工作区** | 你的整张工作图谱（Initiative → Epic → Story → Subtask）以规范化的纯 JSON 文件加哈希链存放——无数据库，无守护进程。你可以用 `cat` 和 `sha256sum` 审计它，导出结果逐字节可复现。 |
 | **一条命令，20 道门** | `pnpm verify:p1` 跑完整条验证链：格式、lint、类型检查、构建、约 40 个测试文件、信任矩阵、归档/SBOM/许可证/漏洞策略、源文件白名单、离线边界、隐私扫描、CI 加固、验证映射、干净历史证明。任何意料之外的东西都会让链条停下。 |
-| **一份机器能读的声明账本** | `verification-map.yaml` 把 74 条声明——13 条 framework-hygiene、13 条 inertness-proof、48 条 runtime-capability——绑定到可观测的 reason code。一条声明的主语变了，它的证明就必须重跑。 |
+| **一份机器能读的声明账本** | `verification-map.yaml` 把 75 条声明——13 条 framework-hygiene、13 条 inertness-proof、49 条 runtime-capability——绑定到可观测的 reason code。一条声明的主语变了，它的证明就必须重跑。 |
 | **会自证仍然有效的守卫** | `pnpm guard-check` 把每一条已登记的守卫从源码中变异掉，并要求它命名的测试变红——17 条守卫，每次推送前验证。一个丢掉了也没人会察觉的保护，不算保护。 |
 | **记录在案的审议** | 会议与决策门被追加到同一条防篡改日志上。一个未满足的门会*阻止*其工作项到达 `done`（`WORKSPACE_GATE_PENDING`）——在命令处，重放时再来一次——而关闭一次会议会把每条决策蒸馏成一条回链的知识候选。 |
 | **每个决策都有名字** | 启用执行者留痕后，之后每一次改动都必须声明是谁在操作——引擎及其重放都会对任何缺失执行者 ID 的事件失败即关闭。从未启用它的工作区，行为与从前逐字节一致。 |
@@ -210,7 +210,7 @@ Codex 现在有刻意收窄的对应能力：`adapter-install` 仍只做惰性�
 下面每一个数字都由一道门强制——任何一个漂移，某处的构建就会失败。
 
 - **20 道门**在 `verify:p1` 链中，每一道都有稳定的终态 reason code。
-- **74 条机器验证的声明**在 `verification-map.yaml` 中——13 条 framework-hygiene、13 条 inertness-proof、48 条 runtime-capability。上方的声明徽章每次运行都会被解析并与账本比对。
+- **75 条机器验证的声明**在 `verification-map.yaml` 中——13 条 framework-hygiene、13 条 inertness-proof、49 条 runtime-capability。上方的声明徽章每次运行都会被解析并与账本比对。
 - **17 条已登记的守卫**，每一条都通过把它变异掉、观察其测试变红，来证明它仍然在咬。
 - **约 40 个密封测试文件**，包含真实的 `SIGKILL` 故障注入、三个独立层各自的 64 种排列确定性证明，以及一套文件系统攻击矩阵。
 - **1 个端到端旗舰证明**（`pnpm verify:e2e`）——对完整受治理闭环（initiative → epic → story → gate → conference → distill → promote → trace）的一次密封重放，每一条教程命令都被逐字执行。
@@ -228,7 +228,7 @@ Codex 现在有刻意收窄的对应能力：`adapter-install` 仍只做惰性�
 | `verify:p4` / `verify:p4:knowledge` | 制品生命周期预算、脱敏、一次性归档 apply/restore；知识核心的元数据/正文分离、晋升 CAS、64 排列一致性。 |
 | `verify:p5` | 封闭的通用 profile 信任模型、有效策略摘要、冷启动图、八个惰性 Core Reference 角色。 |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | 上下文路由器的范围/风险/预算控制与敌意语料；Codex 适配器桥接；Claude Code 适配器（四文件模板包、可逆 settings 片段、禁止路径拒绝、CLAUDE.md 回退、跨宿主一致性摘要）。 |
-| `verify:act4` / `verify:act9` / `verify:act10` | Codex 惰性安装；单一 SessionStart 激活与逐定义信任漂移；只读 supplied-stream 子代理/thread/turn 采集、真实 session 绑定与诚实的 unavailable 降级。 |
+| `verify:act4` / `verify:act9` / `verify:act10` / `verify:act11` | Codex 惰性安装；独立授权的单一 SessionStart 激活与逐定义信任漂移；只读 supplied-stream 子代理/thread/turn 采集；以及保留明确 unavailable 单元格的跨宿主验收与敌对矩阵。 |
 | `verify:p7` / `verify:p7:compatibility` | 规范化交换、兼容性清单、防回滚下限、确定性的导入/检查点/回退计划。 |
 | `verify:authority-mcp` | 带外钉扎的操作者授权、轮换/撤销拒绝，以及宿主中立的结构化 MCP 读写。 |
 | `verify:p8` | 可复现的发布候选：源码归档重建 + 逐字节比对、SBOM、provenance、校验和、六文件封闭包、外部信任负例矩阵。 |

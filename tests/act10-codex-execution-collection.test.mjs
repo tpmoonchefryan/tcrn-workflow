@@ -81,8 +81,10 @@ function completeNotifications({
         thread: {
           id: "thread:verity",
           sessionId: threadSessionId,
+          forkedFromId: null,
           parentThreadId: "thread:parent",
           threadSource: "subagent",
+          ephemeral: true,
           createdAt: 1_753_401_600,
         },
       },
@@ -92,6 +94,21 @@ function completeNotifications({
       params: {
         threadId: "thread:verity",
         turn: turn("turn:verity-1", 1_753_401_601, null),
+      },
+    },
+    {
+      method: "item/completed",
+      params: {
+        threadId: "thread:verity",
+        turnId: "turn:verity-1",
+        completedAtMs: 1_753_401_603_000,
+        item: {
+          type: "agentMessage",
+          id: "item:verity-commentary",
+          text: "Checking the evidence now.",
+          phase: "commentary",
+          memoryCitation: null,
+        },
       },
     },
     {
@@ -160,6 +177,14 @@ test("a supplied current-wire stream correlates spawn, subagent thread, turn, an
   assert.equal(execution.spawnItemId, "item:spawn-verity");
   assert.equal(execution.observed.agentInvocationId, "item:spawn-verity");
   assert.equal(execution.observed.freshContext, true);
+  assert.equal(
+    execution.transcript.freshContextBasis,
+    "new_subagent_thread_not_forked_after_spawn",
+  );
+  assert.equal(
+    execution.transcript.finalMessageItemId,
+    "item:verity-final",
+  );
   assert.equal(execution.transcriptSigned, false);
   assert.equal(execution.attributionNote, COLLECTION_ATTRIBUTION_NOTE);
   assert.equal(
@@ -238,6 +263,97 @@ test("missing prompt and missing final message downgrade the candidate to unavai
   );
 });
 
+test("final output is selected by final_answer phase and completion time, never array position", () => {
+  const frames = completeNotifications();
+  const completedTurn = frames.pop();
+  frames.push(
+    {
+      method: "item/completed",
+      params: {
+        threadId: "thread:verity",
+        turnId: "turn:verity-1",
+        completedAtMs: 1_753_401_604_000,
+        item: {
+          type: "agentMessage",
+          id: "item:verity-final-older",
+          text: "Older final answer.",
+          phase: "final_answer",
+          memoryCitation: null,
+        },
+      },
+    },
+    {
+      method: "item/completed",
+      params: {
+        threadId: "thread:verity",
+        turnId: "turn:verity-1",
+        completedAtMs: 1_753_401_605_000,
+        item: {
+          type: "agentMessage",
+          id: "item:late-commentary",
+          text: "This later array element is not the final answer.",
+          phase: "commentary",
+          memoryCitation: null,
+        },
+      },
+    },
+    completedTurn,
+  );
+  const result = collectCodexAppServerExecutions(input(frames));
+  const execution = result.records[0];
+  assert.equal(execution.availability, "observe");
+  assert.equal(execution.transcript.finalMessageItemId, "item:verity-final");
+
+  const unknownPhase = completeNotifications();
+  for (const frame of unknownPhase) {
+    if (
+      frame.method === "item/completed" &&
+      frame.params.item.id === "item:verity-final"
+    ) {
+      frame.params.item.phase = null;
+    }
+  }
+  const unavailable = collectCodexAppServerExecutions(input(unknownPhase));
+  assert.equal(
+    unavailable.records[0].reasonCode,
+    "CODEX_EXECUTION_FINAL_MESSAGE_UNAVAILABLE",
+  );
+});
+
+test("fresh context is derived from a new non-forked subagent thread instead of asserted", () => {
+  const forked = completeNotifications();
+  const forkedThread = forked.find(
+    (frame) => frame.method === "thread/started",
+  );
+  forkedThread.params.thread.forkedFromId = "thread:older";
+  const forkedResult = collectCodexAppServerExecutions(input(forked));
+  assert.equal(
+    forkedResult.records[0].reasonCode,
+    "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
+  );
+
+  const predatesSpawn = completeNotifications();
+  const oldThread = predatesSpawn.find(
+    (frame) => frame.method === "thread/started",
+  );
+  oldThread.params.thread.createdAt = 1_753_401_599;
+  const oldResult = collectCodexAppServerExecutions(input(predatesSpawn));
+  assert.equal(
+    oldResult.records[0].reasonCode,
+    "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
+  );
+
+  const subsecondUnproven = completeNotifications();
+  subsecondUnproven[0].params.completedAtMs += 500;
+  const subsecondResult = collectCodexAppServerExecutions(
+    input(subsecondUnproven),
+  );
+  assert.equal(
+    subsecondResult.records[0].reasonCode,
+    "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
+  );
+});
+
 test("missing turn lifecycle and no subagent candidates stay honestly unavailable", () => {
   const onlyThread = completeNotifications().filter(
     (frame) =>
@@ -309,6 +425,16 @@ test("cross-session frames and replayed lifecycle events fail closed", () => {
   duplicateItem.push(structuredClone(duplicateItem[0]));
   reason("CODEX_EXECUTION_DUPLICATE_EVENT", () =>
     collectCodexAppServerExecutions(input(duplicateItem)),
+  );
+  const afterTurn = completeNotifications();
+  const final = afterTurn.find(
+    (frame) =>
+      frame.method === "item/completed" &&
+      frame.params.item.id === "item:verity-final",
+  );
+  final.params.completedAtMs = 1_753_401_606_000;
+  reason("CODEX_EXECUTION_SCHEMA_INVALID", () =>
+    collectCodexAppServerExecutions(input(afterTurn)),
   );
 });
 

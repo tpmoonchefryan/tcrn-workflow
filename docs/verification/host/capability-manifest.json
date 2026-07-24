@@ -70,7 +70,7 @@
         "surface": "app",
         "channel": "app-server supplied notification stream",
         "governance": "observe",
-        "note": "the read-only Observer and S054 collector bind supplied spawn/thread/turn/final-message notifications to session/thread/turn receipts; no live attach or active Thread request is performed, and missing fields downgrade to unavailable"
+        "note": "the read-only Observer and S054 collector bind supplied spawn/thread/turn/final-message notifications to session/thread/turn receipts; fresh context is derived only from a non-forked thread created after the spawn completes, and only an in-turn phase=final_answer item is accepted. No live attach or active Thread request is performed, and missing fields downgrade to unavailable"
       }
     },
     {
@@ -100,7 +100,7 @@
         "surface": "app",
         "channel": "installer+.codex/hooks.json+/hooks approval",
         "governance": "observe",
-        "note": "install/deactivate are identity-gated; activation is one fail-open SessionStart hook. Installation alone never claims host activation, Codex's trust hash is opaque, and exact-definition changes require reapproval"
+        "note": "install/deactivate are identity-gated; activation is one fail-open SessionStart hook and requires an independently admitted authority binding the exact request, context, inert receipt, manifest and rung before any activation write. Installation alone never claims host activation, Codex's trust hash is opaque, and exact-definition changes require reapproval"
       }
     }
   ],
@@ -143,6 +143,7 @@
     "no enforce-level host lifecycle or host-tool governance exists; enforce is limited to Workflow MCP mutations at the server boundary",
     "no host approval or internal trust hash is inferred from a Codex installation receipt",
     "no live App Server attach, subagent invocation, Controller, or approval responder is claimed",
+    "no App-visible multi-agent record has been compared with a Workflow execution receipt",
     "governance levels are a snapshot of 2026-07-25 against Codex 0.139.0 and the measured Claude Code 2.1.201 activation"
   ]
 }

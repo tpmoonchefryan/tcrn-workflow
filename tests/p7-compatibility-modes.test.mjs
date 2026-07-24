@@ -208,6 +208,7 @@ async function operatorPinsForCompatibility(admitted) {
     },
     hostInputs: {
       codexAdapter: null,
+      codexAdapterActivation: null,
       claudeAdapter: null,
       claudeAdapterActivation: null,
     },

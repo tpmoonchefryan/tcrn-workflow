@@ -402,6 +402,7 @@ async function runTests({
   appServerObserverOnly = false,
   codexActivationOnly = false,
   codexExecutionCollectionOnly = false,
+  adapterAcceptanceOnly = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -440,6 +441,7 @@ async function runTests({
     .filter((path) => !appServerObserverOnly || path === "tests/act8-app-server-observer.test.mjs")
     .filter((path) => !codexActivationOnly || path === "tests/act9-codex-activation.test.mjs")
     .filter((path) => !codexExecutionCollectionOnly || path === "tests/act10-codex-execution-collection.test.mjs")
+    .filter((path) => !adapterAcceptanceOnly || path === "tests/act11-adapter-acceptance.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -468,6 +470,8 @@ async function runTests({
       ? "ACT9_CODEX_ACTIVATION_TESTS_VERIFIED"
       : codexExecutionCollectionOnly
       ? "ACT10_CODEX_EXECUTION_COLLECTION_TESTS_VERIFIED"
+      : adapterAcceptanceOnly
+      ? "ACT11_ADAPTER_ACCEPTANCE_TESTS_VERIFIED"
       : installerOnly
       ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
@@ -1718,6 +1722,7 @@ const commandContracts = {
   act8: { exit: 0, reasonCode: "ACT8_APP_SERVER_OBSERVER_VERIFIED" },
   act9: { exit: 0, reasonCode: "ACT9_CODEX_ACTIVATION_VERIFIED" },
   act10: { exit: 0, reasonCode: "ACT10_CODEX_EXECUTION_COLLECTION_VERIFIED" },
+  act11: { exit: 0, reasonCode: "ACT11_ADAPTER_ACCEPTANCE_VERIFIED" },
   e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
 };
 
@@ -1958,7 +1963,7 @@ async function verifyAct10() {
   const evidence = await readJson(evidencePath);
   assertion(fixture.schemaVersion === "tcrn.act10-codex-execution-collection-cases.v1", "ACT10_FIXTURE_SCHEMA");
   assertion(fixture.readOnly === true && fixture.drivesHost === false, "ACT10_READ_ONLY");
-  assertion(fixture.unavailableCases === 5 && fixture.refusalCases === 4, "ACT10_CORPUS");
+  assertion(fixture.unavailableCases === 7 && fixture.refusalCases === 5, "ACT10_CORPUS");
   assertion(fixture.transcriptsSigned === false && fixture.attributionNotIdentity === true, "ACT10_NO_OVERCLAIM");
   assertion(fixture.bindings.includes("sessionId") && fixture.bindings.includes("threadId") && fixture.bindings.includes("turnId"), "ACT10_BINDINGS");
   assertion(evidence.boundary.liveAttachClaimed === false && evidence.boundary.liveSubagentReceiptClaimed === false, "ACT10_LIVE_BOUNDARY");
@@ -1967,6 +1972,43 @@ async function verifyAct10() {
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
     schemaEvidenceDigest: (await fileRecord(evidencePath)).sha256,
     liveHostProof: fixture.liveHostProof,
+    standalone: fixture.standalone,
+  });
+}
+
+// INIT-009 S076/S080 and INIT-010 S057: a closed cross-host acceptance
+// matrix. Unavailable cells are an accepted no-overclaim result; the gate keeps
+// the missing live multi-agent comparison visible rather than upgrading it.
+async function verifyAct11() {
+  const result = await runTests({ adapterAcceptanceOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act11-adapter-acceptance-cases.json");
+  const matrixPath = resolve(repositoryRoot, "docs/verification/host/adapter-acceptance-matrix.json");
+  const fixture = await readJson(fixturePath);
+  const matrix = await readJson(matrixPath);
+  assertion(fixture.schemaVersion === "tcrn.act11-adapter-acceptance-cases.v1", "ACT11_FIXTURE_SCHEMA");
+  assertion(matrix.schemaVersion === "tcrn.adapter-acceptance-matrix.v1", "ACT11_MATRIX_SCHEMA");
+  assertion(fixture.hosts === 2 && fixture.surfaces === 8 && fixture.negativeCases === 14, "ACT11_CLOSED_SURFACE");
+  assertion(
+    fixture.enforceHostSurfacesAuthorized === 0 &&
+      fixture.codexExactGeneratedHookLiveFires === 0 &&
+      fixture.liveAppServerAttaches === 0 &&
+      fixture.liveMultiAgentReceiptComparisons === 0,
+    "ACT11_NO_OVERCLAIM",
+  );
+  assertion(
+    matrix.storyAcceptance.S076 === "verified" &&
+      matrix.storyAcceptance.S080 === "accepted_with_explicit_unavailable_cells" &&
+      matrix.storyAcceptance.S057 === "partial_live_multi_agent_positive_probe_missing",
+    "ACT11_STORY_DISPOSITIONS",
+  );
+  return success("ACT11_ADAPTER_ACCEPTANCE_VERIFIED", {
+    tests: result.tests,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    matrixDigest: (await fileRecord(matrixPath)).sha256,
+    hosts: fixture.hosts,
+    surfaces: fixture.surfaces,
+    negativeCases: fixture.negativeCases,
+    s057: matrix.storyAcceptance.S057,
     standalone: fixture.standalone,
   });
 }
@@ -2229,6 +2271,7 @@ const handlers = {
   act8: verifyAct8,
   act9: verifyAct9,
   act10: verifyAct10,
+  act11: verifyAct11,
   e2e: verifyE2eGovernedLoop,
 };
 
@@ -2294,7 +2337,7 @@ function evidencePhase(name) {
   if (name === "act1") {
     return "act";
   }
-  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act8" || name === "act9" || name === "act10") {
+  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act8" || name === "act9" || name === "act10" || name === "act11") {
     return "act2";
   }
   if (name === "e2e") {
