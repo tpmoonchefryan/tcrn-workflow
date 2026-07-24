@@ -8,13 +8,13 @@
 
 English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-74-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-75-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [Why](#why-this-project-exists) · [Is this for you?](#is-this-for-you) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Using it](#using-it-for-real-work) · [Plain answers](#plain-answers-to-fair-questions) · [Known limits](#known-limits) · [License](#license)
 
-`Verified claims: 74 (hygiene 13 · inertness 13 · runtime 48)`
+`Verified claims: 75 (hygiene 13 · inertness 13 · runtime 49)`
 
 </div>
 
@@ -53,7 +53,7 @@ One rule holds the whole thing together, and it is the part people find hardest 
 | --- | --- |
 | **A workspace that is just files** | Your whole work graph (Initiative → Epic → Story → Subtask) lives in plain, canonically formatted JSON files with a hash chain — no database, no daemon. You can audit it with `cat` and `sha256sum`, and exports are byte-reproducible. |
 | **One command, 20 gates** | `pnpm verify:p1` runs the entire verification chain: format, lint, typecheck, build, ~40 test files, trust matrix, archive/SBOM/license/vulnerability policy, source allowlist, offline boundary, privacy scan, CI hardening, verification map, and clean-history proof. Anything unexpected stops the chain. |
-| **A claim ledger a machine can read** | `verification-map.yaml` binds 74 claims — 13 framework-hygiene, 13 inertness-proof, 48 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run. |
+| **A claim ledger a machine can read** | `verification-map.yaml` binds 75 claims — 13 framework-hygiene, 13 inertness-proof, 49 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run. |
 | **Guards that prove they still bite** | `pnpm guard-check` mutates each registered guard out of the source and requires its named test to go red — 17 guards, verified before every push. A protection that nothing would notice losing is not a protection. |
 | **Deliberation on the record** | Conferences and decision gates are appended to the same tamper-evident journal. A pending gate *blocks* its work item from reaching `done` (`WORKSPACE_GATE_PENDING`) — at the command and again on replay — and closing a conference distills each decision into a knowledge candidate that links back to it. |
 | **Every decision gets a name** | Enable actor attestation and every later mutation must declare who acted — the engine and its replay both fail closed on any event that omits an actor id. Workspaces that never enable it stay byte-identical to before. |
@@ -212,7 +212,7 @@ A release is an immutable annotated tag plus a reproducible artifact set (canoni
 Every number below is enforced by a gate — if one drifts, a build fails somewhere.
 
 - **20 gates** in the `verify:p1` chain, each with a stable terminal reason code.
-- **74 machine-verified claims** in `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 48 runtime-capability. The claims badge above is parsed and compared against the ledger on every run.
+- **75 machine-verified claims** in `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 49 runtime-capability. The claims badge above is parsed and compared against the ledger on every run.
 - **17 registered guards**, each proven to still bite by mutating it out and watching its test go red.
 - **~40 hermetic test files**, including real `SIGKILL` fault injection, 64-permutation determinism proofs in three independent layers, and a filesystem attack matrix.
 - **1 end-to-end flagship proof** (`pnpm verify:e2e`) — a hermetic replay of the full governed loop (initiative → epic → story → gate → conference → distill → promote → trace), every tutorial command executed verbatim.
@@ -230,7 +230,7 @@ Every number below is enforced by a gate — if one drifts, a build fails somewh
 | `verify:p4` / `verify:p4:knowledge` | Artifact lifecycle budgets, redaction, disposable archive apply/restore; knowledge core metadata/body separation, promotion CAS, 64-permutation parity. |
 | `verify:p5` | Closed generic-profile trust model, effective-policy digests, cold-start graph, eight inert Core Reference personas. |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | Context router scope/risk/budget controls and hostile corpus; Codex adapter bridge; Claude Code adapter (four-file template bundle, reversible settings fragment, forbidden-path rejection, CLAUDE.md fallback, cross-host parity digest). |
-| `verify:act4` / `verify:act9` / `verify:act10` | Codex inert install; single SessionStart activation plus exact-definition trust drift; read-only supplied-stream subagent/thread/turn collection with real session bindings and honest unavailable fallbacks. |
+| `verify:act4` / `verify:act9` / `verify:act10` / `verify:act11` | Codex inert install; independently authorized single SessionStart activation plus exact-definition trust drift; read-only supplied-stream subagent/thread/turn collection; and the cross-host acceptance/hostile matrix with explicit unavailable cells. |
 | `verify:p7` / `verify:p7:compatibility` | Canonical exchange, compatibility manifest, anti-rollback floor, deterministic import/checkpoint/fallback plans. |
 | `verify:authority-mcp` | Out-of-band pinned operator authority, rotation/revocation refusals, and host-neutral structured MCP reads/writes. |
 | `verify:p8` | Reproducible release candidate: source archive rebuild + byte comparison, SBOM, provenance, checksums, six-file closed bundle, external trust negative matrix. |

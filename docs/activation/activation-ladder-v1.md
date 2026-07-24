@@ -141,6 +141,12 @@ claim activation. `pnpm verify:act4` remains the gate for this rung.
 ### Codex Step 2 — one fail-open SessionStart notify hook (S066)
 
 `adapter-activate` requires a separately read, digest-pinned Step-1 receipt. It
+writes nothing until it also admits an independent
+`tcrn.codex-adapter-activation-host.v1` authority document. That document binds
+the exact request and Context, Workspace/project/work target, Context validity
+window, Step-1 receipt digest, capability-manifest digest and requested
+Step-2/Step-3 rung. The inert generation host input cannot be reused because its
+contract explicitly says `activationAllowed=false`. Once admitted, activation
 writes:
 
 - `.codex/tcrn-workflow/session-start.mjs`;
@@ -161,7 +167,8 @@ installation receipt always has:
 
 - `activationState: pending_host_approval`;
 - `approvedHookDefinitionDigests: []`;
-- `installationDoesNotProveActivation: true`.
+- `installationDoesNotProveActivation: true`;
+- `activationAuthorityDigest`: the independently admitted activation-host digest.
 
 Only `adapter-activation-record`, given an explicit approval-and-fire observation,
 can emit `host_observed_active`. The approved set contains TCRN SHA-256 digests of

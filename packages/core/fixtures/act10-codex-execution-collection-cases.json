@@ -15,8 +15,8 @@
     "promptDigest",
     "outputDigest"
   ],
-  "unavailableCases": 5,
-  "refusalCases": 4,
+  "unavailableCases": 7,
+  "refusalCases": 5,
   "readOnly": true,
   "drivesHost": false,
   "transcriptsSigned": false,

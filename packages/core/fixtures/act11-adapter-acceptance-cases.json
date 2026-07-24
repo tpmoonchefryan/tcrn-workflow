@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "tcrn.act11-adapter-acceptance-cases.v1",
+  "hosts": 2,
+  "surfaces": 8,
+  "negativeCases": 14,
+  "enforceHostSurfacesAuthorized": 0,
+  "codexExactGeneratedHookLiveFires": 0,
+  "liveAppServerAttaches": 0,
+  "liveMultiAgentReceiptComparisons": 0,
+  "s076": "verified",
+  "s080": "accepted_with_explicit_unavailable_cells",
+  "s057": "partial_live_multi_agent_positive_probe_missing",
+  "standalone": true
+}

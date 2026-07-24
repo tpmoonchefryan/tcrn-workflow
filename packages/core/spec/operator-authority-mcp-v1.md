@@ -16,8 +16,8 @@ generation and a sorted set of revoked authority digests. Its own `pinsDigest`
 binds those fields, while the separately supplied file SHA-256 binds the pins
 bytes. The canonical `tcrn.operator-authority-bundle.v1` document carries a
 validity window, active/revoked status, existing file-authority identities,
-existing Codex and Claude host inputs, and an exact MCP write-command allowlist.
-Its `authorityDigest` binds all those fields.
+separate inert-generation and activation host inputs for Codex and Claude, and an
+exact MCP write-command allowlist. Its `authorityDigest` binds all those fields.
 
 Rotation writes a new bundle generation and advances the pinned document.
 Revocation advances the pins document to name the revoked authority digest or

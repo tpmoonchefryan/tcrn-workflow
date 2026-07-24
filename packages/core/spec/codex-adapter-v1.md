@@ -70,8 +70,21 @@ not general DLP.
 The V1 output remains uninstalled and unactivated until a caller takes a separate
 governed route. `codex-adapter-installer.ts` provides the descriptor-bound inert
 install. `codex-adapter-activation.ts` then permits exactly one fail-open
-SessionStart definition, with a digest-bound 1024-byte advisory summary and a
-separate operator approval-and-fire receipt. Installation never proves host
+SessionStart definition, with a digest-bound 1024-byte advisory summary. Before
+any activation file is written, a distinct branded host input must bind the
+canonical request and Context, exact Workspace/project/work, validity window,
+Step-1 installation receipt, capability manifest and requested Step-2/Step-3
+rung. The inert generation authority is deliberately unusable here because it
+says `activationAllowed=false`. A separate operator approval-and-fire receipt
+still remains necessary after installation. Installation never proves host
 activation, Codex's internal trust hash remains opaque, and no PreToolUse
 enforcement, Controller, OS-level parent-component race defense, or release-byte
 claim is added to this V1 specification.
+
+The optional App Server execution collector consumes only a caller-supplied,
+protocol-pinned notification stream. It derives `freshContext=true` only from a
+non-forked subagent thread created after the matching spawn completes, and
+accepts only a `phase=final_answer` item whose completion falls inside the
+completed first turn. Missing evidence returns `unavailable`; the collector
+never opens App Server, invokes an agent, proves actor identity or treats
+notification absence as proof of non-occurrence.

@@ -24,6 +24,7 @@ import test from "node:test";
 
 import {
   CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
+  CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
   CODEX_ADAPTER_HOST_VERSION,
   CODEX_ADAPTER_REQUEST_VERSION,
   CODEX_HOOKS_PATH,
@@ -31,6 +32,7 @@ import {
   CODEX_SESSION_START_PATH,
   CODEX_SESSION_SUMMARY_PATH,
   admitCodexAdapterHostInput,
+  admitCodexAdapterActivationHostInput,
   assessCodexActivationTrust,
   calculateCodexAdapterRequestDigest,
   codexHookDefinitionForDigests,
@@ -196,6 +198,33 @@ function artifactsFor(bundle, stage = "step3") {
   );
 }
 
+function activationHostFor(bundle, inert, stage = "step3", overrides = {}) {
+  const basis = {
+    schemaVersion: CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
+    requestDigest: bundle.requestDigest,
+    contextDigest: bundle.contextDigest,
+    workspaceId,
+    projectId,
+    workId,
+    governedAction: "activate",
+    hostProduct: "Codex CLI",
+    hostVersionReadback: "codex-cli/0.139.0",
+    contextIssuedAt: "2026-07-25T00:00:00Z",
+    contextExpiresAt: "2026-07-25T02:00:00Z",
+    verificationTime: "2026-07-25T01:00:00Z",
+    installationTarget: "project_local_activation",
+    activationAllowed: true,
+    inertInstallationReceiptDigest: inert.receipt.receiptDigest,
+    capabilityManifestDigest,
+    stage,
+    ...overrides,
+  };
+  return admitCodexAdapterActivationHostInput({
+    ...basis,
+    hostDigest: canonicalSha256(basis),
+  });
+}
+
 async function roots() {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "tcrn-codex-activation-")),
@@ -225,6 +254,7 @@ async function installActivation(fixtureRoots, bundle, inert, stage = "step3") {
     bundle,
     inert,
     artifactsFor(bundle, stage),
+    activationHostFor(bundle, inert, stage),
     {
       installationRoot: fixtureRoots.root,
       generationId: `generation:codex-${stage}`,
@@ -253,6 +283,10 @@ test("Step 3 installs one digest-bound SessionStart hook but claims no host acti
       CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
     );
     assert.equal(result.receipt.activationState, "pending_host_approval");
+    assert.equal(
+      result.receipt.activationAuthorityDigest,
+      activationHostFor(bundle, inert).input.hostDigest,
+    );
     assert.equal(result.receipt.installationDoesNotProveActivation, true);
     assert.deepEqual(result.receipt.approvedHookDefinitionDigests, []);
     assert.equal(
@@ -280,6 +314,111 @@ test("Step 3 installs one digest-bound SessionStart hook but claims no host acti
   } finally {
     await fixtureRoots.close();
   }
+});
+
+test("activation requires a separately admitted authority bound to the inert receipt, manifest, and rung", async () => {
+  const first = await roots();
+  const second = await roots();
+  try {
+    const bundle = bundleFor();
+    const inert = await installInert(first, bundle);
+    const artifacts = artifactsFor(bundle);
+    const options = {
+      installationRoot: first.root,
+      generationId: "generation:codex-authority",
+      receiptPath: first.activationReceiptPath,
+    };
+    await reasonAsync("CODEX_ACTIVATION_HOST_REQUIRED", () =>
+      installCodexAdapterActivation(
+        bundle,
+        inert,
+        artifacts,
+        undefined,
+        options,
+      ),
+    );
+
+    const otherInert = await installInert(second, bundle);
+    const wrongReceipt = activationHostFor(bundle, otherInert);
+    await reasonAsync("CODEX_ACTIVATION_HOST_MISMATCH", () =>
+      installCodexAdapterActivation(
+        bundle,
+        inert,
+        artifacts,
+        wrongReceipt,
+        options,
+      ),
+    );
+    const wrongManifest = activationHostFor(bundle, inert, "step3", {
+      capabilityManifestDigest: hash("other-manifest"),
+    });
+    await reasonAsync("CODEX_ACTIVATION_HOST_MISMATCH", () =>
+      installCodexAdapterActivation(
+        bundle,
+        inert,
+        artifacts,
+        wrongManifest,
+        options,
+      ),
+    );
+    const wrongRung = activationHostFor(bundle, inert, "step2");
+    await reasonAsync("CODEX_ACTIVATION_HOST_MISMATCH", () =>
+      installCodexAdapterActivation(
+        bundle,
+        inert,
+        artifacts,
+        wrongRung,
+        options,
+      ),
+    );
+    assert.equal(existsSync(join(first.root, CODEX_HOOKS_PATH)), false);
+  } finally {
+    await first.close();
+    await second.close();
+  }
+});
+
+test("activation authority rejects stale, wrong-product, and self-resealed widening", () => {
+  const bundle = bundleFor();
+  const inertReceiptDigest = hash("inert-receipt");
+  const base = {
+    schemaVersion: CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
+    requestDigest: bundle.requestDigest,
+    contextDigest: bundle.contextDigest,
+    workspaceId,
+    projectId,
+    workId,
+    governedAction: "activate",
+    hostProduct: "Codex CLI",
+    hostVersionReadback: "codex-cli/0.139.0",
+    contextIssuedAt: "2026-07-25T00:00:00Z",
+    contextExpiresAt: "2026-07-25T02:00:00Z",
+    verificationTime: "2026-07-25T01:00:00Z",
+    installationTarget: "project_local_activation",
+    activationAllowed: true,
+    inertInstallationReceiptDigest: inertReceiptDigest,
+    capabilityManifestDigest,
+    stage: "step3",
+  };
+  const reseal = (overrides) => {
+    const basis = { ...base, ...overrides };
+    return { ...basis, hostDigest: canonicalSha256(basis) };
+  };
+  reason("CODEX_ACTIVATION_CONTEXT_STALE", () =>
+    admitCodexAdapterActivationHostInput(
+      reseal({ verificationTime: "2026-07-25T02:00:00Z" }),
+    ),
+  );
+  reason("CODEX_ACTIVATION_HOST_PRODUCT_MISMATCH", () =>
+    admitCodexAdapterActivationHostInput(
+      reseal({ hostProduct: "Claude Code" }),
+    ),
+  );
+  reason("CODEX_ACTIVATION_SCHEMA_INVALID", () =>
+    admitCodexAdapterActivationHostInput(
+      reseal({ activationAllowed: false }),
+    ),
+  );
 });
 
 test("the generated handler injects bounded Verity context and every failure stays silent/zero", async () => {

@@ -1,0 +1,260 @@
+{
+  "schemaVersion": "tcrn.adapter-acceptance-matrix.v1",
+  "observedAt": "2026-07-25",
+  "purpose": "INIT-009 S076/S080 and INIT-010 S057 cross-host acceptance snapshot. A cell records the strongest evidence actually held; unavailable cells are an accepted no-overclaim result, not silently treated as passed capability.",
+  "hosts": {
+    "codex": {
+      "product": "Codex CLI",
+      "version": "0.139.0"
+    },
+    "claude": {
+      "product": "Claude Code",
+      "version": "2.1.201"
+    }
+  },
+  "evidenceClasses": [
+    "live_exact",
+    "live_mechanism_only",
+    "supplied_stream",
+    "hermetic",
+    "unavailable"
+  ],
+  "surfaces": [
+    {
+      "id": "session-start-context-injection",
+      "codex": {
+        "governance": "observe",
+        "evidenceClass": "live_mechanism_only",
+        "liveHostMeasured": true,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "docs/verification/host/codex-session-start-activation.json",
+        "boundary": "Codex 0.139.0 approved and fired a disposable exact SessionStart definition, then skipped its changed definition; generated TCRN handler bytes are proven hermetically but were not themselves live-fired."
+      },
+      "claude": {
+        "governance": "observe",
+        "evidenceClass": "live_exact",
+        "liveHostMeasured": true,
+        "exactGeneratedBytesLiveMeasured": true,
+        "source": "docs/verification/host/claude-code.json",
+        "boundary": "The generated fail-open SessionStart summary reached a real Claude Code 2.1.201 session and the install/remove path was measured."
+      }
+    },
+    {
+      "id": "tool-lifecycle-observe",
+      "codex": {
+        "governance": "unavailable",
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "packages/core/src/observe-hook-handler.ts",
+        "boundary": "The handler is child-process proven but the Codex activation rung registers only SessionStart."
+      },
+      "claude": {
+        "governance": "unavailable",
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "packages/core/src/observe-hook-handler.ts",
+        "boundary": "The amended observe event set is generated and proven, but no live Claude settings fragment registers it."
+      }
+    },
+    {
+      "id": "execution-collection",
+      "codex": {
+        "governance": "observe",
+        "evidenceClass": "supplied_stream",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "docs/verification/host/codex-app-server-execution-collection.json",
+        "boundary": "A pinned supplied notification stream is correlated without opening App Server or driving a subagent; no live attach or Codex App-visible receipt comparison is claimed."
+      },
+      "claude": {
+        "governance": "unavailable",
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "packages/core/src/execution-collection.ts",
+        "boundary": "The host-neutral collector is proven against supplied observations, but no live Claude hook feeds it."
+      }
+    },
+    {
+      "id": "workflow-mcp-tools",
+      "codex": {
+        "governance": "enforce",
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "packages/cli/src/mcp.ts",
+        "boundary": "Pinned operator authority gates Workflow mutations at the MCP server boundary; Codex host registration is operator-owned and not claimed."
+      },
+      "claude": {
+        "governance": "enforce",
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "packages/cli/src/mcp.ts",
+        "boundary": "The same host-neutral server gate applies; Claude host registration is operator-owned and not claimed."
+      }
+    },
+    {
+      "id": "adapter-activation",
+      "codex": {
+        "governance": "observe",
+        "evidenceClass": "live_mechanism_only",
+        "liveHostMeasured": true,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "packages/core/src/codex-adapter-activation.ts",
+        "boundary": "Activation now requires an independent request/receipt/manifest/rung-bound authority document; installation still cannot approve its own hook."
+      },
+      "claude": {
+        "governance": "observe",
+        "evidenceClass": "live_exact",
+        "liveHostMeasured": true,
+        "exactGeneratedBytesLiveMeasured": true,
+        "source": "packages/core/src/claude-adapter-activation.ts",
+        "boundary": "The independent v2 activation host input and reversible live installation were measured."
+      }
+    },
+    {
+      "id": "tool-approval-gate",
+      "codex": {
+        "governance": "invoke-only",
+        "evidenceClass": "unavailable",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "docs/verification/host/controller-feasibility.md",
+        "boundary": "App Server exposes approval requests, but the read-only Observer never responds and MIN-046 authorizes no enforce hook."
+      },
+      "claude": {
+        "governance": "unavailable",
+        "evidenceClass": "unavailable",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "docs/verification/host/claude-code-facts.json",
+        "boundary": "PreToolUse and PermissionRequest exist, but enforce remains explicitly unauthorized by MIN-046."
+      }
+    },
+    {
+      "id": "final-hop-stop-gate",
+      "codex": {
+        "governance": "unavailable",
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "packages/core/src/codex-adapter.ts",
+        "boundary": "The lifecycle simulator proves deterministic final-hop semantics only; no live Stop hook is registered."
+      },
+      "claude": {
+        "governance": "unavailable",
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "packages/core/src/claude-adapter.ts",
+        "boundary": "The lifecycle simulator proves deterministic final-hop semantics only; no live Stop hook is registered."
+      }
+    },
+    {
+      "id": "host-exclusive-tools",
+      "codex": {
+        "governance": "invoke-only",
+        "evidenceClass": "unavailable",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "docs/verification/host/capability-manifest.json",
+        "boundary": "Browser, Computer, Worktree, Automation and Connector surfaces may be invoked by the host, but no complete observer or gate coverage is claimed."
+      },
+      "claude": {
+        "governance": "invoke-only",
+        "evidenceClass": "unavailable",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "docs/verification/host/capability-manifest.json",
+        "boundary": "Worktree, subagent, MCP connector, browser and automation surfaces may be invoked by the host, but no complete observer or gate coverage is claimed."
+      }
+    }
+  ],
+  "negativeMatrix": [
+    {
+      "id": "bypass-no-registration",
+      "expectedDisposition": "unavailable",
+      "proof": "ACT4 installs inert data only and ACT9 requires the exact hooks file before activation."
+    },
+    {
+      "id": "opt-out-definition-removed",
+      "expectedDisposition": "inactive",
+      "proof": "ACT9 deactivation removes hooks.json first and records that host-owned approval may persist without an active project definition."
+    },
+    {
+      "id": "protocol-version-drift",
+      "expectedDisposition": "unavailable",
+      "proof": "ACT8/ACT10 mark an unpinned App Server protocol unavailable before interpreting params."
+    },
+    {
+      "id": "rollback-byte-or-identity-drift",
+      "expectedDisposition": "refused_without_partial_removal",
+      "proof": "ACT4/ACT9 verify every installed file and receipt identity before any unlink."
+    },
+    {
+      "id": "unapproved-hook-definition",
+      "expectedDisposition": "pending_host_approval",
+      "proof": "ACT9 requires the current local exact-definition digest in the explicit approved set."
+    },
+    {
+      "id": "hosted-tool-coverage-hole",
+      "expectedDisposition": "not_governed",
+      "proof": "The capability manifest retains host-exclusive surfaces as invoke-only or unavailable."
+    },
+    {
+      "id": "no-observed-invocation",
+      "expectedDisposition": "unavailable",
+      "proof": "ACT10 emits no execution claim when no subagent candidate exists."
+    },
+    {
+      "id": "forged-actor-attribution",
+      "expectedDisposition": "identity_unproven",
+      "proof": "Host receipts bind content and invocation fields only; the fixed attribution note forbids upgrading them to identity proof."
+    },
+    {
+      "id": "replayed-notification",
+      "expectedDisposition": "refused",
+      "proof": "ACT10 rejects duplicate thread, turn and item lifecycle events."
+    },
+    {
+      "id": "cross-session-notification",
+      "expectedDisposition": "refused",
+      "proof": "ACT10 rejects a subagent thread whose sessionId differs from the observation session."
+    },
+    {
+      "id": "transcript-tamper",
+      "expectedDisposition": "binding_mismatch",
+      "proof": "ACT7/ACT10 compare current transcript bytes with the observation-time digest."
+    },
+    {
+      "id": "activation-authority-mismatch",
+      "expectedDisposition": "refused_before_write",
+      "proof": "ACT9 separately admits and binds the activation host input to request, context, inert receipt, manifest and rung."
+    },
+    {
+      "id": "fresh-context-unproven",
+      "expectedDisposition": "unavailable",
+      "proof": "ACT10 derives freshContext only from a newly created non-forked subagent thread after the spawn completion."
+    },
+    {
+      "id": "final-message-phase-unknown",
+      "expectedDisposition": "unavailable",
+      "proof": "ACT10 accepts only phase=final_answer and orders candidates by completedAtMs inside the completed turn."
+    }
+  ],
+  "storyAcceptance": {
+    "S076": "verified",
+    "S080": "accepted_with_explicit_unavailable_cells",
+    "S057": "partial_live_multi_agent_positive_probe_missing"
+  },
+  "notClaimed": [
+    "Codex generated TCRN SessionStart bytes have not been fired in a real Codex host session.",
+    "No live App Server attach or observer-driven Codex subagent invocation has been performed.",
+    "No Codex App-visible multi-agent record has been compared with a Workflow receipt.",
+    "No host actor identity, host signature, complete event coverage, PreToolUse gate, PermissionRequest responder or Stop blocker is claimed.",
+    "MIN-046 keeps enforce hooks unauthorized until a separate Owner ruling with blast-radius, independent kill-switch and real fail-closed red evidence."
+  ]
+}

@@ -25,6 +25,7 @@ import {
   workflowMcpTools,
 } from "../dist/build/packages/cli/src/mcp.js";
 import {
+  CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
   CODEX_ADAPTER_HOST_VERSION,
   CODEX_ADAPTER_REQUEST_VERSION,
   OPERATOR_AUTHORITY_BUNDLE_VERSION,
@@ -167,6 +168,30 @@ function codexHostInput(request, overrides = {}) {
   return { ...basis, hostDigest: canonicalSha256(basis) };
 }
 
+function codexActivationHostInput(request, overrides = {}) {
+  const basis = {
+    schemaVersion: CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
+    requestDigest: calculateCodexAdapterRequestDigest(request),
+    contextDigest: request.contextResult.contextDigest,
+    workspaceId: request.workspaceId,
+    projectId: request.projectId,
+    workId: request.workId,
+    governedAction: "activate",
+    hostProduct: "Codex CLI",
+    hostVersionReadback: "codex-cli/0.139.0",
+    contextIssuedAt: "2026-07-24T11:00:00Z",
+    contextExpiresAt: "2026-07-24T13:00:00Z",
+    verificationTime: NOW,
+    installationTarget: "project_local_activation",
+    activationAllowed: true,
+    inertInstallationReceiptDigest: hash("codex-inert-installation"),
+    capabilityManifestDigest: hash("capability-manifest"),
+    stage: "step3",
+    ...overrides,
+  };
+  return { ...basis, hostDigest: canonicalSha256(basis) };
+}
+
 async function authorityFixture(options = {}) {
   const directory = await realpath(
     await mkdtemp(join(tmpdir(), "workflow-operator-authority-")),
@@ -190,6 +215,7 @@ async function authorityFixture(options = {}) {
     },
     hostInputs: {
       codexAdapter: null,
+      codexAdapterActivation: null,
       claudeAdapter: null,
       claudeAdapterActivation: null,
       ...options.hostInputs,
@@ -289,7 +315,12 @@ test("historical twelve are reconciled to the seven remaining IO-only gaps", () 
 });
 
 test("pinned authority admits, rotates and reports source identity", async () => {
-  const first = await authorityFixture();
+  const request = adapterRequest();
+  const first = await authorityFixture({
+    hostInputs: {
+      codexAdapterActivation: codexActivationHostInput(request),
+    },
+  });
   const second = await authorityFixture({ generation: 2, minimumGeneration: 2 });
   try {
     const admittedFirst = await readOperatorAuthority(
@@ -309,6 +340,10 @@ test("pinned authority admits, rotates and reports source identity", async () =>
       NOW,
     );
     assert.equal(admittedFirst.bundle.generation, 1);
+    assert.equal(
+      admittedFirst.codexAdapterActivationHost?.input.stage,
+      "step3",
+    );
     assert.equal(admittedSecond.bundle.generation, 2);
     assert.match(admittedSecond.authoritySourceIdentityDigest, /^[a-f0-9]{64}$/);
   } finally {

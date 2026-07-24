@@ -45,6 +45,12 @@ import type {
   ClaudeAdapterInstallationFileIdentity,
 } from "./claude-adapter.js";
 import {
+  admitCodexAdapterActivationHostInput,
+} from "./codex-adapter-activation.js";
+import type {
+  CodexAdapterActivationHostContext,
+} from "./codex-adapter-activation.js";
+import {
   admitCodexAdapterHostInput,
 } from "./codex-adapter.js";
 import type {
@@ -114,6 +120,7 @@ export interface OperatorAuthorityFileGrants {
 
 export interface OperatorAuthorityHostInputs {
   readonly codexAdapter: Readonly<Record<string, unknown>> | null;
+  readonly codexAdapterActivation: Readonly<Record<string, unknown>> | null;
   readonly claudeAdapter: Readonly<Record<string, unknown>> | null;
   readonly claudeAdapterActivation: Readonly<Record<string, unknown>> | null;
 }
@@ -147,6 +154,7 @@ export interface OperatorAuthorityContext {
   readonly profileAdmissionAuthority?: GenericProfileAdmissionAuthority;
   readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
   readonly codexAdapterHost?: CodexAdapterHostContext;
+  readonly codexAdapterActivationHost?: CodexAdapterActivationHostContext;
   readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
   readonly claudeAdapterHost?: ClaudeAdapterHostContext;
   readonly claudeAdapterActivationHost?: ClaudeAdapterActivationHostContext;
@@ -365,6 +373,7 @@ export function validateOperatorAuthorityBundle(
   const hosts = record(document.hostInputs, "hostInputs");
   exact(hosts, [
     "codexAdapter",
+    "codexAdapterActivation",
     "claudeAdapter",
     "claudeAdapterActivation",
   ], "hostInputs");
@@ -409,6 +418,10 @@ export function validateOperatorAuthorityBundle(
       codexAdapter: nullableHostInput(
         hosts.codexAdapter,
         "hostInputs.codexAdapter",
+      ),
+      codexAdapterActivation: nullableHostInput(
+        hosts.codexAdapterActivation,
+        "hostInputs.codexAdapterActivation",
       ),
       claudeAdapter: nullableHostInput(
         hosts.claudeAdapter,
@@ -502,6 +515,8 @@ export async function readOperatorAuthority(
   }
 
   let codexAdapterHost: CodexAdapterHostContext | undefined;
+  let codexAdapterActivationHost:
+    CodexAdapterActivationHostContext | undefined;
   let claudeAdapterHost: ClaudeAdapterHostContext | undefined;
   let claudeAdapterActivationHost:
     ClaudeAdapterActivationHostContext | undefined;
@@ -509,6 +524,12 @@ export async function readOperatorAuthority(
     codexAdapterHost = bundle.hostInputs.codexAdapter === null
       ? undefined
       : admitCodexAdapterHostInput(bundle.hostInputs.codexAdapter);
+    codexAdapterActivationHost =
+      bundle.hostInputs.codexAdapterActivation === null
+        ? undefined
+        : admitCodexAdapterActivationHostInput(
+          bundle.hostInputs.codexAdapterActivation,
+        );
     claudeAdapterHost = bundle.hostInputs.claudeAdapter === null
       ? undefined
       : admitClaudeAdapterHostInput(bundle.hostInputs.claudeAdapter);
@@ -520,6 +541,7 @@ export async function readOperatorAuthority(
         );
     for (const host of [
       codexAdapterHost,
+      codexAdapterActivationHost,
       claudeAdapterHost,
       claudeAdapterActivationHost,
     ]) {
@@ -557,6 +579,9 @@ export async function readOperatorAuthority(
       ? {}
       : { contextRouteAuthority: bundle.fileAuthorities.contextRoute }),
     ...(codexAdapterHost === undefined ? {} : { codexAdapterHost }),
+    ...(codexAdapterActivationHost === undefined
+      ? {}
+      : { codexAdapterActivationHost }),
     ...(bundle.fileAuthorities.codexAdapterInstallation === null
       ? {}
       : {
