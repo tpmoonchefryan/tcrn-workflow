@@ -1,6 +1,6 @@
 {
   "schema": "tcrn.host-facts.v1",
-  "status": "SURFACE OBSERVED — capability discovery only; no adapter installed or activated",
+  "status": "SURFACE OBSERVED; SessionStart trust/approval/fire/drift behavior measured separately",
   "observedAt": "2026-07-24",
   "host": {
     "product": "Codex CLI",
@@ -8,9 +8,9 @@
     "versionSource": "codex --version"
   },
   "method": {
-    "kind": "read-only surface discovery of the installed binary; no session was started, nothing was installed, and no host state was mutated",
+    "kind": "read-only binary discovery plus a separately recorded disposable-project SessionStart trust probe",
     "reproducibility": "every digest below is regenerable on Codex 0.139.0 with the stated command; a different version is expected to differ, so this receipt is version-pinned evidence, not a version-independent claim",
-    "boundary": "this establishes what surfaces exist (EPIC-021 host facts). It does NOT exercise them: no hook fired, no plugin was installed, no App Server round-trip was performed, and no TCRN adapter exists for Codex yet (EPIC-023)."
+    "boundary": "the schema/feature/plugin/MCP rows establish surfaces. docs/verification/host/codex-session-start-activation.json separately proves one operator-approved SessionStart fire and a changed-definition skip. No plugin was installed, no App Server round-trip was driven, and the generated TCRN hook bytes were not themselves run in that host probe."
   },
   "observed": {
     "featureFlags": {
@@ -39,19 +39,19 @@
       "aggregateSchemaDigest": "sha256:4c47a458f57d09cbbf50bf2f58b38f4e",
       "schemaFileCount": 37,
       "threadControlOperations": [
-        "Thread/read",
-        "Thread/list",
-        "Thread/resume",
-        "Thread/fork",
-        "Thread/rollback",
-        "Thread/archive",
-        "Thread/compact/start",
-        "Thread/injectItems",
-        "Thread/metadata/update",
-        "Thread/name/set",
-        "Thread/goal/set",
-        "Thread/goal/get",
-        "Thread/goal/clear"
+        "thread/read",
+        "thread/list",
+        "thread/resume",
+        "thread/fork",
+        "thread/rollback",
+        "thread/archive",
+        "thread/compact/start",
+        "thread/injectItems",
+        "thread/metadata/update",
+        "thread/name/set",
+        "thread/goal/set",
+        "thread/goal/get",
+        "thread/goal/clear"
       ],
       "approvalSurface": [
         "ExecCommandApproval",
@@ -83,7 +83,13 @@
         "codex mcp (manage external MCP servers)",
         "codex mcp-server (run Codex as an MCP server, stdio)"
       ],
-      "note": "a host-neutral Workflow MCP server (EPIC-022) would register through 'codex mcp'; Codex can itself act as an MCP server"
+      "note": "the host-neutral Workflow MCP server delivered by EPIC-022 can register through 'codex mcp'; registration in a particular Codex installation is still an operator action"
+    },
+    "sessionStartTrustProbe": {
+      "evidence": "docs/verification/host/codex-session-start-activation.json",
+      "result": "an exact project SessionStart command definition was approved through /hooks, fired once with source=startup, then a command-definition change did not fire until reapproval",
+      "hostInternalTrustHash": "opaque-not-exported",
+      "localDigestClaim": "the evidence records TCRN digests of exact local definition bytes and does not assert equality with Codex's internal hash"
     }
   },
   "documentedNotExercised": {
@@ -101,15 +107,15 @@
       "SubagentStop",
       "Stop"
     ],
-    "trustModel": "the docs state a non-managed command hook must be reviewed and trusted against its current hash before it runs, and a changed hook definition requires re-approval; this per-hash trust gate was NOT exercised here",
-    "caveat": "these events and the trust gate are documentation claims. They are recorded separately from 'observed' precisely because this receipt did not fire a hook or run the trust ceremony."
+    "trustModel": "the hook-event list remains documentation-derived; the SessionStart trust and reapproval behavior is separately measured in docs/verification/host/codex-session-start-activation.json",
+    "caveat": "events other than SessionStart remain documentation claims and have not been fired by this probe"
   },
   "notVerified": [
-    "any hook actually firing (SessionStart, SessionEnd, PreToolUse, etc.)",
-    "the per-hash trust-and-re-approval ceremony",
+    "any hook event other than SessionStart actually firing",
+    "Codex's opaque internal trust hash or an exported approved-hash registry",
     "SessionEnd firing semantics and tool coverage",
     "an App Server initialize/turn round-trip",
     "plugin loading of a real bundle",
-    "any TCRN adapter install or activation on Codex (no such adapter exists yet; EPIC-023)"
+    "a live host fire of the exact generated TCRN SessionStart handler (the generic trust probe and hermetic generated-handler proof are separate evidence)"
   ]
 }

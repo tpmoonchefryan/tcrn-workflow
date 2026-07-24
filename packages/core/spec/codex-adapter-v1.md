@@ -2,10 +2,13 @@
 
 ## Status and scope
 
-This candidate implements an inert, deterministic bridge from an already validated
-Context Router result to a four-file template bundle. It does not install or
-activate `.codex`, hook, configuration, Skill, agent, store, network, database,
-AOS, or runtime state. OG-04 remains unsatisfied and RC3 remains unaccepted.
+This V1 contract implements an inert, deterministic bridge from an already
+validated Context Router result to a four-file template bundle. The V1 generator
+itself does not install or activate `.codex`, hook, configuration, Skill, agent,
+store, network, database, AOS, or runtime state. Additive INIT-009 modules now
+consume this unchanged inert bundle for a governed Step-1 install and a separately
+approved SessionStart activation; those operations do not weaken or reinterpret
+this V1 generation contract.
 
 ## Admission
 
@@ -64,7 +67,11 @@ not general DLP.
 
 ## Residuals
 
-Templates remain uninstalled and unactivated. There is no live hook behavior,
-OS-level parent-component race defense, Codex activation, or owner-visible
-capability claim. Installation, activation, OG-04, RC3, and P6 closeout require
-separate governed routes.
+The V1 output remains uninstalled and unactivated until a caller takes a separate
+governed route. `codex-adapter-installer.ts` provides the descriptor-bound inert
+install. `codex-adapter-activation.ts` then permits exactly one fail-open
+SessionStart definition, with a digest-bound 1024-byte advisory summary and a
+separate operator approval-and-fire receipt. Installation never proves host
+activation, Codex's internal trust hash remains opaque, and no PreToolUse
+enforcement, Controller, OS-level parent-component race defense, or release-byte
+claim is added to this V1 specification.

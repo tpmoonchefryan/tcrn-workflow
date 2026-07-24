@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "tcrn.act10-codex-execution-collection-cases.v1",
+  "protocolVersion": "Codex CLI 0.139.0",
+  "notificationMethods": [
+    "item/completed",
+    "thread/started",
+    "turn/completed",
+    "turn/started"
+  ],
+  "bindings": [
+    "sessionId",
+    "threadId",
+    "turnId",
+    "agentInvocationId",
+    "promptDigest",
+    "outputDigest"
+  ],
+  "unavailableCases": 5,
+  "refusalCases": 4,
+  "readOnly": true,
+  "drivesHost": false,
+  "transcriptsSigned": false,
+  "attributionNotIdentity": true,
+  "liveHostProof": "not-claimed-no-observer-driven-subagent-invocation",
+  "schemaEvidence": "docs/verification/host/codex-app-server-execution-collection.json",
+  "standalone": "pure-correlation-of-a-supplied-version-pinned-notification-stream"
+}

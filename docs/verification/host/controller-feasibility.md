@@ -18,11 +18,23 @@ source.
 It does not attach to a live App Server. The stream is *supplied* to it. Attaching
 would require running a Codex session, which is out of scope here.
 
+S054 adds a consumer of that same supplied stream:
+`packages/core/src/codex-execution-collection.ts` correlates the lower-case wire
+methods `item/completed`, `thread/started`, `turn/started` and `turn/completed`.
+When a completed `collabAgentToolCall`/`spawnAgent` can be bound to a subagent
+thread, its first turn and a final `agentMessage`, the collector emits an
+`observe` record with real session/thread/turn ids and prompt/output digests.
+Missing fields, an unpinned protocol or incomplete lifecycle return
+`unavailable`; nothing is inferred. The resulting transcript projection is
+unsigned attribution evidence, not identity proof. `pnpm verify:act10` proves
+that correlation against the generated 0.139.0 TypeScript schema shapes without
+starting or steering an agent.
+
 ## S079 — Controller feasibility on Codex
 
 **Mechanically feasible; deliberately not built.** Codex 0.139.0's App Server
-protocol exposes the requests an active controller would need — `Thread/resume`,
-`Thread/fork`, `Thread/rollback`, `Thread/injectItems`, `Thread/compact/start`, plus
+protocol exposes the requests an active controller would need — `thread/resume`,
+`thread/fork`, `thread/rollback`, `thread/injectItems`, `thread/compact/start`, plus
 the approval surface (`ExecCommandApproval`, `ApplyPatchApproval`,
 `FileChangeApproval`, `PermissionsRequestApproval`). The schema is real and pinned
 (`docs/verification/host/codex-0.139.0-facts.json`).
@@ -35,7 +47,7 @@ problem:
    rolls back threads is that mesh returning under another name. MIN-042 held it
    outside this initiative and required a separate initiative plus a GD-1
    re-litigation before any of it is built.
-2. **A blast radius nobody has bounded.** `Thread/rollback` and `Thread/injectItems`
+2. **A blast radius nobody has bounded.** `thread/rollback` and `thread/injectItems`
    mutate a user's session history. The failure-policy discipline MIN-046 established
    for blocking hooks — declared blast radius, an owner-tested kill switch reachable
    without the mechanism, fail-closed behaviour proven on a live host — applies at

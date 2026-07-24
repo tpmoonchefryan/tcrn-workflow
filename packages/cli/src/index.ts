@@ -88,8 +88,16 @@ import {
   planCompatibilityMode,
   planCodexAdapterRollback,
   readCodexAdapterInstallationReceipt,
+  readCodexActivationInstallationReceipt,
   installCodexAdapterBundle,
+  installCodexAdapterActivation,
   executeCodexAdapterRollback,
+  uninstallCodexAdapterActivation,
+  assessCodexActivationTrust,
+  createCodexHostActivationReceipt,
+  generateCodexActivationArtifacts,
+  generateCodexSessionSummary,
+  collectCodexAppServerExecutions,
   generateClaudeAdapterActivationRollbackPlan,
   readClaudeAdapterActivationReceipt,
   simulateCodexAdapterLifecycle,
@@ -527,6 +535,10 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
 // verb. New verbs MUST ship a catalog entry (SDC-1); the p3-cli-catalog parity
 // test enforces two-way name equality with the dispatcher.
 export const COMMAND_CATALOG = Object.freeze([
+  { name: "adapter-activate", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "capability-manifest-digest", required: true, valueKind: "string" }, { name: "step3", required: false, valueKind: "boolean" }] },
+  { name: "adapter-activation-assess", availability: "cli", mutates: false, flags: [{ name: "binding", required: true, valueKind: "json" }, { name: "approved-definition-digests", required: true, valueKind: "json" }] },
+  { name: "adapter-activation-record", availability: "cli", mutates: false, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }, { name: "approved-definition-digests", required: true, valueKind: "json" }, { name: "observation", required: true, valueKind: "json" }] },
+  { name: "adapter-deactivate", availability: "cli", mutates: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }] },
   { name: "adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }] },
@@ -557,6 +569,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "claude-adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
   { name: "claude-adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "claude-adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
+  { name: "codex-execution-observe", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "json" }] },
   { name: "commands", availability: "cli", mutates: false, flags: [] },
   { name: "compatibility-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "compatibility-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
@@ -763,6 +776,125 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     io.write(canonicalJson({ reasonCode: "CONTEXT_VALIDATED", contextDigest: result.contextDigest }));
     return;
   }
+  if (command === "adapter-activate") {
+    const values = parseArguments(rest, [
+      "request",
+      "installation-root",
+      "generation-id",
+      "installation-receipt",
+      "installation-receipt-digest",
+      "receipt-out",
+      "capability-manifest-digest",
+      "step3",
+    ]);
+    required(values, [
+      "request",
+      "installation-root",
+      "generation-id",
+      "installation-receipt",
+      "installation-receipt-digest",
+      "receipt-out",
+      "capability-manifest-digest",
+    ]);
+    const request = jsonValue(values.request, "request");
+    const bundle = generateCodexAdapterBundle(request, io.codexAdapterHost);
+    const installationPath = values["installation-receipt"] ?? "";
+    const inertInstallation = await readCodexAdapterInstallationReceipt(
+      installationPath,
+      suppliedAuthority(
+        io.codexAdapterInstallationAuthority,
+        installationPath,
+        values["installation-receipt-digest"],
+      ),
+    );
+    const stage = booleanValue(values.step3, "step3") ? "step3" : "step2";
+    const summary = generateCodexSessionSummary(
+      bundle,
+      values["capability-manifest-digest"],
+      stage,
+    );
+    const artifacts = generateCodexActivationArtifacts(summary);
+    const installed = await installCodexAdapterActivation(
+      bundle,
+      inertInstallation,
+      artifacts,
+      {
+        installationRoot: values["installation-root"] ?? "",
+        generationId: values["generation-id"] ?? "",
+        receiptPath: values["receipt-out"] ?? "",
+      },
+    );
+    io.write(canonicalJson(installed.receipt));
+    return;
+  }
+  if (command === "adapter-activation-assess") {
+    const values = parseArguments(rest, [
+      "binding",
+      "approved-definition-digests",
+    ]);
+    required(values, ["binding", "approved-definition-digests"]);
+    io.write(
+      canonicalJson(
+        assessCodexActivationTrust(
+          jsonValue(values.binding, "binding"),
+          jsonValue(
+            values["approved-definition-digests"],
+            "approved-definition-digests",
+          ),
+        ),
+      ),
+    );
+    return;
+  }
+  if (command === "adapter-activation-record") {
+    const values = parseArguments(rest, [
+      "activation-receipt",
+      "activation-receipt-digest",
+      "approved-definition-digests",
+      "observation",
+    ]);
+    required(values, [
+      "activation-receipt",
+      "activation-receipt-digest",
+      "approved-definition-digests",
+      "observation",
+    ]);
+    const receiptPath = values["activation-receipt"] ?? "";
+    const context = await readCodexActivationInstallationReceipt(receiptPath, {
+      expectedCanonicalPath: receiptPath,
+      expectedFileSha256: values["activation-receipt-digest"] ?? "",
+    });
+    io.write(
+      canonicalJson(
+        createCodexHostActivationReceipt(
+          context.receipt,
+          jsonValue(
+            values["approved-definition-digests"],
+            "approved-definition-digests",
+          ),
+          jsonValue(values.observation, "observation"),
+        ),
+      ),
+    );
+    return;
+  }
+  if (command === "adapter-deactivate") {
+    const values = parseArguments(rest, [
+      "activation-receipt",
+      "activation-receipt-digest",
+    ]);
+    required(values, [
+      "activation-receipt",
+      "activation-receipt-digest",
+    ]);
+    const receiptPath = values["activation-receipt"] ?? "";
+    const context = await readCodexActivationInstallationReceipt(receiptPath, {
+      expectedCanonicalPath: receiptPath,
+      expectedFileSha256: values["activation-receipt-digest"] ?? "",
+    });
+    io.write(canonicalJson(await uninstallCodexAdapterActivation(context)));
+    return;
+  }
   if (command === "adapter-generate") {
     const values = parseArguments(rest, ["request"]);
     required(values, ["request"]);
@@ -825,6 +957,16 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const plan = planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), installation);
     const result = await executeCodexAdapterRollback(plan, values["installation-receipt"] ?? "");
     io.write(canonicalJson({ reasonCode: result.reasonCode, planDigest: result.planDigest }));
+    return;
+  }
+  if (command === "codex-execution-observe") {
+    const values = parseArguments(rest, ["input"]);
+    required(values, ["input"]);
+    io.write(
+      canonicalJson(
+        collectCodexAppServerExecutions(jsonValue(values.input, "input")),
+      ),
+    );
     return;
   }
   if (command === "claude-adapter-generate") {

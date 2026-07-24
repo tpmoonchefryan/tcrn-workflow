@@ -8,13 +8,13 @@
 
 English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-72-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-74-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [Why](#why-this-project-exists) · [Is this for you?](#is-this-for-you) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Using it](#using-it-for-real-work) · [Plain answers](#plain-answers-to-fair-questions) · [Known limits](#known-limits) · [License](#license)
 
-`Verified claims: 72 (hygiene 13 · inertness 13 · runtime 46)`
+`Verified claims: 74 (hygiene 13 · inertness 13 · runtime 48)`
 
 </div>
 
@@ -53,13 +53,13 @@ One rule holds the whole thing together, and it is the part people find hardest 
 | --- | --- |
 | **A workspace that is just files** | Your whole work graph (Initiative → Epic → Story → Subtask) lives in plain, canonically formatted JSON files with a hash chain — no database, no daemon. You can audit it with `cat` and `sha256sum`, and exports are byte-reproducible. |
 | **One command, 20 gates** | `pnpm verify:p1` runs the entire verification chain: format, lint, typecheck, build, ~40 test files, trust matrix, archive/SBOM/license/vulnerability policy, source allowlist, offline boundary, privacy scan, CI hardening, verification map, and clean-history proof. Anything unexpected stops the chain. |
-| **A claim ledger a machine can read** | `verification-map.yaml` binds 72 claims — 13 framework-hygiene, 13 inertness-proof, 46 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run. |
+| **A claim ledger a machine can read** | `verification-map.yaml` binds 74 claims — 13 framework-hygiene, 13 inertness-proof, 48 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run. |
 | **Guards that prove they still bite** | `pnpm guard-check` mutates each registered guard out of the source and requires its named test to go red — 17 guards, verified before every push. A protection that nothing would notice losing is not a protection. |
 | **Deliberation on the record** | Conferences and decision gates are appended to the same tamper-evident journal. A pending gate *blocks* its work item from reaching `done` (`WORKSPACE_GATE_PENDING`) — at the command and again on replay — and closing a conference distills each decision into a knowledge candidate that links back to it. |
 | **Every decision gets a name** | Enable actor attestation and every later mutation must declare who acted — the engine and its replay both fail closed on any event that omits an actor id. Workspaces that never enable it stay byte-identical to before. |
-| **Activation you can undo** | Three explicit steps turn the inert Claude Code bundle into a live governed session, and uninstalling restores `.claude/settings.json` byte for byte — observed on a real host, alongside a user's own pre-existing hook, which keeps working throughout. Any error in the session hook exits cleanly back to plain Claude Code. Nothing under `~/.claude` is ever named or written. |
+| **Activation you can undo** | Claude Code retains its measured three-step reversible activation. Codex now has a peer rung: one fail-open project `SessionStart` hook, digest-bound handler and summary, explicit `/hooks` approval, and deactivation that unregisters first and returns to the inert install. Installation alone never claims host activation. |
 | **Backups that prove themselves** | A snapshot emits a deterministic per-file manifest; the runbook round-trips snapshot → wipe → restore byte-identically, and the two failure modes that matter (partial or relocated restore) fail closed. |
-| **Two hosts, one truth** | Codex and Claude Code adapters share byte-identical host-neutral machinery with a proven cross-host parity digest. Both generate uninstalled template data by default; **Claude Code can then be activated, Codex cannot** — see "Status, honestly". |
+| **Two hosts, one truth** | Codex and Claude Code adapters share host-neutral authority and receipt machinery. Both remain inert by default, and both now have narrow fail-open SessionStart activation; Codex additionally records its exact-definition approval boundary without pretending its opaque host trust hash is exported. |
 | **Offline by construction** | Development mode installs a process-level network guard and sends zero telemetry. The privacy gate scans every tracked byte, all reachable git history, and the release archive for personal identifiers and machine paths. |
 | **Releases you can re-derive** | A release is an immutable tag plus a reproducible artifact set, rebuilt and byte-compared by `pnpm verify:p8`. External consumers verify through the companion `tcrn-workflow-helper`, whose own digest is published where you can check it independently. |
 | **Defects are first-class** | The create path admits the `Incident` kind, so a defect gets its own record and lineage instead of masquerading as a `Story`; `Review`, `Release`, and `Knowledge` stay closed to direct creation. Retiring a knowledge record reclaims its body and search matches summaries, so the curated store stays lean and findable. |
@@ -157,7 +157,7 @@ flowchart LR
     Layers --> REL
 ```
 
-Frozen protocols at the bottom, a file-native engine above them, capability layers above that, and host adapters at the top — inert until activation, which only Claude Code has. The protocols are additive-only: `work-model-v1` is frozen, and every extension registers itself without touching accepted schemas.
+Frozen protocols at the bottom, a file-native engine above them, capability layers above that, and host adapters at the top — inert until an explicitly approved activation rung. The protocols are additive-only: `work-model-v1` is frozen, and every extension registers itself without touching accepted schemas.
 
 ## Plain answers to fair questions
 
@@ -194,7 +194,14 @@ That a real Claude Code session receives a read-only summary of the workspace's 
 
 Everything else stays deliberately out. The framework does not adjudicate the host's tool use, does not suppress or rewrite responses, never writes under `~/.claude`, does not promote knowledge without an explicit action, and does not orchestrate sessions. A hook that fails prints nothing and the session continues as plain Claude Code — the one place this codebase fails open rather than closed, because a governance layer that can break a session is worse than one that goes quiet.
 
-Codex has no equivalent. Its adapter generates and simulates; it does not install, and nothing here writes to a Codex host.
+Codex now has the deliberately narrow equivalent: `adapter-install` remains inert,
+then `adapter-activate` adds one project-local `SessionStart` notify hook whose
+handler and 1024-byte summary are digest-bound. Codex still decides whether it
+runs: the operator must approve the exact definition through `/hooks`, any
+definition change requires reapproval, and the installation receipt stays
+`pending_host_approval`. `adapter-deactivate` unregisters first and returns to the
+inert rung. No PreToolUse/approval enforcement or active App Server Controller is
+claimed.
 
 ### How is a release trusted?
 
@@ -205,7 +212,7 @@ A release is an immutable annotated tag plus a reproducible artifact set (canoni
 Every number below is enforced by a gate — if one drifts, a build fails somewhere.
 
 - **20 gates** in the `verify:p1` chain, each with a stable terminal reason code.
-- **72 machine-verified claims** in `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 46 runtime-capability. The claims badge above is parsed and compared against the ledger on every run.
+- **74 machine-verified claims** in `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 48 runtime-capability. The claims badge above is parsed and compared against the ledger on every run.
 - **17 registered guards**, each proven to still bite by mutating it out and watching its test go red.
 - **~40 hermetic test files**, including real `SIGKILL` fault injection, 64-permutation determinism proofs in three independent layers, and a filesystem attack matrix.
 - **1 end-to-end flagship proof** (`pnpm verify:e2e`) — a hermetic replay of the full governed loop (initiative → epic → story → gate → conference → distill → promote → trace), every tutorial command executed verbatim.
@@ -223,6 +230,7 @@ Every number below is enforced by a gate — if one drifts, a build fails somewh
 | `verify:p4` / `verify:p4:knowledge` | Artifact lifecycle budgets, redaction, disposable archive apply/restore; knowledge core metadata/body separation, promotion CAS, 64-permutation parity. |
 | `verify:p5` | Closed generic-profile trust model, effective-policy digests, cold-start graph, eight inert Core Reference personas. |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | Context router scope/risk/budget controls and hostile corpus; Codex adapter bridge; Claude Code adapter (four-file template bundle, reversible settings fragment, forbidden-path rejection, CLAUDE.md fallback, cross-host parity digest). |
+| `verify:act4` / `verify:act9` / `verify:act10` | Codex inert install; single SessionStart activation plus exact-definition trust drift; read-only supplied-stream subagent/thread/turn collection with real session bindings and honest unavailable fallbacks. |
 | `verify:p7` / `verify:p7:compatibility` | Canonical exchange, compatibility manifest, anti-rollback floor, deterministic import/checkpoint/fallback plans. |
 | `verify:authority-mcp` | Out-of-band pinned operator authority, rotation/revocation refusals, and host-neutral structured MCP reads/writes. |
 | `verify:p8` | Reproducible release candidate: source archive rebuild + byte comparison, SBOM, provenance, checksums, six-file closed bundle, external trust negative matrix. |
@@ -293,7 +301,7 @@ The four boundaries above are permanent design decisions. The limits below are t
 - `0.1.0` is the **first accepted release**. Semantic Versioning applies; in the 0.x range the public API may still change between minor versions.
 - **Five minor releases have shipped since, and this is `0.5.0`.** `0.2.0` made gate identity real (roster-checked `owner_intent_required`), `0.3.0` added advisory scope on the record (`work-annotate`), `0.3.2` opened the `Incident` create path and gave the knowledge store curation headroom, `0.4.0` added background-resource residue governance, and `0.5.0` added the sprint / release-train mechanism. Each is an immutable tag with a reproducible artifact set; `CHANGELOG.md` carries the full ledger.
 - **Claude Code activation is live and has been observed on a real host.** Steps 1–3 install, activate and uninstall against Claude Code `2.1.201`; nine observations were recorded, including that the authority summary actually arrives in the model's context. What it does when live is inject a read-only summary at session start, nothing more — see the boundary list above for what it deliberately does not do. Receipt: `docs/verification/host/claude-code.json`.
-- **Codex stops at read-only.** `adapter-generate`, `-validate`, `-simulate`, `-fallback` and `-rollback-plan` are real, deterministic, host-neutral tooling. There is no Codex installer and no Codex activation, so nothing is written to a Codex host by anything here.
+- **Codex activation is narrow and evidence-graded.** The inert installer is reversible; activation registers only `SessionStart`, fails open, and requires Codex's operator approval of the exact current definition. A disposable Codex `0.139.0` probe recorded one approved fire and a changed-definition skip. The generated TCRN handler is proven hermetically, while a live fire of those exact generated bytes is not claimed. App Server collection consumes supplied notification streams only and never starts or steers a subagent. These are source-tree capabilities after `0.5.0`, not claims about the accepted `0.5.0` release bytes.
 - `supportedAosReleases` is empty: no external AOS compatibility is claimed.
 - Release mode requires the companion helper to accept the bytes: its bootstrap digest is published independently, and the accepted release digests are compiled into it.
 

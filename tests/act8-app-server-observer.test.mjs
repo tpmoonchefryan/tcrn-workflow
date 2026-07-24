@@ -43,12 +43,12 @@ function stream(notifications, overrides = {}) {
 
 test("a real notification stream folds into a bounded receipt that retains no params", () => {
   const receipt = stream([
-    { method: "Thread/started", params: { threadId: "t1", cwd: "/secret/path" } },
-    { method: "Turn/started", params: { turnId: "u1" } },
-    { method: "Item/commandExecution/outputDelta", params: { chunk: "SECRET OUTPUT" } },
-    { method: "Item/fileChange/outputDelta", params: { path: "/secret/file.ts" } },
-    { method: "Turn/completed", params: { turnId: "u1" } },
-    { method: "Thread/closed", params: { threadId: "t1" } },
+    { method: "thread/started", params: { threadId: "t1", cwd: "/secret/path" } },
+    { method: "turn/started", params: { turnId: "u1" } },
+    { method: "item/commandExecution/outputDelta", params: { chunk: "SECRET OUTPUT" } },
+    { method: "item/fileChange/outputDelta", params: { path: "/secret/file.ts" } },
+    { method: "turn/completed", params: { turnId: "u1" } },
+    { method: "thread/closed", params: { threadId: "t1" } },
   ]);
 
   assert.equal(receipt.totalNotifications, 6);
@@ -66,7 +66,7 @@ test("a real notification stream folds into a bounded receipt that retains no pa
 
 test("the observed vocabulary is the real protocol's, and covers the governance-relevant groups", () => {
   // Names taken from Codex 0.139.0's ServerNotification schema.
-  for (const method of ["Thread/started", "Turn/completed", "Item/completed", "Hook/started", "Process/exited", "Item/autoApprovalReview/started"]) {
+  for (const method of ["thread/started", "turn/completed", "item/completed", "hook/started", "process/exited", "item/autoApprovalReview/started"]) {
     assert.ok(OBSERVED_EVENT_METHODS.includes(method), `${method} must be observed`);
   }
   assert.deepEqual(Object.keys(OBSERVED_EVENT_GROUPS).sort(), ["command", "fileChange", "hook", "item", "thread", "turn"]);
@@ -78,8 +78,8 @@ test("the observed vocabulary is the real protocol's, and covers the governance-
 
 test("an unknown method is counted rather than dropped, and a drifted protocol is marked unpinned", () => {
   const receipt = stream([
-    { method: "Thread/started", params: {} },
-    { method: "Thread/somethingNewInAFutureVersion", params: {} },
+    { method: "thread/started", params: {} },
+    { method: "thread/somethingNewInAFutureVersion", params: {} },
     { method: "Another/unknownMethod", params: {} },
   ]);
   assert.equal(receipt.unknownMethodCount, 2);
@@ -87,7 +87,7 @@ test("an unknown method is counted rather than dropped, and a drifted protocol i
 
   // A stream from a protocol this build was not derived from is admitted but marked,
   // and may not back a completeness claim.
-  const drifted = stream([{ method: "Thread/started", params: {} }], { protocolDigest: "sha256:0000000000000000000000000000000000000000000000000000000000000000" });
+  const drifted = stream([{ method: "thread/started", params: {} }], { protocolDigest: "sha256:0000000000000000000000000000000000000000000000000000000000000000" });
   assert.equal(drifted.protocolBinding, "unpinned");
   assert.equal(assertPinnedObservation(receipt).protocolBinding, "pinned");
   reason("OBSERVER_PROTOCOL_UNPINNED", () => assertPinnedObservation(drifted));
@@ -95,7 +95,7 @@ test("an unknown method is counted rather than dropped, and a drifted protocol i
 
 test("malformed frames are counted, never silently swallowed", () => {
   const receipt = stream([
-    { method: "Turn/started", params: {} },
+    { method: "turn/started", params: {} },
     null,
     "not a frame",
     { noMethod: true },
@@ -108,7 +108,7 @@ test("malformed frames are counted, never silently swallowed", () => {
 });
 
 test("the receipt carries the coverage caveat and the read-only boundary immutably", () => {
-  const receipt = stream([{ method: "Thread/started", params: {} }]);
+  const receipt = stream([{ method: "thread/started", params: {} }]);
   assert.equal(receipt.coverageNote, OBSERVER_COVERAGE_NOTE);
   assert.ok(receipt.coverageNote.includes("not evidence"));
 
@@ -131,7 +131,7 @@ test("hostile and oversized inputs fail closed", () => {
     () => reason("OBSERVER_SCHEMA_INVALID", () => stream("not an array")),
     () => reason("OBSERVER_SCHEMA_INVALID", () => stream([], { sessionId: "" })),
     () => reason("OBSERVER_BUDGET_EXCEEDED", () => stream([], { hostVersion: "x".repeat(OBSERVER_LIMITS.summaryBytes + 1) })),
-    () => reason("OBSERVER_BUDGET_EXCEEDED", () => stream(Array.from({ length: OBSERVER_LIMITS.eventsPerObservation + 1 }, () => ({ method: "Turn/started" })))),
+    () => reason("OBSERVER_BUDGET_EXCEEDED", () => stream(Array.from({ length: OBSERVER_LIMITS.eventsPerObservation + 1 }, () => ({ method: "turn/started" })))),
   ];
   assert.equal(cases.length, fixture.hostileCases);
   for (const operation of cases) operation();
@@ -140,7 +140,7 @@ test("hostile and oversized inputs fail closed", () => {
 test("the module drives nothing: no request, socket, or host write exists in it", async () => {
   const source = await readFile(new URL("../packages/core/src/app-server-observer.ts", import.meta.url), "utf8");
   // The protocol's driving verbs are absent from the implementation.
-  for (const method of ["Thread/resume", "Thread/fork", "Thread/rollback", "Turn/interrupt", "Thread/injectItems"]) {
+  for (const method of ["thread/resume", "thread/fork", "thread/rollback", "turn/interrupt", "thread/injectItems"]) {
     assert.equal(source.includes(`"${method}"`), false, `observer must not name the driving verb ${method}`);
   }
   // The needles are assembled from fragments rather than written literally: the

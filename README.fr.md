@@ -8,13 +8,13 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · Français
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-72-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-74-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [Pourquoi ce projet existe](#pourquoi-ce-projet-existe) · [Est-ce fait pour vous](#est-ce-fait-pour-vous) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrage rapide](#démarrage-rapide) · [L'utiliser](#lutiliser-pour-de-vrai) · [Réponses directes](#réponses-directes) · [Limites connues](#limites-connues) · [Licence](#licence)
 
-`Verified claims: 72 (hygiene 13 · inertness 13 · runtime 46)`
+`Verified claims: 74 (hygiene 13 · inertness 13 · runtime 48)`
 
 </div>
 
@@ -53,13 +53,13 @@ Une seule règle tient l'ensemble, et c'est la partie que l'on croit le moins av
 | --- | --- |
 | **Un espace de travail qui n'est que des fichiers** | Tout votre graphe de travail (Initiative → Epic → Story → Subtask) vit dans des fichiers JSON simples et canoniques avec une chaîne de hachage — pas de base de données, pas de démon. Vous pouvez l'auditer avec `cat` et `sha256sum`, et les exports sont reproductibles octet pour octet. |
 | **Une commande, vingt portes** | `pnpm verify:p1` exécute toute la chaîne de vérification : format, lint, typage, build, ~40 fichiers de tests, matrice de confiance, politiques archive/SBOM/licences/vulnérabilités, liste blanche des sources, frontière hors ligne, analyse de confidentialité, durcissement CI, carte de vérification et preuve d'historique propre. La moindre surprise arrête la chaîne. |
-| **Un registre de revendications lisible par machine** | `verification-map.yaml` lie 72 revendications — 13 framework-hygiene, 13 inertness-proof, 46 runtime-capability — à des reason codes observables. Si le sujet d'une revendication change, sa preuve doit être rejouée. |
+| **Un registre de revendications lisible par machine** | `verification-map.yaml` lie 74 revendications — 13 framework-hygiene, 13 inertness-proof, 48 runtime-capability — à des reason codes observables. Si le sujet d'une revendication change, sa preuve doit être rejouée. |
 | **Des gardes qui prouvent qu'ils mordent encore** | `pnpm guard-check` retire par mutation chaque garde enregistrée du code source et exige que le test qui la couvre passe au rouge — 17 gardes, vérifiées avant chaque push. Une protection dont la disparition ne serait remarquée par personne n'est pas une protection. |
 | **Des délibérations au dossier** | Conférences et portes de décision sont ajoutées au même journal inviolable. Une porte non satisfaite *bloque* le passage de son élément de travail à `done` (`WORKSPACE_GATE_PENDING`) — à la commande, puis de nouveau au rejeu — et clore une conférence distille chaque décision en une candidate de connaissance qui y renvoie. |
 | **Chaque décision reçoit un nom** | Activez l'attestation d'acteur et chaque modification ultérieure doit déclarer qui a agi — le moteur et son rejeu échouent tous deux en fermeture sur tout événement dépourvu d'identifiant d'acteur. Les espaces de travail qui ne l'activent jamais restent identiques octet pour octet. |
 | **Une activation réversible** | Trois étapes explicites transforment le bundle Claude Code inerte en une session gouvernée active, et la désinstallation restaure `.claude/settings.json` octet pour octet — observé sur un hôte réel, aux côtés d'un hook préexistant de l'utilisateur qui continue de fonctionner. Toute erreur du hook de session ressort proprement en Claude Code ordinaire. Rien sous `~/.claude` n'est jamais nommé ni écrit. |
 | **Des sauvegardes qui se prouvent elles-mêmes** | Un instantané produit un manifeste déterministe fichier par fichier ; le runbook boucle instantané → effacement → restauration à l'octet près, et les deux modes d'échec qui comptent (restauration partielle ou déplacée) échouent en fermeture. |
-| **Deux hôtes, une seule vérité** | Les adaptateurs Codex et Claude Code partagent une mécanique neutre identique octet pour octet, avec une empreinte de parité inter-hôtes prouvée. Les deux génèrent par défaut des données de gabarit non installées ; **Claude Code peut ensuite être activé, Codex non** — voir « Statut, honnêtement ». |
+| **Deux hôtes, une seule vérité** | Codex et Claude Code partagent les mécanismes neutres d'authority et de reçus. Tous deux restent inertes par défaut et disposent d'une activation SessionStart étroite et fail-open. Codex consigne la frontière d'approbation de la définition exacte sans prétendre lire le trust hash opaque de l'hôte. |
 | **Hors ligne par construction** | Le mode développement installe une garde réseau au niveau du processus et n'émet aucune télémétrie. La porte de confidentialité balaie chaque octet suivi, tout l'historique git atteignable et l'archive de release à la recherche d'identifiants personnels et de chemins machine. |
 | **Des releases que vous pouvez redériver** | Une release est une étiquette immuable plus un ensemble d'artefacts reproductibles, reconstruits et comparés octet par octet par `pnpm verify:p8`. Les consommateurs externes vérifient via le projet compagnon `tcrn-workflow-helper`, dont l'empreinte est publiée là où vous pouvez la contrôler indépendamment. |
 | **Les défauts sont de première classe** | Le chemin de création admet le type `Incident`, de sorte qu'un défaut obtient son propre enregistrement et sa propre lignée au lieu de se faire passer pour un `Story` ; `Review`, `Release` et `Knowledge` restent fermés à la création directe. Retirer un enregistrement de connaissance récupère son corps et la recherche porte sur les résumés, de sorte que le magasin organisé reste léger et trouvable. |
@@ -194,7 +194,12 @@ Qu'une véritable session Claude Code reçoit un **résumé en lecture seule** d
 
 Tout le reste est délibérément laissé dehors. Le framework n'arbitre **pas** l'usage des outils de l'hôte, ne supprime ni ne réécrit **aucune** réponse, n'écrit **jamais** sous `~/.claude`, ne promeut **pas** de connaissance sans action explicite et n'orchestre **pas** les sessions. Un hook qui échoue n'imprime rien et la session continue en Claude Code ordinaire — le seul endroit où ce dépôt échoue en s'ouvrant plutôt qu'en se fermant, parce qu'une couche de gouvernance capable de casser une session est pire qu'une couche qui se tait.
 
-Codex n'a pas d'équivalent. Son adaptateur génère et simule ; il n'installe pas, et rien ici n'écrit sur un hôte Codex.
+Codex possède désormais un équivalent volontairement étroit. `adapter-install`
+reste inerte ; `adapter-activate` ajoute un seul hook `SessionStart` local au
+projet, avec handler et résumé de 1024 octets liés par digest. Son exécution exige
+l'approbation de la définition exacte via `/hooks`, et toute modification exige
+une nouvelle approbation. Le reçu d'installation reste
+`pending_host_approval` ; `adapter-deactivate` désenregistre d'abord le hook.
 
 ### Comment une release devient-elle digne de confiance
 
@@ -205,7 +210,7 @@ Une release est une étiquette annotée immuable plus un ensemble d'artefacts re
 Chaque chiffre ci-dessous est imposé par une porte — si l'un dérive, une compilation échoue quelque part.
 
 - **20 portes** dans la chaîne `verify:p1`, chacune avec un reason code terminal stable.
-- **72 revendications vérifiées par la machine** dans `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 46 runtime-capability. Le badge de revendications ci-dessus est analysé et confronté au registre à chaque exécution.
+- **74 revendications vérifiées par la machine** dans `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 48 runtime-capability. Le badge de revendications ci-dessus est analysé et confronté au registre à chaque exécution.
 - **17 gardes enregistrées**, chacune prouvée encore mordante en la retirant par mutation et en observant son test passer au rouge.
 - **~40 fichiers de tests hermétiques**, dont une injection de panne `SIGKILL` réelle, des preuves de déterminisme à 64 permutations dans trois couches indépendantes, et une matrice d'attaques du système de fichiers.
 - **1 preuve phare de bout en bout** (`pnpm verify:e2e`) — un rejeu hermétique de la boucle gouvernée complète (initiative → epic → story → gate → conference → distill → promote → trace), chaque commande du tutoriel exécutée mot pour mot.
@@ -223,6 +228,7 @@ Chaque chiffre ci-dessous est imposé par une porte — si l'un dérive, une com
 | `verify:p4` / `verify:p4:knowledge` | Budgets du cycle de vie des artefacts, caviardage, apply/restore d'archive jetable ; séparation métadonnées/corps du noyau de connaissances, CAS de promotion, parité à 64 permutations. |
 | `verify:p5` | Modèle de confiance de profil générique clos, empreintes de politique effective, graphe de démarrage à froid, huit personas Core Reference inertes. |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | Contrôles de portée/risque/budget du routeur de contexte et corpus hostile ; pont de l'adaptateur Codex ; adaptateur Claude Code (bundle de gabarit à quatre fichiers, fragment de settings réversible, rejet des chemins interdits, repli CLAUDE.md, empreinte de parité inter-hôtes). |
+| `verify:act4` / `verify:act9` / `verify:act10` | Installation Codex inerte ; activation SessionStart unique et dérive de définition exacte ; collecte read-only d'un flux fourni subagent/thread/turn avec repli unavailable explicite. |
 | `verify:p7` / `verify:p7:compatibility` | Échange canonique, manifeste de compatibilité, plancher anti-retour, plans déterministes d'import/point de contrôle/repli. |
 | `verify:authority-mcp` | Autorité opérateur épinglée hors bande, refus de rotation/révocation et lectures/écritures MCP structurées et neutres vis-à-vis de l'hôte. |
 | `verify:p8` | Candidat de release reproductible : reconstruction de l'archive source et comparaison octet par octet, SBOM, provenance, sommes de contrôle, bundle clos de six fichiers, matrice négative de confiance externe. |
@@ -293,7 +299,7 @@ Les quatre frontières ci-dessus sont des décisions de conception permanentes. 
 - `0.1.0` est la **première version acceptée**. Le versionnage sémantique s'applique ; dans la plage 0.x, l'API publique peut encore changer entre versions mineures.
 - **Cinq versions mineures ont été livrées depuis, et voici `0.5.0`.** `0.2.0` a rendu réelle l'identité de porte (`owner_intent_required` vérifié sur registre nominatif), `0.3.0` a ajouté la portée consultative sur l'enregistrement (`work-annotate`), `0.3.2` a ouvert le chemin de création `Incident` et donné au magasin de connaissance une marge de curation, `0.4.0` a ajouté la gouvernance des résidus de ressources d'arrière-plan, et `0.5.0` a ajouté le mécanisme de sprint / train de livraison. Chacune est une étiquette immuable avec un ensemble d'artefacts reproductibles ; `CHANGELOG.md` porte le registre complet.
 - **L'activation de Claude Code est active et a été observée sur un hôte réel**. Les étapes 1 à 3 installent, activent et désinstallent face à Claude Code `2.1.201` ; neuf observations ont été consignées, dont le fait que le résumé d'autorité parvient réellement au contexte du modèle. Une fois active, elle injecte un résumé en lecture seule au démarrage de la session, rien de plus — ce qu'elle s'interdit délibérément figure dans la liste des limites ci-dessus. Reçu : `docs/verification/host/claude-code.json`.
-- **Codex s'arrête à la lecture seule**. `adapter-generate`, `-validate`, `-simulate`, `-fallback` et `-rollback-plan` sont un outillage réel, déterministe et neutre vis-à-vis de l'hôte. Il n'existe ni installateur ni activation Codex, donc rien ici n'écrit sur un hôte Codex.
+- **L'activation Codex est étroite et graduée par les preuves.** L'installation inerte est réversible ; seul `SessionStart` est enregistré en fail-open et Codex doit approuver la définition exacte. Un probe jetable Codex `0.139.0` a consigné un déclenchement après approbation puis un skip après modification. La collecte App Server ne lit que des notifications fournies et ne démarre ni ne pilote de subagent. Ce sont des capacités de l'arbre source postérieures à `0.5.0`, pas des revendications sur les octets de la release `0.5.0` acceptée.
 - `supportedAosReleases` est vide : aucune compatibilité AOS externe n'est revendiquée.
 - Le mode release exige que le compagnon accepte les octets : son empreinte d'amorceur est publiée indépendamment, et les empreintes de release acceptées y sont compilées.
 

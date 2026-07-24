@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// INIT-009 EPIC-023 Step 1: the Codex adapter's project-local INERT installer.
+// INIT-009 EPIC-023: the Codex adapter's project-local installer.
 //
 // This is the Codex peer of installClaudeAdapterBundle (claude-adapter-installer.ts)
 // and deliberately inherits its hardening rather than inventing a second discipline:
@@ -10,36 +10,54 @@
 // content digest AND stat identity; and a fail-closed cleanup that leaves zero new
 // bytes behind when any step fails.
 //
-// What this step deliberately does NOT do, and why the ladder has a step at all:
-// nothing here touches Codex host configuration. No config.toml is read or written,
-// no hook is registered, no plugin is installed, and no Codex process is started.
-// The four files are inert JSON data under <root>/.codex/tcrn-workflow/, exactly the
-// bytes generateCodexAdapterBundle produced. Activation — registering a hook command
-// and passing Codex's per-hash trust-and-approval ceremony — is a later step that
-// requires a real host and the operator's approval, and is out of scope here.
+// installCodexAdapterBundle is Step 1 and deliberately touches no Codex host
+// configuration: the four files are inert JSON data under
+// <root>/.codex/tcrn-workflow/. installCodexAdapterActivation is the additive
+// S066/S067 rung lower in this file: it requires a descriptor-bound Step-1 receipt,
+// writes one SessionStart definition plus its handler/summary, and still cannot
+// approve itself. Codex's /hooks review remains an operator/host action and only a
+// separate observed receipt may claim that the exact definition fired.
 //
 // Uninstall reuses the existing planCodexAdapterRollback planner plus the executor
 // below, which removes only files whose bytes and stat identity still match the
 // receipt: a tampered file fails INSTALLER_ROLLBACK_MISMATCH and NOTHING is removed.
 
 import { createHash } from "node:crypto";
-import { constants } from "node:fs";
+import { constants, type BigIntStats } from "node:fs";
 import { lstat, mkdir, open, realpath, rm, rmdir, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 
 import { assertProtocolId, canonicalJson, canonicalSha256 } from "../../protocol/src/index.js";
 import {
   CODEX_ADAPTER_INSTALLATION_VERSION,
+  planCodexAdapterRollback,
   validateCodexAdapterBundle,
 } from "./codex-adapter.js";
 import type {
   CodexAdapterBundle,
+  CodexAdapterInstallationContext,
   CodexAdapterInstallationEntry,
   CodexAdapterInstallationFileIdentity,
   CodexAdapterInstallationReceipt,
 } from "./codex-adapter.js";
+import {
+  CODEX_ACTIVATION_PATHS,
+  CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
+  CODEX_HOOKS_PATH,
+  CODEX_SESSION_START_PATH,
+  CODEX_SESSION_SUMMARY_PATH,
+  assertCodexActivationReceiptContext,
+  validateCodexActivationArtifacts,
+} from "./codex-adapter-activation.js";
+import type {
+  CodexActivationArtifacts,
+  CodexActivationInstallationEntry,
+  CodexActivationInstallationReceipt,
+  CodexActivationReceiptContext,
+} from "./codex-adapter-activation.js";
 
 export const CODEX_ADAPTER_INSTALLER_REASON_CODES = Object.freeze([
+  "INSTALLER_ACTIVATION_PRECONDITION",
   "INSTALLER_ROOT_INVALID",
   "INSTALLER_TARGET_EXISTS",
   "INSTALLER_WRITE_FAILED",
@@ -64,6 +82,25 @@ export interface CodexAdapterRollbackResult {
   readonly reasonCode: "INSTALLER_ROLLBACK_EXECUTED";
   readonly planDigest: string;
   readonly removedCount: number;
+}
+
+export interface CodexAdapterActivationInstallOptions {
+  readonly installationRoot: string;
+  readonly generationId: string;
+  readonly receiptPath: string;
+}
+
+export interface CodexAdapterActivationInstallResult {
+  readonly receipt: CodexActivationInstallationReceipt;
+  readonly authority: CodexAdapterInstallationFileIdentity;
+  readonly sourceIdentityDigest: string;
+}
+
+export interface CodexAdapterActivationUninstallResult {
+  readonly reasonCode: "INSTALLER_ROLLBACK_EXECUTED";
+  readonly receiptDigest: string;
+  readonly removedCount: number;
+  readonly retainedHostTrustBoundary: string;
 }
 
 const exclusiveWriteFlags = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW;
@@ -158,6 +195,49 @@ async function writeExclusive(path: string, bytes: Buffer, message: string): Pro
   }
 }
 
+async function readPinnedInstalledFile(
+  entry: CodexAdapterInstallationEntry,
+): Promise<void> {
+  let stat: StatIdentity;
+  try {
+    stat = await lstat(entry.realpath);
+  } catch {
+    fail("INSTALLER_ACTIVATION_PRECONDITION", entry.path);
+  }
+  if (stat.isSymbolicLink() || stat.nlink !== 1 || !stat.isFile()) {
+    fail("INSTALLER_ACTIVATION_PRECONDITION", entry.path);
+  }
+  let handle;
+  try {
+    handle = await open(entry.realpath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch {
+    fail("INSTALLER_ACTIVATION_PRECONDITION", entry.path);
+  }
+  try {
+    const opened = await handle.stat();
+    const content = await handle.readFile();
+    const after = await handle.stat();
+    const named = await lstat(entry.realpath);
+    if (
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      opened.dev !== stat.dev ||
+      opened.ino !== stat.ino ||
+      after.dev !== opened.dev ||
+      after.ino !== opened.ino ||
+      named.dev !== after.dev ||
+      named.ino !== after.ino ||
+      content.length !== after.size ||
+      contentSha256(content) !== entry.contentDigest ||
+      identityDigest(stat) !== entry.identityDigest
+    ) {
+      fail("INSTALLER_ACTIVATION_PRECONDITION", entry.path);
+    }
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
+
 // Step 1. Write the validated inert bundle under <root>/.codex/tcrn-workflow/ and
 // emit the canonical installation-generation receipt. No Codex host configuration is
 // read or written; no hook is registered; nothing is activated.
@@ -201,6 +281,262 @@ export async function installCodexAdapterBundle(bundleValue: unknown, options: C
     if (createdRoot !== undefined) await rm(createdRoot, { recursive: true, force: true }).catch(() => undefined);
     throw error;
   }
+}
+
+// S066/S067 Step 2/3. The independently-read Step-1 receipt is required and
+// rechecked immediately before activation. The handler and summary are written
+// first; .codex/hooks.json is the final activation-file commit point. The emitted
+// receipt deliberately remains pending_host_approval: only Codex's /hooks ceremony
+// followed by an observed fire can produce a host-activation receipt.
+export async function installCodexAdapterActivation(
+  bundleValue: unknown,
+  inertInstallation: CodexAdapterInstallationContext,
+  artifactsValue: unknown,
+  options: CodexAdapterActivationInstallOptions,
+): Promise<CodexAdapterActivationInstallResult> {
+  const bundle = validateCodexAdapterBundle(bundleValue);
+  // planCodexAdapterRollback owns the WeakSet brand for descriptor-bound Step-1
+  // receipts. Calling it here verifies both that brand and the bundle binding.
+  planCodexAdapterRollback(bundle, inertInstallation);
+  const artifacts: CodexActivationArtifacts =
+    validateCodexActivationArtifacts(artifactsValue);
+  const installationRoot = await admitInstallationRoot(options.installationRoot);
+  const receiptPath = admitReceiptPath(installationRoot, options.receiptPath);
+  if (inertInstallation.receipt.installationRoot !== installationRoot) {
+    fail("INSTALLER_ACTIVATION_PRECONDITION", "installation root");
+  }
+  const generationId = options.generationId;
+  if (
+    typeof generationId !== "string" ||
+    generationId.length === 0 ||
+    !generationId.isWellFormed()
+  ) {
+    fail("INSTALLER_ROOT_INVALID", "generation id");
+  }
+  try {
+    assertProtocolId(generationId);
+  } catch {
+    fail("INSTALLER_ROOT_INVALID", "generation id is not a protocol id");
+  }
+  for (const entry of inertInstallation.receipt.entries) {
+    await readPinnedInstalledFile(entry);
+  }
+
+  const sources = new Map<string, string>([
+    [CODEX_SESSION_START_PATH, artifacts.handlerSource],
+    [CODEX_SESSION_SUMMARY_PATH, artifacts.summarySource],
+    [CODEX_HOOKS_PATH, artifacts.hooksSource],
+  ]);
+  const writtenTargets: string[] = [];
+  let receiptWritten = false;
+  try {
+    const entries: CodexActivationInstallationEntry[] = [];
+    // Safety order: dependencies before the registration that invokes them.
+    for (const path of [
+      CODEX_SESSION_START_PATH,
+      CODEX_SESSION_SUMMARY_PATH,
+      CODEX_HOOKS_PATH,
+    ] as const) {
+      const target = resolve(installationRoot, path);
+      const bytes = Buffer.from(sources.get(path) ?? "", "utf8");
+      await writeExclusive(target, bytes, path);
+      writtenTargets.push(target);
+      const stat = await lstat(target);
+      entries.push({
+        path,
+        realpath: await realpath(target),
+        contentDigest: contentSha256(bytes),
+        identityDigest: identityDigest(stat),
+      });
+    }
+    entries.sort((left, right) => compareCanonicalPath(left.path, right.path));
+    const basis = {
+      schemaVersion: CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
+      generationId,
+      bundleDigest: bundle.bundleDigest,
+      inertInstallationReceiptDigest:
+        inertInstallation.receipt.receiptDigest,
+      installationRoot,
+      artifactsDigest: artifacts.artifactsDigest,
+      binding: artifacts.binding,
+      entries,
+      approvedHookDefinitionDigests: Object.freeze([]) as readonly [],
+      activationState: "pending_host_approval" as const,
+      hostTrustHashRepresentation: "opaque_not_exported" as const,
+      installationDoesNotProveActivation: true as const,
+    };
+    const receipt: CodexActivationInstallationReceipt = {
+      ...basis,
+      receiptDigest: canonicalSha256(basis),
+    };
+    const receiptBytes = Buffer.from(canonicalJson(receipt), "utf8");
+    await writeExclusive(
+      receiptPath,
+      receiptBytes,
+      "activation installation receipt",
+    );
+    receiptWritten = true;
+    const authority: CodexAdapterInstallationFileIdentity = {
+      expectedCanonicalPath: await realpath(receiptPath),
+      expectedFileSha256: contentSha256(receiptBytes),
+    };
+    const sourceIdentityDigest = identityDigest(await lstat(receiptPath));
+    return deepFreeze({ receipt, authority, sourceIdentityDigest });
+  } catch (error) {
+    // Unregister first if the final activation file was reached, then remove the
+    // dependencies this call created. The inert Step-1 files remain untouched.
+    for (const target of [...writtenTargets].reverse()) {
+      await unlink(target).catch(() => undefined);
+    }
+    if (receiptWritten) await unlink(receiptPath).catch(() => undefined);
+    throw error;
+  }
+}
+
+function compareCanonicalPath(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+async function verifyActivationEntry(
+  entry: CodexActivationInstallationEntry,
+): Promise<void> {
+  let stat: StatIdentity;
+  try {
+    stat = await lstat(entry.realpath);
+  } catch {
+    fail("INSTALLER_ROLLBACK_MISMATCH", entry.path);
+  }
+  if (stat.isSymbolicLink() || stat.nlink !== 1 || !stat.isFile()) {
+    fail("INSTALLER_ROLLBACK_MISMATCH", entry.path);
+  }
+  let handle;
+  try {
+    handle = await open(entry.realpath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch {
+    fail("INSTALLER_ROLLBACK_MISMATCH", entry.path);
+  }
+  try {
+    const opened = await handle.stat();
+    const content = await handle.readFile();
+    const after = await handle.stat();
+    const named = await lstat(entry.realpath);
+    if (
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      opened.dev !== stat.dev ||
+      opened.ino !== stat.ino ||
+      after.dev !== opened.dev ||
+      after.ino !== opened.ino ||
+      named.dev !== after.dev ||
+      named.ino !== after.ino ||
+      content.length !== after.size ||
+      contentSha256(content) !== entry.contentDigest ||
+      identityDigest(stat) !== entry.identityDigest
+    ) {
+      fail("INSTALLER_ROLLBACK_MISMATCH", entry.path);
+    }
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
+
+async function verifyActivationReceiptSource(
+  context: CodexActivationReceiptContext,
+): Promise<void> {
+  let stat: StatIdentity;
+  let bigStat: BigIntStats;
+  try {
+    stat = await lstat(context.sourcePath);
+    bigStat = await lstat(context.sourcePath, { bigint: true });
+  } catch {
+    fail("INSTALLER_ROLLBACK_MISMATCH", "activation receipt");
+  }
+  const authorityIdentityDigest = canonicalSha256({
+    dev: bigStat.dev.toString(),
+    ino: bigStat.ino.toString(),
+    size: bigStat.size.toString(),
+    mode: bigStat.mode.toString(),
+    mtimeNs: bigStat.mtimeNs.toString(),
+    ctimeNs: bigStat.ctimeNs.toString(),
+  });
+  if (
+    stat.isSymbolicLink() ||
+    stat.nlink !== 1 ||
+    !stat.isFile() ||
+    authorityIdentityDigest !== context.sourceIdentityDigest
+  ) {
+    fail("INSTALLER_ROLLBACK_MISMATCH", "activation receipt");
+  }
+  let handle;
+  try {
+    handle = await open(
+      context.sourcePath,
+      constants.O_RDONLY | constants.O_NOFOLLOW,
+    );
+  } catch {
+    fail("INSTALLER_ROLLBACK_MISMATCH", "activation receipt");
+  }
+  try {
+    const opened = await handle.stat();
+    const content = await handle.readFile();
+    const after = await handle.stat();
+    const named = await lstat(context.sourcePath);
+    if (
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      opened.dev !== stat.dev ||
+      opened.ino !== stat.ino ||
+      after.dev !== opened.dev ||
+      after.ino !== opened.ino ||
+      named.dev !== after.dev ||
+      named.ino !== after.ino ||
+      content.length !== after.size ||
+      contentSha256(content) !== context.authorityFileSha256
+    ) {
+      fail("INSTALLER_ROLLBACK_MISMATCH", "activation receipt");
+    }
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
+
+// Reverse only the activation rung. Every entry is verified before any unlink.
+// hooks.json is removed first, then the handler and summary; the inert Step-1
+// bundle stays installed. Codex may retain its host-owned approval for the old
+// exact definition, but with no project hook definition there is no active hook.
+export async function uninstallCodexAdapterActivation(
+  contextValue: CodexActivationReceiptContext,
+): Promise<CodexAdapterActivationUninstallResult> {
+  const context = assertCodexActivationReceiptContext(contextValue);
+  const receipt = context.receipt;
+  await verifyActivationReceiptSource(context);
+  for (const entry of receipt.entries) await verifyActivationEntry(entry);
+  const hooksEntry = receipt.entries.find(
+    (entry) => entry.path === CODEX_HOOKS_PATH,
+  );
+  if (hooksEntry === undefined) {
+    fail("INSTALLER_ROLLBACK_MISMATCH", CODEX_HOOKS_PATH);
+  }
+  await unlink(hooksEntry.realpath);
+  for (const entry of receipt.entries) {
+    if (entry.path !== CODEX_HOOKS_PATH) await unlink(entry.realpath);
+  }
+  const receiptStat = await lstat(context.sourcePath).catch(() => undefined);
+  if (
+    receiptStat &&
+    !receiptStat.isSymbolicLink() &&
+    receiptStat.isFile() &&
+    receiptStat.nlink === 1
+  ) {
+    await unlink(context.sourcePath);
+  }
+  return deepFreeze({
+    reasonCode: "INSTALLER_ROLLBACK_EXECUTED" as const,
+    receiptDigest: receipt.receiptDigest,
+    removedCount: CODEX_ACTIVATION_PATHS.length,
+    retainedHostTrustBoundary:
+      "Codex may retain host-owned approval for the removed exact definition; no project hook remains active",
+  });
 }
 
 interface RollbackRemoval {

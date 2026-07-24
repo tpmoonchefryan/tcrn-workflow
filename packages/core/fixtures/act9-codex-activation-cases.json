@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "tcrn.act9-codex-activation-cases.v1",
+  "activationFiles": 3,
+  "hookEvents": [
+    "SessionStart"
+  ],
+  "matcher": "startup|resume",
+  "injectionBudgetBytes": 1024,
+  "failOpen": true,
+  "installationClaimsHostActivation": false,
+  "approvedSetInitiallyEmpty": true,
+  "hostTrustHashRepresentation": "opaque_not_exported",
+  "driftCases": 3,
+  "refusalCases": 6,
+  "liveHostProof": "operator-approved-and-fired-in-disposable-codex-0.139.0-project",
+  "liveHostEvidence": "docs/verification/host/codex-session-start-activation.json",
+  "standalone": "project-local-single-SessionStart-hook-no-enforce-surface"
+}

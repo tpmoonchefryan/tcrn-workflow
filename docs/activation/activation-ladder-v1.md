@@ -2,7 +2,8 @@
 
 - Status: Accepted per program authorization (recommended defaults, OD-32/OD-33/OD-34)
 - Date: 2026-07-17
-- Governs: WSG-2 (Step 1), WSG-3 (Step 2), WSG-4 (Step 3)
+- Governs: WSG-2 (Step 1), WSG-3 (Step 2), WSG-4 (Step 3), INIT-009
+  EPIC-023 S066/S067 (Codex peer rungs)
 
 Both host adapters ship **inert**: `generateClaudeAdapterBundle`
 (`packages/core/src/claude-adapter.ts:356`) emits uninstalled template data to
@@ -125,3 +126,65 @@ Step-2 fail-OPEN semantics admitted as the sole documented exception to the
 fail-closed norm (OD-32); the v2-fragment-with-new-merge-key approach and the
 Verity single-persona allowlist admitted (OD-33/OD-34). This doc is the activation
 gate artifact; WSG-2/3/4 code merges only after their named claims are green.
+
+## Codex peer ladder — INIT-009 EPIC-023
+
+Codex now follows the same narrow evidence staircase without pretending its host
+trust mechanism is the same as Claude Code settings.
+
+### Codex Step 1 — inert project-local install
+
+`adapter-install` writes only the four validated template files beneath
+`.codex/tcrn-workflow/`. It does not create `.codex/hooks.json`, start Codex, or
+claim activation. `pnpm verify:act4` remains the gate for this rung.
+
+### Codex Step 2 — one fail-open SessionStart notify hook (S066)
+
+`adapter-activate` requires a separately read, digest-pinned Step-1 receipt. It
+writes:
+
+- `.codex/tcrn-workflow/session-start.mjs`;
+- `.codex/tcrn-workflow/session-summary.json`;
+- exactly one `.codex/hooks.json` entry, for `SessionStart` with matcher
+  `startup|resume`.
+
+The command resolves the repository root at runtime and carries the exact handler
+and summary byte digests. The handler rechecks both digests, accepts only the
+documented SessionStart sources, emits at most 1024 UTF-8 bytes as
+`systemMessage`, and on every failure emits nothing and exits zero. No enforce
+event is installed.
+
+Codex owns the decisive activation step. A non-managed command hook is skipped
+until the operator reviews and approves its exact current definition through
+`/hooks`; a changed definition is skipped until approved again. Therefore the
+installation receipt always has:
+
+- `activationState: pending_host_approval`;
+- `approvedHookDefinitionDigests: []`;
+- `installationDoesNotProveActivation: true`.
+
+Only `adapter-activation-record`, given an explicit approval-and-fire observation,
+can emit `host_observed_active`. The approved set contains TCRN SHA-256 digests of
+the exact local definition bytes. Codex does not export its internal trust hash,
+so every receipt marks that value `opaque_not_exported` and never asserts digest
+equality. The disposable-host approval, fire, and changed-definition skip are
+recorded in
+`docs/verification/host/codex-session-start-activation.json`; `pnpm verify:act9`
+binds the code proof to that evidence.
+
+### Codex Step 3 — bounded Verity plus capability summary (S067)
+
+Step 3 uses the same single hook and adds the same closed Verity advisory persona
+used on Claude Code, plus the exact capability-manifest digest. Persona source,
+summary object, summary file, handler, and hook definition are digest-bound. A
+handler-byte or summary-byte change changes the command definition and therefore
+returns the local assessment to `pending_host_approval`; a changed approved set is
+also explicit. The injected text continues to confer no mutation or approval
+authority.
+
+`adapter-deactivate` verifies every activation file and its receipt before
+removing anything, unregisters `.codex/hooks.json` first, then removes the handler
+and summary, and leaves the inert Step-1 bundle intact. Codex may retain its
+host-owned approval for the removed exact definition; with no project hook
+definition, nothing remains active. The gate is
+`CODEX-SESSIONSTART-ACTIVATION` / `pnpm verify:act9`.

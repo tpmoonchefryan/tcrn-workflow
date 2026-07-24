@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "tcrn.codex-session-start-host-probe.v1",
+  "status": "MEASURED IN A DISPOSABLE PROJECT — operator approval, one fire, then definition-drift skip",
+  "observedAt": "2026-07-24",
+  "host": {
+    "product": "Codex CLI",
+    "version": "0.139.0",
+    "versionSource": "codex --version"
+  },
+  "method": {
+    "projectClass": "disposable local git repository",
+    "approvalSurface": "interactive /hooks review",
+    "sessionSurface": "codex exec in the approved project",
+    "networkClaim": "none",
+    "workflowAuthorityClaim": "none"
+  },
+  "observation": {
+    "hookEventName": "SessionStart",
+    "source": "startup",
+    "hookFired": true,
+    "fireCount": 1,
+    "sessionIdDigest": "sha256:daefb00a71ac888e1dd42437063f0b158bbdaf56c5ce796cf57629ee47df8bdb",
+    "inputFields": [
+      "cwd",
+      "hook_event_name",
+      "model",
+      "permission_mode",
+      "session_id",
+      "source",
+      "transcript_path"
+    ],
+    "markerDigest": "sha256:560424f8f884c5e6286981a1936625b1e74ebe69c34db7a023f080d38228b62d"
+  },
+  "approval": {
+    "initialLocalDefinitionDigest": "sha256:ee576fffddd472fbf3e789e7430d876be0d07d54a2a96c1a1133090e5e43985f",
+    "approvedDefinitionSet": [
+      "ee576fffddd472fbf3e789e7430d876be0d07d54a2a96c1a1133090e5e43985f"
+    ],
+    "setSemantics": "TCRN digest of the exact local hooks.json bytes approved during the probe"
+  },
+  "driftProbe": {
+    "change": "the command definition gained TCRN_HOOK_REVISION=2",
+    "changedLocalDefinitionDigest": "sha256:0bff245a23fcf5c0d34b30f6530b9433dcd8f4adb9799a95da278cf5e0ee72bc",
+    "changedDefinitionFired": false,
+    "fireCountAfterChangedDefinitionSession": 1,
+    "result": "the changed definition was skipped pending a new approval"
+  },
+  "boundary": {
+    "codexInternalTrustHash": "opaque-not-exported",
+    "localDigestEqualityClaim": false,
+    "installationReceiptProvesActivation": false,
+    "receiptMeaning": "operator-observed attribution evidence for this exact disposable-host probe, not host identity proof and not a signature",
+    "scope": "this proves the Codex trust/reapproval mechanism and SessionStart payload shape; generated TCRN adapter bytes are verified separately by pnpm verify:act9"
+  },
+  "evidenceDigest": "560424f8f884c5e6286981a1936625b1e74ebe69c34db7a023f080d38228b62d"
+}
