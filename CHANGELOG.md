@@ -3,6 +3,27 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.4.0 — 2026-07-24
+
+Background-resource residue governance: the machine-checkable half of a
+convention that keeps a governed agent session from leaking the background loads
+it spawns. The full narrative is `docs/releases/0.4.0.md`.
+
+### Added
+
+- **A host-neutral background-resource detector and registration face.** A pure
+  core (`packages/core/src/background-resource.ts`) records the process **group**
+  a session owns and, given a process-table snapshot, reports residue: any owned
+  group with a live member, or any init-reparented / parent-absent orphan whose
+  command matches a registered pattern. A thin host adapter
+  (`scripts/spawn-guard.mjs`) reads the live table with the reaper's hardened
+  `ps` invocation and stores the registry in the workspace transient zone,
+  outside the engine control tree. Ships with a red-proof (guard `BR-01`/`BR-02`)
+  that the injected orphan is always detected.
+- **A host-wiring recipe** (`docs/architecture/background-resource-governance.md`)
+  stating without overclaim that automatic session-end firing is Owner-gated on
+  both hosts (Claude `Stop` is a signed ladder step; Codex is trust-gated).
+
 ## 0.3.2 — 2026-07-23
 
 Knowledge-store curation headroom and the Incident create path. The full

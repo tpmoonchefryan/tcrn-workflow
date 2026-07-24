@@ -20,12 +20,12 @@ P1 defines and tests this admission boundary. It does not publish a release.
 
 ## P8 Release
 
-`0.3.2` is an accepted release. Its compatibility manifest declares
+`0.4.0` is an accepted release. Its compatibility manifest declares
 `supportedAosReleases: []`; it is not a supported AOS release pair. P8 produces
 deterministic source and release artifacts; publication is the Owner-signed
 annotated tag and the GitHub Release that carries them.
 
-The `0.3.2` release records `supportedAosReleases: []`; it does not
+The `0.4.0` release records `supportedAosReleases: []`; it does not
 enable a live compatibility pair, connected mode, or AOS mutation.
 
 ## Protocol V1
