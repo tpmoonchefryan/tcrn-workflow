@@ -281,6 +281,26 @@ export type {
   CodexAdapterRequest,
 } from "./codex-adapter.js";
 export {
+  APP_SERVER_OBSERVER_VERSION,
+  OBSERVED_EVENT_GROUPS,
+  OBSERVED_EVENT_METHODS,
+  OBSERVED_PROTOCOL_DIGEST,
+  OBSERVED_PROTOCOL_HOST,
+  OBSERVER_COVERAGE_NOTE,
+  OBSERVER_LIMITS,
+  OBSERVER_REASON_CODES,
+  ObserverError,
+  assertPinnedObservation,
+  observeAppServerStream,
+  validateObservationReceipt,
+} from "./app-server-observer.js";
+export type {
+  ObservationInput,
+  ObservationReceipt,
+  ObserverReasonCode,
+  ProtocolBinding,
+} from "./app-server-observer.js";
+export {
   COLLECTION_ATTRIBUTION_NOTE,
   COLLECTION_REASON_CODES,
   CollectionError,

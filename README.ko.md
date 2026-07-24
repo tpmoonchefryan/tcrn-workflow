@@ -8,13 +8,13 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · 한국어 · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-71-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-72-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [이 프로젝트가 존재하는 이유](#이-프로젝트가-존재하는-이유) · [당신에게 맞는가](#당신에게-맞는가) · [무엇을 얻는가](#무엇을-얻는가) · [빠른 시작](#빠른-시작) · [실제로 사용하기](#실제로-사용하기) · [솔직한 답변](#솔직한-답변) · [알려진 한계](#알려진-한계) · [라이선스](#라이선스)
 
-`Verified claims: 71 (hygiene 13 · inertness 13 · runtime 45)`
+`Verified claims: 72 (hygiene 13 · inertness 13 · runtime 46)`
 
 </div>
 
@@ -53,7 +53,7 @@ TCRN Workflow는 이 세 가지를 한꺼번에 막습니다 — 에이전트 �
 | --- | --- |
 | **그냥 파일인 워크스페이스** | 작업 그래프 전체(Initiative → Epic → Story → Subtask)가 정규화된 평범한 JSON 파일과 해시 체인으로 존재합니다 — 데이터베이스도 데몬도 없습니다. `cat`과 `sha256sum`으로 감사할 수 있고, 내보내기는 바이트 단위로 재현 가능합니다. |
 | **명령 하나, 게이트 20개** | `pnpm verify:p1`이 검증 사슬 전체를 실행합니다: 포맷, lint, 타입 검사, 빌드, 약 40개 테스트 파일, 신뢰 매트릭스, 아카이브/SBOM/라이선스/취약점 정책, 소스 허용 목록, 오프라인 경계, 프라이버시 스캔, CI 하드닝, 검증 맵, 클린 히스토리 증명. 예상 밖의 것이 하나라도 있으면 사슬이 멈춥니다. |
-| **기계가 읽는 주장 원장** | `verification-map.yaml`이 71개 주장 — framework-hygiene 13개, inertness-proof 13개, runtime-capability 45개 — 을 관측 가능한 reason code에 결속합니다. 주장의 주어가 바뀌면 그 증명은 다시 실행되어야 합니다. |
+| **기계가 읽는 주장 원장** | `verification-map.yaml`이 72개 주장 — framework-hygiene 13개, inertness-proof 13개, runtime-capability 46개 — 을 관측 가능한 reason code에 결속합니다. 주장의 주어가 바뀌면 그 증명은 다시 실행되어야 합니다. |
 | **여전히 작동함을 스스로 보이는 가드** | `pnpm guard-check`는 등록된 각 가드를 소스에서 변이 제거하고, 지정된 테스트가 빨간불이 되기를 요구합니다 — 가드 17개, 푸시할 때마다 검증. 사라져도 아무도 알아채지 못할 보호는 보호가 아닙니다. |
 | **기록에 남는 숙의** | 콘퍼런스와 결정 게이트는 같은 변조 탐지 저널에 추가됩니다. 충족되지 않은 게이트는 해당 작업 항목이 `done`에 도달하는 것을 *막습니다*(`WORKSPACE_GATE_PENDING`) — 명령 시점에도, 재생 시점에도 다시 — 그리고 콘퍼런스를 닫으면 각 결정이 역링크된 지식 후보로 증류됩니다. |
 | **모든 결정에 이름이 붙는다** | 액터 어테스테이션을 켜면 이후 모든 변경이 누가 행했는지 선언해야 합니다 — 엔진과 그 재생 모두 액터 ID가 빠진 이벤트에 대해 페일클로즈합니다. 켜지 않은 워크스페이스는 이전과 바이트 단위로 동일하게 동작합니다. |
@@ -205,7 +205,7 @@ Codex에는 이에 해당하는 것이 없습니다. 그 어댑터는 생성과 
 아래 모든 숫자는 게이트가 강제합니다 — 하나라도 어긋나면 어딘가에서 빌드가 실패합니다.
 
 - `verify:p1` 사슬의 **게이트 20개**, 각각 안정적인 종단 reason code를 가집니다.
-- `verification-map.yaml`의 **기계 검증 주장 71개** — framework-hygiene 13개, inertness-proof 13개, runtime-capability 45개. 위의 주장 배지는 실행할 때마다 파싱되어 원장과 대조됩니다.
+- `verification-map.yaml`의 **기계 검증 주장 72개** — framework-hygiene 13개, inertness-proof 13개, runtime-capability 46개. 위의 주장 배지는 실행할 때마다 파싱되어 원장과 대조됩니다.
 - **등록된 가드 17개**, 각각 변이 제거 후 테스트가 빨간불이 되는지 확인해 여전히 작동함을 증명합니다.
 - **밀폐 테스트 파일 약 40개**. 진짜 `SIGKILL` 결함 주입, 독립된 세 계층에서의 64순열 결정성 증명, 파일시스템 공격 매트릭스를 포함합니다.
 - **엔드투엔드 대표 증명 1개**(`pnpm verify:e2e`) — 통제 루프 전체(initiative → epic → story → gate → conference → distill → promote → trace)의 밀폐 재생으로, 튜토리얼의 모든 명령을 문자 그대로 실행합니다.

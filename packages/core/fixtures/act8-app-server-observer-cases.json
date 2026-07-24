@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "tcrn.act8-app-server-observer-cases.v1",
+  "protocolDigest": "sha256:4c47a458f57d09cbbf50bf2f58b38f4e",
+  "protocolSource": "docs/verification/host/codex-0.139.0-facts.json",
+  "observedGroups": [
+    "command",
+    "fileChange",
+    "hook",
+    "item",
+    "thread",
+    "turn"
+  ],
+  "immutabilityCases": 3,
+  "hostileCases": 5,
+  "readOnly": true,
+  "drivesHost": false,
+  "paramsRetained": false,
+  "unknownMethodsCounted": true,
+  "driftMarkedUnpinned": true,
+  "liveAttachProof": "not-claimed-stream-is-supplied-not-opened",
+  "standalone": "pure-fold-of-a-supplied-notification-stream-no-socket-no-request-no-host-write"
+}

@@ -399,6 +399,7 @@ async function runTests({
   receiptSidecarOnly = false,
   observeHookOnly = false,
   executionCollectionOnly = false,
+  appServerObserverOnly = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -434,6 +435,7 @@ async function runTests({
     .filter((path) => !receiptSidecarOnly || path === "tests/act5-receipt-sidecar.test.mjs")
     .filter((path) => !observeHookOnly || path === "tests/act6-observe-hook.test.mjs")
     .filter((path) => !executionCollectionOnly || path === "tests/act7-execution-collection.test.mjs")
+    .filter((path) => !appServerObserverOnly || path === "tests/act8-app-server-observer.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -456,6 +458,8 @@ async function runTests({
       ? "ACT6_OBSERVE_HOOK_TESTS_VERIFIED"
       : executionCollectionOnly
       ? "ACT7_EXECUTION_COLLECTION_TESTS_VERIFIED"
+      : appServerObserverOnly
+      ? "ACT8_APP_SERVER_OBSERVER_TESTS_VERIFIED"
       : installerOnly
       ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
@@ -1703,6 +1707,7 @@ const commandContracts = {
   act5: { exit: 0, reasonCode: "ACT5_RECEIPT_SIDECAR_VERIFIED" },
   act6: { exit: 0, reasonCode: "ACT6_OBSERVE_HOOK_VERIFIED" },
   act7: { exit: 0, reasonCode: "ACT7_EXECUTION_COLLECTION_VERIFIED" },
+  act8: { exit: 0, reasonCode: "ACT8_APP_SERVER_OBSERVER_VERIFIED" },
   e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
 };
 
@@ -1888,6 +1893,25 @@ async function verifyAct3() {
 // EPIC-023 Step 1: the Codex project-local inert installer, proven against a real
 // filesystem. The fixture's declared boundary is asserted here so the gate itself
 // refuses to report success while claiming a live host was involved.
+// EPIC-026 S077: the read-only App Server Observer. The gate asserts the read-only
+// boundary and that no live attach is claimed.
+async function verifyAct8() {
+  const result = await runTests({ appServerObserverOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act8-app-server-observer-cases.json");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.act8-app-server-observer-cases.v1", "ACT8_FIXTURE_SCHEMA");
+  assertion(fixture.readOnly === true && fixture.drivesHost === false, "ACT8_READ_ONLY");
+  assertion(fixture.paramsRetained === false && fixture.unknownMethodsCounted === true, "ACT8_BOUNDED");
+  assertion(fixture.liveAttachProof === "not-claimed-stream-is-supplied-not-opened", "ACT8_NO_OVERCLAIM");
+  return success("ACT8_APP_SERVER_OBSERVER_VERIFIED", {
+    tests: result.tests,
+    protocolDigest: fixture.protocolDigest,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    liveAttachProof: fixture.liveAttachProof,
+    standalone: fixture.standalone,
+  });
+}
+
 // EPIC-020 S055: collecting host-execution receipts from observed invocations and
 // feeding them to the EPIC-019 classifier. The gate asserts the honesty boundary:
 // transcripts are never signed and attribution is never identity.
@@ -2143,6 +2167,7 @@ const handlers = {
   act5: verifyAct5,
   act6: verifyAct6,
   act7: verifyAct7,
+  act8: verifyAct8,
   e2e: verifyE2eGovernedLoop,
 };
 
@@ -2208,7 +2233,7 @@ function evidencePhase(name) {
   if (name === "act1") {
     return "act";
   }
-  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7") {
+  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act8") {
     return "act2";
   }
   if (name === "e2e") {
