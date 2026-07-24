@@ -281,6 +281,36 @@ export type {
   CodexAdapterRequest,
 } from "./codex-adapter.js";
 export {
+  OBSERVE_HOOK_EVENTS,
+  RECEIPT_ANCHOR_VERSION,
+  RECEIPT_BATCH_VERSION,
+  RECEIPT_COVERAGE,
+  RECEIPT_COVERAGE_NOTE,
+  RECEIPT_ENTRY_VERSION,
+  RECEIPT_LIMITS,
+  RECEIPT_REASON_CODES,
+  ReceiptError,
+  anchorReceiptBatch,
+  appendReceipt,
+  openReceiptBatch,
+  pruneReceiptBatches,
+  sealReceiptBatch,
+  validateReceiptAnchor,
+  validateReceiptBatch,
+  verifyAnchorAgainstBatch,
+} from "./receipt-sidecar.js";
+export type {
+  AppendReceiptInput,
+  ObserveHookEvent,
+  ObserveReceipt,
+  OpenBatchInput,
+  PruneResult,
+  ReceiptAnchor,
+  ReceiptBatch,
+  ReceiptCoverage,
+  ReceiptReasonCode,
+} from "./receipt-sidecar.js";
+export {
   CODEX_ADAPTER_INSTALLER_REASON_CODES,
   CodexAdapterInstallerError,
   executeCodexAdapterRollback,

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "tcrn.act5-receipt-sidecar-cases.v1",
+  "observeEvents": [
+    "PostToolUse",
+    "SessionEnd",
+    "PreCompact",
+    "PostCompact",
+    "SubagentStart",
+    "SubagentStop"
+  ],
+  "chainCases": 4,
+  "closedSurfaceCases": 7,
+  "anchorCases": 3,
+  "enforceEventsRefused": true,
+  "missingReceiptIsNotMissingEvent": true,
+  "coverageValues": [
+    "complete",
+    "unknown"
+  ],
+  "completeRequiresSeal": true,
+  "anchorIsBoundedSummaryNotEntries": true,
+  "pruneDropsWholeBatchesOnly": true,
+  "liveHostProof": "not-claimed-per-min-046",
+  "standalone": "pure-validation-and-digest-no-io-no-hook-no-host"
+}
