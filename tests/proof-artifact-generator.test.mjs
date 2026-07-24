@@ -129,6 +129,8 @@ async function fixture(context) {
     "packages/core/src/background-resource.ts": "// route fixture\n",
     "scripts/spawn-guard.mjs": "// route fixture\n",
     "tests/background-resource.test.mjs": "// route fixture\n",
+    "tests/spawn-guard.test.mjs": "// route fixture\n",
+    "docs/architecture/background-resource-governance.md": "# route fixture\n",
     "docs/architecture/backup-git-tier.md": "# route fixture\n",
     "docs/architecture/backup-restore-runbook.md": "# route fixture\n",
     "docs/architecture/agent-integration-v1.md": "# route fixture\n",

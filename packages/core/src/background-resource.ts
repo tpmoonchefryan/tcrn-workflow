@@ -34,7 +34,12 @@ export const BACKGROUND_RESOURCE_RESIDUE_VERSION = "tcrn.background-resource-res
 export const BACKGROUND_RESOURCE_LIMITS = Object.freeze({
   maximumRegistrations: 256,
   maximumProcessRows: 65_536,
+  // The registry is small (bounded by maximumRegistrations); a live process
+  // table on a busy CI/container host is not, so it gets its own bound sized to
+  // the host adapter's ps read buffer rather than an arbitrarily tighter cap
+  // that would make the detector break exactly when the host is loaded.
   maximumTextBytes: 262_144,
+  maximumProcessTableBytes: 16 * 1024 * 1024,
 });
 
 // New frozen reason-code list, sorted, owned by this module. It is additive: no
@@ -130,6 +135,28 @@ function assertProcessId(value: JsonValue | undefined, label: string): number {
   return value;
 }
 
+function assertSafeCount(value: number, minimum: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    fail("BACKGROUND_RESOURCE_INPUT_INVALID", `${label} out of range`);
+  }
+  return value;
+}
+
+// Validate a process row fail-closed BEFORE it can reach canonical serialization.
+// The parse boundary must be at least as strict as the registration boundary: an
+// out-of-safe-range pid or an ill-formed command would otherwise pass parsing and
+// throw a foreign ProtocolError out of the deep canonicalSha256 call rather than a
+// typed BackgroundResourceError. pid/pgid are real ids (>= 1); ppid may be 0 (a
+// kernel-owned process) or 1 (reparented to init).
+function assertProcessRow(row: ProcessRow): void {
+  assertSafeCount(row.pid, 1, "pid");
+  assertSafeCount(row.pgid, 1, "pgid");
+  assertSafeCount(row.ppid, 0, "ppid");
+  if (typeof row.command !== "string" || !row.command.isWellFormed()) {
+    fail("BACKGROUND_RESOURCE_INPUT_INVALID", "command is not well-formed UTF-8");
+  }
+}
+
 // ---- Registration face (S041): transient JSONL, one canonical object per line. ----
 
 // Emit one JSONL line for a registration. canonicalJson already appends exactly one
@@ -206,7 +233,10 @@ export function parseRegistry(text: string): readonly SpawnRegistration[] {
 const PROCESS_ROW = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+(?:\.\d+)?)\s+(.*\S)\s*$/u;
 
 export function parseProcessTable(text: string): readonly ProcessRow[] {
-  assertBoundedText(text, "process table");
+  if (typeof text !== "string") fail("BACKGROUND_RESOURCE_INPUT_INVALID", "process table must be a string");
+  if (Buffer.byteLength(text, "utf8") > BACKGROUND_RESOURCE_LIMITS.maximumProcessTableBytes) {
+    fail("BACKGROUND_RESOURCE_LIMIT_EXCEEDED", "process table exceeds byte limit");
+  }
   const rows: ProcessRow[] = [];
   for (const line of text.split("\n")) {
     if (line.trim() === "") continue;
@@ -217,13 +247,15 @@ export function parseProcessTable(text: string): readonly ProcessRow[] {
       cpuText === undefined || command === undefined) {
       fail("BACKGROUND_RESOURCE_INPUT_INVALID", "process-table row missing a field");
     }
-    rows.push({
+    const row: ProcessRow = {
       pid: Number(pidText),
       pgid: Number(pgidText),
       ppid: Number(ppidText),
       cpu: cpuText,
       command,
-    });
+    };
+    assertProcessRow(row);
+    rows.push(row);
     if (rows.length > BACKGROUND_RESOURCE_LIMITS.maximumProcessRows) {
       fail("BACKGROUND_RESOURCE_LIMIT_EXCEEDED", "process table exceeds row limit");
     }
@@ -234,14 +266,23 @@ export function parseProcessTable(text: string): readonly ProcessRow[] {
 // The core predicate. Given the loads a session declared it owns and a live
 // process-table snapshot taken at teardown, a process row is residue iff either:
 //   (1) its pgid is a registered group that still has a live member — the session
-//       owned that group and did not reclaim it; OR
-//   (2) it has reparented to init (ppid === 1) and its command matches a registered
-//       pattern — the orphan backstop for when the group leader has already exited
-//       and its pgid is a defunct group we never see registered live. This is the
-//       exact shape of the 2026-07-24 incident: 35 `yes` orphans, ppid 1, in five
-//       process groups whose bash leaders had exited.
-// Case (1) is checked first, so a row that is both a live-group member and an
-// orphan is attributed to the group it was registered under.
+//       owned that group and did not reclaim it. This is the RELIABLE path, and it
+//       survives reparenting because a process's pgid does not change when its
+//       parent dies. It is the exact shape of the 2026-07-24 incident (35 `yes`
+//       orphans in five process groups whose bash leaders had exited). OR
+//   (2) it is orphaned — reparented to init (ppid === 1) OR its parent is no longer
+//       present in the snapshot — and its command matches a registered pattern. This
+//       is the best-effort backstop for when the group leader has exited and the
+//       pgid we can see is not the one that was registered. It is a fail-safe net,
+//       not the primary detector.
+// Known limit of case (2): on a host with a live intermediate subreaper
+// (Linux `PR_SET_CHILD_SUBREAPER`, e.g. `systemd --user`), an orphan reparents to
+// that subreaper — a live pid still in the snapshot — so neither `ppid === 1` nor
+// "parent absent" fires. Likewise a load that calls `setsid` after registration
+// moves to a new pgid. In both cases the reliable path is to register the load's
+// actual (current) pgid; the pattern backstop only promises init-reparented and
+// parent-absent orphans. Case (1) is checked first, so a row that is both a
+// live-group member and an orphan is attributed to the group it was registered under.
 export function detectResidue(
   registrations: readonly SpawnRegistration[],
   rows: readonly ProcessRow[],
@@ -254,6 +295,7 @@ export function detectResidue(
   if (rows.length > BACKGROUND_RESOURCE_LIMITS.maximumProcessRows) {
     fail("BACKGROUND_RESOURCE_LIMIT_EXCEEDED", "too many process rows");
   }
+  for (const row of rows) assertProcessRow(row);
   const groupPurpose = new Map<number, string>();
   for (const registration of registrations) {
     assertProcessId(registration.pgid, "pgid");
@@ -261,22 +303,26 @@ export function detectResidue(
     // A duplicate pgid keeps the first-registered purpose; order is caller-stable.
     if (!groupPurpose.has(registration.pgid)) groupPurpose.set(registration.pgid, registration.purpose);
   }
+  const livePids = new Set(rows.map((row) => row.pid));
   const residue: ResidueEntry[] = [];
   for (const row of rows) {
     if (groupPurpose.has(row.pgid)) {
       residue.push({ ...row, reason: "registered-group-alive", purpose: groupPurpose.get(row.pgid) ?? "" });
       continue;
     }
-    if (row.ppid === 1) {
+    const orphaned = row.ppid === 1 || !livePids.has(row.ppid);
+    if (orphaned) {
       const matched = registrations.find((registration) => row.command.includes(registration.pattern));
       if (matched !== undefined) {
         residue.push({ ...row, reason: "orphaned-pattern-match", purpose: matched.purpose });
       }
     }
   }
-  // Deterministic order: by pid ascending (pids are unique within a snapshot), so
-  // two runs over byte-identical input produce a byte-identical report.
-  residue.sort((left, right) => left.pid - right.pid);
+  // Deterministic total order (pid, then pgid, then command) so two runs over
+  // byte-identical input produce a byte-identical report even if a caller ever
+  // hands in two rows sharing a pid — the sort never relies on input order.
+  residue.sort((left, right) =>
+    left.pid - right.pid || left.pgid - right.pgid || compareCanonicalText(left.command, right.command));
   const status: ResidueStatus = residue.length === 0 ? "clean" : "residue-present";
   const body = {
     schemaVersion: BACKGROUND_RESOURCE_RESIDUE_VERSION,
