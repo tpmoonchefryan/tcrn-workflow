@@ -61,8 +61,8 @@ no new capability; it tests whether existing proof still bites.
 
 Scope: `guard-check` stays a standalone script wired into `push-gate`. It is
 deliberately **not** folded into `verify:p1`, because each entry costs a build
-plus a test run (~4-5s measured) and the registry's twelve entries would push the
-P1 wall clock toward the 180s escalation trigger that protects the "run it on
+plus a test run (~4-5s measured) and the registry's seventeen entries would push
+the P1 wall clock past the 180s escalation trigger that protects the "run it on
 every change" discipline.
 
 **Current.** `{proofLines: 26631, productLines: 16011, ratio: 1.6633}`, measured
@@ -144,3 +144,14 @@ rather than resetting it**, marking it as taken against earlier bytes. Group B
 costs a human a session; regenerating group A must never be able to silently
 spend that. Stale provenance stated is recoverable — a blank where an observation
 used to be is not.
+
+## Documentation and translations
+
+The human-facing root documents are mirrored into the languages declared in
+`scripts/policy/doc-coverage.json` and follow the house style in
+`docs/style/house-style.md`. English is authoritative; each translation pins the
+SHA-256 of its English source. When you change one of these documents, re-sync and
+re-pin every translation in the same change — `pnpm push-gate` fails closed on a
+stale pin, a missing translation, a version left behind in prose, or the CJK
+emphasis rule. `LICENSE`, `NOTICE`, `CHANGELOG.md` and `SUPPORT.md` are
+English-only by policy.
