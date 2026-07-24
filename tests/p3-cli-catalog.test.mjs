@@ -136,7 +136,7 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
   ]);
 });
 
-test("WSB-5: exactly the authority-gated compatibility verbs are programmatic-only; every other verb is cli", () => {
+test("INIT-009: operator pins make every non-fixture verb binary-invocable", () => {
   const bySurface = {};
   for (const entry of COMMAND_CATALOG) {
     assert.ok(
@@ -146,10 +146,9 @@ test("WSB-5: exactly the authority-gated compatibility verbs are programmatic-on
     (bySurface[entry.availability] ??= []).push(entry.name);
   }
   for (const surface of Object.keys(bySurface)) bySurface[surface] = bySurface[surface].sort();
-  // The shipped binary constructs CliIo as {write} only, so these two verbs cannot
-  // obtain their required CompatibilityAdmissionAuthority and fail closed; the catalog
-  // records that programmatic-only surface (WSB-5).
-  assert.deepEqual(bySurface["programmatic-only"], ["compatibility-dry-run", "compatibility-plan"]);
+  // EPIC-022 adds the host-neutral global operator-pins channel. Compatibility
+  // planning therefore no longer needs a bespoke programmatic embedder.
+  assert.deepEqual(bySurface["programmatic-only"] ?? [], []);
   // OD-18: assertDisposable (artifact-lifecycle.ts) admits a store only when the marker
   // carries disposable and the Workspace external key starts with FIXTURE-, and
   // initializeArtifactStore refuses to set disposable on anything else. So these two
@@ -159,7 +158,9 @@ test("WSB-5: exactly the authority-gated compatibility verbs are programmatic-on
   // to fail for them.
   assert.deepEqual(bySurface["fixture-only"], ["artifact-archive-apply", "artifact-archive-restore"]);
   assert.equal(
-    (bySurface["cli"]?.length ?? 0) + bySurface["programmatic-only"].length + bySurface["fixture-only"].length,
+    (bySurface["cli"]?.length ?? 0) +
+      (bySurface["programmatic-only"]?.length ?? 0) +
+      bySurface["fixture-only"].length,
     COMMAND_CATALOG.length,
     "every catalog entry is partitioned into exactly one known surface",
   );

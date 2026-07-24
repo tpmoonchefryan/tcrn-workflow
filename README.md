@@ -8,13 +8,13 @@
 
 English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-66-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-67-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [Why](#why-this-project-exists) · [Is this for you?](#is-this-for-you) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Using it](#using-it-for-real-work) · [Plain answers](#plain-answers-to-fair-questions) · [Known limits](#known-limits) · [License](#license)
 
-`Verified claims: 66 (hygiene 13 · inertness 13 · runtime 40)`
+`Verified claims: 67 (hygiene 13 · inertness 13 · runtime 41)`
 
 </div>
 
@@ -53,7 +53,7 @@ One rule holds the whole thing together, and it is the part people find hardest 
 | --- | --- |
 | **A workspace that is just files** | Your whole work graph (Initiative → Epic → Story → Subtask) lives in plain, canonically formatted JSON files with a hash chain — no database, no daemon. You can audit it with `cat` and `sha256sum`, and exports are byte-reproducible. |
 | **One command, 20 gates** | `pnpm verify:p1` runs the entire verification chain: format, lint, typecheck, build, ~40 test files, trust matrix, archive/SBOM/license/vulnerability policy, source allowlist, offline boundary, privacy scan, CI hardening, verification map, and clean-history proof. Anything unexpected stops the chain. |
-| **A claim ledger a machine can read** | `verification-map.yaml` binds 66 claims — 13 framework-hygiene, 13 inertness-proof, 40 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run. |
+| **A claim ledger a machine can read** | `verification-map.yaml` binds 67 claims — 13 framework-hygiene, 13 inertness-proof, 41 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run. |
 | **Guards that prove they still bite** | `pnpm guard-check` mutates each registered guard out of the source and requires its named test to go red — 17 guards, verified before every push. A protection that nothing would notice losing is not a protection. |
 | **Deliberation on the record** | Conferences and decision gates are appended to the same tamper-evident journal. A pending gate *blocks* its work item from reaching `done` (`WORKSPACE_GATE_PENDING`) — at the command and again on replay — and closing a conference distills each decision into a knowledge candidate that links back to it. |
 | **Every decision gets a name** | Enable actor attestation and every later mutation must declare who acted — the engine and its replay both fail closed on any event that omits an actor id. Workspaces that never enable it stay byte-identical to before. |
@@ -205,7 +205,7 @@ A release is an immutable annotated tag plus a reproducible artifact set (canoni
 Every number below is enforced by a gate — if one drifts, a build fails somewhere.
 
 - **20 gates** in the `verify:p1` chain, each with a stable terminal reason code.
-- **66 machine-verified claims** in `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 40 runtime-capability. The claims badge above is parsed and compared against the ledger on every run.
+- **67 machine-verified claims** in `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 41 runtime-capability. The claims badge above is parsed and compared against the ledger on every run.
 - **17 registered guards**, each proven to still bite by mutating it out and watching its test go red.
 - **~40 hermetic test files**, including real `SIGKILL` fault injection, 64-permutation determinism proofs in three independent layers, and a filesystem attack matrix.
 - **1 end-to-end flagship proof** (`pnpm verify:e2e`) — a hermetic replay of the full governed loop (initiative → epic → story → gate → conference → distill → promote → trace), every tutorial command executed verbatim.
@@ -224,6 +224,7 @@ Every number below is enforced by a gate — if one drifts, a build fails somewh
 | `verify:p5` | Closed generic-profile trust model, effective-policy digests, cold-start graph, eight inert Core Reference personas. |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | Context router scope/risk/budget controls and hostile corpus; Codex adapter bridge; Claude Code adapter (four-file template bundle, reversible settings fragment, forbidden-path rejection, CLAUDE.md fallback, cross-host parity digest). |
 | `verify:p7` / `verify:p7:compatibility` | Canonical exchange, compatibility manifest, anti-rollback floor, deterministic import/checkpoint/fallback plans. |
+| `verify:authority-mcp` | Out-of-band pinned operator authority, rotation/revocation refusals, and host-neutral structured MCP reads/writes. |
 | `verify:p8` | Reproducible release candidate: source archive rebuild + byte comparison, SBOM, provenance, checksums, six-file closed bundle, external trust negative matrix. |
 | `verify:privacy` | No personal identifiers or machine paths in any tracked byte, git object, or archive. |
 | `verify:isolated` | The same P1 chain from a hermetic dependency materialization (CI-gated). |
@@ -283,7 +284,7 @@ The four boundaries above are permanent design decisions. The limits below are t
 
 **Governance surface**
 
-- **Twelve governed verbs have no operator entry point yet.** Profile admission, context routing, compatibility planning and the adapter families require out-of-band authorities that the shipped CLI cannot accept; from a shell they stop at codes like `ADAPTER_HOST_REQUIRED`. The activation receipts are real — the evidence harness supplies those authorities programmatically — and a later release adds the operator mechanism.
+- **The governed operator surface is source-complete but not in the accepted `0.5.0` release.** The historical twelve IO-blocked verbs were reduced to seven by direct digest flags; current source supplies those seven through an absolute-path plus SHA-256 pins document and exposes the same command catalog as structured, host-neutral MCP tools. Released `0.5.0` binaries still stop at codes such as `ADAPTER_HOST_REQUIRED`.
 - **Destructive artifact maintenance is fixture-only.** `artifact-archive-apply` and `artifact-archive-restore` are marked fixture-only in the machine-readable catalog; real workspaces get dry-runs only, so artifact stores grow until governed compaction ships.
 - **The knowledge store must be acknowledged as disposable.** On non-fixture workspaces it initializes only under an explicit per-invocation acknowledgment (`KNOWLEDGE_DISPOSABLE_ACK_REQUIRED`): it is a derived index, never the system of record.
 

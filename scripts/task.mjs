@@ -383,6 +383,7 @@ async function runTests({
   dependencyOnly = false,
   conferenceOnly = false,
   executionOnly = false,
+  authorityMcpOnly = false,
   assignmentGateOnly = false,
   actorOnly = false,
   extensionStoreOnly = false,
@@ -413,6 +414,7 @@ async function runTests({
     .filter((path) => !dependencyOnly || path === "tests/dependency.test.mjs")
     .filter((path) => !conferenceOnly || path === "tests/conference.test.mjs")
     .filter((path) => !executionOnly || path === "tests/conference-execution.test.mjs")
+    .filter((path) => !authorityMcpOnly || path === "tests/operator-authority-mcp.test.mjs")
     .filter((path) => !assignmentGateOnly || path === "tests/assignment-gate.test.mjs")
     .filter((path) => !actorOnly || path === "tests/actor-attestation.test.mjs")
     .filter((path) => !extensionStoreOnly || path === "tests/workspace-extension-records.test.mjs")
@@ -460,6 +462,8 @@ async function runTests({
                   ? "DEPENDENCY_TESTS_VERIFIED"
                 : conferenceOnly
                   ? "CONFERENCE_TESTS_VERIFIED"
+                : authorityMcpOnly
+                  ? "OPERATOR_AUTHORITY_MCP_TESTS_VERIFIED"
                 : assignmentGateOnly
                   ? "ASSIGNMENT_GATE_TESTS_VERIFIED"
                 : actorOnly
@@ -1034,6 +1038,49 @@ async function verifyExecution() {
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
     specDigest: (await fileRecord(specPath)).sha256,
     standalone: fixture.standalone,
+  });
+}
+
+async function verifyOperatorAuthorityMcp() {
+  const tests = await runTests({ authorityMcpOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/operator-authority-mcp-cases.json");
+  const specPath = resolve(repositoryRoot, "packages/core/spec/operator-authority-mcp-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.operator-authority-mcp-cases.v1", "OPERATOR_AUTHORITY_FIXTURE_SCHEMA");
+  assertion(fixture.historicalIoBlockedVerbs.length === 12 &&
+    fixture.digestFlagResolvedBeforeEpic022.length === 5 &&
+    fixture.currentIoBlockedVerbsBeforeEpic022.length === 7,
+  "OPERATOR_AUTHORITY_RETEST_CORPUS");
+  assertion(JSON.stringify(fixture.operatorAuthorityResolvedVerbs) ===
+    JSON.stringify(fixture.currentIoBlockedVerbsBeforeEpic022),
+  "OPERATOR_AUTHORITY_REACHABILITY");
+  assertion(fixture.authorityPositiveCases === 3 &&
+    fixture.authorityHostileCases === 10 &&
+    fixture.mcpPositiveCases === 8 &&
+    fixture.mcpHostileCases === 5,
+  "OPERATOR_AUTHORITY_MCP_CORPUS");
+  assertion(fixture.authoritySource === "explicit-absolute-pins-path-plus-out-of-band-sha256" &&
+    fixture.ambientAuthoritySources.length === 0 &&
+    fixture.antiRollbackBoundary === "caller-must-retain-newest-pins-digest",
+  "OPERATOR_AUTHORITY_NO_AMBIENT_TRUST");
+  assertion(fixture.mcpTransport === "stdio-json-rpc-newline-delimited" &&
+    fixture.mcpMutationPolicy === "exact-command-grant-plus-canonical-cli-semantics" &&
+    fixture.network === false,
+  "OPERATOR_AUTHORITY_MCP_BOUNDARY");
+  return success("OPERATOR_AUTHORITY_MCP_VERIFIED", {
+    tests: tests.reasonCode,
+    historicalIoBlockedVerbs: fixture.historicalIoBlockedVerbs.length,
+    currentIoBlockedVerbsBeforeEpic022: fixture.currentIoBlockedVerbsBeforeEpic022.length,
+    operatorAuthorityResolvedVerbs: fixture.operatorAuthorityResolvedVerbs.length,
+    authorityCases: fixture.authorityPositiveCases + fixture.authorityHostileCases,
+    mcpCases: fixture.mcpPositiveCases + fixture.mcpHostileCases,
+    fixtureDigest: (await fileRecord(fixturePath)).sha256,
+    specDigest: (await fileRecord(specPath)).sha256,
+    authorityModuleDigest: (await fileRecord(resolve(repositoryRoot, "packages/core/src/operator-authority.ts"))).sha256,
+    mcpModuleDigest: (await fileRecord(resolve(repositoryRoot, "packages/cli/src/mcp.ts"))).sha256,
+    hostNeutral: true,
+    network: false,
+    ambientAuthoritySources: [],
   });
 }
 
@@ -1623,6 +1670,7 @@ const commandContracts = {
   dep: { exit: 0, reasonCode: "DEPENDENCY_VERIFIED" },
   conference: { exit: 0, reasonCode: "CONFERENCE_VERIFIED" },
   "ext-execution": { exit: 0, reasonCode: "EXECUTION_VERIFIED" },
+  "authority-mcp": { exit: 0, reasonCode: "OPERATOR_AUTHORITY_MCP_VERIFIED" },
   "ext-ag": { exit: 0, reasonCode: "ASSIGNMENT_GATE_VERIFIED" },
   "ext-actor": { exit: 0, reasonCode: "ACTOR_ATTESTATION_VERIFIED" },
   "ext-store": { exit: 0, reasonCode: "EXT_STORE_VERIFIED" },
@@ -1965,6 +2013,7 @@ const handlers = {
   dep: verifyDependency,
   conference: verifyConference,
   "ext-execution": verifyExecution,
+  "authority-mcp": verifyOperatorAuthorityMcp,
   "ext-ag": verifyAssignmentGate,
   "ext-actor": verifyActorAttestation,
   "ext-store": verifyExtStore,
@@ -2030,6 +2079,9 @@ function evidencePhase(name) {
     return "p2";
   }
   if (name === "ext-execution") {
+    return "p2";
+  }
+  if (name === "authority-mcp") {
     return "p2";
   }
   if (name === "ext-ag") {

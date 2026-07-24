@@ -97,6 +97,7 @@ import {
   parsePublicAosRequirementsLedger,
   publicAosRequirementsReadback,
   publicAosRequirementsValidReason,
+  readOperatorAuthority,
 } from "../../core/src/index.js";
 import type {
   ConferenceRequest,
@@ -174,6 +175,17 @@ export interface CliIo {
   readonly claudeAdapterInstallationAuthority?: ClaudeAdapterInstallationFileIdentity;
   readonly compatibilityAdmissionAuthority?: CompatibilityAdmissionAuthority;
 }
+
+const AUTHORITY_IO_FIELDS = Object.freeze([
+  "profileAdmissionAuthority",
+  "contextRouteAuthority",
+  "codexAdapterHost",
+  "codexAdapterInstallationAuthority",
+  "claudeAdapterHost",
+  "claudeAdapterActivationHost",
+  "claudeAdapterInstallationAuthority",
+  "compatibilityAdmissionAuthority",
+] as const);
 
 function fail(reasonCode: string, message: string): never {
   throw new WorkflowCliError(reasonCode, message);
@@ -539,8 +551,8 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "claude-adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "claude-adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "commands", availability: "cli", mutates: false, flags: [] },
-  { name: "compatibility-dry-run", availability: "programmatic-only", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "compatibility-plan", availability: "programmatic-only", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
+  { name: "compatibility-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
+  { name: "compatibility-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "compatibility-unavailable", availability: "cli", mutates: false, flags: [{ name: "surface", required: true, valueKind: "string" }] },
   { name: "compatibility-validate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "conference-append-position", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "actor-id", required: true, valueKind: "string" }, { name: "position", required: true, valueKind: "string" }, { name: "risks", required: true, valueKind: "list" }, { name: "recommendations", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -1682,4 +1694,123 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   fail("CLI_COMMAND_UNKNOWN", command);
+}
+
+/**
+ * Shipped operator entry point.
+ *
+ * Global authority flags precede the command:
+ *
+ *   --authority-pins /absolute/pins.json
+ *   --authority-pins-digest <sha256>
+ *   <command> ...
+ *
+ * Both are mandatory together. The digest is the only trust anchor accepted by
+ * this function; no environment lookup, prompt field, workspace discovery or
+ * default file is consulted. Directly injected programmatic authority remains a
+ * separate API and is rejected as ambiguous when pins are also present.
+ */
+export async function runOperatorCli(
+  arguments_: readonly string[],
+  io: CliIo,
+): Promise<void> {
+  if (arguments_[0] !== "--authority-pins" &&
+    !arguments_[0]?.startsWith("--authority-pins=") &&
+    arguments_[0] !== "--authority-pins-digest" &&
+    !arguments_[0]?.startsWith("--authority-pins-digest=")) {
+    await runCli(arguments_, io);
+    return;
+  }
+
+  const global: Record<string, string> = {};
+  let index = 0;
+  while (index < arguments_.length) {
+    const token = arguments_[index];
+    if (token === undefined || !token.startsWith("--")) break;
+    let name: string;
+    let value: string;
+    if (token.includes("=")) {
+      const equalsAt = token.indexOf("=");
+      name = token.slice(2, equalsAt);
+      value = token.slice(equalsAt + 1);
+      index += 1;
+    } else {
+      const next = arguments_[index + 1];
+      if (next === undefined || next.startsWith("--")) {
+        fail("CLI_ARGUMENT_MALFORMED", token);
+      }
+      name = token.slice(2);
+      value = next;
+      index += 2;
+    }
+    if (name !== "authority-pins" && name !== "authority-pins-digest") {
+      fail("CLI_ARGUMENT_UNKNOWN", name);
+    }
+    if (Object.hasOwn(global, name)) {
+      fail("CLI_ARGUMENT_DUPLICATE", name);
+    }
+    global[name] = value;
+  }
+  const missing = ["authority-pins", "authority-pins-digest"].filter(
+    (name) => !global[name],
+  );
+  if (missing.length > 0) {
+    fail("CLI_ARGUMENT_MISSING", missing.join(","));
+  }
+  if (AUTHORITY_IO_FIELDS.some((field) => io[field] !== undefined)) {
+    fail(
+      "CLI_AUTHORITY_AMBIGUOUS",
+      "authority supplied by both host and operator pins",
+    );
+  }
+  if (!io.clock) {
+    fail("CLI_ARGUMENT_MISSING", "clock");
+  }
+  const context = await readOperatorAuthority(
+    global["authority-pins"] as string,
+    {
+      expectedCanonicalPath: global["authority-pins"] as string,
+      expectedFileSha256: global["authority-pins-digest"] as string,
+    },
+    io.clock(),
+  );
+  await runCli(arguments_.slice(index), {
+    ...io,
+    ...(context.profileAdmissionAuthority === undefined
+      ? {}
+      : { profileAdmissionAuthority: context.profileAdmissionAuthority }),
+    ...(context.contextRouteAuthority === undefined
+      ? {}
+      : { contextRouteAuthority: context.contextRouteAuthority }),
+    ...(context.codexAdapterHost === undefined
+      ? {}
+      : { codexAdapterHost: context.codexAdapterHost }),
+    ...(context.codexAdapterInstallationAuthority === undefined
+      ? {}
+      : {
+        codexAdapterInstallationAuthority:
+          context.codexAdapterInstallationAuthority,
+      }),
+    ...(context.claudeAdapterHost === undefined
+      ? {}
+      : { claudeAdapterHost: context.claudeAdapterHost }),
+    ...(context.claudeAdapterActivationHost === undefined
+      ? {}
+      : {
+        claudeAdapterActivationHost:
+          context.claudeAdapterActivationHost,
+      }),
+    ...(context.claudeAdapterInstallationAuthority === undefined
+      ? {}
+      : {
+        claudeAdapterInstallationAuthority:
+          context.claudeAdapterInstallationAuthority,
+      }),
+    ...(context.compatibilityAdmissionAuthority === undefined
+      ? {}
+      : {
+        compatibilityAdmissionAuthority:
+          context.compatibilityAdmissionAuthority,
+      }),
+  });
 }

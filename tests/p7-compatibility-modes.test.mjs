@@ -189,6 +189,47 @@ async function authorityFile(request, changes = {}) {
   return { directory, path, receipt, bytes, authority, context: await readCompatibilityAdmissionReceipt(path, authority), close: () => rm(directory, { recursive: true, force: true }) };
 }
 
+async function operatorPinsForCompatibility(admitted) {
+  const authorityPath = join(admitted.directory, "operator-authority.json");
+  const pinsPath = join(admitted.directory, "operator-pins.json");
+  const authorityBasis = {
+    schemaVersion: "tcrn.operator-authority-bundle.v1",
+    authorityId: "authority:compatibility-wrapper",
+    generation: 1,
+    issuedAt: "2020-01-01T00:00:00Z",
+    expiresAt: "2030-01-01T00:00:00Z",
+    status: "active",
+    fileAuthorities: {
+      profileAdmission: null,
+      contextRoute: null,
+      codexAdapterInstallation: null,
+      claudeAdapterInstallation: null,
+      compatibilityAdmission: admitted.authority,
+    },
+    hostInputs: {
+      codexAdapter: null,
+      claudeAdapter: null,
+      claudeAdapterActivation: null,
+    },
+    mcp: { writeCommands: [] },
+  };
+  const authority = { ...authorityBasis, authorityDigest: canonicalSha256(authorityBasis) };
+  const authorityBytes = canonicalJson(authority);
+  await writeFile(authorityPath, authorityBytes, { flag: "wx", mode: 0o600 });
+  const pinsBasis = {
+    schemaVersion: "tcrn.operator-authority-pins.v1",
+    authorityId: authority.authorityId,
+    authorityPath,
+    authorityFileSha256: sha256(authorityBytes),
+    minimumGeneration: 1,
+    revokedAuthorityDigests: [],
+  };
+  const pins = { ...pinsBasis, pinsDigest: canonicalSha256(pinsBasis) };
+  const pinsBytes = canonicalJson(pins);
+  await writeFile(pinsPath, pinsBytes, { flag: "wx", mode: 0o600 });
+  return { pinsPath, pinsDigest: sha256(pinsBytes) };
+}
+
 function reason(code, operation) { assert.throws(operation, (error) => error?.reasonCode === code, code); }
 async function reasonAsync(code, operation) { await assert.rejects(operation, (error) => error?.reasonCode === code, code); }
 
@@ -524,7 +565,7 @@ async function initializedWrapperWorkspace() {
   return { base, workspace: join(base, "workspace"), close: () => rm(base, { recursive: true, force: true }) };
 }
 
-test("WSB-5: the shipped binary fails compatibility-plan/dry-run closed with COMPATIBILITY_AUTHORITY_REQUIRED and refuses argv authority", () => {
+test("INIT-009: the shipped binary fails without pins and plans through a pinned operator bundle", async () => {
   const { request } = documents();
   const requestJson = canonicalJson(request);
   for (const verb of ["compatibility-plan", "compatibility-dry-run"]) {
@@ -542,6 +583,26 @@ test("WSB-5: the shipped binary fails compatibility-plan/dry-run closed with COM
   const forged = runShippedWorkflowBinary(["compatibility-plan", "--request", requestJson, "--authority", "/tmp/forged.json"]);
   assert.equal(forged.status, 1, forged.stderr);
   assert.equal(JSON.parse(forged.stderr).reasonCode, "CLI_ARGUMENT_UNKNOWN");
+
+  const admitted = await authorityFile(request);
+  try {
+    const pins = await operatorPinsForCompatibility(admitted);
+    for (const verb of ["compatibility-plan", "compatibility-dry-run"]) {
+      const result = runShippedWorkflowBinary([
+        "--authority-pins", pins.pinsPath,
+        "--authority-pins-digest", pins.pinsDigest,
+        verb, "--request", requestJson,
+      ]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stderr, "");
+      assert.ok([
+        "COMPATIBILITY_PLAN_READY",
+        "COMPATIBILITY_DRY_RUN_READY",
+      ].includes(JSON.parse(result.stdout).reasonCode));
+    }
+  } finally {
+    await admitted.close();
+  }
 });
 
 test("WSB-5: the shipped binary completes the status read verb with exit 0 and WORKSPACE_COMMAND_COMPLETED", async () => {

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "tcrn.operator-authority-mcp-cases.v1",
+  "historicalIoBlockedVerbs": [
+    "adapter-generate",
+    "adapter-rollback-plan",
+    "claude-adapter-activation-fragment",
+    "claude-adapter-generate",
+    "claude-adapter-install",
+    "claude-adapter-rollback-plan",
+    "claude-adapter-settings-fragment",
+    "compatibility-dry-run",
+    "compatibility-plan",
+    "context-route",
+    "profile-authorize",
+    "profile-resolve"
+  ],
+  "digestFlagResolvedBeforeEpic022": [
+    "adapter-rollback-plan",
+    "claude-adapter-rollback-plan",
+    "context-route",
+    "profile-authorize",
+    "profile-resolve"
+  ],
+  "currentIoBlockedVerbsBeforeEpic022": [
+    "adapter-generate",
+    "claude-adapter-activation-fragment",
+    "claude-adapter-generate",
+    "claude-adapter-install",
+    "claude-adapter-settings-fragment",
+    "compatibility-dry-run",
+    "compatibility-plan"
+  ],
+  "laterPinnedVerbNotInHistoricalTwelve": "claude-adapter-uninstall",
+  "operatorAuthorityResolvedVerbs": [
+    "adapter-generate",
+    "claude-adapter-activation-fragment",
+    "claude-adapter-generate",
+    "claude-adapter-install",
+    "claude-adapter-settings-fragment",
+    "compatibility-dry-run",
+    "compatibility-plan"
+  ],
+  "authorityPositiveCases": 3,
+  "authorityHostileCases": 10,
+  "mcpPositiveCases": 8,
+  "mcpHostileCases": 5,
+  "authoritySource": "explicit-absolute-pins-path-plus-out-of-band-sha256",
+  "ambientAuthoritySources": [],
+  "antiRollbackBoundary": "caller-must-retain-newest-pins-digest",
+  "mcpTransport": "stdio-json-rpc-newline-delimited",
+  "mcpMutationPolicy": "exact-command-grant-plus-canonical-cli-semantics",
+  "network": false
+}

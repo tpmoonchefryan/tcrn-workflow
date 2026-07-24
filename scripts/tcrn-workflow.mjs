@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 
-import { runCli } from "../dist/build/packages/cli/src/index.js";
+import { runOperatorCli } from "../dist/build/packages/cli/src/index.js";
 
 try {
-  await runCli(process.argv.slice(2), {
+  await runOperatorCli(process.argv.slice(2), {
     write: (value) => process.stdout.write(value),
     // WSE-4: the outermost layer supplies the wall-clock reader. It exists only here,
     // never inside library code, so --attest-dir advisory time receipts read the real

@@ -9,17 +9,20 @@ divergent semantics.
 
 ## 1. Surfaces
 
-Two invocation surfaces exist. The shipped binary runs every `availability: "cli"`
-verb over the default `CliIo`. A programmatic embedder that constructs its own
-`CliIo` — supplying host authority the binary refuses to take from argv — reaches
-the `availability: "programmatic-only"` verbs as well. The two programmatic-only
-verbs both require a host-supplied compatibility admission authority and fail
-closed with `COMPATIBILITY_AUTHORITY_REQUIRED` from the shipped binary:
+The shipped binary runs every `availability: "cli"` verb. Verbs that need an
+out-of-band authority use one host-neutral operator channel: before the command,
+pass `--authority-pins <absolute-canonical-path>` and
+`--authority-pins-digest <sha256>`. The pins document binds the actual authority
+bundle; see `packages/core/spec/operator-authority-mcp-v1.md`. Omitting either
+value fails closed, and the binary never consults prompt text, environment
+variables or ambient configuration. A programmatic embedder may still construct
+`CliIo` directly, but mixing that authority with operator pins is ambiguous and
+rejected.
+
+There are currently no programmatic-only commands:
 
 ```
 programmatic-only
-compatibility-dry-run
-compatibility-plan
 ```
 
 The `commands` verb is the discovery root. It emits the schema-valid, byte-stable
@@ -27,6 +30,12 @@ The `commands` verb is the discovery root. It emits the schema-valid, byte-stabl
 status. An agent enumerates capability from that catalog rather than from prose;
 this document stays in drift-guarded agreement with it (see the read-surface
 test). Never hardcode a verb list an agent could instead read from `commands`.
+
+`tcrn-workflow-mcp` exposes the same catalog as structured MCP tools over stdio.
+It removes shell quoting from tool inputs. Read-only tools retain their underlying
+authority requirements; every mutating tool additionally requires an exact
+command grant in the pinned bundle and preserves numeric CAS, explicit time,
+actor and reason-code semantics.
 
 ## 2. Envelopes
 
