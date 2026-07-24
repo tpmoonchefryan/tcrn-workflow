@@ -3,6 +3,28 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.5.0 — 2026-07-24
+
+The sprint / release-train mechanism: batch Initiatives into a named delivery
+train and ship them together, without entangling the timebox axis with the
+work-scope tree. The full narrative is `docs/releases/0.5.0.md`.
+
+### Added
+
+- **The `Release` work kind is open on the CLI create path**, enforced parentless
+  in the graph validator: a sprint is a top-level batch container. `Review` and
+  `Knowledge` stay closed.
+- **`work-annotate --sprint`** attaches a member to a sprint via a `required:false`
+  `advisory:sprint` extension whose value is a qualified `{workspaceId, workId}`
+  reference to the sprint's Release record — cross-partition capable and
+  non-binding. `work-show` surfaces it; `work-list --sprint` filters members.
+
+### Changed
+
+- **The advisory value-shape check now runs on `work.created` as well as
+  `work.annotated`**, so a forged create cannot smuggle a malformed `advisory:*`
+  value past the envelope-only graph validator (covers scope/decided-by/sprint).
+
 ## 0.4.0 — 2026-07-24
 
 Background-resource residue governance: the machine-checkable half of a
