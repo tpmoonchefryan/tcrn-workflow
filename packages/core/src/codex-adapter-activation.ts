@@ -13,7 +13,9 @@
 // - a separate host-activation receipt can be created only from an explicit
 //   approval-and-fire observation;
 // - the digests below are TCRN's digest of the exact local bytes. Codex does not
-//   export its internal trust hash, so no receipt claims the two values are equal.
+//   expose a stable, documented digest domain that this adapter can reproduce.
+//   The host-owned trusted_hash can be observed out of band, but this receipt does
+//   not ingest it and never claims equality with the TCRN definition digest.
 //
 // The hook remains advisory. It injects session context but confers no mutation,
 // approval, or Workflow authority. Every handler failure is silent and exits zero,

@@ -174,12 +174,19 @@ installation receipt always has:
 
 Only `adapter-activation-record`, given an explicit approval-and-fire observation,
 can emit `host_observed_active`. The approved set contains TCRN SHA-256 digests of
-the exact local definition bytes. Codex does not export its internal trust hash,
-so every receipt marks that value `opaque_not_exported` and never asserts digest
-equality. The disposable-host approval, fire, and changed-definition skip are
-recorded in
-`docs/verification/host/codex-session-start-activation.json`; `pnpm verify:act9`
-binds the code proof to that evidence.
+the exact local definition bytes. Codex stores a host-owned `trusted_hash`, which
+the live probe observed out of band, but its normalized input and digest-domain
+semantics are opaque. Current TCRN receipts do not ingest that host value, so they
+mark it `opaque_not_exported` and never assert digest equality. The
+disposable-host approval, fire, and changed-definition skip are
+recorded in `docs/verification/host/codex-session-start-activation.json`.
+The same evidence now also binds an Owner-authorized live activation of the exact
+generated v2 TCRN definition, handler and summary: Codex CLI 0.139.0 injected
+`hookSpecificOutput.additionalContext` into model context and the model returned
+`HOOK_CONTEXT_PRESENT`. The activated commit is a local development candidate,
+not an accepted release. `docs/verification/host/codex-live-integration-2026-07-25.json`
+holds the exact digests and rollback rehearsal; `pnpm verify:act9` binds the code
+proof to both evidence layers.
 
 ### Codex Step 3 — bounded Verity plus capability summary (S067)
 

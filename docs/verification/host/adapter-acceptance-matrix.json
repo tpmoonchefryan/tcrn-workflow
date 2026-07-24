@@ -24,11 +24,11 @@
       "id": "session-start-context-injection",
       "codex": {
         "governance": "observe",
-        "evidenceClass": "live_mechanism_only",
+        "evidenceClass": "live_exact",
         "liveHostMeasured": true,
-        "exactGeneratedBytesLiveMeasured": false,
-        "source": "docs/verification/host/codex-session-start-activation.json",
-        "boundary": "Codex 0.139.0 approved and fired a disposable exact SessionStart definition, then skipped its changed definition; generated TCRN handler bytes are proven hermetically but were not themselves live-fired."
+        "exactGeneratedBytesLiveMeasured": true,
+        "source": "docs/verification/host/codex-live-integration-2026-07-25.json",
+        "boundary": "Codex 0.139.0 approved and fired the exact generated v2 TCRN definition, handler and summary; hookSpecificOutput.additionalContext reached model context with Verity and capability-manifest markers. The development candidate is not an accepted release."
       },
       "claude": {
         "governance": "observe",
@@ -62,11 +62,11 @@
       "id": "execution-collection",
       "codex": {
         "governance": "observe",
-        "evidenceClass": "supplied_stream",
-        "liveHostMeasured": false,
+        "evidenceClass": "live_mechanism_only",
+        "liveHostMeasured": true,
         "exactGeneratedBytesLiveMeasured": false,
-        "source": "docs/verification/host/codex-app-server-execution-collection.json",
-        "boundary": "A pinned supplied notification stream is correlated without opening App Server or driving a subagent; no live attach or Codex App-visible receipt comparison is claimed."
+        "source": "docs/verification/host/codex-live-integration-2026-07-25.json",
+        "boundary": "Codex Desktop 0.146.0-alpha.3.1 emitted App-visible sub_agent_activity and completed three real subagent rollouts. Those rollout records are not the pinned App Server notification stream accepted by S054, so no Workflow execution receipt or App-visible receipt comparison is claimed."
       },
       "claude": {
         "governance": "unavailable",
@@ -81,11 +81,11 @@
       "id": "workflow-mcp-tools",
       "codex": {
         "governance": "enforce",
-        "evidenceClass": "hermetic",
-        "liveHostMeasured": false,
-        "exactGeneratedBytesLiveMeasured": false,
-        "source": "packages/cli/src/mcp.ts",
-        "boundary": "Pinned operator authority gates Workflow mutations at the MCP server boundary; Codex host registration is operator-owned and not claimed."
+        "evidenceClass": "live_mechanism_only",
+        "liveHostMeasured": true,
+        "exactGeneratedBytesLiveMeasured": true,
+        "source": "docs/verification/host/codex-live-integration-2026-07-25.json",
+        "boundary": "Codex 0.139.0 discovers an enabled stdio registration and the exact candidate server completed initialize, tools/list and read-only Workflow status with pinned authority. A fresh host-routed turn hit the account usage limit before a tool call, and the running Desktop process did not hot-load the server."
       },
       "claude": {
         "governance": "enforce",
@@ -100,11 +100,11 @@
       "id": "adapter-activation",
       "codex": {
         "governance": "observe",
-        "evidenceClass": "live_mechanism_only",
+        "evidenceClass": "live_exact",
         "liveHostMeasured": true,
-        "exactGeneratedBytesLiveMeasured": false,
-        "source": "packages/core/src/codex-adapter-activation.ts",
-        "boundary": "Activation now requires an independent request/receipt/manifest/rung-bound authority document; installation still cannot approve its own hook."
+        "exactGeneratedBytesLiveMeasured": true,
+        "source": "docs/verification/host/codex-live-integration-2026-07-25.json",
+        "boundary": "The independent request/receipt/manifest/rung-bound activation was installed, separately approved and live-fired; a prior candidate was removed through the governed rollback path before the exact current candidate was installed. The immutable installation receipt still cannot approve itself."
       },
       "claude": {
         "governance": "observe",
@@ -248,12 +248,13 @@
   "storyAcceptance": {
     "S076": "verified",
     "S080": "accepted_with_explicit_unavailable_cells",
-    "S057": "partial_live_multi_agent_positive_probe_missing"
+    "S057": "partial_live_app_record_observed_receipt_comparison_missing"
   },
   "notClaimed": [
-    "Codex generated TCRN SessionStart bytes have not been fired in a real Codex host session.",
-    "No live App Server attach or observer-driven Codex subagent invocation has been performed.",
-    "No Codex App-visible multi-agent record has been compared with a Workflow receipt.",
+    "The local Codex development candidate is not an accepted Workflow release.",
+    "No live App Server attach or App Server observer-driven Codex subagent invocation has been performed.",
+    "Codex App-visible multi-agent records exist, but none has been converted to or compared with a Workflow execution receipt.",
+    "The running Codex Desktop process did not hot-load the newly registered Workflow MCP server, and no successful host-routed MCP tool call is claimed.",
     "No host actor identity, host signature, complete event coverage, PreToolUse gate, PermissionRequest responder or Stop blocker is claimed.",
     "MIN-046 keeps enforce hooks unauthorized until a separate Owner ruling with blast-radius, independent kill-switch and real fail-closed red evidence."
   ]

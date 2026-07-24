@@ -1941,7 +1941,13 @@ async function verifyAct9() {
   assertion(fixture.driftCases === 3 && fixture.refusalCases === 6, "ACT9_CORPUS");
   assertion(fixture.failOpen === true && fixture.installationClaimsHostActivation === false && fixture.approvedSetInitiallyEmpty === true, "ACT9_TRUST_DISCIPLINE");
   assertion(fixture.hostTrustHashRepresentation === "opaque_not_exported", "ACT9_OPAQUE_HOST_HASH");
-  assertion(evidence.observation.hookFired === true && evidence.driftProbe.changedDefinitionFired === false, "ACT9_LIVE_HOST_RECEIPT");
+  assertion(
+    evidence.observation.hookFired === true &&
+      evidence.driftProbe.changedDefinitionFired === false &&
+      evidence.generatedAdapterObservation.result === "HOOK_CONTEXT_PRESENT" &&
+      evidence.generatedAdapterObservation.injectionField === "hookSpecificOutput.additionalContext",
+    "ACT9_LIVE_HOST_RECEIPT",
+  );
   return success("ACT9_CODEX_ACTIVATION_VERIFIED", {
     tests: result.tests,
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
@@ -1953,8 +1959,9 @@ async function verifyAct9() {
 }
 
 // EPIC-020 S054: correlate current Codex App Server spawn/thread/turn/item shapes
-// into host-neutral execution receipts without driving the host. A live subagent
-// receipt is deliberately not claimed: GD-1 keeps the Observer read-only.
+// into host-neutral execution receipts without driving the host. Live Desktop
+// subagent rollout records are now held separately, but a live App Server receipt
+// remains deliberately unclaimed: GD-1 keeps the Observer read-only.
 async function verifyAct10() {
   const result = await runTests({ codexExecutionCollectionOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act10-codex-execution-collection-cases.json");
@@ -1967,6 +1974,7 @@ async function verifyAct10() {
   assertion(fixture.transcriptsSigned === false && fixture.attributionNotIdentity === true, "ACT10_NO_OVERCLAIM");
   assertion(fixture.bindings.includes("sessionId") && fixture.bindings.includes("threadId") && fixture.bindings.includes("turnId"), "ACT10_BINDINGS");
   assertion(evidence.boundary.liveAttachClaimed === false && evidence.boundary.liveSubagentReceiptClaimed === false, "ACT10_LIVE_BOUNDARY");
+  assertion(evidence.relatedLiveObservation.acceptedByThisCollector === false, "ACT10_LIVE_ROLLOUT_BOUNDARY");
   return success("ACT10_CODEX_EXECUTION_COLLECTION_VERIFIED", {
     tests: result.tests,
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
@@ -1977,8 +1985,9 @@ async function verifyAct10() {
 }
 
 // INIT-009 S076/S080 and INIT-010 S057: a closed cross-host acceptance
-// matrix. Unavailable cells are an accepted no-overclaim result; the gate keeps
-// the missing live multi-agent comparison visible rather than upgrading it.
+// matrix. Live exact Hook bytes, the registered/directly exercised MCP server and
+// App-visible subagent records are admitted narrowly; the gate keeps the missing
+// App Server attach and Workflow receipt comparison visible.
 async function verifyAct11() {
   const result = await runTests({ adapterAcceptanceOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act11-adapter-acceptance-cases.json");
@@ -1990,7 +1999,10 @@ async function verifyAct11() {
   assertion(fixture.hosts === 2 && fixture.surfaces === 8 && fixture.negativeCases === 14, "ACT11_CLOSED_SURFACE");
   assertion(
     fixture.enforceHostSurfacesAuthorized === 0 &&
-      fixture.codexExactGeneratedHookLiveFires === 0 &&
+      fixture.codexExactGeneratedHookLiveFires === 1 &&
+      fixture.liveWorkflowMcpRegistrations === 1 &&
+      fixture.liveWorkflowMcpDirectHandshakes === 1 &&
+      fixture.liveDesktopMultiAgentRuns === 1 &&
       fixture.liveAppServerAttaches === 0 &&
       fixture.liveMultiAgentReceiptComparisons === 0,
     "ACT11_NO_OVERCLAIM",
@@ -1998,7 +2010,7 @@ async function verifyAct11() {
   assertion(
     matrix.storyAcceptance.S076 === "verified" &&
       matrix.storyAcceptance.S080 === "accepted_with_explicit_unavailable_cells" &&
-      matrix.storyAcceptance.S057 === "partial_live_multi_agent_positive_probe_missing",
+      matrix.storyAcceptance.S057 === "partial_live_app_record_observed_receipt_comparison_missing",
     "ACT11_STORY_DISPOSITIONS",
   );
   return success("ACT11_ADAPTER_ACCEPTANCE_VERIFIED", {
