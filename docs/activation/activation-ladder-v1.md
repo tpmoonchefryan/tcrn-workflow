@@ -138,7 +138,7 @@ trust mechanism is the same as Claude Code settings.
 `.codex/tcrn-workflow/`. It does not create `.codex/hooks.json`, start Codex, or
 claim activation. `pnpm verify:act4` remains the gate for this rung.
 
-### Codex Step 2 — one fail-open SessionStart notify hook (S066)
+### Codex Step 2 — one fail-open SessionStart context hook (S066)
 
 `adapter-activate` requires a separately read, digest-pinned Step-1 receipt. It
 writes nothing until it also admits an independent
@@ -154,11 +154,13 @@ writes:
 - exactly one `.codex/hooks.json` entry, for `SessionStart` with matcher
   `startup|resume`.
 
-The command resolves the repository root at runtime and carries the exact handler
-and summary byte digests. The handler rechecks both digests, accepts only the
-documented SessionStart sources, emits at most 1024 UTF-8 bytes as
-`systemMessage`, and on every failure emits nothing and exits zero. No enforce
-event is installed.
+The command names the project-local handler literally and carries the exact
+handler and summary byte digests. The handler rechecks both digests, accepts only
+the documented SessionStart sources, emits at most 1024 UTF-8 bytes as
+`hookSpecificOutput.additionalContext` for `SessionStart`, and on every failure
+emits nothing and exits zero. The generic `systemMessage` field is deliberately
+not used because Codex surfaces it as a warning rather than model context. No
+enforce event is installed.
 
 Codex owns the decisive activation step. A non-managed command hook is skipped
 until the operator reviews and approves its exact current definition through

@@ -452,10 +452,24 @@ test("the generated handler injects bounded Verity context and every failure sta
     assert.equal(fired.status, 0);
     const output = JSON.parse(fired.stdout);
     assert.equal(output.continue, true);
-    assert.equal(output.suppressOutput, true);
-    assert.ok(output.systemMessage.includes("Advisory persona: Verity"));
+    assert.deepEqual(Object.keys(output).sort(), [
+      "continue",
+      "hookSpecificOutput",
+    ]);
+    assert.equal(
+      output.hookSpecificOutput.hookEventName,
+      "SessionStart",
+    );
     assert.ok(
-      Buffer.byteLength(output.systemMessage, "utf8") <=
+      output.hookSpecificOutput.additionalContext.includes(
+        "Advisory persona: Verity",
+      ),
+    );
+    assert.ok(
+      Buffer.byteLength(
+        output.hookSpecificOutput.additionalContext,
+        "utf8",
+      ) <=
         CODEX_SESSION_START_INJECTION_BUDGET_BYTES,
     );
 
