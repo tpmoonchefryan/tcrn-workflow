@@ -312,6 +312,21 @@ function listValue(value: string | undefined): readonly string[] {
   return values;
 }
 
+// INIT-008: a sprint member reference is a qualified cross-partition pointer. The CLI
+// accepts the ergonomic `workspace:<id>#work:<id>` spelling on one flag and parses it
+// into the {workspaceId, workId} object the core stores (# is only the input delimiter,
+// never the stored form). Both halves are whole protocol ids; the core re-validates them.
+function sprintReference(value: string): { readonly workspaceId: string; readonly workId: string } {
+  const hash = value.indexOf("#");
+  if (hash < 0) fail("CLI_ARGUMENT_MALFORMED", "sprint must be workspace:<id>#work:<id>");
+  const workspaceId = value.slice(0, hash);
+  const workId = value.slice(hash + 1);
+  if (!/^workspace:[a-f0-9]{24}$/u.test(workspaceId) || !/^work:[a-z0-9][a-z0-9._-]{0,127}$/u.test(workId)) {
+    fail("CLI_ARGUMENT_MALFORMED", "sprint must be workspace:<id>#work:<id>");
+  }
+  return { workspaceId, workId };
+}
+
 // Unified nullable-flag spelling: "-" is the canonical null sentinel and an omitted
 // flag is null; "null" is a deprecated alias accepted this release for external
 // compatibility (see COMMAND_CATALOG deprecatedAliases and the agent-integration doc).
@@ -379,10 +394,12 @@ function workSummary(record: WorkRecord): Readonly<Record<string, string | numbe
 function workAdvisory(record: WorkRecord): Readonly<Record<string, unknown>> | null {
   const scope = record.extensions["advisory:scope"] as { readonly value: unknown } | undefined;
   const decidedBy = record.extensions["advisory:decided-by"] as { readonly value: unknown } | undefined;
-  if (scope === undefined && decidedBy === undefined) return null;
+  const sprint = record.extensions["advisory:sprint"] as { readonly value: unknown } | undefined;
+  if (scope === undefined && decidedBy === undefined && sprint === undefined) return null;
   return {
     ...(scope !== undefined ? { scope: scope.value } : {}),
     ...(decidedBy !== undefined ? { decidedBy: decidedBy.value } : {}),
+    ...(sprint !== undefined ? { sprint: sprint.value } : {}),
   };
 }
 
@@ -575,10 +592,10 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "snapshot-verify", availability: "cli", mutates: false, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "manifest", required: true, valueKind: "string" }] },
   { name: "status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
-  { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "sprint", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
+  { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "sprint", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "work-show", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
 ] as const);
@@ -1315,7 +1332,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, [...requiredShared, "project-id", "external-key", "kind"]);
     // Fail closed at the CLI boundary naming the offending flag/value, before the
     // uncast enum reaches core and surfaces as an opaque RECORD_MALFORMED on the id.
-    if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
+    if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident", "Release"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
     if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
@@ -1351,15 +1368,16 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   if (command === "work-annotate") {
     // E05: attach non-binding advisory fields to a work record. At least one of --scope
     // or --decided-by must be present; the core rejects an empty or no-op annotation.
-    const values = parseArguments(rest, [...shared, "id", "scope", "decided-by", "actor"]);
+    const values = parseArguments(rest, [...shared, "id", "scope", "decided-by", "sprint", "actor"]);
     required(values, [...requiredShared, "id"]);
-    if (values.scope === undefined && values["decided-by"] === undefined) fail("CLI_ARGUMENT_MALFORMED", "scope-or-decided-by");
+    if (values.scope === undefined && values["decided-by"] === undefined && values.sprint === undefined) fail("CLI_ARGUMENT_MALFORMED", "scope-or-decided-by-or-sprint");
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => annotateWork(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "",
       ...(values.scope !== undefined ? { scope: values.scope } : {}),
       ...(values["decided-by"] !== undefined ? { decidedBy: listValue(values["decided-by"]) } : {}),
+      ...(values.sprint !== undefined ? { sprint: sprintReference(values.sprint) } : {}),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
@@ -1388,15 +1406,20 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "work-list") {
-    const values = parseArguments(rest, ["workspace", "project-id", "kind", "status", "parent-id", "limit", "offset"]);
+    const values = parseArguments(rest, ["workspace", "project-id", "kind", "status", "parent-id", "sprint", "limit", "offset"]);
     required(values, ["workspace"]);
-    if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
+    if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident", "Release"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
     if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
+    // INIT-008: filter members of a sprint. The flag carries the qualified reference in the
+    // same workspace:<id>#work:<id> spelling used to annotate; we compare the parsed object
+    // against the stored advisory:sprint value by canonical bytes so the round trip is closed.
+    const sprintFilter = values.sprint === undefined ? undefined : canonicalJson(sprintReference(values.sprint));
     const state = await validateWorkspace(values.workspace ?? "");
     const records = state.work.filter((entry) => !entry.tombstone &&
       (values["project-id"] === undefined || entry.projectId === values["project-id"]) &&
       (values.kind === undefined || entry.kind === values.kind) &&
       (values.status === undefined || entry.status === values.status) &&
+      (sprintFilter === undefined || canonicalJson((entry.extensions["advisory:sprint"] as { readonly value: unknown } | undefined)?.value ?? null) === sprintFilter) &&
       // CQ-05(c2): the null sentinel must be spelled the same on the way in and on the way
       // out. work-create routes --parent-id through nullableValue, which accepts BOTH "-"
       // and the deprecated alias "null"; this filter used a bare === "-" and so treated

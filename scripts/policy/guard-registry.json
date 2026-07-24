@@ -131,6 +131,26 @@
       "expectedMatches": 1,
       "test": "tests/background-resource.test.mjs",
       "testName": "BR: a registered group with a live non-orphan member is residue"
+    },
+    {
+      "id": "SPRINT-01-release-parentless",
+      "rationale": "A Release (sprint / release-train batch) is enforced parentless via the expectedParent map, so the timebox axis never entangles the scope tree. Without it a sprint could be parented under an Initiative, confusing membership (advisory:sprint) with parentage.",
+      "file": "packages/protocol/src/index.ts",
+      "find": "[\"Release\", null],",
+      "replace": "[\"Release\", \"Initiative\"],",
+      "expectedMatches": 1,
+      "test": "tests/workspace-extension-records.test.mjs",
+      "testName": "sprint: a Release is created parentless"
+    },
+    {
+      "id": "SPRINT-02-sprint-ref-validation",
+      "rationale": "annotateWork validates a sprint reference is a well-formed {workspaceId, workId} qualified pair before storing it, so a malformed member tag cannot enter the chain. Without it a garbage sprint value would be accepted and later fail replay for every reader.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "if (input.sprint !== undefined && !isSprintReference(input.sprint)) {",
+      "replace": "if (input.sprint !== undefined && isSprintReference(input.sprint)) {",
+      "expectedMatches": 1,
+      "test": "tests/workspace-extension-records.test.mjs",
+      "testName": "sprint: a valid sprint annotation is stored and round-trips"
     }
   ]
 }
