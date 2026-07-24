@@ -281,6 +281,22 @@ export type {
   CodexAdapterRequest,
 } from "./codex-adapter.js";
 export {
+  COLLECTION_ATTRIBUTION_NOTE,
+  COLLECTION_REASON_CODES,
+  CollectionError,
+  collectConferenceReceipts,
+  collectExecutionReceipt,
+  verifyCollectedTranscript,
+} from "./execution-collection.js";
+export type {
+  CollectedReceipt,
+  CollectionContext,
+  CollectionPlanEntry,
+  CollectionReasonCode,
+  CollectionResult,
+  ObservedInvocation,
+} from "./execution-collection.js";
+export {
   OBSERVE_HANDLER_PATH,
   OBSERVE_HANDLER_REASON_CODES,
   OBSERVE_HANDLER_VERSION,

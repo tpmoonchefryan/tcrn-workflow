@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "tcrn.act7-execution-collection-cases.v1",
+  "refusalCases": 7,
+  "transcriptsSigned": false,
+  "attributionNotIdentity": true,
+  "collectorSharesAgentAuthority": true,
+  "duplicateInvocationRefused": true,
+  "editedPositionFailsBinding": true,
+  "editedTranscriptReportsDrift": true,
+  "hostNeutral": true,
+  "liveHostProof": "not-claimed-per-min-046",
+  "standalone": "pure-collection-and-binding-no-io-no-host-read-no-network"
+}
