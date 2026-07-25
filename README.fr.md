@@ -8,13 +8,13 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · Français
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-76-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [Pourquoi ce projet existe](#pourquoi-ce-projet-existe) · [Est-ce fait pour vous](#est-ce-fait-pour-vous) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrage rapide](#démarrage-rapide) · [L'utiliser](#lutiliser-pour-de-vrai) · [Réponses directes](#réponses-directes) · [Limites connues](#limites-connues) · [Licence](#licence)
 
-`Verified claims: 76 (hygiene 13 · inertness 13 · runtime 50)`
+`Verified claims: 77 (hygiene 13 · inertness 13 · runtime 51)`
 
 </div>
 
@@ -53,8 +53,8 @@ Une seule règle tient l'ensemble, et c'est la partie que l'on croit le moins av
 | --- | --- |
 | **Un espace de travail qui n'est que des fichiers** | Tout votre graphe de travail (Initiative → Epic → Story → Subtask) vit dans des fichiers JSON simples et canoniques avec une chaîne de hachage — pas de base de données, pas de démon. Vous pouvez l'auditer avec `cat` et `sha256sum`, et les exports sont reproductibles octet pour octet. |
 | **Une commande, vingt portes** | `pnpm verify:p1` exécute toute la chaîne de vérification : format, lint, typage, build, ~40 fichiers de tests, matrice de confiance, politiques archive/SBOM/licences/vulnérabilités, liste blanche des sources, frontière hors ligne, analyse de confidentialité, durcissement CI, carte de vérification et preuve d'historique propre. La moindre surprise arrête la chaîne. |
-| **Un registre de revendications lisible par machine** | `verification-map.yaml` lie 76 revendications — 13 framework-hygiene, 13 inertness-proof, 50 runtime-capability — à des reason codes observables. Si le sujet d'une revendication change, sa preuve doit être rejouée. |
-| **Des gardes qui prouvent qu'ils mordent encore** | `pnpm guard-check` retire par mutation chaque garde enregistrée du code source et exige que le test qui la couvre passe au rouge — 20 gardes, vérifiées avant chaque push. Une protection dont la disparition ne serait remarquée par personne n'est pas une protection. |
+| **Un registre de revendications lisible par machine** | `verification-map.yaml` lie 77 revendications — 13 framework-hygiene, 13 inertness-proof, 51 runtime-capability — à des reason codes observables. Si le sujet d'une revendication change, sa preuve doit être rejouée. |
+| **Des gardes qui prouvent qu'ils mordent encore** | `pnpm guard-check` retire par mutation chaque garde enregistrée du code source et exige que le test qui la couvre passe au rouge — 22 gardes, vérifiées avant chaque push. Une protection dont la disparition ne serait remarquée par personne n'est pas une protection. |
 | **Des délibérations au dossier** | Conférences et portes de décision sont ajoutées au même journal inviolable. Une porte non satisfaite *bloque* le passage de son élément de travail à `done` (`WORKSPACE_GATE_PENDING`) — à la commande, puis de nouveau au rejeu — et clore une conférence distille chaque décision en une candidate de connaissance qui y renvoie. |
 | **Chaque décision reçoit un nom** | Activez l'attestation d'acteur et chaque modification ultérieure doit déclarer qui a agi — le moteur et son rejeu échouent tous deux en fermeture sur tout événement dépourvu d'identifiant d'acteur. Les espaces de travail qui ne l'activent jamais restent identiques octet pour octet. |
 | **Une activation réversible** | Claude Code et Codex disposent de chemins d'activation réversibles en trois étapes. Les commandes actuelles lient une racine absolue admise et sont prouvées par code et fixture ; les anciens reçus hôte couvrent des octets remplacés. Codex exige toujours l'approbation `/hooks` de chaque définition exacte, et l'installation seule ne prouve jamais l'activation hôte. |
@@ -210,8 +210,8 @@ Une release est une étiquette annotée immuable plus un ensemble d'artefacts re
 Chaque chiffre ci-dessous est imposé par une porte — si l'un dérive, une compilation échoue quelque part.
 
 - **20 portes** dans la chaîne `verify:p1`, chacune avec un reason code terminal stable.
-- **76 revendications vérifiées par la machine** dans `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 50 runtime-capability. Le badge de revendications ci-dessus est analysé et confronté au registre à chaque exécution.
-- **20 gardes enregistrées**, chacune prouvée encore mordante en la retirant par mutation et en observant son test passer au rouge.
+- **77 revendications vérifiées par la machine** dans `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 51 runtime-capability. Le badge de revendications ci-dessus est analysé et confronté au registre à chaque exécution.
+- **22 gardes enregistrées**, chacune prouvée encore mordante en la retirant par mutation et en observant son test passer au rouge.
 - **~40 fichiers de tests hermétiques**, dont une injection de panne `SIGKILL` réelle, des preuves de déterminisme à 64 permutations dans trois couches indépendantes, et une matrice d'attaques du système de fichiers.
 - **1 preuve phare de bout en bout** (`pnpm verify:e2e`) — un rejeu hermétique de la boucle gouvernée complète (initiative → epic → story → gate → conference → distill → promote → trace), chaque commande du tutoriel exécutée mot pour mot.
 - **19 entrées au registre public des exigences AOS** (11 vérifiées par fixture, 8 spécifiées) — la maturité est consignée ligne par ligne, jamais gonflée.
@@ -228,7 +228,7 @@ Chaque chiffre ci-dessous est imposé par une porte — si l'un dérive, une com
 | `verify:p4` / `verify:p4:knowledge` | Budgets du cycle de vie des artefacts, caviardage, apply/restore d'archive jetable ; séparation métadonnées/corps du noyau de connaissances, CAS de promotion, parité à 64 permutations. |
 | `verify:p5` | Modèle de confiance de profil générique clos, empreintes de politique effective, graphe de démarrage à froid, huit personas Core Reference inertes. |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | Contrôles de portée/risque/budget du routeur de contexte et corpus hostile ; pont de l'adaptateur Codex ; adaptateur Claude Code (bundle de gabarit à quatre fichiers, fragment de settings réversible, rejet des chemins interdits, repli CLAUDE.md, empreinte de parité inter-hôtes). |
-| `verify:act4` / `verify:act9` / `verify:act10` / `verify:act11` / `verify:act12` | Installation Codex inerte ; activation SessionStart indépendante et dérive de définition ; collecte read-only d'un flux fourni ; matrice inter-hôtes ; preuve depuis un cwd hostile que les commandes Codex/Claude exécutent uniquement la racine absolue admise. |
+| `verify:act4` / `verify:act9` / `verify:act10` / `verify:act11` / `verify:act12` / `verify:act13` | Installation Codex inerte ; activation SessionStart indépendante et dérive de définition ; collecte read-only d'un flux fourni ; matrice inter-hôtes ; preuve depuis un cwd hostile que les commandes Codex/Claude exécutent uniquement la racine absolue admise ; et reçus d'activation porteurs d'autorité gardés par une autorisation de sortie exacte et une observation hôte épinglée. |
 | `verify:p7` / `verify:p7:compatibility` | Échange canonique, manifeste de compatibilité, plancher anti-retour, plans déterministes d'import/point de contrôle/repli. |
 | `verify:authority-mcp` | Autorité opérateur épinglée hors bande, refus de rotation/révocation et lectures/écritures MCP structurées et neutres vis-à-vis de l'hôte. |
 | `verify:p8` | Candidat de release reproductible : reconstruction de l'archive source et comparaison octet par octet, SBOM, provenance, sommes de contrôle, bundle clos de six fichiers, matrice négative de confiance externe. |

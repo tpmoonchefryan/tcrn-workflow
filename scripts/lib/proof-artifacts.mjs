@@ -43,6 +43,7 @@ const routeAdditions = new Set([
   "tests/proof-artifact-generator.test.mjs",
   "tests/p8-workflow-rc.test.mjs",
   "tests/act12-hook-root-binding.test.mjs",
+  "tests/act13-authority-output.test.mjs",
   "tests/ci-bootstrap.test.mjs",
   "scripts/regen-rc1-inputs.mjs",
   "scripts/lib/rc1-inputs.mjs",

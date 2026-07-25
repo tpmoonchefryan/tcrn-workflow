@@ -49,6 +49,7 @@ import {
 } from "./codex-adapter-activation.js";
 import type {
   CodexAdapterActivationHostContext,
+  CodexHostActivationObservationFileIdentity,
 } from "./codex-adapter-activation.js";
 import {
   admitCodexAdapterHostInput,
@@ -114,6 +115,8 @@ export interface OperatorAuthorityFileGrants {
   readonly profileAdmission: GenericProfileAdmissionAuthority | null;
   readonly contextRoute: ContextRouteAuthorityFileIdentity | null;
   readonly codexAdapterInstallation: CodexAdapterInstallationFileIdentity | null;
+  readonly codexHostActivationObservation:
+    CodexHostActivationObservationFileIdentity | null;
   readonly claudeAdapterInstallation: ClaudeAdapterInstallationFileIdentity | null;
   readonly compatibilityAdmission: CompatibilityAdmissionAuthority | null;
 }
@@ -127,6 +130,7 @@ export interface OperatorAuthorityHostInputs {
 
 export interface OperatorAuthorityMcpGrant {
   readonly writeCommands: readonly string[];
+  readonly authorityOutputCommands: readonly string[];
 }
 
 export interface OperatorAuthorityBundle {
@@ -156,6 +160,8 @@ export interface OperatorAuthorityContext {
   readonly codexAdapterHost?: CodexAdapterHostContext;
   readonly codexAdapterActivationHost?: CodexAdapterActivationHostContext;
   readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
+  readonly codexHostActivationObservationAuthority?:
+    CodexHostActivationObservationFileIdentity;
   readonly claudeAdapterHost?: ClaudeAdapterHostContext;
   readonly claudeAdapterActivationHost?: ClaudeAdapterActivationHostContext;
   readonly claudeAdapterInstallationAuthority?: ClaudeAdapterInstallationFileIdentity;
@@ -367,6 +373,7 @@ export function validateOperatorAuthorityBundle(
     "profileAdmission",
     "contextRoute",
     "codexAdapterInstallation",
+    "codexHostActivationObservation",
     "claudeAdapterInstallation",
     "compatibilityAdmission",
   ], "fileAuthorities");
@@ -378,7 +385,7 @@ export function validateOperatorAuthorityBundle(
     "claudeAdapterActivation",
   ], "hostInputs");
   const mcp = record(document.mcp, "mcp");
-  exact(mcp, ["writeCommands"], "mcp");
+  exact(mcp, ["writeCommands", "authorityOutputCommands"], "mcp");
 
   const issuedAt = instant(document.issuedAt, "issuedAt");
   const expiresAt = instant(document.expiresAt, "expiresAt");
@@ -405,6 +412,10 @@ export function validateOperatorAuthorityBundle(
         files.codexAdapterInstallation,
         "fileAuthorities.codexAdapterInstallation",
       ) as CodexAdapterInstallationFileIdentity | null,
+      codexHostActivationObservation: fileExpectation(
+        files.codexHostActivationObservation,
+        "fileAuthorities.codexHostActivationObservation",
+      ) as CodexHostActivationObservationFileIdentity | null,
       claudeAdapterInstallation: fileExpectation(
         files.claudeAdapterInstallation,
         "fileAuthorities.claudeAdapterInstallation",
@@ -439,8 +450,21 @@ export function validateOperatorAuthorityBundle(
         maximumCommands,
         (entry) => commandPattern.test(entry),
       ),
+      authorityOutputCommands: sortedUniqueStrings(
+        mcp.authorityOutputCommands,
+        "mcp.authorityOutputCommands",
+        maximumCommands,
+        (entry) => commandPattern.test(entry),
+      ),
     },
   };
+  if (
+    basis.mcp.writeCommands.some((command) =>
+      basis.mcp.authorityOutputCommands.includes(command),
+    )
+  ) {
+    fail("OPERATOR_AUTHORITY_SCHEMA_INVALID", "mcp command grants overlap");
+  }
   const authorityDigest = sha(
     document.authorityDigest,
     "authorityDigest",
@@ -588,6 +612,12 @@ export async function readOperatorAuthority(
         codexAdapterInstallationAuthority:
           bundle.fileAuthorities.codexAdapterInstallation,
       }),
+    ...(bundle.fileAuthorities.codexHostActivationObservation === null
+      ? {}
+      : {
+        codexHostActivationObservationAuthority:
+          bundle.fileAuthorities.codexHostActivationObservation,
+      }),
     ...(claudeAdapterHost === undefined ? {} : { claudeAdapterHost }),
     ...(claudeAdapterActivationHost === undefined
       ? {}
@@ -612,6 +642,15 @@ export function assertOperatorMcpWriteGranted(
   command: string,
 ): void {
   if (!context.bundle.mcp.writeCommands.includes(command)) {
+    fail("OPERATOR_AUTHORITY_COMMAND_NOT_GRANTED", command);
+  }
+}
+
+export function assertOperatorMcpAuthorityOutputGranted(
+  context: OperatorAuthorityContext,
+  command: string,
+): void {
+  if (!context.bundle.mcp.authorityOutputCommands.includes(command)) {
     fail("OPERATOR_AUTHORITY_COMMAND_NOT_GRANTED", command);
   }
 }

@@ -404,6 +404,7 @@ async function runTests({
   codexExecutionCollectionOnly = false,
   adapterAcceptanceOnly = false,
   hookRootBindingOnly = false,
+  authorityOutputOnly = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -444,6 +445,7 @@ async function runTests({
     .filter((path) => !codexExecutionCollectionOnly || path === "tests/act10-codex-execution-collection.test.mjs")
     .filter((path) => !adapterAcceptanceOnly || path === "tests/act11-adapter-acceptance.test.mjs")
     .filter((path) => !hookRootBindingOnly || path === "tests/act12-hook-root-binding.test.mjs")
+    .filter((path) => !authorityOutputOnly || path === "tests/act13-authority-output.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -476,6 +478,8 @@ async function runTests({
       ? "ACT11_ADAPTER_ACCEPTANCE_TESTS_VERIFIED"
       : hookRootBindingOnly
       ? "ACT12_HOOK_ROOT_BINDING_TESTS_VERIFIED"
+      : authorityOutputOnly
+      ? "ACT13_AUTHORITY_OUTPUT_TESTS_VERIFIED"
       : installerOnly
       ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
@@ -1101,6 +1105,10 @@ async function verifyOperatorAuthorityMcp() {
   "OPERATOR_AUTHORITY_NO_AMBIENT_TRUST");
   assertion(fixture.mcpTransport === "stdio-json-rpc-newline-delimited" &&
     fixture.mcpMutationPolicy === "exact-command-grant-plus-canonical-cli-semantics" &&
+    fixture.mcpAuthorityOutputPolicy ===
+      "exact-separate-authority-output-grant-plus-pinned-observation" &&
+    JSON.stringify(fixture.authorityOutputCommands) ===
+      JSON.stringify(["adapter-activation-record"]) &&
     fixture.network === false,
   "OPERATOR_AUTHORITY_MCP_BOUNDARY");
   return success("OPERATOR_AUTHORITY_MCP_VERIFIED", {
@@ -1728,6 +1736,7 @@ const commandContracts = {
   act10: { exit: 0, reasonCode: "ACT10_CODEX_EXECUTION_COLLECTION_VERIFIED" },
   act11: { exit: 0, reasonCode: "ACT11_ADAPTER_ACCEPTANCE_VERIFIED" },
   act12: { exit: 0, reasonCode: "ACT12_HOOK_ROOT_BINDING_VERIFIED" },
+  act13: { exit: 0, reasonCode: "ACT13_AUTHORITY_OUTPUT_VERIFIED" },
   e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
 };
 
@@ -2034,6 +2043,15 @@ async function verifyAct12() {
   });
 }
 
+async function verifyAct13() {
+  const result = await runTests({ authorityOutputOnly: true });
+  return success("ACT13_AUTHORITY_OUTPUT_VERIFIED", {
+    tests: result.tests,
+    authorityOutputCommands: ["adapter-activation-record"],
+    observationSource: "activation-host-context-or-operator-pinned-file",
+  });
+}
+
 // EPIC-020 S055: collecting host-execution receipts from observed invocations and
 // feeding them to the EPIC-019 classifier. The gate asserts the honesty boundary:
 // transcripts are never signed and attribution is never identity.
@@ -2294,6 +2312,7 @@ const handlers = {
   act10: verifyAct10,
   act11: verifyAct11,
   act12: verifyAct12,
+  act13: verifyAct13,
   e2e: verifyE2eGovernedLoop,
 };
 
@@ -2359,7 +2378,7 @@ function evidencePhase(name) {
   if (name === "act1") {
     return "act";
   }
-  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act8" || name === "act9" || name === "act10" || name === "act11" || name === "act12") {
+  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act8" || name === "act9" || name === "act10" || name === "act11" || name === "act12" || name === "act13") {
     return "act2";
   }
   if (name === "e2e") {

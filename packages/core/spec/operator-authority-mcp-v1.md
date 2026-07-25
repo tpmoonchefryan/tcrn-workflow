@@ -16,8 +16,11 @@ generation and a sorted set of revoked authority digests. Its own `pinsDigest`
 binds those fields, while the separately supplied file SHA-256 binds the pins
 bytes. The canonical `tcrn.operator-authority-bundle.v1` document carries a
 validity window, active/revoked status, existing file-authority identities,
-separate inert-generation and activation host inputs for Codex and Claude, and an
-exact MCP write-command allowlist. Its `authorityDigest` binds all those fields.
+separate inert-generation and activation host inputs for Codex and Claude, the
+optional pinned `codexHostActivationObservation` file identity, and two disjoint,
+sorted MCP allowlists: `writeCommands` and `authorityOutputCommands`. Its
+`authorityDigest` binds all those fields. A command may appear in neither list or
+in exactly one list; overlap is invalid rather than a precedence rule.
 
 Rotation writes a new bundle generation and advances the pinned document.
 Revocation advances the pins document to name the revoked authority digest or
@@ -35,6 +38,14 @@ admission validators, remain bound to exact request/context/action digests, and
 have their context validity window rechecked against the operator verification
 time so a once-valid host input cannot be replayed from a longer-lived bundle.
 Supplying both programmatic authority and operator pins is ambiguous and rejected.
+The activation observation file is separately descriptor-bound and canonical. It
+is not a self-attested JSON input: a host activation receipt can use either that
+pinned file or a real, WeakSet-branded activation-host context admitted from the
+independent activation authority. In both cases the observation binds the active
+installation receipt, activation authority, activation-host digest, exact hook
+definition, approved definition set, host/session/event/fire facts and evidence
+digest. The derived v2 receipt additionally binds the observation digest, evidence
+source, and (for the file route) the file SHA-256 and source identity digest.
 
 ## Retest of the historical twelve
 
@@ -60,11 +71,25 @@ construction. Fixture-only commands are absent.
 Read-only tools can operate without an authority bundle when the underlying CLI
 command needs none. A read that needs an existing authority still fails with that
 command family's reason code unless pins supply it. Every mutating MCP tool
-requires the current bundle to grant that exact command. The MCP facade then calls
-the canonical CLI with the caller's exact `expected-version`, `at`, `actor` and
-other fields. It never derives CAS from head, invents time, substitutes an actor,
-retries a refusal or changes a reason code. Core and CLI validation therefore
-remain the authority on workspace mutation.
+requires the current bundle to grant that exact command in `writeCommands`.
+Authority-bearing output is a separate category: it is not a write, but it can
+produce a receipt that carries authority. `adapter-activation-record` is the only
+such command and requires an exact `authorityOutputCommands` grant before MCP
+parses caller arguments. A write grant never authorizes it. Its MCP descriptor is
+therefore neither read-only nor destructive. The command accepts an activation
+receipt, an optional direct receipt digest, and an observation-file path; old
+inline `approved-definition-digests` and `observation` JSON flags are unknown.
+The canonical CLI reads the installation receipt through its supplied authority
+and reads the observation only through the bundle-pinned file identity, unless a
+programmatic caller supplies the separately branded activation-host observation
+context. No raw object, forged object, structured clone, or zero-grant call can
+mint `host_observed_active`.
+
+The MCP facade then calls the canonical CLI with the caller's exact
+`expected-version`, `at`, `actor` and other fields. It never derives CAS from
+head, invents time, substitutes an actor, retries a refusal or changes a reason
+code. Core and CLI validation therefore remain the authority on workspace
+mutation.
 
 The server is offline and has no network transport. It is an operator surface,
 not an adapter, orchestrator, controller, identity provider or source-code

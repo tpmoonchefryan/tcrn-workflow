@@ -209,6 +209,7 @@ async function authorityFixture(options = {}) {
       profileAdmission: null,
       contextRoute: null,
       codexAdapterInstallation: null,
+      codexHostActivationObservation: null,
       claudeAdapterInstallation: null,
       compatibilityAdmission: null,
       ...options.fileAuthorities,
@@ -222,6 +223,7 @@ async function authorityFixture(options = {}) {
     },
     mcp: {
       writeCommands: options.writeCommands ?? [],
+      authorityOutputCommands: options.authorityOutputCommands ?? [],
     },
   };
   const bundle = {
@@ -865,6 +867,13 @@ test("fixture counts and boundaries remain exact", async () => {
   assert.equal(cases.authorityHostileCases, 10);
   assert.equal(cases.mcpPositiveCases, 8);
   assert.equal(cases.mcpHostileCases, 5);
+  assert.equal(
+    cases.mcpAuthorityOutputPolicy,
+    "exact-separate-authority-output-grant-plus-pinned-observation",
+  );
+  assert.deepEqual(cases.authorityOutputCommands, [
+    "adapter-activation-record",
+  ]);
   assert.deepEqual(cases.ambientAuthoritySources, []);
   assert.equal(cases.network, false);
   await reasonAsync(
