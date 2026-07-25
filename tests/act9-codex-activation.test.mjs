@@ -289,14 +289,23 @@ test("INC-001: an activation receipt may only name files inside its own installa
     // names: the content and identity digests only prove the caller could READ the
     // target, never that TCRN wrote it. Reachable from adapter-deactivate with no
     // operator authority at all, which is why this is a receipt-level check.
+    // The digest is RECOMPUTED after repointing, so the receipt is internally
+    // consistent and only the containment check can reject it. Without this the
+    // receiptDigest check rejects the tamper first and the case passes for the wrong
+    // reason -- which is exactly what the guard registry caught when it mutated the
+    // containment out and this test stayed green.
+    const reseal = (receipt) => {
+      const { receiptDigest: _unused, ...basis } = receipt;
+      return { ...receipt, receiptDigest: canonicalSha256(basis) };
+    };
     const repointed = JSON.parse(JSON.stringify(result.receipt));
     repointed.entries[0].realpath = join(fixtureRoots.root, "elsewhere", "hooks.json");
-    reason("CODEX_ACTIVATION_RECEIPT_INVALID", () => validateCodexActivationInstallationReceipt(repointed));
+    reason("CODEX_ACTIVATION_RECEIPT_INVALID", () => validateCodexActivationInstallationReceipt(reseal(repointed)));
 
     // A root that is not absolute and canonical cannot anchor containment at all.
     const relativeRoot = JSON.parse(JSON.stringify(result.receipt));
     relativeRoot.installationRoot = "relative/root";
-    reason("CODEX_ACTIVATION_RECEIPT_INVALID", () => validateCodexActivationInstallationReceipt(relativeRoot));
+    reason("CODEX_ACTIVATION_RECEIPT_INVALID", () => validateCodexActivationInstallationReceipt(reseal(relativeRoot)));
   } finally {
     await fixtureRoots.close();
   }
