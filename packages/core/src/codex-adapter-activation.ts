@@ -22,6 +22,7 @@
 // which keeps this single notify hook inside the fail-open rung approved by N-2.
 
 import { createHash } from "node:crypto";
+import { isAbsolute, resolve, sep } from "node:path";
 
 import {
   assertProtocolId,
@@ -68,6 +69,14 @@ export const CODEX_ACTIVATION_PATHS = Object.freeze([
   CODEX_HOOKS_PATH,
   CODEX_SESSION_START_PATH,
   CODEX_SESSION_SUMMARY_PATH,
+] as const);
+
+// INC-003: the closed set of operationAuthority values the project template can emit.
+// The summary is injected into a model's context and the host approval surface never
+// shows its text, so this field is an enum rather than free text: a value outside the
+// set is a forged directive, not a configuration choice.
+export const CODEX_ACTIVATION_OPERATION_AUTHORITIES = Object.freeze([
+  "none_until_live_governed_activation",
 ] as const);
 
 export const CODEX_ACTIVATION_REASON_CODES = Object.freeze([
@@ -349,6 +358,22 @@ function composeSessionSummaryText(
   capabilityManifestDigest: string,
   personaText: string | null,
 ): string {
+  // INC-003 defence in depth: the summary is a line-oriented document, so a value
+  // carrying a line break could forge an additional line however it was validated
+  // upstream. Every interpolated value is checked here, at the single point where
+  // untrusted-shaped data becomes injected text, so a future field added to this
+  // composer inherits the check instead of having to remember it.
+  for (const [label, value] of [
+    ["workspaceId", workspaceId],
+    ["projectId", projectId],
+    ["profileId", profileId],
+    ["operationAuthority", operationAuthority],
+    ["capabilityManifestDigest", capabilityManifestDigest],
+  ] as const) {
+    if (/[\u0000-\u001f\u007f]/u.test(value)) {
+      fail("CODEX_ACTIVATION_SCHEMA_INVALID", `${label} carries a control character`);
+    }
+  }
   const parts = [
     "TCRN Workflow — governed Codex session context",
     `workspace: ${workspaceId}`,
@@ -381,12 +406,26 @@ export function generateCodexSessionSummary(
   const projectId = text(project.projectId, "projectId", 512);
   const workId =
     project.workId === null ? null : text(project.workId, "workId", 512);
+  // INC-003: these two values are interpolated VERBATIM into text that reaches a model's
+  // context, and the host re-approval surface shows only the command line (digests) --
+  // never this text. Bounding them by size alone let a well-formed 512-byte value carry
+  // newlines and forge extra directive lines inside the summary. A profile id is a
+  // protocol id, and the template only ever emits one authority value, so both are
+  // constrained to what they actually are rather than to a byte budget.
   const profileId = text(project.profileId, "profileId", 512);
+  try {
+    assertProtocolId(profileId);
+  } catch {
+    fail("CODEX_ACTIVATION_SCHEMA_INVALID", "profileId is not a protocol id");
+  }
   const operationAuthority = text(
     project.operationAuthority,
     "operationAuthority",
     512,
   );
+  if (!CODEX_ACTIVATION_OPERATION_AUTHORITIES.includes(operationAuthority as (typeof CODEX_ACTIVATION_OPERATION_AUTHORITIES)[number])) {
+    fail("CODEX_ACTIVATION_SCHEMA_INVALID", "operationAuthority is not an admitted value");
+  }
   const persona =
     stage === "step3"
       ? renderPersonaAuthoritySummary(
@@ -564,6 +603,13 @@ export function generateCodexSessionStartScript(): string {
     "// exit 0 so the session is never wedged: N-2 fail-open means the hook dies, not",
     "// the session. Found by adversarial review (handler still resident after 4s).",
     "setTimeout(() => process.exit(0), 2_000).unref();",
+    "",
+    "// INC-004: stdout/stdin failures surface ASYNCHRONOUSLY, so the try/catch below",
+    "// cannot see them -- a closed read end made this handler exit 1 with an unhandled",
+    "// 'error' event, breaking the one property N-2 fail-open rests on. These listeners",
+    "// are the only way to keep the promise that a broken hook never wedges a session.",
+    "process.stdout.on(\"error\", () => process.exit(0));",
+    "process.stdin.on(\"error\", () => process.exit(0));",
     "",
     "try {",
     "  const ownBytes = readFileSync(fileURLToPath(import.meta.url));",
@@ -947,6 +993,13 @@ export function validateCodexActivationInstallationReceipt(
   if (!Array.isArray(document.entries)) {
     fail("CODEX_ACTIVATION_RECEIPT_INVALID", "activation receipt entries");
   }
+  // INC-001: admit the root BEFORE the entries, so every entry can be checked against
+  // it. An installation root that is not absolute and already canonical cannot anchor
+  // a containment check at all, which is why the Step-1 reader rejects one too.
+  const admittedRoot = text(document.installationRoot, "installationRoot", 4_096);
+  if (!isAbsolute(admittedRoot) || resolve(admittedRoot) !== admittedRoot) {
+    fail("CODEX_ACTIVATION_RECEIPT_INVALID", "installationRoot is not absolute and canonical");
+  }
   const entries = document.entries.map((entry, index) => {
     const item = record(entry, `activation receipt entries[${index}]`);
     exact(
@@ -965,9 +1018,27 @@ export function validateCodexActivationInstallationReceipt(
         `activation receipt entries[${index}].path`,
       );
     }
+    // INC-001: an entry's realpath MUST be the admitted root joined with its declared
+    // relative path, and must live under that root. Without this the uninstaller --
+    // which unlinks entry.realpath verbatim -- deletes whatever three readable files a
+    // self-authored receipt names, since the content/identity digests only prove the
+    // caller could READ the target, never that TCRN wrote it. The Step-1 peer
+    // (codex-adapter.ts) has always enforced exactly this pair; the activation receipt
+    // did not, and the gap was reachable from adapter-deactivate with no operator
+    // authority at all.
+    const declaredPath = item.path as (typeof CODEX_ACTIVATION_PATHS)[number];
+    const entryRealpath = text(item.realpath, `entries[${index}].realpath`, 4_096);
+    const expectedRealpath = resolve(admittedRoot, declaredPath);
+    const containedInRoot = entryRealpath === expectedRealpath && entryRealpath.startsWith(`${admittedRoot}${sep}`);
+    if (!containedInRoot) {
+      fail(
+        "CODEX_ACTIVATION_RECEIPT_INVALID",
+        `activation receipt entries[${index}].realpath is not ${declaredPath} under the installation root`,
+      );
+    }
     return {
-      path: item.path as (typeof CODEX_ACTIVATION_PATHS)[number],
-      realpath: text(item.realpath, `entries[${index}].realpath`, 4_096),
+      path: declaredPath,
+      realpath: entryRealpath,
       contentDigest: sha(
         item.contentDigest,
         `entries[${index}].contentDigest`,
@@ -1015,7 +1086,7 @@ export function validateCodexActivationInstallationReceipt(
       document.activationAuthorityDigest,
       "activationAuthorityDigest",
     ),
-    installationRoot: text(document.installationRoot, "installationRoot", 4_096),
+    installationRoot: admittedRoot,
     artifactsDigest: sha(document.artifactsDigest, "artifactsDigest"),
     binding,
     entries,

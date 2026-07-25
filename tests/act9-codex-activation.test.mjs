@@ -24,6 +24,7 @@ import test from "node:test";
 
 import {
   CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
+  validateCodexActivationInstallationReceipt,
   CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
   CODEX_ADAPTER_HOST_VERSION,
   CODEX_ADAPTER_REQUEST_VERSION,
@@ -270,6 +271,36 @@ function reason(code, operation) {
 async function reasonAsync(code, operation) {
   await assert.rejects(operation, (error) => error?.reasonCode === code, code);
 }
+
+test("INC-001: an activation receipt may only name files inside its own installation root", async () => {
+  const fixtureRoots = await roots();
+  try {
+    const bundle = bundleFor();
+    const inert = await installInert(fixtureRoots, bundle);
+    const result = await installActivation(fixtureRoots, bundle, inert);
+    // The genuine receipt validates.
+    assert.equal(
+      validateCodexActivationInstallationReceipt(JSON.parse(JSON.stringify(result.receipt))).activationState,
+      "pending_host_approval",
+    );
+
+    // Repointing any entry outside the root is refused. Without this the uninstaller,
+    // which unlinks entry.realpath verbatim, deletes whatever a self-authored receipt
+    // names: the content and identity digests only prove the caller could READ the
+    // target, never that TCRN wrote it. Reachable from adapter-deactivate with no
+    // operator authority at all, which is why this is a receipt-level check.
+    const repointed = JSON.parse(JSON.stringify(result.receipt));
+    repointed.entries[0].realpath = join(fixtureRoots.root, "elsewhere", "hooks.json");
+    reason("CODEX_ACTIVATION_RECEIPT_INVALID", () => validateCodexActivationInstallationReceipt(repointed));
+
+    // A root that is not absolute and canonical cannot anchor containment at all.
+    const relativeRoot = JSON.parse(JSON.stringify(result.receipt));
+    relativeRoot.installationRoot = "relative/root";
+    reason("CODEX_ACTIVATION_RECEIPT_INVALID", () => validateCodexActivationInstallationReceipt(relativeRoot));
+  } finally {
+    await fixtureRoots.close();
+  }
+});
 
 test("Step 3 installs one digest-bound SessionStart hook but claims no host activation", async () => {
   const fixtureRoots = await roots();
@@ -693,7 +724,11 @@ test("fixture and real-host evidence state the exact no-overclaim boundary", () 
   assert.equal(hostEvidence.host.version, "0.139.0");
   assert.equal(hostEvidence.observation.hookEventName, "SessionStart");
   assert.equal(hostEvidence.observation.hookFired, true);
-  assert.equal(hostEvidence.driftProbe.changedDefinitionFired, false);
+  // INC-009: the receipt records that no fire was OBSERVED for the changed definition.
+  // It must not assert the definition did not run -- that negative is inferred from an
+  // absent marker, the exact inference OBSERVER_COVERAGE_NOTE and MIN-046 refuse.
+  assert.equal(hostEvidence.driftProbe.changedDefinitionFireObserved, false);
+  assert.match(hostEvidence.driftProbe.fireInferenceBoundary, /not proof/u);
   assert.equal(
     hostEvidence.generatedAdapterObservation.result,
     "HOOK_CONTEXT_PRESENT",

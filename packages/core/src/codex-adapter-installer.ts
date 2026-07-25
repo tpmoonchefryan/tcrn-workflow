@@ -25,6 +25,7 @@
 import { createHash } from "node:crypto";
 import { constants, type BigIntStats } from "node:fs";
 import { lstat, mkdir, open, realpath, rm, rmdir, unlink } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 
 import { assertProtocolId, canonicalJson, canonicalSha256 } from "../../protocol/src/index.js";
@@ -158,6 +159,15 @@ async function admitInstallationRoot(installationRoot: string): Promise<string> 
   if (typeof installationRoot !== "string" || installationRoot.length === 0 || !installationRoot.isWellFormed()) fail("INSTALLER_ROOT_INVALID", "installation root");
   if (!isAbsolute(installationRoot) || resolve(installationRoot) !== installationRoot) fail("INSTALLER_ROOT_INVALID", "installation root not canonical");
   if (installationRoot.split(sep).some((segment) => segment === ".claude" || segment === ".codex")) fail("INSTALLER_ROOT_INVALID", "installation root carries a host segment");
+  // INC-005: the segment check above rejects a root INSIDE a host tree but not the home
+  // directory itself, so `--installation-root $HOME` wrote ~/.codex/hooks.json and the
+  // handler under the user's own Codex config root -- the one place every boundary
+  // statement in this project promises never to touch. The filesystem root is refused
+  // for the same reason, plus any ancestor of the home directory, since installing at
+  // one still lands the host tree above the user's project space.
+  const home = homedir();
+  if (installationRoot === home || installationRoot === sep) fail("INSTALLER_ROOT_INVALID", "installation root is the home or filesystem root");
+  if (typeof home === "string" && home.length > 0 && home.startsWith(`${installationRoot}${sep}`)) fail("INSTALLER_ROOT_INVALID", "installation root is an ancestor of the home directory");
   let rootReal: string;
   let rootStat: StatIdentity;
   try {
@@ -177,6 +187,11 @@ function admitReceiptPath(installationRoot: string, receiptPath: string): string
   if (!isAbsolute(receiptPath) || resolve(receiptPath) !== receiptPath) fail("INSTALLER_ROOT_INVALID", "receipt path not canonical");
   const codexDirectory = resolve(installationRoot, ".codex");
   if (receiptPath === codexDirectory || receiptPath.startsWith(`${codexDirectory}${sep}`)) fail("INSTALLER_ROOT_INVALID", "receipt path under .codex");
+  // INC-005: forbidding the receipt under <root>/.codex left every path OUTSIDE the root
+  // admissible, so `--receipt-out ~/.codex/activation-receipt.json` created a file in the
+  // user's Codex config root while the install itself stayed project-local. The receipt
+  // belongs to the installation, so it must live inside the root it describes.
+  if (!receiptPath.startsWith(`${installationRoot}${sep}`)) fail("INSTALLER_ROOT_INVALID", "receipt path is outside the installation root");
   return receiptPath;
 }
 

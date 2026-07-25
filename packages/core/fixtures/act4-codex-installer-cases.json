@@ -1,7 +1,7 @@
 {
   "schemaVersion": "tcrn.act4-codex-installer-cases.v1",
   "templateFiles": 4,
-  "hostileRootCases": 6,
+  "hostileRootCases": 9,
   "roundTripCases": 2,
   "tamperCases": 1,
   "activation": "not-installed-no-host-config-touched",

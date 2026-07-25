@@ -161,6 +161,16 @@
       "expectedMatches": 1,
       "test": "tests/workspace-extension-records.test.mjs",
       "testName": "sprint: a forged work.created carrying a malformed advisory value fails replay closed"
+    },
+    {
+      "id": "INC-001-activation-receipt-containment",
+      "rationale": "The v2 activation receipt validator requires every entry realpath to be its declared path resolved under the admitted installation root. Without it the uninstaller -- which unlinks entry.realpath verbatim -- deletes whatever three readable files a self-authored receipt names, reachable from adapter-deactivate with no operator authority; the content/identity digests only prove the caller could READ the target. Found by adversarial review with an executed proof of concept.",
+      "file": "packages/core/src/codex-adapter-activation.ts",
+      "find": "entryRealpath === expectedRealpath && entryRealpath.startsWith(`${admittedRoot}${sep}`)",
+      "replace": "entryRealpath === entryRealpath && expectedRealpath === expectedRealpath && admittedRoot.length >= 0 && sep.length >= 0",
+      "expectedMatches": 1,
+      "test": "tests/act9-codex-activation.test.mjs",
+      "testName": "INC-001: an activation receipt may only name files inside its own installation root"
     }
   ]
 }

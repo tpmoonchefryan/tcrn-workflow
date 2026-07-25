@@ -41,9 +41,10 @@
   "driftProbe": {
     "change": "the command definition gained TCRN_HOOK_REVISION=2",
     "changedLocalDefinitionDigest": "sha256:0bff245a23fcf5c0d34b30f6530b9433dcd8f4adb9799a95da278cf5e0ee72bc",
-    "changedDefinitionFired": false,
     "fireCountAfterChangedDefinitionSession": 1,
-    "result": "the changed definition was skipped pending a new approval"
+    "result": "the changed definition was skipped pending a new approval",
+    "changedDefinitionFireObserved": false,
+    "fireInferenceBoundary": "no fire was observed for the changed definition; absence of the marker is not proof the definition did not run, per MIN-046"
   },
   "generatedAdapterObservation": {
     "classification": "local development candidate, not an accepted release",
@@ -68,7 +69,8 @@
     "localDigestEqualityClaim": false,
     "installationReceiptProvesActivation": false,
     "receiptMeaning": "operator-observed attribution evidence for this exact disposable-host probe, not host identity proof and not a signature",
-    "scope": "the disposable probe proves Codex trust/reapproval behavior; the generated-adapter observation proves the exact v2 TCRN handler, summary and approved definition reached a real Codex 0.139.0 model context. Neither receipt proves host identity or signs the transcript"
+    "scope": "the disposable probe proves Codex trust/reapproval behavior; the generated-adapter observation proves the exact v2 TCRN handler, summary and approved definition reached a real Codex 0.139.0 model context. Neither receipt proves host identity or signs the transcript",
+    "modelContextClaimBasis": "the model answered HOOK_CONTEXT_PRESENT: a model self-report, not an independent host attestation"
   },
   "evidenceDigest": "560424f8f884c5e6286981a1936625b1e74ebe69c34db7a023f080d38228b62d"
 }

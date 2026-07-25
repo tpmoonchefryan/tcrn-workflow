@@ -1943,7 +1943,8 @@ async function verifyAct9() {
   assertion(fixture.hostTrustHashRepresentation === "opaque_not_exported", "ACT9_OPAQUE_HOST_HASH");
   assertion(
     evidence.observation.hookFired === true &&
-      evidence.driftProbe.changedDefinitionFired === false &&
+      evidence.driftProbe.changedDefinitionFireObserved === false &&
+      typeof evidence.driftProbe.fireInferenceBoundary === "string" &&
       evidence.generatedAdapterObservation.result === "HOOK_CONTEXT_PRESENT" &&
       evidence.generatedAdapterObservation.injectionField === "hookSpecificOutput.additionalContext",
     "ACT9_LIVE_HOST_RECEIPT",
@@ -2091,7 +2092,7 @@ async function verifyAct4() {
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act4-codex-installer-cases.json");
   const fixture = await readJson(fixturePath);
   assertion(fixture.schemaVersion === "tcrn.act4-codex-installer-cases.v1", "ACT4_FIXTURE_SCHEMA");
-  assertion(fixture.templateFiles === 4 && fixture.hostileRootCases === 6, "ACT4_CORPUS");
+  assertion(fixture.templateFiles === 4 && fixture.hostileRootCases === 9, "ACT4_CORPUS");
   assertion(fixture.hostConfigTouched === false && fixture.hookRegistered === false && fixture.trustCeremonyExercised === false, "ACT4_NO_OVERCLAIM");
   return success("ACT4_CODEX_INSTALLER_VERIFIED", {
     tests: result.tests,
