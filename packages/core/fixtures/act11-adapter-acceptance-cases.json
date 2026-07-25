@@ -4,7 +4,7 @@
   "surfaces": 8,
   "negativeCases": 14,
   "enforceHostSurfacesAuthorized": 0,
-  "codexExactGeneratedHookLiveFires": 1,
+  "codexExactGeneratedHookLiveFires": 0,
   "liveWorkflowMcpRegistrations": 1,
   "liveWorkflowMcpDirectHandshakes": 1,
   "liveDesktopMultiAgentRuns": 1,

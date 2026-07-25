@@ -171,6 +171,26 @@
       "expectedMatches": 1,
       "test": "tests/act9-codex-activation.test.mjs",
       "testName": "INC-001: an activation receipt may only name files inside its own installation root"
+    },
+    {
+      "id": "INC-002-codex-hook-command-admitted-absolute-root",
+      "rationale": "The Codex hook definition must shell-quote the handler path derived from the installer-admitted absolute project root. A relative command inherits the host fire-time cwd and can execute another project's same-named handler after the operator approved different bytes.",
+      "file": "packages/core/src/codex-adapter-activation.ts",
+      "find": "shellQuote(resolve(installationRoot, CODEX_SESSION_START_PATH))",
+      "replace": "shellQuote(CODEX_SESSION_START_PATH + installationRoot.slice(0, 0))",
+      "expectedMatches": 1,
+      "test": "tests/act12-hook-root-binding.test.mjs",
+      "testName": "INC-002: Codex hook command executes the admitted root from an attacker cwd"
+    },
+    {
+      "id": "INC-002-claude-hook-command-admitted-absolute-root",
+      "rationale": "The Claude activation fragment carries the same admitted-root invariant. A relative handler path can be redirected by the host fire-time cwd even though the fragment digest itself was approved.",
+      "file": "packages/core/src/claude-adapter-activation.ts",
+      "find": "shellQuote(resolve(installationRoot, CLAUDE_ADAPTER_SESSION_START_PATH))",
+      "replace": "shellQuote(CLAUDE_ADAPTER_SESSION_START_PATH + installationRoot.slice(0, 0))",
+      "expectedMatches": 1,
+      "test": "tests/act12-hook-root-binding.test.mjs",
+      "testName": "INC-002: Claude hook command executes the admitted root from an attacker cwd"
     }
   ]
 }

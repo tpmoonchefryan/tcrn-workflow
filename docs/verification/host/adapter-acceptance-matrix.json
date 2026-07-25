@@ -24,19 +24,19 @@
       "id": "session-start-context-injection",
       "codex": {
         "governance": "observe",
-        "evidenceClass": "live_exact",
-        "liveHostMeasured": true,
-        "exactGeneratedBytesLiveMeasured": true,
-        "source": "docs/verification/host/codex-live-integration-2026-07-25.json",
-        "boundary": "Codex 0.139.0 approved and fired the exact generated v2 TCRN definition, handler and summary; hookSpecificOutput.additionalContext reached model context with Verity and capability-manifest markers. The development candidate is not an accepted release."
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "tests/act12-hook-root-binding.test.mjs",
+        "boundary": "The current definition embeds the admitted absolute project root and is proven against a hostile fire-time cwd. July 25 live receipts bind superseded command bytes and cannot prove this candidate; fresh Owner /hooks review, approval and fire are pending."
       },
       "claude": {
         "governance": "observe",
-        "evidenceClass": "live_exact",
-        "liveHostMeasured": true,
-        "exactGeneratedBytesLiveMeasured": true,
-        "source": "docs/verification/host/claude-code.json",
-        "boundary": "The generated fail-open SessionStart summary reached a real Claude Code 2.1.201 session and the install/remove path was measured."
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "tests/act12-hook-root-binding.test.mjs",
+        "boundary": "The current absolute-root Claude command is code- and fixture-proven only. The prior live observation predates these bytes, and this change makes no Claude live claim."
       }
     },
     {
@@ -100,19 +100,19 @@
       "id": "adapter-activation",
       "codex": {
         "governance": "observe",
-        "evidenceClass": "live_exact",
-        "liveHostMeasured": true,
-        "exactGeneratedBytesLiveMeasured": true,
-        "source": "docs/verification/host/codex-live-integration-2026-07-25.json",
-        "boundary": "The independent request/receipt/manifest/rung-bound activation was installed, separately approved and live-fired; a prior candidate was removed through the governed rollback path before the exact current candidate was installed. The immutable installation receipt still cannot approve itself."
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
+        "source": "packages/core/src/codex-adapter-activation.ts",
+        "boundary": "The independently authorized activation path and admitted-root binding are code-proven, but the current definition has not been installed, reapproved or fired. Historical receipts cannot approve the changed bytes, and an installation receipt still cannot approve itself."
       },
       "claude": {
         "governance": "observe",
-        "evidenceClass": "live_exact",
-        "liveHostMeasured": true,
-        "exactGeneratedBytesLiveMeasured": true,
+        "evidenceClass": "hermetic",
+        "liveHostMeasured": false,
+        "exactGeneratedBytesLiveMeasured": false,
         "source": "packages/core/src/claude-adapter-activation.ts",
-        "boundary": "The independent v2 activation host input and reversible live installation were measured."
+        "boundary": "The independent v2 activation host input, absolute-root binding and reversible installation are code- and fixture-proven. No current Claude live installation is claimed."
       }
     },
     {
@@ -251,7 +251,8 @@
     "S057": "partial_live_app_record_observed_receipt_comparison_missing"
   },
   "notClaimed": [
-    "The local Codex development candidate is not an accepted Workflow release.",
+    "The current Codex absolute-root development candidate has not yet been installed, approved or live-fired and is not an accepted Workflow release.",
+    "No current Claude absolute-root definition is claimed live; Claude work in this change is code and fixture only.",
     "No live App Server attach or App Server observer-driven Codex subagent invocation has been performed.",
     "Codex App-visible multi-agent records exist, but none has been converted to or compared with a Workflow execution receipt.",
     "The running Codex Desktop process did not hot-load the newly registered Workflow MCP server, and no successful host-routed MCP tool call is claimed.",

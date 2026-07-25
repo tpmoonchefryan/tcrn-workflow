@@ -14,7 +14,6 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
-  CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND,
   CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY,
   CLAUDE_ADAPTER_HOST_PRODUCT,
   CLAUDE_ADAPTER_HOST_VERSION,
@@ -27,6 +26,7 @@ import {
   admitClaudeAdapterHostInput,
   assertNoForbiddenClaudePaths,
   calculateClaudeAdapterRequestDigest,
+  claudeAdapterActivationHookCommand,
   executeClaudeAdapterRollback,
   generateClaudeAdapterActivationFragment,
   generateClaudeAdapterActivationRollbackPlan,
@@ -46,6 +46,7 @@ const projectId = "project:activation-fixture";
 const workId = "work:activation-fixture";
 const hostVersionReadback = "claude-code/2026.07.01 (activation fixture)";
 const receiptDigestFixture = "a".repeat(64);
+const installationRootFixture = "/tmp/tcrn-claude-activation-fixture";
 
 function hash(label) {
   return createHash("sha256").update(label, "utf8").digest("hex");
@@ -142,9 +143,16 @@ function activationHostFor(adapterRequest, overrides = {}) {
   return admitClaudeAdapterActivationHostInput({ ...basis, hostDigest: canonicalSha256(basis) });
 }
 
-function fragmentFor(adapterRequest = request()) {
+function fragmentFor(
+  adapterRequest = request(),
+  installationRoot = installationRootFixture,
+) {
   const scriptDigest = sessionStartScriptDigest(generateSessionStartScript());
-  return generateClaudeAdapterActivationFragment(adapterRequest, activationHostFor(adapterRequest), { scriptDigest });
+  return generateClaudeAdapterActivationFragment(
+    adapterRequest,
+    activationHostFor(adapterRequest),
+    { scriptDigest, installationRoot },
+  );
 }
 
 // Reseal a mutated fragment clone so validateClaudeAdapterActivationFragment sees a
@@ -161,7 +169,7 @@ function reason(code, fn) {
   assert.throws(fn, (error) => error?.reasonCode === code, code);
 }
 
-test("v2 activation fragment generation is single-SessionStart, digest-bound, and forbidden-path clean", () => {
+test("v2 activation fragment generation is single-SessionStart, digest-bound, and project-root bound", () => {
   const fragment = fragmentFor();
   assert.equal(fragment.schemaVersion, "tcrn.claude-adapter-settings-fragment.v2");
   assert.equal(fragment.activation, true);
@@ -169,11 +177,21 @@ test("v2 activation fragment generation is single-SessionStart, digest-bound, an
   assert.equal(fragment.settingsTarget, CLAUDE_ADAPTER_SETTINGS_TARGET);
   assert.equal(Object.keys(fragment.hooks).length, 1);
   assert.equal(fragment.hooks.SessionStart.length, 1);
-  assert.equal(fragment.hooks.SessionStart[0].hooks[0].command, CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND);
+  assert.equal(
+    fragment.hooks.SessionStart[0].hooks[0].command,
+    claudeAdapterActivationHookCommand(installationRootFixture),
+  );
   assert.equal(validateClaudeAdapterActivationFragment(fragment).fragmentDigest, fragment.fragmentDigest);
-  // Acceptance 5: nothing under ~/.claude is named; the emitted fragment is clean.
-  assert.equal(assertNoForbiddenClaudePaths(fragment), true);
+  // INC-002 requires the admitted absolute project root. The generic inert-bundle
+  // guard rejects every absolute /.claude/ path, so it is intentionally not applied
+  // to this active fragment; root admission owns the user-level exclusion.
+  assert.equal(fragment.installationRoot, installationRootFixture);
   assert.equal(canonicalJson(fragment).includes("~/.claude"), false);
+  assert.notEqual(
+    fragment.fragmentDigest,
+    fragmentFor(request(), "/tmp/tcrn-claude-activation-other-root").fragmentDigest,
+    "the approved fragment digest must be machine/root specific",
+  );
 });
 
 test("closed-set negatives fail with stable reason codes (acceptance 1)", () => {
@@ -212,7 +230,7 @@ test("byte-inverse merge/remove over three settings shapes (acceptance 2)", () =
     const merged = mergeClaudeAdapterActivationFragment(shape, fragment);
     const parsed = JSON.parse(merged);
     // The real hooks.SessionStart entry is materialized under the real key.
-    assert.ok(parsed.hooks.SessionStart.some((entry) => entry.hooks.some((inner) => inner.command === CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND)));
+    assert.ok(parsed.hooks.SessionStart.some((entry) => entry.hooks.some((inner) => inner.command === claudeAdapterActivationHookCommand(installationRootFixture))));
     assert.ok(Object.prototype.hasOwnProperty.call(parsed, CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY));
     const removed = removeClaudeAdapterActivationFragment(merged, fragment);
     assert.equal(removed, shape, "remove(merge(s)) must equal s byte-exact");
@@ -222,7 +240,7 @@ test("byte-inverse merge/remove over three settings shapes (acceptance 2)", () =
   assert.ok(JSON.parse(mergeClaudeAdapterActivationFragment(withUser, fragment)).hooks.PostToolUse[0].hooks[0].command === "echo pre-existing");
   // A settings blob that already carries the merge key or the hook command conflicts.
   reason("ACTIVATION_FRAGMENT_CONFLICT", () => mergeClaudeAdapterActivationFragment(canonicalJson({ [CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY]: {} }), fragment));
-  reason("ACTIVATION_FRAGMENT_CONFLICT", () => mergeClaudeAdapterActivationFragment(canonicalJson({ hooks: { SessionStart: [{ matcher: "", hooks: [{ type: "command", command: CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND }] }] } }), fragment));
+  reason("ACTIVATION_FRAGMENT_CONFLICT", () => mergeClaudeAdapterActivationFragment(canonicalJson({ hooks: { SessionStart: [{ matcher: "", hooks: [{ type: "command", command: claudeAdapterActivationHookCommand(installationRootFixture) }] }] } }), fragment));
 });
 
 async function tempRoot() {
@@ -302,7 +320,7 @@ test("[BLOCKER] step-2 install writes session-start.mjs + merges settings, and r
 
     const scriptSource = generateSessionStartScript();
     const req = request();
-    const fragment = generateClaudeAdapterActivationFragment(req, activationHostFor(req), { scriptDigest: sessionStartScriptDigest(scriptSource) });
+    const fragment = generateClaudeAdapterActivationFragment(req, activationHostFor(req), { scriptDigest: sessionStartScriptDigest(scriptSource), installationRoot: base });
     const receiptPath = join(base, "activation-generation.json");
     const result = await installClaudeAdapterActivation({
       installationRoot: base,
@@ -319,7 +337,7 @@ test("[BLOCKER] step-2 install writes session-start.mjs + merges settings, and r
     await lstat(join(workflowDir, "session-start.mjs"));
     const mergedSettings = await readFile(settingsPath, "utf8");
     const parsedSettings = JSON.parse(mergedSettings);
-    assert.ok(parsedSettings.hooks.SessionStart.some((entry) => entry.hooks.some((inner) => inner.command === CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND)));
+    assert.ok(parsedSettings.hooks.SessionStart.some((entry) => entry.hooks.some((inner) => inner.command === claudeAdapterActivationHookCommand(base))));
     assert.ok(parsedSettings.hooks.PostToolUse[0].hooks[0].command === "echo user");
     // Settings rollback is byte-inverse of the merge.
     assert.equal(removeClaudeAdapterActivationFragment(mergedSettings, fragment), userSettings);
@@ -333,6 +351,50 @@ test("[BLOCKER] step-2 install writes session-start.mjs + merges settings, and r
     await assert.rejects(stat(receiptPath), "the v2 receipt is removed");
   } finally {
     await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("INC-002: activation rejects a fragment bound to another admitted root before writing", async () => {
+  const first = await tempRoot();
+  const second = await tempRoot();
+  try {
+    await mkdir(first.workflowDir, { recursive: true });
+    const bundle = generateClaudeAdapterBundle(request(), hostFor(request()));
+    for (const file of bundle.files) {
+      await writeFile(
+        join(first.base, ...file.path.split("/")),
+        file.content,
+        { mode: 0o600 },
+      );
+    }
+    const scriptSource = generateSessionStartScript();
+    const req = request();
+    const fragment = generateClaudeAdapterActivationFragment(
+      req,
+      activationHostFor(req),
+      {
+        scriptDigest: sessionStartScriptDigest(scriptSource),
+        installationRoot: second.base,
+      },
+    );
+    await assert.rejects(
+      installClaudeAdapterActivation({
+        installationRoot: first.base,
+        generationId: "activation-generation:wrong-root",
+        receiptPath: join(first.base, "activation-generation.json"),
+        bundleDigest: bundle.bundleDigest,
+        fragment,
+        scriptSource,
+      }),
+      (error) => error?.reasonCode === "INSTALLER_ACTIVATION_PRECONDITION",
+    );
+    await assert.rejects(
+      stat(join(first.workflowDir, "session-start.mjs")),
+      "a root mismatch must fail before activation writes",
+    );
+  } finally {
+    await rm(first.base, { recursive: true, force: true });
+    await rm(second.base, { recursive: true, force: true });
   }
 });
 
@@ -350,7 +412,7 @@ test("WSG-9: a settings.json edit landing before the commit is refused, not sile
 
     const scriptSource = generateSessionStartScript();
     const req = request();
-    const fragment = generateClaudeAdapterActivationFragment(req, activationHostFor(req), { scriptDigest: sessionStartScriptDigest(scriptSource) });
+    const fragment = generateClaudeAdapterActivationFragment(req, activationHostFor(req), { scriptDigest: sessionStartScriptDigest(scriptSource), installationRoot: base });
     // The hook fires after the merge is prepared and before the rename commits it,
     // which is exactly the window a concurrent editor occupies.
     const concurrent = canonicalJson({ hooks: { PostToolUse: [{ matcher: "", hooks: [{ type: "command", command: "echo concurrent" }] }] } });
@@ -385,7 +447,7 @@ async function activationSetup(base) {
   }
   const scriptSource = generateSessionStartScript();
   const req = request();
-  const fragment = generateClaudeAdapterActivationFragment(req, activationHostFor(req), { scriptDigest: sessionStartScriptDigest(scriptSource) });
+  const fragment = generateClaudeAdapterActivationFragment(req, activationHostFor(req), { scriptDigest: sessionStartScriptDigest(scriptSource), installationRoot: base });
   return {
     installationRoot: base,
     generationId: "activation-generation:fixture",

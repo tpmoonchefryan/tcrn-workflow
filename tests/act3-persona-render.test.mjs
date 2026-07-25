@@ -253,7 +253,7 @@ async function installStep3(base, workflowDir) {
   const render = renderPersonaAuthoritySummary(generateCorePersonaBundle(), verityId);
   const scriptSource = generateSessionStartScript({ personaRenderDigest: render.renderDigest });
   const req = request();
-  const fragment = generateClaudeAdapterActivationFragment(req, activationHostFor(req), { scriptDigest: sessionStartScriptDigest(scriptSource) });
+  const fragment = generateClaudeAdapterActivationFragment(req, activationHostFor(req), { scriptDigest: sessionStartScriptDigest(scriptSource), installationRoot: base });
   const receiptPath = join(base, "activation-generation.json");
   const result = await installClaudeAdapterActivation({
     installationRoot: base,

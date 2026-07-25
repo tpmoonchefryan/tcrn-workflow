@@ -30,6 +30,8 @@
 // executeClaudeAdapterRollback empties .claude/tcrn-workflow byte-inverse instead
 // of orphaning the step-2/3 files.
 
+import { isAbsolute, resolve } from "node:path";
+
 import { canonicalJson, canonicalSha256, assertProtocolId, compareCanonicalText, parseStrictInstant } from "../../protocol/src/index.js";
 import { readAuthorityFile } from "./authority-file-reader.js";
 import type { AuthorityFileReasonCodes } from "./authority-file-reader.js";
@@ -37,7 +39,6 @@ import {
   CLAUDE_ADAPTER_HOST_PRODUCT,
   CLAUDE_ADAPTER_SETTINGS_TARGET,
   CLAUDE_ADAPTER_TEMPLATE_PATHS,
-  assertNoForbiddenClaudePaths,
   validateClaudeAdapterRequest,
 } from "./claude-adapter.js";
 
@@ -47,7 +48,6 @@ export const CLAUDE_ADAPTER_INSTALLATION_V2_VERSION = "tcrn.claude-adapter-insta
 export const CLAUDE_ADAPTER_ROLLBACK_PLAN_VERSION = "tcrn.claude-adapter-rollback-plan.v1" as const;
 export const CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY = "tcrnWorkflow" as const;
 export const CLAUDE_ADAPTER_ACTIVATION_HOOK_EVENT = "SessionStart" as const;
-export const CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND = 'node ".claude/tcrn-workflow/session-start.mjs"' as const;
 export const CLAUDE_ADAPTER_SESSION_START_PATH = ".claude/tcrn-workflow/session-start.mjs" as const;
 export const CLAUDE_ADAPTER_PERSONA_RENDER_PATH = ".claude/tcrn-workflow/persona-render.json" as const;
 
@@ -104,7 +104,7 @@ export interface ClaudeAdapterActivationHostContext {
 
 export interface ClaudeAdapterActivationHookCommand {
   readonly type: "command";
-  readonly command: typeof CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND;
+  readonly command: string;
 }
 
 export interface ClaudeAdapterActivationHookEntry {
@@ -120,6 +120,7 @@ export interface ClaudeAdapterActivationFragment {
   readonly requestDigest: string;
   readonly installationReceiptDigest: string;
   readonly scriptDigest: string;
+  readonly installationRoot: string;
   readonly hostProduct: typeof CLAUDE_ADAPTER_HOST_PRODUCT;
   readonly settingsTarget: typeof CLAUDE_ADAPTER_SETTINGS_TARGET;
   readonly mergeKey: typeof CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY;
@@ -129,6 +130,7 @@ export interface ClaudeAdapterActivationFragment {
 
 export interface ClaudeAdapterActivationScriptContext {
   readonly scriptDigest: string;
+  readonly installationRoot: string;
 }
 
 export interface ClaudeAdapterActivationInstallationEntry {
@@ -166,6 +168,28 @@ export class ClaudeAdapterActivationError extends Error {
 
 function fail(reasonCode: ClaudeAdapterActivationReasonCode, message: string): never {
   throw new ClaudeAdapterActivationError(reasonCode, message);
+}
+
+function canonicalInstallationRoot(value: unknown): string {
+  const installationRoot = text(value, "installationRoot", 4_096);
+  if (!isAbsolute(installationRoot) || resolve(installationRoot) !== installationRoot) {
+    fail(
+      "ACTIVATION_SCHEMA_INVALID",
+      "installationRoot is not absolute and canonical",
+    );
+  }
+  return installationRoot;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\"'\"'`)}'`;
+}
+
+export function claudeAdapterActivationHookCommand(
+  installationRootValue: unknown,
+): string {
+  const installationRoot = canonicalInstallationRoot(installationRootValue);
+  return `node ${shellQuote(resolve(installationRoot, CLAUDE_ADAPTER_SESSION_START_PATH))}`;
 }
 
 function record(value: unknown, label: string): Readonly<Record<string, unknown>> {
@@ -266,16 +290,29 @@ function assertActivationHost(request: ReturnType<typeof validateClaudeAdapterRe
   return input;
 }
 
-function activationHookEntry(): ClaudeAdapterActivationHookEntry {
-  return { matcher: "", hooks: [{ type: "command", command: CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND }] };
+function activationHookEntry(installationRoot: string): ClaudeAdapterActivationHookEntry {
+  return {
+    matcher: "",
+    hooks: [{
+      type: "command",
+      command: claudeAdapterActivationHookCommand(installationRoot),
+    }],
+  };
 }
 
 export function generateClaudeAdapterActivationFragment(value: unknown, host: ClaudeAdapterActivationHostContext | undefined, script: ClaudeAdapterActivationScriptContext): ClaudeAdapterActivationFragment {
   const request = validateClaudeAdapterRequest(value);
   const admitted = assertActivationHost(request, host);
   const scriptContext = record(script, "activation script context");
-  exact(scriptContext, ["scriptDigest"], "activation script context");
+  exact(
+    scriptContext,
+    ["scriptDigest", "installationRoot"],
+    "activation script context",
+  );
   const scriptDigest = sha(scriptContext.scriptDigest, "scriptDigest");
+  const installationRoot = canonicalInstallationRoot(
+    scriptContext.installationRoot,
+  );
   const basis = {
     schemaVersion: CLAUDE_ADAPTER_FRAGMENT_V2_VERSION,
     activation: true as const,
@@ -284,30 +321,37 @@ export function generateClaudeAdapterActivationFragment(value: unknown, host: Cl
     requestDigest: admitted.requestDigest,
     installationReceiptDigest: admitted.installationReceiptDigest,
     scriptDigest,
+    installationRoot,
     hostProduct: CLAUDE_ADAPTER_HOST_PRODUCT,
     settingsTarget: CLAUDE_ADAPTER_SETTINGS_TARGET,
     mergeKey: CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY,
-    hooks: { SessionStart: [activationHookEntry()] },
+    hooks: { SessionStart: [activationHookEntry(installationRoot)] },
   };
   const fragment = deepFreeze({ ...basis, fragmentDigest: canonicalSha256(basis) });
-  assertNoForbiddenClaudePaths(fragment);
   return fragment;
 }
 
-function validateHookEntry(value: unknown, label: string): ClaudeAdapterActivationHookEntry {
+function validateHookEntry(
+  value: unknown,
+  label: string,
+  installationRoot: string,
+): ClaudeAdapterActivationHookEntry {
   const entry = record(value, label);
   exact(entry, ["matcher", "hooks"], label);
   if (entry.matcher !== "") fail("ACTIVATION_FRAGMENT_INVALID", `${label}.matcher`);
   if (!Array.isArray(entry.hooks) || entry.hooks.length !== 1) fail("ACTIVATION_HOOK_SURFACE_EXCEEDED", `${label}.hooks`);
   const command = record(entry.hooks[0], `${label}.hooks[0]`);
   exact(command, ["type", "command"], `${label}.hooks[0]`);
-  if (command.type !== "command" || command.command !== CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND) fail("ACTIVATION_FRAGMENT_INVALID", `${label}.hooks[0].command`);
-  return activationHookEntry();
+  if (
+    command.type !== "command" ||
+    command.command !== claudeAdapterActivationHookCommand(installationRoot)
+  ) fail("ACTIVATION_FRAGMENT_INVALID", `${label}.hooks[0].command`);
+  return activationHookEntry(installationRoot);
 }
 
 export function validateClaudeAdapterActivationFragment(value: unknown): ClaudeAdapterActivationFragment {
   const document = record(value, "activation fragment");
-  exact(document, ["schemaVersion", "activation", "contextDigest", "hostDigest", "requestDigest", "installationReceiptDigest", "scriptDigest", "hostProduct", "settingsTarget", "mergeKey", "hooks", "fragmentDigest"], "activation fragment");
+  exact(document, ["schemaVersion", "activation", "contextDigest", "hostDigest", "requestDigest", "installationReceiptDigest", "scriptDigest", "installationRoot", "hostProduct", "settingsTarget", "mergeKey", "hooks", "fragmentDigest"], "activation fragment");
   if (document.schemaVersion !== CLAUDE_ADAPTER_FRAGMENT_V2_VERSION || document.activation !== true || document.hostProduct !== CLAUDE_ADAPTER_HOST_PRODUCT ||
     document.settingsTarget !== CLAUDE_ADAPTER_SETTINGS_TARGET || document.mergeKey !== CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY) fail("ACTIVATION_FRAGMENT_INVALID", "fragment header");
   const contextDigest = sha(document.contextDigest, "fragment contextDigest");
@@ -315,12 +359,17 @@ export function validateClaudeAdapterActivationFragment(value: unknown): ClaudeA
   const requestDigest = sha(document.requestDigest, "fragment requestDigest");
   const installationReceiptDigest = sha(document.installationReceiptDigest, "fragment installationReceiptDigest");
   const scriptDigest = sha(document.scriptDigest, "fragment scriptDigest");
+  const installationRoot = canonicalInstallationRoot(document.installationRoot);
   const hooksDocument = record(document.hooks, "fragment hooks");
   const hookEvents = Object.keys(hooksDocument);
   if (hookEvents.length !== 1 || hookEvents[0] !== CLAUDE_ADAPTER_ACTIVATION_HOOK_EVENT) fail("ACTIVATION_HOOK_SURFACE_EXCEEDED", "fragment hook event set");
   const sessionStart = hooksDocument[CLAUDE_ADAPTER_ACTIVATION_HOOK_EVENT];
   if (!Array.isArray(sessionStart) || sessionStart.length !== 1) fail("ACTIVATION_HOOK_SURFACE_EXCEEDED", "fragment SessionStart entries");
-  const entry = validateHookEntry(sessionStart[0], "fragment SessionStart[0]");
+  const entry = validateHookEntry(
+    sessionStart[0],
+    "fragment SessionStart[0]",
+    installationRoot,
+  );
   const basis = {
     schemaVersion: CLAUDE_ADAPTER_FRAGMENT_V2_VERSION,
     activation: true as const,
@@ -329,6 +378,7 @@ export function validateClaudeAdapterActivationFragment(value: unknown): ClaudeA
     requestDigest,
     installationReceiptDigest,
     scriptDigest,
+    installationRoot,
     hostProduct: CLAUDE_ADAPTER_HOST_PRODUCT,
     settingsTarget: CLAUDE_ADAPTER_SETTINGS_TARGET,
     mergeKey: CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY,
@@ -336,7 +386,6 @@ export function validateClaudeAdapterActivationFragment(value: unknown): ClaudeA
   };
   if (sha(document.fragmentDigest, "fragmentDigest") !== canonicalSha256(basis)) fail("ACTIVATION_FRAGMENT_INVALID", "fragmentDigest");
   const fragment = deepFreeze({ ...basis, fragmentDigest: document.fragmentDigest as string });
-  assertNoForbiddenClaudePaths(fragment);
   return fragment;
 }
 
@@ -353,18 +402,21 @@ function canonicalSettingsObject(settingsText: unknown): Readonly<Record<string,
   return document;
 }
 
-function commandOf(entry: unknown): string | null {
+function commandOf(entry: unknown, expectedCommand: string): string | null {
   if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return null;
   const hooks = (entry as Record<string, unknown>).hooks;
   if (!Array.isArray(hooks)) return null;
   for (const inner of hooks) {
-    if (inner && typeof inner === "object" && !Array.isArray(inner) && (inner as Record<string, unknown>).command === CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND) return CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND;
+    if (inner && typeof inner === "object" && !Array.isArray(inner) && (inner as Record<string, unknown>).command === expectedCommand) return expectedCommand;
   }
   return null;
 }
 
 export function mergeClaudeAdapterActivationFragment(settingsText: unknown, fragmentValue: unknown): string {
   const fragment = validateClaudeAdapterActivationFragment(fragmentValue);
+  const expectedCommand = claudeAdapterActivationHookCommand(
+    fragment.installationRoot,
+  );
   const settings = canonicalSettingsObject(settingsText);
   if (Object.prototype.hasOwnProperty.call(settings, CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY)) fail("ACTIVATION_FRAGMENT_CONFLICT", "settings already carry the activation merge key");
   const entry = fragment.hooks.SessionStart[0] as ClaudeAdapterActivationHookEntry;
@@ -381,7 +433,7 @@ export function mergeClaudeAdapterActivationFragment(settingsText: unknown, frag
     if (!Array.isArray(existing)) fail("ACTIVATION_FRAGMENT_CONFLICT", "settings.hooks.SessionStart is not an array");
     sessionStart = existing;
   }
-  if (sessionStart.some((existing) => commandOf(existing) !== null)) fail("ACTIVATION_FRAGMENT_CONFLICT", "settings already register the activation hook command");
+  if (sessionStart.some((existing) => commandOf(existing, expectedCommand) !== null)) fail("ACTIVATION_FRAGMENT_CONFLICT", "settings already register the activation hook command");
   const otherEvents: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(hooksObject)) if (key !== CLAUDE_ADAPTER_ACTIVATION_HOOK_EVENT) otherEvents[key] = child;
   const mergedHooks = { ...otherEvents, [CLAUDE_ADAPTER_ACTIVATION_HOOK_EVENT]: [...sessionStart, entry] };
@@ -393,6 +445,9 @@ export function mergeClaudeAdapterActivationFragment(settingsText: unknown, frag
 
 export function removeClaudeAdapterActivationFragment(mergedText: unknown, fragmentValue: unknown): string {
   const fragment = validateClaudeAdapterActivationFragment(fragmentValue);
+  const expectedCommand = claudeAdapterActivationHookCommand(
+    fragment.installationRoot,
+  );
   const merged = canonicalSettingsObject(mergedText);
   if (!Object.prototype.hasOwnProperty.call(merged, CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY)) fail("ACTIVATION_FRAGMENT_IRREVERSIBLE", "merged settings carry no activation fragment");
   const stored = record(merged[CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY], "stored activation fragment");
@@ -405,9 +460,9 @@ export function removeClaudeAdapterActivationFragment(mergedText: unknown, fragm
   const hooksObject = record(merged.hooks, "merged hooks");
   const existing = hooksObject[CLAUDE_ADAPTER_ACTIVATION_HOOK_EVENT];
   if (!Array.isArray(existing)) fail("ACTIVATION_FRAGMENT_IRREVERSIBLE", "merged SessionStart array");
-  const matches = existing.filter((entry) => commandOf(entry) !== null);
+  const matches = existing.filter((entry) => commandOf(entry, expectedCommand) !== null);
   if (matches.length !== 1) fail("ACTIVATION_FRAGMENT_IRREVERSIBLE", "activation hook entry is not uniquely present");
-  const remaining = existing.filter((entry) => commandOf(entry) === null);
+  const remaining = existing.filter((entry) => commandOf(entry, expectedCommand) === null);
   const otherEvents: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(hooksObject)) if (key !== CLAUDE_ADAPTER_ACTIVATION_HOOK_EVENT) otherEvents[key] = child;
   let finalHooks: Record<string, unknown>;

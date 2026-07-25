@@ -9,8 +9,8 @@
     "unavailable": "no TCRN integration exists for this capability on this host yet"
   },
   "evidence": {
-    "codex": "docs/verification/host/codex-0.139.0-facts.json and codex-live-integration-2026-07-25.json",
-    "claude": "docs/verification/host/claude-code.json (activation) and claude-code-facts.json (surface)"
+    "codex": "current candidate: packages/core/src/codex-adapter-activation.ts and tests/act12-hook-root-binding.test.mjs; historical host observations remain in codex-0.139.0-facts.json and codex-live-integration-2026-07-25.json",
+    "claude": "current candidate: packages/core/src/claude-adapter-activation.ts and tests/act12-hook-root-binding.test.mjs; historical host observations remain in claude-code.json and claude-code-facts.json"
   },
   "capabilities": [
     {
@@ -19,13 +19,13 @@
         "surface": "app",
         "channel": "hook:SessionStart",
         "governance": "observe",
-        "note": "live and measured: reversible, fail-open, 1024-byte read-only summary (claude-code.json)"
+        "note": "the current absolute-root definition is code- and fixture-proven only; the earlier claude-code.json observation predates these command bytes and is historical, so no current live claim is made"
       },
       "codex": {
         "surface": "app",
         "channel": "hook:SessionStart",
         "governance": "observe",
-        "note": "live and measured on Codex CLI 0.139.0: one project-local startup|resume fail-open hook injected the exact digest-bound v2 Verity/capability summary through hookSpecificOutput.additionalContext; installation receipt remains pending while a separate host-activation receipt records approval and fire"
+        "note": "the current machine-specific absolute-root definition is code- and hermetic-fire-proven only and awaits a fresh Owner /hooks review, approval and fire; July 25 receipts cover superseded command bytes and are not reused"
       }
     },
     {
@@ -94,13 +94,13 @@
         "surface": "app",
         "channel": "installer+settings-fragment",
         "governance": "observe",
-        "note": "install/activate/uninstall measured and byte-reversible (claude-code.json)"
+        "note": "the current absolute-root install/activate/uninstall path is code- and fixture-proven and byte-reversible; no current Claude live activation is claimed"
       },
       "codex": {
         "surface": "app",
         "channel": "installer+.codex/hooks.json+/hooks approval",
         "governance": "observe",
-        "note": "install/deactivate are identity-gated; the exact current development candidate was installed, separately approved and live-fired after a governed rollback rehearsal. Installation alone never claims host activation, Codex's trust hash is opaque, and exact-definition changes require reapproval"
+        "note": "install/deactivate are identity-gated, but the current absolute-root definition has not yet been installed, reapproved or fired. Installation alone never claims host activation, Codex's trust hash is opaque, and this exact-definition change requires reapproval"
       }
     }
   ],
@@ -135,13 +135,14 @@
         "surface": "App / desktop",
         "codex": "yes (codex app, app-server)",
         "claude": "yes (desktop / web)",
-        "tcrnGoverned": "Claude and Codex SessionStart (live observe); Codex Desktop subagents are App-visible, while the App Server collector remains supplied-stream only"
+        "tcrnGoverned": "Claude and Codex SessionStart are code/hermetic observe capabilities for the current definitions, with live reapproval pending; Codex Desktop subagents are App-visible, while the App Server collector remains supplied-stream only"
       }
     ]
   },
   "notClaimed": [
     "no enforce-level host lifecycle or host-tool governance exists; enforce is limited to Workflow MCP mutations at the server boundary",
     "no host approval or internal trust hash is inferred from a Codex installation receipt",
+    "no current Codex or Claude SessionStart definition is claimed live after the absolute-root command change",
     "no live App Server attach, Controller, or approval responder is claimed",
     "App-visible Codex Desktop multi-agent records exist but have not been converted to or compared with a Workflow execution receipt",
     "no hot-load into the running Codex Desktop process or successful host-routed Workflow MCP call is claimed",

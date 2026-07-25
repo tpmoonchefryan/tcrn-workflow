@@ -71,6 +71,7 @@ import {
   generateClaudeAdapterSettingsFragment,
   generateSessionStartScript,
   installClaudeAdapterActivation,
+  admitClaudeAdapterInstallationRoot,
   installClaudeAdapterBundle,
   mergeClaudeAdapterActivationFragment,
   mergeClaudeAdapterSettingsFragment,
@@ -91,6 +92,7 @@ import {
   readCodexActivationInstallationReceipt,
   installCodexAdapterBundle,
   installCodexAdapterActivation,
+  admitCodexAdapterInstallationRoot,
   executeCodexAdapterRollback,
   uninstallCodexAdapterActivation,
   assessCodexActivationTrust,
@@ -558,7 +560,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "artifact-doctor", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "warning-bytes", required: false, valueKind: "integer" }, { name: "critical-bytes", required: false, valueKind: "integer" }, { name: "warning-count", required: false, valueKind: "integer" }, { name: "critical-count", required: false, valueKind: "integer" }] },
   { name: "artifact-size", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "claude-adapter-activation-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
+  { name: "claude-adapter-activation-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }] },
   { name: "claude-adapter-activation-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-activation-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-activation-uninstall", availability: "cli", mutates: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }] },
@@ -815,14 +817,17 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       values["capability-manifest-digest"],
       stage,
     );
-    const artifacts = generateCodexActivationArtifacts(summary);
+    const installationRoot = await admitCodexAdapterInstallationRoot(
+      values["installation-root"] ?? "",
+    );
+    const artifacts = generateCodexActivationArtifacts(summary, installationRoot);
     const installed = await installCodexAdapterActivation(
       bundle,
       inertInstallation,
       artifacts,
       io.codexAdapterActivationHost,
       {
-        installationRoot: values["installation-root"] ?? "",
+        installationRoot,
         generationId: values["generation-id"] ?? "",
         receiptPath: values["receipt-out"] ?? "",
       },
@@ -1005,9 +1010,16 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
         })()
         : generateSessionStartScript();
       const scriptDigest = sessionStartScriptDigest(scriptSource);
-      const fragment = generateClaudeAdapterActivationFragment(request, io.claudeAdapterActivationHost, { scriptDigest });
+      const installationRoot = await admitClaudeAdapterInstallationRoot(
+        values["installation-root"] ?? "",
+      );
+      const fragment = generateClaudeAdapterActivationFragment(
+        request,
+        io.claudeAdapterActivationHost,
+        { scriptDigest, installationRoot },
+      );
       const activation = await installClaudeAdapterActivation({
-        installationRoot: values["installation-root"] ?? "",
+        installationRoot,
         generationId: values["generation-id"] ?? "",
         receiptPath: values["receipt-out"] ?? "",
         bundleDigest: bundle.bundleDigest,
@@ -1031,10 +1043,13 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   if (command === "claude-adapter-activation-fragment") {
     // WSG-3 Step-2: emit the v2 activation fragment digest-bound to the governed
     // SessionStart handler under the independently governed activation host.
-    const values = parseArguments(rest, ["request"]);
-    required(values, ["request"]);
+    const values = parseArguments(rest, ["request", "installation-root"]);
+    required(values, ["request", "installation-root"]);
     const scriptDigest = sessionStartScriptDigest(generateSessionStartScript());
-    io.write(canonicalJson(generateClaudeAdapterActivationFragment(jsonValue(values.request, "request"), io.claudeAdapterActivationHost, { scriptDigest })));
+    const installationRoot = await admitClaudeAdapterInstallationRoot(
+      values["installation-root"] ?? "",
+    );
+    io.write(canonicalJson(generateClaudeAdapterActivationFragment(jsonValue(values.request, "request"), io.claudeAdapterActivationHost, { scriptDigest, installationRoot })));
     return;
   }
   if (command === "claude-adapter-activation-merge") {

@@ -273,6 +273,7 @@
     "tests/act1-claude-installer.test.mjs",
     "tests/act10-codex-execution-collection.test.mjs",
     "tests/act11-adapter-acceptance.test.mjs",
+    "tests/act12-hook-root-binding.test.mjs",
     "tests/act2-claude-activation.test.mjs",
     "tests/act3-persona-render.test.mjs",
     "tests/act4-codex-installer.test.mjs",

@@ -59,8 +59,9 @@ step's code merges.
   governed handler reading `.claude/tcrn-workflow/project.json` read-only and
   printing only a bounded authority summary. Activation binds to a Step-1 receipt
   digest (no install → no activation).
-- **Hook command**: `node .claude/tcrn-workflow/session-start.mjs` (handler
-  emitted by `generateSessionStartScript`). It reads project metadata, composes a
+- **Hook command**: `node '<admittedProjectRoot>/.claude/tcrn-workflow/session-start.mjs'`
+  (handler emitted by `generateSessionStartScript`; the real canonical absolute
+  root is shell-quoted into the fragment). It reads project metadata, composes a
   summary, and if the summary exceeds **1024 bytes it prints nothing** (a
   truncated authority summary is a misrepresentation, not a fallback).
 - **Failure mode**: **fail-OPEN** — this is the single documented exception to the
@@ -87,7 +88,9 @@ step's code merges.
 - **Rollback**: `removeClaudeAdapterSettingsFragment` (`:512`) is the byte-inverse
   of `mergeClaudeAdapterSettingsFragment` (`:506`); removal restores
   `.claude/settings.json` byte-for-byte, preserving any pre-existing user hooks.
-- **Claims required before merge**: `ACT2-CLAUDE-SESSIONSTART`, `ACT2-FAIL-OPEN`.
+- **Claims required before merge**: `ACT2-CLAUDE-SESSIONSTART`, `ACT2-FAIL-OPEN`,
+  and `HOOK-ABSOLUTE-ROOT-BINDING`. The latter proves that fire-time cwd cannot
+  redirect the command to a different project handler.
 
 ## Step 3 — Persona-to-prompt renderer for Verity (WSG-4)
 
@@ -111,8 +114,11 @@ step's code merges.
   authority-creep apex.
 - **Stop / final-hop response suppression** — a live misfire silences the agent;
   it stays simulate-only.
-- **Any write under user-level `~/.claude`** — `assertNoForbiddenClaudePaths`
-  (`:259`) must survive every activation change.
+- **Any write under user-level `~/.claude`** — inert bundle paths remain under
+  `assertNoForbiddenClaudePaths` (`:259`), while active fragments carry the
+  required absolute project path only after installer root admission rejects the
+  home directory, filesystem root, their ancestors, host-tree segments and
+  symlinked roots.
 - **Automatic knowledge promotion** — promotion stays an explicit
   `knowledge-promote` action so conference/candidate output cannot self-authorize
   into routed context.
@@ -154,8 +160,11 @@ writes:
 - exactly one `.codex/hooks.json` entry, for `SessionStart` with matcher
   `startup|resume`.
 
-The command names the project-local handler literally and carries the exact
-handler and summary byte digests. The handler rechecks both digests, accepts only
+The command names the handler through the installer-admitted canonical absolute
+project root and carries the exact handler and summary byte digests. The root is
+part of the artifact and definition digests, and the installer compares it with
+its independently re-admitted root before writing. The resulting definition
+digest is intentionally machine specific. The handler rechecks both byte digests, accepts only
 the documented SessionStart sources, emits at most 1024 UTF-8 bytes as
 `hookSpecificOutput.additionalContext` for `SessionStart`, and on every failure
 emits nothing and exits zero. The generic `systemMessage` field is deliberately
@@ -178,15 +187,16 @@ the exact local definition bytes. Codex stores a host-owned `trusted_hash`, whic
 the live probe observed out of band, but its normalized input and digest-domain
 semantics are opaque. Current TCRN receipts do not ingest that host value, so they
 mark it `opaque_not_exported` and never assert digest equality. The
-disposable-host approval, fire, and changed-definition skip are
-recorded in `docs/verification/host/codex-session-start-activation.json`.
-The same evidence now also binds an Owner-authorized live activation of the exact
-generated v2 TCRN definition, handler and summary: Codex CLI 0.139.0 injected
-`hookSpecificOutput.additionalContext` into model context and the model returned
-`HOOK_CONTEXT_PRESENT`. The activated commit is a local development candidate,
-not an accepted release. `docs/verification/host/codex-live-integration-2026-07-25.json`
-holds the exact digests and rollback rehearsal; `pnpm verify:act9` binds the code
-proof to both evidence layers.
+disposable-host approval, fire, and changed-definition skip for the superseded
+July 25 candidate are recorded in
+`docs/verification/host/codex-session-start-activation.json`. That candidate used
+a different command definition and is historical evidence only: it does not
+prove the current absolute-root definition approved or live. The matching
+`docs/verification/host/codex-live-integration-2026-07-25.json` receipt is likewise
+not reused. `pnpm verify:act9` now binds the code-level fail-open and trust-state
+contracts; `pnpm verify:act12` executes the absolute-root cwd-hijack probe
+hermetically. A fresh `/hooks` review, approval and real SessionStart fire are
+required before any current live claim can return.
 
 ### Codex Step 3 — bounded Verity plus capability summary (S067)
 
