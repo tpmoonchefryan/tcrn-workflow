@@ -142,6 +142,24 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+function canonicalInstallationRoot(value: unknown): string {
+  const installationRoot = text(value, "installationRoot", 4_096);
+  if (!isAbsolute(installationRoot) || resolve(installationRoot) !== installationRoot) {
+    fail(
+      "CODEX_ACTIVATION_SCHEMA_INVALID",
+      "installationRoot is not absolute and canonical",
+    );
+  }
+  return installationRoot;
+}
+
+// Codex executes command hooks through a shell. Single-quote the already-admitted
+// absolute handler path so spaces and shell metacharacters in a project root remain
+// literal parts of that path at fire time.
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\"'\"'`)}'`;
+}
+
 const shaPattern = /^[a-f0-9]{64}$/u;
 const maximumReceiptBytes = 65_536;
 const activationHostContexts = new WeakSet<object>();
@@ -647,9 +665,11 @@ export interface CodexActivationBinding {
 }
 
 function hookDocument(
+  installationRootValue: unknown,
   handlerDigestValue: unknown,
   summaryFileDigestValue: unknown,
 ): Readonly<Record<string, unknown>> {
+  const installationRoot = canonicalInstallationRoot(installationRootValue);
   const handlerDigest = sha(handlerDigestValue, "handlerDigest");
   const summaryFileDigest = sha(summaryFileDigestValue, "summaryFileDigest");
   // The definition names the file literally. It must never COMPUTE the path at fire
@@ -661,9 +681,9 @@ function hookDocument(
   // save that case, because a substituted file simply does not run the check.
   // Found by adversarial review of the S066/S067 rung, with both hijacks
   // demonstrated; the Claude peer already uses a literal path for the same reason
-  // (CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND).
+  // (claudeAdapterActivationHookCommand).
   const command = [
-    `node "${CODEX_SESSION_START_PATH}"`,
+    `node ${shellQuote(resolve(installationRoot, CODEX_SESSION_START_PATH))}`,
     `--handler-digest ${handlerDigest}`,
     `--summary-digest ${summaryFileDigest}`,
   ].join(" ");
@@ -689,12 +709,16 @@ function hookDocument(
 }
 
 export function codexHookDefinitionForDigests(
+  installationRootValue: unknown,
   handlerDigestValue: unknown,
   summaryFileDigestValue: unknown,
 ): { readonly source: string; readonly binding: CodexActivationBinding } {
+  const installationRoot = canonicalInstallationRoot(installationRootValue);
   const handlerDigest = sha(handlerDigestValue, "handlerDigest");
   const summaryFileDigest = sha(summaryFileDigestValue, "summaryFileDigest");
-  const source = canonicalJson(hookDocument(handlerDigest, summaryFileDigest));
+  const source = canonicalJson(
+    hookDocument(installationRoot, handlerDigest, summaryFileDigest),
+  );
   return deepFreeze({
     source,
     binding: {
@@ -707,6 +731,7 @@ export function codexHookDefinitionForDigests(
 
 export interface CodexActivationArtifacts {
   readonly schemaVersion: typeof CODEX_ADAPTER_ACTIVATION_VERSION;
+  readonly installationRoot: string;
   readonly summary: CodexSessionSummary;
   readonly summarySource: string;
   readonly handlerSource: string;
@@ -717,18 +742,22 @@ export interface CodexActivationArtifacts {
 
 export function generateCodexActivationArtifacts(
   summaryValue: unknown,
+  installationRootValue: unknown,
 ): CodexActivationArtifacts {
   const summary = validateCodexSessionSummary(summaryValue);
+  const installationRoot = canonicalInstallationRoot(installationRootValue);
   const summarySource = canonicalJson(summary);
   const handlerSource = generateCodexSessionStartScript();
   const handlerDigest = rawSha256(handlerSource);
   const summaryFileDigest = rawSha256(summarySource);
   const definition = codexHookDefinitionForDigests(
+    installationRoot,
     handlerDigest,
     summaryFileDigest,
   );
   const basis = {
     schemaVersion: CODEX_ADAPTER_ACTIVATION_VERSION,
+    installationRoot,
     summary,
     summarySource,
     handlerSource,
@@ -746,6 +775,7 @@ export function validateCodexActivationArtifacts(
     document,
     [
       "schemaVersion",
+      "installationRoot",
       "summary",
       "summarySource",
       "handlerSource",
@@ -758,6 +788,7 @@ export function validateCodexActivationArtifacts(
   if (document.schemaVersion !== CODEX_ADAPTER_ACTIVATION_VERSION) {
     fail("CODEX_ACTIVATION_SCHEMA_INVALID", "activation artifacts version");
   }
+  const installationRoot = canonicalInstallationRoot(document.installationRoot);
   const summary = validateCodexSessionSummary(document.summary);
   const summarySource = text(
     document.summarySource,
@@ -776,6 +807,7 @@ export function validateCodexActivationArtifacts(
     fail("CODEX_ACTIVATION_CANONICAL_INVALID", "handlerSource");
   }
   const expected = codexHookDefinitionForDigests(
+    installationRoot,
     rawSha256(handlerSource),
     rawSha256(summarySource),
   );
@@ -809,6 +841,7 @@ export function validateCodexActivationArtifacts(
   }
   const basis = {
     schemaVersion: CODEX_ADAPTER_ACTIVATION_VERSION,
+    installationRoot,
     summary,
     summarySource,
     handlerSource,

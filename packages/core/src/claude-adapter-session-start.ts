@@ -3,7 +3,7 @@
 // WSG-3 Step-2 SessionStart hook handler generator (activation ladder v1, Step 2;
 // docs/activation/activation-ladder-v1.md). generateSessionStartScript emits the
 // exact, deterministic .mjs source that the merged SessionStart hook runs:
-// `node ".claude/tcrn-workflow/session-start.mjs"`. The emitted handler reads the
+// the installer-admitted absolute project path. The emitted handler reads the
 // project-local .claude/tcrn-workflow/project.json (and, once WSG-4 lands, the
 // persona render sibling) read-only, composes a bounded authority summary, and
 // prints it ONLY when it fits the 1024-byte fixedInjectionBytes budget (a

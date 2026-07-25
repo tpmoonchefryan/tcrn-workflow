@@ -154,7 +154,9 @@ function contentSha256(bytes: Buffer): string {
 // A governed installation root is absolute, already canonical, a real directory (not
 // a symlink), and carries no host segment of its own — the same guard the Claude
 // installer applies, so a root like /tmp/x/.codex cannot nest a second host tree.
-async function admitInstallationRoot(installationRoot: string): Promise<string> {
+export async function admitCodexAdapterInstallationRoot(
+  installationRoot: string,
+): Promise<string> {
   if (typeof installationRoot !== "string" || installationRoot.length === 0 || !installationRoot.isWellFormed()) fail("INSTALLER_ROOT_INVALID", "installation root");
   if (!isAbsolute(installationRoot) || resolve(installationRoot) !== installationRoot) fail("INSTALLER_ROOT_INVALID", "installation root not canonical");
   if (installationRoot.split(sep).some((segment) => segment === ".claude" || segment === ".codex")) fail("INSTALLER_ROOT_INVALID", "installation root carries a host segment");
@@ -259,7 +261,9 @@ async function readPinnedInstalledFile(
 // read or written; no hook is registered; nothing is activated.
 export async function installCodexAdapterBundle(bundleValue: unknown, options: CodexAdapterInstallOptions): Promise<CodexAdapterInstallResult> {
   const bundle: CodexAdapterBundle = validateCodexAdapterBundle(bundleValue);
-  const installationRoot = await admitInstallationRoot(options.installationRoot);
+  const installationRoot = await admitCodexAdapterInstallationRoot(
+    options.installationRoot,
+  );
   const receiptPath = admitReceiptPath(installationRoot, options.receiptPath);
   const generationId = options.generationId;
   // The receipt reader validates generationId as a protocol id, so the producer must
@@ -315,15 +319,20 @@ export async function installCodexAdapterActivation(
   // planCodexAdapterRollback owns the WeakSet brand for descriptor-bound Step-1
   // receipts. Calling it here verifies both that brand and the bundle binding.
   planCodexAdapterRollback(bundle, inertInstallation);
+  const installationRoot = await admitCodexAdapterInstallationRoot(
+    options.installationRoot,
+  );
   const artifacts: CodexActivationArtifacts =
     validateCodexActivationArtifacts(artifactsValue);
+  if (artifacts.installationRoot !== installationRoot) {
+    fail("INSTALLER_ACTIVATION_PRECONDITION", "artifact installation root");
+  }
   const admittedActivation = assertCodexAdapterActivationHost(
     bundle,
     inertInstallation.receipt,
     artifacts,
     activationHost,
   );
-  const installationRoot = await admitInstallationRoot(options.installationRoot);
   const receiptPath = admitReceiptPath(installationRoot, options.receiptPath);
   if (inertInstallation.receipt.installationRoot !== installationRoot) {
     fail("INSTALLER_ACTIVATION_PRECONDITION", "installation root");

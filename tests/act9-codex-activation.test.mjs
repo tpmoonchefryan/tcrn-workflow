@@ -8,7 +8,6 @@ import { createHash } from "node:crypto";
 import {
   existsSync,
   lstatSync,
-  readFileSync,
 } from "node:fs";
 import {
   mkdir,
@@ -58,15 +57,6 @@ const fixture = JSON.parse(
   await readFile(
     new URL(
       "../packages/core/fixtures/act9-codex-activation-cases.json",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-);
-const hostEvidence = JSON.parse(
-  await readFile(
-    new URL(
-      "../docs/verification/host/codex-session-start-activation.json",
       import.meta.url,
     ),
     "utf8",
@@ -193,9 +183,10 @@ function bundleFor() {
   return generateCodexAdapterBundle(adapterRequest, hostFor(adapterRequest));
 }
 
-function artifactsFor(bundle, stage = "step3") {
+function artifactsFor(bundle, installationRoot, stage = "step3") {
   return generateCodexActivationArtifacts(
     generateCodexSessionSummary(bundle, capabilityManifestDigest, stage),
+    installationRoot,
   );
 }
 
@@ -254,7 +245,7 @@ async function installActivation(fixtureRoots, bundle, inert, stage = "step3") {
   return installCodexAdapterActivation(
     bundle,
     inert,
-    artifactsFor(bundle, stage),
+    artifactsFor(bundle, fixtureRoots.root, stage),
     activationHostFor(bundle, inert, stage),
     {
       installationRoot: fixtureRoots.root,
@@ -362,7 +353,7 @@ test("activation requires a separately admitted authority bound to the inert rec
   try {
     const bundle = bundleFor();
     const inert = await installInert(first, bundle);
-    const artifacts = artifactsFor(bundle);
+    const artifacts = artifactsFor(bundle, first.root);
     const options = {
       installationRoot: first.root,
       generationId: "generation:codex-authority",
@@ -408,6 +399,16 @@ test("activation requires a separately admitted authority bound to the inert rec
         inert,
         artifacts,
         wrongRung,
+        options,
+      ),
+    );
+    const wrongRootArtifacts = artifactsFor(bundle, second.root);
+    await reasonAsync("INSTALLER_ACTIVATION_PRECONDITION", () =>
+      installCodexAdapterActivation(
+        bundle,
+        inert,
+        wrongRootArtifacts,
+        activationHostFor(bundle, inert),
         options,
       ),
     );
@@ -543,17 +544,20 @@ test("the generated handler injects bounded Verity context and every failure sta
 
 test("definition, handler, summary, and approved-set drift all require current-definition approval", () => {
   const bundle = bundleFor();
-  const original = artifactsFor(bundle);
+  const installationRoot = "/tmp/tcrn-codex-activation-definition";
+  const original = artifactsFor(bundle, installationRoot);
   const approved = assessCodexActivationTrust(original.binding, [
     original.binding.hookDefinitionDigest,
   ]);
   assert.equal(approved.currentDefinitionApproved, true);
 
   const handlerDrift = codexHookDefinitionForDigests(
+    installationRoot,
     hash("changed-handler"),
     original.binding.summaryFileDigest,
   );
   const summaryDrift = codexHookDefinitionForDigests(
+    installationRoot,
     original.binding.handlerDigest,
     hash("changed-summary"),
   );
@@ -600,7 +604,10 @@ test("a self-resealed summary cannot replace governed advisory text with an auth
   delete forged.summaryDigest;
   forged.summaryDigest = canonicalSha256(forged);
   reason("CODEX_ACTIVATION_CANONICAL_INVALID", () =>
-    generateCodexActivationArtifacts(forged),
+    generateCodexActivationArtifacts(
+      forged,
+      "/tmp/tcrn-codex-activation-forged-summary",
+    ),
   );
 });
 
@@ -619,7 +626,7 @@ test("only an explicit approval-and-fire observation creates a host activation r
       source: "startup",
       trustApprovalObserved: true,
       hookFired: true,
-      evidenceDigest: hostEvidence.evidenceDigest,
+      evidenceDigest: hash("hermetic-host-observation"),
     };
     reason("CODEX_ACTIVATION_APPROVAL_REQUIRED", () =>
       createCodexHostActivationReceipt(
@@ -722,7 +729,7 @@ test("pre-existing config and tampered activation bytes fail closed without part
   }
 });
 
-test("fixture and real-host evidence state the exact no-overclaim boundary", () => {
+test("fixture states the pending-host-approval no-overclaim boundary", () => {
   assert.equal(
     fixture.schemaVersion,
     "tcrn.act9-codex-activation-cases.v1",
@@ -730,42 +737,17 @@ test("fixture and real-host evidence state the exact no-overclaim boundary", () 
   assert.equal(fixture.installationClaimsHostActivation, false);
   assert.equal(fixture.approvedSetInitiallyEmpty, true);
   assert.equal(fixture.hostTrustHashRepresentation, "opaque_not_exported");
-  assert.equal(hostEvidence.host.version, "0.139.0");
-  assert.equal(hostEvidence.observation.hookEventName, "SessionStart");
-  assert.equal(hostEvidence.observation.hookFired, true);
-  // INC-009: the receipt records that no fire was OBSERVED for the changed definition.
-  // It must not assert the definition did not run -- that negative is inferred from an
-  // absent marker, the exact inference OBSERVER_COVERAGE_NOTE and MIN-046 refuse.
-  assert.equal(hostEvidence.driftProbe.changedDefinitionFireObserved, false);
-  assert.match(hostEvidence.driftProbe.fireInferenceBoundary, /not proof/u);
   assert.equal(
-    hostEvidence.generatedAdapterObservation.result,
-    "HOOK_CONTEXT_PRESENT",
+    fixture.liveHostProof,
+    "not-claimed-current-absolute-root-definition-awaits-owner-reapproval",
   );
   assert.equal(
-    hostEvidence.generatedAdapterObservation.injectionField,
-    "hookSpecificOutput.additionalContext",
+    fixture.historicalHostEvidence,
+    "docs/verification/host/codex-session-start-activation.json",
   );
-  assert.equal(hostEvidence.generatedAdapterObservation.toolCalls, 0);
-  assert.match(
-    hostEvidence.generatedAdapterObservation.classification,
-    /not an accepted release/u,
-  );
-  assert.equal(
-    hostEvidence.boundary.codexInternalTrustHash,
-    "observed-out-of-band-but-semantics-opaque-and-not-exported-by-tcrn-receipt",
-  );
-  assert.equal(
-    createHash("sha256")
-      .update(readFileSync(
-        new URL(
-          "../docs/verification/host/codex-session-start-activation.json",
-          import.meta.url,
-        ),
-      ))
-      .digest("hex").length,
-    64,
-  );
+  // The fixture records historical host behavior, but current-candidate activation
+  // is not inferred from it. INC-002 changed the exact definition bytes.
+  assert.equal(fixture.installationClaimsHostActivation, false);
 });
 
 // Regression: the approved hook definition must NAME the handler, never COMPUTE its
@@ -774,22 +756,23 @@ test("fixture and real-host evidence state the exact no-overclaim boundary", () 
 // approval covered whatever script those selected — including a file this installer
 // never wrote and uninstall never removes. The handler's own --handler-digest check
 // cannot cover that case, because a substituted file never runs the check.
-// INC-002: this case proves the command performs no SHELL SUBSTITUTION -- it does not
-// prove the path resolves independently of ambient state. The command names the handler
-// with a relative path, which the host still resolves against its fire-time working
-// directory, so any directory carrying its own .codex/tcrn-workflow/session-start.mjs
-// would inherit a single operator approval and the substituted file would never reach
-// the --handler-digest self-check. Closing that needs the admitted absolute root baked
-// into the command, which changes the definition digest and therefore requires a fresh
-// host approval and probe. Until that is done the honest claim is the narrow one in
-// this title, not "resolves nothing at fire time".
-test("the approved definition names the handler literally and performs no shell substitution", () => {
-  const definition = codexHookDefinitionForDigests("a".repeat(64), "b".repeat(64));
+// INC-002 closes the remaining ambient-state dependency by baking the independently
+// admitted absolute installation root into the command. Changing that root changes the
+// exact definition bytes and therefore requires a fresh host approval and probe.
+test("the approved definition binds the admitted absolute handler path and performs no shell substitution", () => {
+  const installationRoot = "/tmp/tcrn project root";
+  const definition = codexHookDefinitionForDigests(
+    installationRoot,
+    "a".repeat(64),
+    "b".repeat(64),
+  );
   const command = JSON.parse(definition.source).hooks.SessionStart[0].hooks[0].command;
 
-  assert.ok(command.includes(`"${CODEX_SESSION_START_PATH}"`), "command must name the installed handler path");
-  // No shell substitution, no command expansion. The relative path itself is the
-  // residual recorded in INC-002.
+  assert.ok(
+    command.includes(`'${join(installationRoot, CODEX_SESSION_START_PATH)}'`),
+    "command must name the absolute installed handler path",
+  );
+  assert.equal(command.includes(`node "${CODEX_SESSION_START_PATH}"`), false);
   for (const forbidden of ["$(", "${", "`", "git ", "rev-parse", "..", "~"]) {
     assert.equal(command.includes(forbidden), false, `approved command must not contain ${forbidden}`);
   }

@@ -403,6 +403,7 @@ async function runTests({
   codexActivationOnly = false,
   codexExecutionCollectionOnly = false,
   adapterAcceptanceOnly = false,
+  hookRootBindingOnly = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -442,6 +443,7 @@ async function runTests({
     .filter((path) => !codexActivationOnly || path === "tests/act9-codex-activation.test.mjs")
     .filter((path) => !codexExecutionCollectionOnly || path === "tests/act10-codex-execution-collection.test.mjs")
     .filter((path) => !adapterAcceptanceOnly || path === "tests/act11-adapter-acceptance.test.mjs")
+    .filter((path) => !hookRootBindingOnly || path === "tests/act12-hook-root-binding.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -472,6 +474,8 @@ async function runTests({
       ? "ACT10_CODEX_EXECUTION_COLLECTION_TESTS_VERIFIED"
       : adapterAcceptanceOnly
       ? "ACT11_ADAPTER_ACCEPTANCE_TESTS_VERIFIED"
+      : hookRootBindingOnly
+      ? "ACT12_HOOK_ROOT_BINDING_TESTS_VERIFIED"
       : installerOnly
       ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
@@ -1723,6 +1727,7 @@ const commandContracts = {
   act9: { exit: 0, reasonCode: "ACT9_CODEX_ACTIVATION_VERIFIED" },
   act10: { exit: 0, reasonCode: "ACT10_CODEX_EXECUTION_COLLECTION_VERIFIED" },
   act11: { exit: 0, reasonCode: "ACT11_ADAPTER_ACCEPTANCE_VERIFIED" },
+  act12: { exit: 0, reasonCode: "ACT12_HOOK_ROOT_BINDING_VERIFIED" },
   e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
 };
 
@@ -1928,31 +1933,25 @@ async function verifyAct8() {
 }
 
 // EPIC-023 S066/S067: the single Codex SessionStart activation rung. The gate
-// distinguishes local installation from the independently observed host approval
-// and fire, and pins Codex's non-exported trust hash as an explicit boundary.
+// distinguishes local installation from host approval and fire. The current
+// machine-specific absolute-root definition deliberately has no live receipt yet.
 async function verifyAct9() {
   const result = await runTests({ codexActivationOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act9-codex-activation-cases.json");
-  const evidencePath = resolve(repositoryRoot, "docs/verification/host/codex-session-start-activation.json");
   const fixture = await readJson(fixturePath);
-  const evidence = await readJson(evidencePath);
   assertion(fixture.schemaVersion === "tcrn.act9-codex-activation-cases.v1", "ACT9_FIXTURE_SCHEMA");
   assertion(fixture.activationFiles === 3 && fixture.hookEvents.length === 1 && fixture.hookEvents[0] === "SessionStart", "ACT9_CLOSED_SURFACE");
   assertion(fixture.driftCases === 3 && fixture.refusalCases === 6, "ACT9_CORPUS");
   assertion(fixture.failOpen === true && fixture.installationClaimsHostActivation === false && fixture.approvedSetInitiallyEmpty === true, "ACT9_TRUST_DISCIPLINE");
   assertion(fixture.hostTrustHashRepresentation === "opaque_not_exported", "ACT9_OPAQUE_HOST_HASH");
   assertion(
-    evidence.observation.hookFired === true &&
-      evidence.driftProbe.changedDefinitionFireObserved === false &&
-      typeof evidence.driftProbe.fireInferenceBoundary === "string" &&
-      evidence.generatedAdapterObservation.result === "HOOK_CONTEXT_PRESENT" &&
-      evidence.generatedAdapterObservation.injectionField === "hookSpecificOutput.additionalContext",
-    "ACT9_LIVE_HOST_RECEIPT",
+    fixture.liveHostProof === "not-claimed-current-absolute-root-definition-awaits-owner-reapproval" &&
+      typeof fixture.historicalHostEvidence === "string",
+    "ACT9_CURRENT_LIVE_BOUNDARY",
   );
   return success("ACT9_CODEX_ACTIVATION_VERIFIED", {
     tests: result.tests,
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    hostEvidenceDigest: (await fileRecord(evidencePath)).sha256,
     liveHostProof: fixture.liveHostProof,
     installationClaimsHostActivation: fixture.installationClaimsHostActivation,
     standalone: fixture.standalone,
@@ -2000,7 +1999,7 @@ async function verifyAct11() {
   assertion(fixture.hosts === 2 && fixture.surfaces === 8 && fixture.negativeCases === 14, "ACT11_CLOSED_SURFACE");
   assertion(
     fixture.enforceHostSurfacesAuthorized === 0 &&
-      fixture.codexExactGeneratedHookLiveFires === 1 &&
+      fixture.codexExactGeneratedHookLiveFires === 0 &&
       fixture.liveWorkflowMcpRegistrations === 1 &&
       fixture.liveWorkflowMcpDirectHandshakes === 1 &&
       fixture.liveDesktopMultiAgentRuns === 1 &&
@@ -2023,6 +2022,15 @@ async function verifyAct11() {
     negativeCases: fixture.negativeCases,
     s057: matrix.storyAcceptance.S057,
     standalone: fixture.standalone,
+  });
+}
+
+async function verifyAct12() {
+  const result = await runTests({ hookRootBindingOnly: true });
+  return success("ACT12_HOOK_ROOT_BINDING_VERIFIED", {
+    tests: result.tests,
+    liveHostProof: "not-claimed-hermetic-fire-time-cwd-probe",
+    definitionDigestScope: "machine-specific-admitted-installation-root",
   });
 }
 
@@ -2285,6 +2293,7 @@ const handlers = {
   act9: verifyAct9,
   act10: verifyAct10,
   act11: verifyAct11,
+  act12: verifyAct12,
   e2e: verifyE2eGovernedLoop,
 };
 
@@ -2350,7 +2359,7 @@ function evidencePhase(name) {
   if (name === "act1") {
     return "act";
   }
-  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act8" || name === "act9" || name === "act10" || name === "act11") {
+  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act8" || name === "act9" || name === "act10" || name === "act11" || name === "act12") {
     return "act2";
   }
   if (name === "e2e") {

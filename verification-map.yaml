@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "90b9d953ea6e865bee33d86bffe4f29f42dc48d018042b46e8fba2be465226f6",
+      "fixtureDigest": "5e02e1a8740b819e7e0c46008cac991a4821e33a17b900418035b6779b7a5c59",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -50,7 +50,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "03a74d9b385e22666955cbed6c22787fe6f0f768cca48c1e8bec57efbed87d51",
+      "fixtureDigest": "406ae576ae22397a3c89abc3fd2b67e5716f24868d0bd05847d2cb5397e7061e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -82,7 +82,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "026f45a05afd0904cf612453d4b6a4590472d97402d39d722eb7bae25a0e4b56",
+      "fixtureDigest": "aee4f4e87367d109658a6ca2bb876784c1221c38947db376c493a5c5f3e29a9f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -156,7 +156,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "857e00857433113b762c6f2d45563ddfb5c9ec81a805df44b4cedb59ea84e9de",
+      "fixtureDigest": "fbdd45088d507bfacab4c5a20f8b97ff7e9bee0e95b90e3a13c03bd7f02ab5ce",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -186,7 +186,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "18adf54ef82102d72086b476fb7767d1447432338a369e1dd0f452ee6bdddd35",
+      "fixtureDigest": "08456bc4d9aa4bae99291dfbad1d6b79f436bc6669077e3f2e9ec36c22d87a6d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -219,7 +219,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "87870d188bf00c87e119f3c39bfa35bc26376c6a057f4d73864b89a24ad2b26f",
+      "fixtureDigest": "677be17955f6787f0e6be4acccae10cda0f2c76f37ba873774e2182dcbde9f0a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -245,7 +245,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "48676400905e200bf767963df3d81c76ede158225b8bb14189a2ad1fdb6af590",
+      "fixtureDigest": "d88af6245b37394ac344519872f8268e9d8d681d6f4b05ac362f2a146d842869",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -273,7 +273,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "364ecbe736dc1515e67752a3a4d894b8ffba798d82aedb11617362be2bab9f4e",
+      "fixtureDigest": "a28e8163d8fa15887bd15dba90463f37dfc2b72d5d6b3ac813ddb8e042641257",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -302,7 +302,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "48b5cc150992d5991af779853d5596a9b01ccb491fb50990b8ba0d44a8a7fc98",
+      "fixtureDigest": "393db2bf50b3e5fd98f0ace6df797afb09a40625ec4eb863e8fe4fc47831b7f6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -414,7 +414,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "ed8f15774f203588671b71797b1f02acdba259755382ed6e856d3b8aeca18403",
+      "fixtureDigest": "d1d14cf69c5f23a08b37633eefe06cb76172f9c0dd8c24e2285d186df522b86a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -474,7 +474,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "738dbd874929ba9cd254f1806b45dc3c01d2f556e4f46eb08a1fff795bcfa899",
+      "fixtureDigest": "ac3ec021ccb5774f20300f6ec74a13cbed286a5e25159ae90e20106fb7d9c378",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -502,7 +502,7 @@
         "tests/p3-file-engine.test.mjs",
         "tests/p3-cli-catalog.test.mjs"
       ],
-      "fixtureDigest": "80ef672923ff36a98d1f1c706062a5790e10cbf51982c9d4fa453d77a53d77c0",
+      "fixtureDigest": "cffa2ceebb81ba424cb8d87406be3ca549bb083767a4a03c0754eca9eb7ecb91",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -528,7 +528,7 @@
         "tests/p3-file-engine.test.mjs",
         "tests/p3-cli-catalog.test.mjs"
       ],
-      "fixtureDigest": "a67011fcb4b5c843405e5bfe68add775c7085e1bc2a70a18ca78ab9047807632",
+      "fixtureDigest": "3c0147b8e3e23cd770687cd420f94a2f1fe10845ef2e4eb663999a5d0125d05f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -587,7 +587,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "b08a1672b1a4c0aa6e13093028bea8a33661d89478db48c670bc918f315417ae",
+      "fixtureDigest": "21bd982235d2e5f80ae4731fe2ac672a2e1a2ac30b0a4a76371002bcfb54e30e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -612,7 +612,7 @@
         "packages/protocol/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "1bbf02421def18040964db7527fe2d183b0c70d08ac7fc04ed8889e125bc5fe2",
+      "fixtureDigest": "a79eb2ddd2dc9278480fe5f52c63daabc33a698b151981593ab000b0a5b891ac",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -639,7 +639,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d8f62bef4c1e84840dc9f92ee79f6d5026ee1bb49cf52ea2b8f97680defae6a0",
+      "fixtureDigest": "b8ab83b2dae4c8bddf564dad42ca6b92867e5c84b92b0a6b20bac887a459944c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -666,7 +666,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1cf8930d663f6b9877685db130f277392f4055c355f88d2ae46b318c7ca40fc3",
+      "fixtureDigest": "77d8868e1bbb5bde35e755c234b6eec178aadd8d2b5ae3b9709b8902bac1c4a9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -691,7 +691,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "packages/cli/src/index.ts"
       ],
-      "fixtureDigest": "53bebb904ca2e9afb5dc0556e7a7a0fc17277f36c5d9458c3fd941d9a02a8274",
+      "fixtureDigest": "15c167420eb1835f75252890ab359d779c2384039ec357330ee73e0c6646aeff",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -715,7 +715,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "c19260ec0e9e8ef365c9a06655431239b2f99c191b03a0bbc79f8825205d88d8",
+      "fixtureDigest": "d36ebcdf373ee7c0ca31c81d4a1e724d981ca3e2ad00abc180286bc2e291992a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -740,7 +740,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "2a027b8438d0f1ddaa1f96b5f0f3b726b3a41215236e375e9092780363ce2d1e",
+      "fixtureDigest": "5a7d5e44736bfe44aa67a02276a5e8929a9509f166e423d54fadf01284d84243",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -766,7 +766,7 @@
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1f927c5b1e95b6a5590a1f1837f6bf3a1869af3c1bfe7c285542fd51140d18f2",
+      "fixtureDigest": "b493907b9c9013eb145cefb4d7b5aac8cb8f8eb09c3a4d6a1a38c44e9611e37b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -792,7 +792,7 @@
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1f927c5b1e95b6a5590a1f1837f6bf3a1869af3c1bfe7c285542fd51140d18f2",
+      "fixtureDigest": "b493907b9c9013eb145cefb4d7b5aac8cb8f8eb09c3a4d6a1a38c44e9611e37b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -823,7 +823,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "caf8cf4c3f6183c4a7f8c08e34399288189acb377e32b92eb7b3328a92288161",
+      "fixtureDigest": "3fa40de2074227f990418e52d97126bcb2a2d83c8f04bbf9b117b4f0d0eb3af2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -851,7 +851,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "4006b860a75e9a4d1f55d2d8b59e0667ab8076358db0049a71d272c56e1a28e0",
+      "fixtureDigest": "9f8a54fd8963ef89929ef2527ebd6cae8571dffe9d4f59c2e1862bcfc50a48cd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -887,7 +887,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "8aff05f8092da9492bdb467fc858710d0a50a20d67ded494d2921bc5ecfb74c5",
+      "fixtureDigest": "76ece6afe4d763a29ff8fffeb6b617c096b714eff0655a58af86715402c2604f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -916,7 +916,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "655038172cc2d1dc29117968c8f3b57b8b42b864fbfcb9f46ff914e9fdc5b5f2",
+      "fixtureDigest": "ee5ac5611da47d8e3c4be1ee22cd9f38488858f4b86967b5d68edefd67757d81",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -943,7 +943,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "42e4a2f4d94d8a1173161e0c0fcf5479984396793b3e07e15e271cb193e898e3",
+      "fixtureDigest": "387f3e8742aad5e1d7cd24369a0fcc5a0ec28f7c83e9db41617c78312795e959",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -970,7 +970,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "42e4a2f4d94d8a1173161e0c0fcf5479984396793b3e07e15e271cb193e898e3",
+      "fixtureDigest": "387f3e8742aad5e1d7cd24369a0fcc5a0ec28f7c83e9db41617c78312795e959",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -995,7 +995,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b9b0d2e8c950c519a434d4b8d3f95b233c626098086cd765449d50bda1394073",
+      "fixtureDigest": "f3f3afc4f32fb30730b07138349a8240c28863ee95fc46ca009e3f0e9f2e919d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1022,7 +1022,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "42e4a2f4d94d8a1173161e0c0fcf5479984396793b3e07e15e271cb193e898e3",
+      "fixtureDigest": "387f3e8742aad5e1d7cd24369a0fcc5a0ec28f7c83e9db41617c78312795e959",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1049,7 +1049,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "42e4a2f4d94d8a1173161e0c0fcf5479984396793b3e07e15e271cb193e898e3",
+      "fixtureDigest": "387f3e8742aad5e1d7cd24369a0fcc5a0ec28f7c83e9db41617c78312795e959",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1075,7 +1075,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b241837cb09d13c39734ae05d67a71fb09292173c1c5e0dfdff1ac16919d0aee",
+      "fixtureDigest": "661657b79187de1b5c56c7fc1a7173384c35153e046eedf47fc5cd50e916efbb",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1100,7 +1100,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1949b29e6186688a49a43d051b2ff028d19a61898ef64abf39a011d0a916cba3",
+      "fixtureDigest": "524f5347da05efe646ea428c84c600a55b5efc542241877c6d951dd1f4cfbf37",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1138,7 +1138,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "480da20b531a93334f37ecc4d6f5e3cf75fd4f47a3470e9fcce99694ebafc493",
+      "fixtureDigest": "117a73f4cf400c6ff573c99ce3c4bc0d72fdebd05f7c7e6a757b7fc62495d81d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1203,7 +1203,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "675e1b9af34aa11950253bc96d263e6bd8b9362c76c1e0e745e37fcdf8788f3c",
+      "fixtureDigest": "8f640db9185f3a8679e0337c9e17269e05664e3255d65343e911488e1360d6f7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1235,7 +1235,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "cd5c9b45ee74b0300d19392e6cd004a4fc9382e843a5664a91caf24e3f74e48b",
+      "fixtureDigest": "943c1c632b3b08456dbff8cefcbe63161884b0c43ef77c3e2401d34a34c0ffd8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1269,7 +1269,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "bcba370954c6125727cf75db56fe5dd01233fad162248cbbddfd8458c3b05ddf",
+      "fixtureDigest": "663a2fe20456afdf6fcba0ee4cb0562b7397013aca0b226d5fff3fc15527df27",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1304,7 +1304,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "a5375252878c7a124788bfbb978b00c521e9c87db6c9adb71bc007697ca99a0d",
+      "fixtureDigest": "4ac417d0739b7205fcef6669709ca2e42282a32f1168401585f748109c4694f6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1336,7 +1336,7 @@
         "tests/dependency.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "33be8d0dc1b7ca37342f395c3410e4ffa5d1355642288120159c8cd2d9bd38fa",
+      "fixtureDigest": "a741690244a0e3c7e966a7bb4f6f065244a01844024e38d4e41fb8c8a93b3bc7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1371,7 +1371,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "fdee1c7077851cefc880e67f7afc5e647db1913eb96b9a11ddbcd704cdc8fe09",
+      "fixtureDigest": "80df3172930914ad037e936c20a43f92b5649b0b6baf3205b0fc987f9d913c63",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1403,7 +1403,7 @@
         "tests/assignment-gate.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "31528f9f18b400185e2c974e7c44ca3d172dd15221ad49d901be4994281536c1",
+      "fixtureDigest": "c8d71334e8632a396bdbf894a34ae3fd5ff3ca46ab853dfde40478adeb980232",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1436,7 +1436,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "74f3d4e6d5fb283e130e4a3ad3ace93c4817f015ffd1d18064bd2d31dc623d12",
+      "fixtureDigest": "c1dd1883e8488d06c045e1abc35b2056a4ad362f56e4db6af2e1025de7b0691e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1468,7 +1468,7 @@
         "tests/actor-attestation.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b61a4118c3af7d12f2bdc55fc524358a88beb1a21caacaa8cc64954c8271cf1e",
+      "fixtureDigest": "508fdcd3b51e2ded875b6a5327dacb48271f50b6fd1e4712014fd09e3177654a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1502,7 +1502,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "6e606743a87fba26e7a1e1ad256226d3a1ded25f876f08c14a1a08c4bb6c2aac",
+      "fixtureDigest": "121f1fe15b96cef456a1f8a2938a8d87f145a542125231cce928bc5b177913c6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1531,7 +1531,7 @@
         "tests/conference-execution.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f3c7eb5bbf424b4d824aee9577bb51b4cb454094935938f6dad9e834e4a02eca",
+      "fixtureDigest": "f76de38c6c84a7374a779c7e909324e802320c620444471160f299e8814a6b15",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1560,7 +1560,7 @@
         "tests/act7-execution-collection.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "5c38cdb59062316dbf929572aa9d94f869266b4800f91110aa6b163eda3c520c",
+      "fixtureDigest": "7a9e8e22b3ea90d87701fcfe988c0aea9148091358fb74df5b108685d47d2ab6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1594,7 +1594,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "2cc83df006191400576e8e88df47a855ad7a2c7d10c5d3f33c32cd712aaa4366",
+      "fixtureDigest": "d55a0b5c2843c344d3129a5bf97637da0fc604a74cd712528a74ad7d801ff65a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1624,7 +1624,7 @@
         "tests/act4-codex-installer.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7644c7c07221713e4e35ec10499adfb5031fd70ff43a695c23d919af627a5886",
+      "fixtureDigest": "1245babf68f0146168a314d1cfb3b817482a779e58d2e98771eaf0e5ce816dee",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1652,7 +1652,7 @@
         "tests/act5-receipt-sidecar.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "09cb5a5761dceb4ec57abc658d372ae9c628e8f2af8cab8be8a844f6ce4975e7",
+      "fixtureDigest": "08c2323fa018cd791e5dec9a7b0c17832ed3c3543fc753f4b448bf4f9902a296",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1681,7 +1681,7 @@
         "tests/act6-observe-hook.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b947c0a7411275caa5b2f7ee5f1d0c806c9224cd97dc258d6e1555148da1e574",
+      "fixtureDigest": "7e6ee3e01773f7e6957b390eeb06b5e3d24b961305bccbcbfe26d30fcedf235b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1710,7 +1710,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7da540341d63fe27382ca04bf25834b13a58adc32050dbea5cd6f6a89148af7b",
+      "fixtureDigest": "9191ccebf65dab2c70938e000487d7fc6ef62400020e44a8ff90442b3629d090",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1724,11 +1724,44 @@
       ]
     },
     {
+      "id": "HOOK-ABSOLUTE-ROOT-BINDING",
+      "phase": "P6",
+      "category": "runtime-capability",
+      "status": "implemented",
+      "subject": "INC-002 is closed at the code and hermetic-proof layer: Codex and Claude hook commands are derived only after the project installation root passes the filesystem-backed installer admission, and each definition embeds the shell-quoted absolute handler path under that exact root. The root is carried in the generated artifact or fragment and its digest, then compared with the independently re-admitted installer root before any activation write. A real child-process mutation probe runs each approved command from an attacker-controlled cwd containing a decoy handler; only the admitted handler executes, including when the admitted path contains spaces and an apostrophe. Changing the installation root changes the Codex definition digest by design, so the digest is machine specific and requires a new host review. Claude root admission also refuses the home directory and filesystem root. This gate is hermetic: it proves removal of fire-time cwd inheritance but makes no live-host, approval, or activation claim.",
+      "command": "pnpm verify:act12",
+      "fixturePaths": [
+        "package.json",
+        "packages/cli/src/index.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/codex-adapter-activation.ts",
+        "packages/core/src/codex-adapter-installer.ts",
+        "packages/core/src/claude-adapter-activation.ts",
+        "packages/core/src/claude-adapter-installer.ts",
+        "tests/act12-hook-root-binding.test.mjs",
+        "docs/activation/activation-ladder-v1.md",
+        "scripts/policy/guard-registry.json",
+        "scripts/task.mjs"
+      ],
+      "fixtureDigest": "be4b4582647b8fdda8cc958b5adfeb5ad25881a5f0e9d5fe7cc85155ec3b942c",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "ACT12_HOOK_ROOT_BINDING_VERIFIED",
+      "evidencePath": "dist/evidence/act2/act12.json",
+      "invalidationTriggers": [
+        "Installation-root admission, absolute handler path derivation, shell quoting, artifact/fragment root binding, installer root comparison, fire-time cwd behavior, or machine-specific definition digest semantics change"
+      ]
+    },
+    {
       "id": "CODEX-SESSIONSTART-ACTIVATION",
       "phase": "P6",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "CODEX-SESSIONSTART-ACTIVATION implements INIT-009 EPIC-023 S066/S067 as a peer evidence ladder rather than an installation overclaim. A descriptor-bound Step-1 receipt is rechecked before activation, and a distinct branded activation host input must independently bind the exact request, Context, Workspace/project/work target, validity window, inert receipt, capability manifest and Step-2/Step-3 rung before any write; the inert generation authority is unusable because it says activationAllowed=false. Exactly three activation files are then added with exclusive single-link writes: a deterministic fail-open SessionStart handler, a canonical summary of at most 1024 UTF-8 bytes, and one project .codex/hooks.json definition matching startup|resume. The approved command carries the exact handler and summary byte digests, the handler rechecks both and emits only hookSpecificOutput.additionalContext for SessionStart or nothing with exit zero, and Step 3 binds the closed Verity persona plus the exact capability-manifest digest without conferring mutation or approval authority. Installation always records pending_host_approval, an empty approved-definition set, installationDoesNotProveActivation=true and activationAuthorityDigest. Codex stores a host-owned trusted_hash, now observed out of band, but its normalized input/digest domain remains opaque and current TCRN receipts deliberately retain hostTrustHashRepresentation=opaque_not_exported rather than importing it or asserting equality. A separate host receipt requires an explicit approval-and-fire observation; handler drift, summary drift, definition drift, or removal from the approved local definition set returns the assessment to pending approval. Codex 0.139.0 evidence includes both a disposable /hooks approval-and-drift probe and an Owner-authorized fire of the exact generated v2 handler, summary and definition into model context; the latter is explicitly a local development candidate, not an accepted release. Deactivation verifies every receipt/file before removal, unregisters hooks.json first, removes only activation files, and returns to the inert Step-1 rung; a real governed rollback rehearsal removed the prior candidate before the exact current candidate was installed and left active.",
+      "subject": "CODEX-SESSIONSTART-ACTIVATION implements INIT-009 EPIC-023 S066/S067 as a peer evidence ladder rather than an installation overclaim. A descriptor-bound Step-1 receipt is rechecked before activation, and a distinct branded activation host input must independently bind the exact request, Context, Workspace/project/work target, validity window, inert receipt, capability manifest and Step-2/Step-3 rung before any write; the inert generation authority is unusable because it says activationAllowed=false. Exactly three activation files are then added with exclusive single-link writes: a deterministic fail-open SessionStart handler, a canonical summary of at most 1024 UTF-8 bytes, and one project .codex/hooks.json definition matching startup|resume. The command embeds the shell-quoted handler path derived from the installer-admitted canonical absolute root, carries the exact handler and summary byte digests, and is machine/root specific; the artifact root must equal the independently re-admitted installer root before any write. The handler rechecks both byte digests and emits only hookSpecificOutput.additionalContext for SessionStart or nothing with exit zero. Installation records pending_host_approval, an empty approved-definition set, installationDoesNotProveActivation=true and activationAuthorityDigest. A separate receipt requires a real approval-and-fire observation; handler, summary, definition, root or approved-set drift returns to pending approval. July 25 host receipts bind superseded command bytes and remain historical only, so this gate claims code and hermetic behavior for the current candidate, not current approval, activation or live fire. Codex's host-owned trusted_hash remains opaque and is never inferred. Deactivation verifies every receipt/file before removal, unregisters hooks.json first, removes only activation files, and returns to the inert Step-1 rung.",
       "command": "pnpm verify:act9",
       "fixturePaths": [
         "package.json",
@@ -1742,11 +1775,9 @@
         "packages/core/fixtures/act9-codex-activation-cases.json",
         "tests/act9-codex-activation.test.mjs",
         "docs/activation/activation-ladder-v1.md",
-        "docs/verification/host/codex-session-start-activation.json",
-        "docs/verification/host/codex-live-integration-2026-07-25.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "142b52dbd62c1135aa56022126b91c9fe3971b9762d8f5e436ec5a71a7809b90",
+      "fixtureDigest": "3fb73166928f68442160bebeaa7d89f595c5f9715d23fba9d959436cc7ff6d4e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1756,7 +1787,7 @@
       "expectedReasonCode": "ACT9_CODEX_ACTIVATION_VERIFIED",
       "evidencePath": "dist/evidence/act2/act9.json",
       "invalidationTriggers": [
-        "Codex independent activation-host authority, SessionStart hook surface, matcher, handler/summary byte binding, 1024-byte budget, Verity or capability-manifest binding, local approved-definition set semantics, installation-versus-host-activation distinction, opaque host trust hash boundary, live trust probe, or activation-only rollback changes"
+        "Codex independent activation-host authority, admitted-root binding, SessionStart hook surface, matcher, handler/summary byte binding, 1024-byte budget, Verity or capability-manifest binding, local approved-definition set semantics, installation-versus-host-activation distinction, current-live boundary, opaque host trust hash boundary, or activation-only rollback changes"
       ]
     },
     {
@@ -1781,7 +1812,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1e395276ad5c9cf7ec7a64215d5ac5fca8c07505f8b735ca2399567b29c723a3",
+      "fixtureDigest": "044367fbf25de5693589c1a32f029c3bbf155a894c3d903cf7269bd28dedca1b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1799,7 +1830,7 @@
       "phase": "P6",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "INIT-009 S076/S080 and INIT-010 S057 have one closed cross-host acceptance matrix covering two hosts, eight surfaces and fourteen hostile cases. Each Codex/Claude cell records governance level, evidence class, live-host and exact-generated-byte status, source and an explicit boundary; unavailable and hermetic cells cannot be promoted into live or enforce claims. The negative corpus covers bypass, opt-out, protocol drift, rollback drift, unapproved definitions, hosted coverage holes, no invocation, forged actor attribution, replay, cross-session contamination, transcript tamper, activation-authority mismatch, unproven fresh context and unknown final-message phase. Live evidence now admits the exact generated Codex SessionStart fire, one enabled and directly exercised Workflow MCP registration, and App-visible Codex Desktop subagent records. S076 remains verified and S080 accepted with explicit unavailable cells; S057 remains partial only because Desktop rollout records have not been collected through the pinned App Server stream or compared with a Workflow receipt. MIN-046 still authorizes zero enforce host surfaces, the MCP enforce claim ends at Workflow's pinned server boundary, and neither Desktop hot-load nor a live App Server attach is inferred.",
+      "subject": "INIT-009 S076/S080 and INIT-010 S057 have one closed cross-host acceptance matrix covering two hosts, eight surfaces and fourteen hostile cases. Each Codex/Claude cell records governance level, evidence class, live-host and exact-generated-byte status, source and an explicit boundary; unavailable and hermetic cells cannot be promoted into live or enforce claims. The negative corpus covers bypass, opt-out, protocol drift, rollback drift, unapproved definitions, hosted coverage holes, no invocation, forged actor attribution, replay, cross-session contamination, transcript tamper, activation-authority mismatch, unproven fresh context and unknown final-message phase. The current absolute-root Codex and Claude SessionStart definitions remain hermetic with zero current exact-byte live fires; prior host receipts bind superseded bytes and are historical only. Unaffected live evidence remains narrow: one enabled and directly exercised Workflow MCP registration plus App-visible Codex Desktop subagent records. S076 remains verified and S080 accepted with explicit unavailable cells; S057 remains partial because Desktop rollout records have not been collected through the pinned App Server stream or compared with a Workflow receipt. MIN-046 authorizes zero enforce host surfaces, the MCP enforce claim ends at Workflow's pinned server boundary, and neither current Hook activation, Desktop hot-load nor a live App Server attach is inferred.",
       "command": "pnpm verify:act11",
       "fixturePaths": [
         "package.json",
@@ -1814,7 +1845,7 @@
         "docs/verification/host/codex-live-integration-2026-07-25.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "6e07ca6752e131f485ab8e01115cc0534ec3ea2680c3f2dc9f6e71c24c56e130",
+      "fixtureDigest": "d0717ed3e57774d1b91990905c63dfd8f6d1c66f55981ce43819668b1d7ff06b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1845,7 +1876,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b2865710db6aa4e14a13ba51aaa0df6391659cc407ff528c7d5582e6e438fce1",
+      "fixtureDigest": "803d78cd7549c638e9f7219cb3399f8f43fcbd9ba8e023a425514c74cd8cf9c5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1876,7 +1907,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "96d723d8f53797cd3371b2c756f923043425a91ce584f01f48ca97093073c0d5",
+      "fixtureDigest": "a4105b103abdc23e2c6ca7e370cbaecee000eba73748583d944d2643293886ca",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1908,7 +1939,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "643e9d174e37a15834b7cba96f3f7478d2f973d5e6a37588444ee1cacf8d46ab",
+      "fixtureDigest": "45e3ff41b632f00bb14fce3b0ace5925f38b401b67a2747603ed6e1738a1f433",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1939,7 +1970,7 @@
         "tests/p7-canonical-exchange.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "eac15d5155d2ea53f22b20ae8133532a84c8c6ad8272186d586aca49ede3c264",
+      "fixtureDigest": "6bf9c87f70cbad96fe2baf322b8a2907cf352adb6bd2f5dcf8bf19f48972749a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1971,7 +2002,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "52285c4dd82f45ddd9a84f6b1b0762ae8e160623fa5e6e856835ca432f10e9c0",
+      "fixtureDigest": "f7d5e488dccff2c286de696a10cce2263274082b3742eb23ca3c674173c5f55e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1997,7 +2028,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "docs/compatibility/supported-modes.md"
       ],
-      "fixtureDigest": "e5271e222258e54315846228cbd00d845d63459ecae8e716201815d38c120c48",
+      "fixtureDigest": "1e090a330ec4e102b93ea0f5d1ae22ef3a14ab19ba94e7bb3a6ae986d92943e3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2029,7 +2060,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "4e304630bd0a796f6d1bbcabc8d286adc803f11264bb1aae35fae64f49b13821",
+      "fixtureDigest": "7d848cc86e2684a82ef696cefba728a1f329e04525b011cd79d1bbdd0788e534",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2073,7 +2104,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "0ede9621c826d5071536a697f5a394b2bcf12856892d92a21fea2e03cda31443",
+      "fixtureDigest": "3072ed282edf69c7abe192c2c929b928f1246cbcd3cc05921610588f154807b4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2107,7 +2138,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "e3826f4f592a8a98882f0c40c9acf912536bc137e786ab48fd08cca2c6f1dc7b",
+      "fixtureDigest": "edfae397e0315ab374d34e9f6103aea77cdd01fa8aa3ba1f99a13839756ce2c4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2164,7 +2195,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "37fc46e6851170c2f8bf3264fa521993627b79199d49ce8863d459f7d35515c3",
+      "fixtureDigest": "7da772ba914fcb053fa34eb52dc1a136bce06c2a1b79b2dd09f1ffbf41dd87e8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2182,7 +2213,7 @@
       "phase": "ACT2",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "The tcrn.claude-adapter-settings-fragment.v2 activation fragment (merge key tcrnWorkflow, distinct from v1's inert tcrnWorkflowInert) generates exactly ONE real hooks.SessionStart entry running the governed handler `node \".claude/tcrn-workflow/session-start.mjs\"`; more than one hook event, a second SessionStart entry, or a command not digest-bound to the generated script fails ACTIVATION_HOOK_SURFACE_EXCEEDED / ACTIVATION_FRAGMENT_INVALID, and an activationAllowed:false host is rejected at admission. mergeClaudeAdapterActivationFragment materializes that entry under the real hooks key and records hooksContainerCreated / sessionStartArrayCreated so removeClaudeAdapterActivationFragment is exact byte-inverse over settings shapes that carry no hooks, unrelated user hooks, or a pre-existing SessionStart array (remove(merge(s)) === s), preserving user content. The bounded authority summary honours the 1024-byte fixedInjectionBytes budget. assertNoForbiddenClaudePaths holds over every emitted fragment (nothing under ~/.claude is named or written). The additive tcrn.claude-adapter-installation-generation.v2 receipt (v1 untouched) covers the four templates plus session-start.mjs and reserves persona-render.json, so WSG-2's executeClaudeAdapterRollback empties .claude/tcrn-workflow byte-inverse.",
+      "subject": "The tcrn.claude-adapter-settings-fragment.v2 activation fragment (merge key tcrnWorkflow, distinct from v1's inert tcrnWorkflowInert) generates exactly ONE real hooks.SessionStart entry running the governed handler through the shell-quoted canonical absolute path under the installer-admitted project root. The root is included in the fragment digest and must equal the independently re-admitted installer root before any activation write; home, filesystem-root, ancestor-of-home, host-tree and symlink roots are refused. More than one hook event, a second SessionStart entry, a changed command, or a root mismatch fails closed, while the fire-time cwd cannot redirect the approved command. mergeClaudeAdapterActivationFragment materializes that entry under the real hooks key and records hooksContainerCreated / sessionStartArrayCreated so removeClaudeAdapterActivationFragment is exact byte-inverse over settings shapes that carry no hooks, unrelated user hooks, or a pre-existing SessionStart array (remove(merge(s)) === s), preserving user content. The bounded authority summary honours the 1024-byte fixedInjectionBytes budget. The additive tcrn.claude-adapter-installation-generation.v2 receipt covers the four inert templates plus session-start.mjs and reserves persona-render.json, so WSG-2's executeClaudeAdapterRollback empties .claude/tcrn-workflow byte-inverse. This is code and fixture proof only; no current Claude live activation is claimed.",
       "command": "pnpm verify:act2",
       "fixturePaths": [
         "packages/core/src/claude-adapter-activation.ts",
@@ -2193,7 +2224,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "d38f9f66486f96cbdef9186c57553aa483960486cd2b4bb074d8eecd02caf108",
+      "fixtureDigest": "41dcb3cb535b31b1af5ab8725528edc95afe4f3fd1e79046f373ee78b41b890c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2203,7 +2234,7 @@
       "expectedReasonCode": "ACT2_CLAUDE_SESSIONSTART_VERIFIED",
       "evidencePath": "dist/evidence/act2/act2.json",
       "invalidationTriggers": [
-        "v2 fragment shape, merge/remove byte-inverse, hook-surface bound, injection budget, forbidden-path guard, or v2 receipt/rollback coverage changes"
+        "v2 fragment shape, admitted absolute-root binding, merge/remove byte-inverse, hook-surface bound, injection budget, installer root admission, or v2 receipt/rollback coverage changes"
       ]
     },
     {
@@ -2222,7 +2253,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "d38f9f66486f96cbdef9186c57553aa483960486cd2b4bb074d8eecd02caf108",
+      "fixtureDigest": "41dcb3cb535b31b1af5ab8725528edc95afe4f3fd1e79046f373ee78b41b890c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2252,7 +2283,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "5c6d05c8fae2e4fa4ad33c15786cbfb2ca882dffb116928110c6058a710b409c",
+      "fixtureDigest": "38d4478522c2179b35097f24efa504016980bd38f928846429fd00669b06762b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2279,7 +2310,7 @@
         "packages/core/src/index.ts",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "ca152c20c2f11b8afbab13cfc7b1e8cf0951b50db4cd8f198c0ecfceea563d9f",
+      "fixtureDigest": "930040c0fda63616996bf830d07874c00131deb902a408cfc408072ae665d3ce",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

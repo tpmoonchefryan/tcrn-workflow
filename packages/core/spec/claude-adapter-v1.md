@@ -73,6 +73,13 @@ exact byte inverses over canonical settings text, so a governed apply is fully
 reversible: removing a merged fragment restores the original settings bytes
 byte-for-byte. Non-canonical settings input fails closed.
 
+The additive active v2 fragment is intentionally different from this inert
+fragment: its single SessionStart command carries the installer-admitted canonical
+absolute project handler path. That root is included in the fragment digest and
+must equal the installer's independently re-admitted root before any activation
+write. Home, filesystem-root, ancestor-of-home, host-tree and symlink roots are
+refused, and fire-time cwd therefore cannot redirect an approved command.
+
 ## Fallback and final hop
 
 Raw-session/no-context fallback is authority-empty, operation-null, requires

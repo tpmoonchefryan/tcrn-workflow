@@ -15,6 +15,7 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, realpath, rename, rm, rmdir, unlink } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 
 import { canonicalJson, canonicalSha256 } from "../../protocol/src/index.js";
@@ -155,10 +156,15 @@ function contentSha256(bytes: Buffer): string {
 // the ladder's Step-1 failure mode (INSTALLER_ROOT_INVALID on a segment or
 // symlinked root); assertNoForbiddenClaudePaths is applied to the BUNDLE data, not
 // to absolute target realpaths (which legitimately contain /.claude/).
-async function admitInstallationRoot(installationRoot: string): Promise<string> {
+export async function admitClaudeAdapterInstallationRoot(
+  installationRoot: string,
+): Promise<string> {
   if (typeof installationRoot !== "string" || installationRoot.length === 0 || !installationRoot.isWellFormed()) fail("INSTALLER_ROOT_INVALID", "installation root");
   if (!isAbsolute(installationRoot) || resolve(installationRoot) !== installationRoot) fail("INSTALLER_ROOT_INVALID", "installation root not canonical");
   if (installationRoot.split(sep).some((segment) => segment === ".claude" || segment === ".codex")) fail("INSTALLER_ROOT_INVALID", "installation root carries a host segment");
+  const home = homedir();
+  if (installationRoot === home || installationRoot === sep) fail("INSTALLER_ROOT_INVALID", "installation root is the home or filesystem root");
+  if (typeof home === "string" && home.length > 0 && home.startsWith(`${installationRoot}${sep}`)) fail("INSTALLER_ROOT_INVALID", "installation root is an ancestor of the home directory");
   let rootReal: string;
   let rootStat: StatIdentity;
   try {
@@ -204,7 +210,9 @@ export async function installClaudeAdapterBundle(bundleValue: unknown, options: 
   // .claude/tcrn-workflow/... with no leading slash, so they pass) — this catches
   // every home-anchored or absolute .claude reference smuggled into the data.
   assertNoForbiddenClaudePaths(bundle);
-  const installationRoot = await admitInstallationRoot(options.installationRoot);
+  const installationRoot = await admitClaudeAdapterInstallationRoot(
+    options.installationRoot,
+  );
   const receiptPath = admitReceiptPath(installationRoot, options.receiptPath);
   const generationId = options.generationId;
   if (typeof generationId !== "string" || generationId.length === 0 || !generationId.isWellFormed()) fail("INSTALLER_ROOT_INVALID", "generation id");
@@ -346,10 +354,15 @@ async function assertSettingsUnchanged(settingsPath: string, before: SettingsSna
 // file so the Step-2/3 install rolls back byte-inverse. The receipt lives OUTSIDE
 // .claude (admitReceiptPath) exactly like the v1 receipt.
 export async function installClaudeAdapterActivation(options: ClaudeAdapterActivationInstallOptions): Promise<ClaudeAdapterActivationInstallResult> {
+  const installationRoot = await admitClaudeAdapterInstallationRoot(
+    options.installationRoot,
+  );
   const fragment = validateClaudeAdapterActivationFragment(options.fragment);
+  if (fragment.installationRoot !== installationRoot) {
+    fail("INSTALLER_ACTIVATION_PRECONDITION", "fragment installation root");
+  }
   if (typeof options.scriptSource !== "string" || options.scriptSource.length === 0 || !options.scriptSource.isWellFormed()) fail("INSTALLER_WRITE_FAILED", "session-start script source");
   if (fragment.scriptDigest !== contentSha256(Buffer.from(options.scriptSource, "utf8"))) fail("INSTALLER_ACTIVATION_PRECONDITION", "fragment is not digest-bound to the session-start script");
-  const installationRoot = await admitInstallationRoot(options.installationRoot);
   const receiptPath = admitReceiptPath(installationRoot, options.receiptPath);
   const generationId = options.generationId;
   if (typeof generationId !== "string" || generationId.length === 0 || !generationId.isWellFormed()) fail("INSTALLER_ROOT_INVALID", "generation id");

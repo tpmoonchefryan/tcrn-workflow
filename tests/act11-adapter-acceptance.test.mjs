@@ -117,21 +117,26 @@ test("the acceptance matrix is closed, cross-host, and synchronized with the cap
   }
 });
 
-test("live evidence upgrades only the exact surfaces it measured", () => {
+test("current hook definitions stay hermetic while unaffected live evidence remains narrow", () => {
   const byId = new Map(matrix.surfaces.map((entry) => [entry.id, entry]));
   const activation = byId.get("adapter-activation");
   const sessionStart = byId.get("session-start-context-injection");
   const workflowMcp = byId.get("workflow-mcp-tools");
   const execution = byId.get("execution-collection");
-  assert.equal(activation.codex.evidenceClass, "live_exact");
-  assert.equal(activation.codex.exactGeneratedBytesLiveMeasured, true);
-  assert.equal(sessionStart.codex.evidenceClass, "live_exact");
-  assert.equal(sessionStart.codex.exactGeneratedBytesLiveMeasured, true);
+  assert.equal(activation.codex.evidenceClass, "hermetic");
+  assert.equal(activation.codex.liveHostMeasured, false);
+  assert.equal(activation.codex.exactGeneratedBytesLiveMeasured, false);
+  assert.equal(sessionStart.codex.evidenceClass, "hermetic");
+  assert.equal(sessionStart.codex.liveHostMeasured, false);
+  assert.equal(sessionStart.codex.exactGeneratedBytesLiveMeasured, false);
   assert.equal(workflowMcp.codex.evidenceClass, "live_mechanism_only");
   assert.equal(workflowMcp.codex.exactGeneratedBytesLiveMeasured, true);
   assert.equal(execution.codex.evidenceClass, "live_mechanism_only");
   assert.equal(execution.codex.exactGeneratedBytesLiveMeasured, false);
-  assert.equal(activation.claude.evidenceClass, "live_exact");
+  assert.equal(activation.claude.evidenceClass, "hermetic");
+  assert.equal(activation.claude.liveHostMeasured, false);
+  assert.equal(sessionStart.claude.evidenceClass, "hermetic");
+  assert.equal(sessionStart.claude.liveHostMeasured, false);
 
   for (const id of ["tool-approval-gate", "final-hop-stop-gate"]) {
     const surface = byId.get(id);
@@ -139,13 +144,12 @@ test("live evidence upgrades only the exact surfaces it measured", () => {
     assert.notEqual(surface.claude.governance, "enforce");
   }
   assert.equal(fixture.enforceHostSurfacesAuthorized, 0);
-  assert.equal(fixture.codexExactGeneratedHookLiveFires, 1);
+  assert.equal(fixture.codexExactGeneratedHookLiveFires, 0);
   assert.equal(fixture.liveWorkflowMcpRegistrations, 1);
   assert.equal(fixture.liveWorkflowMcpDirectHandshakes, 1);
   assert.equal(fixture.liveDesktopMultiAgentRuns, 1);
   assert.equal(fixture.liveAppServerAttaches, 0);
   assert.equal(fixture.liveMultiAgentReceiptComparisons, 0);
-  assert.equal(liveIntegration.sessionStart.liveFire.result, "HOOK_CONTEXT_PRESENT");
   assert.equal(liveIntegration.workflowMcp.registration.enabled, true);
   assert.equal(liveIntegration.workflowMcp.directExactServerProbe.toolCount, 93);
   assert.equal(liveIntegration.multiAgent.appVisibleStartRecords, 3);

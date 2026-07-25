@@ -425,6 +425,7 @@ export type {
 export {
   CODEX_ADAPTER_INSTALLER_REASON_CODES,
   CodexAdapterInstallerError,
+  admitCodexAdapterInstallationRoot,
   executeCodexAdapterRollback,
   installCodexAdapterActivation,
   installCodexAdapterBundle,
@@ -486,6 +487,7 @@ export type {
 export {
   CLAUDE_ADAPTER_INSTALLER_REASON_CODES,
   ClaudeAdapterInstallerError,
+  admitClaudeAdapterInstallationRoot,
   executeClaudeAdapterRollback,
   installClaudeAdapterActivation,
   installClaudeAdapterBundle,
@@ -499,7 +501,6 @@ export type {
   ClaudeAdapterRollbackResult,
 } from "./claude-adapter-installer.js";
 export {
-  CLAUDE_ADAPTER_ACTIVATION_HOOK_COMMAND,
   CLAUDE_ADAPTER_ACTIVATION_HOOK_EVENT,
   CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY,
   CLAUDE_ADAPTER_ACTIVATION_PATHS,
@@ -512,6 +513,7 @@ export {
   CLAUDE_ADAPTER_SESSION_START_PATH,
   ClaudeAdapterActivationError,
   admitClaudeAdapterActivationHostInput,
+  claudeAdapterActivationHookCommand,
   generateClaudeAdapterActivationFragment,
   generateClaudeAdapterActivationRollbackPlan,
   mergeClaudeAdapterActivationFragment,

@@ -70,14 +70,19 @@ not general DLP.
 The V1 output remains uninstalled and unactivated until a caller takes a separate
 governed route. `codex-adapter-installer.ts` provides the descriptor-bound inert
 install. `codex-adapter-activation.ts` then permits exactly one fail-open
-SessionStart definition, with a digest-bound 1024-byte advisory summary. Before
+SessionStart definition, with the installer-admitted canonical absolute handler
+path and a digest-bound 1024-byte advisory summary. The installation root is part
+of the generated artifact and definition digest and is re-admitted and compared
+before installation, so the definition is machine specific and cannot inherit a
+different fire-time cwd. Before
 any activation file is written, a distinct branded host input must bind the
 canonical request and Context, exact Workspace/project/work, validity window,
 Step-1 installation receipt, capability manifest and requested Step-2/Step-3
 rung. The inert generation authority is deliberately unusable here because it
 says `activationAllowed=false`. A separate operator approval-and-fire receipt
 still remains necessary after installation. Installation never proves host
-activation, Codex's internal trust hash remains opaque, and no PreToolUse
+activation, Codex's internal trust hash remains opaque, and changing the root or
+any command byte requires a fresh host review. No PreToolUse
 enforcement, Controller, OS-level parent-component race defense, or release-byte
 claim is added to this V1 specification.
 
