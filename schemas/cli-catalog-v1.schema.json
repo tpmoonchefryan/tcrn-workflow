@@ -43,6 +43,9 @@
           "mutates": {
             "type": "boolean"
           },
+          "authorityBearing": {
+            "const": true
+          },
           "flags": {
             "type": "array",
             "items": {
