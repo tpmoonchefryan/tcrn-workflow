@@ -1624,7 +1624,7 @@
         "tests/act4-codex-installer.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "3ac2fbd7a2afb0f925900164673328ba069ab8fe34cc4f4d509f1218d177aa2a",
+      "fixtureDigest": "7644c7c07221713e4e35ec10499adfb5031fd70ff43a695c23d919af627a5886",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1710,7 +1710,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "782386bc473d92bb8d90d109106fc23a2156a5a782fad2b5e5bc6864bdf0df18",
+      "fixtureDigest": "7da540341d63fe27382ca04bf25834b13a58adc32050dbea5cd6f6a89148af7b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1746,7 +1746,7 @@
         "docs/verification/host/codex-live-integration-2026-07-25.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b25c034a15445ecc3df132028674388cdbe000d38f145f3012aac7ab6aa9f330",
+      "fixtureDigest": "142b52dbd62c1135aa56022126b91c9fe3971b9762d8f5e436ec5a71a7809b90",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1764,7 +1764,7 @@
       "phase": "P6",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "CODEX-EXECUTION-COLLECTION implements INIT-010 EPIC-020 S054 on top of the read-only App Server Observer. It corrects the version-pinned 0.139.0 observer vocabulary to the actual lower-case JSON-RPC wire methods and correlates a supplied completed collabAgentToolCall/spawnAgent item with thread/started for a same-session subagent, that thread's first turn/started and turn/completed, and an in-turn phase=final_answer agentMessage. A complete correlation becomes the host-neutral ObservedInvocation shape and an EPIC-019 host-execution receipt carrying real sessionId, threadId, turnId, distinct agentInvocationId, prompt digest and output digest; freshContext is derived only from a non-forked subagent thread created after the matching spawn completes, while final output is the last phase=final_answer item by completedAtMs inside the turn. The compact transcript retains digests rather than raw prompt/output and is explicitly unsigned attribution rather than identity proof. Missing prompt, final message, fresh-context basis or turn lifecycle returns an unavailable candidate; no candidates or an unpinned protocol returns unavailable for the surface; cross-session contamination and replayed lifecycle/item frames fail closed. The collector folds only a supplied stream, opens no socket, issues no request and never starts, forks, resumes, interrupts or otherwise drives a Codex thread or subagent. A real Codex Desktop run now records App-visible sub_agent_activity and completed subagent rollouts, but those rollout records are not converted into the pinned App Server stream and no Workflow receipt is fabricated; a live App Server attach remains expressly unclaimed under the GD-1 observer boundary.",
+      "subject": "CODEX-EXECUTION-COLLECTION implements INIT-010 EPIC-020 S054 on top of the read-only App Server Observer. It corrects the version-pinned 0.139.0 observer vocabulary to the actual lower-case JSON-RPC wire methods and correlates a supplied completed collabAgentToolCall/spawnAgent item with thread/started for a same-session subagent, that thread's first turn/started and turn/completed, and an in-turn phase=final_answer agentMessage. A complete correlation becomes the host-neutral ObservedInvocation shape and an EPIC-019 host-execution receipt carrying real sessionId, threadId, turnId, distinct agentInvocationId, prompt digest and output digest; freshContext is derived only from a non-forked subagent thread created after the matching spawn completes, while final output is the last phase=final_answer item by completedAtMs inside the turn. The compact transcript retains digests rather than raw prompt text in its transcript projection while the emitted record still carries the observed final message verbatim and is explicitly unsigned attribution rather than identity proof. Missing prompt, final message, fresh-context basis or turn lifecycle returns an unavailable candidate; no candidates or an unpinned protocol returns unavailable for the surface; cross-session contamination and replayed lifecycle/item frames fail closed. The collector folds only a supplied stream, opens no socket, issues no request and never starts, forks, resumes, interrupts or otherwise drives a Codex thread or subagent. A real Codex Desktop run now records App-visible sub_agent_activity and completed subagent rollouts, but those rollout records are not converted into the pinned App Server stream and no Workflow receipt is fabricated; a live App Server attach remains expressly unclaimed under the GD-1 observer boundary.",
       "command": "pnpm verify:act10",
       "fixturePaths": [
         "package.json",
@@ -1781,7 +1781,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f7bf2352b2c9d22cfde6e1a45ead1a1189823723b965264519059870d8dbc856",
+      "fixtureDigest": "1e395276ad5c9cf7ec7a64215d5ac5fca8c07505f8b735ca2399567b29c723a3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

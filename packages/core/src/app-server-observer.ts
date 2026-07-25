@@ -31,7 +31,7 @@ export const APP_SERVER_OBSERVER_VERSION = "tcrn.app-server-observation.v1" as c
 
 // The protocol schema this vocabulary was derived from. Recorded as evidence, not as
 // a trust anchor: it says which bytes were read, not that a host must present them.
-export const OBSERVED_PROTOCOL_DIGEST = "sha256:4c47a458f57d09cbbf50bf2f58b38f4e" as const;
+export const OBSERVED_PROTOCOL_DIGEST = "sha256:4c47a458f57d09cbbf50bf2f58b38f4e7e434254b7916bef2ee559945e11d3bc" as const;
 export const OBSERVED_PROTOCOL_HOST = "Codex CLI 0.139.0" as const;
 
 // Notification methods observed in the real protocol schema. Grouped by what a

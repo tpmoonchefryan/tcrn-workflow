@@ -1,6 +1,6 @@
 {
   "schemaVersion": "tcrn.act8-app-server-observer-cases.v1",
-  "protocolDigest": "sha256:4c47a458f57d09cbbf50bf2f58b38f4e",
+  "protocolDigest": "sha256:4c47a458f57d09cbbf50bf2f58b38f4e7e434254b7916bef2ee559945e11d3bc",
   "protocolSource": "docs/verification/host/codex-0.139.0-facts.json",
   "observedGroups": [
     "command",

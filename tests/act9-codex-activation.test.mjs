@@ -774,12 +774,22 @@ test("fixture and real-host evidence state the exact no-overclaim boundary", () 
 // approval covered whatever script those selected — including a file this installer
 // never wrote and uninstall never removes. The handler's own --handler-digest check
 // cannot cover that case, because a substituted file never runs the check.
-test("the approved definition names the handler literally and resolves nothing at fire time", () => {
+// INC-002: this case proves the command performs no SHELL SUBSTITUTION -- it does not
+// prove the path resolves independently of ambient state. The command names the handler
+// with a relative path, which the host still resolves against its fire-time working
+// directory, so any directory carrying its own .codex/tcrn-workflow/session-start.mjs
+// would inherit a single operator approval and the substituted file would never reach
+// the --handler-digest self-check. Closing that needs the admitted absolute root baked
+// into the command, which changes the definition digest and therefore requires a fresh
+// host approval and probe. Until that is done the honest claim is the narrow one in
+// this title, not "resolves nothing at fire time".
+test("the approved definition names the handler literally and performs no shell substitution", () => {
   const definition = codexHookDefinitionForDigests("a".repeat(64), "b".repeat(64));
   const command = JSON.parse(definition.source).hooks.SessionStart[0].hooks[0].command;
 
   assert.ok(command.includes(`"${CODEX_SESSION_START_PATH}"`), "command must name the installed handler path");
-  // No shell substitution, no command expansion, no path computed from ambient state.
+  // No shell substitution, no command expansion. The relative path itself is the
+  // residual recorded in INC-002.
   for (const forbidden of ["$(", "${", "`", "git ", "rev-parse", "..", "~"]) {
     assert.equal(command.includes(forbidden), false, `approved command must not contain ${forbidden}`);
   }
