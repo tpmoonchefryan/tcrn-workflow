@@ -666,7 +666,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7810ab9d7df490e0600d8149360decd5114b1d9c20fa9a20f954ea0b2288bc90",
+      "fixtureDigest": "3d679719f3991727c8eef822be343ccc3d644c9a8eacf23c354ca925b515a118",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
