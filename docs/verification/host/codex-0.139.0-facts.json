@@ -36,7 +36,7 @@
     },
     "appServerProtocol": {
       "command": "codex app-server generate-json-schema --out <dir>",
-      "aggregateSchemaDigest": "sha256:4c47a458f57d09cbbf50bf2f58b38f4e",
+      "aggregateSchemaDigest": "sha256:4c47a458f57d09cbbf50bf2f58b38f4e7e434254b7916bef2ee559945e11d3bc",
       "schemaFileCount": 37,
       "threadControlOperations": [
         "thread/read",

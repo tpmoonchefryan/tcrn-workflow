@@ -42,7 +42,6 @@ import type {
   CodexAdapterInstallationReceipt,
 } from "./codex-adapter.js";
 import {
-  CODEX_ACTIVATION_PATHS,
   CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
   CODEX_HOOKS_PATH,
   CODEX_SESSION_START_PATH,
@@ -542,9 +541,18 @@ export async function uninstallCodexAdapterActivation(
   if (hooksEntry === undefined) {
     fail("INSTALLER_ROLLBACK_MISMATCH", CODEX_HOOKS_PATH);
   }
+  // INC-010: count what was actually removed rather than reporting the constant path
+  // count. The hook definition is unlinked FIRST so a failure part-way through leaves a
+  // project with no registered hook rather than a hook pointing at a deleted handler,
+  // and the measured count tells a caller exactly how far the removal got.
+  let removed = 0;
   await unlink(hooksEntry.realpath);
+  removed += 1;
   for (const entry of receipt.entries) {
-    if (entry.path !== CODEX_HOOKS_PATH) await unlink(entry.realpath);
+    if (entry.path !== CODEX_HOOKS_PATH) {
+      await unlink(entry.realpath);
+      removed += 1;
+    }
   }
   const receiptStat = await lstat(context.sourcePath).catch(() => undefined);
   if (
@@ -558,7 +566,7 @@ export async function uninstallCodexAdapterActivation(
   return deepFreeze({
     reasonCode: "INSTALLER_ROLLBACK_EXECUTED" as const,
     receiptDigest: receipt.receiptDigest,
-    removedCount: CODEX_ACTIVATION_PATHS.length,
+    removedCount: removed,
     retainedHostTrustBoundary:
       "Codex may retain host-owned approval for the removed exact definition; no project hook remains active",
   });

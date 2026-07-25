@@ -1,4 +1,4 @@
-<!-- tcrn-doc-synced-to: CONTRIBUTING.md 2a8268d636884360ac5fccf6efe2586bd633be20baf3b4c61851281d643a10de -->
+<!-- tcrn-doc-synced-to: CONTRIBUTING.md 0309c55144aa0e4cdbdaab6290001650e3c0c805c3235bd767940a2934ddf93e -->
 
 > **La version anglaise fait autorité.** Cette traduction est fournie par commodité ; en cas de divergence entre les deux, c'est le texte anglais de CONTRIBUTING.md qui prévaut.
 
@@ -31,7 +31,7 @@ L'exception est consignée ici plutôt qu'évitée, et la distinction compte. Le
 
 Ce que l'exception achète : le programme rc.6 a fait atterrir à deux reprises une garde dont la preuve n'a jamais été écrite, et la conséquence était que revenir sur la garde ne faisait rien passer au rouge. La correction fut une discipline consignée dans les messages de commit — revenir sur chaque garde, observer le rouge, restaurer. Ceci fait de cette discipline un jugement de machine. Elle ne déclare aucune capacité nouvelle ; elle teste si la preuve existante mord encore.
 
-Portée : `guard-check` reste un script autonome branché sur `push-gate`. Il n'est délibérément **pas** intégré à `verify:p1`, car chaque entrée coûte une compilation plus une exécution de tests (~4-5 s mesurées) et les dix-sept entrées du registre pousseraient le temps d'horloge de P1 au-delà du déclencheur d'escalade de 180 s qui protège la discipline « exécutez-le à chaque modification ».
+Portée : `guard-check` reste un script autonome branché sur `push-gate`. Il n'est délibérément **pas** intégré à `verify:p1`, car chaque entrée coûte une compilation plus une exécution de tests (~4-5 s mesurées) et les dix-huit entrées du registre pousseraient le temps d'horloge de P1 au-delà du déclencheur d'escalade de 180 s qui protège la discipline « exécutez-le à chaque modification ».
 
 **Actuel.** `{proofLines: 26631, productLines: 16011, ratio: 1.6633}`, mesuré le 2026-07-20. **Remesurez plutôt que de citer ce nombre.** C'est un instantané, pas une valeur épinglée : il a déjà été trouvé périmé de 144 lignes une fois, et chaque entrée du commentaire courant qui vivait ici s'est périmée à l'instant où la modification suivante a atterri — un paragraphe qui dit quel travail a ajouté « les dernières » lignes est faux dès qu'il en existe une plus tardive. Le ratio a évolué entre `1.535` et `1.6575` au fil du programme rc.6, du vérificateur de gardes OD-21, du durcissement post-release, du travail de déduplication OD-16 et de `host-evidence` ; **git log sur ce fichier est l'historique, et il ne se périme pas.** Ce qui compte ici, c'est la valeur actuelle, la règle ci-dessus, et que le ratio n'a jamais approché `1.0`, de sorte que la règle s'impose toujours.
 
