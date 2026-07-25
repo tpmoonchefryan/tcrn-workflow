@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
   mkdtemp,
+  readdir,
   readFile,
   realpath,
   rm,
@@ -16,7 +17,11 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  AUTHORITY_OUTPUT_FIELDS,
+  AUTHORITY_STATE_TOKENS,
   COMMAND_CATALOG,
+  assertDeclaredOutputCategory,
+  authorityShapedOutputFields,
   runOperatorCli,
 } from "../dist/build/packages/cli/src/index.js";
 import {
@@ -42,6 +47,7 @@ import {
   installCodexAdapterBundle,
   readCodexAdapterInstallationReceipt,
   readCodexActivationInstallationReceipt,
+  readCodexHostActivationObservation,
   validateContextRouteResult,
 } from "../dist/build/packages/core/src/index.js";
 import {
@@ -208,7 +214,10 @@ function observationFor(installation, activationHost, overrides = {}) {
     ],
     hostProduct: "Codex CLI",
     hostVersion: activationHost.input.hostVersionReadback,
-    observedAt: "2026-07-25T01:15:00Z",
+    // INC-017: the default fire is BEFORE the operator clock (NOW = 01:00) and inside
+    // the bundle window. The old 01:15 default was 15 minutes in the future relative
+    // to the clock that reads it, which the freshness bound now refuses.
+    observedAt: "2026-07-25T00:45:00Z",
     sessionId: "session:authority-output-probe",
     hookEventName: "SessionStart",
     source: "startup",
@@ -288,8 +297,8 @@ async function operatorAuthority(root, options = {}) {
     schemaVersion: OPERATOR_AUTHORITY_BUNDLE_VERSION,
     authorityId: `authority:authority-output-${options.name ?? "default"}`,
     generation: 1,
-    issuedAt: "2026-07-25T00:00:00Z",
-    expiresAt: "2026-07-25T02:00:00Z",
+    issuedAt: options.issuedAt ?? "2026-07-25T00:00:00Z",
+    expiresAt: options.expiresAt ?? "2026-07-25T02:00:00Z",
     status: "active",
     fileAuthorities: {
       profileAdmission: null,
@@ -366,6 +375,112 @@ test("ACT13: adapter-activation-record is the only authority-bearing catalog out
   assert.match(tool.description, /^Authority-bearing output Workflow command:/u);
   assert.equal(tool.annotations.readOnlyHint, false);
   assert.equal(tool.annotations.destructiveHint, false);
+});
+
+test("INC-012: authority-shaped output from a verb that does not declare it fails closed", () => {
+  const hostState = canonicalJson({
+    activationState: "host_observed_active",
+    currentDefinitionApproved: true,
+    hookFired: true,
+    trustApprovalObserved: true,
+  });
+  // A read verb emitting this would be laundering caller-chosen input into evidence.
+  reason("CLI_AUTHORITY_OUTPUT_UNDECLARED", () =>
+    assertDeclaredOutputCategory("work-show", hostState));
+  // A verb absent from the catalog has declared nothing and may not speak either.
+  reason("CLI_AUTHORITY_OUTPUT_UNDECLARED", () =>
+    assertDeclaredOutputCategory("not-a-catalog-verb", hostState));
+  // A renamed field carrying the same token is the same claim.
+  reason("CLI_AUTHORITY_OUTPUT_UNDECLARED", () =>
+    assertDeclaredOutputCategory(
+      "work-show",
+      canonicalJson({ hostState: "host_observed_active" }),
+    ));
+  // Nesting is not a hiding place, and a boolean host act carries no token to match on.
+  reason("CLI_AUTHORITY_OUTPUT_UNDECLARED", () =>
+    assertDeclaredOutputCategory(
+      "work-show",
+      canonicalJson({ records: [{ inner: { hookFired: true } }] }),
+    ));
+  // Bytes that spell the claim but cannot be parsed are refused, not waved through.
+  reason("CLI_AUTHORITY_OUTPUT_UNDECLARED", () =>
+    assertDeclaredOutputCategory(
+      "work-show",
+      '{"activationState":"host_observed_active"',
+    ));
+
+  // The two declared categories may speak.
+  assertDeclaredOutputCategory("adapter-activation-record", hostState);
+  assertDeclaredOutputCategory("adapter-activate", hostState);
+  // And ordinary reads are untouched: the claim lives in object keys, so caller text that
+  // merely mentions a guarded name is not a finding.
+  assertDeclaredOutputCategory(
+    "work-show",
+    canonicalJson({ status: "done", note: "activationState" }),
+  );
+  assert.deepEqual(
+    authorityShapedOutputFields(canonicalJson({ note: "host_observed_active" })),
+    [],
+  );
+  assert.deepEqual(
+    authorityShapedOutputFields(canonicalJson({ activationState: "x" })),
+    ["activationState"],
+  );
+});
+
+test("INC-012: every dispatched write passes the guarded output boundary", async () => {
+  const module = await import("../dist/build/packages/cli/src/index.js");
+  assert.equal(typeof module.runCli, "function");
+  // The unguarded dispatcher is not reachable from outside the module.
+  assert.equal(module.dispatchCli, undefined);
+  const source = await readFile(
+    new URL("../packages/cli/src/index.ts", import.meta.url),
+    "utf8",
+  );
+  // Exactly one guarded io is constructed, and the raw dispatcher is declared once and
+  // called once -- so no verb can obtain an io that writes around the boundary.
+  assert.equal(
+    source.split("assertDeclaredOutputCategory(command, value)").length - 1,
+    1,
+  );
+  assert.equal(source.split("dispatchCli(").length - 1, 2);
+});
+
+test("INC-012: the guarded vocabulary covers every host-state field core declares", async () => {
+  const directory = new URL("../packages/core/src/", import.meta.url);
+  const names = (await readdir(directory)).filter((name) => name.endsWith(".ts"));
+  // The whole core surface, not a hand-listed subset: a new adapter module is scanned the
+  // moment it exists.
+  assert.ok(names.length >= 30, `core sources scanned: ${names.length}`);
+  const declaredFields = new Set();
+  const declaredTokens = new Set();
+  for (const name of names) {
+    const source = await readFile(new URL(name, directory), "utf8");
+    for (const match of source.matchAll(
+      /readonly ([A-Za-z][A-Za-z0-9]*): ((?:"[a-z0-9_]+"(?: \| )?)+|true);/gu,
+    )) {
+      const field = match[1];
+      const declared = match[2];
+      const literals = [...declared.matchAll(/"([a-z0-9_]+)"/gu)].map((entry) => entry[1]);
+      // A value naming an approval or an observed host state, or a `true` asserting that the
+      // host approved, observed or fired something, is host trust state.
+      const hostShaped = literals.some((value) => /^(pending|approved|host)_/u.test(value)) ||
+        (declared === "true" && /(Approved|Observed|Fired)$/u.test(field));
+      if (!hostShaped) continue;
+      declaredFields.add(field);
+      for (const value of literals) declaredTokens.add(value);
+    }
+  }
+  assert.deepEqual([...declaredFields].sort(), [...AUTHORITY_OUTPUT_FIELDS].sort());
+  // The guard list may hold a retired token; it may never miss a live one.
+  assert.deepEqual(
+    [...declaredTokens].filter((token) => !AUTHORITY_STATE_TOKENS.includes(token)),
+    [],
+  );
+  assert.deepEqual(
+    [...AUTHORITY_STATE_TOKENS].filter((token) => !declaredTokens.has(token)),
+    ["approved_current_definition"],
+  );
 });
 
 test("ACT13: authority output requires an exact grant and both pinned evidence files", async () => {
@@ -579,6 +694,93 @@ test("ACT13: self-described, tampered, forged, cloned, and mismatched observatio
       mismatchResult.result.structuredContent.reasonCode,
       "CODEX_ACTIVATION_HOST_MISMATCH",
     );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("INC-017: a pinned observation cannot be replayed past the window that admitted it", async () => {
+  const fixture = await activationFixture();
+  try {
+    // The exact INC-017 replay: the SAME pinned bytes, re-pinned under a ROTATED
+    // bundle whose window opens after the fire. Before the bound this minted another
+    // host_observed_active receipt, for as long as the operator kept issuing bundles.
+    const rotated = await operatorAuthority(fixture.root, {
+      name: "rotated",
+      installationAuthority: fixture.installed.authority,
+      observationAuthority: fixture.observationAuthority,
+      authorityOutputCommands: ["adapter-activation-record"],
+      issuedAt: "2026-07-25T01:00:00Z",
+      expiresAt: "2026-07-25T03:00:00Z",
+    });
+    const replay = new WorkflowMcpDispatcher({
+      authorityPinsPath: rotated.pinsPath,
+      authorityPinsDigest: rotated.pinsDigest,
+      clock: () => "2026-07-25T01:30:00Z",
+    });
+    await replay.dispatch(initializeRequest());
+    const replayed = await toolCall(replay, 2, {
+      "activation-receipt": fixture.installed.authority.expectedCanonicalPath,
+      "observation-file": fixture.observationPath,
+    });
+    assert.equal(
+      replayed.result.structuredContent.reasonCode,
+      "CODEX_ACTIVATION_OBSERVATION_STALE",
+    );
+
+    // An observedAt later than the clock that reads it is refused as well. It is
+    // inside the bundle window, so the window check alone would admit it -- and a
+    // far-future observedAt would otherwise survive every future window.
+    const futurePath = join(fixture.root, "future-observation.json");
+    const future = observationFor(fixture.installed, fixture.activationHost, {
+      observedAt: "2026-07-25T01:30:00Z",
+    });
+    const futureBytes = canonicalJson(future);
+    await writeFile(futurePath, futureBytes, { mode: 0o600 });
+    const futureAuthority = await operatorAuthority(fixture.root, {
+      name: "future",
+      installationAuthority: fixture.installed.authority,
+      observationAuthority: {
+        expectedCanonicalPath: futurePath,
+        expectedFileSha256: rawSha(futureBytes),
+      },
+      authorityOutputCommands: ["adapter-activation-record"],
+    });
+    const futureDispatcher = new WorkflowMcpDispatcher({
+      authorityPinsPath: futureAuthority.pinsPath,
+      authorityPinsDigest: futureAuthority.pinsDigest,
+      clock: () => NOW,
+    });
+    await futureDispatcher.dispatch(initializeRequest(10));
+    const refusedFuture = await toolCall(futureDispatcher, 11, {
+      "activation-receipt": fixture.installed.authority.expectedCanonicalPath,
+      "observation-file": futurePath,
+    });
+    assert.equal(
+      refusedFuture.result.structuredContent.reasonCode,
+      "CODEX_ACTIVATION_OBSERVATION_STALE",
+    );
+
+    // The branded route is bounded by the activation-host context window instead of a
+    // clock. That window is covered by hostDigest, which the observation binds, so it
+    // cannot be widened after the fact to admit an older or a later fire.
+    for (const observedAt of ["2026-07-25T02:30:00Z", "2026-07-24T23:59:59Z"]) {
+      reason("CODEX_ACTIVATION_OBSERVATION_STALE", () =>
+        admitCodexHostActivationObservation(
+          fixture.activationHost,
+          observationFor(fixture.installed, fixture.activationHost, { observedAt }),
+        ),
+      );
+    }
+
+    // A caller holding the pinned identity but no freshness bound gets a refusal
+    // before the file is opened, not an unbounded read.
+    await reasonAsync("CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED", () =>
+      readCodexHostActivationObservation(
+        fixture.observationPath,
+        fixture.observationAuthority,
+        undefined,
+      ));
   } finally {
     await fixture.close();
   }

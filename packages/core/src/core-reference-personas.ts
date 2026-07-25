@@ -60,6 +60,19 @@ const semanticProfiles = [
   ["profile:tcrn-verity-v1", "Verity", "Verification Engineer", "Determine whether an exact immutable basis provides executable and reproducible proof for every claimed contract.", "Owns proof-sufficiency verdicts; reviews read-only and cannot mutate the reviewed basis or substitute for security and Owner acceptance.", "A candidate, repair, checkpoint, release, or evidence contract requires independent proof confirmation. For role_decision or owner_intent_required outcomes, first convene a conference (conference-v1 types strategy/architecture/risk/verification/release/incident/retrospective); leaving it unopened fails WORKSPACE_CONFERENCE_NOT_OPEN, and an unsatisfied linked gate fails WORKSPACE_GATE_PENDING or WORKSPACE_GATE_EVIDENCE_UNRESOLVED before done.", ["exact commit and tree", "claim and verification map", "fixtures, commands, and receipts"], ["approved or changes-requested verdict", "reproducible findings", "explicit residual boundaries"], ["no static-inspection-only proof where execution is claimed", "no mixed-basis approval", "no mutation during review"], ["claims are executable", "digests and reason codes bind", "residuals are truthful"], ["Minerva", "Ilya", "Sable", "Janus"]],
 ] as const;
 
+// Core Reference personas are inert conference-role reference data. They may be
+// used to attribute a position argued inside a conference, but they are not
+// admissible as the authority profile of a main host session. Keep the roster
+// machine-readable so every adapter can enforce that boundary instead of relying
+// on prompt prose.
+export const CORE_REFERENCE_PERSONA_IDS = Object.freeze(
+  semanticProfiles.map((profile) => profile[0]).sort(compareCanonicalText),
+);
+
+export function isCoreReferencePersonaId(value: unknown): value is typeof CORE_REFERENCE_PERSONA_IDS[number] {
+  return typeof value === "string" && (CORE_REFERENCE_PERSONA_IDS as readonly string[]).includes(value);
+}
+
 const semanticBasis = (p: typeof semanticProfiles[number]) => ({ schemaVersion: CORE_PERSONA_PROFILE_VERSION, profileId: p[0], displayName: p[1], jobTitle: p[2], mission: p[3], authorityBoundary: p[4], contactWhen: p[5], requiredInputs: p[6], deliverables: p[7], refusals: p[8], successCriteria: p[9], collaborationRelationships: p[10] });
 // Keyed by plain string on purpose: this table is looked up with a caller-supplied
 // profileId to decide membership, so a miss returning undefined is a real outcome

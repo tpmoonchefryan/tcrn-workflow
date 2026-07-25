@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// INIT-010 EPIC-020 S054: version-pinned Codex subagent/thread/turn collection.
+// INIT-010 EPIC-020 S054/S057: version-pinned Codex subagent execution
+// collection from lifecycle notifications plus same-connection
+// thread/read(includeTurns=true) readback.
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -33,10 +35,14 @@ const schemaEvidence = JSON.parse(
   ),
 );
 
-function turn(id, startedAt, completedAt) {
+const baseSecond = 1_753_401_600;
+const spawnStartedAtMs = baseSecond * 1_000 + 410;
+const spawnCompletedAtMs = baseSecond * 1_000 + 515;
+
+function turn(id, startedAt, completedAt, items = []) {
   return {
     id,
-    items: [],
+    items,
     itemsView: "all",
     status: completedAt === null ? "inProgress" : "completed",
     error: null,
@@ -49,25 +55,47 @@ function turn(id, startedAt, completedAt) {
   };
 }
 
-function completeNotifications({
+function completeCase({
   prompt = "Review the proposed change independently.",
   finalMessage = "The change is insufficiently evidenced.",
+  finalPhase = "final_answer",
   threadSessionId = "session:codex-tree",
+  parentThreadId = "thread:parent",
+  receiverThreadId = "thread:verity",
+  forkedFromId = null,
+  createdAt = baseSecond,
+  includeThreadStarted = false,
+  includeReadback = true,
 } = {}) {
-  return [
+  const childTurnId = "turn:verity-1";
+  const commentary = {
+    type: "agentMessage",
+    id: "item:verity-commentary",
+    text: "Checking the evidence now.",
+    phase: "commentary",
+    memoryCitation: null,
+  };
+  const final = {
+    type: "agentMessage",
+    id: "item:verity-final",
+    text: finalMessage,
+    phase: finalPhase,
+    memoryCitation: null,
+  };
+  const notifications = [
     {
-      method: "item/completed",
+      method: "item/started",
       params: {
-        threadId: "thread:parent",
+        threadId: parentThreadId,
         turnId: "turn:parent",
-        completedAtMs: 1_753_401_600_000,
+        startedAtMs: spawnStartedAtMs,
         item: {
           type: "collabAgentToolCall",
           id: "item:spawn-verity",
           tool: "spawnAgent",
-          status: "completed",
-          senderThreadId: "thread:parent",
-          receiverThreadIds: ["thread:verity"],
+          status: "inProgress",
+          senderThreadId: parentThreadId,
+          receiverThreadIds: [],
           prompt,
           model: null,
           reasoningEffort: null,
@@ -76,71 +104,109 @@ function completeNotifications({
       },
     },
     {
-      method: "thread/started",
+      method: "item/completed",
       params: {
-        thread: {
-          id: "thread:verity",
-          sessionId: threadSessionId,
-          forkedFromId: null,
-          parentThreadId: "thread:parent",
-          threadSource: "subagent",
-          ephemeral: true,
-          createdAt: 1_753_401_600,
+        threadId: parentThreadId,
+        turnId: "turn:parent",
+        completedAtMs: spawnCompletedAtMs,
+        item: {
+          type: "collabAgentToolCall",
+          id: "item:spawn-verity",
+          tool: "spawnAgent",
+          status: "completed",
+          senderThreadId: parentThreadId,
+          receiverThreadIds: [receiverThreadId],
+          prompt,
+          model: null,
+          reasoningEffort: null,
+          agentsStates: {},
         },
       },
     },
     {
       method: "turn/started",
       params: {
-        threadId: "thread:verity",
-        turn: turn("turn:verity-1", 1_753_401_601, null),
+        threadId: receiverThreadId,
+        turn: turn(childTurnId, baseSecond + 1, null),
       },
     },
     {
       method: "item/completed",
       params: {
-        threadId: "thread:verity",
-        turnId: "turn:verity-1",
-        completedAtMs: 1_753_401_603_000,
-        item: {
-          type: "agentMessage",
-          id: "item:verity-commentary",
-          text: "Checking the evidence now.",
-          phase: "commentary",
-          memoryCitation: null,
-        },
+        threadId: receiverThreadId,
+        turnId: childTurnId,
+        completedAtMs: (baseSecond + 3) * 1_000,
+        item: commentary,
       },
     },
     {
       method: "item/completed",
       params: {
-        threadId: "thread:verity",
-        turnId: "turn:verity-1",
-        completedAtMs: 1_753_401_605_000,
-        item: {
-          type: "agentMessage",
-          id: "item:verity-final",
-          text: finalMessage,
-          phase: "final_answer",
-          memoryCitation: null,
-        },
+        threadId: receiverThreadId,
+        turnId: childTurnId,
+        completedAtMs: (baseSecond + 5) * 1_000,
+        item: final,
       },
     },
     {
       method: "turn/completed",
       params: {
-        threadId: "thread:verity",
-        turn: turn(
-          "turn:verity-1",
-          1_753_401_601,
-          1_753_401_605,
-        ),
+        threadId: receiverThreadId,
+        turn: turn(childTurnId, baseSecond + 1, baseSecond + 5),
       },
     },
   ];
+  if (includeThreadStarted) {
+    notifications.splice(2, 0, {
+      method: "thread/started",
+      params: {
+        thread: {
+          id: receiverThreadId,
+          sessionId: threadSessionId,
+          forkedFromId,
+          parentThreadId,
+          threadSource: "subagent",
+          ephemeral: true,
+          createdAt,
+        },
+      },
+    });
+  }
+  const threadReadbacks = includeReadback
+    ? [
+        {
+          request: { threadId: receiverThreadId, includeTurns: true },
+          response: {
+            thread: {
+              id: receiverThreadId,
+              sessionId: threadSessionId,
+              forkedFromId,
+              parentThreadId,
+              threadSource: null,
+              source: {
+                subAgent: {
+                  thread_spawn: { parent_thread_id: parentThreadId },
+                },
+              },
+              ephemeral: true,
+              createdAt,
+              turns: [
+                turn(
+                  childTurnId,
+                  baseSecond + 1,
+                  baseSecond + 5,
+                  [structuredClone(commentary), structuredClone(final)],
+                ),
+              ],
+            },
+          },
+        },
+      ]
+    : [];
+  return { notifications, threadReadbacks };
 }
 
-function input(notifications, overrides = {}) {
+function input(observation, overrides = {}) {
   return {
     hostProduct: "Codex CLI",
     hostVersion: "0.139.0",
@@ -148,7 +214,8 @@ function input(notifications, overrides = {}) {
     protocolDigest: OBSERVED_PROTOCOL_DIGEST,
     observedFrom: "2026-07-25T00:00:00Z",
     observedTo: "2026-07-25T00:10:00Z",
-    notifications,
+    notifications: observation.notifications,
+    threadReadbacks: observation.threadReadbacks,
     ...overrides,
   };
 }
@@ -157,58 +224,61 @@ function reason(code, operation) {
   assert.throws(operation, (error) => error?.reasonCode === code, code);
 }
 
-test("a supplied current-wire stream correlates spawn, subagent thread, turn, and final output", () => {
-  const result = collectCodexAppServerExecutions(
-    input(completeNotifications()),
-  );
+test("a real-shape stream works without a synthetic subagent thread/started frame", () => {
+  const result = collectCodexAppServerExecutions(input(completeCase()));
   assert.equal(result.availability, "observe");
   assert.equal(result.reasonCode, "CODEX_EXECUTION_OBSERVED");
   assert.equal(result.readOnly, true);
   assert.equal(result.drivesHost, false);
   assert.equal(result.observedInvocations, 1);
-  assert.equal(result.unavailableInvocations, 0);
 
   const execution = result.records[0];
   assert.equal(execution.availability, "observe");
-  assert.equal(execution.sessionId, "session:codex-tree");
   assert.equal(execution.threadId, "thread:verity");
   assert.equal(execution.parentThreadId, "thread:parent");
   assert.equal(execution.turnId, "turn:verity-1");
   assert.equal(execution.spawnItemId, "item:spawn-verity");
-  // INC-007: the invocation identity is the (spawn, thread) pair, not the spawn item
-  // alone -- one spawnAgent naming several receivers would otherwise give every
-  // receiver the same id while still being counted as separate invocations.
-  // Distinct per receiver thread and stable for the same (spawn, thread) pair.
-  assert.match(execution.observed.agentInvocationId, /^agent-invocation:[0-9a-f]{32}$/u);
+  assert.match(
+    execution.observed.agentInvocationId,
+    /^agent-invocation:[0-9a-f]{32}$/u,
+  );
   assert.equal(execution.observed.freshContext, true);
   assert.equal(
     execution.transcript.freshContextBasis,
-    "new_subagent_thread_not_forked_after_spawn",
+    "spawn_lifecycle_overlaps_non_forked_subagent_thread_readback",
   );
-  assert.equal(
-    execution.transcript.finalMessageItemId,
-    "item:verity-final",
-  );
+  assert.equal(execution.transcript.threadStartedNotificationObserved, false);
+  assert.match(execution.transcript.threadReadbackDigest, /^[0-9a-f]{64}$/u);
   assert.equal(execution.transcriptSigned, false);
   assert.equal(execution.attributionNote, COLLECTION_ATTRIBUTION_NOTE);
   assert.equal(
-    execution.transcriptSource.includes(
-      "Review the proposed change independently.",
-    ),
+    execution.transcriptSource.includes("Review the proposed change independently."),
     false,
   );
   assert.equal(
-    execution.transcriptSource.includes(
-      "The change is insufficiently evidenced.",
-    ),
+    execution.transcriptSource.includes("The change is insufficiently evidenced."),
     false,
   );
 });
 
-test("the projected host-execution receipt retains actual session/thread/turn bindings", () => {
+test("an observed subagent thread/started frame is optional but must agree with readback", () => {
   const result = collectCodexAppServerExecutions(
-    input(completeNotifications()),
+    input(completeCase({ includeThreadStarted: true })),
   );
+  assert.equal(result.records[0].availability, "observe");
+  assert.equal(result.records[0].transcript.threadStartedNotificationObserved, true);
+
+  const disagreement = completeCase({ includeThreadStarted: true });
+  disagreement.notifications.find(
+    (frame) => frame.method === "thread/started",
+  ).params.thread.createdAt -= 1;
+  reason("CODEX_EXECUTION_SCHEMA_INVALID", () =>
+    collectCodexAppServerExecutions(input(disagreement)),
+  );
+});
+
+test("the projected receipt retains actual session/thread/turn and readback-bound bytes", () => {
+  const result = collectCodexAppServerExecutions(input(completeCase()));
   const execution = result.records[0];
   assert.equal(execution.availability, "observe");
   const collected = collectCodexExecutionReceipt(
@@ -222,61 +292,126 @@ test("the projected host-execution receipt retains actual session/thread/turn bi
   assert.equal(collected.receipt.sessionId, execution.sessionId);
   assert.equal(collected.receipt.threadId, execution.threadId);
   assert.equal(collected.receipt.turnId, execution.turnId);
-  assert.equal(
-    collected.receipt.agentInvocationId,
-    execution.observed.agentInvocationId,
-  );
-  assert.equal(collected.receipt.availability, "observe");
+  assert.equal(collected.receipt.agentInvocationId, execution.observed.agentInvocationId);
   assert.deepEqual(
     verifyCollectedTranscript(collected, execution.transcriptSource),
     { matches: true, transcriptSigned: false },
   );
   assert.deepEqual(
-    verifyCollectedTranscript(
-      collected,
-      `${execution.transcriptSource} `,
-    ),
+    verifyCollectedTranscript(collected, `${execution.transcriptSource} `),
     { matches: false, transcriptSigned: false },
   );
 });
 
-test("missing prompt and missing final message downgrade the candidate to unavailable", () => {
-  const noPrompt = collectCodexAppServerExecutions(
-    input(completeNotifications({ prompt: null })),
+test("missing readback, prompt, turn lifecycle, and final bytes stay unavailable", () => {
+  const missingReadback = collectCodexAppServerExecutions(
+    input(completeCase({ includeReadback: false })),
   );
-  assert.equal(noPrompt.availability, "unavailable");
+  assert.equal(
+    missingReadback.records[0].reasonCode,
+    "CODEX_EXECUTION_THREAD_UNAVAILABLE",
+  );
+
+  const noPrompt = collectCodexAppServerExecutions(
+    input(completeCase({ prompt: null })),
+  );
   assert.equal(
     noPrompt.records[0].reasonCode,
     "CODEX_EXECUTION_PROMPT_UNAVAILABLE",
   );
-  assert.equal(noPrompt.records[0].observed, null);
 
-  const frames = completeNotifications();
-  const noFinal = frames.filter(
-    (frame) =>
-      !(
-        frame.method === "item/completed" &&
-        frame.params.item.type === "agentMessage"
-      ),
+  const missingTurn = completeCase();
+  missingTurn.notifications = missingTurn.notifications.filter(
+    (frame) => frame.method !== "turn/completed",
   );
-  const result = collectCodexAppServerExecutions(input(noFinal));
-  assert.equal(result.availability, "unavailable");
   assert.equal(
-    result.records[0].reasonCode,
+    collectCodexAppServerExecutions(input(missingTurn)).records[0].reasonCode,
+    "CODEX_EXECUTION_TURN_UNAVAILABLE",
+  );
+
+  const noFinal = completeCase();
+  noFinal.notifications = noFinal.notifications.filter(
+    (frame) => frame.params?.item?.id !== "item:verity-final",
+  );
+  assert.equal(
+    collectCodexAppServerExecutions(input(noFinal)).records[0].reasonCode,
     "CODEX_EXECUTION_FINAL_MESSAGE_UNAVAILABLE",
   );
 });
 
-test("final output is selected by final_answer phase and completion time, never array position", () => {
-  const frames = completeNotifications();
-  const completedTurn = frames.pop();
-  frames.push(
+test("fresh context is bound to spawn start/completion, receiver, parent, and non-forked readback", () => {
+  const missingStart = completeCase();
+  missingStart.notifications.shift();
+  assert.equal(
+    collectCodexAppServerExecutions(input(missingStart)).records[0].reasonCode,
+    "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
+  );
+
+  const forked = completeCase({ forkedFromId: "thread:older" });
+  assert.equal(
+    collectCodexAppServerExecutions(input(forked)).records[0].reasonCode,
+    "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
+  );
+
+  const oldThread = completeCase({ createdAt: baseSecond - 2 });
+  assert.equal(
+    collectCodexAppServerExecutions(input(oldThread)).records[0].reasonCode,
+    "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
+  );
+
+  const wrongParent = completeCase({ parentThreadId: "thread:other-parent" });
+  wrongParent.notifications[0].params.threadId = "thread:parent";
+  wrongParent.notifications[0].params.item.senderThreadId = "thread:parent";
+  wrongParent.notifications[1].params.threadId = "thread:parent";
+  wrongParent.notifications[1].params.item.senderThreadId = "thread:parent";
+  assert.equal(
+    collectCodexAppServerExecutions(input(wrongParent)).records[0].reasonCode,
+    "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
+  );
+});
+
+test("receiver/readback mismatch, cross-session contamination, and replay fail closed", () => {
+  const receiverMismatch = completeCase();
+  receiverMismatch.threadReadbacks[0].request.threadId = "thread:other";
+  reason("CODEX_EXECUTION_SCHEMA_INVALID", () =>
+    collectCodexAppServerExecutions(input(receiverMismatch)),
+  );
+
+  reason("CODEX_EXECUTION_SESSION_MISMATCH", () =>
+    collectCodexAppServerExecutions(
+      input(completeCase({ threadSessionId: "session:other" })),
+    ),
+  );
+
+  const duplicateStart = completeCase();
+  duplicateStart.notifications.push(structuredClone(duplicateStart.notifications[0]));
+  reason("CODEX_EXECUTION_DUPLICATE_EVENT", () =>
+    collectCodexAppServerExecutions(input(duplicateStart)),
+  );
+
+  const duplicateCompleted = completeCase();
+  duplicateCompleted.notifications.push(structuredClone(duplicateCompleted.notifications[1]));
+  reason("CODEX_EXECUTION_DUPLICATE_EVENT", () =>
+    collectCodexAppServerExecutions(input(duplicateCompleted)),
+  );
+
+  const duplicateReadback = completeCase();
+  duplicateReadback.threadReadbacks.push(structuredClone(duplicateReadback.threadReadbacks[0]));
+  reason("CODEX_EXECUTION_DUPLICATE_EVENT", () =>
+    collectCodexAppServerExecutions(input(duplicateReadback)),
+  );
+});
+
+test("final output uses final_answer timing and must byte-match the readback", () => {
+  const observation = completeCase();
+  const completedTurn = observation.notifications.pop();
+  observation.notifications.push(
     {
       method: "item/completed",
       params: {
         threadId: "thread:verity",
         turnId: "turn:verity-1",
-        completedAtMs: 1_753_401_604_000,
+        completedAtMs: (baseSecond + 4) * 1_000,
         item: {
           type: "agentMessage",
           id: "item:verity-final-older",
@@ -286,163 +421,53 @@ test("final output is selected by final_answer phase and completion time, never 
         },
       },
     },
-    {
-      method: "item/completed",
-      params: {
-        threadId: "thread:verity",
-        turnId: "turn:verity-1",
-        completedAtMs: 1_753_401_605_000,
-        item: {
-          type: "agentMessage",
-          id: "item:late-commentary",
-          text: "This later array element is not the final answer.",
-          phase: "commentary",
-          memoryCitation: null,
-        },
-      },
-    },
     completedTurn,
   );
-  const result = collectCodexAppServerExecutions(input(frames));
-  const execution = result.records[0];
-  assert.equal(execution.availability, "observe");
+  observation.threadReadbacks[0].response.thread.turns[0].items.splice(1, 0, {
+    type: "agentMessage",
+    id: "item:verity-final-older",
+    text: "Older final answer.",
+    phase: "final_answer",
+    memoryCitation: null,
+  });
+  const execution = collectCodexAppServerExecutions(input(observation)).records[0];
   assert.equal(execution.transcript.finalMessageItemId, "item:verity-final");
 
-  const unknownPhase = completeNotifications();
-  for (const frame of unknownPhase) {
-    if (
-      frame.method === "item/completed" &&
-      frame.params.item.id === "item:verity-final"
-    ) {
-      frame.params.item.phase = null;
-    }
-  }
-  const unavailable = collectCodexAppServerExecutions(input(unknownPhase));
+  const unknownPhase = completeCase({ finalPhase: null });
   assert.equal(
-    unavailable.records[0].reasonCode,
+    collectCodexAppServerExecutions(input(unknownPhase)).records[0].reasonCode,
+    "CODEX_EXECUTION_FINAL_MESSAGE_UNAVAILABLE",
+  );
+
+  const readbackDrift = completeCase();
+  readbackDrift.threadReadbacks[0].response.thread.turns[0].items.find(
+    (item) => item.id === "item:verity-final",
+  ).text += " drift";
+  assert.equal(
+    collectCodexAppServerExecutions(input(readbackDrift)).records[0].reasonCode,
     "CODEX_EXECUTION_FINAL_MESSAGE_UNAVAILABLE",
   );
 });
 
-test("fresh context is derived from a new non-forked subagent thread instead of asserted", () => {
-  const forked = completeNotifications();
-  const forkedThread = forked.find(
-    (frame) => frame.method === "thread/started",
-  );
-  forkedThread.params.thread.forkedFromId = "thread:older";
-  const forkedResult = collectCodexAppServerExecutions(input(forked));
-  assert.equal(
-    forkedResult.records[0].reasonCode,
-    "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
-  );
-
-  const predatesSpawn = completeNotifications();
-  const oldThread = predatesSpawn.find(
-    (frame) => frame.method === "thread/started",
-  );
-  oldThread.params.thread.createdAt = 1_753_401_599;
-  const oldResult = collectCodexAppServerExecutions(input(predatesSpawn));
-  assert.equal(
-    oldResult.records[0].reasonCode,
-    "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
-  );
-
-  const subsecondUnproven = completeNotifications();
-  subsecondUnproven[0].params.completedAtMs += 500;
-  const subsecondResult = collectCodexAppServerExecutions(
-    input(subsecondUnproven),
-  );
-  assert.equal(
-    subsecondResult.records[0].reasonCode,
-    "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
-  );
-});
-
-test("missing turn lifecycle and no subagent candidates stay honestly unavailable", () => {
-  const onlyThread = completeNotifications().filter(
-    (frame) =>
-      frame.method === "thread/started" ||
-      (frame.method === "item/completed" &&
-        frame.params.item.type === "collabAgentToolCall"),
-  );
-  const missingTurn = collectCodexAppServerExecutions(input(onlyThread));
-  assert.equal(
-    missingTurn.records[0].reasonCode,
-    "CODEX_EXECUTION_TURN_UNAVAILABLE",
-  );
-
+test("no candidates and an unpinned protocol remain honestly unavailable", () => {
   const none = collectCodexAppServerExecutions(
-    input([{ method: "thread/started", params: { thread: {
-      id: "thread:user",
-      sessionId: "session:codex-tree",
-      parentThreadId: null,
-      threadSource: "user",
-      createdAt: 1_753_401_600,
-    } } }]),
+    input({ notifications: [], threadReadbacks: [] }),
   );
   assert.equal(none.availability, "unavailable");
   assert.equal(none.reasonCode, "CODEX_EXECUTION_UNAVAILABLE");
   assert.deepEqual(none.records, []);
-});
 
-test("an unpinned protocol downgrades the whole capability without interpreting params", () => {
-  const result = collectCodexAppServerExecutions(
-    input(completeNotifications(), {
-      protocolDigest:
-        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  const drifted = collectCodexAppServerExecutions(
+    input(completeCase(), {
+      protocolDigest: `sha256:${"0".repeat(64)}`,
     }),
   );
-  assert.equal(result.protocolBinding, "unpinned");
-  assert.equal(result.availability, "unavailable");
-  assert.equal(
-    result.reasonCode,
-    "CODEX_EXECUTION_PROTOCOL_UNPINNED",
-  );
-  assert.deepEqual(result.records, []);
+  assert.equal(drifted.protocolBinding, "unpinned");
+  assert.equal(drifted.reasonCode, "CODEX_EXECUTION_PROTOCOL_UNPINNED");
+  assert.deepEqual(drifted.records, []);
 });
 
-test("cross-session frames and replayed lifecycle events fail closed", () => {
-  reason("CODEX_EXECUTION_SCHEMA_INVALID", () =>
-    collectCodexAppServerExecutions(
-      input(completeNotifications(), { hostProduct: "Claude Code" }),
-    ),
-  );
-  reason("CODEX_EXECUTION_SESSION_MISMATCH", () =>
-    collectCodexAppServerExecutions(
-      input(
-        completeNotifications({
-          threadSessionId: "session:other",
-        }),
-      ),
-    ),
-  );
-  const duplicateThread = completeNotifications();
-  duplicateThread.push(
-    structuredClone(
-      duplicateThread.find((frame) => frame.method === "thread/started"),
-    ),
-  );
-  reason("CODEX_EXECUTION_DUPLICATE_EVENT", () =>
-    collectCodexAppServerExecutions(input(duplicateThread)),
-  );
-  const duplicateItem = completeNotifications();
-  duplicateItem.push(structuredClone(duplicateItem[0]));
-  reason("CODEX_EXECUTION_DUPLICATE_EVENT", () =>
-    collectCodexAppServerExecutions(input(duplicateItem)),
-  );
-  const afterTurn = completeNotifications();
-  const final = afterTurn.find(
-    (frame) =>
-      frame.method === "item/completed" &&
-      frame.params.item.id === "item:verity-final",
-  );
-  final.params.completedAtMs = 1_753_401_606_000;
-  reason("CODEX_EXECUTION_SCHEMA_INVALID", () =>
-    collectCodexAppServerExecutions(input(afterTurn)),
-  );
-});
-
-test("the collector is a pure supplied-stream reader and contains no driving verb", async () => {
+test("the collector consumes supplied readbacks but contains no host-driving implementation", async () => {
   const source = await readFile(
     new URL(
       "../packages/core/src/codex-execution-collection.ts",
@@ -469,7 +494,7 @@ test("the collector is a pure supplied-stream reader and contains no driving ver
   }
 });
 
-test("fixture and schema evidence pin the no-overclaim boundary", () => {
+test("fixture and schema evidence pin the corrected live/readback boundary", () => {
   assert.equal(
     fixture.schemaVersion,
     "tcrn.act10-codex-execution-collection-cases.v1",
@@ -477,16 +502,15 @@ test("fixture and schema evidence pin the no-overclaim boundary", () => {
   assert.equal(fixture.readOnly, true);
   assert.equal(fixture.drivesHost, false);
   assert.equal(fixture.transcriptsSigned, false);
-  assert.equal(
-    fixture.liveHostProof,
-    "not-claimed-no-observer-driven-subagent-invocation",
-  );
+  assert.equal(fixture.liveHostProof, "live-app-server-readback-receipt-compared");
   assert.deepEqual(schemaEvidence.wireMethods, [
-    "thread/started",
+    "item/started",
+    "item/completed",
+    "thread/read",
     "turn/started",
     "turn/completed",
-    "item/completed",
   ]);
-  assert.equal(schemaEvidence.boundary.liveAttachClaimed, false);
-  assert.equal(schemaEvidence.boundary.liveSubagentReceiptClaimed, false);
+  assert.equal(schemaEvidence.boundary.liveAttachClaimed, true);
+  assert.equal(schemaEvidence.boundary.liveSubagentReceiptClaimed, true);
+  assert.equal(schemaEvidence.boundary.syntheticThreadStartedAdded, false);
 });

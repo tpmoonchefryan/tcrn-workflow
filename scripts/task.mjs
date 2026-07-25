@@ -17,7 +17,7 @@ import {
   walkFiles,
 } from "./lib/files.mjs";
 import { compareCanonicalText } from "./lib/canonical-order.mjs";
-import { codeOnly } from "./lib/code-only.mjs";
+import { codeOnly, controlByteOffset } from "./lib/code-only.mjs";
 import { LocalCommandError, runLocalCommand } from "./lib/local-command.mjs";
 import {
   DependencyGraphError,
@@ -249,6 +249,15 @@ async function lint() {
   const moduleFiles = files.filter((path) => path.endsWith(".mjs"));
   for (const path of moduleFiles) {
     run(process.execPath, ["--check", path]);
+  }
+  // Byte hygiene runs before every content rule: a file carrying a raw control byte
+  // cannot be reviewed by grep at all, so it must fail here rather than be judged by
+  // rules that read it as text. Same text-file scope as format-check.
+  for (const path of files) {
+    const name = toPosixPath(relative(repositoryRoot, path));
+    if (!textExtensions.has(extname(path)) && !textNames.has(name)) continue;
+    const offset = controlByteOffset(await readSourceFile(path));
+    assertion(offset === -1, "LINT_CONTROL_BYTE", `${name}@${offset}`);
   }
   for (const path of files.filter((candidate) => candidate.endsWith(".ts"))) {
     const content = await readText(path);
@@ -1064,7 +1073,7 @@ async function verifyExecution() {
   const specPath = resolve(repositoryRoot, "specs/conference-execution-v1.md");
   const fixture = await readJson(fixturePath);
   assertion(fixture.schemaVersion === "tcrn.conference-execution-cases.v1", "EXECUTION_FIXTURE_SCHEMA");
-  assertion(fixture.receiptPositiveCases === 3 && fixture.receiptHostileCases === 10, "EXECUTION_RECEIPT_CORPUS");
+  assertion(fixture.receiptPositiveCases === 5 && fixture.receiptHostileCases === 16, "EXECUTION_RECEIPT_CORPUS");
   assertion(fixture.modePositiveCases === 4 && fixture.modeHostileCases === 4, "EXECUTION_MODE_CORPUS");
   assertion(fixture.classifyPositiveCases === 6 && fixture.classifyHostileCases === 9, "EXECUTION_CLASSIFY_CORPUS");
   assertion(fixture.hostExecutionReceiptVersion === "tcrn.host-execution-receipt.v1", "EXECUTION_RECEIPT_SCHEMA");
@@ -1942,8 +1951,9 @@ async function verifyAct8() {
 }
 
 // EPIC-023 S066/S067: the single Codex SessionStart activation rung. The gate
-// distinguishes local installation from host approval and fire. The current
-// machine-specific absolute-root definition deliberately has no live receipt yet.
+// distinguishes local installation from host approval and fire. The historical
+// persona-bound receipt is retained but cannot approve the corrected persona-free
+// main-session bytes; the installation receipt itself proves no host activation.
 async function verifyAct9() {
   const result = await runTests({ codexActivationOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act9-codex-activation-cases.json");
@@ -1954,7 +1964,7 @@ async function verifyAct9() {
   assertion(fixture.failOpen === true && fixture.installationClaimsHostActivation === false && fixture.approvedSetInitiallyEmpty === true, "ACT9_TRUST_DISCIPLINE");
   assertion(fixture.hostTrustHashRepresentation === "opaque_not_exported", "ACT9_OPAQUE_HOST_HASH");
   assertion(
-    fixture.liveHostProof === "not-claimed-current-absolute-root-definition-awaits-owner-reapproval" &&
+    fixture.liveHostProof === "not-claimed-corrected-main-session-definition-awaits-owner-approval" &&
       typeof fixture.historicalHostEvidence === "string",
     "ACT9_CURRENT_LIVE_BOUNDARY",
   );
@@ -1967,10 +1977,10 @@ async function verifyAct9() {
   });
 }
 
-// EPIC-020 S054: correlate current Codex App Server spawn/thread/turn/item shapes
-// into host-neutral execution receipts without driving the host. Live Desktop
-// subagent rollout records are now held separately, but a live App Server receipt
-// remains deliberately unclaimed: GD-1 keeps the Observer read-only.
+// EPIC-020 S054/S057: correlate current Codex App Server spawn/readback/turn/item
+// shapes into host-neutral execution receipts without embedding host-driving code
+// in the collector. A separate bounded live harness supplies the exact same-
+// connection stream/readback comparison and receipt evidence.
 async function verifyAct10() {
   const result = await runTests({ codexExecutionCollectionOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act10-codex-execution-collection-cases.json");
@@ -1982,7 +1992,13 @@ async function verifyAct10() {
   assertion(fixture.unavailableCases === 7 && fixture.refusalCases === 5, "ACT10_CORPUS");
   assertion(fixture.transcriptsSigned === false && fixture.attributionNotIdentity === true, "ACT10_NO_OVERCLAIM");
   assertion(fixture.bindings.includes("sessionId") && fixture.bindings.includes("threadId") && fixture.bindings.includes("turnId"), "ACT10_BINDINGS");
-  assertion(evidence.boundary.liveAttachClaimed === false && evidence.boundary.liveSubagentReceiptClaimed === false, "ACT10_LIVE_BOUNDARY");
+  assertion(
+    fixture.liveHostProof === "live-app-server-readback-receipt-compared" &&
+      evidence.boundary.liveAttachClaimed === true &&
+      evidence.boundary.liveSubagentReceiptClaimed === true &&
+      evidence.boundary.syntheticThreadStartedAdded === false,
+    "ACT10_LIVE_BOUNDARY",
+  );
   assertion(evidence.relatedLiveObservation.acceptedByThisCollector === false, "ACT10_LIVE_ROLLOUT_BOUNDARY");
   return success("ACT10_CODEX_EXECUTION_COLLECTION_VERIFIED", {
     tests: result.tests,
@@ -1994,52 +2010,87 @@ async function verifyAct10() {
 }
 
 // INIT-009 S076/S080 and INIT-010 S057: a closed cross-host acceptance
-// matrix. Live exact Hook bytes, the registered/directly exercised MCP server and
-// App-visible subagent records are admitted narrowly; the gate keeps the missing
-// App Server attach and Workflow receipt comparison visible.
+// matrix. Current SessionStart definitions remain hermetic; bounded exact
+// observe-hook evidence, the registered/directly exercised MCP server and the
+// exact App Server stream/readback receipt comparison are admitted narrowly.
 async function verifyAct11() {
   const result = await runTests({ adapterAcceptanceOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act11-adapter-acceptance-cases.json");
   const matrixPath = resolve(repositoryRoot, "docs/verification/host/adapter-acceptance-matrix.json");
+  const observeEvidencePath = resolve(repositoryRoot, "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json");
   const fixture = await readJson(fixturePath);
   const matrix = await readJson(matrixPath);
+  const observeEvidence = await readJson(observeEvidencePath);
   assertion(fixture.schemaVersion === "tcrn.act11-adapter-acceptance-cases.v1", "ACT11_FIXTURE_SCHEMA");
   assertion(matrix.schemaVersion === "tcrn.adapter-acceptance-matrix.v1", "ACT11_MATRIX_SCHEMA");
   assertion(fixture.hosts === 2 && fixture.surfaces === 8 && fixture.negativeCases === 14, "ACT11_CLOSED_SURFACE");
   assertion(
     fixture.enforceHostSurfacesAuthorized === 0 &&
-      fixture.codexExactGeneratedHookLiveFires === 0 &&
+      fixture.codexExactGeneratedSessionStartLiveFires === 0 &&
+      fixture.observeEvents === 6 &&
+      fixture.codexExactGeneratedObserveEventLiveFires === 5 &&
+      fixture.claudeExactGeneratedObserveEventLiveFires === 1 &&
+      fixture.liveObserveEventHostCells === 6 &&
+      fixture.explicitUnavailableObserveEventHostCells === 6 &&
       fixture.liveWorkflowMcpRegistrations === 1 &&
       fixture.liveWorkflowMcpDirectHandshakes === 1 &&
       fixture.liveDesktopMultiAgentRuns === 1 &&
-      fixture.liveAppServerAttaches === 0 &&
-      fixture.liveMultiAgentReceiptComparisons === 0,
+      fixture.liveAppServerAttaches === 1 &&
+      fixture.liveMultiAgentReceiptComparisons === 1,
     "ACT11_NO_OVERCLAIM",
   );
   assertion(
-    matrix.storyAcceptance.S076 === "verified" &&
+    observeEvidence.schemaVersion === "tcrn.observe-hook-live-acceptance.v1" &&
+      observeEvidence.acceptance.disposition === "accepted_with_explicit_unavailable_cells" &&
+      observeEvidence.acceptance.crossHostEventSetCovered === true &&
+      observeEvidence.acceptance.perHostComplete === false &&
+      observeEvidence.codex.versionPinnedUnavailable.event === "SessionEnd" &&
+      observeEvidence.codex.versionPinnedUnavailable.mustNotAliasTo === "Stop" &&
+      observeEvidence.scope.enforceHostSurfacesAuthorized === 0,
+    "ACT11_OBSERVE_LIVE_BOUNDARY",
+  );
+  assertion(
+      matrix.epicAcceptance["EPIC-024"] === "accepted_with_explicit_unavailable_cells" &&
+      matrix.storyAcceptance.S076 === "verified" &&
       matrix.storyAcceptance.S080 === "accepted_with_explicit_unavailable_cells" &&
-      matrix.storyAcceptance.S057 === "partial_live_app_record_observed_receipt_comparison_missing",
+      matrix.storyAcceptance.S057 === "verified_live_app_server_readback_receipt_compared",
     "ACT11_STORY_DISPOSITIONS",
   );
   return success("ACT11_ADAPTER_ACCEPTANCE_VERIFIED", {
     tests: result.tests,
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
     matrixDigest: (await fileRecord(matrixPath)).sha256,
+    observeEvidenceDigest: (await fileRecord(observeEvidencePath)).sha256,
     hosts: fixture.hosts,
     surfaces: fixture.surfaces,
     negativeCases: fixture.negativeCases,
+    observeEvents: fixture.observeEvents,
+    epic024: matrix.epicAcceptance["EPIC-024"],
     s057: matrix.storyAcceptance.S057,
     standalone: fixture.standalone,
   });
 }
 
+// INC-002 closed the cwd vector for the handler argument; INC-011 is what it did not
+// close. The two halves are reported separately on purpose: a single field would read
+// as a whole-command guarantee. The claim-ledger read is the drift trap -- delete the
+// disclosure from the subject and this gate goes red, so the prose cannot quietly
+// outlive the code while the test below keeps proving the residual is real.
 async function verifyAct12() {
   const result = await runTests({ hookRootBindingOnly: true });
+  const map = JSON.parse(await readText(resolve(repositoryRoot, "verification-map.yaml")));
+  const claim = map.claims.find((candidate) => candidate.id === "HOOK-ABSOLUTE-ROOT-BINDING");
+  assertion(
+    typeof claim?.subject === "string" &&
+      claim.subject.includes("interpreter is resolved through the fire-time PATH"),
+    "ACT12_INTERPRETER_RESIDUAL_UNDISCLOSED",
+  );
   return success("ACT12_HOOK_ROOT_BINDING_VERIFIED", {
     tests: result.tests,
     liveHostProof: "not-claimed-hermetic-fire-time-cwd-probe",
     definitionDigestScope: "machine-specific-admitted-installation-root",
+    handlerArgumentScope: "admitted-absolute-not-cwd-redirectable",
+    interpreterScope: "bare-name-resolved-through-fire-time-path-INC-011-disclosed-not-closed",
   });
 }
 

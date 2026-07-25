@@ -75,10 +75,25 @@ byte-for-byte. Non-canonical settings input fails closed.
 
 The additive active v2 fragment is intentionally different from this inert
 fragment: its single SessionStart command carries the installer-admitted canonical
-absolute project handler path. That root is included in the fragment digest and
-must equal the installer's independently re-admitted root before any activation
+absolute project handler path and that handler's exact byte digest. That root is
+included in the fragment digest and must equal the installer's independently
+re-admitted root before any activation
 write. Home, filesystem-root, ancestor-of-home, host-tree and symlink roots are
-refused, and fire-time cwd therefore cannot redirect an approved command.
+refused, and fire-time cwd therefore cannot redirect an approved command's handler
+argument. Its interpreter is a separate matter: the command begins with the bare name
+`node`, resolved through the fire-time PATH, so a PATH entry ahead of the real
+interpreter substitutes it and the handler's byte self-check never runs. Claude Code
+has no exact-definition approval step, so no re-review is triggered. `pnpm verify:act12`
+executes that substitution; the residual is disclosed, not closed.
+The installed v2 handler emits a bounded Workflow summary only. It screens every
+interpolated project value for control characters before composing that
+line-oriented summary, and verifies its own bytes at fire time against the digest
+in the approved command line; either check failing prints nothing and exits 0.
+It binds no Core
+Reference persona, does not make the main thread read-only, and does not revoke
+explicit user authorization for ordinary repository work. The installation
+receipt covers the four inert templates plus `session-start.mjs`; no
+`persona-render.json` is generated, installed or reserved.
 
 ## Fallback and final hop
 

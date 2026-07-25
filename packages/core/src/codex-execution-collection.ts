@@ -2,12 +2,13 @@
 //
 // INIT-010 EPIC-020 S054: Codex App Server execution collection.
 //
-// This module consumes a notification stream that an external read-only observer
-// already received. It never starts App Server, sends a JSON-RPC request, creates a
-// thread, or invokes an agent. From the current version-pinned notification shapes
-// it correlates:
+// This module consumes a notification stream plus captured thread/read(includeTurns)
+// responses that an external read-only observer already received. It never starts
+// App Server, sends a JSON-RPC request, creates a thread, or invokes an agent. From
+// the current version-pinned shapes it correlates:
 //
-//   collabAgentToolCall(spawnAgent) -> thread/started(subagent)
+//   item/started + item/completed(collabAgentToolCall/spawnAgent)
+//   -> receiver thread/read(includeTurns=true)
 //   -> turn/started + turn/completed -> item/completed(agentMessage)
 //
 // A complete correlation becomes the host-neutral ObservedInvocation consumed by
@@ -42,9 +43,9 @@ import type {
 } from "./execution-collection.js";
 
 export const CODEX_EXECUTION_COLLECTION_VERSION =
-  "tcrn.codex-execution-collection.v1" as const;
+  "tcrn.codex-execution-collection.v2" as const;
 export const CODEX_EXECUTION_TRANSCRIPT_VERSION =
-  "tcrn.codex-execution-transcript.v1" as const;
+  "tcrn.codex-execution-transcript.v2" as const;
 
 export const CODEX_EXECUTION_REASON_CODES = Object.freeze([
   "CODEX_EXECUTION_DUPLICATE_EVENT",
@@ -84,6 +85,21 @@ function record(
     fail("CODEX_EXECUTION_SCHEMA_INVALID", label);
   }
   return value as Readonly<Record<string, unknown>>;
+}
+
+function exactFields(
+  value: Readonly<Record<string, unknown>>,
+  fields: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(value).sort(compareCanonicalText);
+  const wanted = [...fields].sort(compareCanonicalText);
+  if (
+    actual.length !== wanted.length ||
+    wanted.some((field, index) => field !== actual[index])
+  ) {
+    fail("CODEX_EXECUTION_SCHEMA_INVALID", label);
+  }
 }
 
 function stringValue(
@@ -133,6 +149,19 @@ interface ThreadFact {
   readonly sessionId: string;
   readonly parentThreadId: string;
   readonly forkedFromId: string | null;
+  readonly threadSource: "subagent";
+  readonly ephemeral: boolean;
+  readonly createdAt: number;
+  readonly turns: readonly ReadbackTurnFact[];
+  readonly readbackDigest: string;
+}
+
+interface ThreadStartFact {
+  readonly id: string;
+  readonly sessionId: string;
+  readonly parentThreadId: string;
+  readonly forkedFromId: string | null;
+  readonly threadSource: "subagent";
   readonly ephemeral: boolean;
   readonly createdAt: number;
 }
@@ -140,9 +169,26 @@ interface ThreadFact {
 interface SpawnFact {
   readonly id: string;
   readonly senderThreadId: string;
+  readonly senderTurnId: string;
   readonly receiverThreadId: string;
   readonly prompt: string | null;
+  readonly startedAtMs: number | null;
   readonly completedAtMs: number;
+}
+
+interface ReadbackItemFact {
+  readonly id: string;
+  readonly type: string;
+  readonly text: string | null;
+  readonly phase: "commentary" | "final_answer" | null;
+}
+
+interface ReadbackTurnFact {
+  readonly id: string;
+  readonly status: string;
+  readonly startedAt: number | null;
+  readonly completedAt: number | null;
+  readonly items: readonly ReadbackItemFact[];
 }
 
 interface TurnFact {
@@ -169,10 +215,14 @@ export interface CodexExecutionTranscript {
   readonly turnId: string;
   readonly spawnItemId: string;
   readonly promptDigest: string;
+  readonly spawnStartedAt: string;
   readonly spawnCompletedAt: string;
   readonly threadCreatedAt: string;
-  readonly freshContextBasis: "new_subagent_thread_not_forked_after_spawn";
+  readonly threadReadbackDigest: string;
+  readonly threadStartedNotificationObserved: boolean;
+  readonly freshContextBasis: "spawn_lifecycle_overlaps_non_forked_subagent_thread_readback";
   readonly finalMessageItemId: string;
+  readonly readbackFinalMessageItemId: string;
   readonly finalMessageCompletedAt: string;
   readonly outputDigest: string;
   readonly startedAt: string;
@@ -248,7 +298,8 @@ const observedExecutionRecords = new WeakSet<object>();
 function unavailable(
   reasonCode: CodexUnavailableExecution["reasonCode"],
   sessionId: string,
-  thread: ThreadFact,
+  threadId: string,
+  parentThreadId: string,
   turnId: string | null,
   spawnItemId: string | null,
 ): CodexUnavailableExecution {
@@ -256,8 +307,8 @@ function unavailable(
     availability: "unavailable" as const,
     reasonCode,
     sessionId,
-    threadId: thread.id,
-    parentThreadId: thread.parentThreadId,
+    threadId,
+    parentThreadId,
     turnId,
     spawnItemId,
     observed: null,
@@ -310,21 +361,202 @@ function nullableString(
   return value === null ? null : stringValue(value, label, 512);
 }
 
+function readbackItem(value: unknown, label: string): ReadbackItemFact {
+  const item = record(value, label);
+  const type = stringValue(item.type, `${label}.type`, 128);
+  const id = stringValue(item.id, `${label}.id`, 512);
+  if (type !== "agentMessage") {
+    return { id, type, text: null, phase: null };
+  }
+  const text = stringValue(item.text, `${label}.text`, 65_536);
+  const phase =
+    item.phase === null
+      ? null
+      : item.phase === "commentary" || item.phase === "final_answer"
+        ? item.phase
+        : fail("CODEX_EXECUTION_SCHEMA_INVALID", `${label}.phase`);
+  return { id, type, text, phase };
+}
+
+function readbackTurn(value: unknown, label: string): ReadbackTurnFact {
+  const turn = record(value, label);
+  if (!Array.isArray(turn.items)) {
+    fail("CODEX_EXECUTION_SCHEMA_INVALID", `${label}.items`);
+  }
+  return {
+    id: stringValue(turn.id, `${label}.id`, 512),
+    status: stringValue(turn.status, `${label}.status`, 128),
+    startedAt: nullableSeconds(turn.startedAt, `${label}.startedAt`),
+    completedAt: nullableSeconds(turn.completedAt, `${label}.completedAt`),
+    items: turn.items.map((item, index) =>
+      readbackItem(item, `${label}.items[${index}]`),
+    ),
+  };
+}
+
+function readbackThread(value: unknown, sessionId: string, label: string): ThreadFact {
+  const wrapper = record(value, label);
+  exactFields(wrapper, ["request", "response"], label);
+  const request = record(wrapper.request, `${label}.request`);
+  exactFields(request, ["threadId", "includeTurns"], `${label}.request`);
+  const requestedThreadId = stringValue(
+    request.threadId,
+    `${label}.request.threadId`,
+    512,
+  );
+  if (request.includeTurns !== true) {
+    fail("CODEX_EXECUTION_SCHEMA_INVALID", `${label}.request.includeTurns`);
+  }
+  const response = record(wrapper.response, `${label}.response`);
+  exactFields(response, ["thread"], `${label}.response`);
+  const thread = record(response.thread, `${label}.response.thread`);
+  const id = stringValue(thread.id, `${label}.thread.id`, 512);
+  if (id !== requestedThreadId) {
+    fail("CODEX_EXECUTION_SCHEMA_INVALID", `${label}.request/response threadId`);
+  }
+  const threadSessionId = stringValue(
+    thread.sessionId,
+    `${label}.thread.sessionId`,
+    512,
+  );
+  if (threadSessionId !== sessionId) {
+    fail("CODEX_EXECUTION_SESSION_MISMATCH", id);
+  }
+  if (!Array.isArray(thread.turns)) {
+    fail("CODEX_EXECUTION_SCHEMA_INVALID", `${label}.thread.turns`);
+  }
+  const turns = thread.turns.map((turn, index) =>
+    readbackTurn(turn, `${label}.thread.turns[${index}]`),
+  );
+  if (new Set(turns.map((turn) => turn.id)).size !== turns.length) {
+    fail("CODEX_EXECUTION_DUPLICATE_EVENT", `${label}.thread.turns`);
+  }
+  for (const turn of turns) {
+    if (new Set(turn.items.map((item) => item.id)).size !== turn.items.length) {
+      fail("CODEX_EXECUTION_DUPLICATE_EVENT", `${label}.thread.turn:${turn.id}.items`);
+    }
+  }
+  const parentThreadId =
+    thread.parentThreadId === null
+      ? ""
+      : stringValue(
+          thread.parentThreadId,
+          `${label}.thread.parentThreadId`,
+          512,
+        );
+  const declaredThreadSource =
+    thread.threadSource === null
+      ? null
+      : stringValue(thread.threadSource, `${label}.thread.threadSource`, 128);
+  if (declaredThreadSource !== null && declaredThreadSource !== "subagent") {
+    fail("CODEX_EXECUTION_SCHEMA_INVALID", `${label}.thread.threadSource`);
+  }
+  if (declaredThreadSource === null) {
+    const source = record(thread.source, `${label}.thread.source`);
+    const subAgent = record(source.subAgent, `${label}.thread.source.subAgent`);
+    const threadSpawn = record(
+      subAgent.thread_spawn,
+      `${label}.thread.source.subAgent.thread_spawn`,
+    );
+    if (
+      stringValue(
+        threadSpawn.parent_thread_id,
+        `${label}.thread.source parent`,
+        512,
+      ) !== parentThreadId
+    ) {
+      fail("CODEX_EXECUTION_SCHEMA_INVALID", `${label}.thread.source parent`);
+    }
+  }
+  const basis = {
+    id,
+    sessionId: threadSessionId,
+    parentThreadId,
+    forkedFromId: nullableString(
+      thread.forkedFromId,
+      `${label}.thread.forkedFromId`,
+    ),
+    threadSource: "subagent" as const,
+    ephemeral:
+      typeof thread.ephemeral === "boolean"
+        ? thread.ephemeral
+        : fail("CODEX_EXECUTION_SCHEMA_INVALID", `${label}.thread.ephemeral`),
+    createdAt:
+      nullableSeconds(thread.createdAt, `${label}.thread.createdAt`) ??
+      fail("CODEX_EXECUTION_SCHEMA_INVALID", `${label}.thread.createdAt`),
+    turns,
+  };
+  if (basis.parentThreadId.length === 0) {
+    fail("CODEX_EXECUTION_SCHEMA_INVALID", `${label}.thread is not a subagent`);
+  }
+  const digestBasis = {
+    ...basis,
+    turns: turns.map((turn) => ({
+      id: turn.id,
+      status: turn.status,
+      startedAt: turn.startedAt,
+      completedAt: turn.completedAt,
+      items: turn.items.map((item) => ({
+        id: item.id,
+        type: item.type,
+        phase: item.phase,
+        textDigest: item.text === null ? null : digest(item.text),
+      })),
+    })),
+  };
+  return deepFreeze({
+    id: basis.id,
+    sessionId: basis.sessionId,
+    parentThreadId: basis.parentThreadId,
+    forkedFromId: basis.forkedFromId,
+    threadSource: basis.threadSource,
+    ephemeral: basis.ephemeral,
+    createdAt: basis.createdAt,
+    turns: basis.turns,
+    readbackDigest: canonicalSha256(digestBasis),
+  });
+}
+
 // Consume current Codex v2 notification shapes. Only the fields needed for the
 // binding survive; cwd, model, reasoning and other host payloads are ignored.
 export function collectCodexAppServerExecutions(
   inputValue: unknown,
 ): CodexExecutionCollection {
-  const observationReceipt = observeAppServerStream(inputValue);
   const input = record(inputValue, "Codex execution observation input");
+  exactFields(
+    input,
+    [
+      "hostProduct",
+      "hostVersion",
+      "sessionId",
+      "protocolDigest",
+      "observedFrom",
+      "observedTo",
+      "notifications",
+      "threadReadbacks",
+    ],
+    "Codex execution observation input",
+  );
   const notifications = input.notifications;
   if (!Array.isArray(notifications)) {
     fail("CODEX_EXECUTION_SCHEMA_INVALID", "notifications");
+  }
+  if (!Array.isArray(input.threadReadbacks)) {
+    fail("CODEX_EXECUTION_SCHEMA_INVALID", "threadReadbacks");
   }
   const hostProduct = stringValue(input.hostProduct, "hostProduct", 512);
   const hostVersion = stringValue(input.hostVersion, "hostVersion", 512);
   const sessionId = stringValue(input.sessionId, "sessionId", 512);
   const protocolDigest = stringValue(input.protocolDigest, "protocolDigest", 512);
+  const observationReceipt = observeAppServerStream({
+    hostProduct,
+    hostVersion,
+    sessionId,
+    protocolDigest,
+    observedFrom: input.observedFrom,
+    observedTo: input.observedTo,
+    notifications,
+  });
   if (hostProduct !== "Codex CLI") {
     fail("CODEX_EXECUTION_SCHEMA_INVALID", "hostProduct");
   }
@@ -351,8 +583,24 @@ export function collectCodexAppServerExecutions(
     return deepFreeze({ ...basis, collectionDigest: canonicalSha256(basis) });
   }
 
-  const threads = new Map<string, ThreadFact>();
+  const threadReadbacks = new Map<string, ThreadFact>();
+  for (const [index, readbackValue] of input.threadReadbacks.entries()) {
+    const thread = readbackThread(
+      readbackValue,
+      sessionId,
+      `threadReadbacks[${index}]`,
+    );
+    addUnique(threadReadbacks, thread.id, thread, "thread/read");
+  }
+  const threadStarts = new Map<string, ThreadStartFact>();
   const spawnsByReceiver = new Map<string, SpawnFact[]>();
+  const spawnStarts = new Map<string, {
+    readonly id: string;
+    readonly senderThreadId: string;
+    readonly senderTurnId: string;
+    readonly prompt: string | null;
+    readonly startedAtMs: number;
+  }>();
   const turnStarts = new Map<string, TurnFact>();
   const turnCompletions = new Map<string, TurnFact>();
   const messagesByTurn = new Map<string, MessageFact[]>();
@@ -372,6 +620,7 @@ export function collectCodexAppServerExecutions(
       frame.method !== "thread/started" &&
       frame.method !== "turn/started" &&
       frame.method !== "turn/completed" &&
+      frame.method !== "item/started" &&
       frame.method !== "item/completed"
     ) {
       continue;
@@ -397,7 +646,7 @@ export function collectCodexAppServerExecutions(
         continue;
       }
       addUnique(
-        threads,
+        threadStarts,
         id,
         {
           id,
@@ -415,6 +664,7 @@ export function collectCodexAppServerExecutions(
             typeof thread.ephemeral === "boolean"
               ? thread.ephemeral
               : fail("CODEX_EXECUTION_SCHEMA_INVALID", "thread.ephemeral"),
+          threadSource: "subagent",
           createdAt:
             nullableSeconds(thread.createdAt, "thread.createdAt") ??
             fail("CODEX_EXECUTION_SCHEMA_INVALID", "thread.createdAt"),
@@ -445,13 +695,51 @@ export function collectCodexAppServerExecutions(
 
     const threadId = stringValue(params.threadId, "item.threadId", 512);
     const turnId = stringValue(params.turnId, "item.turnId", 512);
+    const item = record(params.item, `${frame.method}.params.item`);
+    const itemId = stringValue(item.id, "item.id", 512);
+    const itemKey = `${threadId}\u0000${turnId}\u0000${itemId}`;
+
+    if (frame.method === "item/started") {
+      if (
+        item.type === "collabAgentToolCall" &&
+        item.tool === "spawnAgent" &&
+        item.status === "inProgress"
+      ) {
+        const senderThreadId = stringValue(
+          item.senderThreadId,
+          "spawn.senderThreadId",
+          512,
+        );
+        if (senderThreadId !== threadId) {
+          fail("CODEX_EXECUTION_SCHEMA_INVALID", "spawn sender/thread mismatch");
+        }
+        const prompt =
+          item.prompt === null
+            ? null
+            : stringValue(item.prompt, "spawn.prompt", 16_384);
+        addUnique(
+          spawnStarts,
+          itemKey,
+          {
+            id: itemId,
+            senderThreadId,
+            senderTurnId: turnId,
+            prompt,
+            startedAtMs: milliseconds(
+              params.startedAtMs,
+              "item.startedAtMs",
+            ),
+          },
+          "item/started:spawnAgent",
+        );
+      }
+      continue;
+    }
+
     const completedAtMs = milliseconds(
       params.completedAtMs,
       "item.completedAtMs",
     );
-    const item = record(params.item, "item/completed.params.item");
-    const itemId = stringValue(item.id, "item.id", 512);
-    const itemKey = `${threadId}\u0000${turnId}\u0000${itemId}`;
     if (completedItems.has(itemKey)) {
       fail("CODEX_EXECUTION_DUPLICATE_EVENT", `item/completed:${itemKey}`);
     }
@@ -466,6 +754,9 @@ export function collectCodexAppServerExecutions(
         "spawn.senderThreadId",
         512,
       );
+      if (senderThreadId !== threadId) {
+        fail("CODEX_EXECUTION_SCHEMA_INVALID", "spawn sender/thread mismatch");
+      }
       if (!Array.isArray(item.receiverThreadIds)) {
         fail("CODEX_EXECUTION_SCHEMA_INVALID", "spawn.receiverThreadIds");
       }
@@ -483,8 +774,10 @@ export function collectCodexAppServerExecutions(
         facts.push({
           id: itemId,
           senderThreadId,
+          senderTurnId: turnId,
           receiverThreadId,
           prompt,
+          startedAtMs: spawnStarts.get(itemKey)?.startedAtMs ?? null,
           completedAtMs,
         });
         spawnsByReceiver.set(receiverThreadId, facts);
@@ -511,74 +804,133 @@ export function collectCodexAppServerExecutions(
   }
 
   const records: CodexExecutionRecord[] = [];
-  for (const thread of [...threads.values()].sort((left, right) =>
-    compareCanonicalText(left.id, right.id),
+  for (const [receiverThreadId, spawns] of [...spawnsByReceiver.entries()].sort(
+    ([left], [right]) => compareCanonicalText(left, right),
   )) {
-    const spawns = (spawnsByReceiver.get(thread.id) ?? []).filter(
-      (spawn) => spawn.senderThreadId === thread.parentThreadId,
-    );
-    const completedTurns = [...turnCompletions.values()]
-      .filter((turn) => turn.threadId === thread.id)
-      .sort((left, right) => {
-        const leftStarted = left.startedAt ?? Number.POSITIVE_INFINITY;
-        const rightStarted = right.startedAt ?? Number.POSITIVE_INFINITY;
-        return leftStarted === rightStarted
-          ? compareCanonicalText(left.id, right.id)
-          : leftStarted - rightStarted;
-      });
-    const firstTurn = completedTurns[0];
+    const representative = spawns[0];
+    if (representative === undefined) continue;
+    if (spawns.length !== 1) {
+      records.push(
+        unavailable(
+          "CODEX_EXECUTION_PROMPT_UNAVAILABLE",
+          sessionId,
+          receiverThreadId,
+          representative.senderThreadId,
+          null,
+          null,
+        ),
+      );
+      continue;
+    }
+    const spawn = representative;
+    const thread = threadReadbacks.get(receiverThreadId);
+    if (thread === undefined) {
+      records.push(
+        unavailable(
+          "CODEX_EXECUTION_THREAD_UNAVAILABLE",
+          sessionId,
+          receiverThreadId,
+          spawn.senderThreadId,
+          null,
+          spawn.id,
+        ),
+      );
+      continue;
+    }
+    const threadStart = threadStarts.get(thread.id);
+    if (
+      threadStart !== undefined &&
+      (threadStart.sessionId !== thread.sessionId ||
+        threadStart.parentThreadId !== thread.parentThreadId ||
+        threadStart.forkedFromId !== thread.forkedFromId ||
+        threadStart.threadSource !== thread.threadSource ||
+        threadStart.ephemeral !== thread.ephemeral ||
+        threadStart.createdAt !== thread.createdAt)
+    ) {
+      fail("CODEX_EXECUTION_SCHEMA_INVALID", `thread surfaces disagree:${thread.id}`);
+    }
+    const orderedTurns = [...thread.turns].sort((left, right) => {
+      const leftStarted = left.startedAt ?? Number.POSITIVE_INFINITY;
+      const rightStarted = right.startedAt ?? Number.POSITIVE_INFINITY;
+      return leftStarted === rightStarted
+        ? compareCanonicalText(left.id, right.id)
+        : leftStarted - rightStarted;
+    });
+    const firstTurn = orderedTurns[0];
     if (firstTurn === undefined) {
       records.push(
         unavailable(
           "CODEX_EXECUTION_TURN_UNAVAILABLE",
           sessionId,
-          thread,
+          thread.id,
+          thread.parentThreadId,
           null,
-          spawns.length === 1 ? spawns[0]?.id ?? null : null,
+          spawn.id,
         ),
       );
       continue;
     }
     const turnKey = `${thread.id}\u0000${firstTurn.id}`;
     const started = turnStarts.get(turnKey);
+    const completed = turnCompletions.get(turnKey);
     if (
+      firstTurn.status !== "completed" ||
+      firstTurn.startedAt === null ||
+      firstTurn.completedAt === null ||
       started === undefined ||
-      started.startedAt === null ||
-      firstTurn.completedAt === null
+      completed === undefined ||
+      started.startedAt !== firstTurn.startedAt ||
+      completed.startedAt !== firstTurn.startedAt ||
+      completed.completedAt !== firstTurn.completedAt
     ) {
       records.push(
         unavailable(
           "CODEX_EXECUTION_TURN_UNAVAILABLE",
           sessionId,
-          thread,
+          thread.id,
+          thread.parentThreadId,
           firstTurn.id,
-          spawns.length === 1 ? spawns[0]?.id ?? null : null,
+          spawn.id,
         ),
       );
       continue;
     }
-    if (spawns.length !== 1 || spawns[0]?.prompt === null) {
+    if (spawn.prompt === null) {
       records.push(
         unavailable(
           "CODEX_EXECUTION_PROMPT_UNAVAILABLE",
           sessionId,
-          thread,
+          thread.id,
+          thread.parentThreadId,
           firstTurn.id,
-          spawns.length === 1 ? spawns[0]?.id ?? null : null,
+          spawn.id,
         ),
       );
       continue;
     }
-    const spawn = spawns[0] as SpawnFact & { readonly prompt: string };
+    const spawnStart = spawnStarts.get(
+      `${spawn.senderThreadId}\u0000${spawn.senderTurnId}\u0000${spawn.id}`,
+    );
+    const creationSecondStartMs = thread.createdAt * 1_000;
+    const creationSecondEndMs = creationSecondStartMs + 999;
     const freshContext =
       thread.forkedFromId === null &&
-      thread.createdAt * 1_000 >= spawn.completedAtMs;
+      thread.parentThreadId === spawn.senderThreadId &&
+      spawnStart !== undefined &&
+      spawn.startedAtMs !== null &&
+      spawnStart.startedAtMs === spawn.startedAtMs &&
+      spawnStart.prompt === spawn.prompt &&
+      spawn.startedAtMs <= spawn.completedAtMs &&
+      creationSecondEndMs >= spawn.startedAtMs &&
+      creationSecondStartMs <= spawn.completedAtMs &&
+      firstTurn.startedAt >= thread.createdAt;
     if (!freshContext) {
       records.push(
         unavailable(
           "CODEX_EXECUTION_FRESH_CONTEXT_UNAVAILABLE",
           sessionId,
-          thread,
+          thread.id,
+          thread.parentThreadId,
           firstTurn.id,
           spawn.id,
         ),
@@ -593,26 +945,50 @@ export function collectCodexAppServerExecutions(
           : left.completedAtMs - right.completedAtMs,
       );
     const finalMessage = messages[messages.length - 1];
-    if (finalMessage === undefined) {
+    const readbackFinals = firstTurn.items.filter(
+      (item) =>
+        item.type === "agentMessage" && item.phase === "final_answer",
+    );
+    const readbackFinal = readbackFinals[readbackFinals.length - 1];
+    if (finalMessage === undefined || readbackFinal === undefined) {
       records.push(
         unavailable(
           "CODEX_EXECUTION_FINAL_MESSAGE_UNAVAILABLE",
           sessionId,
-          thread,
+          thread.id,
+          thread.parentThreadId,
           firstTurn.id,
           spawn.id,
         ),
       );
       continue;
     }
-    const startedAt = instantFromSeconds(started.startedAt, "startedAt");
-    const endedAt = instantFromSeconds(firstTurn.completedAt, "completedAt");
+    if (readbackFinal.text !== finalMessage.text) {
+      records.push(
+        unavailable(
+          "CODEX_EXECUTION_FINAL_MESSAGE_UNAVAILABLE",
+          sessionId,
+          thread.id,
+          thread.parentThreadId,
+          firstTurn.id,
+          spawn.id,
+        ),
+      );
+      continue;
+    }
+    const startedAt = instantFromSeconds(firstTurn.startedAt, "startedAt");
+    // Turn timestamps are exported at whole-second precision while item lifecycle
+    // timestamps carry milliseconds. Use the inclusive end of the reported second
+    // as the invocation's conservative end bound so a real final item at .337 is
+    // not made to appear after its completed turn at .000.
+    instantFromSeconds(firstTurn.completedAt, "completedAt");
+    const endedAt = new Date(firstTurn.completedAt * 1_000 + 999).toISOString();
     if (endedAt < startedAt) {
       fail("CODEX_EXECUTION_SCHEMA_INVALID", `turn order:${firstTurn.id}`);
     }
     if (
-      finalMessage.completedAtMs < started.startedAt * 1_000 ||
-      finalMessage.completedAtMs > firstTurn.completedAt * 1_000
+      finalMessage.completedAtMs < firstTurn.startedAt * 1_000 ||
+      finalMessage.completedAtMs > firstTurn.completedAt * 1_000 + 999
     ) {
       fail(
         "CODEX_EXECUTION_SCHEMA_INVALID",
@@ -628,14 +1004,18 @@ export function collectCodexAppServerExecutions(
       turnId: firstTurn.id,
       spawnItemId: spawn.id,
       promptDigest,
+      spawnStartedAt: new Date(spawn.startedAtMs).toISOString(),
       spawnCompletedAt: new Date(spawn.completedAtMs).toISOString(),
       threadCreatedAt: instantFromSeconds(
         thread.createdAt,
         "threadCreatedAt",
       ),
+      threadReadbackDigest: thread.readbackDigest,
+      threadStartedNotificationObserved: threadStart !== undefined,
       freshContextBasis:
-        "new_subagent_thread_not_forked_after_spawn" as const,
+        "spawn_lifecycle_overlaps_non_forked_subagent_thread_readback" as const,
       finalMessageItemId: finalMessage.id,
+      readbackFinalMessageItemId: readbackFinal.id,
       finalMessageCompletedAt: new Date(
         finalMessage.completedAtMs,
       ).toISOString(),
@@ -653,7 +1033,7 @@ export function collectCodexAppServerExecutions(
       // invocation is the (spawn, thread) pair, so the id is derived from that pair. A
       // digest keeps it a well-formed protocol id (the receipt schema requires one)
       // while staying distinct per receiver and stable for the same pair.
-      agentInvocationId: `agent-invocation:${digest(`${spawn.id} ${thread.id}`).slice(0, 32)}`,
+      agentInvocationId: `agent-invocation:${digest(`${spawn.id}\u0000${thread.id}`).slice(0, 32)}`,
       startedAt,
       endedAt,
       freshContext,
@@ -746,6 +1126,17 @@ export function collectCodexExecutionReceipt(
   });
 }
 
-// Type-only assertion that the input contract stays the host-neutral Observer
-// contract. It is exported so consumers can pin the exact supplied-stream shape.
-export type CodexExecutionObservationInput = ObservationInput;
+// The collector extends the host-neutral observation envelope with captured
+// thread/read(includeTurns=true) request/response pairs. Those pairs are supplied
+// data; this module still sends no request and drives no host action.
+export interface CodexExecutionThreadReadback {
+  readonly request: {
+    readonly threadId: string;
+    readonly includeTurns: true;
+  };
+  readonly response: unknown;
+}
+
+export interface CodexExecutionObservationInput extends ObservationInput {
+  readonly threadReadbacks: readonly CodexExecutionThreadReadback[];
+}

@@ -7,6 +7,7 @@ import { isAbsolute, resolve } from "node:path";
 
 import { canonicalJson, canonicalSha256, assertProtocolId, compareCanonicalText, parseStrictInstant } from "../../protocol/src/index.js";
 import { validateContextRouteResult } from "./context-router.js";
+import { isCoreReferencePersonaId } from "./core-reference-personas.js";
 
 export const CLAUDE_ADAPTER_REQUEST_VERSION = "tcrn.claude-adapter-request.v1" as const;
 export const CLAUDE_ADAPTER_HOST_VERSION = "tcrn.claude-adapter-host.v1" as const;
@@ -345,11 +346,15 @@ function templateContents(request: ClaudeAdapterRequest, host: ClaudeAdapterHost
   const result = request.contextResult;
   const context = record(result.context, "context");
   const authority = record(context.authoritySummary, "authority summary");
+  const profileId = id(authority.profileId, "authority summary profileId");
+  if (isCoreReferencePersonaId(profileId)) {
+    fail("ADAPTER_BINDING_MISMATCH", "Core Reference personas are conference-only and cannot bind a main session");
+  }
   const common = { activation: false, contextDigest: host.contextDigest, hostDigest: host.hostDigest, requestDigest: host.requestDigest };
   return {
     ".claude/tcrn-workflow/bootstrap.json": canonicalJson({ schemaVersion: "tcrn.claude-adapter-bootstrap-template.v1", ...common, routing: "governed_context_required", ambientDiscovery: false }),
     ".claude/tcrn-workflow/final-hop.json": canonicalJson({ schemaVersion: "tcrn.claude-adapter-final-hop-template.v1", ...common, behavior: "single_owner_visible_response_after_governed_routing", duplicate: "reject", receiptRetention: "metadata_only" }),
-    ".claude/tcrn-workflow/project.json": canonicalJson({ schemaVersion: "tcrn.claude-adapter-project-template.v1", ...common, workspaceId: host.workspaceId, projectId: host.projectId, workId: host.workId, profileId: authority.profileId, effectivePolicyDigest: authority.effectivePolicyDigest, operationAuthority: "none_until_live_governed_activation" }),
+    ".claude/tcrn-workflow/project.json": canonicalJson({ schemaVersion: "tcrn.claude-adapter-project-template.v1", ...common, workspaceId: host.workspaceId, projectId: host.projectId, workId: host.workId, profileId, effectivePolicyDigest: authority.effectivePolicyDigest, operationAuthority: "none_until_live_governed_activation" }),
     ".claude/tcrn-workflow/stop.json": canonicalJson({ schemaVersion: "tcrn.claude-adapter-stop-template.v1", ...common, behavior: "preserve_required_final_hop", rawInputRetention: "none" }),
   };
 }
@@ -388,7 +393,10 @@ function validateTemplateContent(path: string, content: string, common: { readon
   if (path.endsWith("final-hop.json") && (parsed.schemaVersion !== "tcrn.claude-adapter-final-hop-template.v1" || parsed.behavior !== "single_owner_visible_response_after_governed_routing" || parsed.duplicate !== "reject" || parsed.receiptRetention !== "metadata_only")) fail("ADAPTER_BUNDLE_INVALID", path);
   if (path.endsWith("project.json")) {
     if (parsed.schemaVersion !== "tcrn.claude-adapter-project-template.v1" || parsed.operationAuthority !== "none_until_live_governed_activation") fail("ADAPTER_BUNDLE_INVALID", path);
-    id(parsed.workspaceId, `${path}.workspaceId`); id(parsed.projectId, `${path}.projectId`); nullableId(parsed.workId, `${path}.workId`); id(parsed.profileId, `${path}.profileId`); sha(parsed.effectivePolicyDigest, `${path}.effectivePolicyDigest`);
+    id(parsed.workspaceId, `${path}.workspaceId`); id(parsed.projectId, `${path}.projectId`); nullableId(parsed.workId, `${path}.workId`);
+    const profileId = id(parsed.profileId, `${path}.profileId`);
+    if (isCoreReferencePersonaId(profileId)) fail("ADAPTER_BINDING_MISMATCH", `${path}.profileId is conference-only`);
+    sha(parsed.effectivePolicyDigest, `${path}.effectivePolicyDigest`);
   }
   if (path.endsWith("stop.json") && (parsed.schemaVersion !== "tcrn.claude-adapter-stop-template.v1" || parsed.behavior !== "preserve_required_final_hop" || parsed.rawInputRetention !== "none")) fail("ADAPTER_BUNDLE_INVALID", path);
 }

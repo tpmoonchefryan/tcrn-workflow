@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { COMMAND_CATALOG, runCli } from "../dist/build/packages/cli/src/index.js";
+import { COMMAND_CATALOG, assertCatalogCategoriesExclusive, runCli } from "../dist/build/packages/cli/src/index.js";
 
 async function invoke(args) {
   let output = "";
@@ -51,9 +51,9 @@ test("unknown verbs fail closed and every cataloged verb dispatches", async () =
   assert.equal((await invoke(["no-such-verb"])).reasonCode, "CLI_COMMAND_UNKNOWN");
   for (const entry of COMMAND_CATALOG) {
     const outcome = await invoke([entry.name]);
-    // WSG-4: persona-render, like commands, takes no flags and resolves — the Verity
-    // persona is a closed allowlist, not a configuration surface.
-    if (entry.name === "commands" || entry.name === "persona-render") {
+    // `commands` is the only zero-argument verb. Conference persona rendering
+    // requires an explicit closed-roster --profile-id and must fail without it.
+    if (entry.name === "commands") {
       assert.equal(outcome.ok, true, `${entry.name} resolves with no flags`);
       continue;
     }
@@ -164,4 +164,33 @@ test("INIT-009: operator pins make every non-fixture verb binary-invocable", () 
     COMMAND_CATALOG.length,
     "every catalog entry is partitioned into exactly one known surface",
   );
+});
+
+test("INC-016: no catalog entry is both a governed write and authority-bearing output", async () => {
+  // The shipped catalog already satisfies the exclusion, and the load-time assertion
+  // in packages/cli/src/index.ts means an import that got this far proves it.
+  assert.equal(assertCatalogCategoriesExclusive(COMMAND_CATALOG), undefined);
+  for (const entry of COMMAND_CATALOG) {
+    assert.equal(
+      entry.mutates === true && entry.authorityBearing === true,
+      false,
+      `${entry.name} declares two authorization categories`,
+    );
+  }
+  // The negative case: mcp.ts tests `mutates` FIRST, so a both-flags entry would be
+  // satisfied by a writeCommands grant alone -- a write grant carrying
+  // authority-bearing output, which operator-authority-mcp-v1 forbids outright.
+  const both = { name: "adapter-activation-record", availability: "cli", mutates: true, authorityBearing: true, flags: [] };
+  assert.throws(
+    () => assertCatalogCategoriesExclusive([both]),
+    (error) => error?.reasonCode === "CLI_CATALOG_CATEGORY_AMBIGUOUS",
+    "CLI_CATALOG_CATEGORY_AMBIGUOUS",
+  );
+  // The published schema must refuse the same document, or the machine-readable
+  // contract permits a state the implementation forbids.
+  const schema = JSON.parse(await readFile(new URL("../schemas/cli-catalog-v1.schema.json", import.meta.url), "utf8"));
+  const validate = new Ajv2020({ strict: false, allErrors: true }).compile(schema);
+  const envelope = (commands) => ({ reasonCode: "CLI_CATALOG_READY", schemaVersion: "tcrn.cli-catalog.v1", commands });
+  assert.equal(validate(envelope([both])), false, "the schema must reject authorityBearing with mutates:true");
+  assert.equal(validate(envelope([{ ...both, mutates: false }])), true, "authorityBearing with mutates:false stays valid");
 });

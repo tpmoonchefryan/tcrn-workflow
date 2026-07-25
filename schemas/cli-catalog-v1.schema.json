@@ -22,6 +22,16 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
+        "$comment": "INC-016: `mutates` and `authorityBearing` name two different authorization categories, and the operator authority bundle keeps their grant lists disjoint. One entry may not declare both, so declaring `authorityBearing` requires `mutates: false`.",
+        "dependentSchemas": {
+          "authorityBearing": {
+            "properties": {
+              "mutates": {
+                "const": false
+              }
+            }
+          }
+        },
         "required": [
           "name",
           "availability",

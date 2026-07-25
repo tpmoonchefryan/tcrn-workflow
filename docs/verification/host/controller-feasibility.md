@@ -15,30 +15,32 @@ construction — the module names none of the protocol's driving verbs, opens no
 socket, and issues no request; `pnpm verify:act8` asserts all of that against the
 source.
 
-It does not attach to a live App Server. The stream is *supplied* to it. Attaching
-would require running a Codex session, which is out of scope here.
+The shipped Observer does not attach to a live App Server; the stream is
+*supplied* to it. S057 later used a separate bounded evidence harness for one live
+attach. That proves the supplied-stream/readback path without adding connection or
+driving verbs to the Observer and without creating a reusable Controller.
 
 S054 adds a consumer of that same supplied stream:
-`packages/core/src/codex-execution-collection.ts` correlates the lower-case wire
-methods `item/completed`, `thread/started`, `turn/started` and `turn/completed`.
-When a completed `collabAgentToolCall`/`spawnAgent` can be bound to a subagent
-thread, its first turn and a phase-tagged final `agentMessage`, the collector
-emits an `observe` record with real session/thread/turn ids and prompt/output
-digests. `freshContext` is derived only when `forkedFromId` is null and the
-thread was created after the matching spawn completed. The final output is the
-last `phase=final_answer` item by completion time inside that turn; commentary
-is never promoted. Missing fields, an unpinned protocol or incomplete lifecycle
-return `unavailable`; nothing is inferred. The resulting transcript projection
-is unsigned attribution evidence, not identity proof. `pnpm verify:act10` proves
-that correlation against the generated 0.139.0 TypeScript schema shapes without
-starting or steering an agent.
+`packages/core/src/codex-execution-collection.ts` correlates the lower-case
+`item/started` and `item/completed` spawn lifecycle with the receiver's captured
+`thread/read(includeTurns=true)`, `turn/started`, `turn/completed`, and a
+phase-tagged final `agentMessage`. A child `thread/started` notification is
+optional because Codex 0.139.0 did not emit it in the live run; if present it must
+agree with readback. The collector emits an `observe` record with real opaque host
+session/thread/turn ids and prompt/output digests. `freshContext` requires matching
+receiver, session, parent, non-forked readback and overlapping creation/spawn
+lifecycle. Raw and normalized readback final ids stay distinct while phase and
+text bytes must match. Missing fields, readback, an unpinned protocol or incomplete
+lifecycle return `unavailable`; replay and cross-session contamination fail closed.
+The transcript projection remains unsigned attribution evidence, not identity
+proof.
 
-`pnpm verify:act11` closes the cross-host acceptance and hostile matrix around
-that boundary. A 2026-07-25 Codex Desktop run now supplies real App-visible
-`sub_agent_activity` records and completed subagent rollouts, recorded in
-`codex-live-integration-2026-07-25.json`. Those rollout records are not the
-pinned App Server notification stream this collector accepts, so the Workflow
-receipt comparison remains incomplete; no frame conversion is inferred.
+`pnpm verify:act10` proves the collector against hostile 0.139.0-shaped fixtures.
+S057 additionally attached a bounded harness once to the real pinned App Server,
+passed 28 raw/readback comparisons, produced one unsigned fresh-context Workflow
+execution receipt, and cleanly tore down its launched process tree. That exact
+evidence is recorded in `codex-app-server-execution-collection.json`. Earlier
+Codex Desktop rollout records remain separate and were not converted.
 
 ## S079 — Controller feasibility on Codex
 
@@ -62,15 +64,15 @@ problem:
    for blocking hooks — declared blast radius, an owner-tested kill switch reachable
    without the mechanism, fail-closed behaviour proven on a live host — applies at
    least as strongly here, and none of it exists for this surface.
-3. **No live App Server evidence.** Real Codex Desktop subagents have now run, but
-   nothing in this repository has attached to a running App Server. A controller
-   built on an unexercised protocol would still be a claim about a control surface
-   we have only read the schema of.
+3. **No live Controller evidence.** S057 now proves one bounded start/readback
+   evidence path, not rollback, injection, approval response, interruption or
+   control of an ordinary user session. Turning that harness into a reusable
+   controller would cross the retired-decision and blast-radius boundaries above.
 
-**Recommendation: do not open a Controller initiative now.** The honest next step is
-the one the observer already takes — read a real stream from a real session and find
-out what the protocol does in practice — and that requires a live Codex run, which is
-the Owner's to authorise.
+**Recommendation: do not open a Controller initiative now.** The read-only
+collection question has enough live evidence for S057; the remaining gap is not
+protocol feasibility but explicit authority and safety evidence for control-plane
+mutation.
 
 ## S083 — Claude Code control-plane observer equivalence
 
@@ -84,27 +86,34 @@ and each is weaker in a way that matters:
 | Session transcripts | The richest record of what happened | Written by the host for its own use, unsigned, and mutable by the same user who owns the session; the collection layer already treats them as attribution evidence only. |
 
 **Assessment: no equivalent Observer is warranted today.** The observe-hook surface
-(EPIC-024) already covers what governance needs from a Claude session — tool
-lifecycle, compaction, subagent boundaries — through a mechanism whose failure
-semantics are ruled and whose receipts are bounded. A second, weaker path would add
-surface without adding evidence. If that changes, it is a separate initiative, on the
-same terms as S079.
+(EPIC-024) is the intended Claude path for tool lifecycle, compaction and subagent
+boundaries. Its generated handler now has exact live evidence for `SessionEnd` on
+Claude Code 2.1.201, while the other five Claude cells remain explicitly unavailable
+because the model probe returned API status 402 before inference or tool use. The
+same acceptance artifact records exact Codex evidence for the other five events and
+the version-pinned absence of Codex `SessionEnd`; neither host has complete six-event
+coverage. A second, weaker control-plane path would add surface without resolving
+those host conditions. If that changes, it is a separate initiative, on the same
+terms as S079.
 
 ## S078 — capability mapping
 
 The Browser, Computer-use, Worktree, Automation and Connector capabilities are
 recorded in `docs/verification/host/capability-manifest.json` with their surface,
 channel and governance level. Their status is unchanged by this epic: they remain
-`invoke-only` or `unavailable`, because the observer built here reads a notification
-stream and does not govern any of them. Mapping them to `observe` would require a
-live attach that has not happened.
+`invoke-only` or `unavailable`, because the observer built here reads a bounded
+notification/readback surface and does not govern any of them. One S057 attach did
+not exercise or establish complete coverage of those host-exclusive capabilities.
 
 ## What this document does not claim
 
-- That any App Server was attached, or that a Codex session was observed through
-  the S054 App Server collector.
+- That S057's bounded evidence harness is a shipped App Server Controller or gives
+  authority to drive ordinary user sessions.
 - That the notification vocabulary is complete for versions other than 0.139.0 — a
   stream from a different protocol digest is admitted as `unpinned`, and the receipt
   says so.
+- That EPIC-024 has complete six-event live coverage on either host. Its accepted
+  matrix preserves six explicit unavailable host-event cells, does not rename Codex
+  `Stop` to `SessionEnd`, and adds no enforce hook.
 - That a Controller is safe to build. It says the opposite: the surface exists, and
   the governance work does not.

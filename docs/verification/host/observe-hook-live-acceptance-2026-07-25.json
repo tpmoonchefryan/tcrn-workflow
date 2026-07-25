@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "tcrn.observe-hook-live-acceptance.v1",
+  "observedAt": "2026-07-25",
+  "scope": {
+    "initiative": "TCRN-CROSS-INIT-009",
+    "epic": "TCRN-CROSS-EPIC-024",
+    "observeEvents": [
+      "PostToolUse",
+      "SessionEnd",
+      "PreCompact",
+      "PostCompact",
+      "SubagentStart",
+      "SubagentStop"
+    ],
+    "enforceHostSurfacesAuthorized": 0,
+    "failureMode": "fail-open"
+  },
+  "generatedBytes": {
+    "handlerSha256": "10d35aba9b67ba5aec46ba0f8730049fa7babf53cfd1372fe0b7353a28998807",
+    "projectManifestSha256": "9bddad29625c7731bb3a3c57749dc19f10716cba04828fdbf7e6632dad6d763c",
+    "codexHooksSha256": "5ddb87b431317a25f986028e7ca7226a26cfafe9d853e79737b823270f96bd3f",
+    "claudeSettingsSha256": "06a754de7223e99dd5d9007aceb1b4a0e4415bbcb59e9b7bfbb53f922b7e12b4"
+  },
+  "codex": {
+    "hostProduct": "Codex CLI",
+    "hostVersion": "0.139.0",
+    "sourceArtifacts": {
+      "result": "dist/local-codex-candidate/epic024-observe-live/codex-app-server-observe.result.json",
+      "resultSha256": "22672c31655fce196dbeb5b59495f0eb60ba4cb516e3b0d1466853443b2b6f3b",
+      "rawStreamSha256": "439f19582643b782eb3ee79c70925c3905e0a483543802f08c337163cca47049",
+      "clientRequestsSha256": "8be51466a028dcbc353b7acf973116d72aa823065090ffe96eb5634786e77cd7",
+      "observeLogSha256": "c513a4a8fb8e983f815b93b6de56d99a611b1c87ae88d41f9402e2cbd527f910",
+      "sessionEndUnavailableSha256": "11377df861ea5618b5cdfde4b47c1db213bcfd1a3b918edf10be176e8bd9ec30"
+    },
+    "projectTrust": "one-off command-line trusted-project override; no project trust entry was persisted",
+    "hookTrust": {
+      "method": "Codex /hooks exact-hash approval",
+      "approvedCurrentHashes": [
+        "sha256:38009bfb3d77eec242b0a1b613144b45bf2a7f1ec87b21f5d60eecbea68c0428",
+        "sha256:552f7fb318d4c0ae1e69f44c60f7bf600d89a49fb40cba7b99780f2c32ac734d",
+        "sha256:beedcde6821fa2ff17dd659b407ecb7fae4d17d2070788ba41894ff787d4e04e",
+        "sha256:c5cbf048f1cd2dbce615f35a8ba45fffe474bff1a6e6d91c8a66c24bc2332d23",
+        "sha256:bb387f2bc7f343b13f0722eabd45e49116ceb3bdbe9f234a3209132aeb3144b1"
+      ],
+      "bypassReliedUpon": false
+    },
+    "appServer": {
+      "threadId": "redacted-62a58368e1e29c16f153d509",
+      "sessionId": "redacted-62a58368e1e29c16f153d509",
+      "turnId": "redacted-a8e5b502bae9cf1e7f721012",
+      "manualCompactTurnId": "redacted-2be31421bb5db3345fa305a4",
+      "hookStartedNotifications": 7,
+      "hookCompletedNotifications": 7,
+      "threadArchived": true,
+      "cleanTeardown": true
+    },
+    "observedReceipts": {
+      "PostToolUse": 3,
+      "PreCompact": 1,
+      "PostCompact": 1,
+      "SubagentStart": 1,
+      "SubagentStop": 1
+    },
+    "receiptBoundary": "all seven handler records retained only a bounded summary and SHA-256 payload digest; no raw hook payload was persisted",
+    "versionPinnedUnavailable": {
+      "event": "SessionEnd",
+      "reason": "Codex CLI 0.139.0 generated HookEventName and ManagedHooksRequirements omit SessionEnd",
+      "mustNotAliasTo": "Stop"
+    }
+  },
+  "claude": {
+    "hostProduct": "Claude Code",
+    "hostVersion": "2.1.201",
+    "sourceArtifacts": {
+      "observeLog": "dist/local-codex-candidate/epic024-observe-live/claude-project/.claude/tcrn-workflow/observe-log.jsonl",
+      "observeLogSha256": "86a76cdafb936dc21179218444a0f5887b249cd98a60c305aec8e9ee8e85554c"
+    },
+    "observedReceipts": {
+      "SessionEnd": 3
+    },
+    "receiptBoundary": "all three handler records retained only a bounded summary and SHA-256 payload digest; no raw hook payload was persisted",
+    "remainingEventsUnavailable": {
+      "reason": "the live model probe returned API status 402 before inference or tool use",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "events": [
+        "PostToolUse",
+        "PreCompact",
+        "PostCompact",
+        "SubagentStart",
+        "SubagentStop"
+      ]
+    }
+  },
+  "eventCoverage": [
+    {
+      "event": "PostToolUse",
+      "codex": "live_exact",
+      "claude": "unavailable_host_account"
+    },
+    {
+      "event": "SessionEnd",
+      "codex": "unavailable_version_pinned",
+      "claude": "live_exact"
+    },
+    {
+      "event": "PreCompact",
+      "codex": "live_exact",
+      "claude": "unavailable_host_account"
+    },
+    {
+      "event": "PostCompact",
+      "codex": "live_exact",
+      "claude": "unavailable_host_account"
+    },
+    {
+      "event": "SubagentStart",
+      "codex": "live_exact",
+      "claude": "unavailable_host_account"
+    },
+    {
+      "event": "SubagentStop",
+      "codex": "live_exact",
+      "claude": "unavailable_host_account"
+    }
+  ],
+  "acceptance": {
+    "disposition": "accepted_with_explicit_unavailable_cells",
+    "crossHostEventSetCovered": true,
+    "perHostComplete": false,
+    "liveEventHostCells": 6,
+    "explicitUnavailableEventHostCells": 6,
+    "shippedSessionStartActivationChanged": false,
+    "hostEnforceAuthorizationChanged": false
+  },
+  "notClaimed": [
+    "complete six-event coverage on either host",
+    "SessionEnd support in Codex CLI 0.139.0",
+    "Stop as an alias for SessionEnd",
+    "a shipped multi-event activation installer",
+    "a PreToolUse gate, PermissionRequest responder or Stop blocker",
+    "a reusable App Server Controller or authority to drive ordinary user sessions",
+    "current persona-free SessionStart live activation on either host"
+  ],
+  "identifierRedaction": "Raw Codex thread, session and turn identifiers are withheld from the repository: they are UUIDv7 and therefore carry both a creation timestamp and a reference to a real session on the operator's machine, which the privacy gate refuses (THREAD_IDENTIFIER). Each occurrence is replaced by redacted-<first 24 hex of sha256(raw id)>, so the same session remains the same token throughout and a verifier holding the raw live artifacts can recompute the digest and re-establish the linkage. No claim in this receipt depends on the raw identifier."
+}

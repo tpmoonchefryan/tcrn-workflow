@@ -155,7 +155,7 @@ export const DISTILLED_DECISION = "persist-conference-and-gate-records";
 // Both sides feed placeholder tokens through this identically, so the comparison
 // is exact token equality with a separator that cannot appear inside a token.
 export function canonicalizeCommand(tokens) {
-  return tokens.join(" ");
+  return tokens.join("\u0000");
 }
 
 // Extract the fenced command lines from the tutorial markdown. A command line is

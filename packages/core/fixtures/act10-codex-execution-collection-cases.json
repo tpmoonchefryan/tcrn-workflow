@@ -2,10 +2,13 @@
   "schemaVersion": "tcrn.act10-codex-execution-collection-cases.v1",
   "protocolVersion": "Codex CLI 0.139.0",
   "notificationMethods": [
+    "item/started",
     "item/completed",
-    "thread/started",
     "turn/completed",
     "turn/started"
+  ],
+  "readbackMethods": [
+    "thread/read(includeTurns=true)"
   ],
   "bindings": [
     "sessionId",
@@ -21,7 +24,9 @@
   "drivesHost": false,
   "transcriptsSigned": false,
   "attributionNotIdentity": true,
-  "liveHostProof": "not-claimed-no-observer-driven-subagent-invocation",
+  "liveHostProof": "live-app-server-readback-receipt-compared",
+  "liveHostEvidence": "docs/verification/host/codex-app-server-execution-collection.json",
+  "liveEvidenceManifestSha256": "8e403517049e99b738fab0b68a848e50aa997aa5fe19303cf75f6b4ad2f2ac62",
   "schemaEvidence": "docs/verification/host/codex-app-server-execution-collection.json",
-  "standalone": "pure-correlation-of-a-supplied-version-pinned-notification-stream"
+  "standalone": "collector-remains-read-only; the separate bounded live harness attached once and supplied same-connection notifications plus thread-readback"
 }

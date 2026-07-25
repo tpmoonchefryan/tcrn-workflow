@@ -64,7 +64,11 @@ test("host-execution receipt validates and rejects malformed receipts", () => {
   const positives = [
     () => assert.equal(validateHostExecutionReceipt(receipt()).schemaVersion, HOST_EXECUTION_RECEIPT_VERSION),
     () => assert.equal(validateHostExecutionReceipt(receipt({ threadId: "thread:t1", turnId: "turn:u1" })).threadId, "thread:t1"),
+    () => assert.equal(validateHostExecutionReceipt(receipt({ sessionId: "7a1c9e42-593b-7cf3-abbf-f63d08109633", threadId: "8b2daf53-787a-7d33-b0e0-c5af86ca9dde", turnId: "9c3eb064-78e1-7a42-9b25-cc6ef54a5dd9" })).sessionId, "7a1c9e42-593b-7cf3-abbf-f63d08109633"),
     () => assert.equal(validateHostExecutionReceipt(receipt({ availability: "invoke-only" })).availability, "invoke-only"),
+    // INC-020 pins the length floor at exactly 4: a floor of 5 reddens here, and the
+    // 3-character hostile below reddens if the floor is dropped to 3.
+    () => assert.equal(validateHostExecutionReceipt(receipt({ threadId: "t123" })).threadId, "t123"),
   ];
   const hostiles = [
     () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ schemaVersion: "tcrn.host-execution-receipt.v2" }))),
@@ -72,11 +76,22 @@ test("host-execution receipt validates and rejects malformed receipts", () => {
     () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ availability: "govern" }))),
     () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ outputDigest: "not-a-digest" }))),
     () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ freshContext: "yes" }))),
-    () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ threadId: "THREAD" }))),
+    () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ threadId: "THREAD\nFORGED" }))),
     () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ invokedAt: "not-an-instant" }))),
     () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ promptDigest: "short" }))),
     () => reason("EXECUTION_UNICODE_INVALID", () => validateHostExecutionReceipt(receipt({ hostProduct: "" }))),
     () => reason("EXECUTION_BUDGET_EXCEEDED", () => validateHostExecutionReceipt(receipt({ attributionNote: "x".repeat(2049) }))),
+    // INC-020: hostId was relaxed for UUID-shaped Codex ids and went too far -- a single
+    // space passed. Each case kills a different half-measure: a trim()-only rule survives
+    // the interior-space case, and a "non-empty" rule survives all of them.
+    () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ sessionId: " " }))),
+    () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ threadId: " 8b2daf53-787a-7d33-b0e0-c5af86ca9dde" }))),
+    () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ sessionId: "7a1c9e42-593b-7cf3-abbf-f63d08109633 " }))),
+    () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ sessionId: "session id" }))),
+    () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ sessionId: "abc" }))),
+    // An id built only of zero-width characters is non-empty and renders as nothing;
+    // synthesized from escapes so this test file stays reviewable (INC-018).
+    () => reason("EXECUTION_RECEIPT_INVALID", () => validateHostExecutionReceipt(receipt({ sessionId: "\u200b".repeat(4) }))),
   ];
   assert.equal(positives.length, fixture.receiptPositiveCases);
   assert.equal(hostiles.length, fixture.receiptHostileCases);

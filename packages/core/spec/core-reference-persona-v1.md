@@ -16,6 +16,10 @@ Skills, network/database/AOS authority, or incident history.
 Generated release-profile layers are display-only and remain unbound and
 non-authorizing. The generic-profile external path/file-digest admission anchor
 and explicit owner rebind remain mandatory. No live profile store is created.
+Core Reference personas are used only to attribute positions argued inside a
+conference. They are not admissible as Codex or Claude main-session profiles,
+are never injected by SessionStart, and cannot make a main thread read-only or
+grant/revoke Workflow or ordinary repository authority.
 
 Structural schema/runtime limits are identical and count Unicode code points,
 including each non-BMP scalar as one: job titles are 2..128 code points; list

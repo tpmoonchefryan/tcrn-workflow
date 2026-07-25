@@ -59,7 +59,7 @@ TCRN Workflow はこの三つをまとめて塞ぎます——エージェント
 | **すべての決定に名前がつく** | アクター署名を有効にすると、以降のすべての変更が誰の行為かを宣言しなければなりません——エンジンもそのリプレイも、アクター ID を欠く事象に対してフェイルクローズします。有効化しないワークスペースは、従来とバイト単位で同一のままです。 |
 | **取り消せるアクティベーション** | Claude Code と Codex は三段階の可逆な activation path を持ちます。現在の command は admitted absolute project root を束縛し、code/fixture で証明済みです。以前の host receipt は置換済み byte の履歴です。Codex は引き続き exact definition ごとの `/hooks` approval を必要とし、install receipt だけでは host activation を証明しません。 |
 | **自らを証明するバックアップ** | スナップショットは決定的なファイル単位マニフェストを出力し、ランブックは「スナップショット → 消去 → リストア」をバイト単位で往復させます。そして本当に重要な二つの失敗モード（部分リストア、別の場所へのリストア）はフェイルクローズします。 |
-| **二つのホスト、一つの真実** | Codex と Claude Code はホスト中立の authority／receipt 機構を共有します。どちらも既定では inert のままで、狭い fail-open SessionStart activation を持ちます。Codex は exact-definition approval 境界を記録し、ホスト内部の opaque trust hash を読めるとは主張しません。 |
+| **二つのホスト、一つの真実** | Codex と Claude Code はホスト中立の authority／receipt 機構を共有します。どちらも既定では inert のままで、狭い fail-open SessionStart activation を持ちます。Codex はこれに加えて exact-definition approval 境界を記録しますが、ホストの opaque trust hash がエクスポートされるとは主張しません。 |
 | **構造としてのオフライン** | 開発モードはプロセスレベルのネットワークガードを導入し、テレメトリはゼロです。プライバシーゲートは、追跡されるすべてのバイト、到達可能なすべての git 履歴、そしてリリースアーカイブを、個人識別子とマシンパスについて走査します。 |
 | **自分で導き直せるリリース** | リリースは不変タグと再現可能な成果物一式であり、`pnpm verify:p8` が再構築してバイト比較します。外部の利用者は付属の `tcrn-workflow-helper` 経由で検証し、その digest 自体は独立に入手できる場所で公開されています。 |
 | **不具合は第一級市民** | 作成経路が `Incident` 種別を受理するため、不具合は `Story` を装うのではなく自身のレコードと系譜を持ちます。`Review`・`Release`・`Knowledge` は直接作成に対して閉じたままです。ナレッジレコードを退役させるとその本文が回収され、検索はサマリーに一致するため、キュレーションされたストアは無駄なく見つけやすいまま保たれます。 |
@@ -157,7 +157,7 @@ flowchart LR
     Layers --> REL
 ```
 
-最下層に凍結されたプロトコル、その上にファイルネイティブなエンジン、さらに上に能力レイヤー、最上部にホストアダプター——アクティベーション前は不活性で、そのアクティベーションを持つのは Claude Code だけです。プロトコルは追記のみです：`work-model-v1` は凍結され、すべての拡張は受理済みスキーマに触れずに自己登録します。
+最下層に凍結されたプロトコル、その上にファイルネイティブなエンジン、さらに上に能力レイヤー、最上部にホストアダプター——明示的に承認された activation の段（rung）に至るまでは不活性です。プロトコルは追記のみです：`work-model-v1` は凍結され、すべての拡張は受理済みスキーマに触れずに自己登録します。
 
 ## 率直な回答
 
@@ -190,7 +190,7 @@ flowchart LR
 
 ### Claude Code の履歴 live receipt は何を証明したのか
 
-旧 relative-path definition が実機 Claude Code session に統治権威の**読み取り専用サマリー**だけを届けたことを証明しました。現在の absolute-root command は exact definition byte を変更しているため、その receipt は履歴であり、現在の Claude live activation は主張しません。
+旧 relative-path definition が実機 Claude Code session に**Workflow に限定された権限境界サマリー**だけを届け、それ以上のものは何も届けなかったことを証明しました。その履歴サマリーが制限したのは Workflow の変更であり、メインスレッドを読み取り専用にしたわけではありません。現在の absolute-root command は exact definition byte を変更しているため、その receipt は履歴であり、現在の Claude live activation は主張しません。
 
 それ以外は意図的に外に置かれています。本フレームワークはホストのツール使用を裁定**せず**、応答を抑制も書き換えも**せず**、`~/.claude` 配下へは**決して**書き込まず、明示的な操作なしにナレッジを昇格**させず**、セッションを編成も**しません**。フックが失敗したときは何も出力せず、セッションは通常の Claude Code として続行します——これは本コードベースで唯一、意図的に fail-closed ではなく fail-open にしている箇所です。セッションを壊しうる統治レイヤーは、黙るだけの統治レイヤーより悪いからです。
 
@@ -199,7 +199,11 @@ Codex にも意図的に狭い同等機能があります。`adapter-install` �
 を持つ project-local `SessionStart` hook を一つだけ追加します。実行には
 `/hooks` で exact definition の operator approval が必要で、definition
 変更時は再承認が必要です。install receipt は
-`pending_host_approval` のままで、`adapter-deactivate` は hook を先に解除します。
+`pending_host_approval` のままです。`adapter-deactivate` はまず hook を解除し、
+inert な段に戻ります。注入される v2 summary は Core Reference ペルソナを一切
+束縛せず、メインスレッドを読み取り専用にもせず、通常のリポジトリ作業に対する
+ユーザーの明示的な認可ではなく Workflow の権限だけを制限します。
+PreToolUse/approval の enforce も、稼働中の App Server Controller も主張しません。
 
 ### リリースはどのように信頼されるのか
 
@@ -215,7 +219,7 @@ Codex にも意図的に狭い同等機能があります。`adapter-install` �
 - **約 40 の密閉テストファイル**。本物の `SIGKILL` 障害注入、三つの独立レイヤーでの 64 通り並べ替え決定性証明、ファイルシステム攻撃マトリクスを含みます。
 - **1 つのエンドツーエンド旗艦証明**（`pnpm verify:e2e`）——統制ループ全体（initiative → epic → story → gate → conference → distill → promote → trace）の密閉リプレイで、チュートリアルの全コマンドを逐語的に実行します。
 - **19 項目の公開 AOS 要件台帳**（11 項目は fixture 検証済み、8 項目は仕様記述）——成熟度は行ごとに記録され、決して水増しされません。
-- **プライバシーゲート**が、許可リストにある 250 のソースファイル全部（完全一致リストであり、ファイルが一つ増減すればゲートは失敗します）、到達可能なすべての git オブジェクト、そしてリリースアーカイブを対象にします。
+- **プライバシーゲート**が、許可リストにある 294 のソースファイル全部（完全一致リストであり、ファイルが一つ増減すればゲートは失敗します）、到達可能なすべての git オブジェクト、そしてリリースアーカイブを対象にします。
 
 <details>
 <summary><b>検証ターゲット完全リファレンス</b>（クリックで展開）</summary>
@@ -228,7 +232,7 @@ Codex にも意図的に狭い同等機能があります。`adapter-install` �
 | `verify:p4` / `verify:p4:knowledge` | 成果物ライフサイクルの予算、秘匿化、使い捨てアーカイブの apply/restore；ナレッジコアのメタデータ/本文分離、昇格 CAS、64 並べ替え一致。 |
 | `verify:p5` | 閉じた汎用プロファイル信頼モデル、実効ポリシー digest、コールドスタートグラフ、八つの不活性 Core Reference ペルソナ。 |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | コンテキストルーターのスコープ/リスク/予算制御と敵対コーパス；Codex アダプターブリッジ；Claude Code アダプター（四ファイルのテンプレートバンドル、可逆な settings フラグメント、禁止パス拒否、CLAUDE.md フォールバック、ホスト間一致 digest）。 |
-| `verify:act4` / `verify:act9` / `verify:act10` / `verify:act11` / `verify:act12` / `verify:act13` | Codex inert install、独立認可された SessionStart activation と definition drift、read-only supplied-stream collection、cross-host matrix、hostile cwd から Codex/Claude command が admitted absolute root だけを実行する証明、さらに厳密な output grant と pin 済み host observation による authority-bearing activation receipt のゲート。 |
+| `verify:act4` / `verify:act9` / `verify:act10` / `verify:act11` / `verify:act12` / `verify:act13` | Codex inert install、独立認可された persona-free な SessionStart activation（exact-definition drift つき、現在の live approval は保留）、read-only collector と、実機 App Server の stream/readback receipt の厳密な一回の比較、cross-host matrix、hostile cwd から Codex/Claude command が admitted absolute handler path のみを指名する証明（interpreter は fire-time の `PATH` 解決のままで、この残余は実測のうえ未クローズとして開示）、さらに厳密な output grant と pin 済み host observation による authority-bearing activation receipt のゲート。 |
 | `verify:p7` / `verify:p7:compatibility` | 正規化交換、互換性マニフェスト、ロールバック防止の下限、決定的なインポート/チェックポイント/フォールバック計画。 |
 | `verify:authority-mcp` | 帯域外でピン留めされた操作者権威、ローテーション／失効の拒否、ホスト中立な構造化 MCP 読み書き。 |
 | `verify:p8` | 再現可能なリリース候補：ソースアーカイブ再構築とバイト比較、SBOM、provenance、チェックサム、六ファイルの閉じたバンドル、外部信頼の否定マトリクス。 |
@@ -284,7 +288,7 @@ Codex にも意図的に狭い同等機能があります。`adapter-install` �
 
 **ドライバーに関する前提**
 
-- **完全性は駆動モデルの能力に依存しません。依存するのは進捗です**。フェイルクローズは弱いドライバーのあらゆる逸脱を拒否に変えるため、チェーンが汚れることはありません——基準未満のエージェントは何かを壊すのではなく、reason code の上で空転するだけです。モデル能力とともにスケールするのは：この規律の下で進捗すること、注入された権威サマリーに従うこと（届くことは証明済み。従われることは一度も主張していません）、そして記録される内容の質——形の整ったゴミは忠実に保存されます。台帳が証明するのは誰がいつ何を言ったかであり、それが正しかったかではないからです。
+- **完全性は駆動モデルの能力に依存しません。依存するのは進捗です**。フェイルクローズは弱いドライバーのあらゆる逸脱を拒否に変えるため、チェーンが汚れることはありません——基準未満のエージェントは何かを壊すのではなく、reason code の上で空転するだけです。モデル能力とともにスケールするのは：この規律の下で進捗すること、注入された権威サマリーに従うこと（届くことは証明済み。従われることは一度も主張していません）、そして記録される内容の質——形の整ったゴミは忠実に保存されます。台帳が証明するのは誰が何を言ったかであり、それが正しかったかではないからです。
 - **フレームワークはドライバーに次を前提とします**：散文を解釈するのではなく reason code で分岐できること。CAS で拒否されたら読み直してから再試行し、決して盲目的に再送しないこと。赤いゲートを「止まって報告」として扱い、緑になるまで再実行しないこと。厳密な RFC 3339 時刻を構成し、再生成の順序を守り、生成物や digest を手で編集しないこと。ワークスペースあたり書き手を一人に保つこと。各項目はあなた自身のエージェントで検証できます。
 - **互換モデルのリストは公開しません。一つも測っていないからです**。測定済みの唯一の駆動構成は Claude Code 2.1.201 上のフロンティア級 Claude モデルです（レシート：`docs/verification/host/claude-code.json`）。上記の前提を下回る場合に予期すべきは、破損ではなく空転です——果てしない拒否コードの列は、基準未満のドライバーの署名であって、フレームワークの欠陥の署名ではありません。
 
@@ -293,13 +297,14 @@ Codex にも意図的に狭い同等機能があります。`adapter-install` �
 - **統治された操作者サーフェスはソース上で完成していますが、受け入れ済みの `0.5.0` リリースにはまだ含まれません。** 歴史的な十二の IO ブロック動詞は直接 digest フラグで七つまで減り、現在のソースは「絶対パス + SHA-256」の pins 文書を通じてその七つを供給し、同じコマンドカタログを構造化されたホスト中立 MCP ツールとして公開します。リリース済み `0.5.0` バイナリは引き続き `ADAPTER_HOST_REQUIRED` などで停止します。
 - **破壊的なアーティファクト保守は fixture 限定**。`artifact-archive-apply` と `artifact-archive-restore` は機械可読カタログで fixture-only と記されています。実ワークスペースにはドライランのみが存在するため、統治された圧縮が出荷されるまでアーティファクトストアは増え続けます。
 - **ナレッジストアは使い捨てであることを明示的に承認しなければなりません**。非 fixture のワークスペースでは、呼び出しごとの明示的承認がある場合にのみ初期化されます（`KNOWLEDGE_DISPOSABLE_ACK_REQUIRED`）。それは派生インデックスであり、決して記録の原本ではありません。
+- **承認された hook command が固定するのは handler であり、interpreter ではありません**。どちらの activation command もインストーラが admit した絶対 handler path を埋め込むため、fire-time の作業ディレクトリでは改変できません（`pnpm verify:act12`）。interpreter は依然として裸名 `node` で、fire-time の `PATH` で解決されます。本物の interpreter より前にあるディレクトリがそれを差し替え、handler 自身のバイト自己検査では検知できません——差し替えられた interpreter は handler を読まないからです。同じゲートが両ホストでその差し替えを実際に実行するので、これは実測であり仮定ではありません。固定ではなく開示を選びました。絶対 interpreter path を固定すると、承認済み definition がツールチェーン変更ごとに漂移し、この hook は fail-open なので漂移は静かに劣化します。
 
 ## ステータス、正直に
 
 - `0.1.0` は**最初の正式リリース**です。セマンティックバージョニングが適用され、0.x の間は公開 API がマイナーバージョン間で変わる可能性があります。
 - **以来、五つのマイナーリリースが出荷され、これが `0.5.0` です。** `0.2.0` はゲートの同一性を実体のあるものにし（名簿照合された `owner_intent_required`）、`0.3.0` はレコード上に助言的スコープを追加し（`work-annotate`）、`0.3.2` は `Incident` 作成経路を開いてナレッジストアにキュレーションの余地を与え、`0.4.0` はバックグラウンドリソースの残渣統治を追加し、`0.5.0` はスプリント／リリーストレインの機構を追加しました。それぞれが再現可能な成果物一式を伴う不変タグであり、`CHANGELOG.md` が完全な台帳を携えています。
-- **Claude Code には履歴 live evidence がありますが、現在の live claim はありません。** `2.1.201` receipt は置換済み relative-path definition を対象とします。現在の admitted absolute-root definition は code/fixture proof のみで、この変更では Claude host を駆動していません。履歴 receipt：`docs/verification/host/claude-code.json`。
-- **Codex activation は狭く、証拠レベルを明示します。** 可逆な inert install の上に `SessionStart` だけを fail-open で登録し、Codex による exact-definition approval を要求します。Codex `0.139.0` の disposable probe は承認後の一回の発火と definition 変更後の skip を記録しました。App Server collection は supplied notification stream だけを読み、subagent を開始・操作しません。これは `0.5.0` 後の source-tree capability であり、accepted `0.5.0` release bytes の claim ではありません。
+- **Claude Code の証拠は狭く、definition ごとに割れています。** 履歴上の `2.1.201` activation receipt は、置換済み relative-path SessionStart バイトについて九件の観測を記録しています。現在の persona-free な admitted absolute-root SessionStart definition は、code/fixture proof のみに留まります。これとは別に、生成された EPIC-024 の fail-open handler そのものが Claude Code `2.1.201` 上で `SessionEnd` を三回 live 発火しました。残る五つの observe イベントは、モデルプローブが推論もツール使用も行う前に API status 402 を返したため、明示的な「計測不可（unavailable）」のセルのままです。
+- **Codex の activation・observe・execution の証拠は狭く、証拠等級つきです。** inert installer は可逆であり、activation が登録するのは `SessionStart` だけで、fail-open であり、Core Reference ペルソナを一切注入せず、現在の exact definition すべてについて Codex の approval を要求します。以前に承認された Verity 束縛の発火は、撤回済みバイトに対する履歴上の証拠です。修正後の persona-free な definition は hermetic であり、approval と live 発火を待っています。EPIC-024 は別途、生成された fail-open handler そのものを、限定された Codex `0.139.0` の証拠プロジェクトで `PostToolUse`・`PreCompact`・`PostCompact`・`SubagentStart`・`SubagentStop` について live 発火させました。そのバージョンの生成 hook schema は `SessionEnd` を含まず、`Stop` を別名としては使いません。S057 はもう一つの限定された App Server ハーネスを用いて 28 件の raw/readback チェックを通し、署名のない fresh-context Workflow execution receipt を一件投影しました。どちらのハーネスも、出荷された Controller でも複数イベントの activation installer でもありません。これらは `0.5.0` 後の source-tree capability であり、受け入れ済みの `0.5.0` release bytes に関する claim ではありません。
 - `supportedAosReleases` は空です：外部 AOS 互換性は主張しません。
 - リリースモードは、付属ヘルパーがそのバイト列を受理することを要求します：ブートストラップ digest は独立に公開され、受理されるリリース digest はその中にコンパイルされています。
 

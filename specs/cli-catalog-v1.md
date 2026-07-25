@@ -13,7 +13,8 @@ of entries. Output is byte-identical across invocations.
 
 ## Entry fields
 
-Each entry is `{name, availability, mutates, flags}`:
+Each entry is `{name, availability, mutates, flags}`, optionally plus
+`authorityBearing`:
 
 - `name` — the dispatched verb.
 - `availability` — `"cli"` for verbs invokable from the shipped binary,
@@ -25,6 +26,16 @@ Each entry is `{name, availability, mutates, flags}`:
   against a live Workspace fails by design, not by misuse, and no flag the caller
   can supply changes that.
 - `mutates` — whether the verb appends a workspace event or writes store state.
+- `authorityBearing` — present and always `true` on a verb that writes nothing but
+  whose OUTPUT carries authority (currently only `adapter-activation-record`, which
+  emits `host_observed_active`). It is a separate authorization category, not a
+  weaker write: the operator bundle grants it through `authorityOutputCommands`, and
+  a `writeCommands` grant never substitutes. An entry therefore never carries
+  `authorityBearing` together with `mutates: true` — two categories for one command
+  would leave no rule for which grant applies, and the dispatcher's write branch
+  would silently win. The schema states the exclusion as a `dependentSchemas`
+  constraint and the catalog refuses to load if a future entry violates it
+  (`CLI_CATALOG_CATEGORY_AMBIGUOUS`).
 - `flags` — each `{name, required, valueKind}`, where `valueKind` is one of
   `string`, `integer`, `boolean`, `json`, `list`, `instant`, `enum`. A flag that
   accepts an explicit null carries two optional descriptive fields:

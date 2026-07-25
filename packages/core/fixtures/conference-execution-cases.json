@@ -1,7 +1,7 @@
 {
   "schemaVersion": "tcrn.conference-execution-cases.v1",
-  "receiptPositiveCases": 3,
-  "receiptHostileCases": 10,
+  "receiptPositiveCases": 5,
+  "receiptHostileCases": 16,
   "modePositiveCases": 4,
   "modeHostileCases": 4,
   "classifyPositiveCases": 6,

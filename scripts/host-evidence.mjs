@@ -345,7 +345,12 @@ async function run() {
   // unreadable — the host consumes the handler's stdout as context.
   const projectPath = resolve(probeRoot, ".claude/tcrn-workflow/project.json");
   const projectBytes = await readFile(projectPath, "utf8");
-  const runHandler = () => spawnSync(process.execPath, [handlerPath], { encoding: "utf8" });
+  // The v3 handler self-checks its own bytes against the digest in the approved
+  // command line (INC-015), so a direct invocation has to supply the same argument
+  // the installed hook definition carries. Taken from the bytes actually on disk, not
+  // from the generator, so a probe against a drifted install reads as drift.
+  const handlerDigest = createHash("sha256").update(await readFile(handlerPath)).digest("hex");
+  const runHandler = () => spawnSync(process.execPath, [handlerPath, "--handler-digest", handlerDigest], { encoding: "utf8" });
 
   const healthy = runHandler();
   record("baseline", "With a valid project.json the installed handler emits the authority summary",

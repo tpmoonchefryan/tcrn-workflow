@@ -1,12 +1,12 @@
 {
   "schema": "tcrn.host-facts.v1",
-  "status": "SURFACE DOCUMENTED — refreshes the host-fact baseline; activation evidence stays in claude-code.json",
-  "observedAt": "2026-07-24",
+  "status": "SURFACE DOCUMENTED; exact generated SessionEnd observe handler live-fired three times; the remaining five observe events were unavailable after an API 402 before inference or tool use",
+  "observedAt": "2026-07-25",
   "host": {
     "product": "Claude Code",
     "measuredActivationVersion": "2.1.201",
     "measuredActivationReceipt": "docs/verification/host/claude-code.json",
-    "note": "the adapter install/activate/uninstall round-trip and the summary-reaches-model observation were measured on 2.1.201; this facts file only refreshes the capability surface that the AC-1 four-event view had gone stale against, and pins nothing about a live version it did not measure"
+    "note": "the historical adapter install/activate/uninstall round-trip and summary-reaches-model observation were measured on 2.1.201. A separate EPIC-024 evidence project on the same self-reported version live-fired the exact generated SessionEnd observe handler; it does not prove the current persona-free SessionStart activation bytes live"
   },
   "documentedSurface": {
     "source": "code.claude.com/docs/hooks (documentation, not a measured round-trip)",
@@ -32,6 +32,24 @@
       "plugin hooks/hooks.json"
     ]
   },
+  "liveObserveProbe": {
+    "evidence": "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json",
+    "hostVersion": "2.1.201",
+    "result": "the exact generated fail-open handler recorded three SessionEnd receipts from project settings",
+    "receiptBoundary": "each record retained a bounded summary and payload digest only; no raw hook payload was persisted",
+    "remainingEventsUnavailable": {
+      "events": [
+        "PostToolUse",
+        "PreCompact",
+        "PostCompact",
+        "SubagentStart",
+        "SubagentStop"
+      ],
+      "reason": "the live print-mode model probe returned API status 402 with zero input and output tokens before inference or tool use"
+    },
+    "shippedActivationChanged": false,
+    "enforceHostSurfacesAuthorized": 0
+  },
   "crossHostContrast": {
     "purpose": "the EPIC-021 capability manifest assigns governance levels per host; the two trust models differ and must not be flattened",
     "codexTrust": "per-hook-definition hash review and re-approval (learn.chatgpt.com/docs/hooks)",
@@ -39,7 +57,8 @@
     "sharedFloor": "for both hosts the durable drift defence is the session-start verify-installed-copy, not a host trust gate"
   },
   "notVerified": [
-    "any hook firing on the current session's version (only 2.1.201 activation was ever measured, in claude-code.json)",
+    "PostToolUse, PreCompact, PostCompact, SubagentStart or SubagentStop firing in the EPIC-024 live evidence project",
+    "the current persona-free absolute-root, handler-digest-pinned SessionStart definition firing on Claude Code",
     "the workspace-trust dialog behaviour for frontmatter hooks",
     "whether the wider event surface changes the single-SessionStart activation contract (it does not, by design: N-2 keeps SessionStart the sole fail-open surface until an amendment)"
   ]
