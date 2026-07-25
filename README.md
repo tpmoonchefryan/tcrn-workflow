@@ -54,7 +54,7 @@ One rule holds the whole thing together, and it is the part people find hardest 
 | **A workspace that is just files** | Your whole work graph (Initiative → Epic → Story → Subtask) lives in plain, canonically formatted JSON files with a hash chain — no database, no daemon. You can audit it with `cat` and `sha256sum`, and exports are byte-reproducible. |
 | **One command, 20 gates** | `pnpm verify:p1` runs the entire verification chain: format, lint, typecheck, build, ~40 test files, trust matrix, archive/SBOM/license/vulnerability policy, source allowlist, offline boundary, privacy scan, CI hardening, verification map, and clean-history proof. Anything unexpected stops the chain. |
 | **A claim ledger a machine can read** | `verification-map.yaml` binds 75 claims — 13 framework-hygiene, 13 inertness-proof, 49 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run. |
-| **Guards that prove they still bite** | `pnpm guard-check` mutates each registered guard out of the source and requires its named test to go red — 17 guards, verified before every push. A protection that nothing would notice losing is not a protection. |
+| **Guards that prove they still bite** | `pnpm guard-check` mutates each registered guard out of the source and requires its named test to go red — 18 guards, verified before every push. A protection that nothing would notice losing is not a protection. |
 | **Deliberation on the record** | Conferences and decision gates are appended to the same tamper-evident journal. A pending gate *blocks* its work item from reaching `done` (`WORKSPACE_GATE_PENDING`) — at the command and again on replay — and closing a conference distills each decision into a knowledge candidate that links back to it. |
 | **Every decision gets a name** | Enable actor attestation and every later mutation must declare who acted — the engine and its replay both fail closed on any event that omits an actor id. Workspaces that never enable it stay byte-identical to before. |
 | **Activation you can undo** | Claude Code retains its measured three-step reversible activation. Codex now has a peer rung: one fail-open project `SessionStart` hook, digest-bound handler and summary, explicit `/hooks` approval, and deactivation that unregisters first and returns to the inert install. Installation alone never claims host activation. |
@@ -213,7 +213,7 @@ Every number below is enforced by a gate — if one drifts, a build fails somewh
 
 - **20 gates** in the `verify:p1` chain, each with a stable terminal reason code.
 - **75 machine-verified claims** in `verification-map.yaml` — 13 framework-hygiene, 13 inertness-proof, 49 runtime-capability. The claims badge above is parsed and compared against the ledger on every run.
-- **17 registered guards**, each proven to still bite by mutating it out and watching its test go red.
+- **18 registered guards**, each proven to still bite by mutating it out and watching its test go red.
 - **~40 hermetic test files**, including real `SIGKILL` fault injection, 64-permutation determinism proofs in three independent layers, and a filesystem attack matrix.
 - **1 end-to-end flagship proof** (`pnpm verify:e2e`) — a hermetic replay of the full governed loop (initiative → epic → story → gate → conference → distill → promote → trace), every tutorial command executed verbatim.
 - **19-entry public AOS requirements ledger** (11 fixture-verified, 8 specified) — maturity is recorded per row, never inflated.

@@ -645,7 +645,15 @@ export function collectCodexAppServerExecutions(
     });
     const transcriptSource = canonicalJson(transcript);
     const observed: ObservedInvocation = deepFreeze({
-      agentInvocationId: spawn.id,
+      // INC-007: one spawnAgent item can name several receivers, and each receiver runs
+      // in its own thread. Using the spawn item id alone gave every receiver the SAME
+      // agentInvocationId while still counting them as separate observed invocations --
+      // inflating exactly the number a multi-agent claim rests on, and contradicting
+      // collectConferenceReceipts, which refuses duplicate invocation ids outright. The
+      // invocation is the (spawn, thread) pair, so the id is derived from that pair. A
+      // digest keeps it a well-formed protocol id (the receipt schema requires one)
+      // while staying distinct per receiver and stable for the same pair.
+      agentInvocationId: `agent-invocation:${digest(`${spawn.id} ${thread.id}`).slice(0, 32)}`,
       startedAt,
       endedAt,
       freshContext,

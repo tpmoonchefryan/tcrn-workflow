@@ -12,8 +12,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { chmod, lstat, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { join, sep } from "node:path";
 import test from "node:test";
 
 import {
@@ -216,6 +216,17 @@ test("the installer refuses hostile roots, refuses to overwrite, and leaves zero
       () => reasonAsync("INSTALLER_ROOT_INVALID", () => installCodexAdapterBundle(bundle, { installationRoot: fixtureRoots.root, generationId: "generation-1", receiptPath: fixtureRoots.receiptPath })),
       // A receipt path inside .codex would break the closed four-entry set.
       () => reasonAsync("INSTALLER_ROOT_INVALID", () => installCodexAdapterBundle(bundle, { installationRoot: fixtureRoots.root, generationId: "g", receiptPath: join(fixtureRoots.root, ".codex", "receipt.json") })),
+      // INC-005: a receipt path OUTSIDE the installation root is refused. Forbidding
+      // only <root>/.codex left every other path admissible, so --receipt-out could
+      // drop a file into the user's own Codex config root while the install itself
+      // stayed project-local.
+      () => reasonAsync("INSTALLER_ROOT_INVALID", () => installCodexAdapterBundle(bundle, { installationRoot: fixtureRoots.root, generationId: "generation:one", receiptPath: join(homedir(), ".codex", "receipt.json") })),
+      // INC-005: the home directory itself is refused as an installation root. The
+      // host-segment check rejects a root inside a host tree but said nothing about
+      // installing AT the home directory, which wrote ~/.codex/hooks.json -- the one
+      // location every boundary statement in this project promises never to touch.
+      () => reasonAsync("INSTALLER_ROOT_INVALID", () => installCodexAdapterBundle(bundle, { installationRoot: homedir(), generationId: "generation:one", receiptPath: join(homedir(), "receipt.json") })),
+      () => reasonAsync("INSTALLER_ROOT_INVALID", () => installCodexAdapterBundle(bundle, { installationRoot: sep, generationId: "generation:one", receiptPath: join(sep, "receipt.json") })),
     ];
     assert.equal(cases.length, fixture.hostileRootCases);
     for (const operation of cases) await operation();
@@ -239,15 +250,18 @@ test("a symlinked root and a pre-existing target are both refused", async () => 
     await reasonAsync("INSTALLER_ROOT_INVALID", () => installCodexAdapterBundle(bundle, { installationRoot: linked, generationId: "g", receiptPath: join(linkBase, "r.json") }));
 
     // A second install over a live installation refuses rather than overwriting, and
-    // the refusal leaves the FIRST installation's bytes intact.
+    // the refusal leaves the FIRST installation's bytes intact. The second receipt
+    // path is inside the root because INC-005 now requires it there -- a receipt
+    // describes an installation, so it may not be written somewhere else entirely.
+    const secondReceipt = join(fixtureRoots.root, "second.json");
     const first = await installCodexAdapterBundle(bundle, { installationRoot: fixtureRoots.root, generationId: "generation:one", receiptPath: fixtureRoots.receiptPath });
-    await reasonAsync("INSTALLER_TARGET_EXISTS", () => installCodexAdapterBundle(bundle, { installationRoot: fixtureRoots.root, generationId: "generation:two", receiptPath: join(linkBase, "second.json") }));
+    await reasonAsync("INSTALLER_TARGET_EXISTS", () => installCodexAdapterBundle(bundle, { installationRoot: fixtureRoots.root, generationId: "generation:two", receiptPath: secondReceipt }));
     for (const entry of first.receipt.entries) {
       const bytes = await readFile(entry.realpath);
       assert.equal(createHash("sha256").update(bytes).digest("hex"), entry.contentDigest);
     }
     // The failed second attempt wrote no receipt of its own.
-    assert.equal(existsSync(join(linkBase, "second.json")), false);
+    assert.equal(existsSync(secondReceipt), false);
   } finally {
     await fixtureRoots.close();
     await rm(linkBase, { recursive: true, force: true });

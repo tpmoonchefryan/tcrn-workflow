@@ -61,7 +61,7 @@ no new capability; it tests whether existing proof still bites.
 
 Scope: `guard-check` stays a standalone script wired into `push-gate`. It is
 deliberately **not** folded into `verify:p1`, because each entry costs a build
-plus a test run (~4-5s measured) and the registry's seventeen entries would push
+plus a test run (~4-5s measured) and the registry's eighteen entries would push
 the P1 wall clock past the 180s escalation trigger that protects the "run it on
 every change" discipline.
 

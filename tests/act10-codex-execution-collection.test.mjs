@@ -175,7 +175,11 @@ test("a supplied current-wire stream correlates spawn, subagent thread, turn, an
   assert.equal(execution.parentThreadId, "thread:parent");
   assert.equal(execution.turnId, "turn:verity-1");
   assert.equal(execution.spawnItemId, "item:spawn-verity");
-  assert.equal(execution.observed.agentInvocationId, "item:spawn-verity");
+  // INC-007: the invocation identity is the (spawn, thread) pair, not the spawn item
+  // alone -- one spawnAgent naming several receivers would otherwise give every
+  // receiver the same id while still being counted as separate invocations.
+  // Distinct per receiver thread and stable for the same (spawn, thread) pair.
+  assert.match(execution.observed.agentInvocationId, /^agent-invocation:[0-9a-f]{32}$/u);
   assert.equal(execution.observed.freshContext, true);
   assert.equal(
     execution.transcript.freshContextBasis,
@@ -220,7 +224,7 @@ test("the projected host-execution receipt retains actual session/thread/turn bi
   assert.equal(collected.receipt.turnId, execution.turnId);
   assert.equal(
     collected.receipt.agentInvocationId,
-    execution.spawnItemId,
+    execution.observed.agentInvocationId,
   );
   assert.equal(collected.receipt.availability, "observe");
   assert.deepEqual(
