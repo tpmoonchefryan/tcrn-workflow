@@ -32,7 +32,10 @@ import {
   parseStrictInstant,
 } from "../../protocol/src/index.js";
 import { readAuthorityFile } from "./authority-file-reader.js";
-import type { AuthorityFileReasonCodes } from "./authority-file-reader.js";
+import type {
+  AuthorityFileExpectation,
+  AuthorityFileReasonCodes,
+} from "./authority-file-reader.js";
 import {
   CODEX_ADAPTER_TEMPLATE_PATHS,
   validateCodexAdapterBundle,
@@ -54,7 +57,9 @@ export const CODEX_ADAPTER_ACTIVATION_HOST_VERSION =
 export const CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION =
   "tcrn.codex-adapter-activation-installation.v1" as const;
 export const CODEX_ADAPTER_HOST_ACTIVATION_RECEIPT_VERSION =
-  "tcrn.codex-adapter-host-activation-receipt.v1" as const;
+  "tcrn.codex-adapter-host-activation-receipt.v2" as const;
+export const CODEX_HOST_ACTIVATION_OBSERVATION_VERSION =
+  "tcrn.codex-host-activation-observation.v1" as const;
 export const CODEX_SESSION_SUMMARY_VERSION = "tcrn.codex-session-summary.v1" as const;
 export const CODEX_SESSION_START_SCRIPT_VERSION =
   "tcrn.codex-session-start-handler.v2" as const;
@@ -164,6 +169,7 @@ const shaPattern = /^[a-f0-9]{64}$/u;
 const maximumReceiptBytes = 65_536;
 const activationHostContexts = new WeakSet<object>();
 const activationReceiptContexts = new WeakSet<object>();
+const hostActivationObservationContexts = new WeakSet<object>();
 
 function sha(value: unknown, label: string): string {
   if (typeof value !== "string" || !shaPattern.test(value)) {
@@ -1199,6 +1205,12 @@ export function assertCodexActivationReceiptContext(
 }
 
 export interface CodexHostActivationObservation {
+  readonly schemaVersion: typeof CODEX_HOST_ACTIVATION_OBSERVATION_VERSION;
+  readonly installationReceiptDigest: string;
+  readonly activationAuthorityDigest: string;
+  readonly activationHostDigest: string;
+  readonly hookDefinitionDigest: string;
+  readonly approvedHookDefinitionDigests: readonly string[];
   readonly hostProduct: "Codex CLI";
   readonly hostVersion: string;
   readonly observedAt: string;
@@ -1208,11 +1220,26 @@ export interface CodexHostActivationObservation {
   readonly trustApprovalObserved: true;
   readonly hookFired: true;
   readonly evidenceDigest: string;
+  readonly observationDigest: string;
+}
+
+export type CodexHostActivationObservationFileIdentity =
+  AuthorityFileExpectation;
+
+export interface CodexHostActivationObservationContext {
+  readonly observation: CodexHostActivationObservation;
+  readonly evidenceSource: "activation_host_context" | "operator_pinned_file";
+  readonly sourcePath: string | null;
+  readonly observationFileSha256: string | null;
+  readonly observationSourceIdentityDigest: string | null;
 }
 
 export interface CodexHostActivationReceipt {
   readonly schemaVersion: typeof CODEX_ADAPTER_HOST_ACTIVATION_RECEIPT_VERSION;
   readonly installationReceiptDigest: string;
+  readonly activationAuthorityDigest: string;
+  readonly activationHostDigest: string;
+  readonly hookDefinitionDigest: string;
   readonly hostProduct: "Codex CLI";
   readonly hostVersion: string;
   readonly observedAt: string;
@@ -1224,33 +1251,28 @@ export interface CodexHostActivationReceipt {
   readonly activationState: "host_observed_active";
   readonly hookFired: true;
   readonly evidenceDigest: string;
+  readonly evidenceSource: "activation_host_context" | "operator_pinned_file";
+  readonly observationDigest: string;
+  readonly observationFileSha256: string | null;
+  readonly observationSourceIdentityDigest: string | null;
   readonly hostTrustHashRepresentation: "opaque_not_exported";
   readonly attributionNote: string;
   readonly receiptDigest: string;
 }
 
-export function createCodexHostActivationReceipt(
-  installationReceiptValue: unknown,
-  approvedDefinitionDigestsValue: unknown,
-  observationValue: unknown,
-): CodexHostActivationReceipt {
-  const installation = validateCodexActivationInstallationReceipt(
-    installationReceiptValue,
-  );
-  const assessment = assessCodexActivationTrust(
-    installation.binding,
-    approvedDefinitionDigestsValue,
-  );
-  if (!assessment.currentDefinitionApproved) {
-    fail(
-      "CODEX_ACTIVATION_APPROVAL_REQUIRED",
-      installation.binding.hookDefinitionDigest,
-    );
-  }
-  const observation = record(observationValue, "host activation observation");
+function validateCodexHostActivationObservation(
+  value: unknown,
+): CodexHostActivationObservation {
+  const observation = record(value, "host activation observation");
   exact(
     observation,
     [
+      "schemaVersion",
+      "installationReceiptDigest",
+      "activationAuthorityDigest",
+      "activationHostDigest",
+      "hookDefinitionDigest",
+      "approvedHookDefinitionDigests",
       "hostProduct",
       "hostVersion",
       "observedAt",
@@ -1260,10 +1282,12 @@ export function createCodexHostActivationReceipt(
       "trustApprovalObserved",
       "hookFired",
       "evidenceDigest",
+      "observationDigest",
     ],
     "host activation observation",
   );
   if (
+    observation.schemaVersion !== CODEX_HOST_ACTIVATION_OBSERVATION_VERSION ||
     observation.hostProduct !== "Codex CLI" ||
     observation.hookEventName !== "SessionStart" ||
     (observation.source !== "startup" && observation.source !== "resume") ||
@@ -1276,23 +1300,208 @@ export function createCodexHostActivationReceipt(
     );
   }
   const basis = {
-    schemaVersion: CODEX_ADAPTER_HOST_ACTIVATION_RECEIPT_VERSION,
-    installationReceiptDigest: installation.receiptDigest,
+    schemaVersion: CODEX_HOST_ACTIVATION_OBSERVATION_VERSION,
+    installationReceiptDigest: sha(
+      observation.installationReceiptDigest,
+      "installationReceiptDigest",
+    ),
+    activationAuthorityDigest: sha(
+      observation.activationAuthorityDigest,
+      "activationAuthorityDigest",
+    ),
+    activationHostDigest: sha(
+      observation.activationHostDigest,
+      "activationHostDigest",
+    ),
+    hookDefinitionDigest: sha(
+      observation.hookDefinitionDigest,
+      "hookDefinitionDigest",
+    ),
+    approvedHookDefinitionDigests: approvedSet(
+      observation.approvedHookDefinitionDigests,
+    ),
     hostProduct: "Codex CLI" as const,
     hostVersion: text(observation.hostVersion, "hostVersion", 512),
     observedAt: instant(observation.observedAt, "observedAt"),
     sessionId: text(observation.sessionId, "sessionId", 512),
     hookEventName: "SessionStart" as const,
     source: observation.source as "startup" | "resume",
+    trustApprovalObserved: true as const,
+    hookFired: true as const,
+    evidenceDigest: sha(observation.evidenceDigest, "evidenceDigest"),
+  };
+  if (basis.approvedHookDefinitionDigests.length === 0) {
+    fail(
+      "CODEX_ACTIVATION_APPROVAL_REQUIRED",
+      "an observed approved definition is required",
+    );
+  }
+  if (!basis.approvedHookDefinitionDigests.includes(basis.hookDefinitionDigest)) {
+    fail(
+      "CODEX_ACTIVATION_APPROVAL_REQUIRED",
+      "observed hook definition is not in the approved definition set",
+    );
+  }
+  if (
+    sha(observation.observationDigest, "observationDigest") !==
+      canonicalSha256(basis)
+  ) {
+    fail("CODEX_ACTIVATION_CANONICAL_INVALID", "observationDigest");
+  }
+  return deepFreeze({
+    ...basis,
+    observationDigest: observation.observationDigest as string,
+  });
+}
+
+export function admitCodexHostActivationObservation(
+  activationHostContextValue: unknown,
+  value: unknown,
+): CodexHostActivationObservationContext {
+  if (
+    typeof activationHostContextValue !== "object" ||
+    activationHostContextValue === null ||
+    !activationHostContexts.has(activationHostContextValue)
+  ) {
+    fail(
+      "CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED",
+      "branded activation-host context required for programmatic observation admission",
+    );
+  }
+  const activationHost = activationHostContextValue as CodexAdapterActivationHostContext;
+  const observation = validateCodexHostActivationObservation(value);
+  if (
+    observation.activationHostDigest !== activationHost.input.hostDigest ||
+    observation.hostVersion !== activationHost.input.hostVersionReadback
+  ) {
+    fail(
+      "CODEX_ACTIVATION_HOST_MISMATCH",
+      "activation-host context does not bind the observed host",
+    );
+  }
+  const context = deepFreeze({
+    observation,
+    evidenceSource: "activation_host_context" as const,
+    sourcePath: null,
+    observationFileSha256: null,
+    observationSourceIdentityDigest: null,
+  });
+  hostActivationObservationContexts.add(context);
+  return context;
+}
+
+export function assertCodexHostActivationObservationContext(
+  value: unknown,
+): CodexHostActivationObservationContext {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !hostActivationObservationContexts.has(value)
+  ) {
+    fail(
+      "CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED",
+      "branded activation-host context or pinned observation file required",
+    );
+  }
+  return value as CodexHostActivationObservationContext;
+}
+
+const hostObservationFileCodes: AuthorityFileReasonCodes<CodexActivationReasonCode> =
+  Object.freeze({
+    required: "CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED",
+    path: "CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED",
+    digest: "CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED",
+    changed: "CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED",
+    link: "CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED",
+    specialFile: "CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED",
+    limitExceeded: "CODEX_ACTIVATION_BUDGET_EXCEEDED",
+    notUtf8: "CODEX_ACTIVATION_UNICODE_INVALID",
+    notJson: "CODEX_ACTIVATION_SCHEMA_INVALID",
+    notCanonical: "CODEX_ACTIVATION_CANONICAL_INVALID",
+  });
+
+export async function readCodexHostActivationObservation(
+  path: string,
+  authority: CodexHostActivationObservationFileIdentity | undefined,
+): Promise<CodexHostActivationObservationContext> {
+  const source = await readAuthorityFile(path, authority, {
+    maximumBytes: maximumReceiptBytes,
+    codes: hostObservationFileCodes,
+    details: {
+      required: "out-of-band Codex activation observation authority is required",
+      expectedDigest: path,
+    },
+    fail,
+    isOwnError: (error) => error instanceof CodexActivationError,
+  });
+  const context = deepFreeze({
+    observation: validateCodexHostActivationObservation(source.parsed),
+    evidenceSource: "operator_pinned_file" as const,
+    sourcePath: source.canonicalPath,
+    observationFileSha256: source.fileSha256,
+    observationSourceIdentityDigest: source.sourceIdentityDigest,
+  });
+  hostActivationObservationContexts.add(context);
+  return context;
+}
+
+export function createCodexHostActivationReceipt(
+  installationContextValue: unknown,
+  observationContextValue: unknown,
+): CodexHostActivationReceipt {
+  const installation = assertCodexActivationReceiptContext(
+    installationContextValue,
+  ).receipt;
+  const observationContext = assertCodexHostActivationObservationContext(
+    observationContextValue,
+  );
+  const observation = observationContext.observation;
+  if (
+    observation.installationReceiptDigest !== installation.receiptDigest ||
+    observation.activationAuthorityDigest !== installation.activationAuthorityDigest ||
+    observation.hookDefinitionDigest !== installation.binding.hookDefinitionDigest
+  ) {
+    fail(
+      "CODEX_ACTIVATION_HOST_MISMATCH",
+      "observed installation receipt or activation authority",
+    );
+  }
+  const assessment = assessCodexActivationTrust(
+    installation.binding,
+    observation.approvedHookDefinitionDigests,
+  );
+  if (!assessment.currentDefinitionApproved) {
+    fail(
+      "CODEX_ACTIVATION_APPROVAL_REQUIRED",
+      installation.binding.hookDefinitionDigest,
+    );
+  }
+  const basis = {
+    schemaVersion: CODEX_ADAPTER_HOST_ACTIVATION_RECEIPT_VERSION,
+    installationReceiptDigest: installation.receiptDigest,
+    activationAuthorityDigest: installation.activationAuthorityDigest,
+    activationHostDigest: observation.activationHostDigest,
+    hookDefinitionDigest: installation.binding.hookDefinitionDigest,
+    hostProduct: "Codex CLI" as const,
+    hostVersion: observation.hostVersion,
+    observedAt: observation.observedAt,
+    sessionId: observation.sessionId,
+    hookEventName: "SessionStart" as const,
+    source: observation.source,
     approvedHookDefinitionDigests:
       assessment.approvedHookDefinitionDigests,
     currentDefinitionApproved: true as const,
     activationState: "host_observed_active" as const,
     hookFired: true as const,
-    evidenceDigest: sha(observation.evidenceDigest, "evidenceDigest"),
+    evidenceDigest: observation.evidenceDigest,
+    evidenceSource: observationContext.evidenceSource,
+    observationDigest: observation.observationDigest,
+    observationFileSha256: observationContext.observationFileSha256,
+    observationSourceIdentityDigest:
+      observationContext.observationSourceIdentityDigest,
     hostTrustHashRepresentation: "opaque_not_exported" as const,
     attributionNote:
-      "operator-observed Codex trust approval and hook fire; TCRN local definition digest is not asserted to be Codex's opaque internal trust hash",
+      "activation-host context or operator-pinned observation records Codex trust approval and hook fire; TCRN does not assert host identity or equality with Codex's opaque internal trust hash",
   };
   return deepFreeze({ ...basis, receiptDigest: canonicalSha256(basis) });
 }

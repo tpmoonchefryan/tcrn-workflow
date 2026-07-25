@@ -90,6 +90,7 @@ import {
   planCodexAdapterRollback,
   readCodexAdapterInstallationReceipt,
   readCodexActivationInstallationReceipt,
+  readCodexHostActivationObservation,
   installCodexAdapterBundle,
   installCodexAdapterActivation,
   admitCodexAdapterInstallationRoot,
@@ -121,6 +122,8 @@ import type {
   CodexAdapterActivationHostContext,
   CodexAdapterHostContext,
   CodexAdapterInstallationFileIdentity,
+  CodexHostActivationObservationContext,
+  CodexHostActivationObservationFileIdentity,
   ClaudeAdapterHostContext,
   ClaudeAdapterActivationHostContext,
   ClaudeAdapterInstallationFileIdentity,
@@ -186,6 +189,8 @@ export interface CliIo {
   readonly codexAdapterHost?: CodexAdapterHostContext;
   readonly codexAdapterActivationHost?: CodexAdapterActivationHostContext;
   readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
+  readonly codexHostActivationObservation?: CodexHostActivationObservationContext;
+  readonly codexHostActivationObservationAuthority?: CodexHostActivationObservationFileIdentity;
   readonly claudeAdapterHost?: ClaudeAdapterHostContext;
   readonly claudeAdapterActivationHost?: ClaudeAdapterActivationHostContext;
   readonly claudeAdapterInstallationAuthority?: ClaudeAdapterInstallationFileIdentity;
@@ -198,6 +203,8 @@ const AUTHORITY_IO_FIELDS = Object.freeze([
   "codexAdapterHost",
   "codexAdapterActivationHost",
   "codexAdapterInstallationAuthority",
+  "codexHostActivationObservation",
+  "codexHostActivationObservationAuthority",
   "claudeAdapterHost",
   "claudeAdapterActivationHost",
   "claudeAdapterInstallationAuthority",
@@ -542,7 +549,7 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
 export const COMMAND_CATALOG = Object.freeze([
   { name: "adapter-activate", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "capability-manifest-digest", required: true, valueKind: "string" }, { name: "step3", required: false, valueKind: "boolean" }] },
   { name: "adapter-activation-assess", availability: "cli", mutates: false, flags: [{ name: "binding", required: true, valueKind: "json" }, { name: "approved-definition-digests", required: true, valueKind: "json" }] },
-  { name: "adapter-activation-record", availability: "cli", mutates: false, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }, { name: "approved-definition-digests", required: true, valueKind: "json" }, { name: "observation", required: true, valueKind: "json" }] },
+  { name: "adapter-activation-record", availability: "cli", mutates: false, authorityBearing: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: false, valueKind: "string" }, { name: "observation-file", required: false, valueKind: "string" }] },
   { name: "adapter-deactivate", availability: "cli", mutates: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }] },
   { name: "adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
@@ -858,29 +865,38 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     const values = parseArguments(rest, [
       "activation-receipt",
       "activation-receipt-digest",
-      "approved-definition-digests",
-      "observation",
+      "observation-file",
     ]);
-    required(values, [
-      "activation-receipt",
-      "activation-receipt-digest",
-      "approved-definition-digests",
-      "observation",
-    ]);
+    required(values, ["activation-receipt"]);
     const receiptPath = values["activation-receipt"] ?? "";
-    const context = await readCodexActivationInstallationReceipt(receiptPath, {
-      expectedCanonicalPath: receiptPath,
-      expectedFileSha256: values["activation-receipt-digest"] ?? "",
-    });
+    const installationContext = await readCodexActivationInstallationReceipt(
+      receiptPath,
+      suppliedAuthority(
+        io.codexAdapterInstallationAuthority,
+        receiptPath,
+        values["activation-receipt-digest"],
+      ),
+    );
+    const observationPath = values["observation-file"];
+    if (
+      io.codexHostActivationObservation !== undefined &&
+      observationPath !== undefined
+    ) {
+      fail(
+        "CLI_AUTHORITY_AMBIGUOUS",
+        "activation observation supplied by both host context and file",
+      );
+    }
+    const observationContext = io.codexHostActivationObservation ??
+      await readCodexHostActivationObservation(
+        observationPath ?? "",
+        io.codexHostActivationObservationAuthority,
+      );
     io.write(
       canonicalJson(
         createCodexHostActivationReceipt(
-          context.receipt,
-          jsonValue(
-            values["approved-definition-digests"],
-            "approved-definition-digests",
-          ),
-          jsonValue(values.observation, "observation"),
+          installationContext,
+          observationContext,
         ),
       ),
     );
@@ -2019,6 +2035,12 @@ export async function runOperatorCli(
       : {
         codexAdapterInstallationAuthority:
           context.codexAdapterInstallationAuthority,
+      }),
+    ...(context.codexHostActivationObservationAuthority === undefined
+      ? {}
+      : {
+        codexHostActivationObservationAuthority:
+          context.codexHostActivationObservationAuthority,
       }),
     ...(context.claudeAdapterHost === undefined
       ? {}

@@ -12,6 +12,7 @@ import type { Readable, Writable } from "node:stream";
 
 import {
   FRAMEWORK_VERSION,
+  assertOperatorMcpAuthorityOutputGranted,
   assertOperatorMcpWriteGranted,
   readOperatorAuthority,
 } from "../../core/src/index.js";
@@ -41,6 +42,7 @@ interface CatalogEntry {
   readonly name: string;
   readonly availability: "cli" | "programmatic-only" | "fixture-only";
   readonly mutates: boolean;
+  readonly authorityBearing?: boolean;
   readonly flags: readonly CatalogFlag[];
 }
 
@@ -129,7 +131,7 @@ function toolDescriptor(entry: CatalogEntry): Readonly<Record<string, unknown>> 
   );
   return {
     name: toolName(entry.name),
-    description: `${entry.mutates ? "Governed write" : "Read-only"} Workflow command: ${entry.name}. Stable CLI reason codes are preserved.`,
+    description: `${entry.mutates ? "Governed write" : entry.authorityBearing ? "Authority-bearing output" : "Read-only"} Workflow command: ${entry.name}. Stable CLI reason codes are preserved.`,
     inputSchema: {
       type: "object",
       properties,
@@ -138,9 +140,9 @@ function toolDescriptor(entry: CatalogEntry): Readonly<Record<string, unknown>> 
       additionalProperties: false,
     },
     annotations: {
-      readOnlyHint: !entry.mutates,
+      readOnlyHint: !(entry.mutates || entry.authorityBearing === true),
       destructiveHint: entry.mutates,
-      idempotentHint: !entry.mutates,
+      idempotentHint: !(entry.mutates || entry.authorityBearing === true),
       openWorldHint: false,
     },
   };
@@ -265,12 +267,12 @@ export class WorkflowMcpDispatcher {
     if (!entry || entry.availability === "fixture-only") {
       fail("MCP_TOOL_UNKNOWN", name);
     }
-    if (entry.mutates) {
+    if (entry.mutates || entry.authorityBearing === true) {
       if (!this.#options.authorityPinsPath ||
         !this.#options.authorityPinsDigest) {
         fail(
           "OPERATOR_AUTHORITY_REQUIRED",
-          `MCP write requires pinned authority: ${entry.name}`,
+          `MCP ${entry.mutates ? "write" : "authority-bearing output"} requires pinned authority: ${entry.name}`,
         );
       }
       const context = await readOperatorAuthority(
@@ -281,7 +283,11 @@ export class WorkflowMcpDispatcher {
         },
         this.#options.clock(),
       );
-      assertOperatorMcpWriteGranted(context, entry.name);
+      if (entry.mutates) {
+        assertOperatorMcpWriteGranted(context, entry.name);
+      } else {
+        assertOperatorMcpAuthorityOutputGranted(context, entry.name);
+      }
     }
     const output: string[] = [];
     await runOperatorCli([

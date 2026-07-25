@@ -25,6 +25,7 @@ import {
   CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
   validateCodexActivationInstallationReceipt,
   CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
+  CODEX_HOST_ACTIVATION_OBSERVATION_VERSION,
   CODEX_ADAPTER_HOST_VERSION,
   CODEX_ADAPTER_REQUEST_VERSION,
   CODEX_HOOKS_PATH,
@@ -33,6 +34,7 @@ import {
   CODEX_SESSION_SUMMARY_PATH,
   admitCodexAdapterHostInput,
   admitCodexAdapterActivationHostInput,
+  admitCodexHostActivationObservation,
   assessCodexActivationTrust,
   calculateCodexAdapterRequestDigest,
   codexHookDefinitionForDigests,
@@ -215,6 +217,33 @@ function activationHostFor(bundle, inert, stage = "step3", overrides = {}) {
     ...basis,
     hostDigest: canonicalSha256(basis),
   });
+}
+
+function hostActivationObservation(installed, activationHost, overrides = {}) {
+  const basis = {
+    schemaVersion: CODEX_HOST_ACTIVATION_OBSERVATION_VERSION,
+    installationReceiptDigest: installed.receipt.receiptDigest,
+    activationAuthorityDigest: installed.receipt.activationAuthorityDigest,
+    activationHostDigest: activationHost.input.hostDigest,
+    hookDefinitionDigest: installed.receipt.binding.hookDefinitionDigest,
+    approvedHookDefinitionDigests: [
+      installed.receipt.binding.hookDefinitionDigest,
+    ],
+    hostProduct: "Codex CLI",
+    hostVersion: activationHost.input.hostVersionReadback,
+    observedAt: "2026-07-25T01:15:00Z",
+    sessionId: "session:host-probe",
+    hookEventName: "SessionStart",
+    source: "startup",
+    trustApprovalObserved: true,
+    hookFired: true,
+    evidenceDigest: hash("hermetic-host-observation"),
+    ...overrides,
+  };
+  return {
+    ...basis,
+    observationDigest: canonicalSha256(basis),
+  };
 }
 
 async function roots() {
@@ -617,35 +646,36 @@ test("only an explicit approval-and-fire observation creates a host activation r
     const bundle = bundleFor();
     const inert = await installInert(fixtureRoots, bundle);
     const installed = await installActivation(fixtureRoots, bundle, inert);
-    const observation = {
-      hostProduct: "Codex CLI",
-      hostVersion: "0.139.0",
-      observedAt: "2026-07-24T16:18:00Z",
-      sessionId: "session:host-probe",
-      hookEventName: "SessionStart",
-      source: "startup",
-      trustApprovalObserved: true,
-      hookFired: true,
-      evidenceDigest: hash("hermetic-host-observation"),
-    };
+    const installation = await readCodexActivationInstallationReceipt(
+      fixtureRoots.activationReceiptPath,
+      installed.authority,
+    );
+    const activationHost = activationHostFor(bundle, inert);
+    const observation = hostActivationObservation(installed, activationHost);
     reason("CODEX_ACTIVATION_APPROVAL_REQUIRED", () =>
-      createCodexHostActivationReceipt(
-        installed.receipt,
-        [],
-        observation,
+      admitCodexHostActivationObservation(
+        activationHost,
+        hostActivationObservation(installed, activationHost, {
+          approvedHookDefinitionDigests: [],
+        }),
       ),
     );
     reason("CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED", () =>
-      createCodexHostActivationReceipt(
-        installed.receipt,
-        [installed.receipt.binding.hookDefinitionDigest],
-        { ...observation, hookFired: false },
-      ),
+      admitCodexHostActivationObservation(activationHost, {
+        ...observation,
+        hookFired: false,
+      }),
+    );
+    reason("CODEX_ACTIVATION_RECEIPT_INVALID", () =>
+      createCodexHostActivationReceipt(installed.receipt, observation),
+    );
+    const observationContext = admitCodexHostActivationObservation(
+      activationHost,
+      observation,
     );
     const receipt = createCodexHostActivationReceipt(
-      installed.receipt,
-      [installed.receipt.binding.hookDefinitionDigest],
-      observation,
+      installation,
+      observationContext,
     );
     assert.equal(receipt.activationState, "host_observed_active");
     assert.equal(receipt.currentDefinitionApproved, true);

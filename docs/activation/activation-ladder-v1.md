@@ -181,9 +181,16 @@ installation receipt always has:
 - `installationDoesNotProveActivation: true`;
 - `activationAuthorityDigest`: the independently admitted activation-host digest.
 
-Only `adapter-activation-record`, given an explicit approval-and-fire observation,
-can emit `host_observed_active`. The approved set contains TCRN SHA-256 digests of
-the exact local definition bytes. Codex stores a host-owned `trusted_hash`, which
+Only `adapter-activation-record`, under the separate authority-bearing-output
+grant, can emit `host_observed_active`. It accepts the descriptor-bound activation
+receipt plus either a real branded activation-host observation context or an
+operator-pinned observation file; it never accepts a self-described approval set
+or observation JSON. The observation binds the active receipt, activation
+authority and host digest, exact hook definition, approved definition set,
+host/session/event/fire facts, and evidence digest. The v2 host receipt binds that
+observation digest, its evidence source, and where applicable the observation
+file SHA-256 and source identity digest. The approved set contains TCRN SHA-256
+digests of the exact local definition bytes. Codex stores a host-owned `trusted_hash`, which
 the live probe observed out of band, but its normalized input and digest-domain
 semantics are opaque. Current TCRN receipts do not ingest that host value, so they
 mark it `opaque_not_exported` and never assert digest equality. The

@@ -191,6 +191,26 @@
       "expectedMatches": 1,
       "test": "tests/act12-hook-root-binding.test.mjs",
       "testName": "INC-002: Claude hook command executes the admitted root from an attacker cwd"
+    },
+    {
+      "id": "INC-006-authority-output-gate",
+      "rationale": "adapter-activation-record returns host_observed_active, so MCP must require a separately granted authority-output capability before it parses caller arguments. Treating it as a read lets a no-pins caller ask the CLI to mint an authority-bearing receipt.",
+      "file": "packages/cli/src/mcp.ts",
+      "find": "if (entry.mutates || entry.authorityBearing === true) {",
+      "replace": "if (entry.mutates) {",
+      "expectedMatches": 1,
+      "test": "tests/act13-authority-output.test.mjs",
+      "testName": "ACT13: authority output requires an exact grant and both pinned evidence files"
+    },
+    {
+      "id": "INC-006-observation-context-brand",
+      "rationale": "A host_observed_active receipt can only be constructed from a WeakSet-branded activation-host observation context or a pinned observation file. Removing the brand check would let a caller forge a plain object or structured clone into the authority-bearing output path.",
+      "file": "packages/core/src/codex-adapter-activation.ts",
+      "find": "!hostActivationObservationContexts.has(value)",
+      "replace": "false",
+      "expectedMatches": 1,
+      "test": "tests/act13-authority-output.test.mjs",
+      "testName": "ACT13: self-described, tampered, forged, cloned, and mismatched observations cannot mint activation"
     }
   ]
 }

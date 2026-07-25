@@ -203,6 +203,7 @@ async function operatorPinsForCompatibility(admitted) {
       profileAdmission: null,
       contextRoute: null,
       codexAdapterInstallation: null,
+      codexHostActivationObservation: null,
       claudeAdapterInstallation: null,
       compatibilityAdmission: admitted.authority,
     },
@@ -212,7 +213,7 @@ async function operatorPinsForCompatibility(admitted) {
       claudeAdapter: null,
       claudeAdapterActivation: null,
     },
-    mcp: { writeCommands: [] },
+    mcp: { writeCommands: [], authorityOutputCommands: [] },
   };
   const authority = { ...authorityBasis, authorityDigest: canonicalSha256(authorityBasis) };
   const authorityBytes = canonicalJson(authority);
