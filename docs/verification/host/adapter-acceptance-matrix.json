@@ -1,7 +1,7 @@
 {
   "schemaVersion": "tcrn.adapter-acceptance-matrix.v1",
   "observedAt": "2026-07-25",
-  "purpose": "INIT-009 S076/S080 and INIT-010 S057 cross-host acceptance snapshot. A cell records the strongest evidence actually held; unavailable cells are an accepted no-overclaim result, not silently treated as passed capability.",
+  "purpose": "INIT-009 EPIC-024/S076/S080 and INIT-010 S057 cross-host acceptance snapshot. A cell records the strongest evidence actually held; unavailable cells are an accepted no-overclaim result, not silently treated as passed capability.",
   "hosts": {
     "codex": {
       "product": "Codex CLI",
@@ -28,7 +28,7 @@
         "liveHostMeasured": false,
         "exactGeneratedBytesLiveMeasured": false,
         "source": "tests/act12-hook-root-binding.test.mjs",
-        "boundary": "The current definition embeds the admitted absolute project root and is proven against a hostile fire-time cwd. July 25 live receipts bind superseded command bytes and cannot prove this candidate; fresh Owner /hooks review, approval and fire are pending."
+        "boundary": "The current definition embeds the admitted absolute project root and is proven against a hostile fire-time cwd. The interpreter is the bare name node and stays PATH-resolved at fire time (INC-011, measured and disclosed, not closed). July 25 live receipts bind superseded command bytes and cannot prove this candidate; fresh Owner /hooks review, approval and fire are pending."
       },
       "claude": {
         "governance": "observe",
@@ -36,37 +36,37 @@
         "liveHostMeasured": false,
         "exactGeneratedBytesLiveMeasured": false,
         "source": "tests/act12-hook-root-binding.test.mjs",
-        "boundary": "The current absolute-root Claude command is code- and fixture-proven only. The prior live observation predates these bytes, and this change makes no Claude live claim."
+        "boundary": "The current absolute-root, handler-digest-pinned Claude command is code- and fixture-proven only; its interpreter is the bare name node and stays PATH-resolved at fire time (INC-011, measured and disclosed, not closed). The prior live observation predates these bytes, and this change makes no Claude live claim."
       }
     },
     {
       "id": "tool-lifecycle-observe",
       "codex": {
         "governance": "unavailable",
-        "evidenceClass": "hermetic",
-        "liveHostMeasured": false,
-        "exactGeneratedBytesLiveMeasured": false,
-        "source": "packages/core/src/observe-hook-handler.ts",
-        "boundary": "The handler is child-process proven but the Codex activation rung registers only SessionStart."
+        "evidenceClass": "live_exact",
+        "liveHostMeasured": true,
+        "exactGeneratedBytesLiveMeasured": true,
+        "source": "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json",
+        "boundary": "The exact generated fail-open handler live-fired PostToolUse three times on Codex CLI 0.139.0 and also fired the four compact/subagent events in the bounded evidence project. SessionEnd is absent from the pinned 0.139.0 schema. The shipped activation rung still registers only SessionStart, so live evidence does not promote this cell into a shipped activation capability."
       },
       "claude": {
         "governance": "unavailable",
-        "evidenceClass": "hermetic",
-        "liveHostMeasured": false,
-        "exactGeneratedBytesLiveMeasured": false,
-        "source": "packages/core/src/observe-hook-handler.ts",
-        "boundary": "The amended observe event set is generated and proven, but no live Claude settings fragment registers it."
+        "evidenceClass": "live_mechanism_only",
+        "liveHostMeasured": true,
+        "exactGeneratedBytesLiveMeasured": true,
+        "source": "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json",
+        "boundary": "The exact generated handler live-fired SessionEnd three times on Claude Code 2.1.201. The model probe returned API status 402 before PostToolUse or the compact/subagent events could occur, and no shipped multi-event activation registration is claimed."
       }
     },
     {
       "id": "execution-collection",
       "codex": {
         "governance": "observe",
-        "evidenceClass": "live_mechanism_only",
+        "evidenceClass": "live_exact",
         "liveHostMeasured": true,
-        "exactGeneratedBytesLiveMeasured": false,
-        "source": "docs/verification/host/codex-live-integration-2026-07-25.json",
-        "boundary": "Codex Desktop 0.146.0-alpha.3.1 emitted App-visible sub_agent_activity and completed three real subagent rollouts. Those rollout records are not the pinned App Server notification stream accepted by S054, so no Workflow execution receipt or App-visible receipt comparison is claimed."
+        "exactGeneratedBytesLiveMeasured": true,
+        "source": "docs/verification/host/codex-app-server-execution-collection.json",
+        "boundary": "Codex CLI 0.139.0 was attached once by a bounded evidence harness. The current collector correlated raw spawn/turn/final notifications with same-connection thread/read(includeTurns=true), passed 28 exact comparisons, and projected one unsigned Workflow execution receipt with freshContext=true. The collector itself still contains no host-driving implementation."
       },
       "claude": {
         "governance": "unavailable",
@@ -173,6 +173,52 @@
       }
     }
   ],
+  "observeEventCoverage": {
+    "eventSet": [
+      "PostToolUse",
+      "SessionEnd",
+      "PreCompact",
+      "PostCompact",
+      "SubagentStart",
+      "SubagentStop"
+    ],
+    "acceptance": "accepted_with_explicit_unavailable_cells",
+    "liveEventHostCells": 6,
+    "explicitUnavailableEventHostCells": 6,
+    "cells": [
+      {
+        "event": "PostToolUse",
+        "codex": "live_exact",
+        "claude": "unavailable_host_account"
+      },
+      {
+        "event": "SessionEnd",
+        "codex": "unavailable_version_pinned",
+        "claude": "live_exact"
+      },
+      {
+        "event": "PreCompact",
+        "codex": "live_exact",
+        "claude": "unavailable_host_account"
+      },
+      {
+        "event": "PostCompact",
+        "codex": "live_exact",
+        "claude": "unavailable_host_account"
+      },
+      {
+        "event": "SubagentStart",
+        "codex": "live_exact",
+        "claude": "unavailable_host_account"
+      },
+      {
+        "event": "SubagentStop",
+        "codex": "live_exact",
+        "claude": "unavailable_host_account"
+      }
+    ],
+    "boundary": "Every MIN-046 observe event has at least one exact live host receipt, but neither host has complete six-event coverage. Codex 0.139.0 SessionEnd is version-pinned unavailable and must not be renamed Stop; Claude's remaining five cells are unavailable because the host account returned API status 402 before inference or tool use."
+  },
   "negativeMatrix": [
     {
       "id": "bypass-no-registration",
@@ -217,7 +263,7 @@
     {
       "id": "replayed-notification",
       "expectedDisposition": "refused",
-      "proof": "ACT10 rejects duplicate thread, turn and item lifecycle events."
+      "proof": "ACT10 rejects duplicate spawn start/completion, turn lifecycle, completed items and duplicate thread/read responses."
     },
     {
       "id": "cross-session-notification",
@@ -237,24 +283,30 @@
     {
       "id": "fresh-context-unproven",
       "expectedDisposition": "unavailable",
-      "proof": "ACT10 derives freshContext only from a newly created non-forked subagent thread after the spawn completion."
+      "proof": "ACT10 derives freshContext only from a matching spawn start/completion pair and a newly created non-forked subagent readback whose receiver, session, parent and creation interval agree."
     },
     {
       "id": "final-message-phase-unknown",
       "expectedDisposition": "unavailable",
-      "proof": "ACT10 accepts only phase=final_answer and orders candidates by completedAtMs inside the completed turn."
+      "proof": "ACT10 accepts only phase=final_answer, orders candidates by completedAtMs inside the completed turn, and requires raw final bytes to match readback."
     }
   ],
   "storyAcceptance": {
     "S076": "verified",
     "S080": "accepted_with_explicit_unavailable_cells",
-    "S057": "partial_live_app_record_observed_receipt_comparison_missing"
+    "S057": "verified_live_app_server_readback_receipt_compared"
+  },
+  "epicAcceptance": {
+    "EPIC-024": "accepted_with_explicit_unavailable_cells"
   },
   "notClaimed": [
     "The current Codex absolute-root development candidate has not yet been installed, approved or live-fired and is not an accepted Workflow release.",
     "No current Claude absolute-root definition is claimed live; Claude work in this change is code and fixture only.",
-    "No live App Server attach or App Server observer-driven Codex subagent invocation has been performed.",
-    "Codex App-visible multi-agent records exist, but none has been converted to or compared with a Workflow execution receipt.",
+    "The S057 live attach is a bounded evidence harness, not a shipped App Server Controller or authority to drive ordinary user sessions.",
+    "The S057 receipt is unsigned attribution evidence; it proves neither host actor identity nor complete event coverage.",
+    "EPIC-024 is accepted with six explicit unavailable host-event cells; neither Codex nor Claude has complete six-event live coverage.",
+    "Codex 0.139.0 SessionEnd is version-pinned unavailable and is not represented by Stop; Claude's remaining five observe events were not reached after API status 402.",
+    "The live EPIC-024 definitions belong to a bounded evidence project and do not create a shipped multi-event activation installer.",
     "The running Codex Desktop process did not hot-load the newly registered Workflow MCP server, and no successful host-routed MCP tool call is claimed.",
     "No host actor identity, host signature, complete event coverage, PreToolUse gate, PermissionRequest responder or Stop blocker is claimed.",
     "MIN-046 keeps enforce hooks unauthorized until a separate Owner ruling with blast-radius, independent kill-switch and real fail-closed red evidence."

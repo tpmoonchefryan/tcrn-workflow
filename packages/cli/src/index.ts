@@ -124,6 +124,7 @@ import type {
   CodexAdapterInstallationFileIdentity,
   CodexHostActivationObservationContext,
   CodexHostActivationObservationFileIdentity,
+  CodexHostActivationObservationFreshness,
   ClaudeAdapterHostContext,
   ClaudeAdapterActivationHostContext,
   ClaudeAdapterInstallationFileIdentity,
@@ -191,6 +192,10 @@ export interface CliIo {
   readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
   readonly codexHostActivationObservation?: CodexHostActivationObservationContext;
   readonly codexHostActivationObservationAuthority?: CodexHostActivationObservationFileIdentity;
+  // INC-017: the freshness bound travels with the pinned observation identity. It is
+  // authority supply, not a convenience, so it joins AUTHORITY_IO_FIELDS below and a
+  // caller mixing it with operator pins is ambiguous like every other authority.
+  readonly codexHostActivationObservationFreshness?: CodexHostActivationObservationFreshness;
   readonly claudeAdapterHost?: ClaudeAdapterHostContext;
   readonly claudeAdapterActivationHost?: ClaudeAdapterActivationHostContext;
   readonly claudeAdapterInstallationAuthority?: ClaudeAdapterInstallationFileIdentity;
@@ -205,6 +210,7 @@ const AUTHORITY_IO_FIELDS = Object.freeze([
   "codexAdapterInstallationAuthority",
   "codexHostActivationObservation",
   "codexHostActivationObservationAuthority",
+  "codexHostActivationObservationFreshness",
   "claudeAdapterHost",
   "claudeAdapterActivationHost",
   "claudeAdapterInstallationAuthority",
@@ -621,7 +627,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "lease-recovery-break", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "claim-token", required: true, valueKind: "string" }] },
   { name: "migration-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "target-version", required: true, valueKind: "integer" }, { name: "dry-run", required: true, valueKind: "boolean" }] },
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
-  { name: "persona-render", availability: "cli", mutates: false, flags: [] },
+  { name: "persona-render", availability: "cli", mutates: false, flags: [{ name: "profile-id", required: true, valueKind: "string" }] },
   { name: "persona-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "profile-authorize", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "operation", required: true, valueKind: "string" }, { name: "workspace-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "command", required: true, valueKind: "string", nullSentinel: "-" }, { name: "receipt-digest", required: false, valueKind: "string" }] },
   { name: "profile-generate", availability: "cli", mutates: false, flags: [{ name: "mode", required: true, valueKind: "string" }] },
@@ -644,7 +650,144 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
 ] as const);
 
+// INC-016: `mutates` and `authorityBearing` name two DIFFERENT authorization
+// categories, and the operator bundle keeps their grant lists disjoint
+// (validateOperatorAuthorityBundle refuses a command present in both). Nothing
+// refused the FLAG pair, and the MCP dispatcher tests `mutates` first -- so an entry
+// declaring both would be satisfied by a writeCommands grant alone: a write grant
+// carrying authority-bearing output, which operator-authority-mcp-v1 forbids
+// outright ("A write grant never authorizes it").
+//
+// The exclusion lives at the declaration, not in a consumer. Three sites read the
+// pair independently (tool description, tool annotations, grant gate), mcp.ts
+// re-types the catalog through its own local interface, and the `commands` verb
+// publishes it to third parties. A contradictory catalog must therefore not be
+// constructible, rather than merely unusable through one surface.
+export function assertCatalogCategoriesExclusive(
+  commands: readonly {
+    readonly name: string;
+    readonly mutates: boolean;
+    readonly authorityBearing?: boolean;
+  }[],
+): void {
+  for (const entry of commands) {
+    if (entry.mutates && entry.authorityBearing === true) {
+      fail(
+        "CLI_CATALOG_CATEGORY_AMBIGUOUS",
+        `${entry.name}: a command is either a governed write or authority-bearing output, never both`,
+      );
+    }
+  }
+}
+
+// Fail at module load, not at first use: the contradiction is a property of the
+// declaration above, and mcp.ts imports this module before it can dispatch anything.
+assertCatalogCategoriesExclusive(COMMAND_CATALOG);
+
+// INC-012: authority-bearing is a property of what a verb EMITS, not a flag its author
+// remembered to set. tests/act13:355 enumerated the flag, so a future verb minting
+// host-state output without it reddened nothing. These are the field names and the state
+// tokens that make a document readable as observed host trust state; the act13 vocabulary
+// test binds this list two-way to the authority documents core actually declares, so a new
+// host-state field cannot land without either entering this list or failing that test.
+export const AUTHORITY_OUTPUT_FIELDS = Object.freeze([
+  "activationState",
+  "currentDefinitionApproved",
+  "hookFired",
+  "trustApprovalObserved",
+] as const);
+
+// Retired tokens stay guarded. "approved_current_definition" was withdrawn from the product
+// by INC-012 because only the caller-supplied comparison ever minted it; keeping it here
+// means re-minting it under any field name still fails closed.
+export const AUTHORITY_STATE_TOKENS = Object.freeze([
+  "approved_current_definition",
+  "host_observed_active",
+  "pending_host_approval",
+] as const);
+
+const authorityOutputNeedles = Object.freeze([
+  ...AUTHORITY_OUTPUT_FIELDS,
+  ...AUTHORITY_STATE_TOKENS,
+].map((token) => `"${token}"`));
+
+// Only the three properties the boundary judges. The catalog's own literal type carries
+// more, and mcp.ts declares its own fuller view of the same rows.
+interface CatalogOutputDeclaration {
+  readonly name: string;
+  readonly mutates: boolean;
+  readonly authorityBearing?: boolean;
+}
+
+// Object KEYS carry the claim, so caller text that merely mentions a guarded name inside a
+// string value is not a finding -- otherwise a knowledge body or a conference position
+// quoting these docs would fail a read closed. A guarded token under a differently spelled
+// state key is the same claim wearing another name, so the token space is checked too.
+export function authorityShapedOutputFields(output: string): readonly string[] {
+  if (!authorityOutputNeedles.some((needle) => output.includes(needle))) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    // Bytes that spell the claim but cannot be read are refused rather than waved through.
+    return Object.freeze(authorityOutputNeedles
+      .filter((needle) => output.includes(needle))
+      .map((needle) => needle.slice(1, -1))
+      .sort());
+  }
+  const found = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const child of node as readonly unknown[]) walk(child);
+      return;
+    }
+    if (typeof node !== "object" || node === null) return;
+    for (const [key, child] of Object.entries(node as Readonly<Record<string, unknown>>)) {
+      if ((AUTHORITY_OUTPUT_FIELDS as readonly string[]).includes(key)) found.add(key);
+      if (typeof child === "string" && /state$/iu.test(key) &&
+        (AUTHORITY_STATE_TOKENS as readonly string[]).includes(child)) {
+        found.add(key);
+      }
+      walk(child);
+    }
+  };
+  walk(parsed);
+  return Object.freeze([...found].sort());
+}
+
+// The write boundary every dispatched verb passes through. The catalog declares which verbs
+// may speak about host trust state; this reads the bytes and checks that declaration rather
+// than trusting it. A verb absent from the catalog has declared nothing and may not speak.
+export function assertDeclaredOutputCategory(command: string, output: string): void {
+  const fields = authorityShapedOutputFields(output);
+  if (fields.length === 0) return;
+  const entry = (COMMAND_CATALOG as readonly CatalogOutputDeclaration[])
+    .find((candidate) => candidate.name === command);
+  if (entry !== undefined && (entry.mutates || entry.authorityBearing === true)) return;
+  fail(
+    "CLI_AUTHORITY_OUTPUT_UNDECLARED",
+    `${command} emits host trust state (${fields.join(",")}) without a catalog mutates or authorityBearing declaration`,
+  );
+}
+
 export async function runCli(arguments_: readonly string[], io: CliIo): Promise<void> {
+  const command = arguments_[0];
+  if (!command || command.startsWith("--")) {
+    fail("CLI_COMMAND_REQUIRED", "A governed command is required");
+  }
+  // INC-012: the dispatcher writes only through this wrapper, so the output-category guard
+  // covers every verb -- including ones added later, which is the whole point of moving the
+  // check from the flag to the bytes.
+  await dispatchCli(arguments_, {
+    ...io,
+    write: (value: string): void => {
+      assertDeclaredOutputCategory(command, value);
+      io.write(value);
+    },
+  });
+}
+
+async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<void> {
   const command = arguments_[0];
   if (!command || command.startsWith("--")) {
     fail("CLI_COMMAND_REQUIRED", "A governed command is required");
@@ -721,11 +864,11 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     io.write(canonicalJson({ reasonCode: "PERSONA_BUNDLE_GENERATED", bundle: generateCorePersonaBundle() })); return;
   }
   if (command === "persona-render") {
-    // WSG-4 Step-3: render the single advisory persona (Verity, closed allowlist) into
-    // the bounded, digest-bound authority summary. Stdout only — the on-disk render is
-    // written by claude-adapter-install --step3, and this is the sole other reader of a
-    // render's .text (hygiene-tested). No flags: the persona is not a configuration surface.
-    io.write(canonicalJson(renderPersonaAuthoritySummary(generateCorePersonaBundle(), "profile:tcrn-verity-v1"))); return;
+    // Core Reference personas are conference-role reference data. Rendering is a
+    // non-mutating stdout-only aid for attributing a conference position; no host
+    // adapter consumes this output and no role is selected implicitly.
+    const values = parseArguments(rest, ["profile-id"]); required(values, ["profile-id"]);
+    io.write(canonicalJson(renderPersonaAuthoritySummary(generateCorePersonaBundle(), values["profile-id"] ?? ""))); return;
   }
   if (command === "persona-validate") {
     const values = parseArguments(rest, ["bundle"]); required(values, ["bundle"]);
@@ -891,6 +1034,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       await readCodexHostActivationObservation(
         observationPath ?? "",
         io.codexHostActivationObservationAuthority,
+        io.codexHostActivationObservationFreshness,
       );
     io.write(
       canonicalJson(
@@ -1010,21 +1154,13 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     required(values, ["request", "installation-root", "generation-id", "receipt-out"]);
     const request = jsonValue(values.request, "request");
     const bundle = generateClaudeAdapterBundle(request, io.claudeAdapterHost);
-    // WSG-4 Step-3 rides Step-2 activation: --step3 additionally renders the Verity
-    // persona summary, digest-binds the SessionStart handler to it, and persists
-    // persona-render.json on the same v2 receipt. --step3 without --step2 still runs
-    // the activation path (Step-3 is Step-2 plus the render). --step2 alone stays
-    // byte-identical to WSG-3 (no render digest, no render file).
+    // --step3 remains a compatibility alias for the activation rung, but it no
+    // longer installs or binds a Core Reference persona. Personas are conference-
+    // only position attributions; the main-session handler is identical for Step 2
+    // and Step 3 and explicitly preserves ordinary user-authorized repository work.
     const wantStep3 = booleanValue(values.step3, "step3");
     if (wantStep3 || booleanValue(values.step2, "step2")) {
-      let renderSource: string | undefined;
-      const scriptSource = wantStep3
-        ? (() => {
-          const render = renderPersonaAuthoritySummary(generateCorePersonaBundle(), "profile:tcrn-verity-v1");
-          renderSource = canonicalJson(render);
-          return generateSessionStartScript({ personaRenderDigest: render.renderDigest });
-        })()
-        : generateSessionStartScript();
+      const scriptSource = generateSessionStartScript();
       const scriptDigest = sessionStartScriptDigest(scriptSource);
       const installationRoot = await admitClaudeAdapterInstallationRoot(
         values["installation-root"] ?? "",
@@ -1041,9 +1177,6 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
         bundleDigest: bundle.bundleDigest,
         fragment,
         scriptSource,
-        // renderSource is set only on the Step-3 path; the installer reads it as
-        // `!== undefined`, so omitting the key is byte-equivalent to passing undefined.
-        ...(renderSource === undefined ? {} : { renderSource }),
       });
       io.write(canonicalJson(activation.receipt));
       return;
@@ -1083,9 +1216,9 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     return;
   }
   if (command === "claude-adapter-activation-uninstall") {
-    // S082: the operator entry point the v2 activation ladder was missing. Step-2/3
+    // S082: the operator entry point the v2 activation ladder was missing. Activated
     // installs emit a tcrn.claude-adapter-installation-generation.v2 receipt covering
-    // the four templates PLUS session-start.mjs (and persona-render.json when present),
+    // the four templates plus session-start.mjs,
     // which the v1 uninstall path cannot read -- so an activated project had no way to
     // be uninstalled from a shell. The receipt is read under its out-of-band digest,
     // the plan is bound to the receipt's own on-disk identity, and the shared executor
@@ -2005,13 +2138,17 @@ export async function runOperatorCli(
   if (!io.clock) {
     fail("CLI_ARGUMENT_MISSING", "clock");
   }
+  // INC-017: read the clock ONCE. The same instant has to bound the bundle window and
+  // the pinned observation's observedAt; two reads are two different instants, and a
+  // receipt could be minted against a moment the bundle was never checked at.
+  const verificationTime = io.clock();
   const context = await readOperatorAuthority(
     global["authority-pins"] as string,
     {
       expectedCanonicalPath: global["authority-pins"] as string,
       expectedFileSha256: global["authority-pins-digest"] as string,
     },
-    io.clock(),
+    verificationTime,
   );
   await runCli(arguments_.slice(index), {
     ...io,
@@ -2042,6 +2179,16 @@ export async function runOperatorCli(
         codexHostActivationObservationAuthority:
           context.codexHostActivationObservationAuthority,
       }),
+    // INC-017: notBefore/notAfter are the operator's OWN declared bundle window,
+    // already verified above to contain verificationTime. The operator, not a constant
+    // in this file, therefore decides how long one captured observation may be
+    // presented; rotating the bundle past a fire retires it unless a fresh observation
+    // is captured.
+    codexHostActivationObservationFreshness: {
+      notBefore: context.bundle.issuedAt,
+      notAfter: context.bundle.expiresAt,
+      verifiedAt: verificationTime,
+    },
     ...(context.claudeAdapterHost === undefined
       ? {}
       : { claudeAdapterHost: context.claudeAdapterHost }),

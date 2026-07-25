@@ -20,7 +20,12 @@ separate inert-generation and activation host inputs for Codex and Claude, the
 optional pinned `codexHostActivationObservation` file identity, and two disjoint,
 sorted MCP allowlists: `writeCommands` and `authorityOutputCommands`. Its
 `authorityDigest` binds all those fields. A command may appear in neither list or
-in exactly one list; overlap is invalid rather than a precedence rule.
+in exactly one list; overlap is invalid rather than a precedence rule. The catalog
+enforces the mirror image of that rule on the FLAG side: a command declares
+`mutates` or `authorityBearing`, never both. MCP resolves the write category first,
+so a both-category entry would be satisfied by a `writeCommands` grant alone, and
+the catalog therefore refuses to load one (`CLI_CATALOG_CATEGORY_AMBIGUOUS`); the
+published catalog schema states the same exclusion.
 
 Rotation writes a new bundle generation and advances the pinned document.
 Revocation advances the pins document to name the revoked authority digest or
@@ -46,6 +51,19 @@ installation receipt, activation authority, activation-host digest, exact hook
 definition, approved definition set, host/session/event/fire facts and evidence
 digest. The derived v2 receipt additionally binds the observation digest, evidence
 source, and (for the file route) the file SHA-256 and source identity digest.
+Neither route accepts an unbounded observation instant. An observation admitted
+through a branded activation-host context must have `observedAt` inside that
+context's `[contextIssuedAt, contextExpiresAt)` window, which the bound
+`hostDigest` covers and so cannot be widened after the fact. An observation
+admitted through the pinned file must have `observedAt` inside the bundle's own
+`[issuedAt, expiresAt)` window and at or before the operator verification time.
+The bound is deliberately the operator's declared window rather than a fixed
+maximum age: without it the same pinned bytes could be re-pinned under each new
+bundle generation and mint a fresh `host_observed_active` receipt
+indefinitely, which is the replay this contract already refuses for host
+inputs. A stale, future-dated or unbounded observation refuses with
+`CODEX_ACTIVATION_OBSERVATION_STALE` or
+`CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED`.
 
 ## Retest of the historical twelve
 
@@ -75,7 +93,11 @@ requires the current bundle to grant that exact command in `writeCommands`.
 Authority-bearing output is a separate category: it is not a write, but it can
 produce a receipt that carries authority. `adapter-activation-record` is the only
 such command and requires an exact `authorityOutputCommands` grant before MCP
-parses caller arguments. A write grant never authorizes it. Its MCP descriptor is
+parses caller arguments. The category is enforced against emitted bytes, not the
+declaration: every CLI write passes an output-category boundary that refuses
+`CLI_AUTHORITY_OUTPUT_UNDECLARED` when a verb that declares neither `mutates` nor
+`authorityBearing` emits a guarded host-state field or state token (INC-012).
+A write grant never authorizes it. Its MCP descriptor is
 therefore neither read-only nor destructive. The command accepts an activation
 receipt, an optional direct receipt digest, and an observation-file path; old
 inline `approved-definition-digests` and `observation` JSON flags are unknown.

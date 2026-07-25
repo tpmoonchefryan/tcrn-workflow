@@ -328,6 +328,7 @@ export type {
   CodexHostActivationObservation,
   CodexHostActivationObservationContext,
   CodexHostActivationObservationFileIdentity,
+  CodexHostActivationObservationFreshness,
   CodexHostActivationReceipt,
   CodexSessionSummary,
 } from "./codex-adapter-activation.js";
@@ -380,6 +381,7 @@ export type {
   CodexExecutionObservationInput,
   CodexExecutionReasonCode,
   CodexExecutionRecord,
+  CodexExecutionThreadReadback,
   CodexExecutionTranscript,
   CodexObservedExecution,
   CodexUnavailableExecution,
@@ -515,7 +517,6 @@ export {
   CLAUDE_ADAPTER_FRAGMENT_V2_VERSION,
   CLAUDE_ADAPTER_HOST_V2_VERSION,
   CLAUDE_ADAPTER_INSTALLATION_V2_VERSION,
-  CLAUDE_ADAPTER_PERSONA_RENDER_PATH,
   CLAUDE_ADAPTER_ROLLBACK_PLAN_VERSION,
   CLAUDE_ADAPTER_SESSION_START_PATH,
   ClaudeAdapterActivationError,
@@ -542,18 +543,12 @@ export type {
 } from "./claude-adapter-activation.js";
 export {
   SESSION_START_INJECTION_BUDGET_BYTES,
-  SESSION_START_REASON_CODES,
   SESSION_START_SCRIPT_VERSION,
-  SessionStartScriptError,
   generateSessionStartScript,
   sessionStartScriptDigest,
 } from "./claude-adapter-session-start.js";
-export type {
-  SessionStartReasonCode,
-  SessionStartScriptOptions,
-} from "./claude-adapter-session-start.js";
 export {
-  PERSONA_RENDER_ALLOWED_PROFILE_ID,
+  PERSONA_RENDER_ALLOWED_PROFILE_IDS,
   PERSONA_RENDER_BUDGET_BYTES,
   PERSONA_RENDER_REASON_CODES,
   PERSONA_RENDER_VERSION,
@@ -788,9 +783,11 @@ export {
   CORE_PERSONA_PROFILE_VERSION,
   CORE_PERSONA_REASON_CODES,
   CORE_PERSONA_SOURCE_MANIFEST_SHA256,
+  CORE_REFERENCE_PERSONA_IDS,
   CorePersonaError,
   generateCorePersonaBundle,
   generateCorePersonaReleaseLayers,
+  isCoreReferencePersonaId,
   validateCorePersonaBundle,
   validateCorePersonaProfile,
   validateCorePersonaProfileShape,

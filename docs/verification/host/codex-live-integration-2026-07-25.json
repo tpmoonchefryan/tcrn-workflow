@@ -1,9 +1,9 @@
 {
   "schemaVersion": "tcrn.codex-live-integration-evidence.v1",
-  "status": "LIVE PARTIAL — exact SessionStart active; Workflow MCP registered and directly exercised; Codex Desktop multi-agent records observed; Desktop hot-load and App Server receipt collection remain unproved",
+  "status": "LIVE PARTIAL — historical persona-bound SessionStart bytes are superseded; Workflow MCP was registered and directly exercised; Codex Desktop records were observed; S057 has one exact App Server stream/readback comparison; EPIC-024 has five exact live observe events with SessionEnd version-pinned unavailable",
   "observedAt": "2026-07-25",
   "candidate": {
-    "classification": "local development candidate, not an accepted release",
+    "classification": "historical local development snapshot, not an accepted release and not the current source tree",
     "acceptedRelease": "v0.5.0",
     "commit": "66c9d451db166f609f0821a5d9f79cbe124366d0",
     "tree": "362fe49ae1c961addfa474be783747862d2aa238",
@@ -13,8 +13,8 @@
   "sessionStart": {
     "hostProduct": "Codex CLI",
     "hostVersion": "0.139.0",
-    "activationState": "host_observed_active",
-    "installedFiles": [
+    "activationState": "historical_host_observed_active_current_definition_pending_host_approval",
+    "historicalInstalledFiles": [
       {
         "path": ".codex/hooks.json",
         "digest": "46c92578f335545a4f67bd6a5e56bc27723064cac07092cd6057cfa41b2f3531"
@@ -28,36 +28,50 @@
         "digest": "355eb52d181543c3c58f281d3a486f8236589c090f8940d5a022c60b74499f2b"
       }
     ],
-    "hostTrust": {
-      "currentDefinitionEnabled": true,
+    "historicalHostTrust": {
+      "definitionEnabledAtObservation": true,
       "trustedHash": "sha256:0f8c529354e5482bc0b8db4531427cb1529dbbf4cab5e65d1913821dc3b2a114",
       "semanticBoundary": "host-owned opaque trust value; no equality with a TCRN file or definition digest is asserted"
     },
-    "receipts": {
+    "historicalReceipts": {
       "inertInstallationReceiptDigest": "bbabf5e57d9b9bbcd94a471cdad3f2db22a35be032f13c9c804491a6a2c63e44",
       "activationInstallationReceiptDigest": "98520eaadc7626fccc617b34d1c5f3707a10865ff5f930d146693fa5b8aa961a",
       "hostActivationReceiptDigest": "841b42b93f6aa975aa45a7965c5622d26d55a66d2777e07864b2188778fad47d",
       "hostActivationReceiptFileDigest": "50d96fe472aa02fd48fc077a597d4ae50ba506fdf9f7582c8391dd4600992977"
     },
-    "liveFire": {
+    "historicalLiveFire": {
       "sessionIdDigest": "93f05373ff0e7bb1fa678faced09ecdbeef0aabcb720d1dfa9718eb89af980b4",
       "rolloutLocation": "out-of-tree Codex session store",
       "rolloutDigest": "690229d2e070220a99e99ad4d762b1e4d187ff2d11e5c9be272cd033cd8a9eae",
       "injectedThrough": "hookSpecificOutput.additionalContext",
-      "contextMarkers": [
+      "withdrawnContextMarkers": [
         "Advisory persona: Verity",
         "capability-manifest"
       ],
       "result": "HOOK_CONTEXT_PRESENT",
       "resultFileDigest": "713e766dca37eec4edb505df960ecfdcebd138631ed446b6c7c2b92655486283",
-      "toolCalls": 0
+      "toolCalls": 0,
+      "disposition": "historical evidence for withdrawn persona-bound bytes only"
     },
     "rollbackRehearsal": {
       "activationRemovalReasonCode": "INSTALLER_ROLLBACK_EXECUTED",
       "activationFilesRemoved": 3,
       "inertRollbackReasonCode": "INSTALLER_ROLLBACK_EXECUTED",
       "inertRollbackPlanDigest": "2e92c81f965d92276225ba54b9266da4fb60e4f1608be7041ecb6a4b5da81f80",
-      "result": "the prior candidate was removed before the exact current candidate was installed; the current candidate remains active"
+      "result": "the historical managed activation was removed; no corrected persona-free definition is currently installed"
+    },
+    "currentDefinition": {
+      "sessionSummarySchema": "tcrn.codex-session-summary.v2",
+      "sessionStartHandlerSchema": "tcrn.codex-session-start-handler.v2",
+      "corePersonaInjected": false,
+      "mainThreadReadOnly": false,
+      "ordinaryRepositoryAuthorizationRevoked": false,
+      "installed": false,
+      "approved": false,
+      "liveFired": false,
+      "historicalHookDefinitionWithdrawn": true,
+      "withdrawalRecoverable": true,
+      "boundary": "Core Reference personas are conference-only; the corrected exact definition requires a fresh /hooks review and Owner approval"
     }
   },
   "workflowMcp": {
@@ -154,12 +168,55 @@
       "reason": "Codex Desktop rollout sub_agent_activity/session metadata is live host evidence, but it is not the pinned App Server notification stream accepted by the S054 collector; the parallel pair inherited parent turns"
     }
   },
+  "appServerExecutionCollection": {
+    "hostProduct": "Codex CLI",
+    "hostVersion": "0.139.0",
+    "appServerAttached": true,
+    "boundedEvidenceHarness": true,
+    "protocolDigest": "sha256:4c47a458f57d09cbbf50bf2f58b38f4e7e434254b7916bef2ee559945e11d3bc",
+    "evidence": "docs/verification/host/codex-app-server-execution-collection.json",
+    "evidenceManifestSha256": "8e403517049e99b738fab0b68a848e50aa997aa5fe19303cf75f6b4ad2f2ac62",
+    "collectorAvailability": "observe",
+    "observedInvocations": 1,
+    "workflowExecutionReceiptProduced": true,
+    "freshContext": true,
+    "readbackChecks": 28,
+    "allReadbackChecksPass": true,
+    "syntheticThreadStartedAdded": false,
+    "cleanTeardown": true,
+    "boundary": "this is exact unsigned attribution evidence from a single bounded live run, not a shipped Controller, host signature, actor identity proof or complete-coverage claim"
+  },
+  "observeHookEvidence": {
+    "hostProduct": "Codex CLI",
+    "hostVersion": "0.139.0",
+    "evidence": "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json",
+    "boundedEvidenceProject": true,
+    "exactGeneratedHandlerLiveMeasured": true,
+    "exactHashHostApprovalObserved": true,
+    "events": {
+      "PostToolUse": 3,
+      "PreCompact": 1,
+      "PostCompact": 1,
+      "SubagentStart": 1,
+      "SubagentStop": 1
+    },
+    "hookStartedNotifications": 7,
+    "hookCompletedNotifications": 7,
+    "sessionEnd": "unavailable_version_pinned",
+    "sessionEndReason": "Codex CLI 0.139.0 generated HookEventName and ManagedHooksRequirements omit SessionEnd; Stop is not an alias",
+    "threadArchived": true,
+    "cleanTeardown": true,
+    "shippedMultiEventActivationInstalled": false,
+    "enforceHostSurfacesAuthorized": 0
+  },
   "notClaimed": [
     "the local development candidate is not an accepted Workflow release",
+    "the corrected persona-free Codex SessionStart definition has not been installed, approved or live-fired",
     "the current Codex Desktop task did not hot-load the newly registered MCP server",
     "no successful host-routed Workflow MCP tool call is claimed",
-    "no live App Server attach or Controller operation is claimed",
-    "no Workflow execution receipt was produced from the Desktop multi-agent records",
+    "the S057 live App Server attach is a bounded evidence harness and is not a shipped Controller operation",
+    "no Workflow execution receipt was produced from the earlier Desktop rollout records; the S057 receipt comes from its later direct App Server run",
+    "EPIC-024 does not claim Codex SessionEnd or complete six-event coverage, and its bounded evidence-project definitions are not a shipped multi-event activation installer",
     "no host signature, actor identity, complete event coverage, enforce hook, approval responder or Stop blocker is claimed"
   ]
 }

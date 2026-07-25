@@ -1,27 +1,42 @@
 {
-  "schemaVersion": "tcrn.codex-app-server-execution-schema-evidence.v1",
-  "status": "SCHEMA-SHAPE VERIFIED — supplied-stream collector; no host-driven subagent invocation",
+  "schemaVersion": "tcrn.codex-app-server-execution-evidence.v2",
+  "status": "LIVE EXACT — one pinned App Server spawn lifecycle was correlated with same-connection thread/read bytes and projected into a Workflow execution receipt",
   "observedAt": "2026-07-25",
   "host": {
     "product": "Codex CLI",
     "version": "0.139.0",
-    "command": "codex app-server generate-ts --out <disposable-dir>"
+    "command": "codex app-server --stdio --disable hooks --enable multi_agent",
+    "protocolSchemaCommand": "codex app-server generate-json-schema --out <disposable-dir>",
+    "protocolDigest": "sha256:4c47a458f57d09cbbf50bf2f58b38f4e7e434254b7916bef2ee559945e11d3bc"
   },
   "wireMethods": [
-    "thread/started",
+    "item/started",
+    "item/completed",
+    "thread/read",
     "turn/started",
-    "turn/completed",
-    "item/completed"
+    "turn/completed"
   ],
   "correlationFields": {
-    "thread": [
+    "spawnItem": [
       "id",
-      "sessionId",
-      "parentThreadId",
-      "forkedFromId",
-      "ephemeral",
-      "threadSource",
-      "createdAt"
+      "type=collabAgentToolCall",
+      "tool=spawnAgent",
+      "status=inProgress|completed",
+      "senderThreadId",
+      "receiverThreadIds",
+      "prompt",
+      "startedAtMs|completedAtMs"
+    ],
+    "threadReadback": [
+      "request.threadId",
+      "request.includeTurns=true",
+      "response.thread.id",
+      "response.thread.sessionId",
+      "response.thread.parentThreadId",
+      "response.thread.forkedFromId",
+      "response.thread.source.subAgent.thread_spawn.parent_thread_id",
+      "response.thread.createdAt",
+      "response.thread.turns"
     ],
     "turnNotification": [
       "threadId",
@@ -29,47 +44,76 @@
       "turn.startedAt",
       "turn.completedAt"
     ],
-    "spawnItem": [
-      "id",
-      "type=collabAgentToolCall",
-      "tool=spawnAgent",
-      "status",
-      "senderThreadId",
-      "receiverThreadIds",
-      "prompt",
-      "item/completed.params.completedAtMs"
-    ],
     "finalItem": [
-      "id",
+      "raw notification item id",
+      "readback-normalized item id",
       "type=agentMessage",
       "phase=final_answer",
-      "text",
+      "text bytes",
       "item/completed.params.completedAtMs"
     ]
   },
   "derivedClaims": {
-    "freshContext": "true only when the observed subagent thread is not forked and thread.createdAt is no earlier than the completed spawn item; otherwise unavailable",
-    "finalMessage": "the last phase=final_answer item by completedAtMs, with canonical id tie-break, inside the completed first-turn interval; commentary and unknown phase never become the final answer"
+    "freshContext": "true only when one item/started and item/completed spawnAgent lifecycle names the readback receiver, the same session and parent are retained, forkedFromId is null, the whole-second thread creation interval overlaps the millisecond spawn lifecycle, and the readback first turn agrees with its lifecycle notifications",
+    "finalMessage": "the last raw phase=final_answer item by completedAtMs inside the completed readback turn, byte-matched to the normalized readback final item; raw and readback item ids are retained separately",
+    "threadStarted": "a child thread/started notification is optional because Codex 0.139.0 did not emit one for the spawned child in this run; if present, it must agree with readback"
   },
-  "correction": {
-    "previousObserverVocabulary": "Pascal-case pseudo-methods such as Thread/started",
-    "wireVocabulary": "lower-case JSON-RPC methods such as thread/started",
-    "effect": "the ACT8 observer vocabulary and tests are corrected in the S054 change"
+  "liveObservation": {
+    "evidenceRoot": "dist/local-codex-candidate/s057-fresh-context",
+    "evidenceManifestSha256": "8e403517049e99b738fab0b68a848e50aa997aa5fe19303cf75f6b4ad2f2ac62",
+    "runResultSha256": "b26a3560356082ec768b98f3261074600793c6211b875698f2a94a52986db375",
+    "rawNotificationStreamSha256": "927f16fbccc4eff091e0a306b37ecaf40b17e709314a0b4c259092f2b6e5d22a",
+    "childReadbackSha256": "8ff58868b1c003a19dad74a4ba478161527f8e6ea7468155c87b2f2d12326b4a",
+    "collectorInputSha256": "8d1869e550799c7ac1eaaa873be05dca05c91aea0b37eb3189fc2d29405afd41",
+    "comparisonSha256": "2de5da7e149f10b6a8b6f54dbdbdcec9ca9e998813a8b9bc34e643593acbe50b",
+    "workflowReceiptSha256": "8626962186e03f595758706751c3b56371321f53b15d192a1cec78fe3bb5473d",
+    "sessionId": "redacted-c551f16296fd7a4f925b6e39",
+    "parentThreadId": "redacted-c551f16296fd7a4f925b6e39",
+    "parentTurnId": "redacted-61e49c2c587ddc94f8b606d7",
+    "childThreadId": "redacted-22e9f5bed0062215a2cff450",
+    "childTurnId": "redacted-27cf80b6cf6819443ceabfd3",
+    "collectorAvailability": "observe",
+    "collectorReasonCode": "CODEX_EXECUTION_OBSERVED",
+    "observedInvocations": 1,
+    "freshContext": true,
+    "readbackChecks": 28,
+    "allReadbackChecksPass": true,
+    "receiptGenerated": true,
+    "transcriptSigned": false,
+    "cleanTeardown": true
   },
+  "negativeCoverage": [
+    "missing readback",
+    "receiver/readback mismatch",
+    "old thread",
+    "forked thread",
+    "cross-session contamination",
+    "duplicate or replayed lifecycle/readback",
+    "missing spawn start",
+    "wrong or missing turn/final lifecycle",
+    "raw/readback final-byte mismatch",
+    "unknown final-message phase",
+    "unpinned protocol"
+  ],
   "boundary": {
     "readOnly": true,
     "drivesHost": false,
-    "liveAttachClaimed": false,
-    "liveSubagentReceiptClaimed": false,
-    "reason": "the Observer may not create/fork/start threads or turns under GD-1; a future externally produced stream can be passed to the collector without changing this module",
+    "collectorMeaning": "the shipped collector consumes supplied notifications and readbacks and contains no App Server connection or driving verb",
+    "liveHarnessMeaning": "a separate bounded evidence harness attached once, started one parent turn, requested exactly one fresh child, read both threads on the same connection, then terminated its launched process tree",
+    "liveAttachClaimed": true,
+    "liveSubagentReceiptClaimed": true,
+    "exactCurrentCollectorBytesLiveMeasured": true,
+    "syntheticThreadStartedAdded": false,
     "freshContextIsHostSigned": false,
     "finalMessageIsHostSigned": false,
+    "actorIdentityClaimed": false,
     "coverage": "absence of a notification is not evidence the action did not occur"
   },
   "relatedLiveObservation": {
     "source": "docs/verification/host/codex-live-integration-2026-07-25.json",
-    "result": "Codex Desktop emitted App-visible sub_agent_activity and completed real subagent rollouts",
+    "result": "earlier Codex Desktop records emitted App-visible sub_agent_activity and completed real subagent rollouts",
     "acceptedByThisCollector": false,
-    "reason": "Desktop rollout records are not the pinned App Server notification stream this collector admits; no frame conversion or receipt was fabricated"
-  }
+    "reason": "the earlier Desktop rollout records remain a separate evidence class; S057 is satisfied by the later direct pinned App Server run, not by converting those records"
+  },
+  "identifierRedaction": "Raw Codex thread, session and turn identifiers are withheld from the repository: they are UUIDv7 and therefore carry both a creation timestamp and a reference to a real session on the operator's machine, which the privacy gate refuses (THREAD_IDENTIFIER). Each occurrence is replaced by redacted-<first 24 hex of sha256(raw id)>, so the same session remains the same token throughout and a verifier holding the raw live artifacts can recompute the digest and re-establish the linkage. No claim in this receipt depends on the raw identifier."
 }

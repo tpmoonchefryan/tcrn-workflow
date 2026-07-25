@@ -12,7 +12,10 @@
 //
 // The v2 fragment materializes exactly ONE real hooks.SessionStart entry running
 // the governed handler emitted by generateSessionStartScript
-// (claude-adapter-session-start.ts). Exactly one hook event and one entry are
+// (claude-adapter-session-start.ts), through the shell-quoted absolute path AND
+// the handler's exact byte digest as --handler-digest (INC-015), so the approved
+// command line names reviewable bytes rather than a mutable file name. Exactly
+// one hook event and one entry are
 // admitted; every other event key or a second entry fails
 // ACTIVATION_HOOK_SURFACE_EXCEEDED. merge records hooksContainerCreated /
 // sessionStartArrayCreated so remove is decidably byte-inverse over settings that
@@ -24,11 +27,12 @@
 //
 // [BLOCKER resolution, OD-32] tcrn.claude-adapter-installation-generation.v2 is an
 // ADDITIVE receipt (v1 untouched) whose entry set covers the four v1 template
-// paths PLUS session-start.mjs and reserves persona-render.json (WSG-4). Its
+// paths PLUS session-start.mjs. Core Reference personas are conference-only and
+// are not installed beside or consumed by the main-session hook. Its
 // rollback-plan generator emits the existing tcrn.claude-adapter-rollback-plan.v1
 // shape covering every installed activation file, so WSG-2's
 // executeClaudeAdapterRollback empties .claude/tcrn-workflow byte-inverse instead
-// of orphaning the step-2/3 files.
+// of orphaning the activation files.
 
 import { isAbsolute, resolve } from "node:path";
 
@@ -49,15 +53,12 @@ export const CLAUDE_ADAPTER_ROLLBACK_PLAN_VERSION = "tcrn.claude-adapter-rollbac
 export const CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY = "tcrnWorkflow" as const;
 export const CLAUDE_ADAPTER_ACTIVATION_HOOK_EVENT = "SessionStart" as const;
 export const CLAUDE_ADAPTER_SESSION_START_PATH = ".claude/tcrn-workflow/session-start.mjs" as const;
-export const CLAUDE_ADAPTER_PERSONA_RENDER_PATH = ".claude/tcrn-workflow/persona-render.json" as const;
 
 // The closed activation entry-path set the v2 receipt admits: the four inert v1
-// templates (already on disk after Step 1), the Step-2 handler, and the reserved
-// Step-3 persona render (WSG-4 rides this).
+// templates (already on disk after Step 1) and the SessionStart handler.
 export const CLAUDE_ADAPTER_ACTIVATION_PATHS = Object.freeze([
   ...CLAUDE_ADAPTER_TEMPLATE_PATHS,
   CLAUDE_ADAPTER_SESSION_START_PATH,
-  CLAUDE_ADAPTER_PERSONA_RENDER_PATH,
 ] as const);
 
 export const CLAUDE_ADAPTER_ACTIVATION_REASON_CODES = Object.freeze([
@@ -185,11 +186,37 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'\"'\"'`)}'`;
 }
 
+// The definition names the handler file literally AND pins its exact bytes. INC-015:
+// the operator approves this one string, so a later same-user rewrite of the named
+// file would otherwise run forever under that approval. The digest has to travel in
+// the command line because that line is the whole approval surface -- and it has to
+// travel as an ARGUMENT, not as a literal inside the handler, because a file cannot
+// carry its own digest and a baked digest would make the emitted bytes
+// machine-specific (N-7). The handler compares argv against its own bytes and
+// fail-opens on any mismatch. Boundary, stated rather than left to be discovered: a
+// wholly substituted handler simply does not run the check, exactly as the Codex peer
+// records (codexHookDefinitionForDigests). What this buys is that drift in the
+// GENERATED handler is caught, and that the approved line names reviewable bytes.
+//
+// INC-011 records the half none of that covers. The command names the admitted
+// absolute handler literally, so fire-time cwd cannot redirect it (INC-002) -- but
+// `node` is a bare name resolved through the fire-time PATH, so a PATH entry ahead of
+// the real interpreter substitutes the interpreter while the approved handler
+// argument stays correct. The --handler-digest self-check above cannot detect that,
+// for the same reason it cannot detect a wholly substituted handler: a substituted
+// interpreter never reads the handler, and fail-open keeps the exit status at zero.
+// Claude Code has no exact-definition approval step at all, so nothing re-prompts
+// here. Disclosed rather than pinned; see the Codex peer for why (hookDocument).
 export function claudeAdapterActivationHookCommand(
   installationRootValue: unknown,
+  scriptDigestValue: unknown,
 ): string {
   const installationRoot = canonicalInstallationRoot(installationRootValue);
-  return `node ${shellQuote(resolve(installationRoot, CLAUDE_ADAPTER_SESSION_START_PATH))}`;
+  const scriptDigest = sha(scriptDigestValue, "hook command scriptDigest");
+  return [
+    `node ${shellQuote(resolve(installationRoot, CLAUDE_ADAPTER_SESSION_START_PATH))}`,
+    `--handler-digest ${scriptDigest}`,
+  ].join(" ");
 }
 
 function record(value: unknown, label: string): Readonly<Record<string, unknown>> {
@@ -290,12 +317,12 @@ function assertActivationHost(request: ReturnType<typeof validateClaudeAdapterRe
   return input;
 }
 
-function activationHookEntry(installationRoot: string): ClaudeAdapterActivationHookEntry {
+function activationHookEntry(installationRoot: string, scriptDigest: string): ClaudeAdapterActivationHookEntry {
   return {
     matcher: "",
     hooks: [{
       type: "command",
-      command: claudeAdapterActivationHookCommand(installationRoot),
+      command: claudeAdapterActivationHookCommand(installationRoot, scriptDigest),
     }],
   };
 }
@@ -325,7 +352,7 @@ export function generateClaudeAdapterActivationFragment(value: unknown, host: Cl
     hostProduct: CLAUDE_ADAPTER_HOST_PRODUCT,
     settingsTarget: CLAUDE_ADAPTER_SETTINGS_TARGET,
     mergeKey: CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY,
-    hooks: { SessionStart: [activationHookEntry(installationRoot)] },
+    hooks: { SessionStart: [activationHookEntry(installationRoot, scriptDigest)] },
   };
   const fragment = deepFreeze({ ...basis, fragmentDigest: canonicalSha256(basis) });
   return fragment;
@@ -335,6 +362,7 @@ function validateHookEntry(
   value: unknown,
   label: string,
   installationRoot: string,
+  scriptDigest: string,
 ): ClaudeAdapterActivationHookEntry {
   const entry = record(value, label);
   exact(entry, ["matcher", "hooks"], label);
@@ -342,11 +370,14 @@ function validateHookEntry(
   if (!Array.isArray(entry.hooks) || entry.hooks.length !== 1) fail("ACTIVATION_HOOK_SURFACE_EXCEEDED", `${label}.hooks`);
   const command = record(entry.hooks[0], `${label}.hooks[0]`);
   exact(command, ["type", "command"], `${label}.hooks[0]`);
+  // Recomputed from the fragment's OWN scriptDigest, so a fragment whose command
+  // pins bytes other than the ones it declares is not merely inconsistent -- it is
+  // refused. Otherwise the approved line and the digest-bound install could disagree.
   if (
     command.type !== "command" ||
-    command.command !== claudeAdapterActivationHookCommand(installationRoot)
+    command.command !== claudeAdapterActivationHookCommand(installationRoot, scriptDigest)
   ) fail("ACTIVATION_FRAGMENT_INVALID", `${label}.hooks[0].command`);
-  return activationHookEntry(installationRoot);
+  return activationHookEntry(installationRoot, scriptDigest);
 }
 
 export function validateClaudeAdapterActivationFragment(value: unknown): ClaudeAdapterActivationFragment {
@@ -369,6 +400,7 @@ export function validateClaudeAdapterActivationFragment(value: unknown): ClaudeA
     sessionStart[0],
     "fragment SessionStart[0]",
     installationRoot,
+    scriptDigest,
   );
   const basis = {
     schemaVersion: CLAUDE_ADAPTER_FRAGMENT_V2_VERSION,
@@ -416,6 +448,7 @@ export function mergeClaudeAdapterActivationFragment(settingsText: unknown, frag
   const fragment = validateClaudeAdapterActivationFragment(fragmentValue);
   const expectedCommand = claudeAdapterActivationHookCommand(
     fragment.installationRoot,
+    fragment.scriptDigest,
   );
   const settings = canonicalSettingsObject(settingsText);
   if (Object.prototype.hasOwnProperty.call(settings, CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY)) fail("ACTIVATION_FRAGMENT_CONFLICT", "settings already carry the activation merge key");
@@ -447,6 +480,7 @@ export function removeClaudeAdapterActivationFragment(mergedText: unknown, fragm
   const fragment = validateClaudeAdapterActivationFragment(fragmentValue);
   const expectedCommand = claudeAdapterActivationHookCommand(
     fragment.installationRoot,
+    fragment.scriptDigest,
   );
   const merged = canonicalSettingsObject(mergedText);
   if (!Object.prototype.hasOwnProperty.call(merged, CLAUDE_ADAPTER_ACTIVATION_MERGE_KEY)) fail("ACTIVATION_FRAGMENT_IRREVERSIBLE", "merged settings carry no activation fragment");
@@ -483,7 +517,7 @@ export function removeClaudeAdapterActivationFragment(mergedText: unknown, fragm
 }
 
 // v2 installation-generation receipt. Additive to v1: covers the four inert
-// template paths plus session-start.mjs and (reserved) persona-render.json.
+// template paths plus session-start.mjs.
 export function validateClaudeAdapterActivationInstallationReceipt(value: unknown): ClaudeAdapterActivationInstallationReceipt {
   const document = record(value, "activation installation receipt");
   exact(document, ["schemaVersion", "generationId", "bundleDigest", "fragmentDigest", "scriptDigest", "installationRoot", "entries", "receiptDigest"], "activation installation receipt");
@@ -519,8 +553,8 @@ export function validateClaudeAdapterActivationInstallationReceipt(value: unknow
 
 // Emit the existing rollback-plan shape (tcrn.claude-adapter-rollback-plan.v1)
 // covering EVERY installed activation entry, so WSG-2's executeClaudeAdapterRollback
-// removes the four templates AND session-start.mjs (AND persona-render.json when
-// present) and then empties the .claude/tcrn-workflow directory byte-inverse.
+// removes the four templates and session-start.mjs, then empties the
+// .claude/tcrn-workflow directory byte-inverse.
 export interface ClaudeAdapterActivationReceiptFileIdentity {
   readonly expectedCanonicalPath: string;
   readonly expectedFileSha256: string;

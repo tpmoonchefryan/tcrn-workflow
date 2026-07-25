@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "f22a019dc44dda1662a78ddd3ea9fbeaaad250e3068df757ccde34bc10f3de04",
+      "fixtureDigest": "22b0152a35636519b3eb38a57077bb4939fbbcdcbac570ebb4a6dd785618dfb7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -50,7 +50,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "de972715349d705d789d8a4a35febc1e50b771d73016f0c32069e352e58214c2",
+      "fixtureDigest": "60d876922abc8825a460a4f1adc03c0b8ee9ee7b8c64515c1e6e1ec3b008bd76",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -82,7 +82,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "a608b02146b187c5141749d6762ad2dbcb93b1cdecc60a9d2237b4ca11ad4a71",
+      "fixtureDigest": "f2ad46ee97f9f8a71aa98ee8bef3572798cffce84081d32479c294b29174b11e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -156,7 +156,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "8b255dc151aec7973416532e5aba91e34cd0466d0f2efb5b6c4612525c2ce8af",
+      "fixtureDigest": "f59abd59d777e1c646b56d59608c899a42bc861902ceba117dac1865634688da",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -186,7 +186,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "580ec81878d8a31269dec743d0f9b0ccfe7512ce76be80b03d7b00fb83e995c8",
+      "fixtureDigest": "a17e73d656b21eb3c685fc7d586465d60e13935219257234e195517c440f36a9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -219,7 +219,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "59a19c0393a413095fac4246b16e8ad770f46d0c47a541a0331e23b4cd81dff4",
+      "fixtureDigest": "25e92ce1c161c30e06a7bc1c61c347042a5028408906b058d79bfe884df35ff9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -245,7 +245,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "07558d2ba7f020dd9f4084bb99197716592de43668cef7a1444c072873b4ac3e",
+      "fixtureDigest": "d370ff664261d45827f907270f8d004a2b6481b406ce96a9315d6229e736d451",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -273,7 +273,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "d21fb46633d590845e843ab3686f405e12f9308c733e8e489936359ee4786df7",
+      "fixtureDigest": "1216e840d4965a8e2ad75af7c55a3034fb573e8e683b7f8de29456631ca39a0d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -474,7 +474,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "cfde581189f769ba633fcbcd75283a027391b6a7665ccff2b6c9b7148653b9e4",
+      "fixtureDigest": "6214bcb0746e6243964155dfc412aeba3a40969e1ed925749946765c3cb0192c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -502,7 +502,7 @@
         "tests/p3-file-engine.test.mjs",
         "tests/p3-cli-catalog.test.mjs"
       ],
-      "fixtureDigest": "44889965667398bcdf75403f5e9cdb884ee8edfe0defd1dbbd9e2b16cf42ad33",
+      "fixtureDigest": "0f7fb4d7eca585185ad813d02b00f16dd4b37bd6d457c89597cd1305c432e5c9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -528,7 +528,7 @@
         "tests/p3-file-engine.test.mjs",
         "tests/p3-cli-catalog.test.mjs"
       ],
-      "fixtureDigest": "0b3d0e71c173e941ddf47f3e094cf375086cda9b5481640d8a70a473231a1df6",
+      "fixtureDigest": "b08aa019ab424de7019b4f8be97391f6864bcfa2bbc6dae89e85dc0fd9d0f865",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -587,7 +587,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "e9138dd264a1c7fe7f49590f1590180387aabd77893f3f8bdd589de2a566c644",
+      "fixtureDigest": "f6f4103378308fa989f463d31eb1808deaef2df5f715e61d286abe034963a108",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -612,7 +612,7 @@
         "packages/protocol/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "87d135ecbe48c9faaa5ce8fa6f5282608efcc1721449c78847bdb9739503c88c",
+      "fixtureDigest": "f55eabc8812a384a675bc140771eb9e39a95f91ac14a4ca180fea94344ef924d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -639,7 +639,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9a2af16c1a53d5fe7b07842ba37fe7f26b4df40ca558a893ae4c49c030e9d874",
+      "fixtureDigest": "dfa623d30355d6c66ab2b94eaec5ec278f10bfacf6c9d85a86ef513e7f96055e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -657,7 +657,7 @@
       "phase": "P3",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "The commands verb emits a schema-valid, canonically ordered, byte-deterministic catalog of every governed CLI verb with its flags, availability, and mutation status; the catalog is in two-way name parity with the live dispatcher (every dispatched verb has exactly one entry and vice versa) and its required-flag declarations match the dispatcher's missing-argument failures.",
+      "subject": "The commands verb emits a schema-valid, canonically ordered, byte-deterministic catalog of every governed CLI verb with its flags, availability, and mutation status; the catalog is in two-way name parity with the live dispatcher (every dispatched verb has exactly one entry and vice versa) and its required-flag declarations match the dispatcher's missing-argument failures. `authorityBearing` is declared, documented and schema-constrained to exclude `mutates: true`; a violating catalog refuses to load.",
       "command": "pnpm verify:p3",
       "fixturePaths": [
         "packages/cli/src/index.ts",
@@ -666,7 +666,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "3d679719f3991727c8eef822be343ccc3d644c9a8eacf23c354ca925b515a118",
+      "fixtureDigest": "de9f116a5477d930d409a5554a42b0b615810873615dbcab60891db65fa1b902",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -676,7 +676,8 @@
       "expectedReasonCode": "P3_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
-        "Command catalog entries, the commands verb, catalog schema/spec, or catalog-dispatcher parity semantics change"
+        "Command catalog entries, the commands verb, catalog schema/spec, or catalog-dispatcher parity semantics change",
+        "`authorityBearing` declaration/documentation or the schema-constrained exclusion of `mutates: true` changes"
       ]
     },
     {
@@ -691,7 +692,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "packages/cli/src/index.ts"
       ],
-      "fixtureDigest": "6f7a52fb880c536ed33214e7511dcf72239b62dacaca155c7f37e96fdcbf9592",
+      "fixtureDigest": "5a6885037178a7da31ddde8299a0fdaa4ff4dcee52e83191f171d24b6470766e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -715,7 +716,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "1e99c2ea9d180fb0d95eaa4900de1e6923c65d5c05b28a07ac7b098ce37b15f9",
+      "fixtureDigest": "0703317ad56147b140b13f782e71f0d204d70f53d1e3c45107f2cf2e1d5d5298",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -740,7 +741,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "f9fd0264b3482472a9a981f5d32fe419e1ec2ebc8d1b00292f6d64f13f6b21ed",
+      "fixtureDigest": "2a56292c31bdcf5c4845d81f633220436c74c988619367efa2c02d5899dd8946",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -766,7 +767,7 @@
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9dfe6668c5106edb3d1a5b3b70c91c79a6882cb5c7b264a8dc6e802a0f7dd0c4",
+      "fixtureDigest": "7531e5796bf9a509f793acf8933d2dad2e1963c3a759c737d78d317fe7983660",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -792,7 +793,7 @@
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9dfe6668c5106edb3d1a5b3b70c91c79a6882cb5c7b264a8dc6e802a0f7dd0c4",
+      "fixtureDigest": "7531e5796bf9a509f793acf8933d2dad2e1963c3a759c737d78d317fe7983660",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -823,7 +824,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "cb1f7c2d9842f05b03c204f58a444680b2e1dc25bf7b285391eeaea9e7d2b255",
+      "fixtureDigest": "e12b5dc36235357a965e820f0cdb24feefe435216d2d935505f80536c6e9e548",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -851,7 +852,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "ec4906fc76561b050cc6bd13620a619c122697b8e036e01a23ad57428595adc7",
+      "fixtureDigest": "30f99d5d6fb2d72ed19178d6ecb8635c1d0f70060bad63b6ea116b6b545005c9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -887,7 +888,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "fc5691f946983fa39a98df56c33808fc134e845fbe1bbb8a10932a132021fca2",
+      "fixtureDigest": "f3d406f3817ff9f9bb4f8e74244c2980f2fdaa4cb39aa0438f2767bd563c04c9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -916,7 +917,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d100d9706e2b7d1023b300f10d8ab1e85f2f367bdb4ebaf5806be973a089e433",
+      "fixtureDigest": "8b97c1bb934403eccba4f848fcc409f0a69e96cd0f66a8bf887f116e13b7efce",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -943,7 +944,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "164717a0cb3ad025eef04eea297a15ea791f591afd7f7419720a79d88e42326c",
+      "fixtureDigest": "51cf5851de64b0ccc0c92e13a337a22037af2779d7302f0dd1ddfde5e665cecc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -970,7 +971,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "164717a0cb3ad025eef04eea297a15ea791f591afd7f7419720a79d88e42326c",
+      "fixtureDigest": "51cf5851de64b0ccc0c92e13a337a22037af2779d7302f0dd1ddfde5e665cecc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -995,7 +996,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "c53434a384c4ffb05f3561563887cd748fa00a55e3c1e5a946ae16af6d42e7f6",
+      "fixtureDigest": "b2506ef2099d6966952bb2b0f198094280251e574dc56f60aa5859f6a249a9d3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1022,7 +1023,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "164717a0cb3ad025eef04eea297a15ea791f591afd7f7419720a79d88e42326c",
+      "fixtureDigest": "51cf5851de64b0ccc0c92e13a337a22037af2779d7302f0dd1ddfde5e665cecc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1049,7 +1050,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "164717a0cb3ad025eef04eea297a15ea791f591afd7f7419720a79d88e42326c",
+      "fixtureDigest": "51cf5851de64b0ccc0c92e13a337a22037af2779d7302f0dd1ddfde5e665cecc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1075,7 +1076,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "36b9f54c11010d62260c91b41e235b4f9a16fd21b4e590f326723bf6b839cbcc",
+      "fixtureDigest": "d8563dbacf96e812883e86393af54cb7a41b919bc1c2abc82b6a49a4126d0f66",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1100,7 +1101,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d93dd5b420abb21072877e040cc4296fac1854799cc2381cc1af8879088cbdd6",
+      "fixtureDigest": "c34c08c937f00aaee6eb26e68915ede12a5afaeb0e543fa72f8a7b1ddb5a4f82",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1138,7 +1139,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "47f7767034d7666c940b7114f1bb958ad612b4250035ece654ccf44a652713ee",
+      "fixtureDigest": "a98d703098ed65873ee1f1b3b6c4d8a93d7a92478d875a363e821eb31ae775da",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1203,7 +1204,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "a640ecd53567a27e83595fceba3d447c964a231109e4a06a7687bd3604e69932",
+      "fixtureDigest": "afb4738e2e6f86b817c319c961d8ea297eda80b9198da3f18f9e1570d2c40863",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1235,7 +1236,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "3fb388786b0901b725fe7d283cf34311db97a063dd5bb54afc0249bae6acec67",
+      "fixtureDigest": "fe76b73dc3a185351c287f3e8b5454989d5bbe5fed138628c26f0e256a1b7c68",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1269,7 +1270,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "95ed6300c6ca4bd8060c8f49f225f80e17d6ef8531c991696627d870e7acfb2d",
+      "fixtureDigest": "c2805de95ee923d9a830c2187955bc315e62d061fffac9055815954836ecaa1e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1304,7 +1305,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "52c6b9a2430a43316ad473e5a5151d0198ef1bedd167a81912800c58ffa8975b",
+      "fixtureDigest": "6a4ae2b61b0fdcd4d0246266643d20246d875ca252628f32c7db0835383c2918",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1336,7 +1337,7 @@
         "tests/dependency.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "545fdf12f1a824b24515c332755fd91669b2f4145c9b347dcbb50410f29e0c10",
+      "fixtureDigest": "9bc42e288271b25fa71ca3378da4d9204205c14c4243d342d2f0c86b1ac04032",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1371,7 +1372,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d89f0d9e242aabd60659f551c750237208052d62b0a86301d2136d751d85fdbd",
+      "fixtureDigest": "8e9531473d5addcddb4cb7b578f7dfa95375af98f3e21c3db15dbbee0392bfe6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1403,7 +1404,7 @@
         "tests/assignment-gate.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "29e2571cadcf4d31fe48bff24b9f588f1b7a9d4add333339f61edac48b5d7686",
+      "fixtureDigest": "1d366cffc0d14af9ae56d06537b6bd91c4acc4bb92da76dde898f860adc8e4af",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1436,7 +1437,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "c90ebf3885d43fa1fffadc773fbe240b2e050c4cfe71b4cc6e08ec362445c117",
+      "fixtureDigest": "862781a01bea669f0172195d713f6bd6206f8d100f9d581603a76f7fd7aff17c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1468,7 +1469,7 @@
         "tests/actor-attestation.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "52c0e415d358dd242e7cf6950adbea85b0cf8c566f188349a6e5d9b1d2b8d314",
+      "fixtureDigest": "6de37832719c59c49b9b4576139f3363a13b4cda2ce50b88dc944947d35452b9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1502,7 +1503,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "10b82afedb5a2970013fce4d12f1ad68a1be30b07e42a8c24200276338faa4f1",
+      "fixtureDigest": "b3de5a3943d2b6667f333f71f8951bdfb400159ea97f3d883fa268eded4eda8b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1531,7 +1532,7 @@
         "tests/conference-execution.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "af976325541b413c0135dcafda6c98b0084f7e9896cfda1b38176e94107e043d",
+      "fixtureDigest": "2464535dfd12fb0dfb34cfca7ed5996ecb7109afd39c33e56e04cded3fb00805",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1560,7 +1561,7 @@
         "tests/act7-execution-collection.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d8f2cf51716be08a1e79498ad029873929ad582cb885c5c69e65c4b955039c6a",
+      "fixtureDigest": "ae45c4328f313152eb6edcbc31c5f276716919f4e5641eba1fa87b5b62233272",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1578,7 +1579,7 @@
       "phase": "P2",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "INIT-009 EPIC-022 supplies the seven remaining IO-only governed command verbs through one host-neutral, two-file operator authority contract: an explicit absolute canonical pins path plus its out-of-band SHA-256 binds an authority-bundle path and byte digest, authority ID, minimum generation and revoked-digest set; the bundle binds its validity window, active/revoked state, existing profile/context/compatibility/installation file authorities, a pinned Codex host-activation observation identity, separate request-bound inert-generation and activation host inputs for Codex and Claude whose context windows are rechecked at operator verification time, and disjoint sorted MCP write-command and authority-output-command allowlists. Rotation, revocation, generation rollback, expiry, binding mismatch, changed/link/special/noncanonical files, unknown fields, forged or stale host input, prompt/environment authority and mixed programmatic/operator sources fail closed. The shipped CLI consumes the pins only as global pre-command arguments. The host-neutral tcrn-workflow-mcp stdio JSON-RPC server derives structured tools from COMMAND_CATALOG, excludes fixture-only commands, allows authority-free reads only where the underlying CLI does, requires an exact pinned grant for every mutation, and forwards numeric CAS, explicit time, actor and stable reason-code semantics without retry or reinterpretation. The anti-rollback boundary remains the caller retaining the newest pins digest; no global revocation, identity proof, network transport, adapter-owned authority or orchestrator is claimed, and the source-complete surface is not claimed to exist in the accepted 0.5.0 binaries.",
+      "subject": "INIT-009 EPIC-022 supplies the seven remaining IO-only governed command verbs through one host-neutral, two-file operator authority contract: an explicit absolute canonical pins path plus its out-of-band SHA-256 binds an authority-bundle path and byte digest, authority ID, minimum generation and revoked-digest set; the bundle binds its validity window, active/revoked state, existing profile/context/compatibility/installation file authorities, a pinned Codex host-activation observation identity, separate request-bound inert-generation and activation host inputs for Codex and Claude whose context windows are rechecked at operator verification time, and disjoint sorted MCP write-command and authority-output-command allowlists. Rotation, revocation, generation rollback, expiry, binding mismatch, changed/link/special/noncanonical files, unknown fields, forged or stale host input, prompt/environment authority and mixed programmatic/operator sources fail closed. The shipped CLI consumes the pins only as global pre-command arguments. The host-neutral tcrn-workflow-mcp stdio JSON-RPC server derives structured tools from COMMAND_CATALOG, excludes fixture-only commands, allows authority-free reads only where the underlying CLI does, requires an exact pinned grant for every mutation, and forwards numeric CAS, explicit time, actor and stable reason-code semantics without retry or reinterpretation. The anti-rollback boundary remains the caller retaining the newest pins digest; no global revocation, identity proof, network transport, adapter-owned authority or orchestrator is claimed, and the source-complete surface is not claimed to exist in the accepted 0.5.0 binaries. INC-012: the authority-output category is enforced by output shape at the CLI write boundary, not by the catalog declaration alone — every dispatched write is checked against the emitted bytes and refuses CLI_AUTHORITY_OUTPUT_UNDECLARED when a verb that declares neither mutates nor authorityBearing emits a guarded host-state field or state token.",
       "command": "pnpm verify:authority-mcp",
       "fixturePaths": [
         "package.json",
@@ -1597,7 +1598,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "24ecfa6b4de6b8a31539398b5e1e19a8f6d21b36e619843c8f99f44baac52bed",
+      "fixtureDigest": "903431903d638dc7e99e903dc2326b3ea88297a0feeb13d9e7e0af043649d705",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1607,7 +1608,8 @@
       "expectedReasonCode": "OPERATOR_AUTHORITY_MCP_VERIFIED",
       "evidencePath": "dist/evidence/p2/authority-mcp.json",
       "invalidationTriggers": [
-        "Outer pins trust anchor, authority bundle schema, rotation/revocation/generation policy, inert-generation or activation host-input admission mapping, pinned host-observation identity, CLI global argument boundary, MCP command schema derivation, write grant, CAS/time/actor forwarding, reason-code preservation, ambient-authority refusal, anti-rollback boundary, or network/orchestration claim changes"
+        "Outer pins trust anchor, authority bundle schema, rotation/revocation/generation policy, inert-generation or activation host-input admission mapping, pinned host-observation identity, CLI global argument boundary, MCP command schema derivation, write grant, CAS/time/actor forwarding, reason-code preservation, ambient-authority refusal, anti-rollback boundary, or network/orchestration claim changes",
+        "Authorization-category flag exclusion or pinned host-observation freshness bound changes"
       ]
     },
     {
@@ -1627,7 +1629,7 @@
         "tests/act4-codex-installer.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "fbfe32115435e78ab14ee4018010e31e8edea558eff948161095b4430e189d63",
+      "fixtureDigest": "4acf18b22c50322ac811d798522e20836fd0025769b265a5fa0b6818e1b5d625",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1655,7 +1657,7 @@
         "tests/act5-receipt-sidecar.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9ffa3972484de1df6ba5c129fc2263bfda4958e95b8acc5bb199fe9a14ebb1fc",
+      "fixtureDigest": "1f35568c3649e6b719809620ec99a03e5ad0ea6356fdb7975063bbadb23f95f5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1684,7 +1686,7 @@
         "tests/act6-observe-hook.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "5289bd373e9faf52bd16709c81d4727cb0843c8613f4057fcc3f55fc279a9d2e",
+      "fixtureDigest": "056c8ac016e47c86243efc9b9c30d3198a82251c0af4357d0c8628033eca2eb9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1702,7 +1704,7 @@
       "phase": "P6",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "APP-SERVER-OBSERVER implements INIT-009 EPIC-026 S077: a read-only observer folds a supplied Codex App Server notification stream into a bounded receipt carrying per-group and per-method counts, an unknown-method count, a malformed-frame count and a protocol binding. The observed vocabulary is taken from the real Codex 0.139.0 protocol schema recorded in the host-facts receipt, and a stream whose protocol digest differs is admitted only as unpinned so a moved protocol is visible rather than silently reinterpreted; an unpinned observation may not back a completeness claim. Notification params are never retained, so command output, file paths and message text stay in the host. An unknown method is counted rather than dropped and a malformed frame is counted rather than swallowed. The read-only boundary is structural: the module names none of the protocol driving verbs, opens no socket, issues no request and performs no host write, each asserted against its own source, and a receipt whose readOnly flag is cleared is refused. No live App Server is attached: the stream is supplied, not opened, and the accompanying feasibility assessment records that a Controller needs its own initiative and a GD-1 re-litigation.",
+      "subject": "APP-SERVER-OBSERVER implements INIT-009 EPIC-026 S077: a read-only observer folds a supplied Codex App Server notification stream into a bounded receipt carrying per-group and per-method counts, an unknown-method count, a malformed-frame count and a protocol binding. The observed vocabulary is taken from the real Codex 0.139.0 protocol schema recorded in the host-facts receipt, and a stream whose protocol digest differs is admitted only as unpinned so a moved protocol is visible rather than silently reinterpreted; an unpinned observation may not back a completeness claim. Notification params are never retained, so command output, file paths and message text stay in the host. An unknown method is counted rather than dropped and a malformed frame is counted rather than swallowed. The read-only boundary is structural: the module names none of the protocol driving verbs, opens no socket, issues no request and performs no host write, each asserted against its own source, and a receipt whose readOnly flag is cleared is refused. The Observer module itself never attaches: its stream is supplied, not opened. S057's later bounded live harness is separate evidence and does not turn the Observer into a Controller; the feasibility assessment still requires a separate initiative and GD-1 re-litigation for reusable control-plane code.",
       "command": "pnpm verify:act8",
       "fixturePaths": [
         "package.json",
@@ -1713,7 +1715,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "ef837a23ec152061eda9db7808118013b5a95d99cf20e773ade174762e53552d",
+      "fixtureDigest": "f96ba2ad7bc8b573573f0a3de99af9f0336a5358e3648521bd8a22146e2ca966",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1731,7 +1733,7 @@
       "phase": "P6",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "INC-002 is closed at the code and hermetic-proof layer: Codex and Claude hook commands are derived only after the project installation root passes the filesystem-backed installer admission, and each definition embeds the shell-quoted absolute handler path under that exact root. The root is carried in the generated artifact or fragment and its digest, then compared with the independently re-admitted installer root before any activation write. A real child-process mutation probe runs each approved command from an attacker-controlled cwd containing a decoy handler; only the admitted handler executes, including when the admitted path contains spaces and an apostrophe. Changing the installation root changes the Codex definition digest by design, so the digest is machine specific and requires a new host review. Claude root admission also refuses the home directory and filesystem root. This gate is hermetic: it proves removal of fire-time cwd inheritance but makes no live-host, approval, or activation claim.",
+      "subject": "INC-002 is closed at the code and hermetic-proof layer: Codex and Claude hook commands are derived only after the project installation root passes the filesystem-backed installer admission, and each definition embeds the shell-quoted absolute handler path under that exact root. The root is carried in the generated artifact or fragment and its digest, then compared with the independently re-admitted installer root before any activation write. A real child-process mutation probe runs each approved command from an attacker-controlled cwd containing a decoy handler; only the admitted handler path is executed, including when the admitted path contains spaces and an apostrophe. Changing the installation root changes the Codex definition digest by design, so the digest is machine specific and requires a new host review. The Claude command additionally pins the generated handler's byte digest, so changing either the root or the handler bytes is a new approval. Claude root admission also refuses the home directory and filesystem root. INC-011 records the half this does not close: the command's first token is the bare name node, so the interpreter is resolved through the fire-time PATH, and a directory ahead of the real interpreter substitutes it while the approved handler argument stays correct; the handler's own byte self-check cannot detect that, because a substituted interpreter never reads the handler. The same probe executes that substitution on both hosts, so the residual is measured rather than assumed, and it is disclosed rather than closed. This gate is hermetic: it proves removal of fire-time cwd inheritance for the handler path only, and makes no live-host, approval, activation, or interpreter-integrity claim.",
       "command": "pnpm verify:act12",
       "fixturePaths": [
         "package.json",
@@ -1746,7 +1748,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "badbc56673e452797bbe351c652ba78fe53887b6f86342d58927cf52ce35a23f",
+      "fixtureDigest": "54c590b1751d2a6bff3767714a4ac78d57fa6547d00d6638ea1f32870feebdde",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1756,7 +1758,8 @@
       "expectedReasonCode": "ACT12_HOOK_ROOT_BINDING_VERIFIED",
       "evidencePath": "dist/evidence/act2/act12.json",
       "invalidationTriggers": [
-        "Installation-root admission, absolute handler path derivation, shell quoting, artifact/fragment root binding, installer root comparison, fire-time cwd behavior, or machine-specific definition digest semantics change"
+        "Installation-root admission, absolute handler path derivation, shell quoting, artifact/fragment root binding, installer root comparison, fire-time cwd behavior, machine-specific definition digest semantics, or interpreter resolution (bare-name PATH lookup versus a pinned absolute interpreter) change",
+        "Claude hook-command handler-digest argument changes"
       ]
     },
     {
@@ -1764,7 +1767,7 @@
       "phase": "P2",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "INC-006 treats authority-bearing output as a separate authorization category. The sole catalog command in that category, adapter-activation-record, is non-mutating but cannot run through MCP until a pinned bundle grants it in authorityOutputCommands; a write grant never substitutes. MCP checks that grant before parsing tool arguments and advertises the command as neither read-only nor destructive. The canonical CLI accepts a descriptor-bound activation receipt with an optional direct digest plus an observation-file path, rejects the former inline approved-definition-digests and observation JSON flags, and can derive host_observed_active only from a real branded activation-host observation context or a separately operator-pinned canonical observation file. The observation and v2 receipt bind the active receipt, activation authority, activation-host digest, exact hook definition, approved set, host/session/event/fire facts, evidence digest, observation digest, evidence source and file SHA-256/source identity where applicable. Raw objects, forged values, structured clones, missing pins, write-only grants, empty grants, absent observation pins, tampered files and definition mismatch refuse; this is hermetic code and filesystem proof, not a live Codex approval or activation claim.",
+      "subject": "INC-006 treats authority-bearing output as a separate authorization category. The sole catalog command in that category, adapter-activation-record, is non-mutating but cannot run through MCP until a pinned bundle grants it in authorityOutputCommands; a write grant never substitutes. MCP checks that grant before parsing tool arguments and advertises the command as neither read-only nor destructive. The canonical CLI accepts a descriptor-bound activation receipt with an optional direct digest plus an observation-file path, rejects the former inline approved-definition-digests and observation JSON flags, and can derive host_observed_active only from a real branded activation-host observation context or a separately operator-pinned canonical observation file. The observation and v2 receipt bind the active receipt, activation authority, activation-host digest, exact hook definition, approved set, host/session/event/fire facts, evidence digest, observation digest, evidence source and file SHA-256/source identity where applicable. Raw objects, forged values, structured clones, missing pins, write-only grants, empty grants, absent observation pins, tampered files and definition mismatch refuse; this is hermetic code and filesystem proof, not a live Codex approval or activation claim. A both-category catalog entry is impossible by construction: `mutates` and `authorityBearing` are mutually exclusive at the catalog declaration and in the published schema, so a write grant can never carry authority-bearing output. An admitted observation must also be fresh for the authority presenting it — inside the branded activation-host context window, or inside the operator bundle window and not after the operator verification time — so re-pinning one observation under a rotated bundle cannot mint a second `host_observed_active` receipt. INC-012 moves the category from the flag to the emitted bytes: every dispatched CLI write passes an output-category boundary that refuses CLI_AUTHORITY_OUTPUT_UNDECLARED when a verb declaring neither mutates nor authorityBearing emits a guarded host-state field name or state token, the guarded vocabulary is bound two-way to the host-state fields core actually declares, and the caller-supplied definition comparison emitted by adapter-activation-assess is reshaped as a non-evidential document — schema-tagged tcrn.codex-activation-definition-comparison.v1, evidenceClass caller_supplied_input_only, carrying no activation-state field and refused by the activation validators on its key set — while the authority path derives its approved set directly from the shared normalizer so receipt bytes are unchanged.",
       "command": "pnpm verify:act13",
       "fixturePaths": [
         "package.json",
@@ -1779,7 +1782,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "dd5238b62cbb18b6c354b3813577718b97b50c5579818de8f4028311d4543ec4",
+      "fixtureDigest": "f89673e8ce406585d7c01000655fff211559b25c0b77becf5bdb04621d64c6ab",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1789,7 +1792,9 @@
       "expectedReasonCode": "ACT13_AUTHORITY_OUTPUT_VERIFIED",
       "evidencePath": "dist/evidence/act2/act13.json",
       "invalidationTriggers": [
-        "Authority-output catalog category, grant inventory, MCP pre-argument pin check or annotations, observation file identity, activation-host observation brand, receipt binding fields, inline JSON removal, refusal matrix, or live-boundary wording changes"
+        "Authority-output catalog category, grant inventory, MCP pre-argument pin check or annotations, observation file identity, activation-host observation brand, receipt binding fields, inline JSON removal, refusal matrix, or live-boundary wording changes",
+        "Catalog authorization-category exclusion, or observation freshness bound (branded host-context window, operator bundle window, verification-time ceiling) changes",
+        "Output-category boundary vocabulary or the definition-comparison document shape changes"
       ]
     },
     {
@@ -1797,7 +1802,7 @@
       "phase": "P6",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "CODEX-SESSIONSTART-ACTIVATION implements INIT-009 EPIC-023 S066/S067 as a peer evidence ladder rather than an installation overclaim. A descriptor-bound Step-1 receipt is rechecked before activation, and a distinct branded activation host input must independently bind the exact request, Context, Workspace/project/work target, validity window, inert receipt, capability manifest and Step-2/Step-3 rung before any write; the inert generation authority is unusable because it says activationAllowed=false. Exactly three activation files are then added with exclusive single-link writes: a deterministic fail-open SessionStart handler, a canonical summary of at most 1024 UTF-8 bytes, and one project .codex/hooks.json definition matching startup|resume. The command embeds the shell-quoted handler path derived from the installer-admitted canonical absolute root, carries the exact handler and summary byte digests, and is machine/root specific; the artifact root must equal the independently re-admitted installer root before any write. The handler rechecks both byte digests and emits only hookSpecificOutput.additionalContext for SessionStart or nothing with exit zero. Installation records pending_host_approval, an empty approved-definition set, installationDoesNotProveActivation=true and activationAuthorityDigest. A separate receipt requires a real approval-and-fire observation; handler, summary, definition, root or approved-set drift returns to pending approval. July 25 host receipts bind superseded command bytes and remain historical only, so this gate claims code and hermetic behavior for the current candidate, not current approval, activation or live fire. Codex's host-owned trusted_hash remains opaque and is never inferred. Deactivation verifies every receipt/file before removal, unregisters hooks.json first, removes only activation files, and returns to the inert Step-1 rung.",
+      "subject": "CODEX-SESSIONSTART-ACTIVATION implements INIT-009 EPIC-023 S066/S067 as a peer evidence ladder rather than an installation overclaim. A descriptor-bound Step-1 receipt is rechecked before activation, and a distinct branded activation host input independently binds the exact request, Context, Workspace/project/work target, validity window, inert receipt, capability manifest and Step-2/Step-3 compatibility rung before any write; the inert generation authority remains unusable because activationAllowed=false. Exactly three activation files are added with exclusive single-link writes: a deterministic fail-open SessionStart handler, a canonical summary of at most 1024 UTF-8 bytes, and one project .codex/hooks.json definition matching startup|resume. The root and exact handler/summary digests are command-bound and machine specific. The v2 summary explicitly does not make the main thread read-only, does not revoke explicit user authority for ordinary repository work, grants no Workflow mutation/approval authority, and binds no Core Reference persona because those roles are conference-only position attributions. All eight Core persona ids are rejected as main-session adapter profiles. Installation records pending_host_approval, an empty approved-definition set and installationDoesNotProveActivation=true; exact definition drift requires a fresh /hooks approval. The earlier a340f94 Verity-bound live fire and v2 receipt are retained only as historical evidence for withdrawn bytes and cannot prove the corrected definition live. The corrected persona-free definition has not been installed, approved or fired. Codex's host-owned trusted_hash remains opaque and is never inferred. Deactivation verifies every receipt/file before removal, unregisters hooks.json first, removes only activation files, and returns to the inert Step-1 rung. INC-012: the local definition comparison is non-evidential and carries no activation state — it is computed entirely from a caller-supplied binding and a caller-supplied approved set, reads no host, hook, receipt or file, is schema-tagged tcrn.codex-activation-definition-comparison.v1 with evidenceClass caller_supplied_input_only, reports only membership of the supplied definition digest in the supplied approved set, and is refused on its key set by the activation validators; the token approved_current_definition is withdrawn from the product.",
       "command": "pnpm verify:act9",
       "fixturePaths": [
         "package.json",
@@ -1811,9 +1816,10 @@
         "packages/core/fixtures/act9-codex-activation-cases.json",
         "tests/act9-codex-activation.test.mjs",
         "docs/activation/activation-ladder-v1.md",
+        "docs/verification/host/codex-session-start-activation.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "98b916ae46dcc46dd7b00ff40983da369fb1099b28f5c037110585ddd7a44217",
+      "fixtureDigest": "777b1e02f99acd64542f279aac4b9f4bf58a8872f25849d88a681f0d7dc1d2aa",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1823,7 +1829,7 @@
       "expectedReasonCode": "ACT9_CODEX_ACTIVATION_VERIFIED",
       "evidencePath": "dist/evidence/act2/act9.json",
       "invalidationTriggers": [
-        "Codex independent activation-host authority, admitted-root binding, SessionStart hook surface, matcher, handler/summary byte binding, 1024-byte budget, Verity or capability-manifest binding, local approved-definition set semantics, installation-versus-host-activation distinction, current-live boundary, opaque host trust hash boundary, or activation-only rollback changes"
+        "Codex independent activation-host authority, admitted-root binding, SessionStart hook surface, matcher, handler/summary byte binding, 1024-byte budget, persona-free main-session scope, ordinary repository authority wording, capability-manifest binding, local approved-definition set semantics, installation-versus-host-activation distinction, current-live boundary, opaque host trust hash boundary, or activation-only rollback changes"
       ]
     },
     {
@@ -1831,7 +1837,7 @@
       "phase": "P6",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "CODEX-EXECUTION-COLLECTION implements INIT-010 EPIC-020 S054 on top of the read-only App Server Observer. It corrects the version-pinned 0.139.0 observer vocabulary to the actual lower-case JSON-RPC wire methods and correlates a supplied completed collabAgentToolCall/spawnAgent item with thread/started for a same-session subagent, that thread's first turn/started and turn/completed, and an in-turn phase=final_answer agentMessage. A complete correlation becomes the host-neutral ObservedInvocation shape and an EPIC-019 host-execution receipt carrying real sessionId, threadId, turnId, distinct agentInvocationId, prompt digest and output digest; freshContext is derived only from a non-forked subagent thread created after the matching spawn completes, while final output is the last phase=final_answer item by completedAtMs inside the turn. The compact transcript retains digests rather than raw prompt text in its transcript projection while the emitted record still carries the observed final message verbatim and is explicitly unsigned attribution rather than identity proof. Missing prompt, final message, fresh-context basis or turn lifecycle returns an unavailable candidate; no candidates or an unpinned protocol returns unavailable for the surface; cross-session contamination and replayed lifecycle/item frames fail closed. The collector folds only a supplied stream, opens no socket, issues no request and never starts, forks, resumes, interrupts or otherwise drives a Codex thread or subagent. A real Codex Desktop run now records App-visible sub_agent_activity and completed subagent rollouts, but those rollout records are not converted into the pinned App Server stream and no Workflow receipt is fabricated; a live App Server attach remains expressly unclaimed under the GD-1 observer boundary.",
+      "subject": "CODEX-EXECUTION-COLLECTION implements INIT-010 EPIC-020 S054/S057 on top of the read-only App Server Observer. Against the pinned Codex CLI 0.139.0 shapes it correlates item/started plus item/completed collabAgentToolCall/spawnAgent lifecycle, the named receiver's same-connection thread/read(includeTurns=true), that child turn's started/completed lifecycle, and its raw phase=final_answer bytes. Child thread/started is optional because the real host omitted it for the spawned child; if present it must agree with readback, and no synthetic frame is manufactured. Fresh context requires matching spawn start/completion, receiver, session and parent, forkedFromId=null, a thread-creation second interval overlapping the millisecond spawn lifecycle, and matching first-turn readback/lifecycle. Raw and readback final item ids are retained separately because Codex normalizes readback ids, while phase and text bytes must match. A complete correlation becomes a host-neutral ObservedInvocation and v1 host-execution receipt carrying real opaque host session/thread/turn ids, prompt/output/transcript digests and freshContext=true; it remains unsigned attribution, not identity proof. Missing readback, prompt, final, turn or fresh-context basis stays unavailable; receiver mismatch, cross-session contamination and duplicate/replayed lifecycle or readback fail closed. The collector itself opens no socket, issues no request and never drives a host. S057 separately ran one bounded live harness against Codex CLI 0.139.0, captured the pinned raw stream and same-connection readbacks, passed 28 comparisons, produced one Workflow receipt, and cleanly tore down its launched process tree.",
       "command": "pnpm verify:act10",
       "fixturePaths": [
         "package.json",
@@ -1848,7 +1854,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b71afe9d5c65b064393b5deac8010bd2d8ac8a9bd6bfb987c67623639673f339",
+      "fixtureDigest": "670cff79237807f501322f55d0501d4663bf73c30c8ceaf20d033cb395450084",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1858,7 +1864,7 @@
       "expectedReasonCode": "ACT10_CODEX_EXECUTION_COLLECTION_VERIFIED",
       "evidencePath": "dist/evidence/act2/act10.json",
       "invalidationTriggers": [
-        "Codex lower-case notification vocabulary, spawn/thread/turn/final-message correlation, fresh-context derivation, final_answer phase/time selection, session/thread/turn receipt bindings, unavailable downgrade rules, duplicate/cross-session refusal, transcript disclosure, unsigned attribution boundary, or no-host-drive boundary changes"
+        "Codex lower-case notification/readback vocabulary, spawn lifecycle and receiver binding, optional child thread/started handling, thread/read source/parent/fork/time proof, raw/readback final-message correlation, fresh-context derivation, session/thread/turn receipt bindings, unavailable downgrade rules, duplicate/cross-session refusal, live evidence-manifest binding, transcript disclosure, unsigned attribution boundary, or collector-versus-live-harness boundary changes"
       ]
     },
     {
@@ -1866,7 +1872,7 @@
       "phase": "P6",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "INIT-009 S076/S080 and INIT-010 S057 have one closed cross-host acceptance matrix covering two hosts, eight surfaces and fourteen hostile cases. Each Codex/Claude cell records governance level, evidence class, live-host and exact-generated-byte status, source and an explicit boundary; unavailable and hermetic cells cannot be promoted into live or enforce claims. The negative corpus covers bypass, opt-out, protocol drift, rollback drift, unapproved definitions, hosted coverage holes, no invocation, forged actor attribution, replay, cross-session contamination, transcript tamper, activation-authority mismatch, unproven fresh context and unknown final-message phase. The current absolute-root Codex and Claude SessionStart definitions remain hermetic with zero current exact-byte live fires; prior host receipts bind superseded bytes and are historical only. Unaffected live evidence remains narrow: one enabled and directly exercised Workflow MCP registration plus App-visible Codex Desktop subagent records. S076 remains verified and S080 accepted with explicit unavailable cells; S057 remains partial because Desktop rollout records have not been collected through the pinned App Server stream or compared with a Workflow receipt. MIN-046 authorizes zero enforce host surfaces, the MCP enforce claim ends at Workflow's pinned server boundary, and neither current Hook activation, Desktop hot-load nor a live App Server attach is inferred.",
+      "subject": "INIT-009 S076/S080 and INIT-010 S057 have one closed cross-host acceptance matrix covering two hosts, eight surfaces, fourteen hostile cases and the six-event MIN-046 observe set. Each Codex/Claude surface cell records governance level, evidence class, live-host and exact-generated-byte status, source and an explicit boundary; a separate twelve-cell event matrix preserves live_exact, unavailable_version_pinned and unavailable_host_account dispositions without promoting unavailable or evidence-only mechanisms into shipped activation. The current persona-free SessionStart definitions remain hermetic with zero current exact-byte live fires; prior persona-bound receipts bind withdrawn bytes only. EPIC-024 exact live evidence covers PostToolUse, PreCompact, PostCompact, SubagentStart and SubagentStop on Codex CLI 0.139.0 plus SessionEnd on Claude Code 2.1.201. Codex SessionEnd is absent from the pinned schema and is not renamed Stop; the remaining five Claude cells stopped at API status 402 before inference or tool use. Live evidence also remains narrow for one enabled/directly exercised Workflow MCP registration, earlier App-visible Codex Desktop records, and one exact bounded Codex App Server stream/readback receipt comparison. S076 remains verified, S080 is accepted with explicit unavailable cells, and S057 is verified by the pinned same-connection comparison. MIN-046 authorizes zero enforce host surfaces; neither current SessionStart activation, a shipped multi-event installer, Desktop hot-load nor a reusable Controller is inferred.",
       "command": "pnpm verify:act11",
       "fixturePaths": [
         "package.json",
@@ -1879,9 +1885,10 @@
         "docs/verification/host/capability-manifest.json",
         "docs/verification/host/adapter-acceptance-matrix.json",
         "docs/verification/host/codex-live-integration-2026-07-25.json",
+        "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "46abe0601fe081c72890a4ce1e2228d0a9688cc2a1f54f5f061558e61161fc93",
+      "fixtureDigest": "a0cb85ee71df3c868789a9ac213619cd06b58c19f0609beaa525f256965430e5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1891,7 +1898,7 @@
       "expectedReasonCode": "ACT11_ADAPTER_ACCEPTANCE_VERIFIED",
       "evidencePath": "dist/evidence/act2/act11.json",
       "invalidationTriggers": [
-        "Cross-host surface inventory, governance level, evidence classification, live/exact flags, negative corpus, no-overclaim boundary, story disposition, or enforce authorization changes"
+        "Cross-host surface inventory, six-event observe coverage cells, version/account unavailable dispositions, governance level, evidence classification, live/exact flags, negative corpus, SessionEnd-versus-Stop boundary, story disposition, or enforce authorization changes"
       ]
     },
     {
@@ -1912,7 +1919,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d78507df21a51c762f5d7241f85b6077ee721a21cec78ce27b2cbcd676c22985",
+      "fixtureDigest": "d6e378948b577927c20c2296c3cd2dd7615c777a4c2fe9503512c91b89d25173",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1943,7 +1950,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "2abd995ec7fc78d02739fae5507a9a3a2c7b522cf0f4718bccb2b1b5eda8df84",
+      "fixtureDigest": "74bc7877a90ad83421e6523b64f28a7dfabfeaeef8804e8e2730cd1fa99213d9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1975,7 +1982,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f3af4fd3564983c5d7088da253aaf9b6fe78dbd9676492bd02dd75e11d432cf6",
+      "fixtureDigest": "9e599635f239d0cbd81080d9a7ee8b0f51c20b1000c09655d55fceeea933b16c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2006,7 +2013,7 @@
         "tests/p7-canonical-exchange.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "a63487cded796bea4f863cbbdeef6443694ea21d20373a6b5238803867775d75",
+      "fixtureDigest": "6c175ab9a2afdb0229d213ea932f1c542de05e8b5f065e476b14cd3da0e4198b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2038,7 +2045,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "897ec78078488e04c6f9e8f3fb8fea5d6d2dfd5b3c278f5dd79348bcf1b7a121",
+      "fixtureDigest": "6d6699331f07c54c86d696b213528a11f4b118cf96fae188c0ff9b6fcaa43e3b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2064,7 +2071,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "docs/compatibility/supported-modes.md"
       ],
-      "fixtureDigest": "e934461a7b7164de9d831a1b4f524b02ce221c6b3f1899fa359317dc4d9968d1",
+      "fixtureDigest": "a4c9f2ab28bb0c0d4cdd651488608734ff7626b60913e01de439c0ba41282df5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2096,7 +2103,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "a3082e43994c963df4d769eb4d789226b48357436525143f4a83013f0b60e12a",
+      "fixtureDigest": "aa5ec432afdf848f184ce57e954e97dc022ceb04263e9ba634d672273e3639b4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2140,7 +2147,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "931c199499b8d584e00ef1b82c43eadb90c026a283a927c849bdb8bd43585894",
+      "fixtureDigest": "8ae89e00725c357177c321797bdf5a58b1a5cd93effc92672868d4997a9129c3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2174,7 +2181,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "6f05de40d656cc44417007c7dadb6b750b7632baad8906b116beb65f4ece1e78",
+      "fixtureDigest": "59d1a4df524c9e71b28fc0c6677c357d3e1443f1f0d36673acf913811266f32a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2231,7 +2238,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "01fcb58fd12118e6fa626d2d23270bd97a383f44e64508f9b61cca3b4f9b39ec",
+      "fixtureDigest": "b56189977521170ef65e1bda4d66a0f57b9d970932c3bca45c210d663b52343c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2249,7 +2256,7 @@
       "phase": "ACT2",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "The tcrn.claude-adapter-settings-fragment.v2 activation fragment (merge key tcrnWorkflow, distinct from v1's inert tcrnWorkflowInert) generates exactly ONE real hooks.SessionStart entry running the governed handler through the shell-quoted canonical absolute path under the installer-admitted project root. The root is included in the fragment digest and must equal the independently re-admitted installer root before any activation write; home, filesystem-root, ancestor-of-home, host-tree and symlink roots are refused. More than one hook event, a second SessionStart entry, a changed command, or a root mismatch fails closed, while the fire-time cwd cannot redirect the approved command. mergeClaudeAdapterActivationFragment materializes that entry under the real hooks key and records hooksContainerCreated / sessionStartArrayCreated so removeClaudeAdapterActivationFragment is exact byte-inverse over settings shapes that carry no hooks, unrelated user hooks, or a pre-existing SessionStart array (remove(merge(s)) === s), preserving user content. The bounded authority summary honours the 1024-byte fixedInjectionBytes budget. The additive tcrn.claude-adapter-installation-generation.v2 receipt covers the four inert templates plus session-start.mjs and reserves persona-render.json, so WSG-2's executeClaudeAdapterRollback empties .claude/tcrn-workflow byte-inverse. This is code and fixture proof only; no current Claude live activation is claimed.",
+      "subject": "The tcrn.claude-adapter-settings-fragment.v2 activation fragment (merge key tcrnWorkflow, distinct from v1's inert tcrnWorkflowInert) generates exactly ONE real hooks.SessionStart entry running the governed handler through the shell-quoted canonical absolute path under the installer-admitted project root AND the handler's exact byte digest as --handler-digest. The root is included in the fragment digest and must equal the independently re-admitted installer root before any activation write; home, filesystem-root, ancestor-of-home, host-tree and symlink roots are refused. More than one hook event, a second SessionStart entry, a changed command, or a root mismatch fails closed, a command line pinning bytes other than the fragment's own scriptDigest fails ACTIVATION_FRAGMENT_INVALID, while fire-time cwd cannot redirect the approved command's handler argument. Its interpreter is the bare name node and stays PATH-resolved at fire time; Claude Code has no exact-definition approval step, so nothing re-prompts (INC-011, disclosed not closed). mergeClaudeAdapterActivationFragment records exact merge topology so removal is byte-inverse while preserving unrelated user hooks. The v2 handler emits a bounded Workflow summary that binds no Core Reference persona, states that the main thread is not read-only, and does not revoke explicit user authority for ordinary repository work. The additive tcrn.claude-adapter-installation-generation.v2 receipt covers exactly the four inert templates plus session-start.mjs; no persona-render.json is generated, installed or reserved. This is code and fixture proof only; no current Claude live activation is claimed.",
       "command": "pnpm verify:act2",
       "fixturePaths": [
         "packages/core/src/claude-adapter-activation.ts",
@@ -2260,7 +2267,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "a7372ea24251d45f54b8001537063f5bd1c334fd62521ffc11bd5ea3119bcb71",
+      "fixtureDigest": "a8645e292a3df6c40d6c521c7c9b13a365c22c2901faa1b369d232c9a43de5b5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2270,7 +2277,8 @@
       "expectedReasonCode": "ACT2_CLAUDE_SESSIONSTART_VERIFIED",
       "evidencePath": "dist/evidence/act2/act2.json",
       "invalidationTriggers": [
-        "v2 fragment shape, admitted absolute-root binding, merge/remove byte-inverse, hook-surface bound, injection budget, installer root admission, or v2 receipt/rollback coverage changes"
+        "v2 fragment shape, admitted absolute-root binding, merge/remove byte-inverse, hook-surface bound, injection budget, installer root admission, or v2 receipt/rollback coverage changes",
+        "Hook command argument set or handler-digest binding changes"
       ]
     },
     {
@@ -2278,7 +2286,7 @@
       "phase": "ACT2",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "The installed SessionStart handler emitted by generateSessionStartScript is the SOLE authorized fail-open surface in the program (N-2 / OD-32): its whole body is wrapped try/catch{}finally{process.exit(0)}, so under every induced failure — missing project.json, malformed JSON, an over-budget (>1024-byte) summary, or an unreadable project file — the spawned handler exits 0 with empty stdout and the session proceeds as plain Claude Code, while the happy path exits 0 printing a summary within the 1024-byte budget. The script carries zero dependencies beyond node:fs/node:path and no host-absolute path, so its scriptDigest is stable and the v2 fragment binds its hook command to it.",
+      "subject": "The installed SessionStart handler emitted by generateSessionStartScript is the SOLE authorized fail-open surface in the program (N-2 / OD-32): its whole body is wrapped try/catch{}finally{process.exit(0)}, so under every induced failure — missing project.json, malformed JSON, a control character in an interpolated project field, a missing or mismatched --handler-digest, an over-budget (>1024-byte) summary, or an unreadable project file — the spawned handler exits 0 with empty stdout and the session proceeds as plain Claude Code, while the happy path exits 0 printing a persona-free Workflow summary within the 1024-byte budget. That summary explicitly preserves main-thread ordinary repository scope and keeps Core Reference roles conference-only. The script carries zero dependencies beyond node:crypto/node:fs/node:path/node:url and no host-absolute path or digest literal, so its scriptDigest is stable across hosts and the v3 fragment binds its hook command to it. Every interpolated project value is screened for control characters at the composition point (INC-014), and the handler digests its own bytes at fire time against the digest carried in the approved command line (INC-015); it does not and cannot detect a wholly substituted handler, which simply does not run the check.",
       "command": "pnpm verify:act2",
       "fixturePaths": [
         "packages/core/src/claude-adapter-activation.ts",
@@ -2289,7 +2297,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "a7372ea24251d45f54b8001537063f5bd1c334fd62521ffc11bd5ea3119bcb71",
+      "fixtureDigest": "a8645e292a3df6c40d6c521c7c9b13a365c22c2901faa1b369d232c9a43de5b5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2299,7 +2307,8 @@
       "expectedReasonCode": "ACT2_CLAUDE_SESSIONSTART_VERIFIED",
       "evidencePath": "dist/evidence/act2/act2.json",
       "invalidationTriggers": [
-        "SessionStart handler fail-open wrapper, injection budget, dependency surface, or scriptDigest binding changes"
+        "SessionStart handler fail-open wrapper, injection budget, dependency surface, or scriptDigest binding changes",
+        "Handler self-digest argv contract, control-character screen, or emitted generator-version interpolation changes"
       ]
     },
     {
@@ -2307,10 +2316,13 @@
       "phase": "ACT2",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "renderPersonaAuthoritySummary renders exactly ONE advisory persona — Verity (closed allowlist of one, OD-34; profileId profile:tcrn-verity-v1) — into a bounded authority summary. Its digest binding rides validateCorePersonaBundle, which transitively pins CORE_PERSONA_SOURCE_MANIFEST_SHA256 and each profile's exact source digest, so upstream prose tampering fails inside that validator (PERSONA_CANONICAL_INVALID for a naive edit, PERSONA_SOURCE_MISMATCH once the profileDigest is resealed) before any text is composed; every non-Verity profileId is rejected with RENDER_PERSONA_NOT_ALLOWED. The composed text is enforced fail-closed to Buffer.byteLength <= 1024 (the same fixedInjectionBytes budget) with RENDER_BUDGET_EXCEEDED at generation time. The render flows into the governed SessionStart injection through exactly one path: claude-adapter-install --step3 renders the summary, digest-binds the generated handler to its renderDigest, and persists persona-render.json on the additive tcrn.claude-adapter-installation-generation.v2 receipt (reserved entry), so WSG-2 rollback removes it byte-inverse; no CLI verb other than persona-render (stdout only) and that install path emits render text. At runtime a render whose renderDigest no longer matches the bound handler degrades to empty stdout exit 0 (N-2 fail-open, unchanged from WSG-3).",
+      "subject": "renderPersonaAuthoritySummary renders any explicitly selected member of the closed eight-role Core Reference roster into a tcrn.conference-persona-reference.v1 document whose scope is conference_position_reference. Its digest binding rides validateCorePersonaBundle, which transitively pins CORE_PERSONA_SOURCE_MANIFEST_SHA256 and each profile's exact source digest, so upstream prose tampering fails before text composition; an id outside the eight-role roster is rejected with RENDER_PERSONA_NOT_ALLOWED. The render is enforced fail-closed to Buffer.byteLength <= 1024 with RENDER_BUDGET_EXCEEDED and its text states that it neither binds the main thread nor grants Workflow authority. The CLI requires persona-render --profile-id and writes the reference to stdout only. Codex and Claude adapters reject every Core Reference persona id as a main-session profile; both SessionStart handlers inject no persona, and Claude activation/rollback contains no persona-render.json. The historical --step3 spelling remains a persona-free activation compatibility alias, not an injection path.",
       "command": "pnpm verify:act3",
       "fixturePaths": [
+        "packages/core/src/core-reference-personas.ts",
         "packages/core/src/persona-render.ts",
+        "packages/core/src/codex-adapter.ts",
+        "packages/core/src/claude-adapter.ts",
         "packages/core/src/claude-adapter-session-start.ts",
         "packages/core/src/claude-adapter-activation.ts",
         "packages/core/src/claude-adapter-installer.ts",
@@ -2319,7 +2331,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "e3cf5bbbe6608ef6b4c45f12564fa705752e2fd9c4e0098e443c6ee3fa61cd13",
+      "fixtureDigest": "4a877dbdd00cb1ae9d4b947ccc31e736f95639caba65e3dcddc62161489c5327",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2329,7 +2341,7 @@
       "expectedReasonCode": "ACT3_PERSONA_RENDER_VERIFIED",
       "evidencePath": "dist/evidence/act2/act3.json",
       "invalidationTriggers": [
-        "persona render template, closed persona allowlist, source-manifest digest binding, 1024-byte budget, single-emit hygiene, or --step3 receipt/rollback coverage changes"
+        "conference persona reference schema/scope, closed eight-role allowlist, source-manifest digest binding, 1024-byte budget, explicit --profile-id CLI contract, main-session profile rejection, SessionStart persona absence, single-emit hygiene, or persona-free --step3 receipt/rollback coverage changes"
       ]
     },
     {
@@ -2346,7 +2358,7 @@
         "packages/core/src/index.ts",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f278d079c63e83d54015d6618e324315cadbcd2ea38409bd01181c00c0bbb16d",
+      "fixtureDigest": "a4e2164b79f09b210738aa63f1390be54fb074a4fad28149c5c1f081b266835b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

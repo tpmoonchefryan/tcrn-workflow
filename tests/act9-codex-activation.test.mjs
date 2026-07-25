@@ -331,7 +331,7 @@ test("INC-001: an activation receipt may only name files inside its own installa
   }
 });
 
-test("Step 3 installs one digest-bound SessionStart hook but claims no host activation", async () => {
+test("compatibility Step 3 installs one persona-free SessionStart hook but claims no host activation", async () => {
   const fixtureRoots = await roots();
   try {
     const bundle = bundleFor();
@@ -491,7 +491,7 @@ test("activation authority rejects stale, wrong-product, and self-resealed widen
   );
 });
 
-test("the generated handler injects bounded Verity context and every failure stays silent/zero", async () => {
+test("the generated handler preserves main-thread scope, injects no conference persona, and every failure stays silent/zero", async () => {
   const fixtureRoots = await roots();
   try {
     const bundle = bundleFor();
@@ -530,11 +530,11 @@ test("the generated handler injects bounded Verity context and every failure sta
       output.hookSpecificOutput.hookEventName,
       "SessionStart",
     );
-    assert.ok(
-      output.hookSpecificOutput.additionalContext.includes(
-        "Advisory persona: Verity",
-      ),
-    );
+    assert.ok(output.hookSpecificOutput.additionalContext.includes("does not make the thread read-only"));
+    assert.ok(output.hookSpecificOutput.additionalContext.includes("ordinary repository work"));
+    assert.ok(output.hookSpecificOutput.additionalContext.includes("conference-only position attributions"));
+    assert.equal(output.hookSpecificOutput.additionalContext.includes("Verity"), false);
+    assert.equal(output.hookSpecificOutput.additionalContext.includes("profile:tcrn-verity-v1"), false);
     assert.ok(
       Buffer.byteLength(
         output.hookSpecificOutput.additionalContext,
@@ -578,7 +578,7 @@ test("definition, handler, summary, and approved-set drift all require current-d
   const approved = assessCodexActivationTrust(original.binding, [
     original.binding.hookDefinitionDigest,
   ]);
-  assert.equal(approved.currentDefinitionApproved, true);
+  assert.equal(approved.hookDefinitionInSuppliedApprovedSet, true);
 
   const handlerDrift = codexHookDefinitionForDigests(
     installationRoot,
@@ -600,11 +600,13 @@ test("definition, handler, summary, and approved-set drift all require current-d
     ]),
   ];
   assert.equal(cases.length, fixture.driftCases);
-  for (const assessment of cases) {
-    assert.equal(assessment.currentDefinitionApproved, false);
-    assert.equal(assessment.activationState, "pending_host_approval");
+  for (const comparison of cases) {
+    assert.equal(comparison.hookDefinitionInSuppliedApprovedSet, false);
+    // INC-012: a caller-supplied comparison reports set membership and deliberately does
+    // not spell the tokens the receipts use for host state.
+    assert.equal(comparison.evidenceClass, "caller_supplied_input_only");
     assert.equal(
-      assessment.hostTrustHashRepresentation,
+      comparison.hostTrustHashRepresentation,
       "opaque_not_exported",
     );
   }
@@ -618,7 +620,60 @@ test("definition, handler, summary, and approved-set drift all require current-d
   );
 });
 
-test("a self-resealed summary cannot replace governed advisory text with an authority claim", () => {
+test("INC-012: the local definition comparison is not shaped as evidence of host state", () => {
+  const bundle = bundleFor();
+  const installationRoot = "/tmp/tcrn-codex-activation-comparison";
+  const artifacts = artifactsFor(bundle, installationRoot);
+  const comparison = assessCodexActivationTrust(artifacts.binding, [
+    artifacts.binding.hookDefinitionDigest,
+  ]);
+  // The emitted key set is pinned: re-adding activationState -- or any other receipt-shaped
+  // trust field -- to a computation over caller-supplied input reddens here first.
+  assert.deepEqual(Object.keys(comparison).sort(), [
+    "digestSemantics",
+    "disclosure",
+    "evidenceClass",
+    "handlerDigest",
+    "hookDefinitionDigest",
+    "hookDefinitionInSuppliedApprovedSet",
+    "hostTrustHashRepresentation",
+    "schemaVersion",
+    "summaryFileDigest",
+    "suppliedApprovedHookDefinitionDigests",
+    "suppliedInputDigest",
+  ]);
+  assert.equal(
+    comparison.schemaVersion,
+    "tcrn.codex-activation-definition-comparison.v1",
+  );
+  assert.equal(comparison.evidenceClass, "caller_supplied_input_only");
+  assert.equal(comparison.hookDefinitionInSuppliedApprovedSet, true);
+  for (const field of [
+    "activationState",
+    "assessmentDigest",
+    "currentDefinitionApproved",
+    "hookFired",
+    "trustApprovalObserved",
+  ]) {
+    assert.equal(Object.hasOwn(comparison, field), false, field);
+  }
+  const bytes = canonicalJson(comparison);
+  for (const token of [
+    "approved_current_definition",
+    "host_observed_active",
+    "pending_host_approval",
+  ]) {
+    assert.equal(bytes.includes(token), false, token);
+  }
+  // Structurally not a receipt: the validators that consume activation evidence refuse it
+  // on its key set, so it cannot be re-presented as an installation or activation record.
+  reason("CODEX_ACTIVATION_SCHEMA_INVALID", () =>
+    validateCodexActivationInstallationReceipt(
+      JSON.parse(JSON.stringify(comparison)),
+    ));
+});
+
+test("a self-resealed summary cannot replace the Workflow authority boundary", () => {
   const summary = generateCodexSessionSummary(
     bundleFor(),
     capabilityManifestDigest,
@@ -626,8 +681,8 @@ test("a self-resealed summary cannot replace governed advisory text with an auth
   );
   const forged = structuredClone(summary);
   forged.text = forged.text.replace(
-    "mutation/approval authority=none",
-    "mutation/approval authority=owner",
+    "grants no Workflow mutation or approval authority",
+    "grants Workflow owner mutation and approval authority",
   );
   forged.byteLength = Buffer.byteLength(forged.text, "utf8");
   delete forged.summaryDigest;
@@ -759,7 +814,7 @@ test("pre-existing config and tampered activation bytes fail closed without part
   }
 });
 
-test("fixture states the pending-host-approval no-overclaim boundary", () => {
+test("fixture does not reuse the withdrawn persona-bound live fire for the corrected definition", () => {
   assert.equal(
     fixture.schemaVersion,
     "tcrn.act9-codex-activation-cases.v1",
@@ -769,14 +824,14 @@ test("fixture states the pending-host-approval no-overclaim boundary", () => {
   assert.equal(fixture.hostTrustHashRepresentation, "opaque_not_exported");
   assert.equal(
     fixture.liveHostProof,
-    "not-claimed-current-absolute-root-definition-awaits-owner-reapproval",
+    "not-claimed-corrected-main-session-definition-awaits-owner-approval",
   );
   assert.equal(
     fixture.historicalHostEvidence,
     "docs/verification/host/codex-session-start-activation.json",
   );
-  // The fixture records historical host behavior, but current-candidate activation
-  // is not inferred from it. INC-002 changed the exact definition bytes.
+  // The old observation remains historical evidence for the withdrawn bytes.
+  // The corrected summary and handler require a new exact-definition approval.
   assert.equal(fixture.installationClaimsHostActivation, false);
 });
 

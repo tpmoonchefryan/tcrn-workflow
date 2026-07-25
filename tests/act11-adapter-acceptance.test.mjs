@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// INIT-009 S076/S080 and INIT-010 S057: cross-host acceptance and hostile matrix.
+// INIT-009 EPIC-024/S076/S080 and INIT-010 S057: cross-host acceptance and hostile matrix.
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -51,6 +51,15 @@ const liveIntegration = JSON.parse(
   await readFile(
     new URL(
       "../docs/verification/host/codex-live-integration-2026-07-25.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+);
+const observeEvidence = JSON.parse(
+  await readFile(
+    new URL(
+      "../docs/verification/host/observe-hook-live-acceptance-2026-07-25.json",
       import.meta.url,
     ),
     "utf8",
@@ -117,10 +126,63 @@ test("the acceptance matrix is closed, cross-host, and synchronized with the cap
   }
 });
 
-test("current hook definitions stay hermetic while unaffected live evidence remains narrow", () => {
+test("EPIC-024 accepts exact live observe evidence with explicit version and account unavailable cells", () => {
+  assert.equal(
+    observeEvidence.schemaVersion,
+    "tcrn.observe-hook-live-acceptance.v1",
+  );
+  assert.deepEqual(
+    matrix.observeEventCoverage.eventSet,
+    observeEvidence.scope.observeEvents,
+  );
+  assert.equal(matrix.observeEventCoverage.eventSet.length, fixture.observeEvents);
+  assert.equal(
+    matrix.observeEventCoverage.liveEventHostCells,
+    fixture.liveObserveEventHostCells,
+  );
+  assert.equal(
+    matrix.observeEventCoverage.explicitUnavailableEventHostCells,
+    fixture.explicitUnavailableObserveEventHostCells,
+  );
+  assert.deepEqual(
+    matrix.observeEventCoverage.cells,
+    observeEvidence.eventCoverage,
+  );
+  assert.equal(
+    observeEvidence.acceptance.disposition,
+    "accepted_with_explicit_unavailable_cells",
+  );
+  assert.equal(observeEvidence.acceptance.crossHostEventSetCovered, true);
+  assert.equal(observeEvidence.acceptance.perHostComplete, false);
+  assert.equal(
+    Object.keys(observeEvidence.codex.observedReceipts).length,
+    fixture.codexExactGeneratedObserveEventLiveFires,
+  );
+  assert.equal(
+    Object.keys(observeEvidence.claude.observedReceipts).length,
+    fixture.claudeExactGeneratedObserveEventLiveFires,
+  );
+  assert.equal(
+    observeEvidence.codex.versionPinnedUnavailable.event,
+    "SessionEnd",
+  );
+  assert.equal(observeEvidence.codex.versionPinnedUnavailable.mustNotAliasTo, "Stop");
+  assert.equal(observeEvidence.codex.hookTrust.bypassReliedUpon, false);
+  assert.equal(observeEvidence.codex.appServer.hookStartedNotifications, 7);
+  assert.equal(observeEvidence.codex.appServer.hookCompletedNotifications, 7);
+  assert.equal(observeEvidence.codex.appServer.threadArchived, true);
+  assert.equal(observeEvidence.codex.appServer.cleanTeardown, true);
+  assert.equal(observeEvidence.claude.observedReceipts.SessionEnd, 3);
+  assert.equal(observeEvidence.claude.remainingEventsUnavailable.inputTokens, 0);
+  assert.equal(observeEvidence.claude.remainingEventsUnavailable.outputTokens, 0);
+  assert.equal(observeEvidence.scope.enforceHostSurfacesAuthorized, 0);
+});
+
+test("current SessionStart definitions stay hermetic while bounded observe and S057 evidence remain separate", () => {
   const byId = new Map(matrix.surfaces.map((entry) => [entry.id, entry]));
   const activation = byId.get("adapter-activation");
   const sessionStart = byId.get("session-start-context-injection");
+  const toolLifecycle = byId.get("tool-lifecycle-observe");
   const workflowMcp = byId.get("workflow-mcp-tools");
   const execution = byId.get("execution-collection");
   assert.equal(activation.codex.evidenceClass, "hermetic");
@@ -131,8 +193,16 @@ test("current hook definitions stay hermetic while unaffected live evidence rema
   assert.equal(sessionStart.codex.exactGeneratedBytesLiveMeasured, false);
   assert.equal(workflowMcp.codex.evidenceClass, "live_mechanism_only");
   assert.equal(workflowMcp.codex.exactGeneratedBytesLiveMeasured, true);
-  assert.equal(execution.codex.evidenceClass, "live_mechanism_only");
-  assert.equal(execution.codex.exactGeneratedBytesLiveMeasured, false);
+  assert.equal(execution.codex.evidenceClass, "live_exact");
+  assert.equal(execution.codex.exactGeneratedBytesLiveMeasured, true);
+  assert.equal(toolLifecycle.codex.evidenceClass, "live_exact");
+  assert.equal(toolLifecycle.codex.liveHostMeasured, true);
+  assert.equal(toolLifecycle.codex.exactGeneratedBytesLiveMeasured, true);
+  assert.equal(toolLifecycle.codex.governance, "unavailable");
+  assert.equal(toolLifecycle.claude.evidenceClass, "live_mechanism_only");
+  assert.equal(toolLifecycle.claude.liveHostMeasured, true);
+  assert.equal(toolLifecycle.claude.exactGeneratedBytesLiveMeasured, true);
+  assert.equal(toolLifecycle.claude.governance, "unavailable");
   assert.equal(activation.claude.evidenceClass, "hermetic");
   assert.equal(activation.claude.liveHostMeasured, false);
   assert.equal(sessionStart.claude.evidenceClass, "hermetic");
@@ -144,23 +214,26 @@ test("current hook definitions stay hermetic while unaffected live evidence rema
     assert.notEqual(surface.claude.governance, "enforce");
   }
   assert.equal(fixture.enforceHostSurfacesAuthorized, 0);
-  assert.equal(fixture.codexExactGeneratedHookLiveFires, 0);
+  assert.equal(fixture.codexExactGeneratedSessionStartLiveFires, 0);
+  assert.equal(fixture.codexExactGeneratedObserveEventLiveFires, 5);
+  assert.equal(fixture.claudeExactGeneratedObserveEventLiveFires, 1);
   assert.equal(fixture.liveWorkflowMcpRegistrations, 1);
   assert.equal(fixture.liveWorkflowMcpDirectHandshakes, 1);
   assert.equal(fixture.liveDesktopMultiAgentRuns, 1);
-  assert.equal(fixture.liveAppServerAttaches, 0);
-  assert.equal(fixture.liveMultiAgentReceiptComparisons, 0);
+  assert.equal(fixture.liveAppServerAttaches, 1);
+  assert.equal(fixture.liveMultiAgentReceiptComparisons, 1);
   assert.equal(liveIntegration.workflowMcp.registration.enabled, true);
   assert.equal(liveIntegration.workflowMcp.directExactServerProbe.toolCount, 93);
   assert.equal(liveIntegration.multiAgent.appVisibleStartRecords, 3);
-  assert.equal(liveIntegration.multiAgent.collectorBoundary.appServerAttached, false);
+  assert.equal(liveIntegration.appServerExecutionCollection.appServerAttached, true);
   assert.equal(
-    liveIntegration.multiAgent.collectorBoundary.workflowExecutionReceiptProduced,
-    false,
+    liveIntegration.appServerExecutionCollection.workflowExecutionReceiptProduced,
+    true,
   );
+  assert.equal(liveIntegration.appServerExecutionCollection.readbackChecks, 28);
   assert.ok(
     matrix.notClaimed.some((claim) =>
-      claim.includes("No live App Server attach"),
+      claim.includes("bounded evidence harness"),
     ),
   );
 });
@@ -195,9 +268,9 @@ test("unapproved definitions and missing or drifted execution streams remain una
     summaryFileDigest: digest("summary"),
     hookDefinitionDigest: digest("definition"),
   };
-  const assessment = assessCodexActivationTrust(binding, []);
-  assert.equal(assessment.activationState, "pending_host_approval");
-  assert.equal(assessment.currentDefinitionApproved, false);
+  const comparison = assessCodexActivationTrust(binding, []);
+  assert.equal(comparison.hookDefinitionInSuppliedApprovedSet, false);
+  assert.equal(comparison.evidenceClass, "caller_supplied_input_only");
 
   const common = {
     hostProduct: "Codex CLI",
@@ -206,6 +279,7 @@ test("unapproved definitions and missing or drifted execution streams remain una
     observedFrom: "2026-07-25T00:00:00Z",
     observedTo: "2026-07-25T00:01:00Z",
     notifications: [],
+    threadReadbacks: [],
   };
   const noInvocation = collectCodexAppServerExecutions({
     ...common,
@@ -317,14 +391,16 @@ test("collected receipts bind bytes and invocations but deliberately do not prov
   );
 });
 
-test("story dispositions separate the live App record from the missing Workflow receipt comparison", () => {
+test("story dispositions retain explicit unavailable cells while S057 is live-verified", () => {
+  assert.equal(matrix.epicAcceptance["EPIC-024"], fixture.epic024);
   assert.equal(matrix.storyAcceptance.S076, fixture.s076);
   assert.equal(matrix.storyAcceptance.S080, fixture.s080);
   assert.equal(matrix.storyAcceptance.S057, fixture.s057);
   assert.equal(fixture.s076, "verified");
   assert.equal(fixture.s080, "accepted_with_explicit_unavailable_cells");
+  assert.equal(fixture.epic024, "accepted_with_explicit_unavailable_cells");
   assert.equal(
     fixture.s057,
-    "partial_live_app_record_observed_receipt_comparison_missing",
+    "verified_live_app_server_readback_receipt_compared",
   );
 });

@@ -27,3 +27,17 @@ export function codeOnly(content) {
   }
   return out;
 }
+
+// The one source rule that must NOT go through codeOnly(). A raw control byte is
+// invisible in review: `file` classifies the source as binary data and BSD grep then
+// reports ZERO matches for the whole file, so every grep-based scan over it silently
+// sees nothing. INC-018 was one raw NUL that blinded two independent reviewers while git
+// (which sniffs only the first 8000 bytes) and the JS gates (which readFile) stayed
+// green. Both instances sat INSIDE string literals, which the blanker above erases, so
+// this reads bytes and blanks nothing. TAB and LF are the only control bytes a text
+// source may carry; a NUL that a digest genuinely wants is spelled with an escape, which
+// is what the rest of the offending file already did at every other separator.
+export function controlByteOffset(bytes) {
+  if (!(bytes instanceof Uint8Array)) throw new TypeError("CONTROL_BYTE_SCAN_BYTES_REQUIRED");
+  return bytes.findIndex((byte) => byte !== 0x09 && byte !== 0x0a && (byte < 0x20 || byte === 0x7f));
+}

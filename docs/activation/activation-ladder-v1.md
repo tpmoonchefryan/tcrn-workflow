@@ -1,6 +1,6 @@
 # Activation Ladder v1 (gated design artifact)
 
-- Status: Accepted per program authorization (recommended defaults, OD-32/OD-33/OD-34)
+- Status: Accepted activation ladder; main-session persona scope corrected 2026-07-25
 - Date: 2026-07-17
 - Governs: WSG-2 (Step 1), WSG-3 (Step 2), WSG-4 (Step 3), INIT-009
   EPIC-023 S066/S067 (Codex peer rungs)
@@ -59,16 +59,22 @@ step's code merges.
   governed handler reading `.claude/tcrn-workflow/project.json` read-only and
   printing only a bounded authority summary. Activation binds to a Step-1 receipt
   digest (no install → no activation).
-- **Hook command**: `node '<admittedProjectRoot>/.claude/tcrn-workflow/session-start.mjs'`
+- **Hook command**: `node '<admittedProjectRoot>/.claude/tcrn-workflow/session-start.mjs' --handler-digest <scriptDigest>`
   (handler emitted by `generateSessionStartScript`; the real canonical absolute
-  root is shell-quoted into the fragment). It reads project metadata, composes a
-  summary, and if the summary exceeds **1024 bytes it prints nothing** (a
-  truncated authority summary is a misrepresentation, not a fallback).
+  root is shell-quoted into the fragment, and the handler's exact byte digest is
+  pinned in the approved line so post-approval drift in those bytes fail-opens
+  instead of running — INC-015. The digest travels as an argument because the
+  emitted source cannot contain its own digest and a literal would break N-7).
+  It reads project metadata, composes a summary, and if the summary exceeds
+  **1024 bytes it prints nothing** (a truncated authority summary is a
+  misrepresentation, not a fallback).
 - **Failure mode**: **fail-OPEN** — this is the single documented exception to the
   repository's fail-closed norm (governing handoff N-2). The handler body is
-  wrapped so every failure path (missing/malformed `project.json`, over-budget
-  text, any thrown error) prints nothing and exits 0; the session proceeds as
-  plain Claude Code. `ACT2-FAIL-OPEN` makes this a proven property.
+  wrapped so every failure path (missing/malformed `project.json`, a control
+  character in an interpolated project field (INC-014), a missing or mismatched
+  --handler-digest (INC-015), over-budget text, any thrown error) prints nothing
+  and exits 0; the session proceeds as plain Claude Code. `ACT2-FAIL-OPEN` makes
+  this a proven property.
 - **Settings admission (installer, not handler)**: the Step-2 installer reads
   `.claude/settings.json` under the same hardened sequence the receipt readers use
   (`lstat` → `open` `O_NOFOLLOW` → `fstat` identity → read → `fstat` + by-name
@@ -90,22 +96,31 @@ step's code merges.
   `.claude/settings.json` byte-for-byte, preserving any pre-existing user hooks.
 - **Claims required before merge**: `ACT2-CLAUDE-SESSIONSTART`, `ACT2-FAIL-OPEN`,
   and `HOOK-ABSOLUTE-ROOT-BINDING`. The latter proves that fire-time cwd cannot
-  redirect the command to a different project handler.
+  redirect the command to a different project handler. It does not cover the
+  interpreter: `node` is a bare name resolved through the fire-time PATH, and the same
+  gate executes that substitution to keep the boundary honest (INC-011, disclosed).
 
-## Step 3 — Persona-to-prompt renderer for Verity (WSG-4)
+## Step 3 — Persona-free compatibility rung; conference renderer stays separate (WSG-4)
 
-- **What**: `renderPersonaAuthoritySummary` renders exactly one advisory persona
-  (`profile:tcrn-verity-v1`, a read-only role) into a digest-bound, byte-budgeted
-  summary written to `.claude/tcrn-workflow/persona-render.json` and consumed only
-  by the Step-2 SessionStart handler. The allowlist is a closed set of one,
-  extended only by a future Owner decision; the render is digest-bound to the
-  pinned persona source manifest, so mutated persona prose → `PERSONA_SOURCE_MISMATCH`.
-- **Hook command**: same SessionStart handler as Step 2; it re-verifies the render
-  file's `renderDigest` and `byteLength <= 1024` before printing.
-- **Failure mode**: fail-OPEN — a render mismatch or over-budget render → the
-  handler prints nothing and exits 0.
-- **Rollback**: the render file is removed by the same
-  `planClaudeAdapterRollback` identity-match sweep as Step 1's templates.
+- **What**: the historical `--step3` activation spelling remains a compatibility
+  alias for the same persona-free SessionStart summary as Step 2. It creates no
+  `persona-render.json`, binds no Core Reference role to the host session, and
+  does not make the main thread read-only. The summary's `operationAuthority`
+  limits Workflow mutations only; it does not revoke a user's explicit authority
+  for ordinary repository work.
+- **Conference-only renderer**: `persona-render --profile-id <id>` can render any
+  of the eight closed Core Reference persona ids into a digest-bound reference of
+  at most 1024 UTF-8 bytes. Its scope is
+  `conference_position_reference`; it writes only to stdout and is never consumed
+  by SessionStart. Mutated persona prose still fails through the pinned source
+  validation path.
+- **Hook command**: unchanged from Step 2. The handler reads only `project.json`
+  and emits the bounded Workflow/main-thread scope summary.
+- **Failure mode**: the SessionStart handler remains fail-OPEN. Conference render
+  generation remains fail-closed with the ACT3 reason codes and is not a host
+  activation path.
+- **Rollback**: activation rollback covers the four inert templates plus
+  `session-start.mjs`; there is no persona file to remove.
 - **Claims required before merge**: `ACT3-PERSONA-RENDER`.
 
 ## KEEP INERT (non-goals — do not activate in this program)
@@ -129,9 +144,11 @@ step's code merges.
 
 Ratified per the program implementation authorization (recommended defaults):
 Step-2 fail-OPEN semantics admitted as the sole documented exception to the
-fail-closed norm (OD-32); the v2-fragment-with-new-merge-key approach and the
-Verity single-persona allowlist admitted (OD-33/OD-34). This doc is the activation
-gate artifact; WSG-2/3/4 code merges only after their named claims are green.
+fail-closed norm (OD-32), and the v2-fragment-with-new-merge-key approach admitted
+(OD-33). The earlier OD-34 implementation interpretation that injected Verity into
+a main host session is superseded: Core Reference personas are conference-only
+position attributions. This doc remains the activation gate artifact; WSG-2/3/4
+code merges only after their named claims are green.
 
 ## Codex peer ladder — INIT-009 EPIC-023
 
@@ -164,12 +181,19 @@ The command names the handler through the installer-admitted canonical absolute
 project root and carries the exact handler and summary byte digests. The root is
 part of the artifact and definition digests, and the installer compares it with
 its independently re-admitted root before writing. The resulting definition
-digest is intentionally machine specific. The handler rechecks both byte digests, accepts only
+digest is intentionally machine specific. The interpreter is not part of that binding:
+the command's first token is the bare name `node`, resolved through the fire-time PATH,
+so a PATH entry ahead of the real interpreter substitutes it and the handler's byte
+self-check never runs (INC-011). An absolute interpreter path is not pinned because the
+approved definition would then drift with every toolchain change, and a fail-open hook
+degrades silently when it drifts. The handler rechecks both byte digests, accepts only
 the documented SessionStart sources, emits at most 1024 UTF-8 bytes as
 `hookSpecificOutput.additionalContext` for `SessionStart`, and on every failure
 emits nothing and exits zero. The generic `systemMessage` field is deliberately
 not used because Codex surfaces it as a warning rather than model context. No
-enforce event is installed.
+enforce event is installed. The injected v2 summary states that the main thread
+is not read-only, ordinary repository authorization remains available when the
+user grants it, and Core Reference personas are conference-only.
 
 Codex owns the decisive activation step. A non-managed command hook is skipped
 until the operator reviews and approves its exact current definition through
@@ -189,31 +213,42 @@ or observation JSON. The observation binds the active receipt, activation
 authority and host digest, exact hook definition, approved definition set,
 host/session/event/fire facts, and evidence digest. The v2 host receipt binds that
 observation digest, its evidence source, and where applicable the observation
-file SHA-256 and source identity digest. The approved set contains TCRN SHA-256
+file SHA-256 and source identity digest. An observation is admitted only while it is
+fresh for the authority presenting it: inside the activation-host context window on
+the branded route (that window is covered by the bound host digest), and inside the
+operator bundle window and at or before the operator verification time on the pinned
+file route. The same pinned bytes therefore cannot be re-presented under a rotated
+bundle to mint another `host_observed_active` receipt. The approved set contains TCRN SHA-256
 digests of the exact local definition bytes. Codex stores a host-owned `trusted_hash`, which
 the live probe observed out of band, but its normalized input and digest-domain
 semantics are opaque. Current TCRN receipts do not ingest that host value, so they
-mark it `opaque_not_exported` and never assert digest equality. The
-disposable-host approval, fire, and changed-definition skip for the superseded
-July 25 candidate are recorded in
-`docs/verification/host/codex-session-start-activation.json`. That candidate used
-a different command definition and is historical evidence only: it does not
-prove the current absolute-root definition approved or live. The matching
-`docs/verification/host/codex-live-integration-2026-07-25.json` receipt is likewise
-not reused. `pnpm verify:act9` now binds the code-level fail-open and trust-state
+mark it `opaque_not_exported` and never assert digest equality. The July 25
+`a340f94` observation and v2 receipt are retained in
+`docs/verification/host/codex-session-start-activation.json` only as historical
+evidence for the withdrawn persona-bound bytes. They do not approve or live-prove
+the corrected persona-free v2 summary and handler. That corrected definition has
+not been installed, reviewed through `/hooks`, approved, or fired. `pnpm
+verify:act9` binds the code-level fail-open, trust-state and pending-live evidence
 contracts; `pnpm verify:act12` executes the absolute-root cwd-hijack probe
-hermetically. A fresh `/hooks` review, approval and real SessionStart fire are
-required before any current live claim can return.
+hermetically and, in the same run, executes the interpreter substitution it does not
+close, so the INC-011 disclosure cannot outlive the code it describes.
 
-### Codex Step 3 — bounded Verity plus capability summary (S067)
+`adapter-activation-assess` computes only set membership from two caller-supplied
+inputs. Its document is schema-tagged
+`tcrn.codex-activation-definition-comparison.v1`, declares `evidenceClass:
+caller_supplied_input_only`, carries no activation-state field, and is refused by
+every activation validator on its key set (INC-012).
 
-Step 3 uses the same single hook and adds the same closed Verity advisory persona
-used on Claude Code, plus the exact capability-manifest digest. Persona source,
-summary object, summary file, handler, and hook definition are digest-bound. A
-handler-byte or summary-byte change changes the command definition and therefore
-returns the local assessment to `pending_host_approval`; a changed approved set is
-also explicit. The injected text continues to confer no mutation or approval
-authority.
+### Codex Step 3 — capability summary compatibility rung (S067)
+
+Step 3 uses the same single hook and the same persona-free summary as Step 2. The
+capability-manifest digest, summary object, summary file, handler, and hook
+definition remain digest-bound. A handler-byte or summary-byte change changes the
+command definition, so the local comparison reports the new definition digest as
+absent from the supplied approved set and a fresh `/hooks` approval is required; a
+changed approved set is also explicit. No Core Reference
+persona is injected or bound to the main session, and the injected Workflow
+authority boundary does not withdraw ordinary repository authorization.
 
 `adapter-deactivate` verifies every activation file and its receipt before
 removing anything, unregisters `.codex/hooks.json` first, then removes the handler

@@ -33,6 +33,14 @@ A receipt binds one position to one real host invocation:
 - an `availability` grade (`enforce` / `observe` / `invoke-only` / `unavailable`),
   shared with the EPIC-021 capability manifest vocabulary.
 
+**Opaque, but not empty.** `sessionId`, `threadId` and `turnId` are host-owned and are
+deliberately *not* held to TCRN's protocol-id grammar — Codex 0.139.0 emits bare UUIDs
+with no namespace, and forcing the grammar here would make real collector output
+unprojectable. "Opaque" is not "anything": a host id is well-formed Unicode, at least
+four characters (the shortest string the protocol-id grammar itself admits), at most 512
+UTF-8 bytes, and carries no whitespace, control character or invisible format character
+anywhere — leading, trailing or interior. A single space is not an identifier.
+
 **Attribution, not identity.** `outputDigest` is an unkeyed SHA-256 of the
 invocation's final assistant message. It proves the position text was not edited after
 the fact and did come from the bound invocation's output; it does **not** prove who

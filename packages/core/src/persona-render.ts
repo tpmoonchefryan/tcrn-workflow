@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// WSG-4 Step-3 persona-to-prompt renderer (activation ladder v1, Step 3;
-// docs/activation/activation-ladder-v1.md). Step 3 renders exactly ONE advisory
-// persona — Verity — into a bounded authority summary that the governed
-// SessionStart handler (claude-adapter-session-start.ts, WSG-3) prints. Verity is
-// the justified single choice: its authorityBoundary is intrinsically read-only
-// ("reviews read-only and cannot mutate the reviewed basis"), so an advisory
-// injection of Verity cannot even textually claim write authority. The persona
-// allowlist is a CLOSED set of one (OD-34: ratified); extending it is a future
-// Owner decision, not a runtime configuration surface.
+// Conference-role reference renderer. Core Reference personas are inert data used
+// to attribute conference positions; they are not host-session authority profiles
+// and are never injected by a SessionStart adapter. The renderer therefore emits
+// an explicitly conference-scoped reference for any of the eight closed roster
+// members, suitable for read-only inspection or for preparing a position whose
+// actorId is that role.
 //
 // renderPersonaAuthoritySummary drives its digest binding through
 // validateCorePersonaBundle, which transitively pins CORE_PERSONA_SOURCE_MANIFEST_SHA256
@@ -17,22 +14,19 @@
 // PERSONA_SOURCE_MISMATCH once the profileDigest is resealed) before this module ever
 // composes text — the render is bound to the governed source for free.
 //
-// The byte budget matches SESSION_START_INJECTION_BUDGET_BYTES / fixedInjectionBytes
-// (1024). It is enforced fail-closed HERE, at generation time: an over-budget render
-// is a build failure, never a runtime surprise. The runtime handler stays fail-open
-// (N-2 / OD-32) and independently re-bounds the text it reads; this module is the
-// generation-time producer, not that fail-open surface.
+// The 1024-byte budget is retained as a compact-reference budget. It is enforced
+// fail-closed at generation time and no host hook consumes the result.
 
 import { canonicalSha256, compareCanonicalText } from "../../protocol/src/index.js";
 import {
+  CORE_REFERENCE_PERSONA_IDS,
   validateCorePersonaBundle,
   type CorePersonaProfile,
 } from "./core-reference-personas.js";
 
-export const PERSONA_RENDER_VERSION = "tcrn.persona-authority-render.v1" as const;
+export const PERSONA_RENDER_VERSION = "tcrn.conference-persona-reference.v1" as const;
 export const PERSONA_RENDER_BUDGET_BYTES = 1_024 as const;
-// Closed persona allowlist of exactly one member (OD-34).
-export const PERSONA_RENDER_ALLOWED_PROFILE_ID = "profile:tcrn-verity-v1" as const;
+export const PERSONA_RENDER_ALLOWED_PROFILE_IDS = CORE_REFERENCE_PERSONA_IDS;
 
 export const PERSONA_RENDER_REASON_CODES = Object.freeze([
   "RENDER_BUDGET_EXCEEDED",
@@ -56,6 +50,7 @@ function fail(reasonCode: PersonaRenderReasonCode, message: string): never {
 
 export interface PersonaAuthorityRender {
   readonly schemaVersion: typeof PERSONA_RENDER_VERSION;
+  readonly scope: "conference_position_reference";
   readonly profileId: string;
   readonly profileDigest: string;
   readonly bundleDigest: string;
@@ -77,10 +72,11 @@ export interface PersonaAuthorityRenderOptions {
 function defaultAuthorityTemplate(profile: CorePersonaProfile): string {
   const refusals = profile.refusals.join("; ");
   return [
-    `Advisory persona: ${profile.displayName} (${profile.jobTitle}).`,
-    `Authority boundary: ${profile.authorityBoundary}`,
+    `Conference role reference: ${profile.displayName} (${profile.jobTitle}).`,
+    `Mandate boundary: ${profile.authorityBoundary}`,
     `Refuses: ${refusals}.`,
-    "This persona is read-only advisory context; it confers no authority to act, mutate, or approve.",
+    "Use only to attribute a conference position argued from this role's mandate.",
+    "This reference does not bind the main thread, make it read-only, or grant Workflow mutation or approval authority.",
   ].join("\n");
 }
 
@@ -110,15 +106,14 @@ function sha(value: unknown, label: string): string {
   return value;
 }
 
-// Compose the bounded advisory summary for the single allowed persona. The bundle
-// is validated first (digest binding to the governed source), then the closed
-// allowlist rejects every other profileId, then the governed template composes the
-// text and the byte budget is enforced fail-closed.
+// Compose a bounded conference reference for one member of the closed eight-role
+// roster. The bundle is validated first, so the output stays digest-bound to the
+// governed source rather than to caller-supplied prose.
 export function renderPersonaAuthoritySummary(bundleValue: unknown, profileId: string, options: PersonaAuthorityRenderOptions = {}): PersonaAuthorityRender {
   if (typeof profileId !== "string") fail("RENDER_SCHEMA_INVALID", "profileId");
   const bundle = validateCorePersonaBundle(bundleValue);
-  if (profileId !== PERSONA_RENDER_ALLOWED_PROFILE_ID) fail("RENDER_PERSONA_NOT_ALLOWED", profileId);
-  const profile = bundle.profiles.find((entry) => entry.profileId === PERSONA_RENDER_ALLOWED_PROFILE_ID);
+  if (!(PERSONA_RENDER_ALLOWED_PROFILE_IDS as readonly string[]).includes(profileId)) fail("RENDER_PERSONA_NOT_ALLOWED", profileId);
+  const profile = bundle.profiles.find((entry) => entry.profileId === profileId);
   if (profile === undefined) fail("RENDER_PERSONA_NOT_ALLOWED", profileId);
   const compose = options.template ?? defaultAuthorityTemplate;
   const text = compose(profile);
@@ -127,7 +122,8 @@ export function renderPersonaAuthoritySummary(bundleValue: unknown, profileId: s
   if (byteLength > PERSONA_RENDER_BUDGET_BYTES) fail("RENDER_BUDGET_EXCEEDED", String(byteLength));
   const basis = {
     schemaVersion: PERSONA_RENDER_VERSION,
-    profileId: PERSONA_RENDER_ALLOWED_PROFILE_ID,
+    scope: "conference_position_reference" as const,
+    profileId,
     profileDigest: profile.profileDigest,
     bundleDigest: bundle.bundleDigest,
     text,
@@ -141,9 +137,9 @@ export function renderPersonaAuthoritySummary(bundleValue: unknown, profileId: s
 // a self-consistent renderDigest over the canonical basis.
 export function validatePersonaAuthorityRender(value: unknown): PersonaAuthorityRender {
   const document = record(value, "persona render");
-  exactFields(document, ["schemaVersion", "profileId", "profileDigest", "bundleDigest", "text", "byteLength", "renderDigest"], "persona render");
-  if (document.schemaVersion !== PERSONA_RENDER_VERSION) fail("RENDER_SCHEMA_INVALID", "schemaVersion");
-  if (document.profileId !== PERSONA_RENDER_ALLOWED_PROFILE_ID) fail("RENDER_PERSONA_NOT_ALLOWED", String(document.profileId));
+  exactFields(document, ["schemaVersion", "scope", "profileId", "profileDigest", "bundleDigest", "text", "byteLength", "renderDigest"], "persona render");
+  if (document.schemaVersion !== PERSONA_RENDER_VERSION || document.scope !== "conference_position_reference") fail("RENDER_SCHEMA_INVALID", "render header");
+  if (typeof document.profileId !== "string" || !(PERSONA_RENDER_ALLOWED_PROFILE_IDS as readonly string[]).includes(document.profileId)) fail("RENDER_PERSONA_NOT_ALLOWED", String(document.profileId));
   const profileDigest = sha(document.profileDigest, "profileDigest");
   const bundleDigest = sha(document.bundleDigest, "bundleDigest");
   if (typeof document.text !== "string" || !document.text.isWellFormed()) fail("RENDER_SCHEMA_INVALID", "text");
@@ -152,7 +148,8 @@ export function validatePersonaAuthorityRender(value: unknown): PersonaAuthority
   if (byteLength > PERSONA_RENDER_BUDGET_BYTES) fail("RENDER_BUDGET_EXCEEDED", String(byteLength));
   const basis = {
     schemaVersion: PERSONA_RENDER_VERSION,
-    profileId: PERSONA_RENDER_ALLOWED_PROFILE_ID,
+    scope: "conference_position_reference" as const,
+    profileId: document.profileId,
     profileDigest,
     bundleDigest,
     text: document.text,

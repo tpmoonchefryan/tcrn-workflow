@@ -1,6 +1,6 @@
 {
   "schema": "tcrn.host-facts.v1",
-  "status": "SURFACE OBSERVED; SessionStart trust/drift and exact generated live fire measured; Workflow MCP registered and directly exercised",
+  "status": "SURFACE OBSERVED; historical persona-bound SessionStart fire retained as superseded; Workflow MCP directly exercised; S057 exact App Server readback comparison measured; five exact EPIC-024 observe events live-fired",
   "observedAt": "2026-07-25",
   "host": {
     "product": "Codex CLI",
@@ -8,9 +8,9 @@
     "versionSource": "codex --version"
   },
   "method": {
-    "kind": "read-only binary discovery, a disposable-project SessionStart trust probe, an exact generated-adapter live fire, and a registered/direct Workflow MCP probe",
+    "kind": "read-only binary discovery, historical SessionStart trust probes, a registered/direct Workflow MCP probe, one bounded S057 App Server execution/readback probe, and one exact-hash-approved EPIC-024 observe-hook probe",
     "reproducibility": "every digest below is regenerable on Codex 0.139.0 with the stated command; a different version is expected to differ, so this receipt is version-pinned evidence, not a version-independent claim",
-    "boundary": "the schema/feature/plugin/MCP rows establish surfaces. codex-session-start-activation.json proves disposable trust drift plus an exact generated TCRN live fire; codex-live-integration-2026-07-25.json records the registered and directly exercised Workflow MCP. No plugin was installed, no App Server round-trip was driven, and the running Codex Desktop process did not hot-load the new MCP registration."
+    "boundary": "the schema/feature/plugin/MCP rows establish surfaces. codex-session-start-activation.json retains the withdrawn persona-bound fire as historical evidence only; the corrected persona-free definition awaits exact-definition approval. codex-live-integration-2026-07-25.json records the registered/direct Workflow MCP, codex-app-server-execution-collection.json records one bounded exact S057 round-trip, and observe-hook-live-acceptance-2026-07-25.json records exact generated fail-open hook receipts for five events. The observe probe used a temporary evidence project and does not install a shipped multi-event activation surface. No plugin was installed, no shipped Controller exists, and the running Codex Desktop process did not hot-load the new MCP registration."
   },
   "observed": {
     "featureFlags": {
@@ -66,7 +66,7 @@
         "McpServerElicitationRequest",
         "ToolRequestUserInput"
       ],
-      "note": "the App Server exposes Thread lifecycle control and an approval surface as a JSON-RPC protocol (JSONRPCMessage/Request/Response/Notification). This is the read-only control plane EPIC-026's Observer would attach to; nothing here was invoked."
+      "note": "the App Server exposes Thread lifecycle control and an approval surface as a JSON-RPC protocol (JSONRPCMessage/Request/Response/Notification). EPIC-026's shipped Observer remains read-only; S057 later exercised a separate bounded harness without adding Controller code."
     },
     "pluginSurface": {
       "command": "codex plugin --help",
@@ -87,16 +87,30 @@
     },
     "sessionStartTrustProbe": {
       "evidence": "docs/verification/host/codex-session-start-activation.json",
-      "result": "an exact disposable SessionStart command definition was approved through /hooks and a changed definition was skipped; separately, the exact generated TCRN v2 definition, handler and summary were approved and fired into model context with source=startup",
+      "result": "an exact SessionStart command definition was approved and fired, but those bytes injected Verity and are now withdrawn; the corrected persona-free v2 handler/summary have not been installed, approved or fired",
       "hostInternalTrustHash": "host-owned trusted_hash observed out of band; normalized input and digest-domain semantics are opaque and the value is not imported into current TCRN receipts",
       "localDigestClaim": "the evidence records TCRN digests of exact local definition bytes and does not assert equality with Codex's trusted_hash"
+    },
+    "appServerExecutionProbe": {
+      "evidence": "docs/verification/host/codex-app-server-execution-collection.json",
+      "result": "one pinned 0.139.0 spawn lifecycle was byte-compared with same-connection thread/read(includeTurns=true), passed 28 checks and projected one unsigned fresh-context Workflow execution receipt",
+      "syntheticThreadStartedAdded": false,
+      "boundary": "the live harness is evidence-only; the shipped collector contains no connection or driving verb, and no host signature, actor identity or complete coverage is claimed"
+    },
+    "observeHookProbe": {
+      "evidence": "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json",
+      "result": "the exact generated fail-open handler recorded PostToolUse, PreCompact, PostCompact, SubagentStart and SubagentStop on Codex CLI 0.139.0; App Server emitted seven hook/started plus seven hook/completed notifications, the manual compaction completed, the evidence thread was archived and the launched process tree terminated cleanly",
+      "trust": "the temporary project was admitted through a one-off command-line project-trust override; Codex /hooks approved the five exact current hashes before the final run, and the final run did not rely on the bypass flag",
+      "receiptBoundary": "seven records retained bounded summaries and payload digests only; no raw hook payload was persisted",
+      "versionPinnedUnavailable": "SessionEnd is absent from Codex 0.139.0 HookEventName and ManagedHooksRequirements and is not represented by Stop",
+      "shippedActivationChanged": false,
+      "enforceHostSurfacesAuthorized": 0
     }
   },
-  "documentedNotExercised": {
-    "source": "learn.chatgpt.com/docs/hooks (documentation, not this binary's output)",
+  "versionPinnedHookSurface": {
+    "source": "codex app-server generate-json-schema on Codex CLI 0.139.0",
     "hookEvents": [
       "SessionStart",
-      "SessionEnd",
       "UserPromptSubmit",
       "PreToolUse",
       "PostToolUse",
@@ -107,14 +121,23 @@
       "SubagentStop",
       "Stop"
     ],
-    "trustModel": "the hook-event list remains documentation-derived; the SessionStart trust and reapproval behavior is separately measured in docs/verification/host/codex-session-start-activation.json",
-    "caveat": "events other than SessionStart remain documentation claims and have not been fired by this probe"
+    "liveFiredByEpic024": [
+      "PostToolUse",
+      "PreCompact",
+      "PostCompact",
+      "SubagentStart",
+      "SubagentStop"
+    ],
+    "schemaUnavailable": [
+      "SessionEnd"
+    ],
+    "currentDocumentationCaveat": "newer documentation includes SessionEnd, but that later surface is not retroactively attributed to the pinned 0.139.0 binary"
   },
   "notVerified": [
-    "any hook event other than SessionStart actually firing",
     "Codex trusted_hash normalization/digest-domain semantics or a supported approved-hash registry API",
-    "SessionEnd firing semantics and tool coverage",
-    "an App Server initialize/turn round-trip or a Workflow receipt produced from live Desktop subagent records",
+    "SessionEnd firing semantics on Codex 0.139.0, because that event is absent from the generated schema",
+    "complete coverage of every Codex tool path or every automatic compaction/subagent variant",
+    "a Workflow receipt produced from the earlier Desktop rollout records (the S057 receipt is from its later direct App Server run)",
     "plugin loading of a real bundle",
     "a successful Codex-host-routed Workflow MCP tool call or hot-loading that MCP server into the already-running Desktop process"
   ]

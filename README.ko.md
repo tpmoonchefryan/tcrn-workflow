@@ -59,7 +59,7 @@ TCRN Workflow는 이 세 가지를 한꺼번에 막습니다 — 에이전트 �
 | **모든 결정에 이름이 붙는다** | 액터 어테스테이션을 켜면 이후 모든 변경이 누가 행했는지 선언해야 합니다 — 엔진과 그 재생 모두 액터 ID가 빠진 이벤트에 대해 페일클로즈합니다. 켜지 않은 워크스페이스는 이전과 바이트 단위로 동일하게 동작합니다. |
 | **되돌릴 수 있는 활성화** | Claude Code와 Codex에는 세 단계 가역 활성화 경로가 있습니다. 현재 명령은 승인된 절대 프로젝트 루트를 결속하며 코드와 fixture로 증명됩니다. 이전 호스트 영수증은 교체된 바이트의 기록입니다. Codex는 각 정확한 정의를 `/hooks`에서 승인해야 하며 설치 영수증만으로 호스트 활성화를 주장하지 않습니다. |
 | **스스로를 증명하는 백업** | 스냅샷은 결정적인 파일별 매니페스트를 냅니다. 런북은 스냅샷 → 삭제 → 복원을 바이트 단위로 왕복시키고, 정말 중요한 두 실패 모드(부분 복원, 다른 위치 복원)는 페일클로즈합니다. |
-| **두 호스트, 하나의 진실** | Codex와 Claude Code는 호스트 중립 authority/receipt 메커니즘을 공유합니다. 둘 다 기본적으로 inert 상태이며 좁은 fail-open SessionStart activation을 갖습니다. Codex는 exact-definition 승인 경계를 기록하고 내부 opaque trust hash를 읽을 수 있다고 주장하지 않습니다. |
+| **두 호스트, 하나의 진실** | Codex와 Claude Code는 호스트 중립 authority/receipt 메커니즘을 공유합니다. 둘 다 기본적으로 inert 상태이며 좁은 fail-open SessionStart activation을 갖습니다. Codex는 exact-definition 승인 경계를 추가로 기록하되, 호스트의 opaque trust hash가 내보내진다고 주장하지는 않습니다. |
 | **구조적으로 오프라인** | 개발 모드는 프로세스 수준 네트워크 가드를 설치하고 텔레메트리는 0입니다. 프라이버시 게이트는 추적되는 모든 바이트, 도달 가능한 모든 git 히스토리, 릴리스 아카이브를 개인 식별자와 머신 경로에 대해 훑습니다. |
 | **직접 다시 도출할 수 있는 릴리스** | 릴리스는 불변 태그와 재현 가능한 산출물 묶음이며, `pnpm verify:p8`이 재구축해 바이트 비교합니다. 외부 사용자는 동반 프로젝트 `tcrn-workflow-helper`를 통해 검증하고, 그 다이제스트 자체는 독립적으로 확인할 수 있는 곳에 공개됩니다. |
 | **결함은 일급 시민** | 생성 경로가 `Incident` 종류를 허용하므로, 결함은 `Story`인 척하는 대신 자기만의 레코드와 계보를 가집니다. `Review`, `Release`, `Knowledge`는 직접 생성에 대해 닫힌 채로 남습니다. 지식 레코드를 폐기하면 그 본문이 회수되고 검색은 요약과 매칭되므로, 큐레이션된 저장소는 군더더기 없이 찾기 쉬운 상태로 유지됩니다. |
@@ -157,7 +157,7 @@ flowchart LR
     Layers --> REL
 ```
 
-맨 아래에 동결된 프로토콜, 그 위에 파일 네이티브 엔진, 다시 그 위에 역량 계층, 맨 위에 호스트 어댑터 — 활성화 전에는 비활성이며, 그 활성화를 가진 것은 Claude Code뿐입니다. 프로토콜은 추가 전용입니다: `work-model-v1`은 동결되었고, 모든 확장은 이미 수용된 스키마를 건드리지 않고 스스로 등록합니다.
+맨 아래에 동결된 프로토콜, 그 위에 파일 네이티브 엔진, 다시 그 위에 역량 계층, 맨 위에 호스트 어댑터 — 명시적으로 승인된 활성화 단(rung)에 이르기 전까지는 비활성입니다. 프로토콜은 추가 전용입니다: `work-model-v1`은 동결되었고, 모든 확장은 이미 수용된 스키마를 건드리지 않고 스스로 등록합니다.
 
 ## 솔직한 답변
 
@@ -190,16 +190,21 @@ flowchart LR
 
 ### Claude Code의 과거 live 영수증은 무엇을 증명했는가
 
-이전 상대 경로 정의가 실제 Claude Code 세션에 통치 권위의 **읽기 전용 요약**만 전달했음을 증명했습니다. 현재 절대 루트 명령은 정확한 정의 바이트를 바꾸므로 그 영수증은 과거 증거이며, 현재 Claude live 활성화는 주장하지 않습니다.
+이전 상대 경로 정의가 실제 Claude Code 세션에 **Workflow 한정 권한 경계 요약**만 전달했고 그 이상은 아무것도 전달하지 않았음을 증명했습니다. 그 과거 요약이 제한한 것은 Workflow 변경이며, 메인 스레드를 읽기 전용으로 만든 것이 아닙니다. 현재 절대 루트 명령은 정확한 정의 바이트를 바꾸므로 그 영수증은 과거 증거이며, 현재 Claude live 활성화는 주장하지 않습니다.
 
 나머지는 의도적으로 밖에 둡니다. 이 프레임워크는 호스트의 도구 사용을 재정하지 **않고**, 응답을 억제하거나 고쳐 쓰지 **않으며**, `~/.claude` 아래에는 **결코** 쓰지 않고, 명시적 행위 없이 지식을 승격하지 **않으며**, 세션을 편성하지도 **않습니다**. 훅이 실패하면 아무것도 출력하지 않고 세션은 평범한 Claude Code로 계속됩니다 — 이 코드베이스에서 의도적으로 fail-closed가 아니라 fail-open인 유일한 지점인데, 세션을 망가뜨릴 수 있는 통치 계층은 조용해지는 통치 계층보다 나쁘기 때문입니다.
 
 Codex에도 의도적으로 좁은 대응 기능이 있습니다. `adapter-install`은 inert
 상태를 유지하고, `adapter-activate`는 digest-bound handler와 1024-byte
-summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. 실행은
-`/hooks`의 exact-definition operator 승인이 필요하며 definition 변경 시
-재승인해야 합니다. 설치 receipt는 `pending_host_approval`로 남고,
-`adapter-deactivate`는 hook 등록부터 제거합니다.
+summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. 실행
+여부는 여전히 Codex가 정합니다: operator가 `/hooks`에서 정확한 definition을
+승인해야 하고, definition이 바뀌면 재승인이 필요하며, 설치 receipt는
+`pending_host_approval`로 남습니다. `adapter-deactivate`는 hook 등록부터
+해제하고 inert 단으로 되돌립니다. 주입되는 v2 summary는 어떤 Core Reference
+페르소나도 결속하지 않고, 메인 스레드를 읽기 전용으로 만들지 않으며,
+일상적인 저장소 작업에 대한 사용자의 명시적 인가가 아니라 Workflow 권한만
+제한합니다. PreToolUse/승인 enforce나 활성 App Server Controller는 주장하지
+않습니다.
 
 ### 릴리스는 어떻게 신뢰되는가
 
@@ -215,7 +220,7 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 - **밀폐 테스트 파일 약 40개**. 진짜 `SIGKILL` 결함 주입, 독립된 세 계층에서의 64순열 결정성 증명, 파일시스템 공격 매트릭스를 포함합니다.
 - **엔드투엔드 대표 증명 1개**(`pnpm verify:e2e`) — 통제 루프 전체(initiative → epic → story → gate → conference → distill → promote → trace)의 밀폐 재생으로, 튜토리얼의 모든 명령을 문자 그대로 실행합니다.
 - **공개 AOS 요구사항 원장 19항목**(11개는 fixture 검증, 8개는 명세 기재) — 성숙도는 행마다 기록되며 결코 부풀리지 않습니다.
-- **프라이버시 게이트**가 허용 목록의 소스 파일 250개 전부(정확히 일치하는 목록이라 파일이 하나 늘거나 줄면 게이트가 실패합니다), 도달 가능한 모든 git 객체, 그리고 릴리스 아카이브를 대상으로 합니다.
+- **프라이버시 게이트**가 허용 목록의 소스 파일 294개 전부(정확히 일치하는 목록이라 파일이 하나 늘거나 줄면 게이트가 실패합니다), 도달 가능한 모든 git 객체, 그리고 릴리스 아카이브를 대상으로 합니다.
 
 <details>
 <summary><b>전체 검증 대상 레퍼런스</b>(클릭해서 펼치기)</summary>
@@ -228,7 +233,7 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 | `verify:p4` / `verify:p4:knowledge` | 산출물 라이프사이클 예산, 비식별화, 일회용 아카이브 apply/restore; 지식 코어의 메타데이터/본문 분리, 승격 CAS, 64순열 일치. |
 | `verify:p5` | 닫힌 범용 프로파일 신뢰 모델, 실효 정책 다이제스트, 콜드스타트 그래프, 여덟 개의 비활성 Core Reference 페르소나. |
 | `verify:p6` / `verify:p6:adapter` / `verify:p6b` | 컨텍스트 라우터의 범위/위험/예산 제어와 적대적 코퍼스; Codex 어댑터 브리지; Claude Code 어댑터(네 파일 템플릿 번들, 가역 settings 조각, 금지 경로 거부, CLAUDE.md 폴백, 호스트 간 일치 다이제스트). |
-| `verify:act4` / `verify:act9` / `verify:act10` / `verify:act11` / `verify:act12` / `verify:act13` | Codex inert 설치, 독립 권한의 SessionStart activation과 definition drift, read-only supplied-stream collection, 교차 호스트 matrix, 적대적 cwd에서도 Codex/Claude 명령이 승인된 절대 루트만 실행한다는 증명, 그리고 정확한 output grant와 고정 host observation으로 게이트된 authority-bearing activation receipt. |
+| `verify:act4` / `verify:act9` / `verify:act10` / `verify:act11` / `verify:act12` / `verify:act13` | Codex inert 설치, 독립적으로 인가된 persona-free SessionStart activation과 exact-definition drift 및 현재 live 승인 대기, read-only 수집기와 정확한 live App Server stream/readback 영수증 비교 1건, 교차 호스트 matrix, 적대적 cwd에서도 Codex/Claude 명령이 승인된 절대 handler 경로만 지목한다는 증명(interpreter는 여전히 fire-time `PATH`로 해석되며, 이 잔여는 실측 후 미해결로 공개), 그리고 정확한 output grant와 고정 host observation으로 게이트된 authority-bearing activation receipt. |
 | `verify:p7` / `verify:p7:compatibility` | 정규 교환, 호환성 매니페스트, 롤백 방지 하한, 결정적 임포트/체크포인트/폴백 계획. |
 | `verify:authority-mcp` | 대역 외 고정 운영자 권위, 회전/폐기 거부, 호스트 중립 구조화 MCP 읽기/쓰기. |
 | `verify:p8` | 재현 가능한 릴리스 후보: 소스 아카이브 재구축과 바이트 비교, SBOM, provenance, 체크섬, 여섯 파일 닫힌 번들, 외부 신뢰 부정 매트릭스. |
@@ -284,7 +289,7 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 
 **드라이버 전제**
 
-- **무결성은 구동 모델의 능력에 의존하지 않습니다. 의존하는 것은 진전입니다**. 실패 후 닫힘은 약한 드라이버의 모든 경계 이탈을 거부로 바꾸므로 체인이 더럽혀질 수 없습니다 — 기준 미달의 에이전트는 무언가를 망가뜨리는 대신 reason code 위에서 공회전할 뿐입니다. 모델 능력에 따라 달라지는 것은: 이 규율 아래에서 진전을 이루는 것, 주입된 권위 요약을 따르는 것(도달함은 증명되었고, 따름은 한 번도 주장한 적 없습니다), 그리고 기록되는 내용의 품질 — 형태가 올바른 쓰레기는 충실히 보존됩니다. 원장이 증명하는 것은 누가 언제 무엇을 말했는가이지, 그것이 옳았는가가 아니기 때문입니다.
+- **무결성은 구동 모델의 능력에 의존하지 않습니다. 의존하는 것은 진전입니다**. 실패 후 닫힘은 약한 드라이버의 모든 경계 이탈을 거부로 바꾸므로 체인이 더럽혀질 수 없습니다 — 기준 미달의 에이전트는 무언가를 망가뜨리는 대신 reason code 위에서 공회전할 뿐입니다. 모델 능력에 따라 달라지는 것은: 이 규율 아래에서 진전을 이루는 것, 주입된 권위 요약을 따르는 것(도달함은 증명되었고, 따름은 한 번도 주장한 적 없습니다), 그리고 기록되는 내용의 품질 — 형태가 올바른 쓰레기는 충실히 보존됩니다. 원장이 증명하는 것은 누가 무엇을 말했는가이지, 그것이 옳았는가가 아니기 때문입니다.
 - **프레임워크는 드라이버가 다음을 할 수 있다고 전제합니다**: 산문 해석이 아니라 reason code로 분기하기; CAS 거부 후 다시 읽고 재시도하기, 결코 맹목적으로 재전송하지 않기; 빨간 게이트를 멈추고 보고하기로 다루기, 초록이 될 때까지 재실행하지 않기; 엄격한 RFC 3339 시각 구성, 재생성 순서 준수, 생성 파일과 다이제스트를 손으로 고치지 않기; 워크스페이스당 작성자 하나 유지하기. 각 항목은 당신의 에이전트로 직접 검증할 수 있습니다.
 - **호환 모델 목록은 공개하지 않습니다. 하나도 측정하지 않았기 때문입니다**. 측정된 유일한 구동 구성은 Claude Code 2.1.201 위의 프런티어급 Claude 모델입니다(영수증: `docs/verification/host/claude-code.json`). 위 전제에 못 미치면 예상되는 것은 손상이 아니라 공회전입니다 — 끝없는 거부 코드의 행렬은 기준 미달 드라이버의 서명이지, 프레임워크 결함의 서명이 아닙니다.
 
@@ -293,13 +298,14 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 - **통치된 운영자 표면은 소스에서 완성되었지만 승인된 `0.5.0` 릴리스에는 아직 포함되지 않았습니다.** 역사적인 열두 IO 차단 동사는 직접 digest 플래그로 일곱 개까지 줄었고, 현재 소스는 절대 경로와 SHA-256 pins 문서로 그 일곱 개를 공급하며 같은 명령 카탈로그를 구조화된 호스트 중립 MCP 도구로 노출합니다. 릴리스된 `0.5.0` 바이너리는 여전히 `ADAPTER_HOST_REQUIRED` 같은 reason code에서 멈춥니다.
 - **파괴적인 아티팩트 유지보수는 fixture 전용입니다**. `artifact-archive-apply`와 `artifact-archive-restore`는 기계 판독 카탈로그에 fixture-only로 표시되어 있습니다. 실제 워크스페이스에는 드라이런만 있으므로, 통치되는 압축이 출시될 때까지 아티팩트 저장소는 계속 커집니다.
 - **지식 저장소는 폐기 가능함을 명시적으로 승인해야 합니다**. 비 fixture 워크스페이스에서는 호출별 명시적 승인이 있을 때만 초기화됩니다(`KNOWLEDGE_DISPOSABLE_ACK_REQUIRED`): 그것은 파생 인덱스이며 결코 기록의 원본이 아닙니다.
+- **승인된 hook 명령이 고정하는 것은 handler이며 interpreter가 아닙니다**. 두 activation 명령 모두 설치기가 승인한 절대 handler 경로를 내장하므로 fire-time 작업 디렉터리로는 우회할 수 없습니다(`pnpm verify:act12`). interpreter는 여전히 맨이름 `node`이며 fire-time `PATH`로 해석됩니다. 진짜 interpreter보다 앞선 디렉터리가 이를 대체하고, handler 자신의 바이트 자기검사는 이를 볼 수 없습니다 — 대체된 interpreter는 handler를 읽지 않기 때문입니다. 동일한 게이트가 두 호스트에서 그 대체를 실제로 실행하므로 이는 가정이 아니라 실측입니다. 고정 대신 공개를 택했습니다. 절대 interpreter 경로를 고정하면 승인된 definition이 툴체인 변경마다 표류하고, 이 hook은 fail-open이므로 표류가 조용히 열화됩니다.
 
 ## 상태, 정직하게
 
 - `0.1.0`은 **첫 정식 릴리스**입니다. 시맨틱 버저닝이 적용되며, 0.x 범위에서는 공개 API가 마이너 버전 사이에 바뀔 수 있습니다.
 - **그 이후 다섯 개의 마이너 릴리스가 배포되었고, 지금은 `0.5.0`입니다.** `0.2.0`은 게이트 신원을 실현했고(명부로 검사되는 `owner_intent_required`), `0.3.0`은 레코드에 어드바이저리 범위를 추가했으며(`work-annotate`), `0.3.2`는 `Incident` 생성 경로를 열고 지식 저장소에 큐레이션 여유를 주었으며, `0.4.0`은 백그라운드 자원 잔여물 통치를 추가했고, `0.5.0`은 스프린트 / 릴리스 트레인 메커니즘을 추가했습니다. 각각은 재현 가능한 산출물 묶음을 가진 불변 태그이며, `CHANGELOG.md`가 전체 원장을 담고 있습니다.
-- **Claude Code에는 과거 live 증거가 있지만 현재 live 주장은 없습니다.** `2.1.201` 영수증은 교체된 상대 경로 정의를 다룹니다. 현재 승인 절대 루트 정의는 코드와 fixture로만 증명되며, 이번 변경에서는 Claude 호스트를 구동하지 않았습니다. 과거 영수증: `docs/verification/host/claude-code.json`.
-- **Codex activation은 좁고 증거 등급을 명시합니다.** 가역 inert 설치 위에 `SessionStart`만 fail-open으로 등록하고 Codex의 exact-definition 승인을 요구합니다. Codex `0.139.0` disposable probe는 승인 뒤 한 번의 실행과 definition 변경 뒤 skip을 기록했습니다. App Server collection은 supplied notification stream만 읽고 subagent를 시작하거나 조종하지 않습니다. 이는 `0.5.0` 이후 source-tree capability이며 accepted `0.5.0` release bytes에 대한 주장이 아닙니다.
+- **Claude Code 증거는 좁고 정의에 따라 갈립니다.** 과거 `2.1.201` activation 영수증은 교체된 상대 경로 SessionStart 바이트에 대한 관측 9건을 기록합니다. 현재의 persona-free 승인 절대 루트 SessionStart 정의는 여전히 코드와 fixture로만 증명됩니다. 이와 별개로, 생성된 EPIC-024 fail-open handler 정본이 Claude Code `2.1.201`에서 `SessionEnd`를 세 번 live 발화했습니다. 나머지 observe 이벤트 다섯 개는 모델 프로브가 추론이나 도구 사용에 이르기 전에 API 상태 402를 반환했기 때문에, 명시적인 측정 불가(unavailable) 칸으로 남아 있습니다.
+- **Codex의 activation·observe·execution 증거는 좁고 증거 등급이 매겨져 있습니다.** inert 설치기는 가역적이며, activation은 `SessionStart`만 등록하고 fail-open으로 동작하며, 어떤 Core Reference 페르소나도 주입하지 않고, 현재의 정확한 definition 전부에 대한 Codex의 승인을 요구합니다. 앞서 승인되었던 Verity 결속 발화는 철회된 바이트에 대한 과거 증거이며, 수정된 persona-free definition은 밀폐(hermetic) 증명에 머물러 있고 승인과 live 발화를 기다리고 있습니다. EPIC-024는 이와 별도로, 범위가 한정된 Codex `0.139.0` 증거 프로젝트에서 생성된 fail-open handler 정본을 `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`에 대해 live 발화시켰습니다. 그 버전의 생성 hook 스키마에는 `SessionEnd`가 없으며, `Stop`을 별칭으로 쓰지도 않습니다. S057은 또 다른 범위 한정 App Server 하네스로 raw/readback 검사 28건을 통과시키고 서명되지 않은 fresh-context Workflow 실행 영수증 1건을 산출했습니다. 두 하네스 모두 출시된 Controller도, 다중 이벤트 activation 설치기도 아닙니다. 이는 `0.5.0` 이후의 source-tree capability이며, 수용된 `0.5.0` 릴리스 바이트에 대한 주장이 아닙니다.
 - `supportedAosReleases`는 비어 있습니다: 외부 AOS 호환성은 주장하지 않습니다.
 - 릴리스 모드는 동반 헬퍼가 그 바이트를 수용할 것을 요구합니다: 부트스트랩 다이제스트는 독립적으로 공개되고, 수용되는 릴리스 다이제스트는 그 안에 컴파일되어 있습니다.
 

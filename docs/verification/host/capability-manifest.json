@@ -9,8 +9,8 @@
     "unavailable": "no TCRN integration exists for this capability on this host yet"
   },
   "evidence": {
-    "codex": "current candidate: packages/core/src/codex-adapter-activation.ts and tests/act12-hook-root-binding.test.mjs; historical host observations remain in codex-0.139.0-facts.json and codex-live-integration-2026-07-25.json",
-    "claude": "current candidate: packages/core/src/claude-adapter-activation.ts and tests/act12-hook-root-binding.test.mjs; historical host observations remain in claude-code.json and claude-code-facts.json"
+    "codex": "current activation candidate: packages/core/src/codex-adapter-activation.ts and tests/act12-hook-root-binding.test.mjs; exact live execution-collection evidence: docs/verification/host/codex-app-server-execution-collection.json; exact bounded observe-hook evidence: docs/verification/host/observe-hook-live-acceptance-2026-07-25.json; historical host observations remain in codex-0.139.0-facts.json and codex-live-integration-2026-07-25.json",
+    "claude": "current activation candidate: packages/core/src/claude-adapter-activation.ts and tests/act12-hook-root-binding.test.mjs; exact bounded SessionEnd evidence and explicit unavailable cells: docs/verification/host/observe-hook-live-acceptance-2026-07-25.json; historical activation observations remain in claude-code.json and claude-code-facts.json"
   },
   "capabilities": [
     {
@@ -19,7 +19,7 @@
         "surface": "app",
         "channel": "hook:SessionStart",
         "governance": "observe",
-        "note": "the current absolute-root definition is code- and fixture-proven only; the earlier claude-code.json observation predates these command bytes and is historical, so no current live claim is made"
+        "note": "the current absolute-root definition additionally pins the generated handler's byte digest in the approved command line and is code- and fixture-proven only; the earlier claude-code.json observation predates these command bytes and is historical, so no current live claim is made"
       },
       "codex": {
         "surface": "app",
@@ -34,13 +34,13 @@
         "surface": "app",
         "channel": "hook:PostToolUse",
         "governance": "unavailable",
-        "note": "surface exists; any hook beyond SessionStart is gated on the N-2 amendment (S072) before it may be added"
+        "note": "the exact generated fail-open handler live-fired SessionEnd three times on Claude Code 2.1.201, but the model probe returned API status 402 before PostToolUse, compact or subagent events could occur. No shipped multi-event activation registration is claimed"
       },
       "codex": {
         "surface": "app",
         "channel": "hook:PostToolUse",
         "governance": "unavailable",
-        "note": "observe handler exists, but Codex activation deliberately registers only SessionStart; PostToolUse remains gated per hook"
+        "note": "a bounded Codex CLI 0.139.0 evidence project obtained exact-hash /hooks approval and live-fired the generated fail-open handler for PostToolUse, PreCompact, PostCompact, SubagentStart and SubagentStop. SessionEnd is absent from the pinned 0.139.0 hook schema and is not renamed to Stop. The shipped activation rung still registers only SessionStart, so this remains evidence rather than a shipped multi-event activation surface"
       }
     },
     {
@@ -68,9 +68,9 @@
       },
       "codex": {
         "surface": "app",
-        "channel": "app-server supplied notification stream",
+        "channel": "app-server notification stream plus same-connection thread/read(includeTurns=true)",
         "governance": "observe",
-        "note": "the read-only Observer and S054 collector bind supplied spawn/thread/turn/final-message notifications to session/thread/turn receipts. A real Codex Desktop 0.146.0-alpha.3.1 run now proves App-visible sub_agent_activity and completed subagent rollouts, but those rollout records are not the pinned App Server notification stream; no live attach or Workflow receipt comparison is claimed"
+        "note": "the read-only Observer and S054 collector bind spawn lifecycle, thread readback, turn lifecycle and final-message bytes to session/thread/turn receipts. S057 attached a bounded harness once to Codex CLI 0.139.0, passed 28 raw/readback comparisons, and projected one unsigned fresh-context Workflow execution receipt. The collector itself still opens no connection and drives no host; the earlier Desktop rollout records remain a separate evidence class"
       }
     },
     {
@@ -135,7 +135,7 @@
         "surface": "App / desktop",
         "codex": "yes (codex app, app-server)",
         "claude": "yes (desktop / web)",
-        "tcrnGoverned": "Claude and Codex SessionStart are code/hermetic observe capabilities for the current definitions, with live reapproval pending; Codex Desktop subagents are App-visible, while the App Server collector remains supplied-stream only"
+        "tcrnGoverned": "Claude and Codex SessionStart are code/hermetic observe capabilities for the current persona-free definitions, with live reapproval pending. EPIC-024 separately holds bounded exact live evidence for five Codex 0.139.0 observe events and Claude SessionEnd with six explicit unavailable host-event cells; S057 live-proves one exact App Server stream/readback receipt comparison"
       }
     ]
   },
@@ -143,8 +143,10 @@
     "no enforce-level host lifecycle or host-tool governance exists; enforce is limited to Workflow MCP mutations at the server boundary",
     "no host approval or internal trust hash is inferred from a Codex installation receipt",
     "no current Codex or Claude SessionStart definition is claimed live after the absolute-root command change",
-    "no live App Server attach, Controller, or approval responder is claimed",
-    "App-visible Codex Desktop multi-agent records exist but have not been converted to or compared with a Workflow execution receipt",
+    "the S057 live App Server attach is a bounded evidence harness, not a shipped Controller or approval responder",
+    "the S057 receipt is unsigned attribution evidence and does not prove host actor identity or complete event coverage",
+    "EPIC-024 does not claim complete six-event coverage on either host: Codex 0.139.0 lacks SessionEnd and the Claude 2.1.201 model probe stopped at API status 402 before the remaining five events",
+    "the EPIC-024 live definitions are bounded evidence-project hooks, not a shipped multi-event activation installer; Stop is not treated as SessionEnd",
     "no hot-load into the running Codex Desktop process or successful host-routed Workflow MCP call is claimed",
     "governance levels are a snapshot of 2026-07-25 against Codex 0.139.0 and the measured Claude Code 2.1.201 activation"
   ]

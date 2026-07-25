@@ -211,6 +211,66 @@
       "expectedMatches": 1,
       "test": "tests/act13-authority-output.test.mjs",
       "testName": "ACT13: self-described, tampered, forged, cloned, and mismatched observations cannot mint activation"
+    },
+    {
+      "id": "INC-014-session-start-control-character-screen",
+      "rationale": "The emitted SessionStart summary is a line-oriented document. Removing the control-character screen lets a tampered project.json forge extra context lines -- including a role assignment -- inside the 1024-byte budget, which no upstream validation can catch because the tampering happens after installation.",
+      "file": "packages/core/src/claude-adapter-session-start.ts",
+      "find": "if (CONTROL.test(project[field]))",
+      "replace": "if (false && CONTROL.test(project[field]))",
+      "expectedMatches": 1,
+      "test": "tests/act2-claude-activation.test.mjs",
+      "testName": "INC-014: a control character in a project field suppresses the whole summary instead of forging a context line"
+    },
+    {
+      "id": "INC-015-session-start-handler-self-digest",
+      "rationale": "The operator approves one command line naming session-start.mjs. Removing the fire-time self-digest check lets every later same-user write to that file run under the original approval, and makes the digest in the approved command line decorative.",
+      "file": "packages/core/src/claude-adapter-session-start.ts",
+      "find": "if (ownDigest !== argument(",
+      "replace": "if (false && ownDigest !== argument(",
+      "expectedMatches": 1,
+      "test": "tests/act2-claude-activation.test.mjs",
+      "testName": "INC-015: the handler refuses to run on bytes the approved command line did not pin"
+    },
+    {
+      "id": "INC-016-catalog-write-and-authority-output-exclusive",
+      "rationale": "mutates and authorityBearing are two different authorization categories and the operator bundle keeps their grant lists disjoint. The MCP dispatcher tests mutates FIRST, so an entry declaring both is satisfied by a writeCommands grant alone -- a write grant carrying authority-bearing output, which operator-authority-mcp-v1 forbids. Nothing else refuses the flag pair: the schema declared authorityBearing with no dependency on mutates.",
+      "file": "packages/cli/src/index.ts",
+      "find": "if (entry.mutates && entry.authorityBearing === true) {",
+      "replace": "if (entry.mutates && entry.authorityBearing === undefined) {",
+      "expectedMatches": 1,
+      "test": "tests/p3-cli-catalog.test.mjs",
+      "testName": "INC-016: no catalog entry is both a governed write and authority-bearing output"
+    },
+    {
+      "id": "INC-017-observation-window-bound",
+      "rationale": "An operator-pinned observation document has no self-limiting lifetime. Without the window comparison the same bytes, re-pinned under a rotated bundle generation, mint another host_observed_active receipt indefinitely. This comparison is the only thing tying a recorded fire to the authority that was current when it happened.",
+      "file": "packages/core/src/codex-adapter-activation.ts",
+      "find": "if (!withinWindow) {",
+      "replace": "if (!withinWindow && withinWindow) {",
+      "expectedMatches": 1,
+      "test": "tests/act13-authority-output.test.mjs",
+      "testName": "INC-017: a pinned observation cannot be replayed past the window that admitted it"
+    },
+    {
+      "id": "INC-017-observation-not-after-verification-time",
+      "rationale": "The window bound alone admits an observedAt that is inside the bundle window but still in the future relative to the clock that reads it. A far-future observedAt would then survive every future window. Nothing can be observed after the moment of verification.",
+      "file": "packages/core/src/codex-adapter-activation.ts",
+      "find": "if (!notInFuture) {",
+      "replace": "if (!notInFuture && notInFuture) {",
+      "expectedMatches": 1,
+      "test": "tests/act13-authority-output.test.mjs",
+      "testName": "INC-017: a pinned observation cannot be replayed past the window that admitted it"
+    },
+    {
+      "id": "INC-012-authority-shaped-output-declared",
+      "rationale": "The catalog's authorityBearing flag was enumerated by a test, not enforced against what a verb emits, so a future command minting activationState/hookFired/trustApprovalObserved without the flag reddened nothing and shipped over MCP as a read-only tool. The CLI write boundary now refuses undeclared host-state output for every verb, present or future. Removing it restores a surface where caller-supplied input can be dressed as host evidence.",
+      "file": "packages/cli/src/index.ts",
+      "find": "  if (fields.length === 0) return;",
+      "replace": "  if (fields.length >= 0) return;",
+      "expectedMatches": 1,
+      "test": "tests/act13-authority-output.test.mjs",
+      "testName": "INC-012: authority-shaped output from a verb that does not declare it fails closed"
     }
   ]
 }

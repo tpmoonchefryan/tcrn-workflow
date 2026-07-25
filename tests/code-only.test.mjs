@@ -12,7 +12,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { codeOnly } from "../scripts/lib/code-only.mjs";
+import { codeOnly, controlByteOffset } from "../scripts/lib/code-only.mjs";
 
 const hasAny = (source) => /\bany\b/u.test(codeOnly(source));
 const hasEval = (source) => /\beval\s*\(/u.test(codeOnly(source));
@@ -63,4 +63,24 @@ test("an escaped quote does not end its string early", () => {
   // and "any" after it would read as code -- a false alarm that is hard to explain.
   assert.equal(hasAny('const a = "he said \\"any\\" loudly";'), false);
   assert.equal(hasAny("const a = 'it is \\'any\\' again';"), false);
+});
+
+test("a raw control byte is reported by offset, while TAB and LF are not", () => {
+  // This is the one rule that must NOT go through the blanker: both real INC-018
+  // instances sat inside string literals, which codeOnly() erases. Bytes are
+  // synthesized here so this test file stays a text file.
+  const clean = Buffer.from('const a = "x";\n\tconst b = 2;\n', "utf8");
+  assert.equal(controlByteOffset(clean), -1);
+  const nul = Buffer.concat([
+    Buffer.from('const a = "', "utf8"),
+    Buffer.from([0x00]),
+    Buffer.from('";\n', "utf8"),
+  ]);
+  assert.equal(controlByteOffset(nul), 11);
+  assert.equal(controlByteOffset(Buffer.from([0x0d])), 0);
+  assert.equal(controlByteOffset(Buffer.from([0x7f])), 0);
+  // The escape spelling the INC-018 patch adopted encodes to exactly the byte it
+  // replaced, so the digest inputs that separator feeds are unchanged.
+  assert.deepEqual([...Buffer.from("\u0000", "utf8")], [0x00]);
+  assert.throws(() => controlByteOffset("not a buffer"), TypeError);
 });

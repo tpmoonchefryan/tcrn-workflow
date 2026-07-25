@@ -90,6 +90,39 @@ function id(value: unknown, label: string): string {
   return value as string;
 }
 
+// INC-020: whitespace and invisible format characters are refused anywhere in a host
+// id, not merely trimmed. Normalising would mint a second spelling for the same
+// identifier, and refusing outright is what stops " " -- non-empty but semantically
+// empty -- from passing as an id. \s already covers NBSP, U+2028/29, U+205F and BOM; the
+// added ranges are the code points that render as nothing (SHY, ZWSP..RLM, WJ). C0 and
+// DEL stay in the class so a newline cannot be smuggled into a logged receipt field.
+const HOST_ID_FORBIDDEN = /[\s\u0000-\u001f\u007f\u00ad\u200b-\u200f\u2060\ufeff]/u;
+
+// Four characters is the shortest string assertProtocolId itself admits ("ab:c"), so
+// the relaxed host rule is no weaker on length than the grammar it replaced, while
+// still refusing the one- and two-character residue a truncated read produces. Real
+// ids are far longer: Codex 0.139.0 emits 36-character UUIDs.
+const MINIMUM_HOST_ID_LENGTH = 4;
+
+// Host session/thread/turn identifiers are opaque values owned by the host. Codex
+// 0.139.0 emits UUID-shaped ids without a protocol namespace, so applying TCRN's
+// assertProtocolId grammar here made real collector output impossible to project
+// into the otherwise host-neutral receipt. Bound them as compact, well-formed
+// opaque strings; only TCRN-owned record and invocation ids use protocol-id syntax.
+// "Opaque" is not "anything" -- see HOST_ID_FORBIDDEN above.
+function hostId(value: unknown, label: string): string {
+  if (
+    typeof value !== "string" ||
+    !value.isWellFormed() ||
+    value.length < MINIMUM_HOST_ID_LENGTH ||
+    Buffer.byteLength(value, "utf8") > 512 ||
+    HOST_ID_FORBIDDEN.test(value)
+  ) {
+    fail("EXECUTION_RECEIPT_INVALID", label);
+  }
+  return value;
+}
+
 function text(value: unknown, label: string): string {
   if (typeof value !== "string" || !value.isWellFormed() || value.length === 0) fail("EXECUTION_UNICODE_INVALID", label);
   if (Buffer.byteLength(value, "utf8") > maximumTextBytes) fail("EXECUTION_BUDGET_EXCEEDED", label);
@@ -106,9 +139,9 @@ function instant(value: unknown, label: string): string {
   return value as string;
 }
 
-function nullableId(value: unknown, label: string): string | null {
+function nullableHostId(value: unknown, label: string): string | null {
   if (value === null) return null;
-  return id(value, label);
+  return hostId(value, label);
 }
 
 function deepFreeze<T>(value: T): T {
@@ -160,9 +193,9 @@ export function validateHostExecutionReceipt(value: unknown): HostExecutionRecei
     positionId: id(document.positionId, "positionId"),
     hostProduct: text(document.hostProduct, "hostProduct"),
     hostVersion: text(document.hostVersion, "hostVersion"),
-    sessionId: id(document.sessionId, "sessionId"),
-    threadId: nullableId(document.threadId, "threadId"),
-    turnId: nullableId(document.turnId, "turnId"),
+    sessionId: hostId(document.sessionId, "sessionId"),
+    threadId: nullableHostId(document.threadId, "threadId"),
+    turnId: nullableHostId(document.turnId, "turnId"),
     agentInvocationId: id(document.agentInvocationId, "agentInvocationId"),
     freshContext: document.freshContext as boolean,
     invokedAt: instant(document.invokedAt, "invokedAt"),

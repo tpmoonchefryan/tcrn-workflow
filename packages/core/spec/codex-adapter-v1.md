@@ -71,10 +71,18 @@ The V1 output remains uninstalled and unactivated until a caller takes a separat
 governed route. `codex-adapter-installer.ts` provides the descriptor-bound inert
 install. `codex-adapter-activation.ts` then permits exactly one fail-open
 SessionStart definition, with the installer-admitted canonical absolute handler
-path and a digest-bound 1024-byte advisory summary. The installation root is part
+path and a digest-bound 1024-byte Workflow summary. The summary binds no Core
+Reference persona, does not make the main thread read-only, and does not revoke
+explicit user authorization for ordinary repository work. The installation root is part
 of the generated artifact and definition digest and is re-admitted and compared
 before installation, so the definition is machine specific and cannot inherit a
-different fire-time cwd. Before
+different fire-time cwd. The interpreter is not pinned: the command's first token is
+the bare name `node`, which is resolved through the fire-time PATH, so a PATH entry
+ahead of the real interpreter substitutes it while the approved handler argument stays
+correct. The handler's own byte self-check cannot detect this, because a substituted
+interpreter never reads the handler. The substitution is executed on both hosts by
+`pnpm verify:act12`, so the residual is measured rather than assumed; it is disclosed,
+not closed. Before
 any activation file is written, a distinct branded host input must bind the
 canonical request and Context, exact Workspace/project/work, validity window,
 Step-1 installation receipt, capability manifest and requested Step-2/Step-3
@@ -86,10 +94,14 @@ any command byte requires a fresh host review. No PreToolUse
 enforcement, Controller, OS-level parent-component race defense, or release-byte
 claim is added to this V1 specification.
 
-The optional App Server execution collector consumes only a caller-supplied,
-protocol-pinned notification stream. It derives `freshContext=true` only from a
-non-forked subagent thread created after the matching spawn completes, and
-accepts only a `phase=final_answer` item whose completion falls inside the
-completed first turn. Missing evidence returns `unavailable`; the collector
-never opens App Server, invokes an agent, proves actor identity or treats
-notification absence as proof of non-occurrence.
+The optional App Server execution collector consumes only caller-supplied,
+protocol-pinned notifications plus captured same-connection
+`thread/read(includeTurns=true)` responses. It binds `item/started` and
+`item/completed` spawn lifecycle to the named receiver, readback session/parent/
+fork/creation facts, first-turn lifecycle and byte-matched `phase=final_answer`
+output. A child `thread/started` notification is optional; no synthetic frame is
+created. Missing evidence returns `unavailable`, while mismatched/replayed or
+cross-session evidence fails closed. The collector never opens App Server,
+invokes an agent, proves actor identity or treats notification absence as proof
+of non-occurrence. S057's separate bounded live harness proves one exact
+stream/readback receipt comparison without adding host-driving code here.
