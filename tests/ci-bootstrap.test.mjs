@@ -29,6 +29,14 @@ test("CI retains explicit safe dependency acquisition and offline P1 execution",
   assert.match(workflow, /- name: Verify P1 offline\n        run: pnpm verify:p1/u);
 });
 
+test("pull-request CI scans the contributor head, not GitHub's synthetic merge commit", async () => {
+  const workflow = await readWorkflow();
+  assert.ok(
+    workflow.includes("ref: ${{ github.event.pull_request.head.sha || github.sha }}"),
+    "checkout must select the PR head SHA and fall back to the pushed SHA",
+  );
+});
+
 // The literal SHA above locates the step and pins the reviewed version. It does not, on
 // its own, say that pinning is the rule -- swap every `uses:` to a moving tag and the
 // ordering assertions still hold, because a tag has an index too. That is the property
