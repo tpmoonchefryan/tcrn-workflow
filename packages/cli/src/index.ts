@@ -426,8 +426,18 @@ function projectSummary(record: ProjectRecord): Readonly<Record<string, string |
   return { id: record.id, revision: record.revision, tombstone: record.tombstone };
 }
 
+// INIT-014 (TCRN-AOS-INC-004): the summary carries `externalKey`.
+//
+// It did not, and `export` — the only read that did — refuses any workspace whose
+// canonical form exceeds one MiB, which two of this platform's four chains
+// already do. A record id is a one-way digest of its key, so a consumer on the
+// paginated path could show a whole work tree and name nothing in it; the one
+// downstream reader resorted to re-deriving keys by brute-force digest match,
+// which only works for records that follow the naming convention and silently
+// leaves the rest anonymous. Returning the key the record already holds costs
+// one field and removes that entire class of workaround.
 function workSummary(record: WorkRecord): Readonly<Record<string, string | number | boolean | null>> {
-  return { id: record.id, kind: record.kind, status: record.status, projectId: record.projectId, parentId: record.parentId, revision: record.revision, tombstone: record.tombstone };
+  return { id: record.id, externalKey: record.externalKey, kind: record.kind, status: record.status, projectId: record.projectId, parentId: record.parentId, revision: record.revision, tombstone: record.tombstone };
 }
 
 // E05 read surface: project the non-binding advisory fields off a work record for
@@ -597,7 +607,9 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "conference-cancel", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "distill", required: false, valueKind: "boolean" }, { name: "accountable-owner-id", required: false, valueKind: "string" }, { name: "stale-days", required: false, valueKind: "integer" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "conference-list-by-work", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
+  { name: "conference-minutes-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "conference-id", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "conference-open", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "type", required: true, valueKind: "string" }, { name: "title", required: true, valueKind: "string" }, { name: "work-ids", required: true, valueKind: "list" }, { name: "desired-outcome", required: true, valueKind: "string" }, { name: "participant-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "conference-position-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "conference-id", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "context-route", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "profile-receipt", required: true, valueKind: "string" }, { name: "authority", required: true, valueKind: "string" }, { name: "profile-receipt-digest", required: false, valueKind: "string" }, { name: "authority-digest", required: false, valueKind: "string" }] },
   { name: "context-validate", availability: "cli", mutates: false, flags: [{ name: "result", required: true, valueKind: "string" }] },
   { name: "exchange-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "output", required: true, valueKind: "string" }] },
@@ -1976,6 +1988,34 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
     writeExtensionState(io, state, values["conference-id"] ?? "");
+    return;
+  }
+  // INIT-014 (TCRN-AOS-INC-005): workspace-scoped reads for the deliberation
+  // record families.
+  //
+  // Before these, positions and minutes could be reached only through `export`,
+  // which is all-or-nothing and refuses an oversized workspace outright. The
+  // consequence was not slow reading but absent reading: a consumer over a large
+  // chain could list its conferences and never see a single position, so a
+  // deliberation with fifteen arguments in it and one with none rendered
+  // identically. Both verbs page like every other list, so a large chain is read
+  // in windows rather than refused whole.
+  if (command === "conference-position-list") {
+    const values = parseArguments(rest, ["workspace", "conference-id", "limit", "offset"]);
+    required(values, ["workspace"]);
+    const state = await validateWorkspace(values.workspace ?? "");
+    const records = state.conferencePositions.filter((entry) => !entry.tombstone &&
+      (values["conference-id"] === undefined || entry.conferenceId === values["conference-id"]));
+    io.write(canonicalJson(paginate(state, "conference-position", records, values)));
+    return;
+  }
+  if (command === "conference-minutes-list") {
+    const values = parseArguments(rest, ["workspace", "conference-id", "limit", "offset"]);
+    required(values, ["workspace"]);
+    const state = await validateWorkspace(values.workspace ?? "");
+    const records = state.conferenceMinutes.filter((entry) => !entry.tombstone &&
+      (values["conference-id"] === undefined || entry.conferenceId === values["conference-id"]));
+    io.write(canonicalJson(paginate(state, "conference-minutes", records, values)));
     return;
   }
   if (command === "conference-list-by-work") {
