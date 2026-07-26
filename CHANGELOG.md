@@ -3,6 +3,36 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.7.0 — 2026-07-27
+
+The read surface stops refusing to name things.
+
+Two gaps were filed against this engine by its first cockpit consumer, and both
+had the same shape: a read that works on a small chain and disappears on a large
+one, in a way that looks like absence rather than refusal.
+
+### Added
+
+- **`externalKey` in `work-list` summaries.** `export` was the only read that
+  carried the human-facing key, and it refuses any workspace whose canonical form
+  exceeds one MiB — which two chains on the platform that filed this already do.
+  A record id is a one-way digest of its key, so a consumer on the paginated path
+  could render an entire work tree and name nothing in it. The one downstream
+  reader resorted to re-deriving keys by brute-force digest match, which only
+  works for conventionally-named records and leaves the rest permanently
+  anonymous. The field the record already holds now travels with the summary.
+- **`conference-position-list` and `conference-minutes-list`**, workspace-scoped
+  and paginated like every other list. Before them, positions and minutes could
+  be reached only through `export`, so on an oversized chain a deliberation
+  holding fifteen arguments and one holding none rendered identically. The
+  failure was not slow reading, it was absent reading presented as emptiness.
+
+### Compatibility
+
+`work-list` receipts gain a field. Consumers that compare whole canonical bodies
+against a stored fixture will see the difference; consumers that read fields will
+not. No verb was removed, renamed, or given a new required flag.
+
 ## 0.6.0 — 2026-07-26
 
 Governed dual-host operator integration: pinned operator authority, a
