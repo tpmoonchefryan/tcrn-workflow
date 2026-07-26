@@ -374,8 +374,15 @@ export async function installClaudeAdapterActivation(options: ClaudeAdapterActiv
   // Compute the merged settings before writing anything (pure, fail-closed).
   const settingsPath = resolve(installationRoot, ".claude", "settings.json");
   const settingsBefore = await readSettingsIdentity(settingsPath, options.afterSettingsLstatForTest);
-  // "{}" preserves, byte for byte, the absent-file input the merge saw before.
-  const mergedSettings = mergeClaudeAdapterActivationFragment(settingsBefore?.content ?? "{}", fragment);
+  // INC-022: the absent-file stand-in has to be CANONICAL empty-object bytes. The merge
+  // admits only canonical settings (canonicalSettingsObject re-serialises and compares),
+  // and canonical JSON ends with a newline, so the earlier literal "{}" -- chosen to
+  // preserve the byte-for-byte input the merge saw before -- failed
+  // ACTIVATION_FRAGMENT_INVALID for every root that had no .claude/settings.json yet,
+  // i.e. the ordinary first install, before anything was written. The written bytes are
+  // the merge output either way, so this changes no output; it changes only whether the
+  // absent-file path is admitted at all.
+  const mergedSettings = mergeClaudeAdapterActivationFragment(settingsBefore?.content ?? canonicalJson({}), fragment);
 
   const scriptTarget = resolve(installationRoot, ...CLAUDE_ADAPTER_SESSION_START_PATH.split("/"));
   const settingsTempPath = `${settingsPath}.tcrn-activation-tmp`;

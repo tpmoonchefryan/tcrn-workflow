@@ -271,6 +271,16 @@
       "expectedMatches": 1,
       "test": "tests/act13-authority-output.test.mjs",
       "testName": "INC-012: authority-shaped output from a verb that does not declare it fails closed"
+    },
+    {
+      "id": "INC-022-activation-absent-settings-canonical-standin",
+      "rationale": "The activation merge admits only canonical settings bytes. A non-canonical absent-file stand-in fails ACTIVATION_FRAGMENT_INVALID for every root that has no .claude/settings.json yet -- the ordinary first install -- before anything is written.",
+      "file": "packages/core/src/claude-adapter-installer.ts",
+      "find": "settingsBefore?.content ?? canonicalJson({})",
+      "replace": "settingsBefore?.content ?? \"{}\"",
+      "expectedMatches": 1,
+      "test": "tests/act2-claude-activation.test.mjs",
+      "testName": "INC-022: activation installs into a root that has no .claude/settings.json yet"
     }
   ]
 }

@@ -1598,7 +1598,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "903431903d638dc7e99e903dc2326b3ea88297a0feeb13d9e7e0af043649d705",
+      "fixtureDigest": "f9aa2f2e71a32dbc47b10720dee0c3aaf8ed96272a9fb3e2d78ad2a03c6f71e4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1748,7 +1748,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "54c590b1751d2a6bff3767714a4ac78d57fa6547d00d6638ea1f32870feebdde",
+      "fixtureDigest": "a9b1d2fe662f2e61fde8f212caec833452f6a2570d25dba60e01846a17604269",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1782,7 +1782,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f89673e8ce406585d7c01000655fff211559b25c0b77becf5bdb04621d64c6ab",
+      "fixtureDigest": "32133164eaa222248e72c82af4f8c799ccad9c75b3fc6a55143b7413a0906fc5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2238,7 +2238,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "b56189977521170ef65e1bda4d66a0f57b9d970932c3bca45c210d663b52343c",
+      "fixtureDigest": "20459a5fe214dc64bd57aac5a1071ad174676d970c89e36b60f1640629f5a867",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2267,7 +2267,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "a8645e292a3df6c40d6c521c7c9b13a365c22c2901faa1b369d232c9a43de5b5",
+      "fixtureDigest": "a9e67b187d1109feb2dd960ff1669f4e78f6a625adc02adb503207509f4c8c09",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2297,7 +2297,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "a8645e292a3df6c40d6c521c7c9b13a365c22c2901faa1b369d232c9a43de5b5",
+      "fixtureDigest": "a9e67b187d1109feb2dd960ff1669f4e78f6a625adc02adb503207509f4c8c09",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2331,7 +2331,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "4a877dbdd00cb1ae9d4b947ccc31e736f95639caba65e3dcddc62161489c5327",
+      "fixtureDigest": "51726d878954a5243ed90362843b9c6b1a6afd5891462542245d1c1705ec9a1c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
