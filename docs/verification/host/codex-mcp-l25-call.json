@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "tcrn.host-evidence.codex-mcp-l25.v1",
+  "layer": "L2.5",
+  "mode": "call",
+  "method": "per-invocation -c overrides against the operator's own CODEX_HOME; the live config file is never written",
+  "server": "<home>/.tcrn-workflow/tcrn-workflow/scripts/tcrn-workflow-mcp.mjs",
+  "authoritySupplied": true,
+  "dryRun": false,
+  "codexVersion": "codex-cli 0.145.0",
+  "codexInvocable": true,
+  "configDigestBefore": "bd3c92202071f36b041a9271fb498745876e30c6504a4c2f4141564224eb0df7",
+  "exitCode": 0,
+  "timedOut": false,
+  "markerOccurrences": 3,
+  "markerObserved": true,
+  "witnessToolObserved": false,
+  "transcriptTail": "TCRN-L25-REPORT\nCOMMAND_COUNT=95\n\nReading additional input from stdin...\n2026-07-26T09:46:07.699558Z ERROR codex_models_manager::manager: failed to refresh available models: timeout waiting for child process to exit\n2026-07-26T09:46:07.720729Z ERROR codex_models_manager::manager: failed to refresh available models: timeout waiting for child process to exit\nOpenAI Codex v0.145.0\n--------\nworkdir: <home>/Code/TCRN Platform/tcrn-workflow\nmodel: gpt-5.6-sol\nprovider: openai\napproval: never\nsandbox: read-only\nreasoning effort: max\nreasoning summaries: none\nsession id: redacted-f3bdd4546cc48362879e45bd\n--------\nuser\nDo not read or modify any file and do not run any shell command. Call the tool tcrn_workflow_commands offered by the MCP server named tcrn_workflow_probe. It takes no arguments. Count the entries in the commands array of what it returns. Answer with the line TCRN-L25-REPORT followed by a line reading COMMAND_COUNT=<the number you counted>. Do not guess the number: if the call fails, say so explicitly after the marker line and report the failure instead.\nmcp: tcrn_workflow_probe/tcrn_workflow_commands started\nmcp: tcrn_workflow_probe/tcrn_workflow_commands (completed)\ncodex\nTCRN-L25-REPORT\nCOMMAND_COUNT=95\ntokens used\n7,951\n",
+  "backendError": null,
+  "reportedCommandCount": 95,
+  "expectedCommandCount": 95,
+  "callWitnessMatched": true,
+  "outcome": "tool-call-routed",
+  "configDigestAfter": "bd3c92202071f36b041a9271fb498745876e30c6504a4c2f4141564224eb0df7",
+  "configUntouched": true,
+  "claimBoundary": [
+    "mode=list: witnessToolObserved=true proves a real Codex process launched this server and enumerated its tools into the model's inventory. It does NOT prove the model routed a call.",
+    "mode=call: outcome=tool-call-routed proves the model executed a tool through this server, because the reported count cannot be produced without the call returning.",
+    "witnessToolObserved=false is an absence of observation, not a proof that the server is unreachable.",
+    "outcome=session-refused-before-mcp means the backend refused the session; the MCP facade was never reached and nothing here judges it.",
+    "Nothing here speaks to write authorization: mutating tools require an operator authority bundle."
+  ],
+  "identifierRedaction": "home directory replaced with <home>; every UUID replaced with redacted-<sha256(id)[:24]>, which keeps repeated ids correlated without carrying the original"
+}
