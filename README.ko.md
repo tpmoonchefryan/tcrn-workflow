@@ -8,7 +8,7 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · 한국어 · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.6.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -220,7 +220,7 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 - **밀폐 테스트 파일 약 40개**. 진짜 `SIGKILL` 결함 주입, 독립된 세 계층에서의 64순열 결정성 증명, 파일시스템 공격 매트릭스를 포함합니다.
 - **엔드투엔드 대표 증명 1개**(`pnpm verify:e2e`) — 통제 루프 전체(initiative → epic → story → gate → conference → distill → promote → trace)의 밀폐 재생으로, 튜토리얼의 모든 명령을 문자 그대로 실행합니다.
 - **공개 AOS 요구사항 원장 19항목**(11개는 fixture 검증, 8개는 명세 기재) — 성숙도는 행마다 기록되며 결코 부풀리지 않습니다.
-- **프라이버시 게이트**가 허용 목록의 소스 파일 294개 전부(정확히 일치하는 목록이라 파일이 하나 늘거나 줄면 게이트가 실패합니다), 도달 가능한 모든 git 객체, 그리고 릴리스 아카이브를 대상으로 합니다.
+- **프라이버시 게이트**가 허용 목록의 소스 파일 333개 전부(정확히 일치하는 목록이라 파일이 하나 늘거나 줄면 게이트가 실패합니다), 도달 가능한 모든 git 객체, 그리고 릴리스 아카이브를 대상으로 합니다.
 
 <details>
 <summary><b>전체 검증 대상 레퍼런스</b>(클릭해서 펼치기)</summary>
@@ -295,7 +295,7 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 
 **통치 표면**
 
-- **통치된 운영자 표면은 소스에서 완성되었지만 승인된 `0.5.0` 릴리스에는 아직 포함되지 않았습니다.** 역사적인 열두 IO 차단 동사는 직접 digest 플래그로 일곱 개까지 줄었고, 현재 소스는 절대 경로와 SHA-256 pins 문서로 그 일곱 개를 공급하며 같은 명령 카탈로그를 구조화된 호스트 중립 MCP 도구로 노출합니다. 릴리스된 `0.5.0` 바이너리는 여전히 `ADAPTER_HOST_REQUIRED` 같은 reason code에서 멈춥니다.
+- **통치된 운영자 표면은 승인된 `0.6.0` 릴리스에 포함됩니다.** 역사적인 열두 IO 차단 동사는 직접 digest 플래그로 일곱 개까지 줄었고, 이 릴리스는 절대 경로와 SHA-256 pins 문서로 그 일곱 개를 공급하며 같은 명령 카탈로그를 구조화된 호스트 중립 MCP 도구로 노출합니다. 모든 변경에는 정확히 고정된 grant가 필요하며 숫자 CAS, 명시적 시각, actor, 안정적인 reason code 의미론을 보존합니다.
 - **파괴적인 아티팩트 유지보수는 fixture 전용입니다**. `artifact-archive-apply`와 `artifact-archive-restore`는 기계 판독 카탈로그에 fixture-only로 표시되어 있습니다. 실제 워크스페이스에는 드라이런만 있으므로, 통치되는 압축이 출시될 때까지 아티팩트 저장소는 계속 커집니다.
 - **지식 저장소는 폐기 가능함을 명시적으로 승인해야 합니다**. 비 fixture 워크스페이스에서는 호출별 명시적 승인이 있을 때만 초기화됩니다(`KNOWLEDGE_DISPOSABLE_ACK_REQUIRED`): 그것은 파생 인덱스이며 결코 기록의 원본이 아닙니다.
 - **승인된 hook 명령이 고정하는 것은 handler이며 interpreter가 아닙니다**. 두 activation 명령 모두 설치기가 승인한 절대 handler 경로를 내장하므로 fire-time 작업 디렉터리로는 우회할 수 없습니다(`pnpm verify:act12`). interpreter는 여전히 맨이름 `node`이며 fire-time `PATH`로 해석됩니다. 진짜 interpreter보다 앞선 디렉터리가 이를 대체하고, handler 자신의 바이트 자기검사는 이를 볼 수 없습니다 — 대체된 interpreter는 handler를 읽지 않기 때문입니다. 동일한 게이트가 두 호스트에서 그 대체를 실제로 실행하므로 이는 가정이 아니라 실측입니다. 고정 대신 공개를 택했습니다. 절대 interpreter 경로를 고정하면 승인된 definition이 툴체인 변경마다 표류하고, 이 hook은 fail-open이므로 표류가 조용히 열화됩니다.
@@ -303,9 +303,9 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 ## 상태, 정직하게
 
 - `0.1.0`은 **첫 정식 릴리스**입니다. 시맨틱 버저닝이 적용되며, 0.x 범위에서는 공개 API가 마이너 버전 사이에 바뀔 수 있습니다.
-- **그 이후 다섯 개의 마이너 릴리스가 배포되었고, 지금은 `0.5.0`입니다.** `0.2.0`은 게이트 신원을 실현했고(명부로 검사되는 `owner_intent_required`), `0.3.0`은 레코드에 어드바이저리 범위를 추가했으며(`work-annotate`), `0.3.2`는 `Incident` 생성 경로를 열고 지식 저장소에 큐레이션 여유를 주었으며, `0.4.0`은 백그라운드 자원 잔여물 통치를 추가했고, `0.5.0`은 스프린트 / 릴리스 트레인 메커니즘을 추가했습니다. 각각은 재현 가능한 산출물 묶음을 가진 불변 태그이며, `CHANGELOG.md`가 전체 원장을 담고 있습니다.
+- **이 버전 전에 승인된 릴리스가 일곱 개 있었고, 지금은 `0.6.0`입니다.** `0.2.0`은 게이트 신원, `0.3.0`은 어드바이저리 범위, `0.3.2`는 `Incident` 생성 경로와 지식 저장소 여유, `0.4.0`은 백그라운드 자원 잔여물 통치, `0.5.0`은 스프린트 / 릴리스 트레인을 추가했습니다. `0.6.0`은 통치된 이중 호스트 운영자 권위, MCP, activation, observe / execution 영수증과 conference provenance를 제공합니다. 승인된 각 버전은 재현 가능한 산출물 묶음을 가진 불변 태그이며, `CHANGELOG.md`가 전체 원장을 담고 있습니다.
 - **Claude Code 증거는 좁고 정의에 따라 갈립니다.** 과거 `2.1.201` activation 영수증은 교체된 상대 경로 SessionStart 바이트에 대한 관측 9건을 기록합니다. 현재의 persona-free 승인 절대 루트 SessionStart 정의는 여전히 코드와 fixture로만 증명됩니다. 이와 별개로, 생성된 EPIC-024 fail-open handler 정본이 Claude Code `2.1.201`에서 `SessionEnd`를 세 번 live 발화했습니다. 나머지 observe 이벤트 다섯 개는 모델 프로브가 추론이나 도구 사용에 이르기 전에 API 상태 402를 반환했기 때문에, 명시적인 측정 불가(unavailable) 칸으로 남아 있습니다.
-- **Codex의 activation·observe·execution 증거는 좁고 증거 등급이 매겨져 있습니다.** inert 설치기는 가역적이며, activation은 `SessionStart`만 등록하고 fail-open으로 동작하며, 어떤 Core Reference 페르소나도 주입하지 않고, 현재의 정확한 definition 전부에 대한 Codex의 승인을 요구합니다. 앞서 승인되었던 Verity 결속 발화는 철회된 바이트에 대한 과거 증거이며, 수정된 persona-free definition은 밀폐(hermetic) 증명에 머물러 있고 승인과 live 발화를 기다리고 있습니다. EPIC-024는 이와 별도로, 범위가 한정된 Codex `0.139.0` 증거 프로젝트에서 생성된 fail-open handler 정본을 `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`에 대해 live 발화시켰습니다. 그 버전의 생성 hook 스키마에는 `SessionEnd`가 없으며, `Stop`을 별칭으로 쓰지도 않습니다. S057은 또 다른 범위 한정 App Server 하네스로 raw/readback 검사 28건을 통과시키고 서명되지 않은 fresh-context Workflow 실행 영수증 1건을 산출했습니다. 두 하네스 모두 출시된 Controller도, 다중 이벤트 activation 설치기도 아닙니다. 이는 `0.5.0` 이후의 source-tree capability이며, 수용된 `0.5.0` 릴리스 바이트에 대한 주장이 아닙니다.
+- **Codex의 activation·observe·execution 증거는 좁고 증거 등급이 매겨져 있습니다.** inert 설치기는 가역적이며, activation은 `SessionStart`만 등록하고 fail-open으로 동작하며, 어떤 Core Reference 페르소나도 주입하지 않고, 현재의 정확한 definition 전부에 대한 Codex의 승인을 요구합니다. 앞서 승인되었던 Verity 결속 발화는 철회된 바이트에 대한 과거 증거이며, 수정된 persona-free definition은 밀폐(hermetic) 증명에 머물러 있고 승인과 live 발화를 기다리고 있습니다. EPIC-024는 이와 별도로, 범위가 한정된 Codex `0.139.0` 증거 프로젝트에서 생성된 fail-open handler 정본을 `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`에 대해 live 발화시켰습니다. 그 버전의 생성 hook 스키마에는 `SessionEnd`가 없으며, `Stop`을 별칭으로 쓰지도 않습니다. S057은 또 다른 범위 한정 App Server 하네스로 raw/readback 검사 28건을 통과시키고 서명되지 않은 fresh-context Workflow 실행 영수증 1건을 산출했습니다. 두 하네스 모두 출시된 Controller도, 다중 이벤트 activation 설치기도 아닙니다. 이 capability들은 `0.6.0`에 포함되지만 증거의 경계는 여기에 적힌 그대로입니다.
 - `supportedAosReleases`는 비어 있습니다: 외부 AOS 호환성은 주장하지 않습니다.
 - 릴리스 모드는 동반 헬퍼가 그 바이트를 수용할 것을 요구합니다: 부트스트랩 다이제스트는 독립적으로 공개되고, 수용되는 릴리스 다이제스트는 그 안에 컴파일되어 있습니다.
 

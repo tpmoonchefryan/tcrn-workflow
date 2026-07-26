@@ -8,7 +8,7 @@
 
 [English](./README.md) · 简体中文 · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.6.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -217,7 +217,7 @@ Codex 现在有刻意收窄的对应能力：`adapter-install` 仍只做惰性�
 - **约 40 个密封测试文件**，包含真实的 `SIGKILL` 故障注入、三个独立层各自的 64 种排列确定性证明，以及一套文件系统攻击矩阵。
 - **1 个端到端旗舰证明**（`pnpm verify:e2e`）——对完整受治理闭环（initiative → epic → story → gate → conference → distill → promote → trace）的一次密封重放，每一条教程命令都被逐字执行。
 - **19 条公开 AOS 需求台账**（11 条经 fixture 验证，8 条为规格声明）——成熟度逐行如实记录，从不夸大。
-- **隐私门**覆盖全部 294 个白名单源文件（一份精确匹配清单——多一个或少一个文件，门就失败）、每一个可达的 git 对象，以及发布归档。
+- **隐私门**覆盖全部 333 个白名单源文件（一份精确匹配清单——多一个或少一个文件，门就失败）、每一个可达的 git 对象，以及发布归档。
 
 <details>
 <summary><b>完整验证目标参考</b>（点击展开）</summary>
@@ -292,7 +292,7 @@ Codex 现在有刻意收窄的对应能力：`adapter-install` 仍只做惰性�
 
 **治理面**
 
-- **受治理的操作者操作面已在源码中完成，但尚未进入已接受的 `0.5.0` 版本。** 历史上的十二个 IO 阻塞动词先由直接摘要参数缩减为七个；当前源码再通过「绝对路径 + SHA-256」pins 文档供给这七个动词，并把同一命令目录暴露为结构化、宿主中立的 MCP 工具。已发布的 `0.5.0` 二进制仍会停在 `ADAPTER_HOST_REQUIRED` 等 reason code 上。
+- **受治理的操作者操作面已随已接受的 `0.6.0` 发布。** 历史上的十二个 IO 阻塞动词先由直接摘要参数缩减为七个；本版本再通过「绝对路径 + SHA-256」pins 文档供给这七个动词，并把同一命令目录暴露为结构化、宿主中立的 MCP 工具。每次变更都要求精确钉定的 grant，并保留数值 CAS、显式时间、actor 与稳定 reason code 语义。
 - **破坏性的制品维护仅限 FIXTURE**。`artifact-archive-apply` 与 `artifact-archive-restore` 在机器可读目录里标为 fixture-only；真实工作区只有 dry-run，所以制品库会持续增长，直到受治理的压缩能力发布。
 - **知识库必须被显式确认为可弃**。在非 FIXTURE 工作区上，它只在每次调用附带显式确认时才初始化（`KNOWLEDGE_DISPOSABLE_ACK_REQUIRED`）：它是派生索引，永远不是事实来源。
 - **被批准的 hook 命令钉住的是 handler，不是解释器**。两条激活命令都嵌入安装器准入的绝对 handler 路径，因此触发时的工作目录无法改道（`pnpm verify:act12`）。解释器仍是裸名 `node`，在触发时经 `PATH` 解析：排在真解释器之前的目录即可替换它，而 handler 自身的字节自检看不到这一点——被替换的解释器根本不会读 handler。同一道门在两个宿主上真的执行了这次替换，所以这是实测而非假设。选择披露而非钉扎：钉扎绝对解释器路径会让已批准的定义随每次工具链变更漂移，而该 hook 是 fail-open，漂移会静默降级。
@@ -300,9 +300,9 @@ Codex 现在有刻意收窄的对应能力：`adapter-install` 仍只做惰性�
 ## 状态，如实相告
 
 - `0.1.0` 是**首个正式接受的发布**。适用语义化版本；0.x 区间内公共 API 仍可能在次要版本之间变化。
-- **此后又发布了五个次要版本，当前是 `0.5.0`。** `0.2.0` 让门身份成真（经名册校验的 `owner_intent_required`），`0.3.0` 为记录增加了咨询式范围（`work-annotate`），`0.3.2` 打开了 `Incident` 创建路径，并为知识库腾出策展余量，`0.4.0` 增加了后台资源残余治理，`0.5.0` 增加了 sprint / 发布列车机制。每一个都是一个不可变标签，附一组可复现的产物；`CHANGELOG.md` 记着完整的账本。
+- **本版本之前已有七个获接受的发布，当前是 `0.6.0`。** `0.2.0` 让门身份成真，`0.3.0` 增加咨询式范围，`0.3.2` 打开 `Incident` 创建路径并扩充知识库策展余量，`0.4.0` 增加后台资源残余治理，`0.5.0` 增加 sprint / 发布列车，`0.6.0` 发布受治理的双宿主操作者权威、MCP、激活、observe / execution 收据与 conference provenance。每个获接受版本都是不可变标签并附可复现产物；`CHANGELOG.md` 记着完整账本。
 - **Claude Code 的证据是窄化的，并按定义一分为二。** 历史 `2.1.201` 激活收据记录了九次观测，对应的是已被替代的相对路径 SessionStart 字节；当前那份 persona-free、准入绝对根路径的 SessionStart 定义，仍然只有代码与 fixture 证明。另外，EPIC-024 那份精确生成的 fail-open 处理器，曾在 Claude Code `2.1.201` 上真实触发 `SessionEnd` 三次；其余五个 observe 事件仍是显式标注为 unavailable（未能测得）的单元格，因为模型探针在任何推理或工具使用发生之前就返回了 API 状态 402。
-- **Codex 的激活、observe 与执行证据都是窄化且按证据分级的。** 惰性安装可逆；激活只注册 `SessionStart`、fail-open、不注入任何 Core Reference persona，并要求 Codex 对每一版精确的当前定义都给出审批。此前那次已批准、绑定 Verity 的触发，是针对已撤回字节的历史证据；修正后的 persona-free 定义是 hermetic 的，仍在等待审批与 live 触发。EPIC-024 另外在一个受限的 Codex `0.139.0` 证据项目里，用那份精确生成的 fail-open 处理器真实触发了 `PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart` 与 `SubagentStop`；该版本生成的 hook schema 不含 `SessionEnd`，也不把 `Stop` 用作别名。S057 用另一套受限的 App Server 试验台通过了 28 项原始/回读检查，并投影出一份未签名的全新上下文 Workflow 执行回执。两套试验台都不是已发布的 Controller，也都不是多事件激活安装器。这些是 `0.5.0` 之后的源码树能力，不是对已接受 `0.5.0` 发布字节的声明。
+- **Codex 的激活、observe 与执行证据都是窄化且按证据分级的。** 惰性安装可逆；激活只注册 `SessionStart`、fail-open、不注入任何 Core Reference persona，并要求 Codex 对每一版精确的当前定义都给出审批。此前那次已批准、绑定 Verity 的触发，是针对已撤回字节的历史证据；修正后的 persona-free 定义是 hermetic 的，仍在等待审批与 live 触发。EPIC-024 另外在一个受限的 Codex `0.139.0` 证据项目里，用那份精确生成的 fail-open 处理器真实触发了 `PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart` 与 `SubagentStop`；该版本生成的 hook schema 不含 `SessionEnd`，也不把 `Stop` 用作别名。S057 用另一套受限的 App Server 试验台通过了 28 项原始/回读检查，并投影出一份未签名的全新上下文 Workflow 执行回执。两套试验台都不是已发布的 Controller，也都不是多事件激活安装器。这些能力已随 `0.6.0` 发布；证据边界仍完全按此处所述。
 - `supportedAosReleases` 为空：不声称任何外部 AOS 兼容性。
 - 发布模式要求配套的 helper 接受这些字节：它的引导程序摘要独立发布，而被接受的发布摘要编译在它内部。
 
