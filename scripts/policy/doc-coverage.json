@@ -29,9 +29,11 @@
     }
   },
   "untranslated": [
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
     "LICENSE",
     "NOTICE",
-    "CHANGELOG.md",
     "SUPPORT.md"
   ]
 }
