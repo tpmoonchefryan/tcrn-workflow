@@ -29,7 +29,7 @@ test("the exact frozen dependency graph has complete policy and integrity closur
   ]);
   assert.deepEqual(graph.transitiveIdentities, [
     "fast-deep-equal@3.1.3",
-    "fast-uri@3.1.3",
+    "fast-uri@3.1.4",
     "json-schema-traverse@1.0.0",
     "require-from-string@2.0.2",
     "undici-types@7.18.2",
@@ -56,13 +56,13 @@ test("each exact Ajv transitive is checked by the vulnerability denylist", async
 test("unapproved lock packages and integrity drift fail closed", async () => {
   const inputs = await dependencyInputs();
   const missingPolicy = structuredClone(inputs.dependencyPolicy);
-  delete missingPolicy.dependencies["fast-uri@3.1.3"];
+  delete missingPolicy.dependencies["fast-uri@3.1.4"];
   assert.throws(
     () => validateFrozenDependencyGraph({ ...inputs, dependencyPolicy: missingPolicy }),
     (error) => error instanceof DependencyGraphError && error.reasonCode === "DEPENDENCY_GRAPH_POLICY_MISMATCH",
   );
   const wrongIntegrity = structuredClone(inputs.dependencyPolicy);
-  wrongIntegrity.dependencies["fast-uri@3.1.3"].integrity = "sha512-invalid";
+  wrongIntegrity.dependencies["fast-uri@3.1.4"].integrity = "sha512-invalid";
   assert.throws(
     () => validateFrozenDependencyGraph({ ...inputs, dependencyPolicy: wrongIntegrity }),
     (error) => error instanceof DependencyGraphError && error.reasonCode === "DEPENDENCY_GRAPH_INTEGRITY_MISMATCH",

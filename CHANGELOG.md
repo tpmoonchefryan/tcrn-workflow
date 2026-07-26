@@ -38,6 +38,12 @@ full narrative is `docs/releases/0.6.0.md`.
 - **Activation hardening closes the audited path, digest, approval, rollback,
   and missing-settings gaps**, including canonical handling of a project with
   no existing `.claude/settings.json`.
+- **The release dependency graph pins `fast-uri` to `3.1.4`**, closing the
+  high-severity host-confusion advisory inherited through the development-only
+  `ajv` toolchain.
+- **Pull-request CI checks out the contributor head SHA**, so the privacy gate
+  judges repository history rather than GitHub's synthetic merge commit, whose
+  generated author metadata may contain an unreviewed private email address.
 
 ## 0.5.0 — 2026-07-24
 
