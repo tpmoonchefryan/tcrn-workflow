@@ -454,11 +454,6 @@ test("INC-015: the merged settings command line fires the installed handler from
     for (const file of bundle.files) {
       await writeFile(join(base, ...file.path.split("/")), file.content, { mode: 0o600 });
     }
-    // A canonical settings.json has to already exist: the installer feeds the merge the
-    // literal "{}" when the file is absent, and canonical JSON ends with a newline, so
-    // the absent-file path fails ACTIVATION_FRAGMENT_INVALID before anything is written.
-    // That is a pre-existing defect in claude-adapter-installer.ts:378, out of scope here.
-    await writeFile(join(base, ".claude", "settings.json"), canonicalJson({}), { mode: 0o600 });
     const scriptSource = generateSessionStartScript();
     const req = request();
     const fragment = generateClaudeAdapterActivationFragment(req, activationHostFor(req), { scriptDigest: sessionStartScriptDigest(scriptSource), installationRoot: base });
@@ -831,5 +826,51 @@ test("CQ-02b: admitClaudeAdapterActivationHostInput refuses governedAction value
     const admitted = admitClaudeAdapterActivationHostInput({ ...basis, hostDigest: canonicalSha256(basis) });
     assert.equal(admitted.input.governedAction, governedAction);
     assert.equal(typeof admitted.input.governedAction, "string");
+  }
+});
+
+test("INC-022: activation installs into a root that has no .claude/settings.json yet", async () => {
+  // The ordinary first install. The merge admits only canonical settings bytes, and the
+  // absent-file stand-in used to be the literal "{}" -- one newline short of canonical --
+  // so every project without a settings.json failed ACTIVATION_FRAGMENT_INVALID before a
+  // single byte was written. Reverting the stand-in to "{}" reddens exactly this test.
+  const { base, workflowDir } = await tempRoot();
+  try {
+    await mkdir(workflowDir, { recursive: true });
+    const bundle = generateClaudeAdapterBundle(request(), hostFor(request()));
+    for (const file of bundle.files) {
+      await writeFile(join(base, ...file.path.split("/")), file.content, { mode: 0o600 });
+    }
+    await assert.rejects(
+      () => stat(join(base, ".claude", "settings.json")),
+      "the precondition under test is that no settings.json exists",
+    );
+
+    const scriptSource = generateSessionStartScript();
+    const adapterRequest = request();
+    const fragment = generateClaudeAdapterActivationFragment(
+      adapterRequest,
+      activationHostFor(adapterRequest),
+      { scriptDigest: sessionStartScriptDigest(scriptSource), installationRoot: base },
+    );
+    const installed = await installClaudeAdapterActivation({
+      installationRoot: base,
+      generationId: "activation-generation:absent-settings",
+      receiptPath: join(base, "activation-generation.json"),
+      bundleDigest: bundle.bundleDigest,
+      fragment,
+      scriptSource,
+    });
+    assert.equal(installed.settingsPath, join(base, ".claude", "settings.json"));
+    assert.equal(installed.receipt.fragmentDigest, fragment.fragmentDigest);
+
+    // The file the installer creates is itself canonical, so a second install reads back
+    // bytes the merge will admit: the absent-file path and the present-file path agree.
+    const written = await readFile(join(base, ".claude", "settings.json"), "utf8");
+    assert.equal(written, canonicalJson(JSON.parse(written)));
+    assert.ok(written.endsWith("\n"), "canonical JSON ends with a newline");
+    assert.ok(JSON.parse(written).hooks.SessionStart, "the activation hook landed");
+  } finally {
+    await rm(base, { recursive: true, force: true });
   }
 });
