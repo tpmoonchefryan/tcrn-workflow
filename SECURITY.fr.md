@@ -1,4 +1,4 @@
-<!-- tcrn-doc-synced-to: SECURITY.md 4bc24fd915e062476a5ef7b02c7842d5958b95be0522b39c308597629de0bb3e -->
+<!-- tcrn-doc-synced-to: SECURITY.md 9a60da68a5a0fb833409778cb8d1c0709178170b037e52a3ff8b64f30410e994 -->
 
 > **La version anglaise fait autorité.** Cette traduction est fournie par commodité ; en cas de divergence entre les deux, c'est le texte anglais de SECURITY.md qui prévaut.
 
@@ -6,7 +6,7 @@
 
 ## Versions prises en charge
 
-Les correctifs de sécurité visent la branche par défaut actuelle et la dernière release étiquetée (`0.5.0`). Dans la plage `0.x`, il n'existe pas de voie de rétroportage : passez à la dernière version mineure pour recevoir les correctifs. Les versions mineures antérieures et tout candidat de pré-release ne sont pas maintenus séparément. Une release n'est prise en charge qu'une fois son bundle vérifié par rapport à une racine de confiance externe et accepté séparément.
+Les correctifs de sécurité visent la branche par défaut actuelle et la dernière release étiquetée (`0.6.0`). Dans la plage `0.x`, il n'existe pas de voie de rétroportage : passez à la dernière version mineure pour recevoir les correctifs. Les versions mineures antérieures et tout candidat de pré-release ne sont pas maintenus séparément. Une release n'est prise en charge qu'une fois son bundle vérifié par rapport à une racine de confiance externe et accepté séparément.
 
 ## Signaler une vulnérabilité
 

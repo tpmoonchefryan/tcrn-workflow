@@ -8,7 +8,7 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · 日本語 · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.5.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.6.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -219,7 +219,7 @@ PreToolUse/approval の enforce も、稼働中の App Server Controller も主�
 - **約 40 の密閉テストファイル**。本物の `SIGKILL` 障害注入、三つの独立レイヤーでの 64 通り並べ替え決定性証明、ファイルシステム攻撃マトリクスを含みます。
 - **1 つのエンドツーエンド旗艦証明**（`pnpm verify:e2e`）——統制ループ全体（initiative → epic → story → gate → conference → distill → promote → trace）の密閉リプレイで、チュートリアルの全コマンドを逐語的に実行します。
 - **19 項目の公開 AOS 要件台帳**（11 項目は fixture 検証済み、8 項目は仕様記述）——成熟度は行ごとに記録され、決して水増しされません。
-- **プライバシーゲート**が、許可リストにある 294 のソースファイル全部（完全一致リストであり、ファイルが一つ増減すればゲートは失敗します）、到達可能なすべての git オブジェクト、そしてリリースアーカイブを対象にします。
+- **プライバシーゲート**が、許可リストにある 333 のソースファイル全部（完全一致リストであり、ファイルが一つ増減すればゲートは失敗します）、到達可能なすべての git オブジェクト、そしてリリースアーカイブを対象にします。
 
 <details>
 <summary><b>検証ターゲット完全リファレンス</b>（クリックで展開）</summary>
@@ -294,7 +294,7 @@ PreToolUse/approval の enforce も、稼働中の App Server Controller も主�
 
 **統治の面**
 
-- **統治された操作者サーフェスはソース上で完成していますが、受け入れ済みの `0.5.0` リリースにはまだ含まれません。** 歴史的な十二の IO ブロック動詞は直接 digest フラグで七つまで減り、現在のソースは「絶対パス + SHA-256」の pins 文書を通じてその七つを供給し、同じコマンドカタログを構造化されたホスト中立 MCP ツールとして公開します。リリース済み `0.5.0` バイナリは引き続き `ADAPTER_HOST_REQUIRED` などで停止します。
+- **統治された操作者サーフェスは、受け入れ済みの `0.6.0` リリースに含まれます。** 歴史的な十二の IO ブロック動詞は直接 digest フラグで七つまで減り、このリリースは「絶対パス + SHA-256」の pins 文書を通じてその七つを供給し、同じコマンドカタログを構造化されたホスト中立 MCP ツールとして公開します。各変更には厳密に固定された grant が必要で、数値 CAS、明示的時刻、actor、安定した reason code の意味論を保ちます。
 - **破壊的なアーティファクト保守は fixture 限定**。`artifact-archive-apply` と `artifact-archive-restore` は機械可読カタログで fixture-only と記されています。実ワークスペースにはドライランのみが存在するため、統治された圧縮が出荷されるまでアーティファクトストアは増え続けます。
 - **ナレッジストアは使い捨てであることを明示的に承認しなければなりません**。非 fixture のワークスペースでは、呼び出しごとの明示的承認がある場合にのみ初期化されます（`KNOWLEDGE_DISPOSABLE_ACK_REQUIRED`）。それは派生インデックスであり、決して記録の原本ではありません。
 - **承認された hook command が固定するのは handler であり、interpreter ではありません**。どちらの activation command もインストーラが admit した絶対 handler path を埋め込むため、fire-time の作業ディレクトリでは改変できません（`pnpm verify:act12`）。interpreter は依然として裸名 `node` で、fire-time の `PATH` で解決されます。本物の interpreter より前にあるディレクトリがそれを差し替え、handler 自身のバイト自己検査では検知できません——差し替えられた interpreter は handler を読まないからです。同じゲートが両ホストでその差し替えを実際に実行するので、これは実測であり仮定ではありません。固定ではなく開示を選びました。絶対 interpreter path を固定すると、承認済み definition がツールチェーン変更ごとに漂移し、この hook は fail-open なので漂移は静かに劣化します。
@@ -302,9 +302,9 @@ PreToolUse/approval の enforce も、稼働中の App Server Controller も主�
 ## ステータス、正直に
 
 - `0.1.0` は**最初の正式リリース**です。セマンティックバージョニングが適用され、0.x の間は公開 API がマイナーバージョン間で変わる可能性があります。
-- **以来、五つのマイナーリリースが出荷され、これが `0.5.0` です。** `0.2.0` はゲートの同一性を実体のあるものにし（名簿照合された `owner_intent_required`）、`0.3.0` はレコード上に助言的スコープを追加し（`work-annotate`）、`0.3.2` は `Incident` 作成経路を開いてナレッジストアにキュレーションの余地を与え、`0.4.0` はバックグラウンドリソースの残渣統治を追加し、`0.5.0` はスプリント／リリーストレインの機構を追加しました。それぞれが再現可能な成果物一式を伴う不変タグであり、`CHANGELOG.md` が完全な台帳を携えています。
+- **この版より前に七つの受け入れ済みリリースがあり、これが `0.6.0` です。** `0.2.0` はゲート同一性、`0.3.0` は助言的スコープ、`0.3.2` は `Incident` 作成経路とナレッジストアの余地、`0.4.0` はバックグラウンドリソース残渣統治、`0.5.0` はスプリント／リリーストレインを追加しました。`0.6.0` は統治された二ホストの操作者権威、MCP、activation、observe / execution レシート、conference provenance を出荷します。各受け入れ済み版は再現可能な成果物一式を伴う不変タグであり、`CHANGELOG.md` が完全な台帳を携えています。
 - **Claude Code の証拠は狭く、definition ごとに割れています。** 履歴上の `2.1.201` activation receipt は、置換済み relative-path SessionStart バイトについて九件の観測を記録しています。現在の persona-free な admitted absolute-root SessionStart definition は、code/fixture proof のみに留まります。これとは別に、生成された EPIC-024 の fail-open handler そのものが Claude Code `2.1.201` 上で `SessionEnd` を三回 live 発火しました。残る五つの observe イベントは、モデルプローブが推論もツール使用も行う前に API status 402 を返したため、明示的な「計測不可（unavailable）」のセルのままです。
-- **Codex の activation・observe・execution の証拠は狭く、証拠等級つきです。** inert installer は可逆であり、activation が登録するのは `SessionStart` だけで、fail-open であり、Core Reference ペルソナを一切注入せず、現在の exact definition すべてについて Codex の approval を要求します。以前に承認された Verity 束縛の発火は、撤回済みバイトに対する履歴上の証拠です。修正後の persona-free な definition は hermetic であり、approval と live 発火を待っています。EPIC-024 は別途、生成された fail-open handler そのものを、限定された Codex `0.139.0` の証拠プロジェクトで `PostToolUse`・`PreCompact`・`PostCompact`・`SubagentStart`・`SubagentStop` について live 発火させました。そのバージョンの生成 hook schema は `SessionEnd` を含まず、`Stop` を別名としては使いません。S057 はもう一つの限定された App Server ハーネスを用いて 28 件の raw/readback チェックを通し、署名のない fresh-context Workflow execution receipt を一件投影しました。どちらのハーネスも、出荷された Controller でも複数イベントの activation installer でもありません。これらは `0.5.0` 後の source-tree capability であり、受け入れ済みの `0.5.0` release bytes に関する claim ではありません。
+- **Codex の activation・observe・execution の証拠は狭く、証拠等級つきです。** inert installer は可逆であり、activation が登録するのは `SessionStart` だけで、fail-open であり、Core Reference ペルソナを一切注入せず、現在の exact definition すべてについて Codex の approval を要求します。以前に承認された Verity 束縛の発火は、撤回済みバイトに対する履歴上の証拠です。修正後の persona-free な definition は hermetic であり、approval と live 発火を待っています。EPIC-024 は別途、生成された fail-open handler そのものを、限定された Codex `0.139.0` の証拠プロジェクトで `PostToolUse`・`PreCompact`・`PostCompact`・`SubagentStart`・`SubagentStop` について live 発火させました。そのバージョンの生成 hook schema は `SessionEnd` を含まず、`Stop` を別名としては使いません。S057 はもう一つの限定された App Server ハーネスを用いて 28 件の raw/readback チェックを通し、署名のない fresh-context Workflow execution receipt を一件投影しました。どちらのハーネスも、出荷された Controller でも複数イベントの activation installer でもありません。これらの capability は `0.6.0` に含まれますが、証拠の境界はここに記した通り変わりません。
 - `supportedAosReleases` は空です：外部 AOS 互換性は主張しません。
 - リリースモードは、付属ヘルパーがそのバイト列を受理することを要求します：ブートストラップ digest は独立に公開され、受理されるリリース digest はその中にコンパイルされています。
 

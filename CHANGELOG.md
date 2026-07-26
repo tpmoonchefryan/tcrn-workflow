@@ -3,6 +3,42 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.6.0 — 2026-07-26
+
+Governed dual-host operator integration: pinned operator authority, a
+host-neutral MCP surface, Codex installation and SessionStart activation,
+bounded observe/execution receipts, and conference execution provenance. The
+full narrative is `docs/releases/0.6.0.md`.
+
+### Added
+
+- **One pinned operator-authority contract for the remaining governed CLI
+  surface.** An absolute-path plus SHA-256 pins document binds the authority
+  bundle, generation floor, revocations, host observations, command allowlists,
+  and every authority file consumed by the seven previously IO-only verbs.
+- **`tcrn-workflow-mcp`, a host-neutral stdio JSON-RPC surface derived from the
+  command catalog.** Mutations require an exact pinned grant and preserve
+  numeric CAS, explicit time, actor, and stable reason-code semantics.
+- **Codex install, uninstall, activation, observe, and execution-collection
+  primitives.** Activation is persona-free, SessionStart-only, fail-open, and
+  bound to the installer-admitted absolute handler path; every exact live
+  definition still requires explicit host approval.
+- **Conference execution provenance.** Execution mode, bounded host receipts,
+  and fresh-context evidence distinguish synthesis from genuinely dispatched
+  deliberation without turning attribution into identity.
+- **Five-language root-document coverage and a machine-pinned translation
+  policy**, plus a CJK-safe house style and release-time stale-mirror checks.
+
+### Changed
+
+- **Authority-bearing output is enforced at the CLI write boundary**, not
+  trusted from catalog metadata alone; undeclared guarded output fails closed.
+- **The command catalog and schema now carry the authority-bearing contract**
+  used by both the CLI and MCP projection.
+- **Activation hardening closes the audited path, digest, approval, rollback,
+  and missing-settings gaps**, including canonical handling of a project with
+  no existing `.claude/settings.json`.
+
 ## 0.5.0 — 2026-07-24
 
 The sprint / release-train mechanism: batch Initiatives into a named delivery
