@@ -662,26 +662,26 @@ function receipt(reasonCode: RelocationReasonCode, entry: WorkspaceRelocationEnt
   }) as RelocationReceipt;
 }
 
-// THE CAP AND ITS PARITY INVARIANT, stated because the review asked whether a vacate
-// can be admitted into a ledger with no room left for its own completion — which
-// would brick the chain permanently (source VACATED, target ADOPTION_REQUIRED, both
-// completions LEDGER_FULL).
+// THE CAP USED TO LIVE HERE AND NO LONGER DOES. It is evaluated in
+// `prepareRelocation`, which `relocation-plan` and `relocation-vacate` share — see the
+// comment there for why, and for the one-way-budget property that made the read-only
+// side matter.
 //
-// It cannot, and the reason is parity, not luck: every completion (`adopted` or
-// `aborted`) follows exactly one `vacated`, so a SETTLED ledger always has even
-// length. A hop therefore starts at an even length <= 14 and reaches at most 16. A
-// vacate at 16 is refused here while the source is still alive (T26), and an odd
-// settled length is not reachable through any verb.
+// Keeping a copy at this commit point was considered and rejected, because after the
+// move it can never be the predicate that fires, and a check that cannot fire is the
+// failure mode this module refuses elsewhere (see the t22 note in adopt). The
+// arithmetic: every completion (`adopted` or `aborted`) follows exactly one `vacated`,
+// so a ledger of even length always ends in a completion. Sixteen is even, therefore a
+// sixteen-entry ledger never ends in `vacated`, therefore `adoptWorkspace` and
+// `abortWorkspaceRelocation` — the only other callers — can never be reached with
+// sixteen entries in hand. The vacate side is refused in the shared preparation while
+// the source is still alive (T40). The read-side cap in `validateRelocationLedger`
+// remains the backstop against a hand-written oversized ledger, which is the only way
+// one can exist at all.
 //
-// A `+ 2` reservation at the vacate side was considered and deliberately NOT added:
-// under this invariant it can never be the predicate that fires, and a check that
-// cannot fire is the failure mode this module refuses elsewhere (see the t22 note in
-// adopt). If a future stage ever appends without a paired completion, the invariant
-// dies and the reservation becomes the correct fix — that is the trigger to watch.
+// If a future stage ever appends without a paired completion, the parity invariant
+// dies and a reservation at this point becomes the correct fix — that is the trigger.
 function withRelocations(metadata: WorkspaceMetadata, entries: readonly WorkspaceRelocationEntry[]): WorkspaceMetadata {
-  if (entries.length > WORKSPACE_RELOCATION_LEDGER_LIMIT) {
-    fail("WORKSPACE_RELOCATION_LEDGER_FULL", `the ledger cap is ${String(WORKSPACE_RELOCATION_LEDGER_LIMIT)} entries`);
-  }
   return { ...metadata, relocations: entries };
 }
 
