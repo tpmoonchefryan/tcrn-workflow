@@ -403,16 +403,6 @@
       "testName": "WSR-1 T43: a target inspection carries a declared observation instant and abort bounds it"
     },
     {
-      "id": "WSR-1-plan-ledger-cap",
-      "rationale": "The cap lived only in withRelocations, which no read-only verb reaches, so relocation-plan answered PLANNED at a full ledger and handed the operator a relocationId for a hop the vacate would refuse -- after which the operator performed the out-of-band minting ceremony for an impossible hop. That was the one reachable state in which plan and vacate disagreed, which is the property their shared preparation exists to guarantee. The commit-point check remains as the backstop, so only the PLAN side can go red on this mutation.",
-      "file": "packages/core/src/workspace-relocation.ts",
-      "find": "if (existingEntries + 1 > WORKSPACE_RELOCATION_LEDGER_LIMIT) {",
-      "replace": "if (existingEntries + 1 > WORKSPACE_RELOCATION_LEDGER_LIMIT * 1000) {",
-      "expectedMatches": 1,
-      "test": "tests/backup-snapshot.test.mjs",
-      "testName": "WSR-1 T40: the ledger cap refuses a vacate while the source is still alive"
-    },
-    {
       "id": "WSR-1-abort-admission-state",
       "rationale": "The admission conjunct that keeps `abort` admissible ONLY at a vacated address. Widened, relocation-abort executes at the DESTINATION and writes an aborted entry into the copy's own ledger -- the fork-creating move performed at the wrong end. Its partner check inside abortWorkspaceRelocation is a labelled restatement, not a second guard: with the admission intact no address can reach it, which is why this layer is the one registered.",
       "file": "packages/core/src/workspace.ts",
@@ -544,10 +534,10 @@
     },
     {
       "id": "WSR-1-ledger-cap",
-      "rationale": "The sixteen-entry cap, refused while the source is still alive. A vacate admitted into a ledger with no room for its own completion would brick the chain permanently: source VACATED, destination ADOPTION_REQUIRED, both completions LEDGER_FULL.",
+      "rationale": "The sixteen-entry cap, refused while the source is still alive. A vacate admitted into a ledger with no room for its own completion would brick the chain permanently: source VACATED, destination ADOPTION_REQUIRED, both completions LEDGER_FULL. It now lives in the preparation relocation-plan and relocation-vacate share, because while it sat at the commit point no read-only verb reached it: the plan answered PLANNED at a full ledger and sent the operator into the out-of-band minting ceremony for a hop the vacate would refuse. T40 asserts BOTH sides of that -- the plan refusing, and the vacate refusing with the source still alive.",
       "file": "packages/core/src/workspace-relocation.ts",
-      "find": "  if (entries.length > WORKSPACE_RELOCATION_LEDGER_LIMIT) {",
-      "replace": "  if (entries.length > WORKSPACE_RELOCATION_LEDGER_LIMIT * 4) {",
+      "find": "  if (existingEntries + 1 > WORKSPACE_RELOCATION_LEDGER_LIMIT) {",
+      "replace": "  if (existingEntries + 1 > WORKSPACE_RELOCATION_LEDGER_LIMIT * 4) {",
       "expectedMatches": 1,
       "test": "tests/backup-snapshot.test.mjs",
       "testName": "WSR-1 T40: the ledger cap refuses a vacate while the source is still alive"

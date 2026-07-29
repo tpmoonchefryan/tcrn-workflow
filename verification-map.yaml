@@ -1598,7 +1598,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "070d84200a0984e72a8373f6683484124016cd822707dff4845e9b5b65dd7643",
+      "fixtureDigest": "f3da2f40a50604433990b884391dcf795552738d40d8893117fb0441cfca61fd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1748,7 +1748,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "0d58ddcdce4e914c436b4b9ba0c439cac2deba8c50c43e22aecc5bb0976b1ac1",
+      "fixtureDigest": "525d1e1119247298ef255233713006cae835dbe00e299f09067786609d41c164",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1782,7 +1782,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b491a37377338d2fea774def91e9ffea6a5a284fe017b87e61018f104c154a19",
+      "fixtureDigest": "edc91809428bfe5a2062fdcb779871d431f1a52d9a1b91ea06f8f5a63b102e1c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2245,7 +2245,7 @@
         "docs/adr/0003-workspace-relocation.md",
         "docs/architecture/backup-restore-runbook.md"
       ],
-      "fixtureDigest": "b38510c0e443436687bc590384ae9a8d98379d2e807fdc8e7c9f5bb7307e4131",
+      "fixtureDigest": "3696f155f12b3cf7bd2f81ecb9482370099f80fe1b7474b91c8230f49e7a1387",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
