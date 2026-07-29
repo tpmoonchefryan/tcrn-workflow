@@ -8,7 +8,7 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · 한국어 · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.6.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.8.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -52,9 +52,9 @@ TCRN Workflow는 이 세 가지를 한꺼번에 막습니다 — 에이전트 �
 | 역량 | 실제로 무슨 뜻인가 |
 | --- | --- |
 | **그냥 파일인 워크스페이스** | 작업 그래프 전체(Initiative → Epic → Story → Subtask)가 정규화된 평범한 JSON 파일과 해시 체인으로 존재합니다 — 데이터베이스도 데몬도 없습니다. `cat`과 `sha256sum`으로 감사할 수 있고, 내보내기는 바이트 단위로 재현 가능합니다. |
-| **명령 하나, 게이트 20개** | `pnpm verify:p1`이 검증 사슬 전체를 실행합니다: 포맷, lint, 타입 검사, 빌드, 약 40개 테스트 파일, 신뢰 매트릭스, 아카이브/SBOM/라이선스/취약점 정책, 소스 허용 목록, 오프라인 경계, 프라이버시 스캔, CI 하드닝, 검증 맵, 클린 히스토리 증명. 예상 밖의 것이 하나라도 있으면 사슬이 멈춥니다. |
+| **명령 하나, 게이트 20개** | `pnpm verify:p1`이 검증 사슬 전체를 실행합니다: 포맷, lint, 타입 검사, 빌드, 약 56개 테스트 파일, 신뢰 매트릭스, 아카이브/SBOM/라이선스/취약점 정책, 소스 허용 목록, 오프라인 경계, 프라이버시 스캔, CI 하드닝, 검증 맵, 클린 히스토리 증명. 예상 밖의 것이 하나라도 있으면 사슬이 멈춥니다. |
 | **기계가 읽는 주장 원장** | `verification-map.yaml`이 77개 주장 — framework-hygiene 13개, inertness-proof 13개, runtime-capability 51개 — 을 관측 가능한 reason code에 결속합니다. 주장의 주어가 바뀌면 그 증명은 다시 실행되어야 합니다. |
-| **여전히 작동함을 스스로 보이는 가드** | `pnpm guard-check`는 등록된 각 가드를 소스에서 변이 제거하고, 지정된 테스트가 빨간불이 되기를 요구합니다 — 가드 22개, 푸시할 때마다 검증. 사라져도 아무도 알아채지 못할 보호는 보호가 아닙니다. |
+| **여전히 작동함을 스스로 보이는 가드** | `pnpm guard-check`는 등록된 각 가드를 소스에서 변이 제거하고, 지정된 테스트가 빨간불이 되기를 요구합니다 — 가드 30개, 푸시할 때마다 검증. 사라져도 아무도 알아채지 못할 보호는 보호가 아닙니다. |
 | **기록에 남는 숙의** | 콘퍼런스와 결정 게이트는 같은 변조 탐지 저널에 추가됩니다. 충족되지 않은 게이트는 해당 작업 항목이 `done`에 도달하는 것을 *막습니다*(`WORKSPACE_GATE_PENDING`) — 명령 시점에도, 재생 시점에도 다시 — 그리고 콘퍼런스를 닫으면 각 결정이 역링크된 지식 후보로 증류됩니다. |
 | **모든 결정에 이름이 붙는다** | 액터 어테스테이션을 켜면 이후 모든 변경이 누가 행했는지 선언해야 합니다 — 엔진과 그 재생 모두 액터 ID가 빠진 이벤트에 대해 페일클로즈합니다. 켜지 않은 워크스페이스는 이전과 바이트 단위로 동일하게 동작합니다. |
 | **되돌릴 수 있는 활성화** | Claude Code와 Codex에는 세 단계 가역 활성화 경로가 있습니다. 현재 명령은 승인된 절대 프로젝트 루트를 결속하며 코드와 fixture로 증명됩니다. 이전 호스트 영수증은 교체된 바이트의 기록입니다. Codex는 각 정확한 정의를 `/hooks`에서 승인해야 하며 설치 영수증만으로 호스트 활성화를 주장하지 않습니다. |
@@ -65,6 +65,7 @@ TCRN Workflow는 이 세 가지를 한꺼번에 막습니다 — 에이전트 �
 | **결함은 일급 시민** | 생성 경로가 `Incident` 종류를 허용하므로, 결함은 `Story`인 척하는 대신 자기만의 레코드와 계보를 가집니다. `Review`, `Release`, `Knowledge`는 직접 생성에 대해 닫힌 채로 남습니다. 지식 레코드를 폐기하면 그 본문이 회수되고 검색은 요약과 매칭되므로, 큐레이션된 저장소는 군더더기 없이 찾기 쉬운 상태로 유지됩니다. |
 | **백그라운드 부하는 잔여물을 남기지 않는다** | 호스트 중립 탐지기가 세션이 소유한 프로세스 그룹을 기록하고, 프로세스 테이블 스냅샷으로부터 등록된 패턴과 일치하는 살아 있는 소유 그룹이나 init에 재양육된 고아를 보고합니다 — 주입된 고아가 항상 잡힌다는 것을 빨간 테스트가 증명합니다. 자동 세션 종료 발화는 두 호스트 모두에서 Owner 게이트로 남습니다. |
 | **뒤엉킴이 아니라 배치로 배포** | `Release` 작업 종류는 최상위 스프린트 컨테이너입니다: `work-annotate --sprint`는 구속력 없는 어드바이저리 참조를 통해 Initiative들을 명명된 딜리버리 트레인에 등록하며 — 파티션을 가로지를 수 있고, 멤버 자신의 상태는 건드리지 않습니다 — `work-list --sprint`가 그 트레인을 다시 읽어 옵니다. 타임박스 축은 작업 범위 트리를 결코 뒤엉키게 하지 않습니다. |
+| **큰 체인도 계속 읽힙니다** | `export`는 전부 아니면 전무이며, 정규 형태가 1 MiB를 넘는 워크스페이스를 거부합니다 — 체인은 자라기만 해도 스스로 그 선을 넘습니다. 그래도 페이지 단위 읽기는 답합니다: `work-list` 요약이 사람이 읽는 `externalKey`를 함께 실어 오고, `conference-position-list`와 `conference-minutes-list`는 예전에 `export`로만 보이던 입장과 회의록에 닿으며, `event-list`는 각 이벤트를 **문자 그대로** — `priorHash`, `payloadHash`, `eventHash`까지 — 돌려주므로 소비자가 체인을 한 페이지씩 다시 도출할 수 있습니다. 페이로드가 들어가지 않는 페이지는 낮춰야 할 플래그 이름과 함께 이름 있는 거부(`CLI_EVENT_PAGE_OVERSIZED`)를 받으며 결코 조용히 잘리지 않습니다: 짧아진 페이지는 체인의 끝과 구별되지 않기 때문입니다. |
 
 <details>
 <summary><b>다섯 가지 용어, 쉬운 말로</b>(클릭해서 펼치기)</summary>
@@ -216,11 +217,11 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 
 - `verify:p1` 사슬의 **게이트 20개**, 각각 안정적인 종단 reason code를 가집니다.
 - `verification-map.yaml`의 **기계 검증 주장 77개** — framework-hygiene 13개, inertness-proof 13개, runtime-capability 51개. 위의 주장 배지는 실행할 때마다 파싱되어 원장과 대조됩니다.
-- **등록된 가드 22개**, 각각 변이 제거 후 테스트가 빨간불이 되는지 확인해 여전히 작동함을 증명합니다.
-- **밀폐 테스트 파일 약 40개**. 진짜 `SIGKILL` 결함 주입, 독립된 세 계층에서의 64순열 결정성 증명, 파일시스템 공격 매트릭스를 포함합니다.
+- **등록된 가드 30개**, 각각 변이 제거 후 테스트가 빨간불이 되는지 확인해 여전히 작동함을 증명합니다.
+- **밀폐 테스트 파일 약 56개**. 진짜 `SIGKILL` 결함 주입, 독립된 세 계층에서의 64순열 결정성 증명, 파일시스템 공격 매트릭스를 포함합니다.
 - **엔드투엔드 대표 증명 1개**(`pnpm verify:e2e`) — 통제 루프 전체(initiative → epic → story → gate → conference → distill → promote → trace)의 밀폐 재생으로, 튜토리얼의 모든 명령을 문자 그대로 실행합니다.
 - **공개 AOS 요구사항 원장 19항목**(11개는 fixture 검증, 8개는 명세 기재) — 성숙도는 행마다 기록되며 결코 부풀리지 않습니다.
-- **프라이버시 게이트**가 허용 목록의 소스 파일 333개 전부(정확히 일치하는 목록이라 파일이 하나 늘거나 줄면 게이트가 실패합니다), 도달 가능한 모든 git 객체, 그리고 릴리스 아카이브를 대상으로 합니다.
+- **프라이버시 게이트**가 허용 목록의 소스 파일 340개 전부(정확히 일치하는 목록이라 파일이 하나 늘거나 줄면 게이트가 실패합니다), 도달 가능한 모든 git 객체, 그리고 릴리스 아카이브를 대상으로 합니다.
 
 <details>
 <summary><b>전체 검증 대상 레퍼런스</b>(클릭해서 펼치기)</summary>
@@ -274,6 +275,7 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 - **워크스페이스당 작성자는 하나**. 모든 변경은 워크스페이스 제어 트리 안의 리스에서 직렬화되며, 경쟁자는 실패 후 닫히고 재시도합니다. 병렬성은 저장 계층 위에 있습니다: 작성자를 늘리지 말고 워크스페이스를 늘리십시오.
 - **프로젝트나 이니셔티브 단위로 워크스페이스를 분할하십시오**. 워크스페이스는 수천 건 초반의 이벤트 수에서 체감할 만큼 느려지고, 단일 명령이 1초를 넘는 지점은 약 6,600건입니다(Apple M3, 외삽값. 원시 샘플은 `docs/verification/2026-07-20-event-chain-ceiling-samples.json`). 읽기도 쓰기와 같은 비용을 치르며 체인에는 압축이 없습니다 — 조직 전체가 공유하는 하나의 워크스페이스가 바로 벌을 받는 형태입니다.
 - **따로 배포된 여러 프로젝트가 하나의 워크스페이스를 공유하는 것은 설계와 싸우는 일입니다**. 기계적으로는 동작합니다 — 모든 동사가 명시적 절대 경로를 받기 때문입니다 — 하지만 모든 작성자가 하나의 리스에 줄을 서고, 모든 접근자는 다섯 루트 전부에 대해 동일한 정규 경로를 제시해야 하며(아니면 `WORKSPACE_SCHEMA_INVALID`), 합쳐진 히스토리는 규모 한계에 더 일찍 도달합니다. 여러 프로젝트에 서비스를 제공하는 일은 한 층 위의 몫입니다. 여기 동봉된 AOS 계약은 명명과 연결의 원장일 뿐이며 `supportedAosReleases`는 비어 있습니다.
+- **`export`는 여전히 전부 아니면 전무입니다**. 정규 형태가 1 MiB를 넘는 워크스페이스를 거부하며(`INPUT_OVERSIZED`), 이 플랫폼의 네 체인 가운데 셋은 이미 그 선을 넘었습니다. 큰 체인은 대신 페이지 단위 동사로 읽습니다 — `work-list`, `conference-position-list`, `conference-minutes-list`, 그리고 `0.8.0`부터는 `event-list`. `export` 자체가 증분식이 된 것은 아니며, `event-list`가 약속하는 것은 하나뿐입니다: 들어가지 않는 페이지는 들어가지 않는다고 말한다는 것.
 - **여러 워크스페이스를 나란히 두는 것이 지원되는 형태입니다**. 아무것도 그것들을 등록하거나 발견하지 않습니다. 각각은 독립된 단일 작성자 영역이며, 하나의 프레임워크 checkout과 하나의 릴리스 신뢰 루트를 공유할 수 있습니다.
 
 **백업과 이동성**
@@ -303,7 +305,8 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 ## 상태, 정직하게
 
 - `0.1.0`은 **첫 정식 릴리스**입니다. 시맨틱 버저닝이 적용되며, 0.x 범위에서는 공개 API가 마이너 버전 사이에 바뀔 수 있습니다.
-- **이 버전 전에 승인된 릴리스가 일곱 개 있었고, 지금은 `0.6.0`입니다.** `0.2.0`은 게이트 신원, `0.3.0`은 어드바이저리 범위, `0.3.2`는 `Incident` 생성 경로와 지식 저장소 여유, `0.4.0`은 백그라운드 자원 잔여물 통치, `0.5.0`은 스프린트 / 릴리스 트레인을 추가했습니다. `0.6.0`은 통치된 이중 호스트 운영자 권위, MCP, activation, observe / execution 영수증과 conference provenance를 제공합니다. 승인된 각 버전은 재현 가능한 산출물 묶음을 가진 불변 태그이며, `CHANGELOG.md`가 전체 원장을 담고 있습니다.
+- **이 버전 전에 승인된 릴리스가 아홉 개 있었고, 지금은 `0.8.0`입니다.** `0.2.0`은 게이트 신원, `0.3.0`은 어드바이저리 범위, `0.3.2`는 `Incident` 생성 경로와 지식 저장소 여유, `0.4.0`은 백그라운드 자원 잔여물 통치, `0.5.0`은 스프린트 / 릴리스 트레인을 추가했습니다. `0.6.0`은 통치된 이중 호스트 운영자 권위, MCP, activation, observe / execution 영수증과 conference provenance를 제공했고, `0.7.0`은 `work-list` 요약에 `externalKey`를 실었으며 페이지 단위 `conference-position-list`와 `conference-minutes-list`를 추가했고, `0.8.0`은 페이지 단위 `event-list`를 더합니다. 승인된 각 버전은 재현 가능한 산출물 묶음을 가진 불변 태그이며, `CHANGELOG.md`가 전체 원장을 담고 있습니다.
+- **`0.7.0`과 `0.8.0`의 읽기 표면은 소비자 하나를 위해 잘린 것이며, 그보다 넓은 주장은 하지 않습니다.** 두 릴리스가 닫은 것은 같은 소비자가 제기한 간극입니다: 두 번째 컨테이너에서 체인을 다시 도출하는 컨테이너 간 일관성 매트릭스입니다. 한도를 넘은 체인에서는 논점 열다섯 개를 담은 심의와 하나도 없는 심의가 똑같이 보였고, 레코드는 나열되지만 이름을 부를 수 없었으며, 매트릭스의 「추가 전용」과 「해시 체인」 행에는 판정할 A측 대상 자체가 없었습니다 — 느린 읽기가 아니라, 「읽을 수 없음」이 「비어 있음」으로 제시된 것입니다. `event-list`가 레코드를 문자 그대로 돌려주는 이유가 바로 그 재도출을 가능하게 하기 위해서입니다. 그것은 `export`를 페이지 단위로 만들지 않고, 스트리밍하지 않으며, 질의 사이에 소비자 상태를 보관하지도 않습니다. 기본 창 64는 엔진 자신의 세그먼트 크기이며, 여기 있는 네 개의 활성 체인에 대해 실측했습니다: 단일 이벤트 최대는 7,008바이트, 95백분위는 3,575바이트입니다.
 - **Claude Code 증거는 좁고 정의에 따라 갈립니다.** 과거 `2.1.201` activation 영수증은 교체된 상대 경로 SessionStart 바이트에 대한 관측 9건을 기록합니다. 현재의 persona-free 승인 절대 루트 SessionStart 정의는 여전히 코드와 fixture로만 증명됩니다. 이와 별개로, 생성된 EPIC-024 fail-open handler 정본이 Claude Code `2.1.201`에서 `SessionEnd`를 세 번 live 발화했습니다. 나머지 observe 이벤트 다섯 개는 모델 프로브가 추론이나 도구 사용에 이르기 전에 API 상태 402를 반환했기 때문에, 명시적인 측정 불가(unavailable) 칸으로 남아 있습니다.
 - **Codex의 activation·observe·execution 증거는 좁고 증거 등급이 매겨져 있습니다.** inert 설치기는 가역적이며, activation은 `SessionStart`만 등록하고 fail-open으로 동작하며, 어떤 Core Reference 페르소나도 주입하지 않고, 현재의 정확한 definition 전부에 대한 Codex의 승인을 요구합니다. 앞서 승인되었던 Verity 결속 발화는 철회된 바이트에 대한 과거 증거이며, 수정된 persona-free definition은 밀폐(hermetic) 증명에 머물러 있고 승인과 live 발화를 기다리고 있습니다. EPIC-024는 이와 별도로, 범위가 한정된 Codex `0.139.0` 증거 프로젝트에서 생성된 fail-open handler 정본을 `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`에 대해 live 발화시켰습니다. 그 버전의 생성 hook 스키마에는 `SessionEnd`가 없으며, `Stop`을 별칭으로 쓰지도 않습니다. S057은 또 다른 범위 한정 App Server 하네스로 raw/readback 검사 28건을 통과시키고 서명되지 않은 fresh-context Workflow 실행 영수증 1건을 산출했습니다. 두 하네스 모두 출시된 Controller도, 다중 이벤트 activation 설치기도 아닙니다. 이 capability들은 `0.6.0`에 포함되지만 증거의 경계는 여기에 적힌 그대로입니다.
 - `supportedAosReleases`는 비어 있습니다: 외부 AOS 호환성은 주장하지 않습니다.

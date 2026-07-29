@@ -8,7 +8,7 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · 日本語 · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.6.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.8.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -52,9 +52,9 @@ TCRN Workflow はこの三つをまとめて塞ぎます——エージェント
 | 能力 | 実務上の意味 |
 | --- | --- |
 | **ただのファイルであるワークスペース** | 作業グラフ全体（Initiative → Epic → Story → Subtask）が、正規化された素の JSON ファイルとハッシュチェーンとして存在します——データベースもデーモンもありません。`cat` と `sha256sum` で監査でき、エクスポートはバイト単位で再現可能です。 |
-| **一つのコマンド、20 のゲート** | `pnpm verify:p1` が検証チェーン全体を実行します：フォーマット、lint、型チェック、ビルド、約 40 のテストファイル、トラストマトリクス、アーカイブ/SBOM/ライセンス/脆弱性ポリシー、ソース許可リスト、オフライン境界、プライバシースキャン、CI ハードニング、検証マップ、クリーン履歴の証明。想定外のものがあればチェーンは止まります。 |
+| **一つのコマンド、20 のゲート** | `pnpm verify:p1` が検証チェーン全体を実行します：フォーマット、lint、型チェック、ビルド、約 56 のテストファイル、トラストマトリクス、アーカイブ/SBOM/ライセンス/脆弱性ポリシー、ソース許可リスト、オフライン境界、プライバシースキャン、CI ハードニング、検証マップ、クリーン履歴の証明。想定外のものがあればチェーンは止まります。 |
 | **機械が読めるクレーム台帳** | `verification-map.yaml` が 77 のクレーム——13 の framework-hygiene、13 の inertness-proof、51 の runtime-capability——を観測可能な reason code に束縛します。クレームの主語が変われば、その証明は再実行されなければなりません。 |
-| **効き目が残っていることを自ら示すガード** | `pnpm guard-check` は登録済みの各ガードをソースから変異除去し、指定されたテストが赤になることを要求します——22 のガードを、プッシュのたびに検証。失われても誰も気づかない保護は、保護ではありません。 |
+| **効き目が残っていることを自ら示すガード** | `pnpm guard-check` は登録済みの各ガードをソースから変異除去し、指定されたテストが赤になることを要求します——30 のガードを、プッシュのたびに検証。失われても誰も気づかない保護は、保護ではありません。 |
 | **記録される熟議** | カンファレンスと決定ゲートは、同じ改竄検知可能なジャーナルに追記されます。未充足のゲートは対象作業項目が `done` に到達するのを*ブロック*し（`WORKSPACE_GATE_PENDING`）——コマンド時点でも、リプレイ時にも——カンファレンスを閉じると各決定が逆リンク付きの知識候補へ蒸留されます。 |
 | **すべての決定に名前がつく** | アクター署名を有効にすると、以降のすべての変更が誰の行為かを宣言しなければなりません——エンジンもそのリプレイも、アクター ID を欠く事象に対してフェイルクローズします。有効化しないワークスペースは、従来とバイト単位で同一のままです。 |
 | **取り消せるアクティベーション** | Claude Code と Codex は三段階の可逆な activation path を持ちます。現在の command は admitted absolute project root を束縛し、code/fixture で証明済みです。以前の host receipt は置換済み byte の履歴です。Codex は引き続き exact definition ごとの `/hooks` approval を必要とし、install receipt だけでは host activation を証明しません。 |
@@ -65,6 +65,7 @@ TCRN Workflow はこの三つをまとめて塞ぎます——エージェント
 | **不具合は第一級市民** | 作成経路が `Incident` 種別を受理するため、不具合は `Story` を装うのではなく自身のレコードと系譜を持ちます。`Review`・`Release`・`Knowledge` は直接作成に対して閉じたままです。ナレッジレコードを退役させるとその本文が回収され、検索はサマリーに一致するため、キュレーションされたストアは無駄なく見つけやすいまま保たれます。 |
 | **バックグラウンド負荷は残渣を残さない** | ホスト中立の検出器が、セッションの所有するプロセスグループを記録し、プロセステーブルのスナップショットから、登録済みパターンに一致する稼働中の所有グループ、または init に再親付けされた孤児プロセスを報告します——注入された孤児プロセスが常に捕捉されることを、赤いテストが証明します。セッション終了時の自動発火は、両ホストとも Owner のゲート下に留まります。 |
 | **もつれではなく、バッチで出荷** | `Release` 作業種別はトップレベルのスプリントコンテナです：`work-annotate --sprint` は、拘束力のない助言的参照を通じて Initiative を名前付きのデリバリートレインに登録します——パーティションをまたぐことができ、メンバー自身のステータスは手つかずのまま——そして `work-list --sprint` がそのトレインを読み戻します。タイムボックスの軸が、作業スコープのツリーをもつれさせることは決してありません。 |
+| **大きなチェーンも読めるまま** | `export` はオール・オア・ナッシングで、正規形が 1 MiB を超えるワークスペースを拒みます——チェーンは育つだけでその線を自分で越えます。それでもページ分割された読み取りは答えます：`work-list` のサマリーは人が読む `externalKey` を携え、`conference-position-list` と `conference-minutes-list` は以前 `export` からしか見えなかった立場と議事録に届き、`event-list` は各イベントを**逐語的に**——`priorHash`、`payloadHash`、`eventHash` ごと——返すので、消費者はチェーンを一ページずつ再導出できます。ペイロードが収まらないページは、下げるべきフラグの名前とともに具名で拒否され（`CLI_EVENT_PAGE_OVERSIZED`）、黙って切り詰められることはありません：短いページはチェーンの終端と見分けがつかないからです。 |
 
 <details>
 <summary><b>五つの用語を、平たい言葉で</b>（クリックで展開）</summary>
@@ -215,11 +216,11 @@ PreToolUse/approval の enforce も、稼働中の App Server Controller も主�
 
 - **20 のゲート**が `verify:p1` チェーンにあり、それぞれが安定した終端 reason code を持ちます。
 - **77 の機械検証済みクレーム**が `verification-map.yaml` にあります——13 の framework-hygiene、13 の inertness-proof、51 の runtime-capability。上部のクレームバッジは毎回解析され、台帳と照合されます。
-- **22 の登録済みガード**。それぞれ変異除去してテストが赤になることを確認し、今も効いていることを証明しています。
-- **約 40 の密閉テストファイル**。本物の `SIGKILL` 障害注入、三つの独立レイヤーでの 64 通り並べ替え決定性証明、ファイルシステム攻撃マトリクスを含みます。
+- **30 の登録済みガード**。それぞれ変異除去してテストが赤になることを確認し、今も効いていることを証明しています。
+- **約 56 の密閉テストファイル**。本物の `SIGKILL` 障害注入、三つの独立レイヤーでの 64 通り並べ替え決定性証明、ファイルシステム攻撃マトリクスを含みます。
 - **1 つのエンドツーエンド旗艦証明**（`pnpm verify:e2e`）——統制ループ全体（initiative → epic → story → gate → conference → distill → promote → trace）の密閉リプレイで、チュートリアルの全コマンドを逐語的に実行します。
 - **19 項目の公開 AOS 要件台帳**（11 項目は fixture 検証済み、8 項目は仕様記述）——成熟度は行ごとに記録され、決して水増しされません。
-- **プライバシーゲート**が、許可リストにある 333 のソースファイル全部（完全一致リストであり、ファイルが一つ増減すればゲートは失敗します）、到達可能なすべての git オブジェクト、そしてリリースアーカイブを対象にします。
+- **プライバシーゲート**が、許可リストにある 340 のソースファイル全部（完全一致リストであり、ファイルが一つ増減すればゲートは失敗します）、到達可能なすべての git オブジェクト、そしてリリースアーカイブを対象にします。
 
 <details>
 <summary><b>検証ターゲット完全リファレンス</b>（クリックで展開）</summary>
@@ -273,6 +274,7 @@ PreToolUse/approval の enforce も、稼働中の App Server Controller も主�
 - **ワークスペースあたり書き手は一人**。すべての変更はワークスペースの制御ツリー内のリースで直列化され、競合者はフェイルクローズして再試行します。並列性はストレージ層の上にあります：書き手を増やすのではなく、ワークスペースを増やしてください。
 - **プロジェクトまたはイニシアチブ単位でワークスペースを分割**。ワークスペースは数千件台前半のイベント数で体感できるほど遅くなり、単一コマンドが一秒を超えるのはおよそ 6,600 件です（Apple M3、外挿値。生サンプルは `docs/verification/2026-07-20-event-chain-ceiling-samples.json`）。読み取りは書き込みと同じ代価を払い、チェーンに圧縮はありません——組織全体で一つのワークスペースは、まさに罰せられる形です。
 - **別々に配備された複数プロジェクトで一つのワークスペースを共有するのは、設計に逆らう使い方です**。機械的には動きます——どの動詞も明示的な絶対パスを取るためです——しかし全書き手が一つのリースに並び、どのアクセス者も五つのルートすべてに同一の正規パスを提示しなければならず（さもなくば `WORKSPACE_SCHEMA_INVALID`）、統合された履歴はスケール限界により早く達します。複数プロジェクトへのサービス提供は一つ上の層の仕事です。ここに同梱される AOS 契約は命名とリンクの台帳にすぎず、`supportedAosReleases` は空です。
+- **`export` は依然としてオール・オア・ナッシングです**。正規形が 1 MiB を超えるワークスペースを拒み（`INPUT_OVERSIZED`）、この基盤の四つのチェーンのうち三つはすでにその線を越えています。大きなチェーンは代わりにページ分割された動詞で読みます——`work-list`、`conference-position-list`、`conference-minutes-list`、そして `0.8.0` からは `event-list`。`export` 自体が増分化されたわけではなく、`event-list` が約束するのは一つだけです：収まらないページは、収まらないと言う、ということ。
 - **複数のワークスペースを並べて置くのがサポートされる形です**。何もそれらを登録も発見もしません。各ワークスペースは独立したシングルライターの領域であり、一つのフレームワーク checkout と一つのリリース信頼ルートを共有できます。
 
 **バックアップと可搬性**
@@ -302,7 +304,8 @@ PreToolUse/approval の enforce も、稼働中の App Server Controller も主�
 ## ステータス、正直に
 
 - `0.1.0` は**最初の正式リリース**です。セマンティックバージョニングが適用され、0.x の間は公開 API がマイナーバージョン間で変わる可能性があります。
-- **この版より前に七つの受け入れ済みリリースがあり、これが `0.6.0` です。** `0.2.0` はゲート同一性、`0.3.0` は助言的スコープ、`0.3.2` は `Incident` 作成経路とナレッジストアの余地、`0.4.0` はバックグラウンドリソース残渣統治、`0.5.0` はスプリント／リリーストレインを追加しました。`0.6.0` は統治された二ホストの操作者権威、MCP、activation、observe / execution レシート、conference provenance を出荷します。各受け入れ済み版は再現可能な成果物一式を伴う不変タグであり、`CHANGELOG.md` が完全な台帳を携えています。
+- **この版より前に九つの受け入れ済みリリースがあり、これが `0.8.0` です。** `0.2.0` はゲート同一性、`0.3.0` は助言的スコープ、`0.3.2` は `Incident` 作成経路とナレッジストアの余地、`0.4.0` はバックグラウンドリソース残渣統治、`0.5.0` はスプリント／リリーストレインを追加しました。`0.6.0` は統治された二ホストの操作者権威、MCP、activation、observe / execution レシート、conference provenance を出荷し、`0.7.0` は `work-list` サマリーに `externalKey` を載せ、ページ分割された `conference-position-list` と `conference-minutes-list` を追加し、`0.8.0` はページ分割された `event-list` を追加します。各受け入れ済み版は再現可能な成果物一式を伴う不変タグであり、`CHANGELOG.md` が完全な台帳を携えています。
+- **`0.7.0` と `0.8.0` の読み取り面は一つの消費者のために切られたものであり、それ以上は主張しません。** どちらのリリースも、同じ消費者が提出したギャップを塞いでいます：第二のコンテナでチェーンを再導出する、コンテナ横断の一貫性マトリクスです。上限を超えたチェーンでは、十五の論点を抱えた熟議と一つも持たない熟議が同じに見え、レコードは列挙できても名前を呼べず、マトリクスの「追記のみ」と「ハッシュチェーン」の行には判定すべき A 側の対象がそもそも存在しませんでした——読むのが遅いのではなく、「読めない」が「空」として提示されていたのです。`event-list` がレコードを逐語的に返すのは、その再導出を可能にするためです。`export` をページ分割するものではなく、ストリーミングもせず、クエリの間に消費者の状態を保持することもありません。既定のウィンドウ 64 はエンジン自身のセグメントサイズであり、ここにある四つのライブチェーンで実測しています：単一イベントの最大は 7,008 バイト、95 パーセンタイルは 3,575 バイトです。
 - **Claude Code の証拠は狭く、definition ごとに割れています。** 履歴上の `2.1.201` activation receipt は、置換済み relative-path SessionStart バイトについて九件の観測を記録しています。現在の persona-free な admitted absolute-root SessionStart definition は、code/fixture proof のみに留まります。これとは別に、生成された EPIC-024 の fail-open handler そのものが Claude Code `2.1.201` 上で `SessionEnd` を三回 live 発火しました。残る五つの observe イベントは、モデルプローブが推論もツール使用も行う前に API status 402 を返したため、明示的な「計測不可（unavailable）」のセルのままです。
 - **Codex の activation・observe・execution の証拠は狭く、証拠等級つきです。** inert installer は可逆であり、activation が登録するのは `SessionStart` だけで、fail-open であり、Core Reference ペルソナを一切注入せず、現在の exact definition すべてについて Codex の approval を要求します。以前に承認された Verity 束縛の発火は、撤回済みバイトに対する履歴上の証拠です。修正後の persona-free な definition は hermetic であり、approval と live 発火を待っています。EPIC-024 は別途、生成された fail-open handler そのものを、限定された Codex `0.139.0` の証拠プロジェクトで `PostToolUse`・`PreCompact`・`PostCompact`・`SubagentStart`・`SubagentStop` について live 発火させました。そのバージョンの生成 hook schema は `SessionEnd` を含まず、`Stop` を別名としては使いません。S057 はもう一つの限定された App Server ハーネスを用いて 28 件の raw/readback チェックを通し、署名のない fresh-context Workflow execution receipt を一件投影しました。どちらのハーネスも、出荷された Controller でも複数イベントの activation installer でもありません。これらの capability は `0.6.0` に含まれますが、証拠の境界はここに記した通り変わりません。
 - `supportedAosReleases` は空です：外部 AOS 互換性は主張しません。
