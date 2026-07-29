@@ -316,11 +316,241 @@
       "id": "WSR-1-permit-workspace-scoping",
       "rationale": "Without the workspaceId term the relocation roster still looks rigorous -- it still names an actor, still names destinations, still carries a basis -- and it permits every workspace on the machine. That is the permanently-green-gate shape this repository was burned by three times in one day: a check whose two sides cannot differ. Removing this term restores an authority for workspace X that authorizes moving workspace Y.",
       "file": "packages/core/src/workspace-relocation.ts",
-      "find": "    entry.actorId === actorId && entry.workspaceIds.includes(workspaceId) && entry.destinations.includes(destination));",
-      "replace": "    entry.actorId === actorId && entry.destinations.includes(destination));",
+      "find": "entry.actorId === actorId && entry.workspaceIds.includes(workspaceId) && entry.destinations.includes(destination) &&",
+      "replace": "entry.actorId === actorId && entry.destinations.includes(destination) &&",
       "expectedMatches": 1,
       "test": "tests/backup-snapshot.test.mjs",
       "testName": "WSR-1 T14c: a roster scoped to a different workspaceId does not permit this workspace"
+    },
+    {
+      "id": "WSR-1-permit-destination-scoping",
+      "rationale": "The destinations term was ruled in D6 and pinned by nothing: deleting it left the whole suite green, so a permit authorising 'move workspace X to /approved/place' silently authorised '/attacker/place' too. The relocationId term does NOT subsume it -- the two are independently authored fields of the same document, so a permit can name the right hop and the wrong destination, which is a reachable operator error as well as an attack.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "entry.actorId === actorId && entry.workspaceIds.includes(workspaceId) && entry.destinations.includes(destination) &&",
+      "replace": "entry.actorId === actorId && entry.workspaceIds.includes(workspaceId) &&",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T14e: a permit scoped to a different destination does not admit this hop"
+    },
+    {
+      "id": "WSR-1-permit-hop-scoping",
+      "rationale": "This is the term that makes the permit per-INVOCATION. Relocation never advances the event chain, so the {version, headEventHash} basis is byte-identical after a hop and bounds drift rather than reuse -- measured, not supposed: one authority file drove vacate/adopt/abort twice and left three live authorities for one workspaceId. Removing the relocationId term restores an authority document that can be spent forever.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "entry.relocationId === relocationId && entry.stage === stage);",
+      "replace": "entry.stage === stage);",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T14f: a permit for a different hop does not admit this one"
+    },
+    {
+      "id": "WSR-1-permit-stage-scoping",
+      "rationale": "Without the stage term one permit authorises every verb of its hop, which specifically means the abort can ride the authority its own vacate was minted with -- the exact move an adversarial review used to fork a workspace with engine verbs only and no tampering.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "entry.relocationId === relocationId && entry.stage === stage);",
+      "replace": "entry.relocationId === relocationId);",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T14g: a permit for another stage of the same hop does not admit this verb"
+    },
+    {
+      "id": "WSR-1-abort-fork-acknowledgement",
+      "rationale": "Abort is the one verb that can create a fork, and the source cannot know whether the destination adopted. The acknowledgement proves nothing and is not meant to: it is the ceremony that stops the fork-creating verb from being one flagless command away. Removing it removes the only in-band statement that the operator was told.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "if (options.acknowledgeForkRisk !== true) {",
+      "replace": "if (options.acknowledgeForkRisk !== true && options.at === \"never\") {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T27: abort demands its own stage permit, an explicit acknowledgement, and refuses on an adopted target"
+    },
+    {
+      "id": "WSR-1-abort-target-adopted-check",
+      "rationale": "The one mechanical check standing in front of the fork: when the operator can reach the destination and passes its own relocation-inspect document, an adopted destination refuses the abort outright. Neutering this turns a checked artifact into a decorative one -- the shape this repository has been burned by four times.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "if (inspection.state !== \"adoption-required\" || inspection.stage !== \"vacated\") {",
+      "replace": "if (inspection.state !== \"adoption-required\" && inspection.stage === \"never\") {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T27: abort demands its own stage permit, an explicit acknowledgement, and refuses on an adopted target"
+    },
+    {
+      "id": "WSR-1-abort-permit-basis",
+      "rationale": "abort called matchPermit and never assertPermitBasis, so the one verb that can create a fork was the only one whose authority was not basis-checked. It was harmless because a vacated chain cannot advance -- an invariant that lived in a different function and was written down nowhere.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "  assertPermitBasis(permit, trailing.basis.version, trailing.basis.headEventHash);\n  const targetStateVerified",
+      "replace": "  void permit;\n  const targetStateVerified",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T27: abort demands its own stage permit, an explicit acknowledgement, and refuses on an adopted target"
+    },
+    {
+      "id": "WSR-1-abort-admission-state",
+      "rationale": "The admission conjunct that keeps `abort` admissible ONLY at a vacated address. Widened, relocation-abort executes at the DESTINATION and writes an aborted entry into the copy's own ledger -- the fork-creating move performed at the wrong end. Its partner check inside abortWorkspaceRelocation is a labelled restatement, not a second guard: with the admission intact no address can reach it, which is why this layer is the one registered.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "  if (admit === \"abort\" && state === \"vacated\") return;",
+      "replace": "  if (admit === \"abort\") return;",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T33: abort runs at the source address and nowhere else"
+    },
+    {
+      "id": "WSR-1-adoption-admission-state",
+      "rationale": "The mirror conjunct for adopt. Widened, an adopt aimed at the vacated SOURCE stops being refused by the state machine and falls through to adopt's own destination checks, which report a different problem than the one that exists.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "  if (admit === \"adoption\" && state === \"adoption-required\") return;",
+      "replace": "  if (admit === \"adoption\") return;",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T32: adopt restates the relocationId of the hop it is completing"
+    },
+    {
+      "id": "WSR-1-foreign-address-fallback",
+      "rationale": "The verdict that refuses a third copy of an adopted tree. Changing the fallback to `live` makes every restored backup and every rsync-to-staging copy read as a fully live workspace on the readMetadata-only paths (lease acquisition, lease-break, lease-recovery-break) that the admission check exists to cover.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "  return vacatedAddresses.has(address) ? \"vacated\" : \"foreign-address\";",
+      "replace": "  return vacatedAddresses.has(address) ? \"vacated\" : \"live\";",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T34: a copy of an ADOPTED tree at a third address is a foreign address everywhere"
+    },
+    {
+      "id": "WSR-1-no-ledger-address-compare",
+      "rationale": "relocationStateAt returned `live` for ANY address whenever the ledger was absent, never comparing the address it was handed against the binding in the file. Since that state is the verdict word of the mandatory two-sided close-out, a stale pre-vacate copy or a restored backup read as a second live authority while every other verb refused to open it.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "    return address === relocationWorkspaceRoot(metadata.roots) ? \"live\" : \"foreign-address\";",
+      "replace": "    return \"live\";",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T30: a stale copy is not `live` just because it carries no ledger"
+    },
+    {
+      "id": "WSR-1-ledger-self-derivation",
+      "rationale": "The cheapest detector of naive or accidental ledger corruption: an entry must name itself from its own content. Both pre-existing tamper tests deliberately recompute the relocationId in order to reach the chaining rule, which left this check with no red proof anywhere.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "      if (entry.relocationId !== deriveRelocationId({ workspaceId, sequence: entry.sequence, from, to, basis })) {",
+      "replace": "      if (entry.relocationId !== deriveRelocationId({ workspaceId, sequence: entry.sequence, from, to, basis }) && entry.sequence === 9999) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T35: a ledger entry must name itself, and a completion must restate its hop"
+    },
+    {
+      "id": "WSR-1-ledger-completion-restatement",
+      "rationale": "A completion entry must restate its hop's id, from, to and basis. Without it an adopted entry can claim a binding its vacate never declared, which is how a ledger stops being the thing that makes a fork legible.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "      if (entry.relocationId !== previous.relocationId ||\n        canonicalJson(from) !== canonicalJson(previous.from) ||\n        canonicalJson(to) !== canonicalJson(previous.to) ||\n        canonicalJson(basis) !== canonicalJson(previous.basis)) {",
+      "replace": "      if (entry.sequence === 9999) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T35: a ledger entry must name itself, and a completion must restate its hop"
+    },
+    {
+      "id": "WSR-1-adopt-manifest-binding",
+      "rationale": "The single line that makes the verifySnapshotManifest call on the next line non-circular. Without it adopt compares the transported tree against a manifest the presenter of that tree also produced -- the manifest is unsigned canonical JSON, so forging one is free. A working exploit exists: tamper a view, regenerate the manifest, adopt clean.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "if (createHash(\"sha256\").update(options.controlManifest, \"utf8\").digest(\"hex\") !== trailing.basis.controlManifestSha256) {",
+      "replace": "if (createHash(\"sha256\").update(options.controlManifest, \"utf8\").digest(\"hex\") !== trailing.basis.controlManifestSha256 && trailing.sequence === 9999) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T36: adopt binds the supplied manifest to the one the vacate recorded"
+    },
+    {
+      "id": "WSR-1-adopt-destination-equality",
+      "rationale": "The resolved roots must BE the destination the vacate declared. Removing it lets an adopter declare arbitrary framework/transient/evidence-locator/release-trust roots, so the ledger commits a destination binding the host does not actually have.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "if (canonicalJson(canonicalRoots) !== canonicalJson(trailing.to)) {",
+      "replace": "if (canonicalJson(canonicalRoots) !== canonicalJson(trailing.to) && canonicalRoots.length === 99) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T31: adopt binds the destination it was declared for, at the address it was declared for"
+    },
+    {
+      "id": "WSR-1-adopt-relocation-id-restatement",
+      "rationale": "Adopt's proof of attention. The only wrong-id adopt in the suite ran against a tree with no ledger and stopped one line earlier at NOT_PENDING, so this branch was never reached by any test.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "  if (trailing.relocationId !== options.relocationId) {\n    fail(\"WORKSPACE_RELOCATION_ID_MISMATCH\", `the trailing hop is ${trailing.relocationId}`);\n  }\n  // t12: idempotence.",
+      "replace": "  if (trailing.relocationId !== options.relocationId && trailing.sequence === 9999) {\n    fail(\"WORKSPACE_RELOCATION_ID_MISMATCH\", `the trailing hop is ${trailing.relocationId}`);\n  }\n  // t12: idempotence.",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T32: adopt restates the relocationId of the hop it is completing"
+    },
+    {
+      "id": "WSR-1-mcp-dispatcher-exclusion",
+      "rationale": "The entire boundary between a standing MCP grant and the three workspace-takeover verbs, and it shipped with no test and no guard. The tools/list filter is not a backstop: commandForTool searches the FULL catalog, so with this clause gone an operator bundle naming relocation-vacate executes a workspace vacate while the verb stays invisible in the listing.",
+      "file": "packages/cli/src/mcp.ts",
+      "find": "if (!entry || entry.availability === \"fixture-only\" || requiresPerInvocationAuthority(entry)) {",
+      "replace": "if (!entry || entry.availability === \"fixture-only\") {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T37: the MCP dispatcher refuses a per-invocation-authority verb, not merely the tools/list surface"
+    },
+    {
+      "id": "WSR-1-vacate-workspace-root-must-move",
+      "rationale": "A hop that leaves the workspace root in place commits, kills the source and can never be adopted, because relocationStateAt keys on that root and evaluates its vacated branch before its adoption-required branch. The shipped code accepted it; the only exit was abort, which is the fork-creating verb.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "  if (left === right) {",
+      "replace": "  if (left === right && left === \"never\") {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T29: a hop that does not move the workspace root is refused while the source is still alive"
+    },
+    {
+      "id": "WSR-1-destination-root-shape",
+      "rationale": "The shape half at the input boundary. Without it a destination whose five roots collide or nest is refused only at the very end by the LEDGER validator, which reports relocations[4].to for a command line the operator typed as flags -- a ledger-integrity code for an operator input error, after a lease has been taken and a full control-tree manifest computed.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "  try {\n    assertDistinctRootShape(roots);\n  } catch (error) {\n    throw new RelocationError(\n      \"WORKSPACE_RELOCATION_INPUT_INVALID\",",
+      "replace": "  try {\n    if (roots.length === 99) assertDistinctRootShape(roots);\n  } catch (error) {\n    throw new RelocationError(\n      \"WORKSPACE_RELOCATION_INPUT_INVALID\",",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T29: a hop that does not move the workspace root is refused while the source is still alive"
+    },
+    {
+      "id": "WSR-1-vacate-expected-version",
+      "rationale": "vacate's explicit --expected-version compare-and-set. On the `head` route the two sides are computed from one read milliseconds apart and cannot differ; the explicit-integer route is the only one on which this check can be the one that fires, and it had no test.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "    if (!Number.isSafeInteger(options.expectedVersion) || options.expectedVersion !== state.version) {",
+      "replace": "    if (!Number.isSafeInteger(options.expectedVersion) || (options.expectedVersion !== state.version && state.version === 99999)) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T39: vacate's explicit --expected-version is a real compare-and-set"
+    },
+    {
+      "id": "WSR-1-ledger-cap",
+      "rationale": "The sixteen-entry cap, refused while the source is still alive. A vacate admitted into a ledger with no room for its own completion would brick the chain permanently: source VACATED, destination ADOPTION_REQUIRED, both completions LEDGER_FULL.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "  if (entries.length > WORKSPACE_RELOCATION_LEDGER_LIMIT) {",
+      "replace": "  if (entries.length > WORKSPACE_RELOCATION_LEDGER_LIMIT * 4) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T40: the ledger cap refuses a vacate while the source is still alive"
+    },
+    {
+      "id": "WSR-1-plan-vacate-shared-derivation",
+      "rationale": "relocation-plan and relocation-vacate must derive the SAME relocationId, because the operator mints an authority against the plan's id and the vacate is what spends it. Perturbing the shared derivation makes the plan a prediction of a hop the engine is not about to take, and every relocation stops being authorizable at all.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "      relocationId: deriveRelocationId({ workspaceId: state.metadata.workspaceId, sequence, from, to, basis }),",
+      "replace": "      relocationId: deriveRelocationId({ workspaceId: state.metadata.workspaceId, sequence: sequence + 1, from, to, basis }),",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T28: relocation-plan is the vacate's own preparation, and it writes nothing"
+    },
+    {
+      "id": "WSR-1-vacate-destination-containment",
+      "rationale": "assertDistinctRootShape compares the five roots of ONE binding against each other and never `from` against `to`, so nothing forbade a destination nested inside the source workspace root. Such a hop relocates cleanly and leaves the only live control tree inside the directory the runbook's next step tells the operator to delete -- `rm -rf` on the vacated source then destroys the chain.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "  if (contains(leftToRight) || contains(rightToLeft)) {",
+      "replace": "  if (contains(leftToRight) && contains(rightToLeft)) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T29: a hop that does not move the workspace root is refused while the source is still alive"
+    },
+    {
+      "id": "WSR-1-inspect-near-miss-report",
+      "rationale": "A destination stated in a spelling the destination host does not realpath to refuses under FOREIGN_ADDRESS, which names the wrong problem -- the ledger DOES name that tree, under a different spelling, and recovery is abort-only after the source is already dead. The engine cannot discriminate it without probing a path on another host, so the inspection reports the near miss. Removing the report returns the operator to guessing.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "    rootPortableIdentity(preview.root) === rootPortableIdentity(declaredDestination) &&\n    preview.root !== declaredDestination;",
+      "replace": "    rootPortableIdentity(preview.root) !== rootPortableIdentity(declaredDestination) &&\n    preview.root !== declaredDestination;",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T41: a destination stated in the wrong spelling is reported as a near miss, not just a foreign address"
     }
   ]
 }

@@ -11,6 +11,9 @@
     },
     {
       "$ref": "#/$defs/inspection"
+    },
+    {
+      "$ref": "#/$defs/plan"
     }
   ],
   "$defs": {
@@ -36,7 +39,9 @@
               "actorId",
               "workspaceIds",
               "destinations",
-              "basis"
+              "basis",
+              "relocationId",
+              "stage"
             ],
             "properties": {
               "actorId": {
@@ -83,6 +88,17 @@
                     "minimum": 0
                   }
                 }
+              },
+              "relocationId": {
+                "type": "string",
+                "pattern": "^relocation:[a-f0-9]{24}$"
+              },
+              "stage": {
+                "enum": [
+                  "abort",
+                  "adopt",
+                  "vacate"
+                ]
               }
             }
           }
@@ -141,6 +157,15 @@
         },
         "authority": {
           "type": "object"
+        },
+        "controlManifest": {
+          "type": "string"
+        },
+        "targetStateVerified": {
+          "type": "boolean"
+        },
+        "forkRisk": {
+          "type": "string"
         }
       }
     },
@@ -183,6 +208,70 @@
           "maximum": 16
         },
         "activeWorkspaceRoot": {
+          "type": "string"
+        },
+        "nearMissDestination": {
+          "type": "boolean"
+        },
+        "forkRisk": {
+          "type": "string"
+        }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "reasonCode",
+        "workspaceId",
+        "relocationId",
+        "sequence",
+        "workspaceRootFrom",
+        "workspaceRootTo",
+        "basis",
+        "permitStages",
+        "controlManifest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "tcrn.workspace-relocation-plan.v1"
+        },
+        "reasonCode": {
+          "const": "WORKSPACE_RELOCATION_PLANNED"
+        },
+        "workspaceId": {
+          "type": "string",
+          "pattern": "^workspace:[a-f0-9]{24}$"
+        },
+        "relocationId": {
+          "type": "string",
+          "pattern": "^relocation:[a-f0-9]{24}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "workspaceRootFrom": {
+          "type": "string"
+        },
+        "workspaceRootTo": {
+          "type": "string"
+        },
+        "basis": {
+          "type": "object"
+        },
+        "permitStages": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "abort",
+              "adopt",
+              "vacate"
+            ]
+          }
+        },
+        "controlManifest": {
           "type": "string"
         }
       }

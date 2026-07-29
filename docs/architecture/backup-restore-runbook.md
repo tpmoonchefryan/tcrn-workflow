@@ -158,15 +158,36 @@ target.
    refuses `WORKSPACE_RELOCATION_UNSETTLED` on a tree carrying `.tmp-` residue —
    at the source, where `recover` can still fix it, rather than at the target
    where it cannot.
-2. **Take the manifest and keep it.** `snapshot-manifest > control-manifest.json`.
-   The adopt step needs this file; the ledger inside the copied tree holds its
-   SHA-256, so a wrong or replayed manifest is refused by the tree itself.
+2. **Plan the hop and keep the plan.** `relocation-plan` (read-only, same flags as
+   the vacate) emits `relocationId`, the `basis`, and `controlManifest`. Write the
+   manifest text to `control-manifest.json`: the adopt step needs it, and **after
+   the vacate commits no address can produce it again** — `snapshot-manifest`
+   refuses the source with `WORKSPACE_RELOCATION_VACATED` and the copy with
+   `WORKSPACE_RELOCATION_ADOPTION_REQUIRED`. The vacate receipt carries the same
+   text as a second copy, so losing it is recoverable; skipping the plan is not a
+   shortcut, because the authority in step 3 must name the id this step computes.
 3. **Mint the relocation authority.** A canonical
-   `tcrn.workspace-relocation-authority.v1` document whose permit names the actor,
-   the `workspaceId`, the destination workspace root, and the CURRENT
-   `{version, headEventHash}` basis. It is per-invocation: an authority minted
-   against an older basis is refused `WORKSPACE_RELOCATION_BASIS_STALE`.
-4. **Vacate the source.** All five destination roots must be stated.
+   `tcrn.workspace-relocation-authority.v1` document. Each permit names the actor,
+   the `workspaceId`, the destination workspace root, the CURRENT
+   `{version, headEventHash}` basis, the `relocationId` from step 2, and ONE
+   `stage` — `vacate`, `adopt` or `abort`. Mint the vacate and adopt permits now;
+   mint an `abort` permit only if and when you decide to abort, because that is the
+   decision the separate stage exists to slow down.
+
+   One permit authorizes exactly one hop and exactly one verb of it. An authority
+   minted against an older basis is refused `WORKSPACE_RELOCATION_BASIS_STALE`;
+   one that names a different hop, destination, workspace or stage is refused
+   `WORKSPACE_RELOCATION_NOT_PERMITTED`. Reuse across hops is not possible: the id
+   is derived over the hop's own content, so the next hop has a different one.
+4. **Vacate the source.** All five destination roots must be stated. A hop that
+   leaves the workspace root where it is (moving only `framework`,
+   `release-trust`, `transient` or `evidence-locator`) is REFUSED at the plan and
+   at the vacate with `WORKSPACE_RELOCATION_INPUT_INVALID`: the ledger keys its
+   whole state machine on the workspace root, so such a hop would kill the source
+   and could never be adopted. Moving a shared root while the workspaces stay put
+   is a real operation — it is simply not a relocation, and it needs its own
+   plan (see the multi-partition note below). A destination nested inside the
+   source workspace root is refused for the same class of reason.
 
    ```
    pnpm --silent exec tcrn-workflow relocation-vacate \
@@ -194,22 +215,53 @@ target.
    returns `WORKSPACE_RELOCATION_ALREADY_ADOPTED` and changes no bytes.
 7. **INSPECT BOTH ADDRESSES AND COMPARE. This step is mandatory.** Run
    `relocation-inspect` at the old address and at the new one. Exactly one must
-   report `state: "live"` for a given `workspaceId`. This is the ONLY instrument
-   that can detect a fork, it requires both trees present at once, and it is
-   therefore by construction not something `verify` can run for you. A close-out
-   that checks only the new address proves nothing about the fork this whole verb
-   family exists to make visible. Record both outputs as gate evidence.
+   report `state: "live"` for a given `workspaceId`. It requires both trees present
+   at once and is therefore by construction not something `verify` can run for you.
+   Record both outputs as gate evidence.
 
-If the copy fails for any reason, `relocation-abort` at the source restores it
-from the ledger's own `from` — no certificate file needed. Abort IS the
-fork-creating move if the target already adopted, and the source cannot know
-whether it did; what is guaranteed is that the contradiction is permanently
-recorded in both files under one `relocationId`.
+   **What this compare proves, exactly:** that the two addresses the ledger names
+   have not both stayed live. It cannot see an address the ledger does not name. A
+   third tree made by copying the control tree, deleting `relocations` and
+   rewriting `roots` is a fully live authority for the same chain and is
+   indistinguishable from a workspace that never relocated — that is the
+   pre-`0.9.0` hand-edit hole, which this design does not close. A green close-out
+   is not a proof that no fork exists; it is a proof about these two addresses.
+
+   A `state` of `foreign-address` at a tree you expected to be the destination,
+   with `nearMissDestination: true`, means the ledger names this tree under a
+   different SPELLING of its path (a case difference on a case-insensitive volume
+   is the usual cause). State the destination exactly as `realpath` renders it on
+   the destination host.
+
+If the copy fails for any reason, `relocation-abort` at the source restores it from
+the ledger's own `from` — no certificate file needed. **Abort IS the fork-creating
+move if the destination already adopted, and the source cannot know whether it
+did.** It therefore costs three things rather than one:
+
+- a permit minted for THIS hop's `abort` stage (the vacate's own permit will not
+  do — that was the exact move an adversarial review used to fork a workspace with
+  engine verbs only);
+- `--acknowledge-fork-risk true`, which proves nothing and is a ceremony;
+- `--target-inspection <file>` whenever you can reach the destination: pass the
+  destination's own `relocation-inspect` output and the engine CHECKS it, refusing
+  with `WORKSPACE_RELOCATION_TARGET_ADOPTED` if the destination has already
+  adopted. It is optional only because the legitimate abort — the copy was never
+  made, the destination is unreachable — has no destination to inspect. The receipt
+  records `targetStateVerified` either way.
+
+What is guaranteed is that the contradiction is permanently recorded in both files
+under one `relocationId`, and that every later `relocation-inspect` at an aborted
+address carries the `forkRisk` statement.
 
 On a multi-partition platform, roots shared between partitions (typically
 `framework` and `release-trust`) must be treated as an all-partitions operation
 with a declared order. `relocation-inspect` reports `unmovedRoots` so the runbook
-can check it; the engine cannot see sibling partitions and does not claim to.
+can check it; the engine cannot see sibling partitions and does not claim to. Note
+the boundary this draws: a relocation always moves the workspace root, so "move the
+shared framework install and leave the workspaces where they are" is NOT expressible
+as a relocation and is refused at the plan. Such a move is a filesystem operation
+plus a relocation per partition whose workspace roots also move, or it is out of
+scope for this verb family.
 
 ## Anti-promises
 

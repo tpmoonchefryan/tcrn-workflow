@@ -19,8 +19,13 @@ storage version.
 
 ### Added
 
-- **`relocation-vacate` / `relocation-adopt` / `relocation-abort` /
-  `relocation-inspect`.** Four verbs that move the BINDING, never the bytes. The
+- **`relocation-plan` / `relocation-vacate` / `relocation-adopt` /
+  `relocation-abort` / `relocation-inspect`.** Five verbs that move the BINDING,
+  never the bytes. `relocation-plan` is read-only and comes first: it emits the
+  hop's `relocationId`, which the authority must name, and the control manifest,
+  which after the vacate commits no address can produce again while adopt requires
+  its exact text. Plan and vacate share one preparation function so the id the
+  operator mints against is the id the vacate takes. The
   order vacate → copy → adopt is mechanically enforced, because copy-first is the
   operator's natural instinct and must fail closed rather than produce an
   unauthorized live target. Between the vacate and the adopt **zero** addresses
@@ -36,10 +41,18 @@ storage version.
   copy of an adopted target dropped back at the old path is dead too. `roots` is
   never rewritten; `activeBinding()` answers where the tree lives now.
 - **A per-invocation relocation authority** on the gate-identity pins-track shape.
-  A permit names `actorId`, `workspaceIds`, `destinations` and a `basis` of
-  `{version, headEventHash}`. Without the `workspaceIds` term the roster permits
-  every workspace on the machine while still looking rigorous; without the basis
-  an authority minted months ago is a standing grant in per-invocation clothes.
+  A permit names `actorId`, `workspaceIds`, `destinations`, a `basis` of
+  `{version, headEventHash}`, the exact `relocationId`, and the exact `stage`
+  (`vacate` / `adopt` / `abort`). Without the `workspaceIds` term the roster
+  permits every workspace on the machine while still looking rigorous; without
+  `destinations` a permit to move a workspace somewhere approved moves it anywhere;
+  without the basis a permit can name the right hop and a stale vintage. The last
+  two terms are what make the permit per-INVOCATION rather than per-vintage:
+  relocation does not advance the chain, so the basis alone is byte-identical after
+  a hop and one file drove `vacate → adopt → abort` twice over in an adversarial
+  review, leaving three live authorities for one `workspaceId` with no tampering.
+  A `relocationId` is derived over `(workspaceId, sequence, from, to, basis)`, so
+  one permit authorizes one hop and one verb of it.
   The ledger records only `{actorId, authorityFileSha256}`, never a file
   reference — a chain whose readability depends on an external file still being
   present is a chain that bricks on a restore onto a fresh machine.
@@ -82,9 +95,12 @@ storage version.
 
 Additive and byte-identical for every workspace that never relocates.
 
-**For a workspace that HAS relocated the break is total and one-way**: the tenth
-metadata field fails the closed-field check with `WORKSPACE_SCHEMA_INVALID` on any
-`0.8.0`-or-earlier binary — not degraded reads, no reads. Accepted deliberately
+**For a workspace that carries a relocation ledger — including one whose relocation
+was ABORTED and that never moved a byte — the break is total and one-way**: the
+tenth metadata field fails the closed-field check with `WORKSPACE_SCHEMA_INVALID` on
+any `0.8.0`-or-earlier binary — not degraded reads, no reads. The aborted case is
+named because the ledger is append-only, so cancelling a move also version-locks the
+partition, and that is the case an operator is least likely to expect. Accepted deliberately
 (OD-A) rather than discovered later. The ledger cap is sixteen entries, picked
 deliberately (OD-B) so it does not become an accidental constant.
 
@@ -95,13 +111,25 @@ cover. Anyone with write access to a vacated source can restore its pre-vacate
 `workspace.json` in canonical bytes and that address is alive again, and the
 engine **cannot** detect it — the same ceiling `gate-identity.ts` already states
 about gates. This release does not prevent two truths; it makes them legible,
-permanently, in both files, under one shared `relocationId`, and it makes
-producing them require deliberate destruction rather than an accident of `rsync`.
+permanently, in both files, under one shared `relocationId`.
+
+It does NOT make producing a fork require destroying an artifact — an earlier draft
+of this entry said so and was measured wrong. `relocation-abort` alone produces one
+if the destination already adopted, destroying nothing, and abort is the documented
+recovery verb. What abort costs now is an authority minted for THIS hop's `abort`
+stage, an explicit `--acknowledge-fork-risk`, and an optional `--target-inspection`
+document that is CHECKED and refuses the abort when the destination has adopted.
+The source still cannot know what the destination did; the receipt and every later
+`relocation-inspect` at that address say exactly that, in those words.
 
 The consequence is a mandatory close-out step no gate can replace: run
-`relocation-inspect` at BOTH addresses and compare. It is the only fork detector,
-it needs both trees at once, and it is therefore by construction not something
-`verify` can run for you. No single-sided "the source is still dead" assertion
+`relocation-inspect` at BOTH ADDRESSES THE LEDGER NAMES and compare. It needs both
+trees at once and is therefore by construction not something `verify` can run for
+you. Its scope is stated exactly, because an earlier draft overstated it: it proves
+those two addresses have not both stayed live. A third address made by copying the
+tree, deleting `relocations` and rewriting `roots` is a fully live authority that
+appears in no ledger and that this compare cannot see — the pre-`0.9.0` hand-edit
+hole, which this design does not close and does not claim to. No single-sided "the source is still dead" assertion
 exists in the suite, and that absence is deliberate — such an assertion would be
 permanently true.
 
