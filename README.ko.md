@@ -8,13 +8,13 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · 한국어 · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.8.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.9.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-78-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 [이 프로젝트가 존재하는 이유](#이-프로젝트가-존재하는-이유) · [당신에게 맞는가](#당신에게-맞는가) · [무엇을 얻는가](#무엇을-얻는가) · [빠른 시작](#빠른-시작) · [실제로 사용하기](#실제로-사용하기) · [솔직한 답변](#솔직한-답변) · [알려진 한계](#알려진-한계) · [라이선스](#라이선스)
 
-`Verified claims: 77 (hygiene 13 · inertness 13 · runtime 51)`
+`Verified claims: 78 (hygiene 13 · inertness 13 · runtime 52)`
 
 </div>
 
@@ -305,7 +305,7 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 ## 상태, 정직하게
 
 - `0.1.0`은 **첫 정식 릴리스**입니다. 시맨틱 버저닝이 적용되며, 0.x 범위에서는 공개 API가 마이너 버전 사이에 바뀔 수 있습니다.
-- **이 버전 전에 승인된 릴리스가 아홉 개 있었고, 지금은 `0.8.0`입니다.** `0.2.0`은 게이트 신원, `0.3.0`은 어드바이저리 범위, `0.3.2`는 `Incident` 생성 경로와 지식 저장소 여유, `0.4.0`은 백그라운드 자원 잔여물 통치, `0.5.0`은 스프린트 / 릴리스 트레인을 추가했습니다. `0.6.0`은 통치된 이중 호스트 운영자 권위, MCP, activation, observe / execution 영수증과 conference provenance를 제공했고, `0.7.0`은 `work-list` 요약에 `externalKey`를 실었으며 페이지 단위 `conference-position-list`와 `conference-minutes-list`를 추가했고, `0.8.0`은 페이지 단위 `event-list`를 더합니다. 승인된 각 버전은 재현 가능한 산출물 묶음을 가진 불변 태그이며, `CHANGELOG.md`가 전체 원장을 담고 있습니다.
+- **이 버전 전에 승인된 릴리스가 열 개 있었고, 지금은 `0.9.0`입니다.** `0.2.0`은 게이트 신원, `0.3.0`은 어드바이저리 범위, `0.3.2`는 `Incident` 생성 경로와 지식 저장소 여유, `0.4.0`은 백그라운드 자원 잔여물 통치, `0.5.0`은 스프린트 / 릴리스 트레인을 추가했습니다. `0.6.0`은 통치된 이중 호스트 운영자 권위, MCP, activation, observe / execution 영수증과 conference provenance를 제공했고, `0.7.0`은 `work-list` 요약에 `externalKey`를 실었으며 페이지 단위 `conference-position-list`와 `conference-minutes-list`를 추가했고, `0.8.0`은 페이지 단위 `event-list`를 더했고, `0.9.0`은 체인의 바이트를 하나도 옮기지 않은 채 워크스페이스의 결속만 옮기는 통치된 재배치 동사군을 더합니다. 승인된 각 버전은 재현 가능한 산출물 묶음을 가진 불변 태그이며, `CHANGELOG.md`가 전체 원장을 담고 있습니다.
 - **`0.7.0`과 `0.8.0`의 읽기 표면은 소비자 하나를 위해 잘린 것이며, 그보다 넓은 주장은 하지 않습니다.** 두 릴리스가 닫은 것은 같은 소비자가 제기한 간극입니다: 두 번째 컨테이너에서 체인을 다시 도출하는 컨테이너 간 일관성 매트릭스입니다. 한도를 넘은 체인에서는 논점 열다섯 개를 담은 심의와 하나도 없는 심의가 똑같이 보였고, 레코드는 나열되지만 이름을 부를 수 없었으며, 매트릭스의 「추가 전용」과 「해시 체인」 행에는 판정할 A측 대상 자체가 없었습니다 — 느린 읽기가 아니라, 「읽을 수 없음」이 「비어 있음」으로 제시된 것입니다. `event-list`가 레코드를 문자 그대로 돌려주는 이유가 바로 그 재도출을 가능하게 하기 위해서입니다. 그것은 `export`를 페이지 단위로 만들지 않고, 스트리밍하지 않으며, 질의 사이에 소비자 상태를 보관하지도 않습니다. 기본 창 64는 엔진 자신의 세그먼트 크기이며, 여기 있는 네 개의 활성 체인에 대해 실측했습니다: 단일 이벤트 최대는 7,008바이트, 95백분위는 3,575바이트입니다.
 - **Claude Code 증거는 좁고 정의에 따라 갈립니다.** 과거 `2.1.201` activation 영수증은 교체된 상대 경로 SessionStart 바이트에 대한 관측 9건을 기록합니다. 현재의 persona-free 승인 절대 루트 SessionStart 정의는 여전히 코드와 fixture로만 증명됩니다. 이와 별개로, 생성된 EPIC-024 fail-open handler 정본이 Claude Code `2.1.201`에서 `SessionEnd`를 세 번 live 발화했습니다. 나머지 observe 이벤트 다섯 개는 모델 프로브가 추론이나 도구 사용에 이르기 전에 API 상태 402를 반환했기 때문에, 명시적인 측정 불가(unavailable) 칸으로 남아 있습니다.
 - **Codex의 activation·observe·execution 증거는 좁고 증거 등급이 매겨져 있습니다.** inert 설치기는 가역적이며, activation은 `SessionStart`만 등록하고 fail-open으로 동작하며, 어떤 Core Reference 페르소나도 주입하지 않고, 현재의 정확한 definition 전부에 대한 Codex의 승인을 요구합니다. 앞서 승인되었던 Verity 결속 발화는 철회된 바이트에 대한 과거 증거이며, 수정된 persona-free definition은 밀폐(hermetic) 증명에 머물러 있고 승인과 live 발화를 기다리고 있습니다. EPIC-024는 이와 별도로, 범위가 한정된 Codex `0.139.0` 증거 프로젝트에서 생성된 fail-open handler 정본을 `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`에 대해 live 발화시켰습니다. 그 버전의 생성 hook 스키마에는 `SessionEnd`가 없으며, `Stop`을 별칭으로 쓰지도 않습니다. S057은 또 다른 범위 한정 App Server 하네스로 raw/readback 검사 28건을 통과시키고 서명되지 않은 fresh-context Workflow 실행 영수증 1건을 산출했습니다. 두 하네스 모두 출시된 Controller도, 다중 이벤트 activation 설치기도 아닙니다. 이 capability들은 `0.6.0`에 포함되지만 증거의 경계는 여기에 적힌 그대로입니다.

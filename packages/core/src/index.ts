@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-export const FRAMEWORK_VERSION = "0.8.0" as const;
+export const FRAMEWORK_VERSION = "0.9.0" as const;
 export const DEFAULT_MODE = "development" as const;
 
 export type WorkflowMode = "development" | "release";
@@ -47,6 +47,8 @@ export function admitDevelopment(): DevelopmentAdmission {
 export { assertDistinctRoots, RootIdentityError } from "./root-identity.js";
 export type { CanonicalRoot } from "./root-identity.js";
 export {
+  CONTROL_TREE_SKELETON_DIRECTORIES,
+  CONTROL_TREE_TRANSPORT_RESIDUE_PATHS,
   SNAPSHOT_REASON_CODES,
   SnapshotError,
   createSnapshotManifest,
@@ -54,6 +56,34 @@ export {
   verifySnapshotManifest,
 } from "./workspace-snapshot.js";
 export type { SnapshotReasonCode } from "./workspace-snapshot.js";
+// WSR-1: governed workspace relocation.
+export {
+  RELOCATION_LIMITS,
+  RELOCATION_REASON_CODES,
+  RelocationError,
+  WORKSPACE_RELOCATION_AUTHORITY_VERSION,
+  WORKSPACE_RELOCATION_INSPECTION_VERSION,
+  WORKSPACE_RELOCATION_RECEIPT_VERSION,
+  abortWorkspaceRelocation,
+  adoptWorkspace,
+  canonicalRelocationAuthority,
+  inspectWorkspaceRelocation,
+  readRelocationAuthority,
+  vacateWorkspace,
+  validateRelocationAuthorityDocument,
+} from "./workspace-relocation.js";
+export type {
+  AbortOptions,
+  AdoptOptions,
+  RelocationAuthorityContext,
+  RelocationAuthorityDocument,
+  RelocationAuthorityFileIdentity,
+  RelocationDestination,
+  RelocationPermit,
+  RelocationReasonCode,
+  RelocationReceipt,
+  VacateOptions,
+} from "./workspace-relocation.js";
 export {
   BACKGROUND_RESOURCE_LIMITS,
   BACKGROUND_RESOURCE_REASON_CODES,
@@ -79,10 +109,17 @@ export type {
 export {
   WORKSPACE_CONTROL_DIRECTORY,
   WORKSPACE_REASON_CODES,
+  WORKSPACE_RELOCATION_ENTRY_VERSION,
+  WORKSPACE_RELOCATION_IDENTITY_VERSION,
+  WORKSPACE_RELOCATION_LEDGER_LIMIT,
   WORKSPACE_SCHEMA_VERSION,
   WORKSPACE_STORAGE_VERSION,
   WorkspaceError,
   acquireWorkspaceLease,
+  activeBinding,
+  activeWorkspaceRoot,
+  deriveRelocationId,
+  relocationStateAt,
   appendConferencePositionInWorkspace,
   applyWorkspaceMigration,
   assertSupportedWorkspaceFilesystem,
@@ -118,12 +155,18 @@ export {
 export type {
   ProjectRecord,
   SprintReference,
+  WorkspaceAdmission,
   WorkspaceCrashPoint,
   WorkspaceLease,
   WorkspaceMetadata,
   WorkspaceMigrationPlan,
   WorkspaceMutationOptions,
   WorkspaceReasonCode,
+  WorkspaceRelocationAuthorityRecord,
+  WorkspaceRelocationBasis,
+  WorkspaceRelocationEntry,
+  WorkspaceRelocationStage,
+  WorkspaceRelocationState,
   WorkspaceState,
 } from "./workspace.js";
 export {

@@ -660,11 +660,18 @@ test("MCP derives structured read-only tools from the catalog and preserves JSON
       method: "tools/list",
       params: {},
     });
-    assert.equal(
-      listed.result.tools.length,
-      COMMAND_CATALOG.filter(
-        (entry) => entry.availability !== "fixture-only",
-      ).length,
+    // WSR-1: two exclusions now, not one. `fixture-only` was always excluded;
+    // a verb that REQUIRES a per-invocation authority file plus its digest is
+    // excluded too, because an MCP grant is a standing command list and cannot
+    // carry one. The predicate is restated here from the catalog rather than
+    // hard-coding a count, so adding another such verb keeps this honest.
+    const mcpExpressible = COMMAND_CATALOG.filter((entry) =>
+      entry.availability !== "fixture-only" &&
+      !entry.flags.some((flag) => flag.required && flag.name.endsWith("-authority-digest")));
+    assert.equal(listed.result.tools.length, mcpExpressible.length);
+    assert.ok(
+      mcpExpressible.length < COMMAND_CATALOG.filter((entry) => entry.availability !== "fixture-only").length,
+      "the per-invocation-authority exclusion must actually exclude something, or it is not a filter",
     );
     assert.ok(
       workflowMcpTools().some(

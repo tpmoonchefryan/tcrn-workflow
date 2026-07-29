@@ -59,11 +59,21 @@ inventing a new one, and the witness never mutates the workspace it inspects
 workspace root). **Manifest classification**: an engine output schema (the
 `migration-plan` precedent), not an extension-registration subject.
 
-**Restore constraint**: same-path-only in V1. Root-rebind (restoring to a
-different path) requires the migration apply path V1 lacks
-(`WORKSPACE_MIGRATION_APPLY_UNAVAILABLE`, `:59`); a workspace whose schema does not
-match its location fails `WORKSPACE_SCHEMA_INVALID` (`:65`). The WSF-3 runbook
-restores to the original path, then validates.
+**Restore constraint**: same-path-only for a *restore*. A workspace whose stored
+roots disagree with its location fails `WORKSPACE_SCHEMA_INVALID` (`:65`), and the
+WSF-3 runbook restores to the original path, then validates.
+
+> **Retired 2026-07-29, superseded by ADR 0003.** This paragraph used to add that
+> root-rebind "requires the migration apply path V1 lacks
+> (`WORKSPACE_MIGRATION_APPLY_UNAVAILABLE`)", and attributed the deferral to
+> OD-29. That was a misattribution repeated in two documents: OD-29 is the
+> manifest-scope decision (see the sign-off section below, which says so), while
+> the apply-path deferral is OD-7 and concerns storage-version-2 chain rewriting.
+> Root rebinding transforms no events and changes no `storageVersion`, so it never
+> needed the apply path. The governed route is the relocation verb family — see
+> `docs/adr/0003-workspace-relocation.md`. The `WORKSPACE_SCHEMA_INVALID` refusal
+> above is unchanged; ADR 0003 supplies a route *through* it, it does not remove
+> it.
 
 ## Consequences
 

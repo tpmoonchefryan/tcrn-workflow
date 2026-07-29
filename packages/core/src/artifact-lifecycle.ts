@@ -23,7 +23,7 @@ import {
   compareCanonicalText,
 } from "../../protocol/src/index.js";
 import type { JsonValue } from "../../protocol/src/index.js";
-import { materializeWorkspace } from "./workspace.js";
+import { activeWorkspaceRoot, materializeWorkspace } from "./workspace.js";
 
 export const ARTIFACT_STORE_SCHEMA_VERSION = "tcrn.artifact-store.v1" as const;
 export const ARTIFACT_RECORD_SCHEMA_VERSION = "tcrn.artifact-record.v1" as const;
@@ -629,7 +629,8 @@ async function resolveArtifactStore(workspaceRootInput: string, options: Artifac
 }> {
   const state = await materializeWorkspace(workspaceRootInput);
   const workspaceRoot = await boundDirectory(workspaceRootInput);
-  const storedWorkspaceRoot = state.metadata.roots.find((root) => root.kind === "workspace")?.canonicalPath;
+  // WSR-1: see the matching note in knowledge-core.ts.
+  const storedWorkspaceRoot = activeWorkspaceRoot(state.metadata);
   if (storedWorkspaceRoot !== workspaceRoot) {
     fail("ARTIFACT_PATH_INVALID", "artifact store root is not the Workspace authority root");
   }
