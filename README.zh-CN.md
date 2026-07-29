@@ -8,7 +8,7 @@
 
 [English](./README.md) · 简体中文 · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.6.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.8.0-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-77-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -52,9 +52,9 @@ TCRN Workflow 把这三个缺口一并补上——办法是用对待安全关键
 | 能力 | 落到实处是什么 |
 | --- | --- |
 | **一个就是文件的工作区** | 你的整张工作图谱（Initiative → Epic → Story → Subtask）以规范化的纯 JSON 文件加哈希链存放——无数据库，无守护进程。你可以用 `cat` 和 `sha256sum` 审计它，导出结果逐字节可复现。 |
-| **一条命令，20 道门** | `pnpm verify:p1` 跑完整条验证链：格式、lint、类型检查、构建、约 40 个测试文件、信任矩阵、归档/SBOM/许可证/漏洞策略、源文件白名单、离线边界、隐私扫描、CI 加固、验证映射、干净历史证明。任何意料之外的东西都会让链条停下。 |
+| **一条命令，20 道门** | `pnpm verify:p1` 跑完整条验证链：格式、lint、类型检查、构建、约 56 个测试文件、信任矩阵、归档/SBOM/许可证/漏洞策略、源文件白名单、离线边界、隐私扫描、CI 加固、验证映射、干净历史证明。任何意料之外的东西都会让链条停下。 |
 | **一份机器能读的声明账本** | `verification-map.yaml` 把 77 条声明——13 条 framework-hygiene、13 条 inertness-proof、51 条 runtime-capability——绑定到可观测的 reason code。一条声明的主语变了，它的证明就必须重跑。 |
-| **会自证仍然有效的守卫** | `pnpm guard-check` 把每一条已登记的守卫从源码中变异掉，并要求它命名的测试变红——22 条守卫，每次推送前验证。一个丢掉了也没人会察觉的保护，不算保护。 |
+| **会自证仍然有效的守卫** | `pnpm guard-check` 把每一条已登记的守卫从源码中变异掉，并要求它命名的测试变红——30 条守卫，每次推送前验证。一个丢掉了也没人会察觉的保护，不算保护。 |
 | **记录在案的审议** | 会议与决策门被追加到同一条防篡改日志上。一个未满足的门会*阻止*其工作项到达 `done`（`WORKSPACE_GATE_PENDING`）——在命令处，重放时再来一次——而关闭一次会议会把每条决策蒸馏成一条回链的知识候选。 |
 | **每个决策都有名字** | 启用执行者留痕后，之后每一次改动都必须声明是谁在操作——引擎及其重放都会对任何缺失执行者 ID 的事件失败即关闭。从未启用它的工作区，行为与从前逐字节一致。 |
 | **可以撤销的激活** | Claude Code 与 Codex 都有三阶可逆激活路径。当前命令绑定准入后的项目绝对根路径，并已由代码与 fixture 证明；旧宿主收据只覆盖已被替代的字节。Codex 仍要求在 `/hooks` 中逐一定义审批，安装回执永不冒充宿主激活证据。 |
@@ -65,6 +65,7 @@ TCRN Workflow 把这三个缺口一并补上——办法是用对待安全关键
 | **缺陷是一等公民** | 创建路径接纳 `Incident` 类型，于是一个缺陷会拿到自己的记录与谱系，而不必伪装成一个 `Story`；`Review`、`Release` 与 `Knowledge` 对直接创建仍然关闭。退役一条知识记录会回收其正文，而搜索匹配的是摘要，因此这个经策展的库保持精简、可检索。 |
 | **后台负载不留残余** | 一个宿主中立的检测器记录一次会话所拥有的进程组，并从一张进程表快照中报告任何存活的自属进程组，或任何匹配已登记模式、被 init 重新收养的孤儿——由一个变红测试证明：注入的孤儿总会被抓到。会话结束时的自动触发在两个宿主上都由 Owner 门控。 |
 | **成批发布，而非缠成一团** | `Release` 工作类型是一个顶层 sprint 容器：`work-annotate --sprint` 通过一个非绑定的咨询式引用，把各个倡议登记进一列具名的交付列车——可跨分区，成员自身的状态不受触动——而 `work-list --sprint` 把这列列车读回来。时间盒轴线绝不与工作范围树纠缠。 |
+| **大链依然读得动** | `export` 是全有或全无的，它拒绝任何规范形态超过 1 MiB 的工作区——而一条链只要在长，自己就会越过这条线。分页读面照样作答：`work-list` 摘要带上面向人的 `externalKey`，`conference-position-list` 与 `conference-minutes-list` 够得着过去只有 `export` 才看得见的立场与纪要，而 `event-list` **逐字**返回每一条事件——`priorHash`、`payloadHash`、`eventHash`——于是消费者可以一页一页地重新推导整条链。一页若因载荷过大而放不下，会连同该调小的旗标一起被具名拒绝（`CLI_EVENT_PAGE_OVERSIZED`），绝不悄悄截短：一页被截短，和链到此为止是分辨不出来的。 |
 
 <details>
 <summary><b>五个术语，用大白话讲</b>（点击展开）</summary>
@@ -213,11 +214,11 @@ Codex 现在有刻意收窄的对应能力：`adapter-install` 仍只做惰性�
 
 - **20 道门**在 `verify:p1` 链中，每一道都有稳定的终态 reason code。
 - **77 条机器验证的声明**在 `verification-map.yaml` 中——13 条 framework-hygiene、13 条 inertness-proof、51 条 runtime-capability。上方的声明徽章每次运行都会被解析并与账本比对。
-- **22 条已登记的守卫**，每一条都通过把它变异掉、观察其测试变红，来证明它仍然在咬。
-- **约 40 个密封测试文件**，包含真实的 `SIGKILL` 故障注入、三个独立层各自的 64 种排列确定性证明，以及一套文件系统攻击矩阵。
+- **30 条已登记的守卫**，每一条都通过把它变异掉、观察其测试变红，来证明它仍然在咬。
+- **约 56 个密封测试文件**，包含真实的 `SIGKILL` 故障注入、三个独立层各自的 64 种排列确定性证明，以及一套文件系统攻击矩阵。
 - **1 个端到端旗舰证明**（`pnpm verify:e2e`）——对完整受治理闭环（initiative → epic → story → gate → conference → distill → promote → trace）的一次密封重放，每一条教程命令都被逐字执行。
 - **19 条公开 AOS 需求台账**（11 条经 fixture 验证，8 条为规格声明）——成熟度逐行如实记录，从不夸大。
-- **隐私门**覆盖全部 333 个白名单源文件（一份精确匹配清单——多一个或少一个文件，门就失败）、每一个可达的 git 对象，以及发布归档。
+- **隐私门**覆盖全部 340 个白名单源文件（一份精确匹配清单——多一个或少一个文件，门就失败）、每一个可达的 git 对象，以及发布归档。
 
 <details>
 <summary><b>完整验证目标参考</b>（点击展开）</summary>
@@ -271,6 +272,7 @@ Codex 现在有刻意收窄的对应能力：`adapter-install` 仍只做惰性�
 - **每个工作区只有一个写者**。所有变更在工作区控制树内的租约上串行；竞争者失败即关闭并重试。并行属于存储层之上：多开工作区，而不是多开写者。
 - **按项目或倡议切分工作区**。一个工作区在低千位事件量上就会可感知地变慢，单条命令跨过一秒约在 6,600 事件（Apple M3，外推值；原始样本在 `docs/verification/2026-07-20-event-chain-ceiling-samples.json`）。读取与写入付同样的代价，且链没有压缩——一个全组织共用的工作区正是被惩罚的形态。
 - **让分开部署的多个项目共用一个工作区，是在跟设计对抗**。机械上可行——每个动词都接显式绝对路径——但所有写者在同一把租约上排队，每个访问方必须给出完全一致的五根规范路径（否则 `WORKSPACE_SCHEMA_INVALID`），合并的历史也会更早撞上规模上限。为多个项目提供服务是更上一层的职责；本仓附带的 AOS 契约只是一份命名与链接账本，且 `supportedAosReleases` 为空。
+- **`export` 仍然是全有或全无**。它拒绝任何规范形态超过 1 MiB 的工作区（`INPUT_OVERSIZED`），而本平台四条链里已有三条越过了这条线。大链改走分页动词来读——`work-list`、`conference-position-list`、`conference-minutes-list`，以及自 `0.8.0` 起的 `event-list`。`export` 本身并未被改成增量式，而 `event-list` 只承诺一件事：放不下的那一页会说出来。
 - **多个工作区并排摆放是受支持的形态**。没有任何东西注册或发现它们；每个都是独立的单写者域，并且可以共用一份框架 checkout 与一份发布信任根。
 
 **备份与可迁移性**
@@ -300,7 +302,8 @@ Codex 现在有刻意收窄的对应能力：`adapter-install` 仍只做惰性�
 ## 状态，如实相告
 
 - `0.1.0` 是**首个正式接受的发布**。适用语义化版本；0.x 区间内公共 API 仍可能在次要版本之间变化。
-- **本版本之前已有七个获接受的发布，当前是 `0.6.0`。** `0.2.0` 让门身份成真，`0.3.0` 增加咨询式范围，`0.3.2` 打开 `Incident` 创建路径并扩充知识库策展余量，`0.4.0` 增加后台资源残余治理，`0.5.0` 增加 sprint / 发布列车，`0.6.0` 发布受治理的双宿主操作者权威、MCP、激活、observe / execution 收据与 conference provenance。每个获接受版本都是不可变标签并附可复现产物；`CHANGELOG.md` 记着完整账本。
+- **本版本之前已有九个获接受的发布，当前是 `0.8.0`。** `0.2.0` 让门身份成真，`0.3.0` 增加咨询式范围，`0.3.2` 打开 `Incident` 创建路径并扩充知识库策展余量，`0.4.0` 增加后台资源残余治理，`0.5.0` 增加 sprint / 发布列车，`0.6.0` 发布受治理的双宿主操作者权威、MCP、激活、observe / execution 收据与 conference provenance，`0.7.0` 把 `externalKey` 放进 `work-list` 摘要并新增分页的 `conference-position-list` 与 `conference-minutes-list`，`0.8.0` 再增加分页的 `event-list`。每个获接受版本都是不可变标签并附可复现产物；`CHANGELOG.md` 记着完整账本。
+- **`0.7.0` 与 `0.8.0` 的读面是为一个消费者而切的，不声称更宽的东西。** 这两个版本关掉的都是同一位消费者提的缺口：一套跨容器一致性矩阵，它要在第二个容器里重新推导一条链。在超限的链上，一场持有十五条论点的审议与一场一条都没有的审议渲染得一模一样；记录列得出来却叫不出名字；而该矩阵的「只增不改」与「哈希链」两行，根本没有可判的 A 侧对象——那不是读得慢，是把「读不到」呈现成了「空」。`event-list` 逐字返回记录，正是为了让重新推导成为可能；它不把 `export` 改成分页，不做流式推送，查询之间也不为消费者保留任何状态。它默认的 64 条窗口取自引擎自己的分段大小，并按本平台四条活链量过：最大的单条事件为 7,008 字节，95 分位为 3,575 字节。
 - **Claude Code 的证据是窄化的，并按定义一分为二。** 历史 `2.1.201` 激活收据记录了九次观测，对应的是已被替代的相对路径 SessionStart 字节；当前那份 persona-free、准入绝对根路径的 SessionStart 定义，仍然只有代码与 fixture 证明。另外，EPIC-024 那份精确生成的 fail-open 处理器，曾在 Claude Code `2.1.201` 上真实触发 `SessionEnd` 三次；其余五个 observe 事件仍是显式标注为 unavailable（未能测得）的单元格，因为模型探针在任何推理或工具使用发生之前就返回了 API 状态 402。
 - **Codex 的激活、observe 与执行证据都是窄化且按证据分级的。** 惰性安装可逆；激活只注册 `SessionStart`、fail-open、不注入任何 Core Reference persona，并要求 Codex 对每一版精确的当前定义都给出审批。此前那次已批准、绑定 Verity 的触发，是针对已撤回字节的历史证据；修正后的 persona-free 定义是 hermetic 的，仍在等待审批与 live 触发。EPIC-024 另外在一个受限的 Codex `0.139.0` 证据项目里，用那份精确生成的 fail-open 处理器真实触发了 `PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart` 与 `SubagentStop`；该版本生成的 hook schema 不含 `SessionEnd`，也不把 `Stop` 用作别名。S057 用另一套受限的 App Server 试验台通过了 28 项原始/回读检查，并投影出一份未签名的全新上下文 Workflow 执行回执。两套试验台都不是已发布的 Controller，也都不是多事件激活安装器。这些能力已随 `0.6.0` 发布；证据边界仍完全按此处所述。
 - `supportedAosReleases` 为空：不声称任何外部 AOS 兼容性。
