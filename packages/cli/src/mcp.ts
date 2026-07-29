@@ -148,9 +148,24 @@ function toolDescriptor(entry: CatalogEntry): Readonly<Record<string, unknown>> 
   };
 }
 
+// D9 / OD-C: an MCP grant is a STANDING command list (operator-authority.ts), and a
+// standing grant to take over a workspace is exactly what a per-invocation
+// authority forbids. A verb that REQUIRES an out-of-band authority file plus its
+// digest on every call is therefore not expressible over this facade at all, and
+// exposing it would advertise a capability that can only ever fail.
+//
+// Derived from the catalog, never hand-listed: an exclusion list of command names
+// goes stale the day the next such verb is added, and it goes stale in the
+// permissive direction. gate-transition is unaffected — its identity authority is
+// OPTIONAL, so the verb remains expressible without one.
+function requiresPerInvocationAuthority(entry: CatalogEntry): boolean {
+  return entry.flags.some((flag) => flag.required && flag.name.endsWith("-authority-digest"));
+}
+
 export function workflowMcpTools(): readonly Readonly<Record<string, unknown>>[] {
   const tools = catalog()
     .filter((entry) => entry.availability !== "fixture-only")
+    .filter((entry) => !requiresPerInvocationAuthority(entry))
     .map(toolDescriptor);
   const names = tools.map((tool) => tool.name);
   if (new Set(names).size !== names.length) {
@@ -264,7 +279,7 @@ export class WorkflowMcpDispatcher {
       fail("MCP_TOOL_UNKNOWN", "tool name");
     }
     const entry = commandForTool(name);
-    if (!entry || entry.availability === "fixture-only") {
+    if (!entry || entry.availability === "fixture-only" || requiresPerInvocationAuthority(entry)) {
       fail("MCP_TOOL_UNKNOWN", name);
     }
     if (entry.mutates || entry.authorityBearing === true) {

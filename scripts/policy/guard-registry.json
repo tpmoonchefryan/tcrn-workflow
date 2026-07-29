@@ -291,6 +291,36 @@
       "expectedMatches": 1,
       "test": "tests/p3-cli-read-surface.test.mjs",
       "testName": "INC-027: a page that cannot fit is refused under its own code, never shortened"
+    },
+    {
+      "id": "WSR-1-strict-admission-default",
+      "rationale": "readMetadata's `admit` default is the only thing standing between a relocation-aware engine and a relocation-blind one. Flipping it to a permissive value breaks nothing visible: every caller keeps working, every existing test stays green, and the entire mechanism is silently off because six call sites -- including acquireWorkspaceLease, which is what makes coverage universal -- pass no admission argument at all. Restoring the guard restores a vacated address that still answers reads and still takes write leases.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "async function readMetadata(workspaceRoot: string, admit: WorkspaceAdmission = \"live\"): Promise<WorkspaceMetadata> {",
+      "replace": "async function readMetadata(workspaceRoot: string, admit: WorkspaceAdmission = \"adoption\"): Promise<WorkspaceMetadata> {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T4: the readMetadata admission default is strict"
+    },
+    {
+      "id": "WSR-1-control-tree-skeleton-assertion",
+      "rationale": "walkControlTree collects FILES only, so the snapshot manifest is structurally blind to a copy that dropped an empty events/, views/ or backups/ -- such a copy verifies SNAPSHOT_VERIFIED and then fails at the first read after it has already been bound. Removing this assertion does not merely weaken adopt; it moves the failure from a named refusal before the commit point to an unexplained WORKSPACE_PATH_INVALID after it.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "  for (const name of CONTROL_TREE_SKELETON_DIRECTORIES) {",
+      "replace": "  for (const name of CONTROL_TREE_SKELETON_DIRECTORIES.slice(0, 0)) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T8: the empty-directory gap is closed by the ADDED check, not by the manifest"
+    },
+    {
+      "id": "WSR-1-permit-workspace-scoping",
+      "rationale": "Without the workspaceId term the relocation roster still looks rigorous -- it still names an actor, still names destinations, still carries a basis -- and it permits every workspace on the machine. That is the permanently-green-gate shape this repository was burned by three times in one day: a check whose two sides cannot differ. Removing this term restores an authority for workspace X that authorizes moving workspace Y.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "    entry.actorId === actorId && entry.workspaceIds.includes(workspaceId) && entry.destinations.includes(destination));",
+      "replace": "    entry.actorId === actorId && entry.destinations.includes(destination));",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T14c: a roster scoped to a different workspaceId does not permit this workspace"
     }
   ]
 }

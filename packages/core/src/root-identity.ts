@@ -36,6 +36,59 @@ function portableIdentity(path: string): string {
   return normalize(path).normalize("NFC").toLocaleLowerCase("en-US");
 }
 
+// WSR-1: the relocation ledger records destinations that do not exist on the host
+// writing them, so it needs the portable-identity derivation and the shape half of
+// the distinctness rules WITHOUT the filesystem half. Exported here rather than
+// duplicated: a second copy of this normalisation would drift silently, and the
+// drift would only surface as a ledger that reads clean on one host and not the
+// other.
+export function rootPortableIdentity(path: string): string {
+  return portableIdentity(path);
+}
+
+// The SHAPE half of assertDistinctRoots: exactly the five kinds in the metadata
+// index order, absolute lexically-canonical paths, no portable-identity collision
+// and no containment. It performs NO filesystem access, by design.
+export function assertDistinctRootShape(
+  roots: readonly { readonly kind: string; readonly canonicalPath: string }[],
+): void {
+  if (roots.length !== REQUIRED_ROOT_KINDS.length) {
+    fail("ROOT_SET_INCOMPLETE", "Exactly five roots are required");
+  }
+  for (const [index, kind] of REQUIRED_ROOT_KINDS.entries()) {
+    if (roots[index]?.kind !== kind) {
+      fail("ROOT_KIND_INVALID", `root ${index} must be ${kind}`);
+    }
+  }
+  for (const root of roots) {
+    if (root.canonicalPath.length === 0 || !isAbsolute(root.canonicalPath) ||
+      normalize(root.canonicalPath) !== root.canonicalPath || resolve(root.canonicalPath) !== root.canonicalPath) {
+      fail("ROOT_PATH_ALIAS", `${root.kind} is not an absolute canonical path`);
+    }
+  }
+  for (let leftIndex = 0; leftIndex < roots.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < roots.length; rightIndex += 1) {
+      const left = roots[leftIndex];
+      const right = roots[rightIndex];
+      if (!left || !right) {
+        fail("ROOT_INTERNAL_ERROR", "Root index is missing");
+      }
+      const leftIdentity = portableIdentity(left.canonicalPath);
+      const rightIdentity = portableIdentity(right.canonicalPath);
+      if (leftIdentity === rightIdentity) {
+        fail("ROOT_PATH_COLLISION", `${left.kind} and ${right.kind} resolve to the same portable identity`);
+      }
+      const leftToRight = relative(leftIdentity, rightIdentity);
+      const rightToLeft = relative(rightIdentity, leftIdentity);
+      const leftContainsRight = leftToRight !== "" && !leftToRight.startsWith("..") && !leftToRight.startsWith(sep);
+      const rightContainsLeft = rightToLeft !== "" && !rightToLeft.startsWith("..") && !rightToLeft.startsWith(sep);
+      if (leftContainsRight || rightContainsLeft) {
+        fail("ROOT_PATH_CONTAINMENT", `${left.kind} and ${right.kind} overlap by containment`);
+      }
+    }
+  }
+}
+
 async function classifyMissingCaseAlias(path: string): Promise<never> {
   const normalized = normalize(path);
   const root = parse(normalized).root;

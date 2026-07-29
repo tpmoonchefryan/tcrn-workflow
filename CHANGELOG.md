@@ -3,6 +3,108 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.9.0 — 2026-07-29
+
+A workspace gains a governed route to a new path or a new machine.
+
+The engine binds five absolute roots and refuses a control tree whose stored root
+identities disagree with the live filesystem. That refusal is correct and stays.
+What was missing was a route THROUGH it: an operator who had to move a workspace
+had exactly one option, hand-editing `roots`, and nothing anywhere recorded that
+it had happened. The documented reason for the gap was also wrong — ADR 0002 and
+the backup runbook both attributed root rebinding's deferral to OD-29, which is
+the manifest-scope decision, when the apply-path deferral is OD-7 and concerns
+storage-version-2 chain rewriting. Root rebinding rewrites no event and changes no
+storage version.
+
+### Added
+
+- **`relocation-vacate` / `relocation-adopt` / `relocation-abort` /
+  `relocation-inspect`.** Four verbs that move the BINDING, never the bytes. The
+  order vacate → copy → adopt is mechanically enforced, because copy-first is the
+  operator's natural instinct and must fail closed rather than produce an
+  unauthorized live target. Between the vacate and the adopt **zero** addresses
+  are alive, not two; the source and the copy refuse under different, actionable
+  codes. The operator moves the bytes with OS tools — the engine gets no copy
+  path, and ADR 0003 names the refused alternatives so a later reader does not add
+  one back.
+- **An append-only `relocations` ledger** as a tenth, OPTIONAL field of
+  `workspace.json`. `schemaVersion` stays `tcrn.workspace.v1`, `storageVersion`
+  stays `1`, and the field is **absent — not empty** — on every workspace that
+  never relocates, so those files are byte-identical to `0.8.0`. Because it
+  travels inside the copied tree, a re-copy of a vacated source is born dead and a
+  copy of an adopted target dropped back at the old path is dead too. `roots` is
+  never rewritten; `activeBinding()` answers where the tree lives now.
+- **A per-invocation relocation authority** on the gate-identity pins-track shape.
+  A permit names `actorId`, `workspaceIds`, `destinations` and a `basis` of
+  `{version, headEventHash}`. Without the `workspaceIds` term the roster permits
+  every workspace on the machine while still looking rigorous; without the basis
+  an authority minted months ago is a standing grant in per-invocation clothes.
+  The ledger records only `{actorId, authorityFileSha256}`, never a file
+  reference — a chain whose readability depends on an external file still being
+  present is a chain that bricks on a restore onto a fresh machine.
+- **Adopt-side assertions for the two blindnesses the snapshot manifest cannot
+  cover**: a copy that dropped an empty directory, and a copy that carried a lock
+  or claim file across. Neither is a manifest bug; both are it doing what it was
+  scoped to do. Each proof asserts BOTH halves — that `snapshot-verify` still
+  returns `SNAPSHOT_VERIFIED`, and that adopt then refuses — because without the
+  first half the second cannot be shown to measure anything.
+
+### Changed
+
+- `readMetadata` gains an `admit` parameter defaulting to the STRICT value. The
+  enforcement point is `readMetadata` and not `resolveWorkspace`, chosen on
+  evidence: `acquireWorkspaceLease`, `lease-break` and `lease-recovery-break`
+  never reach `resolveWorkspace`, so placing the check there leaves a vacated
+  address with live lease-mutation paths. `lease-inspect` is deliberately still
+  admitted at a dead address — it emits no workspace content and cannot revive
+  anything, and an operator legitimately needs to see a stale lease on a dead
+  tree.
+- `verifySnapshotManifest` gains an optional `excludePaths`, additive and
+  byte-neutral for every existing caller.
+- The three mutating verbs are absent from the MCP surface, excluded by a
+  predicate derived from the command catalog rather than a hand-written list of
+  names.
+
+### Doctrine retired
+
+- ADR 0002's "Restore constraint" paragraph and doctrine 1 of the backup runbook
+  both claimed root rebind needed the migration apply path, per OD-29. Both are
+  retired by section reference in the same change that ships the replacement, with
+  the misattribution explained rather than quietly deleted. The
+  `WORKSPACE_SCHEMA_INVALID` refusal itself is unchanged.
+- `packages/core/spec/file-engine-v1.md`'s immutable-metadata / closed-V1-schema
+  language is narrowed with an explicit residual-applicability analysis: the old
+  rule still holds for every field and every caller EXCEPT the three relocation
+  verbs. Conditional retention, not deletion.
+
+### Compatibility
+
+Additive and byte-identical for every workspace that never relocates.
+
+**For a workspace that HAS relocated the break is total and one-way**: the tenth
+metadata field fails the closed-field check with `WORKSPACE_SCHEMA_INVALID` on any
+`0.8.0`-or-earlier binary — not degraded reads, no reads. Accepted deliberately
+(OD-A) rather than discovered later. The ledger cap is sixteen entries, picked
+deliberately (OD-B) so it does not become an accidental constant.
+
+### What this does not do
+
+`workspace.json` is the one part of the control tree the event hash chain does not
+cover. Anyone with write access to a vacated source can restore its pre-vacate
+`workspace.json` in canonical bytes and that address is alive again, and the
+engine **cannot** detect it — the same ceiling `gate-identity.ts` already states
+about gates. This release does not prevent two truths; it makes them legible,
+permanently, in both files, under one shared `relocationId`, and it makes
+producing them require deliberate destruction rather than an accident of `rsync`.
+
+The consequence is a mandatory close-out step no gate can replace: run
+`relocation-inspect` at BOTH addresses and compare. It is the only fork detector,
+it needs both trees at once, and it is therefore by construction not something
+`verify` can run for you. No single-sided "the source is still dead" assertion
+exists in the suite, and that absence is deliberate — such an assertion would be
+permanently true.
+
 ## 0.8.0 — 2026-07-29
 
 The event chain becomes readable on the chains that have one worth reading.

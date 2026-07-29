@@ -18,6 +18,28 @@ Every metadata root entry has exactly `kind`, `path`, `canonicalPath`, and
 type changes fail with `WORKSPACE_SCHEMA_INVALID`, matching the closed V1
 schema.
 
+**Narrowed at `v0.9.0` (WSR-1), with the residual applicability stated.** V1
+metadata carries one OPTIONAL tenth field, `relocations`: an append-only ledger of
+address rebindings. The immutability rule above still holds for every field and
+every caller EXCEPT the three relocation verbs (`relocation-vacate`,
+`relocation-adopt`, `relocation-abort`), which are the sole writers of
+`relocations` and the only writers of workspace metadata after `init`. This is a
+conditional retention rather than a deletion, following the WSD-1 precedent:
+additive, `storageVersion` stays `1`, `schemaVersion` stays `tcrn.workspace.v1`,
+and a workspace that never relocates omits the field entirely and stays
+byte-identical to `0.8.0`.
+
+The backward-compatibility cost is stated plainly rather than softened: **after an
+adopt, no pre-relocation engine can read the workspace at all.** The tenth field
+fails the closed-field check with `WORKSPACE_SCHEMA_INVALID` on any
+`v0.8.0`-or-earlier binary. That is one-way. Rationale, the refused alternatives,
+and the two ceilings of the mechanism are in
+`docs/adr/0003-workspace-relocation.md`.
+
+`roots` is never rewritten. It records the binding the workspace was created with;
+after a relocation the ACTIVE binding is the `to` of the newest adopted hop, and
+`activeBinding()` is the single accessor that answers.
+
 The portable Workspace archive is canonical JSON that binds its canonical
 authority export by SHA-256. It excludes host root paths, is byte-identical for
 the same event basis, and is an exchange artifact rather than a second source of

@@ -28,7 +28,7 @@ import {
 } from "../../protocol/src/index.js";
 import type { JsonValue, KnowledgeRecord, WorkRecord } from "../../protocol/src/index.js";
 import { redactArtifactReference } from "./artifact-lifecycle.js";
-import { materializeWorkspace } from "./workspace.js";
+import { activeWorkspaceRoot, materializeWorkspace } from "./workspace.js";
 import type { ProjectRecord, WorkspaceState } from "./workspace.js";
 
 export const KNOWLEDGE_CORE_VERSION = "tcrn.knowledge-core.v1" as const;
@@ -792,7 +792,9 @@ async function scanKnowledgeStore(
 ): Promise<KnowledgeStoreScan> {
   const workspace = await materializeWorkspace(workspaceRootInput);
   const workspaceRoot = await boundDirectory(workspaceRootInput);
-  const storedWorkspaceRoot = workspace.metadata.roots.find((root) => root.kind === "workspace")?.canonicalPath;
+  // WSR-1: read the ACTIVE binding, not the raw roots array, so this stays the
+  // single definition of the authority root across a relocation.
+  const storedWorkspaceRoot = activeWorkspaceRoot(workspace.metadata);
   if (storedWorkspaceRoot !== workspaceRoot) {
     fail("KNOWLEDGE_PATH_INVALID", "knowledge store is not under the Workspace authority root");
   }

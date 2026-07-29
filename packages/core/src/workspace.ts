@@ -39,7 +39,7 @@ import type {
   WorkRecord,
   WorkStatus,
 } from "../../protocol/src/index.js";
-import { assertDistinctRoots } from "./root-identity.js";
+import { assertDistinctRootShape, assertDistinctRoots, rootPortableIdentity } from "./root-identity.js";
 import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
 import { recordClosureValidation, recordCollectionScan, recordExtensionClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
 import {
@@ -98,6 +98,14 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_PATH_ESCAPE",
   "WORKSPACE_PATH_INVALID",
   "WORKSPACE_RECORD_LIMIT",
+  // WSR-1 (relocation): the four STATE codes live here, not in
+  // workspace-relocation.ts, because validateMetadata/readMetadata raise them and
+  // fail() is typed to WorkspaceReasonCode. Every other relocation code is owned by
+  // the relocation module's own frozen list.
+  "WORKSPACE_RELOCATION_ADOPTION_REQUIRED",
+  "WORKSPACE_RELOCATION_FOREIGN_ADDRESS",
+  "WORKSPACE_RELOCATION_LEDGER_INVALID",
+  "WORKSPACE_RELOCATION_VACATED",
   "WORKSPACE_SCHEMA_INVALID",
   "WORKSPACE_VIEW_STALE",
 ] as const);
@@ -119,6 +127,58 @@ export class WorkspaceError extends Error {
   }
 }
 
+// WSR-1: the relocation ledger. An APPEND-ONLY record of address rebindings that
+// travels inside the control tree it describes. It is a TENTH, OPTIONAL metadata
+// field: absent on every workspace that never relocates, so those files stay
+// byte-identical to 0.8.0 (see the T25 byte-neutrality proof). Absent, not empty —
+// emitting `relocations: []` unconditionally would change every existing
+// workspace.json digest and turn an additive change into a migration.
+export const WORKSPACE_RELOCATION_ENTRY_VERSION = "tcrn.workspace-relocation.v1" as const;
+export const WORKSPACE_RELOCATION_IDENTITY_VERSION = "tcrn.workspace-relocation-identity.v1" as const;
+// OD-B (Owner ruling): sixteen. A workspace that has moved house sixteen times has
+// an operational problem a cap does not fix, and each entry carries ten root paths
+// in a file that is re-read on EVERY workspace operation. Picked deliberately so it
+// does not become an accidental constant.
+export const WORKSPACE_RELOCATION_LEDGER_LIMIT = 16 as const;
+
+export type WorkspaceRelocationStage = "vacated" | "adopted" | "aborted";
+
+export interface WorkspaceRelocationBasis {
+  readonly controlManifestSha256: string;
+  readonly headEventHash: string | null;
+  readonly version: number;
+}
+
+export interface WorkspaceRelocationAuthorityRecord {
+  readonly actorId: string;
+  readonly authorityFileSha256: string;
+}
+
+export interface WorkspaceRelocationEntry {
+  readonly schemaVersion: typeof WORKSPACE_RELOCATION_ENTRY_VERSION;
+  readonly sequence: number;
+  readonly relocationId: string;
+  readonly stage: WorkspaceRelocationStage;
+  readonly at: string;
+  readonly from: readonly CanonicalRoot[];
+  readonly to: readonly CanonicalRoot[];
+  readonly basis: WorkspaceRelocationBasis;
+  readonly authority: WorkspaceRelocationAuthorityRecord;
+}
+
+// The three-state discriminator plus the ordinary case. Computed from ONE file and
+// the address the reader is standing at — no network, no registry, no side channel.
+export type WorkspaceRelocationState =
+  | "live"
+  | "vacated"
+  | "adoption-required"
+  | "foreign-address";
+
+// Admission modes for readMetadata. The DEFAULT MUST be the strict value: a
+// permissive default breaks nothing visible and silently disables the whole
+// mechanism, which is why guard G1 exists and why T4 asserts the default refuses.
+export type WorkspaceAdmission = "live" | "adoption" | "abort" | "any";
+
 export interface WorkspaceMetadata {
   readonly schemaVersion: typeof WORKSPACE_SCHEMA_VERSION;
   readonly storageVersion: 1;
@@ -129,6 +189,7 @@ export interface WorkspaceMetadata {
   readonly createdAt: string;
   readonly segmentEventLimit: number;
   readonly roots: readonly CanonicalRoot[];
+  readonly relocations?: readonly WorkspaceRelocationEntry[];
 }
 
 export interface ProjectRecord {
@@ -230,6 +291,18 @@ const metadataFields = [
   "segmentEventLimit",
   "roots",
 ];
+// WSR-1: the ten-field form. Kept as a second closed list rather than making
+// `relocations` optional inside exactFields, so a workspace that carries the field
+// is checked just as exactly as one that does not — an "optional" arm inside the
+// exactness check is how a closed schema stops being closed.
+const metadataFieldsWithRelocations = [...metadataFields, "relocations"];
+const relocationEntryFields = ["schemaVersion", "sequence", "relocationId", "stage", "at", "from", "to", "basis", "authority"];
+const relocationBasisFields = ["controlManifestSha256", "headEventHash", "version"];
+const relocationAuthorityFields = ["actorId", "authorityFileSha256"];
+const relocationStages = new Set<string>(["vacated", "adopted", "aborted"]);
+// f8: the metadata root order. resolveWorkspace compares INDEX-WISE, so every
+// relocation `from`/`to` array must preserve it exactly.
+const relocationRootKindOrder = ["framework", "workspace", "transient", "evidence-locator", "release-trust"];
 let temporarySequence = 0;
 
 function fail(reasonCode: WorkspaceReasonCode, message: string): never {
@@ -468,8 +541,219 @@ function validateProject(record: unknown, reasonCode: WorkspaceReasonCode = "WOR
   return record as unknown as ProjectRecord;
 }
 
+// WSR-1: the relocation identity. Derived, never random (determinism constraint 6),
+// and derived from the VACATED entry's own position so the same hop always names
+// itself the same way on both hosts. The adopted/aborted counterpart restates it
+// rather than re-deriving from its own sequence.
+export function deriveRelocationId(input: {
+  readonly workspaceId: string;
+  readonly sequence: number;
+  readonly from: readonly CanonicalRoot[];
+  readonly to: readonly CanonicalRoot[];
+  readonly basis: WorkspaceRelocationBasis;
+}): string {
+  return `relocation:${canonicalSha256({
+    schemaVersion: WORKSPACE_RELOCATION_IDENTITY_VERSION,
+    workspaceId: input.workspaceId,
+    sequence: input.sequence,
+    from: input.from,
+    to: input.to,
+    basis: input.basis,
+  }).slice(0, 24)}`;
+}
+
+function relocationRootArray(value: unknown, label: string): readonly CanonicalRoot[] {
+  if (!Array.isArray(value) || value.length !== 5) {
+    fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `${label} must hold five roots`);
+  }
+  const roots: CanonicalRoot[] = [];
+  for (const [index, entry] of value.entries()) {
+    exactFields(entry, rootFields, "WORKSPACE_RELOCATION_LEDGER_INVALID", `${label}[${index}]`);
+    if (typeof entry.kind !== "string" || typeof entry.path !== "string" ||
+      typeof entry.canonicalPath !== "string" || typeof entry.portableIdentity !== "string") {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `${label}[${index}] types are invalid`);
+    }
+    if (entry.kind !== relocationRootKindOrder[index]) {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `${label}[${index}] must be ${String(relocationRootKindOrder[index])}`);
+    }
+    if (entry.portableIdentity !== rootPortableIdentity(entry.canonicalPath)) {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `${label}[${index}] portableIdentity is not derived from its canonicalPath`);
+    }
+    roots.push(entry as unknown as CanonicalRoot);
+  }
+  try {
+    assertDistinctRootShape(roots);
+  } catch (error) {
+    fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `${label}: ${String((error as { message?: string }).message ?? error)}`);
+  }
+  return roots;
+}
+
+// WSR-1: the post-read ledger validator. Runs inside validateMetadata, so a
+// malformed or spliced ledger is refused at the same choke point a malformed root
+// array is — before any caller sees the metadata at all.
+function validateRelocationLedger(value: unknown, roots: readonly CanonicalRoot[], workspaceId: string): readonly WorkspaceRelocationEntry[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    fail("WORKSPACE_RELOCATION_LEDGER_INVALID", "relocations must be a non-empty array when present");
+  }
+  if (value.length > WORKSPACE_RELOCATION_LEDGER_LIMIT) {
+    fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations exceed the ${String(WORKSPACE_RELOCATION_LEDGER_LIMIT)} entry cap`);
+  }
+  const entries: WorkspaceRelocationEntry[] = [];
+  // The binding in force before the entry being read. It starts at `roots` and only
+  // an `adopted` entry moves it. This is what makes a hop unspliceable: a `vacated`
+  // entry must restate the exact binding that preceded it, byte for byte.
+  let binding: readonly CanonicalRoot[] = roots;
+  for (const [index, raw] of value.entries()) {
+    exactFields(raw, relocationEntryFields, "WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}]`);
+    if (raw.schemaVersion !== WORKSPACE_RELOCATION_ENTRY_VERSION) {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].schemaVersion`);
+    }
+    if (raw.sequence !== index + 1) {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].sequence is not contiguous`);
+    }
+    if (typeof raw.stage !== "string" || !relocationStages.has(raw.stage)) {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].stage`);
+    }
+    if (typeof raw.relocationId !== "string" || !/^relocation:[a-f0-9]{24}$/u.test(raw.relocationId)) {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].relocationId`);
+    }
+    try {
+      assertStrictInstant(raw.at);
+    } catch {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].at`);
+    }
+    const from = relocationRootArray(raw.from, `relocations[${index}].from`);
+    const to = relocationRootArray(raw.to, `relocations[${index}].to`);
+    exactFields(raw.basis, relocationBasisFields, "WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].basis`);
+    const basisValue = raw.basis as Readonly<Record<string, unknown>>;
+    if (typeof basisValue.controlManifestSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(basisValue.controlManifestSha256) ||
+      !(basisValue.headEventHash === null || (typeof basisValue.headEventHash === "string" && /^[a-f0-9]{64}$/u.test(basisValue.headEventHash))) ||
+      !Number.isSafeInteger(basisValue.version) || Number(basisValue.version) < 0) {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].basis is invalid`);
+    }
+    const basis: WorkspaceRelocationBasis = {
+      controlManifestSha256: basisValue.controlManifestSha256,
+      headEventHash: basisValue.headEventHash as string | null,
+      version: basisValue.version as number,
+    };
+    exactFields(raw.authority, relocationAuthorityFields, "WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].authority`);
+    const authorityValue = raw.authority as Readonly<Record<string, unknown>>;
+    if (typeof authorityValue.authorityFileSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(authorityValue.authorityFileSha256)) {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].authority.authorityFileSha256`);
+    }
+    try {
+      assertProtocolId(authorityValue.actorId);
+    } catch {
+      fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].authority.actorId`);
+    }
+    const entry = raw as unknown as WorkspaceRelocationEntry;
+    const previous = entries[index - 1];
+    if (entry.stage === "vacated") {
+      if (previous !== undefined && previous.stage === "vacated") {
+        fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}] follows an uncompleted hop`);
+      }
+      if (canonicalJson(from) !== canonicalJson(binding)) {
+        fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].from is not the binding it replaced`);
+      }
+      if (entry.relocationId !== deriveRelocationId({ workspaceId, sequence: entry.sequence, from, to, basis })) {
+        fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}].relocationId is not derived from its own content`);
+      }
+    } else {
+      if (previous === undefined || previous.stage !== "vacated") {
+        fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}] does not complete a vacated hop`);
+      }
+      if (entry.relocationId !== previous.relocationId ||
+        canonicalJson(from) !== canonicalJson(previous.from) ||
+        canonicalJson(to) !== canonicalJson(previous.to) ||
+        canonicalJson(basis) !== canonicalJson(previous.basis)) {
+        fail("WORKSPACE_RELOCATION_LEDGER_INVALID", `relocations[${index}] does not restate its hop`);
+      }
+      if (entry.stage === "adopted") {
+        binding = to;
+      }
+    }
+    entries.push(entry);
+  }
+  return entries;
+}
+
+// WSR-1: the binding in force. `relocations` absent means `roots`; otherwise the
+// `to` of the newest hop an `adopted` completed, and an `aborted` pair reverts to
+// the binding before it.
+//
+// `roots` is NEVER rewritten. The synthesised design had adopt overwrite it, which
+// contradicts the ledger's own chaining rule one line later: the first hop's `from`
+// must equal `roots` byte for byte, so overwriting `roots` makes the ledger
+// self-invalidating on the very next read. Keeping `roots` as the immutable
+// original binding is what makes this accessor load-bearing rather than cosmetic —
+// after an adopt the two genuinely differ, which is why the four call sites below
+// are the complete change set and why T5/T6/T7 can actually go red.
+export function activeBinding(metadata: WorkspaceMetadata): readonly CanonicalRoot[] {
+  let binding: readonly CanonicalRoot[] = metadata.roots;
+  for (const entry of metadata.relocations ?? []) {
+    if (entry.stage === "adopted") {
+      binding = entry.to;
+    }
+  }
+  return binding;
+}
+
+export function activeWorkspaceRoot(metadata: WorkspaceMetadata): string | undefined {
+  return activeBinding(metadata).find((root) => root.kind === "workspace")?.canonicalPath;
+}
+
+function relocationWorkspaceRoot(roots: readonly CanonicalRoot[]): string | undefined {
+  return roots.find((root) => root.kind === "workspace")?.canonicalPath;
+}
+
+// WSR-1: the three-state discriminator. Computed from the file alone plus the
+// address the caller is standing at.
+export function relocationStateAt(metadata: WorkspaceMetadata, address: string): WorkspaceRelocationState {
+  const entries = metadata.relocations ?? [];
+  const trailing = entries[entries.length - 1];
+  if (trailing === undefined) {
+    return "live";
+  }
+  const vacatedAddresses = new Set<string>();
+  for (const entry of entries) {
+    if (entry.stage === "adopted") {
+      const previous = relocationWorkspaceRoot(entry.from);
+      if (previous !== undefined) vacatedAddresses.add(previous);
+    }
+  }
+  if (trailing.stage === "vacated") {
+    if (address === relocationWorkspaceRoot(trailing.from)) return "vacated";
+    if (address === relocationWorkspaceRoot(trailing.to)) return "adoption-required";
+    return "foreign-address";
+  }
+  if (address === relocationWorkspaceRoot(activeBinding(metadata))) {
+    return "live";
+  }
+  return vacatedAddresses.has(address) ? "vacated" : "foreign-address";
+}
+
+function admitRelocationState(state: WorkspaceRelocationState, admit: WorkspaceAdmission, address: string): void {
+  if (admit === "any") return;
+  if (state === "live") return;
+  if (admit === "adoption" && state === "adoption-required") return;
+  if (admit === "abort" && state === "vacated") return;
+  if (state === "vacated") {
+    fail("WORKSPACE_RELOCATION_VACATED", `${address} was vacated by a governed relocation and is no longer a live workspace`);
+  }
+  if (state === "adoption-required") {
+    fail("WORKSPACE_RELOCATION_ADOPTION_REQUIRED", `${address} is a relocated copy awaiting relocation-adopt`);
+  }
+  fail("WORKSPACE_RELOCATION_FOREIGN_ADDRESS", `${address} is not an address this relocation ledger names`);
+}
+
 function validateMetadata(value: unknown): WorkspaceMetadata {
-  exactFields(value, metadataFields, "WORKSPACE_SCHEMA_INVALID", "workspace metadata");
+  // WSR-1: the ten-field form is admitted only when the field is actually present.
+  // A workspace without it is checked against the identical nine-field closed list
+  // it has always been checked against.
+  const relocationsPresent = value !== null && typeof value === "object" && !Array.isArray(value) &&
+    Object.hasOwn(value, "relocations");
+  exactFields(value, relocationsPresent ? metadataFieldsWithRelocations : metadataFields, "WORKSPACE_SCHEMA_INVALID", "workspace metadata");
   if (typeof value.storageVersion === "number" && value.storageVersion > WORKSPACE_STORAGE_VERSION) {
     fail("WORKSPACE_MIGRATION_FUTURE", String(value.storageVersion));
   }
@@ -508,6 +792,9 @@ function validateMetadata(value: unknown): WorkspaceMetadata {
       throw error;
     }
   }
+  if (relocationsPresent) {
+    validateRelocationLedger(value.relocations, value.roots as unknown as readonly CanonicalRoot[], value.workspaceId);
+  }
   return value as unknown as WorkspaceMetadata;
 }
 
@@ -536,10 +823,20 @@ function controlPath(workspaceRoot: string, relativePath = ""): string {
   return candidate;
 }
 
-async function readMetadata(workspaceRoot: string): Promise<WorkspaceMetadata> {
+// WSR-1: readMetadata is the universal choke point — resolveWorkspace is NOT. Six
+// callers reach it, and acquireWorkspaceLease is one of them, so EVERY mutation
+// passes through here too. That is why the relocation admission check lives here
+// and not in resolveWorkspace: lease-break, lease-recovery-break and the lease
+// acquisition itself never touch resolveWorkspace at all.
+//
+// `admit` DEFAULTS TO THE STRICT VALUE. A permissive default would break nothing
+// visible and would silently disable the entire mechanism; guard G1 mutates it and
+// T4 is the test that must go red.
+async function readMetadata(workspaceRoot: string, admit: WorkspaceAdmission = "live"): Promise<WorkspaceMetadata> {
   const content = await boundFile(controlPath(workspaceRoot, "workspace.json"));
+  let metadata: WorkspaceMetadata;
   try {
-    return validateMetadata(assertCanonicalJson(content.toString("utf8")));
+    metadata = validateMetadata(assertCanonicalJson(content.toString("utf8")));
   } catch (error) {
     if (error instanceof WorkspaceError) {
       throw error;
@@ -549,6 +846,10 @@ async function readMetadata(workspaceRoot: string): Promise<WorkspaceMetadata> {
     }
     fail("WORKSPACE_SCHEMA_INVALID", String(error));
   }
+  if (metadata.relocations !== undefined) {
+    admitRelocationState(relocationStateAt(metadata, workspaceRoot), admit, workspaceRoot);
+  }
+  return metadata;
 }
 
 async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetadata): Promise<readonly EventRecord[]> {
@@ -1812,7 +2113,12 @@ export async function inspectWorkspaceLease(workspaceRootInput: string, options:
   assertStrictInstant(options.now);
   const nowNanoseconds = parseStrictInstant(options.now);
   const workspaceRoot = await boundDirectory(workspaceRootInput);
-  await readMetadata(workspaceRoot);
+  // D10: lease-inspect is admitted at a vacated or foreign address. It emits no
+  // workspace content and cannot revive anything — it is pure diagnosis, and an
+  // operator legitimately needs to see a stale lease on a dead tree. lease-break,
+  // lease-recovery-break and lease acquisition are NOT admitted: each mutates the
+  // control tree at an address the design has declared dead.
+  await readMetadata(workspaceRoot, "any");
   const recoveryClaim = await observeRecoveryClaim(workspaceRoot, nowNanoseconds);
   const leasePath = controlPath(workspaceRoot, "lease");
   let observed: LeaseObservation;
@@ -1970,11 +2276,18 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
   readonly afterFreshLeaseForTest?: (value: { readonly observedIdentity: FileIdentity; readonly freshIdentity: FileIdentity }) => Promise<void>;
   readonly beforeLeaseOwnerForTest?: () => Promise<void>;
   readonly crashAfterLeaseDirectoryForTest?: boolean;
+  // WSR-1 (D4): the relocation verbs need mutual exclusion at an address whose
+  // ledger state is not `live` — adopt on an ADOPTION_REQUIRED tree, abort on a
+  // VACATED one. They use the lease every other mutating verb uses rather than a
+  // new claim file, which would mint a fifth member of EXCLUDED_RELATIVE_PATHS and
+  // therefore a fifth thing the snapshot manifest is structurally blind to.
+  // Omitted means "live", so no existing caller changes.
+  readonly relocationAdmission?: WorkspaceAdmission;
 }): Promise<WorkspaceLease> {
   assertStrictInstant(options.now);
   const nowNanoseconds = parseStrictInstant(options.now);
   const workspaceRoot = await boundDirectory(workspaceRootInput);
-  await readMetadata(workspaceRoot);
+  await readMetadata(workspaceRoot, options.relocationAdmission ?? "live");
   const ttl = options.ttlMilliseconds ?? 30_000;
   if (!Number.isSafeInteger(ttl) || ttl < 1_000 || ttl > 300_000) {
     fail("WORKSPACE_LEASE_INVALID", "lease TTL must be 1-300 seconds");
@@ -2112,6 +2425,57 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
   }
 }
 
+// WSR-1 relocation kit. Three narrow functions the relocation verbs need and that
+// no other caller should reach for. They are exported rather than duplicated
+// because the alternative — a second metadata reader and a second atomic writer in
+// workspace-relocation.ts — would put the platform's single most load-bearing
+// read/write pair in two places, and the drift would be silent.
+
+/** Read metadata at an explicit admission level, returning the bound root with it. */
+export async function readWorkspaceMetadataAt(
+  workspaceRootInput: string,
+  admit: WorkspaceAdmission,
+): Promise<{ readonly root: string; readonly metadata: WorkspaceMetadata }> {
+  const root = await boundDirectory(workspaceRootInput);
+  return { root, metadata: await readMetadata(root, admit) };
+}
+
+/**
+ * The relocation commit point. Re-validates the metadata it is handed BEFORE
+ * writing, so a malformed ledger can never reach disk, then goes through the same
+ * atomicWrite (fsync → rename → identity verify → parent-dir sync) every other
+ * control-tree write uses. A crash leaves the previous bytes untouched: the ledger
+ * is never partially written, so no torn ledger is reachable (T19).
+ */
+export async function writeWorkspaceMetadataAt(
+  workspaceRoot: string,
+  metadata: WorkspaceMetadata,
+  crashAt?: WorkspaceCrashPoint,
+): Promise<string> {
+  const text = canonicalJson(metadata);
+  validateMetadata(assertCanonicalJson(text));
+  await atomicWrite(controlPath(workspaceRoot, "workspace.json"), text, workspaceRoot, crashAt);
+  return text;
+}
+
+/**
+ * MEASURE, do not quote. Replays the whole chain at an address whose `roots` still
+ * name another host — resolveWorkspace cannot be used there — and reports what the
+ * tree itself says its version and head are.
+ */
+export async function measureWorkspaceChainAt(
+  workspaceRoot: string,
+  metadata: WorkspaceMetadata,
+): Promise<{ readonly version: number; readonly headEventHash: string | null }> {
+  const state = materialize(metadata, await readSegmentEvents(workspaceRoot, metadata));
+  return { version: state.version, headEventHash: state.headEventHash };
+}
+
+/** The control-tree paths the relocation verbs assert on. */
+export function workspaceControlPath(workspaceRoot: string, relativePath = ""): string {
+  return controlPath(workspaceRoot, relativePath);
+}
+
 export async function withWorkspaceLease<T>(workspaceRoot: string, now: string, operation: (lease: WorkspaceLease) => Promise<T>): Promise<T> {
   const lease = await acquireWorkspaceLease(workspaceRoot, { now });
   try {
@@ -2178,14 +2542,18 @@ async function resolveWorkspace(workspaceRootInput: string): Promise<{ readonly 
   await boundDirectory(controlPath(root, "views"), root);
   await boundDirectory(controlPath(root, "backups"), root);
   const metadata = await readMetadata(root);
+  // WSR-1: the binding under test is the ACTIVE one, not the raw `roots` field.
+  // After an adopt they differ: `roots` still names the host the tree came from,
+  // and only the ledger says where it lives now.
+  const binding = activeBinding(metadata);
   let canonicalRoots: readonly CanonicalRoot[];
   try {
-    canonicalRoots = await assertDistinctRoots(metadata.roots.map((entry) => ({ kind: entry.kind, path: entry.path })));
+    canonicalRoots = await assertDistinctRoots(binding.map((entry) => ({ kind: entry.kind, path: entry.path })));
   } catch (error) {
     fail("WORKSPACE_SCHEMA_INVALID", String((error as { message?: string }).message ?? error));
   }
   const storedRootsMatch = canonicalRoots.every((entry, index) => {
-    const stored = metadata.roots[index];
+    const stored = binding[index];
     return stored?.kind === entry.kind && stored.path === entry.path && stored.canonicalPath === entry.canonicalPath &&
       stored.portableIdentity === entry.portableIdentity;
   });
@@ -2207,7 +2575,7 @@ export async function validateWorkspace(workspaceRootInput: string, checkViews =
     for (const name of Object.keys(expected).sort(compareCanonicalText)) {
       let actual: Buffer;
       try {
-        actual = await boundFile(controlPath(state.metadata.roots.find((root) => root.kind === "workspace")?.canonicalPath ?? "", `views/${name}`));
+        actual = await boundFile(controlPath(activeWorkspaceRoot(state.metadata) ?? "", `views/${name}`));
       } catch {
         fail("WORKSPACE_VIEW_STALE", `${name} is missing or unsafe`);
       }

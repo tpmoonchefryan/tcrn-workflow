@@ -77,6 +77,27 @@ const EXCLUDED_RELATIVE_PATHS = Object.freeze([
   "artifacts/restore.claim",
 ]);
 
+// WSR-1: the manifest is blind in BOTH directions, and the relocation verbs have to
+// assert on exactly the blindness this module defines. The list is EXPORTED rather
+// than restated over there: a second copy would drift, and the drift would be
+// silent in the one place a silent drift is most expensive.
+//
+//   * blind to a MISSING empty directory — walkControlTree collects files only, so
+//     a copy that dropped an empty backups/ still verifies clean (T8);
+//   * blind to an EXTRA lock or claim file — the four paths above are skipped, so a
+//     copy that carried the source's held lease also verifies clean (T9).
+//
+// Neither blindness is a bug; both are the manifest doing what it was scoped to do.
+export const CONTROL_TREE_TRANSPORT_RESIDUE_PATHS: readonly string[] = EXCLUDED_RELATIVE_PATHS;
+
+// The directories initializeWorkspace creates and every live control tree must
+// still have. The manifest structurally cannot see them when they are empty.
+export const CONTROL_TREE_SKELETON_DIRECTORIES: readonly string[] = Object.freeze([
+  "events",
+  "views",
+  "backups",
+]);
+
 // Crashed-session quarantine residue. reclaimObservedLease/release can leave these
 // behind between a rename and its removal, and the engine never cleans control-root
 // quarantines (recover only removes .tmp- files under events/ and views/). A backup
@@ -308,10 +329,20 @@ function assertFileEntry(value: JsonValue): asserts value is { readonly path: st
 // Recompute the control tree under `rootDirectory/.tcrn-workflow` and prove it
 // matches `manifestJson`. Read-only: no lease, no validate — the target is a copy,
 // not a live workspace. Throws SNAPSHOT_MISMATCH naming the first differing path.
-export async function verifySnapshotManifest(rootDirectoryInput: string, manifestJson: string): Promise<Readonly<Record<string, JsonValue>>> {
+export async function verifySnapshotManifest(
+  rootDirectoryInput: string,
+  manifestJson: string,
+  // WSR-1: additive, defaulted to empty, byte-neutral for every existing caller.
+  // relocation-adopt re-runs the comparison on an ALREADY adopted tree, where
+  // workspace.json is the one slot that legitimately differs from the manifest
+  // taken before the move. Pre-commit it is byte-identical, so the exclusion only
+  // matters on a retry.
+  options: { readonly excludePaths?: readonly string[] } = {},
+): Promise<Readonly<Record<string, JsonValue>>> {
   if (typeof rootDirectoryInput !== "string" || rootDirectoryInput.length === 0) {
     fail("SNAPSHOT_INPUT_INVALID", "root directory");
   }
+  const excluded = new Set(options.excludePaths ?? []);
   if (typeof manifestJson !== "string") {
     fail("SNAPSHOT_MANIFEST_INVALID", "manifest must be a string");
   }
@@ -328,6 +359,7 @@ export async function verifySnapshotManifest(rootDirectoryInput: string, manifes
   const expected: SnapshotFileEntry[] = [];
   for (const entry of manifest.files) {
     assertFileEntry(entry);
+    if (excluded.has(entry.path)) continue;
     expected.push({ path: entry.path, sha256: entry.sha256, bytes: entry.bytes });
   }
   expected.sort((left, right) => compareCanonicalText(left.path, right.path));
@@ -336,7 +368,7 @@ export async function verifySnapshotManifest(rootDirectoryInput: string, manifes
   if (!(await directoryExists(controlRoot))) {
     fail("SNAPSHOT_MISMATCH", WORKSPACE_CONTROL_DIRECTORY);
   }
-  const actual = await walkControlTree(controlRoot);
+  const actual = (await walkControlTree(controlRoot)).filter((entry) => !excluded.has(entry.path));
   const bound = Math.max(expected.length, actual.length);
   for (let index = 0; index < bound; index += 1) {
     const left = expected[index];
