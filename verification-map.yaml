@@ -156,7 +156,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "9030b2309e8281d642ca41d087ce531d4ced319c240c43f7ff5dd46ec1ad1c28",
+      "fixtureDigest": "a3cc296e79109db2f123fe65d1135a986181138931365272b4dcce78c689d907",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -245,7 +245,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "ac0ab3f2ecf07369ce50d487bc3e2dff39a8a1523c12650169493d4b07cc547f",
+      "fixtureDigest": "3aff56915ae67693897e0b5bb3f4e71a6c017cf3a825f60a170b56d5050b7b3a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -474,7 +474,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "7aa1dfe096a7bc63a7886fade85c3e219ebdf975e2918f1de350904c96775410",
+      "fixtureDigest": "d13ecbe77d1f8e263287e33f9e763c34d377f6a84677c8feea667eee3d62d3da",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -502,7 +502,7 @@
         "tests/p3-file-engine.test.mjs",
         "tests/p3-cli-catalog.test.mjs"
       ],
-      "fixtureDigest": "ba5881bb8f25aaa026e7698bdf2c6bc665b09cefd1bb39b8be8bef8d5079187b",
+      "fixtureDigest": "e0f09eeeb2581876e2b5a2183542a65fa4f3abe46ecc368fa1208a771cf00a13",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -528,7 +528,7 @@
         "tests/p3-file-engine.test.mjs",
         "tests/p3-cli-catalog.test.mjs"
       ],
-      "fixtureDigest": "ec132fb3f501d689742f484c26773298901c7e57c368c3436f22a769804c8d0e",
+      "fixtureDigest": "f919df060f926a4231e27cabeadb2ffbad0279d209efac338501352d0ee25a7f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -587,7 +587,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "231f96b5d20c22a181a6b853ab6df5af397f0b44032aaf74f5012539cf475913",
+      "fixtureDigest": "5bf69d8ef41dfa1b75d03e3bddb60ddaddd38db99c19e6fa1099bf6012670068",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -612,7 +612,7 @@
         "packages/protocol/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "7a8d02ff6e1cfd9f74cbedade164316837c81a4750a1df0e4cf1754e16f7e001",
+      "fixtureDigest": "6b30de7ee9fbad8983e715b5f2133fdaee85935cb4e9c5ec8fe016fef2ce6851",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -639,7 +639,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f34c029ebe8e5e3cad7665ce2f3c9bd80e926aaa00fa6adff775c9039fb76e39",
+      "fixtureDigest": "72b6d2e4905f0f9979bf56946c4f0828e7e58da0796ceffd3dadceb58c8237e6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -666,7 +666,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "cce8926dc2559925c76ac6971f9b9ca56f779f0571ca630c71054898bb989721",
+      "fixtureDigest": "7ea97400de067361d2f45d62ad26e5f6644c7dad7319eb08ca35a3e62365d0f1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -692,7 +692,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "packages/cli/src/index.ts"
       ],
-      "fixtureDigest": "cbc6f552bde56e10cf517565781428ed073a97db6deaa0c05edffc4fc3b54a63",
+      "fixtureDigest": "692c4d906bb42bd67e1e8921f0304c668b792f8b47fe1a81cb55d9e840c4ad3a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -716,7 +716,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "ff4bd53d84dfe194ec161ff63ab0ef2b7c99bf562b6430c8542c54904f461410",
+      "fixtureDigest": "70def2b362bd80e732dc8bc372d8257586ea1addfca54abac98bc7273e691ef2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -741,7 +741,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "e93a8d64d934c935cdf926233b6f3de8e279b652b9861dcc3a8bf727966dc486",
+      "fixtureDigest": "d30884b8f5c102786e73e9d0fd56e47af89ff68fd50f373007d876ccb4aee8f6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -824,7 +824,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "113d444a9c39fa05ab60f38981ab049d1a4efe458ee957504bb3f85c8ba586d8",
+      "fixtureDigest": "b5593d562cb7d9760d5fab5d77f510f1bf07719fd12e3c8d1bb4c2cbc90804a7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -852,7 +852,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "6feeeca7b8289eca65daac71efeee6e353a584a325da4eb6b35ba2fc8fc17d9d",
+      "fixtureDigest": "80d23daf9cff36f62950bcddbdcb13a27c20a1e5706ce2af00e09464f81117ee",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -888,7 +888,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "b56f4580a4798392e0d73244b8248044ee44ed85734572cbeb1775da9e7333e1",
+      "fixtureDigest": "3facb7de9f4a1b70b42f2b19f7dbc1dc1fb6b2507c8a2384a34aba594c635d81",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -944,7 +944,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d0f1943a2b68396f99cab1f9ae82a115758db71385a9ce5e8c6d2ff80e300f07",
+      "fixtureDigest": "697fae20aed667b05dc1dfb3ef3d49471f5ae3fad09abdd2ec7463f878c938bf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -971,7 +971,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d0f1943a2b68396f99cab1f9ae82a115758db71385a9ce5e8c6d2ff80e300f07",
+      "fixtureDigest": "697fae20aed667b05dc1dfb3ef3d49471f5ae3fad09abdd2ec7463f878c938bf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1023,7 +1023,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d0f1943a2b68396f99cab1f9ae82a115758db71385a9ce5e8c6d2ff80e300f07",
+      "fixtureDigest": "697fae20aed667b05dc1dfb3ef3d49471f5ae3fad09abdd2ec7463f878c938bf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1050,7 +1050,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d0f1943a2b68396f99cab1f9ae82a115758db71385a9ce5e8c6d2ff80e300f07",
+      "fixtureDigest": "697fae20aed667b05dc1dfb3ef3d49471f5ae3fad09abdd2ec7463f878c938bf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1101,7 +1101,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "17b579026dee2f99b88db78edf284c378fd3d70df4866f669cbabf7a09254987",
+      "fixtureDigest": "827711f8d89dbb6d61995a9b53eef70ea814e60da0c60d24adc9bdb7ff572d46",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1139,7 +1139,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "4ed16d7670339888f4a5bb9be87103fc26705c44e147ee3ac1a2fe3d0eac7138",
+      "fixtureDigest": "cb51c616900872516e6d03d773750972f90904b8bd1869308edb60e4a73efce3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1204,7 +1204,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "0c71e091bb8ac4a7b9c0549e47711d64558cbdeee7e122764ef33c7d590a8035",
+      "fixtureDigest": "9bcb698584170e98a167bf7e1366ed007d1173b2d114ec2b0533243f14b8be22",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1236,7 +1236,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "103918f818708d56c1795d27fb07a4fffdece57892e2294a9aa41b2ae11c7ac6",
+      "fixtureDigest": "82257f162106aaa72ffd0c265cb8575704c3f4044db5e1a1051be0c7c39e199b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1270,7 +1270,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "6f9f34b371b353a97f6f63f293553c0f9f3a9a7dcd7d64570bfee1917d6ebec3",
+      "fixtureDigest": "462b0ec5032e87fe08898e81473e11366140ada902545d0b8188ca9b1a4a98ac",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1305,7 +1305,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "115e2a31237d8820ac9e436573aad20d35e7d91c0bcf014ecb20119ab5f3be57",
+      "fixtureDigest": "054d7d13a6cd99dedabd10f09102a2eda1540cd933facc6636b9fa1d45de663d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1337,7 +1337,7 @@
         "tests/dependency.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d442679a110662030cd6ae024c683c5520e104416e19a150b6750d54bbbe4ac2",
+      "fixtureDigest": "48f7daab8dd41aeab3e8141a8420b85e355a84af807c346311ba15c74cecf8b9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1372,7 +1372,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "75bc612911cb0158ae421536ba6633f676e1a9187ea602a4e97851e17cee2acd",
+      "fixtureDigest": "c18070da69f58dcef702eb5f9959d7d74addbbb27a013eb0191d4603c2e4a20d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1404,7 +1404,7 @@
         "tests/assignment-gate.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "fa87320abd8303369c10f1e910969292ecfa7ca1425d83ca7240a3bec2b36295",
+      "fixtureDigest": "f30201450ea7a028a856bc02fae8f240e61c1d0e1ad19ae681385c51556a4e84",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1437,7 +1437,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "6d5d7766e1f94b047857dde0efc9272126a9cce5ee9a5277f687f81c2f06e68a",
+      "fixtureDigest": "5a38c602b6e8c26dfb1205bfb00acef4c9e361975bdb0e12e03bd3c4a669bdac",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1469,7 +1469,7 @@
         "tests/actor-attestation.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "badc24b71b35b7a2a7173b3b23bc9ccd7a6f619f8609ac868cb5a4a91258d16f",
+      "fixtureDigest": "236740fb47de452af3ba97cb8313c03c5a6091540dce8c8838bb9cc772a9c9ab",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1503,7 +1503,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7623b87753b9b1539a31eb970c76771d015e37f8624e059fae78cb8589a2838d",
+      "fixtureDigest": "7715daffc0ec07c5e791c6a437a2b4d325e5a5b6e6410719bb0201a97b0388f7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1532,7 +1532,7 @@
         "tests/conference-execution.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "a8abf73c2807c186acf628b54cf0a566ce38887a1ed76a164d54d51684e143fa",
+      "fixtureDigest": "2931b74218178d348246b5db07ede1aaef88d71a2cab4b3d4b763ec211161df7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1561,7 +1561,7 @@
         "tests/act7-execution-collection.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "312951240260c107d4fa887f8ec2e594f90d87d9d0b27a308c743f03683a8c63",
+      "fixtureDigest": "2144e52db0c67ee6d7285b2876d6c8d4d0ffcd176b6fb61f129f12d7c3690d79",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1598,7 +1598,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "381a34f3658502a05ab2847e00117e9f527d003a116f4d027d71131e2d7f0e5f",
+      "fixtureDigest": "070d84200a0984e72a8373f6683484124016cd822707dff4845e9b5b65dd7643",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1629,7 +1629,7 @@
         "tests/act4-codex-installer.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "c132a20913fb2867b642bf52f532c9cac29cc1ab3a163c0912a9ca19f2d0600b",
+      "fixtureDigest": "a84319b21aa2e9e55086040c191cfb58501ba0873407d22072998a60a769b418",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1657,7 +1657,7 @@
         "tests/act5-receipt-sidecar.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "793d231a1a4d9e3deea04acf45c028e44b09182a384ee43bc1d36a2c02ec465a",
+      "fixtureDigest": "e255cbf67411a8fc64a5d81878fe3027d04e329e5b7681aadca0dc482bc76bee",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1686,7 +1686,7 @@
         "tests/act6-observe-hook.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9b64fb042fefb1b9ea4900cd5c19b7b4cbc6d75e3e0636fb62fd50ee16c417a8",
+      "fixtureDigest": "9ad01a2cb19dd5a9e2c52ada6a069b9ad9a88af894887150aa70faaaa9892e86",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1715,7 +1715,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "70dfba509e9b3abe8908a7bd10f778a44bec85d4ee40cc4f1aa66b00d370aa82",
+      "fixtureDigest": "94f7458d20d1bce8a5c64ffed891c58c90e9511c08562f7103fc2bca1b7f8467",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1748,7 +1748,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "82c1a17f9fa9070affc5d1dc5dea66a3358b7da91c6e984c4d1f845e3c23bac5",
+      "fixtureDigest": "0d58ddcdce4e914c436b4b9ba0c439cac2deba8c50c43e22aecc5bb0976b1ac1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1782,7 +1782,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "c42e04265a53728bc2bdb8035e7e6edcb9ca6f8130d93651e2c95cc911002fcb",
+      "fixtureDigest": "b491a37377338d2fea774def91e9ffea6a5a284fe017b87e61018f104c154a19",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1819,7 +1819,7 @@
         "docs/verification/host/codex-session-start-activation.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "6975428ecd5bf19ce3258fdcfcaad9a61429ed46b0a79f9b5d2dc83fcfbd8021",
+      "fixtureDigest": "c600965505358d9a57299a52d3c0635b01e3fc0509b9fb46d88ea4ba71c79fa3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1854,7 +1854,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "e70c79d2d8df2243030f6e604ebc45f66b096127883ec6f1858a1bf64aea31b3",
+      "fixtureDigest": "a0d008bc63424e07a752bb6ddb83ac4055f461c737f379199de7528a0684f3a5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1919,7 +1919,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d30298518927b29ac0261241e11e0fd5794113e8ae8f2455e0a80f00844529d6",
+      "fixtureDigest": "1654eb796b6d1258928c332aa809f4a471d94dfd8bf2d8ba6928862ae6a70cdd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1950,7 +1950,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "47e6c4f5cf7ceaf9f298300322e886d1ee9df2ed1913a6792f5d324c564a2877",
+      "fixtureDigest": "4a5459a922c1e0672ea8f5d684cbf7c7c9ff39cf87eb9da1e179ef70a4d868e5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1982,7 +1982,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "ce0a5e7de24a0ffc80083ffd1178f34e0914c8e42c5dfd737ef5cf0cb0c5f5f3",
+      "fixtureDigest": "5bcce8a5d9a10bb7dc214a82927a4d26256344449848e83ebfad205153b350cd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2013,7 +2013,7 @@
         "tests/p7-canonical-exchange.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9acd00469ce00e5d70853eec9ff4063335676f55cd8887c54c82254a95fbb7da",
+      "fixtureDigest": "696ec0ba73c795178576b52d91b8f4c074d16a337e20f612b1bb0c81446950c1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2045,7 +2045,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1b996ddf14632984e9ff58188631cfaa45d7bba833260fc144ed9f5462e0103c",
+      "fixtureDigest": "c032ef699d3a65c47d0b8ff945da4eb7bc9c4cd5403a3707da81df0bb1e838c2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2071,7 +2071,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "docs/compatibility/supported-modes.md"
       ],
-      "fixtureDigest": "7936d1fcdf34f774dd7e105b60faea03956e498deaebf42e45f198f7c36d562f",
+      "fixtureDigest": "a2f9a05c3dbb08cfa7986dc640a4410dbf3156aae275c796b543539f47bbd903",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2103,7 +2103,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "5de49ecf0514a4db2290ef5bc9b8a29f08850b0a87795de29c8cc76761019d79",
+      "fixtureDigest": "d4bdf745da0d32134bafaa2be240db92397bd13d306fa6c8d82f1bb61ba31b65",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2147,7 +2147,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "b9edbac532c9196b4441c9e4d0f0636c9b043544848122027d02664db848c499",
+      "fixtureDigest": "1843f781eeffa2f7e45a3b0cd5aa601ca70384955a697f40be5c720944584faa",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2211,7 +2211,7 @@
         "specs/settings-catalog-v1.md",
         "tests/backup-snapshot.test.mjs"
       ],
-      "fixtureDigest": "1ca6df37bcde7f492d309608b4a98a0ba816cb66d42a9a39e523894eb751af0e",
+      "fixtureDigest": "41e01303b1f363a9c2b6d17a8d41e0ebd4ea9354de9f5702b35e6b7b77d12781",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2229,7 +2229,7 @@
       "phase": "BK",
       "category": "runtime-capability",
       "status": "implemented",
-      "subject": "relocation-vacate is terminal at the source and its only effect is to kill it: every availability:'cli' verb taking --workspace, enumerated FROM THE COMMAND CATALOG rather than a hand-written list, refuses at a vacated address (relocation-adopt/abort/inspect and lease-inspect excepted per the diagnosis carve-out), including the four paths that never reach resolveWorkspace -- acquireWorkspaceLease, lease-break, lease-recovery-break -- which is why the admission check lives in readMetadata and defaults to the strict value. relocation-adopt binds a copied tree only after asserting the two blindnesses the snapshot manifest structurally cannot cover (a dropped empty control directory and a carried-across lease or claim file, each proved by asserting BOTH that snapshot-verify still returns SNAPSHOT_VERIFIED and that adopt then refuses under its own code), after MEASURING the chain rather than quoting the ledger, and under a per-invocation authority whose permit is scoped by actorId AND workspaceIds AND destinations AND a {version, headEventHash} basis AND the exact relocationId AND the exact stage, each term carrying its own red proof (the basis alone cannot bound reuse, because relocation never advances the chain, so one authority once drove vacate/adopt/abort twice and left three live authorities for one workspaceId; relocation-plan is the read-only preparation that emits the id an authority must name and the control manifest adopt requires, and it shares one preparation function with vacate so the two cannot derive different ids); relocation-vacate refuses a destination whose workspace root is unchanged or which overlaps the source by containment, and refuses a ledger with no room for the completion; it changes exactly one file (workspace.json), leaves every event, view and knowledge byte identical, is idempotent on retry, and appends an unspliceable ledger entry whose from restates the prior binding byte for byte. relocation-abort restores the source from the tree alone with no external certificate, and is the one fork-creating verb: it requires a permit minted for THIS hop's abort stage, an explicit fork-risk acknowledgement, and an optional destination-side relocation-inspect document that is CHECKED and refuses the abort when the destination has already adopted, with the receipt and every later inspection recording the risk in words. relocationStateAt compares the address it is handed against the binding in the file on EVERY branch, including the no-ledger branch, so a stale copy is never reported live. The MCP exclusion is enforced and tested on BOTH surfaces -- tools/list and the tools/call dispatcher, whose clause is the entire boundary between a standing grant and the three takeover verbs. Neither commit point can leave a torn ledger under crash injection. A workspace that never relocates emits NO relocations field and byte-identical metadata. The mutating verbs are absent from the MCP surface by a catalog-derived predicate. The design does NOT prevent two truths and no single-sided assertion claims it does: the ledger is deletable by anyone with write access to the vacated tree and the engine cannot detect that, so the only fork proof is the two-sided relocation-inspect comparison, which is a mandatory close-out step and gate evidence rather than a verify gate -- and which proves only that the two addresses the ledger NAMES have not both stayed live, since a third address created by copying the tree, deleting relocations and rewriting roots appears in no ledger at all.",
+      "subject": "relocation-vacate is terminal at the source and its only effect is to kill it: every availability:'cli' verb taking --workspace, enumerated FROM THE COMMAND CATALOG rather than a hand-written list, refuses at a vacated address (relocation-adopt/abort/inspect and lease-inspect excepted per the diagnosis carve-out), including the four paths that never reach resolveWorkspace -- acquireWorkspaceLease, lease-break, lease-recovery-break -- which is why the admission check lives in readMetadata and defaults to the strict value. relocation-adopt is idempotent on retry (WORKSPACE_RELOCATION_ALREADY_ADOPTED) and binds a copied tree only after asserting the two blindnesses the snapshot manifest structurally cannot cover (a dropped empty control directory and a carried-across lease or claim file, each proved by asserting BOTH that snapshot-verify still returns SNAPSHOT_VERIFIED and that adopt then refuses under its own code), after MEASURING the chain rather than quoting the ledger, and under a per-invocation authority whose permit is scoped by actorId AND workspaceIds AND destinations AND a {version, headEventHash} basis AND the exact relocationId AND the exact stage, each term carrying its own red proof (the basis alone cannot bound reuse, because relocation never advances the chain, so one authority once drove vacate/adopt/abort twice and left three live authorities for one workspaceId; relocation-plan is the read-only preparation that emits the id an authority must name and the control manifest adopt requires, and it shares one preparation function with vacate so the two cannot derive different ids); relocation-vacate refuses a destination whose workspace root is unchanged or which overlaps the source by containment, and the ledger cap is evaluated in the preparation both verbs share so relocation-plan refuses a full ledger with WORKSPACE_RELOCATION_LEDGER_FULL before the out-of-band minting ceremony rather than after it, and reports the remaining one-way budget (the cap is consumed by ATTEMPTS: a vacate/abort pair spends two entries and moves nothing, and no verb prunes or compacts); it changes exactly one file (workspace.json), leaves every event, view and knowledge byte identical, and appends an unspliceable ledger entry whose from restates the prior binding byte for byte; a byte-identical vacate retry is NOT idempotent and is refused WORKSPACE_RELOCATION_VACATED -- idempotence is relocation-adopt's property, not the vacate's. relocation-abort restores the source from the tree alone with no external certificate, and is the one fork-creating verb: it requires a permit minted for THIS hop's abort stage AND naming the hop's vacateCommitmentSha256 -- the sha256 of the committed vacated ledger entry, which contains the sha256 of the file that authorised the vacate, so the vacate's own document cannot also authorise the abort and the two entries of an aborted hop can never name the same authority file -- an explicit fork-risk acknowledgement, and an optional destination-side relocation-inspect document whose caller-declared observedAt must sit inside one hour of the abort's own caller-declared at and not after it, which is refused WORKSPACE_RELOCATION_INSPECTION_STALE when the two instants disagree and WORKSPACE_RELOCATION_TARGET_ADOPTED when THE SUPPLIED DOCUMENT reports an adopted destination; the check is over the document and not over the destination's current state, it is TOCTOU by construction because an offline source cannot observe a remote address, and the receipt therefore records targetInspectionSupplied plus the document's own digest and declared instant rather than a verdict, with every later inspection carrying the fork risk in words in BOTH tenses (the destination may already have adopted, or may adopt later, because the copy stays adoptable and cannot learn of the abort). relocationStateAt compares the address it is handed against the binding in the file on EVERY branch, including the no-ledger branch, so a stale copy at a DIFFERENT path is never reported live -- a byte copy at the SAME absolute path on another machine still reads live, which is a pre-existing ceiling this claim does not close. The MCP exclusion is enforced and tested on BOTH surfaces -- tools/list and the tools/call dispatcher, whose clause is the entire boundary between a standing grant and the three takeover verbs. Neither commit point can leave a torn ledger under crash injection. A workspace that never relocates emits NO relocations field and byte-identical metadata. The mutating verbs are absent from the MCP surface by a catalog-derived predicate. The design does NOT prevent two truths and no single-sided assertion claims it does: the ledger is deletable by anyone with write access to the vacated tree and the engine cannot detect that, so the only fork proof is the two-sided relocation-inspect comparison, which is a mandatory close-out step and gate evidence rather than a verify gate -- and which proves only that the two addresses the ledger NAMES have not both stayed live, since a third address created by copying the tree, deleting relocations and rewriting roots appears in no ledger at all -- and since a permit is a predicate over the bytes presented at a path rather than a token with a spend record, so one adopt permit admits the same shipped tree at the same path on N hosts and the two-sided compare is green at every one of them, which no check here can see because the ledger carries no host-identifying term. The abort-stage permit and its vacate-commitment binding are a legibility and review device and not a barrier: whoever can mint the vacate permit can mint the abort permit, nothing authenticates a minter and nothing can observe when a document was minted, so what they buy is two documents and two approvals instead of one.",
       "command": "pnpm verify:backup",
       "fixturePaths": [
         "packages/core/src/workspace-relocation.ts",
@@ -2245,7 +2245,7 @@
         "docs/adr/0003-workspace-relocation.md",
         "docs/architecture/backup-restore-runbook.md"
       ],
-      "fixtureDigest": "f0f3ac38f6e6cb3de1ca5a1bb1506e9c05de2b1890dc528c9e599ff3bc65f4f3",
+      "fixtureDigest": "b38510c0e443436687bc590384ae9a8d98379d2e807fdc8e7c9f5bb7307e4131",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2273,7 +2273,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "72e57ff8822f2a60b2ec94c2104bf48e9325c4f421c171dd3631063b40ecb1e4",
+      "fixtureDigest": "0f796da7daa630065134c52e3d4eabaa06dea2324b08f960cc92094baebf576c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2302,7 +2302,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "727e893c5f74d8a567ed3512f6a24fc6dae40825d298102f41aec4ba400d5aa7",
+      "fixtureDigest": "8c19ef5e90a85806a3d034ffa5a73c49b8560b9d450f954486ad6c653b63cefe",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2332,7 +2332,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "727e893c5f74d8a567ed3512f6a24fc6dae40825d298102f41aec4ba400d5aa7",
+      "fixtureDigest": "8c19ef5e90a85806a3d034ffa5a73c49b8560b9d450f954486ad6c653b63cefe",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2366,7 +2366,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "684fa06f45de6888d12279f615b81ce98995c1f41784c3620677c5274b5d2cee",
+      "fixtureDigest": "140621a582b1f6e3217a6e69cd732e06cb2af3ca2958c78c4779589629535ba7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2393,7 +2393,7 @@
         "packages/core/src/index.ts",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1b3d398bc5906b90f7afd48373cd7b10b7f3571a071b517fc831c915af1fe9ad",
+      "fixtureDigest": "e109f91d4221dc62ec988d84aaecfea9c54c6762768fd584ec048e5579105471",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

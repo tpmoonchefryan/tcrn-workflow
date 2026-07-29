@@ -52,7 +52,16 @@ storage version.
   a hop and one file drove `vacate → adopt → abort` twice over in an adversarial
   review, leaving three live authorities for one `workspaceId` with no tampering.
   A `relocationId` is derived over `(workspaceId, sequence, from, to, basis)`, so
-  one permit authorizes one hop and one verb of it.
+  one permit authorizes one hop and one verb of it — one hop, not one INVOCATION:
+  the same hop presented again at the same path is admitted again, which is a stated
+  ceiling rather than an oversight.
+  An `abort` permit, and only an `abort` permit, also names the hop's
+  `vacateCommitmentSha256` — the sha256 of the committed `vacated` ledger entry, which
+  contains the sha256 of the file that authorised the vacate. A document carrying both
+  permits for one hop would have to contain a digest of itself, so the abort is
+  necessarily a second document and the two entries of an aborted hop can never name
+  the same authority file. That is a review device and not a barrier: whoever can mint
+  one permit can mint the other.
   The ledger records only `{actorId, authorityFileSha256}`, never a file
   reference — a chain whose readability depends on an external file still being
   present is a chain that bricks on a restore onto a fresh machine.
@@ -98,11 +107,15 @@ Additive and byte-identical for every workspace that never relocates.
 **For a workspace that carries a relocation ledger — including one whose relocation
 was ABORTED and that never moved a byte — the break is total and one-way**: the
 tenth metadata field fails the closed-field check with `WORKSPACE_SCHEMA_INVALID` on
-any `0.8.0`-or-earlier binary — not degraded reads, no reads. The aborted case is
+any `0.8.0`-or-earlier binary — not degraded reads, no reads. Measured against a
+`0.8.0` build, the break lands at the VACATE, not at the adopt. The aborted case is
 named because the ledger is append-only, so cancelling a move also version-locks the
 partition, and that is the case an operator is least likely to expect. Accepted deliberately
 (OD-A) rather than discovered later. The ledger cap is sixteen entries, picked
-deliberately (OD-B) so it does not become an accidental constant.
+deliberately (OD-B) so it does not become an accidental constant — and it is a
+ONE-WAY BUDGET OF EIGHT ATTEMPTS, because a hop costs two entries whether or not a
+byte moves and no verb prunes or compacts. `relocation-plan` refuses a full ledger
+before the minting ceremony and reports the remaining budget.
 
 ### What this does not do
 
@@ -117,10 +130,18 @@ It does NOT make producing a fork require destroying an artifact — an earlier 
 of this entry said so and was measured wrong. `relocation-abort` alone produces one
 if the destination already adopted, destroying nothing, and abort is the documented
 recovery verb. What abort costs now is an authority minted for THIS hop's `abort`
-stage, an explicit `--acknowledge-fork-risk`, and an optional `--target-inspection`
-document that is CHECKED and refuses the abort when the destination has adopted.
-The source still cannot know what the destination did; the receipt and every later
-`relocation-inspect` at that address say exactly that, in those words.
+stage and naming this hop's `vacateCommitmentSha256`, an explicit
+`--acknowledge-fork-risk`, and an optional `--target-inspection` document whose
+declared `observedAt` must sit within an hour of the abort's own `at`. **The engine
+checks the DOCUMENT, not the destination**: both instants are caller-supplied, the
+source cannot observe a remote address, and the check is TOCTOU by construction — an
+earlier draft said "refuses the abort when the destination has adopted", which the
+document alone cannot establish. The receipt records `targetInspectionSupplied`, the
+document's digest and its declared instant instead of a verdict. The
+source still cannot know what the destination did; the receipt and every later
+`relocation-inspect` at that address say exactly that, in those words, in both tenses
+— after an abort the copy stays adoptable and can never learn of the abort, so the
+runbook now says to DESTROY IT.
 
 The consequence is a mandatory close-out step no gate can replace: run
 `relocation-inspect` at BOTH ADDRESSES THE LEDGER NAMES and compare. It needs both
@@ -129,7 +150,12 @@ you. Its scope is stated exactly, because an earlier draft overstated it: it pro
 those two addresses have not both stayed live. A third address made by copying the
 tree, deleting `relocations` and rewriting `roots` is a fully live authority that
 appears in no ledger and that this compare cannot see — the pre-`0.9.0` hand-edit
-hole, which this design does not close and does not claim to. No single-sided "the source is still dead" assertion
+hole, which this design does not close and does not claim to. **Nor can that compare
+see an N-way adoption**: a permit is a predicate over the bytes presented at a path
+rather than a token with a spend record, so one adopt permit admits the same shipped
+tree at the same path on N hosts, and the two-sided compare is green at every one of
+them. Closing that needs a host-identifying term the ledger does not carry, and it is
+not in `0.9.0`. No single-sided "the source is still dead" assertion
 exists in the suite, and that absence is deliberate — such an assertion would be
 permanently true.
 

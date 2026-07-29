@@ -99,6 +99,10 @@
                   "adopt",
                   "vacate"
                 ]
+              },
+              "vacateCommitmentSha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
               }
             }
           }
@@ -161,8 +165,20 @@
         "controlManifest": {
           "type": "string"
         },
-        "targetStateVerified": {
+        "targetInspectionSupplied": {
           "type": "boolean"
+        },
+        "targetInspectionSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "targetInspectionObservedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "vacateCommitmentSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
         },
         "forkRisk": {
           "type": "string"
@@ -178,6 +194,7 @@
         "workspaceId",
         "state",
         "relocations",
+        "observedAt",
         "activeWorkspaceRoot"
       ],
       "properties": {
@@ -189,6 +206,10 @@
         },
         "address": {
           "type": "string"
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
         },
         "workspaceId": {
           "type": "string",
@@ -230,6 +251,8 @@
         "workspaceRootTo",
         "basis",
         "permitStages",
+        "ledgerEntriesRemaining",
+        "hopsRemaining",
         "controlManifest"
       ],
       "properties": {
@@ -270,6 +293,16 @@
               "vacate"
             ]
           }
+        },
+        "ledgerEntriesRemaining": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "hopsRemaining": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
         },
         "controlManifest": {
           "type": "string"

@@ -10,9 +10,11 @@
 // an engine-side recursive copy is a general arbitrary-write primitive reachable by
 // anyone holding the write grant.
 //
-// Two ceilings this module CANNOT cross, stated here and in ADR 0003's body rather
+// FOUR ceilings this module CANNOT cross, stated here and in ADR 0003's body rather
 // than in a test comment, because a reader who finds them in a test comment will
-// assume the mechanism is stronger than it is:
+// assume the mechanism is stronger than it is. The general theorem the three
+// adversarial reviews converged on: THIS MECHANISM CANNOT PREVENT A FORK. It can
+// only make one legible. Every ceiling below is an instance of that.
 //
 //   * It delivers AUTHORIZATION, not AUTHENTICATION. Nothing here proves who ran
 //     the command. Same limit gate-identity.ts already states about itself.
@@ -27,8 +29,27 @@
 //     hand is invisible to it and no close-out may claim otherwise. No single-sided
 //     "the source is still dead" assertion may be written: it would be permanently
 //     true and would give false comfort.
+//   * THE ABORT-STAGE PERMIT IS A LEGIBILITY AND REVIEW DEVICE, NOT A BARRIER.
+//     Whoever can mint the vacate permit can mint the abort permit; nothing here
+//     authenticates a minter and nothing can observe WHEN a document was minted.
+//     The stage term and the vacate-commitment binding below force the abort into a
+//     SEPARATE document that names a value the vacate produced — so the two
+//     approvals cannot be one approval, and the artifacts show two acts. That is
+//     the whole of what they buy. An operator who intends to fork still forks, in
+//     two acts instead of one, and that is expected rather than a defect.
+//   * A PERMIT IS A PREDICATE OVER PRESENTED BYTES AT A PATH, NOT A TOKEN WITH A
+//     SPEND RECORD. Every input to adopt is host-neutral (rootPortableIdentity is a
+//     lowercased lexical path — no device, no inode, no host identity), and the only
+//     record that a permit was spent is written INTO the copy the permit-holder
+//     controls. Present one shipped vacated tree at the destination path on N hosts
+//     and one adopt permit yields N simultaneously-live authorities for one
+//     workspaceId, each with a valid `adopted` ledger under the same relocationId —
+//     and the mandated two-sided compare PASSES AT EVERY ONE OF THEM. The same
+//     holds for the vacate stage against a restored pre-vacate backup. No check
+//     here can see it: it requires a host-identifying term the ledger does not
+//     carry.
 //
-// Two corrections landed after the first adversarial review, both of which were
+// Corrections landed after the first two adversarial reviews, all of which were
 // live holes rather than documentation defects:
 //
 //   * ONE PERMIT AUTHORIZES ONE HOP-STAGE. The {version, headEventHash} basis alone
@@ -39,15 +60,32 @@
 //     permit therefore also names the exact `relocationId` and the exact `stage`,
 //     both of which the operator obtains from `relocation-plan` BEFORE minting. A
 //     relocationId is derived over (workspaceId, sequence, from, to, basis), so it
-//     cannot be satisfied twice: the next hop has a different sequence and a
-//     different control-manifest digest.
-//   * ABORT CANNOT RIDE THE VACATE'S AUTHORITY. Abort after the target adopted is
-//     the fork-creating move, and the source cannot know whether the target
-//     adopted — proving that negative is not available to an offline engine. What
-//     is now required is a permit minted for THIS hop's `abort` stage (never the
-//     vacate's), an explicit fork-risk acknowledgement, and — when the operator can
-//     reach the target — the target's own relocation-inspect document, which is
-//     CHECKED and which refuses the abort outright if it shows an adopted target.
+//     cannot be satisfied by a DIFFERENT hop: the next hop has a different sequence
+//     and a different control-manifest digest. It can be satisfied any number of
+//     times by the same hop presented again — see the fourth ceiling.
+//   * AN ABORT PERMIT CANNOT SHARE THE VACATE'S DOCUMENT. Abort after the target
+//     adopted is the fork-creating move, and the source cannot know whether the
+//     target adopted — proving that negative is not available to an offline engine.
+//     The second review measured the stage term as insufficient on its own: one
+//     document carrying [abort, adopt, vacate] for one hop is explicitly legal, so
+//     the operator who ran the vacate was still holding the abort authority and the
+//     fork was one flag away. An abort permit therefore also names
+//     `vacateCommitmentSha256` — the sha256 of the committed `vacated` ledger entry,
+//     which contains the sha256 of the authority file that authorized the vacate.
+//     A document carrying both permits for one hop would have to contain a digest of
+//     itself, so it is not constructible. This does not stop a second document being
+//     minted afterwards (or ahead of time by an operator who computes the value);
+//     see the third ceiling for what it actually buys.
+//   * THE TARGET INSPECTION IS BOUNDED, NOT FRESH. It carries a caller-declared
+//     `observedAt` and abort refuses one outside RELOCATION_TARGET_INSPECTION_WINDOW
+//     of the abort's own `at`. Both instants are caller-supplied, so this is an
+//     ordering and legibility device: it converts "a document captured before the
+//     adopt is byte-identical to a fresh one" — which needed no intent at all — into
+//     "the two instants must be stated and must agree", and it records the
+//     document's own digest and declared instant in the receipt so a later reader
+//     can check them against other records. An offline source still cannot learn
+//     the destination's state at the moment it aborts; that check is TOCTOU by
+//     construction and no version of it can be otherwise.
 
 import { createHash } from "node:crypto";
 import { lstat, readdir } from "node:fs/promises";
@@ -120,6 +158,7 @@ export const RELOCATION_REASON_CODES = Object.freeze([
   "WORKSPACE_RELOCATION_ID_MISMATCH",
   "WORKSPACE_RELOCATION_INPUT_INVALID",
   "WORKSPACE_RELOCATION_INSPECTED",
+  "WORKSPACE_RELOCATION_INSPECTION_STALE",
   "WORKSPACE_RELOCATION_LEDGER_FULL",
   "WORKSPACE_RELOCATION_NOT_PENDING",
   "WORKSPACE_RELOCATION_NOT_PERMITTED",
@@ -127,6 +166,7 @@ export const RELOCATION_REASON_CODES = Object.freeze([
   "WORKSPACE_RELOCATION_TARGET_ADOPTED",
   "WORKSPACE_RELOCATION_TRANSPORT_RESIDUE",
   "WORKSPACE_RELOCATION_UNSETTLED",
+  "WORKSPACE_RELOCATION_VACATE_COMMITMENT_MISMATCH",
   "WORKSPACE_RELOCATION_VACATE_COMPLETED",
 ] as const);
 
@@ -180,6 +220,9 @@ export interface RelocationPermit {
   // obtained from `relocation-plan` before the authority is minted.
   readonly relocationId: string;
   readonly stage: RelocationPermitStage;
+  // Present on `abort` permits and ONLY on those, because it is the one value that
+  // does not exist until the vacate has committed. See relocationVacateCommitment.
+  readonly vacateCommitmentSha256?: string;
 }
 
 export interface RelocationAuthorityDocument {
@@ -258,7 +301,15 @@ export function validateRelocationAuthorityDocument(value: unknown): RelocationA
     // which is exactly the permanently-green-gate failure class this repository was
     // burned by three times in one day. Guard G3 drops the check; T14(c) is the
     // test that must go red.
-    exact(permit, ["actorId", "workspaceIds", "destinations", "basis", "relocationId", "stage"], `permits[${index}]`);
+    // The field set is stage-dependent, and both directions of that are refusals:
+    // an `abort` permit WITHOUT vacateCommitmentSha256 is malformed, and a `vacate`
+    // or `adopt` permit WITH it is malformed too. The second half matters as much as
+    // the first — an optional field that nothing rejects when misplaced is how a
+    // reader concludes the binding applies to stages where it does not.
+    const stagedFields = permit.stage === "abort"
+      ? ["actorId", "workspaceIds", "destinations", "basis", "relocationId", "stage", "vacateCommitmentSha256"]
+      : ["actorId", "workspaceIds", "destinations", "basis", "relocationId", "stage"];
+    exact(permit, stagedFields, `permits[${index}]`);
     try {
       assertProtocolId(permit.actorId);
     } catch {
@@ -288,6 +339,10 @@ export function validateRelocationAuthorityDocument(value: unknown): RelocationA
     if (typeof permit.stage !== "string" || !relocationPermitStages.has(permit.stage)) {
       fail("WORKSPACE_RELOCATION_AUTHORITY_MALFORMED", `permits[${index}].stage`);
     }
+    if (permit.stage === "abort" &&
+      (typeof permit.vacateCommitmentSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(permit.vacateCommitmentSha256))) {
+      fail("WORKSPACE_RELOCATION_AUTHORITY_MALFORMED", `permits[${index}].vacateCommitmentSha256`);
+    }
     return Object.freeze({
       actorId: permit.actorId as string,
       workspaceIds: Object.freeze([...workspaceIds]),
@@ -295,12 +350,20 @@ export function validateRelocationAuthorityDocument(value: unknown): RelocationA
       basis: Object.freeze({ headEventHash: basis.headEventHash as string | null, version: basis.version as number }),
       relocationId: permit.relocationId,
       stage: permit.stage as RelocationPermitStage,
+      ...(permit.stage === "abort" ? { vacateCommitmentSha256: permit.vacateCommitmentSha256 as string } : {}),
     });
   });
   // The ordering key is the whole permit identity, not the actor alone: one hop
-  // legitimately needs three permits under one actor (vacate, adopt, abort), so an
+  // legitimately needs a `vacate` and an `adopt` permit under one actor, so an
   // actor-only key would reject the honest document and admit nothing else. A
   // protocol id contains no space, so the join is unambiguous.
+  //
+  // An `abort` permit for the same hop remains REPRESENTABLE here and is not
+  // syntactically rejected — it is simply not satisfiable, because its
+  // vacateCommitmentSha256 would have to be a digest of the file it sits in. That
+  // separation is enforced by arithmetic in abortWorkspaceRelocation rather than by a
+  // rule in this function, and it is stated here so the next reader does not add a
+  // redundant syntactic ban and conclude the ban is what does the work.
   assertCanonicallySorted(permits.map((permit) => `${permit.actorId} ${permit.relocationId} ${permit.stage}`), "permits");
   return Object.freeze({ schemaVersion: WORKSPACE_RELOCATION_AUTHORITY_VERSION, permits: Object.freeze(permits) });
 }
@@ -409,6 +472,31 @@ function assertPermitBasis(permit: RelocationPermit, version: number, headEventH
 
 export function canonicalRelocationAuthority(document: RelocationAuthorityDocument): string {
   return canonicalJson(validateRelocationAuthorityDocument(document));
+}
+
+/**
+ * THE VACATE COMMITMENT: the sha256 of the committed `vacated` ledger entry in its
+ * canonical bytes. An `abort` permit must name it, and that is the only thing here
+ * that a same-document pre-mint cannot satisfy.
+ *
+ * Why it works, stated as arithmetic rather than as a promise: the entry contains
+ * `authority.authorityFileSha256` — the digest of the file that authorized the
+ * vacate. An authority document carrying an `abort` permit for the hop its own
+ * `vacate` permit authorizes would therefore have to contain a digest of itself.
+ *
+ * Why it is NOT a barrier, stated in the same breath: a SECOND document minted after
+ * the vacate satisfies it trivially, and so does one minted beforehand by an operator
+ * who finalizes the vacate document first, hashes it, and computes this value from the
+ * plan output plus the instant they intend to pass. Both are two documents and two
+ * approvals rather than one, which is the entire gain. See the third ceiling in the
+ * module header.
+ *
+ * The value travels in the vacate receipt and in `relocation-inspect` at the vacated
+ * address, so abort stays a pure function of the tree even when every receipt is lost
+ * (T13).
+ */
+export function relocationVacateCommitment(entry: WorkspaceRelocationEntry): string {
+  return createHash("sha256").update(canonicalJson(entry as unknown as JsonValue), "utf8").digest("hex");
 }
 
 // ---------------------------------------------------------------------------
@@ -655,6 +743,20 @@ async function prepareRelocation(workspaceRootInput: string, options: PlanOption
   // never be the one that fires is the shape this module refuses elsewhere.
   assertDisjointFromSource(sourceWorkspace, destinationWorkspace);
 
+  // THE CAP, EVALUATED IN THE SHARED PREPARATION. It used to live only in
+  // `withRelocations`, which no read-only verb reaches, so `relocation-plan` answered
+  // WORKSPACE_RELOCATION_PLANNED at a full ledger and handed the operator a
+  // relocationId for a hop the vacate would refuse — after which the operator
+  // performed the out-of-band minting ceremony (the expensive, owner-involving step
+  // the plan verb exists to feed) for a hop that was impossible. That was the one
+  // reachable state in which plan and vacate disagreed, which is the exact property
+  // this shared function was introduced to guarantee. The check at the commit point
+  // is kept as the backstop it always was.
+  const existingEntries = (preview.metadata.relocations ?? []).length;
+  if (existingEntries + 1 > WORKSPACE_RELOCATION_LEDGER_LIMIT) {
+    fail("WORKSPACE_RELOCATION_LEDGER_FULL", `the ledger cap is ${String(WORKSPACE_RELOCATION_LEDGER_LIMIT)} entries`);
+  }
+
   const lease = await acquireWorkspaceLease(preview.root, { now: options.at });
   try {
     // v3 runs FIRST, ahead of the validate. Found by the T10 fixture: a stray
@@ -723,6 +825,15 @@ export async function planWorkspaceRelocation(
       workspaceRootTo: prepared.destinationWorkspace,
       basis: { ...prepared.basis },
       permitStages: [...RELOCATION_PERMIT_STAGES],
+      // THE BUDGET, REPORTED BEFORE IT IS SPENT. The cap is consumed by ATTEMPTS, not
+      // by moves: a vacate plus an abort costs two entries and moves nothing, so eight
+      // abandoned attempts end this workspace's ability to relocate by any governed
+      // route, permanently. There is no compaction verb and there deliberately is not
+      // one — see ADR 0003's ledger-cap section. An operator who can see the number
+      // fall can at least plan against it instead of discovering the wall after the
+      // minting ceremony.
+      hopsRemaining: Math.floor((WORKSPACE_RELOCATION_LEDGER_LIMIT - prepared.sequence + 1) / 2),
+      ledgerEntriesRemaining: WORKSPACE_RELOCATION_LEDGER_LIMIT - prepared.sequence + 1,
       controlManifest: prepared.controlManifest,
     });
   } finally {
@@ -782,6 +893,11 @@ export async function vacateWorkspace(workspaceRootInput: string, options: Vacat
     return receipt("WORKSPACE_RELOCATION_VACATE_COMPLETED", entry, {
       controlManifestSha256: prepared.basis.controlManifestSha256,
       controlManifest: prepared.controlManifest,
+      // The value an `abort` permit for this hop must name, and which did not exist
+      // until the line above committed. It is emitted here AND by
+      // `relocation-inspect` at this address, so losing the receipt does not strand
+      // the operator: abort stays a pure function of the tree.
+      vacateCommitmentSha256: relocationVacateCommitment(entry),
     });
   } finally {
     await prepared.lease.release();
@@ -941,8 +1057,27 @@ export interface AbortOptions {
 // The fork statement. It is emitted by the abort receipt and by relocation-inspect at
 // any address whose trailing hop is `aborted`, in both cases WITHOUT claiming to know
 // whether the target adopted — that is the thing an offline source cannot know.
+//
+// BOTH TENSES, because the second review measured that only one of the two halves was
+// stated. The past-tense half (the destination already adopted) was covered. The
+// future-tense half was not, and it is the half the FULLY COMPLIANT abort leaves open:
+// after an abort the untouched copy still carries a valid trailing `vacated` entry,
+// nothing at the destination can ever learn that the source aborted, and the copy stays
+// adoptable indefinitely. That is why the runbook now says the copy must be destroyed —
+// the only place that half can be closed is outside the engine.
 export const RELOCATION_ABORT_FORK_RISK =
-  "if the destination already ran relocation-adopt, this address and the destination are now two live authorities for one workspaceId";
+  "if the destination has run relocation-adopt -- or ever runs it later, since the copy stays adoptable and cannot learn of this abort -- this address and the destination are two live authorities for one workspaceId; destroy the copy";
+
+// The window a target inspection may be old, in milliseconds. One hour: long enough
+// for an operator to inspect a reachable destination, decide, and run the abort on a
+// second host, short enough that a document captured before an adopt in the same
+// session is refused rather than silently accepted.
+//
+// It bounds a caller-declared instant against another caller-declared instant. It is
+// therefore an ordering device and NOT a freshness proof — see the module header. The
+// property it does buy is that the stale-document path is no longer indistinguishable
+// from the honest one for free: the two instants have to be stated and have to agree.
+export const RELOCATION_TARGET_INSPECTION_WINDOW_MS = 3_600_000;
 
 /**
  * Verifies a destination-side `relocation-inspect` document against the hop being
@@ -950,11 +1085,27 @@ export const RELOCATION_ABORT_FORK_RISK =
  * relocationId came from the operator's own vacate receipt thirty seconds earlier and
  * therefore carried no information about the only question that matters.
  *
- * It is evidence, not proof. The document is unsigned canonical JSON, so a
- * determined operator can forge one — the same ceiling every other artifact here
- * states about itself. What it cannot be is accidental.
+ * It is evidence, not proof, and the second review measured exactly how weak the
+ * evidence was: the document carried no observation instant, so one captured before the
+ * destination adopted was BYTE-IDENTICAL to a fresh one — the stale path needed no
+ * intent at all, it was the natural operator sequence (inspect, decide, abort) with an
+ * adopt landing in between, and it stamped an affirmative "verified" into the receipt.
+ *
+ * What is checked now: the document's own caller-declared `observedAt` must sit inside
+ * RELOCATION_TARGET_INSPECTION_WINDOW_MS of the abort's own caller-declared `at`, and
+ * not after it. Both instants are caller-supplied. This bounds the gap and makes the two
+ * claims collide if they disagree; it does not and cannot establish what the destination
+ * was doing at the moment of the abort. That check is TOCTOU by construction: the source
+ * is offline with respect to the destination, and no version of an offline check can be
+ * otherwise. The receipt records this document's digest and its declared instant rather
+ * than a verdict.
  */
-function assertTargetNotAdopted(document: string, workspaceId: string, trailing: WorkspaceRelocationEntry): void {
+function assertTargetNotAdopted(
+  document: string,
+  workspaceId: string,
+  trailing: WorkspaceRelocationEntry,
+  abortAt: string,
+): string {
   let parsed: unknown;
   try {
     parsed = JSON.parse(document);
@@ -969,12 +1120,29 @@ function assertTargetNotAdopted(document: string, workspaceId: string, trailing:
     inspection.address !== (trailing.to.find((root) => root.kind === "workspace")?.canonicalPath ?? "")) {
     fail("WORKSPACE_RELOCATION_INPUT_INVALID", "the target inspection is not this hop's destination");
   }
+  if (typeof inspection.observedAt !== "string") {
+    fail("WORKSPACE_RELOCATION_INPUT_INVALID", "the target inspection carries no observedAt");
+  }
+  const observedAt = inspection.observedAt;
+  try {
+    assertStrictInstant(observedAt);
+  } catch {
+    fail("WORKSPACE_RELOCATION_INPUT_INVALID", "the target inspection observedAt is not a strict instant");
+  }
+  const gap = Date.parse(abortAt) - Date.parse(observedAt);
+  if (!Number.isFinite(gap) || gap < 0 || gap > RELOCATION_TARGET_INSPECTION_WINDOW_MS) {
+    fail(
+      "WORKSPACE_RELOCATION_INSPECTION_STALE",
+      `the target inspection declares observedAt=${observedAt} and this abort declares at=${abortAt}; the two must be ordered and within ${String(RELOCATION_TARGET_INSPECTION_WINDOW_MS)}ms`,
+    );
+  }
   if (inspection.state !== "adoption-required" || inspection.stage !== "vacated") {
     fail(
       "WORKSPACE_RELOCATION_TARGET_ADOPTED",
       `the destination reports state=${String(inspection.state)} stage=${String(inspection.stage)}; aborting here would create a fork`,
     );
   }
+  return observedAt;
 }
 
 /**
@@ -986,17 +1154,22 @@ function assertTargetNotAdopted(document: string, workspaceId: string, trailing:
  * source CANNOT know whether it did; proving a negative is not available to an
  * offline engine. Three things are therefore required rather than one:
  *
- *   1. A permit minted for THIS hop's `abort` stage. The vacate's own permit no
- *      longer works — that was measured, not supposed: one authority file drove
- *      vacate, adopt and abort in a loop and left three live authorities behind.
+ *   1. A permit minted for THIS hop's `abort` stage, naming this hop's
+ *      `vacateCommitmentSha256`. The vacate's own permit no longer works, and — the
+ *      second review's finding — neither does a permit sitting in the vacate's own
+ *      DOCUMENT, because that document would have to contain a digest of itself. What
+ *      this buys is two documents and two approvals instead of one; it is a review
+ *      device, not a barrier, and the module header says so as a ceiling.
  *   2. An explicit fork-risk acknowledgement from the caller. It proves nothing; it
  *      is a ceremony, and it is named as one.
- *   3. The destination's own inspection when the operator can reach it, which is
- *      CHECKED and refuses the abort outright if the destination already adopted.
- *      It is optional because the legitimate abort — the copy was never made, the
+ *   3. The destination's own inspection when the operator can reach it, bounded to
+ *      RELOCATION_TARGET_INSPECTION_WINDOW_MS of this abort's own instant. It is
+ *      optional because the legitimate abort — the copy was never made, the
  *      destination host is unreachable — has no destination to inspect, and a
  *      requirement that cannot be met in the case it exists for would simply be
- *      routed around. The receipt records which of the two happened.
+ *      routed around. It is also, measured, routed around by simply omitting the flag:
+ *      the receipt records that omission (`targetInspectionSupplied: false`) and that
+ *      record is the only thing that can be claimed for it.
  *
  * What is guaranteed is that the fork is LEGIBLE: an `aborted` at the source and an
  * `adopted` at the target sharing one relocationId is a permanent contradiction in
@@ -1048,9 +1221,30 @@ export async function abortWorkspaceRelocation(workspaceRootInput: string, optio
   // fork. It was harmless only because a vacated chain cannot advance — an
   // invariant that lived in a different function and was nowhere stated.
   assertPermitBasis(permit, trailing.basis.version, trailing.basis.headEventHash);
-  const targetStateVerified = options.targetInspection !== undefined;
+  // The vacate commitment. This is what a permit minted alongside the vacate cannot
+  // carry — see relocationVacateCommitment for the arithmetic and for what it does NOT
+  // buy.
+  const vacateCommitmentSha256 = relocationVacateCommitment(trailing);
+  if (permit.vacateCommitmentSha256 !== vacateCommitmentSha256) {
+    fail(
+      "WORKSPACE_RELOCATION_VACATE_COMMITMENT_MISMATCH",
+      `the abort permit names vacate commitment ${String(permit.vacateCommitmentSha256)}; this address committed ${vacateCommitmentSha256}`,
+    );
+  }
+  // RECORDED, NOT ADJUDICATED. The old field was named `targetStateVerified` and its
+  // value was literally `options.targetInspection !== undefined` — "a document was
+  // supplied", written under a name that reads "the target's state was verified", and
+  // stamped `true` by a document captured before the destination adopted. What goes in
+  // the receipt now is what is actually known: whether a document was supplied, which
+  // document it was, and what instant it claimed for itself.
+  const targetInspectionSupplied = options.targetInspection !== undefined;
+  let targetInspectionSha256: string | undefined;
+  let targetInspectionObservedAt: string | undefined;
   if (options.targetInspection !== undefined) {
-    assertTargetNotAdopted(options.targetInspection, preview.metadata.workspaceId, trailing);
+    targetInspectionObservedAt = assertTargetNotAdopted(
+      options.targetInspection, preview.metadata.workspaceId, trailing, options.at,
+    );
+    targetInspectionSha256 = createHash("sha256").update(options.targetInspection, "utf8").digest("hex");
   }
 
   const lease = await acquireWorkspaceLease(preview.root, { now: options.at, relocationAdmission: "abort" });
@@ -1070,7 +1264,10 @@ export async function abortWorkspaceRelocation(workspaceRootInput: string, optio
     entries.push(entry);
     await writeWorkspaceMetadataAt(preview.root, withRelocations(preview.metadata, entries), options.crashAt);
     return receipt("WORKSPACE_RELOCATION_ABORT_COMPLETED", entry, {
-      targetStateVerified,
+      targetInspectionSupplied,
+      ...(targetInspectionSha256 === undefined ? {} : { targetInspectionSha256 }),
+      ...(targetInspectionObservedAt === undefined ? {} : { targetInspectionObservedAt }),
+      vacateCommitmentSha256,
       forkRisk: RELOCATION_ABORT_FORK_RISK,
     });
   } finally {
@@ -1089,8 +1286,21 @@ export async function abortWorkspaceRelocation(workspaceRootInput: string, optio
  * THIRD address rebound by hand — that address appears in no ledger, and its
  * inspection is byte-indistinguishable from a workspace that never relocated. Say
  * what it covers; never call it a fork detector without the qualifier.
+ *
+ * `at` is REQUIRED and is stamped into the document as `observedAt`. It is the caller's
+ * declaration of when the observation was taken, on the same fail-closed terms as every
+ * other `--at` in this engine: no implicit clock, and the engine does not pretend to
+ * have measured it. Before it existed, two inspections of the same address taken on
+ * either side of an adopt were BYTE-IDENTICAL, which is what let a pre-adopt document
+ * pass abort's destination check and stamp an affirmative verification into the receipt.
+ * The instant does not make the document fresh; it makes staleness statable, refusable
+ * and recorded.
  */
-export async function inspectWorkspaceRelocation(workspaceRootInput: string): Promise<Readonly<Record<string, JsonValue>>> {
+export async function inspectWorkspaceRelocation(
+  workspaceRootInput: string,
+  options: { readonly at: string },
+): Promise<Readonly<Record<string, JsonValue>>> {
+  assertStrictInstant(options.at);
   const preview = await readWorkspaceMetadataAt(workspaceRootInput, "any");
   const state = relocationStateAt(preview.metadata, preview.root);
   const trailing = trailingEntry(preview.metadata);
@@ -1100,6 +1310,7 @@ export async function inspectWorkspaceRelocation(workspaceRootInput: string): Pr
       schemaVersion: WORKSPACE_RELOCATION_INSPECTION_VERSION,
       reasonCode: "WORKSPACE_RELOCATION_INSPECTED",
       address: preview.root,
+      observedAt: options.at,
       workspaceId: preview.metadata.workspaceId,
       state,
       relocations: 0,
@@ -1127,9 +1338,13 @@ export async function inspectWorkspaceRelocation(workspaceRootInput: string): Pr
     schemaVersion: WORKSPACE_RELOCATION_INSPECTION_VERSION,
     reasonCode: "WORKSPACE_RELOCATION_INSPECTED",
     address: preview.root,
+    observedAt: options.at,
     workspaceId: preview.metadata.workspaceId,
     state,
     relocations: (preview.metadata.relocations ?? []).length,
+    // The remaining budget, at the address that carries it. The cap is spent by
+    // attempts rather than by moves and nothing gives an entry back.
+    ledgerEntriesRemaining: WORKSPACE_RELOCATION_LEDGER_LIMIT - (preview.metadata.relocations ?? []).length,
     relocationId: trailing.relocationId,
     stage: trailing.stage,
     at: trailing.at,
@@ -1142,6 +1357,10 @@ export async function inspectWorkspaceRelocation(workspaceRootInput: string): Pr
     // address whose trailing hop is `aborted` is a fork candidate, and the file
     // itself is the only place an operator will look years later.
     ...(trailing.stage === "aborted" ? { forkRisk: RELOCATION_ABORT_FORK_RISK } : {}),
+    // Emitted while the hop is open, because it is what an `abort` permit for this hop
+    // must name and because the receipt that first carried it may be long gone. Abort
+    // remains a pure function of the tree (T13).
+    ...(trailing.stage === "vacated" ? { vacateCommitmentSha256: relocationVacateCommitment(trailing) } : {}),
     activeWorkspaceRoot: binding.find((root) => root.kind === "workspace")?.canonicalPath ?? "",
   });
 }

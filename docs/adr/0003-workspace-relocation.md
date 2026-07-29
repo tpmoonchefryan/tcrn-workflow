@@ -38,7 +38,7 @@ Five CLI verbs, sequenced mechanically:
 | `relocation-vacate` | source | Its ONLY effect is to kill the source. |
 | `relocation-adopt` | target | Binds the copied tree to this host. Idempotent. |
 | `relocation-abort` | source | Revives the source from the ledger's own `from`. |
-| `relocation-inspect` | either | Read-only. Compares ONE address against its own ledger. |
+| `relocation-inspect` | either | Read-only. Compares ONE address against its own ledger. Requires `--at`. |
 
 `relocation-plan` was added in the second cut, and it is not a convenience. Once a
 permit names the exact `relocationId` (see *Authorization*), the operator needs a
@@ -110,11 +110,22 @@ measurement.
 authority file plus its digest on the command line, read through the same
 TOCTOU-hardened reader. A permit names `actorId` **and** `workspaceIds` **and**
 `destinations` **and** a `basis` of `{version, headEventHash}` **and** the exact
-`relocationId` **and** the exact `stage` (`vacate` / `adopt` / `abort`). Each
+`relocationId` **and** the exact `stage` (`vacate` / `adopt` / `abort`) — and, on an
+`abort` permit and only there, the hop's `vacateCommitmentSha256`. Each
 scoping defends a different attack and none subsumes another: without
 `workspaceIds` the roster permits everything while looking rigorous, and without
 the `basis` an authority minted months ago is a standing grant wearing
 per-invocation clothes.
+
+**`vacateCommitmentSha256` is the sha256 of the committed `vacated` ledger entry**,
+which the vacate receipt emits and which `relocation-inspect` restates at the vacated
+address so abort stays a pure function of the tree. It exists for one reason: the
+`vacated` entry contains the sha256 of the authority file that authorised the vacate,
+so a document carrying an `abort` permit for the hop its own `vacate` permit
+authorises would have to contain a digest of itself. That is not constructible, and
+the consequence is permanent and readable: **the two entries of any aborted hop can
+never name the same authority file.** What it does NOT do is stop the fork — see
+ceiling 3.
 
 **The last two scopes were added after an adversarial review measured the basis as
 inert, and the correction is recorded rather than quietly folded in.** Relocation
@@ -142,13 +153,25 @@ standing command list, and a standing grant to take over a workspace is exactly
 what a per-invocation authority forbids. The exclusion is derived from the
 catalog — any verb with a *required* `*-authority-digest` flag — rather than
 hand-listed, because a list of command names goes stale in the permissive
-direction. `relocation-inspect` is exposed.
+direction. `relocation-inspect` **and `relocation-plan`** are exposed; both are
+read-only and neither can bind anything. (The first cut of this ADR said only
+`relocation-inspect`, and was not updated when `relocation-plan` was added in the
+second cut. The measured MCP tool list carries both.)
 
-## The two ceilings
+## The four ceilings
 
 These are in the body, not a footnote, because a reader who finds them in a test
 comment will assume the mechanism is stronger than it is and will design the next
 thing on top of that assumption.
+
+**The general statement all four are instances of: this mechanism cannot prevent a
+fork. It can only make one legible.** Three adversarial reviews converged on that,
+and the third one produced the structural reasons rather than more instances:
+whoever can mint one permit can mint the others; a permit is a predicate over bytes
+presented at a path rather than a token with a spend record; and an offline source
+cannot observe a remote address's state at the moment it acts. Every "prevention"
+claim written about this verb family has been false so far, and the ceilings below
+are stated so the next one is not written.
 
 **1. This is authorization, not authentication.** Nothing here proves who ran the
 command. Same limit `gate-identity.ts` already states about itself.
@@ -180,25 +203,80 @@ abort is the documented recovery verb. The source cannot know whether the
 destination adopted; proving that negative is not available to an offline engine.
 What abort costs now is three things, and none of them is a proof:
 
-- a permit minted for THIS hop's `abort` stage — the vacate's own permit no longer
-  carries it, which removes the "the operator already holds it" property that made
-  the fork one command away;
+- a permit minted for THIS hop's `abort` stage, naming the hop's
+  `vacateCommitmentSha256`. **A sentence stood here in the second cut and was also
+  false: that the stage term "removes the 'the operator already holds it' property
+  that made the fork one command away".** It did not. One authority document may
+  legitimately carry a `vacate`, an `adopt` and an `abort` permit for one hop — the
+  code says so outright — and a review minted exactly that document before the vacate
+  and forked the workspace from it with one extra flag. What the commitment binding
+  adds is that the document which authorised the vacate cannot also authorise the
+  abort, so the fork costs two documents and two approvals. That is a review device.
+  See ceiling 3 for what it is not;
 - an explicit `--acknowledge-fork-risk`, which is a ceremony and is named as one;
 - an optional `--target-inspection`: the destination's own `relocation-inspect`
-  output, which the engine CHECKS and which refuses the abort with
-  `WORKSPACE_RELOCATION_TARGET_ADOPTED` if the destination has adopted. Optional
-  because the legitimate abort — the copy was never made, the destination host is
-  unreachable — has no destination to inspect, and a requirement that cannot be met
-  in the case it exists for gets routed around rather than obeyed. The receipt
-  records `targetStateVerified` either way, and every later `relocation-inspect` at
-  an aborted address carries the `forkRisk` statement.
+  output. The engine checks THE DOCUMENT — that it names this hop's destination, that
+  its declared `observedAt` sits inside one hour of the abort's own `at` and not after
+  it, and that the state it reports is `adoption-required`. It refuses with
+  `WORKSPACE_RELOCATION_TARGET_ADOPTED` when the supplied document reports an adopted
+  destination and with `WORKSPACE_RELOCATION_INSPECTION_STALE` when the two declared
+  instants do not agree. **It does not and cannot establish what the destination is
+  doing at the moment of the abort**: both instants are caller-supplied, the source is
+  offline with respect to the destination, and the check is TOCTOU by construction. In
+  the second cut the document carried no instant at all, so one captured before the
+  destination adopted was byte-identical to a fresh one — the stale path needed no
+  intent, and it stamped `targetStateVerified: true` into the receipt. The receipt now
+  records `targetInspectionSupplied`, the document's own `targetInspectionSha256` and
+  its declared `targetInspectionObservedAt` — what is known, rather than a verdict.
+  Optional because the legitimate abort — the copy was never made, the destination
+  host is unreachable — has no destination to inspect, and a requirement that cannot
+  be met in the case it exists for gets routed around rather than obeyed; measured,
+  the route around is simply omitting the flag, and the receipt records that omission.
+  Every later `relocation-inspect` at an aborted address carries the `forkRisk`
+  statement, which now names BOTH tenses: the destination may already have adopted, or
+  may adopt later, because the copy stays adoptable and can never learn of the abort.
 
-**A fourth claim needed narrowing rather than replacing.** The two-sided compare is
-not a fork DETECTOR; it is a fork detector for the two addresses the ledger names. A
-third tree made by copying the control tree, deleting `relocations` and rewriting
-`roots` is a fully live authority for the same chain, indistinguishable from a
-workspace that never relocated, and named in no ledger. That is the pre-`0.9.0`
-hand-edit hole restated — this design does not close it and does not claim to.
+**3. The abort-stage permit is a legibility and review device, not a barrier.**
+Whoever can mint the vacate permit can mint the abort permit. Nothing here
+authenticates a minter (ceiling 1) and nothing anywhere can observe WHEN a document
+was minted — a minting-time discipline is counsel, not a control, and the runbook's
+"mint an abort permit only if and when you decide to abort" is exactly that. The
+`stage` term and the `vacateCommitmentSha256` binding force the abort into a separate
+document that names a value the vacate produced; they buy two artifacts where there
+was one, and a permanent difference between the two `authorityFileSha256` values of an
+aborted hop. **They do not make the fork harder to want, and an operator who intends
+one still takes it — in two acts instead of one. That is expected, not a defect.**
+
+**4. A permit is a predicate over presented bytes at a path, not a token with a spend
+record — so N presentations authorise N adoptions, and the mandated two-sided compare
+cannot see it.** Every input to `relocation-adopt` is host-neutral: the tree bytes, the
+manifest text, the authority file, the actor, the instant, and five path STRINGS
+(`rootPortableIdentity` is a lowercased lexical path — no device, no inode, no host
+identity). The only record that an adopt permit was spent is written INTO the copy the
+permit-holder controls. Present one shipped vacated tree at the destination path on N
+hosts and one adopt permit yields N simultaneously-live authorities for one
+`workspaceId`, each carrying a valid `adopted` entry under the same `relocationId` —
+**and the two-sided close-out passes at every one of them**, because at each host the
+source reads `vacated` and the local tree reads `live`. Unlike the third-address hole
+in ceiling 2 this needs no hand-edit and produces no anomaly anywhere. The same holds
+on the vacate side against a restored pre-vacate backup at the source path. Realistic
+accident path, not just an attack: the destination adopts, and a standby host later
+restores the retained shipping tarball at the same path and follows the runbook.
+
+Closing it would need a host-identifying term the ledger can carry — a destination-side
+host attestation recorded in the `adopted` entry — so that two adoptions of one
+`relocationId` are at least distinguishable when the trees are compared. That is not in
+`0.9.0` and this design does not claim it. Until it is, **the close-out must be read as
+a statement about two addresses on the hosts where it was run, not about a
+`relocationId` globally.**
+
+**A claim about the two-sided compare needed narrowing rather than replacing.** It is
+not a fork DETECTOR; it is a fork detector for the two addresses the ledger names, on
+the two hosts where it was run. A third tree made by copying the control tree, deleting
+`relocations` and rewriting `roots` is a fully live authority for the same chain,
+indistinguishable from a workspace that never relocated, and named in no ledger. That is
+the pre-`0.9.0` hand-edit hole restated — this design does not close it and does not
+claim to. Ceiling 4 is the second, cheaper way past it, and it needs no hand-edit at all.
 
 Two things follow and neither fully fixes it. First, **no single-sided assertion
 that "the source is still dead" may be written.** It would be permanently true
@@ -211,7 +289,10 @@ present at once, and it is therefore by construction not in `verify` — which i
 recorded as "a gate that is not in verify lives exactly one day."
 
 That comparison is the weakest link in the whole design, and it is a human step.
-Everything else here is machine-enforced and red-provable.
+Everything else here is machine-enforced and red-provable — with the standing
+qualification of ceiling 4: the compare is green at every host of an N-way adoption, so
+a green close-out is a statement about the two addresses in front of the operator and
+never about the `relocationId`.
 
 ## Residual applicability (per `docs/harness-constraint-convention.md`)
 
@@ -229,10 +310,32 @@ binary. The blast radius is one machine's installed copy, because the platform
 pins one and verifies it every session — but it is one-way and it belongs in the
 decision record rather than a footnote.
 
-**Ledger cap: sixteen entries (OD-B).** Picked deliberately rather than left to
-become an accidental constant. A workspace that has moved house sixteen times has
-an operational problem a cap will not fix, and each entry carries ten root paths
-in a file that is re-read on every workspace operation.
+**Ledger cap: sixteen entries (OD-B), and it is a ONE-WAY BUDGET OF EIGHT ATTEMPTS.**
+Picked deliberately rather than left to become an accidental constant: each entry
+carries ten root paths in a file that is re-read on every workspace operation. What the
+first two cuts did not state, and a review measured: **the cap is consumed by attempts,
+not by moves.** A hop costs two entries whether or not a single byte travels, `abort` is
+the documented recovery verb, and eight vacate/abort cycles that move nothing exhaust the
+ledger permanently. The workspace stays fully usable for ordinary work; it can simply
+never be relocated again by any governed route.
+
+**There is no compaction verb and there deliberately is not one.** Both available
+shapes were rejected. Deleting or collapsing settled entries destroys the append-only,
+self-chaining property that is the entire mechanism — a `vacated` entry must restate the
+binding that preceded it byte for byte, which is what makes a hop unspliceable and what
+lets the counterparty detect a deleted ledger. Keeping the entries while counting only
+"real" hops leaves the array growing without bound in a file re-read on every operation,
+which is the cost the cap exists to bound. A capability that cannot be recovered
+in-band is worse than one that was never offered only if nobody was told; so it is told:
+
+- `relocation-plan` refuses at a full ledger with `WORKSPACE_RELOCATION_LEDGER_FULL`
+  BEFORE the out-of-band minting ceremony, and reports `ledgerEntriesRemaining` and
+  `hopsRemaining` on every successful plan;
+- `relocation-inspect` reports `ledgerEntriesRemaining` at any address carrying a ledger;
+- the operational exit, stated rather than implied: there is none in-band. A workspace
+  that has spent its budget can still be copied and re-created, but rebinding it by hand
+  is the ungoverned edit this whole design exists to make illegible, and doing it leaves
+  no record. Plan the eight.
 
 ## Sequencing on a multi-partition platform (OD-D)
 
