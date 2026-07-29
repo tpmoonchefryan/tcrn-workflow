@@ -713,7 +713,16 @@ export function relocationStateAt(metadata: WorkspaceMetadata, address: string):
   const entries = metadata.relocations ?? [];
   const trailing = entries[entries.length - 1];
   if (trailing === undefined) {
-    return "live";
+    // The address is compared even here. Returning "live" for ANY address whenever
+    // the ledger is absent made relocation-inspect answer `live` at a stale
+    // pre-vacate copy, a restored backup and a tree whose `relocations` field had
+    // been stripped — all of which every other verb refuses to open at all
+    // (WORKSPACE_SCHEMA_INVALID, "stored roots do not match their current
+    // filesystem identities"). The inspection is the mandated close-out's verdict
+    // word, so a detector that reads "this file's ledger does not say otherwise"
+    // while printing itself as "this address is the live authority" produces a
+    // false fork alarm on every stale copy left on disk.
+    return address === relocationWorkspaceRoot(metadata.roots) ? "live" : "foreign-address";
   }
   const vacatedAddresses = new Set<string>();
   for (const entry of entries) {

@@ -30,14 +30,35 @@ invalidates exactly zero event hashes.
 
 ## Decision
 
-Four CLI verbs, sequenced mechanically:
+Five CLI verbs, sequenced mechanically:
 
 | Verb | Host | Effect |
 | --- | --- | --- |
+| `relocation-plan` | source | Read-only. Emits the hop's `relocationId` and its control manifest. |
 | `relocation-vacate` | source | Its ONLY effect is to kill the source. |
 | `relocation-adopt` | target | Binds the copied tree to this host. Idempotent. |
 | `relocation-abort` | source | Revives the source from the ledger's own `from`. |
-| `relocation-inspect` | either | Read-only. The only fork detector. |
+| `relocation-inspect` | either | Read-only. Compares ONE address against its own ledger. |
+
+`relocation-plan` was added in the second cut, and it is not a convenience. Once a
+permit names the exact `relocationId` (see *Authorization*), the operator needs a
+route to that id that is guaranteed to be the one the vacate will take — so plan
+and vacate share a single preparation function rather than deriving the id twice.
+It also carries the control manifest out, which closes a trap the first cut
+shipped: after the vacate commits, `snapshot-manifest` refuses the source with
+`WORKSPACE_RELOCATION_VACATED` and the copy with
+`WORKSPACE_RELOCATION_ADOPTION_REQUIRED`, so an operator who had not already saved
+the manifest had no route to `relocation-adopt` at all — the only exit was abort,
+which is the fork-creating verb.
+
+**A relocation always moves the workspace root.** A hop that leaves it in place
+while moving `framework`, `transient`, `evidence-locator` or `release-trust` is
+refused at plan and vacate with `WORKSPACE_RELOCATION_INPUT_INVALID`. The reason is
+structural rather than conservative: the state machine keys on the workspace root
+and evaluates its `vacated` branch before its `adoption-required` branch, so such a
+hop commits, kills the source, and can never be adopted. The first cut accepted it.
+Moving a shared root while the workspaces stay put is a real operation; it is simply
+not a relocation.
 
 **The operator moves the bytes.** The engine gets no copy path. This is not an
 oversight to be helpfully corrected later, so the refused alternatives are named
@@ -88,10 +109,30 @@ measurement.
 **Authorization** reuses the gate-identity pins-track shape: a per-invocation
 authority file plus its digest on the command line, read through the same
 TOCTOU-hardened reader. A permit names `actorId` **and** `workspaceIds` **and**
-`destinations` **and** a `basis` of `{version, headEventHash}`. Each scoping
-defends a different attack and neither subsumes the other: without `workspaceIds`
-the roster permits everything while looking rigorous, and without the `basis` an
-authority minted months ago is a standing grant wearing per-invocation clothes.
+`destinations` **and** a `basis` of `{version, headEventHash}` **and** the exact
+`relocationId` **and** the exact `stage` (`vacate` / `adopt` / `abort`). Each
+scoping defends a different attack and none subsumes another: without
+`workspaceIds` the roster permits everything while looking rigorous, and without
+the `basis` an authority minted months ago is a standing grant wearing
+per-invocation clothes.
+
+**The last two scopes were added after an adversarial review measured the basis as
+inert, and the correction is recorded rather than quietly folded in.** Relocation
+does not advance the event chain — that is the whole point of the design — so
+`{version, headEventHash}` is byte-identical after a hop as before it. The basis
+therefore bounds DRIFT and cannot bound REUSE. One authority file drove
+`vacate → adopt → abort` twice, with no tampering and every call returning a
+success reason code, and left three addresses answering `status` as the live
+authority for one `workspaceId`. A `relocationId` is derived over
+`(workspaceId, sequence, from, to, basis)`, so a permit that names one authorizes
+exactly one hop; the `stage` term narrows it to one verb of that hop, which is what
+stops an abort riding the authority its own vacate was minted with.
+
+The four older terms are retained rather than dropped as redundant, and the
+residual-applicability reason is legibility: a human approving an authority file
+must be able to read WHAT it permits, and an opaque 24-hex id is not that. They are
+also independently authored, so a permit can name the right hop and the wrong
+destination — a reachable operator error, and each term has its own red proof.
 The ledger records only `{actorId, authorityFileSha256}` — never a file
 reference, because a chain whose readability depends on an external file still
 being present is a chain that bricks on a restore onto a fresh machine.
@@ -122,17 +163,42 @@ detect this. Not "does not currently"; **cannot**. It is the same ceiling
 non-cryptographic replay check can distinguish a hand-authored self-consistent
 document from a genuine one.
 
-So: **this design does not prevent two truths. It makes them legible.** An
-`aborted` at the source and an `adopted` at the target sharing one
-`relocationId` is a permanent contradiction recorded in both files. What it buys
-is real but bounded:
+So: **this design does not prevent two truths. It makes them legible at the
+addresses its ledger names.** An `aborted` at the source and an `adopted` at the
+target sharing one `relocationId` is a permanent contradiction recorded in both
+files. What it buys is real but bounded:
 
-- bypass moves from "no artifact exists" to "an artifact must be deliberately
-  destroyed";
-- destruction becomes detectable **by the counterparty**, whose ledger
-  permanently records `from` and the `relocationId`;
+- destruction of the ledger becomes detectable **by the counterparty**, whose
+  ledger permanently records `from` and the `relocationId`;
 - bypass becomes non-accidental — no ordinary backup, restore, `rsync` or
   `recover` removes the ledger, and re-copying propagates it.
+
+**A third claim stood here in the first cut and was false: that bypass now requires
+deliberately destroying an artifact.** It does not. `relocation-abort` after the
+destination adopted produces a fork with engine verbs only, destroying nothing, and
+abort is the documented recovery verb. The source cannot know whether the
+destination adopted; proving that negative is not available to an offline engine.
+What abort costs now is three things, and none of them is a proof:
+
+- a permit minted for THIS hop's `abort` stage — the vacate's own permit no longer
+  carries it, which removes the "the operator already holds it" property that made
+  the fork one command away;
+- an explicit `--acknowledge-fork-risk`, which is a ceremony and is named as one;
+- an optional `--target-inspection`: the destination's own `relocation-inspect`
+  output, which the engine CHECKS and which refuses the abort with
+  `WORKSPACE_RELOCATION_TARGET_ADOPTED` if the destination has adopted. Optional
+  because the legitimate abort — the copy was never made, the destination host is
+  unreachable — has no destination to inspect, and a requirement that cannot be met
+  in the case it exists for gets routed around rather than obeyed. The receipt
+  records `targetStateVerified` either way, and every later `relocation-inspect` at
+  an aborted address carries the `forkRisk` statement.
+
+**A fourth claim needed narrowing rather than replacing.** The two-sided compare is
+not a fork DETECTOR; it is a fork detector for the two addresses the ledger names. A
+third tree made by copying the control tree, deleting `relocations` and rewriting
+`roots` is a fully live authority for the same chain, indistinguishable from a
+workspace that never relocated, and named in no ledger. That is the pre-`0.9.0`
+hand-edit hole restated — this design does not close it and does not claim to.
 
 Two things follow and neither fully fixes it. First, **no single-sided assertion
 that "the source is still dead" may be written.** It would be permanently true
@@ -140,8 +206,8 @@ and would give false comfort; this repository has been burned three times in one
 day by predicates that could not fail. Second, **the two-sided
 `relocation-inspect` comparison is binding gate evidence for closing any
 relocation work item, not a runbook bullet.** It is the only instrument that can
-detect the fork, it requires both trees present at once, and it is therefore by
-construction not in `verify` — which is precisely the shape this platform has
+detect a fork between the two addresses the ledger names, it requires both trees
+present at once, and it is therefore by construction not in `verify` — which is precisely the shape this platform has
 recorded as "a gate that is not in verify lives exactly one day."
 
 That comparison is the weakest link in the whole design, and it is a human step.

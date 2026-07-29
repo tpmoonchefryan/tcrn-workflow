@@ -29,10 +29,14 @@ additive, `storageVersion` stays `1`, `schemaVersion` stays `tcrn.workspace.v1`,
 and a workspace that never relocates omits the field entirely and stays
 byte-identical to `0.8.0`.
 
-The backward-compatibility cost is stated plainly rather than softened: **after an
-adopt, no pre-relocation engine can read the workspace at all.** The tenth field
-fails the closed-field check with `WORKSPACE_SCHEMA_INVALID` on any
-`v0.8.0`-or-earlier binary. That is one-way. Rationale, the refused alternatives,
+The backward-compatibility cost is stated plainly rather than softened: **once the
+field exists, no pre-relocation engine can read the workspace at all** — and it
+exists from the VACATE, not from the adopt, so a relocation that was aborted and
+never moved a byte carries the same one-way cost. The tenth field fails the
+closed-field check with `WORKSPACE_SCHEMA_INVALID` on any `v0.8.0`-or-earlier
+binary. The aborted case is named because the ledger is append-only and abort is the
+documented recovery verb, so it is the case an operator is most likely to reach and
+least likely to expect. Rationale, the refused alternatives,
 and the two ceilings of the mechanism are in
 `docs/adr/0003-workspace-relocation.md`.
 

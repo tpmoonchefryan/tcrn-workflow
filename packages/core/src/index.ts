@@ -52,22 +52,27 @@ export {
   SNAPSHOT_REASON_CODES,
   SnapshotError,
   createSnapshotManifest,
+  readGovernedDocumentFile,
   readSnapshotManifestFile,
   verifySnapshotManifest,
 } from "./workspace-snapshot.js";
 export type { SnapshotReasonCode } from "./workspace-snapshot.js";
 // WSR-1: governed workspace relocation.
 export {
+  RELOCATION_ABORT_FORK_RISK,
   RELOCATION_LIMITS,
+  RELOCATION_PERMIT_STAGES,
   RELOCATION_REASON_CODES,
   RelocationError,
   WORKSPACE_RELOCATION_AUTHORITY_VERSION,
   WORKSPACE_RELOCATION_INSPECTION_VERSION,
+  WORKSPACE_RELOCATION_PLAN_VERSION,
   WORKSPACE_RELOCATION_RECEIPT_VERSION,
   abortWorkspaceRelocation,
   adoptWorkspace,
   canonicalRelocationAuthority,
   inspectWorkspaceRelocation,
+  planWorkspaceRelocation,
   readRelocationAuthority,
   vacateWorkspace,
   validateRelocationAuthorityDocument,
@@ -75,6 +80,8 @@ export {
 export type {
   AbortOptions,
   AdoptOptions,
+  PlanOptions,
+  RelocationPermitStage,
   RelocationAuthorityContext,
   RelocationAuthorityDocument,
   RelocationAuthorityFileIdentity,

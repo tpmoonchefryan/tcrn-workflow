@@ -181,6 +181,17 @@ export async function readSnapshotManifestFile(path: string): Promise<string> {
   return content.toString("utf8");
 }
 
+// WSR-1: the same governed read for the destination-side relocation-inspect document
+// an abort may present. Separate export rather than a second parameter on the
+// manifest reader, so the refusal names what the operator actually passed.
+export async function readGovernedDocumentFile(path: string, label: string): Promise<string> {
+  if (typeof path !== "string" || path.length === 0) {
+    fail("SNAPSHOT_INPUT_INVALID", label);
+  }
+  const content = await boundReadFileBytes(path, 65_536);
+  return content.toString("utf8");
+}
+
 // Deterministic walk of the control tree under `controlRoot`, applying the SDC-9
 // exclusions and failing closed on residue. Returns files sorted by posix relative
 // path in utf8-byte order so two runs on an unchanged tree are byte-identical.
