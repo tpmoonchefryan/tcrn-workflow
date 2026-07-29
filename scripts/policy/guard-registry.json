@@ -376,11 +376,41 @@
       "id": "WSR-1-abort-permit-basis",
       "rationale": "abort called matchPermit and never assertPermitBasis, so the one verb that can create a fork was the only one whose authority was not basis-checked. It was harmless because a vacated chain cannot advance -- an invariant that lived in a different function and was written down nowhere.",
       "file": "packages/core/src/workspace-relocation.ts",
-      "find": "  assertPermitBasis(permit, trailing.basis.version, trailing.basis.headEventHash);\n  const targetStateVerified",
-      "replace": "  void permit;\n  const targetStateVerified",
+      "find": "  assertPermitBasis(permit, trailing.basis.version, trailing.basis.headEventHash);\n  // The vacate commitment.",
+      "replace": "  void permit;\n  // The vacate commitment.",
       "expectedMatches": 1,
       "test": "tests/backup-snapshot.test.mjs",
       "testName": "WSR-1 T27: abort demands its own stage permit, an explicit acknowledgement, and refuses on an adopted target"
+    },
+    {
+      "id": "WSR-1-abort-vacate-commitment",
+      "rationale": "The third review measured the stage term as insufficient on its own: one authority document may legitimately carry vacate, adopt and abort permits for one hop, so a document minted BEFORE the vacate forked the workspace with one extra flag. The abort permit therefore names the sha256 of the committed vacated ledger entry -- which contains the sha256 of the file that authorised the vacate, so that document would have to contain a digest of itself. Removing this comparison restores the one-file, one-approval fork and erases the permanent two-different-authority-digests record in the ledger.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "if (permit.vacateCommitmentSha256 !== vacateCommitmentSha256) {",
+      "replace": "if (vacateCommitmentSha256.length !== 64) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T42: an abort permit names the vacate commitment, so it cannot be the document that authorized the vacate"
+    },
+    {
+      "id": "WSR-1-target-inspection-observation-window",
+      "rationale": "Before the document carried a declared observedAt, an inspection taken before the destination adopted was BYTE-IDENTICAL to a fresh one, so the stale path needed no intent and stamped an affirmative verification into the receipt. Removing the window comparison restores exactly that: any document of the right shape, of any age, passes. The check bounds two caller-declared instants against each other and is NOT a freshness proof -- that limit is stated in the module header and in ADR 0003 rather than implied away here.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "if (!Number.isFinite(gap) || gap < 0 || gap > RELOCATION_TARGET_INSPECTION_WINDOW_MS) {",
+      "replace": "if (!Number.isFinite(gap) && gap > RELOCATION_TARGET_INSPECTION_WINDOW_MS) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T43: a target inspection carries a declared observation instant and abort bounds it"
+    },
+    {
+      "id": "WSR-1-plan-ledger-cap",
+      "rationale": "The cap lived only in withRelocations, which no read-only verb reaches, so relocation-plan answered PLANNED at a full ledger and handed the operator a relocationId for a hop the vacate would refuse -- after which the operator performed the out-of-band minting ceremony for an impossible hop. That was the one reachable state in which plan and vacate disagreed, which is the property their shared preparation exists to guarantee. The commit-point check remains as the backstop, so only the PLAN side can go red on this mutation.",
+      "file": "packages/core/src/workspace-relocation.ts",
+      "find": "if (existingEntries + 1 > WORKSPACE_RELOCATION_LEDGER_LIMIT) {",
+      "replace": "if (existingEntries + 1 > WORKSPACE_RELOCATION_LEDGER_LIMIT * 1000) {",
+      "expectedMatches": 1,
+      "test": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T40: the ledger cap refuses a vacate while the source is still alive"
     },
     {
       "id": "WSR-1-abort-admission-state",

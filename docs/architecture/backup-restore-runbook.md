@@ -166,19 +166,35 @@ target.
    `WORKSPACE_RELOCATION_ADOPTION_REQUIRED`. The vacate receipt carries the same
    text as a second copy, so losing it is recoverable; skipping the plan is not a
    shortcut, because the authority in step 3 must name the id this step computes.
+
+   **Check `hopsRemaining` in the plan output before you start.** The relocation ledger
+   holds sixteen entries and a hop costs two of them whether or not a single byte moves,
+   so a workspace gets EIGHT attempts for its whole life — an abandoned move that ends in
+   `relocation-abort` spends one of them. Nothing gives an entry back, no verb prunes or
+   compacts the ledger, and the only route past an exhausted budget is the ungoverned
+   hand-edit this design exists to make illegible. At a full ledger the plan itself
+   refuses with `WORKSPACE_RELOCATION_LEDGER_FULL`, before you mint anything.
 3. **Mint the relocation authority.** A canonical
    `tcrn.workspace-relocation-authority.v1` document. Each permit names the actor,
    the `workspaceId`, the destination workspace root, the CURRENT
    `{version, headEventHash}` basis, the `relocationId` from step 2, and ONE
-   `stage` — `vacate`, `adopt` or `abort`. Mint the vacate and adopt permits now;
-   mint an `abort` permit only if and when you decide to abort, because that is the
-   decision the separate stage exists to slow down.
+   `stage` — `vacate`, `adopt` or `abort`. **Mint the vacate and adopt permits now.
+   An abort permit cannot be in this document**: it must also name the hop's
+   `vacateCommitmentSha256`, which is a digest of the committed `vacated` ledger entry
+   and therefore of the digest of this very file. That is arithmetic, not discipline —
+   the abort is necessarily a second document minted after the vacate, and the ledger
+   records the two different authority digests forever.
 
    One permit authorizes exactly one hop and exactly one verb of it. An authority
    minted against an older basis is refused `WORKSPACE_RELOCATION_BASIS_STALE`;
    one that names a different hop, destination, workspace or stage is refused
-   `WORKSPACE_RELOCATION_NOT_PERMITTED`. Reuse across hops is not possible: the id
-   is derived over the hop's own content, so the next hop has a different one.
+   `WORKSPACE_RELOCATION_NOT_PERMITTED`; an abort permit naming the wrong commitment is
+   refused `WORKSPACE_RELOCATION_VACATE_COMMITMENT_MISMATCH`. Reuse across hops is not
+   possible: the id is derived over the hop's own content, so the next hop has a
+   different one. **Reuse of the SAME hop is possible and is a stated ceiling** — a
+   permit is a predicate over the bytes presented at a path, not a token with a spend
+   record, so one adopt permit admits the same shipped tree at the same path on as many
+   hosts as it is presented to (ADR 0003, ceiling 4).
 4. **Vacate the source.** All five destination roots must be stated. A hop that
    leaves the workspace root where it is (moving only `framework`,
    `release-trust`, `transient` or `evidence-locator`) is REFUSED at the plan and
@@ -214,18 +230,24 @@ target.
    receipt and passing the manifest from step 2. Adopt is idempotent: a retry
    returns `WORKSPACE_RELOCATION_ALREADY_ADOPTED` and changes no bytes.
 7. **INSPECT BOTH ADDRESSES AND COMPARE. This step is mandatory.** Run
-   `relocation-inspect` at the old address and at the new one. Exactly one must
-   report `state: "live"` for a given `workspaceId`. It requires both trees present
-   at once and is therefore by construction not something `verify` can run for you.
-   Record both outputs as gate evidence.
+   `relocation-inspect --workspace <address> --at <instant>` at the old address and at
+   the new one. Exactly one must report `state: "live"` for a given `workspaceId`. It
+   requires both trees present at once and is therefore by construction not something
+   `verify` can run for you. Record both outputs as gate evidence. `--at` is your
+   declaration of when the observation was taken; it is stamped into the document as
+   `observedAt` and is what makes a document usable as an abort's `--target-inspection`.
 
    **What this compare proves, exactly:** that the two addresses the ledger names
-   have not both stayed live. It cannot see an address the ledger does not name. A
+   **on the two hosts where you ran it** have not both stayed live. It cannot see an
+   address the ledger does not name. A
    third tree made by copying the control tree, deleting `relocations` and
    rewriting `roots` is a fully live authority for the same chain and is
    indistinguishable from a workspace that never relocated — that is the
-   pre-`0.9.0` hand-edit hole, which this design does not close. A green close-out
-   is not a proof that no fork exists; it is a proof about these two addresses.
+   pre-`0.9.0` hand-edit hole, which this design does not close. **And it cannot see a
+   second host that adopted the same shipped tree at the same path under the same
+   permit: the compare is green at every one of them** (ADR 0003, ceiling 4). A green
+   close-out is not a proof that no fork exists; it is a proof about these two
+   addresses on these two hosts.
 
    A `state` of `foreign-address` at a tree you expected to be the destination,
    with `nearMissDestination: true`, means the ledger names this tree under a
@@ -238,16 +260,36 @@ the ledger's own `from` — no certificate file needed. **Abort IS the fork-crea
 move if the destination already adopted, and the source cannot know whether it
 did.** It therefore costs three things rather than one:
 
-- a permit minted for THIS hop's `abort` stage (the vacate's own permit will not
-  do — that was the exact move an adversarial review used to fork a workspace with
-  engine verbs only);
+- a permit minted for THIS hop's `abort` stage AND naming this hop's
+  `vacateCommitmentSha256` (take it from the vacate receipt, or from
+  `relocation-inspect` at the vacated address if the receipt is gone). The vacate's own
+  document cannot carry it — that was the exact move two adversarial reviews used to
+  fork a workspace with engine verbs only. **This is a review device, not a barrier:
+  whoever can mint the vacate permit can mint the abort permit, and the engine can
+  neither authenticate a minter nor observe when a document was minted. What it buys is
+  two documents, two approvals and two different authority digests in the ledger;**
 - `--acknowledge-fork-risk true`, which proves nothing and is a ceremony;
 - `--target-inspection <file>` whenever you can reach the destination: pass the
-  destination's own `relocation-inspect` output and the engine CHECKS it, refusing
-  with `WORKSPACE_RELOCATION_TARGET_ADOPTED` if the destination has already
-  adopted. It is optional only because the legitimate abort — the copy was never
-  made, the destination is unreachable — has no destination to inspect. The receipt
-  records `targetStateVerified` either way.
+  destination's own `relocation-inspect` output. The engine checks THE DOCUMENT — that
+  it names this hop's destination, that its declared `observedAt` is within one hour of
+  this abort's `--at` and not after it, and that it reports `adoption-required`. It
+  refuses `WORKSPACE_RELOCATION_TARGET_ADOPTED` when the document reports an adopted
+  destination, and `WORKSPACE_RELOCATION_INSPECTION_STALE` when the two declared
+  instants do not agree. **It cannot tell you what the destination is doing right now:
+  both instants are yours, the source is offline with respect to the destination, and a
+  destination that has not yet adopted may still adopt a minute later.** It is optional
+  only because the legitimate abort — the copy was never made, the destination is
+  unreachable — has no destination to inspect. The receipt records
+  `targetInspectionSupplied`, and when a document was supplied its
+  `targetInspectionSha256` and `targetInspectionObservedAt`.
+
+**After an abort, DESTROY THE COPY.** This is the half the compliant abort leaves open
+and no engine check can reach: the untouched copy still carries a valid trailing
+`vacated` entry, nothing at the destination can ever learn that the source aborted, and
+the copy therefore stays adoptable indefinitely. The `forkRisk` statement in the receipt
+and in every later inspection names both tenses for this reason. Delete the shipped tree
+and any retained tarball of it; a standby host restoring that tarball at the destination
+path and following step 6 produces a second live authority with every check green.
 
 What is guaranteed is that the contradiction is permanently recorded in both files
 under one `relocationId`, and that every later `relocation-inspect` at an aborted

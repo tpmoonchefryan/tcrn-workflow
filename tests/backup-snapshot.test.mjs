@@ -465,15 +465,22 @@ async function writeManifestFile(fixture, text, name = "control-manifest.json") 
   return { path, text };
 }
 
+// WSR-1 round three: the DEFAULT document carries only `adopt` and `vacate`. An
+// `abort` permit must name the hop's vacateCommitmentSha256 — a digest of the
+// committed vacated entry, which itself contains the digest of the authority file
+// that authorised the vacate — so a document carrying both would have to contain a
+// digest of itself. Every abort in this suite therefore mints a SECOND document,
+// which is the shape the mechanism forces and the shape the runbook prescribes.
 async function writeRelocationAuthority(fixture, overrides = {}) {
   const plan = overrides.plan ?? await planFor(fixture, overrides.planFor);
-  const permits = (overrides.stages ?? ["abort", "adopt", "vacate"]).map((stage) => ({
+  const permits = (overrides.stages ?? ["adopt", "vacate"]).map((stage) => ({
     actorId: overrides.actorId ?? RELOCATION_ACTOR,
     workspaceIds: overrides.workspaceIds ?? [fixture.workspaceId],
     destinations: overrides.destinations ?? [plan.workspaceRootTo],
     basis: overrides.basis ?? { headEventHash: plan.basis.headEventHash, version: plan.basis.version },
     relocationId: overrides.relocationId ?? plan.relocationId,
     stage,
+    ...(stage === "abort" ? { vacateCommitmentSha256: overrides.vacateCommitment ?? "0".repeat(64) } : {}),
   }));
   permits.sort((left, right) => (`${left.actorId} ${left.relocationId} ${left.stage}` < `${right.actorId} ${right.relocationId} ${right.stage}` ? -1 : 1));
   const document = { schemaVersion: "tcrn.workspace-relocation-authority.v1", permits };
@@ -481,6 +488,35 @@ async function writeRelocationAuthority(fixture, overrides = {}) {
   const bytes = canonicalJson(document);
   await writeFile(path, bytes);
   return { path, digest: createSha256(bytes), document, bytes, plan };
+}
+
+// The second document. It cannot be minted from a plan, because after the vacate the
+// source refuses `relocation-plan` with WORKSPACE_RELOCATION_VACATED — so the hop's
+// terms come from the vacate receipt (or, when the receipt is gone, from
+// `relocation-inspect`, which is what T13 exercises).
+async function writeAbortAuthority(fixture, { relocationId, commitment, basis, destination, ...rest } = {}) {
+  return writeRelocationAuthority(fixture, {
+    plan: {
+      relocationId,
+      workspaceRootTo: destination ?? fixture.targetWorkspace,
+      basis: basis ?? { version: fixture.version, headEventHash: fixture.headEventHash },
+    },
+    stages: ["abort"],
+    vacateCommitment: commitment,
+    ...rest,
+  });
+}
+
+// Read-only, and `--at` is required: it is stamped into the document as `observedAt`
+// and is what abort's --target-inspection window compares against.
+async function inspectAt(workspaceRoot, second = 12) {
+  return invokeCli(["relocation-inspect", "--workspace", workspaceRoot, "--at", instant(second)]);
+}
+
+async function inspectJson(workspaceRoot, second = 12) {
+  const outcome = await inspectAt(workspaceRoot, second);
+  assert.equal(outcome.ok, true, `relocation-inspect must answer: ${String(outcome.reasonCode)}`);
+  return JSON.parse(outcome.output);
 }
 
 let authoritySequence = 0;
@@ -557,7 +593,22 @@ async function vacatedFixture(options = {}) {
   const outcome = await vacate(fixture, authority);
   assert.equal(outcome.ok, true, `vacate must succeed: ${String(outcome.reasonCode)}`);
   const receipt = JSON.parse(outcome.output);
-  return { fixture, authority, manifest, receipt, relocationId: receipt.relocationId };
+  // The abort authority is the SECOND document, minted from the vacate's own
+  // commitment. Minting it here rather than inside each test keeps the arrangement
+  // visible: it could not have existed before the line above ran.
+  const abortAuthority = await writeAbortAuthority(fixture, {
+    relocationId: receipt.relocationId,
+    commitment: receipt.vacateCommitmentSha256,
+  });
+  return {
+    fixture,
+    authority,
+    abortAuthority,
+    manifest,
+    receipt,
+    relocationId: receipt.relocationId,
+    commitment: receipt.vacateCommitmentSha256,
+  };
 }
 
 async function readMetadataJson(workspaceRoot) {
@@ -630,7 +681,7 @@ test("WSR-1 T2: refusal coverage is enumerated from the catalog, never from a ha
   assert.ok(refusedUnderRelocationCode >= 36, `too few verbs reached the relocation refusal: ${String(refusedUnderRelocationCode)}`);
   // The declared exceptions must actually behave as exceptions, or "admitted" is a
   // list of things nobody checked.
-  const inspect = await invokeCli(["relocation-inspect", "--workspace", fixture.workspace]);
+  const inspect = await invokeCli(["relocation-inspect", "--workspace", fixture.workspace, "--at", instant(12)]);
   assert.equal(inspect.ok, true);
   const leaseInspect = await invokeCli(["lease-inspect", "--workspace", fixture.workspace, "--at", instant(12)]);
   assert.equal(leaseInspect.ok, true, "D10 admits lease-inspect: it emits no workspace content and cannot revive anything");
@@ -862,12 +913,19 @@ test("WSR-1 T12: adopt is idempotent", async (t) => {
 });
 
 test("WSR-1 T13: abort restores the source from the tree alone", async (t) => {
-  const { fixture, authority, manifest, relocationId } = await vacatedFixture();
+  const { fixture, manifest, relocationId, commitment } = await vacatedFixture();
   t.after(() => fixture.close());
   // Delete every receipt and sidecar first. Abort must be a pure function of the
   // tree — this is the test the tombstone alternative cannot pass, because a
   // tombstone destroys the pre-vacate binding bytes abort needs.
   await rm(manifest.path, { force: true });
+  // The abort permit names the vacate commitment, which the receipt carried. With
+  // every receipt gone the TREE must still supply it, or the new binding would have
+  // turned abort into a function of an external artifact — exactly what the ledger
+  // design rejected. `relocation-inspect` at the vacated address carries it.
+  const fromTree = await inspectJson(fixture.workspace, 11);
+  assert.equal(fromTree.vacateCommitmentSha256, commitment, "the vacated address restates its own commitment");
+  const abortAuthority = await writeAbortAuthority(fixture, { relocationId, commitment: fromTree.vacateCommitmentSha256 });
   const outcome = await invokeCli([
     "relocation-abort",
     "--workspace", fixture.workspace,
@@ -875,19 +933,21 @@ test("WSR-1 T13: abort restores the source from the tree alone", async (t) => {
     "--actor", RELOCATION_ACTOR,
     "--relocation-id", relocationId,
     "--acknowledge-fork-risk", "true",
-    "--relocation-authority", authority.path,
-    "--relocation-authority-digest", authority.digest,
+    "--relocation-authority", abortAuthority.path,
+    "--relocation-authority-digest", abortAuthority.digest,
   ]);
   assert.equal(outcome.ok, true, `abort must succeed: ${String(outcome.reasonCode)}`);
   const abortReceipt = JSON.parse(outcome.output);
-  assert.equal(abortReceipt.targetStateVerified, false, "an abort taken without the destination's inspection says so in its own receipt");
+  assert.equal(abortReceipt.targetInspectionSupplied, false, "an abort taken without the destination's inspection says so in its own receipt");
+  assert.equal(abortReceipt.targetInspectionSha256, undefined, "and records no digest for a document it was never given");
+  assert.equal(abortReceipt.vacateCommitmentSha256, commitment);
   assert.ok(abortReceipt.forkRisk.includes("two live authorities"), "the receipt states the risk it just accepted");
   const state = await validateWorkspace(fixture.workspace);
   assert.equal(state.version, fixture.version, "version unchanged");
   assert.equal(state.headEventHash, fixture.headEventHash, "head unchanged");
   const status = await invokeCli(["status", "--workspace", fixture.workspace]);
   assert.equal(status.ok, true, "the source is fully alive at its original binding");
-  const inspect = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.workspace])).output);
+  const inspect = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.workspace, "--at", instant(12)])).output);
   assert.equal(inspect.state, "live");
   assert.equal(inspect.stage, "aborted");
   assert.ok(inspect.forkRisk.includes("two live authorities"), "the inspection is loud about an aborted hop for as long as the ledger exists");
@@ -896,7 +956,7 @@ test("WSR-1 T13: abort restores the source from the tree alone", async (t) => {
   const wrong = await invokeCli([
     "relocation-abort", "--workspace", fixture.workspace, "--at", instant(13), "--actor", RELOCATION_ACTOR,
     "--relocation-id", "relocation:000000000000000000000000", "--acknowledge-fork-risk", "true",
-    "--relocation-authority", authority.path, "--relocation-authority-digest", authority.digest,
+    "--relocation-authority", abortAuthority.path, "--relocation-authority-digest", abortAuthority.digest,
   ]);
   assert.equal(wrong.ok, false);
   assert.equal(wrong.reasonCode, "WORKSPACE_RELOCATION_NOT_PENDING");
@@ -1024,12 +1084,12 @@ test("WSR-1 T18: ledger chaining cannot be spliced, and a correct chain still re
     basis: tampered.relocations[0].basis,
   });
   await writeMetadataJson(fixture.workspace, tampered);
-  const spliced = await invokeCli(["relocation-inspect", "--workspace", fixture.workspace]);
+  const spliced = await invokeCli(["relocation-inspect", "--workspace", fixture.workspace, "--at", instant(12)]);
   assert.equal(spliced.ok, false, "a self-consistent but unchained hop must still be refused");
   assert.equal(spliced.reasonCode, "WORKSPACE_RELOCATION_LEDGER_INVALID");
   // (b) the untampered ledger reads clean, or the rule is only proven to reject.
   await writeMetadataJson(fixture.workspace, metadata);
-  const clean = await invokeCli(["relocation-inspect", "--workspace", fixture.workspace]);
+  const clean = await invokeCli(["relocation-inspect", "--workspace", fixture.workspace, "--at", instant(12)]);
   assert.equal(clean.ok, true);
   assert.equal(JSON.parse(clean.output).relocationId, relocationId);
   // (b2) a full two-hop A->B->C ledger reads clean at C.
@@ -1057,7 +1117,7 @@ test("WSR-1 T18: ledger chaining cannot be spliced, and a correct chain still re
     "--relocation-authority", secondAuthority.path, "--relocation-authority-digest", secondAuthority.digest,
   ]);
   assert.equal(secondAdopt.ok, true, `the two-hop ledger must adopt at C: ${String(secondAdopt.reasonCode)}`);
-  const atC = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", c.workspace])).output);
+  const atC = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", c.workspace, "--at", instant(12)])).output);
   assert.equal(atC.state, "live");
   assert.equal(atC.relocations, 4, "two hops, four entries");
   const statusC = JSON.parse((await invokeCli(["status", "--workspace", c.workspace])).output);
@@ -1178,7 +1238,7 @@ test("WSR-1 T23: inspect reports the roots this hop does not move", async (t) =>
   };
   const authority = await writeRelocationAuthority(fixture, { planFor: { destination: shared } });
   assert.equal((await vacate(fixture, authority, { destination: shared })).ok, true);
-  const inspect = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.workspace])).output);
+  const inspect = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.workspace, "--at", instant(12)])).output);
   assert.deepEqual([...inspect.unmovedRoots].sort(), ["framework", "release-trust"]);
   assert.equal(inspect.state, "vacated");
 });
@@ -1226,8 +1286,8 @@ test("WSR-1 T-FORK: two truths are not prevented, they are made legible on both 
   assert.equal(revived.ok, true, "the ceiling, stated honestly: a hand-restored source is alive again and nothing single-sided goes red");
   // The ONLY instrument that catches it is the two-sided comparison. This is why it
   // is a mandatory close-out step and gate evidence rather than a runbook bullet.
-  const left = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.workspace])).output);
-  const right = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.targetWorkspace])).output);
+  const left = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.workspace, "--at", instant(12)])).output);
+  const right = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.targetWorkspace, "--at", instant(12)])).output);
   assert.equal(left.state, "live");
   assert.equal(right.state, "live");
   assert.equal(left.workspaceId, right.workspaceId);
@@ -1317,7 +1377,7 @@ test("WSR-1 T14g: a permit for another stage of the same hop does not admit this
 });
 
 test("WSR-1 T26: one authority cannot drive a second hop — the basis CAS is no longer inert", async (t) => {
-  const { fixture, authority, manifest, relocationId } = await vacatedFixture();
+  const { fixture, authority, abortAuthority, manifest, relocationId } = await vacatedFixture();
   t.after(() => fixture.close());
   // The measured attack, replayed: with the pre-review permit shape ONE authority
   // file drove vacate -> adopt -> abort twice over and left three addresses all
@@ -1327,7 +1387,7 @@ test("WSR-1 T26: one authority cannot drive a second hop — the basis CAS is no
   // byte-identical at every hop.
   await copyControlTree(fixture);
   assert.equal((await adopt(fixture, authority, manifest, relocationId)).ok, true);
-  const aborted = await abortAt(fixture, authority, relocationId);
+  const aborted = await abortAt(fixture, abortAuthority, relocationId);
   assert.equal(aborted.ok, true, `abort with its own stage permit must still work: ${String(aborted.reasonCode)}`);
   // The source is live again (that much is unchanged, and is the fork the design
   // states it cannot prevent). What must NOT work is spending the same file again.
@@ -1351,11 +1411,11 @@ test("WSR-1 T26: one authority cannot drive a second hop — the basis CAS is no
 });
 
 test("WSR-1 T27: abort demands its own stage permit, an explicit acknowledgement, and refuses on an adopted target", async (t) => {
-  const { fixture, authority, manifest, relocationId } = await vacatedFixture();
+  const { fixture, authority, abortAuthority, manifest, relocationId, commitment } = await vacatedFixture();
   t.after(() => fixture.close());
   await copyControlTree(fixture);
   // (a) the acknowledgement is required and is not a default.
-  const unacknowledged = await abortAt(fixture, authority, relocationId, { acknowledge: "false" });
+  const unacknowledged = await abortAt(fixture, abortAuthority, relocationId, { acknowledge: "false" });
   assert.equal(unacknowledged.ok, false);
   assert.equal(unacknowledged.reasonCode, "WORKSPACE_RELOCATION_INPUT_INVALID");
   // (b) the vacate's own permit no longer carries the abort. This is the exact
@@ -1369,34 +1429,144 @@ test("WSR-1 T27: abort demands its own stage permit, an explicit acknowledgement
   assert.equal(withoutAbortPermit.ok, false);
   assert.equal(withoutAbortPermit.reasonCode, "WORKSPACE_RELOCATION_NOT_PERMITTED");
   // (c) with the destination's own inspection in hand while it is still pending,
-  // the abort is admitted AND the receipt records that it was checked.
-  const pending = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.targetWorkspace])).output);
+  // the abort is admitted AND the receipt records which document it was shown.
+  const pending = await inspectJson(fixture.targetWorkspace, 11);
   assert.equal(pending.state, "adoption-required");
   const inspectionPath = join(fixture.base, "target-inspection.json");
-  await writeFile(inspectionPath, canonicalJson(pending));
+  const inspectionBytes = canonicalJson(pending);
+  await writeFile(inspectionPath, inspectionBytes);
   // (d) but once the destination has adopted, the same document says so and the
   // abort is refused outright — the fork-creating move now has one mechanical
   // check standing in front of it rather than none.
   assert.equal((await adopt(fixture, authority, manifest, relocationId)).ok, true);
-  const adoptedInspection = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.targetWorkspace])).output);
+  const adoptedInspection = await inspectJson(fixture.targetWorkspace, 12);
   const adoptedPath = join(fixture.base, "target-adopted.json");
   await writeFile(adoptedPath, canonicalJson(adoptedInspection));
-  const refused = await abortAt(fixture, authority, relocationId, { targetInspection: adoptedPath });
+  const refused = await abortAt(fixture, abortAuthority, relocationId, { targetInspection: adoptedPath });
   assert.equal(refused.ok, false);
   assert.equal(refused.reasonCode, "WORKSPACE_RELOCATION_TARGET_ADOPTED");
   // (e) abort's own permit basis is checked, which it was not: the one verb that
   // can create a fork was the one verb whose authority was not basis-checked, and
   // that was harmless only because of an invariant living in another function.
-  const staleBasis = await writeRelocationAuthority(fixture, {
-    plan: { relocationId, workspaceRootTo: fixture.targetWorkspace, basis: { version: fixture.version + 99, headEventHash: fixture.headEventHash } },
+  const staleBasis = await writeAbortAuthority(fixture, {
+    relocationId, commitment,
+    basis: { version: fixture.version + 99, headEventHash: fixture.headEventHash },
   });
   const staleAbort = await abortAt(fixture, staleBasis, relocationId);
   assert.equal(staleAbort.ok, false);
   assert.equal(staleAbort.reasonCode, "WORKSPACE_RELOCATION_BASIS_STALE");
   // Both sides differ: the pending-state document taken before the adopt admits.
-  const admitted = await abortAt(fixture, authority, relocationId, { at: instant(13), targetInspection: inspectionPath });
+  // It IS a fork — the destination adopted at (d) — and that is stated rather than
+  // hidden: a document is not a proof of the destination's current state, and the
+  // receipt now records what it actually knows instead of a verdict.
+  const admitted = await abortAt(fixture, abortAuthority, relocationId, { at: instant(13), targetInspection: inspectionPath });
   assert.equal(admitted.ok, true, `a destination still awaiting adoption must not block the abort: ${String(admitted.reasonCode)}`);
-  assert.equal(JSON.parse(admitted.output).targetStateVerified, true);
+  const admittedReceipt = JSON.parse(admitted.output);
+  assert.equal(admittedReceipt.targetInspectionSupplied, true);
+  assert.equal(admittedReceipt.targetInspectionSha256, createSha256(inspectionBytes), "the receipt names WHICH document it was shown, not a verdict about the target");
+  assert.equal(admittedReceipt.targetInspectionObservedAt, instant(11), "and the instant that document claimed for itself");
+  assert.equal(admittedReceipt.targetStateVerified, undefined, "the field that read as a verification claim is gone, not renamed alongside it");
+});
+
+test("WSR-1 T42: an abort permit names the vacate commitment, so it cannot be the document that authorized the vacate", async (t) => {
+  const fixture = await relocationFixture();
+  t.after(() => fixture.close());
+  // THE PRE-MINT, exactly as the second review performed it: ONE document, minted
+  // before the vacate, carrying [abort, adopt, vacate] for the hop under one digest.
+  // The abort permit has to guess the vacate commitment, and the value it would need
+  // is a digest of the committed vacated entry — which contains the digest of THIS
+  // FILE. A document satisfying it would have to contain a digest of itself.
+  const preMinted = await writeRelocationAuthority(fixture, { stages: ["abort", "adopt", "vacate"] });
+  const manifest = await writeManifestFile(fixture, preMinted.plan.controlManifest);
+  const vacated = await vacate(fixture, preMinted);
+  assert.equal(vacated.ok, true, `the vacate and adopt permits in that document are untouched: ${String(vacated.reasonCode)}`);
+  const receipt = JSON.parse(vacated.output);
+  const blocked = await abortAt(fixture, preMinted, receipt.relocationId);
+  assert.equal(blocked.ok, false, "the pre-minted abort permit must not be satisfiable");
+  assert.equal(blocked.reasonCode, "WORKSPACE_RELOCATION_VACATE_COMMITMENT_MISMATCH");
+  // And it is genuinely arithmetic rather than a lucky ordering: the value the
+  // document would have had to carry is derivable only now, and it is not the value
+  // it carries.
+  assert.match(receipt.vacateCommitmentSha256, /^[a-f0-9]{64}$/u);
+  assert.notEqual(receipt.vacateCommitmentSha256, "0".repeat(64));
+  // Both sides differ: a SECOND document, minted after the vacate with the value the
+  // vacate produced, admits. That is the whole of what this buys — two documents and
+  // two approvals instead of one. It does not stop an operator who intends to fork,
+  // and ADR 0003 states that as a ceiling rather than implying otherwise.
+  const second = await writeAbortAuthority(fixture, {
+    relocationId: receipt.relocationId,
+    commitment: receipt.vacateCommitmentSha256,
+  });
+  const admitted = await abortAt(fixture, second, receipt.relocationId, { at: instant(14) });
+  assert.equal(admitted.ok, true, `a second document naming the commitment must admit: ${String(admitted.reasonCode)}`);
+  // The permanent consequence in the ledger: an aborted hop's two entries can never
+  // name the same authority file, because the abort's document had to contain a
+  // digest derived from the vacate's. That difference is readable years later.
+  const ledger = (await readMetadataJson(fixture.workspace)).relocations;
+  assert.equal(ledger.length, 2);
+  assert.notEqual(ledger[1].authority.authorityFileSha256, ledger[0].authority.authorityFileSha256);
+  assert.equal(ledger[0].authority.authorityFileSha256, preMinted.digest);
+  assert.equal(ledger[1].authority.authorityFileSha256, second.digest);
+  // A stage that is not `abort` must NOT carry the field: an optional term nothing
+  // rejects when misplaced is how a reader concludes it binds where it does not.
+  const misplaced = { schemaVersion: "tcrn.workspace-relocation-authority.v1", permits: [{
+    actorId: RELOCATION_ACTOR, workspaceIds: [fixture.workspaceId], destinations: [fixture.targetWorkspace],
+    basis: { headEventHash: fixture.headEventHash, version: fixture.version },
+    relocationId: receipt.relocationId, stage: "vacate", vacateCommitmentSha256: receipt.vacateCommitmentSha256,
+  }] };
+  const misplacedPath = join(fixture.base, "misplaced-commitment.json");
+  const misplacedBytes = canonicalJson(misplaced);
+  await writeFile(misplacedPath, misplacedBytes);
+  const refusedShape = await vacate(fixture, { path: misplacedPath, digest: createSha256(misplacedBytes) });
+  assert.equal(refusedShape.ok, false);
+  assert.equal(refusedShape.reasonCode, "WORKSPACE_RELOCATION_AUTHORITY_MALFORMED");
+  void manifest;
+});
+
+test("WSR-1 T43: a target inspection carries a declared observation instant and abort bounds it", async (t) => {
+  const { fixture, abortAuthority, relocationId } = await vacatedFixture();
+  t.after(() => fixture.close());
+  await copyControlTree(fixture);
+  // Before this, two inspections of one address taken either side of an adopt were
+  // BYTE-IDENTICAL — the document carried the vacate's instant and nothing else that
+  // moved — so the stale path needed no intent at all and stamped an affirmative
+  // verification into the receipt. The document now states when it claims to have
+  // been taken, and abort refuses one that does not sit inside the window ending at
+  // its own instant.
+  const early = await inspectJson(fixture.targetWorkspace, 11);
+  const late = await inspectJson(fixture.targetWorkspace, 12);
+  assert.notEqual(canonicalJson(early), canonicalJson(late), "two inspections of one address at two instants must not be byte-identical");
+  const earlyPath = join(fixture.base, "target-early.json");
+  await writeFile(earlyPath, canonicalJson(early));
+  // Out of window: the declared observation is more than an hour before the abort.
+  const stalePath = join(fixture.base, "target-stale.json");
+  await writeFile(stalePath, canonicalJson({ ...early, observedAt: "2026-07-10T00:00:11Z" }));
+  const stale = await abortAt(fixture, abortAuthority, relocationId, { at: instant(13), targetInspection: stalePath });
+  assert.equal(stale.ok, false);
+  assert.equal(stale.reasonCode, "WORKSPACE_RELOCATION_INSPECTION_STALE");
+  // Ordered the wrong way: a document claiming to have been observed after the abort.
+  const futurePath = join(fixture.base, "target-future.json");
+  await writeFile(futurePath, canonicalJson({ ...early, observedAt: "2026-07-11T00:00:59Z" }));
+  const future = await abortAt(fixture, abortAuthority, relocationId, { at: instant(13), targetInspection: futurePath });
+  assert.equal(future.ok, false);
+  assert.equal(future.reasonCode, "WORKSPACE_RELOCATION_INSPECTION_STALE");
+  // Missing entirely: a hand-written document without the field is refused rather
+  // than treated as timeless.
+  const timelessPath = join(fixture.base, "target-timeless.json");
+  const timeless = { ...early };
+  delete timeless.observedAt;
+  await writeFile(timelessPath, canonicalJson(timeless));
+  const withoutInstant = await abortAt(fixture, abortAuthority, relocationId, { at: instant(13), targetInspection: timelessPath });
+  assert.equal(withoutInstant.ok, false);
+  assert.equal(withoutInstant.reasonCode, "WORKSPACE_RELOCATION_INPUT_INVALID");
+  // Both sides differ: inside the window, the same document admits.
+  const admitted = await abortAt(fixture, abortAuthority, relocationId, { at: instant(13), targetInspection: earlyPath });
+  assert.equal(admitted.ok, true, `an in-window inspection must admit: ${String(admitted.reasonCode)}`);
+  // And the honest limit, asserted so nobody reads the window as freshness: BOTH
+  // instants are caller-declared. This document was truthful when taken and the
+  // engine has no way to learn what the destination is doing at the moment of the
+  // abort — the check is TOCTOU by construction.
+  assert.equal(JSON.parse(admitted.output).targetInspectionObservedAt, instant(11));
 });
 
 test("WSR-1 T28: relocation-plan is the vacate's own preparation, and it writes nothing", async (t) => {
@@ -1460,7 +1630,7 @@ test("WSR-1 T29: a hop that does not move the workspace root is refused while th
   // And the source was never touched by any of the three refusals: they all
   // happened before the commit point, which is the whole reason they moved to the
   // input boundary.
-  assert.equal(JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.workspace])).output).relocations, 1);
+  assert.equal(JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.workspace, "--at", instant(12)])).output).relocations, 1);
 });
 
 test("WSR-1 T30: a stale copy is not `live` just because it carries no ledger", async (t) => {
@@ -1474,11 +1644,11 @@ test("WSR-1 T30: a stale copy is not `live` just because it carries no ledger", 
   // every stale copy on disk raised a false fork alarm.
   const strayRoots = await sideRoots(fixture, "STRAY");
   await cp(join(fixture.workspace, ".tcrn-workflow"), join(strayRoots.workspace, ".tcrn-workflow"), { recursive: true });
-  const stray = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", strayRoots.workspace])).output);
+  const stray = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", strayRoots.workspace, "--at", instant(12)])).output);
   assert.equal(stray.state, "foreign-address", "a control tree at an address its own binding does not name is not live");
   assert.equal((await invokeCli(["status", "--workspace", strayRoots.workspace])).ok, false, "and every other verb agrees with that verdict");
   // Both sides differ: the original address still reports live.
-  const home = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.workspace])).output);
+  const home = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", fixture.workspace, "--at", instant(12)])).output);
   assert.equal(home.state, "live");
   assert.equal(home.address, home.activeWorkspaceRoot);
 });
@@ -1537,24 +1707,24 @@ test("WSR-1 T32: adopt restates the relocationId of the hop it is completing", a
 });
 
 test("WSR-1 T33: abort runs at the source address and nowhere else", async (t) => {
-  const { fixture, authority, relocationId } = await vacatedFixture();
+  const { fixture, abortAuthority, relocationId } = await vacatedFixture();
   t.after(() => fixture.close());
   await copyControlTree(fixture);
   // Both layers of this boundary — abort's own address check and the readMetadata
   // admission that narrows `abort` to a `vacated` state — survived deletion with
   // the suite green, and with BOTH removed the fork-creating verb executed at the
   // destination, writing an `aborted` entry into the copy's own ledger.
-  const atTarget = await abortAt(fixture, authority, relocationId, { workspace: fixture.targetWorkspace });
+  const atTarget = await abortAt(fixture, abortAuthority, relocationId, { workspace: fixture.targetWorkspace });
   assert.equal(atTarget.ok, false);
   assert.equal(atTarget.reasonCode, "WORKSPACE_RELOCATION_ADOPTION_REQUIRED", "the admission layer refuses an abort at the destination");
   // A third address the ledger names nowhere is refused by the state machine.
   const strayRoots = await sideRoots(fixture, "STRAY33");
   await cp(join(fixture.workspace, ".tcrn-workflow"), join(strayRoots.workspace, ".tcrn-workflow"), { recursive: true });
-  const atStray = await abortAt(fixture, authority, relocationId, { workspace: strayRoots.workspace });
+  const atStray = await abortAt(fixture, abortAuthority, relocationId, { workspace: strayRoots.workspace });
   assert.equal(atStray.ok, false);
   assert.equal(atStray.reasonCode, "WORKSPACE_RELOCATION_FOREIGN_ADDRESS");
   // Both sides differ: the source address aborts.
-  assert.equal((await abortAt(fixture, authority, relocationId)).ok, true);
+  assert.equal((await abortAt(fixture, abortAuthority, relocationId)).ok, true);
 });
 
 test("WSR-1 T34: a copy of an ADOPTED tree at a third address is a foreign address everywhere", async (t) => {
@@ -1567,7 +1737,7 @@ test("WSR-1 T34: a copy of an ADOPTED tree at a third address is a foreign addre
   // Changing the foreign-address fallback to "live" left the whole suite green, and
   // that change makes every restored backup and every rsync-to-staging copy read as
   // a fully live workspace on the readMetadata-only paths T3 exists to protect.
-  const inspected = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", strayRoots.workspace])).output);
+  const inspected = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", strayRoots.workspace, "--at", instant(12)])).output);
   assert.equal(inspected.state, "foreign-address");
   for (const args of [
     ["status", "--workspace", strayRoots.workspace],
@@ -1599,7 +1769,7 @@ test("WSR-1 T35: a ledger entry must name itself, and a completion must restate 
   tampered.relocations[0].to[2].canonicalPath = elsewhere;
   tampered.relocations[0].to[2].portableIdentity = elsewhere.toLowerCase();
   await writeMetadataJson(fixture.workspace, tampered);
-  const naive = await invokeCli(["relocation-inspect", "--workspace", fixture.workspace]);
+  const naive = await invokeCli(["relocation-inspect", "--workspace", fixture.workspace, "--at", instant(12)]);
   assert.equal(naive.ok, false);
   assert.equal(naive.reasonCode, "WORKSPACE_RELOCATION_LEDGER_INVALID");
   await writeMetadataJson(fixture.workspace, metadata);
@@ -1613,12 +1783,12 @@ test("WSR-1 T35: a ledger entry must name itself, and a completion must restate 
   spliced.relocations[1].to[2].canonicalPath = elsewhere;
   spliced.relocations[1].to[2].portableIdentity = elsewhere.toLowerCase();
   await writeMetadataJson(fixture.targetWorkspace, spliced);
-  const restated = await invokeCli(["relocation-inspect", "--workspace", fixture.targetWorkspace]);
+  const restated = await invokeCli(["relocation-inspect", "--workspace", fixture.targetWorkspace, "--at", instant(12)]);
   assert.equal(restated.ok, false);
   assert.equal(restated.reasonCode, "WORKSPACE_RELOCATION_LEDGER_INVALID");
   // Both sides differ: the untampered ledger reads clean at both addresses.
   await writeMetadataJson(fixture.targetWorkspace, adopted);
-  assert.equal((await invokeCli(["relocation-inspect", "--workspace", fixture.targetWorkspace])).ok, true);
+  assert.equal((await invokeCli(["relocation-inspect", "--workspace", fixture.targetWorkspace, "--at", instant(12)])).ok, true);
 });
 
 test("WSR-1 T36: adopt binds the supplied manifest to the one the vacate recorded", async (t) => {
@@ -1771,7 +1941,24 @@ test("WSR-1 T40: the ledger cap refuses a vacate while the source is still alive
     return entries;
   };
   await writeMetadataJson(fixture.workspace, { ...metadata, relocations: buildLedger(8) });
-  const authority = await writeRelocationAuthority(fixture);
+  // THE READ-ONLY STEP REFUSES FIRST. The cap used to live only at the commit point,
+  // which no read-only verb reaches, so `relocation-plan` answered PLANNED at a full
+  // ledger and handed the operator a relocationId for a hop the vacate would refuse —
+  // after the out-of-band minting ceremony that the plan verb exists to feed. That was
+  // the one reachable state in which the shared preparation disagreed with itself.
+  const plannedFull = await invokeCli([
+    "relocation-plan", "--workspace", fixture.workspace, "--at", instant(9),
+    "--expected-version", "head", ...destinationFlags(fixture.target),
+  ]);
+  assert.equal(plannedFull.ok, false, "the plan must refuse a hop the vacate cannot take");
+  assert.equal(plannedFull.reasonCode, "WORKSPACE_RELOCATION_LEDGER_FULL");
+  const authority = await writeRelocationAuthority(fixture, {
+    plan: {
+      relocationId: `relocation:${"0".repeat(24)}`,
+      workspaceRootTo: fixture.targetWorkspace,
+      basis: { version: fixture.version, headEventHash: fixture.headEventHash },
+    },
+  });
   const full = await vacate(fixture, authority);
   assert.equal(full.ok, false, "a vacate that cannot be completed must be refused before it kills the source");
   assert.equal(full.reasonCode, "WORKSPACE_RELOCATION_LEDGER_FULL");
@@ -1780,6 +1967,10 @@ test("WSR-1 T40: the ledger cap refuses a vacate while the source is still alive
   // cap is not simply refusing everything with a ledger.
   await writeMetadataJson(fixture.workspace, { ...metadata, relocations: buildLedger(7) });
   const room = await writeRelocationAuthority(fixture);
+  // The budget the operator is spending is reported before it is spent. It is
+  // consumed by ATTEMPTS: the eight pairs above moved nothing at all.
+  assert.equal(room.plan.ledgerEntriesRemaining, 2);
+  assert.equal(room.plan.hopsRemaining, 1);
   const vacated = await vacate(fixture, room);
   assert.equal(vacated.ok, true, `fourteen entries must leave room: ${String(vacated.reasonCode)}`);
   await copyControlTree(fixture);
@@ -1818,13 +2009,13 @@ test("WSR-1 T41: a destination stated in the wrong spelling is reported as a nea
   });
   assert.equal((await vacate(fixture, authority, { destination: { ...cased, workspace: lowered } })).ok, true);
   await cp(join(fixture.workspace, ".tcrn-workflow"), join(probe, ".tcrn-workflow"), { recursive: true });
-  const inspected = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", probe])).output);
+  const inspected = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", probe, "--at", instant(12)])).output);
   assert.equal(inspected.state, "foreign-address");
   assert.equal(inspected.nearMissDestination, true, "the ledger names this tree under a different spelling and must say so");
   // Both sides differ: a genuinely foreign address is not a near miss.
   const stray = await sideRoots(fixture, "STRAY41");
   await cp(join(fixture.workspace, ".tcrn-workflow"), join(stray.workspace, ".tcrn-workflow"), { recursive: true });
-  const elsewhere = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", stray.workspace])).output);
+  const elsewhere = JSON.parse((await invokeCli(["relocation-inspect", "--workspace", stray.workspace, "--at", instant(12)])).output);
   assert.equal(elsewhere.state, "foreign-address");
   assert.equal(elsewhere.nearMissDestination, false);
 });

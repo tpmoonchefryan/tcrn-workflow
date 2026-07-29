@@ -63,6 +63,7 @@ export {
   RELOCATION_LIMITS,
   RELOCATION_PERMIT_STAGES,
   RELOCATION_REASON_CODES,
+  RELOCATION_TARGET_INSPECTION_WINDOW_MS,
   RelocationError,
   WORKSPACE_RELOCATION_AUTHORITY_VERSION,
   WORKSPACE_RELOCATION_INSPECTION_VERSION,
@@ -74,6 +75,7 @@ export {
   inspectWorkspaceRelocation,
   planWorkspaceRelocation,
   readRelocationAuthority,
+  relocationVacateCommitment,
   vacateWorkspace,
   validateRelocationAuthorityDocument,
 } from "./workspace-relocation.js";

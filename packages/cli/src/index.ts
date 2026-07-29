@@ -767,7 +767,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "recover", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "relocation-abort", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "relocation-id", required: true, valueKind: "string" }, { name: "acknowledge-fork-risk", required: true, valueKind: "boolean" }, { name: "relocation-authority", required: true, valueKind: "string" }, { name: "relocation-authority-digest", required: true, valueKind: "string" }, { name: "target-inspection", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "relocation-adopt", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "relocation-id", required: true, valueKind: "string" }, { name: "control-manifest", required: true, valueKind: "string" }, { name: "relocation-authority", required: true, valueKind: "string" }, { name: "relocation-authority-digest", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "relocation-inspect", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "relocation-inspect", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "relocation-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "to-framework", required: true, valueKind: "string" }, { name: "to-workspace-root", required: true, valueKind: "string" }, { name: "to-transient", required: true, valueKind: "string" }, { name: "to-evidence-locator", required: true, valueKind: "string" }, { name: "to-release-trust", required: true, valueKind: "string" }] },
   { name: "relocation-vacate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "to-framework", required: true, valueKind: "string" }, { name: "to-workspace-root", required: true, valueKind: "string" }, { name: "to-transient", required: true, valueKind: "string" }, { name: "to-evidence-locator", required: true, valueKind: "string" }, { name: "to-release-trust", required: true, valueKind: "string" }, { name: "relocation-authority", required: true, valueKind: "string" }, { name: "relocation-authority-digest", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "snapshot-manifest", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
@@ -1598,9 +1598,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // The ONLY instrument that can detect a fork — and only when run at BOTH
     // addresses and compared. Read-only, and admitted at every address including a
     // vacated or foreign one, because that is precisely where it must still answer.
-    const values = parseArguments(rest, ["workspace"]);
-    required(values, ["workspace"]);
-    io.write(canonicalJson(await inspectWorkspaceRelocation(values.workspace ?? "")));
+    //
+    // `--at` is required and is the caller's declaration of when the observation was
+    // taken. It is stamped into the document as `observedAt`, which is what
+    // `relocation-abort --target-inspection` bounds against its own `--at`: without it
+    // two inspections taken either side of an adopt are byte-identical.
+    const values = parseArguments(rest, ["workspace", "at"]);
+    required(values, ["workspace", "at"]);
+    io.write(canonicalJson(await inspectWorkspaceRelocation(values.workspace ?? "", { at: values.at ?? "" })));
     return;
   }
   if (command === "snapshot-manifest") {
