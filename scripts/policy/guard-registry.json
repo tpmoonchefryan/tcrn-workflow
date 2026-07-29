@@ -281,6 +281,16 @@
       "expectedMatches": 1,
       "test": "tests/act2-claude-activation.test.mjs",
       "testName": "INC-022: activation installs into a root that has no .claude/settings.json yet"
+    },
+    {
+      "id": "INC-027-event-page-ceiling-refused",
+      "rationale": "event-list is the only list verb whose records are verbatim, so it is the only one whose page can outgrow the canonical ceiling. The catch turns the protocol's INPUT_OVERSIZED into a page-specific refusal that names the flag to lower. Removing it restores export's own code on a paged read -- a caller told 'this chain cannot be read this way' by the verb that exists to read it, which is INC-004's absence-instead-of-refusal defect one layer down.",
+      "file": "packages/cli/src/index.ts",
+      "find": "if ((error as { readonly reasonCode?: string }).reasonCode === \"INPUT_OVERSIZED\") {",
+      "replace": "if ((error as { readonly reasonCode?: string }).reasonCode === \"NEVER_RAISED\") {",
+      "expectedMatches": 1,
+      "test": "tests/p3-cli-read-surface.test.mjs",
+      "testName": "INC-027: a page that cannot fit is refused under its own code, never shortened"
     }
   ]
 }
