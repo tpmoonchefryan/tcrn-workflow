@@ -478,6 +478,52 @@ function paginate(state: Awaited<ReturnType<typeof validateWorkspace>>, kind: st
   };
 }
 
+// INC-027 (TCRN-CROSS-INC-027): the default window for `event-list`.
+//
+// 64 is the engine's own default segment size (initializeWorkspace's
+// segmentEventLimit). The storage layer already reads a segment of that many
+// events back through the one-MiB bound on a single file, so a default page asks
+// for the same granularity the chain is already stored at rather than a number
+// invented here. Measured across the four live chains on the platform that filed
+// this, the largest single event is 7,008 bytes and the 95th percentile is 3,575,
+// which puts a default page around 100 KiB and would need a 16 KiB mean event to
+// reach the ceiling.
+const EVENT_PAGE_DEFAULT_LIMIT = 64;
+
+// INC-027: the event page — and the one list verb that can outgrow its own receipt.
+//
+// Every other list projects a summary, so its records are small by construction.
+// This one returns each EventRecord verbatim (sequence, id, streamId, occurredAt,
+// priorHash, payload, payloadHash, eventHash) because a consumer that re-derives
+// the chain has to hash exactly the bytes the engine hashed; a projection would
+// break that by definition. Verbatim records mean page size is the payloads'
+// business, not the engine's, so a page CAN exceed the one-MiB canonical ceiling.
+//
+// When it does, this refuses. That refusal is the entire reason paging exists
+// here: a silently short page is indistinguishable from the end of the chain,
+// which is the exact failure INC-004/INC-005 were filed for — a limit expressing
+// itself as absence. CLI_EVENT_PAGE_OVERSIZED is deliberately NOT the protocol's
+// INPUT_OVERSIZED that `export` raises on the same ceiling: that code says "this
+// chain cannot be read this way" and leaves the caller nowhere to go, while this
+// one says "this page cannot" and names the flag that fixes it.
+function eventPage(state: Awaited<ReturnType<typeof validateWorkspace>>, values: Readonly<Record<string, string>>): string {
+  // The default applies only when the flag is ABSENT. A supplied value still goes
+  // through boundedInteger inside paginate, so `--limit 0` stays
+  // CLI_ARGUMENT_MALFORMED instead of being quietly replaced by the default.
+  const windowed = values.limit === undefined
+    ? { ...values, limit: String(EVENT_PAGE_DEFAULT_LIMIT) }
+    : values;
+  const page = paginate(state, "event", state.events, windowed);
+  try {
+    return canonicalJson(page);
+  } catch (error) {
+    if ((error as { readonly reasonCode?: string }).reasonCode === "INPUT_OVERSIZED") {
+      fail("CLI_EVENT_PAGE_OVERSIZED", `${(page.records as readonly unknown[]).length} events do not fit one canonical page; lower --limit`);
+    }
+    throw error;
+  }
+}
+
 // WSE-4: lowercase SHA-256 digest shape, duplicated locally rather than imported
 // from the protocol internals (assertSha256 is unexported), matching the adapter
 // duplication discipline.
@@ -612,6 +658,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "conference-position-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "conference-id", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "context-route", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "profile-receipt", required: true, valueKind: "string" }, { name: "authority", required: true, valueKind: "string" }, { name: "profile-receipt-digest", required: false, valueKind: "string" }, { name: "authority-digest", required: false, valueKind: "string" }] },
   { name: "context-validate", availability: "cli", mutates: false, flags: [{ name: "result", required: true, valueKind: "string" }] },
+  { name: "event-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "exchange-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "output", required: true, valueKind: "string" }] },
   { name: "exchange-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "exchange-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "string" }] },
@@ -1844,6 +1891,23 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       record: workSummary(record),
       ...(advisory !== null ? { advisory } : {}),
     }));
+    return;
+  }
+  // INC-027 (TCRN-CROSS-INC-027): the event chain itself, read in windows.
+  //
+  // `export` was the only read that returned events at all, and it refuses any
+  // workspace whose canonical form exceeds one MiB — which three of the four
+  // chains on this platform already do (1,825,251 / 1,160,601 / 1,134,120
+  // canonical event bytes when this was filed). So the one thing a mirror needs in
+  // order to reproduce a chain was unreachable precisely on the chains large
+  // enough to be worth mirroring. Records come back verbatim, in chain order, so
+  // the concatenation of every page is exactly the array `export` would have
+  // emitted and feeds validateEventChain unmodified.
+  if (command === "event-list") {
+    const values = parseArguments(rest, ["workspace", "limit", "offset"]);
+    required(values, ["workspace"]);
+    const state = await validateWorkspace(values.workspace ?? "");
+    io.write(eventPage(state, values));
     return;
   }
   // WSD-2: governed conference/gate verbs. Every mutating verb wraps its WSD-1

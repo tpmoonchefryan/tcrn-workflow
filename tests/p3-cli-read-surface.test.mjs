@@ -10,11 +10,13 @@ import test from "node:test";
 import { COMMAND_CATALOG, runCli } from "../dist/build/packages/cli/src/index.js";
 import {
   acquireWorkspaceLease,
+  annotateWork,
   createProject,
   createWork,
   deleteWork,
   initializeWorkspace,
 } from "../dist/build/packages/core/src/index.js";
+import { PROTOCOL_LIMITS, validateEventChain } from "../dist/build/packages/protocol/src/index.js";
 
 const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
 
@@ -61,6 +63,84 @@ async function run(args) {
 
 function reasonOf(args) {
   return runCli(args, { write() {} }).then(() => null, (error) => error?.reasonCode);
+}
+
+// INC-027: the page-ceiling assertions are about BYTES, so they need the receipt as it
+// was written, not as it survives a JSON round trip.
+async function runRaw(args) {
+  let output = "";
+  await runCli(args, { write: (value) => { output += value; } });
+  return output;
+}
+
+async function emptyRoots(context, prefix) {
+  const base = await realpath(await mkdtemp(join(tmpdir(), prefix)));
+  context.after(() => rm(base, { recursive: true, force: true }));
+  const roots = [];
+  for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
+    const path = join(base, kind);
+    await mkdir(path);
+    roots.push({ kind, path });
+  }
+  return { base, roots, workspace: join(base, "workspace") };
+}
+
+// INC-027: instants for a chain longer than one minute of the `instant` helper.
+const chainInstant = (n) => new Date(Date.UTC(2026, 6, 11, 0, 0, n)).toISOString().replace(/\.\d{3}Z$/u, "Z");
+
+// INC-027: a chain LONGER than the default page window. Without one the default is a
+// constant nobody can observe, and an assertion about it could not go red.
+async function longChainFixture(context, count) {
+  const layout = await emptyRoots(context, "tcrn-cli-events-");
+  await initializeWorkspace({ roots: layout.roots, externalKey: "FIXTURE-CLI-EVENTS", createdAt: chainInstant(1), segmentEventLimit: 64 });
+  const lease = await acquireWorkspaceLease(layout.workspace, { now: chainInstant(2) });
+  try {
+    for (let version = 0; version < count; version += 1) {
+      await createProject(layout.workspace, lease, {
+        expectedVersion: version,
+        occurredAt: chainInstant(version + 3),
+        externalKey: `PROJECT-${String(version).padStart(3, "0")}`,
+        name: `Project ${version}`,
+      });
+    }
+  } finally {
+    await lease.release();
+  }
+  return layout;
+}
+
+// INC-027: a chain whose EVENTS are fat, built out of re-annotations of one work item.
+//
+// The obvious way to fatten a chain -- many large conference positions -- cannot be used,
+// and the reason is worth recording: every extension record stays in the derived state,
+// and the view documents are themselves canonicalized under the same one-MiB ceiling, so
+// the engine refuses to WRITE a chain whose surviving records exceed it. Re-annotating one
+// record replaces the advisory value instead of accumulating records, so the chain grows
+// past the ceiling while the views it materializes stay small -- which is exactly the
+// shape of a long-lived governed chain, and exactly the shape `export` cannot read.
+async function fatChainFixture(context, annotations) {
+  const layout = await emptyRoots(context, "tcrn-cli-fat-events-");
+  await initializeWorkspace({ roots: layout.roots, externalKey: "FIXTURE-CLI-FAT", createdAt: chainInstant(1), segmentEventLimit: 64 });
+  const lease = await acquireWorkspaceLease(layout.workspace, { now: chainInstant(2) });
+  try {
+    const state = await createProject(layout.workspace, lease, { expectedVersion: 0, occurredAt: chainInstant(3), externalKey: "PROJECT-FAT", name: "Fat" });
+    const projectId = state.projects[0].id;
+    const created = await createWork(layout.workspace, lease, { expectedVersion: 1, occurredAt: chainInstant(4), projectId, externalKey: "INIT-FAT", kind: "Initiative", parentId: null });
+    const workId = created.work[0].id;
+    for (let index = 0; index < annotations; index += 1) {
+      await annotateWork(layout.workspace, lease, {
+        expectedVersion: 2 + index,
+        occurredAt: chainInstant(5 + index),
+        id: workId,
+        // Distinct each time: an annotation that changes nothing is refused, and the
+        // whole point is that each event carries its own copy of the fat value.
+        scope: `scope ${index} ${"x".repeat(8_000)}`,
+      });
+    }
+  } finally {
+    await lease.release();
+  }
+  return layout;
 }
 
 test("project-list is deterministic, tombstone-free, and budgeted", async (context) => {
@@ -318,4 +398,130 @@ test("WSB-6: the agent-integration reference stays in drift-guarded agreement wi
   for (const name of liveProgrammaticOnly) {
     assert.ok(docText.includes(name), `doc must mention programmatic-only verb ${name}`);
   }
+});
+
+// INC-027 (TCRN-CROSS-INC-027). `export` was the only read that returned events, and it
+// refuses any workspace whose canonical form exceeds one MiB -- which three of the four
+// chains on this platform already do. So the one thing a downstream mirror needs in order
+// to reproduce a chain was unreachable exactly on the chains worth mirroring. These three
+// tests bind the three properties that make the paged replacement usable: the pages
+// concatenate to the chain, a page that cannot fit is refused rather than shortened, and
+// the default window never stands in for a value the caller supplied.
+test("INC-027: event-list pages the chain and the concatenation IS the chain", async (context) => {
+  const fx = await longChainFixture(context, 70);
+  const ws = ["--workspace", fx.workspace];
+
+  // The default window is the engine's own segment size, and it is only observable on a
+  // chain longer than it -- which is why the fixture writes 70 events for a default of 64.
+  const first = await run(["event-list", ...ws]);
+  assert.equal(first.reasonCode, "WORKSPACE_LIST_READY");
+  assert.equal(first.kind, "event");
+  assert.equal(first.total, 70);
+  assert.equal(first.records.length, 64, "the default window is the engine's segment size");
+  assert.equal(first.truncated, true);
+
+  // Records are verbatim EventRecords, not a summary. A consumer that re-derives the
+  // chain must hash exactly the bytes the engine hashed, so all three hashes and the
+  // payload have to travel; a projection would break re-derivation by definition.
+  assert.deepEqual(
+    Object.keys(first.records[0]).sort(),
+    ["eventHash", "id", "occurredAt", "payload", "payloadHash", "priorHash", "schemaVersion", "sequence", "streamId"],
+  );
+
+  const status = await run(["status", ...ws]);
+  assert.equal(first.version, status.version);
+  assert.equal(first.headEventHash, status.headEventHash);
+
+  // Page to exhaustion at a window that does not divide the total, so an off-by-one in
+  // the offset arithmetic drops or repeats an event instead of landing exactly.
+  const events = [];
+  let offset = 0;
+  for (;;) {
+    const raw = await runRaw(["event-list", ...ws, "--limit", "7", "--offset", String(offset)]);
+    assert.ok(Buffer.byteLength(raw, "utf8") <= PROTOCOL_LIMITS.maxCanonicalBytes, "every page fits the canonical ceiling");
+    const page = JSON.parse(raw);
+    events.push(...page.records);
+    if (!page.truncated) break;
+    offset += page.records.length;
+  }
+  assert.equal(events.length, status.version, "one event per version, none dropped and none repeated");
+  assert.deepEqual(events.map((entry) => entry.sequence), events.map((_, index) => index + 1));
+  assert.equal(validateEventChain(events).length, events.length, "the concatenation revalidates as a chain");
+  assert.equal(events.at(-1).eventHash, status.headEventHash, "the last page ends at the head the authority reports");
+});
+
+// The refusal is the whole reason paging exists here. A page silently shortened to fit
+// would be indistinguishable from the end of the chain -- the same "limit expressed as
+// absence" that INC-004/INC-005 were filed for, reintroduced one layer down.
+test("INC-027: a page that cannot fit is refused under its own code, never shortened", async (context) => {
+  const fx = await fatChainFixture(context, 140);
+  const ws = ["--workspace", fx.workspace];
+
+  // The precondition: this chain is exactly the kind `export` refuses whole. Without this
+  // assertion the rest of the test would still pass on a chain small enough not to matter.
+  assert.equal(await reasonOf(["export", ...ws]), "INPUT_OVERSIZED");
+
+  // A caller may raise the window, and then the ceiling is theirs to hit.
+  const error = await runCli(["event-list", ...ws, "--limit", "200"], { write() {} }).then(() => null, (caught) => caught);
+  assert.ok(error, "an over-ceiling page must fail closed");
+  // Deliberately NOT export's INPUT_OVERSIZED. That code says "this chain cannot be read
+  // this way" and leaves the caller nowhere to go; this one says "this page cannot" and
+  // names the flag that fixes it.
+  assert.equal(error.reasonCode, "CLI_EVENT_PAGE_OVERSIZED");
+  assert.notEqual(error.reasonCode, "INPUT_OVERSIZED");
+  assert.equal(error.message.includes("--limit"), true, `the refusal must name the remedy, got ${error.message}`);
+
+  // The default window on the same chain succeeds, which is what makes the refusal a
+  // property of the page rather than a verdict on the chain -- and is the reason the
+  // default is conservative rather than "as many as the caller asked for".
+  const defaulted = await runRaw(["event-list", ...ws]);
+  assert.ok(Buffer.byteLength(defaulted, "utf8") <= PROTOCOL_LIMITS.maxCanonicalBytes);
+  assert.equal(JSON.parse(defaulted).records.length, 64);
+  assert.equal(JSON.parse(defaulted).truncated, true);
+
+  // And the whole chain still reads, one window at a time.
+  const events = [];
+  let offset = 0;
+  for (;;) {
+    const raw = await runRaw(["event-list", ...ws, "--offset", String(offset)]);
+    assert.ok(Buffer.byteLength(raw, "utf8") <= PROTOCOL_LIMITS.maxCanonicalBytes);
+    const page = JSON.parse(raw);
+    events.push(...page.records);
+    if (!page.truncated) break;
+    offset += page.records.length;
+  }
+  const status = await run(["status", ...ws]);
+  assert.equal(events.length, status.version);
+  assert.equal(validateEventChain(events).length, events.length);
+});
+
+test("INC-027: the default window never stands in for a supplied one, and event-list obeys the view gate", async (context) => {
+  const fx = await fixture(context);
+  const ws = ["--workspace", fx.workspace];
+
+  const all = await run(["event-list", ...ws]);
+  assert.equal(all.total, 7);
+  assert.equal(all.records.length, 7);
+  assert.equal(all.truncated, false);
+
+  // A supplied value is judged, not replaced. `--limit=` is the case that matters: it is
+  // a supplied empty string, and substituting the default for it would answer a question
+  // the caller did not ask -- the exact defect R2-NEW-7 records one verb over.
+  for (const spelling of ["--limit=", "--limit=0", "--limit=abc", "--limit=2.5", "--offset=-1", "--offset=2.5"]) {
+    assert.equal(await reasonOf(["event-list", ...ws, spelling]), "CLI_ARGUMENT_MALFORMED", `${spelling} must be judged`);
+  }
+
+  // An offset past the end is an empty page that still reports the total, not an error
+  // and not a claim that the chain is empty.
+  const past = await run(["event-list", ...ws, "--offset", "99"]);
+  assert.deepEqual(past.records, []);
+  assert.equal(past.total, 7);
+  assert.equal(past.truncated, false);
+
+  // Byte-stable like its siblings.
+  assert.equal(await runRaw(["event-list", ...ws]), await runRaw(["event-list", ...ws]));
+
+  // WSA-3: a read verb answers from view-verified state, so a stale view refuses.
+  await writeFile(join(fx.workspace, ".tcrn-workflow", "views", "index.json"), "{}\n");
+  assert.equal(await reasonOf(["event-list", ...ws]), "WORKSPACE_VIEW_STALE");
 });

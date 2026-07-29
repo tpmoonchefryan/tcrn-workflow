@@ -3,6 +3,48 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.8.0 — 2026-07-29
+
+The event chain becomes readable on the chains that have one worth reading.
+
+`0.7.0` closed two of the three read-surface gaps its first cockpit consumer
+filed. This closes the third, which is the same gap in its purest form: `export`
+was the only read that returned events at all, and it refuses any workspace whose
+canonical form exceeds one MiB. Three of the four chains on the platform that
+filed this already do — `cross-project` at 1,825,251 canonical event bytes,
+`TCRN-AOS` at 1,160,601, `TCRN-Design-System` at 1,134,120 — and the fourth will
+by growing. So the one artifact a consumer needs in order to reproduce a chain was
+unreachable exactly on the chains large enough to be worth reproducing.
+
+### Added
+
+- **`event-list`**, workspace-scoped and paginated with `--limit` / `--offset`
+  like every other list verb. Records come back **verbatim** — `schemaVersion`,
+  `id`, `streamId`, `sequence`, `occurredAt`, `priorHash`, `payload`,
+  `payloadHash`, `eventHash` — because a consumer that re-derives the chain must
+  hash exactly the bytes the engine hashed, and a projection would break
+  re-derivation by construction. The concatenation of every page, in order, is
+  the array `export` would have emitted and feeds `validateEventChain`
+  unmodified. Every page carries the `workspaceId`, `version` and
+  `headEventHash` anchors, so a consumer always knows which chain and which head
+  it just read.
+- **`CLI_EVENT_PAGE_OVERSIZED`**, the refusal for a page that does not fit. This
+  is the one list verb whose records are verbatim, so page size is the payloads'
+  business and a caller who raises `--limit` far enough will reach the ceiling.
+  The default window is 64 — the engine's own segment size, roughly 100 KiB
+  across the four live chains. A page that overflows is refused with the flag to
+  lower named in the message, never silently shortened: a short page is
+  indistinguishable from the end of the chain, which is the same
+  absence-instead-of-refusal defect `0.7.0` was cut to fix. The code is
+  deliberately distinct from the protocol's `INPUT_OVERSIZED` that `export`
+  raises on the same ceiling, because the two leave the caller in different
+  places — one with nowhere to go, one with a smaller window to ask for.
+
+### Compatibility
+
+Purely additive. No receipt changes shape, no flag becomes required, nothing was
+removed or renamed, and `export` is untouched and still all-or-nothing.
+
 ## 0.7.0 — 2026-07-27
 
 The read surface stops refusing to name things.
