@@ -3,7 +3,32 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.10.1 — 2026-08-03
+
+**WSA-3 moved from replay-level to write-path admission.**
+
+`0.10.0` placed WSA-3 in the work-graph validator, which a chain **replay** runs
+over every historical event. A chain that legitimately closed an Initiative
+before 0.10.0 — while descendants were still open — therefore failed replay
+under 0.10.0 (`WORKSPACE_EVENT_CORRUPT`), making an existing, otherwise-healthy
+chain unreadable. That is the defect this patch fixes.
+
+`0.10.1` moves the check out of the graph validator and into the **write path**:
+`transitionWork` refuses to move an `Initiative` to `done` when its subtree still
+holds live non-terminal work (refused with `WORKSPACE_INPUT_INVALID`). Replay is
+unaffected — historical chains stay readable — and the rule still holds going
+forward: you cannot close an INIT with open descendants.
+
+- No verb, event-schema, or storage-version change.
+- `PROTOCOL_REASON_CODES` is unchanged from 0.9.0 (the 0.10.0-only entry is
+  removed; the check now reports `WORKSPACE_INPUT_INVALID` from the core layer).
+
 ## 0.10.0 — 2026-08-03
+
+*Superseded by 0.10.1 — see above. The 0.10.0 placement of WSA-3 in the graph
+validator made existing chains with a historically-premature INIT close fail
+replay; do not deploy 0.10.0.*
+
 
 Closing an Initiative that still holds a live, non-terminal work item is now a
 chain-level error instead of a discipline.

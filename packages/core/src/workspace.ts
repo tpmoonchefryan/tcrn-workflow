@@ -2805,10 +2805,44 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
   }, input);
 }
 
+/**
+ * WSA-3 write-path admission: whether the subtree below `recordId` in `work`
+ * holds any live non-terminal record, at any depth. Used only by transitionWork
+ * when closing an Initiative to done — a tombstoned descendant holds no open
+ * work and is skipped. Lives here (not in the protocol graph validator) so the
+ * check fires on a live mutation, never on replay.
+ */
+function hasLiveNonTerminalDescendant(work: readonly WorkRecord[], recordId: string): boolean {
+  for (const candidate of work) {
+    if (candidate.parentId !== recordId) continue;
+    if (candidate.tombstone) continue;
+    if (candidate.status !== "done" && candidate.status !== "cancelled") return true;
+    if (hasLiveNonTerminalDescendant(work, candidate.id)) return true;
+  }
+  return false;
+}
+
 export async function transitionWork(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly id: string;
   readonly status: WorkStatus;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  // WSA-3 (write-path admission): closing an Initiative to `done` is an act of
+  // completion — its whole subtree must already be terminal, or the close is
+  // premature. This check lives OUTSIDE appendEvent's reducer on purpose: a
+  // reducer check is replayed over history, so it would refuse a chain that
+  // legitimately closed an INIT before 0.10.0 while descendants were still open.
+  // As write-path admission it fires only on a live "close this INIT" mutation,
+  // never on replay, so historical chains stay readable and the rule still
+  // holds going forward. (A tombstoned descendant holds no open work.)
+  if (input.status === "done") {
+    const before = await materializeWorkspace(workspaceRoot);
+    const current = before.work.find((entry) => entry.id === input.id);
+    if (current && current.kind === "Initiative" && !current.tombstone
+      && hasLiveNonTerminalDescendant(before.work, current.id)) {
+      fail("WORKSPACE_INPUT_INVALID",
+        `cannot close Initiative ${input.id} to done: it still holds live non-terminal work`);
+    }
+  }
   return appendEvent(workspaceRoot, lease, (state) => {
     const current = workById(state, input.id);
     assertWorkTransition(current.status, input.status);

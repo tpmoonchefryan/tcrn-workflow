@@ -215,34 +215,6 @@ test("runtime validators match closed schema types, limits, and shared extension
   }
 });
 
-test("a done Initiative may hold only terminal children — the WSA-3 green and its neighbours", () => {
-  // Green: done Initiative, all direct children terminal (done/cancelled).
-  assert.doesNotThrow(() => validateWorkGraph([
-    work({ status: "done" }),
-    work({ id: "work:epic-a", externalKey: "EPIC-A", kind: "Epic", parentId: "work:initiative-alpha", status: "done" }),
-    work({ id: "work:epic-b", externalKey: "EPIC-B", kind: "Epic", parentId: "work:initiative-alpha", status: "cancelled" }),
-  ]));
-
-  // Green: done Initiative with a tombstoned child — a deleted child holds no open work.
-  assert.doesNotThrow(() => validateWorkGraph([
-    work({ status: "done" }),
-    work({ id: "work:epic-a", externalKey: "EPIC-A", kind: "Epic", parentId: "work:initiative-alpha", status: "planned", tombstone: true }),
-  ]));
-
-  // Green: a PLANNED Initiative may hold any live children — the constraint fires only on done.
-  assert.doesNotThrow(() => validateWorkGraph([
-    work(),
-    work({ id: "work:epic-a", externalKey: "EPIC-A", kind: "Epic", parentId: "work:initiative-alpha", status: "active" }),
-  ]));
-
-  // The deep case: a done Initiative whose epic is done but whose story is still active is red.
-  expectReason("WORK_GRAPH_ACTIVE_CHILDREN_OF_DONE_INITIATIVE", () => validateWorkGraph([
-    work({ status: "done" }),
-    work({ id: "work:epic-a", externalKey: "EPIC-A", kind: "Epic", parentId: "work:initiative-alpha", status: "done" }),
-    work({ id: "work:story-a", externalKey: "STORY-A", kind: "Story", parentId: "work:epic-a", status: "active" }),
-  ]));
-});
-
 test("work graph and protocol negatives return exact frozen reason codes", async () => {
   const replay = createEvent({
     id: "event:replay-1",
@@ -294,12 +266,6 @@ test("work graph and protocol negatives return exact frozen reason codes", async
     // materialize silently. Proven against the shipped engine (scratch replay refuses it).
     ["missing-parent-unmapped-kind", () => validateWorkGraph([
       work({ id: "work:incident-a", externalKey: "BUG-A", kind: "Incident", parentId: "work:missing" }),
-    ])],
-    // WSA-3: closing an Initiative that still holds a live non-terminal child is
-    // premature. The engine now refuses the graph, not just the discipline.
-    ["active-child-of-done-initiative", () => validateWorkGraph([
-      work({ status: "done" }),
-      work({ id: "work:epic-a", externalKey: "EPIC-A", kind: "Epic", parentId: "work:initiative-alpha", status: "planned" }),
     ])],
   ]);
 
