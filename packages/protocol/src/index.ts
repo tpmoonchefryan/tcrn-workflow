@@ -31,6 +31,7 @@ export const PROTOCOL_REASON_CODES = Object.freeze([
   "GRAPH_CROSS_PROJECT_PARENT",
   "GRAPH_CYCLE",
   "GRAPH_PARENT_KIND_INVALID",
+  "WORK_GRAPH_ACTIVE_CHILDREN_OF_DONE_INITIATIVE",
   "ID_INVALID",
   "INPUT_OVERSIZED",
   "INVALID_TRANSITION",
@@ -696,6 +697,17 @@ export function validateWorkGraph(records: readonly WorkRecord[], registry: read
       if (parent.tombstone && !record.tombstone) {
         fail("TOMBSTONE_REFERENCED", record.id);
       }
+      // WSA-3: an Initiative in a terminal state (done) may not hold any live
+      // non-terminal descendant, at any depth. "Close the initiative" is an act
+      // of completion — every descendant must already be terminal, or the close
+      // is premature. The check walks the whole subtree below the DONE PARENT
+      // (not just this record), so a done Epic under the done Initiative with a
+      // still-active Story under it is red too. Tombstoned records hold no open
+      // work and are excluded.
+      if (parent.kind === "Initiative" && parent.status === "done" && !record.tombstone
+        && hasLiveNonTerminalDescendant(byId, parent.id)) {
+        fail("WORK_GRAPH_ACTIVE_CHILDREN_OF_DONE_INITIATIVE", record.id);
+      }
     } else if (record.parentId !== null) {
       const parent = byId.get(record.parentId);
       if (!parent) {
@@ -711,6 +723,21 @@ export function validateWorkGraph(records: readonly WorkRecord[], registry: read
   }
   const visiting = new Set<string>();
   const visited = new Set<string>();
+  /**
+   * WSA-3: whether the subtree below `recordId` holds any live non-terminal work.
+   * Walks the whole descendant tree, so a done Initiative with a done Epic whose
+   * Story is still active is still a premature close. Tombstoned records are
+   * skipped — a deleted child holds no open work.
+   */
+  function hasLiveNonTerminalDescendant(map: ReadonlyMap<string, WorkRecord>, recordId: string): boolean {
+    for (const candidate of map.values()) {
+      if (candidate.parentId !== recordId) continue;
+      if (candidate.tombstone) continue;
+      if (candidate.status !== "done" && candidate.status !== "cancelled") return true;
+      if (hasLiveNonTerminalDescendant(map, candidate.id)) return true;
+    }
+    return false;
+  }
   function visit(record: WorkRecord): void {
     if (visiting.has(record.id)) {
       fail("GRAPH_CYCLE", record.id);

@@ -89,6 +89,10 @@
     {
       "id": "missing-parent-unmapped-kind",
       "expectedReasonCode": "REFERENTIAL_INTEGRITY"
+    },
+    {
+      "id": "active-child-of-done-initiative",
+      "expectedReasonCode": "WORK_GRAPH_ACTIVE_CHILDREN_OF_DONE_INITIATIVE"
     }
   ]
 }
