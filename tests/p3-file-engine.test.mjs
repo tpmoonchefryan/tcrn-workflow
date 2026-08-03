@@ -1811,3 +1811,38 @@ test("WSE-3: legacy mutations without --actor on a non-enabled workspace never w
     await fixture.close();
   }
 });
+
+test("WSA-3: closing an Initiative to done with live non-terminal descendants is refused; terminalising first lets it close", async () => {
+  const fixture = await workspaceFixture({ externalKey: "WORKSPACE-WSA3" });
+  try {
+    const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(1) });
+    try {
+      let state = await createProject(fixture.workspace, lease, { expectedVersion: 0, occurredAt: instant(1), externalKey: "PROJECT-WSA3", name: "WSA3" });
+      const projectId = state.projects[0].id;
+      state = await createWork(fixture.workspace, lease, { expectedVersion: 1, occurredAt: instant(2), projectId, externalKey: "INIT-WSA3", kind: "Initiative", parentId: null });
+      const initiativeId = state.work.find((record) => record.kind === "Initiative").id;
+      state = await createWork(fixture.workspace, lease, { expectedVersion: 2, occurredAt: instant(3), projectId, externalKey: "EPIC-WSA3", kind: "Epic", parentId: initiativeId });
+      const epicId = state.work.find((record) => record.kind === "Epic").id;
+      // Bring the INIT to active so done is a legal status-machine transition; WSA-3 must then refuse it while the Epic is live.
+      state = await transitionWork(fixture.workspace, lease, { expectedVersion: 3, occurredAt: instant(4), id: initiativeId, status: "ready" });
+      state = await transitionWork(fixture.workspace, lease, { expectedVersion: 4, occurredAt: instant(5), id: initiativeId, status: "active" });
+
+      await assert.rejects(
+        transitionWork(fixture.workspace, lease, { expectedVersion: 5, occurredAt: instant(6), id: initiativeId, status: "done" }),
+        (error) => error?.reasonCode === "WORKSPACE_INPUT_INVALID" && /still holds live non-terminal work/u.test(String(error?.message)),
+        "closing an active INIT with a live descendant must be refused"
+      );
+
+      // Terminalise the Epic (ready -> active -> done), then the INIT can close.
+      state = await transitionWork(fixture.workspace, lease, { expectedVersion: 5, occurredAt: instant(6), id: epicId, status: "ready" });
+      state = await transitionWork(fixture.workspace, lease, { expectedVersion: 6, occurredAt: instant(7), id: epicId, status: "active" });
+      state = await transitionWork(fixture.workspace, lease, { expectedVersion: 7, occurredAt: instant(8), id: epicId, status: "done" });
+      state = await transitionWork(fixture.workspace, lease, { expectedVersion: 8, occurredAt: instant(9), id: initiativeId, status: "done" });
+      assert.equal(state.work.find((record) => record.id === initiativeId).status, "done");
+    } finally {
+      await lease.release();
+    }
+  } finally {
+    await fixture.close();
+  }
+});
