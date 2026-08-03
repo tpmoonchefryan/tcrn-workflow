@@ -3,6 +3,26 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.10.0 — 2026-08-03
+
+Closing an Initiative that still holds a live, non-terminal work item is now a
+chain-level error instead of a discipline.
+
+The engine's work-graph validation (`validateWorkGraph`) gains **WSA-3**: an
+`Initiative` in the terminal `done` state may not have any live non-terminal
+descendant at any depth — a done Epic under it with a still-active Story is red
+too, not just direct children. A tombstoned (deleted) child holds no open work
+and is excluded. The refusal is `WORK_GRAPH_ACTIVE_CHILDREN_OF_DONE_INITIATIVE`.
+
+This makes "close the initiative" an act of completion: every descendant must
+already be terminal, or the close is premature. The old habit of closing an INIT
+with pending Epics/Stories — which previously passed silently — now fails
+closed at the graph validator, so a replay over a violating chain refuses.
+
+It is a minor release: it adds a graph-validation rule but no verb, no event
+schema change, no transform of existing events, and no change to the chain
+storage version. It alters `PROTOCOL_REASON_CODES` by one entry.
+
 ## 0.9.0 — 2026-07-29
 
 A workspace gains a governed route to a new path or a new machine.
