@@ -27,7 +27,7 @@ transitions do not come back. When a mutating verb genuinely has to be exercised
 understood, exercise it in a scratch workspace created for that purpose and discarded
 after.
 
-### 3. There is no code graph here — and know which copy you are driving
+### 3. There is no code graph here — and know which copy, *on which host*, you are driving
 
 This repository is not indexed by codegraph (the product repositories on this platform
 are). Its instruments are the command catalog, the test suite, and — from `v0.6.0` — the
@@ -38,6 +38,40 @@ The freshness trap that a stale index is elsewhere, a stale *copy* is here: the 
 tree in this repository and the installed copy a governed session actually drives are two
 different things and routinely sit at different versions. Before concluding that a verb
 does or does not exist, check which one you just ran.
+
+**Since 2026-07-29 that question has a second half: which host.** This platform's governed
+chains no longer all live on one machine — one partition's truth was relocated to another
+host, and there is now an installed engine copy on each. Two copies means two version
+numbers and two catalogs, so "does this verb exist" is a question about the copy you are
+actually invoking, and `commands` must be asked of *that* one. Which partition is where,
+with a runnable recheck command per partition, is stated in the platform root's `CLAUDE.md`
+section 三 — do not infer it from this repository's working tree.
+
+### 3b. The relocation verb family, and what it cannot do
+
+`v0.9.0` carries five relocation verbs — `relocation-plan` and `relocation-inspect` (read),
+`relocation-vacate`, `relocation-adopt` and `relocation-abort` (mutating). They are the
+**only** legitimate way a governed workspace changes machines: the engine binds five
+absolute roots, so a byte-identical copy at any other path is refused by all three read
+verbs, and moving bytes without moving the binding produces an unreadable tree rather than
+a second live authority.
+
+**Read `docs/adr/0003-workspace-relocation.md` before reasoning about this family, and read
+its "four ceilings" section rather than a summary of it.** The general statement all four
+are instances of: *this mechanism cannot prevent a fork, only make one legible.* Three
+consequences that repeatedly get overstated in prose and must not be:
+
+- it is **authorization, not authentication** — nothing proves who ran the command;
+- the ledger is **deletable**, and no single-sided test can go red on that; detection is
+  the *counterparty's* capability, not the engine's;
+- `relocation-abort` **after** the destination has adopted is not a rollback — it is a fork,
+  produced with legal verbs and no damaged bytes.
+
+Operationally: the ledger has a **16-entry cap, consumed per attempt, with no compaction
+verb**, and an adopt entry is written only into the destination copy and never sent back. So
+the two sides' ledger lengths are *expected* to differ — **never write a closing predicate
+that compares ledger lengths** — and "move it back" costs a fresh hop rather than an undo.
+Sequencing for a multi-partition platform is in the same ADR (section OD-D).
 
 ### 4. Verify "did it reach elsewhere" against the authority, and compare full values
 
@@ -64,7 +98,9 @@ a leak; the test is whether anything owns the record of it.
   is written in the engine's canonical byte form. An editor that reformats on save, a
   linter, a prettifier, or an agent reaching for a file-write tool breaks the chain, and
   then *reading* it stops working too. Inspecting those files is fine; saving them never
-  is.
+  is. **A remote tree is not an exception**: `cat >`, `sed -i` or `rsync` over SSH is the
+  same act with the same outcome, and a write to a chain that lives on another host must be
+  performed by the engine *on that host*.
 - **Root files are allowlisted in both directions.** `scripts/policy/source-allowlist.json`
   fails closed on a tracked file that is not listed *and* on a listed file that does not
   exist. Adding a root document means adding its entry in the same change.
