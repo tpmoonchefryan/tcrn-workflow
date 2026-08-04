@@ -1812,6 +1812,41 @@ test("WSE-3: legacy mutations without --actor on a non-enabled workspace never w
   }
 });
 
+test("WSA-3 (create side): a done Initiative may not acquire a new live child, while a live Initiative may", async () => {
+  const fixture = await workspaceFixture({ externalKey: "WORKSPACE-WSA3C" });
+  try {
+    const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(1) });
+    try {
+      let state = await createProject(fixture.workspace, lease, { expectedVersion: 0, occurredAt: instant(1), externalKey: "PROJECT-WSA3C", name: "WSA3C" });
+      const projectId = state.projects[0].id;
+      // Two Initiatives: one will be closed, one stays live. The rule must tell them apart.
+      state = await createWork(fixture.workspace, lease, { expectedVersion: 1, occurredAt: instant(2), projectId, externalKey: "INIT-WSA3C-CLOSED", kind: "Initiative", parentId: null });
+      const closedInitiative = state.work.find((record) => record.externalKey === "INIT-WSA3C-CLOSED").id;
+      state = await createWork(fixture.workspace, lease, { expectedVersion: 2, occurredAt: instant(3), projectId, externalKey: "INIT-WSA3C-LIVE", kind: "Initiative", parentId: null });
+      const liveInitiative = state.work.find((record) => record.externalKey === "INIT-WSA3C-LIVE").id;
+      // Close the first one legally: it has no descendants, so the transition-side rule permits it.
+      state = await transitionWork(fixture.workspace, lease, { expectedVersion: 3, occurredAt: instant(4), id: closedInitiative, status: "ready" });
+      state = await transitionWork(fixture.workspace, lease, { expectedVersion: 4, occurredAt: instant(5), id: closedInitiative, status: "active" });
+      state = await transitionWork(fixture.workspace, lease, { expectedVersion: 5, occurredAt: instant(6), id: closedInitiative, status: "done" });
+
+      await assert.rejects(
+        createWork(fixture.workspace, lease, { expectedVersion: 6, occurredAt: instant(7), projectId, externalKey: "EPIC-WSA3C-REOPEN", kind: "Epic", parentId: closedInitiative }),
+        (error) => error?.reasonCode === "WORKSPACE_INPUT_INVALID" && /it is already done/u.test(String(error?.message)),
+        "adding live work under a done Initiative must be refused"
+      );
+
+      // The other side of the predicate: the identical create under a live Initiative is accepted,
+      // so the rule discriminates on the parent's state rather than refusing every child.
+      state = await createWork(fixture.workspace, lease, { expectedVersion: 6, occurredAt: instant(7), projectId, externalKey: "EPIC-WSA3C-OK", kind: "Epic", parentId: liveInitiative });
+      assert.equal(state.work.find((record) => record.externalKey === "EPIC-WSA3C-OK").parentId, liveInitiative);
+    } finally {
+      await lease.release();
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("WSA-3: closing an Initiative to done with live non-terminal descendants is refused; terminalising first lets it close", async () => {
   const fixture = await workspaceFixture({ externalKey: "WORKSPACE-WSA3" });
   try {
