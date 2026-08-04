@@ -3,6 +3,30 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.10.2 — 2026-08-04
+
+**WSA-3 also admits on create.**
+
+`0.10.1` refused to close an Initiative that still held live non-terminal work,
+but nothing stopped a new live child being created under an Initiative that was
+already `done` — so a closed subtree could be reopened one `work-create` later.
+`createWork` now refuses a non-terminal record whose parent is a done,
+non-tombstoned `Initiative` (`WORKSPACE_INPUT_INVALID`); the same create under a
+live Initiative is still accepted.
+
+Like its transition-side twin the check sits in the write path's mutation
+reducer, never in `validateWorkGraph` — replay runs that validator over every
+historical event, which is how `0.10.0` fail-closed an existing chain.
+
+- No verb, event-schema, or storage-version change; `PROTOCOL_REASON_CODES`
+  unchanged.
+- Release hygiene: `packages/{cli,core,protocol}` were still pinned at `0.9.0`
+  while the root manifest said `0.10.x`, so `verify:p8` could not pass for either
+  earlier 0.10 release. All four manifests, `FRAMEWORK_VERSION`, and the
+  `P8_VERSION` / `P8_TAG` constants now agree, and the release carries an
+  **annotated** tag (`v0.10.0` and `v0.10.1` were lightweight, so no tag object
+  existed for the helper's `IDENTITY` to pin).
+
 ## 0.10.1 — 2026-08-03
 
 **WSA-3 moved from replay-level to write-path admission.**
