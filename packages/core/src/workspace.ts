@@ -2787,6 +2787,24 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
     if (state.work.some((record) => record.id === id)) {
       fail("WORKSPACE_INPUT_INVALID", `work ${id} already exists`);
     }
+    // WSA-3 (write-path admission, create side): a `done` Initiative may not
+    // acquire a NEW live child. transitionWork already refuses to close an
+    // Initiative that still holds live work; without this mirror the same
+    // invariant is enforced only at the closing instant, so re-opening the
+    // subtree afterwards is a create away and "done" stops meaning "finished".
+    // Like its transition-side twin this lives in the reducer — the write path's
+    // input validation — and NOT in validateWorkGraph, which replay runs over
+    // every historical event and which therefore fail-closes chains that legally
+    // closed an Initiative before the rule existed (TCRN-AOS-INC-048).
+    if (input.parentId !== null) {
+      const parent = state.work.find((record) => record.id === input.parentId);
+      const status = input.status ?? "planned";
+      if (parent && parent.kind === "Initiative" && parent.status === "done" && !parent.tombstone
+        && status !== "done" && status !== "cancelled") {
+        fail("WORKSPACE_INPUT_INVALID",
+          `cannot add live work under Initiative ${parent.id}: it is already done`);
+      }
+    }
     const record: WorkRecord = {
       schemaVersion: "tcrn.work.v1",
       id,
