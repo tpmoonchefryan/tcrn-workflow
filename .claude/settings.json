@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "deny": [
+      "Write(**/.tcrn-workflow/**)",
+      "Edit(**/.tcrn-workflow/**)",
+      "Write(**/.tcrn-workspace/**)",
+      "Edit(**/.tcrn-workspace/**)",
+      "Write(~/Code/TCRN Platform/.tcrn-workspace/**)",
+      "Edit(~/Code/TCRN Platform/.tcrn-workspace/**)",
+      "Write(~/Code/TCRN Platform/.tcrn-workspace/.*)",
+      "Edit(~/Code/TCRN Platform/.tcrn-workspace/.*)",
+      "Write(~/Code/TCRN Platform/.tcrn-workspace/**/.*)",
+      "Edit(~/Code/TCRN Platform/.tcrn-workspace/**/.*)",
+      "Write(~/Code/TCRN Platform/.tcrn-workspace/.*/**)",
+      "Edit(~/Code/TCRN Platform/.tcrn-workspace/.*/**)",
+      "Write(~/Code/TCRN Platform/.tcrn-workspace/**/.*/**)",
+      "Edit(~/Code/TCRN Platform/.tcrn-workspace/**/.*/**)",
+      "Write(~/.tcrn-workflow/**)",
+      "Edit(~/.tcrn-workflow/**)",
+      "Write(~/.tcrn-workflow/.*)",
+      "Edit(~/.tcrn-workflow/.*)",
+      "Write(~/.tcrn-workflow/**/.*)",
+      "Edit(~/.tcrn-workflow/**/.*)",
+      "Write(~/.tcrn-workflow/.*/**)",
+      "Edit(~/.tcrn-workflow/.*/**)",
+      "Write(~/.tcrn-workflow/**/.*/**)",
+      "Edit(~/.tcrn-workflow/**/.*/**)",
+      "Write(~/.tcrn-workflow/**)",
+      "Edit(~/.tcrn-workflow/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/ssh-write-observer.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}
