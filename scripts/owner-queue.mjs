@@ -74,12 +74,18 @@ function callReadFace(tool, args, timeoutMs = 120_000) {
 export async function renderOwnerQueue({ partition = "cross-project" } = {}) {
   const blocked = await callReadFace("tcrn_remote_read_work_list", { partition, status: "blocked" });
   let blockedRows = [];
+  const readFailures = [];
   if (blocked.ok) {
     const records = blocked.result?.result?.records ?? blocked.result?.records ?? [];
     blockedRows = records.map((r) => ({ source: "chain-blocked", id: r.externalKey ?? r.id, status: r.status }));
+  } else {
+    // INC-051: a chain-read failure must NEVER silently empty the queue — the Owner
+    // could lose a blocked item with no signal at any layer. It is a first-class row.
+    readFailures.push({ source: "chain-read-failed", id: blocked.reasonCode ?? "READ_FAILED", status: "unreadable", evidence: blocked.error ?? "" });
   }
 
   const rows = [
+    ...readFailures,
     ...blockedRows,
     ...INC041_TODOS.map((t) => ({ source: "inc041-todo", id: t.id, status: t.status, evidence: t.evidence })),
     { source: "release-stop", id: RELEASE_STOP.id, status: RELEASE_STOP.status, evidence: RELEASE_STOP.evidence }
