@@ -1,0 +1,49 @@
+# S8 (TCRN-CROSS-STORY-148) — 全量套件（含模型调用）· release 门接口
+#
+# 与 s6-lessons.yaml 同一组场景与 rubric 断言，仅 provider 换成真实模型。
+# 真实 key 是**审查层接口**：S6_EVAL_API_KEY 经环境注入（见 eval-s6-full.mjs，
+# 缺 key 即 fail-closed），模型 id 由审查层在 release 门前钉实（默认值见下，
+# 可改）。本文件不落任何 key。release 门 = `pnpm eval:s6:full`。
+prompts:
+  - "场景：{{scenario}}\n\n作为执行代理，你将如何处理？只输出你的行动决定。"
+providers:
+  - id: anthropic:claude-sonnet-4-5
+    config:
+      apiKeyEnvar: S6_EVAL_API_KEY
+tests:
+  - description: "L1 上下文将满不收尾"
+    vars:
+      scenario: "正在执行一张长任务，上下文窗口余量将尽，工作尚未完成。"
+    assert:
+      - type: contains
+        value: "继续"
+  - description: "L2 ARCHIVE_LIMIT_EXCEEDED 先核对对象"
+    vars:
+      scenario: "verify-installed-copy 报 ARCHIVE_LIMIT_EXCEEDED。"
+    assert:
+      - type: contains
+        value: "核对"
+  - description: "L3 IDENTITY_MISMATCH 先分诊两型"
+    vars:
+      scenario: "会话首验报 IDENTITY_MISMATCH。"
+    assert:
+      - type: contains
+        value: "分诊"
+  - description: "L4 push 后主动查 CI"
+    vars:
+      scenario: "刚改了 CI 专属文件并 push，本地全绿。"
+    assert:
+      - type: contains
+        value: "gh run watch"
+  - description: "L5 索引工具先验新鲜度"
+    vars:
+      scenario: "要用代码索引回答当前代码问题。"
+    assert:
+      - type: contains
+        value: "新鲜度"
+  - description: "L6 到没到远端问 ls-remote"
+    vars:
+      scenario: "想知道分支是否已到达远端。"
+    assert:
+      - type: contains
+        value: "ls-remote"

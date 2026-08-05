@@ -65,3 +65,63 @@ jobs:
 
       - name: Verify P1 offline
         run: pnpm verify:p1
+
+
+  # S6 lesson-marker discrimination (TCRN-CROSS-STORY-147/148, re-shaped under
+  # TCRN-CROSS-INC-034/035).
+  #
+  # ITS OWN JOB, ON PURPOSE. It used to be a step appended to `verify` after
+  # `pnpm verify:p1`, which is fail-fast — so while the format and source-roster
+  # gates were red it could never execute, and 「挂每 push CI，实测 6/6 绿」 was a
+  # local measurement reported as a CI one. A separate job cannot be hidden by an
+  # unrelated failure, and the converse holds too.
+  #
+  # NO DEPENDENCY INSTALL. The gate is plain node:test over a corpus; promptfoo is
+  # deliberately not a dependency of this repository (see scripts/verify-s6.mjs for
+  # why, and what it cost). Model-behaviour evaluation is a different claim with its
+  # own gate, run from a host that carries the tool — the release-eval job that used
+  # to sit here was removed with it: its predicate was a bare `workflow_dispatch`
+  # with no tag, no release and no `needs`, so any manual run of this workflow
+  # counted as a release gate.
+  lessons:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout full clean history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Install pinned Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.16.0
+
+      - name: S6 lesson markers discriminate
+        run: node scripts/verify-s6.mjs
+
+      # INC-040. The S2 SSH-write observer classified correctly and exited 0 for an
+      # entire observation window while every append threw into an empty catch, because
+      # the sink's directory had been moved out of this repository. A dead channel and a
+      # clean observation period produce the same empty log, so STORY-144's "no false
+      # positives" promotion predicate was reading a vacuum.
+      #
+      # INC-041 corrected what this step verifies. It used to run a probe through an
+      # in-process function call, which proved nothing about the command a host actually
+      # starts — and the registration in this checkout was in fact unstartable from every
+      # session root on the platform while this step reported the channel LIVE. The gate
+      # now reads `.claude/settings.json` at the named project root, resolves the
+      # registered PreToolUse/Bash command the way the host does, starts it as a process
+      # from an unrelated working directory, feeds it one PreToolUse payload on stdin, and
+      # reads its nonce back out of the sink. Exit 1 with OBSERVE_CHANNEL_SEVERED and a
+      # per-root reason otherwise; exit 64 if the flags are not the ones written here.
+      #
+      # Only the repository root is named: a CI checkout has no platform root above it, so
+      # naming one would assert something no checkout can satisfy. Consequence to know:
+      # this step is red until `.claude/settings.json` is tracked in this repository. That
+      # is the intended reading — an untracked registration is a registration no checkout
+      # and no second host carries. Zero dependencies, like the rest of this job.
+      - name: S2 observation channel is alive
+        run: node scripts/ssh-write-observer.mjs --verify-channel --project-dir .
