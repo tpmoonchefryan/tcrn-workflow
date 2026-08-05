@@ -61,14 +61,7 @@ function redSamples(module) {
 const MUTATIONS = [
   // ---- tokenizer -----------------------------------------------------------
   { id: "tok-comment", find: `if (char === "#" && !started) {`, replace: `if (false && !started) {`, witness: "D09" },
-  { id: "tok-pipe-split", find: `    if (char === "|") {`, replace: `    if (false) {`, witness: "C16" },
-  {
-    id: "tok-amp-split",
-    find: `      flushSegment();\n      i += 1;\n      if (text[i] === "&") i += 1;\n      continue;`,
-    replace: `      cur += char;\n      started = true;\n      i += 1;\n      continue;`,
-    witness: "F04",
-  },
-  { id: "tok-amp-redirect", find: `      if (text[i + 1] === ">") {`, replace: `      if (false) {`, witness: "E16" },
+  { id: "tok-pipe-split", find: `    if (char === "|") {`, replace: `    if (false) {`, witness: "H01" },
   // One branch covers `(`, `)`, backtick and `$(` — C15/E21/E22 all rely on it.
   { id: "tok-subshell", find: `    if (char === "\`" || char === "(" || char === ")") {`, replace: `    if (false) {`, witness: "E21" },
   { id: "tok-subshell-substitution", find: `    if (char === "\`" || char === "(" || char === ")") {`, replace: `    if (false) {`, witness: "C15" },
@@ -82,12 +75,10 @@ const MUTATIONS = [
     replace: `      argv.push({ value: op, quoted: false });\n      const lifted = readWord();\n      if (lifted) argv.push({ value: lifted, quoted: false });`,
     witness: "A01",
   },
-  { id: "tok-fd-prefix", find: `      if (started && !quoted && /^\\d+$/u.test(cur)) {`, replace: `      if (false) {`, witness: "F15" },
-  {
-    id: "dup-is-not-a-write",
+  { id: "dup-is-not-a-write",
     find: `      if (redirect.dup || !WRITE_REDIRECT_OPS.has(redirect.op)) continue;`,
     replace: `      if (!WRITE_REDIRECT_OPS.has(redirect.op)) continue;`,
-    witness: "D07",
+    witness: "H10",
   },
 
   // ---- wrapper / env-assignment resolution (defect 2) ----------------------
@@ -184,9 +175,9 @@ const MUTATIONS = [
   // ---- write primitives ----------------------------------------------------
   { id: "redirect-op-gt", find: `new Set([">", ">>", ">|", "&>", "&>>"])`, replace: `new Set([">>", ">|", "&>", "&>>"])`, witness: "A01" },
   { id: "redirect-op-gtgt", find: `new Set([">", ">>", ">|", "&>", "&>>"])`, replace: `new Set([">", ">|", "&>", "&>>"])`, witness: "A03" },
-  { id: "redirect-op-gtbar", find: `new Set([">", ">>", ">|", "&>", "&>>"])`, replace: `new Set([">", ">>", "&>", "&>>"])`, witness: "E19" },
-  { id: "redirect-op-ampgt", find: `new Set([">", ">>", ">|", "&>", "&>>"])`, replace: `new Set([">", ">>", ">|", "&>>"])`, witness: "E16" },
-  { id: "redirect-op-ampgtgt", find: `new Set([">", ">>", ">|", "&>", "&>>"])`, replace: `new Set([">", ">>", ">|", "&>"])`, witness: "E20" },
+  { id: "redirect-op-gtbar", find: `new Set([">", ">>", ">|", "&>", "&>>"])`, replace: `new Set([">", ">>", "&>", "&>>"])`, witness: "H15" },
+  { id: "redirect-op-ampgt", find: `new Set([">", ">>", ">|", "&>", "&>>"])`, replace: `new Set([">", ">>", ">|", "&>>"])`, witness: "H03" },
+  { id: "redirect-op-ampgtgt", find: `new Set([">", ">>", ">|", "&>", "&>>"])`, replace: `new Set([">", ">>", ">|", "&>"])`, witness: "H16" },
   { id: "write-cmd-cp", find: `new Set(["cp", "mv", "rm", "dd", "install", "touch", "tee"])`, replace: `new Set(["mv", "rm", "dd", "install", "touch", "tee"])`, witness: "A06" },
   { id: "write-cmd-mv", find: `new Set(["cp", "mv", "rm", "dd", "install", "touch", "tee"])`, replace: `new Set(["cp", "rm", "dd", "install", "touch", "tee"])`, witness: "A07" },
   { id: "write-cmd-rm", find: `new Set(["cp", "mv", "rm", "dd", "install", "touch", "tee"])`, replace: `new Set(["cp", "mv", "dd", "install", "touch", "tee"])`, witness: "A08" },
@@ -213,36 +204,25 @@ const MUTATIONS = [
   },
 
   // ---- exemption stage (defect 1: anchored, and evaluated last) -------------
-  { id: "exemption-stage", find: `      if (exemption) {`, replace: `      if (false) {`, witness: "F02" },
-  { id: "exemption-empty-targets", find: `    if (unit.targets.length === 0) return null;`, replace: `    ;`, witness: "E17" },
-  { id: "exemption-target-guard", find: `    if (!unit.targets.every(isSafeTarget)) return null;`, replace: `    ;`, witness: "F03" },
-  { id: "exemption-every-unit", find: `    matched.push(entry.id);`, replace: `    return entry.id;`, witness: "F06" },
-  {
-    id: "exemption-entry-host-engine",
-    find: `          HOST_ENGINE.test(token.value) && (index === 0 || RUNNERS.has(basename(unit.argv[index - 1].value))),`,
-    replace: `          false && HOST_ENGINE.test(token.value),`,
-    witness: "F02",
-  },
-  { id: "exemption-entry-scratch", find: `    matches: (unit) => unit.targets.every(isScratchTarget),`, replace: `    matches: () => false,`, witness: "F04" },
-  { id: "exemption-runner-unwrap", find: `RUNNERS.has(basename(unit.argv[index - 1].value))`, replace: `false`, witness: "F02" },
-  { id: "exemption-direct-exec", find: `(index === 0 || RUNNERS.has`, replace: `(false || RUNNERS.has`, witness: "F10" },
+  { id: "exemption-stage", find: `      if (exemption) {`, replace: `      if (false) {`, witness: "H05" },
+  { id: "exemption-empty-targets", find: `    if (unit.targets.length === 0) return null;`, replace: `    ;`, witness: "H14" },
+  { id: "exemption-every-unit", find: `    matched.push(entry.id);`, replace: `    return entry.id;`, witness: "H13" },
+  { id: "exemption-entry-scratch", find: `    matches: (unit) => unit.targets.every(isScratchTarget),`, replace: `    matches: () => false,`, witness: "H05" },
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
   },
-  { id: "safe-target-absolute", find: `  return target.startsWith("/") && !GOVERNANCE.test(target);`, replace: `  return !GOVERNANCE.test(target);`, witness: "F13" },
-  { id: "safe-target-governance", find: `  return target.startsWith("/") && !GOVERNANCE.test(target);`, replace: `  return target.startsWith("/");`, witness: "F03" },
-  { id: "scratch-root-tmp", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/var/tmp/", "/run/", "/dev/null"]`, witness: "F04" },
-  { id: "scratch-root-var-tmp", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/tmp/", "/run/", "/dev/null"]`, witness: "F11" },
-  { id: "scratch-root-run", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/tmp/", "/var/tmp/", "/dev/null"]`, witness: "F14" },
-  { id: "scratch-root-dev-null", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/tmp/", "/var/tmp/", "/run/"]`, witness: "F12" },
+  { id: "scratch-root-tmp", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/var/tmp/", "/run/", "/dev/null"]`, witness: "H05" },
+  { id: "scratch-root-var-tmp", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/tmp/", "/run/", "/dev/null"]`, witness: "H06" },
+  { id: "scratch-root-run", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/tmp/", "/var/tmp/", "/dev/null"]`, witness: "H07" },
+  { id: "scratch-root-dev-null", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/tmp/", "/var/tmp/", "/run/"]`, witness: "H08" },
   {
     id: "scratch-prefix-match",
     find: `  return SCRATCH_ROOTS.some((root) => (root.endsWith("/") ? target.startsWith(root) : target === root));`,
     replace: `  return SCRATCH_ROOTS.some((root) => target === root);`,
-    witness: "F04",
+    witness: "H09",
   },
 
   // ---- classify flow -------------------------------------------------------
@@ -261,8 +241,8 @@ const MUTATIONS = [
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
   // The heart of defect 3: scope the write-primitive scan to the remote command.
-  { id: "remote-command-scope", find: `      const units = remoteWriteUnits(transport.remote);`, replace: `      const units = remoteWriteUnits(command);`, witness: "D11" },
-  { id: "write-primitive-required", find: `      if (units.length === 0) continue;`, replace: `      if (false) continue;`, witness: "A15" },
+  { id: "remote-command-scope", find: `      const units = remoteWriteUnits(transport.remote);`, replace: `      const units = remoteWriteUnits(command);`, witness: "H11" },
+  { id: "write-primitive-required", find: `      if (units.length === 0) continue;`, replace: `      if (false) continue;`, witness: "D04" },
   { id: "transfer-spec-required", find: `      if (transport.remoteSpecs.length === 0) continue;`, replace: `      if (false) continue;`, witness: "D08" },
   {
     id: "transfer-governance-check",
@@ -270,7 +250,7 @@ const MUTATIONS = [
     replace: `      if (false) continue;`,
     witness: "E10",
   },
-  { id: "reason-rank", find: `    if (candidateRank > rank) {`, replace: `    if (true) {`, witness: "D12" },
+  { id: "reason-rank", find: `    if (candidateRank > rank) {`, replace: `    if (true) {`, witness: "H12" },
 ];
 
 test("corpus is green against the unmutated observer", async () => {
