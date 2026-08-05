@@ -162,22 +162,31 @@ export async function runInjection({ prompt, partition, roleScope, budget, trigg
   const matched = matchedTriggerKeywords(prompt, triggerKeywords);
   // Query with the matched trigger keywords (clean, curated terms) when available; else
   // fall back to the first few extracted tokens. Never the raw sentence — the AND-token
-  // FTS rejects connective words (measured in STORY-161.5).
+  // FTS rejects connective words (measured in STORY-161.5). Multi-word: query each term
+  // SEPARATELY and union the candidate ids (OR semantics), because a multi-term AND
+  // query pulls to zero whenever any term is absent from a card (measured in the QA
+  // review: "判据+CAS+marker" → 0, single "CAS" → 1).
   const tokens = matched.length > 0 ? matched : extractQueryTokens(prompt).slice(0, 3);
-  const search = tokens.join(" ");
-  if (search.length === 0) {
+  if (tokens.length === 0) {
     return { ok: true, injected: false, reason: "NO_QUERY_TOKENS", candidates: [], injectedBytes: 0 };
   }
-  const call = await callReadFace("tcrn_remote_read_knowledge_candidates", {
-    partition,
-    "role-scope": roleScope,
-    search,
-    at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
-  });
-  if (!call.ok) {
-    return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
+  const seen = new Set();
+  const candidates = [];
+  for (const token of tokens) {
+    const call = await callReadFace("tcrn_remote_read_knowledge_candidates", {
+      partition,
+      "role-scope": roleScope,
+      search: token,
+      at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
+    });
+    if (!call.ok) {
+      return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
+    }
+    const batch = call.result?.result?.candidates ?? call.result?.candidates ?? [];
+    for (const candidate of batch) {
+      if (!seen.has(candidate.id)) { seen.add(candidate.id); candidates.push(candidate); }
+    }
   }
-  const candidates = call.result?.result?.candidates ?? call.result?.candidates ?? [];
   const lines = [];
   for (const candidate of candidates) {
     const line = `· [${candidate.id}] ${candidate.title ?? candidate.subject ?? ""} — ${candidate.summary ?? ""}`;
@@ -243,9 +252,12 @@ if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
     }
     process.exitCode = process.exitCode ?? 0;
   } else if (options.selfTest) {
+    // self-test must NOT be green on zero retrieval (恒绿门, INC-044): a retrieval
+    // chain that produces no candidates for a known curated term is a broken chain.
+    // Predicate aligned with verify-channel.
     const result = await runInjection({ prompt: "hook 没有生效", partition: options.partition, roleScope: options.roleScope, budget: options.budget, triggerKeywords: "" });
     out(result);
-    if (result.ok !== true || result.injected !== true) process.exitCode = 1;
+    if (result.ok !== true || result.injected !== true || result.candidateCount === 0) process.exitCode = 1;
   } else {
     out(await runInjection(options));
   }

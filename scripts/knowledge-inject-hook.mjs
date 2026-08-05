@@ -37,12 +37,15 @@ function runInject(prompt, triggerKeywords = TRIGGER_KEYWORDS) {
 export function buildHookResponse(input) {
   const event = input.hook_event_name ?? "";
   const prompt = typeof input.prompt === "string" ? input.prompt : "";
-  const additionalContext = [];
+  // The host contract requires additionalContext to be a STRING (a JSON array is
+  // schema-invalid and the whole hook output is dropped — verified against the Claude
+  // Code hooks documentation, INC-044). Empty string when nothing matches.
+  const chunks = [];
 
   const inject = (p, triggers = TRIGGER_KEYWORDS) => {
     const result = runInject(p, triggers);
     if (result.ok === true && result.injected === true && typeof result.injection === "string" && result.injection.length > 0) {
-      additionalContext.push(`[平台知识注入 · ${result.candidateCount} 条 · 来源 cross-project 知识面]${result.injection}`);
+      chunks.push(`[平台知识注入 · ${result.candidateCount} 条 · 来源 cross-project 知识面]${result.injection}`);
     }
     return result;
   };
@@ -58,7 +61,7 @@ export function buildHookResponse(input) {
     if (result.injected === false && result.reason === "NO_QUERY_TOKENS") inject("lesson", "");
   }
 
-  return { hookSpecificOutput: { hookEventName: event, additionalContext } };
+  return { hookSpecificOutput: { hookEventName: event, additionalContext: chunks.join("\n") } };
 }
 
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
