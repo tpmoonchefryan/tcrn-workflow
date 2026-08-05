@@ -31,6 +31,12 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // original 21-sample corpus and the inert branches report themselves by name.
 const SOURCE_PATH = process.env.INC037_SOURCE ?? resolve(HERE, "../scripts/ssh-write-observer.mjs");
 const source = await readFile(SOURCE_PATH, "utf8");
+
+// The mutant copies live in a temp workdir, so PLATFORM_ROOT (derived from the
+// script's own location) points nowhere. Pin the break-glass allowlist to the REAL
+// platform file before importing any copy (INC-051): otherwise a mutant sees an
+// empty allowlist and samples that should ride a break-glass entry go red.
+process.env.PUBLIC_CONFIGURATION_VALUE = resolve(HERE, "../../TCRN-AOS/deploy/aos-local-client/ssh-breakglass-allowlist.json");
 const workdir = await mkdtemp(join(tmpdir(), "inc037-mutants-"));
 after(async () => {
   await rm(workdir, { recursive: true, force: true });
@@ -241,7 +247,7 @@ const MUTATIONS = [
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
   // The heart of defect 3: scope the write-primitive scan to the remote command.
-  { id: "remote-command-scope", find: `      const units = remoteWriteUnits(transport.remote);`, replace: `      const units = remoteWriteUnits(command);`, witness: "H11" },
+  { id: "remote-command-scope", find: `      note(2, "no-write-primitive");\n      const units = remoteWriteUnits(transport.remote);`, replace: `      note(2, "no-write-primitive");\n      const units = remoteWriteUnits(command);`, witness: "H11" },
   { id: "write-primitive-required", find: `      if (units.length === 0) continue;`, replace: `      if (false) continue;`, witness: "D04" },
   { id: "transfer-spec-required", find: `      if (transport.remoteSpecs.length === 0) continue;`, replace: `      if (false) continue;`, witness: "D08" },
   {
@@ -251,6 +257,9 @@ const MUTATIONS = [
     witness: "E10",
   },
   { id: "reason-rank", find: `    if (candidateRank > rank) {`, replace: `    if (true) {`, witness: "H12" },
+  // INC-051: the write-guard before the allowlist — removing it lets a "status; rm"
+  // command ride the status break-glass entry. F06 (status + rm of the tree) must turn red.
+  { id: "allowlist-write-guard", find: `        if (writeHit) return { verdict: "HIT", reason: "ssh-write" };`, replace: `        /* guard removed */`, witness: "F06" },
 ];
 
 test("corpus is green against the unmutated observer", async () => {
