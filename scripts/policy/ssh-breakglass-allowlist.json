@@ -1,30 +1,32 @@
 {
   "schemaVersion": "aos.ssh-breakglass-allowlist.v1",
-  "why": "SSH 直驱引擎 CLI 已降格为 break-glass(TCRN-CROSS-INIT-019 STORY-158, D1/D9)。白名单只收两类残余适用场景,每条带日期与理由。本文件被两处共同消费:doc-topology-proof.mjs(157.3 判「文档里出现 SSH 直驱引擎命令且不在白名单」即红)与 tcrn-workflow/scripts/ssh-write-observer.mjs(164.2 判白名单内 PASS、白名单外 HIT)。一份名单、两处消费,防止漂移。两处都把 pattern 用在**完整命令行**上(INC-051:doc-topology 不再截断片段),故同一条目两处判决一致。",
+  "why": "SSH 直驱引擎 CLI 已降格为 break-glass(TCRN-CROSS-INIT-019 STORY-158, D1/D9)。门面(facade-read-service / facade-write-service,STORY-181/182)已是本平台唯一的读写门面;SSH 直驱只收两类残余适用场景,每条带日期与理由,并在 STORY-186 收缩了第一类的触发条件(MCP 面不可达 → 门面不可达)。本文件被两处共同消费:doc-topology-proof.mjs(157.3 判「文档里出现 SSH 直驱引擎命令且不在白名单」即红)与 tcrn-workflow/scripts/ssh-write-observer.mjs(164.2 判白名单内 PASS、白名单外 HIT)。一份名单、两处消费,防止漂移。两处都把 pattern 用在**完整命令行**上(INC-051:doc-topology 不再截断片段),故同一条目两处判决一致。",
   "classes": [
     {
       "id": "mcp-unreachable-fallback",
-      "name": "主机 MCP 面不可达时的 break-glass",
-      "reason": "D1 残余适用性:当 AOS 主机(承载五链的 VM)的 MCP 只读面/写面不可达时,经 SSH 直驱引擎 CLI 做只读核查是最后手段。此类命令必须在记录里说明为什么 MCP 不可达。"
+      "name": "门面不可达时的 break-glass 只读核查",
+      "reason": "D1 残余适用性(STORY-186 收缩):门面服务(facade-read-service / facade-write-service)已是本平台唯一的读写门面,只读复核与受治写都走门面。当 AOS 主机(承载五链的 VM)的门面服务不可达时,经 SSH 直驱引擎 CLI 做只读核查是最后手段。此类命令必须在记录里说明为什么门面不可达。"
     },
     {
       "id": "service-layer-byte-compare",
       "name": "按设计绕开服务层的逐字节比对",
-      "reason": "D9 残余适用性:engine-host:verify 这类逐文件双向比对 sha256 的只读校验,按设计绕开服务层(MCP 面不承载逐字节比对),经 SSH 直读主机是设计而非退化。"
+      "reason": "D9 残余适用性:engine-host:verify 这类逐文件双向比对 sha256 的只读校验,按设计绕开服务层(门面不承载逐字节比对),经 SSH 直读主机是设计而非退化。"
     }
   ],
   "entries": [
     {
       "class": "mcp-unreachable-fallback",
       "pattern": "ssh\\s+tcrn-platform-placeholder\\s+['\"]node\\s+/var/lib/tcrn-placeholder/engine/tcrn-workflow/scripts/tcrn-workflow\\.mjs\\s+status\\b",
-      "reason": "MCP 只读面不可达时的只读 status 核查(使用须在记录说明不可达理由)",
-      "since": "2026-08-06"
+      "reason": "门面只读面不可达时的只读 status 核查(使用须在记录说明门面不可达理由)",
+      "since": "2026-08-06",
+      "reviewedAt": "2026-08-06"
     },
     {
       "class": "service-layer-byte-compare",
       "pattern": "ssh\\s+tcrn-platform-placeholder\\s+['\"](?:sha256sum|shasum|sha1sum)\\s+/var/lib/tcrn-placeholder/engine/tcrn-workflow/",
       "reason": "按设计绕开服务层的逐字节比对:对引擎路径本身做哈希校验(engine-host:verify 的同类手工程)",
-      "since": "2026-08-06"
+      "since": "2026-08-06",
+      "reviewedAt": "2026-08-06"
     }
   ]
 }
