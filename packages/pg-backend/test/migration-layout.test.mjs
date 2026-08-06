@@ -17,6 +17,7 @@ import {
   createProject,
   createWork,
   initializeWorkspace,
+  materializeWorkspace,
   transitionWork,
   withStorageBackendFactory,
 } from "../../../dist/build/packages/core/src/index.js";
@@ -29,7 +30,7 @@ import { PgBackend } from "../../../dist/build/packages/pg-backend/src/index.js"
 const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
   ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
 const SCHEMA = "chain_cross";
-const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
+const instant = (second) => `2026-07-11T00:${String(Math.floor(second / 60)).padStart(2, "0")}:${String(second % 60).padStart(2, "0")}Z`;
 
 before(async () => {
   const { default: pg } = await import("pg");
@@ -70,6 +71,58 @@ test("STORY-189: verify passes when file and PG segment layouts differ (per-even
     await executeMigration(workspace, "pg", options);
     const verified = await verifyMigration(workspace, "pg", options);
     assert.equal(verified.ok, true, `verify must pass despite layout difference: ${verified.reasonCode}`);
+  } finally {
+    await pg.close();
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("STORY-189: PG backend respects the workspace segmentEventLimit (large-chain layout)", async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-s189b-")));
+  const kinds = ["framework", "workspace", "transient", "evidence-locator", "release-trust"];
+  const roots = [];
+  for (const kind of kinds) {
+    const path = join(base, kind);
+    await mkdir(path);
+    roots.push({ kind, path });
+  }
+  const workspace = join(base, "workspace");
+  // segmentEventLimit=64, 70 events → 2 file segments; a 1024-limit PG backend
+  // would put all 70 in one segment and (past 1 MiB) exceed canonical bounds.
+  await initializeWorkspace({ roots, externalKey: "WORKSPACE-S189B", createdAt: instant(0), segmentEventLimit: 64 });
+  const lease = await acquireWorkspaceLease(workspace, { now: instant(1) });
+  try {
+    let state = await createProject(workspace, lease, { expectedVersion: 0, occurredAt: instant(1), externalKey: "PROJECT-S189B", name: "P" });
+    const projectId = state.projects[0].id;
+    const keys = [];
+    // 70 events total: a fresh Initiative + its ready transition each round.
+    for (let i = 0; i < 35; i++) {
+      const key = `INIT-S189B-${String(i).padStart(2, "0")}`;
+      state = await createWork(workspace, lease, { expectedVersion: state.version, occurredAt: instant(2 + i * 2), projectId, externalKey: key, kind: "Initiative", parentId: null });
+      keys.push(key);
+      const fresh = state.work.find((record) => record.externalKey === key);
+      assert.ok(fresh, `work ${key} must exist`);
+      state = await transitionWork(workspace, lease, { expectedVersion: state.version, occurredAt: instant(3 + i * 2), id: fresh.id, status: "ready" });
+    }
+  } finally {
+    await lease.release();
+  }
+  const before = await materializeWorkspace(workspace);
+  assert.ok(before.version >= 70, `expected >=70 events, got ${before.version}`);
+
+  const pg = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
+  await pg.connect();
+  // Isolate from the previous test's migration (the shared chain_cross schema
+  // still holds its events + metadata, which would trip the bypass-copy probe).
+  await pg.clearForTest();
+  try {
+    const options = { backend: () => pg, storeBackend: undefined };
+    await executeMigration(workspace, "pg", options);
+    // PG should read segments in the workspace's 64-event layout.
+    const pgSegmentNames = await pg.listSegmentNames();
+    assert.ok(pgSegmentNames.length >= 2, `expected multiple PG segments, got ${pgSegmentNames.length}`);
+    const verified = await verifyMigration(workspace, "pg", options);
+    assert.equal(verified.ok, true, `verify must pass for the large chain: ${verified.reasonCode}`);
   } finally {
     await pg.close();
     await rm(base, { recursive: true, force: true });

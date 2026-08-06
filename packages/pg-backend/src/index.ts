@@ -21,7 +21,7 @@ const { Client } = pg;
 
 export { PgStoreBackend } from "./store.js";
 
-const SEGMENT_LIMIT = 1024; // engine's maximum segmentEventLimit; segments derive from sequence/limit
+const SEGMENT_LIMIT = 1024; // fallback when no metadata is readable; the workspace's own segmentEventLimit drives layout
 
 export interface PgBackendOptions {
   /** e.g. `chain_cross` — the chain schema this backend serves. */
@@ -67,6 +67,7 @@ export class PgBackend implements StorageBackend {
   private readonly client: pg.Client;
   private readonly schema: string;
   private readonly injectSegmentByteDeviation: boolean;
+  private segmentLimitCache: number | null = null;
 
   constructor(options: PgBackendOptions) {
     this.schema = options.schema;
@@ -86,8 +87,36 @@ export class PgBackend implements StorageBackend {
     await this.client.end().catch(() => {});
   }
 
+  // The workspace's own segmentEventLimit drives PG segment layout, matching the
+  // file backend. Reading it from the metadata row keeps single segments under
+  // the canonical 1 MiB bound for large chains (STORY-189: a 983-event chain
+  // exceeded it at the hardcoded 1024 limit). Falls back to the engine maximum.
+  private async resolveSegmentLimit(): Promise<number> {
+    if (this.segmentLimitCache !== null) {
+      return this.segmentLimitCache;
+    }
+    let limit = SEGMENT_LIMIT;
+    try {
+      const { rows } = await this.client.query(`select bytes from ${this.table("metadata")} where id = 1`);
+      const row = rows[0];
+      if (row?.bytes) {
+        const parsed = JSON.parse(Buffer.from(row.bytes as Buffer).toString("utf8")) as { segmentEventLimit?: unknown };
+        const candidate = Number(parsed.segmentEventLimit);
+        if (Number.isSafeInteger(candidate) && candidate >= 2 && candidate <= 1024) {
+          limit = candidate;
+        }
+      }
+    } catch {
+      // metadata read failure falls back to the max; the caller's own read will
+      // surface the real error if the store is genuinely broken.
+    }
+    this.segmentLimitCache = limit;
+    return limit;
+  }
+
   /** Test-only isolation: truncate the chain tables so a fresh run starts clean. */
   async clearForTest(): Promise<void> {
+    this.segmentLimitCache = null;
     await this.client.query(`truncate ${this.table("events")}, ${this.table("metadata")}, ${this.table("views")}`);
   }
 
@@ -116,6 +145,10 @@ export class PgBackend implements StorageBackend {
          on conflict (id) do update set bytes = excluded.bytes`,
         [content],
       );
+      // The metadata row is the source of the segment limit; a stale cache from
+      // before the row existed (the migration probe reads segments pre-metadata)
+      // would freeze the fallback and mis-layout every later read (STORY-189).
+      this.segmentLimitCache = null;
     } catch (error) {
       mapPgError(error);
     }
@@ -123,10 +156,11 @@ export class PgBackend implements StorageBackend {
 
   async listSegmentNames(): Promise<string[]> {
     try {
+      const limit = await this.resolveSegmentLimit();
       const { rows } = await this.client.query(
         `select distinct ((sequence - 1) / $1) + 1 as segment
          from ${this.table("events")} order by segment`,
-        [SEGMENT_LIMIT],
+        [limit],
       );
       return rows.map((row) => `${String(row.segment as number).padStart(6, "0")}.json`);
     } catch (error) {
@@ -140,9 +174,10 @@ export class PgBackend implements StorageBackend {
       if (!match) {
         throw new StorageError("WORKSPACE_EVENT_CORRUPT", `unexpected event entry ${name}`);
       }
+      const limit = await this.resolveSegmentLimit();
       const segmentIndex = Number(match[1]);
-      const from = (segmentIndex - 1) * SEGMENT_LIMIT + 1;
-      const to = segmentIndex * SEGMENT_LIMIT;
+      const from = (segmentIndex - 1) * limit + 1;
+      const to = segmentIndex * limit;
       const { rows } = await this.client.query(
         `select payload, payload_hash, event_hash, sequence, id, stream_id, schema_version, occurred_at, prior_hash
          from ${this.table("events")} where sequence between $1 and $2 order by sequence`,
