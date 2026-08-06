@@ -565,6 +565,12 @@ function classifyInner(command) {
   // check stopped it rather than which segment happened to be last.
   let rank = 0;
   let reason = "no-host-transport";
+  // INC-057: an allowlisted engine segment does NOT excuse the rest of the command. It
+  // is recorded and the scan continues; a governance-tree write in ANY later segment is
+  // still a HIT. And the allowlist matches the SEGMENT's own engine command (ssh host
+  // "node …tcrn-workflow.mjs …"), not the whole command line — an `echo '…status…'`
+  // prose fragment elsewhere in the line cannot ride the entry (B2).
+  let allowlistedEngine = false;
   const note = (candidateRank, candidateReason) => {
     if (candidateRank > rank) {
       rank = candidateRank;
@@ -579,16 +585,18 @@ function classifyInner(command) {
         // SSH-direct-engine invocation is break-glass only: an ALLOWLISTED command is
         // PASS, else HIT. But the allowlist never excuses a governance-tree WRITE: a
         // command that invokes the engine AND writes the tree is HIT regardless of
-        // pattern (INC-051 — a "status; rm ..." command must not ride the status
-        // fallback entry). Scratch-target writes (tee /dev/null, > /tmp) are exempt.
+        // pattern. Scratch-target writes (tee /dev/null, > /tmp) are exempt.
         let writeHit = false;
         if (GOVERNANCE.test(transport.remote)) {
           const units = remoteWriteUnits(transport.remote);
           writeHit = units.length > 0 && exemptionFor(units) === null;
         }
         if (writeHit) return { verdict: "HIT", reason: "ssh-write" };
-        if (breakglassAllows(command, BREAKGLASS_ALLOWLIST)) {
-          return { verdict: "PASS", reason: "breakglass-allowlist" };
+        const segmentCommand = `ssh ${transport.host} "${transport.remote}"`;
+        if (breakglassAllows(segmentCommand, BREAKGLASS_ALLOWLIST)) {
+          allowlistedEngine = true;
+          note(3, "breakglass-allowlist");
+          continue; // keep scanning later segments for a governance write
         }
         return { verdict: "HIT", reason: "ssh-engine-direct" };
       }
@@ -611,6 +619,9 @@ function classifyInner(command) {
       return { verdict: "HIT", reason: transport.kind };
     }
   }
+  // Every segment scanned; an allowlisted engine segment with NO governance-tree write
+  // anywhere in the command is the break-glass PASS (INC-057).
+  if (allowlistedEngine) return { verdict: "PASS", reason: "breakglass-allowlist" };
   return { verdict: "PASS", reason };
 }
 
