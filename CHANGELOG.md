@@ -3,6 +3,41 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.0 — 2026-08-06
+
+**Postgres storage backend, dual-backend equivalence, and the migration verb
+family.**
+
+`0.11.0` is the INIT-020 engine-side release (TCRN-CROSS-INIT-020): the engine
+gains a second storage backend and the verbs to move a governed chain between
+the two, without changing what a chain *is* on either side.
+
+- Storage abstraction: `StorageBackend` / `StoreBackend` interfaces; the file
+  backend is converged onto them (`workspace` data plane plus the knowledge /
+  artifact stores), byte-identical behaviour.
+- Postgres backend: `PgBackend` / `PgStoreBackend` in the new
+  `packages/pg-backend` workspace package, `pg` driver pinned at `8.22.0`; a
+  per-chain schema, append-only enforced by GRANT + trigger, fail-closed on
+  connection or verification failure.
+- Dual-backend equivalence gate: per-event bytes / head / version compared
+  value-for-value, with a mutation witness so the gate cannot be silently
+  constant-true.
+- Migration verb family: `migration-plan` / `migration-execute` /
+  `migration-verify` / `migration-rollback`. Migration is a copy of bound
+  state: the workspace binding does not travel with the bytes, so a bypass
+  copy is refused.
+- ADR `0004-postgres-storage-backend` records the direction, schema layout,
+  roles/GRANT matrix, and the equivalence criteria (STORY-171).
+
+Compatibility notes:
+
+- No verb, event-schema, or storage-version change to the file backend; file
+  chains are byte-identical to `0.10.2` until a migration runs.
+- Release hygiene: this release adds a fifth workspace package
+  (`packages/pg-backend`); all five manifests, `FRAMEWORK_VERSION`, and the
+  `P8_VERSION` / `P8_TAG` constants are cut on one version. Carries an
+  annotated tag.
+
 ## 0.10.2 — 2026-08-04
 
 **WSA-3 also admits on create.**
