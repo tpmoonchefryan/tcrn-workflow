@@ -24,9 +24,7 @@
       "Write(~/.tcrn-workflow/.*/**)",
       "Edit(~/.tcrn-workflow/.*/**)",
       "Write(~/.tcrn-workflow/**/.*/**)",
-      "Edit(~/.tcrn-workflow/**/.*/**)",
-      "Write(~/.tcrn-workflow/**)",
-      "Edit(~/.tcrn-workflow/**)"
+      "Edit(~/.tcrn-workflow/**/.*/**)"
     ]
   },
   "hooks": {

@@ -8,7 +8,7 @@
 //      prompt and a curated trigger-keyword list (local, cheap gate — no network when
 //      the prompt matches nothing);
 //   3. writes the hook protocol response with `additionalContext` = the metadata-level
-//      injection (or an empty array when nothing matches).
+//      injection (or an empty string when nothing matches — INC-044/060).
 //
 // The command string registered in .claude/settings.json uses ${CLAUDE_PROJECT_DIR}
 // (INC-040: a bare relative path means the hook never starts from a different cwd).

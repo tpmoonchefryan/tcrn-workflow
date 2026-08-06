@@ -92,15 +92,21 @@ export async function renderOwnerQueue({ partition = "cross-project" } = {}) {
   ];
 
   const reminder = rows.length > 0;
+  const dataSourceFailed = readFailures.length > 0;
   return {
     schemaVersion: "tcrn.owner-queue.v1",
     partition,
     renderedAt: new Date().toISOString().replace(/\.\d+Z$/u, "Z"),
-    ok: reminder === false,
-    reasonCode: reminder === false ? "OWNER_QUEUE_EMPTY" : "OWNER_QUEUE_NONEMPTY_REMIND",
+    ok: reminder === false && !dataSourceFailed,
+    reasonCode: dataSourceFailed ? "OWNER_QUEUE_DATA_SOURCE_FAILED"
+      : reminder === false ? "OWNER_QUEUE_EMPTY"
+        : "OWNER_QUEUE_NONEMPTY_REMIND",
     count: rows.length,
     rows,
-    criterion: "队列非空即提醒(exit 1);发布必停点恒在队首语义"
+    dataSourceFailed,
+    // INC-060: exit codes distinguish the three worlds — 0 empty, 1 reminder,
+    // 2 chain-read failed (a data-source failure is a RUNNER failure, not a reminder).
+    criterion: "exit 0 = empty · 1 = reminder · 2 = chain-read failed (data source unreadable, queue untrustworthy)"
   };
 }
 
@@ -111,5 +117,6 @@ if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   for (const row of result.rows) {
     process.stderr.write(`- [${row.source}] ${row.id} (${row.status})${row.evidence ? ` — ${row.evidence}` : ""}\n`);
   }
-  if (!result.ok) process.exitCode = 1;
+  if (result.dataSourceFailed) process.exitCode = 2;
+  else if (!result.ok) process.exitCode = 1;
 }

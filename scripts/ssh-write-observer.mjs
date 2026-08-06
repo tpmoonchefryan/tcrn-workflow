@@ -545,7 +545,7 @@ export function breakglassAllows(command, entries) {
   });
 }
 
-/** The break-glass allowlist entries, read at load (stable config; empty today). */
+/** The break-glass allowlist entries, read at load (stable config; mirrored in-repo — INC-055). */
 export const BREAKGLASS_ALLOWLIST = readBreakglassAllowlist();
 
 /** Does the ssh remote invoke the engine CLI directly? Token-level, recursing into `-c '<script>'`. */
