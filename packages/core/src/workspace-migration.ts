@@ -12,6 +12,7 @@
 
 import { resolve } from "node:path";
 
+import { canonicalJson } from "../../protocol/src/index.js";
 import { ARTIFACT_LIMITS } from "./artifact-lifecycle.js";
 import { KNOWLEDGE_LIMITS } from "./knowledge-core.js";
 import { FileBackend, StorageError, WORKSPACE_CONTROL_DIRECTORY } from "./storage-backend.js";
@@ -472,22 +473,25 @@ function compareSnapshots(source: WorkspaceSnapshot, target: WorkspaceSnapshot):
 }
 
 // Flatten a snapshot's segment bytes (each a canonical JSON array of events)
-// into an ordered list of per-event integrity hashes. Segment layout is
-// backend-dependent; the event stream is the invariant. Each event's eventHash
-// is the canonical sha256 over its full basis (schemaVersion/id/streamId/
-// sequence/occurredAt/priorHash/payload/payloadHash), so two events with the
-// same eventHash are byte-equivalent regardless of how their segment array was
-// grouped or re-serialized.
+// into an ordered list of per-event canonical bytes. Segment layout is
+// backend-dependent; the event stream is the invariant. Each event is the
+// canonical JSON of its full record (schemaVersion/id/streamId/sequence/
+// occurredAt/priorHash/payload/payloadHash/eventHash), so two events serialize
+// to identical bytes — and only then — when every field matches, regardless of
+// how their segment array was grouped. Comparing stored eventHash alone would
+// miss a target whose payload/payloadHash was tampered but whose eventHash was
+// left stale (the PG backend reads eventHash as stored, not recomputed), so the
+// per-event comparison is over the canonical event, not a single stored field.
 function flattenEvents(segments: readonly { readonly name: string; readonly bytes: Buffer }[]): readonly string[] {
-  const events: { readonly sequence: number; readonly eventHash: string }[] = [];
+  const events: { readonly sequence: number; readonly canonical: string }[] = [];
   for (const segment of segments) {
-    const parsed = JSON.parse(segment.bytes.toString("utf8")) as readonly { readonly sequence: number; readonly eventHash: string }[];
+    const parsed = JSON.parse(segment.bytes.toString("utf8")) as readonly { readonly sequence: number }[];
     for (const event of parsed) {
-      events.push({ sequence: event.sequence, eventHash: event.eventHash });
+      events.push({ sequence: event.sequence, canonical: canonicalJson(event) });
     }
   }
   events.sort((left, right) => left.sequence - right.sequence);
-  return events.map((event) => event.eventHash);
+  return events.map((event) => event.canonical);
 }
 
 export async function planMigration(
