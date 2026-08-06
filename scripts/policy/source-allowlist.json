@@ -210,6 +210,7 @@
     "packages/pg-backend/src/store.ts",
     "packages/pg-backend/test/equivalence.test.mjs",
     "packages/pg-backend/test/evidence-roundtrip.mjs",
+    "packages/pg-backend/test/migration-layout.test.mjs",
     "packages/pg-backend/test/migration.test.mjs",
     "packages/pg-backend/test/smoke.test.mjs",
     "packages/pg-backend/test/store-equivalence.test.mjs",

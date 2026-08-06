@@ -427,6 +427,15 @@ function recordsEqual(left: readonly MigratedRecord[], right: readonly MigratedR
 
 // Returns the failing reason code, or null when the two snapshots are
 // byte-equivalent on every criterion the STORY-176 gate checks.
+//
+// Event comparison is PER-EVENT, not per-segment: the file backend segments by
+// the workspace's segmentEventLimit (typically 64) while the PG backend uses a
+// different limit, so the SAME event history lands in different segment
+// layouts. Comparing segment bytes would make verify red on any chain with more
+// than one file segment — a layout difference, not a data difference (the
+// STORY-189 window hit exactly this on Joi-Button v586: 586/586 events
+// byte-identical, verify red on segment shape). The criterion is per-event byte
+// equivalence; segment boundaries are an implementation detail.
 function compareSnapshots(source: WorkspaceSnapshot, target: WorkspaceSnapshot): string | null {
   if (source.workspaceId !== target.workspaceId || source.version !== target.version || source.headEventHash !== target.headEventHash) {
     return "WORKSPACE_MIGRATION_VERIFY_MISMATCH";
@@ -434,12 +443,13 @@ function compareSnapshots(source: WorkspaceSnapshot, target: WorkspaceSnapshot):
   if (!source.metadataBytes.equals(target.metadataBytes)) {
     return "WORKSPACE_MIGRATION_VERIFY_MISMATCH";
   }
-  if (source.segments.length !== target.segments.length) {
+  const sourceEvents = flattenEvents(source.segments);
+  const targetEvents = flattenEvents(target.segments);
+  if (sourceEvents.length !== targetEvents.length) {
     return "WORKSPACE_MIGRATION_VERIFY_MISMATCH";
   }
-  for (const [index, segment] of source.segments.entries()) {
-    const other = target.segments[index];
-    if (other === undefined || other.name !== segment.name || !segment.bytes.equals(other.bytes)) {
+  for (const [index, event] of sourceEvents.entries()) {
+    if (event !== targetEvents[index]) {
       return "WORKSPACE_MIGRATION_VERIFY_MISMATCH";
     }
   }
@@ -459,6 +469,25 @@ function compareSnapshots(source: WorkspaceSnapshot, target: WorkspaceSnapshot):
     }
   }
   return null;
+}
+
+// Flatten a snapshot's segment bytes (each a canonical JSON array of events)
+// into an ordered list of per-event integrity hashes. Segment layout is
+// backend-dependent; the event stream is the invariant. Each event's eventHash
+// is the canonical sha256 over its full basis (schemaVersion/id/streamId/
+// sequence/occurredAt/priorHash/payload/payloadHash), so two events with the
+// same eventHash are byte-equivalent regardless of how their segment array was
+// grouped or re-serialized.
+function flattenEvents(segments: readonly { readonly name: string; readonly bytes: Buffer }[]): readonly string[] {
+  const events: { readonly sequence: number; readonly eventHash: string }[] = [];
+  for (const segment of segments) {
+    const parsed = JSON.parse(segment.bytes.toString("utf8")) as readonly { readonly sequence: number; readonly eventHash: string }[];
+    for (const event of parsed) {
+      events.push({ sequence: event.sequence, eventHash: event.eventHash });
+    }
+  }
+  events.sort((left, right) => left.sequence - right.sequence);
+  return events.map((event) => event.eventHash);
 }
 
 export async function planMigration(
