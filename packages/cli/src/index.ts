@@ -365,6 +365,30 @@ async function migrationOptions(to: string, schemaFlag?: string): Promise<Parame
   return { backend: () => backend, storeBackend: () => storeBackend };
 }
 
+// Close the PG backends the migration opened, so the CLI process exits (a live
+// pg client keeps the event loop running and the process would otherwise hang).
+// close() is called as a method (this bound) — reading `candidate.close` into a
+// variable and invoking it detaches this, which would throw on the pg client's
+// `this.client.end()`. Close failures are swallowed: a close must not mask the
+// migration result the caller is returning, and it must not leave the sibling
+// backend unclosed (which would keep the process alive).
+async function closeMigrationBackends(options: Parameters<typeof executeMigration>[2] | undefined): Promise<void> {
+  const backend = options?.backend?.("");
+  const storeBackend = options?.storeBackend?.("");
+  const closeIfPresent = async (candidate: unknown): Promise<void> => {
+    const maybe = candidate as { close?: unknown } | undefined;
+    if (maybe && typeof maybe.close === "function") {
+      try {
+        await (maybe.close as () => Promise<void>).call(maybe);
+      } catch {
+        // best-effort close; never mask the migration outcome or the sibling close
+      }
+    }
+  };
+  await closeIfPresent(backend);
+  await closeIfPresent(storeBackend);
+}
+
 // WSB-7: opt-in lease-scoped expected-version derivation. The literal "head"
 // resolves, under the already-held workspace lease, to the current materialized
 // version. Lease acquisition plus the mutation claim serialize writers, so this
@@ -1551,19 +1575,34 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   if (command === "migration-execute") {
     const values = parseArguments(rest, ["workspace", "to", "schema"]);
     required(values, ["workspace", "to"]);
-    io.write(canonicalJson(await executeMigration(values.workspace ?? "", migrationTarget(values["to"] ?? ""), await migrationOptions(values["to"] ?? "", values["schema"]))));
+    const options = await migrationOptions(values["to"] ?? "", values["schema"]);
+    try {
+      io.write(canonicalJson(await executeMigration(values.workspace ?? "", migrationTarget(values["to"] ?? ""), options)));
+    } finally {
+      await closeMigrationBackends(options);
+    }
     return;
   }
   if (command === "migration-verify") {
     const values = parseArguments(rest, ["workspace", "to", "schema"]);
     required(values, ["workspace", "to"]);
-    io.write(canonicalJson(await verifyMigration(values.workspace ?? "", migrationTarget(values["to"] ?? ""), await migrationOptions(values["to"] ?? "", values["schema"]))));
+    const options = await migrationOptions(values["to"] ?? "", values["schema"]);
+    try {
+      io.write(canonicalJson(await verifyMigration(values.workspace ?? "", migrationTarget(values["to"] ?? ""), options)));
+    } finally {
+      await closeMigrationBackends(options);
+    }
     return;
   }
   if (command === "migration-rollback") {
     const values = parseArguments(rest, ["workspace", "schema"]);
     required(values, ["workspace"]);
-    io.write(canonicalJson(await rollbackMigration(values.workspace ?? "", await migrationOptions("pg", values["schema"]))));
+    const options = await migrationOptions("pg", values["schema"]);
+    try {
+      io.write(canonicalJson(await rollbackMigration(values.workspace ?? "", options)));
+    } finally {
+      await closeMigrationBackends(options);
+    }
     return;
   }
   if (command === "recover") {
