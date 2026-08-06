@@ -1,0 +1,14 @@
+{
+  "name": "@tcrn-workflow/pg-backend",
+  "version": "0.10.2",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "pg": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.20.4"
+  }
+}

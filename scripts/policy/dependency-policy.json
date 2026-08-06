@@ -56,6 +56,111 @@
       "integrity": "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==",
       "purpose": "exact @types/node transitive dependency",
       "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "pg@8.22.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-8wih1vVIBMxoUM2oB4soJsD9tDnDpLv4OXBJ+EJzFsvycD+lfyIreC2gGHq78f8jbLLt+bvlPTFdFZfJkOuzAA==",
+      "purpose": "PostgreSQL driver for the PG chain backend (STORY-175)",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "pg-cloudflare@1.4.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==",
+      "purpose": "pg optional Cloudflare Socket transport (unused)",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "pg-connection-string@2.14.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-XwWDGcLRGCXAR8F/AM5bG7Q+A3Wm2s6QeEjlOKZLlH3UYcguiqCWKyWXVag5TLTIjR7oOJUY8kcADaZgWPyLeg==",
+      "purpose": "pg connection-string parser",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "pg-int8@1.0.1": {
+      "direct": false,
+      "license": "ISC",
+      "integrity": "sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==",
+      "purpose": "pg 64-bit integer helper",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "pg-pool@3.14.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-gKtPkFdQPU3DksooVLi9LsjZxrsBUZIpa+7aVx+LV5pNh0KzP4Zleud2po+ConrxbuXGBJ6Hfer6hdgpIBpBaw==",
+      "purpose": "pg connection pool",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "pg-protocol@1.15.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-cq9sECI5s0+uPUXjbz8ioyPJni6RzsRib0US67i5IoTZKw8fNeYlVE7u8F4dG7vEJJtc5wdD1K189lCCUwqWTQ==",
+      "purpose": "pg wire-protocol encoder/decoder",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "pg-types@2.2.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==",
+      "purpose": "pg type parsers",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "pgpass@1.0.5": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-FdW9r/jQZhSeohs1Z3sI1yxFQNFvMcnmfuj4WBMUTxOrAyLMaTcE1aAMBiTlbMNaXvBCQuVi0R7hd8udDSP7ug==",
+      "purpose": "pg password-file reader",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "postgres-array@2.0.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==",
+      "purpose": "Postgres array parser",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "postgres-bytea@1.0.1": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-5+5HqXnsZPE65IJZSMkZtURARZelel2oXUEO8rH83VS/hxH5vv1uHquPg5wZs8yMAfdv971IU+kcPUczi7NVBQ==",
+      "purpose": "Postgres bytea parser",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "postgres-date@1.0.7": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q==",
+      "purpose": "Postgres date parser",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "postgres-interval@1.1.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-txJzyrdoPw5F06xk3BEtzl46JCr6qU2DM8gfulxBFgqGKmfREbrcFyVqllttHuqWtafoBmowgJtGjm6kPGA/bg==",
+      "purpose": "Postgres interval parser",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "split2@4.2.0": {
+      "direct": false,
+      "license": "ISC",
+      "integrity": "sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==",
+      "purpose": "pg stream splitter",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "xtend@4.0.2": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==",
+      "purpose": "pg object extend helper",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "@types/pg@8.20.4": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-Jz7UDOlIiFJuacC0TlBoLyNtmwlA/wpIyPDd3tvUqlRM+HzkWy2xUgpFpaXtbfTAFF6sIGq5lsCDBdJnhky1Xg==",
+      "purpose": "pg type declarations for the typecheck gate",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
     }
   }
 }

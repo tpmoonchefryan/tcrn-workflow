@@ -40,6 +40,9 @@ import {
   listKnowledgeMetadata,
   materializeWorkspace,
   planWorkspaceMigration,
+  executeMigration,
+  verifyMigration,
+  rollbackMigration,
   readGenericProfileAdmissionReceipt,
   readContextRouteAuthorityReceipt,
   readKnowledgeBody,
@@ -326,6 +329,40 @@ function integerValue(values: Readonly<Record<string, string>>, name: string, mi
     fail("CLI_ARGUMENT_MALFORMED", name);
   }
   return value;
+}
+
+// STORY-178: the file↔pg migration target. Only `file` and `pg` are legal; the
+// migration verbs refuse anything else by derivation rather than a hard-coded
+// list of typo'd backends.
+function migrationTarget(value: string): "file" | "pg" {
+  if (value === "file" || value === "pg") {
+    return value;
+  }
+  fail("CLI_ARGUMENT_MALFORMED", `to: ${value}`);
+}
+
+// STORY-178/INC-072: build the migration backend options. The file side needs
+// none (the migration defaults to FileBackend); the PG side lazily imports the
+// pg-backend package (a separate workspace package) and constructs a
+// PgBackend/PgStoreBackend from $TCRN_PG_CONNECTION and the target schema.
+async function migrationOptions(to: string, schemaFlag?: string): Promise<Parameters<typeof executeMigration>[2]> {
+  if (to !== "pg") {
+    return {};
+  }
+  const schema = schemaFlag ?? process.env.TCRN_PG_SCHEMA;
+  if (typeof schema !== "string" || schema.length === 0) {
+    fail("CLI_ARGUMENT_MALFORMED", "schema: --schema or $TCRN_PG_SCHEMA is required for a pg migration");
+  }
+  const connection = process.env.TCRN_PG_CONNECTION;
+  if (typeof connection !== "string" || connection.length === 0) {
+    fail("CLI_ARGUMENT_MALFORMED", "connection: $TCRN_PG_CONNECTION is required for a pg migration");
+  }
+  const { PgBackend, PgStoreBackend } = await import("../../pg-backend/src/index.js");
+  const backend = new PgBackend({ schema, connection });
+  const storeBackend = new PgStoreBackend({ schema, connection });
+  await backend.connect();
+  await storeBackend.connect();
+  return { backend: () => backend, storeBackend: () => storeBackend };
 }
 
 // WSB-7: opt-in lease-scoped expected-version derivation. The literal "head"
@@ -752,7 +789,14 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "lease-break", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "owner-token", required: true, valueKind: "string" }] },
   { name: "lease-inspect", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "lease-recovery-break", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "claim-token", required: true, valueKind: "string" }] },
+  // STORY-178/INC-072: the file↔pg migration verb family, in canonical name
+  // order (execute/plan/rollback/verify). `to` names the target backend; `schema`
+  // (optional) names the PG chain schema (e.g. `chain_cross`); it defaults to
+  // $TCRN_PG_SCHEMA, and the PG connection defaults to $TCRN_PG_CONNECTION.
+  { name: "migration-execute", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "to", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
   { name: "migration-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "target-version", required: true, valueKind: "integer" }, { name: "dry-run", required: true, valueKind: "boolean" }] },
+  { name: "migration-rollback", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
+  { name: "migration-verify", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "to", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
   { name: "persona-render", availability: "cli", mutates: false, flags: [{ name: "profile-id", required: true, valueKind: "string" }] },
   { name: "persona-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
@@ -1502,6 +1546,24 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       fail("CLI_MIGRATION_DRY_RUN_REQUIRED", "P3 migration planning is dry-run only");
     }
     io.write(canonicalJson(await planWorkspaceMigration(values.workspace ?? "", integerValue(values, "target-version"))));
+    return;
+  }
+  if (command === "migration-execute") {
+    const values = parseArguments(rest, ["workspace", "to", "schema"]);
+    required(values, ["workspace", "to"]);
+    io.write(canonicalJson(await executeMigration(values.workspace ?? "", migrationTarget(values["to"] ?? ""), await migrationOptions(values["to"] ?? "", values["schema"]))));
+    return;
+  }
+  if (command === "migration-verify") {
+    const values = parseArguments(rest, ["workspace", "to", "schema"]);
+    required(values, ["workspace", "to"]);
+    io.write(canonicalJson(await verifyMigration(values.workspace ?? "", migrationTarget(values["to"] ?? ""), await migrationOptions(values["to"] ?? "", values["schema"]))));
+    return;
+  }
+  if (command === "migration-rollback") {
+    const values = parseArguments(rest, ["workspace", "schema"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await rollbackMigration(values.workspace ?? "", await migrationOptions("pg", values["schema"]))));
     return;
   }
   if (command === "recover") {

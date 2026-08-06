@@ -46,6 +46,18 @@ export function admitDevelopment(): DevelopmentAdmission {
 
 export { assertDistinctRoots, RootIdentityError } from "./root-identity.js";
 export type { CanonicalRoot } from "./root-identity.js";
+// STORY-174: the storage abstraction is part of the public core surface so the
+// PG backend (packages/pg-backend) can implement it. StorageError is the
+// fail-closed refusal shape; StorageBackend/FileBackend are the interface and
+// the converged file implementation.
+export { StorageError, FileBackend, WORKSPACE_CONTROL_DIRECTORY } from "./storage-backend.js";
+export type { StorageBackend, WorkspaceCrashPoint } from "./storage-backend.js";
+// STORY-177: the knowledge/artifact store data-plane backend is part of the public
+// core surface so a future PG store backend can implement it. StoreBackendError is
+// the fail-closed refusal shape; FileStoreBackend is the converged file
+// implementation; withStoreBackendFactory is the test-seam injection.
+export { StoreBackendError, FileStoreBackend, withStoreBackendFactory } from "./store-backend.js";
+export type { StoreBackend } from "./store-backend.js";
 export {
   CONTROL_TREE_SKELETON_DIRECTORIES,
   CONTROL_TREE_TRANSPORT_RESIDUE_PATHS,
@@ -116,7 +128,6 @@ export type {
   SpawnRegistration,
 } from "./background-resource.js";
 export {
-  WORKSPACE_CONTROL_DIRECTORY,
   WORKSPACE_REASON_CODES,
   WORKSPACE_RELOCATION_ENTRY_VERSION,
   WORKSPACE_RELOCATION_IDENTITY_VERSION,
@@ -159,13 +170,13 @@ export {
   transitionWork,
   updateProject,
   validateWorkspace,
+  withStorageBackendFactory,
   withWorkspaceLease,
 } from "./workspace.js";
 export type {
   ProjectRecord,
   SprintReference,
   WorkspaceAdmission,
-  WorkspaceCrashPoint,
   WorkspaceLease,
   WorkspaceMetadata,
   WorkspaceMigrationPlan,
@@ -178,6 +189,24 @@ export type {
   WorkspaceRelocationState,
   WorkspaceState,
 } from "./workspace.js";
+// STORY-178: file↔pg bidirectional migration of the workspace data plane
+// (event segments, workspace metadata, and the two derived stores).
+export {
+  WORKSPACE_MIGRATION_REASON_CODES,
+  WORKSPACE_MIGRATION_VERIFIED,
+  WorkspaceMigrationError,
+  executeMigration,
+  planMigration,
+  rollbackMigration,
+  verifyMigration,
+} from "./workspace-migration.js";
+export type {
+  MigrationDirection,
+  MigrationOptions,
+  MigrationPlan,
+  MigrationVerification,
+  WorkspaceMigrationReasonCode,
+} from "./workspace-migration.js";
 export {
   PUBLIC_AOS_REQUIREMENTS_REASON_CODES,
   PUBLIC_AOS_REQUIREMENTS_READBACK_VERSION,

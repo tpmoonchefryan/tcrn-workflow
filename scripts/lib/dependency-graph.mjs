@@ -15,22 +15,37 @@ function fail(reasonCode, message) {
 }
 
 function splitIdentity(identity) {
-  const separator = identity.lastIndexOf("@");
-  if (separator < 1 || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(identity.slice(separator + 1))) {
+  // pnpm emits peer-contextualised snapshot keys of the form
+  // `pg-pool@3.14.0(pg@8.22.0)` when a dependency is resolved against a peer.
+  // The parenthesised peer suffix is not part of the package's own version, so
+  // strip it before splitting — otherwise lastIndexOf("@") lands inside the
+  // parens and the "version" fails the semver check (DEPENDENCY_LOCK_PARSE).
+  const stripped = identity.replace(/\([^)]*@[^)]*\)$/u, "");
+  const separator = stripped.lastIndexOf("@");
+  if (separator < 1 || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(stripped.slice(separator + 1))) {
     fail("DEPENDENCY_LOCK_PARSE", identity);
   }
-  return { name: identity.slice(0, separator), version: identity.slice(separator + 1) };
+  return { name: stripped.slice(0, separator), version: stripped.slice(separator + 1) };
 }
 
 function parseLock(lockContent) {
   const packages = new Map();
   const snapshots = new Map();
   const importerDirect = new Map();
+  // STORY-175: workspace-package direct deps (e.g. `pg` under
+  // `packages/pg-backend`). pnpm lists each workspace importer's deps in the
+  // lockfile; the root graph only sees the root importer, so workspace deps
+  // must be seeded separately for reachability.
+  const workspaceImporterDirect = new Map();
   let section = "";
   let currentIdentity = null;
   let dependencyBlock = false;
   let importerDependencyBlock = false;
   let currentImporterDependency = null;
+  let rootImporterSeen = false;
+  let currentWorkspaceImporter = null;
+  let workspaceImporterBlock = false;
+  let currentWorkspaceDependency = null;
   for (const line of lockContent.split("\n")) {
     if (line === "importers:") {
       section = "importers";
@@ -42,11 +57,58 @@ function parseLock(lockContent) {
       continue;
     }
     if (section === "importers") {
+      // Root importer parsing is active only inside the `.:` block. Once a
+      // workspace-package header appears, switch to workspace-importer capture
+      // (its deps are not part of the root graph but are seeded for
+      // reachability) and stop treating subsequent `dependencies:` lines as
+      // root deps.
       if (line === "  .:") {
+        rootImporterSeen = true;
         importerDependencyBlock = false;
         currentImporterDependency = null;
         continue;
       }
+      if (rootImporterSeen && /^  \S/u.test(line)) {
+        // A workspace-package importer header (`packages/pg-backend:`).
+        currentWorkspaceImporter = line.trim().replace(/:$/u, "");
+        workspaceImporterBlock = true;
+        currentWorkspaceDependency = null;
+        importerDependencyBlock = false;   // leave root parsing
+        currentImporterDependency = null;
+        if (workspaceImporterDirect.has(currentWorkspaceImporter)) {
+          fail("DEPENDENCY_LOCK_DUPLICATE", currentWorkspaceImporter);
+        }
+        workspaceImporterDirect.set(currentWorkspaceImporter, []);
+        continue;
+      }
+      if (workspaceImporterBlock && currentWorkspaceImporter) {
+        // pnpm lists workspace-importer deps in the nested specifier/version form.
+        const wsDepName = line.match(/^      ['"]?([^'"\s:]+)['"]?:$/u);
+        if (wsDepName) {
+          currentWorkspaceDependency = wsDepName[1];
+          continue;
+        }
+        if (currentWorkspaceDependency) {
+          const wsField = line.match(/^        (specifier|version): ([^\s]+)$/u);
+          if (wsField) {
+            if (wsField[1] === "version") {
+              workspaceImporterDirect.get(currentWorkspaceImporter).push(`${currentWorkspaceDependency}@${wsField[2]}`);
+            }
+            continue;
+          }
+        }
+        if (/^    (?:dependencies|devDependencies|optionalDependencies):$/u.test(line)) {
+          continue;
+        }
+        if (/^  \S/u.test(line)) {
+          workspaceImporterBlock = false;
+          currentWorkspaceImporter = null;
+          currentWorkspaceDependency = null;
+          continue;
+        }
+      }
+      // Only the root block reaches here for dependency capture.
+      if (rootImporterSeen && !workspaceImporterBlock) {
       if (/^    (?:dependencies|devDependencies|optionalDependencies):$/u.test(line)) {
         importerDependencyBlock = true;
         currentImporterDependency = null;
@@ -72,6 +134,7 @@ function parseLock(lockContent) {
         importerDependencyBlock = false;
         currentImporterDependency = null;
       }
+      }
     }
     if (line === "snapshots:") {
       section = "snapshots";
@@ -84,7 +147,18 @@ function parseLock(lockContent) {
     // unquoted keys are captured exactly as before.
     const identityMatch = line.match(/^  ['"]?([^'"\s][^'"]*)['"]?:(?: \{\})?$/u);
     if (identityMatch && ["packages", "snapshots"].includes(section)) {
-      currentIdentity = identityMatch[1];
+      const peerContext = /\([^)]*@[^)]*\)$/u.test(identityMatch[1]);
+      // pnpm emits peer-contextualised entries (`pg-pool@3.14.0(pg@8.22.0)`)
+      // in both the packages and snapshots sections. In packages they carry no
+      // resolution/integrity of their own (the plain-form entry does), so skip
+      // them there. In snapshots the peer-context entry is the ONLY listing of
+      // that package's dependencies, so register it under its STRIPPED plain
+      // identity — the package the graph actually resolves.
+      if (section === "packages" && peerContext) {
+        currentIdentity = null;
+        continue;
+      }
+      currentIdentity = peerContext ? identityMatch[1].replace(/\([^)]*@[^)]*\)$/u, "") : identityMatch[1];
       splitIdentity(currentIdentity);
       dependencyBlock = false;
       if (section === "packages") {
@@ -107,7 +181,10 @@ function parseLock(lockContent) {
       }
     }
     if (section === "snapshots" && currentIdentity) {
-      if (line === "    dependencies:") {
+      // Optional dependencies are reachable edges too (pg-cloudflare is pg's
+      // optional Cloudflare-socket transport); both dependency kinds seed the
+      // reachability walk.
+      if (line === "    dependencies:" || line === "    optionalDependencies:") {
         dependencyBlock = true;
         continue;
       }
@@ -117,7 +194,10 @@ function parseLock(lockContent) {
       if (dependencyBlock) {
         const dependencyMatch = line.match(/^      ['"]?([^'"\s:]+)['"]?: ([^\s]+)$/u);
         if (dependencyMatch) {
-          snapshots.get(currentIdentity).push(`${dependencyMatch[1]}@${dependencyMatch[2]}`);
+          // Normalise a peer-contextualised reference (`pg-pool@3.14.0(pg@8.22.0)`)
+          // to its plain identity, matching the packages-section skip above.
+          const reference = `${dependencyMatch[1]}@${dependencyMatch[2]}`.replace(/\([^)]*@[^)]*\)$/u, "");
+          snapshots.get(currentIdentity).push(reference);
         }
       }
     }
@@ -135,11 +215,11 @@ function parseLock(lockContent) {
       fail("DEPENDENCY_LOCK_IMPORTER_NOT_EXACT", `${name}:${entry.specifier}:${entry.version}`);
     }
   }
-  return { packages, snapshots, importerDirect };
+  return { packages, snapshots, importerDirect, workspaceImporterDirect };
 }
 
 export function validateFrozenDependencyGraph({ packageJson, dependencyPolicy, lockContent }) {
-  const { packages, snapshots, importerDirect } = parseLock(lockContent);
+  const { packages, snapshots, importerDirect, workspaceImporterDirect } = parseLock(lockContent);
   const directIdentities = [];
   for (const section of ["dependencies", "devDependencies", "optionalDependencies"]) {
     for (const [name, version] of Object.entries(packageJson[section] ?? {})) {
@@ -170,8 +250,14 @@ export function validateFrozenDependencyGraph({ packageJson, dependencyPolicy, l
     fail("DEPENDENCY_GRAPH_DIRECT_MISMATCH", `policy=${approvedDirect.join(",")};package=${directIdentities.join(",")}`);
   }
 
+  // Seed reachability from root AND workspace-importer direct deps. The engine
+  // root package.json is a single-package model; STORY-175's pg-backend is a
+  // workspace package whose `pg` dependency lives only in its own importer.
   const reachable = new Set();
   const pending = [...directIdentities];
+  for (const wsDeps of workspaceImporterDirect.values()) {
+    pending.push(...wsDeps);
+  }
   while (pending.length > 0) {
     const identity = pending.pop();
     if (reachable.has(identity)) {

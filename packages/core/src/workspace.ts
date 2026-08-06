@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { randomBytes } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { constants } from "node:fs";
 import {
   lstat,
@@ -40,6 +41,8 @@ import type {
   WorkStatus,
 } from "../../protocol/src/index.js";
 import { assertDistinctRootShape, assertDistinctRoots, rootPortableIdentity } from "./root-identity.js";
+import { FileBackend } from "./storage-backend.js";
+import type { StorageBackend } from "./storage-backend.js";
 import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
 import { recordClosureValidation, recordCollectionScan, recordExtensionClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
 import {
@@ -303,7 +306,39 @@ const relocationStages = new Set<string>(["vacated", "adopted", "aborted"]);
 // f8: the metadata root order. resolveWorkspace compares INDEX-WISE, so every
 // relocation `from`/`to` array must preserve it exactly.
 const relocationRootKindOrder = ["framework", "workspace", "transient", "evidence-locator", "release-trust"];
-let temporarySequence = 0;
+
+// STORY-174: the data-plane IO rides through a StorageBackend. The file backend
+// is the converged implementation of the four former private helpers
+// (boundDirectory/boundFile/ensureDirectory/atomicWrite); its temporary-sequence
+// counter must persist across consecutive atomicWrites in one process, so one
+// instance is cached per workspace root.
+const fileBackends = new Map<string, FileBackend>();
+
+// STORY-176: a package-private backend-factory override so the equivalence gate
+// can run the SAME engine verbs against the PG backend and compare byte output
+// to the file backend. Scope is one async operation (AsyncLocalStorage), like
+// workspace-test-instrumentation; production callers never arm it.
+const backendFactoryOverride = new AsyncLocalStorage<() => StorageBackend>();
+
+export function withStorageBackendFactory<T>(factory: () => StorageBackend, operation: () => Promise<T>): Promise<T> {
+  if (backendFactoryOverride.getStore() !== undefined) {
+    throw new Error("storage backend factory nesting is unsupported");
+  }
+  return backendFactoryOverride.run(factory, operation);
+}
+
+function backendFor(workspaceRoot: string): StorageBackend {
+  const factory = backendFactoryOverride.getStore();
+  if (factory !== undefined) {
+    return factory();
+  }
+  let backend = fileBackends.get(workspaceRoot);
+  if (backend === undefined) {
+    backend = new FileBackend(workspaceRoot);
+    fileBackends.set(workspaceRoot, backend);
+  }
+  return backend;
+}
 
 function fail(reasonCode: WorkspaceReasonCode, message: string): never {
   throw new WorkspaceError(reasonCode, message);
@@ -394,6 +429,15 @@ export function assertWorkspaceRecordCount(count: number): void {
   }
 }
 
+// STORY-174 (174.3): the data-plane copies of boundFile/boundDirectory/
+// ensureDirectory/atomicWrite moved into FileBackend (storage-backend.ts). The
+// three filesystem helpers below remain here DELIBERATELY for the lease, recovery
+// and mutation-claim machinery, which is filesystem-specific (dev/ino identity,
+// O_EXCL claims, rename-verify-remove quarantine) and is NOT part of the
+// data-plane abstraction — the PG backend (STORY-175) reimplements single-writer
+// with advisory locks instead. This is the deliberate-duplication exemption:
+// a second copy kept in place with the reason stated, same as
+// workspace-snapshot.ts's boundReadDirectory/boundReadFileBytes precedent.
 async function boundDirectory(path: string, workspaceRoot?: string): Promise<string> {
   let metadata;
   try {
@@ -463,56 +507,6 @@ async function ensureDirectory(path: string, workspaceRoot: string): Promise<str
 function crash(point: WorkspaceCrashPoint, selected?: WorkspaceCrashPoint): void {
   if (point === selected) {
     fail("WORKSPACE_FAULT_INJECTED", `injected crash at ${point}`);
-  }
-}
-
-async function atomicWrite(path: string, content: string | Buffer, workspaceRoot: string, crashAt?: WorkspaceCrashPoint): Promise<void> {
-  crash("before-write", crashAt);
-  const parent = await boundDirectory(dirname(path), workspaceRoot);
-  if (!inside(parent, resolve(path))) {
-    fail("WORKSPACE_PATH_ESCAPE", path);
-  }
-  try {
-    const existing = await lstat(path);
-    if (existing.isSymbolicLink() || !existing.isFile() || existing.nlink !== 1) {
-      fail("WORKSPACE_PATH_INVALID", `${path} is not a safe replaceable file`);
-    }
-  } catch (error) {
-    if (error instanceof WorkspaceError || (error as { code?: string }).code !== "ENOENT") {
-      throw error;
-    }
-  }
-  const temporary = resolve(parent, `.tmp-${process.pid}-${temporarySequence += 1}`);
-  let handle;
-  try {
-    handle = await open(
-      temporary,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
-      0o600,
-    );
-    await handle.writeFile(content);
-    await handle.sync();
-    const written = await handle.stat();
-    if (!written.isFile() || written.nlink !== 1) {
-      fail("WORKSPACE_PATH_INVALID", `${temporary} is not a single-link file`);
-    }
-    crash("after-temp-sync", crashAt);
-    await handle.close();
-    handle = undefined;
-    await rename(temporary, path);
-    const committed = await lstat(path);
-    if (!committed.isFile() || committed.isSymbolicLink() || committed.nlink !== 1 || committed.dev !== written.dev || committed.ino !== written.ino) {
-      fail("WORKSPACE_PATH_INVALID", `${path} does not name the committed descriptor-written file`);
-    }
-    const directoryHandle = await open(parent, constants.O_RDONLY);
-    try {
-      await directoryHandle.sync();
-    } finally {
-      await directoryHandle.close();
-    }
-  } finally {
-    await handle?.close();
-    await rm(temporary, { force: true });
   }
 }
 
@@ -842,7 +836,7 @@ function controlPath(workspaceRoot: string, relativePath = ""): string {
 // visible and would silently disable the entire mechanism; guard G1 mutates it and
 // T4 is the test that must go red.
 async function readMetadata(workspaceRoot: string, admit: WorkspaceAdmission = "live"): Promise<WorkspaceMetadata> {
-  const content = await boundFile(controlPath(workspaceRoot, "workspace.json"));
+  const content = await backendFor(workspaceRoot).readMetadataBytes();
   let metadata: WorkspaceMetadata;
   try {
     metadata = validateMetadata(assertCanonicalJson(content.toString("utf8")));
@@ -862,22 +856,25 @@ async function readMetadata(workspaceRoot: string, admit: WorkspaceAdmission = "
 }
 
 async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetadata): Promise<readonly EventRecord[]> {
-  const eventsRoot = await boundDirectory(controlPath(workspaceRoot, "events"), workspaceRoot);
-  const entries = await readdir(eventsRoot, { withFileTypes: true });
-  entries.sort((left, right) => compareCanonicalText(left.name, right.name));
+  // STORY-174: enumeration and byte reads ride through the storage backend; the
+  // shape/gap validation stays at the engine layer so both backends enforce the
+  // same segment contract. A non-conforming entry (e.g. `special-entry`) fails
+  // WORKSPACE_EVENT_CORRUPT exactly as before.
+  const backend = backendFor(workspaceRoot);
+  const entries = await backend.listSegmentNames();
   const segmentNames: string[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile() || entry.isSymbolicLink() || !/^\d{6}\.json$/u.test(entry.name)) {
-      fail("WORKSPACE_EVENT_CORRUPT", `unexpected event entry ${entry.name}`);
+  for (const name of entries) {
+    if (!/^\d{6}\.json$/u.test(name)) {
+      fail("WORKSPACE_EVENT_CORRUPT", `unexpected event entry ${name}`);
     }
-    segmentNames.push(entry.name);
+    segmentNames.push(name);
   }
   const events: EventRecord[] = [];
   for (const [index, name] of segmentNames.entries()) {
     if (name !== `${String(index + 1).padStart(6, "0")}.json`) {
       fail("WORKSPACE_EVENT_CORRUPT", `event segment gap at ${name}`);
     }
-    const content = await boundFile(resolve(eventsRoot, name));
+    const content = await backend.readSegment(name);
     let parsed: JsonValue;
     try {
       parsed = assertCanonicalJson(content.toString("utf8"));
@@ -1662,8 +1659,9 @@ function viewDocuments(state: WorkspaceState): Readonly<Record<string, string>> 
 async function writeViews(workspaceRoot: string, state: WorkspaceState, crashAt?: WorkspaceCrashPoint): Promise<void> {
   crash("before-view-commit", crashAt);
   const views = viewDocuments(state);
+  const backend = backendFor(workspaceRoot);
   for (const name of Object.keys(views).sort(compareCanonicalText)) {
-    await atomicWrite(controlPath(workspaceRoot, `views/${name}`), views[name] ?? "", workspaceRoot);
+    await backend.writeView(name, views[name] ?? "");
   }
 }
 
@@ -2463,7 +2461,7 @@ export async function writeWorkspaceMetadataAt(
 ): Promise<string> {
   const text = canonicalJson(metadata);
   validateMetadata(assertCanonicalJson(text));
-  await atomicWrite(controlPath(workspaceRoot, "workspace.json"), text, workspaceRoot, crashAt);
+  await backendFor(workspaceRoot).writeMetadataBytes(Buffer.from(text, "utf8"), crashAt);
   return text;
 }
 
@@ -2537,7 +2535,7 @@ export async function initializeWorkspace(options: {
     segmentEventLimit,
     roots,
   };
-  await atomicWrite(controlPath(workspace.canonicalPath, "workspace.json"), canonicalJson(metadata), workspace.canonicalPath);
+  await backendFor(workspace.canonicalPath).writeMetadataBytes(Buffer.from(canonicalJson(metadata), "utf8"));
   const state = materialize(metadata, []);
   await writeViews(workspace.canonicalPath, state);
   return state;
@@ -2581,10 +2579,11 @@ export async function validateWorkspace(workspaceRootInput: string, checkViews =
   const state = await materializeWorkspace(workspaceRootInput);
   if (checkViews) {
     const expected = viewDocuments(state);
+    const backend = backendFor(activeWorkspaceRoot(state.metadata) ?? "");
     for (const name of Object.keys(expected).sort(compareCanonicalText)) {
       let actual: Buffer;
       try {
-        actual = await boundFile(controlPath(activeWorkspaceRoot(state.metadata) ?? "", `views/${name}`));
+        actual = await backend.readView(name);
       } catch {
         fail("WORKSPACE_VIEW_STALE", `${name} is missing or unsafe`);
       }
@@ -2667,19 +2666,20 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
       payload,
     });
     const segmentIndex = Math.floor((sequence - 1) / workspace.metadata.segmentEventLimit) + 1;
-    const segmentPath = controlPath(workspace.root, `events/${String(segmentIndex).padStart(6, "0")}.json`);
+    const segmentName = `${String(segmentIndex).padStart(6, "0")}.json`;
     const current = sequence % workspace.metadata.segmentEventLimit === 1 && sequence !== 1
       ? []
       : state.events.slice((segmentIndex - 1) * workspace.metadata.segmentEventLimit);
     const segmentBytes = canonicalJson([...current, event]);
-    await atomicWrite(segmentPath, segmentBytes, workspace.root, options.crashAt);
+    const backend = backendFor(workspace.root);
+    await backend.writeSegment(segmentName, Buffer.from(segmentBytes, "utf8"), options.crashAt);
     crash("after-event-commit", options.crashAt);
     // WSA-1: durability readback bounded to the just-committed segment replaces the
     // full-chain re-materialize; atomicWrite already fsync+rename+identity-verified,
     // and the chain was validated under this claim, so re-reading it wholesale was
     // redundant. The committed state is applied from the validated delta, and equals
     // a fresh materialize by construction.
-    const readback = await boundFile(segmentPath);
+    const readback = await backend.readSegment(segmentName);
     if (readback.toString("utf8") !== segmentBytes) {
       fail("WORKSPACE_EVENT_CORRUPT", `segment ${segmentIndex} readback mismatch`);
     }

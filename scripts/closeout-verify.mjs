@@ -23,13 +23,29 @@
 // }
 //
 // Rules: every original item has a disposition; no disposition names an unknown item; a
-// retained disposition names a chain work id; a deferred disposition carries a reason.
+// retained disposition names a chain work id; a superseded disposition names the work id
+// that carries it; a deferred disposition carries a reason.
+//
+// `superseded` is the disposition a batch uses when the item's requirement is not
+// independently closed here but is carried by a named downstream work item (a
+// facet of the storage/transport migration in INIT-020 — e.g. an INC whose
+// protection target is re-homed onto a facade story). It exists so a batch can be
+// reconciled without either folding the item into a retained disposition (which
+// would claim an independent continuation this initiative does not run) or
+// deferring it (which is for a reason, not a carrier). `carriedBy` must name a
+// chain work id, the same shape `retained.ticket` requires — a superseded item
+// that names no live carrier is exactly the evaporation this tool exists to
+// catch.
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+
+function chainWorkId(value) {
+  return typeof value === "string" && /^work:[a-f0-9]{24}$/u.test(value);
+}
 
 export function verifyCloseout(manifest) {
   const problems = [];
@@ -47,12 +63,15 @@ export function verifyCloseout(manifest) {
       problems.push(`item ${item} has no disposition — omitted from the disposition set`);
       continue;
     }
-    if (!["fixed", "retained", "deferred"].includes(d.kind)) {
+    if (!["fixed", "retained", "superseded", "deferred"].includes(d.kind)) {
       problems.push(`item ${item} has unknown disposition ${d.kind}`);
       continue;
     }
-    if (d.kind === "retained" && typeof d.ticket !== "string") {
+    if (d.kind === "retained" && !chainWorkId(d.ticket)) {
       problems.push(`item ${item} is retained but names no chain work ticket`);
+    }
+    if (d.kind === "superseded" && !chainWorkId(d.carriedBy)) {
+      problems.push(`item ${item} is superseded but names no carrying chain work id`);
     }
     if (d.kind === "deferred" && typeof d.reason !== "string") {
       problems.push(`item ${item} is deferred but carries no reason`);

@@ -14,6 +14,9 @@ import {
 } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
+import { resolveStoreBackend } from "./store-backend.js";
+import type { FileStoreBackendProfile, StoreBackend } from "./store-backend.js";
+
 import {
   ProtocolError,
   assertCanonicalJson,
@@ -556,9 +559,41 @@ function validateStoreMarker(value: Readonly<Record<string, JsonValue>>): Artifa
   return value as unknown as ArtifactStoreMarker;
 }
 
+// STORY-177: the artifact store's data-plane IO (marker + records) rides through a
+// StoreBackend. The profile maps the shared physical failures to the artifact
+// reason-code family and carries each file type's byte bound. The file backend is
+// the default; an injected factory (withStoreBackendFactory) can swap in a PG
+// backend. Transient/archive/restore.claim stay file-native, exactly as the
+// workspace lease protocol does.
+const artifactBackendProfile: FileStoreBackendProfile = Object.freeze({
+  reasonCodes: Object.freeze({
+    pathInvalid: "ARTIFACT_PATH_INVALID",
+    linkUnsafe: "ARTIFACT_LINK_UNSAFE",
+    specialFile: "ARTIFACT_SPECIAL_FILE",
+    limitExceeded: "ARTIFACT_LIMIT_EXCEEDED",
+    sourceChanged: "ARTIFACT_SOURCE_CHANGED",
+    alreadyExists: "ARTIFACT_RESTORE_CONFLICT",
+  }),
+  limits: Object.freeze({
+    markerBytes: 16_384,
+    metadataBytes: 0,
+    bodyBytes: 0,
+    viewBytes: 0,
+    recordBytes: maxSourceBytes,
+  }),
+});
+
+function storeBackendFor(storeRoot: string, options: ArtifactScanOptions = {}): StoreBackend {
+  return resolveStoreBackend(storeRoot, artifactBackendProfile, {
+    beforeDescriptorReadForTest: options.beforeDescriptorReadForTest,
+    afterDescriptorOpenForTest: options.afterDescriptorOpenForTest,
+    afterDescriptorReadForTest: options.afterDescriptorReadForTest,
+  });
+}
+
 async function readStoreMarker(storeRoot: string, options: ArtifactScanOptions = {}): Promise<ArtifactStoreMarker> {
-  const opened = await readBoundRegularFile(resolve(storeRoot, "store.json"), 16_384, options);
-  return validateStoreMarker(parseCanonicalObject(opened.bytes, "artifact store marker", "ARTIFACT_INPUT_INVALID"));
+  const opened = await storeBackendFor(storeRoot, options).readArtifactMarker();
+  return validateStoreMarker(parseCanonicalObject(opened, "artifact store marker", "ARTIFACT_INPUT_INVALID"));
 }
 
 async function assertNoPartialState(storeRoot: string, options: ArtifactScanOptions = {}): Promise<ArchiveStorageSummary> {
@@ -650,38 +685,35 @@ async function scanArtifactStore(workspaceRootInput: string, options: ArtifactSc
   const resolved = await resolveArtifactStore(workspaceRootInput, options);
   const recordsRoot = await boundDirectory(resolve(resolved.storeRoot, "records"), resolved.storeRoot);
   const records: ScannedArtifactRecord[] = [];
-  const entries = await readdir(recordsRoot, { withFileTypes: true });
-  entries.sort((left, right) => compareCanonicalText(left.name, right.name));
-  if (entries.length > maxEntries) {
-    fail("ARTIFACT_LIMIT_EXCEEDED", `record count ${entries.length}`);
+  const backend = storeBackendFor(resolved.storeRoot, options);
+  const names = await backend.listArtifactRecords();
+  if (names.length > maxEntries) {
+    fail("ARTIFACT_LIMIT_EXCEEDED", `record count ${names.length}`);
   }
   let storedBytes = 0;
   let logicalBytes = 0;
-  for (const entry of entries) {
-    const path = resolve(recordsRoot, entry.name);
-    if (entry.isSymbolicLink()) {
-      fail("ARTIFACT_LINK_UNSAFE", path);
+  for (const name of names) {
+    // The hardened read behind readArtifactRecord rejects symlinks, hard links,
+    // and special files; this store-level check rejects non-record names.
+    if (!/^artifact:[a-f0-9]{24}\.json$/u.test(name)) {
+      fail("ARTIFACT_PATH_INVALID", name);
     }
-    if (!entry.isFile()) {
-      fail("ARTIFACT_SPECIAL_FILE", path);
-    }
-    if (!/^artifact:[a-f0-9]{24}\.json$/u.test(entry.name)) {
-      fail("ARTIFACT_PATH_INVALID", entry.name);
-    }
-    const opened = await readBoundRegularFile(path, maxSourceBytes, options);
-    const value = parseCanonicalObject(opened.bytes, "artifact record", "ARTIFACT_INPUT_INVALID");
+    const id = name.slice(0, -5);
+    const path = resolve(recordsRoot, name);
+    const bytes = await backend.readArtifactRecord(id);
+    const value = parseCanonicalObject(bytes, "artifact record", "ARTIFACT_INPUT_INVALID");
     const record = validateArtifactRecord(value, resolved.marker);
-    if (`${record.id}.json` !== entry.name) {
-      fail("ARTIFACT_PATH_INVALID", entry.name);
+    if (`${record.id}.json` !== name) {
+      fail("ARTIFACT_PATH_INVALID", name);
     }
-    storedBytes += opened.bytes.length;
+    storedBytes += bytes.length;
     logicalBytes += record.byteSize;
     if (storedBytes > maxStoredBytes) fail("ARTIFACT_LIMIT_EXCEEDED", `stored bytes ${storedBytes}`);
     if (logicalBytes > maxLogicalBytes) fail("ARTIFACT_LIMIT_EXCEEDED", `logical bytes ${logicalBytes}`);
     records.push({
       path,
-      relativePath: `records/${entry.name}`,
-      bytes: opened.bytes,
+      relativePath: `records/${name}`,
+      bytes,
       record,
       classification: classifyArtifact(record.kind),
     });
@@ -754,7 +786,7 @@ export async function initializeArtifactStore(workspaceRootInput: string, option
     disposable: options.disposable,
     authority: "metadata-reference-only",
   };
-  await writeExclusiveFile(resolve(storeRoot, "store.json"), canonicalJson(marker));
+  await storeBackendFor(storeRoot).writeArtifactMarker(canonicalJson(marker));
   return marker;
 }
 
@@ -1181,8 +1213,11 @@ export async function restoreArtifactArchive(workspaceRoot: string, archiveId: s
     throw error;
   }
   crash("after-restore-claim", options.faultAt);
+  const backend = storeBackendFor(scan.storeRoot, options);
   for (const [index, entry] of entries.entries()) {
-    await writeExclusiveFile(resolve(scan.storeRoot, entry.path), entry.bytes);
+    // entry.path is records/<id>.json (validated by validateArchiveBundle).
+    const id = entry.path.slice(0, -5).slice("records/".length);
+    await backend.writeArtifactRecord(id, entry.bytes);
     if (index === 0) {
       crash("after-first-restore-write", options.faultAt);
     }

@@ -13,6 +13,9 @@ import {
 } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
+import { resolveStoreBackend } from "./store-backend.js";
+import type { FileStoreBackendProfile, StoreBackend } from "./store-backend.js";
+
 import {
   ProtocolError,
   assertCanonicalJson,
@@ -230,18 +233,6 @@ interface FileIdentity {
   readonly ino: number | bigint;
 }
 
-interface FileSnapshot extends FileIdentity {
-  readonly size: bigint;
-  readonly mode: bigint;
-  readonly mtimeNs: bigint;
-  readonly ctimeNs: bigint;
-}
-
-interface BoundBytes {
-  readonly bytes: Buffer;
-  readonly identity: FileIdentity;
-}
-
 interface ExclusiveFile {
   readonly path: string;
   readonly identity: FileIdentity;
@@ -286,15 +277,6 @@ function fail(reasonCode: KnowledgeReasonCode, message: string): never {
 
 function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
   return left.dev === right.dev && left.ino === right.ino;
-}
-
-function snapshot(value: FileSnapshot): FileSnapshot {
-  return { dev: value.dev, ino: value.ino, size: value.size, mode: value.mode, mtimeNs: value.mtimeNs, ctimeNs: value.ctimeNs };
-}
-
-function sameSnapshot(left: FileSnapshot, right: FileSnapshot): boolean {
-  return sameIdentity(left, right) && left.size === right.size && left.mode === right.mode &&
-    left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs;
 }
 
 function inside(parent: string, candidate: string): boolean {
@@ -385,63 +367,39 @@ async function boundDirectory(path: string, parent?: string): Promise<string> {
   return canonical;
 }
 
-async function readBoundRegularFile(path: string, maximumBytes: number, options: KnowledgeReadOptions = {}): Promise<BoundBytes> {
-  let before;
-  try {
-    before = await lstat(path, { bigint: true });
-  } catch (error) {
-    fail("KNOWLEDGE_PATH_INVALID", `${path}:${String((error as { code?: string }).code ?? error)}`);
-  }
-  if (before.isSymbolicLink()) {
-    fail("KNOWLEDGE_LINK_UNSAFE", path);
-  }
-  if (!before.isFile()) {
-    fail("KNOWLEDGE_SPECIAL_FILE", path);
-  }
-  if (before.nlink !== 1n) {
-    fail("KNOWLEDGE_LINK_UNSAFE", path);
-  }
-  const maximum = BigInt(maximumBytes);
-  if (before.size > maximum) {
-    fail("KNOWLEDGE_LIMIT_EXCEEDED", `${path}:${before.size}`);
-  }
-  const beforeSnapshot = snapshot(before);
-  await options.beforeDescriptorReadForTest?.(path);
-  let handle: Awaited<ReturnType<typeof open>> | undefined;
-  try {
-    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-    const opened = await handle.stat({ bigint: true });
-    if (!opened.isFile() || opened.nlink !== 1n || opened.size > maximum || !sameSnapshot(beforeSnapshot, opened)) {
-      fail(opened.size > maximum ? "KNOWLEDGE_LIMIT_EXCEEDED" : "KNOWLEDGE_SOURCE_CHANGED", path);
-    }
-    const openedSnapshot = snapshot(opened);
-    await options.afterDescriptorOpenForTest?.(path);
-    const bytes = await handle.readFile();
-    const after = await handle.stat({ bigint: true });
-    const named = await lstat(path, { bigint: true });
-    if (BigInt(bytes.length) > maximum || after.size > maximum || named.size > maximum) {
-      fail("KNOWLEDGE_LIMIT_EXCEEDED", path);
-    }
-    if (BigInt(bytes.length) !== openedSnapshot.size || !sameSnapshot(openedSnapshot, after) || !sameSnapshot(openedSnapshot, named) ||
-      named.isSymbolicLink() || !named.isFile() || named.nlink !== 1n) {
-      fail("KNOWLEDGE_SOURCE_CHANGED", path);
-    }
-    return { bytes, identity: { dev: opened.dev, ino: opened.ino } };
-  } catch (error) {
-    if (error instanceof KnowledgeCoreError) {
-      throw error;
-    }
-    // Thrown inline rather than through fail(): TypeScript's reachability
-    // analysis stops honouring a never-returning call in a catch clause once the
-    // statement carries a finally block, so routing through fail() here would
-    // make the function look like it can fall off the end. This is exactly what
-    // fail() does.
-    throw new KnowledgeCoreError("KNOWLEDGE_SOURCE_CHANGED", `${path}:${String(error)}`);
-  } finally {
-    await handle?.close();
-  }
+// STORY-177: the knowledge store's data-plane IO rides through a StoreBackend.
+// The profile maps the shared physical failures to the knowledge reason-code
+// family and carries each file type's byte bound (the same bounds the former
+// readBoundRegularFile call sites passed). The file backend is the default; an
+// injected factory (withStoreBackendFactory) can swap in a PG backend.
+const knowledgeBackendProfile: FileStoreBackendProfile = Object.freeze({
+  reasonCodes: Object.freeze({
+    pathInvalid: "KNOWLEDGE_PATH_INVALID",
+    linkUnsafe: "KNOWLEDGE_LINK_UNSAFE",
+    specialFile: "KNOWLEDGE_SPECIAL_FILE",
+    limitExceeded: "KNOWLEDGE_LIMIT_EXCEEDED",
+    sourceChanged: "KNOWLEDGE_SOURCE_CHANGED",
+    alreadyExists: "KNOWLEDGE_ALREADY_EXISTS",
+  }),
+  limits: Object.freeze({
+    markerBytes: 16_384,
+    metadataBytes: KNOWLEDGE_LIMITS.maximumMetadataBytes,
+    bodyBytes: KNOWLEDGE_LIMITS.maximumBodyBytes,
+    viewBytes: KNOWLEDGE_LIMITS.maximumAggregateBytes + KNOWLEDGE_LIMITS.maximumMetadataBytes,
+    recordBytes: 0,
+  }),
+});
+
+function storeBackendFor(storeRoot: string, options: KnowledgeReadOptions = {}): StoreBackend {
+  return resolveStoreBackend(storeRoot, knowledgeBackendProfile, {
+    beforeDescriptorReadForTest: options.beforeDescriptorReadForTest,
+    afterDescriptorOpenForTest: options.afterDescriptorOpenForTest,
+  });
 }
 
+// The claim protocol is file-native (STORY-177, like STORY-174's workspace leases):
+// mutation.claim is the O_EXCL exclusive file whose identity the release verifies.
+// Only the data-plane IO rides through the StoreBackend; these helpers stay.
 async function syncDirectory(path: string): Promise<void> {
   const handle = await open(path, constants.O_RDONLY);
   try {
@@ -481,30 +439,6 @@ async function writeExclusiveFile(path: string, bytes: Buffer | string): Promise
       throw error;
     }
     fail("KNOWLEDGE_PATH_INVALID", `${path}:${String(error)}`);
-  }
-}
-
-async function replaceRegularFile(path: string, bytes: Buffer | string): Promise<void> {
-  const current = await lstat(path);
-  if (current.isSymbolicLink() || !current.isFile() || current.nlink !== 1) {
-    fail(current.isSymbolicLink() || current.nlink !== 1 ? "KNOWLEDGE_LINK_UNSAFE" : "KNOWLEDGE_SPECIAL_FILE", path);
-  }
-  const temporaryPath = resolve(dirname(path), `.tmp-${randomBytes(12).toString("hex")}`);
-  const temporary = await writeExclusiveFile(temporaryPath, bytes);
-  try {
-    const rebound = await lstat(path);
-    if (!sameIdentity(current, rebound) || rebound.isSymbolicLink() || !rebound.isFile() || rebound.nlink !== 1) {
-      fail("KNOWLEDGE_SOURCE_CHANGED", path);
-    }
-    await rename(temporaryPath, path);
-    const named = await lstat(path);
-    if (!sameIdentity(named, temporary.identity) || named.isSymbolicLink() || !named.isFile() || named.nlink !== 1) {
-      fail("KNOWLEDGE_SOURCE_CHANGED", path);
-    }
-    await syncDirectory(dirname(path));
-  } catch (error) {
-    await rm(temporaryPath, { force: true });
-    throw error;
   }
 }
 
@@ -802,6 +736,9 @@ async function scanKnowledgeStore(
   const metadataRoot = await boundDirectory(resolve(storeRoot, "metadata"), storeRoot);
   const bodiesRoot = await boundDirectory(resolve(storeRoot, "bodies"), storeRoot);
   const viewsRoot = await boundDirectory(resolve(storeRoot, "views"), storeRoot);
+  // STORY-177: marker, metadata/body/view and their enumeration ride through the
+  // StoreBackend; directory-structure validation stays file-native below.
+  const backend = storeBackendFor(storeRoot, options);
   const rootEntries = (await readdir(storeRoot)).sort(compareCanonicalText);
   const expectedRootEntries = ["bodies", "metadata", "store.json", "views", ...(allowClaim ? ["mutation.claim"] : [])].sort(compareCanonicalText);
   if (JSON.stringify(rootEntries) !== JSON.stringify(expectedRootEntries)) {
@@ -810,7 +747,7 @@ async function scanKnowledgeStore(
   if (!allowClaim && await claimPresence(storeRoot) === "present") {
     fail("KNOWLEDGE_PARTIAL_STATE", "mutation claim is present");
   }
-  const markerBytes = (await readBoundRegularFile(resolve(storeRoot, "store.json"), 16_384, options)).bytes;
+  const markerBytes = await backend.readKnowledgeMarker();
   const marker = validateMarker(parseCanonicalObject(
     markerBytes,
     "knowledge marker",
@@ -821,8 +758,8 @@ async function scanKnowledgeStore(
   if (marker.workspaceId !== workspace.metadata.workspaceId || (!rebase && marker.eventHighWaterDigest !== workspace.headEventHash)) {
     fail("KNOWLEDGE_HIGH_WATER_MISMATCH", marker.workspaceId);
   }
-  const metadataNames = (await readdir(metadataRoot)).sort(compareCanonicalText);
-  const bodyNames = (await readdir(bodiesRoot)).sort(compareCanonicalText);
+  const metadataNames = await backend.listKnowledgeMetadata();
+  const bodyNames = await backend.listKnowledgeBodies();
   // WSC-5: the physical file bound is the live cap plus the retired allowance, so
   // a store at the live cap with retired records still scans cleanly.
   const maximumStoredRecords = KNOWLEDGE_LIMITS.maximumRecords + KNOWLEDGE_LIMITS.maximumRetiredRecords;
@@ -849,7 +786,7 @@ async function scanKnowledgeStore(
   for (const id of metadataIds) {
     const metadataPath = resolve(metadataRoot, `${id}.json`);
     const bodyPath = resolve(bodiesRoot, `${id}.body`);
-    const metadataBytes = (await readBoundRegularFile(metadataPath, KNOWLEDGE_LIMITS.maximumMetadataBytes, options)).bytes;
+    const metadataBytes = await backend.readKnowledgeMetadata(id);
     // WSC-2: in rebase mode, shape is still fully validated but link liveness is
     // deferred so a live record pointing at now-tombstoned work is recorded as an
     // offender rather than failing the whole scan; retired records stay exempt.
@@ -876,7 +813,7 @@ async function scanKnowledgeStore(
       fail("KNOWLEDGE_PARTIAL_STATE", `${id}:live record is missing its body`);
     }
     const body = bodyMode === "full" && hasBody
-      ? (await readBoundRegularFile(bodyPath, KNOWLEDGE_LIMITS.maximumBodyBytes, options)).bytes
+      ? await backend.readKnowledgeBody(id)
       : null;
     if (body !== null) validateMetadataBody(metadata, body, workspace);
     aggregateBytes += metadataBytes.length + (body?.length ?? 0);
@@ -890,7 +827,6 @@ async function scanKnowledgeStore(
   }
   units.sort((left, right) => compareCanonicalText(left.metadata.id, right.metadata.id));
   const index = knowledgeIndex(marker, units.map((unit) => unit.metadata));
-  const viewPath = resolve(viewsRoot, "index.json");
   const viewEntries = await readdir(viewsRoot);
   if (JSON.stringify(viewEntries.sort(compareCanonicalText)) !== JSON.stringify(["index.json"])) {
     fail("KNOWLEDGE_PARTIAL_STATE", "knowledge views are not exact");
@@ -905,7 +841,7 @@ async function scanKnowledgeStore(
   // worth of envelope headroom, since a legitimate index equals Σ metadata (≤ cap)
   // plus its small fixed envelope, so the old cap-tight bound could reject a valid
   // near-full store on the read alone.
-  const viewBytes = (await readBoundRegularFile(viewPath, KNOWLEDGE_LIMITS.maximumAggregateBytes + KNOWLEDGE_LIMITS.maximumMetadataBytes, options)).bytes;
+  const viewBytes = await backend.readKnowledgeView();
   const view = viewBytes.toString("utf8");
   if (view !== canonicalJson(index)) {
     fail("KNOWLEDGE_PARTIAL_STATE", "knowledge index is stale");
@@ -1058,8 +994,8 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
   return metadata;
 }
 
-async function writeIndex(scan: KnowledgeStoreScan, marker: KnowledgeStoreMarker, metadata: readonly KnowledgeUnitMetadata[]): Promise<void> {
-  await replaceRegularFile(resolve(scan.viewsRoot, "index.json"), canonicalJson(knowledgeIndex(marker, metadata)));
+async function writeIndex(backend: StoreBackend, marker: KnowledgeStoreMarker, metadata: readonly KnowledgeUnitMetadata[]): Promise<void> {
+  await backend.writeKnowledgeView(canonicalJson(knowledgeIndex(marker, metadata)));
 }
 
 export async function initializeKnowledgeStore(workspaceRootInput: string, options: { readonly disposableAcknowledged?: boolean } = {}): Promise<Readonly<Record<string, JsonValue>>> {
@@ -1081,6 +1017,7 @@ export async function initializeKnowledgeStore(workspaceRootInput: string, optio
   const viewsRoot = await ensureNewDirectory(resolve(storeRoot, "views"), storeRoot);
   void metadataRoot;
   void bodiesRoot;
+  void viewsRoot;
   const marker: KnowledgeStoreMarker = {
     schemaVersion: KNOWLEDGE_STORE_SCHEMA_VERSION,
     workspaceId: workspace.metadata.workspaceId,
@@ -1089,8 +1026,9 @@ export async function initializeKnowledgeStore(workspaceRootInput: string, optio
     disposable: true,
     authority: "metadata-index-authority-body-separate",
   };
-  await writeExclusiveFile(resolve(storeRoot, "store.json"), canonicalJson(marker));
-  await writeExclusiveFile(resolve(viewsRoot, "index.json"), canonicalJson(knowledgeIndex(marker, [])));
+  const backend = storeBackendFor(storeRoot);
+  await backend.writeKnowledgeMarker(canonicalJson(marker));
+  await backend.writeKnowledgeView(canonicalJson(knowledgeIndex(marker, [])));
   await syncDirectory(storeRoot);
   await scanKnowledgeStore(workspaceRoot);
   return {
@@ -1166,13 +1104,14 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
     if (scan.units.some((unit) => unit.metadata.id === metadata.id || unit.metadata.externalKey === metadata.externalKey)) {
       fail("KNOWLEDGE_DUPLICATE", metadata.id);
     }
-    await writeExclusiveFile(resolve(scan.bodiesRoot, `${metadata.id}.body`), body);
+    const backend = storeBackendFor(scan.storeRoot, options);
+    await backend.writeKnowledgeBody(metadata.id, body);
     crash("after-body-write", options.faultAt);
-    await writeExclusiveFile(resolve(scan.metadataRoot, `${metadata.id}.json`), metadataBytes);
+    await backend.writeKnowledgeMetadata(metadata.id, metadataBytes);
     crash("after-metadata-write", options.faultAt);
-    await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+    await backend.writeKnowledgeMarker(canonicalJson(marker));
     crash("after-marker-write", options.faultAt);
-    await writeIndex(scan, marker, projectedMetadata);
+    await writeIndex(backend, marker, projectedMetadata);
     await releaseMutationClaim(scan.storeRoot, claim);
     released = true;
     const final = await scanKnowledgeStore(workspaceRoot, options);
@@ -1229,15 +1168,16 @@ export async function rebaseKnowledgeStore(workspaceRoot: string, input: {
     const retire = (metadata: KnowledgeUnitMetadata): KnowledgeUnitMetadata =>
       validateMetadataShape({ ...metadata, lifecycle: "retired", revision: metadata.revision + 1, updatedAt: input.at } as unknown as Readonly<Record<string, JsonValue>>, workspace);
     const projectedMetadata = scan.units.map((unit) => offenderSet.has(unit.metadata.id) ? retire(unit.metadata) : unit.metadata);
+    const backend = storeBackendFor(scan.storeRoot, options);
     for (const unit of scan.units) {
       if (offenderSet.has(unit.metadata.id)) {
-        await replaceRegularFile(unit.metadataPath, canonicalJson(retire(unit.metadata)));
+        await backend.writeKnowledgeMetadata(unit.metadata.id, canonicalJson(retire(unit.metadata)));
       }
     }
     crash("after-metadata-write", options.faultAt);
-    await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+    await backend.writeKnowledgeMarker(canonicalJson(marker));
     crash("after-marker-write", options.faultAt);
-    await writeIndex(scan, marker, projectedMetadata);
+    await writeIndex(backend, marker, projectedMetadata);
     await releaseMutationClaim(scan.storeRoot, claim);
     released = true;
     const final = await scanKnowledgeStore(workspaceRoot, options);
@@ -1418,7 +1358,7 @@ export async function readKnowledgeBody(workspaceRoot: string, id: string, optio
     (!options.allowStale && freshness !== "fresh") || unit.metadata.retrievalDisposition === "excluded" || unit.metadata.lifecycle === "retired") {
     fail("KNOWLEDGE_BODY_ACCESS_DENIED", id);
   }
-  const body = (await readBoundRegularFile(unit.bodyPath, KNOWLEDGE_LIMITS.maximumBodyBytes, options)).bytes;
+  const body = await storeBackendFor(scan.storeRoot, options).readKnowledgeBody(id);
   validateMetadataBody(unit.metadata, body, scan.workspace);
   return {
     schemaVersion: "tcrn.knowledge-body-read.v1",
@@ -1514,11 +1454,12 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
     if (projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
       fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge promotion aggregate bytes");
     }
-    await replaceRegularFile(unit.metadataPath, canonicalJson(metadata));
+    const backend = storeBackendFor(scan.storeRoot, options);
+    await backend.writeKnowledgeMetadata(unit.metadata.id, canonicalJson(metadata));
     crash("after-metadata-write", options.faultAt);
-    await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+    await backend.writeKnowledgeMarker(canonicalJson(marker));
     crash("after-marker-write", options.faultAt);
-    await writeIndex(scan, marker, projectedMetadata);
+    await writeIndex(backend, marker, projectedMetadata);
     await releaseMutationClaim(scan.storeRoot, claim);
     released = true;
     await scanKnowledgeStore(workspaceRoot, options);
@@ -1581,11 +1522,12 @@ export async function retireKnowledgeUnit(workspaceRoot: string, input: {
     validateMetadataBody(validated, unitBody, scan.workspace);
     const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
     const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
-    await replaceRegularFile(unit.metadataPath, canonicalJson(metadata));
+    const backend = storeBackendFor(scan.storeRoot, options);
+    await backend.writeKnowledgeMetadata(unit.metadata.id, canonicalJson(metadata));
     crash("after-metadata-write", options.faultAt);
-    await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+    await backend.writeKnowledgeMarker(canonicalJson(marker));
     crash("after-marker-write", options.faultAt);
-    await writeIndex(scan, marker, projectedMetadata);
+    await writeIndex(backend, marker, projectedMetadata);
     // TCRN-CROSS-STORY-024: reclaim the retired record's body as the final step,
     // after the retire is durably committed. A crash before this leaves a valid
     // retired-with-body record (tolerated by the scan); after it, a valid
@@ -1652,11 +1594,12 @@ export async function reverifyKnowledgeUnit(workspaceRoot: string, input: {
     validateMetadataBody(validated, unitBody, scan.workspace);
     const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
     const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
-    await replaceRegularFile(unit.metadataPath, canonicalJson(metadata));
+    const backend = storeBackendFor(scan.storeRoot, options);
+    await backend.writeKnowledgeMetadata(unit.metadata.id, canonicalJson(metadata));
     crash("after-metadata-write", options.faultAt);
-    await replaceRegularFile(resolve(scan.storeRoot, "store.json"), canonicalJson(marker));
+    await backend.writeKnowledgeMarker(canonicalJson(marker));
     crash("after-marker-write", options.faultAt);
-    await writeIndex(scan, marker, projectedMetadata);
+    await writeIndex(backend, marker, projectedMetadata);
     await releaseMutationClaim(scan.storeRoot, claim);
     released = true;
     await scanKnowledgeStore(workspaceRoot, options);

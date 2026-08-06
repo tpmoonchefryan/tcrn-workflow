@@ -21,18 +21,33 @@ async function dependencyInputs() {
 
 test("the exact frozen dependency graph has complete policy and integrity closure", async () => {
   const graph = validateFrozenDependencyGraph(await dependencyInputs());
-  assert.equal(graph.records.length, 8);
+  assert.equal(graph.records.length, 23);
   assert.deepEqual(graph.directIdentities, [
     "@types/node@24.13.2",
     "ajv@8.17.1",
     "typescript@5.9.3",
   ]);
   assert.deepEqual(graph.transitiveIdentities, [
+    "@types/pg@8.20.4",
     "fast-deep-equal@3.1.3",
     "fast-uri@3.1.4",
     "json-schema-traverse@1.0.0",
+    "pg-cloudflare@1.4.0",
+    "pg-connection-string@2.14.0",
+    "pg-int8@1.0.1",
+    "pg-pool@3.14.0",
+    "pg-protocol@1.15.0",
+    "pg-types@2.2.0",
+    "pg@8.22.0",
+    "pgpass@1.0.5",
+    "postgres-array@2.0.0",
+    "postgres-bytea@1.0.1",
+    "postgres-date@1.0.7",
+    "postgres-interval@1.1.0",
     "require-from-string@2.0.2",
+    "split2@4.2.0",
     "undici-types@7.18.2",
+    "xtend@4.0.2",
   ]);
 });
 
