@@ -520,8 +520,14 @@ function exemptionFor(units) {
 // trusted by virtue of being the engine — it is trusted only when the operator declares
 // a break-glass reason.
 
+// INC-055: the break-glass allowlist is mirrored INTO this repository
+// (scripts/policy/ssh-breakglass-allowlist.json) so a lone clone — including this
+// repo's own CI — can read it without a sibling checkout. The AOS file is the
+// authoritative copy; a consistency gate (breakglass-consistency-check.mjs) diffs
+// the two digests so the mirror cannot drift. The env override exists for the
+// mutation harness to pin the real AOS file.
 export const SSH_BREAKGLASS_ALLOWLIST_PATH = process.env.PUBLIC_CONFIGURATION_VALUE
-  ?? resolve(PLATFORM_ROOT, "TCRN-AOS/deploy/aos-local-client/ssh-breakglass-allowlist.json");
+  ?? resolve(REPO_ROOT, "scripts/policy/ssh-breakglass-allowlist.json");
 
 export function readBreakglassAllowlist(path = SSH_BREAKGLASS_ALLOWLIST_PATH) {
   try {
