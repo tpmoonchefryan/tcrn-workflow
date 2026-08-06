@@ -3,6 +3,21 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.3 — 2026-08-06
+
+**The engine CLI serves a chain from Postgres when TCRN_PG_\* is set.**
+
+`0.11.3` is the STORY-189 switch-window serving release on top of `0.11.2`:
+
+- `runCli` arms the storage and store backend factories with a PgBackend /
+  PgStoreBackend for the schema named by `TCRN_PG_SCHEMA` when
+  `TCRN_PG_CONNECTION` is set, so the read verbs answer from a PG-backed chain.
+  Migration verbs are excluded (their explicit backends win) and `commands` is
+  excluded (it answers from the catalogue).
+
+No verb, event-schema, storage-version, or file-backend byte change; CLI verb
+count stays 104.
+
 ## 0.11.2 — 2026-08-06
 
 **The Postgres backend segments by the workspace's segmentEventLimit.**
