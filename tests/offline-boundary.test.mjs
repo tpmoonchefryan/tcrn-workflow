@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
+// INC-059: this file is self-sufficient about its world — the offline guard may be
+// preloaded by the suite (task.mjs) or absent on a lone `node --test` run. Installing
+// it here, before any transport import, makes the single-run / suite / sandbox worlds
+// agree (install is idempotent: a preloaded guard returns immediately). This is a
+// fixture for the guard's presence, not a skip — the assertions below still test the
+// blocking surface for real.
+import { installNoNetworkGuard } from "../scripts/no-network.mjs";
+
+installNoNetworkGuard();
+
 import assert from "node:assert/strict";
 import dgram from "node:dgram";
 import dns from "node:dns";
