@@ -123,6 +123,8 @@ import {
   readGovernedDocumentFile,
   readRelocationAuthority,
   vacateWorkspace,
+  withStoreBackendFactory,
+  withStorageBackendFactory,
 } from "../../core/src/index.js";
 import type {
   ConferenceRequest,
@@ -978,13 +980,46 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   // INC-012: the dispatcher writes only through this wrapper, so the output-category guard
   // covers every verb -- including ones added later, which is the whole point of moving the
   // check from the flag to the bytes.
-  await dispatchCli(arguments_, {
-    ...io,
-    write: (value: string): void => {
-      assertDeclaredOutputCategory(command, value);
-      io.write(value);
-    },
-  });
+  const dispatch = async (): Promise<void> => {
+    await dispatchCli(arguments_, {
+      ...io,
+      write: (value: string): void => {
+        assertDeclaredOutputCategory(command, value);
+        io.write(value);
+      },
+    });
+  };
+  // STORY-189 switch window: a facade serving a PG-backed chain sets TCRN_PG_CONNECTION +
+  // TCRN_PG_SCHEMA, and every verb that touches a workspace then reads that chain from
+  // Postgres instead of the file tree. The migration verbs are excluded — they carry their
+  // own explicit backends (resolveBackend prefers options over the factory), so a wrap here
+  // would only add a wasted connection. `commands` is excluded too: it answers from the
+  // catalogue, not a workspace, and the facade re-derives the tool table from it every TTL.
+  const connection = process.env.TCRN_PG_CONNECTION;
+  const schema = process.env.TCRN_PG_SCHEMA;
+  const migrationVerbs = new Set(["migration-plan", "migration-execute", "migration-verify", "migration-rollback"]);
+  const wrapsWorkspace = (verb: string): boolean => {
+    if (verb === "commands" || migrationVerbs.has(verb)) return false;
+    const entry = COMMAND_CATALOG.find((candidate) => candidate.name === verb);
+    return entry?.flags.some((flag) => flag.name === "workspace") ?? false;
+  };
+  if (typeof connection === "string" && connection.length > 0 &&
+      typeof schema === "string" && schema.length > 0 &&
+      wrapsWorkspace(command)) {
+    const { PgBackend, PgStoreBackend } = await import("../../pg-backend/src/index.js");
+    const backend = new PgBackend({ schema, connection });
+    const storeBackend = new PgStoreBackend({ schema, connection });
+    await backend.connect();
+    await storeBackend.connect();
+    try {
+      await withStorageBackendFactory(() => backend, () =>
+        withStoreBackendFactory(() => storeBackend, dispatch));
+    } finally {
+      await closeMigrationBackends({ backend: () => backend, storeBackend: () => storeBackend });
+    }
+    return;
+  }
+  await dispatch();
 }
 
 async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<void> {
