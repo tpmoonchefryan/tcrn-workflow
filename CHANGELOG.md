@@ -3,6 +3,23 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.1 — 2026-08-06
+
+**Migration-verify tamper detection restored, and the migration CLI exits.**
+
+`0.11.1` is the STORY-189 window rerun release on top of `0.11.0`:
+
+- `migration-verify` compares the full canonical bytes of each event, not a
+  stored `eventHash`, so it still tolerates the file/PG segment-layout
+  difference while catching a tamper of any event field (the STORY-178 red-leg
+  guarantee).
+- The migration CLI now closes its PG backends with `this` bound and swallows
+  close failures, so `migration-execute` / `-verify` / `-rollback` exit cleanly
+  instead of hanging on a live pg client.
+
+No verb, event-schema, storage-version, or file-backend byte change; CLI verb
+count stays 104.
+
 ## 0.11.0 — 2026-08-06
 
 **Postgres storage backend, dual-backend equivalence, and the migration verb
