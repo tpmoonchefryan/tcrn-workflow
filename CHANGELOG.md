@@ -3,6 +3,22 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.2 — 2026-08-06
+
+**The Postgres backend segments by the workspace's segmentEventLimit.**
+
+`0.11.2` is the STORY-189 window rerun release on top of `0.11.1`:
+
+- The PG backend hardcoded `SEGMENT_LIMIT=1024`, so a chain whose single
+  segment exceeded the 1 MiB canonical bound became unreadable after migration
+  (TCRN-Design-System v983, `WORKSPACE_MIGRATION_FUTURE`). It now reads
+  `segmentEventLimit` from the workspace metadata row and lays out segments
+  with it, matching the file backend; the segment-limit cache is invalidated on
+  metadata write so the migration probe does not freeze a stale fallback.
+
+No verb, event-schema, storage-version, or file-backend byte change; CLI verb
+count stays 104.
+
 ## 0.11.1 — 2026-08-06
 
 **Migration-verify tamper detection restored, and the migration CLI exits.**
