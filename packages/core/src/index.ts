@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-export const FRAMEWORK_VERSION = "0.11.6" as const;
+export const FRAMEWORK_VERSION = "0.11.7" as const;
 export const DEFAULT_MODE = "development" as const;
 
 export type WorkflowMode = "development" | "release";
@@ -63,6 +63,7 @@ export {
   StorageHomeError,
   readStorageHomeDeclaration,
   removeStorageHomeDeclaration,
+  sealStorageHomeDeclaration,
   writeStorageHomeDeclaration,
 } from "./storage-home.js";
 export type { StorageHomeDeclaration } from "./storage-home.js";

@@ -3,6 +3,15 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.7 — 2026-08-07
+
+**The storage-home seal is an explicit, fail-closed recovery path.**
+
+- added the engine-only `storage-home-seal` verb for sealing a retained file archive to a validated PG authority without overwriting divergent archive bytes;
+- added `storage-home-status` for an engine read-back of the binding;
+- retries preserve the original declaration and conflicting bindings refuse;
+- the seal requires the live PG schema, a validated chain, and an expected-version sentinel.
+
 ## 0.11.6 — 2026-08-07
 
 **Interrupted migrations can resume a verified target prefix.**

@@ -124,6 +124,7 @@ import {
   readRelocationAuthority,
   vacateWorkspace,
   readStorageHomeDeclaration,
+  sealStorageHomeDeclaration,
   withStoreBackendFactory,
   withStorageBackendFactory,
 } from "../../core/src/index.js";
@@ -851,6 +852,13 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "snapshot-manifest", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "snapshot-verify", availability: "cli", mutates: false, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "manifest", required: true, valueKind: "string" }] },
   { name: "status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  // INC-074/INC-081: seal a retained file archive to an already authoritative
+  // PG chain. This is deliberately separate from migration-execute: a divergent
+  // archive must not be overwritten or treated as a resumable prefix. The PG
+  // wrapper proves the live chain first; this verb writes only the engine-owned
+  // storage-home declaration and is idempotent for the same declaration.
+  { name: "storage-home-seal", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "schema", required: true, valueKind: "string" }] },
+  { name: "storage-home-status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "sprint", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -1677,6 +1685,63 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     } finally {
       await closeMigrationBackends(options);
     }
+    return;
+  }
+  if (command === "storage-home-seal") {
+    const values = parseArguments(rest, ["workspace", "expected-version", "at", "schema"]);
+    required(values, ["workspace", "expected-version", "at", "schema"]);
+    const schema = values.schema ?? "";
+    if (!/^chain_[a-z0-9_]+$/u.test(schema)) {
+      fail("CLI_ARGUMENT_MALFORMED", "schema");
+    }
+    if (process.env.TCRN_PG_SCHEMA !== schema || typeof process.env.TCRN_PG_CONNECTION !== "string" || process.env.TCRN_PG_CONNECTION.length === 0) {
+      fail("STORAGE_HOME_PG_REQUIRED", "storage-home-seal requires the named PG schema and connection in the engine environment");
+    }
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const expected = expectedVersion(values);
+    const lease = await acquireWorkspaceLease(workspace, {
+      now: at,
+      storageHomeAdmission: "migration",
+    });
+    try {
+      // The PG wrapper has already admitted the named schema and injected the
+      // PgBackend. Validate the live chain before sealing so the archive binding
+      // cannot be written from a stale or unreadable authority.
+      const state = await validateWorkspace(workspace);
+      if (state.version !== expected) {
+        fail("WORKSPACE_CAS_MISMATCH", `expected PG version ${String(expected)}, observed ${String(state.version)}`);
+      }
+      const declaration = await sealStorageHomeDeclaration(workspace, {
+        schemaVersion: "tcrn.storage-home.v1",
+        storage: "pg",
+        schema,
+        workspaceId: state.metadata.workspaceId,
+        migratedAt: at,
+      });
+      io.write(canonicalJson({
+        reasonCode: declaration.migratedAt === at ? "STORAGE_HOME_SEALED" : "STORAGE_HOME_ALREADY_SEALED",
+        schemaVersion: declaration.schemaVersion,
+        storage: declaration.storage,
+        schema: declaration.schema,
+        workspaceId: declaration.workspaceId,
+        migratedAt: declaration.migratedAt,
+        version: state.version,
+        headEventHash: state.headEventHash,
+      }));
+    } finally {
+      await lease.release();
+    }
+    return;
+  }
+  if (command === "storage-home-status") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    const declaration = await readStorageHomeDeclaration(values.workspace ?? "");
+    if (declaration === null) {
+      fail("STORAGE_HOME_NOT_DECLARED", "workspace has no storage-home declaration");
+    }
+    io.write(canonicalJson({ reasonCode: "STORAGE_HOME_READY", declaration }));
     return;
   }
   if (command === "recover") {

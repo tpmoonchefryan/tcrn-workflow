@@ -29,6 +29,7 @@ import {
   STORAGE_HOME_VERSION,
   readStorageHomeDeclaration,
   removeStorageHomeDeclaration,
+  sealStorageHomeDeclaration,
   writeStorageHomeDeclaration,
 } from "../dist/build/packages/core/src/index.js";
 
@@ -152,6 +153,36 @@ test("INC-074: CLI refuses a PG path whose schema does not match the sentinel (C
     }
     assert.ok(output.includes("CLI_SCHEMA_MISMATCH"), `expected CLI_SCHEMA_MISMATCH in ${output}`);
     assert.notEqual(exitCode, 0);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("INC-074/INC-081: sealing a retained archive is idempotent and never overwrites a different binding", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    const declaration = {
+      schemaVersion: STORAGE_HOME_VERSION,
+      storage: "pg",
+      schema: "chain_inc074",
+      workspaceId: "workspace:inc074",
+      migratedAt: "2026-08-07T00:00:00.000Z",
+    };
+    const first = await sealStorageHomeDeclaration(fixture.workspace, declaration);
+    assert.deepEqual(first, declaration);
+
+    // A retry at a different instant keeps the original immutable binding and
+    // cannot rewrite its migration evidence.
+    const retry = await sealStorageHomeDeclaration(fixture.workspace, {
+      ...declaration,
+      migratedAt: "2026-08-07T00:01:00.000Z",
+    });
+    assert.deepEqual(retry, declaration);
+
+    await assert.rejects(
+      () => sealStorageHomeDeclaration(fixture.workspace, { ...declaration, schema: "chain_other" }),
+      (error) => error?.reasonCode === "STORAGE_HOME_ALREADY_BOUND",
+    );
   } finally {
     await fixture.close();
   }

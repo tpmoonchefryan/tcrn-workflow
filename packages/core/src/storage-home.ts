@@ -167,6 +167,39 @@ export async function writeStorageHomeDeclaration(workspaceRoot: string, declara
   }
 }
 
+/**
+ * Seal a file workspace to a Postgres home without copying the data plane.
+ *
+ * This is the explicit recovery operation for a retained archive whose bytes
+ * are no longer a prefix of the authoritative PG chain.  It is intentionally
+ * not an overwrite: a different existing declaration is a binding conflict,
+ * while an identical declaration is an idempotent read-back.  The caller is
+ * responsible for proving the PG head before invoking this primitive and for
+ * holding the workspace lease across that proof and this write.
+ */
+export async function sealStorageHomeDeclaration(
+  workspaceRoot: string,
+  declaration: StorageHomeDeclaration,
+): Promise<StorageHomeDeclaration> {
+  if (declaration.storage !== "pg" || typeof declaration.schema !== "string" || declaration.schema.length === 0) {
+    throw new StorageHomeError("STORAGE_HOME_INVALID", "a sealed storage-home declaration must name a PG schema");
+  }
+  const existing = await readStorageHomeDeclaration(workspaceRoot);
+  if (existing !== null) {
+    if (existing.storage !== declaration.storage || existing.schema !== declaration.schema ||
+      existing.workspaceId !== declaration.workspaceId) {
+      throw new StorageHomeError("STORAGE_HOME_ALREADY_BOUND", "workspace already has a different storage-home declaration");
+    }
+    return existing;
+  }
+  await writeStorageHomeDeclaration(workspaceRoot, declaration);
+  const written = await readStorageHomeDeclaration(workspaceRoot);
+  if (written === null || canonicalJson(written) !== canonicalJson(declaration)) {
+    throw new StorageHomeError("STORAGE_HOME_INVALID", "storage-home declaration did not survive its write read-back");
+  }
+  return written;
+}
+
 /** Remove the sentinel — the pg→file rollback restores the file tree as live home. */
 export async function removeStorageHomeDeclaration(workspaceRoot: string): Promise<void> {
   await rm(controlFilePath(workspaceRoot), { force: true });
