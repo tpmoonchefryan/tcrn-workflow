@@ -3,6 +3,22 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.4 — 2026-08-07
+
+**The storage-home migration gate and PG test path are fail-closed.**
+
+`0.11.4` is the INIT-020 engine release on top of `0.11.3`:
+
+- file-backed mutation refuses a migrated workspace's storage-home sentinel;
+- migration takes an archive-side lease and preserves the PG backend's typed
+  storage errors;
+- the PG suite applies an isolated `chain_test_*` schema and runs serially,
+  including the append-only trigger refusal proof; and
+- the release/test wiring records the PG job as a real pipeline owner.
+
+The CLI verb count remains 104. No push or public release is performed by this
+workspace task.
+
 ## 0.11.3 — 2026-08-06
 
 **The engine CLI serves a chain from Postgres when TCRN_PG_\* is set.**

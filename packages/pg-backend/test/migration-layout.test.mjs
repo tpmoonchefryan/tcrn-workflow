@@ -29,7 +29,7 @@ import { PgBackend } from "../../../dist/build/packages/pg-backend/src/index.js"
 
 const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
   ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
-const SCHEMA = "chain_cross";
+const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 const instant = (second) => `2026-07-11T00:${String(Math.floor(second / 60)).padStart(2, "0")}:${String(second % 60).padStart(2, "0")}Z`;
 
 before(async () => {
@@ -112,8 +112,9 @@ test("STORY-189: PG backend respects the workspace segmentEventLimit (large-chai
 
   const pg = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
   await pg.connect();
-  // Isolate from the previous test's migration (the shared chain_cross schema
-  // still holds its events + metadata, which would trip the bypass-copy probe).
+  // Isolate from the previous test's migration in the dedicated test schema;
+  // the schema still holds events + metadata, which would trip the bypass-copy
+  // probe without this explicit clear.
   await pg.clearForTest();
   try {
     const options = { backend: () => pg, storeBackend: undefined };

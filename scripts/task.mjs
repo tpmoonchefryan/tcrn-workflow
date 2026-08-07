@@ -1819,6 +1819,88 @@ async function verifyMap() {
   for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "BK", "ACT", "ACT2", "E2E"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
+  // TCRN-CROSS-INIT-020 INC-078 — ADR acceptance criteria ↔ machine gate
+  // reconciliation. Each ADR acceptance criterion NAMES the executable gate/test
+  // that machine-checks it (scripts/policy/adr-criteria.json); a criterion with no
+  // named gate, a gate file that does not exist, or a gate that no pipeline runs
+  // ("not wired", per INC-079) is red. This is the machine form of "a criterion
+  // with no red leg is not a criterion" (ADR-0004 §9) — the view and reason-code
+  // criteria went silently unenforced during INIT-020 precisely because nothing
+  // forced them to name a gate.
+  {
+    let adrCriteria;
+    try {
+      adrCriteria = JSON.parse(await readText(resolve(repositoryRoot, "scripts/policy/adr-criteria.json")));
+    } catch (error) {
+      assertion(false, "VERIFICATION_MAP_ADR_CRITERIA_UNREADABLE", String(error?.message ?? error));
+    }
+    if (adrCriteria !== undefined) {
+      assertion(adrCriteria.schemaVersion === "tcrn.adr-criteria.v1", "VERIFICATION_MAP_ADR_CRITERIA_SCHEMA");
+      assertion(Array.isArray(adrCriteria.criteria) && adrCriteria.criteria.length > 0, "VERIFICATION_MAP_ADR_CRITERIA_EMPTY");
+      const criterionIds = new Set();
+      const adrSectionHeadings = new Map();
+      const adrDocuments = new Map();
+      for (const criterion of adrCriteria.criteria) {
+        const adrNumber = String(criterion.adr ?? "").padStart(4, "0");
+        if (!adrDocuments.has(adrNumber)) {
+          const adrPath = resolve(repositoryRoot, `docs/adr/${adrNumber}-postgres-storage-backend.md`);
+          let document;
+          try {
+            document = await readText(adrPath);
+          } catch (error) {
+            assertion(false, "VERIFICATION_MAP_ADR_SOURCE_UNREADABLE", `${criterion.id}:${String(error?.message ?? error)}`);
+          }
+          const section = document?.match(/### 9\. Equivalence criteria[\s\S]*?(?=\n##\s|$)/u)?.[0] ?? "";
+          assertion(section.length > 0, "VERIFICATION_MAP_ADR_SECTION_MISSING", criterion.id);
+          const headings = new Map();
+          for (const match of section.matchAll(/^\s*(\d+)\.\s+\*\*(.+?)\*\*/gmu)) {
+            headings.set(Number(match[1]), match[2].replace(/[.。]+$/u, "").trim());
+          }
+          adrDocuments.set(adrNumber, document ?? "");
+          adrSectionHeadings.set(adrNumber, headings);
+        }
+      }
+      const wiring = (await import("./lib/test-wiring.mjs")).judgeTestWiring({ repoRoot: repositoryRoot, registryPath: resolve(repositoryRoot, "scripts/policy/test-wiring.json") });
+      for (const criterion of adrCriteria.criteria) {
+        assertion(typeof criterion.id === "string" && criterion.id.length > 0, "VERIFICATION_MAP_ADR_CRITERION_ID");
+        assertion(!criterionIds.has(criterion.id), "VERIFICATION_MAP_ADR_CRITERION_DUPLICATE", criterion.id);
+        criterionIds.add(criterion.id);
+        const adrNumber = String(criterion.adr ?? "").padStart(4, "0");
+        const headings = adrSectionHeadings.get(adrNumber);
+        assertion(Number.isSafeInteger(criterion.ordinal) && criterion.ordinal > 0, "VERIFICATION_MAP_ADR_CRITERION_ORDINAL", criterion.id);
+        const heading = headings?.get(criterion.ordinal);
+        assertion(typeof heading === "string", "VERIFICATION_MAP_ADR_CRITERION_NOT_IN_SOURCE", criterion.id);
+        assertion(heading.toLocaleLowerCase() === String(criterion.title ?? "").toLocaleLowerCase(), "VERIFICATION_MAP_ADR_CRITERION_TITLE_DRIFT", criterion.id);
+        assertion(typeof criterion.gate === "string" && criterion.gate.length > 0, "VERIFICATION_MAP_ADR_CRITERION_UNNAMED", criterion.id);
+        assertion(["implemented", "candidate", "planned"].includes(criterion.status), "VERIFICATION_MAP_ADR_CRITERION_STATUS", criterion.id);
+        if (criterion.status === "implemented") {
+          // The named gate must be real AND pipeline-wired. A gate that no pipeline
+          // executes is not a gate (INC-079's rule applied to ADR criteria).
+          const gateIsScript = typeof packageJson.scripts?.[criterion.gate] === "string";
+          if (!gateIsScript) {
+            let exists = false;
+            try { await lstat(resolve(repositoryRoot, criterion.gate)); exists = true; } catch { exists = false; }
+            assertion(exists, "VERIFICATION_MAP_ADR_CRITERION_GATE_MISSING", criterion.id);
+          }
+          if (criterion.gate.endsWith(".test.mjs") && (wiring.orphaned ?? []).includes(criterion.gate)) {
+            assertion(false, "VERIFICATION_MAP_ADR_CRITERION_GATE_UNWIRED", `${criterion.id}:${criterion.gate}`);
+          }
+          let gateSource = "";
+          try {
+            gateSource = await readText(resolve(repositoryRoot, criterion.gate));
+          } catch (error) {
+            assertion(false, "VERIFICATION_MAP_ADR_CRITERION_GATE_UNREADABLE", `${criterion.id}:${String(error?.message ?? error)}`);
+          }
+          assertion(gateSource.includes(`§9.${String(criterion.ordinal)}`), "VERIFICATION_MAP_ADR_CRITERION_GATE_LABEL", criterion.id);
+          assertion(/mutation witness|red leg|must fail|gate REDS/iu.test(gateSource), "VERIFICATION_MAP_ADR_CRITERION_RED_LEG", criterion.id);
+        }
+      }
+      for (const [adrNumber, headings] of adrSectionHeadings) {
+        const expected = adrCriteria.criteria.filter((criterion) => String(criterion.adr).padStart(4, "0") === adrNumber);
+        assertion(headings.size === expected.length, "VERIFICATION_MAP_ADR_CRITERION_COUNT_DRIFT", adrNumber);
+      }
+    }
+  }
   const categoryCounts = {
     frameworkHygiene: map.claims.filter((claim) => claim.category === "framework-hygiene").length,
     inertnessProof: map.claims.filter((claim) => claim.category === "inertness-proof").length,

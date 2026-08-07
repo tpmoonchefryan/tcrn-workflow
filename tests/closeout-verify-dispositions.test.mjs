@@ -97,3 +97,75 @@ describe("closeout-verify disposition kinds (STORY-172)", () => {
     assert.ok(result.problems.some((p) => p.includes("INC-062 is retained but names no chain work ticket")));
   });
 });
+
+describe("closeout-verify windowed red-leg obligation (INC-077)", () => {
+  const RED_LEG = {
+    schemaVersion: "tcrn.closeout-red-leg.v1",
+    target: "cross-project file tree",
+    oldPathway: "engine CLI via SSH with no TCRN_PG_*",
+    refusalReasonCode: "WORKSPACE_STORAGE_RELOCATED",
+    evidence: "red-leg-record-2026-08-07.json",
+  };
+
+  test("reconciles a windowed closeout that carries a well-formed redLeg", () => {
+    const result = verifyCloseout({
+      schemaVersion: V1,
+      incident: "TCRN-CROSS-INC-077",
+      windowed: true,
+      redLeg: RED_LEG,
+      items: ["freeze-file-tree"],
+      dispositions: { "freeze-file-tree": { kind: "fixed" } },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.reasonCode, "CLOSEOUT_ITEMS_RECONCILED");
+  });
+
+  test("REDS when a windowed closeout omits the redLeg — only a positive leg is not acceptance", () => {
+    const result = verifyCloseout({
+      schemaVersion: V1,
+      incident: "TCRN-CROSS-INC-077",
+      windowed: true, // redLeg deliberately omitted
+      items: ["freeze-file-tree"],
+      dispositions: { "freeze-file-tree": { kind: "fixed" } },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.problems.some((p) => p.includes("windowed closeout requires a redLeg record")));
+  });
+
+  test("REDS when a redLeg is present but empty (copy-pasted or emptied field)", () => {
+    const result = verifyCloseout({
+      schemaVersion: V1,
+      incident: "TCRN-CROSS-INC-077",
+      windowed: true,
+      redLeg: { schemaVersion: "tcrn.closeout-red-leg.v1", target: "", oldPathway: "", refusalReasonCode: "", evidence: "" },
+      items: ["freeze-file-tree"],
+      dispositions: { "freeze-file-tree": { kind: "fixed" } },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.problems.some((p) => p.includes("redLeg.target must name")));
+  });
+
+  test("REDS when INIT-020 windowed items try to self-report windowed:false", () => {
+    const result = verifyCloseout({
+      schemaVersion: V1,
+      incident: "TCRN-CROSS-INIT-020",
+      windowed: false,
+      items: ["INC-074"],
+      dispositions: { "INC-074": { kind: "fixed" } },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.problems.some((p) => p.includes("require windowed:true")));
+  });
+
+  test("REDS when a non-windowed manifest still carries a malformed redLeg", () => {
+    const result = verifyCloseout({
+      schemaVersion: V1,
+      incident: "TCRN-CROSS-INC-077",
+      redLeg: { schemaVersion: "tcrn.closeout-red-leg.v1", target: "x", oldPathway: "", refusalReasonCode: "", evidence: "y" },
+      items: ["item"],
+      dispositions: { item: { kind: "fixed" } },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.problems.some((p) => p.includes("redLeg.refusalReasonCode must name")));
+  });
+});

@@ -7,7 +7,9 @@
 // round-trip identically across backends — the store-half of the STORY-176
 // equivalence gate. A marker, a metadata record, a body, and an artifact record
 // are written+read through FileStoreBackend and PgStoreBackend; every byte must
-// match.
+// match. The workspace view half is a separate live gate below (ADR-0004 §9.4);
+// its mutation witness is the deliberately different-byte comparison in the
+// existing one-byte abstraction red leg.
 
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
@@ -15,11 +17,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, before } from "node:test";
 
-import { FileStoreBackend, withStoreBackendFactory } from "../../../dist/build/packages/core/src/index.js";
-import { PgStoreBackend } from "../../../dist/build/packages/pg-backend/src/index.js";
+import {
+  FileBackend,
+  FileStoreBackend,
+  initializeWorkspace,
+  validateWorkspace,
+  withStorageBackendFactory,
+  withStoreBackendFactory,
+} from "../../../dist/build/packages/core/src/index.js";
+import { PgBackend, PgStoreBackend } from "../../../dist/build/packages/pg-backend/src/index.js";
 
 const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
   ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
+const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 
 const MARKER = Buffer.from('{"schemaVersion":"tcrn.knowledge-store.v1","version":0,"eventHighWaterDigest":"a".repeat(64)}\n', "utf8");
 const METADATA = Buffer.from('{"schemaVersion":"tcrn.knowledge-unit-metadata.v1","id":"knowledge:aaaaaaaaaaaaaaaaaaaaaaaa"}\n', "utf8");
@@ -31,7 +41,7 @@ before(async () => {
   const { default: pg } = await import("pg");
   const client = new pg.Client({ connectionString: CONNECTION });
   await client.connect();
-  await client.query("truncate chain_cross.knowledge_marker, chain_cross.knowledge_metadata, chain_cross.knowledge_bodies, chain_cross.knowledge_views, chain_cross.artifact_marker, chain_cross.artifact_records");
+  await client.query(`truncate ${SCHEMA}.knowledge_marker, ${SCHEMA}.knowledge_metadata, ${SCHEMA}.knowledge_bodies, ${SCHEMA}.knowledge_views, ${SCHEMA}.artifact_marker, ${SCHEMA}.artifact_records`);
   await client.end();
 });
 
@@ -45,9 +55,21 @@ async function fileStore() {
   return { storeRoot, async close() { await rm(base, { recursive: true, force: true }); } };
 }
 
+async function workspaceFixture() {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-s177-workspace-")));
+  const kinds = ["framework", "workspace", "transient", "evidence-locator", "release-trust"];
+  for (const kind of kinds) await mkdir(join(base, kind));
+  return {
+    base,
+    workspace: join(base, "workspace"),
+    roots: kinds.map((kind) => ({ kind, path: join(base, kind) })),
+    async close() { await rm(base, { recursive: true, force: true }); },
+  };
+}
+
 test("STORY-177: knowledge/artifact store data-plane bytes are identical across file and PG backends", async () => {
   const file = await fileStore();
-  const pg = new PgStoreBackend({ schema: "chain_cross", connection: CONNECTION });
+  const pg = new PgStoreBackend({ schema: SCHEMA, connection: CONNECTION });
   await pg.connect();
   try {
     const fileBackend = new FileStoreBackend(file.storeRoot, {
@@ -95,5 +117,40 @@ test("STORY-177: knowledge/artifact store data-plane bytes are identical across 
   } finally {
     await pg.close();
     await file.close();
+  }
+});
+
+test("ADR-0004 §9.4: workspace view names and bytes are identical at the same head", async () => {
+  const file = await workspaceFixture();
+  const pgWorkspace = await workspaceFixture();
+  const pg = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
+  await pg.connect();
+  await pg.clearForTest();
+  try {
+    const options = {
+      roots: file.roots,
+      externalKey: "WORKSPACE-VIEW-EQUIV",
+      createdAt: "2026-07-11T00:00:00Z",
+      segmentEventLimit: 4,
+    };
+    await initializeWorkspace(options);
+    await withStorageBackendFactory(() => pg, async () => initializeWorkspace({ ...options, roots: pgWorkspace.roots }));
+
+    const fileBackend = new FileBackend(file.workspace);
+    const fileViewNames = await fileBackend.listViewNames();
+    const pgViewNames = await pg.listViewNames();
+    assert.deepEqual(pgViewNames, fileViewNames, "workspace view-name sets are identical");
+    for (const name of fileViewNames) {
+      assert.deepEqual(await pg.readView(name), await fileBackend.readView(name), `${name} bytes are identical`);
+    }
+
+    const fileState = await validateWorkspace(file.workspace);
+    const pgState = await withStorageBackendFactory(() => pg, async () => validateWorkspace(pgWorkspace.workspace));
+    assert.equal(pgState.version, fileState.version, "view comparison is at the same chain version");
+    assert.equal(pgState.headEventHash, fileState.headEventHash, "view comparison is at the same chain head");
+  } finally {
+    await pg.close();
+    await file.close();
+    await pgWorkspace.close();
   }
 });

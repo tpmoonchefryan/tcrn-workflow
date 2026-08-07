@@ -26,16 +26,14 @@
 // retained disposition names a chain work id; a superseded disposition names the work id
 // that carries it; a deferred disposition carries a reason.
 //
-// `superseded` is the disposition a batch uses when the item's requirement is not
-// independently closed here but is carried by a named downstream work item (a
-// facet of the storage/transport migration in INIT-020 — e.g. an INC whose
-// protection target is re-homed onto a facade story). It exists so a batch can be
-// reconciled without either folding the item into a retained disposition (which
-// would claim an independent continuation this initiative does not run) or
-// deferring it (which is for a reason, not a carrier). `carriedBy` must name a
-// chain work id, the same shape `retained.ticket` requires — a superseded item
-// that names no live carrier is exactly the evaporation this tool exists to
-// catch.
+// TCRN-CROSS-INIT-020 INC-077 — the red-leg obligation for window-type closeouts. A
+// freeze/archive/retire/migrate closeout whose acceptance only ran the positive leg
+// (the new path works) is NOT accepted: the negative leg (the old path refuses to
+// write) is half the acceptance criteria, and a window closeout that omits it must
+// red. Machine form: a manifest declaring `windowed: true` MUST carry a non-empty,
+// well-formed `redLeg` record naming the old pathway and the refusal it must produce.
+// A redLeg that is present must always be well-formed, so a copy-pasted or emptied
+// redLeg field fails closed rather than being waved through.
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -43,8 +41,35 @@ import { fileURLToPath } from "node:url";
 
 export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
+const RED_LEG_VERSION = "tcrn.closeout-red-leg.v1";
+
 function chainWorkId(value) {
   return typeof value === "string" && /^work:[a-f0-9]{24}$/u.test(value);
+}
+
+// INC-077: a window-type closeout's negative leg. When present it must be
+// well-formed; when the manifest is `windowed` it is REQUIRED.
+function redLegProblems(redLeg) {
+  const problems = [];
+  if (redLeg === null || typeof redLeg !== "object" || Array.isArray(redLeg)) {
+    return ["redLeg must be an object"];
+  }
+  if (redLeg.schemaVersion !== RED_LEG_VERSION) {
+    problems.push(`redLeg.schemaVersion must be ${RED_LEG_VERSION}`);
+  }
+  if (typeof redLeg.target !== "string" || redLeg.target.length === 0) {
+    problems.push("redLeg.target must name the frozen/archived/retired/migrated object");
+  }
+  if (typeof redLeg.oldPathway !== "string" || redLeg.oldPathway.length === 0) {
+    problems.push("redLeg.oldPathway must name the pathway that must refuse");
+  }
+  if (typeof redLeg.refusalReasonCode !== "string" || redLeg.refusalReasonCode.length === 0) {
+    problems.push("redLeg.refusalReasonCode must name the refusal code the old pathway produces");
+  }
+  if (typeof redLeg.evidence !== "string" || redLeg.evidence.length === 0) {
+    problems.push("redLeg.evidence must point at the recorded negative-leg run");
+  }
+  return problems;
 }
 
 export function verifyCloseout(manifest) {
@@ -57,6 +82,22 @@ export function verifyCloseout(manifest) {
   }
   const dispositions = manifest?.dispositions ?? {};
   const items = manifest?.items ?? [];
+  // INC-077: the INIT-020 storage/archive/migration batch is windowed by its
+  // item set, not by a caller's self-description. An entry that tries to set
+  // `windowed:false` cannot evade the negative-leg obligation.
+  const derivedWindowed = items.some((item) => /^(?:INC-07[4-9]|INC-08[0-9])$/u.test(item));
+  if (derivedWindowed && manifest?.windowed !== true) {
+    problems.push("INIT-020 storage/archive/migration items require windowed:true; the red-leg class is derived from the item set");
+  }
+  if (manifest?.windowed === true || derivedWindowed) {
+    if (manifest.redLeg === undefined || manifest.redLeg === null) {
+      problems.push("windowed closeout requires a redLeg record (INC-077: only a positive leg is not acceptance)");
+    } else {
+      problems.push(...redLegProblems(manifest.redLeg).map((problem) => `redLeg: ${problem}`));
+    }
+  } else if (manifest?.redLeg !== undefined) {
+    problems.push(...redLegProblems(manifest.redLeg).map((problem) => `redLeg: ${problem}`));
+  }
   for (const item of items) {
     const d = dispositions[item];
     if (d === undefined) {

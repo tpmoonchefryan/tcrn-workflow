@@ -9,18 +9,20 @@
 
 import assert from "node:assert/strict";
 import { describe, test, before } from "node:test";
+import pg from "pg";
 
 import { canonicalJson } from "../../../dist/build/packages/protocol/src/index.js";
 import { PgBackend } from "../../../dist/build/packages/pg-backend/src/index.js";
 
 const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
   ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
+const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 
 describe("STORY-175 PgBackend smoke", () => {
-  // Isolate each run: the local PG is shared across tests, so clear the
-  // chain_cross tables before the suite so sequence-1 assertions start clean.
+  // Isolate each run: the runner provisions a dedicated chain_test_* schema;
+  // clear its tables before the suite so sequence-1 assertions start clean.
   before(async () => {
-    const backend = new PgBackend({ schema: "chain_cross", connection: CONNECTION });
+    const backend = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
     await backend.connect();
     try {
       await backend.clearForTest();
@@ -30,7 +32,7 @@ describe("STORY-175 PgBackend smoke", () => {
   });
 
   test("metadata round-trips", async () => {
-    const backend = new PgBackend({ schema: "chain_cross", connection: CONNECTION });
+    const backend = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
     await backend.connect();
     try {
       const bytes = Buffer.from('{"schemaVersion":"tcrn.workspace.v1","ok":true}\n', "utf8");
@@ -43,7 +45,7 @@ describe("STORY-175 PgBackend smoke", () => {
   });
 
   test("segment write/read round-trips events through the append-only trigger", async () => {
-    const backend = new PgBackend({ schema: "chain_cross", connection: CONNECTION });
+    const backend = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
     await backend.connect();
     try {
       const segment = canonicalJson([
@@ -70,7 +72,7 @@ describe("STORY-175 PgBackend smoke", () => {
   });
 
   test("view write/read round-trips", async () => {
-    const backend = new PgBackend({ schema: "chain_cross", connection: CONNECTION });
+    const backend = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
     await backend.connect();
     try {
       await backend.writeView("STATUS.md", "# Workspace Status\n");
@@ -82,7 +84,7 @@ describe("STORY-175 PgBackend smoke", () => {
   });
 
   test("append-only trigger refuses a byte-divergent re-presentation of a committed sequence", async () => {
-    const backend = new PgBackend({ schema: "chain_cross", connection: CONNECTION });
+    const backend = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
     await backend.connect();
     try {
       const event = {
@@ -109,6 +111,30 @@ describe("STORY-175 PgBackend smoke", () => {
       assert.equal(thrown.reasonCode, "WORKSPACE_EVENT_CORRUPT", "append-only violation maps to EVENT_CORRUPT");
     } finally {
       await backend.close();
+    }
+  });
+
+  test("schema admission preserves WORKSPACE_SCHEMA_INVALID when the append-only trigger is absent", async () => {
+    const raw = new pg.Client({ connectionString: CONNECTION });
+    await raw.connect();
+    try {
+      await raw.query(`drop trigger if exists events_append_only on ${SCHEMA}.events`);
+      const backend = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
+      try {
+        await assert.rejects(
+          () => backend.connect(),
+          (error) => error?.reasonCode === "WORKSPACE_SCHEMA_INVALID",
+        );
+      } finally {
+        await backend.close();
+      }
+    } finally {
+      await raw.query(
+        `create trigger events_append_only
+         before insert or update or delete on ${SCHEMA}.events
+         for each row execute function chain_append_only_trigger()`,
+      );
+      await raw.end();
     }
   });
 });

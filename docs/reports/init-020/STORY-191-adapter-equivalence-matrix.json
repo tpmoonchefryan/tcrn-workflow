@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "tcrn.story-191-adapter-equivalence-matrix.v1",
+  "story": "STORY-191",
+  "scope": "The Codex and Claude inert adapter families share one host-neutral contract; host-only surfaces are enumerated rather than silently treated as parity gaps.",
+  "sharedReasonCodes": [
+    "ADAPTER_BINDING_MISMATCH",
+    "ADAPTER_BUDGET_EXCEEDED",
+    "ADAPTER_BUNDLE_GENERATED",
+    "ADAPTER_BUNDLE_INVALID",
+    "ADAPTER_CANONICAL_INVALID",
+    "ADAPTER_CONTEXT_STALE",
+    "ADAPTER_FINAL_HOP_BLOCKED",
+    "ADAPTER_FINAL_HOP_DELIVERED",
+    "ADAPTER_FINAL_HOP_DUPLICATE",
+    "ADAPTER_FINAL_HOP_REQUIRED",
+    "ADAPTER_GOVERNED_ROUTING_REQUIRED",
+    "ADAPTER_HOST_MISMATCH",
+    "ADAPTER_HOST_REQUIRED",
+    "ADAPTER_INSTALLATION_CANONICAL_INVALID",
+    "ADAPTER_INSTALLATION_CHANGED",
+    "ADAPTER_INSTALLATION_DIGEST",
+    "ADAPTER_INSTALLATION_LINK",
+    "ADAPTER_INSTALLATION_MALFORMED",
+    "ADAPTER_INSTALLATION_MISMATCH",
+    "ADAPTER_INSTALLATION_PATH",
+    "ADAPTER_INSTALLATION_REQUIRED",
+    "ADAPTER_INSTALLATION_SPECIAL_FILE",
+    "ADAPTER_PATH_INVALID",
+    "ADAPTER_ROLLBACK_MISMATCH",
+    "ADAPTER_ROLLBACK_PLANNED",
+    "ADAPTER_SCHEMA_INVALID",
+    "ADAPTER_UNICODE_INVALID",
+    "ADAPTER_UNKNOWN_FIELD",
+    "ADAPTER_VALIDATED"
+  ],
+  "hostSpecificReasonCodes": {
+    "codex": [],
+    "claude": [
+      "ADAPTER_FORBIDDEN_PATH",
+      "ADAPTER_FRAGMENT_INVALID",
+      "ADAPTER_FRAGMENT_IRREVERSIBLE",
+      "ADAPTER_HOST_PRODUCT_MISMATCH"
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "request-validation",
+      "codex": "validated closed request with bounded untrusted text",
+      "claude": "validated closed request with bounded untrusted text",
+      "parity": "required"
+    },
+    {
+      "id": "host-admission",
+      "codex": "out-of-band host digest, binding, and validity window",
+      "claude": "out-of-band host digest, binding, product, and validity window",
+      "parity": "required"
+    },
+    {
+      "id": "inert-bundle",
+      "codex": "four canonical project-local inert templates",
+      "claude": "four canonical project-local inert templates",
+      "parity": "required"
+    },
+    {
+      "id": "bundle-integrity",
+      "codex": "canonical bytes, manifest, bundle, and rollback digests",
+      "claude": "canonical bytes, manifest, bundle, and rollback digests",
+      "parity": "required"
+    },
+    {
+      "id": "installation-receipt",
+      "codex": "independent lstat/open/read receipt admission",
+      "claude": "independent lstat/open/read receipt admission",
+      "parity": "required"
+    },
+    {
+      "id": "rollback-plan",
+      "codex": "identity-bound, non-deleting rollback plan",
+      "claude": "identity-bound, non-deleting rollback plan",
+      "parity": "required"
+    },
+    {
+      "id": "fallback",
+      "codex": "authority-empty and governed-routing-required",
+      "claude": "authority-empty, governed-routing-required, claude_md_only",
+      "parity": "reason-code parity; mode is host-specific"
+    },
+    {
+      "id": "final-hop-lifecycle",
+      "codex": "single owner-visible final hop with duplicate and required-stop guards",
+      "claude": "single owner-visible final hop with duplicate and required-stop guards",
+      "parity": "required"
+    }
+  ],
+  "hostSpecificSurfaces": [
+    {
+      "id": "codex-template-root",
+      "owner": "codex",
+      "contract": ".codex/tcrn-workflow/",
+      "reason": "Codex project-local inert templates; no Claude settings merge."
+    },
+    {
+      "id": "claude-template-root",
+      "owner": "claude",
+      "contract": ".claude/tcrn-workflow/",
+      "reason": "Claude project-local inert templates."
+    },
+    {
+      "id": "claude-host-product",
+      "owner": "claude",
+      "contract": "hostProduct=claude-code plus bounded hostVersionReadback",
+      "reason": "Claude host identity is an additional admission fact."
+    },
+    {
+      "id": "claude-settings-fragment",
+      "owner": "claude",
+      "contract": "reversible tcrnWorkflowInert settings fragment",
+      "reason": "Claude Code has a settings merge surface; Codex does not."
+    },
+    {
+      "id": "claude-forbidden-paths",
+      "owner": "claude",
+      "contract": "project-local .claude paths only",
+      "reason": "Claude settings paths need an explicit user-level path boundary."
+    }
+  ],
+  "residuals": [
+    {
+      "id": "live-activation",
+      "appliesTo": [
+        "codex",
+        "claude"
+      ],
+      "status": "not-claimed",
+      "note": "Both V1 families remain inert; live host activation requires separate governed flows."
+    },
+    {
+      "id": "interpreter-path",
+      "appliesTo": [
+        "codex",
+        "claude"
+      ],
+      "status": "measured-open",
+      "note": "Generated activation commands use the host PATH to resolve node; the existing host proofs disclose rather than close this residual."
+    },
+    {
+      "id": "claude-settings-path",
+      "appliesTo": [
+        "claude"
+      ],
+      "status": "closed-for-v1",
+      "note": "The inert Claude fragment accepts only the project-local .claude/tcrn-workflow namespace."
+    }
+  ],
+  "equivalenceTest": "tests/story-191-adapter-equivalence.test.mjs"
+}

@@ -1,6 +1,6 @@
 {
   "name": "tcrn-workflow",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "private": true,
   "description": "Offline-first, verifiable workflow framework bootstrap.",
   "license": "Apache-2.0",
@@ -88,7 +88,10 @@
     "verify:vulnerabilities": "node scripts/task.mjs vulnerabilities",
     "verify:workspace": "node scripts/task.mjs workspace",
     "verify:s6": "node scripts/verify-s6.mjs",
-    "verify:breakglass-consistency": "node scripts/breakglass-consistency-check.mjs"
+    "verify:breakglass-consistency": "node scripts/breakglass-consistency-check.mjs",
+    "test-wiring:proof": "node scripts/test-wiring-proof.mjs",
+    "pg:schema": "node scripts/apply-pg-schema.mjs",
+    "pg:test": "node scripts/apply-pg-test-schema.mjs && node --test --test-concurrency=1 packages/pg-backend/test/*.test.mjs"
   },
   "devDependencies": {
     "@types/node": "24.13.2",

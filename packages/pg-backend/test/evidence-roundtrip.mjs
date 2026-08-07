@@ -8,7 +8,8 @@
 // scrub-hosted evidence JSON suitable for the INC-042 evidence tree.
 //
 // Usage: node packages/pg-backend/test/evidence-roundtrip.mjs
-// Requires the local Docker PG (tcrn-postgres) with chain_cross available.
+// Requires the local Docker PG (tcrn-postgres) with the isolated test schema
+// available; set TCRN_PG_TEST_SCHEMA to override the default.
 
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -36,7 +37,7 @@ import { PgBackend, PgStoreBackend } from "../../../dist/build/packages/pg-backe
 
 const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
   ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
-const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_cross";
+const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
 
 const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");

@@ -36,8 +36,23 @@ export interface PgBackendOptions {
 /**
  * Map a PG driver error to a StorageError with the engine's reason code.
  * Permission refusals and constraint violations are the fail-closed paths.
+ *
+ * INC-085: Node-level connection errors carry Node error codes (ECONNREFUSED,
+ * ENOTFOUND, ETIMEDOUT, ECONNRESET, EPIPE), NOT SQLSTATEs. They previously fell
+ * into the default branch and were misreported as WORKSPACE_EVENT_CORRUPT — a
+ * downed database read as a corrupt chain, which triggers the wrong incident
+ * response (probeTarget reads a dead DB as "bypass copy refused"). They are now
+ * mapped to the apply-unavailable family, the same class the SQLSTATE connection
+ * failures (08001/08006/57P03) already map to.
  */
 function mapPgError(error: unknown): never {
+  // INC-085: admission and backend helpers deliberately raise typed
+  // StorageErrors. Do not remap them through the generic SQL table; doing so
+  // turned a missing append-only trigger (WORKSPACE_SCHEMA_INVALID) into the
+  // unrelated EVENT_CORRUPT reason and erased the actual gate that failed.
+  if (error instanceof StorageError) {
+    throw error;
+  }
   const code = (error as { code?: string }).code;
   const message = (error as { message?: string }).message ?? String(error);
   switch (code) {
@@ -57,9 +72,30 @@ function mapPgError(error: unknown): never {
     case "08001": // sqlclient_unable_to_establish_sqlconnection
     case "08006": // connection_failure
     case "57P03": // cannot_connect_now
+    case "ECONNREFUSED":
+    case "ENOTFOUND":
+    case "ETIMEDOUT":
+    case "ECONNRESET":
+    case "EPIPE":
       throw new StorageError("WORKSPACE_MIGRATION_APPLY_UNAVAILABLE", `pg unreachable: ${message}`);
     default:
       throw new StorageError("WORKSPACE_EVENT_CORRUPT", `pg error ${code ?? "unknown"}: ${message}`);
+  }
+}
+
+/** INC-085: the append-only trigger we require on the events table before any
+ * write is admitted (ADR-0004 §5 admission). A schema without the trigger was
+ * observed to accept writes and even overwrite sequence 1 — the trigger is the
+ * chain's last line of defense against a bypassed engine, so writing into a
+ * triggerless schema is refused. */
+async function assertAppendOnlyTrigger(client: pg.Client, schema: string): Promise<void> {
+  const { rows } = await client.query(
+    `select tgname from pg_trigger where tgrelid = to_regclass($1) and not tgisinternal`,
+    [`${schema}.events`],
+  );
+  const triggerNames = rows.map((row) => String(row.tgname));
+  if (triggerNames.length === 0) {
+    throw new StorageError("WORKSPACE_SCHEMA_INVALID", `events table in schema ${schema} has no append-only trigger; refusing to write`);
   }
 }
 
@@ -78,6 +114,11 @@ export class PgBackend implements StorageBackend {
   async connect(): Promise<void> {
     try {
       await this.client.connect();
+      // INC-085: admission validates the append-only trigger exists. A schema
+      // without it accepted writes (even overwriting sequence 1); the trigger is
+      // the chain's last line of defense, so serving a triggerless schema fails
+      // closed at connect time.
+      await assertAppendOnlyTrigger(this.client, this.schema);
     } catch (error) {
       mapPgError(error);
     }
@@ -91,6 +132,12 @@ export class PgBackend implements StorageBackend {
   // file backend. Reading it from the metadata row keeps single segments under
   // the canonical 1 MiB bound for large chains (STORY-189: a 983-event chain
   // exceeded it at the hardcoded 1024 limit). Falls back to the engine maximum.
+  //
+  // INC-086: the fallback is NEVER cached. A transient metadata-read failure
+  // (a downed replica, a mid-migration row) must not freeze the 1024 ceiling
+  // forever — v0.11.2 fixed a bad layout that a permanent cache would re-admit
+  // on the very next transient fault. Only a genuinely read, validated limit is
+  // cached, and it is invalidated on every metadata write.
   private async resolveSegmentLimit(): Promise<number> {
     if (this.segmentLimitCache !== null) {
       return this.segmentLimitCache;
@@ -104,13 +151,14 @@ export class PgBackend implements StorageBackend {
         const candidate = Number(parsed.segmentEventLimit);
         if (Number.isSafeInteger(candidate) && candidate >= 2 && candidate <= 1024) {
           limit = candidate;
+          // Only a successfully read, validated limit is cached — never the fallback.
+          this.segmentLimitCache = limit;
         }
       }
     } catch {
-      // metadata read failure falls back to the max; the caller's own read will
-      // surface the real error if the store is genuinely broken.
+      // metadata read failure falls back to the max for THIS call only; the
+      // caller's own read surfaces the real error if the store is broken.
     }
-    this.segmentLimitCache = limit;
     return limit;
   }
 
@@ -140,11 +188,24 @@ export class PgBackend implements StorageBackend {
 
   async writeMetadataBytes(content: Buffer, _crashAt?: WorkspaceCrashPoint): Promise<void> {
     try {
-      await this.client.query(
-        `insert into ${this.table("metadata")} (id, bytes) values (1, $1)
-         on conflict (id) do update set bytes = excluded.bytes`,
-        [content],
-      );
+      // INC-085/ADR-0004 §5: the session-level advisory lock is the PG-side
+      // single-writer mutex. One mutation = one transaction = one lock hold, so
+      // two concurrent writers serialize here instead of racing the metadata
+      // upsert (the file backend's lease equivalent).
+      const client = this.client;
+      await client.query("begin");
+      try {
+        await client.query(`select pg_advisory_xact_lock(hashtext($1))`, [`chain:${this.schema}`]);
+        await client.query(
+          `insert into ${this.table("metadata")} (id, bytes) values (1, $1)
+           on conflict (id) do update set bytes = excluded.bytes`,
+          [content],
+        );
+        await client.query("commit");
+      } catch (error) {
+        await client.query("rollback").catch(() => {});
+        throw error;
+      }
       // The metadata row is the source of the segment limit; a stale cache from
       // before the row existed (the migration probe reads segments pre-metadata)
       // would freeze the fallback and mis-layout every later read (STORY-189).
@@ -227,6 +288,10 @@ export class PgBackend implements StorageBackend {
       const client = this.client;
       await client.query("begin");
       try {
+        // INC-085/ADR-0004 §5: schema-scoped advisory xact lock = single-writer
+        // mutex. Serializes concurrent writers so the engine's expectedVersion
+        // CAS cannot be raced at the data plane.
+        await client.query(`select pg_advisory_xact_lock(hashtext($1))`, [`chain:${this.schema}`]);
         for (const event of events) {
           // The engine rewrites the whole segment file on each append (the file
           // backend replaces the segment), so the PG backend must upsert: a
@@ -287,6 +352,15 @@ export class PgBackend implements StorageBackend {
          on conflict (name) do update set bytes = excluded.bytes`,
         [name, Buffer.from(content, "utf8")],
       );
+    } catch (error) {
+      mapPgError(error);
+    }
+  }
+
+  async listViewNames(): Promise<string[]> {
+    try {
+      const { rows } = await this.client.query(`select name from ${this.table("views")} order by name`);
+      return rows.map((row) => String(row.name));
     } catch (error) {
       mapPgError(error);
     }

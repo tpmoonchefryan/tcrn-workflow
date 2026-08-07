@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-export const FRAMEWORK_VERSION = "0.11.3" as const;
+export const FRAMEWORK_VERSION = "0.11.4" as const;
 export const DEFAULT_MODE = "development" as const;
 
 export type WorkflowMode = "development" | "release";
@@ -52,6 +52,20 @@ export type { CanonicalRoot } from "./root-identity.js";
 // the converged file implementation.
 export { StorageError, FileBackend, WORKSPACE_CONTROL_DIRECTORY } from "./storage-backend.js";
 export type { StorageBackend, WorkspaceCrashPoint } from "./storage-backend.js";
+// INC-074: the storage-home sentinel declares where a workspace's chain lives
+// after a file→pg migration. The file backend refuses mutating verbs on a
+// sentinel workspace (WORKSPACE_STORAGE_RELOCATED), and a PG-facing path must
+// name the schema the sentinel declares. Part of the public core surface so the
+// CLI/facade can check it.
+export {
+  STORAGE_HOME_VERSION,
+  STORAGE_HOME_FILE_NAME,
+  StorageHomeError,
+  readStorageHomeDeclaration,
+  removeStorageHomeDeclaration,
+  writeStorageHomeDeclaration,
+} from "./storage-home.js";
+export type { StorageHomeDeclaration } from "./storage-home.js";
 // STORY-177: the knowledge/artifact store data-plane backend is part of the public
 // core surface so a future PG store backend can implement it. StoreBackendError is
 // the fail-closed refusal shape; FileStoreBackend is the converged file

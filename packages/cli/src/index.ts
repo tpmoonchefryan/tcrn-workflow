@@ -123,6 +123,7 @@ import {
   readGovernedDocumentFile,
   readRelocationAuthority,
   vacateWorkspace,
+  readStorageHomeDeclaration,
   withStoreBackendFactory,
   withStorageBackendFactory,
 } from "../../core/src/index.js";
@@ -364,7 +365,14 @@ async function migrationOptions(to: string, schemaFlag?: string): Promise<Parame
   const storeBackend = new PgStoreBackend({ schema, connection });
   await backend.connect();
   await storeBackend.connect();
-  return { backend: () => backend, storeBackend: () => storeBackend };
+  // INC-074: carry the schema + a caller-stamped migratedAt so executeMigration can
+  // write the storage-home sentinel into the source file tree after a file→pg move.
+  return {
+    backend: () => backend,
+    storeBackend: () => storeBackend,
+    schema,
+    migratedAt: new Date().toISOString().replace(/\.\d{3}Z$/u, "Z"),
+  };
 }
 
 // Close the PG backends the migration opened, so the CLI process exits (a live
@@ -1006,6 +1014,37 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   if (typeof connection === "string" && connection.length > 0 &&
       typeof schema === "string" && schema.length > 0 &&
       wrapsWorkspace(command)) {
+    // INC-074: a PG-facing path must name the schema the workspace's storage-home
+    // sentinel declares. A config pointing at the wrong schema — or one that would
+    // silently serve a different chain — refuses named instead of answering wrong.
+    const workspaceValue = arguments_.find((entry, index) => index > 0 && (entry === "--workspace" || entry.startsWith("--workspace=")));
+    const workspaceRoot = workspaceValue === undefined
+      ? null
+      : workspaceValue === "--workspace"
+        ? arguments_[arguments_.indexOf("--workspace") + 1] ?? null
+        : workspaceValue.slice("--workspace=".length);
+    if (typeof workspaceRoot === "string" && workspaceRoot.length > 0) {
+      let home;
+      try {
+        home = await readStorageHomeDeclaration(workspaceRoot);
+      } catch (error) {
+        // INC-074: malformed or unsafe is not the same as absent. Swallowing
+        // this error would reopen the fork path the sentinel closes.
+        fail(
+          typeof (error as { reasonCode?: unknown }).reasonCode === "string"
+            ? String((error as { reasonCode: string }).reasonCode)
+            : "STORAGE_HOME_INVALID",
+          String((error as { message?: unknown }).message ?? error),
+        );
+      }
+      if (home !== null && home.storage === "pg" && home.schema !== undefined && home.schema !== schema) {
+        fail(
+          "CLI_SCHEMA_MISMATCH",
+          `workspace ${workspaceRoot} declares storage-home pg:${home.schema} but this path is configured for ${schema}; ` +
+          "the sentinel schema is the only valid target",
+        );
+      }
+    }
     const { PgBackend, PgStoreBackend } = await import("../../pg-backend/src/index.js");
     const backend = new PgBackend({ schema, connection });
     const storeBackend = new PgStoreBackend({ schema, connection });
@@ -2470,7 +2509,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const values = parseArguments(rest, ["workspace", "work-id"]);
     required(values, ["workspace", "work-id"]);
     const state = await materializeWorkspace(values.workspace ?? "");
-    io.write(canonicalJson(listGatesByWorkItem(values["work-id"] ?? "", state.gates)));
+    // INC-086: a nonexistent work-id must be distinguishable from "no gates". An
+    // empty [] answers "this work item has no gates"; a work item that does not
+    // exist refuses named instead of being read as "no gates".
+    const workId = values["work-id"] ?? "";
+    if (!state.work.some((record) => record.id === workId)) {
+      fail("WORKSPACE_WORK_NOT_FOUND", `work ${workId} does not exist in this workspace`);
+    }
+    io.write(canonicalJson(listGatesByWorkItem(workId, state.gates)));
     return;
   }
   fail("CLI_COMMAND_UNKNOWN", command);

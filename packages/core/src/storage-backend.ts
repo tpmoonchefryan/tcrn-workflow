@@ -58,6 +58,10 @@ export interface StorageBackend {
   readView(name: string): Promise<Buffer>;
   /** Atomically write one derived view. */
   writeView(name: string, content: string, crashAt?: WorkspaceCrashPoint): Promise<void>;
+  /** INC-085: enumerate the derived view names, in canonical byte order. The
+   * migration and ADR-0004 §9 criterion-4 equivalence need the full view set,
+   * not just the views a caller happens to know about. */
+  listViewNames(): Promise<string[]>;
   /** Ensure a control-tree directory exists (mode 0700), fail-closed on symlink. */
   ensureControlDirectory(relativePath: string): Promise<void>;
 }
@@ -119,6 +123,13 @@ export class FileBackend implements StorageBackend {
 
   async writeView(name: string, content: string, crashAt?: WorkspaceCrashPoint): Promise<void> {
     await this.atomicWrite(this.controlPath(`views/${name}`), content, crashAt);
+  }
+
+  async listViewNames(): Promise<string[]> {
+    const root = await this.boundDirectory(this.controlPath("views"));
+    const entries = await readdir(root, { withFileTypes: true });
+    entries.sort((left, right) => this.compare(left.name, right.name));
+    return entries.filter((entry) => entry.isFile() && !entry.name.startsWith(".tmp-")).map((entry) => entry.name);
   }
 
   async ensureControlDirectory(relativePath: string): Promise<void> {

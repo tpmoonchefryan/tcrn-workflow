@@ -13,7 +13,8 @@ import {
   compareCanonicalText,
 } from "../../protocol/src/index.js";
 import type { JsonValue } from "../../protocol/src/index.js";
-import { WORKSPACE_CONTROL_DIRECTORY, validateWorkspace } from "./workspace.js";
+import { WORKSPACE_CONTROL_DIRECTORY, withStorageBackendFactory, validateWorkspace } from "./workspace.js";
+import { FileBackend } from "./storage-backend.js";
 import type { WorkspaceLease } from "./workspace.js";
 import { validateKnowledgeStore } from "./knowledge-core.js";
 
@@ -278,7 +279,12 @@ export async function createSnapshotManifest(workspaceRootInput: string, lease: 
   }
   const root = await boundReadDirectory(workspaceRootInput);
   await assertHeldLease(root, lease);
-  const state = await validateWorkspace(root);
+  // INC-086: the manifest walks the DISK file tree (walkControlTree below), so the
+  // validate half must be bound to the FILE backend too — not to whatever backend
+  // the ambient factory serves (PG after STORY-189). Mixing a PG head with a
+  // file-tree name roster let snapshot-verify answer VERIFIED against a stale
+  // archive; both halves now see the same file tree.
+  const state = await withStorageBackendFactory(() => new FileBackend(root), () => validateWorkspace(root));
   const controlRoot = resolve(root, WORKSPACE_CONTROL_DIRECTORY);
   let knowledgeStatus: "valid" | "absent" = "absent";
   if (await directoryExists(resolve(controlRoot, "knowledge"))) {

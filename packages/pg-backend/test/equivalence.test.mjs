@@ -2,8 +2,9 @@
 // STORY-176 — the dual-backend equivalence gate (window-hardware ①).
 //
 // Same command sequence against the file backend and the PG backend must
-// produce byte-identical export, head hash, and reason codes (ADR §9 / STORY-173
-// criteria). A one-byte deviation injected at the abstraction layer must turn
+// produce byte-identical export, head hash, and reason codes (ADR-0004 §9.1,
+// §9.2, and §9.3 / STORY-173 criteria). A one-byte deviation injected at the
+// abstraction layer must turn
 // the gate red (mutation witness — a gate nobody saw red is not a gate).
 //
 // Runs against the local Docker PG (tcrn-postgres). CI supplies an equivalent
@@ -30,12 +31,14 @@ import { PgBackend } from "../../../dist/build/packages/pg-backend/src/index.js"
 
 const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
   ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
+const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 
 const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
 
-// Isolate: the local PG is shared, so clear chain_cross before the suite.
+// Isolate: the test runner provisions a dedicated chain_test_* schema; clear it
+// before the suite so sequence-1 assertions start clean.
 before(async () => {
-  const pg = new PgBackend({ schema: "chain_cross", connection: CONNECTION });
+  const pg = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
   await pg.connect();
   try {
     await pg.clearForTest();
@@ -89,7 +92,7 @@ async function commandSequence(workspace) {
 test("STORY-176: file and PG backends produce byte-identical export and head on the same sequence", async () => {
   const fileFixture = await workspaceFixture();
   const pgFixture = await workspaceFixture();
-  const pg = new PgBackend({ schema: "chain_cross", connection: CONNECTION });
+  const pg = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
   await pg.connect();
   try {
     // File backend baseline.
@@ -134,7 +137,7 @@ test("STORY-176 mutation witness: a one-byte deviation at the PG abstraction tur
   const fileFixture = await workspaceFixture();
   const pgFixture = await workspaceFixture();
   // Deviated PG backend: readSegment returns a one-byte-shifted segment.
-  const deviatedPg = new PgBackend({ schema: "chain_cross", connection: CONNECTION, injectSegmentByteDeviation: true });
+  const deviatedPg = new PgBackend({ schema: SCHEMA, connection: CONNECTION, injectSegmentByteDeviation: true });
   await deviatedPg.connect();
   try {
     await initializeWorkspace({

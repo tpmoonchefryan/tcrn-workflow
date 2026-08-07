@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "tcrn.test-wiring.v1",
+  "entries": [
+    {
+      "path": "packages/pg-backend/test/cli-pg-serving.test.mjs",
+      "owner": "github-action:verify-pg (postgres service)",
+      "since": "2026-08-07",
+      "reason": "INC-079: requires a live Postgres (TCRN_PG_TEST_CONNECTION); run by the CI postgres job, not the offline pnpm test glob"
+    },
+    {
+      "path": "packages/pg-backend/test/equivalence.test.mjs",
+      "owner": "github-action:verify-pg (postgres service)",
+      "since": "2026-08-07",
+      "reason": "INC-079: ADR-0004 §9 criterion 1-4 equivalence gate needs a real Postgres; run by the CI postgres job"
+    },
+    {
+      "path": "packages/pg-backend/test/migration-layout.test.mjs",
+      "owner": "github-action:verify-pg (postgres service)",
+      "since": "2026-08-07",
+      "reason": "INC-079: file↔pg migration layout tests need a live Postgres; run by the CI postgres job"
+    },
+    {
+      "path": "packages/pg-backend/test/migration.test.mjs",
+      "owner": "github-action:verify-pg (postgres service)",
+      "since": "2026-08-07",
+      "reason": "INC-079: migration verb family tests need a live Postgres; run by the CI postgres job"
+    },
+    {
+      "path": "packages/pg-backend/test/smoke.test.mjs",
+      "owner": "github-action:verify-pg (postgres service)",
+      "since": "2026-08-07",
+      "reason": "INC-079: PG backend smoke tests need a live Postgres; run by the CI postgres job"
+    },
+    {
+      "path": "packages/pg-backend/test/store-equivalence.test.mjs",
+      "owner": "github-action:verify-pg (postgres service)",
+      "since": "2026-08-07",
+      "reason": "INC-079: PG store equivalence needs a live Postgres; run by the CI postgres job"
+    }
+  ]
+}

@@ -697,6 +697,18 @@ test("WSD-2: the eight governed verbs plus gate-delete mutate and read under lea
   assert.deepEqual(gatesAfterDelete.map((entry) => entry.id), [deriveStableId("gate", "GATE-CLI-2")]);
 });
 
+test("INC-086: gate-list distinguishes a nonexistent work-id from 'no gates'", async (context) => {
+  const fx = await cliSeededFixture(context);
+  const ws = fx.ws;
+  // A nonexistent work-id refuses named instead of answering [].
+  const { ok, reasonCode } = await invokeCli(["gate-list", "--workspace", ws, "--work-id", "work:000000000000000000000000"]);
+  assert.equal(ok, false);
+  assert.equal(reasonCode, "WORKSPACE_WORK_NOT_FOUND");
+  // A real work-id with no gates still answers [].
+  const gates = JSON.parse((await invokeCli(["gate-list", "--workspace", ws, "--work-id", fx.workId])).output);
+  assert.deepEqual(gates, []);
+});
+
 test("WSD-2: every mutating verb fails closed on stale CAS, malformed enums pass through to the engine, and contention reports WORKSPACE_LOCKED", async (context) => {
   const fx = await cliSeededFixture(context);
   const ws = fx.ws;

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "tcrn.adr-criteria.v1",
+  "criteria": [
+    {
+      "id": "ADR-0004#9.1",
+      "adr": "0004",
+      "section": "9",
+      "ordinal": 1,
+      "title": "Per-event byte equivalence",
+      "criterion": "Per-event byte equivalence (event_hash/payload_hash byte-for-byte across backends)",
+      "gate": "packages/pg-backend/test/equivalence.test.mjs",
+      "status": "implemented"
+    },
+    {
+      "id": "ADR-0004#9.2",
+      "adr": "0004",
+      "section": "9",
+      "ordinal": 2,
+      "title": "Reason-code equivalence",
+      "criterion": "Reason-code equivalence on every success and refusal class",
+      "gate": "packages/pg-backend/test/equivalence.test.mjs",
+      "status": "implemented"
+    },
+    {
+      "id": "ADR-0004#9.3",
+      "adr": "0004",
+      "section": "9",
+      "ordinal": 3,
+      "title": "Head-hash equivalence",
+      "criterion": "Head-hash and version equivalence at every sequence",
+      "gate": "packages/pg-backend/test/equivalence.test.mjs",
+      "status": "implemented"
+    },
+    {
+      "id": "ADR-0004#9.4",
+      "adr": "0004",
+      "section": "9",
+      "ordinal": 4,
+      "title": "View and two-store marker equivalence",
+      "criterion": "View and two-store marker equivalence at the same head",
+      "gate": "packages/pg-backend/test/store-equivalence.test.mjs",
+      "status": "implemented"
+    }
+  ]
+}

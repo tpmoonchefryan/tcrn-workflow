@@ -25,7 +25,7 @@ import { runCli } from "../../../dist/build/packages/cli/src/index.js";
 
 const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
   ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
-const SCHEMA = "chain_cross";
+const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 const instant = (second) => `2026-07-11T00:${String(Math.floor(second / 60)).padStart(2, "0")}:${String(second % 60).padStart(2, "0")}Z`;
 
 before(async () => {
@@ -73,6 +73,28 @@ test("STORY-189: CLI reads a PG-backed chain when TCRN_PG_* env is set", async (
   })).headEventHash;
   assert.equal(typeof fileHead, "string");
   assert.equal(pgHead, fileHead, "PG-backed status must report the same head as the file chain");
+  // INC-086: the positive leg above can pass vacuously if the PG wrap silently
+  // served the FILE backend (both reads come from the file tree). Prove the PG
+  // path is real: remove the file tree's events and the PG-backed status must
+  // STILL answer the migrated head, while the file-backed status now fails.
+  const { rename } = await import("node:fs/promises");
+  await rename(join(workspace, ".tcrn-workflow", "events"), join(workspace, ".tcrn-workflow", "events-hidden"));
+  try {
+    const pgStill = await statusVia(workspace, {
+      TCRN_PG_CONNECTION: CONNECTION,
+      TCRN_PG_SCHEMA: SCHEMA,
+    });
+    assert.equal(pgStill.headEventHash, fileHead, "PG-backed status must answer from Postgres even with the file tree gone");
+    let fileFailed = false;
+    try {
+      await statusVia(workspace, {});
+    } catch {
+      fileFailed = true;
+    }
+    assert.equal(fileFailed, true, "file-backed status must fail once the file tree events are gone");
+  } finally {
+    await rename(join(workspace, ".tcrn-workflow", "events-hidden"), join(workspace, ".tcrn-workflow", "events"));
+  }
   await rm(base, { recursive: true, force: true });
 });
 

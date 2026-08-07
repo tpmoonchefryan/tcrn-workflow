@@ -43,6 +43,7 @@ import type {
 import { assertDistinctRootShape, assertDistinctRoots, rootPortableIdentity } from "./root-identity.js";
 import { FileBackend } from "./storage-backend.js";
 import type { StorageBackend } from "./storage-backend.js";
+import { readStorageHomeDeclaration } from "./storage-home.js";
 import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
 import { recordClosureValidation, recordCollectionScan, recordExtensionClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
 import {
@@ -110,6 +111,14 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_RELOCATION_LEDGER_INVALID",
   "WORKSPACE_RELOCATION_VACATED",
   "WORKSPACE_SCHEMA_INVALID",
+  // INC-074: a workspace whose chain has been migrated to Postgres carries a
+  // storage-home sentinel (`.tcrn-workflow/storage-home.json`). The file backend
+  // refuses every mutating verb on such a workspace — the write door is closed, so
+  // a caller driving the engine without TCRN_PG_* (the ceremony.mjs fork mechanism)
+  // can no longer fork the chain. Read-only verbs stay open so the tree remains a
+  // forensible archive. Named here because acquireWorkspaceLease raises it and
+  // fail() is typed to WorkspaceReasonCode.
+  "WORKSPACE_STORAGE_RELOCATED",
   "WORKSPACE_VIEW_STALE",
 ] as const);
 
@@ -2290,10 +2299,34 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
   // therefore a fifth thing the snapshot manifest is structurally blind to.
   // Omitted means "live", so no existing caller changes.
   readonly relocationAdmission?: WorkspaceAdmission;
+  // INC-074: migration-execute is the one governed path allowed to take the
+  // archive-side lease while it lays or removes the storage-home sentinel.
+  // Ordinary file-backed mutations keep the strict sentinel refusal below.
+  readonly storageHomeAdmission?: "migration";
 }): Promise<WorkspaceLease> {
   assertStrictInstant(options.now);
   const nowNanoseconds = parseStrictInstant(options.now);
   const workspaceRoot = await boundDirectory(workspaceRootInput);
+  // INC-074 storage-home gate: a workspace whose chain has migrated to Postgres
+  // carries a sentinel declaring where the truth lives. When this process is
+  // serving it via the FILE backend (no backend-factory override — i.e. the caller
+  // drove the engine without TCRN_PG_*), the write door is closed: every mutating
+  // verb refuses WORKSPACE_STORAGE_RELOCATED instead of forking the chain the way
+  // ceremony.mjs did during the INIT-020 window. A sentinel that declares
+  // storage=file stays writable (rollback's declared home); read-only verbs are
+  // unaffected (archive forensics keep working, INC-083).
+  const factory = backendFactoryOverride.getStore();
+  if (factory === undefined && options.storageHomeAdmission !== "migration") {
+    const home = await readStorageHomeDeclaration(workspaceRoot);
+    if (home !== null && home.storage === "pg") {
+      fail(
+        "WORKSPACE_STORAGE_RELOCATED",
+        `${workspaceRoot} was migrated to Postgres (storage-home: pg:${home.schema ?? "?"}); ` +
+        "the file backend refuses mutating verbs here. Drive it through a PG-facing path " +
+        "(facade / TCRN_PG_CONNECTION+TCRN_PG_SCHEMA), or remove the sentinel only via a governed pg→file rollback.",
+      );
+    }
+  }
   await readMetadata(workspaceRoot, options.relocationAdmission ?? "live");
   const ttl = options.ttlMilliseconds ?? 30_000;
   if (!Number.isSafeInteger(ttl) || ttl < 1_000 || ttl > 300_000) {
@@ -2545,9 +2578,19 @@ async function resolveWorkspace(workspaceRootInput: string): Promise<{ readonly 
   const root = await boundDirectory(workspaceRootInput);
   await assertSupportedWorkspaceFilesystem(root);
   await boundDirectory(controlPath(root), root);
-  await boundDirectory(controlPath(root, "events"), root);
-  await boundDirectory(controlPath(root, "views"), root);
-  await boundDirectory(controlPath(root, "backups"), root);
+  // INC-088: a PG-homed workspace keeps only its control metadata/sentinel on
+  // the file side. Events, views, and backups are data-plane tables in the
+  // injected PG backend; requiring their archived directories here made a
+  // perfectly valid PG read fail with ENOENT and obscured the actual source of
+  // truth. The ordinary file backend retains the original strict filesystem
+  // checks. `withStorageBackendFactory` is the same seam used by the facade and
+  // the equivalence suite, so this branch cannot silently select PG in a normal
+  // file-backed process.
+  if (backendFactoryOverride.getStore() === undefined) {
+    await boundDirectory(controlPath(root, "events"), root);
+    await boundDirectory(controlPath(root, "views"), root);
+    await boundDirectory(controlPath(root, "backups"), root);
+  }
   const metadata = await readMetadata(root);
   // WSR-1: the binding under test is the ACTIVE one, not the raw `roots` field.
   // After an adopt they differ: `roots` still names the host the tree came from,

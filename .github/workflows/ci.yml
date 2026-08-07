@@ -66,6 +66,12 @@ jobs:
       - name: Verify P1 offline
         run: pnpm verify:p1
 
+      # TCRN-CROSS-INIT-020 INC-079 — every test file must have an owner. This is
+      # the machine half of "a test no pipeline runs is a gate whose lifetime
+      # equals the day it was written". Plant an unwired test and this step reds.
+      - name: Every test file is wired to a pipeline
+        run: node scripts/test-wiring-proof.mjs
+
 
   # S6 lesson-marker discrimination (TCRN-CROSS-STORY-147/148, re-shaped under
   # TCRN-CROSS-INC-034/035).
@@ -125,3 +131,80 @@ jobs:
       # and no second host carries. Zero dependencies, like the rest of this job.
       - name: S2 observation channel is alive
         run: node scripts/ssh-write-observer.mjs --verify-channel --project-dir .
+
+  # TCRN-CROSS-INIT-020 INC-079 — the PG backend tests. For seven months they were
+  # green and orphaned: the offline `pnpm test` globs only `tests/`, so
+  # `packages/pg-backend/test/*.test.mjs` never ran on any pipeline. The test-wiring
+  # gate (`scripts/test-wiring-proof.mjs`) now reds on any test file with no owner;
+  # the registry names this job as the PG tests' owner. THIS JOB is the proof that
+  # the declaration is true — a real Postgres service, a real schema + append-only
+  # trigger applied, and the PG suite executed (not skipped).
+  #
+  # The test-wiring gate is satisfied only because this job exists: delete it and
+  # `pnpm test-wiring:proof` reds, because the registry entry names an owner that no
+  # pipeline provides. The connection uses the service's mapped localhost port,
+  # which is the correct address for a job running directly on the GitHub-hosted VM.
+  verify-pg:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tcrn
+          POSTGRES_PASSWORD: historical-test-password-redacted
+          POSTGRES_DB: tcrn_governance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tcrn -d tcrn_governance"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout full clean history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Install pinned Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.16.0
+
+      - name: Acquire exact pnpm under explicit online bootstrap policy
+        env:
+          npm_config_offline: "false"
+          npm_config_prefer_offline: "false"
+          npm_config_ignore_scripts: "true"
+          npm_config_audit: "false"
+          npm_config_fund: "false"
+          NO_UPDATE_NOTIFIER: "1"
+        run: npm install --global pnpm@11.3.0 --ignore-scripts --no-audit --no-fund --no-update-notifier --prefer-online
+
+      - name: Acquire exact dependencies explicitly
+        env:
+          npm_config_offline: "false"
+          npm_config_prefer_offline: "false"
+          npm_config_ignore_scripts: "true"
+          npm_config_audit: "false"
+          npm_config_fund: "false"
+          NO_UPDATE_NOTIFIER: "1"
+        run: pnpm install --frozen-lockfile --ignore-scripts --config.offline=false
+
+      - name: Build the engine
+        run: pnpm build
+
+      - name: Apply the isolated PG test schema (schema + append-only trigger)
+        env:
+          TCRN_PG_TEST_CONNECTION: postgresql://history-user@198.51.100.1:5432/tcrn_governance
+          TCRN_PG_TEST_SCHEMA: chain_test_cross
+        run: node scripts/apply-pg-test-schema.mjs
+
+      - name: Run the PG backend tests against the live service
+        env:
+          TCRN_PG_TEST_CONNECTION: postgresql://history-user@198.51.100.1:5432/tcrn_governance
+          TCRN_PG_TEST_SCHEMA: chain_test_cross
+        run: node --test --test-concurrency=1 packages/pg-backend/test/*.test.mjs

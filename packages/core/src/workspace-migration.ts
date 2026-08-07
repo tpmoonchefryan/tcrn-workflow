@@ -17,6 +17,12 @@ import { ARTIFACT_LIMITS } from "./artifact-lifecycle.js";
 import { KNOWLEDGE_LIMITS } from "./knowledge-core.js";
 import { FileBackend, StorageError, WORKSPACE_CONTROL_DIRECTORY } from "./storage-backend.js";
 import type { StorageBackend } from "./storage-backend.js";
+import { acquireWorkspaceLease } from "./workspace.js";
+import {
+  STORAGE_HOME_VERSION,
+  removeStorageHomeDeclaration,
+  writeStorageHomeDeclaration,
+} from "./storage-home.js";
 import { FileStoreBackend, StoreBackendError } from "./store-backend.js";
 import type { FileStoreBackendProfile, StoreBackend } from "./store-backend.js";
 
@@ -46,6 +52,19 @@ export interface MigrationOptions {
   readonly backend?: (root: string) => StorageBackend;
   /** The PG-side store backend factory. Absent for a file↔file degenerate run. */
   readonly storeBackend?: (root: string) => StoreBackend;
+  /**
+   * INC-074: the PG schema the chain is being migrated to. A file→pg migration
+   * writes it into the storage-home sentinel in the source file workspace, so the
+   * file backend thereafter refuses mutating verbs and a PG-facing path must name
+   * the same schema. Required for a pg target; ignored for a file target.
+   */
+  readonly schema?: string;
+  /**
+   * INC-074: the instant the migration completed, stamped into the sentinel. The
+   * engine has no clock (determinism constraint); the CLI supplies it at the
+   * boundary, the same way mutating verbs take `--at`.
+   */
+  readonly migratedAt?: string;
 }
 
 export const WORKSPACE_MIGRATION_REASON_CODES = Object.freeze([
@@ -93,12 +112,18 @@ interface MigratedArtifactStore {
   readonly records: readonly MigratedRecord[];
 }
 
+interface MigratedView {
+  readonly name: string;
+  readonly bytes: Buffer;
+}
+
 interface WorkspaceSnapshot {
   readonly workspaceId: string;
   readonly metadataBytes: Buffer;
   readonly segments: readonly MigratedSegment[];
   readonly version: number;
   readonly headEventHash: string | null;
+  readonly views: readonly MigratedView[];
   readonly knowledge: MigratedKnowledgeStore | null;
   readonly artifact: MigratedArtifactStore | null;
 }
@@ -291,9 +316,17 @@ async function readSnapshot(backend: StorageBackend, knowledgeStore: StoreBacken
     segments.push({ name, bytes: await backend.readSegment(name) });
   }
   const { version, headEventHash } = parseSegments(segments);
+  // INC-085/ADR-0004 §9 criterion 4: the derived views are part of the data
+  // plane. They are migrated and compared like the events, so a migration whose
+  // target then answers WORKSPACE_VIEW_STALE (validate 4/5 red during INIT-020)
+  // is a migration defect, not a post-hoc repair.
+  const views: MigratedView[] = [];
+  for (const name of await backend.listViewNames()) {
+    views.push({ name, bytes: await backend.readView(name) });
+  }
   const knowledge = await readKnowledgeStore(knowledgeStore);
   const artifact = await readArtifactStore(artifactStore);
-  return { workspaceId, metadataBytes, segments, version, headEventHash, knowledge, artifact };
+  return { workspaceId, metadataBytes, segments, version, headEventHash, views, knowledge, artifact };
 }
 
 // An empty target reports its "missing" signal through a reason code that also
@@ -469,7 +502,22 @@ function compareSnapshots(source: WorkspaceSnapshot, target: WorkspaceSnapshot):
       return "WORKSPACE_MIGRATION_VERIFY_STORE_MISMATCH";
     }
   }
+  // INC-085/ADR-0004 §9 criterion 4: the derived views must be byte-identical
+  // across backends at the same head. A migration that left the target's views
+  // empty or stale reds here instead of passing verify and failing validate.
+  if (!viewsEqual(source.views, target.views)) {
+    return "WORKSPACE_MIGRATION_VERIFY_MISMATCH";
+  }
   return null;
+}
+
+function viewsEqual(left: readonly MigratedView[], right: readonly MigratedView[]): boolean {
+  if (left.length !== right.length) return false;
+  for (const [index, view] of left.entries()) {
+    const other = right[index];
+    if (other === undefined || other.name !== view.name || !view.bytes.equals(other.bytes)) return false;
+  }
+  return true;
 }
 
 // Flatten a snapshot's segment bytes (each a canonical JSON array of events)
@@ -492,6 +540,47 @@ function flattenEvents(segments: readonly { readonly name: string; readonly byte
   }
   events.sort((left, right) => left.sequence - right.sequence);
   return events.map((event) => event.canonical);
+}
+
+// INC-085: resume safety. A target that is a strict prefix of the source is a
+// half-finished migration (each PG segment commits in its own transaction, so an
+// interruption leaves complete prefix segments). Resuming is safe ONLY when the
+// existing target events are a byte-prefix of the source — otherwise the
+// idempotent upsert below would silently overwrite divergent events, which is the
+// bypass-copy defect WORKSPACE_MIGRATION_FUTURE exists to refuse.
+async function assertTargetIsPrefix(
+  snapshot: WorkspaceSnapshot,
+  targetBackend: StorageBackend,
+  target: MigrationDirection,
+  options: MigrationOptions,
+  workspaceRoot: string,
+): Promise<void> {
+  let targetSnapshot: WorkspaceSnapshot;
+  try {
+    targetSnapshot = await readSnapshot(
+      targetBackend,
+      resolveStoreBackend(target, options, workspaceRoot, `${WORKSPACE_CONTROL_DIRECTORY}/knowledge`, knowledgeStoreProfile),
+      resolveStoreBackend(target, options, workspaceRoot, `${WORKSPACE_CONTROL_DIRECTORY}/artifacts`, artifactStoreProfile),
+    );
+  } catch (error) {
+    throw new WorkspaceMigrationError(
+      "WORKSPACE_MIGRATION_FUTURE",
+      `target prefix is unreadable; resume refused: ${String((error as { message?: string }).message ?? error)}`,
+    );
+  }
+  if (targetSnapshot.workspaceId !== snapshot.workspaceId) {
+    throw new WorkspaceMigrationError("WORKSPACE_MIGRATION_FUTURE", "target prefix has a different workspace identity");
+  }
+  const sourceEvents = flattenEvents(snapshot.segments);
+  const targetEvents = flattenEvents(targetSnapshot.segments);
+  if (targetEvents.length > sourceEvents.length) {
+    throw new WorkspaceMigrationError("WORKSPACE_MIGRATION_FUTURE", "target prefix is longer than the source");
+  }
+  for (const [index, event] of targetEvents.entries()) {
+    if (event !== sourceEvents[index]) {
+      throw new WorkspaceMigrationError("WORKSPACE_MIGRATION_FUTURE", "target prefix diverges from the source; bypass copy refused");
+    }
+  }
 }
 
 export async function planMigration(
@@ -517,39 +606,81 @@ export async function executeMigration(
 ): Promise<MigrationPlan> {
   assertDirection(target);
   const source = opposite(target);
-  const sourceBackend = resolveBackend(source, options, workspaceRoot);
-  const snapshot = await readSnapshot(
-    sourceBackend,
-    resolveStoreBackend(source, options, workspaceRoot, `${WORKSPACE_CONTROL_DIRECTORY}/knowledge`, knowledgeStoreProfile),
-    resolveStoreBackend(source, options, workspaceRoot, `${WORKSPACE_CONTROL_DIRECTORY}/artifacts`, artifactStoreProfile),
-  );
-  const targetBackend = resolveBackend(target, options, workspaceRoot);
-  const probe = await probeTarget(targetBackend);
-  if (probe.present &&
-    (probe.workspaceId !== snapshot.workspaceId || probe.version !== snapshot.version || probe.headEventHash !== snapshot.headEventHash)) {
-    throw new WorkspaceMigrationError(
-      "WORKSPACE_MIGRATION_FUTURE",
-      "target already holds a workspace that does not match the source; bypass copy refused",
+  // INC-074: migration is itself a governed mutation. Hold the archive-side
+  // lease across the source snapshot, target writes, and sentinel change so
+  // another process cannot observe a half-migrated binding or remove the
+  // declaration out from under the copy. The explicit admission is private to
+  // this verb; normal file-backed mutations remain sentinel-closed.
+  const lease = await acquireWorkspaceLease(workspaceRoot, {
+    now: options.migratedAt ?? "1970-01-01T00:00:00.000Z",
+    storageHomeAdmission: "migration",
+  });
+  try {
+    const sourceBackend = resolveBackend(source, options, workspaceRoot);
+    const snapshot = await readSnapshot(
+      sourceBackend,
+      resolveStoreBackend(source, options, workspaceRoot, `${WORKSPACE_CONTROL_DIRECTORY}/knowledge`, knowledgeStoreProfile),
+      resolveStoreBackend(source, options, workspaceRoot, `${WORKSPACE_CONTROL_DIRECTORY}/artifacts`, artifactStoreProfile),
     );
+    const targetBackend = resolveBackend(target, options, workspaceRoot);
+    const probe = await probeTarget(targetBackend);
+    if (probe.present &&
+      (probe.workspaceId !== snapshot.workspaceId ||
+        // INC-085: a target that has ADVANCED beyond the source is a genuine fork —
+        // refused as before. A target that is a strict prefix of the source is a
+        // half-finished migration: resuming is safe ONLY after proving the existing
+        // target events are a byte-prefix of the source (the upsert below would
+        // otherwise overwrite divergent events). This is the recovery path a
+        // segment-per-transaction interruption previously had no verb for.
+        probe.version === null ||
+        probe.version > snapshot.version ||
+        probe.headEventHash !== snapshot.headEventHash)) {
+      throw new WorkspaceMigrationError(
+        "WORKSPACE_MIGRATION_FUTURE",
+        "target already holds a workspace that does not match the source; bypass copy refused",
+      );
+    }
+    if (probe.present && probe.version !== null && probe.version < snapshot.version) {
+      await assertTargetIsPrefix(snapshot, targetBackend, target, options, workspaceRoot);
+    }
+    await ensureTargetTree(targetBackend, snapshot.knowledge !== null, snapshot.artifact !== null);
+    for (const segment of snapshot.segments) {
+      await targetBackend.writeSegment(segment.name, segment.bytes);
+    }
+    await targetBackend.writeMetadataBytes(snapshot.metadataBytes);
+    for (const view of snapshot.views) {
+      await targetBackend.writeView(view.name, view.bytes.toString("utf8"));
+    }
+    if (snapshot.knowledge !== null) {
+      await writeKnowledgeStore(
+        resolveStoreBackend(target, options, workspaceRoot, `${WORKSPACE_CONTROL_DIRECTORY}/knowledge`, knowledgeStoreProfile),
+        snapshot.knowledge,
+      );
+    }
+    if (snapshot.artifact !== null) {
+      await writeArtifactStore(
+        resolveStoreBackend(target, options, workspaceRoot, `${WORKSPACE_CONTROL_DIRECTORY}/artifacts`, artifactStoreProfile),
+        snapshot.artifact,
+      );
+    }
+    // INC-074: lay or lift the storage-home sentinel. Both operations occur
+    // while the migration lease is held; a normal file-backed caller still
+    // refuses a PG sentinel and cannot reopen the write door.
+    if (target === "pg" && typeof options.schema === "string" && options.schema.length > 0) {
+      await writeStorageHomeDeclaration(workspaceRoot, {
+        schemaVersion: STORAGE_HOME_VERSION,
+        storage: "pg",
+        schema: options.schema,
+        workspaceId: snapshot.workspaceId,
+        migratedAt: options.migratedAt ?? "1970-01-01T00:00:00.000Z",
+      });
+    } else if (target === "file") {
+      await removeStorageHomeDeclaration(workspaceRoot);
+    }
+    return buildPlan(snapshot, target, source);
+  } finally {
+    await lease.release();
   }
-  await ensureTargetTree(targetBackend, snapshot.knowledge !== null, snapshot.artifact !== null);
-  for (const segment of snapshot.segments) {
-    await targetBackend.writeSegment(segment.name, segment.bytes);
-  }
-  await targetBackend.writeMetadataBytes(snapshot.metadataBytes);
-  if (snapshot.knowledge !== null) {
-    await writeKnowledgeStore(
-      resolveStoreBackend(target, options, workspaceRoot, `${WORKSPACE_CONTROL_DIRECTORY}/knowledge`, knowledgeStoreProfile),
-      snapshot.knowledge,
-    );
-  }
-  if (snapshot.artifact !== null) {
-    await writeArtifactStore(
-      resolveStoreBackend(target, options, workspaceRoot, `${WORKSPACE_CONTROL_DIRECTORY}/artifacts`, artifactStoreProfile),
-      snapshot.artifact,
-    );
-  }
-  return buildPlan(snapshot, target, source);
 }
 
 export async function verifyMigration(

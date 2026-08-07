@@ -38,7 +38,7 @@ import { PgBackend, PgStoreBackend } from "../../../dist/build/packages/pg-backe
 
 const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
   ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
-const SCHEMA = "chain_cross";
+const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 
 const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
 
