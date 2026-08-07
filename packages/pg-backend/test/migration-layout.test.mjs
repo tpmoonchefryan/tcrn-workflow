@@ -26,9 +26,9 @@ import {
   verifyMigration,
 } from "../../../dist/build/packages/core/src/index.js";
 import { PgBackend } from "../../../dist/build/packages/pg-backend/src/index.js";
+import { pgTestConnection } from "../../../scripts/pg-test-connection.mjs";
 
-const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
-  ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
+const CONNECTION = pgTestConnection();
 const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 const instant = (second) => `2026-07-11T00:${String(Math.floor(second / 60)).padStart(2, "0")}:${String(second % 60).padStart(2, "0")}Z`;
 
@@ -67,7 +67,7 @@ test("STORY-189: verify passes when file and PG segment layouts differ (per-even
   const pg = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
   await pg.connect();
   try {
-    const options = { backend: () => pg, storeBackend: undefined };
+    const options = { backend: () => pg, storeBackend: undefined, schema: SCHEMA, migratedAt: "2026-08-07T00:00:00Z" };
     await executeMigration(workspace, "pg", options);
     const verified = await verifyMigration(workspace, "pg", options);
     assert.equal(verified.ok, true, `verify must pass despite layout difference: ${verified.reasonCode}`);
@@ -117,7 +117,7 @@ test("STORY-189: PG backend respects the workspace segmentEventLimit (large-chai
   // probe without this explicit clear.
   await pg.clearForTest();
   try {
-    const options = { backend: () => pg, storeBackend: undefined };
+    const options = { backend: () => pg, storeBackend: undefined, schema: SCHEMA, migratedAt: "2026-08-07T00:00:00Z" };
     await executeMigration(workspace, "pg", options);
     // PG should read segments in the workspace's 64-event layout.
     const pgSegmentNames = await pg.listSegmentNames();

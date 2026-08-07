@@ -22,9 +22,9 @@ import {
 import { executeMigration } from "../../../dist/build/packages/core/src/index.js";
 import { PgBackend } from "../../../dist/build/packages/pg-backend/src/index.js";
 import { runCli } from "../../../dist/build/packages/cli/src/index.js";
+import { pgTestConnection } from "../../../scripts/pg-test-connection.mjs";
 
-const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
-  ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
+const CONNECTION = pgTestConnection();
 const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 const instant = (second) => `2026-07-11T00:${String(Math.floor(second / 60)).padStart(2, "0")}:${String(second % 60).padStart(2, "0")}Z`;
 
@@ -61,7 +61,7 @@ test("STORY-189: CLI reads a PG-backed chain when TCRN_PG_* env is set", async (
   await pg.connect();
   await pg.clearForTest();
   try {
-    await executeMigration(workspace, "pg", { backend: () => pg, storeBackend: undefined });
+    await executeMigration(workspace, "pg", { backend: () => pg, storeBackend: undefined, schema: SCHEMA, migratedAt: "2026-08-07T00:00:00Z" });
   } finally {
     await pg.close();
   }

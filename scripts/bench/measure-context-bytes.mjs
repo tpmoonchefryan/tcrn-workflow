@@ -33,7 +33,7 @@ const outDir = resolve(argument("out-dir") ?? join(REPO_ROOT, "docs/reports/init
 
 // The auto-memory index path follows the Claude Code project-slug convention: the
 // project path with the leading slash AND "/" and spaces rewritten to "-"
-// (e.g. <local-home>/Code/TCRN Platform -> -Users-someone-Code-TCRN-Platform).
+// (e.g. a local checkout path -> the corresponding project slug).
 const memoryIndex = join(homedir(), ".claude/projects", PLATFORM_ROOT.replace(/^\//u, "-").replace(/[\/\s]/gu, "-"), "memory", "MEMORY.md");
 
 function bytes(path) {

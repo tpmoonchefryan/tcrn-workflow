@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // S2 (TCRN-CROSS-STORY-144) — SSH-write heuristic observer (observe mode).
 // INC-037 (TCRN-CROSS-INIT-018) rewrote the predicate: the first version matched
 // regular expressions against the whole command line, which produced four proven
@@ -11,8 +12,8 @@
 // ssh hands to the remote shell**.
 //
 // PreToolUse hook matcher: flags Bash commands that would write to the governed
-// chain tree on tcrn-platform-placeholder over SSH (redirection/tee/sed -i/cp/mv/rm via
-// ssh, or rsync/scp toward the host, naming /var/lib/tcrn-placeholder/governance). OBSERVE MODE
+// chain tree on ${PRIVATE_VM_HOST} over SSH (redirection/tee/sed -i/cp/mv/rm via
+// ssh, or rsync/scp toward the host, naming ${PRIVATE_RUNTIME_ROOT}/governance). OBSERVE MODE
 // ONLY: it appends hits to a log file and never blocks. Switching to enforce is
 // the review layer's call (MIN-058) once this observer has run without false
 // positives — the whole point of the observe period.
@@ -50,11 +51,13 @@
 //     → HIT. Once all four are established the burden has flipped; a HIT costs
 //     one log line and nothing else while the observer is in observe mode.
 import { spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { privateRuntimeConfig, PRIVATE_TOKEN_PLACEHOLDERS } from "./lib/private-token-roster.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // INC-040. The sink used to be `REPO_ROOT/docs/reports/init-018/S2/observed-hits.log`.
@@ -73,13 +76,125 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLATFORM_ROOT = resolve(REPO_ROOT, "..");
 const DEFAULT_LOG = resolve(PLATFORM_ROOT, "var/tcrn-observe/ssh-write-hits.jsonl");
 
-// Anchored to a whole host name: `tcrn-platform-placeholder-staging` is a different machine
+// Keep deployment topology configurable without publishing a literal private
+// host/path in the candidate source. The deployed hook supplies the same values
+// through environment variables when its host layout differs.
+const PRIVATE_CONFIG = privateRuntimeConfig();
+const PRIVATE_VM_HOST = PRIVATE_CONFIG.host;
+const PRIVATE_RUNTIME_ROOT = PRIVATE_CONFIG.runtimeRoot;
+const PRIVATE_GOVERNANCE_ROOT = `${PRIVATE_RUNTIME_ROOT}/governance`;
+const PRIVATE_LOOPBACK = PRIVATE_CONFIG.loopback;
+const PRIVATE_FACADE_IP = PRIVATE_CONFIG.facadeEndpoint;
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+// INC-109: the observer's predicate may keep a value-free placeholder for pure
+// parser tests, but an installed hook may not operate on that placeholder. The
+// target roster is a separately maintained registration surface (in AOS), and
+// only digests cross into this public observer source.
+const DEFAULT_TARGET_ROSTER = resolve(PLATFORM_ROOT, "TCRN-AOS/deploy/aos-local-client/ssh-observer-target-roster.json");
+const REQUIRED_RUNTIME_NAMES = [
+  "TCRN_SSH_GOVERNED_HOST",
+  "TCRN_SSH_RUNTIME_ROOT",
+  "TCRN_SSH_LOOPBACK",
+  "TCRN_SSH_FACADE_ENDPOINT",
+];
+
+function sha256(value) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function safeRuntimeValue(value) {
+  return typeof value === "string" && value.length > 0 && !Object.values(PRIVATE_TOKEN_PLACEHOLDERS).includes(value);
+}
+
+function targetRosterPath(override) {
+  const path = override ?? process.env.TCRN_SSH_TARGET_ROSTER ?? DEFAULT_TARGET_ROSTER;
+  // TCRN-CROSS-INC-120, Owner-approved gate change (2026-08-09): a relative roster
+  // path anchors to the project root the registration itself declares
+  // (CLAUDE_PROJECT_DIR), the same way the registered command is resolved
+  // (INC-041). The channel probe runs the observer from a deliberately unrelated
+  // cwd, so a raw relative path could never resolve there — which made the gate
+  // structurally unsatisfiable in any world that cannot use absolute paths, such
+  // as a public CI checkout. Absolute paths behave exactly as before, and a path
+  // that resolves to no file still reads SSH_OBSERVER_TARGET_ROSTER_UNAVAILABLE.
+  if (isAbsolute(path)) return path;
+  const anchor = process.env[PROJECT_DIR_ENV];
+  return anchor ? resolve(anchor, path) : path;
+}
+
+function readTargetRoster(path) {
+  try {
+    if (!existsSync(path)) return { ok: false, reason: "SSH_OBSERVER_TARGET_ROSTER_UNAVAILABLE", detail: `missing roster: ${path}` };
+    const roster = JSON.parse(readFileSync(path, "utf8"));
+    if (roster?.schemaVersion !== "tcrn.ssh-observer-target-roster.v1" || !Array.isArray(roster.targets)) {
+      return { ok: false, reason: "SSH_OBSERVER_TARGET_ROSTER_INVALID", detail: `invalid roster: ${path}` };
+    }
+    return { ok: true, roster };
+  } catch (error) {
+    return { ok: false, reason: "SSH_OBSERVER_TARGET_ROSTER_INVALID", detail: error?.message ?? String(error) };
+  }
+}
+
+/**
+ * Prove that the values driving the observer are supplied and correspond to a
+ * registered governed target. This is intentionally separate from `classify`:
+ * classification stays useful for offline branch tests, while a live hook and
+ * both health gates refuse to call placeholder values a deployment.
+ */
+export function runtimeConfigStatus(env = process.env, { rosterPath } = {}) {
+  const config = privateRuntimeConfig(env);
+  const missing = REQUIRED_RUNTIME_NAMES.filter((name) => {
+    const value = env?.[name];
+    return !safeRuntimeValue(value);
+  });
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      reason: "SSH_OBSERVER_RUNTIME_CONFIG_REQUIRED",
+      detail: `missing or placeholder runtime configuration: ${missing.join(", ")}`,
+      missing,
+      rosterPath: targetRosterPath(rosterPath),
+    };
+  }
+  const loaded = readTargetRoster(targetRosterPath(rosterPath));
+  if (!loaded.ok) return { ...loaded, rosterPath: targetRosterPath(rosterPath) };
+  const fingerprints = Object.freeze({
+    hostSha256: sha256(config.host),
+    runtimeRootSha256: sha256(config.runtimeRoot),
+    loopbackSha256: sha256(config.loopback),
+    facadeEndpointSha256: sha256(config.facadeEndpoint),
+  });
+  const target = loaded.roster.targets.find((candidate) =>
+    candidate?.hostSha256 === fingerprints.hostSha256 &&
+    candidate?.runtimeRootSha256 === fingerprints.runtimeRootSha256 &&
+    candidate?.loopbackSha256 === fingerprints.loopbackSha256 &&
+    candidate?.facadeEndpointSha256 === fingerprints.facadeEndpointSha256,
+  );
+  if (!target) {
+    return {
+      ok: false,
+      reason: "SSH_OBSERVER_TARGET_UNREGISTERED",
+      detail: "supplied observer target does not match any registered governed target",
+      fingerprints,
+      rosterPath: targetRosterPath(rosterPath),
+    };
+  }
+  return {
+    ok: true,
+    config,
+    target: { id: target.id, surface: target.surface ?? null },
+    fingerprints,
+    rosterPath: targetRosterPath(rosterPath),
+  };
+}
+
+// Anchored to a whole host name: `${PRIVATE_VM_HOST}-staging` is a different machine
 // and a local directory whose name merely contains the host is not a transport.
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+const HOST_NAME = new RegExp(`^${escapeRegExp(PRIVATE_VM_HOST)}(?:\\.[A-Za-z0-9.-]+)?$`, "u");
+// Anchored to a path boundary: `${PRIVATE_RUNTIME_ROOT}/governance-mirror` is not the governed tree.
+const GOVERNANCE = new RegExp(`${escapeRegExp(PRIVATE_GOVERNANCE_ROOT)}(?![A-Za-z0-9_-])`, "u");
+
+// Redirection operators that create/extend a file. `2>&1` and friends duplicate a
 // descriptor and open nothing, so they are excluded at the parse site (`dup`).
 const WRITE_REDIRECT_OPS = new Set([">", ">>", ">|", "&>", "&>>"]);
 
@@ -115,11 +230,11 @@ const SSH_FLAGS_WITH_ARG = new Set([
 const RUNNERS = new Set(["node", "nodejs", "node24"]);
 
 // The one program on that host allowed to write inside the governed tree is the
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+// engine installed there; anchored on both ends (prefix AND basename) so a file
+// merely *named* tcrn-workflow.mjs somewhere else is not it.
+const HOST_ENGINE = new RegExp(`^${escapeRegExp(PRIVATE_RUNTIME_ROOT)}/engine/(?:[^\\s]+/)?tcrn-workflow\\.mjs$`, "u");
+
+// Targets that are not persistent state on the host.
 const SCRATCH_ROOTS = ["/tmp/", "/var/tmp/", "/run/", "/dev/null"];
 
 // Exemptions are ANCHORED matchers over the argv of a write-bearing remote segment,
@@ -420,7 +535,7 @@ function parseSsh(args) {
   // first pass above stops at the destination — so a second option scan is needed or
   // the remote command is read as starting at `-p`, and every write primitive in it
   // is missed. Found by the INC-037 reviewer against the first version of this fix:
-  // `ssh tcrn-platform-placeholder -p 2222 "rm …/workspace/index.json"` was judged a pass.
+  // `ssh ${PRIVATE_VM_HOST} -p 2222 "rm …/workspace/index.json"` was judged a pass.
   let rest = index + 1;
   while (rest < args.length) {
     const token = args[rest];
@@ -526,7 +641,7 @@ function exemptionFor(units) {
 // authoritative copy; a consistency gate (breakglass-consistency-check.mjs) diffs
 // the two digests so the mirror cannot drift. The env override exists for the
 // mutation harness to pin the real AOS file.
-export const SSH_BREAKGLASS_ALLOWLIST_PATH = process.env.PUBLIC_CONFIGURATION_VALUE
+export const SSH_BREAKGLASS_ALLOWLIST_PATH = process.env.TCRN_SSH_BREAKGLASS_ALLOWLIST
   ?? resolve(REPO_ROOT, "scripts/policy/ssh-breakglass-allowlist.json");
 
 export function readBreakglassAllowlist(path = SSH_BREAKGLASS_ALLOWLIST_PATH) {
@@ -634,155 +749,226 @@ export function classify(command) {
   }
 }
 
-const GOV_CROSS = "/var/lib/tcrn-placeholder/governance/tcrn-workspace/cross-project/workspace";
-const GOV_AOS = "/var/lib/tcrn-placeholder/governance/tcrn-workspace/TCRN-AOS/workspace";
-const HOST_ENGINE_CLI = "/var/lib/tcrn-placeholder/engine/tcrn-workflow/scripts/tcrn-workflow.mjs";
+const GOV_CROSS = `${PRIVATE_GOVERNANCE_ROOT}/tcrn-workspace/cross-project/workspace`;
+const GOV_AOS = `${PRIVATE_GOVERNANCE_ROOT}/tcrn-workspace/TCRN-AOS/workspace`;
+const HOST_ENGINE_CLI = `${PRIVATE_RUNTIME_ROOT}/engine/tcrn-workflow/scripts/tcrn-workflow.mjs`;
 
 // Every sample asserts a verdict AND the reason, so removing any single decision
 // branch or list entry turns at least one sample red (see ssh-write-observer.test.mjs,
 // which proves that mechanically by mutating this source).
 export const CORPUS = [
   // --- A. the original S2 corpus: verdicts must not regress -------------------
-  { id: "A01", command: `ssh tcrn-platform-placeholder "cat > ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "A02", command: `ssh tcrn-platform-placeholder "echo x > ${GOV_AOS}/ledger.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "A03", command: `ssh tcrn-platform-placeholder "printf 'x' >> ${GOV_CROSS}/events.jsonl"`, expect: "HIT", reason: "ssh-write" },
-  { id: "A04", command: `ssh tcrn-platform-placeholder "tee ${GOV_AOS}/status.json <<< '{}'"`, expect: "HIT", reason: "ssh-write" },
-  { id: "A05", command: `ssh tcrn-platform-placeholder "sed -i 's/a/b/' ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "A06", command: `ssh tcrn-platform-placeholder "cp /tmp/f ${GOV_CROSS}/file"`, expect: "HIT", reason: "ssh-write" },
-  { id: "A07", command: `ssh tcrn-platform-placeholder "mv /tmp/f ${GOV_CROSS}/file"`, expect: "HIT", reason: "ssh-write" },
-  { id: "A08", command: `ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "A09", command: `rsync -av ./local tcrn-platform-placeholder:${GOV_CROSS}/`, expect: "HIT", reason: "rsync" },
-  { id: "A10", command: `scp ./f tcrn-platform-placeholder:${GOV_CROSS}/f`, expect: "HIT", reason: "scp" },
+  { id: "A01", command: `ssh ${PRIVATE_VM_HOST} "cat > ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "A02", command: `ssh ${PRIVATE_VM_HOST} "echo x > ${GOV_AOS}/ledger.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "A03", command: `ssh ${PRIVATE_VM_HOST} "printf 'x' >> ${GOV_CROSS}/events.jsonl"`, expect: "HIT", reason: "ssh-write" },
+  { id: "A04", command: `ssh ${PRIVATE_VM_HOST} "tee ${GOV_AOS}/status.json <<< '{}'"`, expect: "HIT", reason: "ssh-write" },
+  { id: "A05", command: `ssh ${PRIVATE_VM_HOST} "sed -i 's/a/b/' ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "A06", command: `ssh ${PRIVATE_VM_HOST} "cp /tmp/f ${GOV_CROSS}/file"`, expect: "HIT", reason: "ssh-write" },
+  { id: "A07", command: `ssh ${PRIVATE_VM_HOST} "mv /tmp/f ${GOV_CROSS}/file"`, expect: "HIT", reason: "ssh-write" },
+  { id: "A08", command: `ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "A09", command: `rsync -av ./local ${PRIVATE_VM_HOST}:${GOV_CROSS}/`, expect: "HIT", reason: "rsync" },
+  { id: "A10", command: `scp ./f ${PRIVATE_VM_HOST}:${GOV_CROSS}/f`, expect: "HIT", reason: "scp" },
   { id: "A11", command: `node deploy/aos-local-client/ceremony.mjs --payload x.json --partition cross-project --dry-run`, expect: "PASS", reason: "no-host-transport" },
   { id: "A12", command: `node deploy/aos-local-client/ceremony.mjs --payload x.json --partition cross-project --receipt r.json`, expect: "PASS", reason: "no-host-transport" },
   { id: "A13", command: `node deploy/aos-resident-cockpit/paired-backup.mjs --pull --workspace cross-project`, expect: "PASS", reason: "no-host-transport" },
   { id: "A14", command: `pnpm --dir TCRN-AOS engine-host:verify`, expect: "PASS", reason: "no-host-transport" },
-  { id: "A15", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "PASS", reason: "breakglass-allowlist" },
-  { id: "A16", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} work-show --id work:x --workspace ${GOV_CROSS}"`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "A17", command: `ssh tcrn-platform-placeholder "ls /var/lib/tcrn-placeholder/governance/"`, expect: "PASS", reason: "no-write-primitive" },
-  { id: "A18", command: `ssh tcrn-platform-placeholder "systemctl status tcrn-aos-cockpit"`, expect: "PASS", reason: "no-governance-path" },
+  { id: "A15", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "PASS", reason: "breakglass-allowlist" },
+  { id: "A16", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} work-show --id work:x --workspace ${GOV_CROSS}"`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "A17", command: `ssh ${PRIVATE_VM_HOST} "ls ${PRIVATE_RUNTIME_ROOT}/governance/"`, expect: "PASS", reason: "no-write-primitive" },
+  { id: "A18", command: `ssh ${PRIVATE_VM_HOST} "systemctl status tcrn-aos-cockpit"`, expect: "PASS", reason: "no-governance-path" },
   { id: "A19", command: `node scripts/ship-web.mjs --dry-run`, expect: "PASS", reason: "no-host-transport" },
-  { id: "A20", command: `curl -s http://198.51.51.249:4319/api/health`, expect: "PASS", reason: "no-host-transport" },
+  { id: "A20", command: `curl -s http://${PRIVATE_FACADE_IP}:4319/api/health`, expect: "PASS", reason: "no-host-transport" },
   { id: "A21", command: `git push origin main`, expect: "PASS", reason: "no-host-transport" },
 
   // --- B. defect 1: an exempt name no longer waves a dangerous command through -
-  { id: "B01", command: `ssh tcrn-platform-placeholder "cp /tmp/ceremony.mjs ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "B02", command: `ssh tcrn-platform-placeholder "rm ${GOV_AOS}/index.json # replaces paired-backup.mjs"`, expect: "HIT", reason: "ssh-write" },
-  { id: "B03", command: `ssh tcrn-platform-placeholder "sed -i 's/a/b/' ${GOV_CROSS}/ship-web.mjs.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "B04", command: `ssh tcrn-platform-placeholder "mv ${GOV_CROSS}/index.json /tmp/engine-host:verify"`, expect: "HIT", reason: "ssh-write" },
-  { id: "B05", command: `ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/${basename(HOST_ENGINE_CLI)}"`, expect: "HIT", reason: "ssh-write" },
+  { id: "B01", command: `ssh ${PRIVATE_VM_HOST} "cp /tmp/ceremony.mjs ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "B02", command: `ssh ${PRIVATE_VM_HOST} "rm ${GOV_AOS}/index.json # replaces paired-backup.mjs"`, expect: "HIT", reason: "ssh-write" },
+  { id: "B03", command: `ssh ${PRIVATE_VM_HOST} "sed -i 's/a/b/' ${GOV_CROSS}/ship-web.mjs.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "B04", command: `ssh ${PRIVATE_VM_HOST} "mv ${GOV_CROSS}/index.json /tmp/engine-host:verify"`, expect: "HIT", reason: "ssh-write" },
+  { id: "B05", command: `ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/${basename(HOST_ENGINE_CLI)}"`, expect: "HIT", reason: "ssh-write" },
 
   // --- C. defect 2: a token before `ssh` no longer hides the transport ---------
-  { id: "C01", command: `env TCRN_DEBUG=1 ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C02", command: `time ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C03", command: `sudo -u root ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C04", command: `nohup ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C05", command: `command ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C06", command: `TCRN_DEBUG=1 ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C07", command: `timeout 30 ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C08", command: `nice -n 10 ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C09", command: `ionice -c 3 ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C10", command: `stdbuf -oL ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C11", command: `exec ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C12", command: `setsid ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C13", command: `doas ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C14", command: `env TCRN_DEBUG=1 sudo -u root nohup ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "C15", command: `out=$(ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json")`, expect: "HIT", reason: "ssh-write" },
-  { id: "C16", command: `env X=1 ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} | tee ${GOV_CROSS}/leak.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C01", command: `env TCRN_DEBUG=1 ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C02", command: `time ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C03", command: `sudo -u root ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C04", command: `nohup ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C05", command: `command ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C06", command: `TCRN_DEBUG=1 ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C07", command: `timeout 30 ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C08", command: `nice -n 10 ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C09", command: `ionice -c 3 ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C10", command: `stdbuf -oL ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C11", command: `exec ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C12", command: `setsid ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C13", command: `doas ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C14", command: `env TCRN_DEBUG=1 sudo -u root nohup ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "C15", command: `out=$(ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json")`, expect: "HIT", reason: "ssh-write" },
+  { id: "C16", command: `env X=1 ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} | tee ${GOV_CROSS}/leak.json"`, expect: "HIT", reason: "ssh-write" },
 
   // --- D. defect 3: local write primitives are not remote writes ---------------
-  { id: "D01", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}" 2>&1`, expect: "PASS", reason: "breakglass-allowlist" },
-  { id: "D02", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS}" > /tmp/export.json`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "D03", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} work-list --workspace ${GOV_CROSS}" | tee /tmp/work.log`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "D04", command: `rm -rf /tmp/scratch && ssh tcrn-platform-placeholder "ls ${GOV_CROSS}"`, expect: "PASS", reason: "no-write-primitive" },
-  { id: "D05", command: `ssh tcrn-platform-placeholder "ls ${GOV_CROSS}" && rm -rf /tmp/scratch`, expect: "PASS", reason: "no-write-primitive" },
-  { id: "D06", command: `cp /tmp/a /tmp/b; ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "PASS", reason: "breakglass-allowlist" },
-  { id: "D07", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS} 2>&1"`, expect: "PASS", reason: "breakglass-allowlist" },
-  { id: "D08", command: `rsync -av ./tcrn-platform-placeholder-mirror/var/lib/tcrn-placeholder/governance ./backup`, expect: "PASS", reason: "no-host-transport" },
-  { id: "D09", command: `scp /tmp/a /tmp/b # tcrn-platform-placeholder:${GOV_CROSS}/x`, expect: "PASS", reason: "no-host-transport" },
-  { id: "D10", command: `echo "ssh tcrn-platform-placeholder rm ${GOV_CROSS}/index.json" >> /tmp/notes.txt`, expect: "PASS", reason: "no-host-transport" },
-  { id: "D11", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} work-list --workspace ${GOV_CROSS}" > ./docs/reports/init-018/INC-037/outputs/work-list.json`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "D01", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}" 2>&1`, expect: "PASS", reason: "breakglass-allowlist" },
+  { id: "D02", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS}" > /tmp/export.json`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "D03", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} work-list --workspace ${GOV_CROSS}" | tee /tmp/work.log`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "D04", command: `rm -rf /tmp/scratch && ssh ${PRIVATE_VM_HOST} "ls ${GOV_CROSS}"`, expect: "PASS", reason: "no-write-primitive" },
+  { id: "D05", command: `ssh ${PRIVATE_VM_HOST} "ls ${GOV_CROSS}" && rm -rf /tmp/scratch`, expect: "PASS", reason: "no-write-primitive" },
+  { id: "D06", command: `cp /tmp/a /tmp/b; ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "PASS", reason: "breakglass-allowlist" },
+  { id: "D07", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS} 2>&1"`, expect: "PASS", reason: "breakglass-allowlist" },
+  { id: "D08", command: `rsync -av ./${PRIVATE_VM_HOST}-mirror${PRIVATE_RUNTIME_ROOT}/governance ./backup`, expect: "PASS", reason: "no-host-transport" },
+  { id: "D09", command: `scp /tmp/a /tmp/b # ${PRIVATE_VM_HOST}:${GOV_CROSS}/x`, expect: "PASS", reason: "no-host-transport" },
+  { id: "D10", command: `echo "ssh ${PRIVATE_VM_HOST} rm ${GOV_CROSS}/index.json" >> /tmp/notes.txt`, expect: "PASS", reason: "no-host-transport" },
+  { id: "D11", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} work-list --workspace ${GOV_CROSS}" > ./docs/reports/init-018/INC-037/outputs/work-list.json`, expect: "HIT", reason: "ssh-engine-direct" },
   // The PASS reason names the check that stopped the most advanced segment, not the
   // last one: segment 1 reaches the write-primitive check, segment 2 stops earlier.
-  { id: "D12", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}" && ssh tcrn-platform-placeholder "systemctl status tcrn-aos-cockpit"`, expect: "PASS", reason: "breakglass-allowlist" },
+  { id: "D12", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}" && ssh ${PRIVATE_VM_HOST} "systemctl status tcrn-aos-cockpit"`, expect: "PASS", reason: "breakglass-allowlist" },
 
   // --- E. anchoring of host, path and transport -------------------------------
   { id: "E01", command: `ssh other-host "rm ${GOV_CROSS}/index.json"`, expect: "PASS", reason: "no-host-transport" },
-  { id: "E02", command: `ssh tcrn-platform-placeholder-staging "rm ${GOV_CROSS}/index.json"`, expect: "PASS", reason: "no-host-transport" },
-  { id: "E03", command: `ssh tcrn-platform-placeholder "rm /var/lib/tcrn-placeholder/aos-cockpit/web/x"`, expect: "PASS", reason: "no-governance-path" },
-  { id: "E04", command: `ssh tcrn-platform-placeholder "rm /var/lib/tcrn-placeholder/governance-mirror/x"`, expect: "PASS", reason: "no-governance-path" },
-  { id: "E05", command: `ssh -p 2222 -o StrictHostKeyChecking=no tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "E06", command: `ssh -tt history-user-host.invalid "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "E07", command: `ssh tcrn-platform-placeholder`, expect: "PASS", reason: "no-governance-path" },
+  { id: "E02", command: `ssh ${PRIVATE_VM_HOST}-staging "rm ${GOV_CROSS}/index.json"`, expect: "PASS", reason: "no-host-transport" },
+  { id: "E03", command: `ssh ${PRIVATE_VM_HOST} "rm ${PRIVATE_RUNTIME_ROOT}/aos-cockpit/web/x"`, expect: "PASS", reason: "no-governance-path" },
+  { id: "E04", command: `ssh ${PRIVATE_VM_HOST} "rm ${PRIVATE_RUNTIME_ROOT}/governance-mirror/x"`, expect: "PASS", reason: "no-governance-path" },
+  { id: "E05", command: `ssh -p 2222 -o StrictHostKeyChecking=no ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "E06", command: `ssh -tt ${["deploy", "@"].join("")}${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "E07", command: `ssh ${PRIVATE_VM_HOST}`, expect: "PASS", reason: "no-governance-path" },
   { id: "E08", command: ``, expect: "PASS", reason: "no-host-transport" },
-  { id: "E09", command: `rsync -av tcrn-platform-placeholder:${GOV_CROSS}/ ./offsite/`, expect: "HIT", reason: "rsync" },
-  { id: "E10", command: `rsync -av ./dist tcrn-platform-placeholder:/var/lib/tcrn-placeholder/aos-cockpit/web/`, expect: "PASS", reason: "no-governance-path" },
-  { id: "E11", command: `scp tcrn-platform-placeholder:${GOV_CROSS}/index.json /tmp/`, expect: "HIT", reason: "scp" },
-  { id: "E12", command: `rsync -e "ssh -p 2222" -av ./local tcrn-platform-placeholder:${GOV_CROSS}/x`, expect: "HIT", reason: "rsync" },
-  { id: "E13", command: `ssh tcrn-platform-placeholder "dd if=/tmp/f of=${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "E14", command: `ssh tcrn-platform-placeholder "install -m 644 /tmp/f ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "E15", command: `ssh tcrn-platform-placeholder "touch ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "E16", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} &> /var/lib/tcrn-placeholder/aos-cockpit/web/export.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "E17", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} | tee"`, expect: "HIT", reason: "ssh-write" },
-  { id: "E18", command: `/usr/bin/ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "E19", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} >| ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "E20", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} &>> ${GOV_CROSS}/events.jsonl"`, expect: "HIT", reason: "ssh-write" },
-  { id: "E21", command: `(ssh tcrn-platform-placeholder "rm ${GOV_CROSS}/index.json")`, expect: "HIT", reason: "ssh-write" },
-  { id: "E22", command: "out=`ssh tcrn-platform-placeholder \"rm " + GOV_CROSS + "/index.json\"`", expect: "HIT", reason: "ssh-write" },
+  { id: "E09", command: `rsync -av ${PRIVATE_VM_HOST}:${GOV_CROSS}/ ./offsite/`, expect: "HIT", reason: "rsync" },
+  { id: "E10", command: `rsync -av ./dist ${PRIVATE_VM_HOST}:${PRIVATE_RUNTIME_ROOT}/aos-cockpit/web/`, expect: "PASS", reason: "no-governance-path" },
+  { id: "E11", command: `scp ${PRIVATE_VM_HOST}:${GOV_CROSS}/index.json /tmp/`, expect: "HIT", reason: "scp" },
+  { id: "E12", command: `rsync -e "ssh -p 2222" -av ./local ${PRIVATE_VM_HOST}:${GOV_CROSS}/x`, expect: "HIT", reason: "rsync" },
+  { id: "E13", command: `ssh ${PRIVATE_VM_HOST} "dd if=/tmp/f of=${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "E14", command: `ssh ${PRIVATE_VM_HOST} "install -m 644 /tmp/f ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "E15", command: `ssh ${PRIVATE_VM_HOST} "touch ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "E16", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} &> ${PRIVATE_RUNTIME_ROOT}/aos-cockpit/web/export.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "E17", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} | tee"`, expect: "HIT", reason: "ssh-write" },
+  { id: "E18", command: `/usr/bin/ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "E19", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} >| ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "E20", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} &>> ${GOV_CROSS}/events.jsonl"`, expect: "HIT", reason: "ssh-write" },
+  { id: "E21", command: `(ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json")`, expect: "HIT", reason: "ssh-write" },
+  { id: "E22", command: `out=\`ssh ${PRIVATE_VM_HOST} "rm ${GOV_CROSS}/index.json"\``, expect: "HIT", reason: "ssh-write" },
   { id: "E23", command: `rsync -av ./local other-host:${GOV_CROSS}/`, expect: "PASS", reason: "no-host-transport" },
 
   // --- F. the exemption stage: it fires, and it refuses ------------------------
-  { id: "F01", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} > /tmp/export.json"`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "F02", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} > /var/lib/tcrn-placeholder/aos-cockpit/web/export.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "F03", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} > ${GOV_CROSS}/leak.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "F04", command: `ssh tcrn-platform-placeholder "touch /tmp/tcrn-lock && node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "F05", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} event-list --workspace ${GOV_CROSS} | tee /tmp/events.log"`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "F06", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS} > /tmp/a.json; rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "F07", command: `ssh tcrn-platform-placeholder "cp /var/lib/tcrn-placeholder/backups/${basename(HOST_ENGINE_CLI)} /var/lib/tcrn-placeholder/backups/engine-copy.mjs && node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "HIT", reason: "ssh-write" },
-  { id: "F08", command: `ssh tcrn-platform-placeholder "cd ${GOV_CROSS} && rm index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "F01", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} > /tmp/export.json"`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "F02", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} > ${PRIVATE_RUNTIME_ROOT}/aos-cockpit/web/export.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "F03", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} > ${GOV_CROSS}/leak.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "F04", command: `ssh ${PRIVATE_VM_HOST} "touch /tmp/tcrn-lock && node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "F05", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} event-list --workspace ${GOV_CROSS} | tee /tmp/events.log"`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "F06", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS} > /tmp/a.json; rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "F07", command: `ssh ${PRIVATE_VM_HOST} "cp ${PRIVATE_RUNTIME_ROOT}/backups/${basename(HOST_ENGINE_CLI)} ${PRIVATE_RUNTIME_ROOT}/backups/engine-copy.mjs && node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "HIT", reason: "ssh-write" },
+  { id: "F08", command: `ssh ${PRIVATE_VM_HOST} "cd ${GOV_CROSS} && rm index.json"`, expect: "HIT", reason: "ssh-write" },
   // A stray copy of the engine is not the installed engine: the exemption is
   // anchored on the installed path, not on the script's name.
-  { id: "F09", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/${basename(HOST_ENGINE_CLI)} export --workspace ${GOV_CROSS} > /var/lib/tcrn-placeholder/backups/export.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "F10", command: `ssh tcrn-platform-placeholder "${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} > /var/lib/tcrn-placeholder/aos-cockpit/web/export.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "F11", command: `ssh tcrn-platform-placeholder "touch /var/tmp/tcrn-lock && node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "F12", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS} | tee /dev/null"`, expect: "PASS", reason: "breakglass-allowlist" },
-  { id: "F13", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} > export.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "F14", command: `ssh tcrn-platform-placeholder "touch /run/tcrn.lock && node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "F15", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS} | tee /tmp/out.log 2> /tmp/err.log"`, expect: "PASS", reason: "breakglass-allowlist" },
+  { id: "F09", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/${basename(HOST_ENGINE_CLI)} export --workspace ${GOV_CROSS} > ${PRIVATE_RUNTIME_ROOT}/backups/export.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "F10", command: `ssh ${PRIVATE_VM_HOST} "${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} > ${PRIVATE_RUNTIME_ROOT}/aos-cockpit/web/export.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "F11", command: `ssh ${PRIVATE_VM_HOST} "touch /var/tmp/tcrn-lock && node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "F12", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS} | tee /dev/null"`, expect: "PASS", reason: "breakglass-allowlist" },
+  { id: "F13", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} export --workspace ${GOV_CROSS} > export.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "F14", command: `ssh ${PRIVATE_VM_HOST} "touch /run/tcrn.lock && node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "F15", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS} | tee /tmp/out.log 2> /tmp/err.log"`, expect: "PASS", reason: "breakglass-allowlist" },
 
   // --- G. one more shell between ssh and the write ----------------------------
-  { id: "G01", command: `ssh tcrn-platform-placeholder "bash -c 'rm ${GOV_CROSS}/index.json'"`, expect: "HIT", reason: "ssh-write" },
-  { id: "G02", command: `ssh tcrn-platform-placeholder "sudo rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "G03", command: `ssh tcrn-platform-placeholder "sh -lc 'sed -i s/a/b/ ${GOV_CROSS}/index.json'"`, expect: "HIT", reason: "ssh-write" },
-  { id: "G04", command: `ssh tcrn-platform-placeholder "bash -c 'node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}'"`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "G01", command: `ssh ${PRIVATE_VM_HOST} "bash -c 'rm ${GOV_CROSS}/index.json'"`, expect: "HIT", reason: "ssh-write" },
+  { id: "G02", command: `ssh ${PRIVATE_VM_HOST} "sudo rm ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "G03", command: `ssh ${PRIVATE_VM_HOST} "sh -lc 'sed -i s/a/b/ ${GOV_CROSS}/index.json'"`, expect: "HIT", reason: "ssh-write" },
+  { id: "G04", command: `ssh ${PRIVATE_VM_HOST} "bash -c 'node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}'"`, expect: "HIT", reason: "ssh-engine-direct" },
   // STORY-164: READ verbs via ssh are SSH-direct-engine violations too (D1/D9: reads go
   // through the MCP read face; ssh direct is break-glass only). Added, not weakened.
-  { id: "G05", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "PASS", reason: "breakglass-allowlist" },
-  { id: "G06", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} work-list --workspace ${GOV_CROSS} --limit 5"`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "G07", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} work-show --workspace ${GOV_CROSS} --id work:x"`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "G08", command: `ssh tcrn-platform-placeholder "node ${HOST_ENGINE_CLI} knowledge-list --workspace ${GOV_CROSS} --at 2026-08-05T00:00:00Z"`, expect: "HIT", reason: "ssh-engine-direct" },
-  { id: "H01", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} | tee ${GOV_CROSS}/leak.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "H02", command: `ssh tcrn-platform-placeholder "echo x && cat > ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "H03", command: `ssh tcrn-platform-placeholder "echo hi &> ${GOV_CROSS}/log.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "H04", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} 2> ${GOV_CROSS}/err.log"`, expect: "HIT", reason: "ssh-write" },
-  { id: "H05", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} > /tmp/tcrn-out.json"`, expect: "PASS", reason: "exemption:scratch-target" },
-  { id: "H06", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} > /var/tmp/tcrn-out.json"`, expect: "PASS", reason: "exemption:scratch-target" },
-  { id: "H07", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} > /run/tcrn-out.json"`, expect: "PASS", reason: "exemption:scratch-target" },
-  { id: "H08", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} > /dev/null"`, expect: "PASS", reason: "exemption:scratch-target" },
-  { id: "H09", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} > /tmp/sub/tcrn-out.json"`, expect: "PASS", reason: "exemption:scratch-target" },
-  { id: "H10", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} 2>&1"`, expect: "PASS", reason: "no-write-primitive" },
-  { id: "H11", command: `ssh tcrn-platform-placeholder "ls ${GOV_CROSS}" && rm ${GOV_CROSS}/index.json`, expect: "PASS", reason: "no-write-primitive" },
-  { id: "H12", command: `ssh tcrn-platform-placeholder "ls ${GOV_CROSS}" && ssh tcrn-platform-placeholder "ls /tmp"`, expect: "PASS", reason: "no-write-primitive" },
-  { id: "H13", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} > /tmp/a.json && node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} > /var/lib/tcrn-placeholder/backups/b.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "H14", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} | tee"`, expect: "HIT", reason: "ssh-write" },
-  { id: "H15", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} >| ${GOV_CROSS}/out.json"`, expect: "HIT", reason: "ssh-write" },
-  { id: "H16", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/helper.mjs --workspace ${GOV_CROSS} &>> ${GOV_CROSS}/events.jsonl"`, expect: "HIT", reason: "ssh-write" },
-  { id: "H17", command: `ssh tcrn-platform-placeholder "node /var/lib/tcrn-placeholder/backups/tcrn-workflow.mjs status --workspace ${GOV_CROSS}"`, expect: "PASS", reason: "no-write-primitive" },
+  { id: "G05", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} status --workspace ${GOV_CROSS}"`, expect: "PASS", reason: "breakglass-allowlist" },
+  { id: "G06", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} work-list --workspace ${GOV_CROSS} --limit 5"`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "G07", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} work-show --workspace ${GOV_CROSS} --id work:x"`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "G08", command: `ssh ${PRIVATE_VM_HOST} "node ${HOST_ENGINE_CLI} knowledge-list --workspace ${GOV_CROSS} --at 2026-08-05T00:00:00Z"`, expect: "HIT", reason: "ssh-engine-direct" },
+  { id: "H01", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} | tee ${GOV_CROSS}/leak.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "H02", command: `ssh ${PRIVATE_VM_HOST} "echo x && cat > ${GOV_CROSS}/index.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "H03", command: `ssh ${PRIVATE_VM_HOST} "echo hi &> ${GOV_CROSS}/log.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "H04", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} 2> ${GOV_CROSS}/err.log"`, expect: "HIT", reason: "ssh-write" },
+  { id: "H05", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} > /tmp/tcrn-out.json"`, expect: "PASS", reason: "exemption:scratch-target" },
+  { id: "H06", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} > /var/tmp/tcrn-out.json"`, expect: "PASS", reason: "exemption:scratch-target" },
+  { id: "H07", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} > /run/tcrn-out.json"`, expect: "PASS", reason: "exemption:scratch-target" },
+  { id: "H08", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} > /dev/null"`, expect: "PASS", reason: "exemption:scratch-target" },
+  { id: "H09", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} > /tmp/sub/tcrn-out.json"`, expect: "PASS", reason: "exemption:scratch-target" },
+  { id: "H10", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} 2>&1"`, expect: "PASS", reason: "no-write-primitive" },
+  { id: "H11", command: `ssh ${PRIVATE_VM_HOST} "ls ${GOV_CROSS}" && rm ${GOV_CROSS}/index.json`, expect: "PASS", reason: "no-write-primitive" },
+  { id: "H12", command: `ssh ${PRIVATE_VM_HOST} "ls ${GOV_CROSS}" && ssh ${PRIVATE_VM_HOST} "ls /tmp"`, expect: "PASS", reason: "no-write-primitive" },
+  { id: "H13", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} > /tmp/a.json && node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} > ${PRIVATE_RUNTIME_ROOT}/backups/b.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "H14", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} | tee"`, expect: "HIT", reason: "ssh-write" },
+  { id: "H15", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} >| ${GOV_CROSS}/out.json"`, expect: "HIT", reason: "ssh-write" },
+  { id: "H16", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/helper.mjs --workspace ${GOV_CROSS} &>> ${GOV_CROSS}/events.jsonl"`, expect: "HIT", reason: "ssh-write" },
+  { id: "H17", command: `ssh ${PRIVATE_VM_HOST} "node ${PRIVATE_RUNTIME_ROOT}/backups/tcrn-workflow.mjs status --workspace ${GOV_CROSS}"`, expect: "PASS", reason: "no-write-primitive" },
 ];
 
-export function runSelfTest() {
+// INC-109: this is deliberately authored independently of CORPUS and of the
+// production constants above. It is a small semantic acceptance set whose
+// placeholders are filled only after the supplied target has matched the AOS
+// roster. A change that makes CORPUS and its generator agree cannot make this
+// positive real-target leg agree as well.
+export const INDEPENDENT_SELF_TEST_CASES = Object.freeze([
+  {
+    id: "REAL-TARGET-SSH-REDIRECTION",
+    template: 'ssh __TARGET_HOST__ "cat > __GOVERNED_ROOT__/tcrn-workspace/cross-project/workspace/self-test.json"',
+    expect: "HIT",
+    reason: "ssh-write",
+  },
+  {
+    id: "REAL-TARGET-SSH-ENGINE-READ",
+    template: 'ssh __TARGET_HOST__ "node __ENGINE_PATH__ status --workspace __GOVERNED_ROOT__/tcrn-workspace/cross-project/workspace"',
+    expect: "PASS",
+    reason: "breakglass-allowlist",
+  },
+  {
+    id: "REAL-TARGET-NON-GOVERNED-PATH",
+    template: 'ssh __TARGET_HOST__ "cat > __RUNTIME_ROOT__/aos-cockpit/web/self-test.json"',
+    expect: "PASS",
+    reason: "no-governance-path",
+  },
+  {
+    id: "FOREIGN-HOST-GOVERNED-PATH",
+    template: 'ssh observer-fixture.invalid "cat > __GOVERNED_ROOT__/tcrn-workspace/cross-project/workspace/self-test.json"',
+    expect: "PASS",
+    reason: "no-host-transport",
+  },
+  {
+    id: "REAL-TARGET-RSYNC-GOVERNED-PATH",
+    template: 'rsync -av ./fixture __TARGET_HOST__:__GOVERNED_ROOT__/tcrn-workspace/cross-project/workspace/',
+    expect: "HIT",
+    reason: "rsync",
+  },
+]);
+
+function independentSamples(config) {
+  const substitutions = {
+    __TARGET_HOST__: config.host,
+    __RUNTIME_ROOT__: config.runtimeRoot,
+    __GOVERNED_ROOT__: `${config.runtimeRoot}/governance`,
+    __ENGINE_PATH__: `${config.runtimeRoot}/engine/tcrn-workflow/scripts/tcrn-workflow.mjs`,
+  };
+  return INDEPENDENT_SELF_TEST_CASES.map((sample) => ({
+    ...sample,
+    command: Object.entries(substitutions).reduce(
+      (command, [token, value]) => command.split(token).join(value),
+      sample.template,
+    ),
+  }));
+}
+
+function publicRuntimeStatus(status) {
+  const { config: _config, ...safe } = status;
+  return safe;
+}
+
+export function runSelfTest({ env = process.env, rosterPath } = {}) {
+  const status = runtimeConfigStatus(env, { rosterPath });
+  if (!status.ok) {
+    return {
+      ...publicRuntimeStatus(status),
+      total: 0,
+      hits: 0,
+      passes: 0,
+      mismatches: [{ id: "RUNTIME-CONFIG", expected: "registered-runtime-target", got: status.reason }],
+      ok: false,
+    };
+  }
+  const samples = independentSamples(status.config);
   const mismatches = [];
-  for (const sample of CORPUS) {
+  for (const sample of samples) {
     const result = classify(sample.command);
     if (result.verdict !== sample.expect || result.reason !== sample.reason) {
       mismatches.push({
@@ -794,9 +980,10 @@ export function runSelfTest() {
     }
   }
   return {
-    total: CORPUS.length,
-    hits: CORPUS.filter((sample) => sample.expect === "HIT").length,
-    passes: CORPUS.filter((sample) => sample.expect === "PASS").length,
+    ...publicRuntimeStatus(status),
+    total: samples.length,
+    hits: samples.filter((sample) => sample.expect === "HIT").length,
+    passes: samples.filter((sample) => sample.expect === "PASS").length,
     mismatches,
     ok: mismatches.length === 0,
   };
@@ -880,6 +1067,15 @@ function probeTagFor(command) {
 // apart from "nothing arrived on stdin": both used to end in exit 0 with empty output, and
 // that byte-identity is how a CI step whose flag was dropped would keep reporting success.
 function hookMode(stdin) {
+  const config = runtimeConfigStatus();
+  if (!config.ok) {
+    try {
+      writeSync(2, `${JSON.stringify({ status: config.reason, reason: "RUNTIME_CONFIGURATION_INVALID", detail: config.detail })}\n`);
+    } catch {
+      // The host may have already closed stderr; the non-zero status still carries red.
+    }
+    return "runtime-config-unavailable";
+  }
   let input;
   try {
     input = JSON.parse(stdin);
@@ -898,7 +1094,9 @@ function hookMode(stdin) {
 
 // A path that is inside the governed tree (so the probe classifies as a HIT through the
 // real predicate) and names a directory no ceremony writes.
-const PROBE_TARGET_ROOT = "/var/lib/tcrn-placeholder/governance/tcrn-workspace/.observe-channel-probe";
+function probeTargetRoot(config) {
+  return `${config.runtimeRoot}/governance/tcrn-workspace/.observe-channel-probe`;
+}
 
 // ---------------------------------------------------------------------------
 // THE CHANNEL GATE. It answers exactly one question: **would a real HIT, produced the way
@@ -1016,6 +1214,14 @@ export function readRegistration(projectDir) {
       detail: `no ${PROJECT_SETTINGS_FILES.join(" or ")} under ${root}`,
     };
   }
+  const settingEnv = {};
+  for (const { settings } of present) {
+    for (const name of [...REQUIRED_RUNTIME_NAMES, "TCRN_SSH_TARGET_ROSTER"]) {
+      if (typeof settings?.env?.[name] === "string" && settings.env[name].length > 0) {
+        settingEnv[name] = settings.env[name];
+      }
+    }
+  }
   for (const { path, settings } of present) {
     const groups = Array.isArray(settings?.hooks?.PreToolUse) ? settings.hooks.PreToolUse : [];
     for (const group of groups) {
@@ -1027,6 +1233,12 @@ export function readRegistration(projectDir) {
         const args = Array.isArray(entry.args) ? entry.args.map((arg) => substituteProjectDir(arg, root)) : null;
         const whole = [command, ...(args ?? [])].join(" ");
         if (!whole.includes(REGISTRATION_MARKER)) continue;
+        const entryEnv = { ...settingEnv };
+        for (const name of [...REQUIRED_RUNTIME_NAMES, "TCRN_SSH_TARGET_ROSTER"]) {
+          if (typeof entry?.env?.[name] === "string" && entry.env[name].length > 0) {
+            entryEnv[name] = entry.env[name];
+          }
+        }
         return {
           ok: true,
           projectDir: root,
@@ -1037,6 +1249,7 @@ export function readRegistration(projectDir) {
           command,
           args,
           registeredCommand: entry.command,
+          env: entryEnv,
         };
       }
     }
@@ -1086,23 +1299,25 @@ function sinkCarriesNonce(sink, nonce) {
 
 function verifyOneRoot(projectDir, sink) {
   const nonce = randomUUID();
-  const command = `ssh tcrn-platform-placeholder "rm ${PROBE_TARGET_ROOT}/${nonce}"`;
-  const classified = classify(command);
-  if (classified.verdict !== "HIT") {
-    return {
-      projectDir: resolve(projectDir),
-      settingsPath: null,
-      nonce,
-      ok: false,
-      reason: "probe-command-not-classified-hit",
-      detail: `${classified.verdict}/${classified.reason}`,
-      stderr: "",
-    };
-  }
   const registration = readRegistration(projectDir);
   if (!registration.ok) {
     return { ...registration, nonce, ok: false, stderr: "" };
   }
+  const registrationStatus = runtimeConfigStatus(registration.env, {
+    rosterPath: registration.env.TCRN_SSH_TARGET_ROSTER,
+  });
+  if (!registrationStatus.ok) {
+    return {
+      ...registration,
+      nonce,
+      ok: false,
+      reason: registrationStatus.reason,
+      detail: registrationStatus.detail,
+      configStatus: publicRuntimeStatus(registrationStatus),
+      stderr: "",
+    };
+  }
+  const command = `ssh ${registrationStatus.config.host} "rm ${probeTargetRoot(registrationStatus.config)}/${nonce}"`;
   // A working directory that is neither the project root nor this repository, so a
   // registration that only resolves relative to one of them fails here. Created empty and
   // removed afterwards: an inherited cwd could accidentally satisfy a relative path.
@@ -1113,7 +1328,12 @@ function verifyOneRoot(projectDir, sink) {
       input: preToolUsePayload(command, nonce, registration.projectDir),
       encoding: "utf8",
       cwd: scratchCwd,
-      env: { ...process.env, [PROJECT_DIR_ENV]: registration.projectDir, [PROBE_ENV]: nonce },
+      env: {
+        ...process.env,
+        ...registration.env,
+        [PROJECT_DIR_ENV]: registration.projectDir,
+        [PROBE_ENV]: nonce,
+      },
     };
     run =
       registration.form === "exec"
@@ -1276,6 +1496,7 @@ if (isDirectInvocation()) {
     });
     process.stdin.on("end", () => {
       const outcome = hookMode(stdin);
+      if (outcome === "runtime-config-unavailable") process.exit(1);
       if (outcome !== "no-payload") process.exit(0);
       // Nothing parsable arrived. For a real PreToolUse invocation this cannot happen;
       // for `node scripts/ssh-write-observer.mjs` run as if it were a gate, it always

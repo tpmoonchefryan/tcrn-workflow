@@ -53,6 +53,8 @@ function privacyPatterns(owner) {
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
+  return [
+    ["LOCAL_ABSOLUTE_PATH", new RegExp(localUserPath, "u")],
     ["LINUX_HOME_PATH", new RegExp(linuxHomePath, "u")],
     ["WINDOWS_USER_PATH", /[A-Za-z]:\\+Users\\+/u],
     ["THREAD_IDENTIFIER", /019[a-f0-9]{5}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/u],
@@ -66,7 +68,11 @@ function privacyPatterns(owner) {
     ["GOOGLE_API_KEY", /AIza[0-9A-Za-z_-]{35}/u],
     ["AZURE_STORAGE_KEY", /AccountKey=[A-Za-z0-9+/]{40,}={0,2}/u],
     ["JWT_TOKEN", /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/u],
-    ["AUTHENTICATED_URL", /https?:\/\/[^\s/:@]+:[^\s/@]+@/iu],
+    // Credentials are private regardless of the URL scheme. The old https?
+    // shape missed postgres:// and other service connection strings.
+    ["AUTHENTICATED_URL", /[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@/iu],
+    ["PRIVATE_HOSTNAME", new RegExp(`\\b(?:${escaped(privateVmHost)}|[A-Za-z0-9-]+${escaped(privateDnsSuffix)})\\b`, "iu")],
+    ["PRIVATE_USER_AT_HOST", /\b(?:deploy|root|tcrn|ubuntu)@[A-Za-z0-9.-]+\b/iu],
     ["PRIVATE_IPV4", /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b/u],
     ["US_SSN", /\b\d{3}-\d{2}-\d{4}\b/u],
     ["PHONE_IDENTIFIER", /\+?\d{1,3}[-. ]\d{3}[-. ]\d{3}[-. ]\d{4}\b/u],

@@ -20,6 +20,7 @@ import type { StorageBackend } from "./storage-backend.js";
 import { acquireWorkspaceLease } from "./workspace.js";
 import {
   STORAGE_HOME_VERSION,
+  readStorageHomeDeclaration,
   removeStorageHomeDeclaration,
   writeStorageHomeDeclaration,
 } from "./storage-home.js";
@@ -195,6 +196,27 @@ function opposite(direction: MigrationDirection): MigrationDirection {
 function assertDirection(value: MigrationDirection): asserts value is MigrationDirection {
   if (value !== "file" && value !== "pg") {
     throw new WorkspaceMigrationError("WORKSPACE_MIGRATION_INVALID", `target must be "file" or "pg"`);
+  }
+}
+
+function assertTargetSchema(target: MigrationDirection, options: MigrationOptions): void {
+  if (target === "pg" && (typeof options.schema !== "string" || options.schema.trim().length === 0)) {
+    throw new WorkspaceMigrationError(
+      "WORKSPACE_MIGRATION_INVALID",
+      "target pg requires a named schema; refusing to copy without a storage-home binding",
+    );
+  }
+}
+
+function assertMigrationInstant(options: MigrationOptions): void {
+  // The migration lease uses the caller-stamped instant as its clock. The old
+  // epoch fallback made every lease immediately expired against a real clock,
+  // so a missing stamp must be rejected before any target or lease mutation.
+  if (typeof options.migratedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/u.test(options.migratedAt)) {
+    throw new WorkspaceMigrationError(
+      "WORKSPACE_MIGRATION_INVALID",
+      "migration requires migratedAt as a strict UTC instant; refusing to use an expired epoch lease",
+    );
   }
 }
 
@@ -599,6 +621,7 @@ export async function planMigration(
   options: MigrationOptions = {},
 ): Promise<MigrationPlan> {
   assertDirection(target);
+  assertTargetSchema(target, options);
   const source = opposite(target);
   const backend = resolveBackend(source, options, workspaceRoot);
   const snapshot = await readSnapshot(
@@ -615,6 +638,11 @@ export async function executeMigration(
   options: MigrationOptions = {},
 ): Promise<MigrationPlan> {
   assertDirection(target);
+  // Validate before acquiring a lease or touching the target. A missing schema
+  // used to let the data copy complete while silently omitting the sentinel,
+  // reopening the exact file/PG fork this migration is meant to close.
+  assertTargetSchema(target, options);
+  assertMigrationInstant(options);
   const source = opposite(target);
   // INC-074: migration is itself a governed mutation. Hold the archive-side
   // lease across the source snapshot, target writes, and sentinel change so
@@ -622,7 +650,7 @@ export async function executeMigration(
   // declaration out from under the copy. The explicit admission is private to
   // this verb; normal file-backed mutations remain sentinel-closed.
   const lease = await acquireWorkspaceLease(workspaceRoot, {
-    now: options.migratedAt ?? "1970-01-01T00:00:00.000Z",
+    now: options.migratedAt as string,
     storageHomeAdmission: "migration",
   });
   try {
@@ -677,14 +705,22 @@ export async function executeMigration(
     // INC-074: lay or lift the storage-home sentinel. Both operations occur
     // while the migration lease is held; a normal file-backed caller still
     // refuses a PG sentinel and cannot reopen the write door.
-    if (target === "pg" && typeof options.schema === "string" && options.schema.length > 0) {
-      await writeStorageHomeDeclaration(workspaceRoot, {
+    if (target === "pg") {
+      const declaration = {
         schemaVersion: STORAGE_HOME_VERSION,
         storage: "pg",
-        schema: options.schema,
+        schema: options.schema as string,
         workspaceId: snapshot.workspaceId,
-        migratedAt: options.migratedAt ?? "1970-01-01T00:00:00.000Z",
-      });
+        migratedAt: options.migratedAt as string,
+      } as const;
+      await writeStorageHomeDeclaration(workspaceRoot, declaration);
+      const written = await readStorageHomeDeclaration(workspaceRoot);
+      if (written === null || canonicalJson(written) !== canonicalJson(declaration)) {
+        throw new WorkspaceMigrationError(
+          "WORKSPACE_MIGRATION_VERIFY_MISMATCH",
+          "storage-home sentinel did not survive the migration write read-back",
+        );
+      }
     } else if (target === "file") {
       await removeStorageHomeDeclaration(workspaceRoot);
     }
@@ -700,6 +736,7 @@ export async function verifyMigration(
   options: MigrationOptions = {},
 ): Promise<MigrationVerification> {
   assertDirection(target);
+  assertTargetSchema(target, options);
   const source = opposite(target);
   const sourceBackend = resolveBackend(source, options, workspaceRoot);
   const snapshot = await readSnapshot(

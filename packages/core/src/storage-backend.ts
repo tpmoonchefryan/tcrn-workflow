@@ -43,6 +43,8 @@ export class StorageError extends Error {
 }
 
 export interface StorageBackend {
+  /** The concrete data-plane kind, used by sentinel admission gates. */
+  readonly backendKind: "file" | "pg";
   /** Read the workspace.json metadata bytes, fail-closed on any unsafe file. */
   readMetadataBytes(): Promise<Buffer>;
   /** Atomically replace workspace.json. */
@@ -76,6 +78,8 @@ export interface StorageBackend {
  * guarantees the PG backend must reproduce.
  */
 export class FileBackend implements StorageBackend {
+  readonly backendKind = "file" as const;
+
   constructor(
     private readonly workspaceRoot: string,
     private readonly injectedCrashAt?: (phase: WorkspaceCrashPoint) => boolean,

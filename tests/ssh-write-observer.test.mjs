@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // INC-037 — branch-coverage proof for scripts/ssh-write-observer.mjs.
 //
 // The defect this file exists to prevent is the platform's signature failure mode:
@@ -19,6 +20,7 @@
 // Run: node --test scripts/ssh-write-observer.test.mjs   (or: node scripts/…test.mjs)
 import { strict as assert } from "node:assert";
 import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -26,6 +28,25 @@ import { after, test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+// INC-120/INC-122: this proof is self-contained and carries no real topology.
+// The four values below are synthetic fixtures (.invalid host, /opt fixture path)
+// and the roster they fingerprint lives in this repository, so the suite runs in a
+// standalone public checkout with no sibling repository present. A governed host's
+// real values never appear here — they are supplied at runtime and fingerprinted
+// into a private roster the host points at, off this tree.
+const FIXTURE_HOST = "ci-governed-host.invalid";
+const FIXTURE_RUNTIME_ROOT = "/opt/ci-governed-runtime";
+const FIXTURE_GOVERNANCE_ROOT = `${FIXTURE_RUNTIME_ROOT}/governance`;
+const FIXTURE_LOOPBACK = "ci-loopback.invalid";
+const FIXTURE_FACADE_ENDPOINT = "ci-facade.invalid:65500";
+const TARGET_ROSTER = resolve(HERE, "../fixtures/observer/ci-target-roster.json");
+Object.assign(process.env, {
+  TCRN_SSH_GOVERNED_HOST: FIXTURE_HOST,
+  TCRN_SSH_RUNTIME_ROOT: FIXTURE_RUNTIME_ROOT,
+  TCRN_SSH_LOOPBACK: FIXTURE_LOOPBACK,
+  TCRN_SSH_FACADE_ENDPOINT: FIXTURE_FACADE_ENDPOINT,
+  TCRN_SSH_TARGET_ROSTER: TARGET_ROSTER,
+});
 // INC037_SOURCE points the whole proof at a different copy of the observer. That is
 // how the red side is demonstrated: run this suite against a copy carrying only the
 // original 21-sample corpus and the inert branches report themselves by name.
@@ -33,10 +54,13 @@ const SOURCE_PATH = process.env.INC037_SOURCE ?? resolve(HERE, "../scripts/ssh-w
 const source = await readFile(SOURCE_PATH, "utf8");
 
 // The mutant copies live in a temp workdir, so PLATFORM_ROOT (derived from the
-// script's own location) points nowhere. Pin the break-glass allowlist to the REAL
-// platform file before importing any copy (INC-051): otherwise a mutant sees an
-// empty allowlist and samples that should ride a break-glass entry go red.
-process.env.PUBLIC_CONFIGURATION_VALUE = resolve(HERE, "../../TCRN-AOS/deploy/aos-local-client/ssh-breakglass-allowlist.json");
+// script's own location) points nowhere. Pin the break-glass allowlist to this
+// repository's own policy file before importing any copy (INC-051): otherwise a
+// mutant sees an empty allowlist and samples that should ride a break-glass entry go
+// red. INC-122: the in-repo policy is authoritative here so the suite is
+// self-contained — a standalone public checkout has no sibling platform tree.
+const LOCAL_ALLOWLIST = resolve(HERE, "../scripts/policy/ssh-breakglass-allowlist.json");
+process.env.TCRN_SSH_BREAKGLASS_ALLOWLIST = LOCAL_ALLOWLIST;
 const workdir = await mkdtemp(join(tmpdir(), "inc037-mutants-"));
 after(async () => {
   await rm(workdir, { recursive: true, force: true });
@@ -45,6 +69,9 @@ after(async () => {
 // A mutation is applied to a copy; nothing ever writes back to the repository file.
 async function loadMutant(id, mutated) {
   const path = join(workdir, `mutant-${id}.mjs`);
+  await mkdir(join(workdir, "lib"), { recursive: true });
+  const roster = join(workdir, "lib", "private-token-roster.mjs");
+  if (!existsSync(roster)) await symlink(resolve(HERE, "../scripts/lib/private-token-roster.mjs"), roster);
   await writeFile(path, mutated);
   return import(pathToFileURL(path).href);
 }
@@ -168,8 +195,8 @@ const MUTATIONS = [
   {
     id: "transfer-spec-anchor",
     find: `    const match = /^(?:[^@:/\\s]+@)?([A-Za-z0-9._-]+):(.+)$/u.exec(token.value);`,
-    replace: `    const match = [token.value, "tcrn-platform-placeholder", token.value];`,
-    witness: "D08",
+    replace: `    const match = [token.value, ["fixture", "host", "invalid"].join("-"), token.value];`,
+    witness: "E09",
   },
   {
     id: "transfer-host-check",
@@ -214,11 +241,11 @@ const MUTATIONS = [
   { id: "exemption-empty-targets", find: `    if (unit.targets.length === 0) return null;`, replace: `    ;`, witness: "H14" },
   { id: "exemption-every-unit", find: `    matched.push(entry.id);`, replace: `    return entry.id;`, witness: "H13" },
   { id: "exemption-entry-scratch", find: `    matches: (unit) => unit.targets.every(isScratchTarget),`, replace: `    matches: () => false,`, witness: "H05" },
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+  {
+    id: "host-engine-anchor",
+    find: 'const HOST_ENGINE = new RegExp(`^${escapeRegExp(PRIVATE_RUNTIME_ROOT)}/engine/(?:[^\\\\s]+/)?tcrn-workflow\\\\.mjs$`, "u");',
+    replace: `const HOST_ENGINE = /tcrn-workflow\\.mjs/u;`,
+    witness: "H17",
   },
   { id: "scratch-root-tmp", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/var/tmp/", "/run/", "/dev/null"]`, witness: "H05" },
   { id: "scratch-root-var-tmp", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/tmp/", "/run/", "/dev/null"]`, witness: "H06" },
@@ -235,17 +262,17 @@ const MUTATIONS = [
   { id: "host-check", find: `      if (!transport.host || !HOST_NAME.test(transport.host)) continue;`, replace: `      if (false) continue;`, witness: "E01" },
   {
     id: "host-anchor",
-    find: `const HOST_NAME = /^tcrn-platform-placeholder(?:\\.[A-Za-z0-9.-]+)?$/u;`,
-    replace: `const HOST_NAME = /tcrn-platform-placeholder/u;`,
+    find: 'const HOST_NAME = new RegExp(`^${escapeRegExp(PRIVATE_VM_HOST)}(?:\\\\.[A-Za-z0-9.-]+)?$`, "u");',
+    replace: `const HOST_NAME = /./u;`,
     witness: "E02",
   },
   { id: "governance-check", find: `      if (!GOVERNANCE.test(transport.remote)) continue;`, replace: `      if (false) continue;`, witness: "E03" },
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+  {
+    id: "governance-anchor",
+    find: 'const GOVERNANCE = new RegExp(`${escapeRegExp(PRIVATE_GOVERNANCE_ROOT)}(?![A-Za-z0-9_-])`, "u");',
+    replace: `const GOVERNANCE = /governance/u;`,
+    witness: "E04",
+  },
   // The heart of defect 3: scope the write-primitive scan to the remote command.
   { id: "remote-command-scope", find: `      note(2, "no-write-primitive");\n      const units = remoteWriteUnits(transport.remote);`, replace: `      note(2, "no-write-primitive");\n      const units = remoteWriteUnits(command);`, witness: "H11" },
   { id: "write-primitive-required", find: `      if (units.length === 0) continue;`, replace: `      if (false) continue;`, witness: "D04" },
@@ -267,8 +294,26 @@ test("corpus is green against the unmutated observer", async () => {
   assert.deepEqual(redSamples(live), [], "unmutated corpus must classify every sample as declared");
   const report = live.runSelfTest();
   assert.equal(report.ok, true);
-  assert.equal(report.total, live.CORPUS.length);
+  assert.equal(report.total, live.INDEPENDENT_SELF_TEST_CASES.length);
   assert.ok(report.hits > 0 && report.passes > 0, "corpus must exercise both verdicts");
+  assert.ok(report.target?.id, "self-test must identify a registered target");
+});
+
+test("self-test is red when runtime configuration is absent or unregistered", async () => {
+  const missingEnv = { ...process.env };
+  for (const name of ["TCRN_SSH_GOVERNED_HOST", "TCRN_SSH_RUNTIME_ROOT", "TCRN_SSH_LOOPBACK", "TCRN_SSH_FACADE_ENDPOINT"]) {
+    delete missingEnv[name];
+  }
+  const missing = spawnSync(process.execPath, [SOURCE_PATH, "--self-test"], { encoding: "utf8", env: missingEnv });
+  assert.equal(missing.status, 1);
+  assert.equal(JSON.parse(missing.stdout).reason, "SSH_OBSERVER_RUNTIME_CONFIG_REQUIRED");
+
+  const unregistered = spawnSync(process.execPath, [SOURCE_PATH, "--self-test"], {
+    encoding: "utf8",
+    env: { ...process.env, TCRN_SSH_GOVERNED_HOST: "unregistered-observer.invalid" },
+  });
+  assert.equal(unregistered.status, 1);
+  assert.equal(JSON.parse(unregistered.stdout).reason, "SSH_OBSERVER_TARGET_UNREGISTERED");
 });
 
 test("control mutation leaves the corpus green (the harness is not red for everyone)", async () => {
@@ -338,7 +383,7 @@ test("hook mode holds its input contract: log only on HIT, and never block", asy
       env: { ...process.env, S2_OBSERVE_LOG: logPath },
     });
   try {
-    const hit = `env X=1 ssh tcrn-platform-placeholder "rm /var/lib/tcrn-placeholder/governance/tcrn-workspace/cross-project/workspace/index.json"`;
+    const hit = `env X=1 ssh ${FIXTURE_HOST} "rm ${FIXTURE_GOVERNANCE_ROOT}/tcrn-workspace/cross-project/workspace/index.json"`;
     run(JSON.stringify({ tool_name: "Bash", tool_input: { command: hit } }));
     run(JSON.stringify({ tool_name: "Bash", tool_input: { command: "git status" } }));
     run(JSON.stringify({ tool_name: "Read", tool_input: { file_path: "/etc/hosts" } }));
@@ -388,7 +433,7 @@ function runCli(args, { sink, script = SOURCE_PATH, input } = {}) {
   return { status: run.status, stdout: run.stdout ?? "", stderr: run.stderr ?? "" };
 }
 
-const HIT_COMMAND = `ssh tcrn-platform-placeholder "rm /var/lib/tcrn-placeholder/governance/tcrn-workspace/cross-project/workspace/index.json"`;
+const HIT_COMMAND = `ssh ${FIXTURE_HOST} "rm ${FIXTURE_GOVERNANCE_ROOT}/tcrn-workspace/cross-project/workspace/index.json"`;
 const hookPayload = JSON.stringify({ tool_name: "Bash", tool_input: { command: HIT_COMMAND } });
 
 test("the default sink is outside the repository checkout (the INC-040 root cause)", async () => {
@@ -467,10 +512,16 @@ const PRE_INC041_COMMAND = `node scripts/${OBSERVER_BASENAME}`;
  * with `${CLAUDE_PROJECT_DIR}` resolves to a real file — which is what makes the
  * substitution itself observable rather than assumed.
  */
-async function makeProjectRoot({ command, args, matcher = "Bash", hooks, fileName = "settings.json", scriptsTarget = null } = {}) {
+async function makeProjectRoot({ command, args, matcher = "Bash", hooks, fileName = "settings.json", scriptsTarget = null, env = {
+  TCRN_SSH_GOVERNED_HOST: FIXTURE_HOST,
+  TCRN_SSH_RUNTIME_ROOT: FIXTURE_RUNTIME_ROOT,
+  TCRN_SSH_LOOPBACK: FIXTURE_LOOPBACK,
+  TCRN_SSH_FACADE_ENDPOINT: FIXTURE_FACADE_ENDPOINT,
+  TCRN_SSH_TARGET_ROSTER: TARGET_ROSTER,
+} } = {}) {
   const root = await mkdtemp(join(tmpdir(), "inc041-root-"));
   await mkdir(join(root, ".claude"), { recursive: true });
-  const settings = {};
+  const settings = { env };
   if (hooks !== undefined) {
     if (hooks !== null) settings.hooks = hooks;
   } else if (command !== undefined) {
@@ -692,6 +743,8 @@ test("the channel gate is bound to the hook's write path: neutering the hook's a
   const anchor = `  if (appendObservation(entry)) return;`;
   assert.equal(source.split(anchor).length - 1, 1, "anchor must appear exactly once — refresh the proof");
   const mutantDir = await mkdtemp(join(tmpdir(), "inc041-mutant-scripts-"));
+  await mkdir(join(mutantDir, "lib"), { recursive: true });
+  await symlink(resolve(HERE, "../scripts/lib/private-token-roster.mjs"), join(mutantDir, "lib", "private-token-roster.mjs"));
   await writeFile(join(mutantDir, OBSERVER_BASENAME), source.replace(anchor, `  if (true) return;`));
   const dir = await mkdtemp(join(tmpdir(), "inc040-severed-"));
   const sink = join(dir, "ssh-write-hits.jsonl");
@@ -780,7 +833,7 @@ test("the probe tag cannot be acquired without the gate's own environment", asyn
   const dir = await mkdtemp(join(tmpdir(), "inc041-tag-"));
   const sink = join(dir, "ssh-write-hits.jsonl");
   const nonce = "11111111-2222-3333-4444-555555555555";
-  const command = `ssh tcrn-platform-placeholder "rm /var/lib/tcrn-placeholder/governance/tcrn-workspace/.observe-channel-probe/${nonce}"`;
+  const command = `ssh ${FIXTURE_HOST} "rm ${FIXTURE_GOVERNANCE_ROOT}/tcrn-workspace/.observe-channel-probe/${nonce}"`;
   const payload = JSON.stringify({ tool_name: "Bash", tool_input: { command } });
   try {
     const env = { ...process.env, S2_OBSERVE_LOG: sink };

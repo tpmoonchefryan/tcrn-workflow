@@ -17,6 +17,9 @@ importers:
       ajv:
         specifier: 8.17.1
         version: 8.17.1
+      pg:
+        specifier: 8.22.0
+        version: 8.22.0
       typescript:
         specifier: 5.9.3
         version: 5.9.3

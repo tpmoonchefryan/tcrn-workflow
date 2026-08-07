@@ -94,12 +94,17 @@ async function assertAppendOnlyTrigger(client: pg.Client, schema: string): Promi
     [`${schema}.events`],
   );
   const triggerNames = rows.map((row) => String(row.tgname));
-  if (triggerNames.length === 0) {
-    throw new StorageError("WORKSPACE_SCHEMA_INVALID", `events table in schema ${schema} has no append-only trigger; refusing to write`);
+  if (!triggerNames.includes("events_append_only")) {
+    throw new StorageError(
+      "WORKSPACE_SCHEMA_INVALID",
+      `events table in schema ${schema} lacks the required events_append_only trigger (found: ${triggerNames.join(",") || "none"}); refusing to write`,
+    );
   }
 }
 
 export class PgBackend implements StorageBackend {
+  readonly backendKind = "pg" as const;
+
   private readonly client: pg.Client;
   private readonly schema: string;
   private readonly injectSegmentByteDeviation: boolean;

@@ -40,27 +40,27 @@ judgement and the criterion that would turn it red.
 
 ### 1. Instance topology and version (STORY-171.1)
 
-**Verdict: one PostgreSQL 18 instance on `tcrn-platform-placeholder`, bound to
-`198.51.100.1`, reached only through the SSH tunnel the facade owns.**
+**Verdict: one PostgreSQL 18 instance on the private VM, bound to loopback,
+reached only through the SSH tunnel the facade owns.**
 
 - **Version: PostgreSQL 18.** Measured 2026-08-06 via `apt-cache policy
-  postgresql` on `tcrn-platform-placeholder` (`Ubuntu 26.04 LTS`, candidate
+  postgresql` on the private VM (`Ubuntu 26.04 LTS`, candidate
   `18+290ubuntu1`). PG 18 is the newest major available on the host's own
   distribution, which is the sourcing criterion: a distribution-provided
   version gets backported security fixes without a third-party APT source.
-  Recheck: `ssh tcrn-platform-placeholder "apt-cache policy postgresql"`.
+  Recheck: `ssh <vm-host> "apt-cache policy postgresql"`.
 - **Upgrade path.** Annual major-version assessment (the ADR 0004 review
   rhythm). In-place upgrades run `pg_upgrade` at a low-traffic point **outside**
   the switch window; the write side of a major bump is gated by the next
   mandated release stop. A minor upgrade is a package update plus restart.
 - **systemd unit.** `tcrn-postgres.service`, `Restart=on-failure`,
   `LimitNOFILE` raised, WAL on the same data dir (single host, single disk
-  class), data dir under `/var/lib/tcrn-placeholder/postgres` (outside the rsynced cockpit
+  class), data dir under `<private-data-root>/postgres` (outside the rsynced cockpit
   `runtime/`), `pg_hba.conf` with only `local` peer for `root`→`postgres` admin
   and `local` peer for the engine role (below), no `host` lines for any chain
   schema.
-- **Binding.** `listen_addresses = '198.51.100.1'` hard-coded in
-  `/etc/postgresql/18/main/postgresql.conf`, mirroring the cockpit bind
+- **Binding.** `listen_addresses = '<loopback>'` hard-coded in
+  `<private-config-root>/postgresql.conf`, mirroring the cockpit bind
   (CONF-007 D7 precedent). No environment variable moves it.
 - **Backups** are taken on the VM (both halves on one host) and pulled to this
   machine as the off-site copy — the pull direction re-ruled in `MIN-007 D9`

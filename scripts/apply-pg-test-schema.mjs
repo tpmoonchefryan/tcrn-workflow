@@ -6,14 +6,20 @@
 // that the schema name is never chain_cross/chain_aos (or another live chain).
 
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import pg from "pg";
+import { pgTestConnection } from "./pg-test-connection.mjs";
+
+// This root support script consumes the driver through the workspace package
+// that owns it. Keeping the dependency there preserves the frozen dependency
+// graph's direct-dependency boundary while still making a clean pnpm install
+// sufficient for the root command.
+const pg = createRequire(new URL("../packages/pg-backend/package.json", import.meta.url))("pg");
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DDL_PATH = resolve(ROOT, "packages/pg-backend/schema/chain-ddl.sql");
-const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
-  ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
+const CONNECTION = pgTestConnection();
 const schema = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 
 if (!/^chain_test_[a-z0-9_]{1,40}$/u.test(schema)) {

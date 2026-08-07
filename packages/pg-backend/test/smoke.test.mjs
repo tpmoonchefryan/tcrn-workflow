@@ -13,9 +13,9 @@ import pg from "pg";
 
 import { canonicalJson } from "../../../dist/build/packages/protocol/src/index.js";
 import { PgBackend } from "../../../dist/build/packages/pg-backend/src/index.js";
+import { pgTestConnection } from "../../../scripts/pg-test-connection.mjs";
 
-const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
-  ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
+const CONNECTION = pgTestConnection();
 const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 
 describe("STORY-175 PgBackend smoke", () => {

@@ -25,6 +25,7 @@ test("the exact frozen dependency graph has complete policy and integrity closur
   assert.deepEqual(graph.directIdentities, [
     "@types/node@24.13.2",
     "ajv@8.17.1",
+    "pg@8.22.0",
     "typescript@5.9.3",
   ]);
   assert.deepEqual(graph.transitiveIdentities, [
@@ -38,7 +39,6 @@ test("the exact frozen dependency graph has complete policy and integrity closur
     "pg-pool@3.14.0",
     "pg-protocol@1.15.0",
     "pg-types@2.2.0",
-    "pg@8.22.0",
     "pgpass@1.0.5",
     "postgres-array@2.0.0",
     "postgres-bytea@1.0.1",

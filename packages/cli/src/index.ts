@@ -1618,7 +1618,27 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // view-verifying and fail closed with WORKSPACE_VIEW_STALE.
     const values = parseArguments(rest, ["workspace"]);
     required(values, ["workspace"]);
-    writeState(io, await materializeWorkspace(values.workspace ?? ""));
+    const workspace = values.workspace ?? "";
+    const state = await materializeWorkspace(workspace);
+    const storageHome = await readStorageHomeDeclaration(workspace);
+    io.write(canonicalJson({
+      reasonCode: "WORKSPACE_COMMAND_COMPLETED",
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      projects: state.projects.filter((entry) => !entry.tombstone).length,
+      work: state.work.filter((entry) => !entry.tombstone).length,
+      // Identity is metadata-only: no local path is exposed. A sealed archive
+      // must tell a reader that its authority is PG and which workspace binding
+      // it carries, rather than looking like an ordinary file-backed status.
+      storageHome: storageHome === null ? null : {
+        schemaVersion: storageHome.schemaVersion,
+        storage: storageHome.storage,
+        ...(storageHome.schema === undefined ? {} : { schema: storageHome.schema }),
+        ...(storageHome.workspaceId === undefined ? {} : { workspaceId: storageHome.workspaceId }),
+        migratedAt: storageHome.migratedAt,
+      },
+    }));
     return;
   }
   if (command === "lease-inspect") {

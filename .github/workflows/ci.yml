@@ -152,7 +152,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: tcrn
-          POSTGRES_PASSWORD: historical-test-password-redacted
+          POSTGRES_PASSWORD: ci_test_password
           POSTGRES_DB: tcrn_governance
         ports:
           - 5432:5432
@@ -199,12 +199,20 @@ jobs:
 
       - name: Apply the isolated PG test schema (schema + append-only trigger)
         env:
-          TCRN_PG_TEST_CONNECTION: postgresql://history-user@198.51.100.1:5432/tcrn_governance
+          TCRN_PG_TEST_USER: tcrn
+          TCRN_PG_TEST_PASSWORD: ci_test_password
+          TCRN_PG_TEST_HOST: localhost
+          TCRN_PG_TEST_PORT: 5432
+          TCRN_PG_TEST_DATABASE: tcrn_governance
           TCRN_PG_TEST_SCHEMA: chain_test_cross
         run: node scripts/apply-pg-test-schema.mjs
 
       - name: Run the PG backend tests against the live service
         env:
-          TCRN_PG_TEST_CONNECTION: postgresql://history-user@198.51.100.1:5432/tcrn_governance
+          TCRN_PG_TEST_USER: tcrn
+          TCRN_PG_TEST_PASSWORD: ci_test_password
+          TCRN_PG_TEST_HOST: localhost
+          TCRN_PG_TEST_PORT: 5432
+          TCRN_PG_TEST_DATABASE: tcrn_governance
           TCRN_PG_TEST_SCHEMA: chain_test_cross
-        run: node --test --test-concurrency=1 packages/pg-backend/test/*.test.mjs
+        run: node --test --test-concurrency=1 packages/pg-backend/test/*.test.mjs packages/pg-backend/test/evidence-roundtrip.mjs

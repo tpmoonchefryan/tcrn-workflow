@@ -4,11 +4,13 @@ import { spawnSync } from "node:child_process";
 
 const localGitCommands = new Set([
   "cat-file",
+  "diff",
   "for-each-ref",
   "fsck",
   "ls-tree",
   "reflog",
   "remote",
+  "rev-parse",
   "rev-list",
   "status",
 ]);

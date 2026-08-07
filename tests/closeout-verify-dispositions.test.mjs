@@ -96,6 +96,53 @@ describe("closeout-verify disposition kinds (STORY-172)", () => {
     assert.equal(result.ok, false);
     assert.ok(result.problems.some((p) => p.includes("INC-062 is retained but names no chain work ticket")));
   });
+
+  test("chain-backed closeouts reconcile the authoritative item set and per-item notes", () => {
+    const result = verifyCloseout({
+      schemaVersion: V1,
+      incident: "TCRN-CROSS-INC-090",
+      items: ["INC-090", "INC-091"],
+      chainItems: [{ externalKey: "INC-090" }, { id: "INC-091" }],
+      chainAnnotations: {
+        "INC-090": "red-leg refusal receipt evidence/090.json sha256=abc",
+        "INC-091": "negative-leg refusal receipt evidence/091.json sha256=def",
+      },
+      dispositions: {
+        "INC-090": { kind: "fixed" },
+        "INC-091": { kind: "fixed" },
+      },
+    });
+    assert.equal(result.ok, true, JSON.stringify(result.problems));
+  });
+
+  test("reds when chain-derived closeout notes omit the red leg or evidence anchor", () => {
+    const result = verifyCloseout({
+      schemaVersion: V1,
+      incident: "TCRN-CROSS-INC-090",
+      items: ["INC-090"],
+      chainItems: [{ id: "INC-090" }],
+      chainNotes: { "INC-090": "closeout says done" },
+      dispositions: { "INC-090": { kind: "fixed" } },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.problems.some((p) => p.includes("names no evidence/receipt/hash")));
+    assert.ok(result.problems.some((p) => p.includes("names no red-leg/negative-leg")));
+  });
+
+  test("execution-form and actor declarations are required when the manifest opts in", () => {
+    const result = verifyCloseout({
+      schemaVersion: V1,
+      incident: "TCRN-CROSS-INC-092",
+      items: ["INC-092"],
+      chainItems: [{ id: "INC-092" }],
+      chainNotes: { "INC-092": "red-leg receipt evidence/092.json" },
+      requireExecutionForm: true,
+      dispositions: { "INC-092": { kind: "fixed" } },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.problems.some((p) => p.includes("execution-form")));
+    assert.ok(result.problems.some((p) => p.includes("attributed persona")));
+  });
 });
 
 describe("closeout-verify windowed red-leg obligation (INC-077)", () => {

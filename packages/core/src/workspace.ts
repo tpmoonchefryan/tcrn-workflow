@@ -349,6 +349,11 @@ function backendFor(workspaceRoot: string): StorageBackend {
   return backend;
 }
 
+function activeOverrideBackendKind(): StorageBackend["backendKind"] | undefined {
+  const factory = backendFactoryOverride.getStore();
+  return factory?.().backendKind;
+}
+
 function fail(reasonCode: WorkspaceReasonCode, message: string): never {
   throw new WorkspaceError(reasonCode, message);
 }
@@ -2309,14 +2314,13 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
   const workspaceRoot = await boundDirectory(workspaceRootInput);
   // INC-074 storage-home gate: a workspace whose chain has migrated to Postgres
   // carries a sentinel declaring where the truth lives. When this process is
-  // serving it via the FILE backend (no backend-factory override — i.e. the caller
-  // drove the engine without TCRN_PG_*), the write door is closed: every mutating
+  // serving it via a file backend, the write door is closed: every mutating
   // verb refuses WORKSPACE_STORAGE_RELOCATED instead of forking the chain the way
   // ceremony.mjs did during the INIT-020 window. A sentinel that declares
   // storage=file stays writable (rollback's declared home); read-only verbs are
   // unaffected (archive forensics keep working, INC-083).
-  const factory = backendFactoryOverride.getStore();
-  if (factory === undefined && options.storageHomeAdmission !== "migration") {
+  const overrideBackendKind = activeOverrideBackendKind();
+  if (overrideBackendKind !== "pg" && options.storageHomeAdmission !== "migration") {
     const home = await readStorageHomeDeclaration(workspaceRoot);
     if (home !== null && home.storage === "pg") {
       fail(
@@ -2584,9 +2588,9 @@ async function resolveWorkspace(workspaceRootInput: string): Promise<{ readonly 
   // perfectly valid PG read fail with ENOENT and obscured the actual source of
   // truth. The ordinary file backend retains the original strict filesystem
   // checks. `withStorageBackendFactory` is the same seam used by the facade and
-  // the equivalence suite, so this branch cannot silently select PG in a normal
-  // file-backed process.
-  if (backendFactoryOverride.getStore() === undefined) {
+  // the equivalence suite; concrete backend kind, rather than merely an
+  // override's presence, decides whether the PG data-plane directories are omitted.
+  if (activeOverrideBackendKind() !== "pg") {
     await boundDirectory(controlPath(root, "events"), root);
     await boundDirectory(controlPath(root, "views"), root);
     await boundDirectory(controlPath(root, "backups"), root);

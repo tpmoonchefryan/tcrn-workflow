@@ -47,6 +47,89 @@ function chainWorkId(value) {
   return typeof value === "string" && /^work:[a-f0-9]{24}$/u.test(value);
 }
 
+function chainItemId(value) {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    for (const key of ["id", "externalKey", "key", "itemId"]) {
+      if (typeof value[key] === "string" && value[key].length > 0) return value[key];
+    }
+  }
+  return null;
+}
+
+function noteText(note) {
+  if (typeof note === "string") return note;
+  if (note && typeof note === "object") return JSON.stringify(note);
+  return "";
+}
+
+function namedEvidence(note) {
+  const text = noteText(note);
+  return /(?:evidence|receipt|reasonCode|sha256|hash|\.json|\.md)/iu.test(text);
+}
+
+function redLegNamed(note) {
+  const text = noteText(note);
+  return /(?:red[- ]?leg|negative[- ]?leg|negative path|红腿|负腿)/iu.test(text)
+    || note?.redLeg === true || note?.negativeLeg === true;
+}
+
+function chainCloseoutProblems(manifest, items, dispositions) {
+  const problems = [];
+  const source = manifest?.chainItems
+    ?? manifest?.authoritativeItems
+    ?? manifest?.chain?.items;
+  if (source === undefined) return problems;
+  if (!Array.isArray(source) || source.length === 0) {
+    return ["chainItems must be a non-empty authoritative item array"];
+  }
+  const derived = source.map(chainItemId);
+  if (derived.some((id) => id === null)) {
+    problems.push("chainItems contains an item without id/externalKey/key");
+  }
+  const original = new Set(items);
+  const authoritative = new Set(derived.filter((id) => id !== null));
+  if (original.size !== authoritative.size || [...original].some((id) => !authoritative.has(id))) {
+    problems.push("items must equal the chain-derived item set; the closeout may not omit or invent a chain item");
+  }
+
+  const notes = manifest?.chainNotes
+    ?? manifest?.chainAnnotations
+    ?? manifest?.closeoutNotes
+    ?? manifest?.chain?.annotations;
+  if (notes === undefined || notes === null || typeof notes !== "object" || Array.isArray(notes)) {
+    problems.push("chainItems require per-item chainNotes/chainAnnotations");
+    return problems;
+  }
+  for (const item of items) {
+    const note = Array.isArray(notes)
+      ? notes.find((entry) => chainItemId(entry) === item)
+      : notes[item];
+    if (note === undefined || note === null || noteText(note).length === 0) {
+      problems.push(`item ${item} has no per-item chain closeout note`);
+      continue;
+    }
+    if (manifest.requireChainEvidence !== false && !namedEvidence(note)) {
+      problems.push(`item ${item} chain closeout note names no evidence/receipt/hash`);
+    }
+    if (manifest.requireChainRedLeg !== false && dispositions[item]?.kind !== "deferred" && !redLegNamed(note)) {
+      problems.push(`item ${item} chain closeout note names no red-leg/negative-leg result`);
+    }
+  }
+
+  if (manifest.requireExecutionForm === true) {
+    const executionForm = manifest.executionForm ?? manifest.execution?.form;
+    const actor = manifest.actor ?? manifest.execution?.actor;
+    if (typeof executionForm !== "string" || executionForm.trim().length === 0) {
+      problems.push("closeout requires an execution-form declaration");
+    }
+    if (typeof actor !== "string" || !/^(?:agent|person):[A-Za-z0-9._:-]+$/u.test(actor)) {
+      problems.push("closeout requires the executing actor's own attributed persona");
+    }
+  }
+  return problems;
+}
+
 // INC-077: a window-type closeout's negative leg. When present it must be
 // well-formed; when the manifest is `windowed` it is REQUIRED.
 function redLegProblems(redLeg) {
@@ -82,6 +165,13 @@ export function verifyCloseout(manifest) {
   }
   const dispositions = manifest?.dispositions ?? {};
   const items = manifest?.items ?? [];
+  if (dispositions === null || typeof dispositions !== "object" || Array.isArray(dispositions)) {
+    problems.push("dispositions must be an object keyed by original item id");
+  }
+  if (new Set(items).size !== items.length) {
+    problems.push("items must not contain duplicate ids");
+  }
+  problems.push(...chainCloseoutProblems(manifest, items, dispositions));
   // INC-077: the INIT-020 storage/archive/migration batch is windowed by its
   // item set, not by a caller's self-description. An entry that tries to set
   // `windowed:false` cannot evade the negative-leg obligation.
@@ -102,6 +192,10 @@ export function verifyCloseout(manifest) {
     const d = dispositions[item];
     if (d === undefined) {
       problems.push(`item ${item} has no disposition — omitted from the disposition set`);
+      continue;
+    }
+    if (d === null || typeof d !== "object" || Array.isArray(d)) {
+      problems.push(`item ${item} has a non-object disposition`);
       continue;
     }
     if (!["fixed", "retained", "superseded", "deferred"].includes(d.kind)) {

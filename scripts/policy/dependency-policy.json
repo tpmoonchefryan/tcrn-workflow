@@ -58,10 +58,10 @@
       "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
     },
     "pg@8.22.0": {
-      "direct": false,
+      "direct": true,
       "license": "MIT",
       "integrity": "sha512-8wih1vVIBMxoUM2oB4soJsD9tDnDpLv4OXBJ+EJzFsvycD+lfyIreC2gGHq78f8jbLLt+bvlPTFdFZfJkOuzAA==",
-      "purpose": "PostgreSQL driver for the PG chain backend (STORY-175)",
+      "purpose": "PostgreSQL driver for the root PG support scripts and chain backend (STORY-175)",
       "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
     },
     "pg-cloudflare@1.4.0": {

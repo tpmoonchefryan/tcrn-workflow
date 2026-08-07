@@ -24,12 +24,14 @@ import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
   WorkspaceError,
   acquireWorkspaceLease,
+  FileBackend,
   initializeWorkspace,
   materializeWorkspace,
   STORAGE_HOME_VERSION,
   readStorageHomeDeclaration,
   removeStorageHomeDeclaration,
   sealStorageHomeDeclaration,
+  withStorageBackendFactory,
   writeStorageHomeDeclaration,
 } from "../dist/build/packages/core/src/index.js";
 
@@ -97,6 +99,25 @@ test("INC-074: a sentinel declares storage=pg; a mutating verb via the file back
     assert.equal(await readStorageHomeDeclaration(fixture.workspace), null);
     const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(6) });
     await lease.release();
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("INC-097 red leg: a file-kind backend override cannot bypass the PG storage-home sentinel", async () => {
+  const fixture = await workspaceFixture();
+  try {
+    await writeStorageHomeDeclaration(fixture.workspace, {
+      schemaVersion: STORAGE_HOME_VERSION,
+      storage: "pg",
+      schema: "chain_inc097",
+      workspaceId: "workspace:inc097",
+      migratedAt: "2026-08-07T00:00:00.000Z",
+    });
+    await assert.rejects(
+      () => withStorageBackendFactory(() => new FileBackend(fixture.workspace), () => acquireWorkspaceLease(fixture.workspace, { now: instant(5) })),
+      (error) => error?.reasonCode === "WORKSPACE_STORAGE_RELOCATED",
+    );
   } finally {
     await fixture.close();
   }

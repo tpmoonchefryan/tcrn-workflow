@@ -33,6 +33,7 @@ import {
   scanPrivacyEntries,
 } from "./lib/privacy.mjs";
 import {
+  P8_TAG,
   P8_SUPPORTED_AOS_RELEASES,
   P8_RELEASE_ARTIFACTS,
   P8_VERSION,
@@ -40,6 +41,7 @@ import {
   p8ArtifactRecords,
   rebuildP8SourceArchiveInIndependentRoots,
 } from "./lib/p8-workflow-rc.mjs";
+import { assertP8TagPreconditions, assertReleaseCommitShape } from "./lib/release-tag-gate.mjs";
 import {
   ProtocolProofError,
   validateAosLedger,
@@ -566,7 +568,10 @@ async function verifyP8() {
   );
   assertion(privacyFindings.length === 0, "P8_RELEASE_PRIVACY_FINDINGS", privacyFindings.join(","));
   const privacy = await verifyPrivacy({ requireP8Surfaces: true });
+  const p8BasisCommit = run("git", ["rev-parse", "HEAD"]);
   return success("P8_WORKFLOW_RC_VERIFIED", {
+    tag: P8_TAG,
+    p8BasisCommit,
     tests: dogfood.reasonCode,
     trust: trust.reasonCode,
     sourceArchive,
@@ -585,6 +590,24 @@ async function verifyP8() {
       rootsIndependent: independentlyRebuilt.rootsIndependent,
     },
     privacySurfaces: privacy.p8Surfaces,
+  });
+}
+
+async function verifyReleaseTagPreflight() {
+  const p8 = await verifyP8();
+  const expectedTagIndex = process.argv.indexOf("--tag");
+  const expectedTag = expectedTagIndex >= 0 ? process.argv[expectedTagIndex + 1] : P8_TAG;
+  const tagCommit = run("git", ["rev-parse", "HEAD"]);
+  const parentRecord = run("git", ["rev-list", "--parents", "-n", "1", "HEAD"]).split(/\s+/u);
+  assertion(parentRecord.length === 2, "RELEASE_TAG_COMMIT_PARENT_INVALID", parentRecord.join(" "));
+  const changedPaths = run("git", ["diff", "--name-only", `${parentRecord[1]}..HEAD`]).split("\n").filter(Boolean);
+  const tagProof = assertP8TagPreconditions({ p8Result: p8, expectedTag, tagCommit, p8BasisCommit: p8.p8BasisCommit });
+  const commitShape = assertReleaseCommitShape({ changedPaths });
+  return success("RELEASE_TAG_PREFLIGHT_VERIFIED", {
+    ...tagProof,
+    commitShape,
+    publication: false,
+    mutation: false,
   });
 }
 
@@ -1731,6 +1754,7 @@ const commandContracts = {
   "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
   "p7-aos-requirements": { exit: 0, reasonCode: "P7_PUBLIC_AOS_REQUIREMENTS_VERIFIED" },
   p8: { exit: 0, reasonCode: "P8_WORKFLOW_RC_VERIFIED" },
+  "release-preflight": { exit: 0, reasonCode: "RELEASE_TAG_PREFLIGHT_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
   backup: { exit: 0, reasonCode: "BACKUP_VERIFIED" },
   act1: { exit: 0, reasonCode: "ACT1_CLAUDE_INSTALLER_VERIFIED" },
@@ -1892,7 +1916,17 @@ async function verifyMap() {
             assertion(false, "VERIFICATION_MAP_ADR_CRITERION_GATE_UNREADABLE", `${criterion.id}:${String(error?.message ?? error)}`);
           }
           assertion(gateSource.includes(`§9.${String(criterion.ordinal)}`), "VERIFICATION_MAP_ADR_CRITERION_GATE_LABEL", criterion.id);
-          assertion(/mutation witness|red leg|must fail|gate REDS/iu.test(gateSource), "VERIFICATION_MAP_ADR_CRITERION_RED_LEG", criterion.id);
+          const redLeg = criterion.redLeg;
+          assertion(redLeg !== null && typeof redLeg === "object" && !Array.isArray(redLeg), "VERIFICATION_MAP_ADR_RED_LEG_STRUCTURED", criterion.id);
+          assertion(redLeg?.schemaVersion === "tcrn.adr-red-leg.v1", "VERIFICATION_MAP_ADR_RED_LEG_SCHEMA", criterion.id);
+          assertion(typeof redLeg?.marker === "string" && redLeg.marker.length > 0, "VERIFICATION_MAP_ADR_RED_LEG_MARKER", criterion.id);
+          assertion(redLeg?.mutation !== null && typeof redLeg?.mutation === "object" && !Array.isArray(redLeg.mutation), "VERIFICATION_MAP_ADR_RED_LEG_MUTATION", criterion.id);
+          assertion(typeof redLeg?.mutation?.kind === "string" && redLeg.mutation.kind.length > 0, "VERIFICATION_MAP_ADR_RED_LEG_MUTATION_KIND", criterion.id);
+          assertion(typeof redLeg?.mutation?.target === "string" && redLeg.mutation.target.length > 0, "VERIFICATION_MAP_ADR_RED_LEG_MUTATION_TARGET", criterion.id);
+          assertion(redLeg?.expected !== null && typeof redLeg?.expected === "object" && !Array.isArray(redLeg.expected), "VERIFICATION_MAP_ADR_RED_LEG_EXPECTED", criterion.id);
+          assertion(typeof redLeg?.expected?.outcome === "string" && redLeg.expected.outcome.length > 0, "VERIFICATION_MAP_ADR_RED_LEG_OUTCOME", criterion.id);
+          assertion(Array.isArray(redLeg?.expected?.reasonCodes) && redLeg.expected.reasonCodes.length > 0 && redLeg.expected.reasonCodes.every((code) => typeof code === "string" && code.length > 0), "VERIFICATION_MAP_ADR_RED_LEG_REASON_CODES", criterion.id);
+          assertion(gateSource.includes(redLeg.marker), "VERIFICATION_MAP_ADR_CRITERION_RED_LEG_MARKER", criterion.id);
         }
       }
       for (const [adrNumber, headings] of adrSectionHeadings) {
@@ -2417,6 +2451,7 @@ const handlers = {
   "p7-compatibility": verifyP7Compatibility,
   "p7-aos-requirements": verifyP7AosRequirements,
   p8: verifyP8,
+  "release-preflight": verifyReleaseTagPreflight,
   privacy: verifyPrivacy,
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,

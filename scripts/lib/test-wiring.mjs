@@ -25,7 +25,9 @@ function walkTestFiles(dir, out = [], root = dir) {
     if (entry.name === "node_modules" || entry.name === ".git") continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) walkTestFiles(full, out, root);
-    else if (entry.isFile() && entry.name.endsWith(".test.mjs")) out.push(relative(root, full));
+    else if (entry.isFile() && (entry.name.endsWith(".test.mjs") || (full.split("/").includes("test") && entry.name.endsWith(".mjs")))) {
+      out.push(relative(root, full));
+    }
   }
   return out;
 }
@@ -68,19 +70,25 @@ export function judgeTestWiring({ repoRoot, registryPath } = {}) {
     if (typeof entry.reason !== "string" || entry.reason.length === 0) {
       problems.push(`${path}: registry entry has no reason`);
     }
-    const action = /^github-action:([A-Za-z0-9_-]+)/u.exec(entry.owner ?? "");
-    if (action !== null) {
-      const marker = `\n  ${action[1]}:\n`;
-      const start = workflow.indexOf(marker);
-      const nextJob = start < 0 ? -1 : workflow.slice(start + marker.length).search(/\n  [A-Za-z0-9_-]+:\n/u);
-      const block = start < 0
-        ? ""
-        : workflow.slice(start, nextJob < 0 ? undefined : start + marker.length + nextJob);
-      if (start < 0) {
-        problems.push(`${path}: owner ${action[1]} is not a job in .github/workflows/ci.yml`);
-      } else if (!block.includes("node --test") || !block.includes("packages/pg-backend/test/*.test.mjs")) {
-        problems.push(`${path}: owner ${action[1]} does not execute the declared PG test glob in CI`);
-      }
+    // Every registry entry must name an executable owner. The previous code
+    // only validated owners that happened to begin with github-action: and
+    // silently accepted any other prefix.
+    const owner = entry.owner ?? "";
+    const action = /^github-action:([A-Za-z0-9_-]+)(?:\s|$)/u.exec(owner);
+    if (action === null) {
+      problems.push(`${path}: owner must use the github-action:<job> prefix`);
+      continue;
+    }
+    const marker = `\n  ${action[1]}:\n`;
+    const start = workflow.indexOf(marker);
+    const nextJob = start < 0 ? -1 : workflow.slice(start + marker.length).search(/\n  [A-Za-z0-9_-]+:\n/u);
+    const block = start < 0
+      ? ""
+      : workflow.slice(start, nextJob < 0 ? undefined : start + marker.length + nextJob);
+    if (start < 0) {
+      problems.push(`${path}: owner ${action[1]} is not a job in .github/workflows/ci.yml`);
+    } else if (!block.includes("node --test") || !block.includes("packages/pg-backend/test/*.test.mjs") || (!path.endsWith(".test.mjs") && !block.includes(path))) {
+      problems.push(`${path}: owner ${action[1]} does not execute the declared PG test glob in CI`);
     }
   }
   const scannedSet = new Set(scanned);

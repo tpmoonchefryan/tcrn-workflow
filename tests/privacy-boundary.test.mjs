@@ -12,7 +12,9 @@ import { parseGitObjectBatch, parseHistoricalTreePaths, scanPrivacyEntries } fro
 
 const batchCheckFormat = "--batch-check=%(objectname) %(objecttype) %(objectsize)";
 const batchArguments = ["cat-file", "--batch-all-objects", "--batch"];
-const fixtureMaximumBytes = 64 * 1024 * 1024;
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
@@ -227,6 +229,10 @@ test("public Git hosting identity is allowed only in commit metadata", () => {
 [REDACTED_PUBLIC_HISTORY_LINE]
     ["npm", `npm_${"A".repeat(36)}`, "NPM_TOKEN"],
     ["Slack", `xoxb-${"1".repeat(12)}-${"A".repeat(24)}`, "SLACK_TOKEN"],
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
+[REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]
 [REDACTED_PUBLIC_HISTORY_LINE]

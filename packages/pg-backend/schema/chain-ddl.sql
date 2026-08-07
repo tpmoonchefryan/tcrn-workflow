@@ -7,7 +7,7 @@
 -- triggers; the events table is structurally append-only.
 --
 -- This script is applied by the engine's schema-DDL verb (STORY-175.1) on the
--- VM's single instance bound to 198.51.100.1. It is NOT applied by hand.
+-- VM's single instance bound to loopback. It is NOT applied by hand.
 
 -- Roles (ADR §3). Idempotent creation.
 do $$

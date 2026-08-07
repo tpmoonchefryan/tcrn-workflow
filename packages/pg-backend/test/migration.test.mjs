@@ -36,9 +36,9 @@ import {
 } from "../../../dist/build/packages/core/src/index.js";
 import { canonicalSha256, deriveStableId } from "../../../dist/build/packages/protocol/src/index.js";
 import { PgBackend, PgStoreBackend } from "../../../dist/build/packages/pg-backend/src/index.js";
+import { pgTestConnection } from "../../../scripts/pg-test-connection.mjs";
 
-const CONNECTION = process.env.TCRN_PG_TEST_CONNECTION
-  ?? "postgresql://history-user@198.51.100.1:5432/tcrn_governance";
+const CONNECTION = pgTestConnection();
 const SCHEMA = process.env.TCRN_PG_TEST_SCHEMA ?? "chain_test_cross";
 
 const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
@@ -146,8 +146,15 @@ async function seedKnowledgeUnit(workspace, projectId, workId) {
 }
 
 function migrationOptions(pg, pgStore) {
-  return { backend: () => pg, storeBackend: () => pgStore };
+  return { backend: () => pg, storeBackend: () => pgStore, schema: SCHEMA, migratedAt: "2026-08-07T00:00:00Z" };
 }
+
+test("STORY-178 red leg: a mutating migration rejects a missing caller-stamped instant", async () => {
+  await assert.rejects(
+    () => executeMigration("/tmp/tcrn-migration-missing-instant", "pg", { schema: SCHEMA }),
+    (error) => error?.reasonCode === "WORKSPACE_MIGRATION_INVALID",
+  );
+});
 
 test("STORY-178 positive leg: file→pg→file round trip verifies green", async () => {
   const fixture = await workspaceFixture();
