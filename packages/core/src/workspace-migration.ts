@@ -512,9 +512,19 @@ function compareSnapshots(source: WorkspaceSnapshot, target: WorkspaceSnapshot):
 }
 
 function viewsEqual(left: readonly MigratedView[], right: readonly MigratedView[]): boolean {
-  if (left.length !== right.length) return false;
-  for (const [index, view] of left.entries()) {
-    const other = right[index];
+  // FileBackend and PgBackend are both allowed to choose their own enumeration
+  // order.  In particular, the file track's directory order puts `STATUS.md`
+  // before lower-case names while PostgreSQL's collation places it after them.
+  // The equivalence criterion is the view name + bytes, not backend collation;
+  // compare a canonical name order so a healthy migration cannot red merely
+  // because the two stores enumerate the same four views differently.
+  const sortByName = (views: readonly MigratedView[]) => [...views].sort((leftView, rightView) =>
+    leftView.name < rightView.name ? -1 : leftView.name > rightView.name ? 1 : 0);
+  const orderedLeft = sortByName(left);
+  const orderedRight = sortByName(right);
+  if (orderedLeft.length !== orderedRight.length) return false;
+  for (const [index, view] of orderedLeft.entries()) {
+    const other = orderedRight[index];
     if (other === undefined || other.name !== view.name || !view.bytes.equals(other.bytes)) return false;
   }
   return true;

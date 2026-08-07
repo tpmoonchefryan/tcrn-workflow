@@ -3,6 +3,16 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.5 — 2026-08-07
+
+**Migration view equivalence is independent of backend collation.**
+
+- `migration-verify` sorts workspace views by canonical name before comparing
+  names and bytes, so `STATUS.md` cannot make a healthy FileBackend/PG pair red
+  merely because the two stores enumerate names differently.
+- Added a mixed-case view regression test and the release evidence for the
+  patch.
+
 ## 0.11.4 — 2026-08-07
 
 **The storage-home migration gate and PG test path are fail-closed.**

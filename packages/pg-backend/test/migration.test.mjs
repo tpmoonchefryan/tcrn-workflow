@@ -24,6 +24,7 @@ import {
   createProject,
   createWork,
   executeMigration,
+  FileBackend,
   initializeArtifactStore,
   initializeKnowledgeStore,
   initializeWorkspace,
@@ -188,6 +189,31 @@ test("STORY-178 positive leg: file→pg→file round trip verifies green", async
     const reverted = await verifyMigration(fixture.workspace, "file", migrationOptions(pg, pgStore));
     assert.equal(reverted.ok, true, "verify after rollback must be green");
     assert.equal(reverted.eventCount, 4);
+  } finally {
+    await pg.close();
+    await pgStore.close();
+    await fixture.close();
+  }
+});
+
+test("STORY-178: migration view equivalence ignores backend enumeration collation", async () => {
+  const fixture = await workspaceFixture();
+  const pg = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
+  const pgStore = new PgStoreBackend({ schema: SCHEMA, connection: CONNECTION });
+  await pg.connect();
+  await pgStore.connect();
+  try {
+    await buildChain(fixture.workspace, "FIXTURE-MIGRATION-VIEWS", "VIEWS");
+    const fileBackend = new FileBackend(fixture.workspace);
+    await fileBackend.writeView("STATUS.md", "status view\n");
+    await fileBackend.writeView("extensions.json", "{}\n");
+    await fileBackend.writeView("index.json", "{}\n");
+    await fileBackend.writeView("readback.json", "{}\n");
+
+    await executeMigration(fixture.workspace, "pg", migrationOptions(pg, pgStore));
+    const verified = await verifyMigration(fixture.workspace, "pg", migrationOptions(pg, pgStore));
+    assert.equal(verified.ok, true);
+    assert.equal(verified.reasonCode, "WORKSPACE_MIGRATION_VERIFIED");
   } finally {
     await pg.close();
     await pgStore.close();
