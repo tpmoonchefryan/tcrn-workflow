@@ -3,6 +3,15 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.6 — 2026-08-07
+
+**Interrupted migrations can resume a verified target prefix.**
+
+- A strict prefix is admitted to the existing byte-prefix proof before the
+  remaining source segments are copied; a same-version head mismatch remains a
+  fork refusal.
+- Added a segment-interruption regression test and release evidence.
+
 ## 0.11.5 — 2026-08-07
 
 **Migration view equivalence is independent of backend collation.**

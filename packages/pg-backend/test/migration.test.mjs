@@ -221,6 +221,62 @@ test("STORY-178: migration view equivalence ignores backend enumeration collatio
   }
 });
 
+test("STORY-178: migration resumes a byte-identical strict target prefix", async () => {
+  const fixture = await workspaceFixture();
+  const pg = new PgBackend({ schema: SCHEMA, connection: CONNECTION });
+  const pgStore = new PgStoreBackend({ schema: SCHEMA, connection: CONNECTION });
+  await pg.connect();
+  await pgStore.connect();
+  try {
+    await initializeWorkspace({
+      roots: fixtureRoots(fixture.workspace),
+      externalKey: "FIXTURE-MIGRATION-PREFIX",
+      createdAt: instant(0),
+      segmentEventLimit: 2,
+    });
+    const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(1) });
+    try {
+      let state = await createProject(fixture.workspace, lease, {
+        expectedVersion: 0,
+        occurredAt: instant(1),
+        externalKey: "PROJECT-PREFIX",
+        name: "Prefix",
+      });
+      state = await createWork(fixture.workspace, lease, {
+        expectedVersion: 1,
+        occurredAt: instant(2),
+        projectId: state.projects[0].id,
+        externalKey: "INIT-PREFIX",
+        kind: "Initiative",
+        parentId: null,
+      });
+      await transitionWork(fixture.workspace, lease, {
+        expectedVersion: 2,
+        occurredAt: instant(3),
+        id: state.work[0].id,
+        status: "ready",
+      });
+    } finally {
+      await lease.release();
+    }
+
+    // Simulate an interruption after the first PG segment committed, before
+    // the migration could copy the remaining segment or lay the sentinel.
+    const fileBackend = new FileBackend(fixture.workspace);
+    await pg.writeMetadataBytes(await fileBackend.readMetadataBytes());
+    await pg.writeSegment("000001.json", await fileBackend.readSegment("000001.json"));
+
+    await executeMigration(fixture.workspace, "pg", migrationOptions(pg, pgStore));
+    const verified = await verifyMigration(fixture.workspace, "pg", migrationOptions(pg, pgStore));
+    assert.equal(verified.ok, true);
+    assert.equal(verified.reasonCode, "WORKSPACE_MIGRATION_VERIFIED");
+  } finally {
+    await pg.close();
+    await pgStore.close();
+    await fixture.close();
+  }
+});
+
 test("STORY-178 red leg: a tampered PG payload_hash turns verify red", async () => {
   const fixture = await workspaceFixture();
   const pg = new PgBackend({ schema: SCHEMA, connection: CONNECTION });

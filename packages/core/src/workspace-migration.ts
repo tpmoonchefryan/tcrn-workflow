@@ -638,13 +638,14 @@ export async function executeMigration(
       (probe.workspaceId !== snapshot.workspaceId ||
         // INC-085: a target that has ADVANCED beyond the source is a genuine fork —
         // refused as before. A target that is a strict prefix of the source is a
-        // half-finished migration: resuming is safe ONLY after proving the existing
-        // target events are a byte-prefix of the source (the upsert below would
-        // otherwise overwrite divergent events). This is the recovery path a
-        // segment-per-transaction interruption previously had no verb for.
+        // half-finished migration: a differing prefix head is expected, and
+        // resuming is safe ONLY after proving the existing target events are a
+        // byte-prefix of the source (the upsert below would otherwise overwrite
+        // divergent events). This is the recovery path a segment-per-transaction
+        // interruption previously had no verb for.
         probe.version === null ||
         probe.version > snapshot.version ||
-        probe.headEventHash !== snapshot.headEventHash)) {
+        (probe.version === snapshot.version && probe.headEventHash !== snapshot.headEventHash))) {
       throw new WorkspaceMigrationError(
         "WORKSPACE_MIGRATION_FUTURE",
         "target already holds a workspace that does not match the source; bypass copy refused",
