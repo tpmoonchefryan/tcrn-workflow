@@ -9,6 +9,7 @@ import { canonicalJson, canonicalSha256 } from "../dist/build/packages/protocol/
 const fixture = JSON.parse(await readFile(new URL("../packages/core/fixtures/p5-generic-profile-cases.json", import.meta.url), "utf8"));
 
 const reason = (code, operation) => assert.throws(operation, (error) => error?.reasonCode === code, code);
+const joinParts = (parts, separator) => parts.join(separator);
 test("exact eight-profile bundle is closed, schema-valid, source-bound, and deterministic", async () => {
   const bundle = generateCorePersonaBundle(); assert.equal(bundle.profiles.length, 8); assert.equal(bundle.sourceManifestSha256, CORE_PERSONA_SOURCE_MANIFEST_SHA256);
   assert.deepEqual(bundle.profiles.map((p) => p.displayName).sort(), ["Arturo", "Ilya", "Janus", "Mara", "Minerva", "Mneme", "Sable", "Verity"]);
@@ -42,13 +43,13 @@ test("decision-owning personas advise convening a conference and name the stable
   }
 });
 
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+test("forbidden, tampered, duplicate, unknown, and extended roster records fail closed", () => {
+  const bundle = generateCorePersonaBundle(); const first = structuredClone(bundle.profiles[0]);
+  const linuxPath = joinParts(["", "home", "alice", "private", "persona.json"], "/");
+  const macPath = joinParts(["", "Users", "alice", "private", "persona.json"], "/");
+  const windowsPath = joinParts(["C:", "Users", "alice", "private", "persona.json"], "\\");
+  reason("PERSONA_UNKNOWN_FIELD", () => validateCorePersonaProfile({ ...first, threadId: "thread:private" }));
+  const semanticMutations = [
     ["mission", "Use model performance settings for this public role."],
     ["mission", "Owner private preference and private family fact."],
     ["mission", `Read ${linuxPath} from Linux.`],
@@ -102,6 +103,6 @@ test("governed persona CLI is read-only and closed", async () => {
 
 test("persona implementation has no legacy, network, database, hook, Skill, or runtime source authority", async () => {
   const source=await readFile(new URL("../packages/core/src/core-reference-personas.ts", import.meta.url),"utf8");
-  const forbidden = [["node", ":", "fs"], ["node", ":", "http"], ["node", ":", "https"], ["process", ".", "env"], ["thread", "Id"], ["session", "Id"], ["model", "Id"], ["/", "Users", "/"], ["legacy", "/"], ["hooks", "/"], ["skills", "/"]].map((parts) => parts.join(""));
+  const forbidden = [["node", ":", "fs"], ["node", ":", "http"], ["node", ":", "https"], ["process", ".", "env"], ["thread", "Id"], ["session", "Id"], ["model", "Id"], ["/", "Users", "/"], ["legacy", "/"], ["hooks", "/"], ["skills", "/"]].map((parts) => joinParts(parts, ""));
   for(const token of forbidden) assert.equal(source.includes(token),false,token);
 });

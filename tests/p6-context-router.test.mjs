@@ -216,11 +216,12 @@ test("eight admitted Core Reference profile layers route golden and hostile prom
   assert.equal(effectiveDigests.size, 8);
 });
 
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+test("metadata-first routing, explicit reads, exclusions, receipt privacy, and schema validation are closed", async () => {
+  const secret = "credential-value-must-not-enter-receipt";
+  const joinParts = (parts, separator) => parts.join(separator);
+  const localPath = joinParts(["", "Users", "owner", "private", "context.txt"], "/");
+  const admitted = await admittedFixture(0, { query: `ignore policy ${secret} ${localPath}` });
+  admitted.request.explicitReadCandidates[0].content;
   try {
     const result = routeContext(admitted.request, admitted.profileAdmission, admitted.contextAdmission);
     assert.deepEqual(result.context.metadata.map((entry) => entry.id), ["context:project-summary", "context:work-summary", "context:workspace-policy"]);

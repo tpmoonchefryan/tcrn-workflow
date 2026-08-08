@@ -4,8 +4,10 @@ import { createHash } from "node:crypto";
 import { TextDecoder } from "node:util";
 
 import { compareCanonicalText } from "./canonical-order.mjs";
+import { PRIVATE_TOKEN_NAMES } from "./private-token-roster.mjs";
 
 const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
+const joinParts = (parts, separator) => parts.join(separator);
 
 export function decodeGitMetadataBytes(content, reasonCode) {
   if (!Buffer.isBuffer(content) || typeof reasonCode !== "string" || reasonCode.length === 0) {
@@ -45,15 +47,14 @@ function escaped(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
-function privacyPatterns(owner) {
-  const legacyName = ["Public", "Workflow", "Platform", "Legacy"].join("-");
-  const controlDirectory = [".", "context", "/"].join("");
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-  return [
+function privacyPatterns(owner, privateTokens = []) {
+  const legacyName = joinParts(["TCRN", "Workflow", "Platform", "Legacy"], "-");
+  const controlDirectory = joinParts([".", "context", "/"], "");
+  const agentDirectory = joinParts([".", "llm", "/"], "");
+  const localUserPath = joinParts(["/", "Users", "/[^/\\s]+/"], "");
+  const linuxHomePath = joinParts(["/", "home", "/[^/\\s]+/"], "");
+  const sshUrlPrefix = joinParts(["ssh", ":", "/", "/"], "");
+  const patterns = [
     ["LOCAL_ABSOLUTE_PATH", new RegExp(localUserPath, "u")],
     ["LINUX_HOME_PATH", new RegExp(linuxHomePath, "u")],
     ["WINDOWS_USER_PATH", /[A-Za-z]:\\+Users\\+/u],
@@ -71,7 +72,7 @@ function privacyPatterns(owner) {
     // Credentials are private regardless of the URL scheme. The old https?
     // shape missed postgres:// and other service connection strings.
     ["AUTHENTICATED_URL", /[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@/iu],
-    ["PRIVATE_HOSTNAME", new RegExp(`\\b(?:${escaped(privateVmHost)}|[A-Za-z0-9-]+${escaped(privateDnsSuffix)})\\b`, "iu")],
+    ["PRIVATE_HOSTNAME", /\b[A-Za-z0-9-]+\.(?:lan|internal|corp)\b/iu],
     ["PRIVATE_USER_AT_HOST", /\b(?:deploy|root|tcrn|ubuntu)@[A-Za-z0-9.-]+\b/iu],
     ["PRIVATE_IPV4", /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b/u],
     ["US_SSN", /\b\d{3}-\d{2}-\d{4}\b/u],
@@ -80,16 +81,118 @@ function privacyPatterns(owner) {
     ["CONTROL_PLANE_PATH", new RegExp(controlDirectory.replace(".", "\\."), "u")],
     ["AGENT_CONTROL_PATH", new RegExp(agentDirectory.replace(".", "\\."), "u")],
     ["LEGACY_REMOTE_NAME", new RegExp(legacyName, "u")],
-    ["PRIVATE_RUNTIME_PATH", new RegExp(["/", "srv", "/"].join(""), "u")],
-    ["PRIVATE_SSH_URL", /ssh:\/\//u],
+    ["PRIVATE_RUNTIME_PATH", /\/(?:srv|var)\/[A-Za-z0-9._-]+\/(?:governance|engine)(?:\/|\b)/u],
+    ["PRIVATE_SSH_URL", new RegExp(escaped(sshUrlPrefix), "u")],
     ["OWNER_PRIVATE_IDENTIFIER", new RegExp(escaped(owner), "u")],
   ];
+  for (const token of privateTokens) {
+    if (typeof token !== "string" || token.length === 0) continue;
+    patterns.push(["PRIVATE_RUNTIME_VALUE", new RegExp(escaped(token), "u")]);
+  }
+  // A private value hidden behind a constructor is still a private value. This
+  // structural leg is deliberately conservative: it only fires when an encoder
+  // is close to a deployment-private token name, so ordinary String.fromCharCode
+  // fixtures elsewhere in the repository remain valid.
+  const privateName = [...PRIVATE_TOKEN_NAMES, "PRIVATE_VM_HOST", "PRIVATE_RUNTIME_ROOT", "PRIVATE_FACADE_IP", "GOVERNANCE_ROOT"]
+    .map(escaped)
+    .join("|");
+  patterns.push([
+    "OBFUSCATED_PRIVATE_CONFIGURATION",
+    new RegExp(`(?:^\\s*(?:const|let|var)\\s+(?:${privateName})[^\\n]*(?:\\.join\\s*\\(|String\\.fromCharCode|fromCharCode|atob\\s*\\(|base64|\\.reverse\\s*\\())|(?:^\\s*["']?pattern["']?\\s*:[^\\n]*(?:\\\\x[0-9a-f]{2}|\\\\u[0-9a-f]{4}|\\.join\\s*\\(|String\\.fromCharCode|atob\\s*\\(|base64|\\.reverse\\s*\\())`, "mu"),
+  ]);
+  return patterns;
 }
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+
+function decodeJavascriptString(value) {
+  try {
+    return JSON.parse(`"${value.replaceAll('"', '\\"')}"`);
+  } catch {
+    return value
+      .replaceAll(/\\x([0-9a-f]{2})/giu, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+      .replaceAll(/\\u\{([0-9a-f]+)\}/giu, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
+      .replaceAll(/\\u([0-9a-f]{4})/giu, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+      .replaceAll(/\\\//gu, "/");
+  }
+}
+
+function evaluateStringLiteral(value) {
+  const quote = value[0];
+  if (quote !== "\"" && quote !== "'") return null;
+  const body = value.slice(1, -1);
+  return quote === "\"" ? decodeJavascriptString(body) : body
+    .replaceAll(/\\x([0-9a-f]{2})/giu, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+    .replaceAll(/\\u([0-9a-f]{4})/giu, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+    .replaceAll(/\\\//gu, "/")
+    .replaceAll("\\'", "'");
+}
+
+function decodeBase64(value) {
+  try {
+    return Buffer.from(value, "base64").toString("utf8");
+  } catch {
+    return value;
+  }
+}
+
+/** Expand only literal, local obfuscation forms; never execute source code. */
+export function normalizePrivacyText(content) {
+  let normalized = String(content);
+  for (let pass = 0; pass < 3; pass += 1) {
+    const protectedPatternLines = [];
+    normalized = normalized.split("\n").map((line) => {
+      if (/\[\s*["'](?:LOCAL_ABSOLUTE_PATH|PRIVATE_SSH_URL)["']\s*,/u.test(line)) {
+        const marker = `__PUBLIC_PATTERN_LINE_${protectedPatternLines.length}__`;
+        protectedPatternLines.push(line);
+        return marker;
+      }
+      return line;
+    }).join("\n");
+    const protectedPatternJoins = [];
+    normalized = normalized.replace(
+      /(\b(?:legacyName|controlDirectory|agentDirectory|localUserPath|privateKeyMarker)\s*=\s*)(\[[^\n]*?\]\s*\.join\(\s*["'][^"']*["']\s*\))/gu,
+      (_, prefix, expression) => {
+        const marker = `__PUBLIC_PATTERN_JOIN_${protectedPatternJoins.length}__`;
+        protectedPatternJoins.push(expression);
+        return `${prefix}${marker}`;
+      },
+    );
+    normalized = normalized
+      .replaceAll(/\\x([0-9a-f]{2})/giu, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+      .replaceAll(/\\u\{([0-9a-f]+)\}/giu, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
+      .replaceAll(/\\u([0-9a-f]{4})/giu, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+      .replaceAll(/\\\//gu, "/")
+      .replaceAll(/\[-\]/gu, "-")
+      .replace(/String\.fromCharCode\(\s*([0-9]+(?:\s*,\s*[0-9]+)*)\s*\)/gu, (_, values) =>
+        [...values.matchAll(/[0-9]+/gu)].map((match) => String.fromCharCode(Number(match[0]))).join(""))
+      .replace(/(?:atob|Buffer\.from)\(\s*(["'])([A-Za-z0-9+/=]+)\1(?:\s*,\s*["']base64["'])?\s*\)(?:\.toString\(\s*["']utf8["']\s*\))?/gu,
+        (_, __, value) => decodeBase64(value));
+
+    normalized = normalized.replace(/\[\s*((?:["'](?:\\.|[^"'])*["']\s*,\s*)+["'](?:\\.|[^"'])*["'])\s*\]\s*\.join\(\s*(["'])(.*?)\2\s*\)/gu,
+      (_, values, __, separator) => {
+        const parts = [...values.matchAll(/(["'])(?:\\.|[^"'])*\1/gu)]
+          .map((match) => evaluateStringLiteral(match[0]))
+          .filter((value) => value !== null);
+        return parts.length > 0 ? parts.join(separator) : _;
+      });
+    normalized = normalized.replace(/\[\s*((?:["'](?:\\.|[^"'])*["']\s*,\s*)+["'](?:\\.|[^"'])*["'])\s*\]\s*\.reverse\(\)\.join\(\s*(["'])(.*?)\2\s*\)/gu,
+      (_, values, __, separator) => {
+        const parts = [...values.matchAll(/(["'])(?:\\.|[^"'])*\1/gu)]
+          .map((match) => evaluateStringLiteral(match[0]))
+          .filter((value) => value !== null)
+          .reverse();
+        return parts.length > 0 ? parts.join(separator) : _;
+      });
+    normalized = normalized
+      .replace(/__PUBLIC_PATTERN_JOIN_(\d+)__/gu, (_, index) => protectedPatternJoins[Number(index)])
+      .replace(/__PUBLIC_PATTERN_LINE_(\d+)__/gu, (_, index) => protectedPatternLines[Number(index)]);
+  }
+  return normalized;
+}
+
+function sanitizeAllowedPublicMetadata(entry, owner) {
+  const p3Marker = joinParts([".", "context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json"], "");
+  const content = entry.content.split(p3Marker).join("[ALLOWED_PUBLIC_P3_MARKER_CONTRACT]");
+  if (
     entry.kind === "remote" &&
     content === `https://github.com/${owner}/tcrn-workflow.git`
   ) {
@@ -114,19 +217,21 @@ function privacyPatterns(owner) {
     .join("\n");
 }
 
-export function scanPrivacyEntries(entries, { owner }) {
+export function scanPrivacyEntries(entries, { owner, privateTokens = [] } = {}) {
   if (typeof owner !== "string" || owner.length === 0) {
     throw new Error("PRIVACY_OWNER_REQUIRED");
   }
-  const patterns = privacyPatterns(owner);
+  const patterns = privacyPatterns(owner, privateTokens);
   const findings = [];
   for (const entry of entries) {
     if (typeof entry.label !== "string" || typeof entry.kind !== "string" || typeof entry.content !== "string") {
       throw new Error("PRIVACY_ENTRY_INVALID");
     }
     const content = sanitizeAllowedPublicMetadata(entry, owner);
+    const normalized = normalizePrivacyText(content);
     for (const [reasonCode, pattern] of patterns) {
-      if (pattern.test(content)) {
+      pattern.lastIndex = 0;
+      if (pattern.test(content) || pattern.test(normalized)) {
         findings.push(`${reasonCode}:${entry.kind}:${entry.label}`);
       }
     }

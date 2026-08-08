@@ -23,12 +23,14 @@ import test from "node:test";
 
 import {
   CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
+  CODEX_ADAPTER_OBSERVE_EVENTS,
   validateCodexActivationInstallationReceipt,
   CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
   CODEX_HOST_ACTIVATION_OBSERVATION_VERSION,
   CODEX_ADAPTER_HOST_VERSION,
   CODEX_ADAPTER_REQUEST_VERSION,
   CODEX_HOOKS_PATH,
+  CODEX_OBSERVE_HANDLER_PATH,
   CODEX_SESSION_START_INJECTION_BUDGET_BYTES,
   CODEX_SESSION_START_PATH,
   CODEX_SESSION_SUMMARY_PATH,
@@ -189,6 +191,18 @@ function artifactsFor(bundle, installationRoot, stage = "step3") {
   return generateCodexActivationArtifacts(
     generateCodexSessionSummary(bundle, capabilityManifestDigest, stage),
     installationRoot,
+  );
+}
+
+function observeArtifactsFor(bundle, installationRoot, stage = "step3") {
+  const projectManifest = bundle.files.find(
+    (file) => file.path === ".codex/tcrn-workflow/project.json",
+  );
+  return generateCodexActivationArtifacts(
+    generateCodexSessionSummary(bundle, capabilityManifestDigest, stage),
+    installationRoot,
+    CODEX_ADAPTER_OBSERVE_EVENTS,
+    projectManifest?.contentDigest,
   );
 }
 
@@ -371,6 +385,62 @@ test("compatibility Step 3 installs one persona-free SessionStart hook but claim
       assert.equal(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1, true);
       assert.equal(stat.mode & 0o777, 0o600);
     }
+  } finally {
+    await fixtureRoots.close();
+  }
+});
+
+test("adapter installs the bounded observe surface and never widens into Stop or PreToolUse", async () => {
+  const fixtureRoots = await roots();
+  try {
+    const bundle = bundleFor();
+    const inert = await installInert(fixtureRoots, bundle);
+    const artifacts = observeArtifactsFor(bundle, fixtureRoots.root);
+    const activationHost = activationHostFor(bundle, inert);
+    const result = await installCodexAdapterActivation(
+      bundle,
+      inert,
+      artifacts,
+      activationHost,
+      {
+        installationRoot: fixtureRoots.root,
+        generationId: "generation:codex-observe",
+        receiptPath: fixtureRoots.activationReceiptPath,
+      },
+    );
+
+    assert.deepEqual(
+      Object.keys(JSON.parse(artifacts.hooksSource).hooks).sort(),
+      ["PostCompact", "PostToolUse", "PreCompact", "SessionStart", "SubagentStart", "SubagentStop"].sort(),
+    );
+    assert.equal(
+      result.receipt.entries.some((entry) => entry.path === CODEX_OBSERVE_HANDLER_PATH),
+      true,
+    );
+    assert.equal(artifacts.observeHandlerDigest?.length, 64);
+
+    const handlerPath = join(fixtureRoots.root, CODEX_OBSERVE_HANDLER_PATH);
+    const fired = spawnSync(
+      process.execPath,
+      [handlerPath, "PostToolUse", "--handler-digest", artifacts.observeHandlerDigest],
+      { cwd: fixtureRoots.root, input: JSON.stringify({ hook_event_name: "PostToolUse" }), encoding: "utf8" },
+    );
+    assert.equal(fired.status, 0);
+    assert.equal(fired.stdout, "");
+    const log = await readFile(join(fixtureRoots.root, ".codex/tcrn-workflow/observe-log.jsonl"), "utf8");
+    assert.equal(log.includes('"event":"PostToolUse"'), true);
+
+    const projectManifest = bundle.files.find(
+      (file) => file.path === ".codex/tcrn-workflow/project.json",
+    );
+    reason("CODEX_ACTIVATION_SCHEMA_INVALID", () =>
+      generateCodexActivationArtifacts(
+        generateCodexSessionSummary(bundle, capabilityManifestDigest, "step3"),
+        fixtureRoots.root,
+        ["Stop"],
+        projectManifest?.contentDigest,
+      ),
+    );
   } finally {
     await fixtureRoots.close();
   }

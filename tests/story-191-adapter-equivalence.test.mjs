@@ -185,6 +185,14 @@ test("STORY-191 matrix is closed and reason-code families are symmetric", () => 
   assert.equal(new Set(matrix.capabilities.map((entry) => entry.id)).size, matrix.capabilities.length);
   assert.equal(new Set(matrix.hostSpecificSurfaces.map((entry) => entry.id)).size, matrix.hostSpecificSurfaces.length);
   assert.ok(matrix.residuals.every((entry) => entry.status && entry.note));
+  assert.equal(
+    matrix.hostSpecificSurfaces.find((entry) => entry.id === "codex-stop-pact")?.owner,
+    "codex",
+  );
+  assert.equal(
+    matrix.residuals.find((entry) => entry.id === "ssh-observer-execution-coverage")?.status,
+    "explicitly-uncovered",
+  );
 });
 
 test("the same host-neutral negative inputs return the same reason code on both adapters", () => {

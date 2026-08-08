@@ -27,6 +27,7 @@
     "host-evidence": "node scripts/host-evidence.mjs",
     "lint": "node scripts/task.mjs lint",
     "push-gate": "node scripts/push-gate.mjs",
+    "release:preflight": "node scripts/task.mjs release-preflight",
     "regen:map-digests": "node scripts/generate-proof-artifacts.mjs",
     "regen:rc1-inputs": "node scripts/regen-rc1-inputs.mjs",
     "report:budget": "node scripts/task.mjs budget",
@@ -89,6 +90,9 @@
     "verify:workspace": "node scripts/task.mjs workspace",
     "verify:s6": "node scripts/verify-s6.mjs",
     "verify:breakglass-consistency": "node scripts/breakglass-consistency-check.mjs",
+    "verify:stop-pact": "node tools/stop-pact/verify-channel.mjs --verify-channel --project-dir . --project-dir ..",
+    "verify:stop-pact:codex": "node --test tests/codex-stop-pact.test.mjs",
+    "verify:story-193": "node --test tests/qa4-codex-hook-equivalence.test.mjs",
     "test-wiring:proof": "node scripts/test-wiring-proof.mjs",
     "pg:schema": "node scripts/apply-pg-schema.mjs",
     "pg:test": "node scripts/apply-pg-test-schema.mjs && node --test --test-concurrency=1 packages/pg-backend/test/*.test.mjs"
@@ -96,6 +100,7 @@
   "devDependencies": {
     "@types/node": "24.13.2",
     "ajv": "8.17.1",
+    "pg": "8.22.0",
     "typescript": "5.9.3"
   }
 }

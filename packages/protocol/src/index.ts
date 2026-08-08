@@ -49,7 +49,20 @@ export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: 
 export type PlannedDeliveryKind = "Initiative" | "Epic" | "Story" | "Subtask";
 export type ExtensionWorkKind = "Review" | "Incident" | "Release" | "Knowledge";
 export type WorkKind = PlannedDeliveryKind | ExtensionWorkKind;
-export type WorkStatus = "planned" | "ready" | "active" | "blocked" | "done" | "cancelled";
+export const WORK_STATUSES = Object.freeze([
+  "planned",
+  "ready",
+  "active",
+  "blocked",
+  "pending-owner-acceptance",
+  "done",
+  "cancelled",
+] as const);
+export type WorkStatus = typeof WORK_STATUSES[number];
+
+export function isWorkStatus(value: unknown): value is WorkStatus {
+  return typeof value === "string" && (WORK_STATUSES as readonly string[]).includes(value);
+}
 
 export interface ProtocolBootstrapStatus {
   readonly phase: "P2";
@@ -400,7 +413,7 @@ function assertWorkRecordShape(record: WorkRecord): void {
   if (typeof record.kind !== "string" || !["Initiative", "Epic", "Story", "Subtask", "Review", "Incident", "Release", "Knowledge"].includes(record.kind)) {
     fail("RECORD_MALFORMED", String(record.id));
   }
-  if (typeof record.status !== "string" || !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(record.status)) {
+  if (!isWorkStatus(record.status)) {
     fail("RECORD_MALFORMED", String(record.id));
   }
 }
@@ -752,8 +765,9 @@ export function deterministicWorkOrder(records: readonly WorkRecord[]): readonly
 const transitions: Readonly<Record<WorkStatus, readonly WorkStatus[]>> = Object.freeze({
   planned: ["ready", "cancelled"],
   ready: ["active", "blocked", "cancelled"],
-  active: ["blocked", "done", "cancelled"],
+  active: ["blocked", "pending-owner-acceptance", "done", "cancelled"],
   blocked: ["ready", "active", "cancelled"],
+  "pending-owner-acceptance": ["active", "done", "cancelled"],
   done: [],
   cancelled: [],
 });

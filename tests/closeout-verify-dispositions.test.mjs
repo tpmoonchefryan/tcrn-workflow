@@ -10,10 +10,14 @@
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { verifyCloseout } from "../scripts/closeout-verify.mjs";
 
 const V1 = "tcrn.closeout-verify.v1";
+const V2 = "tcrn.closeout-verify.v2";
 
 describe("closeout-verify disposition kinds (STORY-172)", () => {
   test("reconciles a batch where every item has exactly one disposition", () => {
@@ -142,6 +146,83 @@ describe("closeout-verify disposition kinds (STORY-172)", () => {
     assert.equal(result.ok, false);
     assert.ok(result.problems.some((p) => p.includes("execution-form")));
     assert.ok(result.problems.some((p) => p.includes("attributed persona")));
+  });
+
+  test("INIT-020 reds when the caller supplies only a self-selected items list", () => {
+    const result = verifyCloseout({
+      schemaVersion: V1,
+      incident: "TCRN-CROSS-INIT-020",
+      items: ["INC-061"],
+      dispositions: { "INC-061": { kind: "fixed" } },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.problems.some((p) => p.includes("authoritativeItems")));
+  });
+
+  test("INIT-020 compares the closeout list to chain-derived items and authority evidence", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "closeout-live-authority-"));
+    mkdirSync(join(projectRoot, "evidence"), { recursive: true });
+    writeFileSync(join(projectRoot, "evidence", "061.json"), "061\n");
+    writeFileSync(join(projectRoot, "evidence", "062.json"), "062\n");
+    const common = {
+      schemaVersion: V2,
+      incident: "TCRN-CROSS-INIT-020",
+      authoritativeItems: ["INC-061", "INC-062"],
+      chainAuthority: {
+        schemaVersion: "tcrn.closeout-chain-authority.v1",
+        source: "live-facade-read:status+work-list",
+        partition: "cross-project",
+        observedAt: "2026-08-07T00:00:00Z",
+        workspaceId: "workspace:test",
+        version: 2,
+        headEventHash: "b".repeat(64),
+      },
+      chainNotes: {
+        "INC-061": "receipt evidence/061.json red-leg result",
+        "INC-062": "receipt evidence/062.json red-leg result",
+      },
+      dispositions: {
+        "INC-061": { kind: "fixed" },
+        "INC-062": { kind: "fixed" },
+      },
+    };
+    const authority = {
+      schemaVersion: "tcrn.closeout-live-authority.v1",
+      source: "live-facade-read:status+work-list",
+      partition: "cross-project",
+      observedAt: "2026-08-07T00:00:00Z",
+      head: { workspaceId: "workspace:test", version: 2, headEventHash: "b".repeat(64) },
+      scope: {
+        schemaVersion: "tcrn.closeout-scope.v1",
+        source: "live-facade-read:work-show",
+        workId: "work:" + "c".repeat(24),
+        externalKey: "TCRN-CROSS-STORY-172",
+        text: "INC-061..062 red-leg receipt evidence",
+        itemIds: ["INC-061", "INC-062"],
+      },
+      items: [
+        { externalKey: "INC-061", scope: "red-leg receipt evidence/061.json" },
+        { externalKey: "INC-062", scope: "red-leg receipt evidence/062.json" },
+        { externalKey: "TCRN-CROSS-INC-999", id: "work:" + "d".repeat(24) },
+      ],
+    };
+    try {
+      assert.equal(verifyCloseout({ ...common, items: ["INC-061", "INC-062"] }, { authority, projectRoot }).ok, true);
+      const liveOnly = { ...common, items: ["INC-061", "INC-062"] };
+      delete liveOnly.authoritativeItems;
+      delete liveOnly.chainNotes;
+      assert.equal(verifyCloseout(liveOnly, { authority, projectRoot }).ok, true);
+      const withoutScope = { ...authority };
+      delete withoutScope.scope;
+      const scopeMissing = verifyCloseout(liveOnly, { authority: withoutScope, projectRoot });
+      assert.equal(scopeMissing.ok, false);
+      assert.ok(scopeMissing.problems.some((p) => p.includes("live work-show scope-derived item set")));
+      const omitted = verifyCloseout({ ...common, items: ["INC-061"], dispositions: { "INC-061": { kind: "fixed" } } }, { authority, projectRoot });
+      assert.equal(omitted.ok, false);
+      assert.ok(omitted.problems.some((p) => p.includes("chain-derived item set")));
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 });
 

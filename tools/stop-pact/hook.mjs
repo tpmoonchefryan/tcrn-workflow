@@ -45,8 +45,8 @@ function main() {
   const transcriptPath = typeof hookInput.transcript_path === "string" ? hookInput.transcript_path : "";
 
   // Enforcement strength from the CURRENT model (recovered from the transcript; the
-  // model is not in stdin). Fable => observe; anything else => enforce; UNKNOWN =>
-  // observe (never block a possible flagship).
+  // model is not in stdin). Flagship families and unknown/new names => observe;
+  // only explicitly reviewed non-flagship families enforce.
   const model = resolveModelFromTranscript(transcriptPath);
   const mode = resolveMode(model);
 

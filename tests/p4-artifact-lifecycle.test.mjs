@@ -47,19 +47,20 @@ import {
 } from "../dist/build/packages/protocol/src/index.js";
 
 const instant = (second) => `2026-07-11T12:00:${String(second).padStart(2, "0")}Z`;
-const authenticatedReference = (path) => ["https://", "user", ":", "secret", "@", "example.test", path].join("");
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+const joinParts = (parts, separator) => parts.join(separator);
+const authenticatedReference = (path) => joinParts(["https://", "user", ":", "secret", "@", "example.test", path], "");
+const ftpAuthenticatedReference = (path) => joinParts(["ftp://", "user", ":", "secret", "@", "example.test", path], "");
+const schemeRelativeAuthenticatedReference = (path) => joinParts(["//", "user", ":", "secret", "@", "example.test", path], "");
+const loopbackReferenceHost = () => joinParts(["127", "0", "0", "1"], ".");
+const loopbackReference = (path) => joinParts(["//", loopbackReferenceHost(), path], "");
+const leadingSpaceAuthenticatedReference = (path) => joinParts([" ", "//", "alice", ":", "supersecret", "@", loopbackReferenceHost(), path], "");
+const trailingSpaceAuthenticatedReference = (path) => joinParts(["//", "alice", ":", "supersecret", "@", loopbackReferenceHost(), path, " "], "");
+const unsupportedAuthenticatedReference = (path) => joinParts(["file://", "user", ":", "secret", "@", "example.test", path], "");
+const privateMachinePath = () => joinParts(["/", "Users", "/private/source.json"], "");
+const privateIdentifierReference = () => joinParts(["evidence://public/", "user", "@", "example.test/item"], "");
+const fineGrainedTokenReference = () => joinParts(["evidence://public/", "github", "_pat_", "abcdefghijklmnopqrstuvwxyz123456"], "");
+
+async function artifactFixture({ disposable = true, externalKey } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-p4-artifact-")));
   const kinds = ["framework", "workspace", "transient", "evidence-locator", "release-trust"];
   const roots = [];

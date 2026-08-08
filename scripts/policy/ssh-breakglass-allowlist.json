@@ -14,18 +14,18 @@
     }
   ],
   "entries": [
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+    {
+      "class": "mcp-unreachable-fallback",
+      "pattern": "ssh\\s+[^\\s]+\\s+['\"]node\\s+[^'\"]*/tcrn-workflow\\.mjs\\s+status\\b",
+      "reason": "门面只读面不可达时的只读 status 核查(使用须在记录说明门面不可达理由)",
+      "since": "2026-08-06",
       "reviewedAt": "2026-08-06"
     },
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+    {
+      "class": "service-layer-byte-compare",
+      "pattern": "ssh\\s+[^\\s]+\\s+['\"](?:sha256sum|shasum|sha1sum)\\s+[^'\"]+/tcrn-workflow/",
+      "reason": "按设计绕开服务层的逐字节比对:对引擎路径本身做哈希校验(engine-host:verify 的同类手工程)",
+      "since": "2026-08-06",
       "reviewedAt": "2026-08-06"
     }
   ]

@@ -87,6 +87,15 @@ test("planned delivery and extension shapes validate without forcing extensions 
   assert.deepEqual(extensionOrder[0].extensions["extension:unknown-optional"].value, { preserved: true });
 });
 
+test("owner-acceptance is a non-terminal work status with an explicit return path", () => {
+  assert.equal(validateWorkGraph([work({ status: "pending-owner-acceptance" })])[0].status, "pending-owner-acceptance");
+  assert.doesNotThrow(() => assertWorkTransition("active", "pending-owner-acceptance"));
+  assert.doesNotThrow(() => assertWorkTransition("pending-owner-acceptance", "active"));
+  assert.doesNotThrow(() => assertWorkTransition("pending-owner-acceptance", "done"));
+  expectReason("INVALID_TRANSITION", () => assertWorkTransition("planned", "pending-owner-acceptance"));
+  expectReason("INVALID_TRANSITION", () => assertWorkTransition("pending-owner-acceptance", "planned"));
+});
+
 test("event integrity vectors reject replay and corruption", async () => {
   const vector = await fixture("positive/event-chain.json");
   const first = createEvent(vector.inputs[0]);

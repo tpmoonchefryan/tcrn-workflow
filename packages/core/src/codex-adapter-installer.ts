@@ -43,7 +43,9 @@ import type {
 } from "./codex-adapter.js";
 import {
   CODEX_ADAPTER_ACTIVATION_INSTALLATION_VERSION,
+  CODEX_ACTIVATION_PATHS,
   CODEX_HOOKS_PATH,
+  CODEX_OBSERVE_HANDLER_PATH,
   CODEX_SESSION_START_PATH,
   CODEX_SESSION_SUMMARY_PATH,
   assertCodexAdapterActivationHost,
@@ -359,16 +361,21 @@ export async function installCodexAdapterActivation(
     [CODEX_SESSION_SUMMARY_PATH, artifacts.summarySource],
     [CODEX_HOOKS_PATH, artifacts.hooksSource],
   ]);
+  const activationPaths: (typeof CODEX_ACTIVATION_PATHS)[number][] = [
+    CODEX_SESSION_START_PATH,
+    CODEX_SESSION_SUMMARY_PATH,
+  ];
+  if (artifacts.observeHandlerSource !== null) {
+    sources.set(CODEX_OBSERVE_HANDLER_PATH, artifacts.observeHandlerSource);
+    activationPaths.push(CODEX_OBSERVE_HANDLER_PATH);
+  }
+  activationPaths.push(CODEX_HOOKS_PATH);
   const writtenTargets: string[] = [];
   let receiptWritten = false;
   try {
     const entries: CodexActivationInstallationEntry[] = [];
     // Safety order: dependencies before the registration that invokes them.
-    for (const path of [
-      CODEX_SESSION_START_PATH,
-      CODEX_SESSION_SUMMARY_PATH,
-      CODEX_HOOKS_PATH,
-    ] as const) {
+    for (const path of activationPaths) {
       const target = resolve(installationRoot, path);
       const bytes = Buffer.from(sources.get(path) ?? "", "utf8");
       await writeExclusive(target, bytes, path);

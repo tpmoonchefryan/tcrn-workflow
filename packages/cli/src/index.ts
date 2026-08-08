@@ -157,6 +157,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
 import { assertStrictInstant, canonicalExternalKey, canonicalJson, deriveStableId } from "../../protocol/src/index.js";
+import { isWorkStatus } from "../../protocol/src/index.js";
 import type { PlannedDeliveryKind, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
 // ProjectRecord is a core type, not a protocol one. The protocol package never exported
 // it, so this import resolved to nothing; import elision hid the mistake from every
@@ -749,7 +750,7 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
 // verb. New verbs MUST ship a catalog entry (SDC-1); the p3-cli-catalog parity
 // test enforces two-way name equality with the dispatcher.
 export const COMMAND_CATALOG = Object.freeze([
-  { name: "adapter-activate", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "capability-manifest-digest", required: true, valueKind: "string" }, { name: "step3", required: false, valueKind: "boolean" }] },
+  { name: "adapter-activate", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "capability-manifest-digest", required: true, valueKind: "string" }, { name: "step3", required: false, valueKind: "boolean" }, { name: "observe-events", required: false, valueKind: "json" }] },
   { name: "adapter-activation-assess", availability: "cli", mutates: false, flags: [{ name: "binding", required: true, valueKind: "json" }, { name: "approved-definition-digests", required: true, valueKind: "json" }] },
   { name: "adapter-activation-record", availability: "cli", mutates: false, authorityBearing: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: false, valueKind: "string" }, { name: "observation-file", required: false, valueKind: "string" }] },
   { name: "adapter-deactivate", availability: "cli", mutates: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }] },
@@ -1223,6 +1224,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       "receipt-out",
       "capability-manifest-digest",
       "step3",
+      "observe-events",
     ]);
     required(values, [
       "request",
@@ -1252,7 +1254,18 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const installationRoot = await admitCodexAdapterInstallationRoot(
       values["installation-root"] ?? "",
     );
-    const artifacts = generateCodexActivationArtifacts(summary, installationRoot);
+    const observeEvents = values["observe-events"] === undefined
+      ? []
+      : jsonValue(values["observe-events"], "observe-events");
+    const projectManifest = bundle.files.find(
+      (file) => file.path === ".codex/tcrn-workflow/project.json",
+    );
+    const artifacts = generateCodexActivationArtifacts(
+      summary,
+      installationRoot,
+      observeEvents,
+      projectManifest?.contentDigest,
+    );
     const installed = await installCodexAdapterActivation(
       bundle,
       inertInstallation,
@@ -2204,7 +2217,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // Fail closed at the CLI boundary naming the offending flag/value, before the
     // uncast enum reaches core and surfaces as an opaque RECORD_MALFORMED on the id.
     if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident", "Release"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
-    if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
+    if (values.status !== undefined && !isWorkStatus(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => createWork(workspace, lease, {
@@ -2225,7 +2238,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   if (command === "work-transition") {
     const values = parseArguments(rest, [...shared, "id", "status", "actor"]);
     required(values, [...requiredShared, "id", "status"]);
-    if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
+    if (values.status !== undefined && !isWorkStatus(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => transitionWork(workspace, lease, {
@@ -2280,7 +2293,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const values = parseArguments(rest, ["workspace", "project-id", "kind", "status", "parent-id", "sprint", "limit", "offset"]);
     required(values, ["workspace"]);
     if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident", "Release"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
-    if (values.status !== undefined && !["planned", "ready", "active", "blocked", "done", "cancelled"].includes(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
+    if (values.status !== undefined && !isWorkStatus(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     // INIT-008: filter members of a sprint. The flag carries the qualified reference in the
     // same workspace:<id>#work:<id> spelling used to annotate; we compare the parsed object
     // against the stored advisory:sprint value by canonical bytes so the round trip is closed.

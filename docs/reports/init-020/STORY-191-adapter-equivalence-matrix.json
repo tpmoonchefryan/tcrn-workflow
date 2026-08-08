@@ -122,6 +122,12 @@
       "owner": "claude",
       "contract": "project-local .claude paths only",
       "reason": "Claude settings paths need an explicit user-level path boundary."
+    },
+    {
+      "id": "codex-stop-pact",
+      "owner": "codex",
+      "contract": "tools/stop-pact/codex-executor.mjs",
+      "reason": "Codex Stop payloads use a different host contract; this adapter shares the Claude pact file and pure decider, emits the Codex decision response, and fails open on missing facts."
     }
   ],
   "residuals": [
@@ -150,6 +156,22 @@
       ],
       "status": "closed-for-v1",
       "note": "The inert Claude fragment accepts only the project-local .claude/tcrn-workflow namespace."
+    },
+    {
+      "id": "ssh-observer-execution-coverage",
+      "appliesTo": [
+        "codex"
+      ],
+      "status": "explicitly-uncovered",
+      "note": "ssh-write-observer sees Claude PreToolUse/Bash command payloads; Codex App Server execution collection is read-only and does not invoke it. No Codex execution is treated as safe by default."
+    },
+    {
+      "id": "codex-live-host-fire",
+      "appliesTo": [
+        "codex"
+      ],
+      "status": "hermetic-only",
+      "note": "STORY-193 records one digest-bound generated-handler subprocess fire and an engine activation-record receipt; current Codex Desktop load/approval/fire remains unclaimed."
     }
   ],
   "equivalenceTest": "tests/story-191-adapter-equivalence.test.mjs"

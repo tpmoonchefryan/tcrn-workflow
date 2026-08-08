@@ -15,11 +15,13 @@ import {
   decodePrivacyScanBytes,
   parseHistoricalTreePaths,
 } from "../scripts/lib/privacy.mjs";
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+
+const joinParts = (parts, separator) => parts.join(separator);
+
+function fixtureGit(root, arguments_, { raw = false } = {}) {
+  const publicEmail = joinParts(["fixture", "@", "users.noreply.github.com"], "");
+  const result = spawnSync("git", arguments_, {
+    cwd: root,
     encoding: raw ? undefined : "utf8",
     env: {
       ...process.env,

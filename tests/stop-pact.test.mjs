@@ -113,6 +113,12 @@ test("observe mode surfaces a premature stop but never blocks it (the flagship d
   assert.equal(verdict.code, "OBSERVE_WOULD_BLOCK");
 });
 
+test("a host continuation firing never blocks itself again", () => {
+  const verdict = callDecide({ stopHookActive: true, mode: "enforce", workedSinceLastBlock: true });
+  assert.equal(verdict.action, "allow");
+  assert.equal(verdict.code, "STOP_HOOK_ACTIVE");
+});
+
 test("enforce + running + fresh work blocks and starts the streak at 1", () => {
   const verdict = callDecide({ mode: "enforce", workedSinceLastBlock: true, consecutiveBlocks: 0 });
   assert.equal(verdict.action, "block");
@@ -177,6 +183,7 @@ test("every declared decision code is actually reachable", () => {
     callDecide({ pact: runningPact({ status: "blocked", ticket: { class: "hard_blockage" } }) }).code,
     callDecide({ pact: runningPact({ status: "owner_directive" }) }).code,
     callDecide({ pact: runningPact({ status: "runing" }) }).code,
+    callDecide({ stopHookActive: true }).code,
     callDecide({ mode: "observe" }).code,
     callDecide({ mode: "enforce", workedSinceLastBlock: false, consecutiveBlocks: 3 }).code,
     callDecide({ mode: "enforce", workedSinceLastBlock: true }).code,
@@ -196,11 +203,13 @@ test("the block message names all three ticket classes and a runnable command, a
 // D2 — the mode dial: unknown model fails toward observe (flagship-safe)
 // ---------------------------------------------------------------------------
 
-test("resolveMode: Fable and UNKNOWN both observe; only an identified non-flagship enforces", () => {
+test("resolveMode: flagship and UNKNOWN both observe; only an identified non-flagship enforces", () => {
   assert.equal(resolveMode("claude-fable-5"), "observe");
-  assert.equal(resolveMode("claude-opus-4-8"), "enforce");
-  assert.equal(resolveMode("claude-opus-5"), "enforce");
+  assert.equal(resolveMode("claude-opus-4-8"), "observe");
+  assert.equal(resolveMode("claude-opus-5"), "observe");
   assert.equal(resolveMode("claude-haiku-4-5-20251001"), "enforce");
+  assert.equal(resolveMode("gpt-5-codex"), "enforce");
+  assert.equal(resolveMode("brand-new-model"), "observe");
   // The review's flagship finding: an unrecoverable model must NOT enforce.
   assert.equal(resolveMode(null), "observe");
   assert.equal(resolveMode(""), "observe");
@@ -359,8 +368,15 @@ test("hook: no pact → exits 0, emits nothing", () => {
   assert.equal(r.stdout.trim(), "");
 });
 
-test("hook: running + opus + first fire → block, binds the session, counter 1", () => {
+test("hook: running + opus → observe and allows the flagship", () => {
   const r = runHook(livePact(), { session_id: "A" }, OPUS);
+  assert.equal(r.json, null);
+  assert.equal(r.pactAfter.boundSession, "A");
+  assert.equal(r.pactAfter.runtime.consecutiveBlocks, 0);
+});
+
+test("hook: running + reviewed non-flagship → block, binds the session, counter 1", () => {
+  const r = runHook(livePact(), { session_id: "A" }, [{ type: "assistant", message: { model: "gpt-5-codex" } }]);
   assert.equal(r.json?.decision, "block");
   assert.equal(r.pactAfter.boundSession, "A");
   assert.equal(r.pactAfter.runtime.consecutiveBlocks, 1);
@@ -385,7 +401,7 @@ test("hook: a PARALLEL session does not reset the bound session's counter", () =
 });
 
 test("hook: a large scope produces a valid, untruncated block decision", () => {
-  const r = runHook(livePact({ boundSession: "A", scope: "s".repeat(4000) }), { session_id: "A" }, OPUS);
+  const r = runHook(livePact({ boundSession: "A", scope: "s".repeat(4000) }), { session_id: "A" }, [{ type: "assistant", message: { model: "gpt-5-codex" } }]);
   assert.equal(r.json?.decision, "block", "the block JSON must parse (not be truncated by exit)");
   assert.ok(r.json.reason.length > 100);
 });

@@ -3,6 +3,16 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.8 — 2026-08-07
+
+**INIT-020 QA3 hardening closes the migration, admission, evidence, and release gates.**
+
+- PG migrations require a named schema and caller-stamped instant, write and read back the storage-home sentinel, and refuse expired epoch leases;
+- sealed archive reads identify their storage authority, backend admission recognizes concrete backend kind, and PG admission requires the named append-only trigger;
+- test wiring scans non-standard test entrypoints, validates executable owners, and CI runs the evidence round-trip proof;
+- ADR red legs are structured policy records, receipt hygiene anchors both heads to the authoritative event stream, and release preflight binds a green P8 result to the exact tag commit and metadata-only release diff;
+- no tag creation, history rewrite, or push is performed by this workspace task.
+
 ## 0.11.7 — 2026-08-07
 
 **The storage-home seal is an explicit, fail-closed recovery path.**

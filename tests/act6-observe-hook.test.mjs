@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -50,9 +50,12 @@ async function installed(overrides = {}) {
   return { root, source, close: () => rm(root, { recursive: true, force: true }) };
 }
 
-// Run the handler the way a host would: event name on argv, payload on stdin.
+// Run the handler the way a host would: event name and the exact handler digest on
+// argv, payload on stdin.
 function fire(root, event, payload = "") {
-  return spawnSync(process.execPath, [join(root, OBSERVE_HANDLER_PATH), event], { input: payload, encoding: "utf8" });
+  const handlerPath = join(root, OBSERVE_HANDLER_PATH);
+  const handlerDigest = createHash("sha256").update(readFileSync(handlerPath)).digest("hex");
+  return spawnSync(process.execPath, [handlerPath, event, "--handler-digest", handlerDigest], { input: payload, encoding: "utf8" });
 }
 
 async function logLines(root) {

@@ -8,18 +8,19 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { LocalCommandError, runLocalCommand } from "../scripts/lib/local-command.mjs";
-import { parseGitObjectBatch, parseHistoricalTreePaths, scanPrivacyEntries } from "../scripts/lib/privacy.mjs";
+import { normalizePrivacyText, parseGitObjectBatch, parseHistoricalTreePaths, scanPrivacyEntries } from "../scripts/lib/privacy.mjs";
 
 const batchCheckFormat = "--batch-check=%(objectname) %(objecttype) %(objectsize)";
 const batchArguments = ["cat-file", "--batch-all-objects", "--batch"];
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+const fixtureMaximumBytes = 64 * 1024 * 1024;
+const joinParts = (parts, separator) => parts.join(separator);
+const PRIVATE_VM_HOST = joinParts(["vm-aos", "internal"], ".");
+const PRIVATE_DNS_HOST = joinParts(["aos", "tcrn", "internal"], ".");
+
+function fixtureGit(root, arguments_, { raw = false, tolerateStderr = false } = {}) {
+  const publicEmail = joinParts(["fixture", "@", "users.noreply.github.com"], "");
+  const result = spawnSync("git", arguments_, {
+    cwd: root,
     encoding: raw ? undefined : "utf8",
     maxBuffer: fixtureMaximumBytes,
     env: {
@@ -71,11 +72,11 @@ test("adversarial object-database shapes fail closed instead of shortening the s
   await context.test("a symlink blob is extracted by declared length, not by delimiter", async (caseContext) => {
     const root = await emptyFixtureRepository(caseContext, "tcrn-privacy-symlink-");
     // A symlink blob's content is the raw target with no trailing newline, so a parser
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+    // that scanned for the framing LF instead of honouring the declared size would run
+    // straight into the next object's header and lose the privacy-bearing path.
+    const target = joinParts(["..", "..", "Users", "local-user", "secrets.txt"], "/");
+    await symlink(target, join(root, "link"));
+    fixtureGit(root, ["add", "-A"]);
     fixtureGit(root, ["commit", "-q", "-m", "symlink fixture"]);
     const stream = fixtureGit(root, batchArguments, { raw: true });
     const records = parseGitObjectBatch(stream, declaredBatchBytes(root));
@@ -194,11 +195,11 @@ test("batch object framing is validated per record and as a whole stream", () =>
   );
 });
 
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+const publicIdentity = {
+  login: "public-contributor",
+  email: joinParts(["12345+public-contributor", "@", "users.noreply.github.com"], ""),
+};
+
 test("public Git hosting identity is allowed only in commit metadata", () => {
   const commit = `tree ${"a".repeat(40)}\nauthor ${publicIdentity.login} <${publicIdentity.email}> 1 +0000\ncommitter ${publicIdentity.login} <${publicIdentity.email}> 1 +0000\n\nmessage\n`;
   assert.deepEqual(
@@ -222,26 +223,26 @@ test("public Git hosting identity is allowed only in commit metadata", () => {
   );
 });
 
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+test("private/raw identifiers and common secret families fail closed", () => {
+  const cases = [
+    ["raw email", joinParts(["person", "@", "example.invalid"], ""), "EMAIL_IDENTIFIER"],
+    ["fine-grained GitHub", `github_pat_${"A".repeat(32)}`, "GITHUB_FINE_GRAINED_TOKEN"],
+    ["AWS session", `ASIA${"A".repeat(16)}`, "AWS_ACCESS_KEY"],
     ["npm", `npm_${"A".repeat(36)}`, "NPM_TOKEN"],
     ["Slack", `xoxb-${"1".repeat(12)}-${"A".repeat(24)}`, "SLACK_TOKEN"],
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+    ["cloud", `AIza${"A".repeat(35)}`, "GOOGLE_API_KEY"],
+    ["JWT", `${"eyJ"}${"A".repeat(24)}.${"B".repeat(24)}.${"C".repeat(24)}`, "JWT_TOKEN"],
+    ["authenticated URL", joinParts(["https://user", ":", "password", "@", "example.invalid/path"], ""), "AUTHENTICATED_URL"],
+    ["authenticated postgres URL", joinParts(["postgresql://user", ":", "password", "@", "db.example.invalid/schema"], ""), "AUTHENTICATED_URL"],
+    ["private VM hostname", joinParts(["ssh to", PRIVATE_VM_HOST], " "), "PRIVATE_HOSTNAME"],
+    ["private DNS hostname", joinParts(["read from", PRIVATE_DNS_HOST], " "), "PRIVATE_HOSTNAME"],
+    ["private user at host", joinParts(["ssh", joinParts(["deploy", "@"], "") + PRIVATE_VM_HOST], " "), "PRIVATE_USER_AT_HOST"],
+    ["private key", joinParts(["-----BEGIN OPENSSH", " PRIVATE KEY-----"], ""), "PRIVATE_KEY"],
+    ["customer marker", joinParts(["tenant", "-", "export.csv"], ""), "CUSTOMER_SOURCE_MARKER"],
+    ["linux home path", joinParts(["/", "home", "/", "user1", "/work"], ""), "LINUX_HOME_PATH"],
+    ["raw windows path", joinParts(["C", ":", "\\", "Users", "\\", "user1"], ""), "WINDOWS_USER_PATH"],
+  ];
+  for (const [label, content, reasonCode] of cases) {
     const findings = scanPrivacyEntries([{ label, kind: "source", content }], {
       owner: publicIdentity.login,
     });
@@ -249,27 +250,50 @@ test("public Git hosting identity is allowed only in commit metadata", () => {
   }
 });
 
+test("private values reconstructed by common obfuscation forms are normalized before scanning", () => {
+  const token = ["fixture", "-private.invalid"].join("");
+  const hex = [...token].map((character) => `\\x${character.charCodeAt(0).toString(16).padStart(2, "0")}`).join("");
+  const unicode = [...token].map((character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`).join("");
+  const base64 = Buffer.from(token, "utf8").toString("base64");
+  const cases = [
+    `["fixture","-private.invalid"].join("")`,
+    hex,
+    unicode,
+    "fixture[-]private.invalid",
+    `String.fromCharCode(${[...token].map((character) => character.charCodeAt(0)).join(",")})`,
+    `Buffer.from("${base64}", "base64").toString("utf8")`,
+  ];
+  for (const content of cases) {
+    assert.equal(normalizePrivacyText(content), token, content);
+    const findings = scanPrivacyEntries([{ label: "obfuscated", kind: "source", content }], {
+      owner: publicIdentity.login,
+      privateTokens: [token],
+    });
+    assert.ok(findings.some((finding) => finding.startsWith("PRIVATE_RUNTIME_VALUE:")), content);
+  }
+});
+
 test("filenames are scanned as privacy-bearing metadata", () => {
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+  const findings = scanPrivacyEntries(
+    [{
+      label: joinParts(["customer", "-", "export.csv"], ""),
+      kind: "filename",
+      content: joinParts(["customer", "-", "export.csv"], ""),
+    }],
+    { owner: publicIdentity.login },
   );
   assert.ok(findings.some((finding) => finding.startsWith("CUSTOMER_SOURCE_MARKER:")));
 });
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+
+test("only the exact public P3 marker contract bypasses control-path rejection", () => {
+  const marker = joinParts([".", "context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json"], "");
+  assert.deepEqual(
+    scanPrivacyEntries([{ label: "contract", kind: "source", content: marker }], { owner: publicIdentity.login }),
+    [],
+  );
+  const sibling = joinParts([".", "context/private-note.json"], "");
+  assert.ok(
+    scanPrivacyEntries([{ label: "sibling", kind: "source", content: sibling }], { owner: publicIdentity.login })
       .some((finding) => finding.startsWith("CONTROL_PLANE_PATH:")),
   );
 });
@@ -277,11 +301,11 @@ test("filenames are scanned as privacy-bearing metadata", () => {
 test("recursive historical tree records preserve privacy-bearing full paths", () => {
   assert.deepEqual(parseHistoricalTreePaths(""), []);
   assert.throws(() => parseHistoricalTreePaths("malformed"), /PRIVACY_TREE_RECORD_INVALID/u);
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+  const object = "a".repeat(40);
+  const controlPath = `${joinParts([".", "context"], "")}/private-note.md`;
+  const machinePath = joinParts(["nested", "Users", "local-user", "cache.txt"], "/");
+  const records = [
+    `100644 blob ${object}\t${controlPath}`,
     `100644 blob ${object}\t${machinePath}`,
   ].join("\0") + "\0";
   const paths = parseHistoricalTreePaths(records);

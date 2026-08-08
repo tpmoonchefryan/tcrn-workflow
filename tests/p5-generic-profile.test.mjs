@@ -263,11 +263,12 @@ test("starter bundle is closed, schema-valid, deterministic, inert, and base-anc
   assert.equal(bundle1.bundleDigest, fixture.starterBundleDigest);
   assert.equal(canonicalSha256(bundle1.layers[0]), GENERIC_PROFILE_BASE_DIGEST);
   assert.equal(GENERIC_PROFILE_BASE_DIGEST, fixture.baseProfileDigest);
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+  assert.deepEqual(bundle1.starterFlow.map((step) => step.kind), ["Initiative", "Epic", "Story", "Subtask"]);
+  const serialized = canonicalJson(bundle1);
+  assert.equal(/persona|https?:\/\/|file:\/\/|"(?:hooks?|models?|threadIds?)"\s*:/iu.test(serialized), false);
+  assert.equal(serialized.includes(`${"/"}Users${"/"}`), false);
+  assert.equal(/\$\{|\{\{|`|<\/?script/iu.test(serialized), false);
+
   const schema = JSON.parse(readFileSync(new URL("../packages/core/schema/generic-profile-v1.schema.json", import.meta.url), "utf8"));
   const common = JSON.parse(readFileSync(new URL("../schemas/protocol-common-v1.schema.json", import.meta.url), "utf8"));
   const ajv = new Ajv2020({ strict: true, validateFormats: false });

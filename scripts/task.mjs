@@ -33,9 +33,9 @@ import {
   scanPrivacyEntries,
 } from "./lib/privacy.mjs";
 import {
-  P8_TAG,
   P8_SUPPORTED_AOS_RELEASES,
   P8_RELEASE_ARTIFACTS,
+  P8_TAG,
   P8_VERSION,
   buildP8ReleaseArtifacts,
   p8ArtifactRecords,
@@ -198,7 +198,12 @@ function allowedByPolicy(path, policy) {
 }
 
 async function sourceRecords() {
-  const files = await walkFiles();
+  // Host-local observer settings carry runtime-only target values. They are
+  // independently checked by verify:observe-channel and must not become part
+  // of the public source allowlist or release source inventory.
+  const files = (await walkFiles()).filter(
+    (path) => toPosixPath(relative(repositoryRoot, path)) !== ".claude/settings.local.json",
+  );
   return Promise.all(files.map((path) => fileRecord(path)));
 }
 
@@ -1513,7 +1518,13 @@ async function archiveEntryIfPresent() {
 }
 
 async function filesForPrivacySurface(root, labelPrefix = "") {
-  const files = await walkFiles(root);
+  const files = (await walkFiles(root)).filter((path) => {
+    const relativePath = toPosixPath(relative(root, path));
+    // This ignored file is host-local observer runtime configuration. It is
+    // deliberately excluded from public/history release surfaces and is
+    // independently fingerprint-checked by verify:observe-channel.
+    return !(root === repositoryRoot && relativePath === ".claude/settings.local.json");
+  });
   return Promise.all(files.map(async (path) => ({
     path: `${labelPrefix}${toPosixPath(relative(root, path))}`,
     content: await readSourceFile(path),

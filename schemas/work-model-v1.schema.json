@@ -62,6 +62,7 @@
         "ready",
         "active",
         "blocked",
+        "pending-owner-acceptance",
         "done",
         "cancelled"
       ]

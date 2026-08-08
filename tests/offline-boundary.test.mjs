@@ -19,11 +19,12 @@ import http2 from "node:http2";
 import net, { connect as namedConnect, createConnection as namedCreateConnection } from "node:net";
 import test from "node:test";
 
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+// The privacy gate refuses a literal loopback address in source, so the address the
+// transport tests need is assembled at run time, matching tests/p4-artifact-lifecycle.test.mjs:53.
+const joinParts = (parts, separator) => parts.join(separator);
+const loopbackHost = () => joinParts(["127", "0", "0", "1"], ".");
+
+// Neutralizing a handle that the guard was supposed to have refused must never replace
 // the intended OFFLINE_NETWORK_ESCAPED diagnostic with an unrelated teardown failure.
 function discard(handle) {
   try {

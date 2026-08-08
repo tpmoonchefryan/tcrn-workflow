@@ -22,6 +22,10 @@ const routeAdditions = new Set([
   "scripts/lib/local-command.mjs",
   "scripts/lib/proof-artifacts.mjs",
   "scripts/lib/p8-workflow-rc.mjs",
+  "scripts/lib/private-token-roster.mjs",
+  "tools/stop-pact/codex-executor.mjs",
+  "tests/codex-stop-pact.test.mjs",
+  "tests/qa4-codex-hook-equivalence.test.mjs",
   "docs/releases/0.1.0-rc.2.md",
   "docs/releases/0.1.0-rc.3.md",
   "docs/releases/0.1.0-rc.4.md",
@@ -185,7 +189,13 @@ async function record(root, path, virtual = new Map()) {
 
 async function listedFiles(root) {
   try {
-    return await walkFiles(root);
+    const files = await walkFiles(root);
+    // Claude's project-local settings.local.json carries host-only observer
+    // targets.  It is intentionally ignored by git and independently checked
+    // by verify:observe-channel; admitting it here would make the public source
+    // allowlist depend on whichever operator happens to run the proof.
+    return files.filter((path) => root !== repositoryRoot ||
+      toPosixPath(relative(root, path)) !== ".claude/settings.local.json");
   } catch (error) {
     if (error instanceof ProofArtifactError) throw error;
     fail("PROOF_ARTIFACT_SOURCE_INVALID", String(error?.message ?? error));

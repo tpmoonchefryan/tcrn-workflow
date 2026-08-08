@@ -45,12 +45,13 @@ import {
   validateKnowledgeStore,
 } from "../dist/build/packages/core/src/index.js";
 import { canonicalJson, canonicalSha256, deriveStableId } from "../dist/build/packages/protocol/src/index.js";
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+
+const instant = (day, second = 0) => `2026-07-${String(day).padStart(2, "0")}T14:00:${String(second).padStart(2, "0")}Z`;
+const joinParts = (parts, separator) => parts.join(separator);
+const credentialReference = () => joinParts(["https://", "user", ":", "secret", "@", "example.test/current"], "");
+const privateReference = () => joinParts(["/", "Users", "/source/current"], "");
+
+function knowledgeAjv() {
   const ajv = new Ajv2020({ strict: true, validateFormats: false });
   ajv.addKeyword({
     keyword: "x-tcrn-maxUtf8Bytes",

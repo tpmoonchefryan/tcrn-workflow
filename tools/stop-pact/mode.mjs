@@ -8,11 +8,11 @@
 // blocking forever). The two hard invariants — never trap a session, never harm a
 // flagship — both live on that side of every ambiguity.
 //
-// D2: Fable (the flagship) => observe. Everything else => enforce. A model we cannot
-// identify => observe, NOT a configurable fallback: a review finding proved that an
-// enforce fallback blocks a Fable session whenever its model can't be recovered from
-// the transcript (a large final message, a missing model field, an unreadable file).
-// So model-recovery failure must land on observe unconditionally.
+// D2: flagship families (Opus/Fable) => observe. Explicitly identified ordinary
+// families may enforce. Unknown or newly introduced model names => observe, NOT a
+// configurable fallback: a review finding proved that an enforce fallback blocks a
+// flagship session whenever its model cannot be recovered from the transcript.
+// Model-recovery failure therefore lands on observe unconditionally.
 //
 // The model is NOT in the Stop-hook stdin (verified against the Claude Code hook
 // contract, 2026-08-01); it is recovered from the transcript's last assistant entry.
@@ -20,14 +20,20 @@
 import { openSync, fstatSync, readSync, closeSync } from "node:fs";
 
 export const OBSERVE_MODEL_PATTERNS = Object.freeze([
-  /fable/iu, // the flagship the owner does not want constrained (D2)
+  /(?:^|[-_.])(?:opus|fable)(?:[-_.\d]|$)/iu, // flagship families, never constrained (D2)
 ]);
 
-// Unknown model => observe (fail toward flagship-safe). Fable => observe. Else enforce.
+export const ENFORCE_MODEL_PATTERNS = Object.freeze([
+  /^(?:gpt-(?:4|4o|5-codex)|claude-(?:haiku|sonnet))(?:[-_.\d]|$)/iu,
+]);
+
+// Unknown/new model => observe (fail toward flagship-safe). Only a named, reviewed
+// non-flagship family takes the enforce branch.
 export function resolveMode(model) {
   if (typeof model !== "string" || model.length === 0) return "observe";
   if (OBSERVE_MODEL_PATTERNS.some((pattern) => pattern.test(model))) return "observe";
-  return "enforce";
+  if (ENFORCE_MODEL_PATTERNS.some((pattern) => pattern.test(model))) return "enforce";
+  return "observe";
 }
 
 // Recover the current model from the transcript's last assistant entry. Reads a

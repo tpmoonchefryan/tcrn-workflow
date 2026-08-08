@@ -66,4 +66,3 @@ export function assertReleaseCommitShape({ changedPaths } = {}) {
   }
   return { changedPaths: uniquePaths.sort() };
 }
-

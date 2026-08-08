@@ -261,8 +261,9 @@ export function sanitizedCoreReferenceProjection(bundle) {
     assertion(Object.values(projection).every((value) => typeof value === "string" && value.length > 0), "P8_SANITIZED_CORE_INVALID");
     return projection;
   }).sort((left, right) => compareCanonicalText(left.profileId, right.profileId));
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+  const output = { schemaVersion: "tcrn.p8-sanitized-core-reference.v1", bundleIdentity: bundle.bundleDigest, profiles };
+  const text = canonicalJson(profiles);
+  const localUserPath = `${"/"}Users${"/"}`;
+  assertion(!/(?:\.context|legacy|transcript|credential|AOS)/iu.test(text) && !text.includes(localUserPath), "P8_SANITIZED_CORE_PRIVATE_CONTENT");
+  return output;
+}

@@ -169,11 +169,13 @@ test("P8 projects the generated eight-profile Core Reference bundle through the 
   const projection = sanitizedCoreReferenceProjection(bundle);
   assert.equal(bundle.profiles.length, 8);
   assert.equal(projection.profiles.length, 8);
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+  assert.equal(projection.bundleIdentity, bundle.bundleDigest);
+  assert.deepEqual(Object.keys(projection.profiles[0]).sort(compareCanonicalText), ["displayName", "jobTitle", "mission", "profileDigest", "profileId"]);
+  const serialized = canonicalJson(projection);
+  assert.equal(serialized.match(/legacy|transcript|credential|AOS/iu), null);
+  assert.equal(serialized.includes(`${"/"}Users${"/"}`), false);
+});
+
 test("P8 dogfood completes one disposable local_primary initiative with Knowledge and dry-run artifacts", async (context) => {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-p8-dogfood-")));
   context.after(async () => {

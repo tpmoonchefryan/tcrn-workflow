@@ -312,11 +312,12 @@ function assertSha256(value: unknown, label: string): asserts value is string {
 function inertText(value: unknown, label: string, maximumBytes = 1_024): string {
   if (typeof value !== "string" || value.length === 0 || Buffer.byteLength(value, "utf8") > maximumBytes) {
     fail("PROFILE_SCHEMA_INVALID", label);
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
-[REDACTED_PUBLIC_HISTORY_LINE]
+  }
+  safeCanonical(value, label);
+  const localUserPath = `${"/"}Users${"/"}`;
+  if (/\$\{|\{\{|`|<\/?script|(?:javascript|data|file|node|https?|ftp|ssh):|[A-Za-z]:\\/iu.test(value) || value.includes(localUserPath)) {
+    fail("PROFILE_INERT_DATA_REQUIRED", label);
+  }
   return value;
 }
 

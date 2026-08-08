@@ -16,10 +16,10 @@
 //     silently, and without writing. Widening the surface is a new ruling, so it must
 //     require regenerating (and re-approving) the handler bytes, not a config edit.
 //   * Self-verification against drift. The handler carries the digest of the manifest
-//     it was generated against, re-derives it at entry, and falls silent on mismatch.
-//     Claude Code has no per-hook hash gate, so this is the drift defence available
-//     there -- and it is deliberately NOT claimed to be equivalent to Codex's
-//     per-hash re-approval: it detects payload drift, not wholesale replacement.
+//     it was generated against, re-derives it at entry, and also checks its own bytes
+//     against the digest baked into the host command. Claude Code has no per-hook hash
+//     gate, so this is the drift defence available there -- and it is deliberately NOT
+//     claimed to be equivalent to Codex's per-hash re-approval.
 //   * No environment trust. The handler reads no environment variable for anything
 //     that decides behaviour; its inputs are argv, its own directory, and stdin.
 //   * Bounded. Summaries are truncated to the sidecar's summary budget and the raw
@@ -87,6 +87,11 @@ function handlerSource(events: readonly ObserveHookEvent[], manifestDigest: stri
     `const MANIFEST_DIGEST = "${manifestDigest}";`,
     `const SUMMARY_BYTES = ${RECEIPT_LIMITS.summaryBytes};`,
     `const LOG = "${OBSERVE_LOG_PATH}";`,
+    "const argument = (name) => {",
+    "  const index = process.argv.indexOf(name);",
+    "  if (index < 0 || index + 1 >= process.argv.length) throw new Error(name);",
+    "  return process.argv[index + 1];",
+    "};",
     "",
     "// Truncate on a code-point boundary so the result is valid UTF-8 and never",
     "// exceeds the byte budget.",
@@ -103,6 +108,11 @@ function handlerSource(events: readonly ObserveHookEvent[], manifestDigest: stri
     "  const event = process.argv[2];",
     "  // Closed surface: an event this handler was not generated for is ignored.",
     "  if (!EVENTS.includes(event)) throw new Error(\"event\");",
+    "",
+    "  // The command definition carries the exact handler digest. This catches a",
+    "  // replaced handler even on hosts without a per-hook trust hash.",
+    "  const ownBytes = readFileSync(new URL(\"./observe-hook.mjs\", import.meta.url));",
+    "  if (createHash(\"sha256\").update(ownBytes).digest(\"hex\") !== argument(\"--handler-digest\")) throw new Error(\"handler\");",
     "",
     "  // Drift self-check: the manifest must still be the bytes this handler was",
     "  // generated against. On mismatch the handler falls silent rather than",

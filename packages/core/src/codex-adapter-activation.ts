@@ -6,8 +6,8 @@
 // skipped until the operator approves its exact current definition, and changing
 // that definition makes the host ask again. This module preserves that distinction:
 //
-// - generation binds one fail-open SessionStart handler and one bounded summary to
-//   one exact .codex/hooks.json definition;
+// - generation binds one fail-open SessionStart handler, an optional bounded
+//   observe handler and one exact .codex/hooks.json definition;
 // - installation receipts always say `pending_host_approval` and carry an empty
 //   approved-definition set;
 // - a separate host-activation receipt can be created only from an explicit
@@ -17,10 +17,11 @@
 //   The host-owned trusted_hash can be observed out of band, but this receipt does
 //   not ingest it and never claims equality with the TCRN definition digest.
 //
-// The hook remains advisory. It injects Workflow binding/capability context but
-// does not bind a Core Reference persona and does not make the main thread
-// read-only. Every handler failure is silent and exits zero, which keeps this
-// single notify hook inside the fail-open rung approved by N-2.
+// The activation surface remains advisory. SessionStart injects Workflow
+// binding/capability context; the optional observe events only append bounded
+// receipts. Neither binds a Core Reference persona, makes the main thread
+// read-only, or enforces a decision. Every handler failure is silent and exits
+// zero, which keeps the surface inside the fail-open rung approved by N-2.
 
 import { createHash } from "node:crypto";
 import { isAbsolute, resolve, sep } from "node:path";
@@ -46,6 +47,14 @@ import type {
   CodexAdapterInstallationFileIdentity,
   CodexAdapterInstallationReceipt,
 } from "./codex-adapter.js";
+import {
+  OBSERVE_HOOK_EVENTS,
+} from "./receipt-sidecar.js";
+import {
+  generateObserveHookHandler,
+  observeHookHandlerDigest,
+} from "./observe-hook-handler.js";
+import type { ObserveHookEvent } from "./receipt-sidecar.js";
 
 export const CODEX_ADAPTER_ACTIVATION_VERSION = "tcrn.codex-adapter-activation.v1" as const;
 export const CODEX_ADAPTER_ACTIVATION_HOST_VERSION =
@@ -71,11 +80,35 @@ export const CODEX_SESSION_START_PATH =
   ".codex/tcrn-workflow/session-start.mjs" as const;
 export const CODEX_SESSION_SUMMARY_PATH =
   ".codex/tcrn-workflow/session-summary.json" as const;
-export const CODEX_ACTIVATION_PATHS = Object.freeze([
+export const CODEX_OBSERVE_HANDLER_PATH =
+  ".codex/tcrn-workflow/observe-hook.mjs" as const;
+export const CODEX_ACTIVATION_BASE_PATHS = Object.freeze([
   CODEX_HOOKS_PATH,
   CODEX_SESSION_START_PATH,
   CODEX_SESSION_SUMMARY_PATH,
 ] as const);
+export const CODEX_ACTIVATION_OBSERVE_PATHS = Object.freeze([
+  ...CODEX_ACTIVATION_BASE_PATHS,
+  CODEX_OBSERVE_HANDLER_PATH,
+] as const);
+// This union is kept public for callers that need to describe either the legacy
+// SessionStart-only receipt or the current observe-enabled receipt. The validator
+// below accepts exactly one of those two closed path sets.
+export const CODEX_ACTIVATION_PATHS = Object.freeze([
+  ...CODEX_ACTIVATION_OBSERVE_PATHS,
+] as const);
+
+// Codex 0.139.0 is the version-pinned live evidence used by this initiative. It
+// fired these five fail-open observe events; SessionEnd was absent from that host
+// schema and must not be renamed to Stop. A caller may explicitly request another
+// member of OBSERVE_HOOK_EVENTS only after its host surface has been read back.
+export const CODEX_ADAPTER_OBSERVE_EVENTS = Object.freeze([
+  "PostToolUse",
+  "PreCompact",
+  "PostCompact",
+  "SubagentStart",
+  "SubagentStop",
+] as const satisfies readonly ObserveHookEvent[]);
 
 // INC-003: the closed set of operationAuthority values the project template can emit.
 // The summary is injected into a model's context and the host approval surface never
@@ -178,6 +211,29 @@ function sha(value: unknown, label: string): string {
     fail("CODEX_ACTIVATION_SCHEMA_INVALID", label);
   }
   return value;
+}
+
+function normalizeObserveEvents(
+  value: unknown,
+  label = "observeEvents",
+): readonly ObserveHookEvent[] {
+  const supplied = value === undefined ? [] : value;
+  if (!Array.isArray(supplied)) {
+    fail("CODEX_ACTIVATION_SCHEMA_INVALID", label);
+  }
+  const events = supplied.map((event, index) => {
+    if (
+      typeof event !== "string" ||
+      !(OBSERVE_HOOK_EVENTS as readonly string[]).includes(event)
+    ) {
+      fail("CODEX_ACTIVATION_SCHEMA_INVALID", `${label}[${index}]`);
+    }
+    return event as ObserveHookEvent;
+  });
+  if (new Set(events).size !== events.length) {
+    fail("CODEX_ACTIVATION_SCHEMA_INVALID", `${label} duplicate`);
+  }
+  return Object.freeze([...events].sort(compareCanonicalText));
 }
 
 function text(value: unknown, label: string, maximumBytes = 8_192): string {
@@ -636,10 +692,22 @@ function hookDocument(
   installationRootValue: unknown,
   handlerDigestValue: unknown,
   summaryFileDigestValue: unknown,
+  observeEventsValue: unknown = [],
+  observeHandlerDigestValue: unknown = null,
 ): Readonly<Record<string, unknown>> {
   const installationRoot = canonicalInstallationRoot(installationRootValue);
   const handlerDigest = sha(handlerDigestValue, "handlerDigest");
   const summaryFileDigest = sha(summaryFileDigestValue, "summaryFileDigest");
+  const observeEvents = normalizeObserveEvents(observeEventsValue);
+  const observeHandlerDigest = observeEvents.length === 0
+    ? null
+    : sha(observeHandlerDigestValue, "observeHandlerDigest");
+  if (observeEvents.length === 0 && observeHandlerDigestValue !== null) {
+    fail(
+      "CODEX_ACTIVATION_SCHEMA_INVALID",
+      "observeHandlerDigest without observe events",
+    );
+  }
   // The definition names the file literally. It must never COMPUTE the path at fire
   // time: `$(git rev-parse --show-toplevel)` resolves through the working directory
   // and through GIT_DIR/GIT_WORK_TREE, so a one-time operator approval would cover
@@ -667,24 +735,44 @@ function hookDocument(
     `--handler-digest ${handlerDigest}`,
     `--summary-digest ${summaryFileDigest}`,
   ].join(" ");
-  return {
-    description:
-      "TCRN Workflow governed SessionStart context; fail-open and operator-approved per exact definition.",
-    hooks: {
-      SessionStart: [
+  const hooks: Record<string, unknown> = {
+    SessionStart: [
+      {
+        matcher: "startup|resume",
+        hooks: [
+          {
+            type: "command",
+            command,
+            timeout: 3,
+            statusMessage: "Loading governed TCRN session context",
+          },
+        ],
+      },
+    ],
+  };
+  if (observeHandlerDigest !== null) {
+    const observeCommandPath = shellQuote(
+      resolve(installationRoot, CODEX_OBSERVE_HANDLER_PATH),
+    );
+    for (const event of observeEvents) {
+      hooks[event] = [
         {
-          matcher: "startup|resume",
+          matcher: "",
           hooks: [
             {
               type: "command",
-              command,
-              timeout: 3,
-              statusMessage: "Loading governed TCRN session context",
+              command: `node ${observeCommandPath} ${event} --handler-digest ${observeHandlerDigest}`,
+              timeout: 5,
             },
           ],
         },
-      ],
-    },
+      ];
+    }
+  }
+  return {
+    description:
+      "TCRN Workflow governed SessionStart plus bounded observe hooks; fail-open and operator-approved per exact definition.",
+    hooks,
   };
 }
 
@@ -692,12 +780,24 @@ export function codexHookDefinitionForDigests(
   installationRootValue: unknown,
   handlerDigestValue: unknown,
   summaryFileDigestValue: unknown,
+  observeEventsValue: unknown = [],
+  observeHandlerDigestValue: unknown = null,
 ): { readonly source: string; readonly binding: CodexActivationBinding } {
   const installationRoot = canonicalInstallationRoot(installationRootValue);
   const handlerDigest = sha(handlerDigestValue, "handlerDigest");
   const summaryFileDigest = sha(summaryFileDigestValue, "summaryFileDigest");
+  const observeEvents = normalizeObserveEvents(observeEventsValue);
+  const observeHandlerDigest = observeEvents.length === 0
+    ? null
+    : sha(observeHandlerDigestValue, "observeHandlerDigest");
   const source = canonicalJson(
-    hookDocument(installationRoot, handlerDigest, summaryFileDigest),
+    hookDocument(
+      installationRoot,
+      handlerDigest,
+      summaryFileDigest,
+      observeEvents,
+      observeHandlerDigest,
+    ),
   );
   return deepFreeze({
     source,
@@ -715,6 +815,10 @@ export interface CodexActivationArtifacts {
   readonly summary: CodexSessionSummary;
   readonly summarySource: string;
   readonly handlerSource: string;
+  readonly observeEvents: readonly ObserveHookEvent[];
+  readonly observeManifestDigest: string | null;
+  readonly observeHandlerSource: string | null;
+  readonly observeHandlerDigest: string | null;
   readonly hooksSource: string;
   readonly binding: CodexActivationBinding;
   readonly artifactsDigest: string;
@@ -723,17 +827,37 @@ export interface CodexActivationArtifacts {
 export function generateCodexActivationArtifacts(
   summaryValue: unknown,
   installationRootValue: unknown,
+  observeEventsValue: unknown = [],
+  projectManifestDigestValue: unknown = undefined,
 ): CodexActivationArtifacts {
   const summary = validateCodexSessionSummary(summaryValue);
   const installationRoot = canonicalInstallationRoot(installationRootValue);
+  const observeEvents = normalizeObserveEvents(observeEventsValue);
   const summarySource = canonicalJson(summary);
   const handlerSource = generateCodexSessionStartScript();
   const handlerDigest = rawSha256(handlerSource);
   const summaryFileDigest = rawSha256(summarySource);
+  let observeManifestDigest: string | null = null;
+  let observeHandlerSource: string | null = null;
+  if (observeEvents.length > 0) {
+    observeManifestDigest = sha(
+      projectManifestDigestValue,
+      "projectManifestDigest",
+    );
+    observeHandlerSource = generateObserveHookHandler({
+      events: observeEvents,
+      manifestDigest: observeManifestDigest,
+    });
+  }
+  const observeHandlerDigest = observeHandlerSource === null
+    ? null
+    : observeHookHandlerDigest(observeHandlerSource);
   const definition = codexHookDefinitionForDigests(
     installationRoot,
     handlerDigest,
     summaryFileDigest,
+    observeEvents,
+    observeHandlerDigest,
   );
   const basis = {
     schemaVersion: CODEX_ADAPTER_ACTIVATION_VERSION,
@@ -741,6 +865,10 @@ export function generateCodexActivationArtifacts(
     summary,
     summarySource,
     handlerSource,
+    observeEvents,
+    observeManifestDigest,
+    observeHandlerSource,
+    observeHandlerDigest,
     hooksSource: definition.source,
     binding: definition.binding,
   };
@@ -759,6 +887,10 @@ export function validateCodexActivationArtifacts(
       "summary",
       "summarySource",
       "handlerSource",
+      "observeEvents",
+      "observeManifestDigest",
+      "observeHandlerSource",
+      "observeHandlerDigest",
       "hooksSource",
       "binding",
       "artifactsDigest",
@@ -786,10 +918,49 @@ export function validateCodexActivationArtifacts(
   if (handlerSource !== generateCodexSessionStartScript()) {
     fail("CODEX_ACTIVATION_CANONICAL_INVALID", "handlerSource");
   }
+  const observeEvents = normalizeObserveEvents(document.observeEvents);
+  const observeManifestDigest = observeEvents.length === 0
+    ? null
+    : sha(document.observeManifestDigest, "observeManifestDigest");
+  const observeHandlerSource = document.observeHandlerSource === null
+    ? null
+    : text(
+      document.observeHandlerSource,
+      "observeHandlerSource",
+      maximumReceiptBytes,
+    );
+  const observeHandlerDigest = document.observeHandlerDigest === null
+    ? null
+    : sha(document.observeHandlerDigest, "observeHandlerDigest");
+  if (observeEvents.length === 0) {
+    if (
+      document.observeManifestDigest !== null ||
+      document.observeHandlerSource !== null ||
+      document.observeHandlerDigest !== null
+    ) {
+      fail("CODEX_ACTIVATION_CANONICAL_INVALID", "empty observe surface");
+    }
+  } else {
+    if (observeManifestDigest === null || observeHandlerSource === null || observeHandlerDigest === null) {
+      fail("CODEX_ACTIVATION_CANONICAL_INVALID", "incomplete observe surface");
+    }
+    const expectedObserveHandler = generateObserveHookHandler({
+      events: observeEvents,
+      manifestDigest: observeManifestDigest,
+    });
+    if (
+      observeHandlerSource !== expectedObserveHandler ||
+      observeHandlerDigest !== observeHookHandlerDigest(observeHandlerSource)
+    ) {
+      fail("CODEX_ACTIVATION_CANONICAL_INVALID", "observe handler");
+    }
+  }
   const expected = codexHookDefinitionForDigests(
     installationRoot,
     rawSha256(handlerSource),
     rawSha256(summarySource),
+    observeEvents,
+    observeHandlerDigest,
   );
   const hooksSource = text(
     document.hooksSource,
@@ -825,6 +996,10 @@ export function validateCodexActivationArtifacts(
     summary,
     summarySource,
     handlerSource,
+    observeEvents,
+    observeManifestDigest,
+    observeHandlerSource,
+    observeHandlerDigest,
     hooksSource,
     binding,
   };
@@ -1077,11 +1252,13 @@ export function validateCodexActivationInstallationReceipt(
     };
   });
   const paths = entries.map((entry) => entry.path);
-  const wanted = [...CODEX_ACTIVATION_PATHS].sort(compareCanonicalText);
-  if (
-    paths.length !== wanted.length ||
-    paths.some((path, index) => path !== wanted[index])
-  ) {
+  const sortedPaths = [...paths].sort(compareCanonicalText);
+  const legacyPaths = [...CODEX_ACTIVATION_BASE_PATHS].sort(compareCanonicalText);
+  const observePaths = [...CODEX_ACTIVATION_OBSERVE_PATHS].sort(compareCanonicalText);
+  const matches = (wanted: readonly string[]) =>
+    sortedPaths.length === wanted.length &&
+    sortedPaths.every((path, index) => path === wanted[index]);
+  if (!matches(legacyPaths) && !matches(observePaths)) {
     fail("CODEX_ACTIVATION_RECEIPT_INVALID", "activation receipt entry set");
   }
   const bindingDocument = record(document.binding, "activation receipt binding");

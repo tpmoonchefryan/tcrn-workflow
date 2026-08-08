@@ -47,9 +47,39 @@ node tools/stop-pact/cli.mjs cancel
 node tools/stop-pact/cli.mjs status
 ```
 
+The registration gate is explicit and read-only:
+
+```
+node tools/stop-pact/verify-channel.mjs --verify-channel --project-dir <root>
+```
+
+It reads the actual project Stop registration, executes that exact registered
+command against a scratch pact, and checks the host decision response. It also
+reds on an active pact whose expiry has passed. The gate never installs or
+edits a hook. `pnpm verify:stop-pact` checks both the Workflow and platform
+roots; a red result is evidence that registration or the current pact state
+still needs an owner action.
+
 The three ticket classes are the only legitimate reasons a run may stop early — verbatim
 the stop-budget ruling. The pact lives at `~/.claude/stop-pact/current.json` (override
 with `TCRN_STOP_PACT_PATH`).
+
+## Codex host adapter
+
+Current Codex supplies a `Stop` event, but its payload and stdout contract differ from
+Claude Code's hook. `codex-executor.mjs` is the narrow host adapter: it accepts the
+real Stop payload, reads this same pact file, calls this same decider, writes this same
+runtime state, and emits the host decision response. It does not accept a
+caller-supplied pact or work status, and it never installs a Codex hook by itself.
+
+The stdin payload may be the real Codex Stop object (`session_id`, `model`,
+`stop_hook_active`, `tool_use_count`, and additional host fields) or the legacy test
+envelope. An absent session or work delta allows without writing; an absent timestamp
+is filled at the adapter boundary. An absent or unidentifiable model resolves to
+`observe`; an identified non-flagship model may reach `enforce`, but only against the
+shared pact's `status` and runtime counter. Default stdout is empty for allow and is
+`{"decision":"block","reason":"..."}` for block. Use `--diagnostic` for the
+neutral machine-readable envelope.
 
 ## Wiring (D1: user level)
 
@@ -92,5 +122,8 @@ ordinary sessions are untouched.
   race.
 - **One active pact per user.** Two concurrent run-to-completion sessions are not yet
   supported; the second `start` refuses unless `--force`.
-- **Codex has no equivalent Stop event**, so this governs Claude Code only; the gap is
-  recorded per supply-parity (`TCRN-CROSS-STORY-125`).
+- **Codex Stop is host-adapted, not host-claimed.** `codex-executor.mjs` consumes the
+  current Stop payload and speaks the host response protocol, but this repository does
+  not claim that the running Codex Desktop process has loaded, approved, or fired a
+  live hook. The host difference and the separate `ssh-write-observer` coverage
+  residual are recorded in `docs/reports/init-020/STORY-191-adapter-equivalence-matrix.json`.
