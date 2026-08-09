@@ -1,7 +1,7 @@
 {
   "env": {
     "TCRN_SSH_GOVERNED_HOST": "ci-governed-host.invalid",
-    "TCRN_SSH_RUNTIME_ROOT": "/srv/ci-governed-runtime",
+    "TCRN_SSH_RUNTIME_ROOT": "/opt/ci-governed-runtime",
     "TCRN_SSH_LOOPBACK": "ci-loopback.invalid",
     "TCRN_SSH_FACADE_ENDPOINT": "ci-facade.invalid:65500",
     "TCRN_SSH_TARGET_ROSTER": "fixtures/observer/ci-target-roster.json"

@@ -32,6 +32,7 @@ import {
   parseHistoricalTreePaths,
   scanPrivacyEntries,
 } from "./lib/privacy.mjs";
+import { privateRuntimeConfig } from "./lib/private-token-roster.mjs";
 import {
   P8_SUPPORTED_AOS_RELEASES,
   P8_RELEASE_ARTIFACTS,
@@ -1624,7 +1625,19 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
   }
   const refs = run("git", ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(upstream)"], { raw: true });
   entries.push({ label: "git-refs", kind: "ref", content: decodeGitMetadataBytes(refs, "PRIVACY_REFS_UTF8_INVALID") });
-  const findings = scanPrivacyEntries(entries, { owner });
+  // INC-122: feed the gate the deployment-private runtime values so the
+  // PRIVATE_RUNTIME_VALUE legs are actually built. The roster is value-free by
+  // design (the host supplies the values at runtime), so on a governed host —
+  // where settings.local provides real TCRN_SSH_* values — the scan now catches
+  // the bare governed hostname and runtime root (e.g. baked into a tracked test
+  // fixture) that the earlier legs, keyed on suffixes and encoders, missed. When
+  // the environment is unconfigured (a public CI checkout) no real value is known
+  // and none is invented, so nothing private is embedded in the gate itself.
+  const runtime = privateRuntimeConfig();
+  const privateTokens = runtime.configured
+    ? [runtime.host, runtime.runtimeRoot, runtime.loopback, runtime.facadeEndpoint, `${runtime.runtimeRoot}/governance`]
+    : [];
+  const findings = scanPrivacyEntries(entries, { owner, privateTokens });
   assertion(findings.length === 0, "PRIVACY_FINDINGS", findings.join(","));
   const source = await verifySource();
   return success("PRIVACY_SOURCE_CLEAN", {
