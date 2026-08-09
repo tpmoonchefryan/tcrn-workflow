@@ -137,8 +137,10 @@ test("ADR-0004 §9.4: workspace view names and bytes are identical at the same h
     await withStorageBackendFactory(() => pg, async () => initializeWorkspace({ ...options, roots: pgWorkspace.roots }));
 
     const fileBackend = new FileBackend(file.workspace);
-    const fileViewNames = await fileBackend.listViewNames();
-    const pgViewNames = await pg.listViewNames();
+    // The claim is set equality; readdir enumeration order is OS-specific (Linux and
+    // macOS disagree), so compare sorted copies rather than arrival order.
+    const fileViewNames = (await fileBackend.listViewNames()).slice().sort();
+    const pgViewNames = (await pg.listViewNames()).slice().sort();
     assert.deepEqual(pgViewNames, fileViewNames, "workspace view-name sets are identical");
     for (const name of fileViewNames) {
       assert.deepEqual(await pg.readView(name), await fileBackend.readView(name), `${name} bytes are identical`);
