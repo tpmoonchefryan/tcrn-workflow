@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // TCRN-CROSS-INIT-019 INC-054 — 批单逐项核销:处置集与原单条目集机器可 diff.
 //
 //   node tcrn-workflow/scripts/closeout-verify.mjs --manifest <manifest.json>

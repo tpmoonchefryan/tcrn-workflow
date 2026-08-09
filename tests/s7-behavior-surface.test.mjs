@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // S7 — engine behavior-surface golden samples (TCRN-CROSS-STORY-141).
 //
 // The engine's behavior surface is deterministic for a fixed input: same bytes in,

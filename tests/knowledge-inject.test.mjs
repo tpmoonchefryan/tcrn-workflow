@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // TCRN-CROSS-INIT-019 STORY-162.5 — the pure half of the knowledge injection chain.
 // The liveness gate itself (--verify-channel) needs the live host and is run by hand /
 // in the runner; these tests hold the pure decision logic (gate, token extraction,

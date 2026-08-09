@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // S11 (TCRN-CROSS-STORY-151) — host session JSONL token parser.
 //
 // Reads Claude Code session transcripts (JSONL under ~/.claude/projects) and

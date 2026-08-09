@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // INC-105 — stop-pact in-position gate.
 //
 // A stop decider passing pure tests is not evidence that a host has registered it.

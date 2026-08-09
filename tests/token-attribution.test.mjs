@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // R2 — exit-code contract proof for scripts/token-attribution.mjs.
 //
 // The defect this file exists to prevent: the exit contract was prose the bytes did

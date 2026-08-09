@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // TCRN-CROSS-INIT-019 INC-055 — break-glass allowlist consistency gate.
 //
 //   node tcrn-workflow/scripts/breakglass-consistency-check.mjs

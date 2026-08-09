@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // S6 lesson corpus — TCRN-CROSS-STORY-147, reworked under TCRN-CROSS-INC-034/035.
 //
 // WHAT THIS IS, AND WHAT THE PREVIOUS SHAPE WAS.

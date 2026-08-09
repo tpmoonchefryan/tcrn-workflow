@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // S6 assertion-discrimination gate — TCRN-CROSS-INC-034 / INC-035.
 //
 // This replaces the promptfoo-backed "deterministic subset" that ran on every

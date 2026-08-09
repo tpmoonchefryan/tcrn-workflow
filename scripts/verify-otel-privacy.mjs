@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // S10 (TCRN-CROSS-STORY-150) — privacy self-check for the OTel span sinks.
 //
 // Reads a JSONL span sink and asserts every record carries only the allowed label

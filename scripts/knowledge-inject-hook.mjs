@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // TCRN-CROSS-INIT-019 STORY-162.4 — the hook wrapper for knowledge injection.
 //
 // Claude Code fires a hook with a JSON body on stdin (SessionStart has no prompt;

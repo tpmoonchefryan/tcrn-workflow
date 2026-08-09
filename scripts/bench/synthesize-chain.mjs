@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // S12.1 — synthesize a scratch chain of N events through the engine's public CLI
 // (TCRN-CROSS-STORY-142).
 //

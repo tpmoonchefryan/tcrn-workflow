@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // TCRN-CROSS-INIT-020 INC-079 — apply the chain DDL to a Postgres so the PG
 // backend tests can run against a real schema + append-only trigger. CI's
 // `verify-pg` job runs this after the postgres service starts; the VM applies the

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // S15 — hot-path context byte baseline (TCRN-CROSS-STORY-143).
 //
 // Measures the byte size of the files that sit in every governed session's context

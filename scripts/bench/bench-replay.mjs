@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // S12.2 — replay benchmark over a synthesized scratch chain (TCRN-CROSS-STORY-142).
 //
 // Runs the four common read verbs — status, validate, export, work-list — against

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // S10 (TCRN-CROSS-STORY-150) — engine verb entry/exit spans (observability).
 //
 // Emits one JSONL span per dispatched verb (entry + exit) when TCRN_OTEL_SINK is

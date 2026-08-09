@@ -64,7 +64,7 @@
     "verify:licenses": "node scripts/task.mjs licenses",
     "verify:lifecycle": "node scripts/task.mjs lifecycle",
     "verify:map": "node scripts/task.mjs verification-map",
-    "verify:observe-channel": "node scripts/breakglass-consistency-check.mjs && node scripts/ssh-write-observer.mjs --verify-channel --project-dir . --project-dir ..",
+    "verify:observe-channel": "node scripts/observe-channel-proof.mjs",
     "verify:offline": "node scripts/task.mjs offline",
     "verify:p1": "node scripts/task.mjs verify-p1",
     "verify:p2": "node scripts/task.mjs p2",
@@ -95,7 +95,7 @@
     "verify:story-193": "node --test tests/qa4-codex-hook-equivalence.test.mjs",
     "test-wiring:proof": "node scripts/test-wiring-proof.mjs",
     "pg:schema": "node scripts/apply-pg-schema.mjs",
-    "pg:test": "node scripts/apply-pg-test-schema.mjs && node --test --test-concurrency=1 packages/pg-backend/test/*.test.mjs"
+    "pg:test": "node scripts/pg-test-runner.mjs"
   },
   "devDependencies": {
     "@types/node": "24.13.2",

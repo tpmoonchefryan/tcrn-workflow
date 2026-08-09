@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // S7 fixed inputs — the single source both the golden generator and the golden
 // comparison test read, so the snapshot can never drift from what the test asserts.
 import {

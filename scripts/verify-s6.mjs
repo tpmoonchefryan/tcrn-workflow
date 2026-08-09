@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // S6 gate entry — TCRN-CROSS-STORY-148, reworked under TCRN-CROSS-INC-034/035.
 //
 // WHAT CHANGED AND WHY. This used to shell out to promptfoo against

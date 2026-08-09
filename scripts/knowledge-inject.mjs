@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // TCRN-CROSS-INIT-019 STORY-162 — the knowledge injection chain.
 //
 //   node tcrn-workflow/scripts/knowledge-inject.mjs --prompt "<p>" [--partition X]

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // TCRN-CROSS-INIT-019 STORY-167 — 待 Owner 队列:从链与仓取数渲染,不写成散文.
 //
 //   node tcrn-workflow/scripts/owner-queue.mjs [--partition cross-project]

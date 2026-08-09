@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // S7 golden — persona-render (TCRN-CROSS-STORY-141; re-homed under TCRN-CROSS-INC-034).
 //
 // The engine emits CANONICAL single-line JSON, and this snapshot locks those exact

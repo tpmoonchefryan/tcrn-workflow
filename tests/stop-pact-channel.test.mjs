@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // INC-105 — the stop-pact gate must measure the registered command, not the pure decider.
 
 import assert from "node:assert/strict";
