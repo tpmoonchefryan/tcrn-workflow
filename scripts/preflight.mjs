@@ -25,32 +25,34 @@ const ALLOWED_ENV_NAMES = Object.freeze([
 ]);
 
 export const P1_GATE_SPECS = Object.freeze([
-  ["format", ["pnpm", "format:check"]],
-  ["lint", ["pnpm", "lint"]],
-  ["typecheck", ["pnpm", "typecheck"]],
-  ["build", ["pnpm", "build"]],
-  ["test", ["pnpm", "test"]],
-  ["test-trust", ["pnpm", "test-trust"]],
-  ["archive", ["pnpm", "archive"]],
-  ["sbom", ["pnpm", "sbom"]],
-  ["licenses", ["pnpm", "verify:licenses"]],
-  ["vulnerabilities", ["pnpm", "verify:vulnerabilities"]],
-  ["source", ["pnpm", "verify:source"]],
-  ["lifecycle", ["pnpm", "verify:lifecycle"]],
-  ["offline", ["pnpm", "verify:offline"]],
-  ["governance", ["pnpm", "verify:governance"]],
-  ["workspace", ["pnpm", "verify:workspace"]],
-  ["privacy", ["pnpm", "verify:privacy"]],
-  ["roots", ["pnpm", "verify:roots"]],
-  ["ci", ["pnpm", "verify:ci"]],
-  ["verification-map", ["pnpm", "verify:map"]],
-  ["history", ["pnpm", "verify:history"]],
+  ["format", ["pnpm", "run", "--silent", "format:check"]],
+  ["lint", ["pnpm", "run", "--silent", "lint"]],
+  ["typecheck", ["pnpm", "run", "--silent", "typecheck"]],
+  ["build", ["pnpm", "run", "--silent", "build"]],
+  ["test", ["pnpm", "run", "--silent", "test"]],
+  ["test-trust", ["pnpm", "run", "--silent", "verify:trust"]],
+  ["archive", ["pnpm", "run", "--silent", "archive"]],
+  ["sbom", ["pnpm", "run", "--silent", "sbom"]],
+  ["licenses", ["pnpm", "run", "--silent", "verify:licenses"]],
+  ["vulnerabilities", ["pnpm", "run", "--silent", "verify:vulnerabilities"]],
+  ["source", ["pnpm", "run", "--silent", "verify:source"]],
+  ["lifecycle", ["pnpm", "run", "--silent", "verify:lifecycle"]],
+  ["offline", ["pnpm", "run", "--silent", "verify:offline"]],
+  ["governance", ["pnpm", "run", "--silent", "verify:governance"]],
+  ["workspace", ["pnpm", "run", "--silent", "verify:workspace"]],
+  ["privacy", ["pnpm", "run", "--silent", "verify:privacy"]],
+  ["roots", ["pnpm", "run", "--silent", "verify:roots"]],
+  ["ci", ["pnpm", "run", "--silent", "verify:ci"]],
+  ["verification-map", ["pnpm", "run", "--silent", "verify:map"]],
+  ["history", ["pnpm", "run", "--silent", "verify:history"]],
 ]);
 
 export const LESSON_GATE_SPECS = Object.freeze([
   ["lessons", ["node", "scripts/verify-s6.mjs"]],
   ["observer", ["node", "scripts/ssh-write-observer.mjs", "--verify-channel", "--project-dir", "."]],
 ]);
+
+const PnpmRun = (script) => ["pnpm", "run", "--silent", script];
 
 const UNSAFE_PROBE_FORMS = Object.freeze([
   ["ZSH_COMMAND", /(?:^|[\s/])zsh(?:$|[\s])/iu],
@@ -175,6 +177,17 @@ async function runPreflight({ runPg = false } = {}) {
     };
   }
 
+  const sourceOriginResult = git(["remote", "get-url", "origin"], ROOT, publicEnvironment);
+  const sourceOrigin = sourceOriginResult.stdout.trim();
+  if (sourceOriginResult.status !== 0 || sourceOrigin.length === 0) {
+    return {
+      ok: false,
+      reasonCode: "PREFLIGHT_SOURCE_ORIGIN_UNREADABLE",
+      isolation: { clone: "not-created", environment: "env-i allowlist", siblingCheckout: "unavailable" },
+      gates: [summarizeGateResult("source-origin", ["git", "remote", "get-url", "origin"], sourceOriginResult)],
+    };
+  }
+
   const commitResult = git(["rev-parse", "HEAD"], ROOT, publicEnvironment);
   const commit = commitResult.stdout.trim();
   if (commitResult.status !== 0 || !/^[a-f0-9]{40}$/u.test(commit)) {
@@ -214,13 +227,25 @@ async function runPreflight({ runPg = false } = {}) {
       };
     }
 
+    const checkoutOrigin = git(["remote", "set-url", "origin", sourceOrigin], checkout, publicEnvironment);
+    gates.push(summarizeGateResult("checkout-origin", ["git", "remote", "set-url", "origin", "<public-origin>"], checkoutOrigin));
+    if (checkoutOrigin.status !== 0) {
+      return {
+        ok: false,
+        reasonCode: "PREFLIGHT_CHECKOUT_ORIGIN_FAILED",
+        commit,
+        isolation: { clone: "--no-local", environment: "env-i allowlist", siblingCheckout: "unavailable" },
+        gates,
+      };
+    }
+
     const install = run(["pnpm", "install", "--offline", "--frozen-lockfile", "--ignore-scripts"], checkout, publicEnvironment);
     gates.push(summarizeGateResult("dependency-install", ["pnpm", "install", "--offline", "--frozen-lockfile", "--ignore-scripts"], install));
 
     const gateSpecs = [...P1_GATE_SPECS, ...LESSON_GATE_SPECS];
     gates.push(...collectGateResults(gateSpecs, (command) => run(command, checkout, publicEnvironment)));
     if (runPg) {
-      gates.push(...collectGateResults([["verify-pg", ["pnpm", "pg:test"]]], (command) => run(command, checkout, publicEnvironment)));
+      gates.push(...collectGateResults([["verify-pg", PnpmRun("pg:test")]], (command) => run(command, checkout, publicEnvironment)));
     } else {
       gates.push(successResult("verify-pg", ["pnpm", "pg:test"], "PREFLIGHT_PG_OPTIONAL_SKIPPED"));
       gates.at(-1).ok = true;

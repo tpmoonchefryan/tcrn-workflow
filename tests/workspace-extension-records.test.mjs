@@ -1506,12 +1506,24 @@ test("INIT-004: the CLI opens Incident for creation and it materializes outside 
   // refused by the graph validator, which the protocol suite pins for unmapped kinds).
   const fx = await cliSeededFixture(context);
   const ws = fx.ws;
+  const storyScope = [
+    "【Goal】为谁=the test owner；目的锚=exercise Incident parenting；符合性判据=the Incident materializes；判定人=执行方自证。",
+    "【Requirements】现象与证据=the CLI previously rejected Incident creation；修复项=实现 Story 子项的 CLI 路径；Story keeps its complete scope and legacy elements.",
+    "【Acceptance Criteria】GIVEN a Story WHEN an Incident is created under it THEN the Incident is materialized.",
+    "【Business Background】INIT-004 CLI coverage.",
+    "【Preconditions】the seeded workspace exists.",
+    "【Assumptions】the CLI owns the test chain.",
+    "【Use Cases & Examples】create a Story and an Incident child.",
+    "【Feature Toggle & Setting】无；本测试不启用 feature toggle。",
+    "【Permissions】the test owner may create work.",
+    "【Implementation Notes】fixture-only scope.",
+  ].join("\n\n");
   const story = JSON.parse((await invokeCli(["work-create", "--workspace", ws, "--expected-version", "2",
     "--at", instant(3), "--project-id", fx.projectId, "--external-key", "EPIC-X", "--kind", "Epic",
     "--parent-id", fx.workId])).output);
   const st = JSON.parse((await invokeCli(["work-create", "--workspace", ws, "--expected-version", "3",
     "--at", instant(4), "--project-id", fx.projectId, "--external-key", "STORY-X", "--kind", "Story",
-    "--parent-id", story.record.id])).output);
+    "--parent-id", story.record.id, "--scope", storyScope])).output);
 
   // Incident, found in that Story, via the CLI.
   const incident = await invokeCli(["work-create", "--workspace", ws, "--expected-version", "4",

@@ -43,6 +43,18 @@ const fixture = JSON.parse(await readFile(
   "utf8",
 ));
 const clone = (value) => structuredClone(value);
+const GENERIC_STORY_SCOPE = [
+  "【Goal】为谁=generic workspace owner；目的锚=exercise planned delivery；符合性判据=the generic flow completes；判定人=执行方自证。",
+  "【Requirements】现象与证据=generic flow must remain reproducible；修复项=实现 planned delivery scope；保留兼容的四项 legacy elements；缺失项必须明确写明无及原因。",
+  "【Acceptance Criteria】GIVEN a generic workspace WHEN the planned delivery is run THEN the records complete in dependency order.",
+  "【Business Background】generic profile cold-start coverage.",
+  "【Preconditions】workspace roots are initialized.",
+  "【Assumptions】the generic fixture owns its test data.",
+  "【Use Cases & Examples】create and complete a minimal delivery tree.",
+  "【Feature Toggle & Setting】无；本测试不依赖 feature toggle。",
+  "【Permissions】generic workspace owner may execute the flow.",
+  "【Implementation Notes】fixture-only scope for the generic profile test.",
+].join("\n\n");
 const fileAuthority = (path, bytes) => ({
   expectedCanonicalPath: path,
   expectedFileSha256: createHash("sha256").update(bytes).digest("hex"),
@@ -1024,6 +1036,7 @@ test("empty non-project-specific Workspace cold-start completes the minimal plan
           kind,
           parentId,
           status: "planned",
+          scope: kind === "Story" ? GENERIC_STORY_SCOPE : undefined,
         });
       }
       const completionOrder = ["GENERIC-SUBTASK", "GENERIC-STORY", "GENERIC-EPIC", "GENERIC-INITIATIVE"];

@@ -101,11 +101,23 @@ for (let e = 0; e < epicCount; e += 1) {
 }
 
 const stories = [];
+const syntheticStoryScope = [
+  "【Goal】为谁=synthetic benchmark owner；目的锚=measure replay;符合性判据=benchmark completes;判定人=执行方自证。",
+  "【Requirements】evidence=synthetic chain output is reproducible; fix=implement the generated Story scope; retain the required legacy elements; absent elements state no and why.",
+  "【Acceptance Criteria】GIVEN a synthetic chain WHEN it is replayed THEN the benchmark remains deterministic.",
+  "【Business Background】synthetic replay benchmark.",
+  "【Preconditions】the benchmark workspace is initialized.",
+  "【Assumptions】all generated records are disposable.",
+  "【Use Cases & Examples】generate stories and subtasks.",
+  "【Feature Toggle & Setting】none; benchmark uses no toggle.",
+  "【Permissions】the benchmark actor may generate records.",
+  "【Implementation Notes】generated fixture scope.",
+].join("\n\n");
 for (let s = 0; s < eventsTarget; s += 1) {
   const epicId = epics[s % epics.length];
   const story = run(["work-create", "--workspace", workspace, "--expected-version", String(version),
     "--at", at(), "--project-id", projectId, "--parent-id", epicId,
-    "--external-key", `S12-STORY-${eventsTarget}-${s}`, "--kind", "Story"]);
+    "--external-key", `S12-STORY-${eventsTarget}-${s}`, "--kind", "Story", "--scope", syntheticStoryScope]);
   version = story.version;
   stories.push(story.record.id);
 }
