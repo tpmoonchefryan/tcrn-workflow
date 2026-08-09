@@ -19,6 +19,18 @@ import {
 import { PROTOCOL_LIMITS, validateEventChain } from "../dist/build/packages/protocol/src/index.js";
 
 const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
+const STORY_SCOPE = [
+  "【Goal】为谁改变什么=CLI fixture；目的锚=STORY-209；符合性判据=命令可复跑；判定人=Owner。",
+  "【Requirements】现象与证据=fixture 命令；修复项=实现 fixture。",
+  "【Acceptance Criteria】GIVEN fixture WHEN 执行 THEN 通过。",
+  "【Business Background】证据=测试需要真实 Story。",
+  "【Preconditions】无——原因：测试已初始化工作区。",
+  "【Assumptions】无——原因：不改变协议。",
+  "【Use Cases & Examples】无——原因：只覆盖读面。",
+  "【Feature Toggle & Setting】无——原因：无运行时开关。",
+  "【Permissions】测试执行方。",
+  "【Implementation Notes】决策点及裁定状态=fixture planned/ready。",
+].join("\n");
 
 async function fixture(context) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-cli-read-")));
@@ -46,7 +58,7 @@ async function fixture(context) {
     ids.epicA = s.work.find((r) => r.externalKey === "EPIC-A").id;
     s = await createWork(workspace, lease, { expectedVersion: v, occurredAt: at(), projectId: ids.projectB, externalKey: "INIT-B", kind: "Initiative", parentId: null }); v += 1;
     ids.initB = s.work.find((r) => r.externalKey === "INIT-B").id;
-    s = await createWork(workspace, lease, { expectedVersion: v, occurredAt: at(), projectId: ids.projectA, externalKey: "STORY-A", kind: "Story", parentId: ids.epicA, status: "ready" }); v += 1;
+    s = await createWork(workspace, lease, { expectedVersion: v, occurredAt: at(), projectId: ids.projectA, externalKey: "STORY-A", kind: "Story", parentId: ids.epicA, status: "ready", scope: STORY_SCOPE }); v += 1;
     ids.storyA = s.work.find((r) => r.externalKey === "STORY-A").id;
     s = await deleteWork(workspace, lease, { expectedVersion: v, occurredAt: at(), id: ids.storyA }); v += 1;
   } finally {

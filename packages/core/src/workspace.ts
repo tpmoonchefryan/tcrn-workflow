@@ -73,6 +73,7 @@ import { GateIdentityError, gateIdentityDecision, permitsGateOutcome, validateGa
 import type { GateIdentityAuthorityContext, GateIdentityDecision } from "./gate-identity.js";
 import type { CanonicalRoot } from "./root-identity.js";
 import type { ExplicitRoot } from "./index.js";
+import { storyScopeFromRecord, storyScopeNamesOwnerDecider, validateStoryRecord } from "./story-scope-compliance.js";
 
 export const WORKSPACE_SCHEMA_VERSION = "tcrn.workspace.v1" as const;
 export const WORKSPACE_STORAGE_VERSION = 1 as const;
@@ -119,6 +120,9 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   // forensible archive. Named here because acquireWorkspaceLease raises it and
   // fail() is typed to WorkspaceReasonCode.
   "WORKSPACE_STORAGE_RELOCATED",
+  "WORKSPACE_STORY_SCOPE_REQUIRED",
+  "WORKSPACE_STORY_SCOPE_INVALID",
+  "WORKSPACE_OWNER_ACCEPTANCE_REQUIRED",
   "WORKSPACE_VIEW_STALE",
 ] as const);
 
@@ -1166,9 +1170,9 @@ function readGateEvidenceLocator(extensions: Readonly<Record<string, unknown>>):
   return typeof value === "string" ? value : undefined;
 }
 
-// E05 (advisory scope-on-record): non-binding advisory fields on a work record,
-// written by the additive work.annotated operation. Both are required:false extensions
-// -- no registry row, they never gate a transition or block done, and a binary
+// E05 (advisory scope-on-record): advisory fields on a work record, written by the
+// additive work.annotated operation. Both are required:false extensions -- no registry
+// row; Story scope gates execution and Owner-decided completion, while a binary
 // predating them still reads any workspace that never annotates. advisory:scope is an
 // authoritative one-line scope/intent statement; advisory:decided-by backlinks the
 // governing conference minutes, so an executor reads a work item's scope off the record
@@ -1246,6 +1250,19 @@ function isMinutesId(value: unknown): boolean {
     return false;
   }
   return true;
+}
+
+function advisoryHasMinutes(record: Pick<WorkRecord, "extensions">): boolean {
+  const entry = record.extensions[ADVISORY_DECIDED_BY_KEY];
+  return Array.isArray(entry?.value) && entry.value.length > 0 && entry.value.every((item) => isMinutesId(item));
+}
+
+function assertStoryCompletionAdmission(record: WorkRecord, targetStatus: WorkStatus): void {
+  if (record.kind !== "Story" || targetStatus !== "done") return;
+  const scope = storyScopeFromRecord(record);
+  if (storyScopeNamesOwnerDecider(scope) && !advisoryHasMinutes(record)) {
+    fail("WORKSPACE_OWNER_ACCEPTANCE_REQUIRED", "Owner-decided Story requires a decided-by minutes backlink before done");
+  }
 }
 
 // Defence in depth on the advisory value shape. The terminal validateWorkGraph over the
@@ -2826,6 +2843,8 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
   readonly kind: PlannedDeliveryKind;
   readonly parentId: string | null;
   readonly status?: WorkStatus;
+  readonly scope?: string;
+  readonly decidedBy?: readonly string[];
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   const externalKey = canonicalExternalKey(input.externalKey);
   const id = deriveStableId("work", externalKey);
@@ -2852,6 +2871,19 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
           `cannot add live work under Initiative ${parent.id}: it is already done`);
       }
     }
+    if (input.kind === "Story" && input.scope === undefined) {
+      fail("WORKSPACE_STORY_SCOPE_REQUIRED", "a new Story must carry its complete scope atomically");
+    }
+    if (input.scope !== undefined && input.scope.length === 0) {
+      fail("WORKSPACE_STORY_SCOPE_REQUIRED", "Story scope must be a non-empty string");
+    }
+    if (input.decidedBy !== undefined && (input.decidedBy.length === 0 || !input.decidedBy.every((item) => isMinutesId(item)))) {
+      fail("WORKSPACE_INPUT_INVALID", "advisory decided-by must be a non-empty list of minutes ids");
+    }
+    const extensions = workAdvisoryExtensions({}, {
+      ...(input.scope !== undefined ? { scope: input.scope } : {}),
+      ...(input.decidedBy !== undefined ? { decidedBy: input.decidedBy } : {}),
+    });
     const record: WorkRecord = {
       schemaVersion: "tcrn.work.v1",
       id,
@@ -2863,8 +2895,15 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
       revision: 1,
       updatedAt: input.occurredAt,
       tombstone: false,
-      extensions: {},
+      extensions: extensions as WorkRecord["extensions"],
     };
+    if (record.kind === "Story") {
+      const compliance = validateStoryRecord(record);
+      if (!compliance.ok) {
+        fail("WORKSPACE_STORY_SCOPE_INVALID", compliance.problems.map((problem) => problem.message).join("; "));
+      }
+    }
+    assertStoryCompletionAdmission(record, record.status);
     const work = validateWorkGraph([...state.work, record]);
     return { payload: { operation: "work.created", record: workJsonFields(record) }, projects: state.projects, work };
   }, input);
@@ -2891,6 +2930,22 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
   readonly id: string;
   readonly status: WorkStatus;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  // Story scope is a live write-path admission rule.  Historical chains remain
+  // replayable, but a Story cannot enter an execution or completion state until
+  // its current ten-block scope and legacy obligations are present.
+  if (["ready", "active", "done"].includes(input.status)) {
+    const before = await materializeWorkspace(workspaceRoot);
+    const current = workById(before, input.id);
+    if (current.kind === "Story") {
+      const compliance = validateStoryRecord(current);
+      if (!compliance.ok) {
+        const hasScope = storyScopeFromRecord(current) !== null;
+        fail(hasScope ? "WORKSPACE_STORY_SCOPE_INVALID" : "WORKSPACE_STORY_SCOPE_REQUIRED",
+          compliance.problems.map((problem) => problem.message).join("; "));
+      }
+    }
+    assertStoryCompletionAdmission(current, input.status);
+  }
   // WSA-3 (write-path admission): closing an Initiative to `done` is an act of
   // completion — its whole subtree must already be terminal, or the close is
   // premature. This check lives OUTSIDE appendEvent's reducer on purpose: a
@@ -2921,10 +2976,10 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
   }, input);
 }
 
-// E05 (scope-on-record): attach non-binding advisory fields to a live work record. It
-// never changes status and never touches a gate, so it stays entirely clear of the
-// transition and gate-clearance machinery -- an annotation cannot advance, block, or
-// unblock work. validateWorkGraph re-validates the merged extensions (rejecting a
+// E05 (scope-on-record): attach advisory fields to a live work record. It never changes
+// status and never touches a gate, so an annotation cannot advance, block, or unblock
+// work; the transition path separately enforces Story scope and Owner acceptance.
+// validateWorkGraph re-validates the merged extensions (rejecting a
 // required:true advisory key, which carries no registry row), and the reducer replays
 // the advisory-only delta as WORKSPACE_EVENT_CORRUPT.
 export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease, input: {
@@ -2959,6 +3014,12 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
       fail("WORKSPACE_INPUT_INVALID", "annotation does not change any advisory field");
     }
     const record: WorkRecord = { ...current, extensions: extensions as WorkRecord["extensions"], revision: current.revision + 1, updatedAt: input.occurredAt };
+    if (record.kind === "Story" && input.scope !== undefined) {
+      const compliance = validateStoryRecord(record);
+      if (!compliance.ok) {
+        fail("WORKSPACE_STORY_SCOPE_INVALID", compliance.problems.map((problem) => problem.message).join("; "));
+      }
+    }
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
     return { payload: { operation: "work.annotated", record: workJsonFields(record) }, projects: state.projects, work };
   }, input);

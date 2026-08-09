@@ -11,6 +11,15 @@ pnpm install --offline --frozen-lockfile --ignore-scripts
 pnpm verify:p1
 ```
 
+Before pushing a public branch, run `pnpm preflight`. It creates an independent
+`git clone --no-local --no-hardlinks`, scrubs private `TCRN_*` and sibling-checkout
+variables, and runs the P1 and lessons gates without fail-fast so all red legs are
+visible in the same receipt. The preflight probe contract is executable: do not use
+zsh command modifiers, shell conjunctions, `PIPESTATUS`, `ref:path` probes, `tail`,
+`head`, or `grep` as a verdict. `pnpm verify:privacy` judges the checked-out
+HEAD-reachable public surface; `pnpm verify:privacy:history` is a separate local
+diagnostic and may remain red when retained historical tags contain retired bytes.
+
 Dependencies must be exact versions, compatible with Apache-2.0 distribution,
 and added to the offline dependency and vulnerability policies. Source files
 that accept comments must include `SPDX-License-Identifier: Apache-2.0`.

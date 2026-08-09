@@ -1,4 +1,4 @@
-<!-- tcrn-doc-synced-to: CONTRIBUTING.md 0309c55144aa0e4cdbdaab6290001650e3c0c805c3235bd767940a2934ddf93e -->
+<!-- tcrn-doc-synced-to: CONTRIBUTING.md 3e2f9b9f05b1b55b1518b5de2b17887ec6f1076d7b02dfc9ba89ae457dedd6f2 -->
 
 > **영어가 권위 있는 버전입니다.** 이 번역은 편의를 위해 제공됩니다. 둘이 다를 경우 CONTRIBUTING.md의 영어 텍스트가 우선합니다.
 
@@ -12,6 +12,14 @@
 pnpm install --offline --frozen-lockfile --ignore-scripts
 pnpm verify:p1
 ```
+
+공개 브랜치를 push하기 전에 `pnpm preflight`를 실행하십시오. 이 명령은 독립적인
+`git clone --no-local --no-hardlinks`를 만들고 비공개 `TCRN_*` 및 형제 체크아웃 환경 변수를
+제거한 뒤 P1과 lessons 게이트를 fail-fast 없이 실행하여 모든 빨간 다리를 하나의 영수증에
+기록합니다. 프로브 규율은 기계가 검사합니다. zsh 명령 수정자, 셸 결합자, `PIPESTATUS`,
+`ref:path` 프로브, `tail`, `head`, `grep`을 판정에 사용하지 마십시오. `pnpm verify:privacy`는
+체크아웃한 HEAD에서 도달 가능한 공개 표면을 판정하며, `pnpm verify:privacy:history`는 별도의
+로컬 진단입니다. 보존된 과거 태그에 폐기된 바이트가 있으면 후자는 계속 빨간 상태일 수 있습니다.
 
 의존성은 정확한 버전이어야 하고, Apache-2.0 배포와 호환되어야 하며, 오프라인 의존성 정책과 취약점 정책에 추가되어야 합니다. 주석을 허용하는 소스 파일은 `SPDX-License-Identifier: Apache-2.0`을 포함해야 합니다.
 

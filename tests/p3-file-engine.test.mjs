@@ -60,6 +60,19 @@ import {
   deriveStableId,
 } from "../dist/build/packages/protocol/src/index.js";
 
+const STORY_SCOPE = [
+  "【Goal】为谁改变什么=engine fixture；目的锚=STORY-209；符合性判据=命令可复跑；判定人=Owner。",
+  "【Requirements】现象与证据=fixture 命令；修复项=实现 fixture。",
+  "【Acceptance Criteria】GIVEN fixture WHEN 执行 THEN 通过。",
+  "【Business Background】证据=测试需要真实 Story。",
+  "【Preconditions】无——原因：测试已初始化工作区。",
+  "【Assumptions】无——原因：不改变协议。",
+  "【Use Cases & Examples】无——原因：只覆盖引擎。",
+  "【Feature Toggle & Setting】无——原因：无运行时开关。",
+  "【Permissions】测试执行方。",
+  "【Implementation Notes】决策点及裁定状态=fixture planned。",
+].join("\n");
+
 const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
 
 async function workspaceFixture(options = {}) {
@@ -252,7 +265,7 @@ test("project CRUD and Initiative-Epic-Story-Subtask operations materialize dete
       });
       const epicId = state.work.find((record) => record.kind === "Epic").id;
       state = await createWork(fixture.workspace, lease, {
-        expectedVersion: 3, occurredAt: instant(4), projectId, externalKey: "STORY-ONE", kind: "Story", parentId: epicId,
+        expectedVersion: 3, occurredAt: instant(4), projectId, externalKey: "STORY-ONE", kind: "Story", parentId: epicId, scope: STORY_SCOPE,
       });
       const storyId = state.work.find((record) => record.kind === "Story").id;
       state = await createWork(fixture.workspace, lease, {
@@ -721,7 +734,7 @@ test("WSA-2: a 400-record deep-hierarchy build completes and exports determinist
         state = await createWork(fixture.workspace, lease, { expectedVersion: version, occurredAt: at(version), projectId, externalKey: `EPIC-${i}`, kind: "Epic", parentId: initiativeId });
         const epicId = state.work.find((record) => record.externalKey === `EPIC-${i}`).id;
         version += 1;
-        state = await createWork(fixture.workspace, lease, { expectedVersion: version, occurredAt: at(version), projectId, externalKey: `STORY-${i}`, kind: "Story", parentId: epicId });
+        state = await createWork(fixture.workspace, lease, { expectedVersion: version, occurredAt: at(version), projectId, externalKey: `STORY-${i}`, kind: "Story", parentId: epicId, scope: STORY_SCOPE });
         const storyId = state.work.find((record) => record.externalKey === `STORY-${i}`).id;
         version += 1;
         state = await createWork(fixture.workspace, lease, { expectedVersion: version, occurredAt: at(version), projectId, externalKey: `SUBTASK-${i}`, kind: "Subtask", parentId: storyId });

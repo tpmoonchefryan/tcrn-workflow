@@ -151,6 +151,29 @@
           "evidence": "SOURCE_HARDLINK was green locally and red on every runner because a cross-filesystem pnpm store copies instead of linking. The answer was a test calling link() to build the runner's nlink, not a rule about runners."
         }
       ]
+    },
+    {
+      "id": "evaluated-world-drift",
+      "statement": "A gate is declared green in a world different from the one that evaluates it, while fail-fast ordering or an unbounded scan hides the remaining world-specific failures.",
+      "layer": "environment",
+      "audience": "developer",
+      "disposition": "gated",
+      "gate": "pnpm preflight",
+      "occurrenceCount": 3,
+      "occurrences": [
+        {
+          "date": "2026-08-09",
+          "evidence": "INC-123: the local P1 path and the public CI world diverged on environment, sibling-checkout, race, and failure-ordering conditions; the old path could stop at the first red leg instead of collecting the world it claimed to judge."
+        },
+        {
+          "date": "2026-08-09",
+          "evidence": "INC-124: the privacy check scanned all local objects, so historical tag and pull-ref bytes outside the checked-out release HEAD made the public release gate red even when the evaluated source surface was clean."
+        },
+        {
+          "date": "2026-08-09",
+          "evidence": "INC-125: shell shortcuts, ref:path probes, and text-filter verdicts could inspect a different command world or truncate the evidence; the probe discipline contract now rejects those forms."
+        }
+      ]
     }
   ]
 }

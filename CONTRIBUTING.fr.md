@@ -1,4 +1,4 @@
-<!-- tcrn-doc-synced-to: CONTRIBUTING.md 0309c55144aa0e4cdbdaab6290001650e3c0c805c3235bd767940a2934ddf93e -->
+<!-- tcrn-doc-synced-to: CONTRIBUTING.md 3e2f9b9f05b1b55b1518b5de2b17887ec6f1076d7b02dfc9ba89ae457dedd6f2 -->
 
 > **La version anglaise fait autorité.** Cette traduction est fournie par commodité ; en cas de divergence entre les deux, c'est le texte anglais de CONTRIBUTING.md qui prévaut.
 
@@ -12,6 +12,15 @@ Avant de proposer une modification :
 pnpm install --offline --frozen-lockfile --ignore-scripts
 pnpm verify:p1
 ```
+
+Avant de pousser une branche publique, exécutez `pnpm preflight`. Cette commande crée un
+`git clone --no-local --no-hardlinks` indépendant, retire les variables privées `TCRN_*` et celles
+du checkout frère, puis exécute les portes P1 et lessons sans arrêt au premier échec afin de rendre
+visibles toutes les jambes rouges dans le même reçu. La discipline des sondes est exécutable :
+n'utilisez pas de modificateurs de commande zsh, de conjonctions shell, de `PIPESTATUS`, de sondes
+`ref:path`, de `tail`, `head` ou `grep` pour conclure. `pnpm verify:privacy` juge la surface publique
+atteignable depuis le HEAD checkouté ; `pnpm verify:privacy:history` est un diagnostic local distinct
+et peut rester rouge si des tags historiques conservés contiennent des octets retirés.
 
 Les dépendances doivent être des versions exactes, compatibles avec une distribution Apache-2.0, et ajoutées aux politiques de dépendances hors ligne et de vulnérabilités. Les fichiers sources qui acceptent des commentaires doivent inclure `SPDX-License-Identifier: Apache-2.0`.
 

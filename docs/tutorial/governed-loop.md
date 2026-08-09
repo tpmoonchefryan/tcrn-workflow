@@ -46,7 +46,7 @@ echoes the new record's id in `record.id`; capture each one for the next parent.
 $ tcrn-workflow project-create --workspace ./flagship/workspace --expected-version 0 --at 2026-07-11T00:00:01Z --external-key FLAGSHIP-PROJECT --name Flagship
 $ tcrn-workflow work-create --workspace ./flagship/workspace --expected-version 1 --at 2026-07-11T00:00:02Z --project-id <project-id> --external-key FLAGSHIP-INITIATIVE --kind Initiative
 $ tcrn-workflow work-create --workspace ./flagship/workspace --expected-version 2 --at 2026-07-11T00:00:03Z --project-id <project-id> --external-key FLAGSHIP-EPIC --kind Epic --parent-id <initiative-id>
-$ tcrn-workflow work-create --workspace ./flagship/workspace --expected-version 3 --at 2026-07-11T00:00:04Z --project-id <project-id> --external-key FLAGSHIP-STORY --kind Story --parent-id <epic-id>
+$ tcrn-workflow work-create --workspace ./flagship/workspace --expected-version 3 --at 2026-07-11T00:00:04Z --project-id <project-id> --external-key FLAGSHIP-STORY --kind Story --parent-id <epic-id> --scope <story-scope>
 ```
 
 Each verb returns `WORKSPACE_COMMAND_COMPLETED` with the created `record`. The Epic
@@ -136,7 +136,8 @@ Once the gate is `satisfied`, the story is free to reach `done`.
 
 ```console
 $ tcrn-workflow gate-transition --workspace ./flagship/workspace --expected-version 10 --at 2026-07-11T00:00:13Z --id <gate-id> --status satisfied --minutes-locator <minutes-locator>
-$ tcrn-workflow work-transition --workspace ./flagship/workspace --expected-version 11 --at 2026-07-11T00:00:14Z --id <story-id> --status done
+$ tcrn-workflow work-annotate --workspace ./flagship/workspace --expected-version 11 --at 2026-07-11T00:00:14Z --id <story-id> --decided-by <minutes-id>
+$ tcrn-workflow work-transition --workspace ./flagship/workspace --expected-version 12 --at 2026-07-11T00:00:15Z --id <story-id> --status done
 ```
 
 ## 8. Trace the chain

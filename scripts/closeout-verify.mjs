@@ -19,13 +19,14 @@
 //   "dispositions": {                                 // every original item must appear
 //     "item-id-1": { "kind": "fixed" },
 //     "item-id-2": { "kind": "retained", "ticket": "work:<id>" },  // retained REQUIRES a live chain work id
-//     "item-id-3": { "kind": "deferred", "reason": "..." }
+//     "item-id-3": { "kind": "deferred", "reason": "...", "timing": "..." }
 //   }
 // }
 //
 // Rules: every original item has a disposition; no disposition names an unknown item; a
 // retained disposition names a chain work id; a superseded disposition names the work id
-// that carries it; a deferred disposition carries a reason.
+// that carries it; a deferred disposition carries a reason and timing (or a legacy `scope`
+// field that explicitly states the timing).
 //
 // TCRN-CROSS-INIT-020 INC-077 — the red-leg obligation for window-type closeouts. A
 // freeze/archive/retire/migrate closeout whose acceptance only ran the positive leg
@@ -39,6 +40,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { storyScopeProblems } from "./story-scope-compliance.mjs";
 
 export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -383,6 +385,12 @@ export function verifyCloseout(manifest, options = {}) {
     problems.push("items must not contain duplicate ids");
   }
   problems.push(...chainCloseoutProblems(manifest, items, dispositions, options));
+  // Closeout is an independent backstop: the live authority must carry every
+  // non-terminal Story's scope, even when the transition path was bypassed by a
+  // legacy engine or an imported authority adapter.
+  if (options.authority !== undefined && options.authority !== null) {
+    problems.push(...storyScopeProblems(options.authority.storyScopes ?? options.authority.items));
+  }
   // INC-077: the INIT-020 storage/archive/migration batch is windowed by its
   // item set, not by a caller's self-description. An entry that tries to set
   // `windowed:false` cannot evade the negative-leg obligation.
@@ -419,8 +427,11 @@ export function verifyCloseout(manifest, options = {}) {
     if (d.kind === "superseded" && !chainWorkId(d.carriedBy)) {
       problems.push(`item ${item} is superseded but names no carrying chain work id`);
     }
-    if (d.kind === "deferred" && typeof d.reason !== "string") {
+    if (d.kind === "deferred" && (typeof d.reason !== "string" || d.reason.trim().length === 0)) {
       problems.push(`item ${item} is deferred but carries no reason`);
+    }
+    if (d.kind === "deferred" && !((typeof d.timing === "string" && d.timing.trim().length > 0) || (typeof d.scope === "string" && d.scope.trim().length > 0))) {
+      problems.push(`item ${item} is deferred but carries no timing`);
     }
   }
   for (const item of Object.keys(dispositions)) {

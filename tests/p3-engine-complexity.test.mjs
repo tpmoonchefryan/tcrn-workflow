@@ -27,6 +27,18 @@ import { withWorkspacePerfInstrumentation } from "../dist/build/packages/core/sr
 const minutesLocator = (minutesExternalKey) => `conference-minutes:${deriveStableId("minutes", minutesExternalKey).slice("minutes:".length)}`;
 
 const instant = (second) => `2026-07-11T00:${String(Math.floor(second / 60)).padStart(2, "0")}:${String(second % 60).padStart(2, "0")}Z`;
+const STORY_SCOPE = [
+  "【Goal】为谁改变什么=complexity fixture；目的锚=STORY-209；符合性判据=基准可复跑；判定人=Owner。",
+  "【Requirements】现象与证据=基准命令；修复项=保持复杂度性能。",
+  "【Acceptance Criteria】GIVEN fixture WHEN 构建 THEN 完成。",
+  "【Business Background】证据=性能测试需要 Story 节点。",
+  "【Preconditions】无——原因：fixture roots 已建。",
+  "【Assumptions】无——原因：不改变图结构。",
+  "【Use Cases & Examples】无——原因：仅基准。",
+  "【Feature Toggle & Setting】无——原因：无开关。",
+  "【Permissions】测试执行方。",
+  "【Implementation Notes】决策点及裁定状态=fixture planned。",
+].join("\n");
 
 async function fixture(context, chains) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-complexity-")));
@@ -51,7 +63,7 @@ async function fixture(context, chains) {
       const initiativeId = s.work.find((r) => r.externalKey === `INITIATIVE-${i}`).id;
       s = await createWork(workspace, lease, { expectedVersion: version, occurredAt: at(), projectId, externalKey: `EPIC-${i}`, kind: "Epic", parentId: initiativeId }); version += 1; workEvents += 1;
       const epicId = s.work.find((r) => r.externalKey === `EPIC-${i}`).id;
-      s = await createWork(workspace, lease, { expectedVersion: version, occurredAt: at(), projectId, externalKey: `STORY-${i}`, kind: "Story", parentId: epicId }); version += 1; workEvents += 1;
+      s = await createWork(workspace, lease, { expectedVersion: version, occurredAt: at(), projectId, externalKey: `STORY-${i}`, kind: "Story", parentId: epicId, scope: STORY_SCOPE }); version += 1; workEvents += 1;
       s = await createWork(workspace, lease, { expectedVersion: version, occurredAt: at(), projectId, externalKey: `SUBTASK-${i}`, kind: "Subtask", parentId: s.work.find((r) => r.externalKey === `STORY-${i}`).id }); version += 1; workEvents += 1;
     }
     return { workspace, lease, version, workEvents, projectId };

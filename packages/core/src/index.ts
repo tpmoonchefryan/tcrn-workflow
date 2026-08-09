@@ -204,6 +204,20 @@ export type {
   WorkspaceRelocationState,
   WorkspaceState,
 } from "./workspace.js";
+export {
+  STORY_SCOPE_HEADINGS,
+  storyScopeFromRecord,
+  storyScopeNamesOwnerDecider,
+  validateStoryRecord,
+  validateStoryScope,
+} from "./story-scope-compliance.js";
+export type {
+  StoryScopeHeading,
+  StoryScopeProblem,
+  StoryScopeProblemCode,
+  StoryScopeSection,
+  StoryScopeValidation,
+} from "./story-scope-compliance.js";
 // STORY-178: file↔pg bidirectional migration of the workspace data plane
 // (event segments, workspace metadata, and the two derived stores).
 export {

@@ -39,6 +39,7 @@ import {
   extractTutorialCommands,
   governedLoopStoryline,
   initCommand,
+  STORY_SCOPE,
 } from "./e2e-governed-loop-commands.mjs";
 
 const MINUTES_PREFIX = "minutes:";
@@ -78,7 +79,7 @@ test("the flagship governed loop replays end-to-end through the CLI with an unbr
 
   // The live substitution table: path placeholders first, identifiers as the
   // storyline captures them from each receipt.
-  const substitutions = { ...roots };
+  const substitutions = { ...roots, "<story-scope>": STORY_SCOPE };
 
   // Establish the workspace at version zero.
   const initReceipt = await invoke(render(initCommand, substitutions));
@@ -119,6 +120,7 @@ test("the flagship governed loop replays end-to-end through the CLI with an unbr
       case "conference-close-distill":
         captured.minutesId = output.recordId;
         captured.knowledgeUnitIds = output.knowledgeUnitIds;
+        substitutions["<minutes-id>"] = output.recordId;
         substitutions["<minutes-locator>"] = `${MINUTES_LOCATOR_PREFIX}${output.recordId.slice(MINUTES_PREFIX.length)}`;
         break;
       case "knowledge-validate":

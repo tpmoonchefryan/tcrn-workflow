@@ -36,6 +36,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { P8_VERSION } from "./lib/p8-workflow-rc.mjs";
+import { requiredFailurePatternProblems } from "./preflight.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -165,6 +166,9 @@ if (register !== null) {
     if (pattern.disposition !== "gated" && pattern.gate !== null) {
       fail("PUSH_GATE_REGISTER_GATE_UNEXPECTED", `${pattern.id}: ${String(pattern.gate)}`);
     }
+  }
+  for (const problem of requiredFailurePatternProblems(register)) {
+    fail("PUSH_GATE_FAILURE_PATTERN_REQUIRED", problem);
   }
 }
 

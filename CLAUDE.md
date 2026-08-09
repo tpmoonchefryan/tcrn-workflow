@@ -27,6 +27,12 @@ transitions do not come back. When a mutating verb genuinely has to be exercised
 understood, exercise it in a scratch workspace created for that purpose and discarded
 after.
 
+Probe evidence must come from the command's structured result, not a shell-shaped shortcut:
+use argv execution and parse JSON reason codes. Do not use zsh colon modifiers, `ref:path`
+lookups, `|tail`/`|head`, `PIPESTATUS`, or `grep` as a verdict. The public-world replay is
+`pnpm preflight`; it supplies the scrubbed environment, isolated checkout, and collect-all
+ordering that a local one-liner cannot prove.
+
 ### 3. There is no code graph here — and know which copy, *on which host*, you are driving
 
 This repository is not indexed by codegraph (the product repositories on this platform

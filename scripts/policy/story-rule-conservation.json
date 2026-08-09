@@ -1,0 +1,562 @@
+{
+  "schemaVersion": "tcrn.story-rule-conservation.v1",
+  "canonicalSource": "docs/dispatch-readiness-convention.md",
+  "dispositions": [
+    "retained",
+    "superseded-by-stricter",
+    "deferred"
+  ],
+  "sourceInventory": [
+    {
+      "source": "docs/dispatch-readiness-convention.md",
+      "rules": [
+        "DISPATCH-LEGACY-001",
+        "DISPATCH-LEGACY-002",
+        "DISPATCH-LEGACY-003",
+        "DISPATCH-LEGACY-004",
+        "DISPATCH-BRIEF-001",
+        "DISPATCH-BRIEF-002",
+        "DISPATCH-BRIEF-003",
+        "DISPATCH-BRIEF-004",
+        "DISPATCH-BRIEF-005",
+        "CLOSEOUT-001",
+        "CLOSEOUT-002",
+        "CLOSEOUT-003",
+        "CLOSEOUT-004",
+        "CLOSEOUT-005",
+        "PURPOSE-001",
+        "PURPOSE-002",
+        "PURPOSE-003",
+        "STORY-TEMPLATE-001"
+      ]
+    },
+    {
+      "source": "TCRN-AOS/docs/reports/init-020/HANDOVER-2026-08-08-final-codex.md",
+      "rules": [
+        "HANDOVER-001",
+        "HANDOVER-002",
+        "HANDOVER-003"
+      ]
+    },
+    {
+      "source": "chain:cross-project:TCRN-CROSS-INC-108",
+      "rules": [
+        "INC108-001",
+        "INC108-002",
+        "INC108-003"
+      ]
+    },
+    {
+      "source": "chain:cross-project:TCRN-CROSS-INC-117",
+      "rules": [
+        "INC117-001",
+        "INC117-002",
+        "INC117-003"
+      ]
+    },
+    {
+      "source": ".claude/skills/tcrn-workflow-helper/references/workflow-operations.md",
+      "rules": [
+        "HELPER-001",
+        "HELPER-002",
+        "HELPER-003",
+        "HELPER-004",
+        "HELPER-005"
+      ]
+    },
+    {
+      "source": "tcrn-workflow-helper/skill/tcrn-workflow-helper/references/workflow-operations.md",
+      "rules": [
+        "HELPER-001",
+        "HELPER-002",
+        "HELPER-003",
+        "HELPER-004",
+        "HELPER-005"
+      ]
+    },
+    {
+      "source": "TCRN-AOS/deploy/aos-local-client/closeout-chain-proof.mjs",
+      "rules": [
+        "AOS-CLOSEOUT-001",
+        "AOS-CLOSEOUT-002",
+        "AOS-CLOSEOUT-003"
+      ]
+    },
+    {
+      "source": "scripts/closeout-verify.mjs",
+      "rules": [
+        "WF-CLOSEOUT-001",
+        "WF-CLOSEOUT-002",
+        "WF-CLOSEOUT-003",
+        "WF-CLOSEOUT-004"
+      ]
+    },
+    {
+      "source": "scripts/dispatch-readiness-compliance.mjs",
+      "rules": [
+        "DISPATCH-BRIEF-001",
+        "DISPATCH-BRIEF-002",
+        "DISPATCH-BRIEF-003",
+        "DISPATCH-BRIEF-004",
+        "DISPATCH-BRIEF-005"
+      ]
+    },
+    {
+      "source": "tests/closeout-verify-dispositions.test.mjs",
+      "rules": [
+        "TEST-CLOSEOUT-001",
+        "TEST-CLOSEOUT-002",
+        "TEST-CLOSEOUT-003"
+      ]
+    },
+    {
+      "source": "tests/dispatch-readiness-compliance.test.mjs",
+      "rules": [
+        "DISPATCH-BRIEF-001",
+        "DISPATCH-BRIEF-002",
+        "DISPATCH-BRIEF-003",
+        "DISPATCH-BRIEF-004",
+        "DISPATCH-BRIEF-005"
+      ]
+    },
+    {
+      "source": "tests/story-scope-compliance.test.mjs",
+      "rules": [
+        "DISPATCH-LEGACY-001",
+        "DISPATCH-LEGACY-002",
+        "DISPATCH-LEGACY-003",
+        "DISPATCH-LEGACY-004",
+        "PURPOSE-001",
+        "PURPOSE-002",
+        "PURPOSE-003",
+        "STORY-TEMPLATE-001",
+        "HANDOVER-001",
+        "HANDOVER-002",
+        "CLOSEOUT-005"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "DISPATCH-LEGACY-001",
+      "source": "docs/dispatch-readiness-convention.md#第一层-现象与证据",
+      "semantics": "scope names a rerunnable command or checkable observation",
+      "landing": "packages/core/src/story-scope-compliance.ts legacyEvidence",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "story-scope-compliance.test.mjs compliant fixture",
+      "redLeg": "delete evidence anchor and expect STORY_SCOPE_LEGACY_ELEMENT_MISSING",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-LEGACY-002",
+      "source": "docs/dispatch-readiness-convention.md#第一层-修复项",
+      "semantics": "scope lists concrete fix items",
+      "landing": "packages/core/src/story-scope-compliance.ts legacyFix",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "compliant Story scope",
+      "redLeg": "delete fix marker and expect STORY_SCOPE_LEGACY_ELEMENT_MISSING",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-LEGACY-003",
+      "source": "docs/dispatch-readiness-convention.md#第一层-验收判据",
+      "semantics": "acceptance has a falsifiable red and green shape",
+      "landing": "packages/core/src/story-scope-compliance.ts Acceptance Criteria",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "GIVEN/WHEN/THEN fixture",
+      "redLeg": "remove WHEN/THEN and expect STORY_SCOPE_ACCEPTANCE_INVALID",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-LEGACY-004",
+      "source": "docs/dispatch-readiness-convention.md#第一层-决策点及其裁定状态",
+      "semantics": "scope records open or settled decision/state",
+      "landing": "packages/core/src/story-scope-compliance.ts legacyDecision",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "state/decider anchor fixture",
+      "redLeg": "delete state and decider anchors and expect STORY_SCOPE_LEGACY_ELEMENT_MISSING",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-BRIEF-001",
+      "source": "docs/dispatch-readiness-convention.md#第二层-红线边界",
+      "semantics": "dispatch identifies applicable hard boundaries",
+      "landing": "scripts/dispatch-readiness-compliance.mjs redLineBoundaries",
+      "enforcementHost": "dispatch caller and helper",
+      "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
+      "redLeg": "omit redLineBoundaries and reject",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-BRIEF-002",
+      "source": "docs/dispatch-readiness-convention.md#第二层-文件指针",
+      "semantics": "dispatch names concrete files and hosts",
+      "landing": "scripts/dispatch-readiness-compliance.mjs filePointers",
+      "enforcementHost": "dispatch caller and helper",
+      "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
+      "redLeg": "omit filePointers and reject",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-BRIEF-003",
+      "source": "docs/dispatch-readiness-convention.md#第二层-验证命令",
+      "semantics": "dispatch carries baseline and completion commands",
+      "landing": "scripts/dispatch-readiness-compliance.mjs verificationCommands",
+      "enforcementHost": "dispatch caller and helper",
+      "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
+      "redLeg": "omit verificationCommands and reject",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-BRIEF-004",
+      "source": "docs/dispatch-readiness-convention.md#第二层-链上收口动作",
+      "semantics": "dispatch carries governed closeout and readback action",
+      "landing": "scripts/dispatch-readiness-compliance.mjs chainCloseoutActions",
+      "enforcementHost": "dispatch caller and helper",
+      "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
+      "redLeg": "omit chainCloseoutActions and reject",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-BRIEF-005",
+      "source": "docs/dispatch-readiness-convention.md#第二层-生效证据命令",
+      "semantics": "dispatch carries deployment-position evidence",
+      "landing": "scripts/dispatch-readiness-compliance.mjs effectiveEvidenceCommands",
+      "enforcementHost": "dispatch caller and helper",
+      "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
+      "redLeg": "omit effectiveEvidenceCommands and reject",
+      "disposition": "retained"
+    },
+    {
+      "id": "CLOSEOUT-001",
+      "source": "docs/dispatch-readiness-convention.md#第三层-最后一次全量门",
+      "semantics": "final full gate runs after the last commit",
+      "landing": "TCRN-AOS/deploy/aos-local-client/closeout-chain-proof.mjs",
+      "enforcementHost": "TCRN-AOS local engine",
+      "positiveLeg": "live status/work-list/work-show read",
+      "redLeg": "stale-head authority fixture",
+      "disposition": "retained"
+    },
+    {
+      "id": "CLOSEOUT-002",
+      "source": "docs/dispatch-readiness-convention.md#第三层-结果表由命令产出",
+      "semantics": "closeout result is command-generated",
+      "landing": "scripts/closeout-verify.mjs and closeout-evidence-runner.mjs",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "runner-generated result",
+      "redLeg": "manifest-only authority fixture",
+      "disposition": "retained"
+    },
+    {
+      "id": "CLOSEOUT-003",
+      "source": "docs/dispatch-readiness-convention.md#第三层-done附生效证据",
+      "semantics": "done carries effective-evidence note",
+      "landing": "scripts/closeout-verify.mjs evidenceProblems",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "existing evidence path fixture",
+      "redLeg": "missing evidence path fixture",
+      "disposition": "retained"
+    },
+    {
+      "id": "CLOSEOUT-004",
+      "source": "docs/dispatch-readiness-convention.md#批单逐项核销",
+      "semantics": "every original item receives exactly one disposition",
+      "landing": "scripts/closeout-verify.mjs chainCloseoutProblems",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "CLOSEOUT_ITEMS_RECONCILED",
+      "redLeg": "omit one disposition and expect CLOSEOUT_ITEMS_UNRECONCILED",
+      "disposition": "retained"
+    },
+    {
+      "id": "CLOSEOUT-005",
+      "source": "docs/dispatch-readiness-convention.md#第三层-done附生效证据",
+      "semantics": "an Owner-decided Story cannot self-close without a deciding-minutes backlink",
+      "landing": "packages/core/src/workspace.ts assertStoryCompletionAdmission",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "Owner-decided Story with decided-by reaches done",
+      "redLeg": "Owner-decided Story without decided-by returns WORKSPACE_OWNER_ACCEPTANCE_REQUIRED",
+      "disposition": "retained"
+    },
+    {
+      "id": "PURPOSE-001",
+      "source": "docs/dispatch-readiness-convention.md#目的三件套",
+      "semantics": "scope names who changes what",
+      "landing": "Goal purpose anchors and live Story validator",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "Goal purpose fixture",
+      "redLeg": "remove beneficiary phrase and reject",
+      "disposition": "retained"
+    },
+    {
+      "id": "PURPOSE-002",
+      "source": "docs/dispatch-readiness-convention.md#目的三件套",
+      "semantics": "scope names purpose anchor and compliance criterion",
+      "landing": "Goal purpose anchors and live Story validator",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "Goal purpose fixture",
+      "redLeg": "remove purpose anchor/criterion and reject",
+      "disposition": "retained"
+    },
+    {
+      "id": "PURPOSE-003",
+      "source": "docs/dispatch-readiness-convention.md#目的三件套",
+      "semantics": "scope names accountable decider",
+      "landing": "Goal purpose anchors and live Story validator",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "Goal decider fixture",
+      "redLeg": "remove decider and reject",
+      "disposition": "retained"
+    },
+    {
+      "id": "STORY-TEMPLATE-001",
+      "source": "docs/dispatch-readiness-convention.md#Story十区块",
+      "semantics": "Story has exactly ten ordered blocks; no-section reason is explicit",
+      "landing": "packages/core/src/story-scope-compliance.ts and scripts/story-scope-compliance.mjs",
+      "enforcementHost": "create/annotate/transition/closeout",
+      "positiveLeg": "all-ten-blocks fixture",
+      "redLeg": "delete or duplicate each heading independently",
+      "disposition": "superseded-by-stricter",
+      "strictnessProof": "The exact ten ordered blocks retain every legacy element and add explicit no-section reasons; deleting any legacy element is an independent red leg, so the old four-element-only shape is a strict subset."
+    },
+    {
+      "id": "HANDOVER-001",
+      "source": "TCRN-AOS/docs/reports/init-020/HANDOVER-2026-08-08-final-codex.md#4",
+      "semantics": "new Stories use the ten-block hard template",
+      "landing": "Story create and annotation admission",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "new Story with --scope",
+      "redLeg": "missing scope refuses",
+      "disposition": "retained"
+    },
+    {
+      "id": "HANDOVER-002",
+      "source": "TCRN-AOS/docs/reports/init-020/HANDOVER-2026-08-08-final-codex.md#4",
+      "semantics": "empty content is written as a reason, never omitted",
+      "landing": "section parser allows explicit no-reason text",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "无——原因 fixture",
+      "redLeg": "empty section refuses",
+      "disposition": "retained"
+    },
+    {
+      "id": "HANDOVER-003",
+      "source": "TCRN-AOS/docs/reports/init-020/HANDOVER-2026-08-08-final-codex.md#4",
+      "semantics": "purpose is revalidated at closeout",
+      "landing": "closeout storyScopes readback",
+      "enforcementHost": "TCRN-AOS",
+      "positiveLeg": "live Story scope readback",
+      "redLeg": "purpose anchor removed",
+      "disposition": "retained"
+    },
+    {
+      "id": "INC108-001",
+      "source": "chain:cross-project:TCRN-CROSS-INC-108#scope",
+      "semantics": "closeout uses live authority",
+      "landing": "closeout-chain-proof live status/work-list/work-show",
+      "enforcementHost": "TCRN-AOS",
+      "positiveLeg": "live-local-engine authority",
+      "redLeg": "manifest-only authority refuses",
+      "disposition": "retained"
+    },
+    {
+      "id": "INC108-002",
+      "source": "chain:cross-project:TCRN-CROSS-INC-108#scope",
+      "semantics": "closeout checks structure, purpose, evidence, and red legs",
+      "landing": "closeout verifier plus Story scope backstop",
+      "enforcementHost": "TCRN-AOS and tcrn-workflow",
+      "positiveLeg": "closeout proof",
+      "redLeg": "each removed check fails",
+      "disposition": "retained"
+    },
+    {
+      "id": "INC108-003",
+      "source": "chain:cross-project:TCRN-CROSS-INC-108#scope",
+      "semantics": "live authority cannot be self-closing manifest state",
+      "landing": "authorityShapeProblems and no manifest fallback",
+      "enforcementHost": "TCRN-AOS",
+      "positiveLeg": "live read binding",
+      "redLeg": "captured authority refuses",
+      "disposition": "retained"
+    },
+    {
+      "id": "INC117-001",
+      "source": "chain:cross-project:TCRN-CROSS-INC-117#scope",
+      "semantics": "dispatch-readiness is the canonical rule source",
+      "landing": "platform docs canonical source plus AOS pointer",
+      "enforcementHost": "platform docs registry",
+      "positiveLeg": "registry path and pointer proof",
+      "redLeg": "delete registry row and topology proof fails",
+      "disposition": "retained"
+    },
+    {
+      "id": "INC117-002",
+      "source": "chain:cross-project:TCRN-CROSS-INC-117#scope",
+      "semantics": "Story ten-block template is hard, not advice",
+      "landing": "create/annotate/transition/closeout gates",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "compliant Story",
+      "redLeg": "each missing heading refuses",
+      "disposition": "retained"
+    },
+    {
+      "id": "INC117-003",
+      "source": "chain:cross-project:TCRN-CROSS-INC-117#scope",
+      "semantics": "AOS named compatibility path must exist without a second source",
+      "landing": "TCRN-AOS/docs/dispatch-readiness-convention.md pointer",
+      "enforcementHost": "TCRN-AOS",
+      "positiveLeg": "pointer readback",
+      "redLeg": "missing pointer is a registry/proof failure",
+      "disposition": "retained"
+    },
+    {
+      "id": "HELPER-001",
+      "source": "helper:workflow-operations#parents-before-children",
+      "semantics": "parents are created before children",
+      "landing": "helper operations and work graph admission",
+      "enforcementHost": "engine and helper",
+      "positiveLeg": "parented Story create",
+      "redLeg": "missing parent refuses",
+      "disposition": "retained"
+    },
+    {
+      "id": "HELPER-002",
+      "source": "helper:workflow-operations#stories-deepest-planning-record",
+      "semantics": "Story is the deepest planning record",
+      "landing": "helper operations decomposition guidance",
+      "enforcementHost": "helper",
+      "positiveLeg": "Story/subtask routing",
+      "redLeg": "predeclared subtask overreach is rejected by dispatch review",
+      "disposition": "retained"
+    },
+    {
+      "id": "HELPER-003",
+      "source": "helper:workflow-operations#scope-on-record",
+      "semantics": "scope and deciding minutes live on the work record",
+      "landing": "atomic work-create scope/decided-by and work-annotate",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "work-show advisory readback",
+      "redLeg": "scope omitted from Story create refuses",
+      "disposition": "retained"
+    },
+    {
+      "id": "HELPER-004",
+      "source": "helper:workflow-operations#cas",
+      "semantics": "mutations use live expected version and readback",
+      "landing": "existing engine CAS plus chain ceremony discipline",
+      "enforcementHost": "engine/helper",
+      "positiveLeg": "expected-version write",
+      "redLeg": "stale expected-version refuses",
+      "disposition": "retained"
+    },
+    {
+      "id": "HELPER-005",
+      "source": "helper:workflow-operations#live-authority",
+      "semantics": "authority comes from live status/list/show, not cached prose",
+      "landing": "AOS closeout storyScopes readback",
+      "enforcementHost": "TCRN-AOS",
+      "positiveLeg": "live local engine proof",
+      "redLeg": "manifest self-report refuses",
+      "disposition": "retained"
+    },
+    {
+      "id": "AOS-CLOSEOUT-001",
+      "source": "TCRN-AOS/deploy/aos-local-client/closeout-chain-proof.mjs#readLiveAuthority",
+      "semantics": "read status and complete work-list",
+      "landing": "readLiveAuthority",
+      "enforcementHost": "TCRN-AOS local engine",
+      "positiveLeg": "authorityRead",
+      "redLeg": "status/list refusal is red",
+      "disposition": "retained"
+    },
+    {
+      "id": "AOS-CLOSEOUT-002",
+      "source": "TCRN-AOS/deploy/aos-local-client/closeout-chain-proof.mjs#storyScopes",
+      "semantics": "read every live Story with work-show",
+      "landing": "storyScopes enrichment",
+      "enforcementHost": "TCRN-AOS local engine",
+      "positiveLeg": "all live Stories read",
+      "redLeg": "Story work-show refusal is red",
+      "disposition": "retained"
+    },
+    {
+      "id": "AOS-CLOSEOUT-003",
+      "source": "TCRN-AOS/deploy/aos-local-client/closeout-chain-proof.mjs#verifyCloseout",
+      "semantics": "pass live authority into the independent verifier",
+      "landing": "verifyCloseout effectiveManifest",
+      "enforcementHost": "TCRN-AOS",
+      "positiveLeg": "CLOSEOUT_ITEMS_RECONCILED",
+      "redLeg": "scope or authority mismatch",
+      "disposition": "retained"
+    },
+    {
+      "id": "WF-CLOSEOUT-001",
+      "source": "scripts/closeout-verify.mjs#authorityShapeProblems",
+      "semantics": "live authority carries source, partition, time, head, and records",
+      "landing": "authorityShapeProblems",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "live authority fixture",
+      "redLeg": "missing live field",
+      "disposition": "retained"
+    },
+    {
+      "id": "WF-CLOSEOUT-002",
+      "source": "scripts/closeout-verify.mjs#storyScopeProblems",
+      "semantics": "closeout independently rejects non-compliant non-terminal Stories",
+      "landing": "storyScopeProblems",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "compliant live Story",
+      "redLeg": "each missing block",
+      "disposition": "retained"
+    },
+    {
+      "id": "WF-CLOSEOUT-003",
+      "source": "scripts/closeout-verify.mjs#redLegProblems",
+      "semantics": "windowed closeout has a well-formed negative leg",
+      "landing": "redLegProblems",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "redLeg fixture",
+      "redLeg": "missing redLeg",
+      "disposition": "retained"
+    },
+    {
+      "id": "WF-CLOSEOUT-004",
+      "source": "scripts/closeout-verify.mjs#chainCloseoutProblems",
+      "semantics": "disposition set equals original/live item set",
+      "landing": "chainCloseoutProblems",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "CLOSEOUT_ITEMS_RECONCILED",
+      "redLeg": "omitted item",
+      "disposition": "retained"
+    },
+    {
+      "id": "TEST-CLOSEOUT-001",
+      "source": "tests/closeout-verify-dispositions.test.mjs#omitted-disposition",
+      "semantics": "omitted disposition is a stable red leg",
+      "landing": "closeout verifier test",
+      "enforcementHost": "CI",
+      "positiveLeg": "complete disposition fixture",
+      "redLeg": "omitted disposition fixture",
+      "disposition": "retained"
+    },
+    {
+      "id": "TEST-CLOSEOUT-002",
+      "source": "tests/closeout-verify-dispositions.test.mjs#redLeg",
+      "semantics": "positive-only window closeout is red",
+      "landing": "closeout verifier test",
+      "enforcementHost": "CI",
+      "positiveLeg": "well-formed redLeg",
+      "redLeg": "redLeg omitted fixture",
+      "disposition": "retained"
+    },
+    {
+      "id": "TEST-CLOSEOUT-003",
+      "source": "tests/closeout-verify-dispositions.test.mjs#live-authority",
+      "semantics": "live authority mismatch is red",
+      "landing": "closeout verifier test",
+      "enforcementHost": "CI",
+      "positiveLeg": "matching live head",
+      "redLeg": "manifest-only or stale head",
+      "disposition": "retained"
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { verifyCloseout } from "../scripts/closeout-verify.mjs";
+import { storyScopeProblems } from "../scripts/story-scope-compliance.mjs";
 
 const V1 = "tcrn.closeout-verify.v1";
 const V2 = "tcrn.closeout-verify.v2";
@@ -29,7 +30,7 @@ describe("closeout-verify disposition kinds (STORY-172)", () => {
         "INC-061": { kind: "superseded", carriedBy: "work:aaaaaaaaaaaaaaaaaaaaaaaa" },
         "INC-062": { kind: "retained", ticket: "work:aaaaaaaaaaaaaaaaaaaaaaaa" },
         "INC-069": { kind: "fixed" },
-        "INC-068": { kind: "deferred", reason: "convention revision awaits owner" },
+        "INC-068": { kind: "deferred", reason: "convention revision awaits owner", timing: "after the next Owner ruling" },
       },
     });
     assert.equal(result.ok, true);
@@ -88,6 +89,17 @@ describe("closeout-verify disposition kinds (STORY-172)", () => {
     });
     assert.equal(result.ok, false);
     assert.ok(result.problems.some((p) => p.includes("INC-061 has unknown disposition absorbed")));
+  });
+
+  test("reds when a deferred disposition omits its timing", () => {
+    const result = verifyCloseout({
+      schemaVersion: V1,
+      incident: "TCRN-CROSS-INC-061",
+      items: ["INC-068"],
+      dispositions: { "INC-068": { kind: "deferred", reason: "awaits Owner ruling" } },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.problems.some((p) => p.includes("INC-068 is deferred but carries no timing")));
   });
 
   test("reds when a retained disposition names no chain work ticket", () => {
@@ -223,6 +235,29 @@ describe("closeout-verify disposition kinds (STORY-172)", () => {
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }
+  });
+
+  test("validates non-terminal Story scopes but ignores terminal historical Stories", () => {
+    const validScope = [
+      "Goal 为谁：Owner；目的锚：规则合规；符合性判据：十区块且证据可回读；判定人：Owner。",
+      "Requirements 改造与落点：修复旧规则并保留证据命令。",
+      "Acceptance Criteria GIVEN 新规则 WHEN 缺一个区块 THEN 拒绝并给出红腿。",
+      "Business Background 现状与证据：旧记录缺区块。",
+      "Preconditions 无——原因：不需要额外前置。",
+      "Assumptions 无——原因：不改变业务假设。",
+      "Use Cases & Examples 无——原因：本单只改规则。",
+      "Feature Toggle & Setting 无——原因：不引入开关。",
+      "Permissions 无——原因：沿用 Owner 判定。",
+      "Implementation Notes 改造：create、annotate、transition、closeout 均有门；状态：planned。",
+    ].join("\n");
+    const invalidScope = validScope.replace("Implementation Notes 改造", "Implementation Notes");
+    const authority = {
+      storyScopes: [
+        { kind: "Story", status: "active", externalKey: "TCRN-CROSS-STORY-LIVE", advisory: { scope: validScope } },
+        { kind: "Story", status: "done", externalKey: "TCRN-CROSS-STORY-HISTORICAL", advisory: { scope: invalidScope } },
+      ],
+    };
+    assert.deepEqual(storyScopeProblems(authority.storyScopes), []);
   });
 });
 

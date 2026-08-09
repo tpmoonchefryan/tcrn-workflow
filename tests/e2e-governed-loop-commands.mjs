@@ -25,6 +25,22 @@ export const TRANSIENT_PATH = "./flagship/transient";
 export const EVIDENCE_PATH = "./flagship/evidence-locator";
 export const RELEASE_TRUST_PATH = "./flagship/release-trust";
 
+// The Story is created atomically with its complete scope.  The tutorial keeps
+// the value as a placeholder; the replay substitutes this one canonical fixture
+// so the command remains readable without weakening the engine admission rule.
+export const STORY_SCOPE = [
+  "【Goal】为谁改变什么=flagship Story；目的锚=governed-loop；符合性判据=loop reaches done with evidence；判定人=Owner。",
+  "【Requirements】现象与证据=命令回放；修复项=完成 flagship loop。",
+  "【Acceptance Criteria】GIVEN the workspace is ready WHEN the loop runs THEN the Story reaches done。",
+  "【Business Background】evidence=the loop is the canonical tutorial path。",
+  "【Preconditions】无——原因：fixture roots are created by init。",
+  "【Assumptions】无——原因：the tutorial does not add a runtime setting。",
+  "【Use Cases & Examples】无——原因：the command sequence is the example。",
+  "【Feature Toggle & Setting】无——原因：no bypass flag is permitted。",
+  "【Permissions】Owner is the decider; the engine is the write face。",
+  "【Implementation Notes】决策点及裁定状态=the Story starts planned and transitions through the loop。",
+].join("\n");
+
 // The init command is narrated and executed but is NOT part of the CAS-versioned
 // mutation storyline (it establishes the workspace at version zero). It is listed
 // separately so the proof can seed the real roots before the loop begins while
@@ -72,7 +88,7 @@ export const governedLoopStoryline = [
   {
     key: "work-create-story",
     reasonCode: "WORKSPACE_COMMAND_COMPLETED",
-    command: ["work-create", "--workspace", WORKSPACE_PATH, "--expected-version", "3", "--at", "2026-07-11T00:00:04Z", "--project-id", "<project-id>", "--external-key", "FLAGSHIP-STORY", "--kind", "Story", "--parent-id", "<epic-id>"],
+    command: ["work-create", "--workspace", WORKSPACE_PATH, "--expected-version", "3", "--at", "2026-07-11T00:00:04Z", "--project-id", "<project-id>", "--external-key", "FLAGSHIP-STORY", "--kind", "Story", "--parent-id", "<epic-id>", "--scope", "<story-scope>"],
   },
   {
     key: "work-transition-story-ready",
@@ -130,9 +146,14 @@ export const governedLoopStoryline = [
     command: ["gate-transition", "--workspace", WORKSPACE_PATH, "--expected-version", "10", "--at", "2026-07-11T00:00:13Z", "--id", "<gate-id>", "--status", "satisfied", "--minutes-locator", "<minutes-locator>"],
   },
   {
+    key: "work-annotate-story-owner-acceptance",
+    reasonCode: "WORKSPACE_COMMAND_COMPLETED",
+    command: ["work-annotate", "--workspace", WORKSPACE_PATH, "--expected-version", "11", "--at", "2026-07-11T00:00:14Z", "--id", "<story-id>", "--decided-by", "<minutes-id>"],
+  },
+  {
     key: "work-transition-story-done",
     reasonCode: "WORKSPACE_COMMAND_COMPLETED",
-    command: ["work-transition", "--workspace", WORKSPACE_PATH, "--expected-version", "11", "--at", "2026-07-11T00:00:14Z", "--id", "<story-id>", "--status", "done"],
+    command: ["work-transition", "--workspace", WORKSPACE_PATH, "--expected-version", "12", "--at", "2026-07-11T00:00:15Z", "--id", "<story-id>", "--status", "done"],
   },
   {
     key: "work-show-story",

@@ -1,4 +1,4 @@
-<!-- tcrn-doc-synced-to: CONTRIBUTING.md 0309c55144aa0e4cdbdaab6290001650e3c0c805c3235bd767940a2934ddf93e -->
+<!-- tcrn-doc-synced-to: CONTRIBUTING.md 3e2f9b9f05b1b55b1518b5de2b17887ec6f1076d7b02dfc9ba89ae457dedd6f2 -->
 
 > **英文版为权威版本。** 本翻译仅供参考；如有出入，以 CONTRIBUTING.md 的英文文本为准。
 
@@ -12,6 +12,14 @@
 pnpm install --offline --frozen-lockfile --ignore-scripts
 pnpm verify:p1
 ```
+
+推送公开分支前运行 `pnpm preflight`。它会创建独立的
+`git clone --no-local --no-hardlinks`，清除私有 `TCRN_*` 与兄弟检出环境变量，
+并以不快速失败的方式运行 P1 与 lessons 门，将同一回执中的全部红腿都显式列出。
+探针纪律由机器执行：不得使用 zsh 命令修饰符、shell 连接符、`PIPESTATUS`、
+`ref:path` 探针、`tail`、`head` 或 `grep` 作为判定。`pnpm verify:privacy` 判定已检出
+HEAD 可达的公开面；`pnpm verify:privacy:history` 是独立的本地诊断，如果保留的历史
+标签包含已退役字节，它可以继续为红。
 
 依赖必须是精确版本，与 Apache-2.0 分发兼容，并被加入到离线依赖策略与漏洞策略中。接受注释的源文件必须包含 `SPDX-License-Identifier: Apache-2.0`。
 

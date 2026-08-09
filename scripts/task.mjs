@@ -1532,7 +1532,8 @@ async function filesForPrivacySurface(root, labelPrefix = "") {
   })));
 }
 
-async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
+async function verifyPrivacy({ requireP8Surfaces = false, historyScope = "head" } = {}) {
+  assertion(historyScope === "head" || historyScope === "all", "PRIVACY_SCOPE_INVALID", historyScope);
   const owner = await remoteOwner();
   const entries = [];
   entries.push({
@@ -1548,33 +1549,54 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
   }
   entries.push(...await archiveEntryIfPresent());
 
-  // One streaming pass over the whole object database. This previously spawned two git
-  // processes per object -- one for the type, one for the content -- which on this
-  // repository meant roughly five thousand spawnSync calls and dominated the gate's wall
-  // clock. --batch emits "<oid> <type> <size>\n" followed by exactly <size> bytes and a
-  // trailing newline, so the payload stays binary-safe: the length comes from the header,
-  // never from scanning for a delimiter.
-  // A batch-check pass runs first and declares every object in exactly the header form
-  // the batch pass emits, so the total stream length is known before the capture: the
-  // batch-check bytes plus, per object, the declared size and one framing newline.
-  // spawnSync's 1 MiB default is far below the ~28 MiB stream here, so maxBuffer is set
-  // to that exact length. Both drift directions then fail closed rather than yielding a
-  // short stream whose unscanned tail would leave the gate green: a repository that
-  // grows between the passes overflows the cap (COMMAND_OUTPUT_OVERFLOW), and one that
-  // shrinks trips the length-equality backstop inside parseGitObjectBatch.
+  // The public CI world is the checked-out release tip, not every object that happens
+  // to be present in a clone. A full object database includes old tags, pull refs and
+  // unreachable pre-hardening blobs; scanning that set makes a clean tip permanently
+  // red for content that is not in the evaluated release. The explicit history command
+  // below preserves the broader scan as a separately named local diagnostic.
+  const objectIds = historyScope === "head"
+    ? decodeGitMetadataBytes(run("git", ["rev-list", "--objects", "HEAD"], { raw: true }), "PRIVACY_REACHABLE_OBJECTS_UTF8_INVALID")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => line.split(/\s+/u)[0])
+    : null;
+  if (objectIds !== null) {
+    assertion(objectIds.length > 0, "PRIVACY_REACHABLE_OBJECTS_EMPTY");
+    assertion(objectIds.every((object) => /^[a-f0-9]{40,64}$/u.test(object)), "PRIVACY_REACHABLE_OBJECTS_INVALID");
+    assertion(new Set(objectIds).size === objectIds.length, "PRIVACY_REACHABLE_OBJECTS_DUPLICATE");
+  }
+  const objectInput = objectIds === null ? undefined : Buffer.from(`${objectIds.join("\n")}\n`, "utf8");
+  // One streaming pass over the selected object set. --batch emits
+  // "<oid> <type> <size>\n" followed by exactly <size> bytes and a trailing newline,
+  // so the payload stays binary-safe: the length comes from the header, never from
+  // scanning for a delimiter. A batch-check pass runs first and declares every object
+  // in exactly the header form the batch pass emits, so the total stream length is known
+  // before the capture. Both drift directions fail closed rather than yielding a short
+  // stream whose unscanned tail would leave the privacy gate green.
   const batchCheck = run(
     "git",
-    ["cat-file", "--batch-all-objects", "--batch-check=%(objectname) %(objecttype) %(objectsize)"],
-    { raw: true, maxBuffer: 64 * 1024 * 1024 },
+    objectIds === null
+      ? ["cat-file", "--batch-all-objects", "--batch-check=%(objectname) %(objecttype) %(objectsize)"]
+      : ["cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)"],
+    { raw: true, input: objectInput, maxBuffer: 64 * 1024 * 1024 },
   );
   let expectedStreamBytes = batchCheck.length;
-  for (const line of decodeGitMetadataBytes(batchCheck, "PRIVACY_GIT_OBJECT_INDEX_UTF8_INVALID").split("\n")) {
-    if (line === "") continue;
-    const declaredSize = Number(line.split(" ")[2]);
+  const batchCheckLines = decodeGitMetadataBytes(batchCheck, "PRIVACY_GIT_OBJECT_INDEX_UTF8_INVALID").split("\n").filter(Boolean);
+  if (objectIds !== null) {
+    assertion(batchCheckLines.length === objectIds.length, "PRIVACY_REACHABLE_OBJECT_COUNT_MISMATCH", `${objectIds.length}/${batchCheckLines.length}`);
+  }
+  for (const line of batchCheckLines) {
+    const [object, type, sizeText] = line.split(" ");
+    assertion(/^[a-f0-9]{40,64}$/u.test(object) && type !== "missing", "PRIVACY_GIT_OBJECT_TYPE", line);
+    const declaredSize = Number(sizeText);
     assertion(Number.isSafeInteger(declaredSize) && declaredSize >= 0, "PRIVACY_GIT_OBJECT_TYPE", line);
     expectedStreamBytes += declaredSize + 1;
   }
-  const batch = run("git", ["cat-file", "--batch-all-objects", "--batch"], { raw: true, maxBuffer: expectedStreamBytes + 1 });
+  const batch = run(
+    "git",
+    objectIds === null ? ["cat-file", "--batch-all-objects", "--batch"] : ["cat-file", "--batch"],
+    { raw: true, input: objectInput, maxBuffer: expectedStreamBytes + 1 },
+  );
   const historyRecords = [];
   let objectCount = 0;
   for (const { object, type, content } of parseGitObjectBatch(batch, expectedStreamBytes)) {
@@ -1613,7 +1635,7 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
     p8Surfaces.sourceArchive = aggregatePrivacySurface([{ path: "dist/source/tcrn-workflow-source.tar", content: sourceArchive.content }]);
     p8Surfaces.releaseArtifacts = aggregatePrivacySurface(releaseRecords);
   }
-  const commits = run("git", ["rev-list", "--all"]).split("\n").filter(Boolean);
+  const commits = run("git", historyScope === "all" ? ["rev-list", "--all"] : ["rev-list", "HEAD"]).split("\n").filter(Boolean);
   let historicalPaths = 0;
   for (const commit of commits) {
     const tree = run("git", ["ls-tree", "-rz", "--full-tree", commit], { raw: true });
@@ -1645,6 +1667,7 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
   assertion(findings.length === 0, "PRIVACY_FINDINGS", findings.join(","));
   const source = await verifySource();
   return success("PRIVACY_SOURCE_CLEAN", {
+    privacyScope: historyScope === "head" ? "HEAD-reachable" : "all-local-objects",
     scannedEntries: entries.length,
     gitObjects: objectCount,
     historicalCommits: commits.length,
@@ -1755,6 +1778,7 @@ async function aggregateDigest(paths) {
 const commandContracts = {
   history: { exit: 0, reasonCode: "HISTORY_CLEAN" },
   privacy: { exit: 0, reasonCode: "PRIVACY_SOURCE_CLEAN" },
+  "privacy-history": { exit: 0, reasonCode: "PRIVACY_SOURCE_CLEAN" },
   "verify-p1": { exit: 0, reasonCode: "P1_VERIFIED" },
   "test-trust": { exit: 0, reasonCode: "TRUST_NEGATIVE_MATRIX_VERIFIED" },
   governance: { exit: 0, reasonCode: "GOVERNANCE_TOOLCHAIN_VERIFIED" },
@@ -2481,6 +2505,7 @@ const handlers = {
   p8: verifyP8,
   "release-preflight": verifyReleaseTagPreflight,
   privacy: verifyPrivacy,
+  "privacy-history": () => verifyPrivacy({ historyScope: "all" }),
   rc1: verifyRc1CandidateReadiness,
   roots: verifyRoots,
   "protocol-schemas": verifyP2Schemas,

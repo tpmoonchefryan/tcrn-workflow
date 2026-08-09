@@ -1,4 +1,4 @@
-<!-- tcrn-doc-synced-to: CONTRIBUTING.md 0309c55144aa0e4cdbdaab6290001650e3c0c805c3235bd767940a2934ddf93e -->
+<!-- tcrn-doc-synced-to: CONTRIBUTING.md 3e2f9b9f05b1b55b1518b5de2b17887ec6f1076d7b02dfc9ba89ae457dedd6f2 -->
 
 > **英語版が正本です。** この翻訳は便宜のために提供されるものであり、両者が異なる場合は CONTRIBUTING.md にある英語のテキストが優先されます。
 
@@ -12,6 +12,15 @@
 pnpm install --offline --frozen-lockfile --ignore-scripts
 pnpm verify:p1
 ```
+
+公開ブランチを push する前に `pnpm preflight` を実行してください。これは独立した
+`git clone --no-local --no-hardlinks` を作成し、非公開の `TCRN_*` と兄弟チェックアウトの
+環境変数を除去したうえで、P1 と lessons のゲートを fail-fast なしで実行し、すべての
+赤い脚を同じレシートに記録します。プローブ規律は機械で検査されます：zsh のコマンド修飾子、
+シェルの結合、`PIPESTATUS`、`ref:path` プローブ、`tail`、`head`、`grep` を判定に使わないでください。
+`pnpm verify:privacy` はチェックアウトした HEAD から到達可能な公開面を判定し、
+`pnpm verify:privacy:history` は別のローカル診断です。保持された過去のタグに廃止済みのバイトが
+含まれる場合、後者は赤のままでも構いません。
 
 依存関係は厳密なバージョンでなければならず、Apache-2.0 での配布と互換性があり、オフライン依存ポリシーおよび脆弱性ポリシーに追加されていなければなりません。コメントを受け付けるソースファイルには `SPDX-License-Identifier: Apache-2.0` を含めなければなりません。
 
