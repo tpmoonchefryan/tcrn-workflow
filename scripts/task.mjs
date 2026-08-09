@@ -1634,8 +1634,12 @@ async function verifyPrivacy({ requireP8Surfaces = false } = {}) {
   // the environment is unconfigured (a public CI checkout) no real value is known
   // and none is invented, so nothing private is embedded in the gate itself.
   const runtime = privateRuntimeConfig();
+  // Only the genuinely-private values: the governed hostname and its runtime
+  // root. The loopback address and the facade port are not secret and appear as
+  // ordinary literals throughout the tree, so feeding them would red on every
+  // legitimate loopback reference rather than on leaked topology.
   const privateTokens = runtime.configured
-    ? [runtime.host, runtime.runtimeRoot, runtime.loopback, runtime.facadeEndpoint, `${runtime.runtimeRoot}/governance`]
+    ? [runtime.host, runtime.runtimeRoot, `${runtime.runtimeRoot}/governance`]
     : [];
   const findings = scanPrivacyEntries(entries, { owner, privateTokens });
   assertion(findings.length === 0, "PRIVACY_FINDINGS", findings.join(","));
