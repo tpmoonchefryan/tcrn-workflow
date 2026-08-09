@@ -129,6 +129,21 @@ jobs:
       # this step is red until `.claude/settings.json` is tracked in this repository. That
       # is the intended reading — an untracked registration is a registration no checkout
       # and no second host carries. Zero dependencies, like the rest of this job.
+      # TCRN-CROSS-INC-120 — the channel gate demands runtime configuration, and the
+      # real values are private topology that must never appear in a public workflow
+      # (Owner ruling D1). A public checkout is still a world this gate is evaluated
+      # in, so the gate must be satisfiable here. The gate deliberately ignores
+      # ambient process env (a registration must carry its own configuration — the
+      # INC-109 doctrine), so the synthetic values live in the tracked
+      # `.claude/settings.json` env block: .invalid hosts and fixture paths,
+      # deliberately distinct from the PRIVATE_TOKEN_PLACEHOLDERS sentinels the gate
+      # rejects, and containing no IPv4 literal because the privacy gate admits none.
+      # A governed host overrides them with real values in the untracked
+      # `.claude/settings.local.json`, which never enters this repository. The
+      # channel machinery runs end to end against the synthetic world — process
+      # start, classification, nonce readback — which is exactly what a public world
+      # can honestly prove. Whether the *real* host classifies correctly is the
+      # governed local world's gate (INC-109/110), not this one.
       - name: S2 observation channel is alive
         run: node scripts/ssh-write-observer.mjs --verify-channel --project-dir .
 

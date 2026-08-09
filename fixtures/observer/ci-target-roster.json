@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "tcrn.ssh-observer-target-roster.v1",
+  "purpose": "Synthetic registration fingerprints for the public-CI world (TCRN-CROSS-INC-120). The four fingerprinted values are the .invalid fixtures published in .claude/settings.json; no real topology is registered here. A governed host overrides both the runtime values and TCRN_SSH_TARGET_ROSTER in its untracked settings.local.json.",
+  "targets": [
+    {
+      "id": "ci-synthetic-governance",
+      "surface": "ci-fixture",
+      "hostSha256": "d4ac18e739ff0956a676f17bf8529ec9e0c656dd5c545986c79018316c705b80",
+      "runtimeRootSha256": "86b8339e1c5f96312072979cee6b44b7542fffac69fa42231ac53fb11e392a47",
+      "loopbackSha256": "f79f6e911c2b3d30e61062470fe87595e0b38216c89e37882a8e779292b4dc82",
+      "facadeEndpointSha256": "eb128025c5e6cb39ee37d0dabb89b8167e9c1cd2d8cd12e94891355ae554ea20"
+    }
+  ]
+}
