@@ -2,6 +2,7 @@
   "normativeInputs": [
     "extensions/aos-requirements-v1.json",
     "fixtures/isolated-proof/README.md",
+    "fixtures/observer/ci-target-roster.json",
     "fixtures/protocol/v1/negative/cases.json",
     "fixtures/protocol/v1/positive/canonical-vector.json",
     "fixtures/protocol/v1/positive/event-chain.json",
