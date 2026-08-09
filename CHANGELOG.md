@@ -11,7 +11,9 @@ Versioning after the first accepted release.
 - sealed archive reads identify their storage authority, backend admission recognizes concrete backend kind, and PG admission requires the named append-only trigger;
 - test wiring scans non-standard test entrypoints, validates executable owners, and CI runs the evidence round-trip proof;
 - ADR red legs are structured policy records, receipt hygiene anchors both heads to the authoritative event stream, and release preflight binds a green P8 result to the exact tag commit and metadata-only release diff;
-- no tag creation, history rewrite, or push is performed by this workspace task.
+- Story-209 now requires the exact ten-block Story scope, preserves the legacy evidence/fix/decision contract, and refuses incomplete scope at create and transition gates;
+- dispatch briefs require red-line boundaries, file pointers, verification commands, chain closeout actions, and effective evidence commands; closeout and source-to-rule conservation each have executable positive and negative legs;
+- the public preflight runs the complete P1 gate set in an independent no-local clone under a scrubbed environment and reports every gate, including the optional PG lane, rather than relying on the evaluated checkout.
 
 ## 0.11.7 — 2026-08-07
 
