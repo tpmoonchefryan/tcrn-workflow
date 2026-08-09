@@ -14,6 +14,7 @@ Versioning after the first accepted release.
 - Story-209 now requires the exact ten-block Story scope, preserves the legacy evidence/fix/decision contract, and refuses incomplete scope at create and transition gates;
 - dispatch briefs require red-line boundaries, file pointers, verification commands, chain closeout actions, and effective evidence commands; closeout and source-to-rule conservation each have executable positive and negative legs;
 - the public preflight runs the complete P1 gate set in an independent no-local clone under a scrubbed environment and reports every gate, including the optional PG lane, rather than relying on the evaluated checkout.
+- generated verification-map and RC1 proof surfaces are refreshed from the final source basis and checked for byte-current parity.
 
 ## 0.11.7 — 2026-08-07
 
