@@ -32,10 +32,24 @@ test("INC-093 red leg: a red P8 result or a different basis refuses tag prefligh
   );
 });
 
-test("INC-093: release commits admit only manifests, changelog, and versioned release notes", () => {
+test("INC-093: release commits admit metadata and regenerated proof surfaces", () => {
   assert.deepEqual(
-    assertReleaseCommitShape({ changedPaths: ["packages/core/package.json", "CHANGELOG.md", "docs/releases/0.11.8.md"] }),
-    { changedPaths: ["CHANGELOG.md", "docs/releases/0.11.8.md", "packages/core/package.json"] },
+    assertReleaseCommitShape({ changedPaths: [
+      "packages/core/package.json",
+      "CHANGELOG.md",
+      "docs/releases/0.11.8.md",
+      "scripts/policy/source-allowlist.json",
+      "verification-map.yaml",
+      "fixtures/rc1/rc1-candidate-proof-manifest.json",
+    ] }),
+    { changedPaths: [
+      "CHANGELOG.md",
+      "docs/releases/0.11.8.md",
+      "fixtures/rc1/rc1-candidate-proof-manifest.json",
+      "packages/core/package.json",
+      "scripts/policy/source-allowlist.json",
+      "verification-map.yaml",
+    ] },
   );
   assert.throws(
     () => assertReleaseCommitShape({ changedPaths: ["packages/core/src/workspace.ts"] }),
