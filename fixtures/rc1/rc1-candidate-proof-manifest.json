@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "0dcacdff9e210ea5d8b3e750451940c3d1658d60d39b4801e1c8ed6f07ecd4f3",
+  "basisDigest": "9339a72f4a4f140c4c57bb11df492e51514e3630763bdee43b517e5a433fbb39",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -16,8 +16,8 @@
     },
     {
       "path": "fixtures/observer/ci-target-roster.json",
-      "size": 876,
-      "sha256": "7b6804181d531a5f7012b99d5cdbab2a09d3c31a7f64537b9f733990fc502a70"
+      "size": 940,
+      "sha256": "da7380a80e74547ab636d262075429c5f5f934cb6927107611ed002e9c7ecd05"
     },
     {
       "path": "fixtures/protocol/v1/negative/cases.json",
@@ -307,7 +307,7 @@
     {
       "path": "verification-map.yaml",
       "size": 154714,
-      "sha256": "1d517c6955ce284f12d1e4aaf6f1d514b2a87b7e841e23146b52772e3c1e4d94"
+      "sha256": "85c95e5b2f9d92d0b3ad8ce965df75b478e0ae14b823f61206240486744f98b1"
     }
   ],
   "roleVerdictSlots": {
