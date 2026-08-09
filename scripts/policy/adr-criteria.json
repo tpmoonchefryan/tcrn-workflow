@@ -19,7 +19,9 @@
         },
         "expected": {
           "outcome": "refused-or-byte-mismatch",
-          "reasonCodes": ["WORKSPACE_EVENT_CORRUPT"]
+          "reasonCodes": [
+            "WORKSPACE_EVENT_CORRUPT"
+          ]
         }
       }
     },
@@ -41,7 +43,9 @@
         },
         "expected": {
           "outcome": "refused-or-byte-mismatch",
-          "reasonCodes": ["WORKSPACE_EVENT_CORRUPT"]
+          "reasonCodes": [
+            "WORKSPACE_EVENT_CORRUPT"
+          ]
         }
       }
     },
@@ -63,7 +67,9 @@
         },
         "expected": {
           "outcome": "refused-or-byte-mismatch",
-          "reasonCodes": ["WORKSPACE_EVENT_CORRUPT"]
+          "reasonCodes": [
+            "WORKSPACE_EVENT_CORRUPT"
+          ]
         }
       }
     },
@@ -85,7 +91,9 @@
         },
         "expected": {
           "outcome": "refused-or-byte-mismatch",
-          "reasonCodes": ["WORKSPACE_EVENT_CORRUPT"]
+          "reasonCodes": [
+            "WORKSPACE_EVENT_CORRUPT"
+          ]
         }
       }
     }
