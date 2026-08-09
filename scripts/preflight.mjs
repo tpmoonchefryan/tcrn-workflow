@@ -247,7 +247,7 @@ async function runPreflight({ runPg = false } = {}) {
     if (runPg) {
       gates.push(...collectGateResults([["verify-pg", PnpmRun("pg:test")]], (command) => run(command, checkout, publicEnvironment)));
     } else {
-      gates.push(successResult("verify-pg", ["pnpm", "pg:test"], "PREFLIGHT_PG_OPTIONAL_SKIPPED"));
+      gates.push(successResult("verify-pg", PnpmRun("pg:test"), "PREFLIGHT_PG_OPTIONAL_SKIPPED"));
       gates.at(-1).ok = true;
       gates.at(-1).reasonCode = "PREFLIGHT_PG_OPTIONAL_SKIPPED";
     }
