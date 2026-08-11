@@ -74,7 +74,14 @@ function privacyPatterns(owner, privateTokens = []) {
     ["AUTHENTICATED_URL", /[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@/iu],
     ["PRIVATE_HOSTNAME", /\b[A-Za-z0-9-]+\.(?:lan|internal|corp)\b/iu],
     ["PRIVATE_USER_AT_HOST", /\b(?:deploy|root|tcrn|ubuntu)@[A-Za-z0-9.-]+\b/iu],
-    ["PRIVATE_IPV4", /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b/u],
+      // Loopback is deliberately NOT in this class. The class exists to catch an
+      // address that reveals someone's network — which host, which subnet, what the
+      // deployment looks like. 127.0.0.1 names no host and is identical on every
+      // machine on earth; publishing it discloses nothing. Keeping it here made any
+      // feature that binds locally unreleasable, which is how the portal's bind
+      // address — a security property meant to be stated out loud — tripped a
+      // privacy gate. The RFC 1918 ranges are unchanged.
+    ["PRIVATE_IPV4", /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b/u],
     ["US_SSN", /\b\d{3}-\d{2}-\d{4}\b/u],
     ["PHONE_IDENTIFIER", /\+?\d{1,3}[-. ]\d{3}[-. ]\d{3}[-. ]\d{4}\b/u],
     ["CUSTOMER_SOURCE_MARKER", /\b(?:customer|tenant)[-_ ](?:export|dump|backup)\b/iu],
