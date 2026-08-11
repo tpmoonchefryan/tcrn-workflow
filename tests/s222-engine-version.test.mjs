@@ -60,16 +60,26 @@ async function declare(workspace, value) {
   ]);
 }
 
+// Derived from the running version rather than written as a literal: a literal
+// "newer" version stops being newer the moment the framework reaches it, which
+// turned this assertion red during the 0.11.10 release train.
+const NEWER_THAN_FRAMEWORK = (() => {
+  const [major, ...rest] = FRAMEWORK_VERSION.split(".");
+  return [Number(major) + 1, ...rest].join(".");
+})();
+
+const literal = (value) => new RegExp(value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u");
+
 test("S222: a workspace requiring a newer engine refuses with both versions", async (t) => {
   const { workspace } = await fixture(t, "mismatch");
-  const receipt = await declare(workspace, "0.11.10");
+  const receipt = await declare(workspace, NEWER_THAN_FRAMEWORK);
   assert.equal(receipt.reasonCode, "SETTINGS_WRITE_COMMITTED");
 
   const error = await runError(["status", "--workspace", workspace]);
   assert.equal(error.reasonCode, "WORKSPACE_ENGINE_VERSION_MISMATCH");
-  assert.deepEqual(error.details, { required: "0.11.10", actual: FRAMEWORK_VERSION });
-  assert.match(error.message, /0\.11\.10/u);
-  assert.match(error.message, /0\.11\.9/u);
+  assert.deepEqual(error.details, { required: NEWER_THAN_FRAMEWORK, actual: FRAMEWORK_VERSION });
+  assert.match(error.message, literal(NEWER_THAN_FRAMEWORK));
+  assert.match(error.message, literal(FRAMEWORK_VERSION));
 });
 
 test("S222: a satisfied declaration opens normally", async (t) => {
