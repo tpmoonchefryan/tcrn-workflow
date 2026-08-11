@@ -35,8 +35,9 @@ import {
 } from "../../protocol/src/index.js";
 import type {
   EventRecord,
+  ExtensionRegistration,
   JsonValue,
-  PlannedDeliveryKind,
+  WorkKind,
   WorkRecord,
   WorkStatus,
 } from "../../protocol/src/index.js";
@@ -74,6 +75,28 @@ import type { GateIdentityAuthorityContext, GateIdentityDecision } from "./gate-
 import type { CanonicalRoot } from "./root-identity.js";
 import type { ExplicitRoot } from "./index.js";
 import { storyScopeFromRecord, storyScopeNamesOwnerDecider, validateStoryRecord } from "./story-scope-compliance.js";
+import {
+  TemplateAdmissionError,
+  admitTemplate,
+  createTemplateAdmissionRecord,
+  templateBindingFromReceipt,
+  templateBindingFromWorkRecord,
+  templateRecordMatchesBinding,
+  templateRecordForBinding,
+  templateRegistry,
+  validateBoundTemplateWork,
+  validateTemplateAdmissionRecord,
+  validateTemplateAdmissionReceipt,
+} from "./template-admission.js";
+import type { TemplateAdmissionRecord } from "./template-admission.js";
+import {
+  SETTINGS_LAYER_KIND,
+  SettingsError,
+  createWorkspaceSettingRecord,
+  sortWorkspaceSettings,
+  validateWorkspaceSettingRecord,
+} from "./settings.js";
+import type { WorkspaceSettingRecord } from "./settings.js";
 
 export const WORKSPACE_SCHEMA_VERSION = "tcrn.workspace.v1" as const;
 export const WORKSPACE_STORAGE_VERSION = 1 as const;
@@ -231,6 +254,8 @@ export interface WorkspaceState {
   readonly conferencePositions: readonly ConferencePosition[];
   readonly conferenceMinutes: readonly ConferenceMinutes[];
   readonly gates: readonly GateRecord[];
+  readonly settings: readonly WorkspaceSettingRecord[];
+  readonly templates: readonly TemplateAdmissionRecord[];
   readonly events: readonly EventRecord[];
   // WSE-2: the sequence of the attestation.actor.enabled event once one has been
   // replayed, else null. From this sequence onward (the enabling event itself
@@ -296,6 +321,8 @@ const workOperations = new Set(["work.created", "work.updated", "work.deleted", 
 // that never use them stay fully readable, and storageVersion stays 1.
 const conferenceOperations = new Set(["conference.created", "conference.updated", "conference.position.appended", "conference.closed"]);
 const gateOperations = new Set(["gate.created", "gate.updated", "gate.deleted"]);
+const settingsOperations = new Set(["settings.updated"]);
+const templateOperations = new Set(["template.admitted"]);
 const metadataFields = [
   "schemaVersion",
   "storageVersion",
@@ -984,7 +1011,7 @@ function extensionRecordOrCorrupt<T>(validate: () => T): T {
   try {
     return validate();
   } catch (error) {
-    if (error instanceof ConferenceError || error instanceof AssignmentGateError || error instanceof GateIdentityError) {
+    if (error instanceof ConferenceError || error instanceof AssignmentGateError || error instanceof GateIdentityError || error instanceof SettingsError || error instanceof TemplateAdmissionError) {
       fail("WORKSPACE_EVENT_CORRUPT", `${error.reasonCode}:${error.message}`);
     }
     throw error;
@@ -1038,7 +1065,7 @@ function collectWorkClosure(work: Map<string, WorkRecord>, record: WorkRecord): 
 // CQ-10b correction: the ancestor walk is O(delta), but the delete arm below is a
 // full scan of the work map, so this function is NOT O(delta) on a work.deleted
 // event. The scan is counted by recordCollectionScan so the proof can bound it.
-function validateWorkClosure(work: Map<string, WorkRecord>, projects: Map<string, ProjectRecord>, record: WorkRecord): void {
+function validateWorkClosure(work: Map<string, WorkRecord>, projects: Map<string, ProjectRecord>, record: WorkRecord, registry: readonly ExtensionRegistration[] = []): void {
   const project = projects.get(record.projectId);
   if (!project || (project.tombstone && !record.tombstone)) {
     fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} references an unavailable project`);
@@ -1046,7 +1073,7 @@ function validateWorkClosure(work: Map<string, WorkRecord>, projects: Map<string
   const closure = collectWorkClosure(work, record);
   recordClosureValidation(closure.length);
   try {
-    validateWorkGraph(closure);
+    validateWorkGraph(closure, registry);
   } catch (error) {
     if (error instanceof ProtocolError) {
       fail("WORKSPACE_EVENT_CORRUPT", `${error.reasonCode}:${error.message}`);
@@ -1356,6 +1383,9 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
   const conferencePositions = new Map<string, ConferencePosition>();
   const conferenceMinutes = new Map<string, ConferenceMinutes>();
   const gates = new Map<string, GateRecord>();
+  const settings = new Map<string, WorkspaceSettingRecord>();
+  const templates = new Map<string, TemplateAdmissionRecord>();
+  const workspaceRoot = metadata.roots.find((root) => root.kind === "workspace")?.path;
   let attestationEnabledAtSequence: number | null = null;
   for (const event of events) {
     const payload = event.payload;
@@ -1388,6 +1418,16 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       continue;
     }
     const actorRequired = attestationEnabledAtSequence !== null;
+    if (templateOperations.has(operation)) {
+      const record = extensionRecordOrCorrupt(() => validateTemplateAdmissionRecord(
+        payloadRecord(payload, operation, actorRequired),
+      ));
+      requireEventBoundTimestamp(record.receipt.admittedAt, event, `template ${record.template.id}@${record.template.version}`);
+      const key = `${record.template.id}@${record.template.version}`;
+      if (templates.has(key)) fail("WORKSPACE_EVENT_CORRUPT", `duplicate template admission ${key}`);
+      templates.set(key, record);
+      continue;
+    }
     if (projectOperations.has(operation)) {
       const record = validateProject(payloadRecord(payload, operation, actorRequired));
       const current = projects.get(record.id);
@@ -1466,8 +1506,9 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         }
         assertWorkAnnotationExtensions(current.extensions, record.extensions, record.id);
       }
+      extensionRecordOrCorrupt(() => validateBoundTemplateWork(record, [...templates.values()]));
       work.set(record.id, record);
-      validateWorkClosure(work, projects, record);
+      validateWorkClosure(work, projects, record, templateRegistry([...templates.values()]));
       continue;
     }
     if (conferenceOperations.has(operation)) {
@@ -1621,11 +1662,27 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       gates.set(record.id, record);
       continue;
     }
+    if (settingsOperations.has(operation)) {
+      const record = extensionRecordOrCorrupt(() => validateWorkspaceSettingRecord(
+        payloadRecord(payload, operation, actorRequired),
+        workspaceRoot,
+      ));
+      requireEventBoundTimestamp(record.updatedAt, event, `setting ${record.key}`);
+      const current = settings.get(record.key);
+      if ((current === undefined && record.revision !== 1) ||
+        (current !== undefined && record.revision !== current.revision + 1) ||
+        record.layerKind !== SETTINGS_LAYER_KIND || record.tombstone !== false) {
+        fail("WORKSPACE_EVENT_CORRUPT", `invalid setting mutation ${record.key}`);
+      }
+      settings.set(record.key, record);
+      continue;
+    }
     fail("WORKSPACE_EVENT_CORRUPT", `unknown operation ${operation}`);
   }
   const projectRecords = [...projects.values()].sort((left, right) => compareCanonicalText(left.id, right.id));
   recordTerminalGraphValidation();
-  const workRecords = validateWorkGraph([...work.values()]);
+  const templateRecords = [...templates.values()].sort((left, right) => compareCanonicalText(left.registrationId, right.registrationId));
+  const workRecords = validateWorkGraph([...work.values()], templateRegistry(templateRecords));
   return {
     metadata,
     version: events.length,
@@ -1636,6 +1693,8 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
     conferencePositions: sortExtensionRecords(conferencePositions.values()),
     conferenceMinutes: sortExtensionRecords(conferenceMinutes.values()),
     gates: sortExtensionRecords(gates.values()),
+    settings: sortWorkspaceSettings(settings.values()),
+    templates: templateRecords,
     events,
     attestationEnabledAtSequence,
   };
@@ -1675,13 +1734,15 @@ function viewDocuments(state: WorkspaceState): Readonly<Record<string, string>> 
   // holds at least one conference or gate record (positions and minutes cannot
   // exist without their conference), so the three views above and the view set
   // stay byte-identical for every workspace without extension records.
-  if (state.conferences.length + state.gates.length > 0) {
+  if (state.conferences.length + state.gates.length + state.settings.length + state.templates.length > 0) {
     views["extensions.json"] = canonicalJson({
       schemaVersion: "tcrn.workspace-extension-index.v1",
       conferences: state.conferences,
       conferencePositions: state.conferencePositions,
       conferenceMinutes: state.conferenceMinutes,
       gates: state.gates,
+      ...(state.settings.length === 0 ? {} : { settings: state.settings }),
+      ...(state.templates.length === 0 ? {} : { templates: state.templates }),
     });
   }
   return views;
@@ -2674,6 +2735,8 @@ interface MutationDelta {
   readonly conferencePositions?: readonly ConferencePosition[];
   readonly conferenceMinutes?: readonly ConferenceMinutes[];
   readonly gates?: readonly GateRecord[];
+  readonly settings?: readonly WorkspaceSettingRecord[];
+  readonly templates?: readonly TemplateAdmissionRecord[];
 }
 
 async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, buildDelta: (state: WorkspaceState) => MutationDelta, options: WorkspaceMutationOptions): Promise<WorkspaceState> {
@@ -2757,6 +2820,8 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
       conferencePositions: delta.conferencePositions ?? state.conferencePositions,
       conferenceMinutes: delta.conferenceMinutes ?? state.conferenceMinutes,
       gates: delta.gates ?? state.gates,
+      settings: delta.settings ?? state.settings,
+      templates: delta.templates ?? state.templates,
       events: [...state.events, event],
       attestationEnabledAtSequence: isEnableEvent ? sequence : state.attestationEnabledAtSequence,
     };
@@ -2840,11 +2905,12 @@ export async function deleteProject(workspaceRoot: string, lease: WorkspaceLease
 export async function createWork(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly projectId: string;
   readonly externalKey: string;
-  readonly kind: PlannedDeliveryKind;
+  readonly kind: WorkKind;
   readonly parentId: string | null;
   readonly status?: WorkStatus;
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
+  readonly templateAdmission?: unknown;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   const externalKey = canonicalExternalKey(input.externalKey);
   const id = deriveStableId("work", externalKey);
@@ -2880,10 +2946,25 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
     if (input.decidedBy !== undefined && (input.decidedBy.length === 0 || !input.decidedBy.every((item) => isMinutesId(item)))) {
       fail("WORKSPACE_INPUT_INVALID", "advisory decided-by must be a non-empty list of minutes ids");
     }
-    const extensions = workAdvisoryExtensions({}, {
+    const templateReceipt = input.templateAdmission === undefined
+      ? undefined
+      : validateTemplateAdmissionReceipt(input.templateAdmission);
+    const templateRecord = templateReceipt === undefined
+      ? undefined
+      : templateRecordForBinding(state.templates, templateBindingFromReceipt(templateReceipt));
+    if (templateReceipt !== undefined && (templateRecord === undefined || !templateRecordMatchesBinding(templateRecord, templateBindingFromReceipt(templateReceipt)))) {
+      throw new TemplateAdmissionError("TEMPLATE_UNKNOWN", `${templateReceipt.templateId}@${templateReceipt.templateVersion}`);
+    }
+    if (templateRecord !== undefined && !templateRecord.template.appliesTo.includes(input.kind)) {
+      throw new TemplateAdmissionError("TEMPLATE_NOT_APPLICABLE", `${templateRecord.template.id}:${input.kind}`);
+    }
+    const extensions: Record<string, unknown> = workAdvisoryExtensions({}, {
       ...(input.scope !== undefined ? { scope: input.scope } : {}),
       ...(input.decidedBy !== undefined ? { decidedBy: input.decidedBy } : {}),
     });
+    if (templateReceipt !== undefined && templateRecord !== undefined) {
+      extensions[templateRecord.registrationId] = { required: true, value: templateBindingFromReceipt(templateReceipt) };
+    }
     const record: WorkRecord = {
       schemaVersion: "tcrn.work.v1",
       id,
@@ -2897,14 +2978,18 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
       tombstone: false,
       extensions: extensions as WorkRecord["extensions"],
     };
-    if (record.kind === "Story") {
+    // A bound Story is governed by the admitted heading data, not by the
+    // pre-template ten-heading parser.  Unbound records retain the legacy
+    // validator so the pre-era exemption stays byte/replay compatible.
+    if (record.kind === "Story" && templateRecord === undefined) {
       const compliance = validateStoryRecord(record);
       if (!compliance.ok) {
         fail("WORKSPACE_STORY_SCOPE_INVALID", compliance.problems.map((problem) => problem.message).join("; "));
       }
     }
+    validateBoundTemplateWork(record, state.templates);
     assertStoryCompletionAdmission(record, record.status);
-    const work = validateWorkGraph([...state.work, record]);
+    const work = validateWorkGraph([...state.work, record], templateRegistry(state.templates));
     return { payload: { operation: "work.created", record: workJsonFields(record) }, projects: state.projects, work };
   }, input);
 }
@@ -2930,13 +3015,16 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
   readonly id: string;
   readonly status: WorkStatus;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
-  // Story scope is a live write-path admission rule.  Historical chains remain
-  // replayable, but a Story cannot enter an execution or completion state until
-  // its current ten-block scope and legacy obligations are present.
+  // Scope is a live write-path admission rule. Historical chains remain
+  // replayable; unbound Stories use the legacy ten-block contract, while a
+  // bound Story is checked against its admitted template and the same engine
+  // floor before it enters an execution or completion state.
   if (["ready", "active", "done"].includes(input.status)) {
     const before = await materializeWorkspace(workspaceRoot);
     const current = workById(before, input.id);
-    if (current.kind === "Story") {
+    const templateBound = templateBindingFromWorkRecord(current) !== null;
+    validateBoundTemplateWork(current, before.templates);
+    if (current.kind === "Story" && !templateBound) {
       const compliance = validateStoryRecord(current);
       if (!compliance.ok) {
         const hasScope = storyScopeFromRecord(current) !== null;
@@ -2971,7 +3059,8 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
     // the identical predicate as WORKSPACE_EVENT_CORRUPT.
     assertGateClearance(state.gates, current.id, input.status, "WORKSPACE_GATE_PENDING");
     const record: WorkRecord = { ...current, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
-    const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
+    validateBoundTemplateWork(record, state.templates);
+    const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
     return { payload: { operation: "work.updated", record: workJsonFields(record) }, projects: state.projects, work };
   }, input);
 }
@@ -3014,13 +3103,15 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
       fail("WORKSPACE_INPUT_INVALID", "annotation does not change any advisory field");
     }
     const record: WorkRecord = { ...current, extensions: extensions as WorkRecord["extensions"], revision: current.revision + 1, updatedAt: input.occurredAt };
-    if (record.kind === "Story" && input.scope !== undefined) {
+    const templateBound = templateBindingFromWorkRecord(record) !== null;
+    if (record.kind === "Story" && input.scope !== undefined && !templateBound) {
       const compliance = validateStoryRecord(record);
       if (!compliance.ok) {
         fail("WORKSPACE_STORY_SCOPE_INVALID", compliance.problems.map((problem) => problem.message).join("; "));
       }
     }
-    const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
+    validateBoundTemplateWork(record, state.templates);
+    const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
     return { payload: { operation: "work.annotated", record: workJsonFields(record) }, projects: state.projects, work };
   }, input);
 }
@@ -3031,7 +3122,8 @@ export async function deleteWork(workspaceRoot: string, lease: WorkspaceLease, i
   return appendEvent(workspaceRoot, lease, (state) => {
     const current = workById(state, input.id);
     const record: WorkRecord = { ...current, revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true };
-    const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry));
+    validateBoundTemplateWork(record, state.templates);
+    const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
     return { payload: { operation: "work.deleted", record: workJsonFields(record) }, projects: state.projects, work };
   }, input);
 }
@@ -3350,6 +3442,58 @@ export async function deleteGateInWorkspace(workspaceRoot: string, lease: Worksp
   }, input);
 }
 
+// INIT-022 S212: a template file is inert until this governed admission event
+// records its digest, version, owner, and schema in the workspace chain. The
+// reducer derives the extension registry from these records; callers cannot
+// smuggle a required template extension in through a work payload alone.
+export async function admitTemplateInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly template: unknown;
+  readonly ownerId: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  const receipt = admitTemplate(input.template, { ownerId: input.ownerId, admittedAt: input.occurredAt });
+  const record = createTemplateAdmissionRecord(input.template, receipt);
+  return appendEvent(workspaceRoot, lease, (state) => {
+    if (state.templates.some((entry) => entry.template.id === record.template.id && entry.template.version === record.template.version)) {
+      throw new TemplateAdmissionError("TEMPLATE_DUPLICATE", `${record.template.id}@${record.template.version}`);
+    }
+    const templates = [...state.templates, record].sort((left, right) => compareCanonicalText(left.registrationId, right.registrationId));
+    return {
+      payload: buildEventPayload("template.admitted", record as unknown as JsonValue),
+      projects: state.projects,
+      work: state.work,
+      templates,
+    };
+  }, input);
+}
+
+// INIT-022 S213: settings are a bounded workspace_configuration overlay, not an
+// ungoverned JSON sidecar. Each write is an append-only event and the replay arm
+// above enforces the same key, layer, revision, and value contract.
+export async function setWorkspaceSetting(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly key: string;
+  readonly value: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const current = state.settings.find((record) => record.key === input.key);
+    const record = createWorkspaceSettingRecord(
+      input.key,
+      input.value,
+      (current?.revision ?? 0) + 1,
+      input.occurredAt,
+      workspaceRoot,
+    );
+    return {
+      payload: buildEventPayload("settings.updated", record as unknown as JsonValue),
+      projects: state.projects,
+      work: state.work,
+      settings: sortWorkspaceSettings([
+        ...state.settings.filter((entry) => entry.key !== record.key),
+        record,
+      ]),
+    };
+  }, input);
+}
+
 export async function rebuildWorkspaceViews(workspaceRoot: string, lease: WorkspaceLease): Promise<WorkspaceState> {
   const resolved = await boundDirectory(workspaceRoot);
   await assertLease(resolved, lease);
@@ -3383,12 +3527,14 @@ export async function exportWorkspace(workspaceRoot: string): Promise<string> {
   // bytes (and the archive digest) stay identical for every workspace without
   // conference/gate events. canonicalJson sorts keys, so conditional inclusion
   // is byte-stable.
-  const extensionCollections = state.conferences.length + state.gates.length > 0
+  const extensionCollections = state.conferences.length + state.gates.length + state.settings.length + state.templates.length > 0
     ? {
       conferences: state.conferences,
       conferencePositions: state.conferencePositions,
       conferenceMinutes: state.conferenceMinutes,
       gates: state.gates,
+      ...(state.settings.length === 0 ? {} : { settings: state.settings }),
+      ...(state.templates.length === 0 ? {} : { templates: state.templates }),
     }
     : {};
   return canonicalJson({

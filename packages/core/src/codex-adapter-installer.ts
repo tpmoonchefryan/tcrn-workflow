@@ -24,7 +24,7 @@
 
 import { createHash } from "node:crypto";
 import { constants, type BigIntStats } from "node:fs";
-import { lstat, mkdir, open, realpath, rm, rmdir, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, realpath, rename, rm, rmdir, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 
@@ -50,6 +50,8 @@ import {
   CODEX_SESSION_SUMMARY_PATH,
   assertCodexAdapterActivationHost,
   assertCodexActivationReceiptContext,
+  codexHookDefinitionForDigests,
+  removeCodexAdapterHookFragment,
   validateCodexActivationArtifacts,
 } from "./codex-adapter-activation.js";
 import type {
@@ -540,6 +542,36 @@ async function verifyActivationReceiptSource(
   }
 }
 
+async function managedCodexHookFragment(
+  receipt: CodexActivationInstallationReceipt,
+): Promise<string> {
+  const observeEntry = receipt.entries.find((entry) => entry.path === CODEX_OBSERVE_HANDLER_PATH);
+  let observeEvents: string[] = [];
+  let observeHandlerDigest: string | null = null;
+  if (observeEntry !== undefined) {
+    const source = await readFile(observeEntry.realpath, "utf8").catch(() => {
+      fail("INSTALLER_ROLLBACK_MISMATCH", CODEX_OBSERVE_HANDLER_PATH);
+    });
+    const match = source.match(/const EVENTS = (\[[^\n]+\]);/u);
+    if (match === null) fail("INSTALLER_ROLLBACK_MISMATCH", "observe event manifest");
+    try {
+      const parsed: unknown = JSON.parse(match[1] ?? "");
+      if (!Array.isArray(parsed) || parsed.some((event) => typeof event !== "string")) fail("INSTALLER_ROLLBACK_MISMATCH", "observe event manifest");
+      observeEvents = parsed as string[];
+    } catch {
+      fail("INSTALLER_ROLLBACK_MISMATCH", "observe event manifest");
+    }
+    observeHandlerDigest = contentSha256(Buffer.from(source, "utf8"));
+  }
+  return codexHookDefinitionForDigests(
+    receipt.installationRoot,
+    receipt.binding.handlerDigest,
+    receipt.binding.summaryFileDigest,
+    observeEvents,
+    observeHandlerDigest,
+  ).source;
+}
+
 // Reverse only the activation rung. Every entry is verified before any unlink.
 // hooks.json is removed first, then the handler and summary; the inert Step-1
 // bundle stays installed. Codex may retain its host-owned approval for the old
@@ -550,19 +582,50 @@ export async function uninstallCodexAdapterActivation(
   const context = assertCodexActivationReceiptContext(contextValue);
   const receipt = context.receipt;
   await verifyActivationReceiptSource(context);
-  for (const entry of receipt.entries) await verifyActivationEntry(entry);
+  for (const entry of receipt.entries) {
+    // hooks.json is a two-zone document. It may have acquired user-owned hook
+    // entries after installation, so its whole-file identity is not a valid
+    // rollback precondition. The managed fragment is checked and removed below;
+    // every other TCRN-owned file remains byte-and-identity pinned here.
+    if (entry.path !== CODEX_HOOKS_PATH) await verifyActivationEntry(entry);
+  }
   const hooksEntry = receipt.entries.find(
     (entry) => entry.path === CODEX_HOOKS_PATH,
   );
   if (hooksEntry === undefined) {
     fail("INSTALLER_ROLLBACK_MISMATCH", CODEX_HOOKS_PATH);
   }
+  const currentHooks = await readFile(hooksEntry.realpath, "utf8").catch(() => {
+    fail("INSTALLER_ROLLBACK_MISMATCH", CODEX_HOOKS_PATH);
+  });
+  let remainingHooks: string;
+  try {
+    remainingHooks = removeCodexAdapterHookFragment(
+      currentHooks,
+      await managedCodexHookFragment(receipt),
+    );
+  } catch (error) {
+    if (error instanceof CodexAdapterInstallerError) throw error;
+    fail("INSTALLER_ROLLBACK_MISMATCH", CODEX_HOOKS_PATH);
+  }
   // INC-010: count what was actually removed rather than reporting the constant path
-  // count. The hook definition is unlinked FIRST so a failure part-way through leaves a
-  // project with no registered hook rather than a hook pointing at a deleted handler,
-  // and the measured count tells a caller exactly how far the removal got.
+  // count. The managed fragment is removed FIRST; a user-owned remainder is written
+  // back atomically and survives. If no user zone remains, the empty registration
+  // file is removed just as the legacy installer did.
   let removed = 0;
-  await unlink(hooksEntry.realpath);
+  const remainingDocument = JSON.parse(remainingHooks) as Record<string, unknown>;
+  if (Object.keys(remainingDocument).length === 0) {
+    await unlink(hooksEntry.realpath);
+  } else {
+    const temporary = `${hooksEntry.realpath}.tcrn-remove-tmp`;
+    try {
+      await writeFile(temporary, Buffer.from(remainingHooks, "utf8"), { flag: "wx", mode: 0o600 });
+      await rename(temporary, hooksEntry.realpath);
+    } catch {
+      await unlink(temporary).catch(() => undefined);
+      fail("INSTALLER_ROLLBACK_MISMATCH", CODEX_HOOKS_PATH);
+    }
+  }
   removed += 1;
   for (const entry of receipt.entries) {
     if (entry.path !== CODEX_HOOKS_PATH) {

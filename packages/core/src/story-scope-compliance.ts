@@ -31,7 +31,9 @@ export type StoryScopeProblemCode =
   | "STORY_SCOPE_SECTION_EMPTY"
   | "STORY_SCOPE_ACCEPTANCE_INVALID"
   | "STORY_SCOPE_PURPOSE_INVALID"
-  | "STORY_SCOPE_LEGACY_ELEMENT_MISSING";
+  | "STORY_SCOPE_LEGACY_ELEMENT_MISSING"
+  | "TEMPLATE_SCOPE_HEADING_UNEXPECTED"
+  | "TEMPLATE_SCOPE_REFERENCE_INVALID";
 
 export interface StoryScopeProblem {
   readonly code: StoryScopeProblemCode;
@@ -40,7 +42,11 @@ export interface StoryScopeProblem {
 }
 
 export interface StoryScopeSection {
-  readonly heading: StoryScopeHeading;
+  // Template-bound records may use an admitted heading set outside the historic
+  // Story vocabulary.  The legacy validator still narrows its own values to
+  // StoryScopeHeading at runtime; the public section shape is widened so the
+  // kind-independent template floor can reuse the same readback structure.
+  readonly heading: string;
   readonly content: string;
   readonly line: number;
 }
@@ -176,4 +182,121 @@ export function storyScopeNamesOwnerDecider(scope: unknown): boolean {
   if (typeof scope !== "string") return false;
   const goal = validateStoryScope(scope).sections.find((section) => section.heading === "Goal")?.content ?? "";
   return /判定人\s*[=:：]\s*[^\n。；;]*(?:\bOwner\b|所有者)/u.test(goal);
+}
+
+/**
+ * A template owns its headings; the engine owns only this invariant floor.  The
+ * old Story validator above remains byte-compatible for pre-template records,
+ * while this contract lets an admitted template choose a different heading set
+ * without weakening the four purpose anchors or the legacy closeout elements.
+ */
+export interface ScopeTemplateDefinition {
+  readonly id: string;
+  readonly version: number;
+  readonly headings: readonly string[];
+  readonly acceptanceHeadings?: readonly string[];
+  readonly referenceHeadings?: readonly string[];
+}
+
+const TEMPLATE_BRACKET_HEADING = /^\s*(?:【([^】]+)】|\[([^\]]+)\])(.*)$/u;
+const TEMPLATE_MARKDOWN_HEADING = /^\s*#{1,6}\s+(.+?)\s*$/u;
+const TEMPLATE_BASE_ANCHORS = Object.freeze(["为谁", "目的锚", "符合性判据", "判定人"] as const);
+const TEMPLATE_REFERENCE_VALUE = /^(?:(?:ref|reference|vault|credential|secret|attachment):[^\s]+|https?:\/\/[^\s]+)$/iu;
+
+interface ParsedTemplateHeading {
+  readonly name: string;
+  readonly inline: string;
+  readonly line: number;
+}
+
+function parseTemplateHeadings(scope: string): readonly ParsedTemplateHeading[] {
+  const lines = scope.split(/\r?\n/u);
+  const found: ParsedTemplateHeading[] = [];
+  for (const [index, line] of lines.entries()) {
+    const bracket = line.match(TEMPLATE_BRACKET_HEADING);
+    if (bracket !== null) {
+      found.push({ name: (bracket[1] ?? bracket[2] ?? "").trim(), inline: (bracket[3] ?? "").trim(), line: index + 1 });
+      continue;
+    }
+    const markdown = line.match(TEMPLATE_MARKDOWN_HEADING);
+    if (markdown !== null) found.push({ name: (markdown[1] ?? "").trim(), inline: "", line: index + 1 });
+  }
+  return found;
+}
+
+function templateSections(scope: string, found: readonly ParsedTemplateHeading[]): readonly StoryScopeSection[] {
+  const lines = scope.split(/\r?\n/u);
+  return found.map((entry, index) => {
+    const nextLine = found[index + 1]?.line ?? lines.length + 1;
+    const body = [entry.inline, ...lines.slice(entry.line, nextLine - 1)]
+      .filter((value) => value.length > 0)
+      .join("\n")
+      .trim();
+    return { heading: entry.name, content: body, line: entry.line };
+  });
+}
+
+/**
+ * Validate an admitted template instance.  `kind` is intentionally absent from
+ * this API: template shape is data, while work-graph behaviour remains owned by
+ * the protocol kind and the frozen coupling roster in template-admission.ts.
+ */
+export function validateTemplateScope(scope: unknown, template: ScopeTemplateDefinition): StoryScopeValidation {
+  const problems: StoryScopeProblem[] = [];
+  if (typeof scope !== "string" || scope.trim().length === 0) {
+    return { ok: false, problems: [{ code: "STORY_SCOPE_REQUIRED", message: "templated work requires a non-empty scope" }], sections: [] };
+  }
+  const expected = [...template.headings];
+  const found = parseTemplateHeadings(scope);
+  const counts = new Map<string, number>();
+  for (const entry of found) counts.set(entry.name, (counts.get(entry.name) ?? 0) + 1);
+  for (const heading of expected) {
+    const count = counts.get(heading) ?? 0;
+    if (count === 0) problems.push({ code: "STORY_SCOPE_HEADING_MISSING", heading, message: `missing template scope block ${heading}` });
+    else if (count > 1) problems.push({ code: "STORY_SCOPE_HEADING_DUPLICATE", heading, message: `duplicate template scope block ${heading}` });
+  }
+  for (const entry of found) {
+    if (!expected.includes(entry.name)) {
+      problems.push({ code: "TEMPLATE_SCOPE_HEADING_UNEXPECTED", heading: entry.name, message: `unexpected template scope block ${entry.name}` });
+    }
+  }
+  if (found.length === expected.length && found.some((entry, index) => entry.name !== expected[index])) {
+    problems.push({ code: "STORY_SCOPE_HEADING_ORDER", message: "template scope blocks must use the admitted order" });
+  }
+  const sections = templateSections(scope, found);
+  for (const section of sections) {
+    if (section.content.length === 0) {
+      problems.push({ code: "STORY_SCOPE_SECTION_EMPTY", heading: section.heading, message: `template scope block ${section.heading} is empty` });
+    }
+  }
+
+  const byHeading = new Map(sections.map((section) => [section.heading, section.content]));
+  const all = scope;
+  for (const anchor of TEMPLATE_BASE_ANCHORS) {
+    if (!all.includes(anchor)) {
+      problems.push({ code: "STORY_SCOPE_PURPOSE_INVALID", heading: "Goal", message: `template scope is missing base anchor ${anchor}` });
+    }
+  }
+  const legacyEvidence = /现象|现状|问题|来源|实证|证据|命令|实测|复核|evidence|command|observed/iu.test(all);
+  const legacyFix = /修复|改造|交付|落点|改什么|实现|新增|移除|调整|fix|implement|deliver/iu.test(all);
+  const legacyDecision = /决策|裁定|状态|判定人|Owner|planned|ready|active|blocked|done|待/iu.test(all);
+  if (!legacyEvidence) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Requirements", message: "legacy phenomenon/evidence element is not mapped" });
+  if (!legacyFix) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Requirements", message: "legacy fix-items element is not mapped" });
+  if (!legacyDecision) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Implementation Notes", message: "legacy decision/state element is not mapped" });
+
+  const acceptanceHeadings = template.acceptanceHeadings ?? ["Acceptance Criteria"];
+  const primaryAcceptanceHeading = acceptanceHeadings[0] ?? "Acceptance Criteria";
+  const acceptance = acceptanceHeadings.map((heading) => byHeading.get(heading) ?? "").find((content) => content.length > 0) ?? "";
+  if (acceptance.length === 0 || (!hasOrderedGwt(acceptance) && !isBulletList(acceptance) && acceptanceHeadings.length === 1 && primaryAcceptanceHeading === "Acceptance Criteria")) {
+    problems.push({ code: "STORY_SCOPE_ACCEPTANCE_INVALID", heading: primaryAcceptanceHeading, message: "template scope lacks an acceptance/expected outcome section" });
+  }
+
+  for (const heading of template.referenceHeadings ?? []) {
+    const content = byHeading.get(heading) ?? "";
+    const values = content.split(/\r?\n/u).map((value) => value.trim()).filter(Boolean);
+    if (values.length === 0 || values.some((value) => !TEMPLATE_REFERENCE_VALUE.test(value))) {
+      problems.push({ code: "TEMPLATE_SCOPE_REFERENCE_INVALID", heading, message: `${heading} must contain references, not inline secrets or arbitrary text` });
+    }
+  }
+  return { ok: problems.length === 0, problems, sections };
 }

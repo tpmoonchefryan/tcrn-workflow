@@ -1,0 +1,78 @@
+{
+  "$id": "https://tcrn.dev/schemas/template-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCRN admitted work template V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "version",
+    "appliesTo",
+    "headings",
+    "acceptanceHeadings",
+    "referenceHeadings",
+    "couplings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "tcrn.template.v1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]{1,95}$",
+      "maxLength": 96
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "appliesTo": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["Epic", "Incident", "Initiative", "Knowledge", "Release", "Review", "Story", "Subtask"]
+      }
+    },
+    "headings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    },
+    "acceptanceHeadings": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    },
+    "referenceHeadings": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    },
+    "couplings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["owner-decider-minutes"]
+      }
+    }
+  }
+}

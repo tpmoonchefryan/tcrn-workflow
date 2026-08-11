@@ -148,7 +148,7 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
     "conference-append-position", "conference-cancel", "conference-close", "conference-open",
     "gate-create", "gate-delete", "gate-transition",
     "project-create", "project-delete", "project-update", "relocation-plan", "relocation-vacate",
-    "storage-home-seal", "work-annotate", "work-create", "work-delete", "work-transition",
+    "settings-set", "storage-home-seal", "template-admit", "work-annotate", "work-create", "work-delete", "work-transition",
   ]);
 });
 

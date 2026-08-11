@@ -884,6 +884,34 @@ test("pre-existing config and tampered activation bytes fail closed without part
   }
 });
 
+test("deactivation removes only the managed hook fragment and preserves a user hook", async () => {
+  const fixtureRoots = await roots();
+  try {
+    const bundle = bundleFor();
+    const inert = await installInert(fixtureRoots, bundle);
+    const installed = await installActivation(fixtureRoots, bundle, inert);
+    const userHook = {
+      matcher: "*",
+      hooks: [{ type: "command", command: "user-owned-hook" }],
+    };
+    const current = JSON.parse(await readFile(join(fixtureRoots.root, CODEX_HOOKS_PATH), "utf8"));
+    current.hooks.PreToolUse = [userHook];
+    await writeFile(join(fixtureRoots.root, CODEX_HOOKS_PATH), canonicalJson(current), "utf8");
+    const context = await readCodexActivationInstallationReceipt(
+      fixtureRoots.activationReceiptPath,
+      installed.authority,
+    );
+    const removed = await uninstallCodexAdapterActivation(context);
+    assert.equal(removed.reasonCode, "INSTALLER_ROLLBACK_EXECUTED");
+    const remaining = JSON.parse(await readFile(join(fixtureRoots.root, CODEX_HOOKS_PATH), "utf8"));
+    assert.deepEqual(remaining, { hooks: { PreToolUse: [userHook] } });
+    assert.equal(existsSync(join(fixtureRoots.root, CODEX_SESSION_START_PATH)), false);
+    assert.equal(existsSync(join(fixtureRoots.root, CODEX_SESSION_SUMMARY_PATH)), false);
+  } finally {
+    await fixtureRoots.close();
+  }
+});
+
 test("fixture does not reuse the withdrawn persona-bound live fire for the corrected definition", () => {
   assert.equal(
     fixture.schemaVersion,

@@ -6,12 +6,14 @@ created by this document.
 ## Surface change
 
 `work-create` keeps all existing flags and adds optional `--scope` and
-`--decided-by` catalog entries. For `kind=Story`, `--scope` is now required and
-must contain the ordered ten-block contract plus the preserved legacy elements.
-`work-annotate --scope` and transitions to `ready`, `active`, or `done` apply the
-same validator. Non-Story records and existing terminal history remain readable;
-existing non-terminal Stories require an append-only migration annotation before
-they can advance.
+`--decided-by` catalog entries. An unbound new `kind=Story` still requires the
+ordered ten-block contract plus the preserved legacy elements. An admitted
+template may instead bind a `template@version` extension; its ordered heading
+set owns the template shape while the engine keeps the kind-independent purpose,
+acceptance, evidence, and reference floor. `work-annotate --scope` and
+transitions to `ready`, `active`, or `done` apply the matching bound or legacy
+validator. Existing non-template history remains readable; a missing binding is
+the explicit pre-template exemption, not a migration failure.
 
 ## Compatibility impact and migration
 
@@ -34,9 +36,12 @@ they can advance.
 ## Verification record
 
 The command catalog is generated from the CLI source and now exposes the two
-additive flags. The positive and negative compatibility legs are covered by
-`tests/story-scope-compliance.test.mjs`; the independent closeout copy is covered
-by `scripts/story-scope-compliance.mjs` and live Story `work-show` readback. The
+additive flags plus the template admission family. The positive and negative
+legacy legs are covered by `tests/story-scope-compliance.test.mjs`; admitted
+template binding and its red legs are covered by
+`tests/s212-template-admission.test.mjs`. The independent closeout copy remains
+covered by `scripts/story-scope-compliance.mjs` for pre-template Stories, while
+the engine validates bound templates from the admitted registry. The
 source-to-rule mapping and deletion red legs are in
 `scripts/policy/story-rule-conservation.json`. This is an offline Workflow
 surface change, not a mutual Workflow/AOS release pair, so the existing

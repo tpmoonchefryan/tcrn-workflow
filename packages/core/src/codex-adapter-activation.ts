@@ -809,6 +809,97 @@ export function codexHookDefinitionForDigests(
   });
 }
 
+// The host hook document has two zones.  The TCRN zone is the exact fragment
+// generated above; the arrays already present under other commands belong to the
+// user and are copied byte-for-byte at the JSON value level.  These helpers are
+// intentionally separate from the installer so validation, merge, and removal all
+// share the same ownership boundary.
+function canonicalHookDocument(value: unknown, label: string): Readonly<Record<string, unknown>> {
+  const source = typeof value === "string" ? value : canonicalJson(value);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    fail("CODEX_ACTIVATION_SCHEMA_INVALID", `${label} json`);
+  }
+  const document = record(parsed, label);
+  if (canonicalJson(document) !== source) {
+    fail("CODEX_ACTIVATION_CANONICAL_INVALID", `${label} canonical`);
+  }
+  return document;
+}
+
+function managedHookFragment(value: unknown): Readonly<{ readonly description: string; readonly hooks: Readonly<Record<string, readonly unknown[]>> }> {
+  const document = canonicalHookDocument(value, "adapter hook fragment");
+  exact(document, ["description", "hooks"], "adapter hook fragment");
+  const description = text(document.description, "adapter hook fragment description", 4_096);
+  const hooksDocument = record(document.hooks, "adapter hook fragment hooks");
+  const allowed = ["SessionStart", ...CODEX_ADAPTER_OBSERVE_EVENTS];
+  const hookKeys = Object.keys(hooksDocument);
+  if (hookKeys.length === 0 || hookKeys.some((key) => !allowed.includes(key))) {
+    fail("CODEX_ACTIVATION_SCHEMA_INVALID", "adapter hook fragment event set");
+  }
+  const hooks: Record<string, readonly unknown[]> = {};
+  for (const event of hookKeys) {
+    const entries = hooksDocument[event];
+    if (!Array.isArray(entries) || entries.length === 0) {
+      fail("CODEX_ACTIVATION_SCHEMA_INVALID", `adapter hook fragment ${event}`);
+    }
+    hooks[event] = Object.freeze(entries.map((entry) => entry));
+  }
+  return { description, hooks };
+}
+
+function canonicalSettingsDocument(value: unknown): Readonly<Record<string, unknown>> {
+  const source = text(value, "adapter hooks settings", maximumReceiptBytes);
+  return canonicalHookDocument(source, "adapter hooks settings");
+}
+
+export function mergeCodexAdapterHookFragment(settingsText: unknown, fragmentValue: unknown): string {
+  const settings = canonicalSettingsDocument(settingsText);
+  const fragment = managedHookFragment(fragmentValue);
+  const existingHooksValue = settings.hooks;
+  const existingHooks = existingHooksValue === undefined
+    ? {}
+    : record(existingHooksValue, "adapter hooks settings hooks");
+  const hooks: Record<string, unknown> = { ...existingHooks };
+  for (const [event, entries] of Object.entries(fragment.hooks)) {
+    const current = hooks[event];
+    if (current !== undefined && !Array.isArray(current)) {
+      fail("CODEX_ACTIVATION_SCHEMA_INVALID", `adapter hooks settings ${event}`);
+    }
+    hooks[event] = [...(current as readonly unknown[] | undefined ?? []), ...entries];
+  }
+  const merged: Record<string, unknown> = { ...settings, hooks };
+  if (!Object.prototype.hasOwnProperty.call(settings, "description")) merged.description = fragment.description;
+  return canonicalJson(merged);
+}
+
+export function removeCodexAdapterHookFragment(settingsText: unknown, fragmentValue: unknown): string {
+  const settings = canonicalSettingsDocument(settingsText);
+  const fragment = managedHookFragment(fragmentValue);
+  const hooksDocument = record(settings.hooks, "adapter hooks settings hooks");
+  const hooks: Record<string, unknown> = { ...hooksDocument };
+  for (const [event, entries] of Object.entries(fragment.hooks)) {
+    const current = hooks[event];
+    if (!Array.isArray(current)) fail("CODEX_ACTIVATION_SCHEMA_INVALID", `adapter hooks settings missing ${event}`);
+    const remaining = [...current];
+    for (const expected of entries) {
+      const expectedBytes = canonicalJson(expected);
+      const index = remaining.findIndex((candidate) => canonicalJson(candidate) === expectedBytes);
+      if (index < 0) fail("CODEX_ACTIVATION_SCHEMA_INVALID", `adapter hooks settings managed ${event}`);
+      remaining.splice(index, 1);
+    }
+    if (remaining.length === 0) delete hooks[event];
+    else hooks[event] = remaining;
+  }
+  const result: Record<string, unknown> = { ...settings };
+  if (Object.keys(hooks).length === 0) delete result.hooks;
+  else result.hooks = hooks;
+  if (result.description === fragment.description) delete result.description;
+  return canonicalJson(result);
+}
+
 export interface CodexActivationArtifacts {
   readonly schemaVersion: typeof CODEX_ADAPTER_ACTIVATION_VERSION;
   readonly installationRoot: string;

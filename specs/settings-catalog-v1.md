@@ -2,13 +2,13 @@
 
 ## Status and scope
 
-This is a documentation-level catalog (spec only). It enumerates the settings
-surface and classifies each knob by tier. It ships zero engine code: the overlay
-machinery (`user_owned_overlay` trust level, workspace/project/command_override
-overlay categories, restrict-only fields, admission receipts) and the
-context-router budgets already exist and are accepted. This catalog only
-documents what is adjustable, at what tier, with what default and bounds, and by
-what mechanism.
+This is the bounded, engine-backed catalog for workspace settings. The engine
+stores records in the `workspace_configuration` layer and appends each change to
+the workspace event chain as `settings.updated`; `settings-catalog` is the
+machine-readable read surface and `settings-set` is the governed write surface.
+The generic-profile layer remains the trust and tier authority, while this file
+documents the finite keys the engine is allowed to consume. A key is not in the
+engine catalog merely because it appears in helper or portal prose.
 
 ## Tier taxonomy
 
@@ -25,7 +25,8 @@ them on a user's behalf.
 adjustment: profile selection, `ContextBudgets` allocations under the frozen caps,
 staleness defaults, work-log verbosity, conference default type, and language.
 
-Each catalogued knob records: key, tier, default, bounds, and a mechanism pointer.
+Each engine-catalogued knob records: key, type, layer, default, bounds, and a
+governed read/write mechanism.
 
 ## New-key rule
 
@@ -36,16 +37,18 @@ the catalog bounded.
 ### Shared decision-record format
 
 Per SDC-7 (the Settings-Catalog Key Allocation Contract), new keys are catalogued
-in append-only per-namespace sections (`conference.*`, `backup.*`, `knowledge.*`,
-with `activation.*` reserved-until-implemented) so packages can land in every
-order without textual conflict. Each catalogued key records six fields in one
-shared format: **key**, **tier**, **default**, **bounds**, **mechanism** (the
-overlay-informed invocation surface — never an engine read), and a **decision
-record** pointer naming the Owner decision that admitted it. The catalog stays
-zero-engine-code: a mechanism pointer describes how an agent composes an explicit
-CLI invocation from an overlay value; it never grants the engine a new read.
+in append-only per-namespace sections. Each engine-consumed key records **key**,
+**type**, **layer**, **default**, **bounds**, and a governed read/write mechanism;
+the implementation also exposes those fields through `settings-catalog`. A
+documentary preference may be mentioned before implementation, but it is
+explicitly reserved and must not be treated as an engine setting until it is
+added to the machine-readable catalog with a decision record.
 
-## Catalogued keys — conference preferences (`conference.*`)
+## Reserved documentary preferences — conference (`conference.*`)
+
+These preferences remain prose-only and are not returned by `settings-catalog`.
+They are retained here to preserve the prior decision record and to make the
+boundary visible to helper authors.
 
 - **Key:** `conference.defaultType`
   - **Tier:** 2 (conversational preference).
@@ -55,7 +58,7 @@ CLI invocation from an overlay value; it never grants the engine a new read.
   - **Mechanism:** a workspace overlay layer value, read by the agent only when
     composing a `conference-open --type` invocation. The CLI always requires an
     explicit `--type`; the overlay informs the agent's suggested value and never
-    reaches the engine, preserving the zero-engine-code posture stated above.
+    reaches the engine, preserving this preference's prose-only posture.
   - **Decision record:** binds the previously mechanism-less Tier-2 "conference
     default type" preference (Tier taxonomy, above) to the WSD-2 `conference-open`
     surface, resolving the documentation drift SDC-7 calls out. Admitted under the
@@ -76,46 +79,69 @@ CLI invocation from an overlay value; it never grants the engine a new read.
     default — ratify distillation as mandatory-with-opt-out with accountable-owner
     enforcement deferred to promote.
 
-## Catalogued keys — backup preferences (`backup.*`)
+## Engine-consumed keys — backup (`backup.*`)
 
 - **Key:** `backup.cadence`
+  - **Type:** enum.
+  - **Layer:** `workspace_configuration`.
   - **Tier:** 2 (conversational preference).
   - **Default:** `gate-close`.
   - **Bounds:** the closed enum `{gate-close, session-end, manual}`.
-  - **Mechanism:** a workspace overlay layer value, read by the agent only when
-    the helper backup-elicitation flow composes an explicit snapshot invocation.
-    Advisory only: no engine scheduler exists and none is claimed — the cadence
-    informs when the agent proposes a backup, never an automatic trigger, so the
-    zero-engine-code posture stated above is preserved.
+  - **Mechanism:** `settings-catalog` returns the current value and
+    `settings-set` appends a governed `settings.updated` record. The backup
+    helper may read the catalog before composing an explicit snapshot invocation;
+    this setting does not create an automatic scheduler.
   - **Decision record:** OD-31 (WSF-5/WSF-6 backup keys), resolved to its
     recommended default — sign the key with cadence default `gate-close`. Admitted
     under the new-key rule (default, bounds, tier, and this record).
 
 - **Key:** `backup.destination`
+  - **Type:** absolute path.
+  - **Layer:** `workspace_configuration`.
   - **Tier:** 2 (conversational preference).
   - **Default:** none — always elicit an explicit path; there is no implicit
     fallback and no managed default location.
-  - **Bounds:** an absolute filesystem path that is NOT inside the workspace root,
-    NOT inside the workspace control directory `.tcrn-workflow`
-    (`WORKSPACE_CONTROL_DIRECTORY`), NOT inside the helper's managed trust-state
-    root `~/.tcrn-workflow` (a distinct tree from the workspace control dir despite
-    the shared basename — it holds the anti-rollback state the helper marks
-    machine-bound), and NOT inside any live host skills directory
-    (`~/.claude/skills` or a project's `.claude/skills`) — the same location
-    hygiene the first-run wizard enforces for the state root. A destination on a
-    synced or cloud-backed filesystem means workspace data leaves the machine and
-    requires the explicit off-machine approval language from the elicitation flow
-    before it is accepted.
-  - **Mechanism:** a workspace overlay layer value, read by the agent only when
-    the helper backup-elicitation flow composes an explicit snapshot destination
-    argument. The CLI always takes the destination explicitly; the overlay informs
-    the agent's suggested value and never reaches the engine.
+  - **Bounds:** an absolute filesystem path outside the workspace root and its
+    control directory `.tcrn-workflow` (`WORKSPACE_CONTROL_DIRECTORY`). The helper
+    elicitation flow may impose additional machine-boundary hygiene for trust-state
+    or skills directories. A destination on a synced or cloud-backed filesystem
+    means workspace data leaves the machine and requires the explicit off-machine
+    approval language from that flow before it is accepted.
+  - **Mechanism:** `settings-catalog` returns the current value and
+    `settings-set` appends a governed `settings.updated` record. The value is an
+    absolute path outside the workspace and its control tree; any off-machine
+    destination still requires the helper's explicit approval language.
   - **Decision record:** OD-31 (WSF-5/WSF-6 backup keys), resolved to its
     recommended default — always-elicit a path with a suggested location OUTSIDE
     both the workspace control dir and the helper trust-state root, rather than a
     managed default inside the state root (which would collide with the
     machine-bound anti-rollback state). Admitted under the new-key rule (default,
     bounds, tier, and this record).
+
+## Engine-consumed keys — workspace and driver
+
+- **Key:** `workspace.generatedArtifactsPath`
+  - **Type:** workspace-relative path.
+  - **Layer:** `workspace_configuration`.
+  - **Default:** `.tcrn-workflow/artifacts`.
+  - **Bounds:** non-empty relative path with no `.`, `..`, empty, absolute,
+    backslash, or NUL path segment.
+  - **Mechanism:** `settings-catalog` reads the effective value and
+    `settings-set` records a governed update. Artifact-producing consumers must
+    use this key rather than inventing a second workspace path setting.
+  - **Decision record:** TCRN-CROSS-MIN-065 ruling 2/8, implemented by
+    TCRN-CROSS-STORY-213.
+
+- **Key:** `driver.capabilityProfile`
+  - **Type:** bounded string.
+  - **Layer:** `workspace_configuration`.
+  - **Default:** `default`.
+  - **Bounds:** non-empty canonical string, at most 128 characters.
+  - **Mechanism:** `settings-catalog` reads the effective value and
+    `settings-set` records a governed update. Driver consumers must resolve this
+    key from the catalog; arbitrary user-defined keys are rejected.
+  - **Decision record:** TCRN-CROSS-MIN-065 ruling 2/8, implemented by
+    TCRN-CROSS-STORY-213.
 
 ## Non-knob declarations
 
@@ -142,16 +168,14 @@ mistakenly applied to them.
 - The write flow is fixed: show a diff, obtain explicit user confirmation, then
   emit an overlay admission receipt and a decision record (per the work-log
   convention).
-- Settings live in the Workspace overlay layers, never in host hook surfaces
+- Settings live in the Workspace overlay layer, never in host hook surfaces
   (`.claude/settings.json` or Codex configuration), which are written solely by
-  adapter bundles.
+  adapter bundles. Replaying a settings event rechecks the registered key,
+  layer, value bounds, timestamp binding, and monotonic revision.
 - Tier-1 knobs are explain-only; the agent never edits them.
 
 ## Ledger impact
 
-Zero new ledger entries: the overlay semantics are already covered by the
-profile-trust-without-release-elevation requirement. This catalog adds no
-protocol surface and no engine code. The `backup.*` keys catalogued above add no
-engine code and no new ledger entries either: they are advisory overlay
-preferences that inform how the agent composes explicit snapshot invocations,
-preserving this section's zero-engine-code claim.
+No new release ledger entry is claimed. The workspace event operation and CLI
+catalog are local governed protocol surfaces; release, publication, and remote
+repository actions remain outside this story's scope.

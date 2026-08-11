@@ -103,6 +103,8 @@ import {
   createCodexHostActivationReceipt,
   generateCodexActivationArtifacts,
   generateCodexSessionSummary,
+  createAdapterBaseline,
+  validateAdapterSurface,
   collectCodexAppServerExecutions,
   generateClaudeAdapterActivationRollbackPlan,
   readClaudeAdapterActivationReceipt,
@@ -125,6 +127,12 @@ import {
   vacateWorkspace,
   readStorageHomeDeclaration,
   sealStorageHomeDeclaration,
+  readSettingsCatalog,
+  setWorkspaceSetting,
+  admitTemplateInWorkspace,
+  readTemplateDocumentFile,
+  templateBindingFromWorkRecord,
+  validateTemplateDocument,
   withStoreBackendFactory,
   withStorageBackendFactory,
 } from "../../core/src/index.js";
@@ -156,7 +164,7 @@ import type {
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
-import { assertStrictInstant, canonicalExternalKey, canonicalJson, deriveStableId } from "../../protocol/src/index.js";
+import { assertStrictInstant, canonicalExternalKey, canonicalJson, canonicalSha256, deriveStableId } from "../../protocol/src/index.js";
 import { isWorkStatus } from "../../protocol/src/index.js";
 import type { PlannedDeliveryKind, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
 // ProjectRecord is a core type, not a protocol one. The protocol package never exported
@@ -577,8 +585,19 @@ function projectSummary(record: ProjectRecord): Readonly<Record<string, string |
 // which only works for records that follow the naming convention and silently
 // leaves the rest anonymous. Returning the key the record already holds costs
 // one field and removes that entire class of workaround.
-function workSummary(record: WorkRecord): Readonly<Record<string, string | number | boolean | null>> {
-  return { id: record.id, externalKey: record.externalKey, kind: record.kind, status: record.status, projectId: record.projectId, parentId: record.parentId, revision: record.revision, tombstone: record.tombstone };
+function workSummary(record: WorkRecord): Readonly<Record<string, unknown>> {
+  const templateBinding = templateBindingFromWorkRecord(record);
+  return {
+    id: record.id,
+    externalKey: record.externalKey,
+    kind: record.kind,
+    status: record.status,
+    projectId: record.projectId,
+    parentId: record.parentId,
+    revision: record.revision,
+    tombstone: record.tombstone,
+    ...(templateBinding === null ? {} : { templateBinding }),
+  };
 }
 
 // E05 read surface: project the non-binding advisory fields off a work record for
@@ -745,6 +764,45 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
   }));
 }
 
+function writeSettingsState(io: CliIo, state: Awaited<ReturnType<typeof materializeWorkspace>>, key: string): void {
+  const setting = state.settings.find((entry) => entry.key === key);
+  if (setting === undefined) fail("CLI_COMMAND_FAILED", `setting ${key} was not materialized after write`);
+  const receipt = {
+    schemaVersion: "tcrn.settings-write-receipt.v1",
+    workspaceId: state.metadata.workspaceId,
+    version: state.version,
+    headEventHash: state.headEventHash,
+    recordId: key,
+    setting,
+  } as const;
+  io.write(canonicalJson({
+    reasonCode: "SETTINGS_WRITE_COMMITTED",
+    ...receipt,
+    receiptDigest: canonicalSha256(receipt),
+  }));
+}
+
+function writeTemplateAdmissionState(
+  io: CliIo,
+  state: Awaited<ReturnType<typeof materializeWorkspace>>,
+  templateId: string,
+  templateVersion: number,
+): void {
+  const admitted = state.templates.find((entry) => entry.template.id === templateId && entry.template.version === templateVersion);
+  if (admitted === undefined) fail("CLI_COMMAND_FAILED", `template ${templateId}@${templateVersion} was not materialized after admission`);
+  io.write(canonicalJson({
+    reasonCode: "TEMPLATE_ADMISSION_COMMITTED",
+    workspaceId: state.metadata.workspaceId,
+    version: state.version,
+    headEventHash: state.headEventHash,
+    registrationId: admitted.registrationId,
+    templateId: admitted.template.id,
+    templateVersion: admitted.template.version,
+    templateDigest: admitted.receipt.templateDigest,
+    receipt: admitted.receipt,
+  }));
+}
+
 // WSB-3: the declarative command catalog — the machine-readable source of truth
 // for every dispatched verb and its flags, emitted by the `commands` discovery
 // verb. New verbs MUST ship a catalog entry (SDC-1); the p3-cli-catalog parity
@@ -760,7 +818,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
   { name: "adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
-  { name: "adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
+  { name: "adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "baseline", required: false, valueKind: "json" }, { name: "settings", required: false, valueKind: "string" }] },
   { name: "aos-requirements-readback", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
   { name: "aos-requirements-validate", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
   { name: "artifact-archive-apply", availability: "fixture-only", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-plan-digest", required: true, valueKind: "string" }] },
@@ -850,6 +908,8 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "relocation-inspect", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "relocation-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "to-framework", required: true, valueKind: "string" }, { name: "to-workspace-root", required: true, valueKind: "string" }, { name: "to-transient", required: true, valueKind: "string" }, { name: "to-evidence-locator", required: true, valueKind: "string" }, { name: "to-release-trust", required: true, valueKind: "string" }] },
   { name: "relocation-vacate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "to-framework", required: true, valueKind: "string" }, { name: "to-workspace-root", required: true, valueKind: "string" }, { name: "to-transient", required: true, valueKind: "string" }, { name: "to-evidence-locator", required: true, valueKind: "string" }, { name: "to-release-trust", required: true, valueKind: "string" }, { name: "relocation-authority", required: true, valueKind: "string" }, { name: "relocation-authority-digest", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "settings-catalog", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "settings-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "value", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "snapshot-manifest", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "snapshot-verify", availability: "cli", mutates: false, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "manifest", required: true, valueKind: "string" }] },
   { name: "status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
@@ -860,9 +920,11 @@ export const COMMAND_CATALOG = Object.freeze([
   // storage-home declaration and is idempotent for the same declaration.
   { name: "storage-home-seal", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "schema", required: true, valueKind: "string" }] },
   { name: "storage-home-status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "template-admit", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "template", required: true, valueKind: "string" }, { name: "owner", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "template-validate", availability: "cli", mutates: false, flags: [{ name: "template", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "sprint", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "template-receipt", required: false, valueKind: "json" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "sprint", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "work-show", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }] },
@@ -1076,6 +1138,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     fail("CLI_COMMAND_REQUIRED", "A governed command is required");
   }
   const rest = arguments_.slice(1);
+  // requiredShared is the mandatory trio every workspace-event mutation verb demands
+  // via required(); shared is the ALLOWED-flag list those verbs pass to parseArguments.
+  // WSE-4: --attest-dir joins shared (allowed) but NOT requiredShared, so it is a
+  // catalog-OPTIONAL flag on every mutation verb.
+  const requiredShared = ["workspace", "expected-version", "at"];
+  const shared = [...requiredShared, "attest-dir"];
   if (command === "commands") {
     parseArguments(rest, []);
     io.write(canonicalJson({ reasonCode: "CLI_CATALOG_READY", schemaVersion: "tcrn.cli-catalog.v1", commands: COMMAND_CATALOG }));
@@ -1365,10 +1433,11 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "adapter-validate") {
-    const values = parseArguments(rest, ["bundle"]);
+    const values = parseArguments(rest, ["bundle", "baseline", "settings"]);
     required(values, ["bundle"]);
     const bundle = validateCodexAdapterBundle(jsonValue(values.bundle, "bundle"));
-    io.write(canonicalJson({ reasonCode: "ADAPTER_VALIDATED", bundleDigest: bundle.bundleDigest, activation: false }));
+    const baseline = values.baseline === undefined ? createAdapterBaseline() : jsonValue(values.baseline, "baseline");
+    io.write(canonicalJson(validateAdapterSurface(bundle.bundleDigest, baseline, values.settings)));
     return;
   }
   if (command === "adapter-simulate") {
@@ -1777,6 +1846,32 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     io.write(canonicalJson({ reasonCode: "STORAGE_HOME_READY", declaration }));
     return;
   }
+  if (command === "template-validate") {
+    const values = parseArguments(rest, ["template"]);
+    required(values, ["template"]);
+    const template = await readTemplateDocumentFile(values.template ?? "");
+    io.write(canonicalJson(validateTemplateDocument(template)));
+    return;
+  }
+  if (command === "template-admit") {
+    const values = parseArguments(rest, [...shared, "template", "owner", "actor"]);
+    required(values, [...requiredShared, "template", "owner"]);
+    // The external edit surface is read and validated before taking the workspace
+    // lease. Only the governed admission event below can make its digest effective.
+    const template = await readTemplateDocumentFile(values.template ?? "");
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => admitTemplateInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      template,
+      ownerId: values.owner ?? "",
+      ...(values.actor ? { actorId: values.actor } : {}),
+    }));
+    await emitTimeAttestation(io, values, state.headEventHash);
+    writeTemplateAdmissionState(io, state, template.id, template.version);
+    return;
+  }
   if (command === "recover") {
     const values = parseArguments(rest, ["workspace", "at"]);
     required(values, ["workspace", "at"]);
@@ -1879,6 +1974,29 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const values = parseArguments(rest, ["workspace", "at"]);
     required(values, ["workspace", "at"]);
     io.write(canonicalJson(await inspectWorkspaceRelocation(values.workspace ?? "", { at: values.at ?? "" })));
+    return;
+  }
+  if (command === "settings-catalog") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    const state = await materializeWorkspace(values.workspace ?? "");
+    io.write(canonicalJson({ reasonCode: "SETTINGS_CATALOG_READY", ...readSettingsCatalog(state.metadata.workspaceId, state.settings) }));
+    return;
+  }
+  if (command === "settings-set") {
+    const values = parseArguments(rest, [...shared, "key", "value", "actor"]);
+    required(values, [...requiredShared, "key", "value"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => setWorkspaceSetting(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      key: values.key ?? "",
+      value: values.value ?? "",
+      ...(values.actor ? { actorId: values.actor } : {}),
+    }));
+    await emitTimeAttestation(io, values, state.headEventHash);
+    writeSettingsState(io, state, values.key ?? "");
     return;
   }
   if (command === "snapshot-manifest") {
@@ -2141,17 +2259,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     )));
     return;
   }
-  // requiredShared is the mandatory trio every workspace-event mutation verb demands
-  // via required(); shared is the ALLOWED-flag list those verbs pass to parseArguments.
-  // WSE-4: --attest-dir joins shared (allowed) but NOT requiredShared, so it is a
-  // catalog-OPTIONAL flag on every mutation verb. After a successful mutation each verb
-  // calls emitTimeAttestation(io, values, <post-mutation headEventHash>), a no-op unless
-  // --attest-dir is set. Read verbs (validate/status/list) never spread shared, so the
-  // flag is unknown there and no receipt is ever written off a read. The receipt is
-  // advisory local-clock evidence, opt-in, and lives OUTSIDE the workspace root — the
-  // chain still proves only ordering.
-  const requiredShared = ["workspace", "expected-version", "at"];
-  const shared = [...requiredShared, "attest-dir"];
   // WSE-3: attestation-enable appends the one-way attestation.actor.enabled chain
   // event (WSE-2 enableActorAttestation) under a held lease; from that sequence on
   // the engine makes a valid --actor mandatory. --actor itself is catalog-OPTIONAL
@@ -2212,7 +2319,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "work-create") {
-    const values = parseArguments(rest, [...shared, "project-id", "external-key", "kind", "parent-id", "status", "scope", "decided-by", "actor"]);
+    const values = parseArguments(rest, [...shared, "project-id", "external-key", "kind", "parent-id", "status", "scope", "decided-by", "template-receipt", "actor"]);
     required(values, [...requiredShared, "project-id", "external-key", "kind"]);
     // Fail closed at the CLI boundary naming the offending flag/value, before the
     // uncast enum reaches core and surfaces as an opaque RECORD_MALFORMED on the id.
@@ -2230,6 +2337,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ...(values.status ? { status: values.status as WorkStatus } : {}),
       ...(values.scope !== undefined ? { scope: values.scope } : {}),
       ...(values["decided-by"] !== undefined ? { decidedBy: listValue(values["decided-by"]) } : {}),
+      ...(values["template-receipt"] !== undefined ? { templateAdmission: jsonValue(values["template-receipt"], "template-receipt") } : {}),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     const id = deriveStableId("work", canonicalExternalKey(values["external-key"] ?? ""));
