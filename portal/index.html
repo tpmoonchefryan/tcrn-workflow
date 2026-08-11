@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TCRN Workflow Portal</title>
+<link rel="stylesheet" href="/tokens.css">
+<script src="/locales.js"></script>
+<style>
+/* Every value below resolves to a @tcrn/ui-tokens custom property. Literal
+   colours are refused by scripts/design-proof.mjs, so the visual language can
+   only ever change in the design system. */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--tcrn-color-surface-canvas);
+  color: var(--tcrn-color-text-primary);
+  font: var(--tcrn-text-body-dense);
+}
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h1, h2, h3, p { margin: 0; }
+:focus-visible { outline: none; box-shadow: var(--tcrn-elevation-focus); }
+
+.tcrn-shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
+
+/* Rail */
+.tcrn-rail {
+  display: flex; flex-direction: column; gap: var(--tcrn-space-5);
+  padding: var(--tcrn-space-5) var(--tcrn-space-4);
+  border-right: 1px solid var(--tcrn-color-border-subtle);
+  background: var(--tcrn-color-surface-panel);
+}
+.tcrn-brand { display: flex; flex-direction: column; gap: var(--tcrn-space-0h); }
+.tcrn-brand__mark { font-size: var(--tcrn-type-size-heading-3); font-weight: var(--tcrn-type-weight-strong); letter-spacing: 0.02em; }
+.tcrn-brand__sub { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-eyebrow {
+  color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption);
+  font-weight: var(--tcrn-type-weight-medium); letter-spacing: 0.04em; text-transform: uppercase;
+}
+.tcrn-nav { display: flex; flex-direction: column; gap: var(--tcrn-space-0h); }
+.tcrn-nav__link {
+  display: flex; align-items: center; gap: var(--tcrn-space-2);
+  min-height: var(--tcrn-density-compact-row-height);
+  padding: 0 var(--tcrn-space-2h);
+  border: 0; border-radius: var(--tcrn-radius-control);
+  background: transparent; color: var(--tcrn-color-text-secondary);
+  text-align: left; transition: background var(--tcrn-motion-fast), color var(--tcrn-motion-fast);
+}
+.tcrn-nav__link:hover { background: var(--tcrn-selection-fill-hover); color: var(--tcrn-color-text-primary); }
+.tcrn-nav__link[aria-current="page"] { background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-nav__index { color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
+.tcrn-nav__link[aria-current="page"] .tcrn-nav__index { color: var(--tcrn-color-brand-primary); }
+.tcrn-rail__note { margin-top: auto; display: flex; flex-direction: column; gap: var(--tcrn-space-2); }
+.tcrn-rail__note p { color: var(--tcrn-color-text-secondary); font: var(--tcrn-text-body-dense); }
+.tcrn-rail__path {
+  color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono);
+  font-size: var(--tcrn-type-size-caption); word-break: break-all;
+}
+
+/* State chip */
+.tcrn-state-chip {
+  display: inline-flex; align-items: center; gap: var(--tcrn-space-1h);
+  padding: var(--tcrn-state-chip-padding); border-radius: var(--tcrn-radius-pill);
+  font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption);
+}
+.tcrn-state-chip::before { content: ""; width: var(--tcrn-state-dot-size); height: var(--tcrn-state-dot-size); border-radius: var(--tcrn-radius-pill); background: currentColor; }
+.tcrn-state-chip--ready { background: var(--tcrn-color-state-ready-bg); color: var(--tcrn-color-state-ready); }
+.tcrn-state-chip--blocked { background: var(--tcrn-color-state-blocked-bg); color: var(--tcrn-color-state-blocked); }
+.tcrn-state-chip--warning { background: var(--tcrn-color-state-warning-bg); color: var(--tcrn-color-state-warning); }
+.tcrn-state-chip--neutral { background: var(--tcrn-color-brand-neutral-bg); color: var(--tcrn-color-brand-neutral); }
+
+/* Main */
+.tcrn-main { display: flex; flex-direction: column; min-width: 0; padding: var(--tcrn-space-5) var(--tcrn-space-6) var(--tcrn-space-6); gap: var(--tcrn-space-5); max-width: var(--tcrn-container-readable); }
+.tcrn-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--tcrn-space-4); padding-bottom: var(--tcrn-space-3); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-page-head h1 { margin-top: var(--tcrn-space-1); font-size: var(--tcrn-type-size-page); line-height: var(--tcrn-type-line-page); font-weight: var(--tcrn-type-weight-strong); }
+.tcrn-lede { max-width: 68ch; color: var(--tcrn-color-text-secondary); font: var(--tcrn-text-body-reading); }
+
+.tcrn-columns { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: var(--tcrn-space-4); align-items: start; }
+.tcrn-panel { border: 1px solid var(--tcrn-color-border-subtle); border-radius: var(--tcrn-radius-surface); background: var(--tcrn-color-surface-panel); box-shadow: var(--tcrn-elevation-floating); }
+.tcrn-panel__head { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-3); padding: var(--tcrn-space-3) var(--tcrn-space-4); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-panel__head h2, .tcrn-panel__head h3 { font-size: var(--tcrn-type-size-heading-3); font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-panel__body { padding: var(--tcrn-space-4); }
+.tcrn-meta { color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
+
+/* Rows */
+.tcrn-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--tcrn-space-3);
+  align-items: center; width: 100%; min-height: var(--tcrn-density-compact-row-height);
+  padding: var(--tcrn-space-2) var(--tcrn-space-4);
+  border: 0; border-bottom: 1px solid var(--tcrn-color-border-subtle);
+  background: transparent; text-align: left;
+  transition: background var(--tcrn-motion-fast);
+}
+.tcrn-row:last-child { border-bottom: 0; }
+.tcrn-row:hover { background: var(--tcrn-selection-fill-hover); }
+.tcrn-row[aria-selected="true"] { background: var(--tcrn-selection-fill); box-shadow: inset 2px 0 0 var(--tcrn-color-brand-primary); }
+.tcrn-row__key { display: block; font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-row__meta { display: block; margin-top: var(--tcrn-space-0h); color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
+.tcrn-row__value { color: var(--tcrn-color-text-secondary); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
+.tcrn-list { border-top: 1px solid var(--tcrn-color-border-subtle); }
+
+/* Form */
+.tcrn-field { display: grid; gap: var(--tcrn-space-1h); }
+.tcrn-label { color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-meta); font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-input, .tcrn-textarea {
+  width: 100%; min-height: var(--tcrn-density-compact-row-height);
+  padding: var(--tcrn-space-2) var(--tcrn-space-2h);
+  border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-surface-panel); outline: none;
+  transition: border-color var(--tcrn-motion-fast), box-shadow var(--tcrn-motion-fast);
+}
+.tcrn-textarea { min-height: 340px; resize: vertical; font: var(--tcrn-type-weight-regular) var(--tcrn-type-size-body)/var(--tcrn-type-line-reading) var(--tcrn-type-family-mono); }
+.tcrn-input:focus-visible, .tcrn-textarea:focus-visible { border-color: var(--tcrn-color-brand-primary); box-shadow: var(--tcrn-elevation-focus); }
+.tcrn-help { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-description {
+  padding: var(--tcrn-space-2) var(--tcrn-space-2h);
+  border-left: 2px solid var(--tcrn-color-brand-primary);
+  background: var(--tcrn-color-brand-primary-bg);
+  color: var(--tcrn-color-text-secondary);
+  font: var(--tcrn-text-body-reading);
+  border-radius: 0 var(--tcrn-radius-control) var(--tcrn-radius-control) 0;
+}
+.tcrn-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-2); flex-wrap: wrap; }
+
+/* Button — the design system ships class names but no stylesheet for them, so
+   these are composed from tokens and kept to the DS naming contract. */
+.tcrn-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--tcrn-space-1h);
+  min-height: var(--tcrn-density-compact-row-height); padding: 0 var(--tcrn-space-3);
+  border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-surface-panel); color: var(--tcrn-color-text-primary);
+  font-size: var(--tcrn-type-size-control); font-weight: var(--tcrn-type-weight-medium);
+  transition: background var(--tcrn-motion-fast), border-color var(--tcrn-motion-fast), transform var(--tcrn-motion-instant);
+}
+.tcrn-button:hover { background: var(--tcrn-color-surface-muted); }
+.tcrn-button:active { transform: scale(var(--tcrn-motion-press-scale)); }
+.tcrn-button--primary { border-color: var(--tcrn-color-brand-primary); background: var(--tcrn-color-brand-primary); color: var(--tcrn-color-text-inverse); }
+.tcrn-button--primary:hover { border-color: var(--tcrn-color-brand-secondary); background: var(--tcrn-color-brand-secondary); }
+.tcrn-button[disabled] { opacity: 0.55; cursor: not-allowed; }
+
+/* Receipt */
+.tcrn-receipt__code { display: block; padding: var(--tcrn-space-3) 0; color: var(--tcrn-color-brand-primary); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-body); font-weight: var(--tcrn-type-weight-medium); word-break: break-word; }
+.tcrn-receipt__code--refused { color: var(--tcrn-color-state-blocked); }
+.tcrn-kv { display: flex; align-items: baseline; justify-content: space-between; gap: var(--tcrn-space-3); padding: var(--tcrn-space-2) 0; border-top: 1px solid var(--tcrn-color-border-subtle); font-size: var(--tcrn-type-size-meta); }
+.tcrn-kv dt { color: var(--tcrn-color-text-muted); }
+.tcrn-kv dd { margin: 0; font-family: var(--tcrn-type-family-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcrn-empty { color: var(--tcrn-color-text-muted); font: var(--tcrn-text-body-reading); }
+.tcrn-footnote { margin-top: var(--tcrn-space-3); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); line-height: var(--tcrn-type-line-caption); }
+
+/* Banner + table */
+.tcrn-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-3); padding: var(--tcrn-space-2h) var(--tcrn-space-3); border-radius: var(--tcrn-radius-control); font-size: var(--tcrn-type-size-meta); }
+.tcrn-banner--ready { background: var(--tcrn-color-state-ready-bg); color: var(--tcrn-color-state-ready); }
+.tcrn-banner--blocked { background: var(--tcrn-color-state-blocked-bg); color: var(--tcrn-color-state-blocked); }
+.tcrn-table { width: 100%; margin-top: var(--tcrn-space-3); border: 1px solid var(--tcrn-color-border-subtle); border-radius: var(--tcrn-radius-control); border-collapse: separate; border-spacing: 0; overflow: hidden; }
+.tcrn-table th, .tcrn-table td { padding: var(--tcrn-space-2) var(--tcrn-space-3); border-bottom: 1px solid var(--tcrn-color-border-subtle); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); text-align: left; }
+.tcrn-table th { background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-muted); font-weight: var(--tcrn-type-weight-medium); text-transform: uppercase; letter-spacing: 0.04em; }
+.tcrn-table tr:last-child td { border-bottom: 0; }
+.tcrn-table__flag--yes { color: var(--tcrn-color-state-ready); }
+.tcrn-table__flag--no { color: var(--tcrn-color-state-blocked); font-weight: var(--tcrn-type-weight-strong); }
+
+.tcrn-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+[hidden] { display: none !important; }
+
+/* Locale font families, following the design system's own pattern of pointing
+   --tcrn-type-family-ui at the script-specific family. */
+[data-tcrn-locale="en"], [data-tcrn-locale="fr"] { --tcrn-type-family-ui: var(--tcrn-type-family-latin); }
+[data-tcrn-locale="zh-CN"] { --tcrn-type-family-ui: var(--tcrn-type-family-zh-cn); }
+[data-tcrn-locale="ja"] { --tcrn-type-family-ui: var(--tcrn-type-family-ja); }
+[data-tcrn-locale="ko"] { --tcrn-type-family-ui: var(--tcrn-type-family-ko); }
+
+.tcrn-select {
+  width: 100%; min-height: var(--tcrn-density-compact-row-height);
+  padding: 0 var(--tcrn-space-2h);
+  border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-surface-panel); color: var(--tcrn-color-text-primary);
+}
+.tcrn-select:focus-visible { border-color: var(--tcrn-color-brand-primary); box-shadow: var(--tcrn-elevation-focus); }
+
+@media (max-width: 900px) {
+  .tcrn-shell { grid-template-columns: minmax(0, 1fr); }
+  .tcrn-rail { border-right: 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+  .tcrn-nav { flex-direction: row; flex-wrap: wrap; }
+  .tcrn-rail__note { display: none; }
+  .tcrn-main { padding: var(--tcrn-space-4); }
+  .tcrn-columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: var(--tcrn-motion-reduced-duration) !important; animation-duration: var(--tcrn-motion-reduced-duration) !important; }
+}
+</style>
+</head>
+<body>
+<div class="tcrn-shell">
+  <nav class="tcrn-rail" aria-label="Portal">
+    <div class="tcrn-brand"><span class="tcrn-brand__mark" data-i18n="app.brand">TCRN Workflow</span><span class="tcrn-brand__sub" data-i18n="app.subtitle">Portal · INIT-023</span></div>
+    <span class="tcrn-state-chip tcrn-state-chip--neutral" data-i18n="chip.loopback">loopback only</span>
+    <div>
+      <p class="tcrn-eyebrow" id="nav-label" data-i18n="nav.label">Public surfaces</p>
+      <div class="tcrn-nav" role="tablist" aria-labelledby="nav-label">
+        <button class="tcrn-nav__link" role="tab" data-surface="config" aria-current="page" type="button"><span class="tcrn-nav__index">01</span><span data-i18n="nav.config">Configuration</span></button>
+        <button class="tcrn-nav__link" role="tab" data-surface="prose" type="button"><span class="tcrn-nav__index">02</span><span data-i18n="nav.prose">Prose</span></button>
+        <button class="tcrn-nav__link" role="tab" data-surface="reconcile" type="button"><span class="tcrn-nav__index">03</span><span data-i18n="nav.reconcile">Reconciliation</span></button>
+      </div>
+    </div>
+    <div class="tcrn-field">
+      <label class="tcrn-label" for="locale-select" data-i18n="locale.label">Language</label>
+      <select class="tcrn-select" id="locale-select"></select>
+    </div>
+    <div class="tcrn-field" id="partition-switcher" hidden>
+      <label class="tcrn-label" for="partition-select" data-i18n="partition.label">Partition</label>
+      <select class="tcrn-select" id="partition-select" autocomplete="off"></select>
+    </div>
+    <div class="tcrn-rail__note">
+      <p class="tcrn-eyebrow" data-i18n="app.boundaryTitle">Boundary</p>
+      <p data-i18n="app.boundaryBody">Every value here came from the public CLI.</p>
+      <span class="tcrn-rail__path" id="boot-workspace"></span>
+    </div>
+  </nav>
+
+  <main class="tcrn-main">
+    <header class="tcrn-page-head">
+      <div>
+      <p class="tcrn-eyebrow">TCRN-CROSS-INIT-023</p>
+        <h1 id="surface-title">Configuration</h1>
+      </div>
+      <span class="tcrn-state-chip tcrn-state-chip--warning" id="live-chip">connecting</span>
+    </header>
+
+    <!-- CONFIG -->
+    <section id="surface-config">
+      <p class="tcrn-lede" data-i18n="config.lede">…</p>
+      <div class="tcrn-columns" style="margin-top: var(--tcrn-space-4)">
+        <section class="tcrn-panel">
+          <div class="tcrn-panel__head"><h2 data-i18n="config.panelTitle">Workspace configuration</h2><span class="tcrn-meta" id="catalog-tag">loading…</span></div>
+          <div class="tcrn-list" id="setting-list" role="listbox" aria-label="Registered settings"></div>
+          <div class="tcrn-panel__body">
+            <div class="tcrn-field">
+              <label class="tcrn-label" for="setting-input" id="setting-label">Value</label>
+              <p class="tcrn-description" id="setting-description"></p>
+              <select class="tcrn-select" id="setting-select" hidden autocomplete="off" aria-describedby="setting-description setting-help"></select>
+              <input class="tcrn-input" id="setting-input" autocomplete="off">
+              <p class="tcrn-help" id="setting-help"></p>
+            </div>
+            <div class="tcrn-actions" style="margin-top: var(--tcrn-space-3)">
+              <span class="tcrn-meta" id="write-note" data-i18n="config.writeNote">writes go through the public CLI</span>
+              <button class="tcrn-button tcrn-button--primary" id="save-setting" type="button" data-i18n="config.commit">Commit change</button>
+            </div>
+          </div>
+        </section>
+        <section class="tcrn-panel">
+          <div class="tcrn-panel__head"><h3 data-i18n="receipt.title">Engine receipt</h3><span class="tcrn-state-chip tcrn-state-chip--neutral" id="receipt-state">idle</span></div>
+          <div class="tcrn-panel__body" id="receipt-body">
+            <p class="tcrn-empty" data-i18n="receipt.empty">…</p>
+            <p class="tcrn-footnote" id="receipt-footnote">…</p>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- PROSE -->
+    <section id="surface-prose" hidden>
+      <p class="tcrn-lede" data-i18n="prose.lede">…</p>
+      <section class="tcrn-panel" style="margin-top: var(--tcrn-space-4)">
+        <div class="tcrn-panel__head"><h2 id="prose-path">AGENTS.md</h2><span class="tcrn-meta" data-i18n="prose.fileNote">plain file · not a control tree</span></div>
+        <div class="tcrn-panel__body">
+          <label class="tcrn-sr-only" for="prose-text" data-i18n="prose.panelTitle">Canonical prose</label>
+          <textarea class="tcrn-textarea" id="prose-text" spellcheck="false"></textarea>
+          <div class="tcrn-actions" style="margin-top: var(--tcrn-space-3)">
+            <span class="tcrn-meta" id="prose-meta">—</span>
+            <button class="tcrn-button tcrn-button--primary" id="save-prose" type="button" data-i18n="prose.save">Save file</button>
+          </div>
+          <p class="tcrn-help" id="prose-saved" hidden></p>
+        </div>
+      </section>
+    </section>
+
+    <!-- RECONCILE -->
+    <section id="surface-reconcile" hidden>
+      <p class="tcrn-lede" data-i18n="reconcile.lede">…</p>
+      <section class="tcrn-panel" style="margin-top: var(--tcrn-space-4)">
+        <div class="tcrn-panel__head"><h2 data-i18n="reconcile.panelTitle">Prose against the live catalog</h2><button class="tcrn-button" id="rerun-reconcile" type="button" data-i18n="reconcile.rerun">Re-run</button></div>
+        <div class="tcrn-panel__body">
+          <div class="tcrn-banner tcrn-banner--ready" id="reconcile-banner"><span id="reconcile-message">checking…</span><span class="tcrn-meta" id="reconcile-code"></span></div>
+          <table class="tcrn-table">
+            <thead><tr><th scope="col" data-i18n="reconcile.colFile">File</th><th scope="col" data-i18n="reconcile.colKey">Key claimed in prose</th><th scope="col" data-i18n="reconcile.colRegistered">Registered</th></tr></thead>
+            <tbody id="reconcile-rows"></tbody>
+          </table>
+          <p class="tcrn-help" style="margin-top: var(--tcrn-space-2)"><span data-i18n="reconcile.mismatches">Mismatches</span>: <span id="reconcile-count">0</span></p>
+        </div>
+      </section>
+    </section>
+  </main>
+</div>
+
+<script>
+const BOOT = __PORTAL_BOOT__;
+const $ = (id) => document.getElementById(id);
+
+// --- i18n ---------------------------------------------------------------
+// The locale set and the fallback come from @tcrn/ui-copy-state via BOOT;
+// scripts/i18n-proof.mjs asserts the table here matches that contract.
+const LOCALES = window.PORTAL_LOCALES;
+const FALLBACK = BOOT.fallbackLocale;
+let locale = (() => {
+  const stored = localStorage.getItem("tcrn-portal-locale");
+  if (stored && LOCALES[stored]) return stored;
+  for (const candidate of navigator.languages ?? []) {
+    if (LOCALES[candidate]) return candidate;
+    const base = candidate.split("-")[0];
+    const match = BOOT.supportedLocales.find((entry) => entry === base || entry.split("-")[0] === base);
+    if (match) return match;
+  }
+  return BOOT.defaultLocale;
+})();
+
+// Missing copy falls back rather than rendering a bare key, but the proof
+// script keeps that path from being reached: every key is required in every
+// locale, so a fallback in production would be a defect.
+const t = (key, replacements) => {
+  let value = LOCALES[locale]?.[key] ?? LOCALES[FALLBACK]?.[key] ?? key;
+  for (const [name, replacement] of Object.entries(replacements ?? {})) value = value.replaceAll("{" + name + "}", replacement);
+  return value;
+};
+
+function applyLocale() {
+  document.documentElement.lang = locale;
+  document.documentElement.setAttribute("data-tcrn-locale", locale);
+  localStorage.setItem("tcrn-portal-locale", locale);
+  for (const node of document.querySelectorAll("[data-i18n]")) node.textContent = t(node.dataset.i18n);
+  $("surface-title").textContent = t("nav." + currentSurface);
+  $("receipt-footnote").textContent = t("receipt.footnote", { actor: BOOT.actor });
+  document.title = t("app.brand") + " — " + t("app.subtitle");
+}
+
+const localeSelect = $("locale-select");
+const partitionSwitcher = $("partition-switcher");
+const partitionSelect = $("partition-select");
+for (const entry of BOOT.localeMetadata) {
+  const option = document.createElement("option");
+  option.value = entry.locale;
+  option.textContent = entry.nativeName;
+  localeSelect.append(option);
+}
+localeSelect.value = locale;
+localeSelect.onchange = () => {
+  locale = localeSelect.value;
+  applyLocale();
+  renderCatalog(); syncEditor(); loadReconcile();
+  if (lastReceipt) renderReceipt(lastReceipt.status, lastReceipt.body);
+};
+
+// The design system carries its dark values under [data-tcrn-theme="dark"], so
+// following the OS preference costs one attribute and invents no colour.
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+const applyTheme = () => document.documentElement.setAttribute("data-tcrn-theme", darkQuery.matches ? "dark" : "light");
+darkQuery.addEventListener("change", applyTheme);
+applyTheme();
+const text = (value) => String(value ?? "");
+
+$("boot-workspace").textContent = BOOT.partitionMode ? BOOT.container : BOOT.workspace;
+
+async function api(path, options = {}) {
+  const headers = { "content-type": "application/json" };
+  if (options.method && options.method !== "GET") headers["x-portal-token"] = BOOT.token;
+  const response = await fetch(path, { ...options, headers });
+  return { status: response.status, body: await response.json() };
+}
+
+partitionSelect.onchange = async () => {
+  const previous = selectedPartition;
+  partitionSelect.disabled = true;
+  try {
+    const { status, body } = await api("/api/partition", {
+      method: "POST",
+      body: JSON.stringify({ partition: partitionSelect.value }),
+    });
+    if (status !== 200) {
+      selectedPartition = previous;
+      renderPartitions();
+      chip($("live-chip"), "warning", t("chip.catalogFailed"));
+      return;
+    }
+    selectedPartition = body.selectedPartition;
+    renderPartitions();
+    $("boot-workspace").textContent = body.workspace ?? $("boot-workspace").textContent;
+    lastReceipt = null;
+    await Promise.all([loadCatalog(), loadProse(), loadReconcile()]);
+  } finally {
+    partitionSelect.disabled = false;
+  }
+};
+
+async function loadPartitions() {
+  if (!BOOT.partitionMode) return;
+  const { status, body } = await api("/api/partitions");
+  if (status === 200) {
+    partitions = body.partitions ?? partitions;
+    selectedPartition = body.selectedPartition ?? selectedPartition;
+    renderPartitions();
+  }
+}
+
+let catalog = [];
+let selectedKey = null;
+let currentSurface = "config";
+let lastReceipt = null;
+let partitions = BOOT.partitions ?? [];
+let selectedPartition = BOOT.selectedPartition ?? partitions[0]?.id ?? "";
+
+function renderPartitions() {
+  partitionSwitcher.hidden = !BOOT.partitionMode;
+  if (!BOOT.partitionMode) return;
+  partitionSelect.textContent = "";
+  for (const entry of partitions) {
+    const option = document.createElement("option");
+    option.value = entry.id;
+    option.textContent = entry.id;
+    partitionSelect.append(option);
+  }
+  partitionSelect.value = selectedPartition;
+}
+
+function chip(element, tone, label) {
+  element.className = "tcrn-state-chip tcrn-state-chip--" + tone;
+  element.textContent = label;
+}
+
+function renderCatalog() {
+  const list = $("setting-list");
+  list.textContent = "";
+  for (const entry of catalog) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "tcrn-row";
+    row.setAttribute("role", "option");
+    row.setAttribute("aria-selected", String(entry.key === selectedKey));
+    row.onclick = () => { selectedKey = entry.key; renderCatalog(); syncEditor(); };
+    const label = document.createElement("span");
+    const key = document.createElement("span");
+    key.className = "tcrn-row__key";
+    key.textContent = entry.key;
+    const meta = document.createElement("span");
+    meta.className = "tcrn-row__meta";
+    meta.textContent = entry.type + " · " + entry.layer;
+    label.append(key, meta);
+    const value = document.createElement("span");
+    value.className = "tcrn-row__value";
+    value.textContent = entry.currentValue === null ? t("config.unset") : entry.currentValue;
+    row.append(label, value);
+    list.append(row);
+  }
+  $("catalog-tag").textContent = catalog.length + " " + t("config.keyCount");
+}
+
+function syncEditor() {
+  const entry = catalog.find((item) => item.key === selectedKey);
+  if (!entry) return;
+  $("setting-label").textContent = entry.key;
+  // A key the engine registers but the portal has no copy for gets an explicit
+  // sentence rather than an empty box; i18n-proof turns red on that state.
+  const descriptionKey = "setting." + entry.key + ".description";
+  const described = LOCALES[locale]?.[descriptionKey] ?? LOCALES[FALLBACK]?.[descriptionKey];
+  $("setting-description").textContent = described ?? t("setting.unknown.description");
+  const input = $("setting-input");
+  const select = $("setting-select");
+  const isEnum = entry.type === "enum";
+  const allowedValues = Array.isArray(entry.allowedValues) ? entry.allowedValues : [];
+  $("setting-label").htmlFor = isEnum ? "setting-select" : "setting-input";
+  input.hidden = isEnum;
+  select.hidden = !isEnum;
+  select.disabled = isEnum && allowedValues.length === 0;
+  select.textContent = "";
+  for (const value of allowedValues) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+  if (isEnum) {
+    select.value = entry.currentValue ?? allowedValues[0] ?? "";
+  } else {
+    input.value = entry.currentValue ?? "";
+  }
+  $("setting-help").textContent = isEnum && allowedValues.length === 0
+    ? t("config.enumUnavailable")
+    : t("config.helpType") + " " + entry.type + " · " + t("config.helpDefault") + " " + (entry.defaultValue === null ? t("config.helpNone") : entry.defaultValue) + " · " + t("config.helpLayer") + " " + entry.layer;
+  $("save-setting").disabled = isEnum && allowedValues.length === 0;
+}
+
+function renderReceipt(status, body) {
+  lastReceipt = { status, body };
+  const committed = status === 200 && body.reasonCode === "SETTINGS_WRITE_COMMITTED";
+  chip($("receipt-state"), committed ? "ready" : "blocked", t(committed ? "chip.committed" : "chip.refused"));
+  const host = $("receipt-body");
+  host.textContent = "";
+  const code = document.createElement("strong");
+  code.className = "tcrn-receipt__code" + (committed ? "" : " tcrn-receipt__code--refused");
+  // Verbatim engine text, labelled as the evidence it is rather than used as
+  // the interface's own wording (i18n contract: rawEnumLabelsAllowed false).
+  code.textContent = body.reasonCode ?? "UNKNOWN";
+  const codeLabel = document.createElement("span");
+  codeLabel.className = "tcrn-meta";
+  codeLabel.textContent = t("receipt.reasonCode");
+  host.append(codeLabel, code);
+  const pairs = committed
+    ? [[t("receipt.value"), body.setting?.value], [t("receipt.readback"), body.readback?.currentValue], [t("receipt.version"), body.version], [t("receipt.record"), body.recordId], [t("receipt.digest"), text(body.receiptDigest).slice(0, 16) + "…"], [t("receipt.head"), text(body.headEventHash).slice(0, 16) + "…"]]
+    : [[t("receipt.error"), body.error ?? "—"], [t("receipt.key"), selectedKey], ...(Array.isArray(body.allowedValues) ? [[t("receipt.allowedValues"), body.allowedValues.join(", ")]] : [])];
+  const list = document.createElement("dl");
+  list.style.margin = "0";
+  for (const [term, value] of pairs) {
+    const row = document.createElement("div");
+    row.className = "tcrn-kv";
+    const dt = document.createElement("dt");
+    dt.textContent = term;
+    const dd = document.createElement("dd");
+    dd.textContent = text(value);
+    row.append(dt, dd);
+    list.append(row);
+  }
+  host.append(list);
+  const note = document.createElement("p");
+  note.className = "tcrn-footnote";
+  note.id = "receipt-footnote";
+  note.textContent = t("receipt.footnote", { actor: BOOT.actor });
+  host.append(note);
+}
+
+async function loadCatalog() {
+  const { body } = await api("/api/settings");
+  catalog = body.settings ?? [];
+  if (!selectedKey && catalog.length) selectedKey = catalog[0].key;
+  renderCatalog();
+  syncEditor();
+  chip($("live-chip"), body.reasonCode === "SETTINGS_CATALOG_READY" ? "ready" : "warning", t(body.reasonCode === "SETTINGS_CATALOG_READY" ? "chip.catalogReady" : "chip.catalogFailed"));
+}
+
+$("save-setting").onclick = async () => {
+  const button = $("save-setting");
+  button.disabled = true;
+  try {
+    const entry = catalog.find((item) => item.key === selectedKey);
+    const value = entry?.type === "enum" ? $("setting-select").value : $("setting-input").value;
+    const { status, body } = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: selectedKey, value }) });
+    renderReceipt(status, body);
+    await loadCatalog();
+    await loadReconcile();
+  } finally { button.disabled = false; }
+};
+
+async function loadProse() {
+  const { body } = await api("/api/prose?file=" + encodeURIComponent(BOOT.proseFiles[0]));
+  $("prose-text").value = body.text ?? "";
+  $("prose-path").textContent = BOOT.proseFiles[0];
+  $("prose-meta").textContent = body.path ?? "";
+}
+
+$("save-prose").onclick = async () => {
+  const { body } = await api("/api/prose", { method: "POST", body: JSON.stringify({ file: BOOT.proseFiles[0], text: $("prose-text").value }) });
+  const line = $("prose-saved");
+  line.hidden = false;
+  line.textContent = t(body.matches ? "prose.savedMatch" : "prose.savedDiffer");
+  await loadReconcile();
+};
+
+async function loadReconcile() {
+  const { body } = await api("/api/reconcile");
+  const banner = $("reconcile-banner");
+  banner.className = "tcrn-banner tcrn-banner--" + (body.ok ? "ready" : "blocked");
+  $("reconcile-message").textContent = t(body.ok ? "reconcile.green" : "reconcile.red");
+  $("reconcile-code").textContent = body.reasonCode ?? "";
+  $("reconcile-count").textContent = String(body.mismatchCount ?? 0);
+  const host = $("reconcile-rows");
+  host.textContent = "";
+  for (const row of body.rows ?? []) {
+    const tr = document.createElement("tr");
+    const file = document.createElement("td");
+    file.textContent = row.file;
+    const key = document.createElement("td");
+    key.textContent = row.key;
+    const flag = document.createElement("td");
+    flag.className = "tcrn-table__flag--" + (row.registered ? "yes" : "no");
+    flag.textContent = t(row.registered ? "reconcile.yes" : "reconcile.no");
+    tr.append(file, key, flag);
+    host.append(tr);
+  }
+}
+
+$("rerun-reconcile").onclick = loadReconcile;
+
+for (const button of document.querySelectorAll(".tcrn-nav__link")) {
+  button.onclick = () => {
+    const target = button.dataset.surface;
+    currentSurface = target;
+    for (const other of document.querySelectorAll(".tcrn-nav__link")) {
+      if (other === button) other.setAttribute("aria-current", "page");
+      else other.removeAttribute("aria-current");
+    }
+    for (const name of ["config", "prose", "reconcile"]) $("surface-" + name).hidden = name !== target;
+    $("surface-title").textContent = t("nav." + target);
+  };
+}
+
+applyLocale();
+renderPartitions();
+loadPartitions();
+loadCatalog();
+loadProse();
+loadReconcile();
+</script>
+</body>
+</html>
