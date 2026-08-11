@@ -88,7 +88,7 @@
 //     construction and no version of it can be otherwise.
 
 import { createHash } from "node:crypto";
-import { lstat, readdir } from "node:fs/promises";
+import { lstat, readdir, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import {
@@ -160,9 +160,11 @@ export const RELOCATION_REASON_CODES = Object.freeze([
   "WORKSPACE_RELOCATION_INSPECTED",
   "WORKSPACE_RELOCATION_INSPECTION_STALE",
   "WORKSPACE_RELOCATION_LEDGER_FULL",
+  "WORKSPACE_RELOCATION_MANIFEST_OVERSIZED",
   "WORKSPACE_RELOCATION_NOT_PENDING",
   "WORKSPACE_RELOCATION_NOT_PERMITTED",
   "WORKSPACE_RELOCATION_PLANNED",
+  "WORKSPACE_RELOCATION_RECEIPT_UNSERIALISABLE",
   "WORKSPACE_RELOCATION_TARGET_ADOPTED",
   "WORKSPACE_RELOCATION_TRANSPORT_RESIDUE",
   "WORKSPACE_RELOCATION_UNSETTLED",
@@ -698,12 +700,61 @@ export interface PlanOptions {
   readonly at: string;
   readonly destination: RelocationDestination;
   readonly expectedVersion: number;
+  /**
+   * INC-132. Where to put the control manifest's exact bytes. Optional, and required
+   * only when the manifest is too large to ride inside the receipt — in that case the
+   * verb refuses rather than committing a vacate whose receipt it cannot emit.
+   */
+  readonly controlManifestOut?: string | undefined;
 }
 
 export interface VacateOptions extends PlanOptions {
   readonly actorId: string;
   readonly authority: RelocationAuthorityContext;
   readonly crashAt?: WorkspaceCrashPoint;
+}
+
+/**
+ * INC-132. The manifest is the one field here with no bound: it grows with the control
+ * tree, so a long-lived workspace eventually produces a receipt that cannot be
+ * serialised at all. Before this check the overflow was discovered AFTER the vacate
+ * committed — the source was already dead, the receipt never reached the operator, and
+ * `snapshot-manifest` refuses a vacated source, so the artifact `relocation-adopt`
+ * requires had become unobtainable at both addresses. The verb that exists to move a
+ * workspace destroyed it instead.
+ *
+ * Two changes, and the order matters more than either one: the manifest gets a
+ * destination on disk that does not travel through a protocol string, and the receipt
+ * is proved serialisable BEFORE the single commit point rather than after it.
+ */
+function manifestOverflowsReceipt(controlManifest: string): boolean {
+  // Asked of the same serialiser that will judge the real receipt, rather than
+  // recomputed against the limit constant: a second implementation of the rule is a
+  // second thing that can drift from it.
+  try {
+    canonicalJson({ controlManifest });
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+async function writeControlManifestOut(path: string | undefined, controlManifest: string): Promise<void> {
+  if (path === undefined) return;
+  await writeFile(path, controlManifest, { encoding: "utf8" });
+}
+
+/**
+ * Proves the receipt this hop is about to return can actually be emitted. A throw here
+ * costs nothing; the same throw one line later costs the workspace.
+ */
+function assertReceiptSerialisable(candidate: Readonly<Record<string, JsonValue>>): void {
+  try {
+    canonicalJson(candidate);
+  } catch {
+    fail("WORKSPACE_RELOCATION_RECEIPT_UNSERIALISABLE",
+      "the receipt this hop would return cannot be emitted; refusing before the commit");
+  }
 }
 
 interface PreparedRelocation {
@@ -815,6 +866,12 @@ export async function planWorkspaceRelocation(
 ): Promise<Readonly<Record<string, JsonValue>>> {
   const prepared = await prepareRelocation(workspaceRootInput, options);
   try {
+    const oversized = manifestOverflowsReceipt(prepared.controlManifest);
+    await writeControlManifestOut(options.controlManifestOut, prepared.controlManifest);
+    if (oversized && options.controlManifestOut === undefined) {
+      fail("WORKSPACE_RELOCATION_MANIFEST_OVERSIZED",
+        "the control manifest cannot ride inside the receipt; re-run with --control-manifest-out <path>");
+    }
     return Object.freeze({
       schemaVersion: WORKSPACE_RELOCATION_PLAN_VERSION,
       reasonCode: "WORKSPACE_RELOCATION_PLANNED",
@@ -834,7 +891,11 @@ export async function planWorkspaceRelocation(
       // minting ceremony.
       hopsRemaining: Math.floor((WORKSPACE_RELOCATION_LEDGER_LIMIT - prepared.sequence + 1) / 2),
       ledgerEntriesRemaining: WORKSPACE_RELOCATION_LEDGER_LIMIT - prepared.sequence + 1,
-      controlManifest: prepared.controlManifest,
+      // Omitted rather than truncated when it cannot ride inside the receipt: a
+      // truncated manifest is worse than an absent one, because `relocation-adopt`
+      // compares it byte for byte and a short read would look like tampering.
+      ...(oversized ? { controlManifestOversized: true } : { controlManifest: prepared.controlManifest }),
+      ...(options.controlManifestOut === undefined ? {} : { controlManifestPath: options.controlManifestOut }),
     });
   } finally {
     await prepared.lease.release();
@@ -883,6 +944,26 @@ export async function vacateWorkspace(workspaceRootInput: string, options: Vacat
     };
     entries.push(entry);
 
+    // INC-132: everything that can refuse must refuse ABOVE this line. The manifest
+    // gets its destination on disk, and the receipt is proved emittable, while the
+    // source is still alive and `snapshot-manifest` still answers for it.
+    const oversized = manifestOverflowsReceipt(prepared.controlManifest);
+    if (oversized && options.controlManifestOut === undefined) {
+      fail("WORKSPACE_RELOCATION_MANIFEST_OVERSIZED",
+        "the control manifest cannot ride inside the receipt and would be unobtainable "
+        + "after the vacate; re-run with --control-manifest-out <path>");
+    }
+    await writeControlManifestOut(options.controlManifestOut, prepared.controlManifest);
+    const manifestFields: Readonly<Record<string, JsonValue>> = {
+      controlManifestSha256: prepared.basis.controlManifestSha256,
+      ...(oversized ? { controlManifestOversized: true } : { controlManifest: prepared.controlManifest }),
+      ...(options.controlManifestOut === undefined ? {} : { controlManifestPath: options.controlManifestOut }),
+    };
+    assertReceiptSerialisable(receipt("WORKSPACE_RELOCATION_VACATE_COMPLETED", entry, {
+      ...manifestFields,
+      vacateCommitmentSha256: relocationVacateCommitment(entry),
+    }));
+
     // v6: THE SINGLE COMMIT POINT.
     await writeWorkspaceMetadataAt(prepared.root, withRelocations(prepared.metadata, entries), options.crashAt);
     // The manifest travels in the receipt because after this write it is
@@ -891,8 +972,7 @@ export async function vacateWorkspace(workspaceRootInput: string, options: Vacat
     // requires its exact text. An operator who skipped the plan step had no forward
     // route at all; the only exit was abort, which is the fork-creating verb.
     return receipt("WORKSPACE_RELOCATION_VACATE_COMPLETED", entry, {
-      controlManifestSha256: prepared.basis.controlManifestSha256,
-      controlManifest: prepared.controlManifest,
+      ...manifestFields,
       // The value an `abort` permit for this hop must name, and which did not exist
       // until the line above committed. It is emitted here AND by
       // `relocation-inspect` at this address, so losing the receipt does not strand

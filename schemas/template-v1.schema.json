@@ -33,7 +33,16 @@
       "minItems": 1,
       "uniqueItems": true,
       "items": {
-        "enum": ["Epic", "Incident", "Initiative", "Knowledge", "Release", "Review", "Story", "Subtask"]
+        "enum": [
+          "Epic",
+          "Incident",
+          "Initiative",
+          "Knowledge",
+          "Release",
+          "Review",
+          "Story",
+          "Subtask"
+        ]
       }
     },
     "headings": {
@@ -71,7 +80,9 @@
       "type": "array",
       "uniqueItems": true,
       "items": {
-        "enum": ["owner-decider-minutes"]
+        "enum": [
+          "owner-decider-minutes"
+        ]
       }
     }
   }

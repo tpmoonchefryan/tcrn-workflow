@@ -600,6 +600,14 @@ async function verifyP8() {
 }
 
 async function verifyReleaseTagPreflight() {
+  // INC-133 item 3. The format gate lives inside `verify-p1`, which needs a clean
+  // checkout under the exclusive output session — a condition no working tree meets
+  // mid-change, which is why the gate was never part of any train and two schema
+  // files shipped un-normalised in 0.11.9 and 0.11.10. A release commit is exactly
+  // when that condition IS met, so the gate belongs here: at the last point before a
+  // tag, on the tree that tag will name. Asserted directly rather than by running the
+  // whole of p1, because p1's other basis checks are the release's own subject.
+  const format = await formatCheck();
   const p8 = await verifyP8();
   const expectedTagIndex = process.argv.indexOf("--tag");
   const expectedTag = expectedTagIndex >= 0 ? process.argv[expectedTagIndex + 1] : P8_TAG;
@@ -612,6 +620,7 @@ async function verifyReleaseTagPreflight() {
   return success("RELEASE_TAG_PREFLIGHT_VERIFIED", {
     ...tagProof,
     commitShape,
+    formatChecked: format.checked,
     publication: false,
     mutation: false,
   });

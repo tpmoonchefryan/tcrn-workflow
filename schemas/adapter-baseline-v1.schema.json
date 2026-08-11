@@ -4,9 +4,15 @@
   "title": "TCRN adapter baseline v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "entries", "manifestDigest"],
+  "required": [
+    "schemaVersion",
+    "entries",
+    "manifestDigest"
+  ],
   "properties": {
-    "schemaVersion": { "const": "tcrn.adapter-baseline.v1" },
+    "schemaVersion": {
+      "const": "tcrn.adapter-baseline.v1"
+    },
     "entries": {
       "type": "array",
       "minItems": 3,
@@ -14,18 +20,66 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "surface", "installationState", "owner", "summary", "events", "driftCheck"],
+        "required": [
+          "id",
+          "surface",
+          "installationState",
+          "owner",
+          "summary",
+          "events",
+          "driftCheck"
+        ],
         "properties": {
-          "id": { "enum": ["session-start-governance", "observe-collection", "stop-pact-stop-gate"] },
-          "surface": { "enum": ["session-start", "observe", "stop-pact"] },
-          "installationState": { "enum": ["installed", "exempted"] },
-          "owner": { "enum": ["tcrn", "user"] },
-          "summary": { "type": "string", "minLength": 1 },
-          "events": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
-          "driftCheck": { "enum": ["receipt-and-handler-digest", "handler-and-manifest-digest", "independent-readonly"] }
+          "id": {
+            "enum": [
+              "session-start-governance",
+              "observe-collection",
+              "stop-pact-stop-gate"
+            ]
+          },
+          "surface": {
+            "enum": [
+              "session-start",
+              "observe",
+              "stop-pact"
+            ]
+          },
+          "installationState": {
+            "enum": [
+              "installed",
+              "exempted"
+            ]
+          },
+          "owner": {
+            "enum": [
+              "tcrn",
+              "user"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "driftCheck": {
+            "enum": [
+              "receipt-and-handler-digest",
+              "handler-and-manifest-digest",
+              "independent-readonly"
+            ]
+          }
         }
       }
     },
-    "manifestDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+    "manifestDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
   }
 }

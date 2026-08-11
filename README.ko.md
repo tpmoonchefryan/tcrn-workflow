@@ -8,7 +8,7 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · 한국어 · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.11.10-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-78-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.11.11-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-78-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -305,7 +305,7 @@ summary를 가진 project-local `SessionStart` hook 하나만 추가합니다. �
 ## 상태, 정직하게
 
 - `0.1.0`은 **첫 정식 릴리스**입니다. 시맨틱 버저닝이 적용되며, 0.x 범위에서는 공개 API가 마이너 버전 사이에 바뀔 수 있습니다.
-- 현재 승인된 릴리스 후보는 `0.11.10`입니다. Story-209 열 개 블록 범위 계약, dispatch-readiness 검증, closeout 검증, 소스-규칙 보존, 독립 공개 세계 preflight를 포함하며 공개는 별도 거버넌스 절차를 따릅니다.
+- 현재 승인된 릴리스 후보는 `0.11.11`입니다. Story-209 열 개 블록 범위 계약, dispatch-readiness 검증, closeout 검증, 소스-규칙 보존, 독립 공개 세계 preflight를 포함하며 공개는 별도 거버넌스 절차를 따릅니다.
 - **이 버전 전에 승인된 릴리스가 열한 개 있었고, 지금은 `0.10.0`입니다.** `0.2.0`은 게이트 신원, `0.3.0`은 어드바이저리 범위, `0.3.2`는 `Incident` 생성 경로와 지식 저장소 여유, `0.4.0`은 백그라운드 자원 잔여물 통치, `0.5.0`은 스프린트 / 릴리스 트레인을 추가했습니다. `0.6.0`은 통치된 이중 호스트 운영자 권위, MCP, activation, observe / execution 영수증과 conference provenance를 제공했고, `0.7.0`은 `work-list` 요약에 `externalKey`를 실었으며 페이지 단위 `conference-position-list`와 `conference-minutes-list`를 추가했고, `0.8.0`은 페이지 단위 `event-list`를 더했고, `0.9.0`은 체인의 바이트를 하나도 옮기지 않은 채 워크스페이스의 결속만 옮기는 통치된 재배치 동사군을 더합니다. 승인된 각 버전은 재현 가능한 산출물 묶음을 가진 불변 태그이며, `0.10.0`은 살아 있는 비종료 자식을 가진 Initiative를 `done`으로 닫는 것을 체인 오류로 만듭니다(`WORK_GRAPH_ACTIVE_CHILDREN_OF_DONE_INITIATIVE`).「닫힌」INIT가 미완료 작업을 숨길 수 없습니다. 승인된 각 버전은 재현 가능한 산출물 묶음을 가진 불변 태그이며, `CHANGELOG.md`가 전체 원장을 담고 있습니다.
 - **`0.7.0`과 `0.8.0`의 읽기 표면은 소비자 하나를 위해 잘린 것이며, 그보다 넓은 주장은 하지 않습니다.** 두 릴리스가 닫은 것은 같은 소비자가 제기한 간극입니다: 두 번째 컨테이너에서 체인을 다시 도출하는 컨테이너 간 일관성 매트릭스입니다. 한도를 넘은 체인에서는 논점 열다섯 개를 담은 심의와 하나도 없는 심의가 똑같이 보였고, 레코드는 나열되지만 이름을 부를 수 없었으며, 매트릭스의 「추가 전용」과 「해시 체인」 행에는 판정할 A측 대상 자체가 없었습니다 — 느린 읽기가 아니라, 「읽을 수 없음」이 「비어 있음」으로 제시된 것입니다. `event-list`가 레코드를 문자 그대로 돌려주는 이유가 바로 그 재도출을 가능하게 하기 위해서입니다. 그것은 `export`를 페이지 단위로 만들지 않고, 스트리밍하지 않으며, 질의 사이에 소비자 상태를 보관하지도 않습니다. 기본 창 64는 엔진 자신의 세그먼트 크기이며, 여기 있는 네 개의 활성 체인에 대해 실측했습니다: 단일 이벤트 최대는 7,008바이트, 95백분위는 3,575바이트입니다.
 - **Claude Code 증거는 좁고 정의에 따라 갈립니다.** 과거 `2.1.201` activation 영수증은 교체된 상대 경로 SessionStart 바이트에 대한 관측 9건을 기록합니다. 현재의 persona-free 승인 절대 루트 SessionStart 정의는 여전히 코드와 fixture로만 증명됩니다. 이와 별개로, 생성된 EPIC-024 fail-open handler 정본이 Claude Code `2.1.201`에서 `SessionEnd`를 세 번 live 발화했습니다. 나머지 observe 이벤트 다섯 개는 모델 프로브가 추론이나 도구 사용에 이르기 전에 API 상태 402를 반환했기 때문에, 명시적인 측정 불가(unavailable) 칸으로 남아 있습니다.

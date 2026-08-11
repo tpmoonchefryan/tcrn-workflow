@@ -1888,13 +1888,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // share one preparation function precisely so they cannot drift. It also emits
     // the control manifest, which after the vacate commits is unobtainable at either
     // address while `relocation-adopt` requires its exact text.
-    const values = parseArguments(rest, ["workspace", "at", "expected-version", "to-framework", "to-workspace-root", "to-transient", "to-evidence-locator", "to-release-trust"]);
+    const values = parseArguments(rest, ["workspace", "at", "expected-version", "to-framework", "to-workspace-root", "to-transient", "to-evidence-locator", "to-release-trust", "control-manifest-out"]);
     required(values, ["workspace", "at", "expected-version", "to-framework", "to-workspace-root", "to-transient", "to-evidence-locator", "to-release-trust"]);
     const workspace = values.workspace ?? "";
     io.write(canonicalJson(await planWorkspaceRelocation(workspace, {
       at: values.at ?? "",
       destination: relocationDestination(values, "to-"),
       expectedVersion: await resolveExpectedVersion(values, workspace),
+      controlManifestOut: values["control-manifest-out"],
     })));
     return;
   }
@@ -1903,7 +1904,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // the target, and does not advance the chain. All five destination roots are
     // required — see RelocationDestination for why the terminal verb states the
     // whole destination binding rather than the workspace root alone.
-    const values = parseArguments(rest, ["workspace", "at", "actor", "expected-version", "to-framework", "to-workspace-root", "to-transient", "to-evidence-locator", "to-release-trust", "relocation-authority", "relocation-authority-digest", "attest-dir"]);
+    const values = parseArguments(rest, ["workspace", "at", "actor", "expected-version", "to-framework", "to-workspace-root", "to-transient", "to-evidence-locator", "to-release-trust", "relocation-authority", "relocation-authority-digest", "attest-dir", "control-manifest-out"]);
     required(values, ["workspace", "at", "actor", "expected-version", "to-framework", "to-workspace-root", "to-transient", "to-evidence-locator", "to-release-trust", "relocation-authority", "relocation-authority-digest"]);
     const workspace = values.workspace ?? "";
     const authority = await relocationAuthorityFor(values);
@@ -1913,6 +1914,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       destination: relocationDestination(values, "to-"),
       authority,
       expectedVersion: await resolveExpectedVersion(values, workspace),
+      controlManifestOut: values["control-manifest-out"],
     });
     await emitRelocationAttestation(io, values, receipt);
     io.write(canonicalJson(receipt));

@@ -8,7 +8,7 @@
 
 [English](./README.md) · 简体中文 · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.11.10-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-78-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.11.11-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-78-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -302,7 +302,7 @@ Codex 现在有刻意收窄的对应能力：`adapter-install` 仍只做惰性�
 ## 状态，如实相告
 
 - `0.1.0` 是**首个正式接受的发布**。适用语义化版本；0.x 区间内公共 API 仍可能在次要版本之间变化。
-- 当前获接受的发布候选是 `0.11.10`；它包含 Story-209 十区块范围契约、派工就绪校验、收口校验、源规则守恒和独立公开世界预检。发布仍由独立治理流程决定。
+- 当前获接受的发布候选是 `0.11.11`；它包含 Story-209 十区块范围契约、派工就绪校验、收口校验、源规则守恒和独立公开世界预检。发布仍由独立治理流程决定。
 - **本版本之前已有十一个获接受的发布，当前是 `0.10.0`。** `0.2.0` 让门身份成真，`0.3.0` 增加咨询式范围，`0.3.2` 打开 `Incident` 创建路径并扩充知识库策展余量，`0.4.0` 增加后台资源残余治理，`0.5.0` 增加 sprint / 发布列车，`0.6.0` 发布受治理的双宿主操作者权威、MCP、激活、observe / execution 收据与 conference provenance，`0.7.0` 把 `externalKey` 放进 `work-list` 摘要并新增分页的 `conference-position-list` 与 `conference-minutes-list`，`0.8.0` 再增加分页的 `event-list`，`0.9.0` 增加受治迁置动词族——移动工作区的绑定，而不移动它这条链的任何一个字节。每个获接受版本都是不可变标签并附可复现产物；`0.10.0` 让「把仍有活子项的 Initiative 标记为 done」成为链级错误（`WORK_GRAPH_ACTIVE_CHILDREN_OF_DONE_INITIATIVE`），一个「已关闭」的 INIT 不再能藏着未完的工作。每个获接受版本都是不可变标签并附可复现产物；`CHANGELOG.md` 记着完整账本。
 - **`0.7.0` 与 `0.8.0` 的读面是为一个消费者而切的，不声称更宽的东西。** 这两个版本关掉的都是同一位消费者提的缺口：一套跨容器一致性矩阵，它要在第二个容器里重新推导一条链。在超限的链上，一场持有十五条论点的审议与一场一条都没有的审议渲染得一模一样；记录列得出来却叫不出名字；而该矩阵的「只增不改」与「哈希链」两行，根本没有可判的 A 侧对象——那不是读得慢，是把「读不到」呈现成了「空」。`event-list` 逐字返回记录，正是为了让重新推导成为可能；它不把 `export` 改成分页，不做流式推送，查询之间也不为消费者保留任何状态。它默认的 64 条窗口取自引擎自己的分段大小，并按本平台四条活链量过：最大的单条事件为 7,008 字节，95 分位为 3,575 字节。
 - **Claude Code 的证据是窄化的，并按定义一分为二。** 历史 `2.1.201` 激活收据记录了九次观测，对应的是已被替代的相对路径 SessionStart 字节；当前那份 persona-free、准入绝对根路径的 SessionStart 定义，仍然只有代码与 fixture 证明。另外，EPIC-024 那份精确生成的 fail-open 处理器，曾在 Claude Code `2.1.201` 上真实触发 `SessionEnd` 三次；其余五个 observe 事件仍是显式标注为 unavailable（未能测得）的单元格，因为模型探针在任何推理或工具使用发生之前就返回了 API 状态 402。
