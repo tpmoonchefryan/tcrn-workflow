@@ -3,6 +3,16 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.11 — 2026-08-12
+
+- `relocation-vacate` proves its receipt emittable before the commit point, so an
+  oversized control manifest refuses while the source is still live instead of
+  destroying it. `relocation-plan` and `relocation-vacate` accept
+  `--control-manifest-out <path>`; the new refusal is
+  `WORKSPACE_RELOCATION_MANIFEST_OVERSIZED`.
+- `release-preflight` asserts the format gate, which `verify-p1` could never run
+  during a train. Two schema files are normalised.
+
 ## 0.11.10 — 2026-08-12
 
 **INIT-023 productization: engine version declarations and enum value exposure.**
