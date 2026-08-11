@@ -3,6 +3,15 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.10 — 2026-08-12
+
+**INIT-023 productization: engine version declarations and enum value exposure.**
+
+- a workspace can declare the engine version it requires, and an engine that does not satisfy it refuses by name with both version numbers rather than surfacing a version mismatch as a corrupt chain;
+- a workspace carrying no declaration is unaffected, so existing chains read and write as before;
+- `settings-catalog` publishes `allowedValues` for keys with a closed value set, so a consumer can offer exactly what the engine accepts instead of maintaining a second copy;
+- a refused enum write names the accepted values in both its payload and its message.
+
 ## 0.11.9 — 2026-08-11
 
 **INIT-022 pre-pin: settings, template admission, and the adapter baseline.**
