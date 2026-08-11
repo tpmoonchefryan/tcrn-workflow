@@ -26,6 +26,7 @@ export type SettingKey =
   | "backup.cadence"
   | "backup.destination"
   | "driver.capabilityProfile"
+  | "engine.requiredVersion"
   | "workspace.generatedArtifactsPath";
 
 export interface SettingsCatalogEntry {
@@ -120,6 +121,12 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     defaultValue: "default",
   },
   {
+    key: "engine.requiredVersion",
+    type: "string",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: null,
+  },
+  {
     key: "workspace.generatedArtifactsPath",
     type: "path",
     layerKind: SETTINGS_LAYER_KIND,
@@ -138,6 +145,27 @@ const catalogByKey = new Map<SettingKey, SettingsCatalogEntry>(
   SETTINGS_CATALOG.map((entry) => [entry.key, entry]),
 );
 
+const engineVersionPattern = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u;
+
+function engineVersionParts(value: string): readonly [number, number, number] {
+  const match = engineVersionPattern.exec(value);
+  if (match === null) {
+    fail("SETTINGS_VALUE_INVALID", "engine.requiredVersion must be a stable semantic version");
+  }
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+/** Compare two validated engine versions using release precedence only. */
+export function compareEngineVersions(left: string, right: string): number {
+  const leftParts = engineVersionParts(left);
+  const rightParts = engineVersionParts(right);
+  for (const [index, leftPart] of leftParts.entries()) {
+    const rightPart = rightParts[index] ?? 0;
+    if (leftPart !== rightPart) return leftPart < rightPart ? -1 : 1;
+  }
+  return 0;
+}
+
 export function settingsCatalogEntry(key: unknown): SettingsCatalogEntry {
   if (typeof key !== "string") {
     fail("SETTINGS_KEY_UNREGISTERED", String(key));
@@ -154,6 +182,9 @@ export function validateSettingValue(key: unknown, value: unknown, workspaceRoot
   assertCanonicalString(value, String(key), entry.key === "driver.capabilityProfile" ? 128 : 4096);
   if (entry.type === "enum" && !entry.allowedValues?.includes(value)) {
     fail("SETTINGS_VALUE_INVALID", `${entry.key} is outside its closed enum`);
+  }
+  if (entry.key === "engine.requiredVersion") {
+    engineVersionParts(value);
   }
   if (entry.key === "workspace.generatedArtifactsPath") {
     assertWorkspaceRelativeSettingPath(value, entry.key);

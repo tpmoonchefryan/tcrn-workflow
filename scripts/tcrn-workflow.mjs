@@ -14,6 +14,10 @@ try {
   });
 } catch (error) {
   const reasonCode = typeof error?.reasonCode === "string" ? error.reasonCode : "CLI_INTERNAL_ERROR";
-  process.stderr.write(`${JSON.stringify({ ok: false, reasonCode, error: String(error?.message ?? error) })}\n`);
+  const details = error?.details !== null && typeof error?.details === "object"
+    ? Object.fromEntries(Object.entries(error.details).filter(([key, value]) =>
+      (key === "required" || key === "actual") && typeof value === "string"))
+    : {};
+  process.stderr.write(`${JSON.stringify({ ok: false, reasonCode, ...details, error: String(error?.message ?? error) })}\n`);
   process.exitCode = 1;
 }

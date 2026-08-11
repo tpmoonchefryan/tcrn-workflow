@@ -73,6 +73,7 @@ import type { GateRecord } from "./assignment-gate.js";
 import { GateIdentityError, gateIdentityDecision, permitsGateOutcome, validateGateIdentityDecision } from "./gate-identity.js";
 import type { GateIdentityAuthorityContext, GateIdentityDecision } from "./gate-identity.js";
 import type { CanonicalRoot } from "./root-identity.js";
+import { FRAMEWORK_VERSION } from "./index.js";
 import type { ExplicitRoot } from "./index.js";
 import { storyScopeFromRecord, storyScopeNamesOwnerDecider, validateStoryRecord } from "./story-scope-compliance.js";
 import {
@@ -92,6 +93,7 @@ import type { TemplateAdmissionRecord } from "./template-admission.js";
 import {
   SETTINGS_LAYER_KIND,
   SettingsError,
+  compareEngineVersions,
   createWorkspaceSettingRecord,
   sortWorkspaceSettings,
   validateWorkspaceSettingRecord,
@@ -110,6 +112,7 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_EVENT_CORRUPT",
   "WORKSPACE_FAULT_INJECTED",
   "WORKSPACE_FILESYSTEM_UNSUPPORTED",
+  "WORKSPACE_ENGINE_VERSION_MISMATCH",
   "WORKSPACE_GATE_EVIDENCE_UNRESOLVED",
   "WORKSPACE_GATE_IDENTITY_REFUSED",
   "WORKSPACE_GATE_IDENTITY_REQUIRED",
@@ -158,11 +161,13 @@ export type WorkspaceCrashPoint =
 
 export class WorkspaceError extends Error {
   readonly reasonCode: WorkspaceReasonCode;
+  readonly details: Readonly<Record<string, string>> | undefined;
 
-  constructor(reasonCode: WorkspaceReasonCode, message: string) {
+  constructor(reasonCode: WorkspaceReasonCode, message: string, details?: Readonly<Record<string, string>>) {
     super(message);
     this.name = "WorkspaceError";
     this.reasonCode = reasonCode;
+    this.details = details;
   }
 }
 
@@ -1683,6 +1688,15 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
   recordTerminalGraphValidation();
   const templateRecords = [...templates.values()].sort((left, right) => compareCanonicalText(left.registrationId, right.registrationId));
   const workRecords = validateWorkGraph([...work.values()], templateRegistry(templateRecords));
+  const settingRecords = sortWorkspaceSettings(settings.values());
+  const engineRequirement = settingRecords.find((record) => record.key === "engine.requiredVersion");
+  if (engineRequirement !== undefined && compareEngineVersions(FRAMEWORK_VERSION, engineRequirement.value) < 0) {
+    throw new WorkspaceError(
+      "WORKSPACE_ENGINE_VERSION_MISMATCH",
+      `workspace requires engine version ${engineRequirement.value}; current engine version is ${FRAMEWORK_VERSION}`,
+      { required: engineRequirement.value, actual: FRAMEWORK_VERSION },
+    );
+  }
   return {
     metadata,
     version: events.length,
@@ -1693,7 +1707,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
     conferencePositions: sortExtensionRecords(conferencePositions.values()),
     conferenceMinutes: sortExtensionRecords(conferenceMinutes.values()),
     gates: sortExtensionRecords(gates.values()),
-    settings: sortWorkspaceSettings(settings.values()),
+    settings: settingRecords,
     templates: templateRecords,
     events,
     attestationEnabledAtSequence,
