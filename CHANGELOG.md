@@ -3,6 +3,13 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.13 — 2026-08-12
+
+- The portal ships in `portal/`. Cloning the engine gets the interface with it,
+  and the portal drives the CLI it arrived with rather than a machine-level path.
+- `portal:test` and `portal:proof` are sibling steps; the design-system
+  comparisons skip where that repository is absent.
+
 ## 0.11.12 — 2026-08-12
 
 - `--control-manifest-out` is declared in the command catalog. It was added to both
