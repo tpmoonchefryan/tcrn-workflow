@@ -54,24 +54,27 @@ export interface SettingsCatalogReadback {
   readonly settings: readonly {
     readonly key: SettingKey;
     readonly type: SettingValueType;
-    readonly layer: typeof SETTINGS_LAYER_KIND;
-    readonly defaultValue: string | null;
-    readonly currentValue: string | null;
-  }[];
+      readonly layer: typeof SETTINGS_LAYER_KIND;
+      readonly defaultValue: string | null;
+      readonly currentValue: string | null;
+      readonly allowedValues?: readonly string[];
+    }[];
 }
 
 export class SettingsError extends Error {
   readonly reasonCode: SettingsReasonCode;
+  readonly details: Readonly<Record<string, unknown>> | undefined;
 
-  constructor(reasonCode: SettingsReasonCode, message: string) {
+  constructor(reasonCode: SettingsReasonCode, message: string, details?: Readonly<Record<string, unknown>>) {
     super(message);
     this.name = "SettingsError";
     this.reasonCode = reasonCode;
+    this.details = details;
   }
 }
 
-function fail(reasonCode: SettingsReasonCode, message: string): never {
-  throw new SettingsError(reasonCode, message);
+function fail(reasonCode: SettingsReasonCode, message: string, details?: Readonly<Record<string, unknown>>): never {
+  throw new SettingsError(reasonCode, message, details);
 }
 
 function isInside(parent: string, candidate: string): boolean {
@@ -181,7 +184,11 @@ export function validateSettingValue(key: unknown, value: unknown, workspaceRoot
   const entry = settingsCatalogEntry(key);
   assertCanonicalString(value, String(key), entry.key === "driver.capabilityProfile" ? 128 : 4096);
   if (entry.type === "enum" && !entry.allowedValues?.includes(value)) {
-    fail("SETTINGS_VALUE_INVALID", `${entry.key} is outside its closed enum`);
+    fail(
+      "SETTINGS_VALUE_INVALID",
+      `${entry.key} is outside its closed enum; allowed values: ${entry.allowedValues?.join(", ") ?? "none"}`,
+      { allowedValues: entry.allowedValues ?? [] },
+    );
   }
   if (entry.key === "engine.requiredVersion") {
     engineVersionParts(value);
@@ -274,6 +281,7 @@ export function readSettingsCatalog(
       layer: entry.layerKind,
       defaultValue: entry.defaultValue,
       currentValue: records.find((record) => record.key === entry.key)?.value ?? entry.defaultValue,
+      ...(entry.allowedValues === undefined ? {} : { allowedValues: entry.allowedValues }),
     })),
   };
 }

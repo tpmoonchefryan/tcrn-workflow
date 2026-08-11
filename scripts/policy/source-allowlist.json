@@ -430,6 +430,7 @@
     "tests/s213-settings.test.mjs",
     "tests/s214-adapter-baseline.test.mjs",
     "tests/s222-engine-version.test.mjs",
+    "tests/s223-allowed-values.test.mjs",
     "tests/s6-lessons.test.mjs",
     "tests/s7-behavior-surface.test.mjs",
     "tests/spawn-guard.test.mjs",
