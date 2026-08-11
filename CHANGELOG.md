@@ -3,6 +3,15 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.9 — 2026-08-11
+
+**INIT-022 pre-pin: settings, template admission, and the adapter baseline.**
+
+- `settings-catalog` and `settings-set` make workspace settings a first-class machine-readable surface: registered keys carry type, layer, current and default values, writes go through compare-and-swap against the live head, and each write answers with a receipt bearing the chain version and receipt digest;
+- the settings registry is a closed set the engine defines, because a key exists only where the engine consumes it — a deployment sets values, not the vocabulary;
+- `template-admit` and `template-validate` move what a record must contain from a compiled constant to data the engine admits under digest and owner authorization, so a project carries its own genre without forking the engine while the base contract stays outside the reach of what it constrains;
+- the adapter baseline names the hooks the machinery needs and validates only those, leaving hooks a user installs untouched and unjudged.
+
 ## 0.11.8 — 2026-08-07
 
 **INIT-020 QA3 hardening closes the migration, admission, evidence, and release gates.**
