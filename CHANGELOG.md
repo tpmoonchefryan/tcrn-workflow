@@ -3,6 +3,12 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.12 — 2026-08-12
+
+- `--control-manifest-out` is declared in the command catalog. It was added to both
+  relocation verbs in 0.11.11 but not to the catalog, which is the only authority
+  this engine has on what exists.
+
 ## 0.11.11 — 2026-08-12
 
 - `relocation-vacate` proves its receipt emittable before the commit point, so an
