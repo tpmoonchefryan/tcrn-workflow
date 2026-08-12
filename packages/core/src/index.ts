@@ -183,7 +183,9 @@ export {
   rebuildWorkspaceViews,
   recoverWorkspace,
   removeHostConfigurationInWorkspace,
+  removeCustomPersonaInWorkspace,
   removePersonaBindingInWorkspace,
+  setCustomPersonaInWorkspace,
   setHostConfigurationInWorkspace,
   setHostDefaultInWorkspace,
   setPersonaBindingInWorkspace,
@@ -295,6 +297,32 @@ export type {
   HostDefaultRecord,
   PersonaBindingRecord,
 } from "./execution-config.js";
+export {
+  CORE_REFERENCE_PERSONAS,
+  EMPTY_PERSONA_STORE,
+  PERSONA_REASON_CODES,
+  PERSONA_RECORD_VERSION,
+  PERSONA_ROLES,
+  PERSONA_STORE_VERSION,
+  PersonaStoreError,
+  allPersonaReadback,
+  applyPersonaRemove,
+  applyPersonaSet,
+  derivePersonaId,
+  personaExists,
+  validatePersonaDescription,
+  validatePersonaName,
+  validatePersonaPrompt,
+  validatePersonaRole,
+  validatePersonaStoreState,
+} from "./persona-store.js";
+export type {
+  PersonaReasonCode,
+  PersonaRecord,
+  PersonaRole,
+  PersonaStoreState,
+  ReferencePersonaReadback,
+} from "./persona-store.js";
 export {
   STORY_SCOPE_HEADINGS,
   storyScopeFromRecord,

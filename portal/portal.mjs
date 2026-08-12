@@ -184,6 +184,10 @@ async function writeExecution(action, body) {
     "binding-set": () => ["persona-binding-set", ...base, "--profile-id", String(body.profileId ?? ""),
       "--host", String(body.host ?? ""), "--name", String(body.name ?? "")],
     "binding-remove": () => ["persona-binding-remove", ...base, "--profile-id", String(body.profileId ?? ""), "--host", String(body.host ?? "")],
+    "persona-set": () => ["persona-set", ...base, "--name", String(body.name ?? ""),
+      "--description", String(body.description ?? ""), "--role", String(body.role ?? ""),
+      "--prompt", String(body.prompt ?? "")],
+    "persona-remove": () => ["persona-remove", ...base, "--name", String(body.name ?? "")],
   };
   const build = verbs[action];
   if (!build) return { ok: false, body: { ok: false, reasonCode: "PORTAL_UNKNOWN_ACTION", error: String(action) } };

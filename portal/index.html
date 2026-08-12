@@ -123,6 +123,33 @@ h1, h2, h3, p { margin: 0; }
   border-radius: 0 var(--tcrn-radius-control) var(--tcrn-radius-control) 0;
 }
 .tcrn-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-2); flex-wrap: wrap; }
+.tcrn-stack { display: grid; gap: var(--tcrn-space-2); }
+.tcrn-mt-2 { margin-top: var(--tcrn-space-2); }
+.tcrn-mt-3 { margin-top: var(--tcrn-space-3); }
+.tcrn-mt-4 { margin-top: var(--tcrn-space-4); }
+.tcrn-section-title { margin-top: var(--tcrn-space-4); font-size: var(--tcrn-type-size-heading-3); font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-field-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--tcrn-space-2);
+  align-items: center; padding: var(--tcrn-space-2) 0;
+  border-top: 1px solid var(--tcrn-color-border-subtle);
+}
+.tcrn-field-row:first-child { border-top: 0; }
+.tcrn-execution-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--tcrn-space-4); align-items: start; }
+.tcrn-execution-card { min-width: 0; overflow: hidden; }
+.tcrn-execution-card--muted { background: var(--tcrn-color-surface-muted); filter: grayscale(1); opacity: 0.58; }
+.tcrn-execution-card--muted .tcrn-panel__head { background: var(--tcrn-color-surface-muted); }
+.tcrn-persona-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--tcrn-space-2); padding: var(--tcrn-space-2) 0; border-top: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-persona-row:first-child { border-top: 0; }
+.tcrn-persona-row--dimmed { background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-muted); opacity: 0.62; }
+.tcrn-persona-row__name { display: block; font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-persona-row__description { display: block; margin-top: var(--tcrn-space-0h); color: var(--tcrn-color-text-secondary); font: var(--tcrn-text-body-reading); }
+.tcrn-persona-row__meta { display: block; margin-top: var(--tcrn-space-1h); color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
+.tcrn-policy-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 0.8fr); gap: var(--tcrn-space-3); padding: var(--tcrn-space-3) 0; border-top: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-policy-row:first-child { border-top: 0; }
+.tcrn-policy-row__description { margin-top: var(--tcrn-space-1h); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); line-height: var(--tcrn-type-line-caption); }
+.tcrn-persona-editor { padding-top: var(--tcrn-space-3); border-top: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-persona-editor__fields { display: grid; gap: var(--tcrn-space-3); }
+.tcrn-persona-prompt-count { text-align: right; }
 
 /* Button — the design system ships class names but no stylesheet for them, so
    these are composed from tokens and kept to the DS naming contract. */
@@ -146,6 +173,7 @@ h1, h2, h3, p { margin: 0; }
 .tcrn-kv { display: flex; align-items: baseline; justify-content: space-between; gap: var(--tcrn-space-3); padding: var(--tcrn-space-2) 0; border-top: 1px solid var(--tcrn-color-border-subtle); font-size: var(--tcrn-type-size-meta); }
 .tcrn-kv dt { color: var(--tcrn-color-text-muted); }
 .tcrn-kv dd { margin: 0; font-family: var(--tcrn-type-family-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcrn-kv-list { margin: 0; }
 .tcrn-empty { color: var(--tcrn-color-text-muted); font: var(--tcrn-text-body-reading); }
 .tcrn-footnote { margin-top: var(--tcrn-space-3); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); line-height: var(--tcrn-type-line-caption); }
 
@@ -185,6 +213,7 @@ h1, h2, h3, p { margin: 0; }
   .tcrn-rail__note { display: none; }
   .tcrn-main { padding: var(--tcrn-space-4); }
   .tcrn-columns { grid-template-columns: minmax(0, 1fr); }
+  .tcrn-execution-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: var(--tcrn-motion-reduced-duration) !important; animation-duration: var(--tcrn-motion-reduced-duration) !important; }
@@ -232,7 +261,7 @@ h1, h2, h3, p { margin: 0; }
     <!-- CONFIG -->
     <section id="surface-config">
       <p class="tcrn-lede" data-i18n="config.lede">…</p>
-      <div class="tcrn-columns" style="margin-top: var(--tcrn-space-4)">
+      <div class="tcrn-columns tcrn-mt-4">
         <section class="tcrn-panel">
           <div class="tcrn-panel__head"><h2 data-i18n="config.panelTitle">Workspace configuration</h2><span class="tcrn-meta" id="catalog-tag">loading…</span></div>
           <div class="tcrn-list" id="setting-list" role="listbox" aria-label="Registered settings"></div>
@@ -245,7 +274,7 @@ h1, h2, h3, p { margin: 0; }
               <input class="tcrn-input" id="setting-input" autocomplete="off">
               <p class="tcrn-help" id="setting-help"></p>
             </div>
-            <div class="tcrn-actions" style="margin-top: var(--tcrn-space-3)">
+            <div class="tcrn-actions tcrn-mt-3">
               <span class="tcrn-meta" id="write-note" data-i18n="config.writeNote">writes go through the public CLI</span>
               <button class="tcrn-button tcrn-button--primary" id="save-setting" type="button" data-i18n="config.commit">Commit change</button>
             </div>
@@ -261,44 +290,64 @@ h1, h2, h3, p { margin: 0; }
       </div>
     </section>
 
-    <!-- PROSE -->
+    <!-- EXECUTION -->
     <section id="surface-execution" hidden>
-      <section class="tcrn-panel" style="margin-top: var(--tcrn-space-4)">
-        <div class="tcrn-panel__head"><h2 data-i18n="execution.panelTitle">Model configurations</h2><span class="tcrn-meta" data-i18n="execution.panelNote">per host · governed writes</span></div>
-        <div id="execution-hosts"></div>
-        <h3 data-i18n="execution.addTitle" style="margin-top: var(--tcrn-space-4)">Add a configuration</h3>
-        <div class="tcrn-field-row">
-          <select class="tcrn-select" id="execution-host" autocomplete="off"></select>
-          <input class="tcrn-input" id="execution-name" data-i18n-placeholder="execution.namePlaceholder" placeholder="name" autocomplete="off" />
-          <input class="tcrn-input" id="execution-model" data-i18n-placeholder="execution.modelPlaceholder" placeholder="model" autocomplete="off" />
-          <input class="tcrn-input" id="execution-note" data-i18n-placeholder="execution.notePlaceholder" placeholder="note (optional)" autocomplete="off" />
-          <button class="tcrn-button" id="execution-add" type="button" data-i18n="execution.add">Add</button>
-        </div>
-        <h3 data-i18n="execution.bindingsTitle" style="margin-top: var(--tcrn-space-4)">Persona bindings</h3>
-        <div id="execution-bindings"></div>
-        <div class="tcrn-field-row">
-          <input class="tcrn-input" id="binding-profile" list="persona-ids" data-i18n-placeholder="execution.personaPlaceholder" placeholder="profile:tcrn-verity-v1" autocomplete="off" />
-          <datalist id="persona-ids">
-            <option value="profile:tcrn-arturo-v1"></option><option value="profile:tcrn-ilya-v1"></option>
-            <option value="profile:tcrn-janus-v1"></option><option value="profile:tcrn-mara-v1"></option>
-            <option value="profile:tcrn-minerva-v1"></option><option value="profile:tcrn-mneme-v1"></option>
-            <option value="profile:tcrn-sable-v1"></option><option value="profile:tcrn-verity-v1"></option>
-          </datalist>
-          <select class="tcrn-select" id="binding-host" autocomplete="off"></select>
-          <select class="tcrn-select" id="binding-name" autocomplete="off"></select>
-          <button class="tcrn-button" id="binding-add" type="button" data-i18n="execution.bind">Bind</button>
-        </div>
-        <pre class="tcrn-receipt" id="execution-receipt" hidden></pre>
-      </section>
+      <p class="tcrn-lede" data-i18n="execution.lede">Configure models, personas, and dispatch policy from the engine-backed execution surface.</p>
+      <div class="tcrn-execution-grid tcrn-mt-4">
+        <section class="tcrn-panel tcrn-execution-card" id="execution-config-card">
+          <div class="tcrn-panel__head"><h2 data-i18n="execution.configCardTitle">Model configurations</h2><span class="tcrn-meta" data-i18n="execution.panelNote">per host · governed writes</span></div>
+          <div class="tcrn-panel__body">
+            <div id="execution-hosts" class="tcrn-stack"></div>
+            <h3 class="tcrn-section-title" data-i18n="execution.addTitle">Add a configuration</h3>
+            <div class="tcrn-stack tcrn-mt-2">
+              <div class="tcrn-field"><label class="tcrn-label" for="execution-host" data-i18n="execution.hostLabel">Host</label><select class="tcrn-select" id="execution-host" autocomplete="off"></select></div>
+              <div class="tcrn-field"><label class="tcrn-label" for="execution-name" data-i18n="execution.nameLabel">Name</label><input class="tcrn-input" id="execution-name" data-i18n-placeholder="execution.namePlaceholder" placeholder="name" autocomplete="off" /></div>
+              <div class="tcrn-field"><label class="tcrn-label" for="execution-model" data-i18n="execution.modelLabel">Model</label><input class="tcrn-input" id="execution-model" data-i18n-placeholder="execution.modelPlaceholder" placeholder="model" autocomplete="off" /></div>
+              <div class="tcrn-field"><label class="tcrn-label" for="execution-note" data-i18n="execution.noteLabel">Note</label><input class="tcrn-input" id="execution-note" data-i18n-placeholder="execution.notePlaceholder" placeholder="note (optional)" autocomplete="off" /></div>
+              <button class="tcrn-button tcrn-button--primary" id="execution-add" type="button" data-i18n="execution.add">Add</button>
+            </div>
+            <h3 class="tcrn-section-title" data-i18n="execution.bindingsTitle">Persona bindings</h3>
+            <div id="execution-bindings" class="tcrn-stack tcrn-mt-2"></div>
+            <div class="tcrn-stack tcrn-mt-3">
+              <div class="tcrn-field"><label class="tcrn-label" for="binding-profile" data-i18n="execution.personaLabel">Persona</label><select class="tcrn-select" id="binding-profile" autocomplete="off"></select></div>
+              <div class="tcrn-field"><label class="tcrn-label" for="binding-host" data-i18n="execution.hostLabel">Host</label><select class="tcrn-select" id="binding-host" autocomplete="off"></select></div>
+              <div class="tcrn-field"><label class="tcrn-label" for="binding-name" data-i18n="execution.configurationLabel">Configuration</label><select class="tcrn-select" id="binding-name" autocomplete="off"></select></div>
+              <button class="tcrn-button" id="binding-add" type="button" data-i18n="execution.bind">Bind</button>
+            </div>
+          </div>
+        </section>
+        <section class="tcrn-panel tcrn-execution-card" id="execution-personas-card">
+          <div class="tcrn-panel__head"><h2 data-i18n="execution.personasCardTitle">Personas</h2><span class="tcrn-meta" data-i18n="execution.personasCardNote">built-in reference + custom content</span></div>
+          <div class="tcrn-panel__body">
+            <p class="tcrn-description" data-i18n="execution.personasDescription">Built-in personas are read-only. Custom personas are governed content and can be edited or removed.</p>
+            <div id="execution-personas" class="tcrn-stack tcrn-mt-3"></div>
+            <div class="tcrn-persona-editor tcrn-mt-3" id="persona-editor">
+              <h3 class="tcrn-section-title" data-i18n="execution.customTitle">Custom persona</h3>
+              <div class="tcrn-persona-editor__fields tcrn-mt-2">
+                <div class="tcrn-field"><label class="tcrn-label" for="persona-name" data-i18n="execution.nameLabel">Name</label><input class="tcrn-input" id="persona-name" autocomplete="off" /></div>
+                <div class="tcrn-field"><label class="tcrn-label" for="persona-description" data-i18n="execution.descriptionLabel">Description</label><input class="tcrn-input" id="persona-description" autocomplete="off" /></div>
+                <div class="tcrn-field"><label class="tcrn-label" for="persona-role" data-i18n="execution.roleLabel">Role</label><select class="tcrn-select" id="persona-role" autocomplete="off"><option value="orchestrator">orchestrator</option><option value="planner">planner</option><option value="implementer">implementer</option><option value="reviewer">reviewer</option><option value="gatekeeper">gatekeeper</option><option value="steward">steward</option></select></div>
+                <div class="tcrn-field"><label class="tcrn-label" for="persona-prompt" data-i18n="execution.promptLabel">Prompt</label><textarea class="tcrn-textarea" id="persona-prompt" spellcheck="false"></textarea><p class="tcrn-help tcrn-persona-prompt-count" id="persona-prompt-count" data-i18n="execution.promptHint">0 / 4096 · hint only</p></div>
+                <div class="tcrn-actions"><span class="tcrn-meta" id="persona-editor-mode" data-i18n="execution.editorIdle">New custom persona</span><span class="tcrn-stack"><button class="tcrn-button tcrn-button--primary" id="persona-save" type="button" data-i18n="execution.savePersona">Save persona</button><button class="tcrn-button" id="persona-clear" type="button" data-i18n="execution.clearPersona">Clear</button></span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="tcrn-panel tcrn-execution-card" id="execution-policy-card">
+          <div class="tcrn-panel__head"><h2 data-i18n="execution.policyCardTitle">Dispatch policy</h2><span class="tcrn-meta" data-i18n="execution.policyCardNote">three governed keys</span></div>
+          <div class="tcrn-panel__body"><div id="execution-policy" class="tcrn-stack"></div></div>
+        </section>
+      </div>
+      <pre class="tcrn-receipt" id="execution-receipt" hidden></pre>
     </section>
     <section id="surface-prose" hidden>
       <p class="tcrn-lede" data-i18n="prose.lede">…</p>
-      <section class="tcrn-panel" style="margin-top: var(--tcrn-space-4)">
+      <section class="tcrn-panel tcrn-mt-4">
         <div class="tcrn-panel__head"><h2 id="prose-path">AGENTS.md</h2><span class="tcrn-meta" data-i18n="prose.fileNote">plain file · not a control tree</span></div>
         <div class="tcrn-panel__body">
           <label class="tcrn-sr-only" for="prose-text" data-i18n="prose.panelTitle">Canonical prose</label>
           <textarea class="tcrn-textarea" id="prose-text" spellcheck="false"></textarea>
-          <div class="tcrn-actions" style="margin-top: var(--tcrn-space-3)">
+          <div class="tcrn-actions tcrn-mt-3">
             <span class="tcrn-meta" id="prose-meta">—</span>
             <button class="tcrn-button tcrn-button--primary" id="save-prose" type="button" data-i18n="prose.save">Save file</button>
           </div>
@@ -310,7 +359,7 @@ h1, h2, h3, p { margin: 0; }
     <!-- RECONCILE -->
     <section id="surface-reconcile" hidden>
       <p class="tcrn-lede" data-i18n="reconcile.lede">…</p>
-      <section class="tcrn-panel" style="margin-top: var(--tcrn-space-4)">
+      <section class="tcrn-panel tcrn-mt-4">
         <div class="tcrn-panel__head"><h2 data-i18n="reconcile.panelTitle">Prose against the live catalog</h2><button class="tcrn-button" id="rerun-reconcile" type="button" data-i18n="reconcile.rerun">Re-run</button></div>
         <div class="tcrn-panel__body">
           <div class="tcrn-banner tcrn-banner--ready" id="reconcile-banner"><span id="reconcile-message">checking…</span><span class="tcrn-meta" id="reconcile-code"></span></div>
@@ -318,7 +367,7 @@ h1, h2, h3, p { margin: 0; }
             <thead><tr><th scope="col" data-i18n="reconcile.colFile">File</th><th scope="col" data-i18n="reconcile.colKey">Key claimed in prose</th><th scope="col" data-i18n="reconcile.colRegistered">Registered</th></tr></thead>
             <tbody id="reconcile-rows"></tbody>
           </table>
-          <p class="tcrn-help" style="margin-top: var(--tcrn-space-2)"><span data-i18n="reconcile.mismatches">Mismatches</span>: <span id="reconcile-count">0</span></p>
+          <p class="tcrn-help tcrn-mt-2"><span data-i18n="reconcile.mismatches">Mismatches</span>: <span id="reconcile-count">0</span></p>
         </div>
       </section>
     </section>
@@ -378,7 +427,7 @@ localeSelect.value = locale;
 localeSelect.onchange = () => {
   locale = localeSelect.value;
   applyLocale();
-  renderCatalog(); syncEditor(); loadReconcile();
+  renderCatalog(); syncEditor(); renderPolicyCard(); renderPersonas(); loadReconcile();
   if (lastReceipt) renderReceipt(lastReceipt.status, lastReceipt.body);
 };
 
@@ -545,7 +594,7 @@ function renderReceipt(status, body) {
     ? [[t("receipt.value"), body.setting?.value], [t("receipt.readback"), body.readback?.currentValue], [t("receipt.version"), body.version], [t("receipt.record"), body.recordId], [t("receipt.digest"), text(body.receiptDigest).slice(0, 16) + "…"], [t("receipt.head"), text(body.headEventHash).slice(0, 16) + "…"]]
     : [[t("receipt.error"), body.error ?? "—"], [t("receipt.key"), selectedKey], ...(Array.isArray(body.allowedValues) ? [[t("receipt.allowedValues"), body.allowedValues.join(", ")]] : [])];
   const list = document.createElement("dl");
-  list.style.margin = "0";
+  list.className = "tcrn-kv-list";
   for (const [term, value] of pairs) {
     const row = document.createElement("div");
     row.className = "tcrn-kv";
@@ -570,6 +619,10 @@ async function loadCatalog() {
   if (!selectedKey && catalog.length) selectedKey = catalog[0].key;
   renderCatalog();
   syncEditor();
+  renderPolicyCard();
+  renderPersonas();
+  renderBindings();
+  applyPersonaPolicy();
   chip($("live-chip"), body.reasonCode === "SETTINGS_CATALOG_READY" ? "ready" : "warning", t(body.reasonCode === "SETTINGS_CATALOG_READY" ? "chip.catalogReady" : "chip.catalogFailed"));
 }
 
@@ -647,19 +700,82 @@ loadProse();
 loadExecution();
 
 const HOSTS = ["claude-code", "codex"];
+const PERSONA_ROLES = ["orchestrator", "planner", "implementer", "reviewer", "gatekeeper", "steward"];
+const POLICY_KEYS = ["execution.maxConcurrentSubagents", "execution.maxDispatchDepth", "execution.personalessDispatch"];
+const REVIEW_ONLY_ROLES = new Set(["reviewer", "gatekeeper"]);
+let executionData = { configurations: [], defaults: [], bindings: [], personas: [] };
+let personaEditingId = null;
 
-// INIT-026 S236. The portal renders what the engine answered and posts one
-// action per engine verb; a refusal (a pinned configuration, a ghost name)
-// arrives verbatim in the receipt panel. No governance logic lives here.
-async function loadExecution() {
-  const { body } = await api("/api/execution?token=" + BOOT.token);
-  if (body.reasonCode !== "EXECUTION_CONFIG_READY") return;
+function personaLabel(persona) {
+  return persona.name + " - " + persona.description;
+}
+
+function personaForId(profileId) {
+  return executionData.personas.find((persona) => persona.id === profileId) ?? null;
+}
+
+function reviewOnlyDimmed(persona) {
+  return policyValue("execution.subagentPolicy") === "review-only" && !REVIEW_ONLY_ROLES.has(persona?.role);
+}
+
+function policyValue(key) {
+  return catalog.find((entry) => entry.key === key)?.currentValue ?? null;
+}
+
+function optionList(select, values, selected) {
+  select.textContent = "";
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+  if (selected !== undefined && values.includes(selected)) select.value = selected;
+}
+
+function renderPolicyCard() {
+  const host = $("execution-policy");
+  if (!host || catalog.length === 0) return;
+  host.textContent = "";
+  for (const key of POLICY_KEYS) {
+    const entry = catalog.find((candidate) => candidate.key === key);
+    if (!entry) continue;
+    const row = document.createElement("div");
+    row.className = "tcrn-policy-row";
+    const copy = document.createElement("div");
+    const label = document.createElement("strong");
+    label.className = "tcrn-row__key";
+    label.textContent = t("setting." + key + ".label");
+    const description = document.createElement("p");
+    description.className = "tcrn-policy-row__description";
+    description.textContent = t("setting." + key + ".description");
+    copy.append(label, description);
+    const control = entry.type === "enum" ? document.createElement("select") : document.createElement("input");
+    control.className = entry.type === "enum" ? "tcrn-select" : "tcrn-input";
+    control.id = "policy-" + key.replaceAll(".", "-");
+    control.dataset.policyKey = key;
+    if (entry.type === "enum") optionList(control, entry.allowedValues ?? [], entry.currentValue ?? undefined);
+    else control.value = entry.currentValue ?? "";
+    const save = document.createElement("button");
+    save.className = "tcrn-button tcrn-button--primary tcrn-mt-2";
+    save.type = "button";
+    save.textContent = t("execution.savePolicy");
+    save.onclick = () => savePolicy(key, control);
+    const editor = document.createElement("div");
+    editor.append(control, save);
+    row.append(copy, editor);
+    host.append(row);
+  }
+}
+
+function renderExecutionHosts() {
   const hostsBox = $("execution-hosts");
   hostsBox.textContent = "";
   for (const host of HOSTS) {
-    const configurations = body.configurations.filter((entry) => entry.host === host);
-    const fallback = body.defaults.find((entry) => entry.host === host)?.configurationName ?? null;
+    const configurations = executionData.configurations.filter((entry) => entry.host === host);
+    const fallback = executionData.defaults.find((entry) => entry.host === host)?.configurationName ?? null;
     const head = document.createElement("h3");
+    head.className = "tcrn-row__key";
     head.textContent = host + (fallback ? " · " + t("execution.defaultIs") + " " + fallback : "");
     hostsBox.append(head);
     if (configurations.length === 0) {
@@ -675,6 +791,8 @@ async function loadExecution() {
       const label = document.createElement("span");
       label.className = "tcrn-row__key";
       label.textContent = entry.name + " → " + entry.model + (entry.note ? " (" + entry.note + ")" : "") + (entry.name === fallback ? "  ★" : "");
+      const actions = document.createElement("span");
+      actions.className = "tcrn-actions";
       const setDefault = document.createElement("button");
       setDefault.className = "tcrn-button";
       setDefault.type = "button";
@@ -685,44 +803,173 @@ async function loadExecution() {
       remove.type = "button";
       remove.textContent = t("execution.remove");
       remove.onclick = () => executionAction({ action: "config-remove", host, name: entry.name });
-      row.append(label, setDefault, remove);
+      actions.append(setDefault, remove);
+      row.append(label, actions);
       hostsBox.append(row);
     }
   }
+}
+
+function renderBindings() {
   const bindingsBox = $("execution-bindings");
   bindingsBox.textContent = "";
-  for (const binding of body.bindings) {
+  for (const binding of executionData.bindings) {
+    const persona = personaForId(binding.profileId);
+    const dimmed = reviewOnlyDimmed(persona);
     const row = document.createElement("div");
-    row.className = "tcrn-field-row";
-    const label = document.createElement("span");
-    label.className = "tcrn-row__key";
-    label.textContent = binding.profileId + " → " + binding.host + " : " + binding.configurationName;
+    row.className = "tcrn-persona-row" + (dimmed ? " tcrn-persona-row--dimmed" : "");
+    row.dataset.personaRole = persona?.role ?? "";
+    const copy = document.createElement("span");
+    copy.className = "tcrn-row__key";
+    copy.textContent = (persona ? personaLabel(persona) : binding.profileId) + " → " + binding.host + " : " + binding.configurationName;
     const unbind = document.createElement("button");
     unbind.className = "tcrn-button";
     unbind.type = "button";
     unbind.textContent = t("execution.unbind");
+    unbind.dataset.reviewOnlyBlocked = String(dimmed);
+    unbind.disabled = dimmed;
     unbind.onclick = () => executionAction({ action: "binding-remove", profileId: binding.profileId, host: binding.host });
-    row.append(label, unbind);
+    row.append(copy, unbind);
     bindingsBox.append(row);
   }
-  for (const selectId of ["execution-host", "binding-host"]) {
-    const select = $(selectId);
-    select.textContent = "";
-    for (const host of HOSTS) {
-      const option = document.createElement("option");
-      option.value = host; option.textContent = host;
-      select.append(option);
-    }
+  if (executionData.bindings.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "tcrn-help";
+    empty.textContent = t("execution.noBindings");
+    bindingsBox.append(empty);
   }
-  const nameSelect = $("binding-name");
-  nameSelect.textContent = "";
+}
+
+function renderBindingControls() {
+  optionList($("execution-host"), HOSTS);
   const bindingHost = $("binding-host").value || HOSTS[0];
-  for (const entry of body.configurations.filter((item) => item.host === bindingHost)) {
+  optionList($("binding-host"), HOSTS, bindingHost);
+  const personas = executionData.personas;
+  const profileSelect = $("binding-profile");
+  const previousProfile = profileSelect.value;
+  profileSelect.textContent = "";
+  for (const persona of personas) {
     const option = document.createElement("option");
-    option.value = entry.name; option.textContent = entry.name;
-    nameSelect.append(option);
+    option.value = persona.id;
+    option.textContent = personaLabel(persona);
+    profileSelect.append(option);
   }
-  $("binding-host").onchange = loadExecution;
+  if (personas.some((persona) => persona.id === previousProfile)) profileSelect.value = previousProfile;
+  const configurations = executionData.configurations.filter((entry) => entry.host === bindingHost).map((entry) => entry.name);
+  const previousName = $("binding-name").value;
+  optionList($("binding-name"), configurations, previousName);
+}
+
+function renderPersonas() {
+  const host = $("execution-personas");
+  if (!host) return;
+  host.textContent = "";
+  for (const persona of executionData.personas) {
+    const dimmed = reviewOnlyDimmed(persona);
+    const row = document.createElement("div");
+    row.className = "tcrn-persona-row" + (dimmed ? " tcrn-persona-row--dimmed" : "");
+    row.dataset.personaRole = persona.role;
+    row.dataset.personaId = persona.id;
+    const textBox = document.createElement("div");
+    const name = document.createElement("span");
+    name.className = "tcrn-persona-row__name";
+    name.textContent = persona.name;
+    const description = document.createElement("span");
+    description.className = "tcrn-persona-row__description";
+    description.textContent = persona.description;
+    const meta = document.createElement("span");
+    meta.className = "tcrn-persona-row__meta";
+    meta.textContent = persona.role + " · " + (persona.readOnly ? t("execution.readOnly") : t("execution.custom"));
+    textBox.append(name, description, meta);
+    const actions = document.createElement("span");
+    actions.className = "tcrn-actions";
+    const action = document.createElement("button");
+    action.className = "tcrn-button";
+    action.type = "button";
+    action.dataset.reviewOnlyBlocked = String(dimmed);
+    action.disabled = dimmed;
+    if (persona.readOnly) {
+      action.textContent = t("execution.copyPersona");
+      action.onclick = () => openPersonaEditor(persona, true);
+    } else {
+      action.textContent = t("execution.editPersona");
+      action.onclick = () => openPersonaEditor(persona, false);
+      const remove = document.createElement("button");
+      remove.className = "tcrn-button";
+      remove.type = "button";
+      remove.dataset.reviewOnlyBlocked = String(dimmed);
+      remove.disabled = dimmed;
+      remove.textContent = t("execution.removePersona");
+      remove.onclick = () => executionAction({ action: "persona-remove", name: persona.name });
+      actions.append(remove);
+    }
+    actions.append(action);
+    row.append(textBox, actions);
+    host.append(row);
+  }
+  applyPersonaPolicy();
+}
+
+function applyPersonaPolicy() {
+  const card = $("execution-personas-card");
+  if (!card) return;
+  const policy = policyValue("execution.subagentPolicy");
+  const forbidden = policy === "forbidden";
+  card.classList.toggle("tcrn-execution-card--muted", forbidden);
+  card.setAttribute("aria-disabled", String(forbidden));
+  for (const control of card.querySelectorAll("button, input, select, textarea")) {
+    control.disabled = forbidden || control.dataset.reviewOnlyBlocked === "true";
+  }
+  if (policy === "review-only" && personaEditingId !== null) {
+    const editing = personaForId(personaEditingId);
+    if (editing && !REVIEW_ONLY_ROLES.has(editing.role)) $("persona-save").disabled = true;
+  }
+}
+
+function openPersonaEditor(persona, copy) {
+  personaEditingId = copy ? null : persona.id;
+  $("persona-name").value = copy ? persona.name + " (custom)" : persona.name;
+  $("persona-description").value = persona.description;
+  $("persona-role").value = persona.role;
+  $("persona-prompt").value = persona.prompt;
+  $("persona-editor-mode").textContent = copy ? t("execution.copyMode") : t("execution.editMode");
+  updatePromptCount();
+  applyPersonaPolicy();
+  $("persona-name").focus();
+}
+
+function clearPersonaEditor() {
+  personaEditingId = null;
+  $("persona-name").value = "";
+  $("persona-description").value = "";
+  $("persona-role").value = "orchestrator";
+  $("persona-prompt").value = "";
+  $("persona-editor-mode").textContent = t("execution.editorIdle");
+  updatePromptCount();
+  applyPersonaPolicy();
+}
+
+function updatePromptCount() {
+  $("persona-prompt-count").textContent = $("persona-prompt").value.length + " / 4096 · " + t("execution.promptHintShort");
+}
+
+// INIT-027 S238/S240/S241. The portal is a renderer and a one-verb transport;
+// it does not pre-validate persona content. Prompt overflow and every other
+// refusal travel to the engine and are shown verbatim in the execution receipt.
+async function loadExecution() {
+  const { body } = await api("/api/execution?token=" + BOOT.token);
+  if (body.reasonCode !== "EXECUTION_CONFIG_READY") return;
+  executionData = {
+    configurations: body.configurations ?? [],
+    defaults: body.defaults ?? [],
+    bindings: body.bindings ?? [],
+    personas: body.personas ?? [],
+  };
+  renderExecutionHosts();
+  renderPersonas();
+  renderBindings();
+  renderBindingControls();
+  applyPersonaPolicy();
 }
 
 async function executionAction(payload) {
@@ -733,19 +980,28 @@ async function executionAction(payload) {
   await loadExecution();
 }
 
+async function savePolicy(key, control) {
+  const { status, body } = await api("/api/settings", { method: "POST", body: JSON.stringify({ key, value: control.value }) });
+  selectedKey = key;
+  renderReceipt(status, body);
+  await Promise.all([loadCatalog(), loadExecution(), loadReconcile()]);
+}
+
 $("execution-add").onclick = () => executionAction({
-  action: "config-set",
-  host: $("execution-host").value,
-  name: $("execution-name").value.trim(),
-  model: $("execution-model").value.trim(),
-  note: $("execution-note").value.trim() || undefined,
+  action: "config-set", host: $("execution-host").value, name: $("execution-name").value,
+  model: $("execution-model").value, note: $("execution-note").value || undefined,
 });
+$("binding-host").onchange = () => renderBindingControls();
 $("binding-add").onclick = () => executionAction({
-  action: "binding-set",
-  profileId: $("binding-profile").value.trim(),
-  host: $("binding-host").value,
-  name: $("binding-name").value,
+  action: "binding-set", profileId: $("binding-profile").value,
+  host: $("binding-host").value, name: $("binding-name").value,
 });
+$("persona-prompt").oninput = updatePromptCount;
+$("persona-save").onclick = () => executionAction({
+  action: "persona-set", name: $("persona-name").value, description: $("persona-description").value,
+  role: $("persona-role").value, prompt: $("persona-prompt").value,
+});
+$("persona-clear").onclick = clearPersonaEditor;
 loadReconcile();
 </script>
 </body>

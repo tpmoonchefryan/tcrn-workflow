@@ -28,6 +28,9 @@ export type SettingKey =
   | "driver.capabilityProfile"
   | "engine.requiredVersion"
   | "execution.independenceFloor"
+  | "execution.maxConcurrentSubagents"
+  | "execution.maxDispatchDepth"
+  | "execution.personalessDispatch"
   | "execution.subagentPolicy"
   | "workspace.generatedArtifactsPath";
 
@@ -153,6 +156,28 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     allowedValues: ["none", "verification", "verification-and-risk", "all"],
   },
   {
+    // INIT-027 S239. These orchestration controls are strings on the governed
+    // surface so they remain compatible with the existing settings/profile
+    // transport; their numeric domains are enforced below.
+    key: "execution.maxConcurrentSubagents",
+    type: "string",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "8",
+  },
+  {
+    key: "execution.maxDispatchDepth",
+    type: "string",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "1",
+  },
+  {
+    key: "execution.personalessDispatch",
+    type: "enum",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "allowed",
+    allowedValues: ["allowed", "forbidden"],
+  },
+  {
     key: "workspace.generatedArtifactsPath",
     type: "path",
     layerKind: SETTINGS_LAYER_KIND,
@@ -179,6 +204,13 @@ function engineVersionParts(value: string): readonly [number, number, number] {
     fail("SETTINGS_VALUE_INVALID", "engine.requiredVersion must be a stable semantic version");
   }
   return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function orchestrationInteger(value: string, key: SettingKey): void {
+  const maximum = key === "execution.maxConcurrentSubagents" ? 32 : 4;
+  if (!/^(?:0|[1-9][0-9]*)$/u.test(value) || Number(value) < 1 || Number(value) > maximum) {
+    fail("SETTINGS_VALUE_INVALID", `${key} must be a decimal integer from 1 to ${maximum}`);
+  }
 }
 
 /** Compare two validated engine versions using release precedence only. */
@@ -215,6 +247,9 @@ export function validateSettingValue(key: unknown, value: unknown, workspaceRoot
   }
   if (entry.key === "engine.requiredVersion") {
     engineVersionParts(value);
+  }
+  if (entry.key === "execution.maxConcurrentSubagents" || entry.key === "execution.maxDispatchDepth") {
+    orchestrationInteger(value, entry.key);
   }
   if (entry.key === "workspace.generatedArtifactsPath") {
     assertWorkspaceRelativeSettingPath(value, entry.key);

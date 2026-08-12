@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { assertProtocolId, canonicalJson } from "../../protocol/src/index.js";
+import { EMPTY_PERSONA_STORE, PersonaStoreError, applyPersonaRemove, applyPersonaSet, personaExists, validatePersonaStoreState } from "./persona-store.js";
+import type { PersonaRecord } from "./persona-store.js";
 
 /**
  * INIT-026 S232 — the execution-configuration surface.
@@ -39,6 +41,8 @@ export const EXECUTION_CONFIG_REASON_CODES = Object.freeze([
   "EXECUTION_CONFIGURATION_IN_USE",
   "EXECUTION_CONFIGURATION_UNKNOWN",
   "EXECUTION_HOST_UNKNOWN",
+  "EXECUTION_PERSONA_IN_USE",
+  "EXECUTION_PERSONA_UNKNOWN",
   "EXECUTION_RECORD_INVALID",
 ] as const);
 export type ExecutionConfigReasonCode = typeof EXECUTION_CONFIG_REASON_CODES[number];
@@ -71,12 +75,14 @@ export interface ExecutionConfigState {
   readonly configurations: readonly HostConfigurationRecord[];
   readonly defaults: readonly HostDefaultRecord[];
   readonly bindings: readonly PersonaBindingRecord[];
+  readonly personas: readonly PersonaRecord[];
 }
 
 export const EMPTY_EXECUTION_CONFIG: ExecutionConfigState = Object.freeze({
   configurations: Object.freeze([]),
   defaults: Object.freeze([]),
   bindings: Object.freeze([]),
+  personas: EMPTY_PERSONA_STORE.personas,
 });
 
 export class ExecutionConfigError extends Error {
@@ -205,6 +211,9 @@ export function applyPersonaBindingSet(state: ExecutionConfigState, input: {
   if (findConfiguration(state, input.host, input.configurationName) === undefined) {
     fail("EXECUTION_CONFIGURATION_UNKNOWN", `no configuration named ${input.configurationName} for ${input.host}`);
   }
+  if (!personaExists({ personas: state.personas }, input.profileId)) {
+    fail("EXECUTION_PERSONA_UNKNOWN", `no persona exists for ${input.profileId}`);
+  }
   const record: PersonaBindingRecord = Object.freeze({
     profileId: input.profileId,
     host: input.host,
@@ -226,6 +235,40 @@ export function applyPersonaBindingRemove(state: ExecutionConfigState, input: {
   return { ...state, bindings: state.bindings.filter((entry) => entry !== existing) };
 }
 
+export function applyCustomPersonaSet(state: ExecutionConfigState, input: {
+  readonly name: unknown;
+  readonly description: unknown;
+  readonly role: unknown;
+  readonly prompt: unknown;
+  readonly updatedAt: string;
+}): { readonly state: ExecutionConfigState; readonly record: PersonaRecord } {
+  try {
+    const applied = applyPersonaSet({ personas: state.personas }, input);
+    return { state: { ...state, personas: applied.state.personas }, record: applied.record };
+  } catch (error) {
+    if (error instanceof PersonaStoreError) throw error;
+    throw error;
+  }
+}
+
+export function applyCustomPersonaRemove(state: ExecutionConfigState, input: { readonly name: unknown }): ExecutionConfigState {
+  const id = (() => {
+    const candidate = state.personas.find((persona) => persona.name === input.name);
+    return candidate?.id;
+  })();
+  const binding = id === undefined ? undefined : state.bindings.find((candidate) => candidate.profileId === id);
+  if (binding !== undefined) {
+    fail("EXECUTION_PERSONA_IN_USE", `${String(input.name)} is referenced by ${binding.profileId} on ${binding.host}; remove that binding first`);
+  }
+  try {
+    const next = applyPersonaRemove({ personas: state.personas }, input);
+    return { ...state, personas: next.personas };
+  } catch (error) {
+    if (error instanceof PersonaStoreError) throw error;
+    throw error;
+  }
+}
+
 function sortState(configurations: readonly HostConfigurationRecord[]): readonly HostConfigurationRecord[] {
   return Object.freeze(configurations.slice().sort((a, b) =>
     a.host.localeCompare(b.host) || a.name.localeCompare(b.name)));
@@ -236,10 +279,11 @@ export function validateExecutionConfigState(value: unknown): ExecutionConfigSta
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail("EXECUTION_RECORD_INVALID", "execution config state must be an object");
   }
-  const candidate = value as { configurations?: unknown; defaults?: unknown; bindings?: unknown };
+  const candidate = value as { configurations?: unknown; defaults?: unknown; bindings?: unknown; personas?: unknown };
   const configurations = Array.isArray(candidate.configurations) ? candidate.configurations : [];
   const defaults = Array.isArray(candidate.defaults) ? candidate.defaults : [];
   const bindings = Array.isArray(candidate.bindings) ? candidate.bindings : [];
+  const personas = validatePersonaStoreState({ personas: Array.isArray(candidate.personas) ? candidate.personas : [] });
   for (const entry of configurations) {
     const record = entry as HostConfigurationRecord;
     assertExecutionHost(record.host);
@@ -256,10 +300,12 @@ export function validateExecutionConfigState(value: unknown): ExecutionConfigSta
     const record = entry as PersonaBindingRecord;
     assertExecutionHost(record.host);
     validateConfigurationName(record.configurationName);
+    if (!personaExists(personas, record.profileId)) fail("EXECUTION_PERSONA_UNKNOWN", `no persona exists for ${record.profileId}`);
   }
   return {
     configurations: sortState(configurations as HostConfigurationRecord[]),
     defaults: Object.freeze([...(defaults as HostDefaultRecord[])]),
     bindings: Object.freeze([...(bindings as PersonaBindingRecord[])]),
+    personas: personas.personas,
   };
 }

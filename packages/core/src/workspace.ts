@@ -76,6 +76,8 @@ import {
   applyHostConfigDefault,
   applyHostConfigRemove,
   applyHostConfigSet,
+  applyCustomPersonaRemove,
+  applyCustomPersonaSet,
   applyPersonaBindingRemove,
   applyPersonaBindingSet,
   assertExecutionHost,
@@ -124,6 +126,14 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_ALREADY_EXISTS",
   "WORKSPACE_CAS_MISMATCH",
   "CONFERENCE_INDEPENDENCE_REQUIRED",
+  "EXECUTION_PERSONA_IN_USE",
+  "EXECUTION_PERSONA_UNKNOWN",
+  "PERSONA_DESCRIPTION_INVALID",
+  "PERSONA_NAME_INVALID",
+  "PERSONA_NOT_FOUND",
+  "PERSONA_PROMPT_INVALID",
+  "PERSONA_RECORD_INVALID",
+  "PERSONA_ROLE_INVALID",
   "WORKSPACE_CONFERENCE_NOT_OPEN",
   "WORKSPACE_EVENT_CORRUPT",
   "WORKSPACE_FAULT_INJECTED",
@@ -344,7 +354,15 @@ const workOperations = new Set(["work.created", "work.updated", "work.deleted", 
 const conferenceOperations = new Set(["conference.created", "conference.updated", "conference.position.appended", "conference.closed"]);
 const gateOperations = new Set(["gate.created", "gate.updated", "gate.deleted"]);
 const settingsOperations = new Set(["settings.updated"]);
-const executionOperations = new Set(["execution.configuration.set", "execution.configuration.removed", "execution.default.set", "execution.binding.set", "execution.binding.removed"]);
+const executionOperations = new Set([
+  "execution.configuration.set",
+  "execution.configuration.removed",
+  "execution.default.set",
+  "execution.binding.set",
+  "execution.binding.removed",
+  "execution.persona.set",
+  "execution.persona.removed",
+]);
 const templateOperations = new Set(["template.admitted"]);
 const metadataFields = [
   "schemaVersion",
@@ -1707,7 +1725,25 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       // event sequence that violates it is a corrupt chain, not a soft state.
       const body = payloadRecord(payload, operation, actorRequired) as Record<string, unknown>;
       try {
-        if (operation === "execution.configuration.set") {
+        if (operation === "execution.persona.set") {
+          const applied = applyCustomPersonaSet(executionConfig, {
+            name: body.name,
+            description: body.description,
+            role: body.role,
+            prompt: body.prompt,
+            updatedAt: String(body.updatedAt),
+          });
+          requireEventBoundTimestamp(applied.record.updatedAt, event, `persona ${applied.record.id}`);
+          if (canonicalJson(applied.record) !== canonicalJson(body)) {
+            fail("WORKSPACE_EVENT_CORRUPT", `persona ${applied.record.id} mutation record is not canonical`);
+          }
+          executionConfig = applied.state;
+        } else if (operation === "execution.persona.removed") {
+          exactFields(body, ["name", "updatedAt"], "WORKSPACE_EVENT_CORRUPT", "persona removal record");
+          if (typeof body.updatedAt !== "string") fail("WORKSPACE_EVENT_CORRUPT", "persona removal timestamp is invalid");
+          requireEventBoundTimestamp(body.updatedAt, event, `persona ${String(body.name)}`);
+          executionConfig = applyCustomPersonaRemove(executionConfig, { name: body.name });
+        } else if (operation === "execution.configuration.set") {
           executionConfig = applyHostConfigSet(executionConfig, {
             host: body.host as ExecutionHost,
             name: validateConfigurationName(body.name),
@@ -3390,6 +3426,46 @@ export async function closeConferenceInWorkspace(workspaceRoot: string, lease: W
       conferenceMinutes: sortExtensionRecords([...state.conferenceMinutes, minutes]),
     };
   }, input);
+}
+
+// INIT-027 S238. Custom personas are content records on the same governed
+// execution surface. Their ids are derived from names inside persona-store.ts;
+// callers provide the human name and the event carries the validated record.
+export async function setCustomPersonaInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly name: unknown;
+  readonly description: unknown;
+  readonly role: unknown;
+  readonly prompt: unknown;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const applied = applyCustomPersonaSet(state.executionConfig, {
+      name: input.name,
+      description: input.description,
+      role: input.role,
+      prompt: input.prompt,
+      updatedAt: input.occurredAt,
+    });
+    return {
+      payload: buildEventPayload("execution.persona.set", applied.record as unknown as JsonValue),
+      projects: state.projects,
+      work: state.work,
+      executionConfig: applied.state,
+    };
+  }, input);
+}
+
+export async function removeCustomPersonaInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly name: unknown;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => ({
+    payload: buildEventPayload("execution.persona.removed", {
+      name: input.name as JsonValue,
+      updatedAt: input.occurredAt,
+    } as JsonValue),
+    projects: state.projects,
+    work: state.work,
+    executionConfig: applyCustomPersonaRemove(state.executionConfig, { name: input.name }),
+  }), input);
 }
 
 // INIT-026 S232. Five verbs, one event each: an audit trail where "the default

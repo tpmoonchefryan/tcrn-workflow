@@ -128,10 +128,13 @@ import {
   readStorageHomeDeclaration,
   sealStorageHomeDeclaration,
   readSettingsCatalog,
+  allPersonaReadback,
   removeHostConfigurationInWorkspace,
+  removeCustomPersonaInWorkspace,
   removePersonaBindingInWorkspace,
   setHostConfigurationInWorkspace,
   setHostDefaultInWorkspace,
+  setCustomPersonaInWorkspace,
   setPersonaBindingInWorkspace,
   setWorkspaceSetting,
   admitTemplateInWorkspace,
@@ -779,6 +782,24 @@ function writeExecutionConfigState(io: CliIo, state: Awaited<ReturnType<typeof m
     configurations: state.executionConfig.configurations,
     defaults: state.executionConfig.defaults,
     bindings: state.executionConfig.bindings,
+    personas: allPersonaReadback(state.executionConfig),
+  }));
+}
+
+function writePersonaState(
+  io: CliIo,
+  state: Awaited<ReturnType<typeof materializeWorkspace>>,
+  reasonCode: "PERSONA_WRITE_COMMITTED" | "PERSONA_REMOVE_COMMITTED",
+  record?: Readonly<Record<string, unknown>>,
+): void {
+  io.write(canonicalJson({
+    reasonCode,
+    schemaVersion: "tcrn.persona-write-receipt.v1",
+    workspaceId: state.metadata.workspaceId,
+    version: state.version,
+    headEventHash: state.headEventHash,
+    ...(record === undefined ? {} : { record }),
+    personas: allPersonaReadback(state.executionConfig),
   }));
 }
 
@@ -916,7 +937,10 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "persona-binding-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "profile-id", required: true, valueKind: "string" }, { name: "host", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "persona-binding-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "profile-id", required: true, valueKind: "string" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
+  { name: "persona-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "persona-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "persona-render", availability: "cli", mutates: false, flags: [{ name: "profile-id", required: true, valueKind: "string" }] },
+  { name: "persona-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "description", required: true, valueKind: "string" }, { name: "role", required: true, valueKind: "string" }, { name: "prompt", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "persona-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "profile-authorize", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "operation", required: true, valueKind: "string" }, { name: "workspace-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "command", required: true, valueKind: "string", nullSentinel: "-" }, { name: "receipt-digest", required: false, valueKind: "string" }] },
   { name: "profile-generate", availability: "cli", mutates: false, flags: [{ name: "mode", required: true, valueKind: "string" }] },
@@ -2060,6 +2084,54 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     writeExecutionConfigState(io, state);
     return;
   }
+  if (command === "persona-set") {
+    const values = parseArguments(rest, [...shared, "name", "description", "role", "prompt", "actor"]);
+    required(values, [...requiredShared, "name", "description", "role", "prompt"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => setCustomPersonaInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      name: values.name ?? "",
+      description: values.description ?? "",
+      role: values.role ?? "",
+      prompt: values.prompt ?? "",
+      ...(values.actor ? { actorId: values.actor } : {}),
+    }));
+    await emitTimeAttestation(io, values, state.headEventHash);
+    const record = state.executionConfig.personas.find((persona) => persona.name === values.name);
+    writePersonaState(io, state, "PERSONA_WRITE_COMMITTED", record as Readonly<Record<string, unknown>> | undefined);
+    return;
+  }
+  if (command === "persona-remove") {
+    const values = parseArguments(rest, [...shared, "name", "actor"]);
+    required(values, [...requiredShared, "name"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => removeCustomPersonaInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      name: values.name ?? "",
+      ...(values.actor ? { actorId: values.actor } : {}),
+    }));
+    await emitTimeAttestation(io, values, state.headEventHash);
+    writePersonaState(io, state, "PERSONA_REMOVE_COMMITTED", { name: values.name ?? "" });
+    return;
+  }
+  if (command === "persona-list") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    const state = await materializeWorkspace(values.workspace ?? "");
+    io.write(canonicalJson({
+      schemaVersion: "tcrn.persona-list-readback.v1",
+      reasonCode: "PERSONA_LIST_READY",
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      personas: allPersonaReadback(state.executionConfig),
+    }));
+    return;
+  }
   if (command === "persona-binding-set") {
     const values = parseArguments(rest, [...shared, "profile-id", "host", "name", "actor"]);
     required(values, [...requiredShared, "profile-id", "host", "name"]);
@@ -2102,6 +2174,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
         configurations: config.configurations.filter((entry) => entry.host === host),
         defaults: config.defaults.filter((entry) => entry.host === host),
         bindings: config.bindings.filter((entry) => entry.host === host),
+        personas: allPersonaReadback(config),
       }));
       return;
     }
@@ -2112,6 +2185,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       configurations: config.configurations,
       defaults: config.defaults,
       bindings: config.bindings,
+      personas: allPersonaReadback(config),
     }));
     return;
   }

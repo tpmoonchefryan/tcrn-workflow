@@ -327,11 +327,12 @@ process.stdout.write(JSON.stringify(body));
   assert.equal(report.ok, false);
   assert.equal(report.reasonCode, "I18N_CONTRACT_VIOLATION");
   assert.equal(report.legs.find((leg) => leg.leg === "setting-descriptions").reasonCode, "SETTING_ENUM_VALUES_GAP");
-  // Three enum keys since INIT-026 added the two execution policy settings.
+  // Four enum keys since INIT-026 added the two execution policy settings and
+  // INIT-027 added personalessDispatch.
   // Sorted before comparing: the leg reports catalog order, which is not
   // lexicographic and is not this assertion's subject.
   assert.deepEqual([...report.legs.find((leg) => leg.leg === "setting-descriptions").enumMissingAllowedValues].sort(),
-    ["backup.cadence", "execution.independenceFloor", "execution.subagentPolicy"]);
+    ["backup.cadence", "execution.independenceFloor", "execution.personalessDispatch", "execution.subagentPolicy"]);
 });
 
 test("execution surface: the owner scenario end to end with the engine's own receipts", async (t) => {
@@ -369,4 +370,61 @@ test("execution surface: the owner scenario end to end with the engine's own rec
   // The execution surface is in the page with its translated chrome.
   assert.match(page, /surface-execution/u);
   assert.match(page, /data-surface="execution"/u);
+});
+
+test("INIT-027 execution cards keep persona data, policy linkage, and engine refusals visible", async (t) => {
+  const scratch = await governedScratch();
+  const { child, url } = await startPortal(scratch);
+  t.after(async () => { child.kill(); await rm(scratch.base, { recursive: true, force: true }); });
+
+  const page = await (await fetch(url)).text();
+  const token = JSON.parse(page.match(/const BOOT = (\{.*\});/u)[1]).token;
+  const post = async (payload) => {
+    const response = await fetch(new URL("/api/execution", url), {
+      method: "POST", headers: { "content-type": "application/json", "x-portal-token": token },
+      body: JSON.stringify(payload),
+    });
+    return { status: response.status, body: await response.json() };
+  };
+  const setting = async (key, value) => {
+    const response = await fetch(new URL("/api/settings", url), {
+      method: "POST", headers: { "content-type": "application/json", "x-portal-token": token },
+      body: JSON.stringify({ key, value }),
+    });
+    return { status: response.status, body: await response.json() };
+  };
+
+  const initial = await (await fetch(new URL("/api/execution", url))).json();
+  assert.equal(initial.personas.filter((persona) => persona.readOnly).length, 8);
+  assert.equal(initial.personas.some((persona) => persona.name === "Verity" && persona.description), true);
+  assert.equal((page.match(/class="tcrn-panel tcrn-execution-card"/gu) ?? []).length, 3);
+  assert.doesNotMatch(page, /\bstyle\s*=/u);
+
+  const created = await post({ action: "persona-set", name: "Portal auditor", description: "portal custom reviewer", role: "reviewer", prompt: "Review exact evidence." });
+  assert.equal(created.status, 200);
+  assert.equal(created.body.reasonCode, "PERSONA_WRITE_COMMITTED");
+  assert.equal(created.body.record.revision, 1);
+  const custom = created.body.record;
+  const readback = await (await fetch(new URL("/api/execution", url))).json();
+  assert.equal(readback.personas.some((persona) => persona.id === custom.id && persona.source === "custom"), true);
+
+  const overflow = await post({ action: "persona-set", name: "Too long", description: "portal", role: "reviewer", prompt: "x".repeat(4097) });
+  assert.equal(overflow.status, 409);
+  assert.equal(overflow.body.reasonCode, "PERSONA_PROMPT_INVALID");
+
+  const configured = await post({ action: "config-set", host: "codex", name: "review", model: "model-a" });
+  assert.equal(configured.status, 200);
+  const bound = await post({ action: "binding-set", profileId: custom.id, host: "codex", name: "review" });
+  assert.equal(bound.status, 200);
+  const refused = await post({ action: "persona-remove", name: custom.name });
+  assert.equal(refused.status, 409);
+  assert.equal(refused.body.reasonCode, "EXECUTION_PERSONA_IN_USE");
+  assert.match(refused.body.error, new RegExp(custom.id.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
+
+  const forbidden = await setting("execution.subagentPolicy", "forbidden");
+  assert.equal(forbidden.status, 200);
+  const personaDataAfterPolicy = await (await fetch(new URL("/api/execution", url))).json();
+  assert.equal(personaDataAfterPolicy.personas.some((persona) => persona.id === custom.id), true, "policy presentation never deletes persona data");
+  assert.equal((await setting("execution.maxConcurrentSubagents", "32")).body.setting.value, "32");
+  assert.equal((await setting("execution.maxDispatchDepth", "4")).body.setting.value, "4");
 });
