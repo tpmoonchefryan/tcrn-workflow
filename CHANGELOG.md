@@ -3,6 +3,17 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.14 — 2026-08-12
+
+- Execution configuration: per-host named model configurations with a `default`
+  pointer and per-persona pins; six verbs, one chain event per action,
+  referential integrity enforced, model names carried and never interpreted.
+- `execution.subagentPolicy` and `execution.independenceFloor` settings; where
+  the floor covers a conference type, `conference-close` requires
+  `--execution-form independent`.
+- The portal grew an Execution surface, and every setting leads with a
+  translated human name in all five locales.
+
 ## 0.11.13 — 2026-08-12
 
 - The portal ships in `portal/`. Cloning the engine gets the interface with it,
