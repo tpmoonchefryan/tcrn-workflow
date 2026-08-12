@@ -202,6 +202,7 @@ h1, h2, h3, p { margin: 0; }
         <button class="tcrn-nav__link" role="tab" data-surface="config" aria-current="page" type="button"><span class="tcrn-nav__index">01</span><span data-i18n="nav.config">Configuration</span></button>
         <button class="tcrn-nav__link" role="tab" data-surface="prose" type="button"><span class="tcrn-nav__index">02</span><span data-i18n="nav.prose">Prose</span></button>
         <button class="tcrn-nav__link" role="tab" data-surface="reconcile" type="button"><span class="tcrn-nav__index">03</span><span data-i18n="nav.reconcile">Reconciliation</span></button>
+        <button class="tcrn-nav__link" role="tab" data-surface="execution" type="button"><span class="tcrn-nav__index">04</span><span data-i18n="execution.navTitle">Execution</span></button>
       </div>
     </div>
     <div class="tcrn-field">
@@ -238,6 +239,7 @@ h1, h2, h3, p { margin: 0; }
           <div class="tcrn-panel__body">
             <div class="tcrn-field">
               <label class="tcrn-label" for="setting-input" id="setting-label">Value</label>
+              <code class="tcrn-row__meta" id="setting-key"></code>
               <p class="tcrn-description" id="setting-description"></p>
               <select class="tcrn-select" id="setting-select" hidden autocomplete="off" aria-describedby="setting-description setting-help"></select>
               <input class="tcrn-input" id="setting-input" autocomplete="off">
@@ -260,6 +262,35 @@ h1, h2, h3, p { margin: 0; }
     </section>
 
     <!-- PROSE -->
+    <section id="surface-execution" hidden>
+      <section class="tcrn-panel" style="margin-top: var(--tcrn-space-4)">
+        <div class="tcrn-panel__head"><h2 data-i18n="execution.panelTitle">Model configurations</h2><span class="tcrn-meta" data-i18n="execution.panelNote">per host · governed writes</span></div>
+        <div id="execution-hosts"></div>
+        <h3 data-i18n="execution.addTitle" style="margin-top: var(--tcrn-space-4)">Add a configuration</h3>
+        <div class="tcrn-field-row">
+          <select class="tcrn-select" id="execution-host" autocomplete="off"></select>
+          <input class="tcrn-input" id="execution-name" data-i18n-placeholder="execution.namePlaceholder" placeholder="name" autocomplete="off" />
+          <input class="tcrn-input" id="execution-model" data-i18n-placeholder="execution.modelPlaceholder" placeholder="model" autocomplete="off" />
+          <input class="tcrn-input" id="execution-note" data-i18n-placeholder="execution.notePlaceholder" placeholder="note (optional)" autocomplete="off" />
+          <button class="tcrn-button" id="execution-add" type="button" data-i18n="execution.add">Add</button>
+        </div>
+        <h3 data-i18n="execution.bindingsTitle" style="margin-top: var(--tcrn-space-4)">Persona bindings</h3>
+        <div id="execution-bindings"></div>
+        <div class="tcrn-field-row">
+          <input class="tcrn-input" id="binding-profile" list="persona-ids" data-i18n-placeholder="execution.personaPlaceholder" placeholder="profile:tcrn-verity-v1" autocomplete="off" />
+          <datalist id="persona-ids">
+            <option value="profile:tcrn-arturo-v1"></option><option value="profile:tcrn-ilya-v1"></option>
+            <option value="profile:tcrn-janus-v1"></option><option value="profile:tcrn-mara-v1"></option>
+            <option value="profile:tcrn-minerva-v1"></option><option value="profile:tcrn-mneme-v1"></option>
+            <option value="profile:tcrn-sable-v1"></option><option value="profile:tcrn-verity-v1"></option>
+          </datalist>
+          <select class="tcrn-select" id="binding-host" autocomplete="off"></select>
+          <select class="tcrn-select" id="binding-name" autocomplete="off"></select>
+          <button class="tcrn-button" id="binding-add" type="button" data-i18n="execution.bind">Bind</button>
+        </div>
+        <pre class="tcrn-receipt" id="execution-receipt" hidden></pre>
+      </section>
+    </section>
     <section id="surface-prose" hidden>
       <p class="tcrn-lede" data-i18n="prose.lede">…</p>
       <section class="tcrn-panel" style="margin-top: var(--tcrn-space-4)">
@@ -440,10 +471,14 @@ function renderCatalog() {
     const label = document.createElement("span");
     const key = document.createElement("span");
     key.className = "tcrn-row__key";
-    key.textContent = entry.key;
+    // The human name leads; the technical key stays present in the meta line
+    // because the CLI and the conversation still speak in keys, and a person
+    // must be able to map what they see here onto what they type there.
+    const labelKey = "setting." + entry.key + ".label";
+    key.textContent = LOCALES[locale]?.[labelKey] ?? LOCALES[FALLBACK]?.[labelKey] ?? entry.key;
     const meta = document.createElement("span");
     meta.className = "tcrn-row__meta";
-    meta.textContent = entry.type + " · " + entry.layer;
+    meta.textContent = entry.key + " · " + entry.type;
     label.append(key, meta);
     const value = document.createElement("span");
     value.className = "tcrn-row__value";
@@ -457,7 +492,9 @@ function renderCatalog() {
 function syncEditor() {
   const entry = catalog.find((item) => item.key === selectedKey);
   if (!entry) return;
-  $("setting-label").textContent = entry.key;
+  const editorLabelKey = "setting." + entry.key + ".label";
+  $("setting-label").textContent = LOCALES[locale]?.[editorLabelKey] ?? LOCALES[FALLBACK]?.[editorLabelKey] ?? entry.key;
+  $("setting-key").textContent = entry.key;
   // A key the engine registers but the portal has no copy for gets an explicit
   // sentence rather than an empty box; i18n-proof turns red on that state.
   const descriptionKey = "setting." + entry.key + ".description";
@@ -597,7 +634,7 @@ for (const button of document.querySelectorAll(".tcrn-nav__link")) {
       if (other === button) other.setAttribute("aria-current", "page");
       else other.removeAttribute("aria-current");
     }
-    for (const name of ["config", "prose", "reconcile"]) $("surface-" + name).hidden = name !== target;
+    for (const name of ["config", "prose", "reconcile", "execution"]) $("surface-" + name).hidden = name !== target;
     $("surface-title").textContent = t("nav." + target);
   };
 }
@@ -607,6 +644,108 @@ renderPartitions();
 loadPartitions();
 loadCatalog();
 loadProse();
+loadExecution();
+
+const HOSTS = ["claude-code", "codex"];
+
+// INIT-026 S236. The portal renders what the engine answered and posts one
+// action per engine verb; a refusal (a pinned configuration, a ghost name)
+// arrives verbatim in the receipt panel. No governance logic lives here.
+async function loadExecution() {
+  const { body } = await api("/api/execution?token=" + BOOT.token);
+  if (body.reasonCode !== "EXECUTION_CONFIG_READY") return;
+  const hostsBox = $("execution-hosts");
+  hostsBox.textContent = "";
+  for (const host of HOSTS) {
+    const configurations = body.configurations.filter((entry) => entry.host === host);
+    const fallback = body.defaults.find((entry) => entry.host === host)?.configurationName ?? null;
+    const head = document.createElement("h3");
+    head.textContent = host + (fallback ? " · " + t("execution.defaultIs") + " " + fallback : "");
+    hostsBox.append(head);
+    if (configurations.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "tcrn-help";
+      empty.textContent = t("execution.empty");
+      hostsBox.append(empty);
+      continue;
+    }
+    for (const entry of configurations) {
+      const row = document.createElement("div");
+      row.className = "tcrn-field-row";
+      const label = document.createElement("span");
+      label.className = "tcrn-row__key";
+      label.textContent = entry.name + " → " + entry.model + (entry.note ? " (" + entry.note + ")" : "") + (entry.name === fallback ? "  ★" : "");
+      const setDefault = document.createElement("button");
+      setDefault.className = "tcrn-button";
+      setDefault.type = "button";
+      setDefault.textContent = t("execution.setDefault");
+      setDefault.onclick = () => executionAction({ action: "config-default", host, name: entry.name });
+      const remove = document.createElement("button");
+      remove.className = "tcrn-button";
+      remove.type = "button";
+      remove.textContent = t("execution.remove");
+      remove.onclick = () => executionAction({ action: "config-remove", host, name: entry.name });
+      row.append(label, setDefault, remove);
+      hostsBox.append(row);
+    }
+  }
+  const bindingsBox = $("execution-bindings");
+  bindingsBox.textContent = "";
+  for (const binding of body.bindings) {
+    const row = document.createElement("div");
+    row.className = "tcrn-field-row";
+    const label = document.createElement("span");
+    label.className = "tcrn-row__key";
+    label.textContent = binding.profileId + " → " + binding.host + " : " + binding.configurationName;
+    const unbind = document.createElement("button");
+    unbind.className = "tcrn-button";
+    unbind.type = "button";
+    unbind.textContent = t("execution.unbind");
+    unbind.onclick = () => executionAction({ action: "binding-remove", profileId: binding.profileId, host: binding.host });
+    row.append(label, unbind);
+    bindingsBox.append(row);
+  }
+  for (const selectId of ["execution-host", "binding-host"]) {
+    const select = $(selectId);
+    select.textContent = "";
+    for (const host of HOSTS) {
+      const option = document.createElement("option");
+      option.value = host; option.textContent = host;
+      select.append(option);
+    }
+  }
+  const nameSelect = $("binding-name");
+  nameSelect.textContent = "";
+  const bindingHost = $("binding-host").value || HOSTS[0];
+  for (const entry of body.configurations.filter((item) => item.host === bindingHost)) {
+    const option = document.createElement("option");
+    option.value = entry.name; option.textContent = entry.name;
+    nameSelect.append(option);
+  }
+  $("binding-host").onchange = loadExecution;
+}
+
+async function executionAction(payload) {
+  const { body } = await api("/api/execution", { method: "POST", body: JSON.stringify(payload) });
+  const receipt = $("execution-receipt");
+  receipt.hidden = false;
+  receipt.textContent = JSON.stringify(body, null, 2);
+  await loadExecution();
+}
+
+$("execution-add").onclick = () => executionAction({
+  action: "config-set",
+  host: $("execution-host").value,
+  name: $("execution-name").value.trim(),
+  model: $("execution-model").value.trim(),
+  note: $("execution-note").value.trim() || undefined,
+});
+$("binding-add").onclick = () => executionAction({
+  action: "binding-set",
+  profileId: $("binding-profile").value.trim(),
+  host: $("binding-host").value,
+  name: $("binding-name").value,
+});
 loadReconcile();
 </script>
 </body>

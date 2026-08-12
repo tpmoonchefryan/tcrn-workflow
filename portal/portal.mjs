@@ -163,6 +163,33 @@ async function cliResult(args) {
 
 const settingsCatalog = () => cli(["settings-catalog", "--workspace", currentPartition().workspace]);
 
+const executionConfig = () => cli(["execution-config", "--workspace", currentPartition().workspace]);
+
+// INIT-026 S236. Each portal action maps onto exactly one engine verb, and every
+// write reads the live head first — the portal owns no governance logic, so a
+// refusal (removing a pinned configuration, a ghost host) arrives verbatim from
+// the engine and is shown, never translated.
+async function writeExecution(action, body) {
+  const selected = currentPartition();
+  const status = await cli(["status", "--workspace", selected.workspace]);
+  const base = ["--workspace", selected.workspace, "--expected-version", String(status.version),
+    "--at", new Date().toISOString().slice(0, 19) + "Z", "--actor", ACTOR];
+  if (selected.attestDir) base.push("--attest-dir", selected.attestDir);
+  const verbs = {
+    "config-set": () => ["host-config-set", ...base, "--host", String(body.host ?? ""), "--name", String(body.name ?? ""),
+      "--model", String(body.model ?? ""), ...(body.note ? ["--note", String(body.note)] : [])],
+    "config-remove": () => ["host-config-remove", ...base, "--host", String(body.host ?? ""), "--name", String(body.name ?? "")],
+    "config-default": () => ["host-config-default", ...base, "--host", String(body.host ?? ""),
+      ...(body.clear === true ? ["--clear", "true"] : ["--name", String(body.name ?? "")])],
+    "binding-set": () => ["persona-binding-set", ...base, "--profile-id", String(body.profileId ?? ""),
+      "--host", String(body.host ?? ""), "--name", String(body.name ?? "")],
+    "binding-remove": () => ["persona-binding-remove", ...base, "--profile-id", String(body.profileId ?? ""), "--host", String(body.host ?? "")],
+  };
+  const build = verbs[action];
+  if (!build) return { ok: false, body: { ok: false, reasonCode: "PORTAL_UNKNOWN_ACTION", error: String(action) } };
+  return cliResult(build());
+}
+
 async function writeSetting(key, value) {
   // Read the live head immediately before the write: expected-version supplied
   // from anywhere else would freeze nothing.
@@ -329,6 +356,17 @@ const server = createServer(async (request, response) => {
           ...result.body,
           readback: readback?.settings.find((entry) => entry.key === body.key) ?? null,
         });
+        return;
+      }
+      if (url.pathname === "/api/execution" && request.method === "GET") {
+        send(response, 200, await executionConfig());
+        return;
+      }
+      if (url.pathname === "/api/execution" && request.method === "POST") {
+        const body = await readJsonBody(request);
+        const result = await writeExecution(String(body.action ?? ""), body);
+        const readback = result.ok ? await executionConfig() : null;
+        send(response, result.ok ? 200 : 409, { ...result.body, readback });
         return;
       }
       if (url.pathname === "/api/prose" && request.method === "GET") {

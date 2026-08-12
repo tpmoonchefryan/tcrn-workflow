@@ -63,12 +63,27 @@ import {
   ConferenceError,
   appendConferencePosition,
   openConference,
+  CONFERENCE_EXECUTION_FORMS,
+  independenceFloorCovers,
   validateConferenceMinutes,
   validateConferencePosition,
   validateConferenceRequest,
 } from "./conference.js";
 import { AssignmentGateError, GATE_VERSION, validateGateRecord } from "./assignment-gate.js";
 import type { ConferenceMinutes, ConferencePosition, ConferenceRequest } from "./conference.js";
+import {
+  EMPTY_EXECUTION_CONFIG,
+  applyHostConfigDefault,
+  applyHostConfigRemove,
+  applyHostConfigSet,
+  applyPersonaBindingRemove,
+  applyPersonaBindingSet,
+  assertExecutionHost,
+  validateConfigurationName,
+  validateModel,
+  validateNote,
+} from "./execution-config.js";
+import type { ExecutionConfigState, ExecutionHost } from "./execution-config.js";
 import type { GateRecord } from "./assignment-gate.js";
 import { GateIdentityError, gateIdentityDecision, permitsGateOutcome, validateGateIdentityDecision } from "./gate-identity.js";
 import type { GateIdentityAuthorityContext, GateIdentityDecision } from "./gate-identity.js";
@@ -108,6 +123,7 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_ACTOR_REQUIRED",
   "WORKSPACE_ALREADY_EXISTS",
   "WORKSPACE_CAS_MISMATCH",
+  "CONFERENCE_INDEPENDENCE_REQUIRED",
   "WORKSPACE_CONFERENCE_NOT_OPEN",
   "WORKSPACE_EVENT_CORRUPT",
   "WORKSPACE_FAULT_INJECTED",
@@ -260,6 +276,7 @@ export interface WorkspaceState {
   readonly conferenceMinutes: readonly ConferenceMinutes[];
   readonly gates: readonly GateRecord[];
   readonly settings: readonly WorkspaceSettingRecord[];
+  readonly executionConfig: ExecutionConfigState;
   readonly templates: readonly TemplateAdmissionRecord[];
   readonly events: readonly EventRecord[];
   // WSE-2: the sequence of the attestation.actor.enabled event once one has been
@@ -327,6 +344,7 @@ const workOperations = new Set(["work.created", "work.updated", "work.deleted", 
 const conferenceOperations = new Set(["conference.created", "conference.updated", "conference.position.appended", "conference.closed"]);
 const gateOperations = new Set(["gate.created", "gate.updated", "gate.deleted"]);
 const settingsOperations = new Set(["settings.updated"]);
+const executionOperations = new Set(["execution.configuration.set", "execution.configuration.removed", "execution.default.set", "execution.binding.set", "execution.binding.removed"]);
 const templateOperations = new Set(["template.admitted"]);
 const metadataFields = [
   "schemaVersion",
@@ -1389,6 +1407,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
   const conferenceMinutes = new Map<string, ConferenceMinutes>();
   const gates = new Map<string, GateRecord>();
   const settings = new Map<string, WorkspaceSettingRecord>();
+  let executionConfig: ExecutionConfigState = EMPTY_EXECUTION_CONFIG;
   const templates = new Map<string, TemplateAdmissionRecord>();
   const workspaceRoot = metadata.roots.find((root) => root.kind === "workspace")?.path;
   let attestationEnabledAtSequence: number | null = null;
@@ -1682,6 +1701,43 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       settings.set(record.key, record);
       continue;
     }
+    if (executionOperations.has(operation)) {
+      // INIT-026 S232: replay reuses the same apply functions the write path
+      // used, so referential integrity is re-proved on every materialize; an
+      // event sequence that violates it is a corrupt chain, not a soft state.
+      const body = payloadRecord(payload, operation, actorRequired) as Record<string, unknown>;
+      try {
+        if (operation === "execution.configuration.set") {
+          executionConfig = applyHostConfigSet(executionConfig, {
+            host: body.host as ExecutionHost,
+            name: validateConfigurationName(body.name),
+            model: validateModel(body.model),
+            note: validateNote(body.note),
+            updatedAt: String(body.updatedAt),
+          }).state;
+        } else if (operation === "execution.configuration.removed") {
+          executionConfig = applyHostConfigRemove(executionConfig, { host: body.host as ExecutionHost, name: validateConfigurationName(body.name) });
+        } else if (operation === "execution.default.set") {
+          executionConfig = applyHostConfigDefault(executionConfig, {
+            host: body.host as ExecutionHost,
+            configurationName: body.configurationName === null ? null : validateConfigurationName(body.configurationName),
+            updatedAt: String(body.updatedAt),
+          });
+        } else if (operation === "execution.binding.set") {
+          executionConfig = applyPersonaBindingSet(executionConfig, {
+            profileId: String(body.profileId),
+            host: body.host as ExecutionHost,
+            configurationName: validateConfigurationName(body.configurationName),
+            updatedAt: String(body.updatedAt),
+          });
+        } else {
+          executionConfig = applyPersonaBindingRemove(executionConfig, { profileId: String(body.profileId), host: body.host as ExecutionHost });
+        }
+      } catch (error) {
+        fail("WORKSPACE_EVENT_CORRUPT", `invalid execution mutation: ${String((error as Error).message ?? error)}`);
+      }
+      continue;
+    }
     fail("WORKSPACE_EVENT_CORRUPT", `unknown operation ${operation}`);
   }
   const projectRecords = [...projects.values()].sort((left, right) => compareCanonicalText(left.id, right.id));
@@ -1708,6 +1764,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
     conferenceMinutes: sortExtensionRecords(conferenceMinutes.values()),
     gates: sortExtensionRecords(gates.values()),
     settings: settingRecords,
+    executionConfig,
     templates: templateRecords,
     events,
     attestationEnabledAtSequence,
@@ -2750,6 +2807,7 @@ interface MutationDelta {
   readonly conferenceMinutes?: readonly ConferenceMinutes[];
   readonly gates?: readonly GateRecord[];
   readonly settings?: readonly WorkspaceSettingRecord[];
+  readonly executionConfig?: ExecutionConfigState;
   readonly templates?: readonly TemplateAdmissionRecord[];
 }
 
@@ -2835,6 +2893,7 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
       conferenceMinutes: delta.conferenceMinutes ?? state.conferenceMinutes,
       gates: delta.gates ?? state.gates,
       settings: delta.settings ?? state.settings,
+      executionConfig: delta.executionConfig ?? state.executionConfig,
       templates: delta.templates ?? state.templates,
       events: [...state.events, event],
       attestationEnabledAtSequence: isEnableEvent ? sequence : state.attestationEnabledAtSequence,
@@ -3282,12 +3341,26 @@ export async function closeConferenceInWorkspace(workspaceRoot: string, lease: W
   readonly outcomeClass: ConferenceMinutes["outcomeClass"];
   readonly decisions: readonly string[];
   readonly unresolvedIssues: readonly string[];
+  readonly executionForm?: string | undefined;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   const minutesId = deriveStableId("minutes", canonicalExternalKey(input.minutesExternalKey));
   return appendEvent(workspaceRoot, lease, (state) => {
     const conference = openConferenceById(state, input.conferenceId);
     if (state.conferenceMinutes.some((entry) => entry.id === minutesId)) {
       fail("WORKSPACE_INPUT_INVALID", `conference minutes ${minutesId} already exist`);
+    }
+    // INIT-026 S234: where the workspace's independence floor covers this
+    // conference's type, the close must declare an independent execution form.
+    // The declaration is a self-report, validated for presence and value and
+    // never for truth — the same authorization-not-authentication ceiling
+    // gate-identity states about itself; see CONFERENCE_EXECUTION_FORMS.
+    if (input.executionForm !== undefined && !(CONFERENCE_EXECUTION_FORMS as readonly string[]).includes(input.executionForm)) {
+      fail("WORKSPACE_INPUT_INVALID", `execution-form must be one of ${CONFERENCE_EXECUTION_FORMS.join(", ")}`);
+    }
+    const independenceFloor = state.settings.find((entry) => entry.key === "execution.independenceFloor")?.value ?? "none";
+    if (independenceFloorCovers(independenceFloor, conference.type) && input.executionForm !== "independent") {
+      fail("CONFERENCE_INDEPENDENCE_REQUIRED",
+        `execution.independenceFloor=${independenceFloor} covers type=${conference.type}; close requires --execution-form independent`);
     }
     const record = validateConferenceRequest({ ...conference, status: "closed", revision: conference.revision + 1, updatedAt: input.occurredAt });
     const minutes = validateConferenceMinutes({
@@ -3302,7 +3375,10 @@ export async function closeConferenceInWorkspace(workspaceRoot: string, lease: W
       revision: 1,
       updatedAt: input.occurredAt,
       tombstone: false,
-      extensions: {},
+      // The extension mechanism's native shape: a protocol-id key carrying a
+      // {required, value} declaration. required:false so a reader that does not
+      // know this key is never forced to interpret it.
+      extensions: input.executionForm === undefined ? {} : { "conference:execution-form": { required: false, value: input.executionForm } },
     });
     // The single-event atomic close: the payload carries the closed conference
     // as its record and the minutes as the registered per-operation extra.
@@ -3314,6 +3390,90 @@ export async function closeConferenceInWorkspace(workspaceRoot: string, lease: W
       conferenceMinutes: sortExtensionRecords([...state.conferenceMinutes, minutes]),
     };
   }, input);
+}
+
+// INIT-026 S232. Five verbs, one event each: an audit trail where "the default
+// moved" is one legible line, never a diff of a rewritten blob. Validation and
+// referential integrity run in the apply functions, against the claim-fresh
+// state, and the SAME functions run again on every replay.
+export async function setHostConfigurationInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly host: string; readonly name: string; readonly model: string; readonly note: string | null;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  assertExecutionHost(input.host);
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const applied = applyHostConfigSet(state.executionConfig, {
+      host: input.host as ExecutionHost,
+      name: validateConfigurationName(input.name),
+      model: validateModel(input.model),
+      note: validateNote(input.note),
+      updatedAt: input.occurredAt,
+    });
+    return {
+      payload: buildEventPayload("execution.configuration.set", {
+        host: input.host, name: input.name, model: input.model, note: validateNote(input.note), updatedAt: input.occurredAt,
+      } as unknown as JsonValue),
+      projects: state.projects, work: state.work, executionConfig: applied.state,
+    };
+  }, input);
+}
+
+export async function removeHostConfigurationInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly host: string; readonly name: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  assertExecutionHost(input.host);
+  return appendEvent(workspaceRoot, lease, (state) => ({
+    payload: buildEventPayload("execution.configuration.removed", {
+      host: input.host, name: input.name, updatedAt: input.occurredAt,
+    } as unknown as JsonValue),
+    projects: state.projects, work: state.work,
+    executionConfig: applyHostConfigRemove(state.executionConfig, { host: input.host as ExecutionHost, name: validateConfigurationName(input.name) }),
+  }), input);
+}
+
+export async function setHostDefaultInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly host: string; readonly configurationName: string | null;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  assertExecutionHost(input.host);
+  return appendEvent(workspaceRoot, lease, (state) => ({
+    payload: buildEventPayload("execution.default.set", {
+      host: input.host, configurationName: input.configurationName, updatedAt: input.occurredAt,
+    } as unknown as JsonValue),
+    projects: state.projects, work: state.work,
+    executionConfig: applyHostConfigDefault(state.executionConfig, {
+      host: input.host as ExecutionHost,
+      configurationName: input.configurationName === null ? null : validateConfigurationName(input.configurationName),
+      updatedAt: input.occurredAt,
+    }),
+  }), input);
+}
+
+export async function setPersonaBindingInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly profileId: string; readonly host: string; readonly configurationName: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  assertExecutionHost(input.host);
+  return appendEvent(workspaceRoot, lease, (state) => ({
+    payload: buildEventPayload("execution.binding.set", {
+      profileId: input.profileId, host: input.host, configurationName: input.configurationName, updatedAt: input.occurredAt,
+    } as unknown as JsonValue),
+    projects: state.projects, work: state.work,
+    executionConfig: applyPersonaBindingSet(state.executionConfig, {
+      profileId: input.profileId, host: input.host as ExecutionHost,
+      configurationName: validateConfigurationName(input.configurationName), updatedAt: input.occurredAt,
+    }),
+  }), input);
+}
+
+export async function removePersonaBindingInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly profileId: string; readonly host: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  assertExecutionHost(input.host);
+  return appendEvent(workspaceRoot, lease, (state) => ({
+    payload: buildEventPayload("execution.binding.removed", {
+      profileId: input.profileId, host: input.host, updatedAt: input.occurredAt,
+    } as unknown as JsonValue),
+    projects: state.projects, work: state.work,
+    executionConfig: applyPersonaBindingRemove(state.executionConfig, { profileId: input.profileId, host: input.host as ExecutionHost }),
+  }), input);
 }
 
 export async function cancelConferenceInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {

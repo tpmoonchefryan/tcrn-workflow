@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-export const FRAMEWORK_VERSION = "0.11.13" as const;
+export const FRAMEWORK_VERSION = "0.11.14" as const;
 export const DEFAULT_MODE = "development" as const;
 
 export type WorkflowMode = "development" | "release";
@@ -182,6 +182,11 @@ export {
   planWorkspaceMigration,
   rebuildWorkspaceViews,
   recoverWorkspace,
+  removeHostConfigurationInWorkspace,
+  removePersonaBindingInWorkspace,
+  setHostConfigurationInWorkspace,
+  setHostDefaultInWorkspace,
+  setPersonaBindingInWorkspace,
   setWorkspaceSetting,
   transitionGateInWorkspace,
   transitionWork,
@@ -265,6 +270,31 @@ export type {
   SettingsReasonCode,
   WorkspaceSettingRecord,
 } from "./settings.js";
+export {
+  EMPTY_EXECUTION_CONFIG,
+  EXECUTION_CONFIG_VERSION,
+  EXECUTION_HOSTS,
+  EXECUTION_CONFIG_REASON_CODES,
+  ExecutionConfigError,
+  applyHostConfigDefault,
+  applyHostConfigRemove,
+  applyHostConfigSet,
+  applyPersonaBindingRemove,
+  applyPersonaBindingSet,
+  assertExecutionHost,
+  validateConfigurationName,
+  validateExecutionConfigState,
+  validateModel,
+  validateNote,
+} from "./execution-config.js";
+export type {
+  ExecutionConfigState,
+  ExecutionHost,
+  ExecutionConfigReasonCode,
+  HostConfigurationRecord,
+  HostDefaultRecord,
+  PersonaBindingRecord,
+} from "./execution-config.js";
 export {
   STORY_SCOPE_HEADINGS,
   storyScopeFromRecord,

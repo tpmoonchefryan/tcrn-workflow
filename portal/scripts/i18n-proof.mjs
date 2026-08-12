@@ -169,17 +169,27 @@ try {
     const registered = catalog.map((entry) => entry.key);
     const undescribed = registered.filter((key) => !describedKeys.includes(key));
     const orphaned = describedKeys.filter((key) => !registered.includes(key));
+    // INIT-026 S235: the portal leads with a human name, so every registered key
+    // must carry a label in EVERY locale — a missing label falls back to the raw
+    // key, which is exactly the state this batch exists to remove.
+    const unlabeled = [];
+    for (const key of registered) {
+      for (const candidate of contractLocales) {
+        if (typeof table?.[candidate]?.[`setting.${key}.label`] !== "string") unlabeled.push(`${candidate}:${key}`);
+      }
+    }
     const enumMissingAllowedValues = catalog
       .filter((entry) => entry.type === "enum" && (!Array.isArray(entry.allowedValues) || entry.allowedValues.length === 0))
       .map((entry) => entry.key);
-    const ok = undescribed.length === 0 && orphaned.length === 0 && enumMissingAllowedValues.length === 0;
+    const ok = undescribed.length === 0 && orphaned.length === 0 && enumMissingAllowedValues.length === 0 && unlabeled.length === 0;
     settingLeg = {
       leg: "setting-descriptions",
       ok,
       reasonCode: enumMissingAllowedValues.length > 0
         ? "SETTING_ENUM_VALUES_GAP"
+        : unlabeled.length > 0 ? "SETTING_LABEL_GAP"
         : ok ? "EVERY_SETTING_DESCRIBED" : "SETTING_DESCRIPTION_GAP",
-      registered, describedKeys, undescribed, orphaned, enumMissingAllowedValues,
+      registered, describedKeys, undescribed, orphaned, enumMissingAllowedValues, unlabeled,
     };
   } finally { rmSync(base, { recursive: true, force: true }); }
 } catch (error) {

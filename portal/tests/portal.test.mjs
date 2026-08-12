@@ -327,5 +327,46 @@ process.stdout.write(JSON.stringify(body));
   assert.equal(report.ok, false);
   assert.equal(report.reasonCode, "I18N_CONTRACT_VIOLATION");
   assert.equal(report.legs.find((leg) => leg.leg === "setting-descriptions").reasonCode, "SETTING_ENUM_VALUES_GAP");
-  assert.deepEqual(report.legs.find((leg) => leg.leg === "setting-descriptions").enumMissingAllowedValues, ["backup.cadence"]);
+  // Three enum keys since INIT-026 added the two execution policy settings.
+  // Sorted before comparing: the leg reports catalog order, which is not
+  // lexicographic and is not this assertion's subject.
+  assert.deepEqual([...report.legs.find((leg) => leg.leg === "setting-descriptions").enumMissingAllowedValues].sort(),
+    ["backup.cadence", "execution.independenceFloor", "execution.subagentPolicy"]);
+});
+
+test("execution surface: the owner scenario end to end with the engine's own receipts", async (t) => {
+  const scratch = await governedScratch();
+  const { child, url } = await startPortal(scratch);
+  t.after(async () => { child.kill(); await rm(scratch.base, { recursive: true, force: true }); });
+
+  const page = await (await fetch(url)).text();
+  const token = JSON.parse(page.match(/const BOOT = (\{.*\});/u)[1]).token;
+  const post = async (payload) => {
+    const response = await fetch(new URL("/api/execution", url), {
+      method: "POST", headers: { "content-type": "application/json", "x-portal-token": token },
+      body: JSON.stringify(payload),
+    });
+    return { status: response.status, body: await response.json() };
+  };
+
+  const created = await post({ action: "config-set", host: "claude-code", name: "默认", model: "claude-opus-5" });
+  assert.equal(created.status, 200);
+  assert.equal(created.body.reasonCode, "EXECUTION_CONFIG_COMMITTED");
+  await post({ action: "config-set", host: "claude-code", name: "回滚45", model: "claude-opus-4-8", note: "综合选择" });
+  const switched = await post({ action: "config-default", host: "claude-code", name: "回滚45" });
+  assert.equal(switched.body.defaults[0].configurationName, "回滚45");
+  const bound = await post({ action: "binding-set", profileId: "profile:tcrn-verity-v1", host: "claude-code", name: "默认" });
+  assert.equal(bound.body.bindings.length, 1);
+
+  // A refusal arrives verbatim from the engine — the portal must not translate
+  // it into a generic failure, and the state must be untouched.
+  const refused = await post({ action: "config-remove", host: "claude-code", name: "回滚45" });
+  assert.equal(refused.status, 409);
+  assert.equal(refused.body.reasonCode, "EXECUTION_CONFIGURATION_IN_USE");
+  const readback = await (await fetch(new URL("/api/execution?token=" + token, url))).json();
+  assert.equal(readback.configurations.length, 2);
+
+  // The execution surface is in the page with its translated chrome.
+  assert.match(page, /surface-execution/u);
+  assert.match(page, /data-surface="execution"/u);
 });

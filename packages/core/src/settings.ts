@@ -27,6 +27,8 @@ export type SettingKey =
   | "backup.destination"
   | "driver.capabilityProfile"
   | "engine.requiredVersion"
+  | "execution.independenceFloor"
+  | "execution.subagentPolicy"
   | "workspace.generatedArtifactsPath";
 
 export interface SettingsCatalogEntry {
@@ -128,6 +130,27 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     type: "string",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: null,
+  },
+  {
+    // INIT-026 S233. Declarative, like backup.cadence: the engine never sees a
+    // subagent, so this states the workspace's policy for hosts to honour rather
+    // than something the engine can enforce.
+    key: "execution.subagentPolicy",
+    type: "enum",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "allowed",
+    allowedValues: ["allowed", "review-only", "forbidden"],
+  },
+  {
+    // INIT-026 S233/S234. Unlike its sibling above, this one IS enforced: when the
+    // floor covers a conference's type, conference-close refuses without an
+    // execution-form declaration of "independent". The deliberation convention's
+    // "undeclared reads as unverified" grows teeth exactly where the floor says so.
+    key: "execution.independenceFloor",
+    type: "enum",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "none",
+    allowedValues: ["none", "verification", "verification-and-risk", "all"],
   },
   {
     key: "workspace.generatedArtifactsPath",

@@ -9,6 +9,26 @@ export const CONFERENCE_MINUTES_VERSION = "tcrn.conference.v1.minutes" as const;
 
 export const CONFERENCE_TYPES = Object.freeze(["strategy", "architecture", "risk", "verification", "release", "incident", "retrospective"] as const);
 export const CONFERENCE_STATUSES = Object.freeze(["open", "closed", "cancelled"] as const);
+
+// INIT-026 S234. The deliberation convention already said an undeclared execution
+// form reads as unverified; a prose rule has no teeth. Where the workspace's
+// execution.independenceFloor covers a conference's type, conference-close now
+// demands the declaration at write time. The declaration is still a self-report —
+// the engine cannot verify that positions were in fact argued in separate
+// contexts, the same authorization-not-authentication ceiling gate-identity
+// states about itself — so what is enforced is that the claim is PRESENT and
+// says "independent", never that it is true.
+export const CONFERENCE_EXECUTION_FORMS = Object.freeze(["independent", "single-context"] as const);
+export type ConferenceExecutionForm = typeof CONFERENCE_EXECUTION_FORMS[number];
+
+export function independenceFloorCovers(floor: string, conferenceType: string): boolean {
+  switch (floor) {
+    case "verification": return conferenceType === "verification";
+    case "verification-and-risk": return conferenceType === "verification" || conferenceType === "risk";
+    case "all": return (CONFERENCE_TYPES as readonly string[]).includes(conferenceType);
+    default: return false;
+  }
+}
 export const CONFERENCE_OUTCOME_CLASSES = Object.freeze(["discussion_only", "recommendation", "role_decision", "blocked", "owner_intent_required"] as const);
 
 export const CONFERENCE_REASON_CODES = Object.freeze([
