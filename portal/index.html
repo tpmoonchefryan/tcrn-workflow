@@ -334,7 +334,7 @@ h1, h2, h3, p { margin: 0; }
           </div>
         </section>
         <section class="tcrn-panel tcrn-execution-card" id="execution-policy-card">
-          <div class="tcrn-panel__head"><h2 data-i18n="execution.policyCardTitle">Dispatch policy</h2><span class="tcrn-meta" data-i18n="execution.policyCardNote">three governed keys</span></div>
+          <div class="tcrn-panel__head"><h2 data-i18n="execution.policyCardTitle">Dispatch policy</h2><span class="tcrn-meta" data-i18n="execution.policyCardNote">five governed keys</span></div>
           <div class="tcrn-panel__body"><div id="execution-policy" class="tcrn-stack"></div></div>
         </section>
       </div>
@@ -701,7 +701,7 @@ loadExecution();
 
 const HOSTS = ["claude-code", "codex"];
 const PERSONA_ROLES = ["orchestrator", "planner", "implementer", "reviewer", "gatekeeper", "steward"];
-const POLICY_KEYS = ["execution.maxConcurrentSubagents", "execution.maxDispatchDepth", "execution.personalessDispatch"];
+const POLICY_KEYS = ["execution.subagentPolicy", "execution.independenceFloor", "execution.maxConcurrentSubagents", "execution.maxDispatchDepth", "execution.personalessDispatch"];
 const REVIEW_ONLY_ROLES = new Set(["reviewer", "gatekeeper"]);
 let executionData = { configurations: [], defaults: [], bindings: [], personas: [] };
 let personaEditingId = null;

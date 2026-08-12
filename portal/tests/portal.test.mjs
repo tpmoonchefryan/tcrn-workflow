@@ -398,6 +398,7 @@ test("INIT-027 execution cards keep persona data, policy linkage, and engine ref
   assert.equal(initial.personas.filter((persona) => persona.readOnly).length, 8);
   assert.equal(initial.personas.some((persona) => persona.name === "Verity" && persona.description), true);
   assert.equal((page.match(/class="tcrn-panel tcrn-execution-card"/gu) ?? []).length, 3);
+  assert.match(page, /const POLICY_KEYS = \["execution\.subagentPolicy", "execution\.independenceFloor", "execution\.maxConcurrentSubagents", "execution\.maxDispatchDepth", "execution\.personalessDispatch"\]/u);
   assert.doesNotMatch(page, /\bstyle\s*=/u);
 
   const created = await post({ action: "persona-set", name: "Portal auditor", description: "portal custom reviewer", role: "reviewer", prompt: "Review exact evidence." });
