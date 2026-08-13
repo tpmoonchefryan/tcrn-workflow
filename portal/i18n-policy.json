@@ -10,19 +10,28 @@
   "locales": {
     "zh-CN": {
       "maxEnglishMatches": 2,
-      "waivers": ["app.brand", "search.command"]
+      "waivers": [
+        "app.brand",
+        "search.command"
+      ]
     },
     "ja": {
       "maxEnglishMatches": 1,
-      "waivers": ["app.brand"]
+      "waivers": [
+        "app.brand"
+      ]
     },
     "ko": {
       "maxEnglishMatches": 1,
-      "waivers": ["app.brand"]
+      "waivers": [
+        "app.brand"
+      ]
     },
     "fr": {
       "maxEnglishMatches": 1,
-      "waivers": ["app.brand"]
+      "waivers": [
+        "app.brand"
+      ]
     }
   }
 }

@@ -42,4 +42,3 @@ and the mutation was reverted before the green run.
    with the shim removed.
 
 All temporary mutations were reverted and the final build was regenerated.
-
