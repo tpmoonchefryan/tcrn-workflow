@@ -2388,6 +2388,7 @@ async function verifyCi() {
   assertion(workflow.includes('test "$(pnpm --version)" = "11.3.0"'), "CI_PNPM_VERSION_CHECK_MISSING");
   assertion(workflow.includes("--frozen-lockfile --ignore-scripts --config.offline=false"), "CI_INSTALL_NOT_EXPLICIT");
   assertion(workflow.includes("- name: Verify P1 offline\n        run: pnpm verify:p1"), "CI_OFFLINE_P1_MISSING");
+  assertion(workflow.includes("- name: Verify portal remediation train\n        run: pnpm verify:portal"), "CI_PORTAL_REMEDIATION_MISSING");
   return success("CI_HARDENING_VERIFIED", { linted });
 }
 
@@ -2399,6 +2400,7 @@ async function verifyP1() {
     "typecheck",
     "build",
     "test",
+    "portal",
     "test-trust",
     "archive",
     "sbom",
@@ -2423,6 +2425,10 @@ async function verifyP1() {
     commands: sequence,
     observedReasonCodes: results.map((result) => result.reasonCode),
   });
+}
+
+async function verifyPortal() {
+  return JSON.parse(run(process.execPath, [resolve(repositoryRoot, "scripts/verify-portal.mjs")]));
 }
 
 async function verifyP2() {
@@ -2512,6 +2518,7 @@ const handlers = {
   "p7-compatibility": verifyP7Compatibility,
   "p7-aos-requirements": verifyP7AosRequirements,
   p8: verifyP8,
+  portal: verifyPortal,
   "release-preflight": verifyReleaseTagPreflight,
   privacy: verifyPrivacy,
   "privacy-history": () => verifyPrivacy({ historyScope: "all" }),

@@ -51,9 +51,9 @@ test("unknown verbs fail closed and every cataloged verb dispatches", async () =
   assert.equal((await invoke(["no-such-verb"])).reasonCode, "CLI_COMMAND_UNKNOWN");
   for (const entry of COMMAND_CATALOG) {
     const outcome = await invoke([entry.name]);
-    // `commands` is the only zero-argument verb. Conference persona rendering
+    // `commands` and the read-only vocabulary surface are zero-argument verbs.
     // requires an explicit closed-roster --profile-id and must fail without it.
-    if (entry.name === "commands") {
+    if (entry.name === "commands" || entry.name === "vocabulary") {
       assert.equal(outcome.ok, true, `${entry.name} resolves with no flags`);
       continue;
     }
@@ -147,10 +147,10 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
     "attestation-enable",
     "conference-append-position", "conference-cancel", "conference-close", "conference-open",
     "gate-create", "gate-delete", "gate-transition",
-    "host-config-default", "host-config-remove", "host-config-set",
-    "persona-binding-remove", "persona-binding-set", "persona-remove", "persona-set",
+    "model-plan-assign", "model-plan-remove", "model-plan-set", "model-plan-unassign",
+    "persona-preset-override", "persona-preset-restore", "persona-remove", "persona-set",
     "project-create", "project-delete", "project-update", "relocation-plan", "relocation-vacate",
-    "settings-set", "storage-home-seal", "template-admit", "work-annotate", "work-create", "work-delete", "work-transition",
+    "settings-remove", "settings-set", "storage-home-seal", "template-admit", "work-annotate", "work-create", "work-delete", "work-transition",
   ]);
 });
 

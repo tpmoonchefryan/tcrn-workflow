@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "tcrn.coverage-waivers.v1",
+  "waivers": [
+    {
+      "path": "tests/dependency-policy.test.mjs",
+      "testName": "each exact Ajv transitive is checked by the vulnerability denylist",
+      "reason": "test was renamed to cover every exact transitive dependency, preserving the same assertion surface",
+      "replacement": "tests/dependency-policy.test.mjs:each exact transitive package is checked by the vulnerability denylist"
+    }
+  ]
+}

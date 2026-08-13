@@ -1,0 +1,28 @@
+{
+  "schema": "tcrn.portal-i18n-policy.v1",
+  "referenceLocale": "en",
+  "baselineEqualCount": {
+    "zh-CN": 33,
+    "ja": 21,
+    "ko": 21,
+    "fr": 21
+  },
+  "locales": {
+    "zh-CN": {
+      "maxEnglishMatches": 2,
+      "waivers": ["app.brand", "search.command"]
+    },
+    "ja": {
+      "maxEnglishMatches": 1,
+      "waivers": ["app.brand"]
+    },
+    "ko": {
+      "maxEnglishMatches": 1,
+      "waivers": ["app.brand"]
+    },
+    "fr": {
+      "maxEnglishMatches": 1,
+      "waivers": ["app.brand"]
+    }
+  }
+}

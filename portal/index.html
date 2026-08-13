@@ -1,1008 +1,541 @@
 <!doctype html>
-<html lang="en">
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<html lang="en" data-tcrn-locale="en" data-tcrn-theme="light">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TCRN Workflow Portal</title>
 <link rel="stylesheet" href="/tokens.css">
-<script src="/locales.js"></script>
 <style>
-/* Every value below resolves to a @tcrn/ui-tokens custom property. Literal
-   colours are refused by scripts/design-proof.mjs, so the visual language can
-   only ever change in the design system. */
+:root { color-scheme: light; }
+[data-tcrn-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: var(--tcrn-color-surface-canvas);
-  color: var(--tcrn-color-text-primary);
-  font: var(--tcrn-text-body-dense);
-}
-button, input, textarea { font: inherit; color: inherit; }
+body { margin: 0; min-width: 320px; background: var(--tcrn-color-surface-canvas); color: var(--tcrn-color-text-primary); font: var(--tcrn-text-body-dense); }
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
-h1, h2, h3, p { margin: 0; }
-:focus-visible { outline: none; box-shadow: var(--tcrn-elevation-focus); }
-
-.tcrn-shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
-
-/* Rail */
-.tcrn-rail {
-  display: flex; flex-direction: column; gap: var(--tcrn-space-5);
-  padding: var(--tcrn-space-5) var(--tcrn-space-4);
-  border-right: 1px solid var(--tcrn-color-border-subtle);
-  background: var(--tcrn-color-surface-panel);
-}
-.tcrn-brand { display: flex; flex-direction: column; gap: var(--tcrn-space-0h); }
-.tcrn-brand__mark { font-size: var(--tcrn-type-size-heading-3); font-weight: var(--tcrn-type-weight-strong); letter-spacing: 0.02em; }
+button:disabled { cursor: not-allowed; opacity: 0.55; }
+.tcrn-app { height: 100vh; min-height: 0; display: grid; grid-template-rows: 48px minmax(0, 1fr) 30px; }
+.tcrn-topbar { display: flex; align-items: center; gap: var(--tcrn-space-3); padding: 0 var(--tcrn-space-4); background: var(--tcrn-color-surface-panel); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-brand { display: inline-flex; align-items: baseline; gap: var(--tcrn-space-2); min-width: 196px; padding: 0; border: 0; background: transparent; color: var(--tcrn-color-text-primary); text-align: left; }
+.tcrn-brand__name { font-weight: var(--tcrn-type-weight-strong); letter-spacing: -0.02em; }
 .tcrn-brand__sub { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
-.tcrn-eyebrow {
-  color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption);
-  font-weight: var(--tcrn-type-weight-medium); letter-spacing: 0.04em; text-transform: uppercase;
-}
-.tcrn-nav { display: flex; flex-direction: column; gap: var(--tcrn-space-0h); }
-.tcrn-nav__link {
-  display: flex; align-items: center; gap: var(--tcrn-space-2);
-  min-height: var(--tcrn-density-compact-row-height);
-  padding: 0 var(--tcrn-space-2h);
-  border: 0; border-radius: var(--tcrn-radius-control);
-  background: transparent; color: var(--tcrn-color-text-secondary);
-  text-align: left; transition: background var(--tcrn-motion-fast), color var(--tcrn-motion-fast);
-}
-.tcrn-nav__link:hover { background: var(--tcrn-selection-fill-hover); color: var(--tcrn-color-text-primary); }
-.tcrn-nav__link[aria-current="page"] { background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); font-weight: var(--tcrn-type-weight-medium); }
-.tcrn-nav__index { color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
-.tcrn-nav__link[aria-current="page"] .tcrn-nav__index { color: var(--tcrn-color-brand-primary); }
-.tcrn-rail__note { margin-top: auto; display: flex; flex-direction: column; gap: var(--tcrn-space-2); }
-.tcrn-rail__note p { color: var(--tcrn-color-text-secondary); font: var(--tcrn-text-body-dense); }
-.tcrn-rail__path {
-  color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono);
-  font-size: var(--tcrn-type-size-caption); word-break: break-all;
-}
-
-/* State chip */
-.tcrn-state-chip {
-  display: inline-flex; align-items: center; gap: var(--tcrn-space-1h);
-  padding: var(--tcrn-state-chip-padding); border-radius: var(--tcrn-radius-pill);
-  font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption);
-}
-.tcrn-state-chip::before { content: ""; width: var(--tcrn-state-dot-size); height: var(--tcrn-state-dot-size); border-radius: var(--tcrn-radius-pill); background: currentColor; }
-.tcrn-state-chip--ready { background: var(--tcrn-color-state-ready-bg); color: var(--tcrn-color-state-ready); }
-.tcrn-state-chip--blocked { background: var(--tcrn-color-state-blocked-bg); color: var(--tcrn-color-state-blocked); }
-.tcrn-state-chip--warning { background: var(--tcrn-color-state-warning-bg); color: var(--tcrn-color-state-warning); }
-.tcrn-state-chip--neutral { background: var(--tcrn-color-brand-neutral-bg); color: var(--tcrn-color-brand-neutral); }
-
-/* Main */
-.tcrn-main { display: flex; flex-direction: column; min-width: 0; padding: var(--tcrn-space-5) var(--tcrn-space-6) var(--tcrn-space-6); gap: var(--tcrn-space-5); max-width: var(--tcrn-container-readable); }
-.tcrn-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--tcrn-space-4); padding-bottom: var(--tcrn-space-3); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
-.tcrn-page-head h1 { margin-top: var(--tcrn-space-1); font-size: var(--tcrn-type-size-page); line-height: var(--tcrn-type-line-page); font-weight: var(--tcrn-type-weight-strong); }
-.tcrn-lede { max-width: 68ch; color: var(--tcrn-color-text-secondary); font: var(--tcrn-text-body-reading); }
-
-.tcrn-columns { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: var(--tcrn-space-4); align-items: start; }
-.tcrn-panel { border: 1px solid var(--tcrn-color-border-subtle); border-radius: var(--tcrn-radius-surface); background: var(--tcrn-color-surface-panel); box-shadow: var(--tcrn-elevation-floating); }
-.tcrn-panel__head { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-3); padding: var(--tcrn-space-3) var(--tcrn-space-4); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
-.tcrn-panel__head h2, .tcrn-panel__head h3 { font-size: var(--tcrn-type-size-heading-3); font-weight: var(--tcrn-type-weight-medium); }
-.tcrn-panel__body { padding: var(--tcrn-space-4); }
-.tcrn-meta { color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
-
-/* Rows */
-.tcrn-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--tcrn-space-3);
-  align-items: center; width: 100%; min-height: var(--tcrn-density-compact-row-height);
-  padding: var(--tcrn-space-2) var(--tcrn-space-4);
-  border: 0; border-bottom: 1px solid var(--tcrn-color-border-subtle);
-  background: transparent; text-align: left;
-  transition: background var(--tcrn-motion-fast);
-}
-.tcrn-row:last-child { border-bottom: 0; }
-.tcrn-row:hover { background: var(--tcrn-selection-fill-hover); }
-.tcrn-row[aria-selected="true"] { background: var(--tcrn-selection-fill); box-shadow: inset 2px 0 0 var(--tcrn-color-brand-primary); }
-.tcrn-row__key { display: block; font-weight: var(--tcrn-type-weight-medium); }
-.tcrn-row__meta { display: block; margin-top: var(--tcrn-space-0h); color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
-.tcrn-row__value { color: var(--tcrn-color-text-secondary); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
-.tcrn-list { border-top: 1px solid var(--tcrn-color-border-subtle); }
-
-/* Form */
-.tcrn-field { display: grid; gap: var(--tcrn-space-1h); }
-.tcrn-label { color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-meta); font-weight: var(--tcrn-type-weight-medium); }
-.tcrn-input, .tcrn-textarea {
-  width: 100%; min-height: var(--tcrn-density-compact-row-height);
-  padding: var(--tcrn-space-2) var(--tcrn-space-2h);
-  border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control);
-  background: var(--tcrn-color-surface-panel); outline: none;
-  transition: border-color var(--tcrn-motion-fast), box-shadow var(--tcrn-motion-fast);
-}
-.tcrn-textarea { min-height: 340px; resize: vertical; font: var(--tcrn-type-weight-regular) var(--tcrn-type-size-body)/var(--tcrn-type-line-reading) var(--tcrn-type-family-mono); }
-.tcrn-input:focus-visible, .tcrn-textarea:focus-visible { border-color: var(--tcrn-color-brand-primary); box-shadow: var(--tcrn-elevation-focus); }
-.tcrn-help { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
-.tcrn-description {
-  padding: var(--tcrn-space-2) var(--tcrn-space-2h);
-  border-left: 2px solid var(--tcrn-color-brand-primary);
-  background: var(--tcrn-color-brand-primary-bg);
-  color: var(--tcrn-color-text-secondary);
-  font: var(--tcrn-text-body-reading);
-  border-radius: 0 var(--tcrn-radius-control) var(--tcrn-radius-control) 0;
-}
-.tcrn-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-2); flex-wrap: wrap; }
-.tcrn-stack { display: grid; gap: var(--tcrn-space-2); }
-.tcrn-mt-2 { margin-top: var(--tcrn-space-2); }
-.tcrn-mt-3 { margin-top: var(--tcrn-space-3); }
-.tcrn-mt-4 { margin-top: var(--tcrn-space-4); }
-.tcrn-section-title { margin-top: var(--tcrn-space-4); font-size: var(--tcrn-type-size-heading-3); font-weight: var(--tcrn-type-weight-medium); }
-.tcrn-field-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--tcrn-space-2);
-  align-items: center; padding: var(--tcrn-space-2) 0;
-  border-top: 1px solid var(--tcrn-color-border-subtle);
-}
-.tcrn-field-row:first-child { border-top: 0; }
-.tcrn-execution-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--tcrn-space-4); align-items: start; }
-.tcrn-execution-card { min-width: 0; overflow: hidden; }
-.tcrn-execution-card--muted { background: var(--tcrn-color-surface-muted); filter: grayscale(1); opacity: 0.58; }
-.tcrn-execution-card--muted .tcrn-panel__head { background: var(--tcrn-color-surface-muted); }
-.tcrn-persona-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--tcrn-space-2); padding: var(--tcrn-space-2) 0; border-top: 1px solid var(--tcrn-color-border-subtle); }
-.tcrn-persona-row:first-child { border-top: 0; }
-.tcrn-persona-row--dimmed { background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-muted); opacity: 0.62; }
-.tcrn-persona-row__name { display: block; font-weight: var(--tcrn-type-weight-medium); }
-.tcrn-persona-row__description { display: block; margin-top: var(--tcrn-space-0h); color: var(--tcrn-color-text-secondary); font: var(--tcrn-text-body-reading); }
-.tcrn-persona-row__meta { display: block; margin-top: var(--tcrn-space-1h); color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
-.tcrn-policy-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 0.8fr); gap: var(--tcrn-space-3); padding: var(--tcrn-space-3) 0; border-top: 1px solid var(--tcrn-color-border-subtle); }
-.tcrn-policy-row:first-child { border-top: 0; }
-.tcrn-policy-row__description { margin-top: var(--tcrn-space-1h); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); line-height: var(--tcrn-type-line-caption); }
-.tcrn-persona-editor { padding-top: var(--tcrn-space-3); border-top: 1px solid var(--tcrn-color-border-subtle); }
-.tcrn-persona-editor__fields { display: grid; gap: var(--tcrn-space-3); }
-.tcrn-persona-prompt-count { text-align: right; }
-
-/* Button — the design system ships class names but no stylesheet for them, so
-   these are composed from tokens and kept to the DS naming contract. */
-.tcrn-button {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--tcrn-space-1h);
-  min-height: var(--tcrn-density-compact-row-height); padding: 0 var(--tcrn-space-3);
-  border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control);
-  background: var(--tcrn-color-surface-panel); color: var(--tcrn-color-text-primary);
-  font-size: var(--tcrn-type-size-control); font-weight: var(--tcrn-type-weight-medium);
-  transition: background var(--tcrn-motion-fast), border-color var(--tcrn-motion-fast), transform var(--tcrn-motion-instant);
-}
-.tcrn-button:hover { background: var(--tcrn-color-surface-muted); }
-.tcrn-button:active { transform: scale(var(--tcrn-motion-press-scale)); }
+.tcrn-topbar__workspace { min-width: 0; flex: 1; color: var(--tcrn-color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcrn-topbar__actions { display: flex; align-items: center; gap: var(--tcrn-space-2); }
+.tcrn-topbar__actions .tcrn-select { width: auto; min-width: 92px; }
+.tcrn-topbar__partition { width: 160px; }
+.tcrn-shell { min-height: 0; display: grid; grid-template-columns: 196px minmax(0, 1fr); }
+.tcrn-rail { display: flex; min-height: 0; flex-direction: column; gap: var(--tcrn-space-4); padding: var(--tcrn-space-4) var(--tcrn-space-3); background: var(--tcrn-color-surface-panel); border-right: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-rail__mark { display: grid; gap: var(--tcrn-space-1); padding: 0 var(--tcrn-space-2); }
+.tcrn-eyebrow { margin: 0 0 var(--tcrn-space-2); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); letter-spacing: 0.06em; text-transform: uppercase; }
+.tcrn-nav { display: grid; gap: var(--tcrn-space-1); }
+.tcrn-nav__item, .tcrn-subnav__item, .tcrn-tab { display: flex; align-items: center; gap: var(--tcrn-space-2); width: 100%; min-height: 32px; padding: 0 var(--tcrn-space-2h); border: 1px solid transparent; border-radius: var(--tcrn-radius-control); background: transparent; color: var(--tcrn-color-text-secondary); text-align: left; }
+.tcrn-nav__item:hover, .tcrn-subnav__item:hover, .tcrn-tab:hover { background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-primary); }
+.tcrn-nav__item[aria-current="page"], .tcrn-subnav__item[aria-current="page"], .tcrn-tab[aria-selected="true"] { background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-nav__glyph { width: 18px; color: var(--tcrn-color-text-muted); text-align: center; }
+.tcrn-rail__footer { margin-top: auto; padding: var(--tcrn-space-3) var(--tcrn-space-2); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); line-height: var(--tcrn-type-line-caption); }
+.tcrn-main { min-width: 0; min-height: 0; overflow: auto; padding: var(--tcrn-space-6); }
+.tcrn-page { width: min(1040px, 100%); margin: 0 auto; }
+.tcrn-page--manage { width: min(1100px, 100%); }
+.tcrn-page__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--tcrn-space-4); margin-bottom: var(--tcrn-space-5); }
+.tcrn-page__head h1 { margin: 0; font-size: var(--tcrn-type-size-page); line-height: var(--tcrn-type-line-page); letter-spacing: -0.03em; }
+.tcrn-page__lede { max-width: 680px; margin: var(--tcrn-space-2) 0 0; color: var(--tcrn-color-text-secondary); line-height: var(--tcrn-type-line-reading); }
+.tcrn-page__actions { display: flex; align-items: center; gap: var(--tcrn-space-2); }
+.tcrn-button { min-height: 32px; padding: 0 var(--tcrn-space-3); border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control); background: var(--tcrn-color-surface-panel); color: var(--tcrn-color-text-primary); transition: border-color var(--tcrn-motion-fast), color var(--tcrn-motion-fast), background var(--tcrn-motion-fast); }
+.tcrn-button:hover { border-color: var(--tcrn-color-brand-primary); color: var(--tcrn-color-brand-primary); }
 .tcrn-button--primary { border-color: var(--tcrn-color-brand-primary); background: var(--tcrn-color-brand-primary); color: var(--tcrn-color-text-inverse); }
-.tcrn-button--primary:hover { border-color: var(--tcrn-color-brand-secondary); background: var(--tcrn-color-brand-secondary); }
-.tcrn-button[disabled] { opacity: 0.55; cursor: not-allowed; }
-
-/* Receipt */
-.tcrn-receipt__code { display: block; padding: var(--tcrn-space-3) 0; color: var(--tcrn-color-brand-primary); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-body); font-weight: var(--tcrn-type-weight-medium); word-break: break-word; }
-.tcrn-receipt__code--refused { color: var(--tcrn-color-state-blocked); }
-.tcrn-kv { display: flex; align-items: baseline; justify-content: space-between; gap: var(--tcrn-space-3); padding: var(--tcrn-space-2) 0; border-top: 1px solid var(--tcrn-color-border-subtle); font-size: var(--tcrn-type-size-meta); }
-.tcrn-kv dt { color: var(--tcrn-color-text-muted); }
-.tcrn-kv dd { margin: 0; font-family: var(--tcrn-type-family-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tcrn-kv-list { margin: 0; }
-.tcrn-empty { color: var(--tcrn-color-text-muted); font: var(--tcrn-text-body-reading); }
-.tcrn-footnote { margin-top: var(--tcrn-space-3); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); line-height: var(--tcrn-type-line-caption); }
-
-/* Banner + table */
-.tcrn-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-3); padding: var(--tcrn-space-2h) var(--tcrn-space-3); border-radius: var(--tcrn-radius-control); font-size: var(--tcrn-type-size-meta); }
-.tcrn-banner--ready { background: var(--tcrn-color-state-ready-bg); color: var(--tcrn-color-state-ready); }
-.tcrn-banner--blocked { background: var(--tcrn-color-state-blocked-bg); color: var(--tcrn-color-state-blocked); }
-.tcrn-table { width: 100%; margin-top: var(--tcrn-space-3); border: 1px solid var(--tcrn-color-border-subtle); border-radius: var(--tcrn-radius-control); border-collapse: separate; border-spacing: 0; overflow: hidden; }
-.tcrn-table th, .tcrn-table td { padding: var(--tcrn-space-2) var(--tcrn-space-3); border-bottom: 1px solid var(--tcrn-color-border-subtle); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); text-align: left; }
-.tcrn-table th { background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-muted); font-weight: var(--tcrn-type-weight-medium); text-transform: uppercase; letter-spacing: 0.04em; }
-.tcrn-table tr:last-child td { border-bottom: 0; }
-.tcrn-table__flag--yes { color: var(--tcrn-color-state-ready); }
-.tcrn-table__flag--no { color: var(--tcrn-color-state-blocked); font-weight: var(--tcrn-type-weight-strong); }
-
+.tcrn-button--quiet { border-color: transparent; background: transparent; color: var(--tcrn-color-text-secondary); }
+.tcrn-button--danger { color: var(--tcrn-color-state-blocked); }
+.tcrn-button:focus-visible, .tcrn-input:focus-visible, .tcrn-select:focus-visible, .tcrn-textarea:focus-visible, .tcrn-tab:focus-visible { outline: 0; box-shadow: var(--tcrn-elevation-focus); }
+.tcrn-chip { display: inline-flex; align-items: center; gap: var(--tcrn-space-1); min-height: 24px; padding: 0 var(--tcrn-space-2); border: 1px solid var(--tcrn-color-border-subtle); border-radius: var(--tcrn-radius-pill); color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-caption); white-space: nowrap; }
+.tcrn-chip--ready { border-color: var(--tcrn-color-state-ready); background: var(--tcrn-color-state-ready-bg); color: var(--tcrn-color-state-ready); }
+.tcrn-chip--warning { border-color: var(--tcrn-color-state-warning); background: var(--tcrn-color-state-warning-bg); color: var(--tcrn-color-state-warning); }
+.tcrn-chip--blocked { border-color: var(--tcrn-color-state-blocked); background: var(--tcrn-color-state-blocked-bg); color: var(--tcrn-color-state-blocked); }
+.tcrn-dot { width: var(--tcrn-state-dot-size); height: var(--tcrn-state-dot-size); border-radius: var(--tcrn-radius-pill); background: currentColor; }
+.tcrn-grid { display: grid; gap: var(--tcrn-space-3); }
+.tcrn-dashboard-grid { margin-top: var(--tcrn-space-3); }
+.tcrn-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tcrn-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tcrn-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tcrn-card { min-width: 0; padding: var(--tcrn-space-4); border: 1px solid var(--tcrn-color-border-subtle); border-radius: var(--tcrn-radius-panel); background: var(--tcrn-color-surface-panel); box-shadow: var(--tcrn-elevation-floating); }
+.tcrn-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-3); margin-bottom: var(--tcrn-space-3); }
+.tcrn-card__head h2, .tcrn-card__head h3 { margin: 0; font-size: var(--tcrn-type-size-heading-3); }
+.tcrn-card__note { margin: var(--tcrn-space-1) 0 0; color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-stat { min-height: 104px; }
+.tcrn-stat__value { margin: var(--tcrn-space-2) 0 var(--tcrn-space-1); color: var(--tcrn-color-brand-primary); font: var(--tcrn-type-weight-strong) var(--tcrn-type-size-heading-2)/1 var(--tcrn-type-family-mono); }
+.tcrn-stat__label { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); text-transform: uppercase; letter-spacing: 0.04em; }
+.tcrn-meta { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-mono { font-family: var(--tcrn-type-family-mono); }
+.tcrn-list { display: grid; gap: var(--tcrn-space-1); }
+.tcrn-list__row { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-3); min-height: 34px; padding: var(--tcrn-space-1) var(--tcrn-space-2); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-list__row:last-child { border-bottom: 0; }
+.tcrn-list__main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcrn-list__sub { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-empty { padding: var(--tcrn-space-5); color: var(--tcrn-color-text-muted); text-align: center; }
+.tcrn-tabs { display: flex; gap: var(--tcrn-space-1); margin-bottom: var(--tcrn-space-4); padding-bottom: var(--tcrn-space-1); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-tab { width: auto; min-height: 34px; }
+.tcrn-manage { display: grid; grid-template-columns: 208px minmax(0, 860px); gap: var(--tcrn-space-6); align-items: start; }
+.tcrn-subnav { display: grid; gap: var(--tcrn-space-1); position: sticky; top: 0; }
+.tcrn-subnav__item { min-height: 34px; }
+.tcrn-section { margin-bottom: var(--tcrn-space-5); }
+.tcrn-section__title { display: flex; align-items: center; gap: var(--tcrn-space-2); margin: 0 0 var(--tcrn-space-2); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); letter-spacing: 0.06em; text-transform: uppercase; }
+.tcrn-setting-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 300px) auto; gap: var(--tcrn-space-3); align-items: center; min-height: 66px; padding: var(--tcrn-space-2) 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-setting-row__label { min-width: 0; }
+.tcrn-setting-row__name { display: flex; align-items: center; gap: var(--tcrn-space-2); font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-key { color: var(--tcrn-color-text-muted); font: var(--tcrn-type-weight-regular) var(--tcrn-type-size-caption)/1 var(--tcrn-type-family-mono); }
+.tcrn-setting-row__description { margin-top: var(--tcrn-space-1); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); line-height: var(--tcrn-type-line-caption); }
+.tcrn-setting-row__tools { display: inline-flex; align-items: center; gap: var(--tcrn-space-1); }
+.tcrn-modified-dot { color: var(--tcrn-color-brand-accent); }
+.tcrn-setting-reset { visibility: hidden; opacity: 0; transition: opacity var(--tcrn-motion-fast), visibility var(--tcrn-motion-fast); }
+.tcrn-setting-row:hover .tcrn-setting-reset, .tcrn-setting-row:focus-within .tcrn-setting-reset { visibility: visible; opacity: 1; }
+.tcrn-input, .tcrn-select, .tcrn-textarea { width: 100%; border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control); background: var(--tcrn-color-surface-panel); color: var(--tcrn-color-text-primary); }
+.tcrn-input, .tcrn-select { min-height: var(--tcrn-density-compact-row-height); padding: 0 var(--tcrn-space-2h); }
+.tcrn-input--search { min-width: 200px; }
+.tcrn-textarea { min-height: 96px; padding: var(--tcrn-space-2h); resize: vertical; line-height: var(--tcrn-type-line-reading); }
+.tcrn-segmented { display: inline-flex; max-width: 100%; overflow: auto; border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control); }
+.tcrn-segmented .tcrn-button { min-height: 32px; border: 0; border-right: 1px solid var(--tcrn-color-border-subtle); border-radius: 0; white-space: nowrap; }
+.tcrn-segmented .tcrn-button:last-child { border-right: 0; }
+.tcrn-switch { display: inline-flex; align-items: center; gap: var(--tcrn-space-2); color: var(--tcrn-color-text-secondary); }
+.tcrn-switch input { width: 18px; height: 18px; accent-color: var(--tcrn-color-brand-primary); }
+.tcrn-form { display: grid; gap: var(--tcrn-space-3); }
+.tcrn-form__row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--tcrn-space-3); }
+.tcrn-field { display: grid; gap: var(--tcrn-space-1); }
+.tcrn-field label { color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-model-plan { display: grid; gap: var(--tcrn-space-3); margin-top: var(--tcrn-space-4); }
+.tcrn-model-plan__host { padding: var(--tcrn-space-3); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-model-plan__host > h3 { margin: 0 0 var(--tcrn-space-2); font-size: var(--tcrn-type-size-heading-3); }
+.tcrn-plan { padding: var(--tcrn-space-3) 0; border-top: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-plan--active { border-left: 3px solid var(--tcrn-color-brand-primary); padding-left: var(--tcrn-space-3); }
+.tcrn-plan__head { display: flex; justify-content: space-between; gap: var(--tcrn-space-2); align-items: baseline; }
+.tcrn-plan__head strong { font-size: var(--tcrn-type-size-heading-3); }
+.tcrn-plan__model { color: var(--tcrn-color-text-secondary); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
+.tcrn-plan__assignments { display: grid; gap: var(--tcrn-space-1); margin-top: var(--tcrn-space-2); }
+.tcrn-assignment { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-2); padding: var(--tcrn-space-1) var(--tcrn-space-2); border-radius: var(--tcrn-radius-control); background: var(--tcrn-color-brand-neutral-bg); color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-caption); }
+.tcrn-assignment-addline { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) auto; gap: var(--tcrn-space-2); align-items: end; margin-top: var(--tcrn-space-3); }
+.tcrn-scope-note { margin: var(--tcrn-space-2) 0 0; color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-editor-shell { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: var(--tcrn-space-3); }
+.tcrn-editor__bar { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: var(--tcrn-space-3); }
+.tcrn-editor__status { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-editor__directory { display: grid; align-content: start; gap: var(--tcrn-space-1); position: sticky; top: 0; }
+.tcrn-directory__item { display: flex; align-items: center; width: 100%; min-height: 28px; padding: 0 var(--tcrn-space-2); border: 0; border-left: 2px solid transparent; background: transparent; color: var(--tcrn-color-text-secondary); text-align: left; font-size: var(--tcrn-type-size-caption); }
+.tcrn-directory__item:hover { border-left-color: var(--tcrn-color-brand-primary); background: var(--tcrn-color-surface-muted); }
+.tcrn-editor-wrap { display: grid; grid-template-columns: 38px minmax(0, 1fr); min-width: 0; border: 1px solid var(--tcrn-color-border-subtle); border-radius: var(--tcrn-radius-panel); background: var(--tcrn-color-surface-panel); overflow: hidden; }
+.tcrn-editor__gutter { min-height: 520px; padding: var(--tcrn-space-2) var(--tcrn-space-1); overflow: hidden; background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-muted); font: var(--tcrn-type-size-caption)/var(--tcrn-type-line-reading) var(--tcrn-type-family-mono); text-align: right; user-select: none; }
+.tcrn-editor { min-height: 520px; border: 0; border-radius: 0; font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-reading); tab-size: 2; }
+.tcrn-prose-findings { grid-column: 1 / -1; }
+.tcrn-finding-link { display: flex; align-items: center; gap: var(--tcrn-space-2); width: 100%; padding: var(--tcrn-space-2); border: 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); background: transparent; color: var(--tcrn-color-state-warning); text-align: left; }
+.tcrn-finding-link:hover { background: var(--tcrn-color-state-warning-bg); }
+.tcrn-entity-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: var(--tcrn-space-4); }
+.tcrn-entity-list { min-height: 520px; }
+.tcrn-entity-section { display: grid; gap: var(--tcrn-space-1); margin-bottom: var(--tcrn-space-3); }
+.tcrn-entity-section__label { padding: 0 var(--tcrn-space-2); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); letter-spacing: 0.04em; text-transform: uppercase; }
+.tcrn-entity { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; padding: var(--tcrn-space-2); border: 1px solid transparent; border-radius: var(--tcrn-radius-control); background: transparent; color: var(--tcrn-color-text-primary); text-align: left; }
+.tcrn-entity:hover { background: var(--tcrn-color-surface-muted); }
+.tcrn-entity[aria-current="true"] { border-color: var(--tcrn-color-brand-primary); background: var(--tcrn-color-brand-primary-bg); }
+.tcrn-entity__role { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-entity__source { color: var(--tcrn-color-brand-primary); font-size: var(--tcrn-type-size-caption); }
+.tcrn-entity-detail { min-width: 0; }
+.tcrn-entity-detail__head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--tcrn-space-3); margin-bottom: var(--tcrn-space-4); }
+.tcrn-entity-detail__head h2 { margin: 0; font-size: var(--tcrn-type-size-heading-2); }
+.tcrn-entity-detail__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--tcrn-space-2); }
+.tcrn-entity-detail__identity { display: flex; align-items: center; gap: var(--tcrn-space-2); flex-wrap: wrap; }
+.tcrn-lock-hint { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-more-fields { margin-top: var(--tcrn-space-4); border-top: 1px solid var(--tcrn-color-border-subtle); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-more-fields summary { padding: var(--tcrn-space-3) 0; color: var(--tcrn-color-text-secondary); cursor: pointer; }
+.tcrn-more-fields__body { display: grid; gap: var(--tcrn-space-3); padding-bottom: var(--tcrn-space-3); }
+.tcrn-ghost { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--tcrn-space-3); align-items: start; margin-top: var(--tcrn-space-3); padding: var(--tcrn-space-2); border-left: 2px solid var(--tcrn-color-border-strong); background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); font-style: italic; }
+.tcrn-ghost__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcrn-model-readonly { display: grid; gap: var(--tcrn-space-2); margin-top: var(--tcrn-space-4); padding-top: var(--tcrn-space-3); border-top: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-model-resolution { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: var(--tcrn-space-2); align-items: baseline; padding: var(--tcrn-space-1) 0; }
+.tcrn-confirm-popover { margin-top: var(--tcrn-space-3); padding: var(--tcrn-space-3); border: 1px solid var(--tcrn-color-state-warning); border-radius: var(--tcrn-radius-control); background: var(--tcrn-color-state-warning-bg); }
+.tcrn-confirm-popover__actions { display: flex; gap: var(--tcrn-space-2); margin-top: var(--tcrn-space-2); }
+.tcrn-vocabulary { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: var(--tcrn-space-6); }
+.tcrn-vocabulary__terms { display: grid; gap: var(--tcrn-space-2); }
+.tcrn-term { display: grid; grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1fr); gap: var(--tcrn-space-4); padding: var(--tcrn-space-3) 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-term__value { overflow-wrap: anywhere; color: var(--tcrn-color-brand-primary); font-family: var(--tcrn-type-family-mono); }
+.tcrn-term__definition { color: var(--tcrn-color-text-secondary); line-height: var(--tcrn-type-line-reading); }
+.tcrn-term__definition small { display: block; margin-top: var(--tcrn-space-1); color: var(--tcrn-color-text-muted); }
+.tcrn-paths { display: grid; gap: var(--tcrn-space-1); }
+.tcrn-path { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: var(--tcrn-space-2); align-items: center; min-height: 32px; }
+.tcrn-path__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tcrn-color-text-secondary); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
+.tcrn-search-results { position: absolute; z-index: var(--tcrn-z-popover); top: 42px; right: var(--tcrn-space-4); width: min(440px, calc(100vw - 32px)); max-height: 360px; overflow: auto; padding: var(--tcrn-space-2); border: 1px solid var(--tcrn-color-border-strong); border-radius: var(--tcrn-radius-panel); background: var(--tcrn-color-surface-panel); box-shadow: var(--tcrn-elevation-floating); }
+.tcrn-search-result { display: grid; gap: var(--tcrn-space-1); width: 100%; padding: var(--tcrn-space-2); border: 0; border-radius: var(--tcrn-radius-control); background: transparent; color: var(--tcrn-color-text-primary); text-align: left; }
+.tcrn-search-result:hover, .tcrn-search-result[aria-current="true"] { background: var(--tcrn-color-brand-primary-bg); }
+.tcrn-search-result__meta { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-highlight { box-shadow: 0 0 0 2px var(--tcrn-color-brand-primary); }
+.tcrn-statusbar { display: flex; align-items: center; gap: var(--tcrn-space-3); min-width: 0; padding: 0 var(--tcrn-space-4); border-top: 1px solid var(--tcrn-color-border-subtle); background: var(--tcrn-color-surface-panel); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
+.tcrn-statusbar__command { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcrn-statusbar__command code { color: var(--tcrn-color-text-secondary); font-family: var(--tcrn-type-family-mono); }
+.tcrn-drawer { position: fixed; z-index: var(--tcrn-z-overlay); top: 0; right: 0; bottom: 30px; width: min(400px, 94vw); padding: var(--tcrn-space-5); overflow: auto; border-left: 1px solid var(--tcrn-color-border-strong); background: var(--tcrn-color-surface-panel); box-shadow: var(--tcrn-elevation-floating); transform: translateX(0); transition: transform var(--tcrn-motion-standard) var(--tcrn-motion-ease-drawer); }
+.tcrn-drawer[data-open="false"] { visibility: hidden; pointer-events: none; transform: translateX(100%); }
+.tcrn-drawer__head { display: flex; justify-content: space-between; align-items: center; gap: var(--tcrn-space-3); margin-bottom: var(--tcrn-space-4); }
+.tcrn-drawer__head h2 { margin: 0; font-size: var(--tcrn-type-size-heading-2); }
+.tcrn-receipt { display: grid; gap: var(--tcrn-space-2); padding: var(--tcrn-space-3); border: 1px solid var(--tcrn-color-border-subtle); border-radius: var(--tcrn-radius-panel); background: var(--tcrn-color-surface-muted); }
+.tcrn-receipt__row { display: flex; justify-content: space-between; gap: var(--tcrn-space-3); }
+.tcrn-receipt__key { color: var(--tcrn-color-text-muted); }
+.tcrn-receipt__value { max-width: 62%; overflow-wrap: anywhere; color: var(--tcrn-color-text-secondary); font-family: var(--tcrn-type-family-mono); text-align: right; }
+.tcrn-audit { display: grid; gap: var(--tcrn-space-2); }
+.tcrn-audit__item { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: var(--tcrn-space-2); align-items: center; padding: var(--tcrn-space-2) 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-audit__item:last-child { border-bottom: 0; }
+.tcrn-audit__time { color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
+.tcrn-audit__summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcrn-portal-note { margin: var(--tcrn-space-4) 0 0; padding: var(--tcrn-space-3); border-left: 3px solid var(--tcrn-color-brand-primary); background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-text-secondary); line-height: var(--tcrn-type-line-reading); }
 .tcrn-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 [hidden] { display: none !important; }
-
-/* Locale font families, following the design system's own pattern of pointing
-   --tcrn-type-family-ui at the script-specific family. */
 [data-tcrn-locale="en"], [data-tcrn-locale="fr"] { --tcrn-type-family-ui: var(--tcrn-type-family-latin); }
 [data-tcrn-locale="zh-CN"] { --tcrn-type-family-ui: var(--tcrn-type-family-zh-cn); }
 [data-tcrn-locale="ja"] { --tcrn-type-family-ui: var(--tcrn-type-family-ja); }
 [data-tcrn-locale="ko"] { --tcrn-type-family-ui: var(--tcrn-type-family-ko); }
-
-.tcrn-select {
-  width: 100%; min-height: var(--tcrn-density-compact-row-height);
-  padding: 0 var(--tcrn-space-2h);
-  border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control);
-  background: var(--tcrn-color-surface-panel); color: var(--tcrn-color-text-primary);
-}
-.tcrn-select:focus-visible { border-color: var(--tcrn-color-brand-primary); box-shadow: var(--tcrn-elevation-focus); }
-
-@media (max-width: 900px) {
-  .tcrn-shell { grid-template-columns: minmax(0, 1fr); }
-  .tcrn-rail { border-right: 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); }
-  .tcrn-nav { flex-direction: row; flex-wrap: wrap; }
-  .tcrn-rail__note { display: none; }
+@media (max-width: 980px) {
+  .tcrn-shell { grid-template-columns: 1fr; }
+  .tcrn-rail { border-right: 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); padding: var(--tcrn-space-2) var(--tcrn-space-3); }
+  .tcrn-rail__mark, .tcrn-rail__footer { display: none; }
+  .tcrn-nav { display: flex; overflow: auto; }
+  .tcrn-nav__item { width: auto; white-space: nowrap; }
   .tcrn-main { padding: var(--tcrn-space-4); }
-  .tcrn-columns { grid-template-columns: minmax(0, 1fr); }
-  .tcrn-execution-grid { grid-template-columns: minmax(0, 1fr); }
+  .tcrn-manage, .tcrn-vocabulary { grid-template-columns: 1fr; gap: var(--tcrn-space-3); }
+  .tcrn-subnav { position: static; display: flex; overflow: auto; }
+  .tcrn-subnav__item { width: auto; white-space: nowrap; }
+  .tcrn-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: var(--tcrn-motion-reduced-duration) !important; animation-duration: var(--tcrn-motion-reduced-duration) !important; }
+@media (max-width: 680px) {
+  .tcrn-topbar__workspace, .tcrn-topbar__actions .tcrn-input--search, .tcrn-topbar__partition { display: none; }
+  .tcrn-topbar { padding: 0 var(--tcrn-space-2); }
+  .tcrn-grid--2, .tcrn-grid--3, .tcrn-grid--4, .tcrn-form__row, .tcrn-entity-layout, .tcrn-term, .tcrn-assignment-addline { grid-template-columns: 1fr; }
+  .tcrn-setting-row { grid-template-columns: 1fr; gap: var(--tcrn-space-2); }
+  .tcrn-page__head { display: grid; }
+  .tcrn-editor-shell { grid-template-columns: 1fr; }
+  .tcrn-editor__directory { position: static; }
 }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: var(--tcrn-motion-reduced-duration) !important; animation-duration: var(--tcrn-motion-reduced-duration) !important; } }
 </style>
 </head>
 <body>
-<div class="tcrn-shell">
-  <nav class="tcrn-rail" aria-label="Portal">
-    <div class="tcrn-brand"><span class="tcrn-brand__mark" data-i18n="app.brand">TCRN Workflow</span><span class="tcrn-brand__sub" data-i18n="app.subtitle">Portal · INIT-023</span></div>
-    <span class="tcrn-state-chip tcrn-state-chip--neutral" data-i18n="chip.loopback">loopback only</span>
-    <div>
-      <p class="tcrn-eyebrow" id="nav-label" data-i18n="nav.label">Public surfaces</p>
-      <div class="tcrn-nav" role="tablist" aria-labelledby="nav-label">
-        <button class="tcrn-nav__link" role="tab" data-surface="config" aria-current="page" type="button"><span class="tcrn-nav__index">01</span><span data-i18n="nav.config">Configuration</span></button>
-        <button class="tcrn-nav__link" role="tab" data-surface="prose" type="button"><span class="tcrn-nav__index">02</span><span data-i18n="nav.prose">Prose</span></button>
-        <button class="tcrn-nav__link" role="tab" data-surface="reconcile" type="button"><span class="tcrn-nav__index">03</span><span data-i18n="nav.reconcile">Reconciliation</span></button>
-        <button class="tcrn-nav__link" role="tab" data-surface="execution" type="button"><span class="tcrn-nav__index">04</span><span data-i18n="execution.navTitle">Execution</span></button>
-      </div>
+<div class="tcrn-app">
+  <header class="tcrn-topbar">
+    <button class="tcrn-brand" id="brand-button" data-page-target="dashboard" aria-label="TCRN Workflow">
+      <span class="tcrn-brand__name" data-i18n="app.brand">TCRN Workflow</span>
+      <span class="tcrn-brand__sub" data-i18n="app.subtitle">Portal</span>
+    </button>
+    <div class="tcrn-topbar__workspace" id="workspace-label"></div>
+    <div class="tcrn-topbar__actions">
+      <label class="tcrn-sr-only" for="partition-select" data-i18n="partition.label">Partition</label>
+      <select class="tcrn-select tcrn-topbar__partition" id="partition-select" data-ui="partition-switcher" aria-label="Partition"></select>
+      <span class="tcrn-chip tcrn-chip--ready" id="engine-connection" data-ui="engine-connection" role="status"><span class="tcrn-dot"></span><span id="engine-connection-text">engine · local loopback</span></span>
+      <input class="tcrn-input tcrn-input--search" id="global-search" type="search" placeholder="Search" data-i18n-placeholder="search.placeholder" autocomplete="off">
+      <button class="tcrn-button tcrn-button--quiet" id="palette-button" data-i18n="search.command">⌘K</button>
+      <button class="tcrn-button tcrn-button--quiet" id="theme-button" data-i18n="theme.toggle">Theme</button>
+      <label class="tcrn-sr-only" for="locale-select" data-i18n="locale.label">Language</label>
+      <select class="tcrn-select" id="locale-select" aria-label="Language"><option value="en">EN</option><option value="zh-CN">中文</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="fr">FR</option></select>
+      <button class="tcrn-chip tcrn-chip--ready" id="receipt-chip" data-ui="receipt-chip" aria-controls="receipt-drawer" data-ui-action="open-receipt" type="button"><span class="tcrn-dot"></span><span id="receipt-chip-text" data-i18n="chip.idle">idle</span></button>
     </div>
-    <div class="tcrn-field">
-      <label class="tcrn-label" for="locale-select" data-i18n="locale.label">Language</label>
-      <select class="tcrn-select" id="locale-select"></select>
-    </div>
-    <div class="tcrn-field" id="partition-switcher" hidden>
-      <label class="tcrn-label" for="partition-select" data-i18n="partition.label">Partition</label>
-      <select class="tcrn-select" id="partition-select" autocomplete="off"></select>
-    </div>
-    <div class="tcrn-rail__note">
-      <p class="tcrn-eyebrow" data-i18n="app.boundaryTitle">Boundary</p>
-      <p data-i18n="app.boundaryBody">Every value here came from the public CLI.</p>
-      <span class="tcrn-rail__path" id="boot-workspace"></span>
-    </div>
-  </nav>
-
-  <main class="tcrn-main">
-    <header class="tcrn-page-head">
-      <div>
-      <p class="tcrn-eyebrow">TCRN-CROSS-INIT-023</p>
-        <h1 id="surface-title">Configuration</h1>
-      </div>
-      <span class="tcrn-state-chip tcrn-state-chip--warning" id="live-chip">connecting</span>
-    </header>
-
-    <!-- CONFIG -->
-    <section id="surface-config">
-      <p class="tcrn-lede" data-i18n="config.lede">…</p>
-      <div class="tcrn-columns tcrn-mt-4">
-        <section class="tcrn-panel">
-          <div class="tcrn-panel__head"><h2 data-i18n="config.panelTitle">Workspace configuration</h2><span class="tcrn-meta" id="catalog-tag">loading…</span></div>
-          <div class="tcrn-list" id="setting-list" role="listbox" aria-label="Registered settings"></div>
-          <div class="tcrn-panel__body">
-            <div class="tcrn-field">
-              <label class="tcrn-label" for="setting-input" id="setting-label">Value</label>
-              <code class="tcrn-row__meta" id="setting-key"></code>
-              <p class="tcrn-description" id="setting-description"></p>
-              <select class="tcrn-select" id="setting-select" hidden autocomplete="off" aria-describedby="setting-description setting-help"></select>
-              <input class="tcrn-input" id="setting-input" autocomplete="off">
-              <p class="tcrn-help" id="setting-help"></p>
-            </div>
-            <div class="tcrn-actions tcrn-mt-3">
-              <span class="tcrn-meta" id="write-note" data-i18n="config.writeNote">writes go through the public CLI</span>
-              <button class="tcrn-button tcrn-button--primary" id="save-setting" type="button" data-i18n="config.commit">Commit change</button>
-            </div>
-          </div>
-        </section>
-        <section class="tcrn-panel">
-          <div class="tcrn-panel__head"><h3 data-i18n="receipt.title">Engine receipt</h3><span class="tcrn-state-chip tcrn-state-chip--neutral" id="receipt-state">idle</span></div>
-          <div class="tcrn-panel__body" id="receipt-body">
-            <p class="tcrn-empty" data-i18n="receipt.empty">…</p>
-            <p class="tcrn-footnote" id="receipt-footnote">…</p>
-          </div>
-        </section>
-      </div>
-    </section>
-
-    <!-- EXECUTION -->
-    <section id="surface-execution" hidden>
-      <p class="tcrn-lede" data-i18n="execution.lede">Configure models, personas, and dispatch policy from the engine-backed execution surface.</p>
-      <div class="tcrn-execution-grid tcrn-mt-4">
-        <section class="tcrn-panel tcrn-execution-card" id="execution-config-card">
-          <div class="tcrn-panel__head"><h2 data-i18n="execution.configCardTitle">Model configurations</h2><span class="tcrn-meta" data-i18n="execution.panelNote">per host · governed writes</span></div>
-          <div class="tcrn-panel__body">
-            <div id="execution-hosts" class="tcrn-stack"></div>
-            <h3 class="tcrn-section-title" data-i18n="execution.addTitle">Add a configuration</h3>
-            <div class="tcrn-stack tcrn-mt-2">
-              <div class="tcrn-field"><label class="tcrn-label" for="execution-host" data-i18n="execution.hostLabel">Host</label><select class="tcrn-select" id="execution-host" autocomplete="off"></select></div>
-              <div class="tcrn-field"><label class="tcrn-label" for="execution-name" data-i18n="execution.nameLabel">Name</label><input class="tcrn-input" id="execution-name" data-i18n-placeholder="execution.namePlaceholder" placeholder="name" autocomplete="off" /></div>
-              <div class="tcrn-field"><label class="tcrn-label" for="execution-model" data-i18n="execution.modelLabel">Model</label><input class="tcrn-input" id="execution-model" data-i18n-placeholder="execution.modelPlaceholder" placeholder="model" autocomplete="off" /></div>
-              <div class="tcrn-field"><label class="tcrn-label" for="execution-note" data-i18n="execution.noteLabel">Note</label><input class="tcrn-input" id="execution-note" data-i18n-placeholder="execution.notePlaceholder" placeholder="note (optional)" autocomplete="off" /></div>
-              <button class="tcrn-button tcrn-button--primary" id="execution-add" type="button" data-i18n="execution.add">Add</button>
-            </div>
-            <h3 class="tcrn-section-title" data-i18n="execution.bindingsTitle">Persona bindings</h3>
-            <div id="execution-bindings" class="tcrn-stack tcrn-mt-2"></div>
-            <div class="tcrn-stack tcrn-mt-3">
-              <div class="tcrn-field"><label class="tcrn-label" for="binding-profile" data-i18n="execution.personaLabel">Persona</label><select class="tcrn-select" id="binding-profile" autocomplete="off"></select></div>
-              <div class="tcrn-field"><label class="tcrn-label" for="binding-host" data-i18n="execution.hostLabel">Host</label><select class="tcrn-select" id="binding-host" autocomplete="off"></select></div>
-              <div class="tcrn-field"><label class="tcrn-label" for="binding-name" data-i18n="execution.configurationLabel">Configuration</label><select class="tcrn-select" id="binding-name" autocomplete="off"></select></div>
-              <button class="tcrn-button" id="binding-add" type="button" data-i18n="execution.bind">Bind</button>
-            </div>
-          </div>
-        </section>
-        <section class="tcrn-panel tcrn-execution-card" id="execution-personas-card">
-          <div class="tcrn-panel__head"><h2 data-i18n="execution.personasCardTitle">Personas</h2><span class="tcrn-meta" data-i18n="execution.personasCardNote">built-in reference + custom content</span></div>
-          <div class="tcrn-panel__body">
-            <p class="tcrn-description" data-i18n="execution.personasDescription">Built-in personas are read-only. Custom personas are governed content and can be edited or removed.</p>
-            <div id="execution-personas" class="tcrn-stack tcrn-mt-3"></div>
-            <div class="tcrn-persona-editor tcrn-mt-3" id="persona-editor">
-              <h3 class="tcrn-section-title" data-i18n="execution.customTitle">Custom persona</h3>
-              <div class="tcrn-persona-editor__fields tcrn-mt-2">
-                <div class="tcrn-field"><label class="tcrn-label" for="persona-name" data-i18n="execution.nameLabel">Name</label><input class="tcrn-input" id="persona-name" autocomplete="off" /></div>
-                <div class="tcrn-field"><label class="tcrn-label" for="persona-description" data-i18n="execution.descriptionLabel">Description</label><input class="tcrn-input" id="persona-description" autocomplete="off" /></div>
-                <div class="tcrn-field"><label class="tcrn-label" for="persona-role" data-i18n="execution.roleLabel">Role</label><select class="tcrn-select" id="persona-role" autocomplete="off"><option value="orchestrator">orchestrator</option><option value="planner">planner</option><option value="implementer">implementer</option><option value="reviewer">reviewer</option><option value="gatekeeper">gatekeeper</option><option value="steward">steward</option></select></div>
-                <div class="tcrn-field"><label class="tcrn-label" for="persona-prompt" data-i18n="execution.promptLabel">Prompt</label><textarea class="tcrn-textarea" id="persona-prompt" spellcheck="false"></textarea><p class="tcrn-help tcrn-persona-prompt-count" id="persona-prompt-count" data-i18n="execution.promptHint">0 / 4096 · hint only</p></div>
-                <div class="tcrn-actions"><span class="tcrn-meta" id="persona-editor-mode" data-i18n="execution.editorIdle">New custom persona</span><span class="tcrn-stack"><button class="tcrn-button tcrn-button--primary" id="persona-save" type="button" data-i18n="execution.savePersona">Save persona</button><button class="tcrn-button" id="persona-clear" type="button" data-i18n="execution.clearPersona">Clear</button></span></div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section class="tcrn-panel tcrn-execution-card" id="execution-policy-card">
-          <div class="tcrn-panel__head"><h2 data-i18n="execution.policyCardTitle">Dispatch policy</h2><span class="tcrn-meta" data-i18n="execution.policyCardNote">five governed keys</span></div>
-          <div class="tcrn-panel__body"><div id="execution-policy" class="tcrn-stack"></div></div>
-        </section>
-      </div>
-      <pre class="tcrn-receipt" id="execution-receipt" hidden></pre>
-    </section>
-    <section id="surface-prose" hidden>
-      <p class="tcrn-lede" data-i18n="prose.lede">…</p>
-      <section class="tcrn-panel tcrn-mt-4">
-        <div class="tcrn-panel__head"><h2 id="prose-path">AGENTS.md</h2><span class="tcrn-meta" data-i18n="prose.fileNote">plain file · not a control tree</span></div>
-        <div class="tcrn-panel__body">
-          <label class="tcrn-sr-only" for="prose-text" data-i18n="prose.panelTitle">Canonical prose</label>
-          <textarea class="tcrn-textarea" id="prose-text" spellcheck="false"></textarea>
-          <div class="tcrn-actions tcrn-mt-3">
-            <span class="tcrn-meta" id="prose-meta">—</span>
-            <button class="tcrn-button tcrn-button--primary" id="save-prose" type="button" data-i18n="prose.save">Save file</button>
-          </div>
-          <p class="tcrn-help" id="prose-saved" hidden></p>
+  </header>
+  <div class="tcrn-shell">
+    <aside class="tcrn-rail">
+      <div class="tcrn-rail__mark"><span class="tcrn-eyebrow" data-i18n="nav.label">Public surfaces</span><span class="tcrn-meta" id="partition-label"></span></div>
+      <nav class="tcrn-nav" aria-label="Portal navigation">
+        <button class="tcrn-nav__item" data-page-target="dashboard" aria-current="page"><span class="tcrn-nav__glyph">◌</span><span data-i18n="nav.dashboard">Dashboard</span></button>
+        <button class="tcrn-nav__item" data-page-target="settings"><span class="tcrn-nav__glyph">◫</span><span data-i18n="nav.settings">Settings</span></button>
+        <button class="tcrn-nav__item" data-page-target="prose"><span class="tcrn-nav__glyph">¶</span><span data-i18n="nav.prose">Rules</span></button>
+        <button class="tcrn-nav__item" data-page-target="entities"><span class="tcrn-nav__glyph">◎</span><span data-i18n="nav.entities">Entities</span></button>
+        <button class="tcrn-nav__item" data-page-target="vocabulary"><span class="tcrn-nav__glyph">≡</span><span data-i18n="nav.vocabulary">Vocabulary</span></button>
+      </nav>
+      <div class="tcrn-rail__footer"><span data-i18n="app.boundaryBody">Writes use the public CLI and return the engine receipt.</span></div>
+    </aside>
+    <main class="tcrn-main" id="main-content">
+      <section class="tcrn-page" data-page="dashboard">
+        <div class="tcrn-page__head"><div><h1 data-i18n="page.dashboard">Workspace overview</h1><p class="tcrn-page__lede" data-i18n="dashboard.lede">A readable status surface for the live governed workspace.</p></div><div class="tcrn-page__actions"><span class="tcrn-chip tcrn-chip--ready" id="health-chip"><span class="tcrn-dot"></span><span id="health-chip-text" data-i18n="health.healthy">healthy</span></span><button class="tcrn-button" id="audit-button" data-i18n="dashboard.audit">Audit</button></div></div>
+        <div class="tcrn-tabs" role="tablist" data-ui="workspace-tabs" aria-label="Workspace views"><button class="tcrn-tab" role="tab" aria-selected="true" data-workspace-tab="overview" data-i18n="dashboard.overview">Overview</button><button class="tcrn-tab" role="tab" aria-selected="false" data-workspace-tab="audit" data-i18n="dashboard.auditTab">Audit</button></div>
+        <div data-workspace-panel="overview">
+          <div class="tcrn-grid tcrn-grid--4"><article class="tcrn-card tcrn-stat"><span class="tcrn-stat__label" data-i18n="dashboard.chain">Chain version</span><div class="tcrn-stat__value" id="stat-version">—</div><span class="tcrn-meta" id="stat-head"></span></article><article class="tcrn-card tcrn-stat"><span class="tcrn-stat__label" data-i18n="dashboard.events">Events</span><div class="tcrn-stat__value" id="stat-events">—</div><span class="tcrn-meta" data-i18n="dashboard.eventsNote">materialized chain</span></article><article class="tcrn-card tcrn-stat"><span class="tcrn-stat__label" data-i18n="dashboard.engine">Engine</span><div class="tcrn-stat__value" id="stat-engine">—</div><span class="tcrn-meta" data-i18n="dashboard.engineNote">local loopback</span></article><article class="tcrn-card tcrn-stat"><span class="tcrn-stat__label" data-i18n="dashboard.healthCard">Health</span><div class="tcrn-stat__value" id="stat-health">—</div><span class="tcrn-meta" data-i18n="dashboard.healthCardNote">read-only checks</span></article></div>
+          <div class="tcrn-grid tcrn-grid--2 tcrn-dashboard-grid"><article class="tcrn-card"><div class="tcrn-card__head"><div><h2 data-i18n="dashboard.healthTitle">Health</h2><p class="tcrn-card__note" data-i18n="dashboard.healthNote">Read-only checks from the workspace and engine.</p></div><span class="tcrn-chip tcrn-chip--ready" id="validate-chip">validate</span></div><div class="tcrn-list" id="health-list"></div></article><article class="tcrn-card"><div class="tcrn-card__head"><div><h2 data-i18n="dashboard.pathsTitle">Workspace paths</h2><p class="tcrn-card__note" data-i18n="dashboard.pathsNote">The five explicit roots used by this partition.</p></div></div><div class="tcrn-paths" id="workspace-paths" data-ui="workspace-paths" role="region"></div></article></div>
         </div>
+        <div data-workspace-panel="audit" hidden><article class="tcrn-card"><div class="tcrn-card__head"><div><h2 data-i18n="dashboard.auditTitle">This session</h2><p class="tcrn-card__note" data-i18n="dashboard.auditNote">Every attempted governed write stays visible.</p></div></div><div class="tcrn-audit" id="dashboard-audit"></div></article></div>
       </section>
-    </section>
-
-    <!-- RECONCILE -->
-    <section id="surface-reconcile" hidden>
-      <p class="tcrn-lede" data-i18n="reconcile.lede">…</p>
-      <section class="tcrn-panel tcrn-mt-4">
-        <div class="tcrn-panel__head"><h2 data-i18n="reconcile.panelTitle">Prose against the live catalog</h2><button class="tcrn-button" id="rerun-reconcile" type="button" data-i18n="reconcile.rerun">Re-run</button></div>
-        <div class="tcrn-panel__body">
-          <div class="tcrn-banner tcrn-banner--ready" id="reconcile-banner"><span id="reconcile-message">checking…</span><span class="tcrn-meta" id="reconcile-code"></span></div>
-          <table class="tcrn-table">
-            <thead><tr><th scope="col" data-i18n="reconcile.colFile">File</th><th scope="col" data-i18n="reconcile.colKey">Key claimed in prose</th><th scope="col" data-i18n="reconcile.colRegistered">Registered</th></tr></thead>
-            <tbody id="reconcile-rows"></tbody>
-          </table>
-          <p class="tcrn-help tcrn-mt-2"><span data-i18n="reconcile.mismatches">Mismatches</span>: <span id="reconcile-count">0</span></p>
-        </div>
+      <section class="tcrn-page tcrn-page--manage" data-page="settings" hidden>
+        <div class="tcrn-page__head"><div><h1 data-i18n="page.settings">Settings</h1><p class="tcrn-page__lede" data-i18n="config.lede">Registered settings, read from the engine and changed through its public CLI.</p></div><div class="tcrn-page__actions"><span class="tcrn-chip" id="settings-count"></span></div></div>
+        <div class="tcrn-manage"><nav class="tcrn-subnav" aria-label="Settings groups"><button class="tcrn-subnav__item" data-setting-group="workspace" aria-current="page" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="models" data-i18n="settings.models">Subagent models</button></nav><div><div id="settings-rows"></div><div id="model-plans" hidden></div></div></div>
       </section>
-    </section>
-  </main>
+      <section class="tcrn-page tcrn-page--manage" data-page="prose" hidden>
+        <div class="tcrn-page__head"><div><h1 data-i18n="page.prose">Rules</h1><p class="tcrn-page__lede" data-i18n="prose.lede">Workspace prose is edited as a plain file and checked against the live engine vocabulary.</p></div><div class="tcrn-page__actions"><span class="tcrn-chip" id="reconcile-chip">—</span><button class="tcrn-button tcrn-button--primary" id="save-agents" data-i18n="prose.save" data-cli-action="agents-write">Save</button></div></div>
+        <div class="tcrn-editor-shell"><nav class="tcrn-editor__directory" id="prose-directory" data-ui="prose-directory" aria-label="Document directory" role="tree"></nav><div class="tcrn-editor__bar"><span class="tcrn-meta" id="agents-path"></span><span class="tcrn-editor__status" id="agents-status" data-i18n="prose.fileNote">plain file</span></div><div class="tcrn-editor-wrap"><div class="tcrn-editor__gutter" id="prose-gutter" data-ui="prose-gutter" role="note" aria-label="Line numbers"></div><textarea class="tcrn-textarea tcrn-editor" id="agents-md" spellcheck="false" aria-label="AGENTS.md"></textarea></div><div class="tcrn-card tcrn-prose-findings" id="reconcile-findings"></div></div>
+      </section>
+      <section class="tcrn-page tcrn-page--manage" data-page="entities" hidden>
+        <div class="tcrn-page__head"><div><h1 data-i18n="page.entities">Entities</h1><p class="tcrn-page__lede" data-i18n="entities.lede">Personas are identities. Presets can be overridden or tombstoned; names remain stable.</p></div><div class="tcrn-page__actions"><button class="tcrn-button tcrn-button--primary" id="new-persona" data-i18n="entities.new" data-cli-action="persona-set">New persona</button></div></div>
+        <div class="tcrn-tabs" role="tablist" data-ui="entity-tabs" aria-label="Entity views"><button class="tcrn-tab" role="tab" aria-selected="true" data-entity-tab="personas" data-i18n="entities.personasTab">Personas</button><button class="tcrn-tab" role="tab" aria-selected="false" disabled data-entity-tab="templates" data-i18n="entities.templatesTab">Templates (reserved)</button></div>
+        <div class="tcrn-entity-layout" data-entity-panel="personas"><section class="tcrn-card tcrn-entity-list"><div class="tcrn-card__head"><h2 data-i18n="entities.list">Personas</h2><span class="tcrn-meta" id="persona-count"></span></div><div class="tcrn-entity-section" data-ui="persona-section-custom" role="group"><div class="tcrn-entity-section__label" data-i18n="entities.customSection">Custom</div><div class="tcrn-list" id="persona-list-custom"></div></div><div class="tcrn-entity-section" data-ui="persona-section-preset" role="group"><div class="tcrn-entity-section__label" data-i18n="entities.presetSection">Presets</div><div class="tcrn-list" id="persona-list-preset"></div></div></section><section class="tcrn-card tcrn-entity-detail" id="persona-detail"><div class="tcrn-empty" data-i18n="entities.select">Select a persona to inspect its governed content.</div></section></div>
+      </section>
+      <section class="tcrn-page tcrn-page--manage" data-page="vocabulary" hidden>
+        <div class="tcrn-page__head"><div><h1 data-i18n="page.vocabulary">System vocabulary</h1><p class="tcrn-page__lede" data-i18n="vocabulary.lede">Read-only terms come from the engine roster. The portal does not invent enums.</p></div><span class="tcrn-chip" id="vocabulary-version">—</span></div>
+        <div class="tcrn-vocabulary"><nav class="tcrn-subnav" aria-label="Vocabulary categories" id="vocabulary-nav"></nav><div class="tcrn-vocabulary__terms" id="vocabulary-terms"></div></div>
+      </section>
+    </main>
+  </div>
+  <footer class="tcrn-statusbar"><span class="tcrn-dot"></span><span class="tcrn-statusbar__command" id="echo-command"><code data-i18n="echo.idle">agent:portal · public CLI</code></span><button class="tcrn-button tcrn-button--quiet" id="drawer-button" data-i18n="receipt.open">Receipt &amp; audit</button></footer>
 </div>
-
+<div class="tcrn-search-results" id="search-results" hidden aria-label="Search results"></div>
+<aside class="tcrn-drawer" id="receipt-drawer" data-ui="receipt-drawer" data-open="false" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="receipt-title"><div class="tcrn-drawer__head"><h2 id="receipt-title" data-i18n="receipt.title">Engine receipt</h2><button class="tcrn-button tcrn-button--quiet" id="drawer-close" data-i18n="receipt.close">Close</button></div><div class="tcrn-receipt" id="receipt-body"></div><h3 data-i18n="dashboard.auditTitle">This session</h3><div class="tcrn-audit" id="drawer-audit"></div></aside>
+<!-- These stable markers keep the static DOM contract visible before data loads. The
+     live renderers replace their content with the same selectors after the engine
+     read completes. -->
+<script src="/locales.js"></script>
 <script>
 const BOOT = __PORTAL_BOOT__;
-const $ = (id) => document.getElementById(id);
-
-// --- i18n ---------------------------------------------------------------
-// The locale set and the fallback come from @tcrn/ui-copy-state via BOOT;
-// scripts/i18n-proof.mjs asserts the table here matches that contract.
-const LOCALES = window.PORTAL_LOCALES;
-const FALLBACK = BOOT.fallbackLocale;
-let locale = (() => {
-  const stored = localStorage.getItem("tcrn-portal-locale");
-  if (stored && LOCALES[stored]) return stored;
-  for (const candidate of navigator.languages ?? []) {
-    if (LOCALES[candidate]) return candidate;
-    const base = candidate.split("-")[0];
-    const match = BOOT.supportedLocales.find((entry) => entry === base || entry.split("-")[0] === base);
-    if (match) return match;
-  }
-  return BOOT.defaultLocale;
-})();
-
-// Missing copy falls back rather than rendering a bare key, but the proof
-// script keeps that path from being reached: every key is required in every
-// locale, so a fallback in production would be a defect.
-const t = (key, replacements) => {
-  let value = LOCALES[locale]?.[key] ?? LOCALES[FALLBACK]?.[key] ?? key;
-  for (const [name, replacement] of Object.entries(replacements ?? {})) value = value.replaceAll("{" + name + "}", replacement);
-  return value;
-};
-
-function applyLocale() {
-  document.documentElement.lang = locale;
-  document.documentElement.setAttribute("data-tcrn-locale", locale);
-  localStorage.setItem("tcrn-portal-locale", locale);
-  for (const node of document.querySelectorAll("[data-i18n]")) node.textContent = t(node.dataset.i18n);
-  $("surface-title").textContent = t("nav." + currentSurface);
-  $("receipt-footnote").textContent = t("receipt.footnote", { actor: BOOT.actor });
-  document.title = t("app.brand") + " — " + t("app.subtitle");
-}
-
-const localeSelect = $("locale-select");
-const partitionSwitcher = $("partition-switcher");
-const partitionSelect = $("partition-select");
-for (const entry of BOOT.localeMetadata) {
-  const option = document.createElement("option");
-  option.value = entry.locale;
-  option.textContent = entry.nativeName;
-  localeSelect.append(option);
-}
-localeSelect.value = locale;
-localeSelect.onchange = () => {
-  locale = localeSelect.value;
-  applyLocale();
-  renderCatalog(); syncEditor(); renderPolicyCard(); renderPersonas(); loadReconcile();
-  if (lastReceipt) renderReceipt(lastReceipt.status, lastReceipt.body);
-};
-
-// The design system carries its dark values under [data-tcrn-theme="dark"], so
-// following the OS preference costs one attribute and invents no colour.
-const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
-const applyTheme = () => document.documentElement.setAttribute("data-tcrn-theme", darkQuery.matches ? "dark" : "light");
-darkQuery.addEventListener("change", applyTheme);
-applyTheme();
-const text = (value) => String(value ?? "");
-
-$("boot-workspace").textContent = BOOT.partitionMode ? BOOT.container : BOOT.workspace;
-
-async function api(path, options = {}) {
-  const headers = { "content-type": "application/json" };
-  if (options.method && options.method !== "GET") headers["x-portal-token"] = BOOT.token;
-  const response = await fetch(path, { ...options, headers });
-  return { status: response.status, body: await response.json() };
-}
-
-partitionSelect.onchange = async () => {
-  const previous = selectedPartition;
-  partitionSelect.disabled = true;
-  try {
-    const { status, body } = await api("/api/partition", {
-      method: "POST",
-      body: JSON.stringify({ partition: partitionSelect.value }),
+(() => {
+  "use strict";
+  const LOCALES = window.PORTAL_LOCALES || {};
+  const state = { locale: BOOT.defaultLocale || "en", theme: "light", page: "dashboard", dashboardTab: "overview", entityTab: "personas", settingGroup: "workspace", settings: null, execution: null, vocabulary: null, status: null, commands: [], audit: [], selectedPersona: null, selectedVocabulary: "roles", receipt: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]);
+  const localeText = (key) => LOCALES[state.locale]?.[key] ?? LOCALES[BOOT.fallbackLocale || "en"]?.[key] ?? key;
+  const t = (key, values = {}) => Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), localeText(key));
+  const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = String(value ?? ""); };
+  const roleValue = (role) => typeof role === "string" ? role : role?.value;
+  const termValue = (term) => typeof term === "string" ? term : term?.value ?? term?.key ?? "";
+  const vocabularyDefinition = (category, term) => {
+    if (typeof term === "string") return t("vocabulary.readOnly");
+    const value = termValue(term);
+    const localized = t(`vocabulary.term.${category}.${value}.description`);
+    if (localized !== `vocabulary.term.${category}.${value}.description`) return localized;
+    if (category === "settingsEnums" && term.key) return settingDescription(term.key);
+    return term.description || `${t("vocabulary.enumValues")}: ${(term.allowedValues || term.coveredByIndependenceFloors || []).join(", ")}`;
+  };
+  const api = async (path, options = {}) => {
+    const headers = { ...(options.body === undefined ? {} : { "content-type": "application/json" }), ...(options.method && options.method !== "GET" ? { "x-portal-token": BOOT.token } : {}) };
+    const response = await fetch(path, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+    const body = await response.json();
+    return { ...body, httpStatus: response.status };
+  };
+  const commandEntry = (name) => state.commands.find((entry) => entry.name === name);
+  const echo = (name, args = []) => {
+    if (!commandEntry(name)) return;
+    // Proposal for the unresolved echo decision: show the catalog verb and
+    // domain flags while omitting common workspace/CAS/instant prefixes.
+    setText("#echo-command", `${name}${args.length ? ` ${args.join(" ")}` : ""}`);
+  };
+  const attachEcho = (root = document) => {
+    $$('[data-cli-action]', root).forEach((node) => {
+      const action = node.dataset.cliAction;
+      const handler = () => echo(action);
+      node.addEventListener("focus", handler);
+      node.addEventListener("mouseenter", handler);
+      node.addEventListener("pointerenter", handler);
     });
-    if (status !== 200) {
-      selectedPartition = previous;
-      renderPartitions();
-      chip($("live-chip"), "warning", t("chip.catalogFailed"));
-      return;
-    }
-    selectedPartition = body.selectedPartition;
-    renderPartitions();
-    $("boot-workspace").textContent = body.workspace ?? $("boot-workspace").textContent;
-    lastReceipt = null;
-    await Promise.all([loadCatalog(), loadProse(), loadReconcile()]);
-  } finally {
-    partitionSelect.disabled = false;
-  }
-};
-
-async function loadPartitions() {
-  if (!BOOT.partitionMode) return;
-  const { status, body } = await api("/api/partitions");
-  if (status === 200) {
-    partitions = body.partitions ?? partitions;
-    selectedPartition = body.selectedPartition ?? selectedPartition;
-    renderPartitions();
-  }
-}
-
-let catalog = [];
-let selectedKey = null;
-let currentSurface = "config";
-let lastReceipt = null;
-let partitions = BOOT.partitions ?? [];
-let selectedPartition = BOOT.selectedPartition ?? partitions[0]?.id ?? "";
-
-function renderPartitions() {
-  partitionSwitcher.hidden = !BOOT.partitionMode;
-  if (!BOOT.partitionMode) return;
-  partitionSelect.textContent = "";
-  for (const entry of partitions) {
-    const option = document.createElement("option");
-    option.value = entry.id;
-    option.textContent = entry.id;
-    partitionSelect.append(option);
-  }
-  partitionSelect.value = selectedPartition;
-}
-
-function chip(element, tone, label) {
-  element.className = "tcrn-state-chip tcrn-state-chip--" + tone;
-  element.textContent = label;
-}
-
-function renderCatalog() {
-  const list = $("setting-list");
-  list.textContent = "";
-  for (const entry of catalog) {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "tcrn-row";
-    row.setAttribute("role", "option");
-    row.setAttribute("aria-selected", String(entry.key === selectedKey));
-    row.onclick = () => { selectedKey = entry.key; renderCatalog(); syncEditor(); };
-    const label = document.createElement("span");
-    const key = document.createElement("span");
-    key.className = "tcrn-row__key";
-    // The human name leads; the technical key stays present in the meta line
-    // because the CLI and the conversation still speak in keys, and a person
-    // must be able to map what they see here onto what they type there.
-    const labelKey = "setting." + entry.key + ".label";
-    key.textContent = LOCALES[locale]?.[labelKey] ?? LOCALES[FALLBACK]?.[labelKey] ?? entry.key;
-    const meta = document.createElement("span");
-    meta.className = "tcrn-row__meta";
-    meta.textContent = entry.key + " · " + entry.type;
-    label.append(key, meta);
-    const value = document.createElement("span");
-    value.className = "tcrn-row__value";
-    value.textContent = entry.currentValue === null ? t("config.unset") : entry.currentValue;
-    row.append(label, value);
-    list.append(row);
-  }
-  $("catalog-tag").textContent = catalog.length + " " + t("config.keyCount");
-}
-
-function syncEditor() {
-  const entry = catalog.find((item) => item.key === selectedKey);
-  if (!entry) return;
-  const editorLabelKey = "setting." + entry.key + ".label";
-  $("setting-label").textContent = LOCALES[locale]?.[editorLabelKey] ?? LOCALES[FALLBACK]?.[editorLabelKey] ?? entry.key;
-  $("setting-key").textContent = entry.key;
-  // A key the engine registers but the portal has no copy for gets an explicit
-  // sentence rather than an empty box; i18n-proof turns red on that state.
-  const descriptionKey = "setting." + entry.key + ".description";
-  const described = LOCALES[locale]?.[descriptionKey] ?? LOCALES[FALLBACK]?.[descriptionKey];
-  $("setting-description").textContent = described ?? t("setting.unknown.description");
-  const input = $("setting-input");
-  const select = $("setting-select");
-  const isEnum = entry.type === "enum";
-  const allowedValues = Array.isArray(entry.allowedValues) ? entry.allowedValues : [];
-  $("setting-label").htmlFor = isEnum ? "setting-select" : "setting-input";
-  input.hidden = isEnum;
-  select.hidden = !isEnum;
-  select.disabled = isEnum && allowedValues.length === 0;
-  select.textContent = "";
-  for (const value of allowedValues) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
-    select.append(option);
-  }
-  if (isEnum) {
-    select.value = entry.currentValue ?? allowedValues[0] ?? "";
-  } else {
-    input.value = entry.currentValue ?? "";
-  }
-  $("setting-help").textContent = isEnum && allowedValues.length === 0
-    ? t("config.enumUnavailable")
-    : t("config.helpType") + " " + entry.type + " · " + t("config.helpDefault") + " " + (entry.defaultValue === null ? t("config.helpNone") : entry.defaultValue) + " · " + t("config.helpLayer") + " " + entry.layer;
-  $("save-setting").disabled = isEnum && allowedValues.length === 0;
-}
-
-function renderReceipt(status, body) {
-  lastReceipt = { status, body };
-  const committed = status === 200 && body.reasonCode === "SETTINGS_WRITE_COMMITTED";
-  chip($("receipt-state"), committed ? "ready" : "blocked", t(committed ? "chip.committed" : "chip.refused"));
-  const host = $("receipt-body");
-  host.textContent = "";
-  const code = document.createElement("strong");
-  code.className = "tcrn-receipt__code" + (committed ? "" : " tcrn-receipt__code--refused");
-  // Verbatim engine text, labelled as the evidence it is rather than used as
-  // the interface's own wording (i18n contract: rawEnumLabelsAllowed false).
-  code.textContent = body.reasonCode ?? "UNKNOWN";
-  const codeLabel = document.createElement("span");
-  codeLabel.className = "tcrn-meta";
-  codeLabel.textContent = t("receipt.reasonCode");
-  host.append(codeLabel, code);
-  const pairs = committed
-    ? [[t("receipt.value"), body.setting?.value], [t("receipt.readback"), body.readback?.currentValue], [t("receipt.version"), body.version], [t("receipt.record"), body.recordId], [t("receipt.digest"), text(body.receiptDigest).slice(0, 16) + "…"], [t("receipt.head"), text(body.headEventHash).slice(0, 16) + "…"]]
-    : [[t("receipt.error"), body.error ?? "—"], [t("receipt.key"), selectedKey], ...(Array.isArray(body.allowedValues) ? [[t("receipt.allowedValues"), body.allowedValues.join(", ")]] : [])];
-  const list = document.createElement("dl");
-  list.className = "tcrn-kv-list";
-  for (const [term, value] of pairs) {
-    const row = document.createElement("div");
-    row.className = "tcrn-kv";
-    const dt = document.createElement("dt");
-    dt.textContent = term;
-    const dd = document.createElement("dd");
-    dd.textContent = text(value);
-    row.append(dt, dd);
-    list.append(row);
-  }
-  host.append(list);
-  const note = document.createElement("p");
-  note.className = "tcrn-footnote";
-  note.id = "receipt-footnote";
-  note.textContent = t("receipt.footnote", { actor: BOOT.actor });
-  host.append(note);
-}
-
-async function loadCatalog() {
-  const { body } = await api("/api/settings");
-  catalog = body.settings ?? [];
-  if (!selectedKey && catalog.length) selectedKey = catalog[0].key;
-  renderCatalog();
-  syncEditor();
-  renderPolicyCard();
-  renderPersonas();
-  renderBindings();
-  applyPersonaPolicy();
-  chip($("live-chip"), body.reasonCode === "SETTINGS_CATALOG_READY" ? "ready" : "warning", t(body.reasonCode === "SETTINGS_CATALOG_READY" ? "chip.catalogReady" : "chip.catalogFailed"));
-}
-
-$("save-setting").onclick = async () => {
-  const button = $("save-setting");
-  button.disabled = true;
-  try {
-    const entry = catalog.find((item) => item.key === selectedKey);
-    const value = entry?.type === "enum" ? $("setting-select").value : $("setting-input").value;
-    const { status, body } = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: selectedKey, value }) });
-    renderReceipt(status, body);
-    await loadCatalog();
-    await loadReconcile();
-  } finally { button.disabled = false; }
-};
-
-async function loadProse() {
-  const { body } = await api("/api/prose?file=" + encodeURIComponent(BOOT.proseFiles[0]));
-  $("prose-text").value = body.text ?? "";
-  $("prose-path").textContent = BOOT.proseFiles[0];
-  $("prose-meta").textContent = body.path ?? "";
-}
-
-$("save-prose").onclick = async () => {
-  const { body } = await api("/api/prose", { method: "POST", body: JSON.stringify({ file: BOOT.proseFiles[0], text: $("prose-text").value }) });
-  const line = $("prose-saved");
-  line.hidden = false;
-  line.textContent = t(body.matches ? "prose.savedMatch" : "prose.savedDiffer");
-  await loadReconcile();
-};
-
-async function loadReconcile() {
-  const { body } = await api("/api/reconcile");
-  const banner = $("reconcile-banner");
-  banner.className = "tcrn-banner tcrn-banner--" + (body.ok ? "ready" : "blocked");
-  $("reconcile-message").textContent = t(body.ok ? "reconcile.green" : "reconcile.red");
-  $("reconcile-code").textContent = body.reasonCode ?? "";
-  $("reconcile-count").textContent = String(body.mismatchCount ?? 0);
-  const host = $("reconcile-rows");
-  host.textContent = "";
-  for (const row of body.rows ?? []) {
-    const tr = document.createElement("tr");
-    const file = document.createElement("td");
-    file.textContent = row.file;
-    const key = document.createElement("td");
-    key.textContent = row.key;
-    const flag = document.createElement("td");
-    flag.className = "tcrn-table__flag--" + (row.registered ? "yes" : "no");
-    flag.textContent = t(row.registered ? "reconcile.yes" : "reconcile.no");
-    tr.append(file, key, flag);
-    host.append(tr);
-  }
-}
-
-$("rerun-reconcile").onclick = loadReconcile;
-
-for (const button of document.querySelectorAll(".tcrn-nav__link")) {
-  button.onclick = () => {
-    const target = button.dataset.surface;
-    currentSurface = target;
-    for (const other of document.querySelectorAll(".tcrn-nav__link")) {
-      if (other === button) other.setAttribute("aria-current", "page");
-      else other.removeAttribute("aria-current");
-    }
-    for (const name of ["config", "prose", "reconcile", "execution"]) $("surface-" + name).hidden = name !== target;
-    $("surface-title").textContent = t("nav." + target);
   };
-}
-
-applyLocale();
-renderPartitions();
-loadPartitions();
-loadCatalog();
-loadProse();
-loadExecution();
-
-const HOSTS = ["claude-code", "codex"];
-const PERSONA_ROLES = ["orchestrator", "planner", "implementer", "reviewer", "gatekeeper", "steward"];
-const POLICY_KEYS = ["execution.subagentPolicy", "execution.independenceFloor", "execution.maxConcurrentSubagents", "execution.maxDispatchDepth", "execution.personalessDispatch"];
-const REVIEW_ONLY_ROLES = new Set(["reviewer", "gatekeeper"]);
-let executionData = { configurations: [], defaults: [], bindings: [], personas: [] };
-let personaEditingId = null;
-
-function personaLabel(persona) {
-  return persona.name + " - " + persona.description;
-}
-
-function personaForId(profileId) {
-  return executionData.personas.find((persona) => persona.id === profileId) ?? null;
-}
-
-function reviewOnlyDimmed(persona) {
-  return policyValue("execution.subagentPolicy") === "review-only" && !REVIEW_ONLY_ROLES.has(persona?.role);
-}
-
-function policyValue(key) {
-  return catalog.find((entry) => entry.key === key)?.currentValue ?? null;
-}
-
-function optionList(select, values, selected) {
-  select.textContent = "";
-  for (const value of values) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
-    select.append(option);
-  }
-  if (selected !== undefined && values.includes(selected)) select.value = selected;
-}
-
-function renderPolicyCard() {
-  const host = $("execution-policy");
-  if (!host || catalog.length === 0) return;
-  host.textContent = "";
-  for (const key of POLICY_KEYS) {
-    const entry = catalog.find((candidate) => candidate.key === key);
-    if (!entry) continue;
-    const row = document.createElement("div");
-    row.className = "tcrn-policy-row";
-    const copy = document.createElement("div");
-    const label = document.createElement("strong");
-    label.className = "tcrn-row__key";
-    label.textContent = t("setting." + key + ".label");
-    const description = document.createElement("p");
-    description.className = "tcrn-policy-row__description";
-    description.textContent = t("setting." + key + ".description");
-    copy.append(label, description);
-    const control = entry.type === "enum" ? document.createElement("select") : document.createElement("input");
-    control.className = entry.type === "enum" ? "tcrn-select" : "tcrn-input";
-    control.id = "policy-" + key.replaceAll(".", "-");
-    control.dataset.policyKey = key;
-    if (entry.type === "enum") optionList(control, entry.allowedValues ?? [], entry.currentValue ?? undefined);
-    else control.value = entry.currentValue ?? "";
-    const save = document.createElement("button");
-    save.className = "tcrn-button tcrn-button--primary tcrn-mt-2";
-    save.type = "button";
-    save.textContent = t("execution.savePolicy");
-    save.onclick = () => savePolicy(key, control);
-    const editor = document.createElement("div");
-    editor.append(control, save);
-    row.append(copy, editor);
-    host.append(row);
-  }
-}
-
-function renderExecutionHosts() {
-  const hostsBox = $("execution-hosts");
-  hostsBox.textContent = "";
-  for (const host of HOSTS) {
-    const configurations = executionData.configurations.filter((entry) => entry.host === host);
-    const fallback = executionData.defaults.find((entry) => entry.host === host)?.configurationName ?? null;
-    const head = document.createElement("h3");
-    head.className = "tcrn-row__key";
-    head.textContent = host + (fallback ? " · " + t("execution.defaultIs") + " " + fallback : "");
-    hostsBox.append(head);
-    if (configurations.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "tcrn-help";
-      empty.textContent = t("execution.empty");
-      hostsBox.append(empty);
-      continue;
-    }
-    for (const entry of configurations) {
-      const row = document.createElement("div");
-      row.className = "tcrn-field-row";
-      const label = document.createElement("span");
-      label.className = "tcrn-row__key";
-      label.textContent = entry.name + " → " + entry.model + (entry.note ? " (" + entry.note + ")" : "") + (entry.name === fallback ? "  ★" : "");
-      const actions = document.createElement("span");
-      actions.className = "tcrn-actions";
-      const setDefault = document.createElement("button");
-      setDefault.className = "tcrn-button";
-      setDefault.type = "button";
-      setDefault.textContent = t("execution.setDefault");
-      setDefault.onclick = () => executionAction({ action: "config-default", host, name: entry.name });
-      const remove = document.createElement("button");
-      remove.className = "tcrn-button";
-      remove.type = "button";
-      remove.textContent = t("execution.remove");
-      remove.onclick = () => executionAction({ action: "config-remove", host, name: entry.name });
-      actions.append(setDefault, remove);
-      row.append(label, actions);
-      hostsBox.append(row);
-    }
-  }
-}
-
-function renderBindings() {
-  const bindingsBox = $("execution-bindings");
-  bindingsBox.textContent = "";
-  for (const binding of executionData.bindings) {
-    const persona = personaForId(binding.profileId);
-    const dimmed = reviewOnlyDimmed(persona);
-    const row = document.createElement("div");
-    row.className = "tcrn-persona-row" + (dimmed ? " tcrn-persona-row--dimmed" : "");
-    row.dataset.personaRole = persona?.role ?? "";
-    const copy = document.createElement("span");
-    copy.className = "tcrn-row__key";
-    copy.textContent = (persona ? personaLabel(persona) : binding.profileId) + " → " + binding.host + " : " + binding.configurationName;
-    const unbind = document.createElement("button");
-    unbind.className = "tcrn-button";
-    unbind.type = "button";
-    unbind.textContent = t("execution.unbind");
-    unbind.dataset.reviewOnlyBlocked = String(dimmed);
-    unbind.disabled = dimmed;
-    unbind.onclick = () => executionAction({ action: "binding-remove", profileId: binding.profileId, host: binding.host });
-    row.append(copy, unbind);
-    bindingsBox.append(row);
-  }
-  if (executionData.bindings.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "tcrn-help";
-    empty.textContent = t("execution.noBindings");
-    bindingsBox.append(empty);
-  }
-}
-
-function renderBindingControls() {
-  optionList($("execution-host"), HOSTS);
-  const bindingHost = $("binding-host").value || HOSTS[0];
-  optionList($("binding-host"), HOSTS, bindingHost);
-  const personas = executionData.personas;
-  const profileSelect = $("binding-profile");
-  const previousProfile = profileSelect.value;
-  profileSelect.textContent = "";
-  for (const persona of personas) {
-    const option = document.createElement("option");
-    option.value = persona.id;
-    option.textContent = personaLabel(persona);
-    profileSelect.append(option);
-  }
-  if (personas.some((persona) => persona.id === previousProfile)) profileSelect.value = previousProfile;
-  const configurations = executionData.configurations.filter((entry) => entry.host === bindingHost).map((entry) => entry.name);
-  const previousName = $("binding-name").value;
-  optionList($("binding-name"), configurations, previousName);
-}
-
-function renderPersonas() {
-  const host = $("execution-personas");
-  if (!host) return;
-  host.textContent = "";
-  for (const persona of executionData.personas) {
-    const dimmed = reviewOnlyDimmed(persona);
-    const row = document.createElement("div");
-    row.className = "tcrn-persona-row" + (dimmed ? " tcrn-persona-row--dimmed" : "");
-    row.dataset.personaRole = persona.role;
-    row.dataset.personaId = persona.id;
-    const textBox = document.createElement("div");
-    const name = document.createElement("span");
-    name.className = "tcrn-persona-row__name";
-    name.textContent = persona.name;
-    const description = document.createElement("span");
-    description.className = "tcrn-persona-row__description";
-    description.textContent = persona.description;
-    const meta = document.createElement("span");
-    meta.className = "tcrn-persona-row__meta";
-    meta.textContent = persona.role + " · " + (persona.readOnly ? t("execution.readOnly") : t("execution.custom"));
-    textBox.append(name, description, meta);
-    const actions = document.createElement("span");
-    actions.className = "tcrn-actions";
-    const action = document.createElement("button");
-    action.className = "tcrn-button";
-    action.type = "button";
-    action.dataset.reviewOnlyBlocked = String(dimmed);
-    action.disabled = dimmed;
-    if (persona.readOnly) {
-      action.textContent = t("execution.copyPersona");
-      action.onclick = () => openPersonaEditor(persona, true);
-    } else {
-      action.textContent = t("execution.editPersona");
-      action.onclick = () => openPersonaEditor(persona, false);
-      const remove = document.createElement("button");
-      remove.className = "tcrn-button";
-      remove.type = "button";
-      remove.dataset.reviewOnlyBlocked = String(dimmed);
-      remove.disabled = dimmed;
-      remove.textContent = t("execution.removePersona");
-      remove.onclick = () => executionAction({ action: "persona-remove", name: persona.name });
-      actions.append(remove);
-    }
-    actions.append(action);
-    row.append(textBox, actions);
-    host.append(row);
-  }
-  applyPersonaPolicy();
-}
-
-function applyPersonaPolicy() {
-  const card = $("execution-personas-card");
-  if (!card) return;
-  const policy = policyValue("execution.subagentPolicy");
-  const forbidden = policy === "forbidden";
-  card.classList.toggle("tcrn-execution-card--muted", forbidden);
-  card.setAttribute("aria-disabled", String(forbidden));
-  for (const control of card.querySelectorAll("button, input, select, textarea")) {
-    control.disabled = forbidden || control.dataset.reviewOnlyBlocked === "true";
-  }
-  if (policy === "review-only" && personaEditingId !== null) {
-    const editing = personaForId(personaEditingId);
-    if (editing && !REVIEW_ONLY_ROLES.has(editing.role)) $("persona-save").disabled = true;
-  }
-}
-
-function openPersonaEditor(persona, copy) {
-  personaEditingId = copy ? null : persona.id;
-  $("persona-name").value = copy ? persona.name + " (custom)" : persona.name;
-  $("persona-description").value = persona.description;
-  $("persona-role").value = persona.role;
-  $("persona-prompt").value = persona.prompt;
-  $("persona-editor-mode").textContent = copy ? t("execution.copyMode") : t("execution.editMode");
-  updatePromptCount();
-  applyPersonaPolicy();
-  $("persona-name").focus();
-}
-
-function clearPersonaEditor() {
-  personaEditingId = null;
-  $("persona-name").value = "";
-  $("persona-description").value = "";
-  $("persona-role").value = "orchestrator";
-  $("persona-prompt").value = "";
-  $("persona-editor-mode").textContent = t("execution.editorIdle");
-  updatePromptCount();
-  applyPersonaPolicy();
-}
-
-function updatePromptCount() {
-  $("persona-prompt-count").textContent = $("persona-prompt").value.length + " / 4096 · " + t("execution.promptHintShort");
-}
-
-// INIT-027 S238/S240/S241. The portal is a renderer and a one-verb transport;
-// it does not pre-validate persona content. Prompt overflow and every other
-// refusal travel to the engine and are shown verbatim in the execution receipt.
-async function loadExecution() {
-  const { body } = await api("/api/execution?token=" + BOOT.token);
-  if (body.reasonCode !== "EXECUTION_CONFIG_READY") return;
-  executionData = {
-    configurations: body.configurations ?? [],
-    defaults: body.defaults ?? [],
-    bindings: body.bindings ?? [],
-    personas: body.personas ?? [],
+  const recordValue = (body) => body?.record?.id ?? body?.setting?.key ?? body?.plan?.name ?? body?.name ?? body?.reasonCode ?? "—";
+  const openReceipt = () => { const drawer = $("#receipt-drawer"); drawer.dataset.open = "true"; drawer.setAttribute("aria-hidden", "false"); renderReceipt(); $("#drawer-close").focus(); };
+  const closeReceipt = () => { const drawer = $("#receipt-drawer"); drawer.dataset.open = "false"; drawer.setAttribute("aria-hidden", "true"); };
+  const showReceipt = (body) => {
+    state.receipt = body || { ok: false, reasonCode: "PORTAL_EMPTY_RECEIPT" };
+    const success = state.receipt.ok !== false && !String(state.receipt.reasonCode || "").includes("REFUSED");
+    const chip = $("#receipt-chip");
+    chip.className = `tcrn-chip ${success ? "tcrn-chip--ready" : "tcrn-chip--blocked"}`;
+    setText("#receipt-chip-text", state.receipt.version ? `${success ? "✓" : "✕"}v${state.receipt.version}` : `${success ? "✓" : "✕"} ${state.receipt.reasonCode || "—"}`);
+    renderReceipt();
   };
-  renderExecutionHosts();
-  renderPersonas();
-  renderBindings();
-  renderBindingControls();
-  applyPersonaPolicy();
-}
-
-async function executionAction(payload) {
-  const { body } = await api("/api/execution", { method: "POST", body: JSON.stringify(payload) });
-  const receipt = $("execution-receipt");
-  receipt.hidden = false;
-  receipt.textContent = JSON.stringify(body, null, 2);
-  await loadExecution();
-}
-
-async function savePolicy(key, control) {
-  const { status, body } = await api("/api/settings", { method: "POST", body: JSON.stringify({ key, value: control.value }) });
-  selectedKey = key;
-  renderReceipt(status, body);
-  await Promise.all([loadCatalog(), loadExecution(), loadReconcile()]);
-}
-
-$("execution-add").onclick = () => executionAction({
-  action: "config-set", host: $("execution-host").value, name: $("execution-name").value,
-  model: $("execution-model").value, note: $("execution-note").value || undefined,
-});
-$("binding-host").onchange = () => renderBindingControls();
-$("binding-add").onclick = () => executionAction({
-  action: "binding-set", profileId: $("binding-profile").value,
-  host: $("binding-host").value, name: $("binding-name").value,
-});
-$("persona-prompt").oninput = updatePromptCount;
-$("persona-save").onclick = () => executionAction({
-  action: "persona-set", name: $("persona-name").value, description: $("persona-description").value,
-  role: $("persona-role").value, prompt: $("persona-prompt").value,
-});
-$("persona-clear").onclick = clearPersonaEditor;
-loadReconcile();
+  const renderReceipt = () => {
+    const body = state.receipt || { reasonCode: "PORTAL_IDLE", message: t("receipt.empty"), actor: BOOT.actor };
+    const fields = [["receipt.reasonCode", t("receipt.reasonCode"), body.reasonCode], ["receipt.record", t("receipt.record"), recordValue(body)], ["receipt.version", t("receipt.version"), body.version ?? "—"], ["receipt.digest", t("receipt.digest"), body.receiptDigest ?? "—"], ["receipt.head", t("receipt.head"), body.headEventHash ?? "—"], ["receipt.actor", t("receipt.actor"), body.actor ?? BOOT.actor]];
+    $("#receipt-body").innerHTML = fields.map(([, label, value]) => `<div class="tcrn-receipt__row"><span class="tcrn-receipt__key">${esc(label)}</span><span class="tcrn-receipt__value">${esc(value)}</span></div>`).join("");
+    renderAudit("#drawer-audit");
+  };
+  const renderAudit = (selector) => {
+    const target = $(selector);
+    if (!target) return;
+    target.innerHTML = state.audit.length === 0 ? `<div class="tcrn-empty">${esc(t("dashboard.auditEmpty"))}</div>` : state.audit.map((entry) => `<div class="tcrn-audit__item"><span class="tcrn-audit__time">${esc(String(entry.occurredAt || "").slice(11, 16))}</span><span class="tcrn-audit__summary">${esc(entry.summary)}</span><span class="tcrn-chip ${entry.ok ? "tcrn-chip--ready" : "tcrn-chip--blocked"}">${esc(entry.version ? `v${entry.version}` : entry.reasonCode)}</span></div>`).join("");
+  };
+  const applyLocale = () => {
+    document.documentElement.lang = state.locale;
+    document.documentElement.dataset.tcrnLocale = state.locale;
+    $$('[data-i18n]').forEach((node) => { node.textContent = t(node.dataset.i18n); });
+    $$('[data-i18n-placeholder]').forEach((node) => { node.placeholder = t(node.dataset.i18nPlaceholder); });
+    $("#locale-select").value = state.locale;
+    renderReceipt();
+  };
+  const navigate = (page) => {
+    state.page = page;
+    $$('[data-page]').forEach((section) => { section.hidden = section.dataset.page !== page; });
+    $$('[data-page-target]').forEach((button) => { if (button.dataset.pageTarget) button.setAttribute("aria-current", button.dataset.pageTarget === page ? "page" : "false"); });
+    setText("#echo-command", page === "dashboard" ? t("echo.idle") : `${page} · ${BOOT.actor}`);
+    $("#search-results").hidden = true;
+  };
+  const settingGroup = (key) => key.startsWith("backup.") ? "backup" : key.startsWith("execution.") && key.endsWith("SubagentPlan") ? "models" : key.startsWith("execution.") ? "execution" : "workspace";
+  const settingLabel = (key) => t(`setting.${key}.label`);
+  const settingDescription = (key) => t(`setting.${key}.description`);
+  const currentSetting = (key) => state.settings?.settings?.find((entry) => entry.key === key);
+  const hostFromPlanKey = (key) => key.slice("execution.".length, -"SubagentPlan".length).replace(/[A-Z]/gu, (character) => `-${character.toLowerCase()}`);
+  const planSettingForHost = (host) => (state.settings?.settings || []).find((entry) => entry.key.startsWith("execution.") && entry.key.endsWith("SubagentPlan") && hostFromPlanKey(entry.key) === host);
+  const activePlan = (host) => { const entry = planSettingForHost(host); return state.execution?.plans?.find((plan) => plan.host === host && plan.name === entry?.currentValue); };
+  const controlFor = (entry) => {
+    const values = entry.key.includes("SubagentPlan") ? ["", ...(state.execution?.plans || []).filter((plan) => plan.host === hostFromPlanKey(entry.key)).map((plan) => plan.name)] : [...(entry.allowedValues || [])];
+    const current = entry.currentValue ?? "";
+    if (entry.controlType === "boolean") return `<label class="tcrn-switch"><input class="tcrn-input" type="checkbox" role="switch" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set" data-setting-value="${esc(entry.trueValue || "allowed")}" ${current === (entry.trueValue || "allowed") ? "checked" : ""}><span>${esc(current === (entry.trueValue || "allowed") ? t("config.enabled") : t("config.disabled"))}</span></label>`;
+    if (entry.controlType === "number") return `<input class="tcrn-input" type="number" min="${esc(entry.min)}" max="${esc(entry.max)}" step="1" value="${esc(current)}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set">`;
+    if (entry.controlType === "enum" && values.length > 0 && values.length <= 3) return `<div class="tcrn-segmented" role="group" aria-label="${esc(settingLabel(entry.key))}">${values.map((value) => `<button type="button" class="tcrn-button ${value === current ? "tcrn-button--primary" : ""}" data-setting-control="${esc(entry.key)}" data-setting-value="${esc(value)}" data-cli-action="settings-set">${esc(value || t("config.unset"))}</button>`).join("")}</div>`;
+    if (entry.controlType === "enum" && values.length > 0) return `<select class="tcrn-select" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set">${values.map((value) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(value || t("config.unset"))}</option>`).join("")}</select>`;
+    return `<input class="tcrn-input" value="${esc(current)}" placeholder="${esc(entry.defaultValue ?? t("config.unset"))}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set">`;
+  };
+  const renderSettings = () => {
+    const settings = state.settings?.settings || [];
+    const visible = settings.filter((entry) => settingGroup(entry.key) === state.settingGroup);
+    setText("#settings-count", `${visible.length} ${t("config.keyCount")}`);
+    $("#settings-rows").innerHTML = visible.map((entry) => {
+      const modified = entry.currentValue !== entry.defaultValue;
+      const reset = modified ? `<button class="tcrn-button tcrn-button--quiet tcrn-setting-reset" data-reset-setting="${esc(entry.key)}" data-cli-action="settings-remove" aria-label="${esc(t("config.reset"))}">↺</button>` : `<span class="tcrn-setting-reset" aria-hidden="true">↺</span>`;
+      const dictionary = entry.allowedValues?.length ? `<button type="button" class="tcrn-button tcrn-button--quiet" data-vocabulary-link="settingsEnums" data-ui="setting-dictionary-link" aria-label="${esc(t("config.dictionary"))}">📖</button>` : "";
+      const dot = `<span class="tcrn-modified-dot" data-ui="setting-modified-dot" role="status" aria-label="${esc(t("config.modified"))}" ${modified ? "" : "hidden"}>●</span>`;
+      return `<div class="tcrn-setting-row ${modified ? "tcrn-highlightable" : ""}" data-setting-row="${esc(entry.key)}"><div class="tcrn-setting-row__label"><div class="tcrn-setting-row__name"><span>${esc(settingLabel(entry.key))}</span>${dot}<span class="tcrn-key">${esc(entry.key)}</span></div><div class="tcrn-setting-row__description">${esc(settingDescription(entry.key))}</div></div><div>${controlFor(entry)}</div><div class="tcrn-setting-row__tools">${dictionary}${reset}</div></div>`;
+    }).join("") || `<div class="tcrn-empty">${esc(t("config.empty"))}</div>`;
+    $("#model-plans").hidden = state.settingGroup !== "models";
+    if (state.settingGroup === "models") renderPlans();
+    $$('[data-setting-control]').forEach((control) => {
+      if (control.tagName === "BUTTON") control.addEventListener("click", () => saveSetting(control.dataset.settingControl, control.dataset.settingValue));
+      else control.addEventListener("change", () => saveSetting(control.dataset.settingControl, control.type === "checkbox" ? (control.checked ? control.dataset.settingValue : (currentSetting(control.dataset.settingControl)?.falseValue || "forbidden")) : control.value));
+    });
+    $$('[data-reset-setting]').forEach((button) => button.addEventListener("click", () => resetSetting(button.dataset.resetSetting)));
+    $$('[data-vocabulary-link]').forEach((button) => button.addEventListener("click", () => { state.selectedVocabulary = button.dataset.vocabularyLink; navigate("vocabulary"); renderVocabulary(); }));
+    attachEcho($("#settings-rows"));
+  };
+  const renderPlans = () => {
+    const plans = state.execution?.plans || [];
+    const hosts = state.vocabulary?.hosts || [];
+    const people = state.execution?.personas || [];
+    $("#model-plans").innerHTML = `<div class="tcrn-card"><div class="tcrn-card__head"><div><h2>${esc(t("models.title"))}</h2><p class="tcrn-card__note">${esc(t("models.note"))}</p><p class="tcrn-scope-note">${esc(t("models.scope"))}</p></div></div><div class="tcrn-model-plan">${hosts.map((host) => {
+      const hostPlans = plans.filter((plan) => plan.host === host);
+      return `<section class="tcrn-model-plan__host"><h3>${esc(host)}</h3>${hostPlans.map((plan) => {
+        const active = activePlan(host)?.name === plan.name;
+        return `<article class="tcrn-plan ${active ? "tcrn-plan--active" : ""}"><div class="tcrn-plan__head"><strong>${esc(plan.name)}</strong><span class="tcrn-plan__model">${esc(plan.defaultModel)}</span>${active ? `<span class="tcrn-chip tcrn-chip--ready" data-ui="plan-active-badge" role="status">${esc(t("models.active"))}</span>` : ""}</div><div class="tcrn-plan__assignments">${Object.entries(plan.assignments || {}).map(([persona, model]) => `<div class="tcrn-assignment"><span>${esc(persona)} → ${esc(model)}</span><button type="button" class="tcrn-button tcrn-button--quiet" data-unassign="${esc(JSON.stringify({ host, plan: plan.name, persona }))}" data-cli-action="model-plan-unassign" aria-label="${esc(t("models.unassign"))}">×</button></div>`).join("") || `<span class="tcrn-meta">${esc(t("models.defaultFallback"))}</span>`}</div><div class="tcrn-assignment-addline" data-ui="assignment-addline" role="group"><div class="tcrn-field"><label>${esc(t("models.persona"))}</label><select class="tcrn-select" data-assign-persona="${esc(JSON.stringify({ host, plan: plan.name }))}">${people.map((persona) => `<option value="${esc(persona.name)}">${esc(persona.name)}</option>`).join("")}</select></div><div class="tcrn-field"><label>${esc(t("models.model"))}</label><input class="tcrn-input" data-assign-model="${esc(JSON.stringify({ host, plan: plan.name }))}" required></div><button type="button" class="tcrn-button" data-assign="${esc(JSON.stringify({ host, plan: plan.name }))}" data-cli-action="model-plan-assign">${esc(t("models.assign"))}</button></div><button type="button" class="tcrn-button tcrn-button--quiet" data-remove-plan="${esc(JSON.stringify({ host, name: plan.name }))}" data-cli-action="model-plan-remove">${esc(t("models.remove"))}</button></article>`;
+      }).join("") || `<div class="tcrn-empty">${esc(t("models.noPlans"))}</div>`}</section>`;
+    }).join("")}</div><form class="tcrn-form" id="plan-form"><div class="tcrn-form__row"><div class="tcrn-field"><label for="plan-host">${esc(t("models.host"))}</label><select class="tcrn-select" id="plan-host">${hosts.map((host) => `<option value="${esc(host)}">${esc(host)}</option>`).join("")}</select></div><div class="tcrn-field"><label for="plan-name">${esc(t("models.name"))}</label><input class="tcrn-input" id="plan-name" required></div></div><div class="tcrn-field"><label for="plan-default-model">${esc(t("models.defaultModel"))}</label><input class="tcrn-input" id="plan-default-model" required></div><button class="tcrn-button tcrn-button--primary" type="submit" data-cli-action="model-plan-set">${esc(t("models.create"))}</button></form></div>`;
+    $$('[data-assign]').forEach((button) => button.addEventListener("click", () => { const value = JSON.parse(button.dataset.assign); const model = $(`[data-assign-model="${CSS.escape(JSON.stringify(value))}"]`)?.value || ""; writeExecution("model-plan-assign", { ...value, model }); }));
+    $$('[data-unassign]').forEach((button) => button.addEventListener("click", () => writeExecution("model-plan-unassign", JSON.parse(button.dataset.unassign))));
+    $$('[data-remove-plan]').forEach((button) => button.addEventListener("click", () => writeExecution("model-plan-remove", JSON.parse(button.dataset.removePlan))));
+    $("#plan-form").addEventListener("submit", (event) => { event.preventDefault(); writeExecution("model-plan-set", { host: $("#plan-host").value, name: $("#plan-name").value, defaultModel: $("#plan-default-model").value }); });
+    attachEcho($("#model-plans"));
+  };
+  const renderDashboard = () => {
+    const execution = state.execution || {};
+    const status = state.status || {};
+    setText("#stat-version", status.version ?? execution.version ?? "—");
+    setText("#stat-head", String(status.headEventHash || execution.headEventHash || "—").slice(0, 16));
+    setText("#stat-events", status.eventCount ?? "—");
+    setText("#stat-engine", status.engineVersion ?? "—");
+    const checks = status.checks || [];
+    const displayChecks = status.ok === false && checks.length > 0 && checks.every((check) => check.ok)
+      ? checks.map((check) => ({ ...check, ok: false, reasonCode: status.reasonCode || "PORTAL_STATUS_FAILED" }))
+      : checks;
+    const healthy = status.ok !== false && displayChecks.length > 0 && displayChecks.every((check) => check.ok);
+    setText("#stat-health", displayChecks.length ? `${displayChecks.filter((check) => check.ok).length}/${displayChecks.length}` : "—");
+    const healthChip = $("#health-chip"); healthChip.className = `tcrn-chip ${healthy ? "tcrn-chip--ready" : "tcrn-chip--blocked"}`; setText("#health-chip-text", healthy ? t("health.healthy") : t("health.degraded"));
+    const healthLabel = (key) => ({ validate: t("health.validate"), catalog: t("health.catalog"), actor: t("health.actor") }[key] || t(`health.${key}`));
+    $("#health-list").innerHTML = displayChecks.map((check) => `<div class="tcrn-list__row"><span>${esc(healthLabel(check.key))}</span><span class="tcrn-chip ${check.ok ? "tcrn-chip--ready" : "tcrn-chip--blocked"}">${esc(check.ok ? t("health.ok") : t("health.failed"))}</span></div>`).join("") || `<div class="tcrn-empty">${esc(t("health.unavailable"))}</div>`;
+    setText("#validate-chip", healthy ? t("health.healthy") : t("health.degraded"));
+    $("#validate-chip").className = `tcrn-chip ${healthy ? "tcrn-chip--ready" : "tcrn-chip--blocked"}`;
+    $("#workspace-paths").innerHTML = Object.entries(BOOT.paths || {}).map(([key, value]) => `<div class="tcrn-path"><strong>${esc(key)}</strong><span class="tcrn-path__value" title="${esc(value)}">${esc(value)}</span><button type="button" class="tcrn-button tcrn-button--quiet" data-ui="path-copy" data-path="${esc(value)}" aria-label="${esc(t("dashboard.copyPath"))}">⧉</button></div>`).join("");
+    $$('[data-path]').forEach((button) => button.addEventListener("click", async () => { try { await navigator.clipboard.writeText(button.dataset.path); button.textContent = "✓"; setTimeout(() => { button.textContent = "⧉"; }, 700); } catch { setText("#echo-command", t("dashboard.copyUnavailable")); } }));
+    renderAudit("#dashboard-audit");
+  };
+  const personaFields = ["jobTitle", "mission", "refusals", "authorityBoundary", "contactWhen", "requiredInputs", "deliverables", "successCriteria"];
+  const renderPersonaButton = (persona) => `<button class="tcrn-entity" data-persona-name="${esc(persona.name)}" aria-current="${state.selectedPersona?.name === persona.name ? "true" : "false"}"><span><strong>${esc(persona.name)}</strong><span class="tcrn-entity__role">${esc(roleValue(persona.role))}</span></span><span class="tcrn-entity__source">${esc(persona.source === "custom" ? t("entities.custom") : persona.overridden ? t("entities.overridden") : t("entities.preset"))}${persona.overridden ? ` · <span data-ui="persona-override-dot" role="status" aria-label="${esc(t("entities.modified"))}">●</span>` : ""}</span></button>`;
+  const renderPersonaList = () => {
+    const people = state.execution?.personas || [];
+    setText("#persona-count", people.length);
+    $("#persona-list-custom").innerHTML = people.filter((persona) => persona.source === "custom").map(renderPersonaButton).join("") || `<div class="tcrn-empty">${esc(t("entities.noCustom"))}</div>`;
+    $("#persona-list-preset").innerHTML = people.filter((persona) => persona.source !== "custom").map(renderPersonaButton).join("");
+    $$('[data-persona-name]').forEach((button) => button.addEventListener("click", () => { state.selectedPersona = people.find((persona) => persona.name === button.dataset.personaName) || null; renderPersonaList(); renderPersonaDetails(); }));
+  };
+  const modelResolution = (persona) => (state.vocabulary?.hosts || []).map((host) => {
+    const plan = activePlan(host);
+    const explicit = plan?.assignments?.[persona.name];
+    return { host, model: explicit || plan?.defaultModel || t("models.hostDefault"), source: explicit ? t("models.sourceExplicit") : plan ? t("models.sourceDefault") : t("models.sourceUnset") };
+  });
+  const renderPersonaDetails = () => {
+    const persona = state.selectedPersona;
+    if (!persona) { $("#persona-detail").innerHTML = `<div class="tcrn-empty">${esc(t("entities.select"))}</div>`; return; }
+    const preset = persona.source === "core-reference";
+    const roleOptions = (state.vocabulary?.roles || []).map((role) => { const value = roleValue(role); return `<option value="${esc(value)}" ${value === roleValue(persona.role) ? "selected" : ""}>${esc(value)}</option>`; }).join("");
+    const overridden = new Set(persona.overriddenFields || []);
+    const editableField = (field) => `<div class="tcrn-field"><label for="persona-${esc(field)}">${esc(t(`entities.field.${field}`))}</label><textarea class="tcrn-textarea" id="persona-${esc(field)}" data-persona-field="${esc(field)}">${esc(persona[field] || "")}</textarea>${preset && overridden.has(field) ? `<div class="tcrn-ghost" data-ui="persona-ghost" role="note"><span class="tcrn-ghost__value">${esc(t("entities.factoryValue"))}: ${esc(persona.factory?.[field] || "—")}</span><button type="button" class="tcrn-button tcrn-button--quiet" data-restore-field="${esc(field)}" data-cli-action="persona-preset-restore" data-ui="persona-restore-field">↺ ${esc(t("entities.restoreField"))}</button></div>` : ""}</div>`;
+    const primary = ["jobTitle", "mission", "refusals"].map(editableField).join("");
+    const more = ["authorityBoundary", "contactWhen", "requiredInputs", "deliverables", "successCriteria"].map(editableField).join("");
+    const resolutions = modelResolution(persona);
+    $("#persona-detail").innerHTML = `<div class="tcrn-entity-detail__head"><div><div class="tcrn-entity-detail__identity"><h2>${esc(persona.name || t("entities.newName"))}</h2><span class="tcrn-chip ${preset ? "" : "tcrn-chip--ready"}">${esc(preset ? t("entities.preset") : t("entities.custom"))}</span>${persona.overridden ? `<span class="tcrn-chip tcrn-chip--warning" data-ui="persona-modified-badge" role="status">${esc(t("entities.modified"))}</span>` : `<span data-ui="persona-modified-badge" role="status" hidden>${esc(t("entities.modified"))}</span>`}</div><span class="tcrn-meta">${esc(persona.id || t("entities.pendingId"))}</span></div><div class="tcrn-entity-detail__actions">${preset ? `<span class="tcrn-lock-hint" data-ui="persona-name-lock" role="note">🔒 ${esc(t("entities.nameLocked"))}</span>` : ""}${preset && persona.overridden ? `<button type="button" class="tcrn-button tcrn-button--quiet" data-restore-all="true" data-cli-action="persona-preset-restore" data-ui="persona-restore-all">↺ ${esc(t("entities.restoreAll"))}</button>` : ""}<button class="tcrn-button tcrn-button--danger" id="remove-persona" data-cli-action="persona-remove">${esc(t("entities.remove"))}</button><button class="tcrn-button tcrn-button--primary" id="save-persona" data-cli-action="persona-set">${esc(t("entities.save"))}</button></div></div><form class="tcrn-form" id="persona-form"><div class="tcrn-form__row"><div class="tcrn-field"><label for="persona-name">${esc(t("entities.name"))}</label><input class="tcrn-input" id="persona-name" value="${esc(persona.name)}" ${preset ? "readonly" : ""} required>${preset ? `<span class="tcrn-lock-hint" data-ui="persona-name-lock" role="note">🔒 ${esc(t("entities.nameLocked"))}</span>` : ""}</div><div class="tcrn-field"><label for="persona-role">${esc(t("entities.role"))}</label><select class="tcrn-select" id="persona-role" data-persona-field="role">${roleOptions}</select></div></div>${primary}<details class="tcrn-more-fields" data-ui="persona-more-fields" role="group"><summary>${esc(t("entities.moreFields"))}</summary><div class="tcrn-more-fields__body">${more}</div></details><section class="tcrn-model-readonly" data-ui="persona-model-readonly" role="region" aria-label="${esc(t("entities.modelReadOnly"))}"><h3>${esc(t("entities.modelReadOnly"))}</h3>${resolutions.map((resolution) => `<div class="tcrn-model-resolution"><strong>${esc(resolution.host)}</strong><span class="tcrn-mono">${esc(resolution.model)}</span><span class="tcrn-meta">${esc(resolution.source)}</span></div>`).join("")}</section><div class="tcrn-confirm-popover" id="persona-delete-confirm" data-ui="persona-delete-confirm" role="alertdialog" hidden><strong>${esc(t("entities.confirmRemove"))}</strong><div class="tcrn-confirm-popover__actions"><button type="button" class="tcrn-button tcrn-button--danger" id="confirm-remove">${esc(t("entities.confirm"))}</button><button type="button" class="tcrn-button" id="cancel-remove">${esc(t("entities.cancel"))}</button></div></div></form>`;
+    $("#save-persona").addEventListener("click", (event) => { event.preventDefault(); savePersona(); });
+    $("#remove-persona").addEventListener("click", () => { $("#persona-delete-confirm").hidden = false; $("#confirm-remove").focus(); });
+    $("#cancel-remove").addEventListener("click", () => { $("#persona-delete-confirm").hidden = true; });
+    $("#confirm-remove").addEventListener("click", () => writeExecution("persona-remove", { name: persona.name }));
+    $$('[data-restore-field]').forEach((button) => button.addEventListener("click", () => writeExecution("persona-preset-restore", { name: persona.name, field: button.dataset.restoreField })));
+    $$('[data-restore-all]').forEach((button) => button.addEventListener("click", () => writeExecution("persona-preset-restore", { name: persona.name })));
+    attachEcho($("#persona-detail"));
+  };
+  const renderVocabulary = () => {
+    const vocabulary = state.vocabulary || {};
+    setText("#vocabulary-version", vocabulary.schemaVersion || "—");
+    const categories = ["roles", "hosts", "conferenceTypes", "executionForms", "settingsEnums"];
+    $("#vocabulary-nav").innerHTML = categories.map((category) => `<button class="tcrn-subnav__item" data-vocabulary-category="${category}" aria-current="${state.selectedVocabulary === category ? "page" : "false"}">${esc(t(`vocabulary.${category}`))}</button>`).join("");
+    $$('[data-vocabulary-category]').forEach((button) => button.addEventListener("click", () => { state.selectedVocabulary = button.dataset.vocabularyCategory; renderVocabulary(); }));
+    const terms = vocabulary[state.selectedVocabulary] || [];
+    $("#vocabulary-terms").innerHTML = terms.length === 0 ? `<div class="tcrn-empty">${esc(t("vocabulary.empty"))}</div>` : terms.map((term) => {
+      const value = termValue(term);
+      const definition = vocabularyDefinition(state.selectedVocabulary, term);
+      const detail = term.reviewOnlyDispatchable === undefined ? term.valueSource || (term.coveredByIndependenceFloors ? `${t("vocabulary.floor")}: ${term.coveredByIndependenceFloors.join(", ") || t("vocabulary.none")}` : "") : `${t("vocabulary.reviewOnlyDispatchable")}: ${term.reviewOnlyDispatchable ? t("vocabulary.yes") : t("vocabulary.no")}`;
+      return `<article class="tcrn-term"><div class="tcrn-term__value">${esc(value)}</div><div class="tcrn-term__definition">${esc(definition)}<small>${esc(detail || t("vocabulary.source"))}</small></div></article>`;
+    }).join("");
+  };
+  const lineFromText = (text) => text.split("\n");
+  const renderProseDirectory = () => {
+    const lines = lineFromText(state.agentsText);
+    const headings = lines.map((line, index) => ({ line: index + 1, text: line.replace(/^#+\s*/u, ""), level: (line.match(/^#+/u) || [""])[0].length })).filter((entry) => entry.level > 0);
+    $("#prose-directory").innerHTML = headings.length ? headings.map((entry) => `<button type="button" class="tcrn-directory__item" data-prose-line="${entry.line}" data-level="${entry.level}" data-cli-action="agents-read">↳ ${esc(entry.text)}</button>`).join("") : `<div class="tcrn-empty">${esc(t("prose.noHeadings"))}</div>`;
+    $$('[data-prose-line]').forEach((button) => button.addEventListener("click", () => focusLine(Number(button.dataset.proseLine))));
+    attachEcho($("#prose-directory"));
+  };
+  const renderGutter = () => {
+    const lineCount = Math.max(1, lineFromText(state.agentsText).length);
+    $("#prose-gutter").innerHTML = Array.from({ length: lineCount }, (_, index) => `<div>${index + 1}</div>`).join("");
+  };
+  const focusLine = (line) => { const editor = $("#agents-md"); const before = lineFromText(editor.value).slice(0, Math.max(0, line - 1)).join("\n"); editor.focus(); editor.setSelectionRange(before.length, before.length + (lineFromText(editor.value)[line - 1] || "").length); };
+  const renderReconciliation = (result) => {
+    state.reconciliation = result;
+    const chip = $("#reconcile-chip"); chip.className = `tcrn-chip ${result.ok ? "tcrn-chip--ready" : "tcrn-chip--warning"}`; chip.textContent = result.ok ? t("reconcile.green") : `${result.findings?.length || result.mismatchCount || 0} ${t("reconcile.findings")}`;
+    $("#reconcile-findings").innerHTML = result.findings?.length ? result.findings.map((finding) => `<button type="button" class="tcrn-finding-link" data-ui="prose-finding-link" data-prose-line="${esc(finding.line)}"><span>●</span><span>${esc(finding.file)}:${esc(finding.line)}</span><span class="tcrn-key">${esc(finding.token || finding.key)}</span><span>${esc(finding.kind)}</span></button>`).join("") : `<div class="tcrn-empty">${esc(t("reconcile.green"))}</div>`;
+    $$('[data-prose-line]', $("#reconcile-findings")).forEach((button) => button.addEventListener("click", () => focusLine(Number(button.dataset.proseLine))));
+  };
+  const loadAgents = async () => { const [documentResult, reconciliation] = await Promise.all([api("/api/agents-md"), api("/api/agents-md/reconcile")]); state.agentsText = documentResult.text || ""; $("#agents-md").value = state.agentsText; setText("#agents-path", documentResult.path || "AGENTS.md"); renderProseDirectory(); renderGutter(); renderReconciliation(reconciliation); };
+  const saveSetting = async (key, value) => { echo("settings-set", ["--key", key, "--value", value]); const result = await api("/api/settings", { method: "POST", body: JSON.stringify({ key, value }) }); showReceipt(result); await refresh(); };
+  const resetSetting = async (key) => { echo("settings-remove", ["--key", key]); const result = await api("/api/settings", { method: "POST", body: JSON.stringify({ key, reset: true }) }); showReceipt(result); await refresh(); };
+  const writeExecution = async (action, body) => { echo(action); const result = await api("/api/execution", { method: "POST", body: JSON.stringify({ action, ...body }) }); showReceipt(result); await refresh(); };
+  const savePersona = async () => { const persona = state.selectedPersona; if (!persona) return; const fields = Object.fromEntries($$('[data-persona-field]', $("#persona-form")).map((node) => [node.dataset.personaField, node.value])); const name = $("#persona-name").value || persona.name; if (!name) return; if (persona.source === "core-reference") await writeExecution("persona-preset-override", { name, fields }); else await writeExecution("persona-set", { name, ...fields }); };
+  const loadPartitions = () => { const select = $("#partition-select"); select.innerHTML = (BOOT.partitions || [{ id: "workspace" }]).map((partition) => `<option value="${esc(partition.id)}" ${partition.id === BOOT.selectedPartition ? "selected" : ""}>${esc(partition.id)}</option>`).join(""); select.disabled = !BOOT.partitionMode; };
+  const refresh = async () => { try { const [settings, execution, vocabularyResult, status, commandsResult, audit] = await Promise.all([api("/api/settings"), api("/api/execution"), api("/api/vocabulary"), api("/api/status"), api("/api/commands"), api("/api/session-audit")]); state.settings = settings; state.execution = execution; state.vocabulary = vocabularyResult; state.status = status; state.commands = commandsResult.commands || []; state.audit = audit.writes || []; if (state.selectedPersona) state.selectedPersona = execution.personas.find((persona) => persona.name === state.selectedPersona.name) || null; renderDashboard(); renderSettings(); renderPersonaList(); renderPersonaDetails(); renderVocabulary(); rebuildSearchIndex(); } catch (error) { state.status = { ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE", checks: [{ key: "validate", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "catalog", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "actor", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }] }; renderDashboard(); showReceipt({ ok: false, reasonCode: "PORTAL_READ_FAILED", error: String(error?.message ?? error) }); } };
+  const rebuildSearchIndex = () => {
+    const rows = [];
+    for (const entry of state.settings?.settings || []) rows.push({ text: `${entry.key} ${settingLabel(entry.key)} ${settingDescription(entry.key)}`, label: entry.key, meta: t("search.settings"), page: "settings", key: entry.key });
+    for (const persona of state.execution?.personas || []) rows.push({ text: `${persona.name} ${persona.jobTitle || ""} ${roleValue(persona.role)}`, label: persona.name, meta: t("search.personas"), page: "entities", persona: persona.name });
+    for (const category of ["roles", "hosts", "conferenceTypes", "executionForms", "settingsEnums"]) for (const term of state.vocabulary?.[category] || []) rows.push({ text: `${termValue(term)} ${vocabularyDefinition(category, term)}`, label: termValue(term), meta: t("search.vocabulary"), page: "vocabulary", vocabulary: category });
+    state.searchIndex = rows;
+  };
+  const renderSearchResults = () => { const target = $("#search-results"); target.hidden = state.searchResults.length === 0; target.innerHTML = state.searchResults.map((result, index) => `<button type="button" class="tcrn-search-result" aria-current="${index === state.searchSelection ? "true" : "false"}" data-search-index="${index}"><strong>${esc(result.label)}</strong><span class="tcrn-search-result__meta">${esc(result.meta)} · ${esc(result.page)}</span></button>`).join(""); $$('[data-search-index]').forEach((button) => button.addEventListener("click", () => chooseSearch(Number(button.dataset.searchIndex)))); };
+  const search = (query) => { const normalized = query.trim().toLocaleLowerCase(); state.searchResults = normalized ? state.searchIndex.filter((entry) => entry.text.toLocaleLowerCase().includes(normalized)).slice(0, 12) : []; state.searchSelection = 0; renderSearchResults(); };
+  const chooseSearch = (index = 0) => { const result = state.searchResults[index]; if (!result) return; navigate(result.page); state.searchResults = []; renderSearchResults(); if (result.persona) { state.selectedPersona = state.execution.personas.find((persona) => persona.name === result.persona) || null; renderPersonaList(); renderPersonaDetails(); } if (result.vocabulary) { state.selectedVocabulary = result.vocabulary; renderVocabulary(); } if (result.key) { state.settingGroup = settingGroup(result.key); $$('[data-setting-group]').forEach((button) => button.setAttribute("aria-current", button.dataset.settingGroup === state.settingGroup ? "page" : "false")); renderSettings(); const row = $(`[data-setting-row="${CSS.escape(result.key)}"]`); row?.classList.add("tcrn-highlight"); row?.scrollIntoView({ block: "center" }); } };
+  $$('[data-page-target]').forEach((button) => button.addEventListener("click", () => navigate(button.dataset.pageTarget)));
+  $$('[data-setting-group]').forEach((button) => button.addEventListener("click", () => { state.settingGroup = button.dataset.settingGroup; $$('[data-setting-group]').forEach((candidate) => candidate.setAttribute("aria-current", candidate === button ? "page" : "false")); renderSettings(); }));
+  $$('[data-workspace-tab]').forEach((button) => button.addEventListener("click", () => { state.dashboardTab = button.dataset.workspaceTab; $$('[data-workspace-tab]').forEach((candidate) => candidate.setAttribute("aria-selected", candidate === button ? "true" : "false")); $$('[data-workspace-panel]').forEach((panel) => { panel.hidden = panel.dataset.workspacePanel !== state.dashboardTab; }); }));
+  $$('[data-entity-tab]').forEach((button) => button.addEventListener("click", () => { if (button.disabled) return; state.entityTab = button.dataset.entityTab; }));
+  $("#save-agents").addEventListener("click", async () => { echo("agents-write"); const result = await api("/api/agents-md", { method: "PUT", body: JSON.stringify({ file: "AGENTS.md", text: $("#agents-md").value }) }); showReceipt(result); await loadAgents(); });
+  $("#agents-md").addEventListener("input", (event) => { state.agentsText = event.target.value; renderProseDirectory(); renderGutter(); });
+  $("#agents-md").addEventListener("scroll", () => { $("#prose-gutter").scrollTop = $("#agents-md").scrollTop; });
+  $("#new-persona").addEventListener("click", () => { const firstRole = roleValue(state.vocabulary?.roles?.[0]) || ""; state.selectedPersona = { name: "", role: firstRole, id: "", source: "custom", jobTitle: "", mission: "", refusals: "", authorityBoundary: "", contactWhen: "", requiredInputs: "", deliverables: "", successCriteria: "" }; navigate("entities"); renderPersonaList(); renderPersonaDetails(); $("#persona-name")?.focus(); });
+  $("#receipt-chip").addEventListener("click", openReceipt); $("#audit-button").addEventListener("click", () => { state.dashboardTab = "audit"; $$('[data-workspace-tab]').forEach((button) => button.setAttribute("aria-selected", button.dataset.workspaceTab === "audit" ? "true" : "false")); $$('[data-workspace-panel]').forEach((panel) => { panel.hidden = panel.dataset.workspacePanel !== "audit"; }); }); $("#drawer-button").addEventListener("click", openReceipt); $("#drawer-close").addEventListener("click", closeReceipt);
+  $("#partition-select").addEventListener("change", async (event) => { if (!BOOT.partitionMode) return; const selected = await api("/api/partition", { method: "POST", body: JSON.stringify({ partition: event.target.value }) }); if (selected.ok) { BOOT.selectedPartition = selected.selectedPartition; BOOT.workspace = selected.workspace; BOOT.proseRoot = selected.proseRoot; BOOT.paths = selected.paths; setText("#workspace-label", BOOT.workspace); setText("#partition-label", BOOT.selectedPartition); await refresh(); await loadAgents(); } else showReceipt(selected); });
+  $("#theme-button").addEventListener("click", () => { state.theme = state.theme === "light" ? "dark" : "light"; document.documentElement.dataset.tcrnTheme = state.theme; });
+  $("#locale-select").addEventListener("change", (event) => { state.locale = event.target.value; applyLocale(); renderDashboard(); renderSettings(); renderPersonaList(); renderPersonaDetails(); renderVocabulary(); renderReconciliation(state.reconciliation || { ok: true, findings: [] }); });
+  $("#palette-button").addEventListener("click", () => $("#global-search").focus());
+  $("#global-search").addEventListener("input", (event) => search(event.target.value));
+  $("#global-search").addEventListener("keydown", (event) => { if (event.key === "ArrowDown" && state.searchResults.length) { event.preventDefault(); state.searchSelection = (state.searchSelection + 1) % state.searchResults.length; renderSearchResults(); } if (event.key === "ArrowUp" && state.searchResults.length) { event.preventDefault(); state.searchSelection = (state.searchSelection + state.searchResults.length - 1) % state.searchResults.length; renderSearchResults(); } if (event.key === "Enter") { event.preventDefault(); chooseSearch(state.searchSelection); } if (event.key === "Escape") { state.searchResults = []; renderSearchResults(); event.target.blur(); } });
+  document.addEventListener("keydown", (event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); $("#global-search").focus(); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s" && state.page === "prose") { event.preventDefault(); $("#save-agents").click(); } if (event.key === "Escape" && $("#receipt-drawer").dataset.open === "true") closeReceipt(); });
+  loadPartitions(); applyLocale(); setText("#workspace-label", BOOT.workspace); setText("#partition-label", BOOT.selectedPartition || "workspace"); renderReceipt(); refresh(); loadAgents();
+})();
 </script>
 </body>
 </html>

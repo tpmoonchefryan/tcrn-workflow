@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 //
-// TCRN Workflow Portal — zero-dependency local server.
-//
-// It owns no governance logic. Every read and every write is a child process
-// call to the public TCRN Workflow CLI; the portal never imports an engine
-// package, never touches a control tree, and never writes a chain file itself.
-// AGENTS.md is ordinary repository prose and is read/written with plain fs.
+// TCRN Workflow Portal — a zero-dependency local projection of the public CLI.
+// The portal owns no governance state. Chain reads and writes go through the
+// bundled CLI; AGENTS.md is ordinary workspace prose and is handled with fs.
 
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -20,14 +17,7 @@ import { LOCALE_CONTRACT } from "./locale-contract.mjs";
 
 const execFileAsync = promisify(execFile);
 const portalRoot = dirname(fileURLToPath(import.meta.url));
-
-// A portal request must never become a governed identity. The actor is declared
-// once at startup so a browser payload can never nominate who wrote to a chain.
-const ACTOR = process.env.TCRN_PORTAL_ACTOR ?? "agent:portal";
-// The portal ships inside the engine, so the CLI it drives is the one it came
-// with — resolved relative to this file rather than guessed at a machine-level
-// path. A portal and an engine that arrived together cannot disagree about which
-// version is running, which is the whole reason they are no longer two products.
+const ACTOR = (process.env.TCRN_PORTAL_ACTOR ?? "agent:portal").trim();
 const BUNDLED_CLI = join(portalRoot, "..", "scripts", "tcrn-workflow.mjs");
 const CLI = process.env.TCRN_WORKFLOW_CLI ?? BUNDLED_CLI;
 const PROSE_FILES = Object.freeze(["AGENTS.md"]);
@@ -36,8 +26,6 @@ function argument(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
   return index >= 0 && index + 1 < process.argv.length ? process.argv[index + 1] : fallback;
 }
-
-
 
 function startupError(reasonCode, detail, message = reasonCode) {
   const error = new Error(message);
@@ -60,52 +48,39 @@ const workspaceArgument = argument("workspace", process.env.TCRN_PORTAL_WORKSPAC
 const containerArgument = argument("container", process.env.TCRN_PORTAL_CONTAINER ?? "");
 const workspace = workspaceArgument ? resolve(workspaceArgument) : "";
 const containerRoot = containerArgument ? resolve(containerArgument) : "";
-const proseRoot = resolve(argument("prose-root", process.env.TCRN_PORTAL_PROSE_ROOT ?? (containerRoot ? dirname(containerRoot) : join(portalRoot, ".."))));
+const proseRootArgument = argument("prose-root", process.env.TCRN_PORTAL_PROSE_ROOT ?? "");
 const port = Number(argument("port", process.env.TCRN_PORTAL_PORT ?? "4319"));
 const attestDirArgument = argument("attest-dir", process.env.TCRN_PORTAL_ATTEST_DIR ?? "");
 const attestDir = attestDirArgument ? resolve(attestDirArgument) : "";
 const requestedPartition = argument("partition", process.env.TCRN_PORTAL_PARTITION ?? "");
 
-if (workspace && containerRoot) {
-  failStartup(startupError("PORTAL_TARGET_AMBIGUOUS", {}, "choose exactly one of --workspace or --container"));
-}
+if (workspace && containerRoot) failStartup(startupError("PORTAL_TARGET_AMBIGUOUS", {}, "choose exactly one target"));
 if (!workspace && !containerRoot) {
-  failStartup(startupError("PORTAL_TARGET_REQUIRED", {}, "usage: node portal.mjs --workspace <governed workspace path> | --container <.tcrn-workspace path> [--prose-root <dir>] [--port 4319]"));
+  failStartup(startupError("PORTAL_TARGET_REQUIRED", {}, "use --workspace or --container"));
 }
 
 async function discoverPartitions(root) {
   let rootInfo;
-  try {
-    rootInfo = await stat(root);
-  } catch {
+  try { rootInfo = await stat(root); } catch {
     throw startupError("PORTAL_CONTAINER_UNAVAILABLE", { container: root }, `container does not exist: ${root}`);
   }
-  if (!rootInfo.isDirectory()) {
-    throw startupError("PORTAL_CONTAINER_UNAVAILABLE", { container: root }, `container is not a directory: ${root}`);
-  }
-
-  const entries = await readdir(root, { withFileTypes: true });
+  if (!rootInfo.isDirectory()) throw startupError("PORTAL_CONTAINER_UNAVAILABLE", { container: root }, "container is not a directory");
   const partitions = [];
-  for (const entry of entries) {
+  for (const entry of await readdir(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
     const partitionRoot = join(root, entry.name);
     const partitionWorkspace = join(partitionRoot, "workspace");
     try {
-      const workspaceInfo = await stat(partitionWorkspace);
-      if (!workspaceInfo.isDirectory()) continue;
+      if (!(await stat(partitionWorkspace)).isDirectory()) continue;
       let partitionAttestDir = attestDir;
       if (!partitionAttestDir) {
         const candidate = join(partitionRoot, "attestations");
-        try {
-          if ((await stat(candidate)).isDirectory()) partitionAttestDir = candidate;
-        } catch { /* an attestation directory is optional for read-only runs */ }
+        try { if ((await stat(candidate)).isDirectory()) partitionAttestDir = candidate; } catch { /* optional */ }
       }
       partitions.push({ id: entry.name, workspace: partitionWorkspace, attestDir: partitionAttestDir });
     } catch { /* non-partition directories are ignored */ }
   }
-  if (partitions.length === 0) {
-    throw startupError("PORTAL_CONTAINER_EMPTY", { container: root, expected: "<partition>/workspace" }, `container has no partition workspaces: ${root}`);
-  }
+  if (partitions.length === 0) throw startupError("PORTAL_CONTAINER_EMPTY", { container: root });
   return partitions.sort((left, right) => left.id.localeCompare(right.id));
 }
 
@@ -114,26 +89,31 @@ try {
   partitionCatalog = containerRoot
     ? await discoverPartitions(containerRoot)
     : [{ id: "workspace", workspace, attestDir }];
-} catch (error) {
-  failStartup(error);
-}
+} catch (error) { failStartup(error); }
 
-if (requestedPartition && !partitionCatalog.some((partition) => partition.id === requestedPartition)) {
+if (requestedPartition && !partitionCatalog.some((entry) => entry.id === requestedPartition)) {
   failStartup(startupError("PORTAL_PARTITION_UNKNOWN", {
-    container: containerRoot || null,
     requestedPartition,
     partitions: partitionCatalog.map(({ id }) => id),
-  }, `unknown partition: ${requestedPartition}`));
+  }));
 }
 
 const partitionMode = Boolean(containerRoot);
 let selectedPartitionId = requestedPartition || partitionCatalog[0].id;
-const currentPartition = () => partitionCatalog.find((partition) => partition.id === selectedPartitionId) ?? partitionCatalog[0];
-
-// Loopback plus a per-run token. The bind address alone does not stop another
-// page in the same browser from POSTing here, so mutations carry a token that
-// only this process ever printed.
+const currentPartition = () => partitionCatalog.find((entry) => entry.id === selectedPartitionId) ?? partitionCatalog[0];
+// Proposal for the unresolved container prose decision: resolve the document in
+// the selected partition root.  An explicit --prose-root remains authoritative
+// for callers that have already chosen a target.  This keeps a container read
+// local to its partition and never silently targets the platform root.
+const currentProseRoot = () => resolve(proseRootArgument || dirname(currentPartition().workspace));
+const currentPaths = () => {
+  const root = dirname(currentPartition().workspace);
+  return Object.fromEntries(["framework", "workspace", "transient", "evidence-locator", "release-trust"].map((kind) => [kind, join(root, kind)]));
+};
 const TOKEN = randomBytes(24).toString("hex");
+const sessionWrites = [];
+let writeSequence = 0;
+let lastWriteAt = 0;
 
 async function cli(args) {
   const { stdout } = await execFileAsync(process.execPath, [CLI, ...args], {
@@ -145,81 +125,132 @@ async function cli(args) {
   return JSON.parse(stdout);
 }
 
-// The CLI reports refusals as a non-zero exit with a canonical JSON body. Those
-// are answers, not transport failures, so they are surfaced verbatim rather
-// than collapsed into a generic 500 — a refused write must stay legible.
 async function cliResult(args) {
-  try {
-    return { ok: true, body: await cli(args) };
-  } catch (error) {
+  try { return { ok: true, body: await cli(args) }; } catch (error) {
     const raw = String(error?.stderr ?? error?.stdout ?? "").trim();
-    try {
-      return { ok: false, body: JSON.parse(raw) };
-    } catch {
+    try { return { ok: false, body: JSON.parse(raw) }; } catch {
       return { ok: false, body: { ok: false, reasonCode: "PORTAL_CLI_UNAVAILABLE", error: raw || String(error?.message ?? error) } };
     }
   }
 }
 
 const settingsCatalog = () => cli(["settings-catalog", "--workspace", currentPartition().workspace]);
+const modelPlans = () => cli(["model-plan-list", "--workspace", currentPartition().workspace]);
+const personas = () => cli(["persona-list", "--workspace", currentPartition().workspace]);
+const vocabulary = () => cli(["vocabulary"]);
+const commands = () => cli(["commands"]);
 
-const executionConfig = () => cli(["execution-config", "--workspace", currentPartition().workspace]);
+async function executionState() {
+  const [settings, plans, personaList] = await Promise.all([settingsCatalog(), modelPlans(), personas()]);
+  return {
+    ok: true,
+    reasonCode: "PORTAL_EXECUTION_READY",
+    workspaceId: settings.workspaceId,
+    version: settings.version ?? plans.version ?? personaList.version ?? null,
+    headEventHash: settings.headEventHash ?? plans.headEventHash ?? personaList.headEventHash ?? null,
+    settings: settings.settings,
+    plans: plans.plans,
+    personas: personaList.personas,
+  };
+}
 
-// INIT-026 S236. Each portal action maps onto exactly one engine verb, and every
-// write reads the live head first — the portal owns no governance logic, so a
-// refusal (removing a pinned configuration, a ghost host) arrives verbatim from
-// the engine and is shown, never translated.
-async function writeExecution(action, body) {
+function nextOccurredAt() {
+  const now = Date.now();
+  lastWriteAt = Math.max(now, lastWriteAt + 1000);
+  return new Date(lastWriteAt).toISOString().replace(/\.\d{3}Z$/u, "Z");
+}
+
+function recordSessionWrite(action, result, summary, occurredAt) {
+  const body = result.body ?? {};
+  sessionWrites.unshift({
+    sequence: ++writeSequence,
+    action,
+    summary,
+    occurredAt,
+    ok: result.ok,
+    reasonCode: body.reasonCode ?? "PORTAL_WRITE_UNRECORDED",
+    version: body.version ?? null,
+    headEventHash: body.headEventHash ?? null,
+    receiptDigest: body.receiptDigest ?? null,
+  });
+  if (sessionWrites.length > 100) sessionWrites.length = 100;
+}
+
+async function governedWrite(build, action, summary) {
   const selected = currentPartition();
-  const status = await cli(["status", "--workspace", selected.workspace]);
-  const base = ["--workspace", selected.workspace, "--expected-version", String(status.version),
-    "--at", new Date().toISOString().slice(0, 19) + "Z", "--actor", ACTOR];
-  if (selected.attestDir) base.push("--attest-dir", selected.attestDir);
+  const occurredAt = nextOccurredAt();
+  let result;
+  try {
+    if (!ACTOR) throw new Error("TCRN_PORTAL_ACTOR must be a non-empty actor id");
+    const status = await cli(["status", "--workspace", selected.workspace]);
+    const common = ["--workspace", selected.workspace, "--expected-version", String(status.version), "--at", occurredAt, "--actor", ACTOR];
+    if (selected.attestDir) common.push("--attest-dir", selected.attestDir);
+    result = await cliResult(build(common));
+  } catch (error) {
+    result = { ok: false, body: { ok: false, reasonCode: "PORTAL_CLI_UNAVAILABLE", error: String(error?.message ?? error) } };
+  }
+  recordSessionWrite(action, result, summary, occurredAt);
+  return result;
+}
+
+function writeSetting(key, value) {
+  return governedWrite(
+    (common) => ["settings-set", ...common, "--key", String(key), "--value", String(value)],
+    "settings-set",
+    `${key} → ${value}`,
+  );
+}
+
+function removeSetting(key) {
+  return governedWrite(
+    (common) => ["settings-remove", ...common, "--key", String(key)],
+    "settings-remove",
+    `${key} reset`,
+  );
+}
+
+function writeExecution(action, body) {
+  const selected = currentPartition();
+  const text = (value) => String(value ?? "");
+  const json = (value) => JSON.stringify(value ?? {});
   const verbs = {
-    "config-set": () => ["host-config-set", ...base, "--host", String(body.host ?? ""), "--name", String(body.name ?? ""),
-      "--model", String(body.model ?? ""), ...(body.note ? ["--note", String(body.note)] : [])],
-    "config-remove": () => ["host-config-remove", ...base, "--host", String(body.host ?? ""), "--name", String(body.name ?? "")],
-    "config-default": () => ["host-config-default", ...base, "--host", String(body.host ?? ""),
-      ...(body.clear === true ? ["--clear", "true"] : ["--name", String(body.name ?? "")])],
-    "binding-set": () => ["persona-binding-set", ...base, "--profile-id", String(body.profileId ?? ""),
-      "--host", String(body.host ?? ""), "--name", String(body.name ?? "")],
-    "binding-remove": () => ["persona-binding-remove", ...base, "--profile-id", String(body.profileId ?? ""), "--host", String(body.host ?? "")],
-    "persona-set": () => ["persona-set", ...base, "--name", String(body.name ?? ""),
-      "--description", String(body.description ?? ""), "--role", String(body.role ?? ""),
-      "--prompt", String(body.prompt ?? "")],
-    "persona-remove": () => ["persona-remove", ...base, "--name", String(body.name ?? "")],
+    "model-plan-set": (common) => ["model-plan-set", ...common, "--host", text(body.host), "--name", text(body.name), "--default-model", text(body.defaultModel)],
+    "model-plan-assign": (common) => ["model-plan-assign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona), "--model", text(body.model)],
+    "model-plan-unassign": (common) => ["model-plan-unassign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona)],
+    "model-plan-remove": (common) => ["model-plan-remove", ...common, "--host", text(body.host), "--name", text(body.name)],
+    "persona-preset-override": (common) => ["persona-preset-override", ...common, "--name", text(body.name), "--fields", json(body.fields)],
+    "persona-preset-restore": (common) => ["persona-preset-restore", ...common, "--name", text(body.name), ...(body.field ? ["--field", text(body.field)] : [])],
+    "persona-set": (common) => ["persona-set", ...common, "--name", text(body.name), "--role", text(body.role),
+      ...Object.entries({
+        "job-title": body.jobTitle,
+        mission: body.mission,
+        refusals: body.refusals,
+        "authority-boundary": body.authorityBoundary,
+        "contact-when": body.contactWhen,
+        "required-inputs": body.requiredInputs,
+        deliverables: body.deliverables,
+        "success-criteria": body.successCriteria,
+      }).flatMap(([key, value]) => value === undefined ? [] : [`--${key}`, text(value)])],
+    "persona-remove": (common) => ["persona-remove", ...common, "--name", text(body.name)],
   };
   const build = verbs[action];
-  if (!build) return { ok: false, body: { ok: false, reasonCode: "PORTAL_UNKNOWN_ACTION", error: String(action) } };
-  return cliResult(build());
+  if (!build) {
+    const result = { ok: false, body: { ok: false, reasonCode: "PORTAL_UNKNOWN_ACTION", error: action } };
+    recordSessionWrite(action, result, action, new Date().toISOString());
+    return Promise.resolve(result);
+  }
+  return governedWrite(build, action, body.summary ?? action);
 }
 
-async function writeSetting(key, value) {
-  // Read the live head immediately before the write: expected-version supplied
-  // from anywhere else would freeze nothing.
-  const selected = currentPartition();
-  const status = await cli(["status", "--workspace", selected.workspace]);
-  const args = [
-    "settings-set", "--workspace", selected.workspace,
-    "--expected-version", String(status.version),
-    "--at", new Date().toISOString().slice(0, 19) + "Z",
-    "--key", key, "--value", value, "--actor", ACTOR,
-  ];
-  if (selected.attestDir) args.push("--attest-dir", selected.attestDir);
-  return cliResult(args);
-}
-
-function proseTarget(name) {
+function proseTarget(name = PROSE_FILES[0]) {
   if (!PROSE_FILES.includes(name)) return null;
-  const path = join(proseRoot, name);
-  // Belt and braces: the allow-list already fixes the basename, and the
-  // resolved path is confirmed to stay under the declared prose root.
-  return isAbsolute(path) && resolve(path).startsWith(proseRoot) ? path : null;
+  const root = currentProseRoot();
+  const candidate = resolve(root, name);
+  const relation = relative(root, candidate);
+  if (relation.startsWith("..") || relation.startsWith(`..${sep}`)) return null;
+  return candidate;
 }
 
-// Reconciliation compares two things that drift apart in practice: the setting
-// keys prose claims exist, and the keys the engine actually registers. A key
-// named only in prose is a stale document; the check is red when one is found.
 const KEY_PATTERN = /\b([a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+)\b/gu;
 
 async function reconcile() {
@@ -228,38 +259,33 @@ async function reconcile() {
   const rows = [];
   for (const name of PROSE_FILES) {
     const path = proseTarget(name);
+    if (!path) continue;
     let text = "";
-    try {
-      text = await readFile(path, "utf8");
-    } catch {
-      continue;
-    }
-    const claimed = new Set();
-    for (const match of text.matchAll(KEY_PATTERN)) {
-      const candidate = match[1];
-      // Only keys whose namespace the engine already knows are treated as
-      // claims; every other dotted token in prose is ordinary English.
-      const namespace = candidate.slice(0, candidate.indexOf("."));
-      if ([...registered].some((key) => key.startsWith(`${namespace}.`))) claimed.add(candidate);
-    }
-    for (const key of [...claimed].sort()) {
-      rows.push({ file: name, key, registered: registered.has(key) });
+    try { text = await readFile(path, "utf8"); } catch { continue; }
+    for (const [lineIndex, line] of text.split("\n").entries()) {
+      for (const match of line.matchAll(KEY_PATTERN)) {
+        const key = match[1];
+        const namespace = key.slice(0, key.indexOf("."));
+        if (![...registered].some((entry) => entry.startsWith(`${namespace}.`))) continue;
+        const known = registered.has(key);
+        rows.push({ file: name, line: lineIndex + 1, token: key, key, registered: known, kind: known ? "registered" : "unregistered" });
+      }
     }
   }
-  const mismatches = rows.filter((row) => !row.registered);
+  const findings = rows.filter((row) => row.kind !== "registered");
   return {
-    reasonCode: mismatches.length === 0 ? "PROSE_MATCHES_CATALOG" : "PROSE_CLAIMS_UNREGISTERED_KEY",
-    ok: mismatches.length === 0,
+    ok: findings.length === 0,
+    reasonCode: findings.length === 0 ? "PROSE_MATCHES_CATALOG" : "PROSE_CLAIMS_UNREGISTERED_KEY",
     registered: [...registered].sort(),
     rows,
-    mismatchCount: mismatches.length,
+    findings,
+    mismatchCount: findings.length,
   };
 }
 
 function send(response, status, body) {
-  const payload = JSON.stringify(body);
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-  response.end(payload);
+  response.end(JSON.stringify(body));
 }
 
 async function readJsonBody(request) {
@@ -267,16 +293,37 @@ async function readJsonBody(request) {
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 1024 * 1024) throw new Error("payload too large");
+    if (size > 1024 * 1024) throw startupError("PORTAL_PAYLOAD_TOO_LARGE", {});
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
+async function agentsRead(name) {
+  const path = proseTarget(name);
+  if (!path) return { status: 404, body: { ok: false, reasonCode: "PORTAL_PATH_ESCAPE", file: name } };
+  let text = "";
+  try { text = await readFile(path, "utf8"); } catch { /* absent prose reads as an empty editor */ }
+  return { status: 200, body: { ok: true, reasonCode: "PORTAL_AGENTS_MD_READY", file: name, path, text } };
+}
+
+async function agentsWrite(body) {
+  const file = String(body.file ?? PROSE_FILES[0]);
+  const path = proseTarget(file);
+  if (!path) return { status: 404, body: { ok: false, reasonCode: "PORTAL_PATH_ESCAPE", file } };
+  const text = String(body.text ?? "");
+  await writeFile(path, text, "utf8");
+  const readback = await readFile(path, "utf8");
+  return { status: 200, body: { ok: true, reasonCode: "PORTAL_AGENTS_MD_WRITTEN", file, path, matches: readback === text, text: readback } };
+}
+
+const apiAlias = (pathname) => pathname === "/api/prose" ? "/api/agents-md" : pathname === "/api/reconcile" ? "/api/agents-md/reconcile" : pathname;
+
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://127.0.0.1");
+  const pathname = apiAlias(url.pathname);
   try {
-    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+    if (request.method === "GET" && (pathname === "/" || pathname === "/index.html")) {
       const html = await readFile(join(portalRoot, "index.html"), "utf8");
       const boot = JSON.stringify({
         token: TOKEN,
@@ -285,7 +332,8 @@ const server = createServer(async (request, response) => {
         partitionMode,
         partitions: partitionCatalog.map(({ id }) => ({ id })),
         selectedPartition: selectedPartitionId,
-        proseRoot,
+        proseRoot: currentProseRoot(),
+        paths: currentPaths(),
         actor: ACTOR,
         proseFiles: PROSE_FILES,
         ...LOCALE_CONTRACT,
@@ -294,120 +342,121 @@ const server = createServer(async (request, response) => {
       response.end(html.replace("__PORTAL_BOOT__", boot.replace(/</gu, "\\u003c")));
       return;
     }
-
-    if (request.method === "GET" && url.pathname === "/locales.js") {
-      const script = await readFile(join(portalRoot, "locales.js"), "utf8");
+    if (request.method === "GET" && pathname === "/locales.js") {
       response.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
-      response.end(script);
+      response.end(await readFile(join(portalRoot, "locales.js"), "utf8"));
       return;
     }
-
-    if (request.method === "GET" && url.pathname === "/tokens.css") {
-      // The design system's token file, served verbatim. scripts/design-proof.mjs
-      // fails if this copy drifts from @tcrn/ui-tokens.
-      const css = await readFile(join(portalRoot, "tokens.css"), "utf8");
+    if (request.method === "GET" && pathname === "/tokens.css") {
       response.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": "no-store" });
-      response.end(css);
+      response.end(await readFile(join(portalRoot, "tokens.css"), "utf8"));
       return;
     }
-
-    if (url.pathname.startsWith("/api/")) {
-      if (request.method !== "GET" && request.headers["x-portal-token"] !== TOKEN) {
-        send(response, 403, { ok: false, reasonCode: "PORTAL_TOKEN_REQUIRED" });
-        return;
-      }
-      if (url.pathname === "/api/settings" && request.method === "GET") {
-        send(response, 200, await settingsCatalog());
-        return;
-      }
-      if (url.pathname === "/api/partitions" && request.method === "GET") {
-        send(response, 200, {
-          ok: true,
-          reasonCode: "PORTAL_PARTITIONS_READY",
-          mode: partitionMode ? "container" : "workspace",
-          partitions: partitionCatalog.map(({ id }) => ({ id })),
-          selectedPartition: selectedPartitionId,
-        });
-        return;
-      }
-      if (url.pathname === "/api/partition" && request.method === "POST") {
-        const body = await readJsonBody(request);
-        const next = String(body.partition ?? body.id ?? "");
-        const selected = partitionCatalog.find((partition) => partition.id === next);
-        if (!selected) {
-          send(response, 404, {
-            ok: false,
-            reasonCode: "PORTAL_PARTITION_UNKNOWN",
-            requestedPartition: next,
-            partitions: partitionCatalog.map(({ id }) => id),
-          });
-          return;
-        }
-        selectedPartitionId = selected.id;
-        send(response, 200, {
-          ok: true,
-          reasonCode: "PORTAL_PARTITION_SELECTED",
-          selectedPartition: selected.id,
-          workspace: selected.workspace,
-        });
-        return;
-      }
-      if (url.pathname === "/api/settings" && request.method === "POST") {
-        const body = await readJsonBody(request);
-        const result = await writeSetting(String(body.key ?? ""), String(body.value ?? ""));
-        const readback = result.ok ? await settingsCatalog() : null;
-        send(response, result.ok ? 200 : 409, {
-          ...result.body,
-          readback: readback?.settings.find((entry) => entry.key === body.key) ?? null,
-        });
-        return;
-      }
-      if (url.pathname === "/api/execution" && request.method === "GET") {
-        send(response, 200, await executionConfig());
-        return;
-      }
-      if (url.pathname === "/api/execution" && request.method === "POST") {
-        const body = await readJsonBody(request);
-        const result = await writeExecution(String(body.action ?? ""), body);
-        const readback = result.ok ? await executionConfig() : null;
-        send(response, result.ok ? 200 : 409, { ...result.body, readback });
-        return;
-      }
-      if (url.pathname === "/api/prose" && request.method === "GET") {
-        const path = proseTarget(url.searchParams.get("file") ?? PROSE_FILES[0]);
-        if (!path) { send(response, 404, { ok: false, reasonCode: "PORTAL_PROSE_NOT_ALLOWED" }); return; }
-        let text = "";
-        try { text = await readFile(path, "utf8"); } catch { text = ""; }
-        send(response, 200, { ok: true, reasonCode: "PORTAL_PROSE_READ", path, text });
-        return;
-      }
-      if (url.pathname === "/api/prose" && request.method === "POST") {
-        const body = await readJsonBody(request);
-        const path = proseTarget(String(body.file ?? ""));
-        if (!path) { send(response, 404, { ok: false, reasonCode: "PORTAL_PROSE_NOT_ALLOWED" }); return; }
-        await writeFile(path, String(body.text ?? ""), "utf8");
-        const readback = await readFile(path, "utf8");
-        send(response, 200, { ok: true, reasonCode: "PORTAL_PROSE_WRITTEN", path, matches: readback === String(body.text ?? "") });
-        return;
-      }
-      if (url.pathname === "/api/reconcile" && request.method === "GET") {
-        send(response, 200, await reconcile());
-        return;
-      }
-      send(response, 404, { ok: false, reasonCode: "PORTAL_ROUTE_UNKNOWN" });
+    if (!pathname.startsWith("/api/")) {
+      response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      response.end("not found\n");
       return;
     }
-
-    response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-    response.end("not found\n");
+    if (request.method !== "GET" && request.headers["x-portal-token"] !== TOKEN) {
+      send(response, 403, { ok: false, reasonCode: "PORTAL_TOKEN_REQUIRED" });
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/settings") {
+      send(response, 200, await settingsCatalog());
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/execution") {
+      send(response, 200, await executionState());
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/vocabulary") {
+      send(response, 200, await vocabulary());
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/commands") {
+      send(response, 200, await commands());
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/status") {
+      const selected = currentPartition();
+      const [status, validation, catalog] = await Promise.all([
+        cliResult(["status", "--workspace", selected.workspace]),
+        cliResult(["validate", "--workspace", selected.workspace]),
+        cliResult(["settings-catalog", "--workspace", selected.workspace]),
+      ]);
+      const checks = [
+        { key: "validate", ok: validation.ok, reasonCode: validation.body?.reasonCode ?? "PORTAL_VALIDATE_FAILED" },
+        { key: "catalog", ok: catalog.ok, reasonCode: catalog.body?.reasonCode ?? "PORTAL_CATALOG_FAILED" },
+        { key: "actor", ok: ACTOR.length > 0, reasonCode: ACTOR.length > 0 ? "PORTAL_ACTOR_CONFIGURED" : "PORTAL_ACTOR_MISSING" },
+      ];
+      let events = null;
+      try { events = await cli(["event-list", "--workspace", selected.workspace, "--limit", "1"]); } catch { /* health remains legible */ }
+      const body = status.body ?? {};
+      send(response, 200, {
+        ok: checks.every((check) => check.ok) && status.ok,
+        reasonCode: checks.every((check) => check.ok) && status.ok ? "PORTAL_STATUS_READY" : "PORTAL_STATUS_DEGRADED",
+        workspaceId: body.workspaceId ?? null,
+        version: body.version ?? null,
+        headEventHash: body.headEventHash ?? null,
+        eventCount: events?.total ?? null,
+        engineVersion: body.engineVersion ?? null,
+        checks,
+      });
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/session-audit") {
+      send(response, 200, { ok: true, reasonCode: "PORTAL_SESSION_AUDIT_READY", selectedPartition: selectedPartitionId, writes: sessionWrites });
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/partitions") {
+      send(response, 200, { ok: true, reasonCode: "PORTAL_PARTITIONS_READY", mode: partitionMode ? "container" : "workspace", partitions: partitionCatalog.map(({ id }) => ({ id })), selectedPartition: selectedPartitionId });
+      return;
+    }
+    if (request.method === "POST" && pathname === "/api/partition") {
+      const body = await readJsonBody(request);
+      const next = String(body.partition ?? body.id ?? "");
+      const selected = partitionCatalog.find((entry) => entry.id === next);
+      if (!selected) { send(response, 404, { ok: false, reasonCode: "PORTAL_PARTITION_UNKNOWN", requestedPartition: next }); return; }
+      selectedPartitionId = selected.id;
+      send(response, 200, { ok: true, reasonCode: "PORTAL_PARTITION_SELECTED", selectedPartition: selected.id, workspace: selected.workspace, proseRoot: currentProseRoot(), paths: currentPaths() });
+      return;
+    }
+    if (request.method === "POST" && pathname === "/api/settings") {
+      const body = await readJsonBody(request);
+      const key = String(body.key ?? "");
+      const result = body.reset === true ? await removeSetting(key) : await writeSetting(key, String(body.value ?? ""));
+      const readback = result.ok ? await settingsCatalog() : null;
+      send(response, result.ok ? 200 : 409, { ...result.body, readback: readback?.settings.find((entry) => entry.key === key) ?? null });
+      return;
+    }
+    if (request.method === "POST" && pathname === "/api/execution") {
+      const body = await readJsonBody(request);
+      const result = await writeExecution(String(body.action ?? ""), body);
+      const readback = result.ok ? await executionState() : null;
+      send(response, result.ok ? 200 : 409, { ...result.body, readback });
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/agents-md") {
+      const result = await agentsRead(url.searchParams.get("file") ?? PROSE_FILES[0]);
+      send(response, result.status, result.body);
+      return;
+    }
+    if (request.method === "PUT" && pathname === "/api/agents-md") {
+      const result = await agentsWrite(await readJsonBody(request));
+      send(response, result.status, result.body);
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/agents-md/reconcile") {
+      send(response, 200, await reconcile());
+      return;
+    }
+    send(response, 404, { ok: false, reasonCode: "PORTAL_ROUTE_UNKNOWN" });
   } catch (error) {
-    send(response, 500, { ok: false, reasonCode: "PORTAL_INTERNAL_ERROR", error: String(error?.message ?? error) });
+    send(response, 500, { ok: false, reasonCode: error?.reasonCode ?? "PORTAL_INTERNAL_ERROR", error: String(error?.message ?? error) });
   }
 });
 
 server.listen(port, "127.0.0.1", () => {
-  // Port 0 asks the OS to pick, so the bound port -- not the requested one --
-  // is what callers must be told.
   const bound = server.address().port;
   process.stdout.write(`${JSON.stringify({
     reasonCode: "PORTAL_LISTENING",
@@ -416,7 +465,8 @@ server.listen(port, "127.0.0.1", () => {
     container: containerRoot || null,
     partitionMode,
     selectedPartition: selectedPartitionId,
-    proseRoot, actor: ACTOR, cli: CLI,
+    proseRoot: currentProseRoot(),
+    actor: ACTOR,
+    cli: CLI,
   })}\n`);
-  process.stdout.write(`open http://127.0.0.1:${bound}/ (token is injected into the page; mutations without it are refused)\n`);
 });

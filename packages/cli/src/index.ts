@@ -128,14 +128,20 @@ import {
   readStorageHomeDeclaration,
   sealStorageHomeDeclaration,
   readSettingsCatalog,
+  readVocabulary,
+  FRAMEWORK_VERSION,
+  assertModelPlanHost,
   allPersonaReadback,
-  removeHostConfigurationInWorkspace,
-  removeCustomPersonaInWorkspace,
-  removePersonaBindingInWorkspace,
-  setHostConfigurationInWorkspace,
-  setHostDefaultInWorkspace,
+  SETTINGS_CATALOG,
+  assignModelPlanInWorkspace,
+  removeModelPlanInWorkspace,
+  removePersonaInWorkspace,
+  overridePersonaPresetInWorkspace,
+  restorePersonaPresetInWorkspace,
+  setModelPlanInWorkspace,
+  unassignModelPlanInWorkspace,
+  removeWorkspaceSetting,
   setCustomPersonaInWorkspace,
-  setPersonaBindingInWorkspace,
   setWorkspaceSetting,
   admitTemplateInWorkspace,
   readTemplateDocumentFile,
@@ -772,20 +778,6 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
   }));
 }
 
-function writeExecutionConfigState(io: CliIo, state: Awaited<ReturnType<typeof materializeWorkspace>>): void {
-  io.write(canonicalJson({
-    reasonCode: "EXECUTION_CONFIG_COMMITTED",
-    schemaVersion: "tcrn.execution-config-write-receipt.v1",
-    workspaceId: state.metadata.workspaceId,
-    version: state.version,
-    headEventHash: state.headEventHash,
-    configurations: state.executionConfig.configurations,
-    defaults: state.executionConfig.defaults,
-    bindings: state.executionConfig.bindings,
-    personas: allPersonaReadback(state.executionConfig),
-  }));
-}
-
 function writePersonaState(
   io: CliIo,
   state: Awaited<ReturnType<typeof materializeWorkspace>>,
@@ -799,20 +791,23 @@ function writePersonaState(
     version: state.version,
     headEventHash: state.headEventHash,
     ...(record === undefined ? {} : { record }),
-    personas: allPersonaReadback(state.executionConfig),
+    personas: allPersonaReadback({ personas: state.executionConfig.personas }, state.executionConfig.personaOverrides, state.executionConfig.personaTombstones),
+    modelPlans: state.executionConfig.modelPlans,
   }));
 }
 
 function writeSettingsState(io: CliIo, state: Awaited<ReturnType<typeof materializeWorkspace>>, key: string): void {
   const setting = state.settings.find((entry) => entry.key === key);
-  if (setting === undefined) fail("CLI_COMMAND_FAILED", `setting ${key} was not materialized after write`);
+  const catalogEntry = SETTINGS_CATALOG.find((entry) => entry.key === key);
+  if (catalogEntry === undefined) fail("CLI_COMMAND_FAILED", `setting ${key} is not registered`);
   const receipt = {
     schemaVersion: "tcrn.settings-write-receipt.v1",
     workspaceId: state.metadata.workspaceId,
     version: state.version,
     headEventHash: state.headEventHash,
     recordId: key,
-    setting,
+    setting: setting ?? null,
+    effectiveValue: setting?.value ?? catalogEntry.defaultValue,
   } as const;
   io.write(canonicalJson({
     reasonCode: "SETTINGS_WRITE_COMMITTED",
@@ -900,15 +895,11 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "exchange-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "output", required: true, valueKind: "string" }] },
   { name: "exchange-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "exchange-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "string" }] },
-  { name: "execution-config", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "host", required: false, valueKind: "string" }] },
   { name: "export", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "gate-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "title", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "gate-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "gate-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
   { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "minutes-locator", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "identity-authority", required: false, valueKind: "string" }, { name: "identity-authority-digest", required: false, valueKind: "string" }] },
-  { name: "host-config-default", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: false, valueKind: "string" }, { name: "clear", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "host-config-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "host-config-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "model", required: true, valueKind: "string" }, { name: "note", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "segment-events", required: false, valueKind: "integer" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }] },
   { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
@@ -934,13 +925,18 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "migration-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "target-version", required: true, valueKind: "integer" }, { name: "dry-run", required: true, valueKind: "boolean" }] },
   { name: "migration-rollback", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
   { name: "migration-verify", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "to", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
-  { name: "persona-binding-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "profile-id", required: true, valueKind: "string" }, { name: "host", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "persona-binding-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "profile-id", required: true, valueKind: "string" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "model-plan-assign", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "plan", required: true, valueKind: "string" }, { name: "persona", required: true, valueKind: "string" }, { name: "model", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "model-plan-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "host", required: false, valueKind: "string" }] },
+  { name: "model-plan-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "model-plan-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "default-model", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "model-plan-unassign", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "plan", required: true, valueKind: "string" }, { name: "persona", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
   { name: "persona-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "persona-preset-override", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "fields", required: true, valueKind: "json" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "persona-preset-restore", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "field", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "persona-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "persona-render", availability: "cli", mutates: false, flags: [{ name: "profile-id", required: true, valueKind: "string" }] },
-  { name: "persona-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "description", required: true, valueKind: "string" }, { name: "role", required: true, valueKind: "string" }, { name: "prompt", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "persona-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "role", required: true, valueKind: "string" }, { name: "job-title", required: false, valueKind: "string" }, { name: "mission", required: false, valueKind: "string" }, { name: "refusals", required: false, valueKind: "string" }, { name: "authority-boundary", required: false, valueKind: "string" }, { name: "contact-when", required: false, valueKind: "string" }, { name: "required-inputs", required: false, valueKind: "string" }, { name: "deliverables", required: false, valueKind: "string" }, { name: "success-criteria", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "persona-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "profile-authorize", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "operation", required: true, valueKind: "string" }, { name: "workspace-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "command", required: true, valueKind: "string", nullSentinel: "-" }, { name: "receipt-digest", required: false, valueKind: "string" }] },
   { name: "profile-generate", availability: "cli", mutates: false, flags: [{ name: "mode", required: true, valueKind: "string" }] },
@@ -957,6 +953,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "relocation-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "to-framework", required: true, valueKind: "string" }, { name: "to-workspace-root", required: true, valueKind: "string" }, { name: "to-transient", required: true, valueKind: "string" }, { name: "to-evidence-locator", required: true, valueKind: "string" }, { name: "to-release-trust", required: true, valueKind: "string" }, { name: "control-manifest-out", required: false, valueKind: "string" }] },
   { name: "relocation-vacate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "to-framework", required: true, valueKind: "string" }, { name: "to-workspace-root", required: true, valueKind: "string" }, { name: "to-transient", required: true, valueKind: "string" }, { name: "to-evidence-locator", required: true, valueKind: "string" }, { name: "to-release-trust", required: true, valueKind: "string" }, { name: "relocation-authority", required: true, valueKind: "string" }, { name: "relocation-authority-digest", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "control-manifest-out", required: false, valueKind: "string" }] },
   { name: "settings-catalog", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "settings-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "settings-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "value", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "snapshot-manifest", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "snapshot-verify", availability: "cli", mutates: false, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "manifest", required: true, valueKind: "string" }] },
@@ -971,6 +968,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "template-admit", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "template", required: true, valueKind: "string" }, { name: "owner", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "template-validate", availability: "cli", mutates: false, flags: [{ name: "template", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "vocabulary", availability: "cli", mutates: false, flags: [] },
   { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "sprint", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "template-receipt", required: false, valueKind: "json" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -1103,6 +1101,11 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   const command = arguments_[0];
   if (!command || command.startsWith("--")) {
     fail("CLI_COMMAND_REQUIRED", "A governed command is required");
+  }
+  // S245 retirement boundary: these names remain replay-only historical
+  // operations, never callable write/read verbs on the public CLI.
+  if (["execution-config", "host-config-default", "host-config-remove", "host-config-set", "persona-binding-remove", "persona-binding-set"].includes(command)) {
+    fail("CLI_COMMAND_UNKNOWN", `${command} is a retired replay-only path; use settings-catalog, persona-list, model-plan-list, or vocabulary for read-only state`);
   }
   // INC-012: the dispatcher writes only through this wrapper, so the output-category guard
   // covers every verb -- including ones added later, which is the whole point of moving the
@@ -1753,6 +1756,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const storageHome = await readStorageHomeDeclaration(workspace);
     io.write(canonicalJson({
       reasonCode: "WORKSPACE_COMMAND_COMPLETED",
+      engineVersion: FRAMEWORK_VERSION,
       workspaceId: state.metadata.workspaceId,
       version: state.version,
       headEventHash: state.headEventHash,
@@ -2033,74 +2037,117 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     io.write(canonicalJson({ reasonCode: "SETTINGS_CATALOG_READY", ...readSettingsCatalog(state.metadata.workspaceId, state.settings) }));
     return;
   }
-  if (command === "host-config-set") {
-    const values = parseArguments(rest, [...shared, "host", "name", "model", "note", "actor"]);
-    required(values, [...requiredShared, "host", "name", "model"]);
-    const workspace = values.workspace ?? "";
-    const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => setHostConfigurationInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace),
-      occurredAt: at,
-      host: values.host ?? "", name: values.name ?? "", model: values.model ?? "", note: values.note ?? null,
-      ...(values.actor ? { actorId: values.actor } : {}),
-    }));
-    await emitTimeAttestation(io, values, state.headEventHash);
-    writeExecutionConfigState(io, state);
+  if (command === "vocabulary") {
+    parseArguments(rest, []);
+    io.write(canonicalJson({ reasonCode: "VOCABULARY_READY", ...readVocabulary() }));
     return;
   }
-  if (command === "host-config-remove") {
-    const values = parseArguments(rest, [...shared, "host", "name", "actor"]);
-    required(values, [...requiredShared, "host", "name"]);
-    const workspace = values.workspace ?? "";
-    const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => removeHostConfigurationInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace),
-      occurredAt: at, host: values.host ?? "", name: values.name ?? "",
-      ...(values.actor ? { actorId: values.actor } : {}),
+  if (command === "model-plan-list") {
+    const values = parseArguments(rest, ["workspace", "host"]);
+    required(values, ["workspace"]);
+    const state = await materializeWorkspace(values.workspace ?? "");
+    const host = values.host;
+    if (host !== undefined && host !== "") assertModelPlanHost(host);
+    io.write(canonicalJson({
+      schemaVersion: "tcrn.model-plan-list-readback.v1",
+      reasonCode: "MODEL_PLAN_LIST_READY",
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      plans: state.executionConfig.modelPlans.filter((plan) => host === undefined || host === "" || plan.host === host),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
-    writeExecutionConfigState(io, state);
     return;
   }
-  if (command === "host-config-default") {
-    // --clear switches the pointer off explicitly; omitting BOTH --name and
-    // --clear is refused rather than read as a clear, because an accidental
-    // omission must not silently un-default a host.
-    const values = parseArguments(rest, [...shared, "host", "name", "clear", "actor"]);
-    required(values, [...requiredShared, "host"]);
-    const clearing = values.clear === "true";
-    if (!clearing && (values.name === undefined || values.name === "")) {
-      fail("CLI_ARGUMENT_MISSING", "name (or pass --clear true)");
-    }
+  if (command === "model-plan-set" || command === "model-plan-assign" || command === "model-plan-unassign" || command === "model-plan-remove") {
+    const names = command === "model-plan-set"
+      ? [...shared, "host", "name", "default-model", "actor"]
+      : command === "model-plan-assign"
+        ? [...shared, "host", "plan", "persona", "model", "actor"]
+        : command === "model-plan-unassign"
+          ? [...shared, "host", "plan", "persona", "actor"]
+          : [...shared, "host", "name", "actor"];
+    const values = parseArguments(rest, names);
+    required(values, command === "model-plan-set" ? [...requiredShared, "host", "name", "default-model"] : command === "model-plan-remove" ? [...requiredShared, "host", "name"] : [...requiredShared, "host", "plan", "persona"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => setHostDefaultInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace),
-      occurredAt: at, host: values.host ?? "",
-      configurationName: clearing ? null : values.name ?? "",
+    const state = await withLease(workspace, at, async (lease) => {
+      const expectedVersion = await resolveExpectedVersion(values, workspace);
+      if (command === "model-plan-set") return setModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.name ?? "", defaultModel: values["default-model"] ?? "", ...(values.actor ? { actorId: values.actor } : {}) });
+      if (command === "model-plan-assign") return assignModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.plan ?? "", persona: values.persona ?? "", model: values.model ?? "", ...(values.actor ? { actorId: values.actor } : {}) });
+      if (command === "model-plan-unassign") return unassignModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.plan ?? "", persona: values.persona ?? "", ...(values.actor ? { actorId: values.actor } : {}) });
+      return removeModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.name ?? "", ...(values.actor ? { actorId: values.actor } : {}) });
+    });
+    await emitTimeAttestation(io, values, state.headEventHash);
+    io.write(canonicalJson({
+      schemaVersion: "tcrn.model-plan-write-receipt.v1",
+      reasonCode: "MODEL_PLAN_WRITE_COMMITTED",
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      plans: state.executionConfig.modelPlans,
+    }));
+    return;
+  }
+  if (command === "persona-preset-override") {
+    const values = parseArguments(rest, [...shared, "name", "fields", "actor"]);
+    required(values, [...requiredShared, "name", "fields"]);
+    const fields = jsonValue(values.fields, "fields");
+    if (fields === null || typeof fields !== "object" || Array.isArray(fields)) fail("CLI_ARGUMENT_MALFORMED", "fields must be a JSON object");
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => overridePersonaPresetInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, name: values.name ?? "", fields: fields as Readonly<Record<string, unknown>>,
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
-    writeExecutionConfigState(io, state);
+    writePersonaState(io, state, "PERSONA_WRITE_COMMITTED", state.executionConfig.personaOverrides.find((entry) => entry.name === values.name) as unknown as Readonly<Record<string, unknown>> | undefined);
+    return;
+  }
+  if (command === "persona-preset-restore") {
+    const values = parseArguments(rest, [...shared, "name", "field", "actor"]);
+    required(values, [...requiredShared, "name"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => restorePersonaPresetInWorkspace(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, name: values.name ?? "", ...(values.field === undefined ? {} : { field: values.field }),
+      ...(values.actor ? { actorId: values.actor } : {}),
+    }));
+    await emitTimeAttestation(io, values, state.headEventHash);
+    writePersonaState(io, state, "PERSONA_WRITE_COMMITTED");
     return;
   }
   if (command === "persona-set") {
-    const values = parseArguments(rest, [...shared, "name", "description", "role", "prompt", "actor"]);
-    required(values, [...requiredShared, "name", "description", "role", "prompt"]);
+    const values = parseArguments(rest, [...shared, "name", "role", "job-title", "mission", "refusals", "authority-boundary", "contact-when", "required-inputs", "deliverables", "success-criteria", "actor"]);
+    required(values, [...requiredShared, "name", "role"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => setCustomPersonaInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace),
-      occurredAt: at,
-      name: values.name ?? "",
-      description: values.description ?? "",
-      role: values.role ?? "",
-      prompt: values.prompt ?? "",
+      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at,
+      name: values.name ?? "", role: values.role ?? "",
+      ...(values["job-title"] === undefined ? {} : { jobTitle: values["job-title"] }),
+      ...(values.mission === undefined ? {} : { mission: values.mission }),
+      ...(values.refusals === undefined ? {} : { refusals: values.refusals }),
+      ...(values["authority-boundary"] === undefined ? {} : { authorityBoundary: values["authority-boundary"] }),
+      ...(values["contact-when"] === undefined ? {} : { contactWhen: values["contact-when"] }),
+      ...(values["required-inputs"] === undefined ? {} : { requiredInputs: values["required-inputs"] }),
+      ...(values.deliverables === undefined ? {} : { deliverables: values.deliverables }),
+      ...(values["success-criteria"] === undefined ? {} : { successCriteria: values["success-criteria"] }),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
-    const record = state.executionConfig.personas.find((persona) => persona.name === values.name);
-    writePersonaState(io, state, "PERSONA_WRITE_COMMITTED", record as Readonly<Record<string, unknown>> | undefined);
+    writePersonaState(io, state, "PERSONA_WRITE_COMMITTED", state.executionConfig.personas.find((entry) => entry.name === values.name) as unknown as Readonly<Record<string, unknown>> | undefined);
+    return;
+  }
+  if (command === "settings-remove") {
+    const values = parseArguments(rest, [...shared, "key", "actor"]);
+    required(values, [...requiredShared, "key"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const state = await withLease(workspace, at, async (lease) => removeWorkspaceSetting(workspace, lease, {
+      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, key: values.key ?? "", ...(values.actor ? { actorId: values.actor } : {}),
+    }));
+    await emitTimeAttestation(io, values, state.headEventHash);
+    writeSettingsState(io, state, values.key ?? "");
     return;
   }
   if (command === "persona-remove") {
@@ -2108,7 +2155,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "name"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => removeCustomPersonaInWorkspace(workspace, lease, {
+    const state = await withLease(workspace, at, async (lease) => removePersonaInWorkspace(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
       name: values.name ?? "",
@@ -2128,64 +2175,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       workspaceId: state.metadata.workspaceId,
       version: state.version,
       headEventHash: state.headEventHash,
-      personas: allPersonaReadback(state.executionConfig),
-    }));
-    return;
-  }
-  if (command === "persona-binding-set") {
-    const values = parseArguments(rest, [...shared, "profile-id", "host", "name", "actor"]);
-    required(values, [...requiredShared, "profile-id", "host", "name"]);
-    const workspace = values.workspace ?? "";
-    const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => setPersonaBindingInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace),
-      occurredAt: at, profileId: values["profile-id"] ?? "", host: values.host ?? "", configurationName: values.name ?? "",
-      ...(values.actor ? { actorId: values.actor } : {}),
-    }));
-    await emitTimeAttestation(io, values, state.headEventHash);
-    writeExecutionConfigState(io, state);
-    return;
-  }
-  if (command === "persona-binding-remove") {
-    const values = parseArguments(rest, [...shared, "profile-id", "host", "actor"]);
-    required(values, [...requiredShared, "profile-id", "host"]);
-    const workspace = values.workspace ?? "";
-    const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => removePersonaBindingInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace),
-      occurredAt: at, profileId: values["profile-id"] ?? "", host: values.host ?? "",
-      ...(values.actor ? { actorId: values.actor } : {}),
-    }));
-    await emitTimeAttestation(io, values, state.headEventHash);
-    writeExecutionConfigState(io, state);
-    return;
-  }
-  if (command === "execution-config") {
-    const values = parseArguments(rest, ["workspace", "host"]);
-    required(values, ["workspace"]);
-    const state = await materializeWorkspace(values.workspace ?? "");
-    const config = state.executionConfig;
-    const host = values.host;
-    if (host !== undefined && host !== "") {
-      io.write(canonicalJson({
-        schemaVersion: "tcrn.execution-config-readback.v1",
-        reasonCode: "EXECUTION_CONFIG_READY",
-        workspaceId: state.metadata.workspaceId,
-        configurations: config.configurations.filter((entry) => entry.host === host),
-        defaults: config.defaults.filter((entry) => entry.host === host),
-        bindings: config.bindings.filter((entry) => entry.host === host),
-        personas: allPersonaReadback(config),
-      }));
-      return;
-    }
-    io.write(canonicalJson({
-      schemaVersion: "tcrn.execution-config-readback.v1",
-      reasonCode: "EXECUTION_CONFIG_READY",
-      workspaceId: state.metadata.workspaceId,
-      configurations: config.configurations,
-      defaults: config.defaults,
-      bindings: config.bindings,
-      personas: allPersonaReadback(config),
+      personas: allPersonaReadback({ personas: state.executionConfig.personas }, state.executionConfig.personaOverrides, state.executionConfig.personaTombstones),
     }));
     return;
   }

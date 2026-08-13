@@ -33,6 +33,7 @@
     "portal:launchers": "node portal/scripts/generate-launchers.mjs",
     "portal:proof": "node portal/scripts/design-proof.mjs && node portal/scripts/i18n-proof.mjs && node portal/scripts/dependency-audit.mjs",
     "portal:test": "node --test portal/tests/*.test.mjs",
+    "verify:portal": "node scripts/verify-portal.mjs",
     "preflight": "node scripts/preflight.mjs",
     "push-gate": "node scripts/push-gate.mjs",
     "regen:map-digests": "node scripts/generate-proof-artifacts.mjs",
@@ -107,6 +108,7 @@
   "devDependencies": {
     "@types/node": "24.13.2",
     "ajv": "8.17.1",
+    "linkedom": "0.18.12",
     "pg": "8.22.0",
     "typescript": "5.9.3"
   }

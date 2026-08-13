@@ -1,8 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertProtocolId, canonicalJson } from "../../protocol/src/index.js";
-import { EMPTY_PERSONA_STORE, PersonaStoreError, applyPersonaRemove, applyPersonaSet, personaExists, validatePersonaStoreState } from "./persona-store.js";
-import type { PersonaRecord } from "./persona-store.js";
+import { assertProtocolId, canonicalJson, compareCanonicalText } from "../../protocol/src/index.js";
+import {
+  EMPTY_PERSONA_STORE,
+  PersonaStoreError,
+  applyPersonaRemove,
+  applyPersonaSet,
+  applyLegacyPersonaSet,
+  applyPersonaPresetOverride,
+  applyPersonaPresetRemove,
+  applyPersonaPresetRestore,
+  personaExists,
+  personaNameExists,
+  validatePersonaPresetOverride,
+  validatePersonaStoreState,
+} from "./persona-store.js";
+import type { PersonaPresetOverrideRecord, PersonaRecord } from "./persona-store.js";
+import {
+  ModelPlanError,
+  applyModelPlanAssign,
+  applyModelPlanRemove,
+  applyModelPlanSet,
+  applyModelPlanUnassign,
+  validateModelPlanState,
+} from "./model-plan.js";
+import type { ModelPlanRecord } from "./model-plan.js";
 
 /**
  * INIT-026 S232 — the execution-configuration surface.
@@ -76,6 +98,9 @@ export interface ExecutionConfigState {
   readonly defaults: readonly HostDefaultRecord[];
   readonly bindings: readonly PersonaBindingRecord[];
   readonly personas: readonly PersonaRecord[];
+  readonly modelPlans: readonly ModelPlanRecord[];
+  readonly personaOverrides: readonly PersonaPresetOverrideRecord[];
+  readonly personaTombstones: readonly string[];
 }
 
 export const EMPTY_EXECUTION_CONFIG: ExecutionConfigState = Object.freeze({
@@ -83,6 +108,9 @@ export const EMPTY_EXECUTION_CONFIG: ExecutionConfigState = Object.freeze({
   defaults: Object.freeze([]),
   bindings: Object.freeze([]),
   personas: EMPTY_PERSONA_STORE.personas,
+  modelPlans: Object.freeze([]),
+  personaOverrides: Object.freeze([]),
+  personaTombstones: Object.freeze([]),
 });
 
 export class ExecutionConfigError extends Error {
@@ -237,13 +265,48 @@ export function applyPersonaBindingRemove(state: ExecutionConfigState, input: {
 
 export function applyCustomPersonaSet(state: ExecutionConfigState, input: {
   readonly name: unknown;
-  readonly description: unknown;
   readonly role: unknown;
-  readonly prompt: unknown;
+  readonly jobTitle?: unknown;
+  readonly mission?: unknown;
+  readonly refusals?: unknown;
+  readonly authorityBoundary?: unknown;
+  readonly contactWhen?: unknown;
+  readonly requiredInputs?: unknown;
+  readonly deliverables?: unknown;
+  readonly successCriteria?: unknown;
+  readonly description?: unknown;
+  readonly prompt?: unknown;
   readonly updatedAt: string;
 }): { readonly state: ExecutionConfigState; readonly record: PersonaRecord } {
   try {
+    const name = String(input.name);
+    if (personaNameExists({ personas: state.personas }, name, state.personaTombstones) && !state.personas.some((persona) => persona.name === name)) {
+      throw new PersonaStoreError("PERSONA_NAME_CONFLICT", `${name} is reserved by a preset persona`);
+    }
+    if (state.personaTombstones.includes(name)) {
+      throw new PersonaStoreError("PERSONA_NAME_CONFLICT", `${name} is reserved by a tombstoned preset persona`);
+    }
     const applied = applyPersonaSet({ personas: state.personas }, input);
+    return { state: { ...state, personas: applied.state.personas }, record: applied.record };
+  } catch (error) {
+    if (error instanceof PersonaStoreError) throw error;
+    throw error;
+  }
+}
+
+export function applyLegacyCustomPersonaSet(state: ExecutionConfigState, input: {
+  readonly id?: unknown;
+  readonly schemaVersion?: unknown;
+  readonly name: unknown;
+  readonly description: unknown;
+  readonly role: unknown;
+  readonly prompt: unknown;
+  readonly revision: unknown;
+  readonly updatedAt: string;
+  readonly tombstone: unknown;
+}): { readonly state: ExecutionConfigState; readonly record: PersonaRecord } {
+  try {
+    const applied = applyLegacyPersonaSet({ personas: state.personas }, input);
     return { state: { ...state, personas: applied.state.personas }, record: applied.record };
   } catch (error) {
     if (error instanceof PersonaStoreError) throw error;
@@ -260,6 +323,10 @@ export function applyCustomPersonaRemove(state: ExecutionConfigState, input: { r
   if (binding !== undefined) {
     fail("EXECUTION_PERSONA_IN_USE", `${String(input.name)} is referenced by ${binding.profileId} on ${binding.host}; remove that binding first`);
   }
+  const name = String(input.name);
+  if (state.modelPlans.some((plan) => Object.hasOwn(plan.assignments, name))) {
+    fail("EXECUTION_PERSONA_IN_USE", `${name} is referenced by a model plan; remove that assignment first`);
+  }
   try {
     const next = applyPersonaRemove({ personas: state.personas }, input);
     return { ...state, personas: next.personas };
@@ -267,6 +334,71 @@ export function applyCustomPersonaRemove(state: ExecutionConfigState, input: { r
     if (error instanceof PersonaStoreError) throw error;
     throw error;
   }
+}
+
+export function applyModelPlanSetInExecutionConfig(state: ExecutionConfigState, input: {
+  readonly host: unknown; readonly name: unknown; readonly defaultModel: unknown; readonly updatedAt: string;
+}): { readonly state: ExecutionConfigState; readonly record: ModelPlanRecord } {
+  try {
+    const applied = applyModelPlanSet(state.modelPlans, input);
+    return { state: { ...state, modelPlans: applied.records }, record: applied.record };
+  } catch (error) {
+    if (error instanceof ModelPlanError) throw error;
+    throw error;
+  }
+}
+
+export function applyModelPlanAssignInExecutionConfig(state: ExecutionConfigState, input: {
+  readonly host: unknown; readonly name: unknown; readonly persona: unknown; readonly model: unknown; readonly updatedAt: string;
+}): { readonly state: ExecutionConfigState; readonly record: ModelPlanRecord } {
+  const applied = applyModelPlanAssign(state.modelPlans, input, (name) => personaNameExists({ personas: state.personas }, name, state.personaTombstones));
+  return { state: { ...state, modelPlans: applied.records }, record: applied.record };
+}
+
+export function applyModelPlanUnassignInExecutionConfig(state: ExecutionConfigState, input: {
+  readonly host: unknown; readonly name: unknown; readonly persona: unknown; readonly updatedAt: string;
+}): { readonly state: ExecutionConfigState; readonly record: ModelPlanRecord } {
+  const applied = applyModelPlanUnassign(state.modelPlans, input);
+  return { state: { ...state, modelPlans: applied.records }, record: applied.record };
+}
+
+export function applyModelPlanRemoveInExecutionConfig(state: ExecutionConfigState, input: { readonly host: unknown; readonly name: unknown }, settings: readonly { readonly key: string; readonly value: string }[]): ExecutionConfigState {
+  const records = applyModelPlanRemove(state.modelPlans, input, (plan) => {
+    const setting = settings.find((candidate) =>
+      (plan.host === "claude-code" && candidate.key === "execution.claudeCodeSubagentPlan" && candidate.value === plan.name) ||
+      (plan.host === "codex" && candidate.key === "execution.codexSubagentPlan" && candidate.value === plan.name),
+    );
+    return setting === undefined ? undefined : `setting ${setting.key}`;
+  });
+  return { ...state, modelPlans: records };
+}
+
+export function applyPersonaPresetOverrideInExecutionConfig(state: ExecutionConfigState, input: {
+  readonly name: unknown; readonly fields: Readonly<Record<string, unknown>>; readonly updatedAt: string;
+}): { readonly state: ExecutionConfigState; readonly record: PersonaPresetOverrideRecord } {
+  if (state.personas.some((persona) => persona.name === String(input.name))) {
+    throw new PersonaStoreError("PERSONA_NAME_CONFLICT", `${String(input.name)} is a custom persona, not a preset; use persona-set for custom content`);
+  }
+  const applied = applyPersonaPresetOverride(input, state.personaOverrides, state.personaTombstones);
+  return { state: { ...state, personaOverrides: applied.overrides }, record: applied.record };
+}
+
+export function applyPersonaPresetRestoreInExecutionConfig(state: ExecutionConfigState, input: { readonly name: unknown; readonly field?: unknown; readonly updatedAt: string }): ExecutionConfigState {
+  const name = String(input.name);
+  return {
+    ...state,
+    personaOverrides: applyPersonaPresetRestore(input, state.personaOverrides, state.personaTombstones),
+    personaTombstones: state.personaTombstones.filter((entry) => entry !== name),
+  };
+}
+
+export function applyPersonaPresetRemoveInExecutionConfig(state: ExecutionConfigState, input: { readonly name: unknown }): ExecutionConfigState {
+  const applied = applyPersonaPresetRemove(input, state.personaOverrides, state.personaTombstones,
+    (name) => {
+      const plan = state.modelPlans.find((candidate) => Object.hasOwn(candidate.assignments, name));
+      return plan === undefined ? undefined : `model plan ${plan.host}/${plan.name}`;
+    });
+  return { ...state, personaOverrides: applied.overrides, personaTombstones: applied.tombstones };
 }
 
 function sortState(configurations: readonly HostConfigurationRecord[]): readonly HostConfigurationRecord[] {
@@ -279,11 +411,16 @@ export function validateExecutionConfigState(value: unknown): ExecutionConfigSta
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail("EXECUTION_RECORD_INVALID", "execution config state must be an object");
   }
-  const candidate = value as { configurations?: unknown; defaults?: unknown; bindings?: unknown; personas?: unknown };
+  const candidate = value as { configurations?: unknown; defaults?: unknown; bindings?: unknown; personas?: unknown; modelPlans?: unknown; personaOverrides?: unknown; personaTombstones?: unknown };
   const configurations = Array.isArray(candidate.configurations) ? candidate.configurations : [];
   const defaults = Array.isArray(candidate.defaults) ? candidate.defaults : [];
   const bindings = Array.isArray(candidate.bindings) ? candidate.bindings : [];
   const personas = validatePersonaStoreState({ personas: Array.isArray(candidate.personas) ? candidate.personas : [] });
+  const modelPlans = validateModelPlanState(Array.isArray(candidate.modelPlans) ? candidate.modelPlans : []);
+  const personaOverrides = Array.isArray(candidate.personaOverrides) ? candidate.personaOverrides.map(validatePersonaPresetOverride) : [];
+  const personaTombstones = Array.isArray(candidate.personaTombstones) && candidate.personaTombstones.every((entry) => typeof entry === "string")
+    ? [...new Set(candidate.personaTombstones as string[])].sort(compareCanonicalText)
+    : [];
   for (const entry of configurations) {
     const record = entry as HostConfigurationRecord;
     assertExecutionHost(record.host);
@@ -307,5 +444,8 @@ export function validateExecutionConfigState(value: unknown): ExecutionConfigSta
     defaults: Object.freeze([...(defaults as HostDefaultRecord[])]),
     bindings: Object.freeze([...(bindings as PersonaBindingRecord[])]),
     personas: personas.personas,
+    modelPlans,
+    personaOverrides: Object.freeze(personaOverrides),
+    personaTombstones: Object.freeze(personaTombstones),
   };
 }

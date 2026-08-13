@@ -15,6 +15,125 @@
       "purpose": "offline Draft 2020-12 schema evaluation",
       "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
     },
+    "boolbase@1.0.0": {
+      "direct": false,
+      "license": "ISC",
+      "integrity": "sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww==",
+      "purpose": "exact linkedom transitive selector dependency",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "css-select@5.1.0": {
+      "direct": false,
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-nwoRF1rvRRnnCqqY7updORDsuqKzqYJ28+oSMaJMMgOauh3fvwHqMS7EZpIPqK8GL+g9mKxF1vP/ZjSeNjEVHg==",
+      "purpose": "exact linkedom transitive selector dependency",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "css-what@6.1.0": {
+      "direct": false,
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-HTUrgRJ7r4dsZKU6GjmpfRK1O76h97Z8MfS1G0FozR+oF2kG6Vfe8JE6zwrkbxigziPHinCJ+gCPjA9EaBDtRw==",
+      "purpose": "exact linkedom transitive selector dependency",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "cssom@0.5.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-iKuQcq+NdHqlAcwUY0o/HL69XQrUaQdMjmStJ8JFmUaiiQErlhrmuigkg/CU4E2J0IyUKUrMAgl36TvN67MqTw==",
+      "purpose": "exact linkedom DOM stylesheet dependency",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "dom-serializer@2.0.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==",
+      "purpose": "exact linkedom transitive DOM serializer",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "domelementtype@2.3.0": {
+      "direct": false,
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-OLETBj6w0OsagBwdXnPdN0cnMfF9opN69co+7ZrbfPGrdpPVNBUj02spi6B1N7wChLQiPn4CSH/zJvXw56gmHw==",
+      "purpose": "exact linkedom transitive DOM element dependency",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "domhandler@5.0.2": {
+      "direct": false,
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-pr8ToPIuwBonzUy42STpc5Cf0m69zsQ7gtCLLvKrTbhVRnRohT2pLiJmGp3PAh16nDVWpYpcRpdjuk1vFmnQUg==",
+      "purpose": "exact linkedom transitive DOM handler",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "domhandler@5.0.3": {
+      "direct": false,
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==",
+      "purpose": "exact linkedom transitive DOM handler",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "domutils@3.0.1": {
+      "direct": false,
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-z08c1l761iKhDFtfXO04C7kTdPBLi41zwOZl00WS8b5eiaebNpY00HKbztwBq+e3vyqWNwWF3mP9YLUeqIrF+Q==",
+      "purpose": "exact linkedom transitive DOM utility",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "domutils@3.2.2": {
+      "direct": false,
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==",
+      "purpose": "exact linkedom transitive DOM utility",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "entities@4.2.0": {
+      "direct": false,
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-wEJa03bJgqEwPnkUqYdgmcfUXfm6+4hePQhntIvRy/1/+C4dFuhYHsgKBRjbQ6OWBh42P+VhAoCDO77DUh0e/Q==",
+      "purpose": "exact linkedom transitive entity decoder",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "entities@7.0.1": {
+      "direct": false,
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==",
+      "purpose": "exact linkedom transitive entity decoder",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "html-escaper@3.0.3": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-RuMffC89BOWQoY0WKGpIhn5gX3iI54O6nRA0yC124NYVtzjmFWBIiFd8M0x+ZdX0P9R4lADg1mgP8C7PxGOWuQ==",
+      "purpose": "exact linkedom transitive HTML escaping dependency",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "htmlparser2@10.1.0": {
+      "direct": false,
+      "license": "MIT",
+      "integrity": "sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ==",
+      "purpose": "exact linkedom transitive HTML parser",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "linkedom@0.18.12": {
+      "direct": true,
+      "license": "ISC",
+      "integrity": "sha512-jalJsOwIKuQJSeTvsgzPe9iJzyfVaEJiEXl+25EkKevsULHvMJzpNqwvj1jOESWdmgKDiXObyjOYwlUqG7wo1Q==",
+      "purpose": "test-only executed DOM proof for the portal; not a distribution runtime dependency",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "nth-check@2.0.1": {
+      "direct": false,
+      "license": "BSD-2-Clause",
+      "integrity": "sha512-it1vE95zF6dTT9lBsYbxvqh0Soy4SPowchj0UBGj/V6cTPnXXtQOPUbhZ6CmGzAD/rW22LQK6E96pcdJXk4A4w==",
+      "purpose": "exact linkedom transitive selector dependency",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
+    "uhyphen@0.2.0": {
+      "direct": false,
+      "license": "ISC",
+      "integrity": "sha512-qz3o9CHXmJJPGBdqzab7qAYuW8kQGKNEuoHFYrBwV6hWIMcpAmxDLXojcHfFr9US1Pe6zUswEIJIbLI610fuqA==",
+      "purpose": "exact linkedom transitive hyphenation dependency",
+      "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
+    },
     "fast-deep-equal@3.1.3": {
       "direct": false,
       "license": "MIT",

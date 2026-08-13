@@ -47,13 +47,13 @@ test("S239: defaults, closed enum, and bounded numeric strings are catalog-backe
   const catalog = await json(["settings-catalog", "--workspace", workspace]);
   const entries = new Map(catalog.settings.map((entry) => [entry.key, entry]));
   assert.deepEqual(entries.get("execution.maxConcurrentSubagents"), {
-    key: "execution.maxConcurrentSubagents", type: "string", layer: "workspace_configuration", defaultValue: "8", currentValue: "8",
+    key: "execution.maxConcurrentSubagents", type: "string", controlType: "number", layer: "workspace_configuration", defaultValue: "8", currentValue: "8", min: 1, max: 32,
   });
   assert.deepEqual(entries.get("execution.maxDispatchDepth"), {
-    key: "execution.maxDispatchDepth", type: "string", layer: "workspace_configuration", defaultValue: "1", currentValue: "1",
+    key: "execution.maxDispatchDepth", type: "string", controlType: "number", layer: "workspace_configuration", defaultValue: "1", currentValue: "1", min: 1, max: 4,
   });
   assert.deepEqual(entries.get("execution.personalessDispatch"), {
-    key: "execution.personalessDispatch", type: "enum", layer: "workspace_configuration", defaultValue: "allowed", currentValue: "allowed", allowedValues: ["allowed", "forbidden"],
+    key: "execution.personalessDispatch", type: "enum", controlType: "boolean", layer: "workspace_configuration", defaultValue: "allowed", currentValue: "allowed", allowedValues: ["allowed", "forbidden"], trueValue: "allowed", falseValue: "forbidden",
   });
 
   const first = await json(["settings-set", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(1),
@@ -76,7 +76,7 @@ test("S239: semantic refusals identify the setting and leave the head unchanged"
     ["execution.maxConcurrentSubagents", "1.0", /1 to 32/u],
     ["execution.maxDispatchDepth", "0", /1 to 4/u],
     ["execution.maxDispatchDepth", "5", /1 to 4/u],
-    ["execution.personalessDispatch", "review-only", /allowed, forbidden/u],
+    ["execution.personalessDispatch", "unknown", /allowed, forbidden/u],
   ];
   for (const [key, value, message] of cases) {
     const stable = await version();

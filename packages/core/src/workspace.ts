@@ -76,8 +76,16 @@ import {
   applyHostConfigDefault,
   applyHostConfigRemove,
   applyHostConfigSet,
+  applyLegacyCustomPersonaSet,
   applyCustomPersonaRemove,
   applyCustomPersonaSet,
+  applyModelPlanAssignInExecutionConfig,
+  applyModelPlanRemoveInExecutionConfig,
+  applyModelPlanSetInExecutionConfig,
+  applyModelPlanUnassignInExecutionConfig,
+  applyPersonaPresetOverrideInExecutionConfig,
+  applyPersonaPresetRemoveInExecutionConfig,
+  applyPersonaPresetRestoreInExecutionConfig,
   applyPersonaBindingRemove,
   applyPersonaBindingSet,
   assertExecutionHost,
@@ -128,9 +136,23 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "CONFERENCE_INDEPENDENCE_REQUIRED",
   "EXECUTION_PERSONA_IN_USE",
   "EXECUTION_PERSONA_UNKNOWN",
+  "MODEL_PLAN_ASSIGNMENT_INVALID",
+  "MODEL_PLAN_DEFAULT_MODEL_INVALID",
+  "MODEL_PLAN_HOST_UNKNOWN",
+  "MODEL_PLAN_IN_USE",
+  "MODEL_PLAN_NAME_INVALID",
+  "MODEL_PLAN_NOT_FOUND",
+  "MODEL_PLAN_PERSONA_UNKNOWN",
+  "MODEL_PLAN_RECORD_INVALID",
+  "PERSONA_CONTENT_INVALID",
   "PERSONA_DESCRIPTION_INVALID",
+  "PERSONA_FIELD_INVALID",
   "PERSONA_NAME_INVALID",
+  "PERSONA_NAME_CONFLICT",
   "PERSONA_NOT_FOUND",
+  "PERSONA_PRESET_IN_USE",
+  "PERSONA_PRESET_NOT_FOUND",
+  "PERSONA_PRESET_TOMBSTONED",
   "PERSONA_PROMPT_INVALID",
   "PERSONA_RECORD_INVALID",
   "PERSONA_ROLE_INVALID",
@@ -353,7 +375,7 @@ const workOperations = new Set(["work.created", "work.updated", "work.deleted", 
 // that never use them stay fully readable, and storageVersion stays 1.
 const conferenceOperations = new Set(["conference.created", "conference.updated", "conference.position.appended", "conference.closed"]);
 const gateOperations = new Set(["gate.created", "gate.updated", "gate.deleted"]);
-const settingsOperations = new Set(["settings.updated"]);
+const settingsOperations = new Set(["settings.updated", "settings.removed"]);
 const executionOperations = new Set([
   "execution.configuration.set",
   "execution.configuration.removed",
@@ -362,6 +384,13 @@ const executionOperations = new Set([
   "execution.binding.removed",
   "execution.persona.set",
   "execution.persona.removed",
+  "execution.model-plan.set",
+  "execution.model-plan.assigned",
+  "execution.model-plan.unassigned",
+  "execution.model-plan.removed",
+  "execution.persona-preset.override",
+  "execution.persona-preset.restore",
+  "execution.persona-preset.removed",
 ]);
 const templateOperations = new Set(["template.admitted"]);
 const metadataFields = [
@@ -1705,8 +1734,19 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       continue;
     }
     if (settingsOperations.has(operation)) {
+      const body = payloadRecord(payload, operation, actorRequired);
+      if (operation === "settings.removed") {
+        exactFields(body, ["key", "updatedAt"], "WORKSPACE_EVENT_CORRUPT", "setting removal record");
+        if (typeof body.key !== "string" || typeof body.updatedAt !== "string") fail("WORKSPACE_EVENT_CORRUPT", "setting removal record is invalid");
+        try { assertStrictInstant(body.updatedAt); } catch { fail("WORKSPACE_EVENT_CORRUPT", "setting removal timestamp is invalid"); }
+        requireEventBoundTimestamp(body.updatedAt, event, `setting ${body.key}`);
+        const current = settings.get(body.key);
+        if (current === undefined) fail("WORKSPACE_EVENT_CORRUPT", `cannot remove unknown setting ${body.key}`);
+        settings.delete(body.key);
+        continue;
+      }
       const record = extensionRecordOrCorrupt(() => validateWorkspaceSettingRecord(
-        payloadRecord(payload, operation, actorRequired),
+        body,
         workspaceRoot,
       ));
       requireEventBoundTimestamp(record.updatedAt, event, `setting ${record.key}`);
@@ -1726,23 +1766,93 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       const body = payloadRecord(payload, operation, actorRequired) as Record<string, unknown>;
       try {
         if (operation === "execution.persona.set") {
-          const applied = applyCustomPersonaSet(executionConfig, {
-            name: body.name,
-            description: body.description,
-            role: body.role,
-            prompt: body.prompt,
-            updatedAt: String(body.updatedAt),
-          });
-          requireEventBoundTimestamp(applied.record.updatedAt, event, `persona ${applied.record.id}`);
-          if (canonicalJson(applied.record) !== canonicalJson(body)) {
-            fail("WORKSPACE_EVENT_CORRUPT", `persona ${applied.record.id} mutation record is not canonical`);
-          }
+          const applied = body.schemaVersion === "tcrn.persona.v1"
+            ? applyLegacyCustomPersonaSet(executionConfig, {
+                schemaVersion: body.schemaVersion,
+                id: body.id,
+                name: body.name,
+                description: body.description,
+                role: body.role,
+                prompt: body.prompt,
+                revision: body.revision,
+                updatedAt: String(body.updatedAt),
+                tombstone: body.tombstone,
+              })
+            : applyCustomPersonaSet(executionConfig, {
+                name: body.name,
+                role: body.role,
+                jobTitle: body.jobTitle,
+                mission: body.mission,
+                refusals: body.refusals,
+                authorityBoundary: body.authorityBoundary,
+                contactWhen: body.contactWhen,
+                requiredInputs: body.requiredInputs,
+                deliverables: body.deliverables,
+                successCriteria: body.successCriteria,
+                updatedAt: String(body.updatedAt),
+              });
+          requireEventBoundTimestamp(String(body.updatedAt), event, `persona ${String(body.name)}`);
+          if (body.schemaVersion !== "tcrn.persona.v1" && canonicalJson(applied.record) !== canonicalJson(body)) fail("WORKSPACE_EVENT_CORRUPT", `persona ${applied.record.id} mutation record is not canonical`);
           executionConfig = applied.state;
         } else if (operation === "execution.persona.removed") {
           exactFields(body, ["name", "updatedAt"], "WORKSPACE_EVENT_CORRUPT", "persona removal record");
           if (typeof body.updatedAt !== "string") fail("WORKSPACE_EVENT_CORRUPT", "persona removal timestamp is invalid");
           requireEventBoundTimestamp(body.updatedAt, event, `persona ${String(body.name)}`);
           executionConfig = applyCustomPersonaRemove(executionConfig, { name: body.name });
+        } else if (operation === "execution.model-plan.set") {
+          const applied = applyModelPlanSetInExecutionConfig(executionConfig, {
+            host: body.host,
+            name: body.name,
+            defaultModel: body.defaultModel,
+            updatedAt: String(body.updatedAt),
+          });
+          requireEventBoundTimestamp(String(body.updatedAt), event, `model plan ${String(body.name)}`);
+          if (canonicalJson(applied.record) !== canonicalJson(body)) fail("WORKSPACE_EVENT_CORRUPT", `model plan ${String(body.name)} mutation record is not canonical`);
+          executionConfig = applied.state;
+        } else if (operation === "execution.model-plan.assigned") {
+          const applied = applyModelPlanAssignInExecutionConfig(executionConfig, {
+            host: body.host,
+            name: body.name,
+            persona: body.persona,
+            model: body.model,
+            updatedAt: String(body.updatedAt),
+          });
+          requireEventBoundTimestamp(String(body.updatedAt), event, `model plan assignment ${String(body.persona)}`);
+          const canonicalBody = Object.fromEntries(Object.entries(body).filter(([key]) => key !== "persona" && key !== "model"));
+          if (canonicalJson(applied.record) !== canonicalJson(canonicalBody as unknown as JsonValue)) fail("WORKSPACE_EVENT_CORRUPT", "model plan assignment record is not canonical");
+          executionConfig = applied.state;
+        } else if (operation === "execution.model-plan.unassigned") {
+          const applied = applyModelPlanUnassignInExecutionConfig(executionConfig, {
+            host: body.host,
+            name: body.name,
+            persona: body.persona,
+            updatedAt: String(body.updatedAt),
+          });
+          requireEventBoundTimestamp(String(body.updatedAt), event, `model plan unassignment ${String(body.persona)}`);
+          const canonicalBody = Object.fromEntries(Object.entries(body).filter(([key]) => key !== "persona"));
+          if (canonicalJson(applied.record) !== canonicalJson(canonicalBody as unknown as JsonValue)) fail("WORKSPACE_EVENT_CORRUPT", "model plan unassignment record is not canonical");
+          executionConfig = applied.state;
+        } else if (operation === "execution.model-plan.removed") {
+          exactFields(body, ["host", "name", "updatedAt"], "WORKSPACE_EVENT_CORRUPT", "model plan removal record");
+          requireEventBoundTimestamp(String(body.updatedAt), event, `model plan ${String(body.name)}`);
+          executionConfig = applyModelPlanRemoveInExecutionConfig(executionConfig, { host: body.host, name: body.name }, [...settings.values()]);
+        } else if (operation === "execution.persona-preset.override") {
+          const applied = applyPersonaPresetOverrideInExecutionConfig(executionConfig, {
+            name: body.name,
+            fields: body.fields as Readonly<Record<string, unknown>>,
+            updatedAt: String(body.updatedAt),
+          });
+          requireEventBoundTimestamp(String(body.updatedAt), event, `persona preset ${String(body.name)}`);
+          if (canonicalJson(applied.record) !== canonicalJson(body)) fail("WORKSPACE_EVENT_CORRUPT", "persona preset override is not canonical");
+          executionConfig = applied.state;
+        } else if (operation === "execution.persona-preset.restore") {
+          exactFields(body, ["field", "name", "updatedAt"], "WORKSPACE_EVENT_CORRUPT", "persona preset restore record");
+          requireEventBoundTimestamp(String(body.updatedAt), event, `persona preset ${String(body.name)}`);
+          executionConfig = applyPersonaPresetRestoreInExecutionConfig(executionConfig, { name: body.name, field: body.field, updatedAt: String(body.updatedAt) });
+        } else if (operation === "execution.persona-preset.removed") {
+          exactFields(body, ["name", "updatedAt"], "WORKSPACE_EVENT_CORRUPT", "persona preset removal record");
+          requireEventBoundTimestamp(String(body.updatedAt), event, `persona preset ${String(body.name)}`);
+          executionConfig = applyPersonaPresetRemoveInExecutionConfig(executionConfig, { name: body.name });
         } else if (operation === "execution.configuration.set") {
           executionConfig = applyHostConfigSet(executionConfig, {
             host: body.host as ExecutionHost,
@@ -3433,16 +3543,28 @@ export async function closeConferenceInWorkspace(workspaceRoot: string, lease: W
 // callers provide the human name and the event carries the validated record.
 export async function setCustomPersonaInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly name: unknown;
-  readonly description: unknown;
   readonly role: unknown;
-  readonly prompt: unknown;
+  readonly jobTitle?: unknown;
+  readonly mission?: unknown;
+  readonly refusals?: unknown;
+  readonly authorityBoundary?: unknown;
+  readonly contactWhen?: unknown;
+  readonly requiredInputs?: unknown;
+  readonly deliverables?: unknown;
+  readonly successCriteria?: unknown;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
     const applied = applyCustomPersonaSet(state.executionConfig, {
       name: input.name,
-      description: input.description,
       role: input.role,
-      prompt: input.prompt,
+      jobTitle: input.jobTitle,
+      mission: input.mission,
+      refusals: input.refusals,
+      authorityBoundary: input.authorityBoundary,
+      contactWhen: input.contactWhen,
+      requiredInputs: input.requiredInputs,
+      deliverables: input.deliverables,
+      successCriteria: input.successCriteria,
       updatedAt: input.occurredAt,
     });
     return {
@@ -3451,6 +3573,75 @@ export async function setCustomPersonaInWorkspace(workspaceRoot: string, lease: 
       work: state.work,
       executionConfig: applied.state,
     };
+  }, input);
+}
+
+export async function setModelPlanInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly host: string; readonly name: string; readonly defaultModel: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const applied = applyModelPlanSetInExecutionConfig(state.executionConfig, { ...input, updatedAt: input.occurredAt });
+    return { payload: buildEventPayload("execution.model-plan.set", applied.record as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applied.state };
+  }, input);
+}
+
+export async function assignModelPlanInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly host: string; readonly name: string; readonly persona: string; readonly model: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const applied = applyModelPlanAssignInExecutionConfig(state.executionConfig, { ...input, updatedAt: input.occurredAt });
+    return { payload: buildEventPayload("execution.model-plan.assigned", { ...applied.record, persona: input.persona, model: input.model } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applied.state };
+  }, input);
+}
+
+export async function unassignModelPlanInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly host: string; readonly name: string; readonly persona: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const applied = applyModelPlanUnassignInExecutionConfig(state.executionConfig, { ...input, updatedAt: input.occurredAt });
+    return { payload: buildEventPayload("execution.model-plan.unassigned", { ...applied.record, persona: input.persona } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applied.state };
+  }, input);
+}
+
+export async function removeModelPlanInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly host: string; readonly name: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => ({
+    payload: buildEventPayload("execution.model-plan.removed", { host: input.host, name: input.name, updatedAt: input.occurredAt } as unknown as JsonValue),
+    projects: state.projects,
+    work: state.work,
+    executionConfig: applyModelPlanRemoveInExecutionConfig(state.executionConfig, { host: input.host, name: input.name }, state.settings),
+  }), input);
+}
+
+export async function overridePersonaPresetInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly name: string; readonly fields: Readonly<Record<string, unknown>>;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const applied = applyPersonaPresetOverrideInExecutionConfig(state.executionConfig, { ...input, updatedAt: input.occurredAt });
+    return { payload: buildEventPayload("execution.persona-preset.override", applied.record as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applied.state };
+  }, input);
+}
+
+export async function restorePersonaPresetInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly name: string; readonly field?: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const field = input.field ?? "";
+    const next = applyPersonaPresetRestoreInExecutionConfig(state.executionConfig, { name: input.name, field, updatedAt: input.occurredAt });
+    return { payload: buildEventPayload("execution.persona-preset.restore", { name: input.name, field, updatedAt: input.occurredAt } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: next };
+  }, input);
+}
+
+export async function removePersonaInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly name: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const isPreset = state.executionConfig.personaTombstones.includes(input.name) || state.executionConfig.personas.every((persona) => persona.name !== input.name);
+    if (isPreset) {
+      return { payload: buildEventPayload("execution.persona-preset.removed", { name: input.name, updatedAt: input.occurredAt } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applyPersonaPresetRemoveInExecutionConfig(state.executionConfig, { name: input.name }) };
+    }
+    return { payload: buildEventPayload("execution.persona.removed", { name: input.name, updatedAt: input.occurredAt } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applyCustomPersonaRemove(state.executionConfig, { name: input.name }) };
   }, input);
 }
 
@@ -3724,6 +3915,12 @@ export async function setWorkspaceSetting(workspaceRoot: string, lease: Workspac
   readonly value: string;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
+    if (input.key === "execution.claudeCodeSubagentPlan" || input.key === "execution.codexSubagentPlan") {
+      const host = input.key === "execution.claudeCodeSubagentPlan" ? "claude-code" : "codex";
+      if (!state.executionConfig.modelPlans.some((plan) => plan.host === host && plan.name === input.value)) {
+        fail("MODEL_PLAN_NOT_FOUND", `${input.value} is not a model plan for ${host}`);
+      }
+    }
     const current = state.settings.find((record) => record.key === input.key);
     const record = createWorkspaceSettingRecord(
       input.key,
@@ -3740,6 +3937,21 @@ export async function setWorkspaceSetting(workspaceRoot: string, lease: Workspac
         ...state.settings.filter((entry) => entry.key !== record.key),
         record,
       ]),
+    };
+  }, input);
+}
+
+export async function removeWorkspaceSetting(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly key: string;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => {
+    const current = state.settings.find((record) => record.key === input.key);
+    if (current === undefined) fail("WORKSPACE_INPUT_INVALID", `setting ${input.key} is not set`);
+    return {
+      payload: buildEventPayload("settings.removed", { key: input.key, updatedAt: input.occurredAt } as unknown as JsonValue),
+      projects: state.projects,
+      work: state.work,
+      settings: sortWorkspaceSettings(state.settings.filter((entry) => entry.key !== input.key)),
     };
   }, input);
 }

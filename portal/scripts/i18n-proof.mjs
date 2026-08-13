@@ -1,92 +1,68 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// The portal's copy is held to the platform's i18n contract in
-// @tcrn/ui-copy-state, which declares copyCoverage "required" for all five
-// locales. That word is why this is a gate and not a checklist: a missing
-// translation is a defect now, not a gap to fill later.
+// The portal's copy is held to the checked-in locale contract snapshot in
+// `portal/locale-contract.mjs`. The snapshot is the CI input; an upstream
+// design-system comparison is a separate, Owner-scheduled synchronization
+// concern. That separation keeps this gate meaningful in a clean checkout.
 //
 //   1. locale-set  — the portal's locales are exactly the contract's locales.
 //   2. key-coverage — every key exists, non-empty, in every locale.
 //   3. placeholders — a key's {placeholders} are identical across locales, so a
 //      translation cannot silently drop the actor name out of a sentence.
 //
-// The contract is read from the design system rather than restated here; when
-// it cannot be read the run reports UNVERIFIED and exits non-zero.
+// A missing translation is a defect now, not a gap to fill later. This script
+// must never turn an absent external checkout into a successful skip.
 
 import { readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { LOCALE_CONTRACT } from "../locale-contract.mjs";
 
 const portalRoot = fileURLToPath(new URL("..", import.meta.url));
-const copyStateSource = process.env.TCRN_COPY_STATE_SOURCE
-  ?? join(portalRoot, "..", "..", "TCRN-Design-System", "packages", "ui-copy-state", "src", "index.ts");
+const localeSourcePath = process.env.TCRN_PORTAL_LOCALES_SOURCE ?? join(portalRoot, "locales.js");
+const policyPath = join(portalRoot, "i18n-policy.json");
 
 function fail(reasonCode, detail) {
   process.stdout.write(`${JSON.stringify({ ok: false, reasonCode, ...detail }, null, 2)}\n`);
   process.exitCode = 1;
 }
 
-function skip(reasonCode, detail) {
-  // This proof compares the shipped copy against its upstream in the design
-  // system, which exists on the platform that authors the portal and nowhere
-  // else. The portal now ships inside the engine, so this script travels to
-  // every user — and a gate that goes red on a machine that was never meant to
-  // satisfy it teaches people to ignore red. Absent upstream is not a failure;
-  // it is this check having nothing to compare against, and it says so.
-  process.stdout.write(`${JSON.stringify({ ok: true, skipped: true, reasonCode, ...detail }, null, 2)}\n`);
-  process.exit(0);
-}
-
-
-let contractLocales;
-let fallbackLocale;
-try {
-  const source = await readFile(copyStateSource, "utf8");
-  const declared = source.match(/tcrnSupportedLocales = \[([^\]]+)\]/u);
-  if (!declared) throw new Error("tcrnSupportedLocales not found");
-  contractLocales = [...declared[1].matchAll(/"([^"]+)"/gu)].map((entry) => entry[1]);
-  fallbackLocale = source.match(/tcrnFallbackLocale:\s*TcrnLocale\s*=\s*"([^"]+)"/u)?.[1] ?? contractLocales[0];
-} catch (error) {
-  skip("I18N_CONTRACT_SOURCE_ABSENT", { source: copyStateSource, note: "run this on the platform that holds the design system" });
-}
+const contractLocales = [...LOCALE_CONTRACT.supportedLocales];
+const fallbackLocale = LOCALE_CONTRACT.fallbackLocale;
 
 // locales.js assigns onto `window`; give it one rather than importing a DOM.
-const table = await (async () => {
-  const source = await readFile(join(portalRoot, "locales.js"), "utf8");
+function evaluateLocaleTable(source) {
   const sandbox = {};
   new Function("window", source)(sandbox);
   return sandbox.PORTAL_LOCALES;
-})();
+}
+
+const localeSource = await readFile(localeSourcePath, "utf8");
+const table = evaluateLocaleTable(localeSource);
+const policy = JSON.parse(await readFile(policyPath, "utf8"));
 
 const portalLocales = Object.keys(table ?? {});
 const placeholders = (value) => [...String(value).matchAll(/\{([a-zA-Z0-9_]+)\}/gu)].map((entry) => entry[1]).sort().join(",");
 
 const legs = [];
 
-// Leg 1 — the contract the portal ships is the contract the design system states.
-// Compared term by term rather than by a digest over the file, because that file
-// carries prose which may legitimately change while these values must not.
-const { LOCALE_CONTRACT } = await import(new URL("../locale-contract.mjs", import.meta.url));
-const contractMetadata = [...(await readFile(copyStateSource, "utf8")).matchAll(
-  /\{\s*locale:\s*"([^"]+)",\s*nativeName:\s*"([^"]+)"/gu)].map(([, locale, nativeName]) => ({ locale, nativeName }));
-const shippedDrift = [];
-if (LOCALE_CONTRACT.supportedLocales.join(",") !== contractLocales.join(",")) {
-  shippedDrift.push({ term: "supportedLocales", shipped: [...LOCALE_CONTRACT.supportedLocales], source: contractLocales });
-}
-if (LOCALE_CONTRACT.fallbackLocale !== fallbackLocale) {
-  shippedDrift.push({ term: "fallbackLocale", shipped: LOCALE_CONTRACT.fallbackLocale, source: fallbackLocale });
-}
-for (const entry of contractMetadata) {
-  const shipped = LOCALE_CONTRACT.localeMetadata.find((candidate) => candidate.locale === entry.locale);
-  if (shipped?.nativeName !== entry.nativeName) {
-    shippedDrift.push({ term: `nativeName:${entry.locale}`, shipped: shipped?.nativeName ?? null, source: entry.nativeName });
-  }
-}
+// Leg 1 — the signed-in contract snapshot is present and structurally complete.
+// The design-system upstream sync is deliberately not a CI prerequisite: the
+// snapshot is the artifact a clean checkout can actually carry.
+const contractMetadata = [...LOCALE_CONTRACT.localeMetadata];
+const snapshotReady = contractLocales.length > 0
+  && contractLocales.includes(fallbackLocale)
+  && contractMetadata.length === contractLocales.length
+  && contractMetadata.every((entry) => contractLocales.includes(entry.locale) && typeof entry.nativeName === "string" && entry.nativeName.length > 0);
 legs.push({
-  leg: "shipped-contract",
-  ok: shippedDrift.length === 0,
-  reasonCode: shippedDrift.length === 0 ? "SHIPPED_CONTRACT_MATCHES_SOURCE" : "SHIPPED_CONTRACT_DRIFTED",
-  drift: shippedDrift,
+  leg: "contract-snapshot",
+  ok: snapshotReady,
+  reasonCode: snapshotReady ? "I18N_CONTRACT_SNAPSHOT_READY" : "I18N_CONTRACT_SNAPSHOT_INVALID",
+  source: "portal/locale-contract.mjs",
+  contractLocales,
+  fallbackLocale,
+  contractMetadata,
 });
 
 // Leg 2 — locale set matches the contract exactly, in both directions.
@@ -120,6 +96,110 @@ legs.push({
   localeCount: contractLocales.length,
   expectedStrings: allKeys.length * contractLocales.length,
   gaps: coverageGaps,
+});
+
+// Leg 5 — a newly shipped key is not allowed to masquerade as a translation
+// merely because it exists in every table.  The comparison basis is the last
+// committed portal copy, so this leg reports the current batch's additions
+// without maintaining a second hand-written key list.  Any deliberate English
+// carry-over must be listed here with a reason and is visible in the report.
+const TRANSLATION_REALITY_EXEMPTIONS = Object.freeze({});
+let baselineKeys = [];
+let baselineError = null;
+try {
+  const baselineSource = execFileSync("git", ["show", "HEAD:portal/locales.js"], { cwd: join(portalRoot, ".."), encoding: "utf8" });
+  const baseline = evaluateLocaleTable(baselineSource);
+  baselineKeys = [...new Set(Object.values(baseline ?? {}).flatMap((entry) => Object.keys(entry)))];
+} catch (error) {
+  baselineError = String(error?.message ?? error);
+}
+const addedKeys = allKeys.filter((key) => !baselineKeys.includes(key));
+const realityGaps = [];
+for (const locale of ["ja", "ko", "fr"]) {
+  for (const key of addedKeys) {
+    const english = table?.en?.[key];
+    const translated = table?.[locale]?.[key];
+    if (typeof english !== "string" || typeof translated !== "string" || english !== translated) continue;
+    if (TRANSLATION_REALITY_EXEMPTIONS[key]) continue;
+    realityGaps.push({ locale, key, reason: "matches-en", english, exemption: null });
+  }
+}
+legs.push({
+  leg: "translation-reality",
+  ok: baselineError === null && realityGaps.length === 0,
+  reasonCode: baselineError !== null ? "TRANSLATION_BASELINE_UNAVAILABLE" : realityGaps.length === 0 ? "TRANSLATIONS_DIFFER_FROM_ENGLISH" : "TRANSLATION_REALITY_GAP",
+  baseline: "HEAD:portal/locales.js",
+  addedKeyCount: addedKeys.length,
+  exemptions: TRANSLATION_REALITY_EXEMPTIONS,
+  gaps: realityGaps,
+  ...(baselineError ? { error: baselineError } : {}),
+});
+
+// Leg 7 — the whole table is compared, not only keys added since HEAD. A
+// spread-based locale can otherwise silently fall back to English when an old
+// translation is deleted. The small waiver set is explicit, bounded, and
+// reviewable; the checked-in baseline count records the pre-fix observation.
+const fullTableProblems = [];
+const fullTableReference = policy.referenceLocale ?? fallbackLocale;
+const policyLocales = policy.locales ?? {};
+for (const locale of contractLocales.filter((candidate) => candidate !== fullTableReference)) {
+  const config = policyLocales[locale];
+  const equalKeys = allKeys.filter((key) => table?.[locale]?.[key] === table?.[fullTableReference]?.[key]);
+  if (!config || !Number.isSafeInteger(config.maxEnglishMatches) || !Array.isArray(config.waivers)) {
+    fullTableProblems.push({ locale, reason: "policy-missing" });
+    continue;
+  }
+  const unexpected = equalKeys.filter((key) => !config.waivers.includes(key));
+  if (equalKeys.length > config.maxEnglishMatches || unexpected.length > 0) {
+    fullTableProblems.push({
+      locale,
+      equalCount: equalKeys.length,
+      maxEnglishMatches: config.maxEnglishMatches,
+      equalKeys,
+      unexpected,
+      baselineEqualCount: policy.baselineEqualCount?.[locale] ?? null,
+      waivers: config.waivers,
+    });
+  }
+}
+legs.push({
+  leg: "translation-full-table",
+  ok: fullTableProblems.length === 0,
+  reasonCode: fullTableProblems.length === 0 ? "FULL_LOCALE_TABLE_TRANSLATED" : "FULL_LOCALE_TABLE_REALITY_GAP",
+  policy: "portal/i18n-policy.json",
+  baselineEqualCount: policy.baselineEqualCount ?? {},
+  problems: fullTableProblems,
+});
+
+// Leg 6 — every shipped key must be reachable from the portal source.  The
+// dynamic families below are explicit because their concrete key is assembled
+// from engine data at runtime; each family also names the source marker that
+// makes the dynamic access reviewable.  Unknown/unlisted keys remain red.
+const sourceForReachability = `${await readFile(join(portalRoot, "index.html"), "utf8")}\n${await readFile(join(portalRoot, "portal.mjs"), "utf8")}`;
+const literalReachable = new Set();
+for (const match of sourceForReachability.matchAll(/data-i18n(?:-placeholder)?="([^"]+)"|\bt\(\s*["']([^"']+)["']/gu)) literalReachable.add(match[1] ?? match[2]);
+const dynamicFamilies = [
+  { prefix: "entities.field.", marker: "t(`entities.field.", reason: "persona field names are assembled from the unified schema" },
+  { prefix: "setting.", marker: "t(`setting.", reason: "setting labels/descriptions are assembled from the engine catalog" },
+  { prefix: "vocabulary.", marker: "t(`vocabulary.", reason: "dictionary category labels are assembled from the vocabulary read surface" },
+];
+const dynamicReachable = [];
+for (const family of dynamicFamilies) {
+  if (!sourceForReachability.includes(family.marker)) continue;
+  for (const key of allKeys.filter((candidate) => candidate.startsWith(family.prefix))) {
+    if (key === "setting.unknown.description") continue;
+    literalReachable.add(key);
+    dynamicReachable.push({ key, ...family });
+  }
+}
+const unreachableKeys = allKeys.filter((key) => !literalReachable.has(key));
+legs.push({
+  leg: "key-reachability",
+  ok: unreachableKeys.length === 0,
+  reasonCode: unreachableKeys.length === 0 ? "EVERY_LOCALE_KEY_REACHABLE" : "UNREACHABLE_LOCALE_KEYS",
+  unreachable: unreachableKeys,
+  dynamicFamilies,
+  dynamicReachable,
 });
 
 // Leg 3 — placeholders identical across locales.

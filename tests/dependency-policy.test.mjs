@@ -21,18 +21,34 @@ async function dependencyInputs() {
 
 test("the exact frozen dependency graph has complete policy and integrity closure", async () => {
   const graph = validateFrozenDependencyGraph(await dependencyInputs());
-  assert.equal(graph.records.length, 23);
+  assert.equal(graph.records.length, 40);
   assert.deepEqual(graph.directIdentities, [
     "@types/node@24.13.2",
     "ajv@8.17.1",
+    "linkedom@0.18.12",
     "pg@8.22.0",
     "typescript@5.9.3",
   ]);
   assert.deepEqual(graph.transitiveIdentities, [
     "@types/pg@8.20.4",
+    "boolbase@1.0.0",
+    "css-select@5.1.0",
+    "css-what@6.1.0",
+    "cssom@0.5.0",
+    "dom-serializer@2.0.0",
+    "domelementtype@2.3.0",
+    "domhandler@5.0.2",
+    "domhandler@5.0.3",
+    "domutils@3.0.1",
+    "domutils@3.2.2",
+    "entities@4.2.0",
+    "entities@7.0.1",
     "fast-deep-equal@3.1.3",
     "fast-uri@3.1.4",
+    "html-escaper@3.0.3",
+    "htmlparser2@10.1.0",
     "json-schema-traverse@1.0.0",
+    "nth-check@2.0.1",
     "pg-cloudflare@1.4.0",
     "pg-connection-string@2.14.0",
     "pg-int8@1.0.1",
@@ -46,12 +62,13 @@ test("the exact frozen dependency graph has complete policy and integrity closur
     "postgres-interval@1.1.0",
     "require-from-string@2.0.2",
     "split2@4.2.0",
+    "uhyphen@0.2.0",
     "undici-types@7.18.2",
     "xtend@4.0.2",
   ]);
 });
 
-test("each exact Ajv transitive is checked by the vulnerability denylist", async () => {
+test("each exact transitive is checked by the vulnerability denylist", async () => {
   const graph = validateFrozenDependencyGraph(await dependencyInputs());
   assert.doesNotThrow(() => assertNoKnownVulnerabilities(graph, []));
   for (const identity of graph.transitiveIdentities) {

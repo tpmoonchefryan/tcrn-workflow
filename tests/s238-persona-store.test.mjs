@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// INIT-027 S238: governed custom persona content and binding integrity.
+// INIT-028 S246: unified persona content and preset overlay behavior.
 
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
@@ -19,16 +19,12 @@ async function json(args) {
 }
 
 async function refusal(args) {
-  try {
-    await runCli(args, { write() {} });
-  } catch (error) {
-    return error;
-  }
+  try { await runCli(args, { write() {} }); } catch (error) { return error; }
   assert.fail(`expected ${args[0]} to refuse`);
 }
 
 async function fixture(context, suffix) {
-  const base = await realpath(await mkdtemp(join(tmpdir(), `tcrn-s238-${suffix}-`)));
+  const base = await realpath(await mkdtemp(join(tmpdir(), `tcrn-s246-${suffix}-`)));
   context.after(() => rm(base, { recursive: true, force: true }));
   const roots = [];
   for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
@@ -36,75 +32,107 @@ async function fixture(context, suffix) {
     await mkdir(path);
     roots.push({ kind, path });
   }
-  await initializeWorkspace({ roots, externalKey: `FIXTURE-S238-${suffix}`, createdAt: instant(0) });
+  await initializeWorkspace({ roots, externalKey: `FIXTURE-S246-${suffix}`, createdAt: instant(0) });
   const workspace = join(base, "workspace");
   const version = async () => (await json(["status", "--workspace", workspace])).version;
   return { workspace, version };
 }
 
-const setArgs = (workspace, version, at, name = "审计员", prompt = "你是审计员") => [
-  "persona-set", "--workspace", workspace, "--expected-version", String(version), "--at", instant(at),
-  "--name", name, "--description", "对抗复核细节控", "--role", "reviewer", "--prompt", prompt, "--actor", "agent:test",
-];
+const write = (command, workspace, version, at, args) => [command, "--workspace", workspace, "--expected-version", String(version), "--at", instant(at), ...args, "--actor", "agent:test"];
+const customArgs = (workspace, version, at, name, fields) => write("persona-set", workspace, version, at, ["--name", name, "--role", fields.role, "--job-title", fields.jobTitle, "--mission", fields.mission, "--refusals", fields.refusals, "--authority-boundary", fields.authorityBoundary, "--contact-when", fields.contactWhen, "--required-inputs", fields.requiredInputs, "--deliverables", fields.deliverables, "--success-criteria", fields.successCriteria]);
+
+test("S246: custom persona readback is the unified schema, with stable derived identity", async (t) => {
+  const { workspace, version } = await fixture(t, "custom");
+  const fields = { role: "reviewer", jobTitle: "Verification reviewer", mission: "Review evidence", refusals: "No publication", authorityBoundary: "Owner decides", contactWhen: "When evidence conflicts", requiredInputs: "Scope and receipts", deliverables: "Review note", successCriteria: "All claims trace" };
+  const first = await json(customArgs(workspace, await version(), 1, "审计员", fields));
+  assert.equal(first.reasonCode, "PERSONA_WRITE_COMMITTED");
+  assert.equal(first.record.id, derivePersonaId("审计员"));
+  assert.equal(first.record.revision, 1);
+  const readback = await json(["persona-list", "--workspace", workspace]);
+  const custom = readback.personas.find((persona) => persona.name === "审计员");
+  assert.deepEqual({ role: custom.role, jobTitle: custom.jobTitle, mission: custom.mission, prompt: custom.prompt, description: custom.description }, { role: "reviewer", jobTitle: "Verification reviewer", mission: "Review evidence", prompt: undefined, description: undefined });
+  assert.equal(custom.readOnly, false);
+
+  const updated = await json(customArgs(workspace, await version(), 2, "审计员", { ...fields, mission: "Review updated evidence" }));
+  assert.equal(updated.record.revision, 2);
+  assert.equal((await json(["persona-list", "--workspace", workspace])).personas.find((persona) => persona.name === "审计员").mission, "Review updated evidence");
+  assert.equal(readback.personas.filter((persona) => persona.source === "core-reference").length, 8);
+});
+
+test("S246: preset override accepts non-name fields, restores factory data, and tombstones safely", async (t) => {
+  const { workspace, version } = await fixture(t, "preset");
+  const override = await json(write("persona-preset-override", workspace, await version(), 1, ["--name", "Verity", "--fields", JSON.stringify({ role: "gatekeeper", mission: "Owner-facing review" })]));
+  assert.equal(override.reasonCode, "PERSONA_WRITE_COMMITTED");
+  let verity = (await json(["persona-list", "--workspace", workspace])).personas.find((persona) => persona.name === "Verity");
+  assert.equal(verity.role, "gatekeeper");
+  assert.equal(verity.mission, "Owner-facing review");
+  assert.deepEqual(verity.overriddenFields, ["mission", "role"]);
+  assert.equal(verity.factory.mission === verity.mission, false);
+
+  const restoredField = await json(write("persona-preset-restore", workspace, await version(), 2, ["--name", "Verity", "--field", "mission"]));
+  assert.equal(restoredField.reasonCode, "PERSONA_WRITE_COMMITTED");
+  verity = (await json(["persona-list", "--workspace", workspace])).personas.find((persona) => persona.name === "Verity");
+  assert.equal(verity.mission, verity.factory.mission);
+  assert.equal(verity.role, "gatekeeper");
+
+  const restored = await json(write("persona-preset-restore", workspace, await version(), 3, ["--name", "Verity"]));
+  assert.equal(restored.reasonCode, "PERSONA_WRITE_COMMITTED");
+  verity = (await json(["persona-list", "--workspace", workspace])).personas.find((persona) => persona.name === "Verity");
+  assert.equal(verity.role, "reviewer");
+  assert.equal(verity.overridden, false);
+
+  await json(write("model-plan-set", workspace, await version(), 4, ["--host", "codex", "--name", "review", "--default-model", "m"]));
+  await json(write("model-plan-assign", workspace, await version(), 5, ["--host", "codex", "--plan", "review", "--persona", "Verity", "--model", "m2"]));
+  const inUse = await refusal(write("persona-remove", workspace, await version(), 6, ["--name", "Verity"]));
+  assert.equal(inUse.reasonCode, "PERSONA_PRESET_IN_USE");
+  await json(write("model-plan-unassign", workspace, await version(), 7, ["--host", "codex", "--plan", "review", "--persona", "Verity"]));
+  const removed = await json(write("persona-remove", workspace, await version(), 8, ["--name", "Verity"]));
+  assert.equal(removed.reasonCode, "PERSONA_REMOVE_COMMITTED");
+  assert.equal((await json(["persona-list", "--workspace", workspace])).personas.some((persona) => persona.name === "Verity"), false);
+  const revived = await json(write("persona-preset-restore", workspace, await version(), 9, ["--name", "Verity"]));
+  assert.equal(revived.reasonCode, "PERSONA_WRITE_COMMITTED");
+  assert.equal((await json(["persona-list", "--workspace", workspace])).personas.some((persona) => persona.name === "Verity"), true);
+});
 
 test("S238: custom persona set/update/list is one event with a stable derived id", async (t) => {
-  const { workspace, version } = await fixture(t, "crud");
-  const first = await json(setArgs(workspace, await version(), 1));
+  const { workspace, version } = await fixture(t, "crud-remediation");
+  const fields = { role: "reviewer", jobTitle: "Verification reviewer", mission: "Review evidence", refusals: "No publication", authorityBoundary: "Owner decides", contactWhen: "When evidence conflicts", requiredInputs: "Scope and receipts", deliverables: "Review note", successCriteria: "All claims trace" };
+  const first = await json(customArgs(workspace, await version(), 1, "审计员", fields));
   assert.equal(first.reasonCode, "PERSONA_WRITE_COMMITTED");
-  assert.equal(first.record.revision, 1);
   assert.equal(first.record.id, derivePersonaId("审计员"));
+  assert.equal(first.record.revision, 1);
   assert.equal(first.version, 1);
-
-  const second = await json(setArgs(workspace, await version(), 2, "审计员", "更新后的审计提示"));
+  const second = await json(customArgs(workspace, await version(), 2, "审计员", { ...fields, mission: "Review updated evidence" }));
   assert.equal(second.record.id, first.record.id);
   assert.equal(second.record.revision, 2);
   assert.equal(second.version, 2);
-
   const readback = await json(["persona-list", "--workspace", workspace]);
-  assert.equal(readback.reasonCode, "PERSONA_LIST_READY");
   const custom = readback.personas.find((persona) => persona.name === "审计员" && persona.source === "custom");
-  assert.deepEqual({ readOnly: custom.readOnly, role: custom.role, prompt: custom.prompt }, { readOnly: false, role: "reviewer", prompt: "更新后的审计提示" });
+  assert.equal(custom.mission, "Review updated evidence");
+  assert.equal(custom.readOnly, false);
   assert.equal(readback.personas.filter((persona) => persona.source === "core-reference").length, 8);
 });
 
 test("S238: role, prompt, binding, and removal violations are named and do not advance the chain", async (t) => {
-  const { workspace, version } = await fixture(t, "integrity");
-  await json(setArgs(workspace, await version(), 1));
+  const { workspace, version } = await fixture(t, "integrity-remediation");
+  const fields = { role: "reviewer", jobTitle: "Reviewer", mission: "Review", refusals: "No publication", authorityBoundary: "Owner decides", contactWhen: "When needed", requiredInputs: "Receipts", deliverables: "Finding", successCriteria: "Traceable" };
+  await json(customArgs(workspace, await version(), 1, "审计员", fields));
   const stable = await version();
-
-  const badRoleArgs = setArgs(workspace, stable, 2, "坏角色");
-  badRoleArgs[12] = "hacker";
-  const badRole = await refusal(badRoleArgs);
+  const badRole = await refusal(customArgs(workspace, stable, 2, "坏角色", { ...fields, role: "hacker" }));
   assert.equal(badRole.reasonCode, "PERSONA_ROLE_INVALID");
   assert.match(badRole.message, /orchestrator.*planner.*implementer.*reviewer.*gatekeeper.*steward/u);
   assert.equal(await version(), stable);
-
-  const badPrompt = await refusal(setArgs(workspace, stable, 3, "超限", "x".repeat(4097)));
-  assert.equal(badPrompt.reasonCode, "PERSONA_PROMPT_INVALID");
+  const badPrompt = await refusal(["persona-set", "--workspace", workspace, "--expected-version", String(stable), "--at", instant(3), "--name", "legacy-prompt", "--role", "reviewer", "--prompt", "retired", "--actor", "agent:test"]);
+  assert.equal(badPrompt.reasonCode, "CLI_ARGUMENT_UNKNOWN");
   assert.equal(await version(), stable);
-
-  await json(["host-config-set", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(4),
-    "--host", "codex", "--name", "review", "--model", "m", "--actor", "agent:test"]);
-  const custom = (await json(["persona-list", "--workspace", workspace])).personas.find((persona) => persona.source === "custom");
-  const bound = await json(["persona-binding-set", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(6),
-    "--profile-id", custom.id, "--host", "codex", "--name", "review", "--actor", "agent:test"]);
-  assert.equal(bound.bindings.length, 1);
-  const referenced = await refusal(["persona-remove", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(7),
-    "--name", custom.name, "--actor", "agent:test"]);
+  await json(write("model-plan-set", workspace, await version(), 4, ["--host", "codex", "--name", "review", "--default-model", "m"]));
+  const assigned = await json(write("model-plan-assign", workspace, await version(), 5, ["--host", "codex", "--plan", "review", "--persona", "审计员", "--model", "m2"]));
+  assert.equal(assigned.plans.find((plan) => plan.name === "review").assignments["审计员"], "m2");
+  const referenced = await refusal(write("persona-remove", workspace, await version(), 6, ["--name", "审计员"]));
   assert.equal(referenced.reasonCode, "EXECUTION_PERSONA_IN_USE");
-  assert.match(referenced.message, new RegExp(custom.id.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
-
-  await json(["persona-binding-remove", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(8),
-    "--profile-id", custom.id, "--host", "codex", "--actor", "agent:test"]);
-  const removed = await json(["persona-remove", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(9),
-    "--name", custom.name, "--actor", "agent:test"]);
+  assert.match(referenced.message, /model plan/u);
+  await json(write("model-plan-unassign", workspace, await version(), 7, ["--host", "codex", "--plan", "review", "--persona", "审计员"]));
+  const removed = await json(write("persona-remove", workspace, await version(), 8, ["--name", "审计员"]));
   assert.equal(removed.reasonCode, "PERSONA_REMOVE_COMMITTED");
-  assert.equal((await json(["persona-list", "--workspace", workspace])).personas.some((persona) => persona.source === "custom"), false);
-
-  const unknown = await refusal(["persona-binding-set", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(10),
-    "--profile-id", "profile:custom-000000000000000000000000-v1", "--host", "codex", "--name", "review", "--actor", "agent:test"]);
-  assert.equal(unknown.reasonCode, "EXECUTION_PERSONA_UNKNOWN");
-  const builtin = await json(["persona-binding-set", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(11),
-    "--profile-id", "profile:tcrn-verity-v1", "--host", "codex", "--name", "review", "--actor", "agent:test"]);
-  assert.equal(builtin.bindings[0].profileId, "profile:tcrn-verity-v1");
+  assert.equal((await json(["persona-list", "--workspace", workspace])).personas.some((persona) => persona.name === "审计员"), false);
 });

@@ -72,6 +72,11 @@ jobs:
       - name: Every test file is wired to a pipeline
         run: node scripts/test-wiring-proof.mjs
 
+      # INIT-028 remediation INC-140 — run the portal suite, proof legs, and
+      # coverage conservation in one serial train after the engine suite.
+      - name: Verify portal remediation train
+        run: pnpm verify:portal
+
 
   # S6 lesson-marker discrimination (TCRN-CROSS-STORY-147/148, re-shaped under
   # TCRN-CROSS-INC-034/035).

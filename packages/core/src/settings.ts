@@ -21,12 +21,15 @@ export const SETTINGS_REASON_CODES = Object.freeze([
 
 export type SettingsReasonCode = typeof SETTINGS_REASON_CODES[number];
 export type SettingValueType = "enum" | "path" | "string";
+export type SettingControlType = "enum" | "boolean" | "number" | "text";
 
 export type SettingKey =
   | "backup.cadence"
   | "backup.destination"
   | "driver.capabilityProfile"
   | "engine.requiredVersion"
+  | "execution.claudeCodeSubagentPlan"
+  | "execution.codexSubagentPlan"
   | "execution.independenceFloor"
   | "execution.maxConcurrentSubagents"
   | "execution.maxDispatchDepth"
@@ -37,9 +40,14 @@ export type SettingKey =
 export interface SettingsCatalogEntry {
   readonly key: SettingKey;
   readonly type: SettingValueType;
+  readonly controlType: SettingControlType;
   readonly layerKind: typeof SETTINGS_LAYER_KIND;
   readonly defaultValue: string | null;
   readonly allowedValues?: readonly string[];
+  readonly min?: number;
+  readonly max?: number;
+  readonly trueValue?: string;
+  readonly falseValue?: string;
 }
 
 export interface WorkspaceSettingRecord {
@@ -59,10 +67,15 @@ export interface SettingsCatalogReadback {
   readonly settings: readonly {
     readonly key: SettingKey;
     readonly type: SettingValueType;
+    readonly controlType: SettingControlType;
       readonly layer: typeof SETTINGS_LAYER_KIND;
       readonly defaultValue: string | null;
       readonly currentValue: string | null;
       readonly allowedValues?: readonly string[];
+      readonly min?: number;
+      readonly max?: number;
+      readonly trueValue?: string;
+      readonly falseValue?: string;
     }[];
 }
 
@@ -112,6 +125,7 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
   {
     key: "backup.cadence",
     type: "enum",
+    controlType: "enum",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "gate-close",
     allowedValues: ["gate-close", "session-end", "manual"],
@@ -119,30 +133,37 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
   {
     key: "backup.destination",
     type: "path",
+    controlType: "text",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: null,
   },
   {
     key: "driver.capabilityProfile",
     type: "string",
+    controlType: "text",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "default",
   },
   {
     key: "engine.requiredVersion",
     type: "string",
+    controlType: "text",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: null,
   },
   {
-    // INIT-026 S233. Declarative, like backup.cadence: the engine never sees a
-    // subagent, so this states the workspace's policy for hosts to honour rather
-    // than something the engine can enforce.
-    key: "execution.subagentPolicy",
-    type: "enum",
+    key: "execution.claudeCodeSubagentPlan",
+    type: "string",
+    controlType: "enum",
     layerKind: SETTINGS_LAYER_KIND,
-    defaultValue: "allowed",
-    allowedValues: ["allowed", "review-only", "forbidden"],
+    defaultValue: null,
+  },
+  {
+    key: "execution.codexSubagentPlan",
+    type: "string",
+    controlType: "enum",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: null,
   },
   {
     // INIT-026 S233/S234. Unlike its sibling above, this one IS enforced: when the
@@ -151,6 +172,7 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     // "undeclared reads as unverified" grows teeth exactly where the floor says so.
     key: "execution.independenceFloor",
     type: "enum",
+    controlType: "enum",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "none",
     allowedValues: ["none", "verification", "verification-and-risk", "all"],
@@ -161,32 +183,53 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     // transport; their numeric domains are enforced below.
     key: "execution.maxConcurrentSubagents",
     type: "string",
+    controlType: "number",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "8",
+    min: 1,
+    max: 32,
   },
   {
     key: "execution.maxDispatchDepth",
     type: "string",
+    controlType: "number",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "1",
+    min: 1,
+    max: 4,
   },
   {
     key: "execution.personalessDispatch",
     type: "enum",
+    controlType: "boolean",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "allowed",
     allowedValues: ["allowed", "forbidden"],
+    trueValue: "allowed",
+    falseValue: "forbidden",
+  },
+  {
+    // INIT-026 S233. Declarative, like backup.cadence: the engine never sees a
+    // subagent, so this states the workspace's policy for hosts to honour rather
+    // than something the engine can enforce.
+    key: "execution.subagentPolicy",
+    type: "enum",
+    controlType: "enum",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "allowed",
+    allowedValues: ["allowed", "review-only", "forbidden"],
   },
   {
     key: "workspace.generatedArtifactsPath",
     type: "path",
+    controlType: "text",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: ".tcrn-workflow/artifacts",
   },
 ];
 
 export const SETTINGS_CATALOG: readonly SettingsCatalogEntry[] = Object.freeze(
-  catalogEntries.map((entry) => Object.freeze({
+  catalogEntries.slice().sort((left, right) => compareCanonicalText(left.key, right.key)).map((entry) => Object.freeze({
     ...entry,
     ...(entry.allowedValues === undefined ? {} : { allowedValues: Object.freeze([...entry.allowedValues]) }),
   })),
@@ -336,10 +379,15 @@ export function readSettingsCatalog(
     settings: SETTINGS_CATALOG.map((entry) => ({
       key: entry.key,
       type: entry.type,
+      controlType: entry.controlType,
       layer: entry.layerKind,
       defaultValue: entry.defaultValue,
       currentValue: records.find((record) => record.key === entry.key)?.value ?? entry.defaultValue,
       ...(entry.allowedValues === undefined ? {} : { allowedValues: entry.allowedValues }),
+      ...(entry.min === undefined ? {} : { min: entry.min }),
+      ...(entry.max === undefined ? {} : { max: entry.max }),
+      ...(entry.trueValue === undefined ? {} : { trueValue: entry.trueValue }),
+      ...(entry.falseValue === undefined ? {} : { falseValue: entry.falseValue }),
     })),
   };
 }
