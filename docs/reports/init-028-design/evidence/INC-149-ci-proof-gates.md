@@ -169,7 +169,7 @@ CLEAN_VERIFY_EXIT=0
       "leg": "translation-reality",
       "ok": true,
       "reasonCode": "TRANSLATIONS_DIFFER_FROM_ENGLISH",
-      "addedKeyCount": 148,
+      "addedKeyCount": 0,
       "gaps": []
     },
     {
@@ -204,6 +204,13 @@ CLEAN_VERIFY_EXIT=0
   ]
 }
 ```
+
+注:`translation-reality` 腿以 `git show HEAD:` 为基线计算新增键,因此在
+clean checkout(即 CI 的条件)下 `addedKeyCount` 恒为 0——该腿在 CI 里不检查
+任何东西。实质检查由 `translation-full-table` 承担,它比较整表且能对既有键的
+译文回退变红。此处记为 INC-149 的已知残留(P2):基线应改为签入式清单,
+如 INC-155 对覆盖守恒门所做的那样。
+
 
 ## 方案与待裁
 
