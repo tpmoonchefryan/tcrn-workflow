@@ -3,6 +3,30 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.15 — 2026-08-13
+
+- Subagent model plans: a plan is `{host, name, defaultModel, assignments}`
+  mapping persona to model; `execution.claudeCodeSubagentPlan` and
+  `execution.codexSubagentPlan` name the plan a host reads before dispatch.
+  Five verbs, referential integrity both ways, and the 0.11.14 write family
+  (`host-config-*`, `persona-binding-*`) retired from the catalog with its
+  events still replaying.
+- Preset personas are editable as chain overlays over compiled data:
+  `persona-preset-override`, `persona-preset-restore` (whole or per field), and
+  tombstone deletion. Names remain identities; content moved to prose fields and
+  the free-form `prompt` field is gone.
+- `vocabulary`: a read-only surface for the closed sets the engine enforces —
+  roles with `reviewOnlyDispatchable`, conference types with their covering
+  independence floors, hosts, execution forms, and enum settings.
+- The portal was rebuilt into a dashboard plus four management pages; state
+  surfaces fail visibly (health reddens on a failed read, engine version comes
+  from the engine, the receipt chip shows the version or the reason code).
+- Gates that can fail: rendered-DOM UI presence, whole-table i18n comparison,
+  coverage conservation against a checked-in baseline that must name every test
+  file, and byte-for-byte re-execution of verbatim evidence blocks. Each ships
+  with a mutation proving it goes red, and `verify:portal` runs in CI with the
+  workflow step asserted from the verify train.
+
 ## 0.11.14 — 2026-08-12
 
 - Execution configuration: per-host named model configurations with a `default`
