@@ -47,9 +47,16 @@
 
 复核脚本的 metric 是“门户自有第二个 style 块中的 unique class-root token”，排除
 BEM `__` 部件与 `--` 修饰符；不是 DS 快照里的 101 根类计数。S253 原交付阶段为
-62；S255 继续消费八个回流根类后，本次收口复核为 51：
+62；S255 继续消费八个回流根类后，本次收口复核为 51。
 
-```verbatim:node scripts/s253-class-alignment-proof.mjs
+**下面这段输出记录于交付当时，不可逐字复现，故不带 `verbatim` 标记**（MIN-082
+「verbatim 标记仅许真逐字块携带」）。原因是量具本身依赖 git 暂存状态：脚本用
+`git show HEAD:portal/index.html` 当交接基线，而当时门户改造尚未提交，所以
+`handoverBaseline` 读到的是改造前的 71。这些改动随 0.11.16 发版进入 HEAD 之后，
+baseline 与 current 成为同一份字节，三个计数一并塌为 51——收敛结论（71 → 66 →
+51）不变，但只有当时那次运行能产出下面的数字。
+
+```json
 {
   "schemaVersion": "tcrn.inc253-class-alignment-proof.v1",
   "metric": "unique portal-owned CSS class-root tokens; BEM parts and modifiers excluded",

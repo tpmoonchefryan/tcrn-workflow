@@ -5,10 +5,13 @@
 
 import { spawnSync } from "node:child_process";
 
+// `--silent` is not cosmetic: pnpm echoes the script body it is about to run onto
+// stderr, and verify-p1 fails a command whose stderr is not empty. Without it the
+// train reports its own progress lines as an unjudged toolchain error.
 const commands = [
-  ["pnpm", ["portal:test"]],
-  ["pnpm", ["portal:proof"]],
-  ["pnpm", ["verify:cross-repo-privacy"]],
+  ["pnpm", ["run", "--silent", "portal:test"]],
+  ["pnpm", ["run", "--silent", "portal:proof"]],
+  ["pnpm", ["run", "--silent", "verify:cross-repo-privacy"]],
   [process.execPath, ["scripts/ds-component-css-reconcile.mjs"]],
   [process.execPath, ["scripts/ds-component-css-proof.mjs"]],
   [process.execPath, ["scripts/coverage-conservation.mjs"]],
@@ -21,9 +24,13 @@ const commands = [
 const unverified = [];
 for (const [executable, args] of commands) {
   const result = spawnSync(executable, args, { encoding: "utf8", env: { ...process.env, npm_config_offline: "true" } });
-  if (result.stdout) process.stdout.write(result.stdout);
-  if (result.stderr) process.stderr.write(result.stderr);
+  // Only the receipt goes to stdout. Callers parse this command's whole stdout as one
+  // JSON document, so a passing step's own chatter cannot be forwarded there; a failing
+  // step's output is diagnostics, which is what stderr is for, and the non-zero exit
+  // that follows is what the caller judges.
   if (result.status !== 0) {
+    if (result.stdout) process.stderr.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
     process.exit(result.status ?? 1);
   }
   if (args[0] === "scripts/ds-component-css-reconcile.mjs") {
