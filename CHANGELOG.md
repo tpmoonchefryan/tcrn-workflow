@@ -3,6 +3,26 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.16 — 2026-08-14
+
+- The install surface is engine data: `install-manifest` enumerates every
+  wiring item across both adapters — layer, placeholder path template, writer,
+  and an acceptance probe — with an independent required-item catalog so that
+  deleting an item turns the completeness gate red rather than shrinking the
+  truth.
+- The platform doctor executes the probes it is given: wiring presence,
+  deployment freshness against the helper pin, helper copies by digest,
+  launchd duty by last exit and product freshness, hook target resolvability,
+  bridge syntax, and trust-archive freshness. Every leg carries a synthetic
+  red in the suite.
+- The paired backup is retired where it silently died; a local snapshot timer
+  (tar + sha256 + chain versions, 14-copy rotation) and an encrypted pure-file
+  offsite leg replace it, both registered in the manifest so the doctor sees a
+  stall instead of assuming health.
+- Evidence residency: originals with real paths live in the platform archive;
+  the public copies are sanitised and declare it. Cross-repo privacy is a gate
+  of its own, scanning every governed project root the manifest names.
+
 ## 0.11.15 — 2026-08-13
 
 - Subagent model plans: a plan is `{host, name, defaultModel, assignments}`
