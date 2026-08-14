@@ -18,6 +18,10 @@ export const excludedDirectories = new Set([
   "coverage",
   "dist",
   "node_modules",
+  // Codex host adapter bundles are a local installation surface. They may live
+  // inside a project root at runtime, but are never public source, proof-
+  // artifact input, or privacy-scan input.
+  ".codex",
 ]);
 
 export function toPosixPath(value) {
@@ -81,6 +85,9 @@ export async function walkFiles(root = repositoryRoot) {
     entries.sort((left, right) => compareCanonicalText(left.name, right.name));
     for (const entry of entries) {
       if (entry.isDirectory() && excludedDirectories.has(entry.name)) {
+        continue;
+      }
+      if (entry.isDirectory() && entry.name === "tcrn-workflow" && directory.split(sep).at(-1) === ".claude") {
         continue;
       }
       const absolute = resolve(directory, entry.name);

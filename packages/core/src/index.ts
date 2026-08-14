@@ -281,6 +281,26 @@ export type {
   WorkspaceSettingRecord,
 } from "./settings.js";
 export {
+  INSTALL_MANIFEST,
+  INSTALL_MANIFEST_ITEMS,
+  INSTALL_MANIFEST_PROJECTS,
+  INSTALL_MANIFEST_REASON_CODES,
+  INSTALL_MANIFEST_REQUIRED_ITEM_IDS,
+  INSTALL_MANIFEST_VERSION,
+  InstallManifestError,
+  assertInstallManifestComplete,
+  readInstallManifest,
+} from "./install-manifest.js";
+export type {
+  InstallManifestHost,
+  InstallManifestItem,
+  InstallManifestLayer,
+  InstallManifestProject,
+  InstallManifestReadback,
+  InstallManifestWriter,
+  InstallManifestReasonCode,
+} from "./install-manifest.js";
+export {
   EMPTY_EXECUTION_CONFIG,
   EXECUTION_CONFIG_VERSION,
   EXECUTION_HOSTS,

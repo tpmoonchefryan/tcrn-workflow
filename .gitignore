@@ -24,3 +24,9 @@ coverage/
 .tcrn-workflow/released-*
 .tcrn-workflow/attempt-owned-*
 .tcrn-workflow/**/.tmp-*
+
+# Engine-materialized install products (per-machine, written by the adapter
+# families; the install manifest and platform doctor own them, git does not).
+.claude/tcrn-workflow/
+.codex/tcrn-workflow/
+.tcrn-install-receipts/

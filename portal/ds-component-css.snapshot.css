@@ -1,0 +1,3225 @@
+
+:root {
+  --tcrn-motion-product-shell: var(--tcrn-motion-emphasis);
+  --tcrn-motion-product-shell-search: 240ms var(--tcrn-motion-ease-drawer);
+  --tcrn-color-brand-secondary-readable: #246f80;
+  --tcrn-brand-accent-aos: #187c7c;
+  --tcrn-brand-accent-tms: #2c63c8;
+  --tcrn-brand-accent-design-system-1: #6577f3;
+  --tcrn-brand-accent-design-system-2: #3096f4;
+  --tcrn-brand-accent-design-system-3: #43d4cf;
+  --tcrn-brand-accent-design-system-4: #78b957;
+}
+[data-tcrn-theme="dark"] {
+  --tcrn-color-brand-secondary-readable: #a6e8ef;
+  --tcrn-brand-accent-aos: #69d6d0;
+  --tcrn-brand-accent-tms: #9bb8ff;
+  --tcrn-brand-accent-design-system-1: #aeb8ff;
+  --tcrn-brand-accent-design-system-2: #83c8ff;
+  --tcrn-brand-accent-design-system-3: #7ce4df;
+  --tcrn-brand-accent-design-system-4: #c9f08f;
+}
+.tcrn-button,
+.tcrn-shell-locale-menu__trigger,
+.tcrn-shell-locale-menu__option {
+  font: inherit;
+}
+.tcrn-button,
+.tcrn-link-button,
+.tcrn-button--secondary,
+.tcrn-link-button--secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tcrn-space-2);
+  min-height: 38px;
+  padding: 0 var(--tcrn-space-3);
+  border: 1px solid var(--tcrn-color-border-control);
+  border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-surface-panel);
+  color: var(--tcrn-color-text-primary);
+  font-size: var(--tcrn-type-size-ui);
+  font-weight: var(--tcrn-type-weight-strong);
+  transition: transform var(--tcrn-motion-instant), background-color var(--tcrn-motion-fast), border-color var(--tcrn-motion-fast), color var(--tcrn-motion-fast);
+}
+/* A pressable surface has to answer the press, or the interface reads as not
+   listening. Scale is deliberately subtle and lives on :active (not :hover), so it
+   works the same under a finger as under a pointer. */
+.tcrn-button:active,
+.tcrn-nav-item:active,
+.tcrn-shell-theme-toggle:active,
+.tcrn-shell-locale-menu__trigger:active,
+.tcrn-table-toolbar__chip:active,
+.tcrn-table-toolbar__collapse:active {
+  transform: scale(var(--tcrn-motion-press-scale));
+}
+.tcrn-button--primary,
+.tcrn-link-button--primary {
+  background: var(--tcrn-color-brand-primary);
+  border-color: var(--tcrn-color-brand-primary);
+  color: var(--tcrn-color-text-inverse);
+}
+[data-tcrn-theme="dark"] .tcrn-button--primary,
+[data-tcrn-theme="dark"] .tcrn-link-button--primary {
+  color: var(--tcrn-color-surface-canvas);
+}
+.tcrn-button--quiet,
+.tcrn-link-button--quiet {
+  border-color: transparent;
+  background: transparent;
+}
+/* TCRN-DS-STORY-063: the core Button / LinkButton answered neither hover nor keyboard focus in
+   either layer (only .tcrn-button carried press-scale). They now speak the same feedback language
+   as the shell controls — muted-surface hover, a deepened brand fill on the primary variant, the
+   focus-ring outline, and press-scale on both (LinkButton was missing the press it shares). */
+.tcrn-button:not([disabled]):hover,
+.tcrn-link-button:hover {
+  border-color: var(--tcrn-color-border-control);
+  background: color-mix(in srgb, var(--tcrn-color-surface-muted) 72%, var(--tcrn-color-surface-panel));
+  color: var(--tcrn-color-text-primary);
+}
+.tcrn-button--primary:not([disabled]):hover,
+.tcrn-link-button--primary:hover {
+  border-color: color-mix(in srgb, var(--tcrn-color-brand-primary) 88%, var(--tcrn-color-brand-secondary));
+  background: color-mix(in srgb, var(--tcrn-color-brand-primary) 88%, var(--tcrn-color-brand-secondary));
+}
+.tcrn-button:focus-visible,
+.tcrn-link-button:focus-visible {
+  outline: 2px solid var(--tcrn-color-focus-ring);
+  outline-offset: 2px;
+}
+.tcrn-link-button:active {
+  transform: scale(var(--tcrn-motion-press-scale));
+}
+.tcrn-button--danger {
+  border-color: var(--tcrn-color-state-blocked);
+  color: var(--tcrn-color-state-blocked);
+}
+.tcrn-button--md {
+  min-height: 38px;
+  padding: 0 var(--tcrn-space-3);
+}
+.tcrn-button--sm {
+  min-height: 30px;
+  padding: 0 var(--tcrn-space-2);
+  gap: var(--tcrn-space-1h);
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-button[disabled],
+.tcrn-nav-item[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+.tcrn-icon-button {
+  inline-size: 38px;
+  block-size: 38px;
+  padding: 0;
+}
+.tcrn-divider {
+  border: 0;
+  border-top: 1px solid var(--tcrn-color-border-subtle);
+  margin: var(--tcrn-space-3) 0;
+}
+.tcrn-shell-theme-toggle,
+.tcrn-button.tcrn-shell-theme-toggle {
+  position: relative;
+  inline-size: 36px;
+  block-size: 36px;
+  min-inline-size: 36px;
+  min-block-size: 36px;
+  min-height: 36px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--tcrn-radius-pill);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  transition:
+    background-color var(--tcrn-motion-standard),
+    border-color var(--tcrn-motion-standard),
+    color var(--tcrn-motion-standard),
+    box-shadow var(--tcrn-motion-standard);
+}
+.tcrn-shell-side-nav-toggle {
+  transition:
+    background-color var(--tcrn-motion-standard),
+    border-color var(--tcrn-motion-standard),
+    color var(--tcrn-motion-standard),
+    box-shadow var(--tcrn-motion-standard);
+}
+.tcrn-shell-theme-toggle:hover,
+.tcrn-shell-side-nav-toggle:hover,
+.tcrn-shell-locale-menu__trigger:hover,
+.tcrn-shell-locale-menu__trigger[aria-expanded="true"] {
+  border-color: var(--tcrn-color-border-control);
+  background: color-mix(in srgb, var(--tcrn-color-surface-muted) 72%, var(--tcrn-color-surface-panel));
+  color: var(--tcrn-color-text-primary);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+.tcrn-product-shell .tcrn-shell-theme-toggle:focus-visible,
+.tcrn-product-shell .tcrn-shell-side-nav-toggle:focus-visible,
+.tcrn-product-shell .tcrn-shell-locale-menu__trigger:focus-visible,
+.tcrn-product-shell .tcrn-search-input:focus-within {
+  box-shadow: none;
+}
+.tcrn-product-shell .tcrn-search-input:focus-within {
+  outline: 3px solid var(--tcrn-color-focus-ring);
+  outline-offset: 2px;
+}
+.tcrn-product-shell .tcrn-search-input__control:focus,
+.tcrn-product-shell .tcrn-search-input__control:focus-visible {
+  outline-style: none;
+  outline-width: 0;
+  outline-offset: 0;
+  box-shadow: none;
+}
+.tcrn-shell-theme-toggle__icon {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.58) rotate(-90deg);
+  transition:
+    opacity var(--tcrn-motion-emphasis),
+    transform var(--tcrn-motion-emphasis);
+}
+.tcrn-shell-theme-toggle[data-current-theme="light"] .tcrn-shell-theme-toggle__icon[data-theme-icon="light"],
+.tcrn-shell-theme-toggle[data-current-theme="dark"] .tcrn-shell-theme-toggle__icon[data-theme-icon="dark"] {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1) rotate(0deg);
+}
+.tcrn-shell-theme-toggle[data-current-theme="light"] .tcrn-shell-theme-toggle__icon[data-theme-icon="dark"] {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.58) rotate(-90deg);
+}
+.tcrn-shell-theme-toggle[data-current-theme="dark"] .tcrn-shell-theme-toggle__icon[data-theme-icon="light"] {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.58) rotate(90deg);
+}
+.tcrn-shell-side-nav-toggle {
+  inline-size: 38px;
+  block-size: 38px;
+  min-inline-size: 38px;
+  min-block-size: 38px;
+  min-height: 38px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  color: var(--tcrn-color-brand-primary);
+}
+/*
+ * Mobile-only, and hidden by default rather than shown by default: above the
+ * breakpoint the navigation is always on screen, so a show/hide control there
+ * would be the no-op the responsive standard forbids — the same reason its
+ * width-collapse sibling is hidden below the breakpoint. Each control exists
+ * exactly where it does something.
+ */
+.tcrn-shell-mobile-nav-toggle {
+  display: none;
+  place-items: center;
+  padding: 0;
+  color: var(--tcrn-color-brand-primary);
+}
+.tcrn-shell-side-nav-toggle__icon {
+  display: inline-grid;
+  inline-size: 20px;
+  block-size: 20px;
+  place-items: center;
+}
+.tcrn-icon-button__label,
+.tcrn-sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* aria-live announcer: visually-hidden by default so status text is spoken by
+   assistive tech without occupying layout (agent-picked announcer disposition). */
+.tcrn-live-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.tcrn-brand-lockup,
+.tcrn-shell-brand-lockup,
+.tcrn-product-logo {
+  --tcrn-brand-mark-size: 38px;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--tcrn-space-3);
+}
+.tcrn-brand-mark {
+  display: block;
+  inline-size: var(--tcrn-brand-mark-size);
+  block-size: var(--tcrn-brand-mark-size);
+  flex: 0 0 auto;
+  filter: var(--tcrn-brand-mark-filter, none);
+  transition:
+    inline-size var(--tcrn-motion-emphasis),
+    block-size var(--tcrn-motion-emphasis),
+    filter var(--tcrn-motion-standard);
+}
+.tcrn-brand-wordmark {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  gap: var(--tcrn-space-0h) var(--tcrn-space-2);
+  color: var(--tcrn-color-text-primary);
+  font-size: var(--tcrn-type-size-section);
+  font-weight: var(--tcrn-type-weight-regular);
+  line-height: var(--tcrn-type-line-section);
+  overflow-wrap: anywhere;
+}
+.tcrn-brand-wordmark__base {
+  flex: 0 0 auto;
+  letter-spacing: 0;
+  font-weight: var(--tcrn-type-weight-regular);
+  white-space: nowrap;
+}
+.tcrn-brand-wordmark__suffix {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--tcrn-color-brand-secondary-readable);
+  font-size: inherit;
+  font-weight: var(--tcrn-type-weight-strong);
+}
+.tcrn-brand-wordmark__suffix--aos {
+  color: var(--tcrn-brand-accent-aos);
+}
+.tcrn-brand-wordmark__suffix--tms {
+  color: var(--tcrn-brand-accent-tms);
+}
+.tcrn-brand-wordmark__suffix--design-system {
+  background: linear-gradient(
+    105deg,
+    var(--tcrn-brand-accent-design-system-1) 0%,
+    var(--tcrn-brand-accent-design-system-2) 31%,
+    var(--tcrn-brand-accent-design-system-3) 62%,
+    var(--tcrn-brand-accent-design-system-4) 100%
+  );
+  background-clip: text;
+  color: transparent;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.tcrn-brand-lockup--long-name .tcrn-brand-wordmark {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+.tcrn-shell-brand-lockup__copy,
+.tcrn-product-logo__copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--tcrn-space-0h);
+}
+.tcrn-product-logo__line-one {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--tcrn-space-0h) var(--tcrn-space-1);
+  color: var(--tcrn-color-text-primary);
+  font-size: var(--tcrn-type-size-ui);
+  font-weight: var(--tcrn-type-weight-regular);
+  line-height: var(--tcrn-type-line-ui);
+  white-space: nowrap;
+}
+.tcrn-product-logo__line-one-base {
+  flex: 0 0 auto;
+  font-weight: var(--tcrn-type-weight-regular);
+  white-space: nowrap;
+}
+.tcrn-product-logo__line-one-suffix {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-weight: var(--tcrn-type-weight-strong);
+  white-space: nowrap;
+}
+.tcrn-product-logo--stacked-suffix .tcrn-product-logo__line-one {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  white-space: normal;
+}
+.tcrn-shell-brand-lockup__caption,
+.tcrn-product-logo__line-two {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+  font-weight: var(--tcrn-type-weight-strong);
+  line-height: var(--tcrn-type-line-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tcrn-product-shell {
+  --tcrn-product-shell-sidebar-width: 280px;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: var(--tcrn-product-shell-sidebar-width) minmax(0, 1fr);
+  background: var(--tcrn-color-surface-canvas);
+  color: var(--tcrn-color-text-primary);
+  font-family: var(--tcrn-type-family-ui);
+  font-size: var(--tcrn-type-size-ui);
+  line-height: var(--tcrn-type-line-ui);
+  letter-spacing: 0;
+  transition: grid-template-columns var(--tcrn-motion-product-shell);
+}
+.tcrn-product-shell[data-product-shell-collapsed="true"] {
+  --tcrn-product-shell-sidebar-width: 92px;
+}
+.tcrn-product-shell[data-theme-switching="true"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--tcrn-color-brand-primary-bg), transparent 20%);
+  animation: tcrn-product-shell-theme-wash var(--tcrn-motion-product-shell) both;
+}
+@keyframes tcrn-product-shell-theme-wash {
+  from { opacity: 0.22; }
+  to { opacity: 0; }
+}
+.tcrn-product-shell :focus-visible:not(.tcrn-search-input__control) {
+  outline: 3px solid var(--tcrn-color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.tcrn-product-shell__sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tcrn-space-5);
+  min-width: 0;
+  padding: var(--tcrn-space-4);
+  border-right: 1px solid var(--tcrn-color-border-subtle);
+  background: var(--tcrn-color-surface-panel);
+  /*
+   * The rail is exactly one viewport tall and sticky, so navigation taller than
+   * the viewport used to paint outside its own box with nothing to scroll: the
+   * page scrolled, the sticky rail did not, and the items past the fold were
+   * unreachable at any scroll position. Measured on a rotated 375x760 phone —
+   * 812x375 is above the mobile breakpoint, so it takes this path — where the
+   * last three destinations could not be reached at all (TCRN-AOS-INC-026).
+   * dvh for the same family of reason: vh ignores the browser chrome that
+   * appears and disappears on a phone.
+   */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.tcrn-product-shell__sidebar-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-product-shell__brand {
+  display: flex;
+  min-width: 0;
+  min-height: 46px;
+  align-items: center;
+  overflow: hidden;
+  text-decoration: none;
+}
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-product-shell__sidebar-header {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-product-shell__brand {
+  inline-size: 42px;
+  min-height: 42px;
+}
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-shell-brand-lockup__copy,
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-product-logo__copy,
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-nav-group__label,
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-nav-item__label,
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-nav-item__disabled-reason {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-side-nav {
+  align-items: center;
+}
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-nav-group {
+  width: 48px;
+}
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-nav-item {
+  grid-template-columns: 20px;
+  justify-content: center;
+  inline-size: 44px;
+  min-height: 42px;
+  padding: var(--tcrn-space-2);
+}
+.tcrn-product-shell[data-product-shell-collapsed="true"] .tcrn-nav-item[data-nav-item-has-icon="false"]::before {
+  content: "";
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: var(--tcrn-radius-pill);
+  background: currentColor;
+}
+.tcrn-product-shell__workspace {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+.tcrn-product-shell__workspace > .tcrn-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: var(--tcrn-space-4);
+  min-height: 68px;
+  padding: var(--tcrn-space-3) var(--tcrn-space-5);
+  border: 0;
+  border-bottom: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: 0;
+  justify-content: stretch;
+  background: color-mix(in srgb, var(--tcrn-color-surface-panel), transparent 5%);
+  backdrop-filter: blur(16px);
+}
+.tcrn-product-shell__utility-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--tcrn-space-3);
+  min-width: 0;
+}
+.tcrn-product-shell__utility-row > * {
+  min-width: 0;
+}
+.tcrn-product-shell__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-product-shell__current-location {
+  display: grid;
+  flex: 0 1 240px;
+  gap: var(--tcrn-space-0h);
+  margin-right: auto;
+  min-width: 0;
+  max-width: 240px;
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-caption);
+  line-height: var(--tcrn-type-line-caption);
+  letter-spacing: 0;
+}
+.tcrn-product-shell__current-location strong {
+  color: var(--tcrn-color-text-primary);
+  font-size: var(--tcrn-type-size-ui);
+  font-weight: var(--tcrn-type-weight-strong);
+  line-height: var(--tcrn-type-line-ui);
+}
+.tcrn-product-shell__current-location span,
+.tcrn-product-shell__current-location strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tcrn-product-shell-search {
+  position: relative;
+  flex-grow: 0;
+  flex-shrink: 1;
+  flex-basis: 260px;
+  margin-left: auto;
+  justify-self: end;
+  width: 260px;
+  max-width: min(100%, 260px);
+  transition:
+    flex-basis var(--tcrn-motion-product-shell-search),
+    width var(--tcrn-motion-product-shell-search),
+    max-width var(--tcrn-motion-product-shell-search);
+}
+.tcrn-product-shell-search[data-search-expanded="true"] {
+  flex-basis: 420px;
+  width: 420px;
+  max-width: min(100%, 420px);
+}
+.tcrn-product-shell-search__results {
+  position: absolute;
+  inset-block-start: calc(100% + var(--tcrn-space-2));
+  inset-inline-end: 0;
+  z-index: 40;
+  display: grid;
+  gap: var(--tcrn-space-1);
+  width: min(420px, calc(100vw - 32px));
+  padding: var(--tcrn-space-2);
+  border: 1px solid var(--tcrn-color-border-strong);
+  border-radius: var(--tcrn-radius-panel);
+  background: var(--tcrn-color-surface-panel);
+  box-shadow: var(--tcrn-elevation-floating);
+}
+.tcrn-product-shell-search__results[hidden] {
+  display: none;
+}
+.tcrn-product-shell-search__result,
+.tcrn-product-shell-search__empty {
+  display: grid;
+  gap: var(--tcrn-space-0h);
+  padding: var(--tcrn-space-2);
+  border-radius: var(--tcrn-radius-control);
+  color: var(--tcrn-color-text-primary);
+  text-decoration: none;
+}
+.tcrn-product-shell-search__result:hover,
+.tcrn-product-shell-search__result[data-selected="true"] {
+  background: var(--tcrn-selection-fill);
+}
+.tcrn-product-shell-search__result span,
+.tcrn-product-shell-search__empty {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-product-shell__main {
+  min-width: 0;
+  padding: var(--tcrn-space-5);
+}
+.tcrn-product-shell-content-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--tcrn-space-5);
+  min-width: 0;
+  max-width: 1180px;
+}
+.tcrn-product-shell-content-stack > *,
+.tcrn-product-shell-section-grid > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.tcrn-product-shell-section-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr);
+  gap: var(--tcrn-space-4);
+  align-items: start;
+}
+.tcrn-top-bar {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  align-items: center;
+  gap: var(--tcrn-space-4);
+  min-height: 68px;
+  padding: var(--tcrn-space-3) var(--tcrn-space-5);
+  border-bottom: 1px solid var(--tcrn-color-border-subtle);
+  background: color-mix(in srgb, var(--tcrn-color-surface-panel), transparent 5%);
+  backdrop-filter: blur(16px);
+}
+.tcrn-top-bar__brand {
+  font-weight: var(--tcrn-type-weight-strong);
+}
+.tcrn-top-bar__module {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-ui);
+}
+.tcrn-top-bar__actions {
+  min-width: 0;
+}
+.tcrn-side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tcrn-space-4);
+}
+.tcrn-nav-group {
+  display: grid;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-nav-group__label {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-caption);
+  font-weight: var(--tcrn-type-weight-strong);
+  text-transform: uppercase;
+  letter-spacing: 0;
+  padding: 0 var(--tcrn-space-2);
+}
+.tcrn-nav-group__items {
+  display: grid;
+  gap: var(--tcrn-space-1);
+}
+/* TCRN-DS-STORY-062: NavGroup's selected prop previously emitted data-selected with NO visual
+   rule (a dead API). The containing group of the active item now marks itself the same way the
+   doc-shell section header does — brand text on the group label; the 3px rail stays on the leaf. */
+.tcrn-nav-group[data-selected="true"] > .tcrn-nav-group__label {
+  color: var(--tcrn-color-text-primary);
+}
+.tcrn-nav-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  min-height: 38px;
+  padding: var(--tcrn-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--tcrn-radius-control);
+  color: var(--tcrn-color-text-secondary);
+  text-decoration: none;
+}
+.tcrn-nav-item[data-nav-item-has-icon="false"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.tcrn-nav-item__content {
+  min-width: 0;
+}
+/* TCRN-DS-STORY-062 → STORY-087: selection used to speak one axis — a 3px left-edge brand
+   rail, brand text, zero radius. It now speaks ink. The rail is gone; this sentence is kept
+   only to say so, because the original wording survived the change that deleted the rule it
+   described and read as truth for three commits.
+   The item keeps its own radius rather than squaring off for an axis that no
+   longer exists, and weight is safe here because a sidebar item sits in a
+   fixed-width column where a bolder label cannot reflow the row. */
+.tcrn-nav-item[data-selected="true"],
+.tcrn-nav-item[aria-current="page"] {
+  color: var(--tcrn-color-text-primary);
+  font-weight: var(--tcrn-type-weight-strong);
+  background: var(--tcrn-selection-fill);
+}
+.tcrn-nav-item:hover {
+  background: var(--tcrn-color-surface-muted);
+  color: var(--tcrn-color-text-primary);
+}
+.tcrn-nav-item__label {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.tcrn-search-input {
+  --tcrn-search-input-icon-size: 16px;
+  --tcrn-search-input-block-size: 38px;
+  --tcrn-search-input-padding-inline: var(--tcrn-space-3);
+  --tcrn-search-input-column-gap: var(--tcrn-space-2);
+  --tcrn-search-input-control-min-inline-size: 9ch;
+  display: grid;
+  grid-template-columns: var(--tcrn-search-input-icon-size) minmax(var(--tcrn-search-input-control-min-inline-size), 1fr) max-content;
+  align-items: center;
+  gap: var(--tcrn-search-input-column-gap);
+  min-block-size: var(--tcrn-search-input-block-size);
+  min-inline-size: var(--tcrn-search-input-min-inline-size, 0);
+  max-inline-size: 100%;
+  padding: 0 var(--tcrn-search-input-padding-inline);
+  border: 1px solid var(--tcrn-color-border-control);
+  border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-surface-panel);
+}
+/* The fill prop: the wrapper takes its container's full inline size. */
+.tcrn-search-input--fill {
+  inline-size: 100%;
+}
+.tcrn-search-input__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  grid-column: 1;
+  inline-size: var(--tcrn-search-input-icon-size);
+  block-size: var(--tcrn-search-input-icon-size);
+  color: var(--tcrn-color-text-secondary);
+  pointer-events: none;
+}
+.tcrn-search-input__icon svg {
+  inline-size: var(--tcrn-search-input-icon-size);
+  block-size: var(--tcrn-search-input-icon-size);
+}
+.tcrn-search-input .tcrn-search-input__control {
+  appearance: none;
+  box-sizing: border-box;
+  grid-column: 2;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--tcrn-color-text-primary);
+  font: inherit;
+  box-shadow: none;
+}
+.tcrn-search-input:focus-within {
+  outline: 3px solid var(--tcrn-color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.tcrn-search-input .tcrn-search-input__control:focus,
+.tcrn-search-input .tcrn-search-input__control:focus-visible {
+  outline-style: none;
+  outline-width: 0;
+  outline-offset: 0;
+  box-shadow: none;
+}
+.tcrn-search-input__shortcut {
+  position: static;
+  z-index: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  grid-column: 3;
+  color: var(--tcrn-color-text-secondary);
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-surface);
+  background: var(--tcrn-color-surface-muted);
+  padding: var(--tcrn-space-0h) var(--tcrn-space-1h);
+  font-family: var(--tcrn-type-family-ui);
+  font-size: var(--tcrn-type-size-caption);
+  font-weight: var(--tcrn-type-weight-strong);
+  line-height: var(--tcrn-type-line-caption);
+  letter-spacing: 0;
+  pointer-events: none;
+}
+.tcrn-shell-locale-menu {
+  position: relative;
+}
+.tcrn-shell-locale-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  max-width: 132px;
+  min-height: 36px;
+  padding: 0 var(--tcrn-space-2h);
+  border: 1px solid var(--tcrn-color-border-control);
+  border-radius: var(--tcrn-radius-pill);
+  background: var(--tcrn-color-surface-panel);
+  color: var(--tcrn-color-text-primary);
+  font-size: var(--tcrn-type-size-ui);
+  font-weight: var(--tcrn-type-weight-strong);
+  line-height: var(--tcrn-type-line-ui);
+  letter-spacing: 0;
+  transition:
+    background-color var(--tcrn-motion-standard),
+    border-color var(--tcrn-motion-standard),
+    color var(--tcrn-motion-standard),
+    box-shadow var(--tcrn-motion-standard);
+}
+.tcrn-shell-locale-menu__current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tcrn-shell-locale-menu__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--tcrn-space-2));
+  z-index: 30;
+  display: grid;
+  gap: var(--tcrn-space-1);
+  min-width: 148px;
+  padding: var(--tcrn-space-2);
+  border: 1px solid var(--tcrn-color-border-strong);
+  border-radius: var(--tcrn-radius-panel);
+  background: var(--tcrn-color-surface-panel);
+  box-shadow: var(--tcrn-elevation-floating);
+}
+.tcrn-shell-locale-menu__chevron {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  color: var(--tcrn-color-text-tertiary);
+  pointer-events: none;
+  transition: transform var(--tcrn-motion-emphasis);
+}
+.tcrn-shell-locale-menu[data-locale-menu-open="true"] .tcrn-shell-locale-menu__chevron,
+.tcrn-shell-locale-menu__trigger[aria-expanded="true"] .tcrn-shell-locale-menu__chevron {
+  transform: rotate(180deg);
+}
+.tcrn-shell-locale-menu__panel[hidden] {
+  display: none;
+}
+.tcrn-shell-locale-menu__option {
+  border: 0;
+  border-radius: var(--tcrn-radius-control);
+  padding: var(--tcrn-space-2);
+  text-align: left;
+  background: transparent;
+  color: var(--tcrn-color-text-primary);
+}
+.tcrn-shell-locale-menu__option[aria-current="true"],
+.tcrn-shell-locale-menu__option:hover {
+  background: var(--tcrn-color-surface-muted);
+}
+.tcrn-shell-locale-menu__name {
+  font: inherit;
+}
+[data-theme-icon="dark"],
+[data-side-nav-icon="expand"] {
+  display: none;
+}
+html[data-tcrn-theme="dark"] [data-theme-icon="light"],
+[data-side-nav-collapsed="true"] [data-side-nav-icon="collapse"] {
+  display: none;
+}
+html[data-tcrn-theme="dark"] [data-theme-icon="dark"],
+[data-side-nav-collapsed="true"] [data-side-nav-icon="expand"] {
+  display: inline-flex;
+}
+.tcrn-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  margin-block-end: var(--tcrn-space-2);
+}
+.tcrn-table-toolbar .tcrn-search-input {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+.tcrn-table-toolbar .tcrn-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-1);
+}
+.tcrn-table-toolbar__chip {
+  min-height: 26px;
+  padding: 0 var(--tcrn-space-2);
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-control);
+  background: transparent;
+  color: var(--tcrn-color-text-secondary);
+  font: inherit;
+  font-size: var(--tcrn-type-size-meta);
+  cursor: pointer;
+  transition:
+    background-color var(--tcrn-motion-fast),
+    border-color var(--tcrn-motion-fast),
+    color var(--tcrn-motion-fast);
+}
+.tcrn-table-toolbar__chip:hover {
+  border-color: var(--tcrn-color-border-control);
+  color: var(--tcrn-color-text-primary);
+}
+.tcrn-table-toolbar__chip:focus-visible,
+.tcrn-table-toolbar__collapse:focus-visible {
+  outline: 2px solid var(--tcrn-color-focus-ring);
+  outline-offset: 2px;
+}
+/* TCRN-DS-STORY-087 — "selection is ink", applied to a chip that carries a frame.
+   This chip and WorkQuickFilters are both exported filter chips with the same
+   "this filter is chosen" meaning, and they carried two different grammars until
+   now: this one painted brand, that one inked. One grammar does not mean one
+   declaration — ink takes over whatever structural layer the control already
+   has. The quick filter sits in a frameless track and so takes fill; this chip
+   owns a visible border and so takes the edge. Nothing is added on top in
+   either case, and brand colour stays with actionability. */
+.tcrn-table-toolbar__chip[aria-pressed="true"] {
+  border-color: var(--tcrn-selection-edge);
+  color: var(--tcrn-color-text-primary);
+}
+.tcrn-table-toolbar__count {
+  margin-inline-start: auto;
+  /* text-secondary, not text-muted: the live match count is real information and
+     muted fails the 4.5:1 contrast floor on panel surfaces. */
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+  font-variant-numeric: tabular-nums;
+}
+.tcrn-table-toolbar__collapse {
+  min-height: 26px;
+  padding: 0 var(--tcrn-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--tcrn-radius-control);
+  background: transparent;
+  color: var(--tcrn-color-text-secondary);
+  font: inherit;
+  font-size: var(--tcrn-type-size-meta);
+  cursor: pointer;
+}
+.tcrn-table-toolbar__collapse:hover {
+  color: var(--tcrn-color-text-primary);
+  border-color: var(--tcrn-color-border-subtle);
+}
+.tcrn-table-toolbar__collapse [data-table-toolbar-collapse-label="expand"],
+.tcrn-table-toolbar__collapse[aria-expanded="false"] [data-table-toolbar-collapse-label="collapse"] {
+  display: none;
+}
+.tcrn-table-toolbar__collapse[aria-expanded="false"] [data-table-toolbar-collapse-label="expand"] {
+  display: inline;
+}
+.tcrn-table-shell [role="row"][hidden] {
+  display: none;
+}
+.tcrn-environment-banner,
+.tcrn-inline-alert {
+  display: flex;
+  align-items: center;
+  gap: var(--tcrn-space-3);
+  min-height: 42px;
+  padding: var(--tcrn-space-2) var(--tcrn-space-3);
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-panel);
+  background: var(--tcrn-color-brand-neutral-bg);
+}
+.tcrn-inline-alert--warning {
+  background: var(--tcrn-color-state-warning-bg);
+}
+.tcrn-heading {
+  margin: 0;
+  letter-spacing: 0;
+}
+.tcrn-heading--1 {
+  font-size: clamp(28px, 3vw, 44px);
+  line-height: 1.04;
+}
+.tcrn-heading--2 {
+  font-size: var(--tcrn-type-size-heading-2);
+}
+.tcrn-heading--3 {
+  font-size: var(--tcrn-type-size-heading-3);
+}
+.tcrn-text {
+  margin: var(--tcrn-space-2) 0 0;
+  color: var(--tcrn-color-text-secondary);
+}
+/* Status reads as ink dot plus word. The pill-with-pastel-fill it replaces put a
+   saturated block of colour behind every row in a dense table, which is loud at
+   this density and is the single most recognisable tell of generated UI. Squaring
+   the chip to the control radius keeps it reading as an instrument value rather
+   than a marketing badge. */
+.tcrn-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 24px;
+  padding: var(--tcrn-state-chip-padding);
+  padding-inline-start: calc(var(--tcrn-space-2) + var(--tcrn-state-dot-size) + 4px);
+  border-radius: var(--tcrn-radius-control);
+  font-size: var(--tcrn-type-size-meta);
+  line-height: 1.25;
+  font-weight: var(--tcrn-type-weight-strong);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  background: var(--tcrn-color-surface-muted);
+  color: var(--tcrn-color-text-secondary);
+}
+/* The dot is positioned rather than laid out. As a flex item it contributed its own
+   min-content width, which left the anonymous text item unable to shrink and clipped
+   longer labels ("Proof required") at narrow widths; out of flow it costs the label
+   nothing and the text wraps as it did before. */
+.tcrn-badge::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: var(--tcrn-space-2);
+  inset-block-start: 50%;
+  inline-size: var(--tcrn-state-dot-size);
+  block-size: var(--tcrn-state-dot-size);
+  margin-block-start: calc(var(--tcrn-state-dot-size) / -2);
+  border-radius: 50%;
+  background: currentColor;
+}
+.tcrn-badge--warning {
+  background: var(--tcrn-color-state-warning-bg);
+  color: var(--tcrn-color-state-warning);
+}
+.tcrn-badge--positive {
+  background: var(--tcrn-color-state-ready-bg);
+  color: var(--tcrn-color-state-ready);
+}
+.tcrn-badge--danger {
+  background: var(--tcrn-color-state-blocked-bg);
+  color: var(--tcrn-color-state-blocked);
+}
+
+/* ── B「治理纸感」identity stamp ──────────────────────────────────────────────
+   Reserved for identity moments: a gate closing, a ruling landing, a release being
+   accepted. It is deliberately the only place the serif and the oxblood ink appear,
+   because an impression that shows up everywhere stops meaning anything. The
+   whitelist is enforced mechanically by scripts/stamp-whitelist-proof.mjs. */
+.tcrn-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  padding: var(--tcrn-space-1) var(--tcrn-space-2h);
+  border: 1px solid currentColor;
+  border-radius: var(--tcrn-radius-control);
+  color: var(--tcrn-color-brand-accent);
+  background: transparent;
+  font-family: var(--tcrn-type-family-stamp);
+  font-size: var(--tcrn-type-size-stamp-min);
+  font-weight: var(--tcrn-type-weight-strong);
+  letter-spacing: var(--tcrn-type-tracking-stamp);
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.tcrn-stamp[data-stamp-moment="release"] {
+  color: var(--tcrn-color-state-ready);
+}
+/* The double rule is the archival-document memory: two weights, not one, so a
+   header carrying a ruling reads differently from an ordinary panel header. */
+.tcrn-stamp-rule {
+  border: 0;
+  border-top: 2px solid var(--tcrn-color-border-strong);
+  border-bottom: 1px solid var(--tcrn-color-border-subtle);
+  block-size: 3px;
+  margin: 0;
+}
+.tcrn-readback-panel,
+.tcrn-table-shell {
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-panel);
+  background: var(--tcrn-color-surface-panel);
+}
+.tcrn-readback-panel {
+  display: grid;
+  gap: var(--tcrn-space-2);
+  padding: var(--tcrn-space-4);
+  overflow: hidden;
+}
+.tcrn-readback-panel > .tcrn-heading + * {
+  margin-top: 0;
+}
+.tcrn-evidence-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tcrn-space-2);
+  margin-top: var(--tcrn-space-3);
+}
+.tcrn-key-value-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--tcrn-space-3);
+  margin: var(--tcrn-space-3) 0 0;
+}
+.tcrn-key-value-list div {
+  display: grid;
+  gap: var(--tcrn-space-0h);
+  padding: var(--tcrn-space-2);
+  border-radius: var(--tcrn-radius-panel);
+  background: var(--tcrn-color-surface-muted);
+}
+.tcrn-key-value-list dt {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-key-value-list dd {
+  margin: 0;
+  font-weight: var(--tcrn-type-weight-strong);
+}
+.tcrn-table-shell {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+}
+.tcrn-table-shell__head,
+.tcrn-table-shell__row {
+  display: grid;
+  grid-template-columns: var(
+    --tcrn-table-shell-columns,
+    repeat(var(--tcrn-table-column-count, 1), minmax(var(--tcrn-table-shell-column-min-width, 160px), 1fr))
+  );
+  min-width: var(
+    --tcrn-table-shell-min-width,
+    max(100%, calc(var(--tcrn-table-column-count, 1) * var(--tcrn-table-shell-column-min-width, 160px)))
+  );
+}
+.tcrn-table-shell__head {
+  position: sticky;
+  top: 0;
+  background: var(--tcrn-color-surface-muted);
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+  font-weight: var(--tcrn-type-weight-strong);
+}
+.tcrn-table-shell__head span,
+.tcrn-table-shell__cell {
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--tcrn-space-3);
+  border-bottom: 1px solid var(--tcrn-color-border-subtle);
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.tcrn-table-shell__row:last-child .tcrn-table-shell__cell {
+  border-bottom: 0;
+}
+.tcrn-table-shell__empty {
+  padding: var(--tcrn-space-3);
+  color: var(--tcrn-color-text-secondary);
+}
+.tcrn-table-shell__empty-row {
+  display: block;
+}
+@media (max-width: 520px) {
+  .tcrn-table-shell {
+    overflow-x: visible;
+  }
+  .tcrn-table-shell__head {
+    display: none;
+  }
+  .tcrn-table-shell__row {
+    grid-template-columns: 1fr;
+    gap: var(--tcrn-space-2);
+    min-width: 0;
+    padding: var(--tcrn-space-3);
+  }
+  .tcrn-table-shell__cell {
+    display: grid;
+    grid-template-columns: minmax(84px, 0.4fr) minmax(0, 1fr);
+    gap: var(--tcrn-space-2);
+    min-width: 0;
+  }
+  .tcrn-table-shell__cell::before {
+    content: attr(data-label);
+    color: var(--tcrn-color-text-secondary);
+    font-weight: var(--tcrn-type-weight-strong);
+  }
+}
+.tcrn-relationship-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tcrn-space-1);
+  width: max-content;
+  max-width: 100%;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tcrn-relationship-chip__label {
+  font-weight: var(--tcrn-type-weight-strong);
+}
+.tcrn-relationship-chip__target {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* TCRN-DS-STORY-064: the four relation tones were dangling classes with zero rules, so all 12
+   relations rendered neutral gray, and the href variant had no chip surface at all (bare text —
+   no fill, no border, no dot). Tones now map to the shared state palette on BOTH the Badge and the
+   link variant; the link variant gains the same pill surface + status dot Badge provides, plus
+   click feedback. */
+.tcrn-relationship-chip--neutral {
+  background: var(--tcrn-color-surface-muted);
+  color: var(--tcrn-color-text-secondary);
+}
+.tcrn-relationship-chip--positive {
+  background: var(--tcrn-color-state-ready-bg);
+  color: var(--tcrn-color-state-ready);
+}
+.tcrn-relationship-chip--warning {
+  background: var(--tcrn-color-state-warning-bg);
+  color: var(--tcrn-color-state-warning);
+}
+.tcrn-relationship-chip--danger {
+  background: var(--tcrn-color-state-blocked-bg);
+  color: var(--tcrn-color-state-blocked);
+}
+a.tcrn-relationship-chip {
+  position: relative;
+  min-height: 24px;
+  padding: var(--tcrn-state-chip-padding);
+  padding-inline-start: calc(var(--tcrn-space-2) + var(--tcrn-state-dot-size) + 4px);
+  border-radius: var(--tcrn-radius-control);
+  font-size: var(--tcrn-type-size-meta);
+  font-weight: var(--tcrn-type-weight-strong);
+}
+a.tcrn-relationship-chip::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: var(--tcrn-space-2);
+  inset-block-start: 50%;
+  inline-size: var(--tcrn-state-dot-size);
+  block-size: var(--tcrn-state-dot-size);
+  margin-block-start: calc(var(--tcrn-state-dot-size) / -2);
+  border-radius: 50%;
+  background: currentColor;
+}
+a.tcrn-relationship-chip:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+a.tcrn-relationship-chip:focus-visible {
+  outline: 2px solid var(--tcrn-color-focus-ring);
+  outline-offset: 2px;
+}
+.tcrn-machine-token {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  width: min(100%, max-content);
+  max-width: 100%;
+  min-width: 0;
+}
+.tcrn-machine-token__label {
+  grid-column: 1 / -1;
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-caption);
+  font-weight: var(--tcrn-type-weight-strong);
+  line-height: var(--tcrn-type-line-caption);
+}
+.tcrn-machine-token__value {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--tcrn-color-text-primary);
+  font-family: var(--tcrn-type-family-mono);
+  font-size: var(--tcrn-type-size-meta);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* A traversable machine token (MachineToken href). Same inline-record-link ink as
+   the Knowledge result anchor: brand colour with a quiet underline that answers
+   hover, so a token that leads somewhere is distinguishable from one that does
+   not without changing the monospace shape of the value itself. */
+.tcrn-machine-token__link {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--tcrn-color-brand-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in srgb, var(--tcrn-color-brand-primary) 35%, transparent);
+}
+.tcrn-machine-token__link:hover {
+  text-decoration-color: var(--tcrn-color-brand-primary);
+}
+.tcrn-machine-token__link .tcrn-machine-token__value {
+  color: inherit;
+}
+.tcrn-machine-token__copy {
+  min-height: 28px;
+  padding: var(--tcrn-space-0h) var(--tcrn-space-2);
+}
+.tcrn-machine-token--compact {
+  gap: var(--tcrn-space-1);
+}
+.tcrn-machine-token--compact .tcrn-machine-token__label {
+  font-size: var(--tcrn-type-size-caption);
+}
+.tcrn-machine-token--compact .tcrn-machine-token__value {
+  font-size: var(--tcrn-type-size-caption);
+}
+.tcrn-machine-token-cell {
+  display: inline-grid;
+  min-width: 0;
+  max-width: 100%;
+}
+.tcrn-work-management-subnav,
+.tcrn-saved-view-toolbar,
+.tcrn-work-page-header,
+.tcrn-work-view-tabs,
+.tcrn-work-quick-filters,
+.tcrn-work-item-row,
+.tcrn-work-list,
+.tcrn-work-split-view,
+.tcrn-work-backlog-group,
+.tcrn-work-inline-create-static,
+.tcrn-work-board-view,
+.tcrn-gate-pipeline,
+.tcrn-evidence-attachment-list,
+.tcrn-work-hierarchy,
+.tcrn-work-field-panel,
+.tcrn-metadata-rail,
+.tcrn-work-activity-feed,
+.tcrn-work-detail-layout,
+.tcrn-work-item-inspector {
+  min-width: 0;
+}
+.tcrn-work-page-header,
+.tcrn-work-view-tabs,
+.tcrn-work-quick-filters,
+.tcrn-work-item-row,
+.tcrn-work-list,
+.tcrn-work-split-view,
+.tcrn-work-backlog-group,
+.tcrn-work-board,
+.tcrn-work-board-view,
+.tcrn-work-detail-layout,
+.tcrn-work-field-panel,
+.tcrn-metadata-rail,
+.tcrn-work-activity-feed {
+  --tcrn-work-density-gap: var(--tcrn-space-2);
+  --tcrn-work-density-padding: var(--tcrn-space-3);
+  --tcrn-work-density-row-min: 40px;
+}
+.tcrn-work-page-header--dense,
+.tcrn-work-view-tabs--dense,
+.tcrn-work-quick-filters--dense,
+.tcrn-work-item-row--dense,
+.tcrn-work-list--dense,
+.tcrn-work-split-view--dense,
+.tcrn-work-backlog-group--dense,
+.tcrn-work-board--dense,
+.tcrn-work-board-view--dense,
+.tcrn-work-detail-layout--dense,
+.tcrn-work-field-panel--dense,
+.tcrn-metadata-rail--dense,
+.tcrn-work-activity-feed--dense {
+  --tcrn-work-density-gap: var(--tcrn-space-1);
+  --tcrn-work-density-padding: var(--tcrn-space-2);
+  --tcrn-work-density-row-min: 34px;
+}
+.tcrn-work-board-view__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--tcrn-work-density-gap);
+  margin-bottom: var(--tcrn-space-3);
+}
+.tcrn-work-page-header {
+  display: grid;
+  gap: var(--tcrn-work-density-gap);
+  padding-block-end: var(--tcrn-space-3);
+  border-bottom: 1px solid var(--tcrn-color-border-subtle);
+}
+.tcrn-work-page-header__breadcrumbs,
+.tcrn-work-page-header__breadcrumb,
+.tcrn-work-page-header__meta,
+.tcrn-work-page-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-work-page-header__breadcrumbs {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+  font-weight: var(--tcrn-type-weight-strong);
+}
+.tcrn-work-page-header__breadcrumbs a {
+  color: inherit;
+  text-decoration: none;
+}
+.tcrn-work-page-header__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--tcrn-space-3);
+  min-width: 0;
+}
+.tcrn-work-page-header__title {
+  min-width: 0;
+}
+.tcrn-work-page-header__title .tcrn-heading,
+.tcrn-work-page-header__title .tcrn-text {
+  margin: 0;
+}
+.tcrn-work-page-header__meta {
+  justify-content: flex-end;
+}
+.tcrn-work-page-header__actions {
+  grid-column: 1 / -1;
+}
+/* TCRN-DS-STORY-087 — the segmented track.
+   A row of tabs is one control, so it carries one frame; the items inside it are
+   frameless and selection inks the item's own surface. This replaces the
+   per-item bordered pill, which put a frame around every option and then had to
+   add a second mark on top of it to say which one was chosen. */
+.tcrn-work-management-subnav {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-0h);
+  padding: var(--tcrn-space-0h);
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-surface);
+  background: var(--tcrn-color-surface-panel);
+  max-width: 100%;
+}
+.tcrn-work-management-subnav > a,
+.tcrn-work-management-subnav > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  min-height: 32px;
+  padding: var(--tcrn-space-1) var(--tcrn-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--tcrn-radius-control);
+  color: var(--tcrn-color-text-secondary);
+  text-decoration: none;
+  background: transparent;
+  white-space: nowrap;
+}
+.tcrn-saved-view-toolbar {
+  display: grid;
+  gap: var(--tcrn-space-3);
+}
+.tcrn-work-view-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-0h);
+  padding: var(--tcrn-space-0h);
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-surface);
+  background: var(--tcrn-color-surface-panel);
+  max-width: 100%;
+}
+/* Quick filters wrap across lines by design, so they get no track — a frame that
+   wraps is not a frame. The item grammar is the same either way, which is the
+   point of inking the item rather than decorating the container. */
+.tcrn-work-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-0h);
+}
+.tcrn-work-view-tabs > a,
+.tcrn-work-view-tabs > span,
+.tcrn-work-quick-filters > a,
+.tcrn-work-quick-filters > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+  min-height: var(--tcrn-work-density-row-min);
+  padding: var(--tcrn-space-0h) var(--tcrn-space-2h);
+  border: 1px solid transparent;
+  border-radius: var(--tcrn-radius-control);
+  color: var(--tcrn-color-text-secondary);
+  text-decoration: none;
+  background: transparent;
+  white-space: nowrap;
+}
+/*
+ * A wrapping row lays chips out by line-breaking, so letting a chip shrink
+ * below its own no-wrap text does not save the line — it just lets the text
+ * bleed past the chip and drag a horizontal scroll into whatever column holds
+ * the row, which is how a four-chip filter bar overflowed a 375px viewport.
+ * Natural width plus the wrap the row already has; max-width caps the one
+ * pathological label longer than the column itself.
+ */
+.tcrn-work-quick-filters > a,
+.tcrn-work-quick-filters > span {
+  flex-shrink: 0;
+  max-width: 100%;
+}
+/* TCRN-DS-STORY-087 — "selection is ink".
+   One rule for every surface-bearing item in the system: the item's own surface
+   takes ink, and nothing is added on top of it. This replaced two competing
+   grammars (a vertical left axis in brand colour, a horizontal bottom axis) that
+   read as two different products when placed on the same page — DS-INC-003.
+   Brand colour leaves selection entirely and stays with actionability and focus,
+   so colour means "you can act" and structure means "this is the state". */
+.tcrn-work-management-subnav [data-selected="true"],
+.tcrn-work-view-tabs [data-selected="true"],
+.tcrn-work-quick-filters [data-selected="true"] {
+  background: var(--tcrn-selection-fill);
+  color: var(--tcrn-color-text-primary);
+}
+/* TCRN-DS-STORY-088 — SearchableList.
+   Frameless rows inside one framed panel, so selection inks the row: the same
+   grammar the rest of the system speaks, applied to a surface that did not
+   exist until now. */
+.tcrn-searchable-list {
+  display: grid;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-searchable-list__items {
+  display: grid;
+  gap: var(--tcrn-space-0h);
+  max-height: 18rem;
+  overflow-y: auto;
+  min-width: 0;
+}
+.tcrn-searchable-list__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  width: 100%;
+  min-height: 34px;
+  padding: var(--tcrn-space-1) var(--tcrn-space-2h);
+  border: 1px solid transparent;
+  border-radius: var(--tcrn-radius-control);
+  background: transparent;
+  color: var(--tcrn-color-text-primary);
+  text-align: start;
+  text-decoration: none;
+  font: inherit;
+  cursor: pointer;
+}
+.tcrn-searchable-list__item:hover {
+  background: var(--tcrn-selection-fill-hover);
+}
+.tcrn-searchable-list__item[data-selected="true"] {
+  background: var(--tcrn-selection-fill);
+  font-weight: var(--tcrn-type-weight-strong);
+}
+.tcrn-searchable-list__item[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+.tcrn-searchable-list__label {
+  display: grid;
+  min-width: 0;
+}
+.tcrn-searchable-list__description,
+.tcrn-searchable-list__meta {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-searchable-list__meta {
+  white-space: nowrap;
+}
+.tcrn-searchable-list__divider {
+  border: 0;
+  border-top: 1px solid var(--tcrn-color-border-subtle);
+  margin: var(--tcrn-space-1) var(--tcrn-space-1h);
+}
+.tcrn-searchable-list__truncation {
+  padding: var(--tcrn-space-1) var(--tcrn-space-2h);
+}
+.tcrn-searchable-list__state {
+  display: grid;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-work-quick-filters__value {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-work-item-row,
+.tcrn-work-backlog-group,
+.tcrn-work-activity-feed__item,
+.tcrn-work-detail-layout,
+.tcrn-work-field-panel {
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-panel);
+  background: var(--tcrn-color-surface-panel);
+}
+.tcrn-work-item-row {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.18fr) minmax(180px, 1fr) minmax(220px, 0.8fr);
+  align-items: center;
+  gap: var(--tcrn-work-density-gap);
+  min-height: var(--tcrn-work-density-row-min);
+  padding: var(--tcrn-work-density-padding);
+  color: var(--tcrn-color-text-primary);
+  text-decoration: none;
+}
+.tcrn-work-item-row--compact {
+  grid-template-columns: minmax(96px, 0.16fr) minmax(160px, 1fr) minmax(192px, 0.72fr);
+  gap: var(--tcrn-space-2);
+  padding: var(--tcrn-space-2) var(--tcrn-space-3);
+}
+/*
+ * A row stacks when ITS OWN container cannot hold its columns, not when the
+ * viewport crosses a number.
+ *
+ * The three floors plus their gaps need 464px. The mobile block stacks the row
+ * below a 760px viewport, which sounds like the same thing and is not: on a
+ * shell with a 280px rail, a 761px viewport leaves the row 441px — 23px short
+ * of its own floor, and the row overflowed the page by exactly that. Measured
+ * 16px at 761 and 7px at 770, gone at 780; the responsive standard forbids
+ * page-level horizontal overflow and nothing was asserting it (TCRN-AOS-INC-028).
+ *
+ * A viewport query cannot see the rail, so it cannot answer this question for a
+ * consumer whose rail is a different width — and a second consumer arrives with
+ * a different shell. The container can answer it for all of them.
+ */
+.tcrn-work-list,
+[data-work-list] {
+  container: tcrn-work-row / inline-size;
+}
+@container tcrn-work-row (max-width: 464px) {
+  .tcrn-work-item-row,
+  .tcrn-work-item-row--compact,
+  .tcrn-work-item-row--dense {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.tcrn-work-item-row--dense {
+  grid-template-columns: minmax(92px, 0.14fr) minmax(180px, 1fr) minmax(172px, 0.62fr);
+  padding: var(--tcrn-space-1) var(--tcrn-space-2);
+  font-size: var(--tcrn-type-size-ui);
+}
+/* The framed half of the grammar. A row already has a border, so selection
+   promotes that border to ink rather than drawing a second mark inside it —
+   which is exactly what produced the double frame consumers reported. */
+.tcrn-work-item-row[data-selected="true"] {
+  border-color: var(--tcrn-selection-edge);
+}
+.tcrn-work-item-row__id,
+.tcrn-work-item-row__summary,
+.tcrn-work-item-row__meta,
+.tcrn-work-item-row__relationships {
+  min-width: 0;
+}
+.tcrn-work-item-row__id,
+.tcrn-work-item-row__meta,
+.tcrn-work-item-row__relationships {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-work-item-row__summary {
+  display: grid;
+  gap: var(--tcrn-space-0h);
+}
+.tcrn-work-item-row__summary strong {
+  overflow-wrap: anywhere;
+}
+.tcrn-work-item-row__summary .tcrn-text {
+  margin: 0;
+}
+.tcrn-work-item-row__field,
+.tcrn-work-board__card-field {
+  display: inline-grid;
+  gap: var(--tcrn-space-0h);
+  min-width: 0;
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-work-item-row__field span,
+.tcrn-work-board__card-field span {
+  color: var(--tcrn-color-text-secondary);
+}
+.tcrn-work-board__card-meta {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-work-item-row__relationships {
+  grid-column: 1 / -1;
+}
+.tcrn-work-list,
+.tcrn-work-board-view,
+.tcrn-work-backlog-group,
+.tcrn-work-field-panel,
+.tcrn-metadata-rail,
+.tcrn-work-activity-feed,
+.tcrn-work-detail-layout__main,
+.tcrn-work-detail-layout__rail {
+  display: grid;
+  gap: var(--tcrn-work-density-gap);
+}
+/*
+ * The frame is the size container; the section is the grid. An element cannot
+ * answer a container query about itself, and it is the section's own columns
+ * that must change when space runs out — so the component wraps itself and the
+ * breakpoint becomes true wherever the split view is mounted. The first
+ * consumer approximated this with a viewport media query that was only correct
+ * for its own shell width; a second consumer with a different shell would have
+ * needed a different number.
+ */
+.tcrn-work-split-view-frame {
+  container: tcrn-work-split-view / inline-size;
+  min-width: 0;
+  /*
+   * inline-size containment means this box contributes no intrinsic width, so
+   * a parent that sizes to its content would measure it at zero and the whole
+   * split view would vanish silently. width 100% gives it back a definite size
+   * wherever the parent has one to give — block flow, a grid track, a flex
+   * item. A parent that is itself shrink-to-fit (inline-block, float, an auto
+   * track) has no width to resolve against, and the component's own
+   * documentation states that requirement rather than leaving it to be
+   * discovered as a blank region.
+   */
+  width: 100%;
+}
+.tcrn-work-split-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+  gap: var(--tcrn-work-density-gap);
+  align-items: start;
+}
+.tcrn-work-split-view__list,
+.tcrn-work-split-view__detail {
+  min-width: 0;
+}
+/* 780px of actual container: below it the 280px detail column starves the list. */
+@container tcrn-work-split-view (max-width: 780px) {
+  .tcrn-work-split-view {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /*
+   * Stacked, the one bit the consumer supplies decides the detail region's
+   * fate: absent a selection it is an empty box pushing the list down, and
+   * with one it is what the reader chose, so it leads. Without the attribute
+   * both regions render in source order, which is the pre-admission layout.
+   */
+  .tcrn-work-split-view[data-detail-populated="false"] .tcrn-work-split-view__detail {
+    display: none;
+  }
+  .tcrn-work-split-view[data-detail-populated="true"] .tcrn-work-split-view__detail {
+    order: -1;
+  }
+}
+.tcrn-work-backlog-group,
+.tcrn-work-field-panel,
+.tcrn-work-activity-feed__item,
+.tcrn-work-detail-layout {
+  padding: var(--tcrn-work-density-padding);
+}
+.tcrn-work-backlog-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-work-backlog-group__head > div:first-child {
+  min-width: 0;
+  margin-right: auto;
+}
+.tcrn-work-backlog-group__head .tcrn-heading,
+.tcrn-work-backlog-group__head .tcrn-text,
+.tcrn-work-field-panel .tcrn-heading {
+  margin: 0;
+}
+.tcrn-work-field-panel .tcrn-key-value-list > div,
+.tcrn-metadata-rail .tcrn-key-value-list > div {
+  grid-template-columns: minmax(0, 1fr);
+}
+.tcrn-work-backlog-group__actions,
+.tcrn-work-inline-create-static,
+.tcrn-metadata-rail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-work-inline-create-static .tcrn-text {
+  margin: 0;
+}
+.tcrn-work-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--tcrn-work-density-gap);
+  min-width: 0;
+}
+.tcrn-work-board--compact {
+  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+  gap: var(--tcrn-space-2);
+}
+.tcrn-work-board--dense {
+  grid-template-columns: repeat(auto-fit, minmax(188px, 1fr));
+}
+.tcrn-work-board__lane {
+  display: grid;
+  gap: var(--tcrn-space-3);
+  min-width: 0;
+  max-height: 620px;
+  overflow: auto;
+}
+.tcrn-work-board__lane-head,
+.tcrn-work-board__card-head,
+.tcrn-work-item-inspector__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-work-board__lane-head > .tcrn-heading,
+.tcrn-work-item-inspector__head > div {
+  min-width: 0;
+  margin-right: auto;
+}
+.tcrn-work-board__cards {
+  display: grid;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-work-board__card {
+  display: grid;
+  gap: var(--tcrn-work-density-gap);
+  min-width: 0;
+  padding: var(--tcrn-work-density-padding);
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-panel);
+  background: var(--tcrn-color-surface-muted);
+  /* The stretched card link below positions against the card itself. */
+  position: relative;
+}
+/*
+ * A card with an href is one click target, delivered as a stretched link rather
+ * than an <a> around the card: the card can also carry relationship chips, and
+ * an anchor inside an anchor is not a document. The chips row raises itself
+ * above the stretched surface so both stay clickable.
+ */
+.tcrn-work-board__card-link {
+  color: inherit;
+  text-decoration: none;
+}
+.tcrn-work-board__card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--tcrn-radius-panel);
+}
+.tcrn-work-board__card:has(.tcrn-work-board__card-link):hover {
+  border-color: var(--tcrn-color-border-strong);
+}
+.tcrn-work-board__card-link:hover,
+.tcrn-work-board__card-link:focus-visible {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+.tcrn-work-board__card-link:focus-visible::after {
+  outline: 2px solid var(--tcrn-color-focus-ring);
+  outline-offset: 2px;
+}
+/*
+ * Everything the card's own API lets a consumer fill sits above the stretched
+ * link. Relations render chips that are links in their own right, and meta and
+ * fields are public ReactNode slots — a consumer may put a button, a link, or
+ * selectable text in either, and a stretched surface over the whole card would
+ * swallow all three without any diagnostic. The card stays one click target
+ * everywhere the consumer put nothing of its own.
+ */
+.tcrn-work-board__relations,
+.tcrn-work-board__card-meta,
+.tcrn-work-board__card-fields {
+  position: relative;
+  z-index: 1;
+}
+.tcrn-work-board__card > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tcrn-work-board__card .tcrn-text {
+  margin: 0;
+}
+.tcrn-work-board--compact .tcrn-work-board__lane,
+.tcrn-work-board--compact .tcrn-work-board__card {
+  gap: var(--tcrn-space-2);
+}
+.tcrn-work-board--compact .tcrn-work-board__card {
+  padding: var(--tcrn-space-2);
+}
+.tcrn-work-board__card-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-work-board__relations,
+.tcrn-work-item-inspector__relationships,
+.tcrn-work-detail-layout__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-work-hierarchy {
+  display: grid;
+  gap: var(--tcrn-space-3);
+}
+.tcrn-work-hierarchy__levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--tcrn-space-3);
+  min-width: 0;
+}
+.tcrn-work-hierarchy__node {
+  display: grid;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-work-hierarchy__node .tcrn-heading,
+.tcrn-work-hierarchy__node .tcrn-text {
+  margin: 0;
+}
+.tcrn-work-item-inspector {
+  display: grid;
+  gap: var(--tcrn-space-4);
+}
+.tcrn-work-item-inspector__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--tcrn-space-3);
+  min-width: 0;
+}
+.tcrn-work-item-inspector__grid > section {
+  min-width: 0;
+}
+.tcrn-work-item-inspector__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-work-activity-feed__head,
+.tcrn-work-detail-layout__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-work-activity-feed__head time {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+  margin-left: auto;
+}
+.tcrn-work-activity-feed__item .tcrn-text,
+.tcrn-work-detail-layout__head .tcrn-heading,
+.tcrn-work-detail-layout__head .tcrn-text {
+  margin: 0;
+}
+.tcrn-work-detail-layout {
+  gap: var(--tcrn-work-density-gap);
+  padding: var(--tcrn-work-density-padding);
+}
+.tcrn-work-detail-layout__head > div {
+  min-width: 0;
+  margin-right: auto;
+}
+.tcrn-work-detail-layout__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.34fr);
+  gap: var(--tcrn-space-3);
+  min-width: 0;
+  align-items: start;
+}
+.tcrn-knowledge-page-tree,
+.tcrn-knowledge-document-canvas,
+.tcrn-knowledge-toc-rail,
+.tcrn-knowledge-inline-comment-list,
+.tcrn-knowledge-metadata-rail,
+.tcrn-knowledge-attachment-list,
+.tcrn-knowledge-label-set,
+.tcrn-knowledge-version-history,
+.tcrn-knowledge-template-gallery,
+.tcrn-knowledge-search-results {
+  min-width: 0;
+}
+.tcrn-knowledge-page-tree,
+.tcrn-knowledge-document-canvas,
+.tcrn-knowledge-toc-rail,
+.tcrn-knowledge-inline-comment-list__item,
+.tcrn-knowledge-metadata-rail,
+.tcrn-knowledge-version-history__item,
+.tcrn-knowledge-search-results__item {
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-panel);
+  background: var(--tcrn-color-surface-panel);
+}
+.tcrn-knowledge-page-tree,
+.tcrn-knowledge-document-canvas,
+.tcrn-knowledge-toc-rail,
+.tcrn-knowledge-inline-comment-list__item,
+.tcrn-knowledge-metadata-rail,
+.tcrn-knowledge-version-history__item,
+.tcrn-knowledge-search-results__item {
+  padding: var(--tcrn-space-3);
+}
+.tcrn-knowledge-page-tree__list {
+  display: grid;
+  gap: var(--tcrn-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tcrn-knowledge-page-tree__item {
+  min-width: 0;
+}
+.tcrn-knowledge-page-tree__item > a,
+.tcrn-knowledge-page-tree__item > span,
+.tcrn-knowledge-toc-rail nav > a,
+.tcrn-knowledge-toc-rail nav > span {
+  display: flex;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  min-height: 32px;
+  min-width: 0;
+  padding: var(--tcrn-space-0h) var(--tcrn-space-2);
+  border-radius: var(--tcrn-radius-control);
+  color: var(--tcrn-color-text-primary);
+  text-decoration: none;
+}
+/* TCRN-DS-STORY-062: same single-axis selection as the doc shell — 3px left rail + brand
+   text, no row fill, zero radius on the selected element. */
+.tcrn-knowledge-page-tree__item > [data-selected="true"],
+.tcrn-knowledge-toc-rail nav > [data-selected="true"] {
+  color: var(--tcrn-color-text-primary);
+  font-weight: var(--tcrn-type-weight-strong);
+  background: var(--tcrn-selection-fill);
+}
+.tcrn-knowledge-page-tree__item[data-tree-level="2"] > a,
+.tcrn-knowledge-page-tree__item[data-tree-level="2"] > span {
+  padding-inline-start: var(--tcrn-space-4);
+}
+.tcrn-knowledge-page-tree__item[data-tree-level="3"] > a,
+.tcrn-knowledge-page-tree__item[data-tree-level="3"] > span {
+  padding-inline-start: var(--tcrn-space-6);
+}
+.tcrn-knowledge-page-tree__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tcrn-knowledge-document-canvas,
+.tcrn-knowledge-inline-comment-list,
+.tcrn-knowledge-metadata-rail,
+.tcrn-knowledge-attachment-list,
+.tcrn-knowledge-version-history,
+.tcrn-knowledge-template-gallery,
+.tcrn-knowledge-search-results {
+  display: grid;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-knowledge-document-canvas__head,
+.tcrn-knowledge-inline-comment-list__head,
+.tcrn-knowledge-search-results__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-knowledge-document-canvas__head > div:first-child,
+.tcrn-knowledge-search-results__head > strong {
+  min-width: 0;
+  margin-right: auto;
+}
+.tcrn-knowledge-document-canvas__meta {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-knowledge-document-canvas__head .tcrn-heading,
+.tcrn-knowledge-document-canvas__head .tcrn-text,
+.tcrn-knowledge-document-canvas__section .tcrn-heading,
+.tcrn-knowledge-document-canvas__section .tcrn-text,
+.tcrn-knowledge-inline-comment-list__item .tcrn-text,
+.tcrn-knowledge-template-gallery__card .tcrn-heading,
+.tcrn-knowledge-template-gallery__card .tcrn-text,
+.tcrn-knowledge-search-results__item .tcrn-text,
+.tcrn-knowledge-toc-rail .tcrn-heading {
+  margin: 0;
+}
+.tcrn-knowledge-document-canvas__body {
+  display: grid;
+  gap: var(--tcrn-space-4);
+  max-width: 74ch;
+}
+.tcrn-knowledge-document-canvas__section {
+  display: grid;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-knowledge-label-set,
+.tcrn-knowledge-metadata-rail__actions,
+.tcrn-knowledge-version-history__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-knowledge-toc-rail nav {
+  display: grid;
+  gap: var(--tcrn-space-1);
+}
+.tcrn-knowledge-template-gallery {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.tcrn-knowledge-template-gallery__card {
+  display: grid;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-knowledge-version-history__item {
+  justify-content: flex-start;
+}
+.tcrn-knowledge-version-history__item > strong,
+.tcrn-knowledge-search-results__head a,
+.tcrn-knowledge-search-results__head span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tcrn-work-detail-layout__main,
+.tcrn-work-detail-layout__rail,
+.tcrn-work-detail-layout__activity {
+  min-width: 0;
+}
+.tcrn-skip-link {
+  position: fixed;
+  z-index: 1000;
+  top: var(--tcrn-space-3);
+  left: var(--tcrn-space-3);
+  transform: translateY(-150%);
+  padding: var(--tcrn-space-2) var(--tcrn-space-3);
+  border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-surface-panel);
+  border: 1px solid var(--tcrn-color-border-control);
+}
+.tcrn-skip-link:focus {
+  transform: translateY(0);
+}
+@media (max-width: 760px) {
+  .tcrn-product-shell {
+    --tcrn-product-shell-sidebar-width: 1fr;
+    grid-template-columns: 1fr;
+  }
+  .tcrn-product-shell__sidebar {
+    position: relative;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--tcrn-color-border-subtle);
+  }
+  .tcrn-product-shell__workspace > .tcrn-top-bar,
+  .tcrn-top-bar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  /*
+   * Lever 2 of the mobile fold budget. Each of these used to take a full row of
+   * its own, which spent 130px of a 760px screen on three controls before the
+   * page said anything. They sit on one line and wrap only when they must.
+   */
+  .tcrn-product-shell__utility-row {
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--tcrn-space-2);
+  }
+  .tcrn-product-shell__current-location,
+  .tcrn-shell-locale-menu {
+    flex: 0 1 auto;
+    margin-right: 0;
+    max-width: none;
+    width: auto;
+  }
+  .tcrn-product-shell-search,
+  .tcrn-product-shell-search[data-search-expanded="true"] {
+    flex-basis: min(100%, 320px);
+    margin-left: 0;
+    justify-self: start;
+    width: 320px;
+    max-width: 320px;
+  }
+  /*
+   * The width-collapse control stays hidden here, and that ruling has not
+   * changed: narrowing a rail to 92px means nothing in a full-width stacked
+   * layout, and a control that does nothing is what the responsive standard
+   * forbids. What was never ruled on — because the shell had two destinations
+   * when this rule was written and has eleven now — is whether the navigation
+   * can be put away at all. That is the control below, and it is a different one.
+   */
+  .tcrn-product-shell__sidebar-header .tcrn-shell-side-nav-toggle {
+    display: none;
+  }
+  .tcrn-shell-mobile-nav-toggle {
+    display: inline-flex;
+    /* Sole route to the whole IA on the one viewport where it is touched. */
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /*
+   * Lever 1. display:none rather than a transform: it takes the eleven links
+   * out of the tab order and out of the accessibility tree, which a translated
+   * or merely invisible panel does not. Closed is the CSS default, so a server
+   * render emits the closed nav with no script and no correction after
+   * hydration — the attribute only ever turns it on.
+   */
+  .tcrn-product-shell__sidebar .tcrn-side-nav {
+    display: none;
+  }
+  .tcrn-product-shell[data-mobile-nav-expanded="true"] .tcrn-product-shell__sidebar .tcrn-side-nav {
+    display: grid;
+  }
+  /*
+   * The header carries the only navigation control on this viewport, so it has
+   * to survive the scroll that the shorter page now invites. Without this it
+   * leaves after 79px and the reader has no way back to the navigation at all.
+   */
+  .tcrn-product-shell__sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .tcrn-work-board,
+  .tcrn-work-hierarchy__levels,
+  .tcrn-work-item-inspector__grid,
+  .tcrn-work-page-header__body,
+  .tcrn-work-item-row,
+  .tcrn-work-item-row--compact,
+  .tcrn-work-split-view,
+  .tcrn-work-detail-layout__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tcrn-work-page-header__meta,
+  .tcrn-work-page-header__actions,
+  .tcrn-work-detail-layout__actions {
+    justify-content: flex-start;
+  }
+  .tcrn-work-management-subnav > a,
+  .tcrn-work-management-subnav > span,
+  .tcrn-work-view-tabs > a,
+  .tcrn-work-view-tabs > span,
+  .tcrn-work-quick-filters > a,
+  .tcrn-work-quick-filters > span {
+    /*
+     * Lever 3. These wrapped into four and three rows, spending 380px of the
+     * fold on chrome before the first work item. One scrolling row each: the
+     * chips keep their own width (a CJK filter name with a count needs 213px
+     * and shrinking it bled the text out of the chip), and the overflow is the
+     * row's, not the page's.
+     *
+     * Supersedes the wrap-based sizing that fixed that bleed — same property,
+     * different mechanism, and the no-page-overflow property it was protecting
+     * still holds because the scroll is contained here.
+     */
+    flex: 0 0 auto;
+    max-width: 100%;
+  }
+  .tcrn-work-view-tabs,
+  .tcrn-work-quick-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    /* Momentum on touch, and the row keeps its own scrollbar off the page. */
+    -webkit-overflow-scrolling: touch;
+  }
+  .tcrn-shell-locale-menu__trigger {
+    width: 100%;
+    max-width: none;
+    justify-content: space-between;
+  }
+  .tcrn-product-shell__main {
+    padding: var(--tcrn-space-4);
+  }
+  .tcrn-shell-brand-lockup__caption,
+  .tcrn-product-logo__line-two {
+    white-space: normal;
+  }
+  .tcrn-product-shell-section-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tcrn-key-value-list {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced motion means fewer and gentler animations, not none. Travel is what
+     causes discomfort, so transform and position animation is removed; opacity and
+     colour transitions stay, because they are how the interface says that something
+     changed. Killing them outright leaves state changes to happen with no cue at
+     all, which is a comprehension regression dressed up as an accessibility win. */
+  .tcrn-product-shell,
+  .tcrn-product-shell-search {
+    transition: opacity var(--tcrn-motion-comprehension), background-color var(--tcrn-motion-comprehension), color var(--tcrn-motion-comprehension), border-color var(--tcrn-motion-comprehension);
+  }
+  .tcrn-product-shell[data-theme-switching="true"]::after {
+    animation: none;
+  }
+  .tcrn-button,
+  .tcrn-button.tcrn-shell-theme-toggle,
+  .tcrn-nav-item,
+  .tcrn-search-input,
+  .tcrn-shell-theme-toggle__icon,
+  .tcrn-shell-locale-menu__trigger,
+  .tcrn-shell-locale-menu__chevron {
+    transition: opacity var(--tcrn-motion-comprehension), background-color var(--tcrn-motion-comprehension), color var(--tcrn-motion-comprehension), border-color var(--tcrn-motion-comprehension);
+  }
+  /* No travel, and no press-scale either: scale is transform. */
+  .tcrn-button:active,
+  .tcrn-nav-item:active,
+  .tcrn-shell-theme-toggle:active,
+  .tcrn-shell-locale-menu__trigger:active,
+  .tcrn-table-toolbar__chip:active,
+  .tcrn-table-toolbar__collapse:active,
+  .tcrn-link-button:active,
+  .tcrn-product-launcher button:active,
+  .tcrn-product-switcher button:active,
+  .tcrn-module-tabs button:active,
+  .tcrn-section-tabs button:active,
+  .tcrn-segmented-nav button:active {
+    transform: none;
+  }
+}
+
+/* ---- Component families relocated from the docs demo layer (TCRN-DS-STORY-037) ----
+   These 24 families are emitted by real @tcrn/ui-react components (Form, Overlay,
+   Feedback, Layout, Navigation, DataDisplay, Typography). They used to live only in the
+   docs stylesheets, so package consumers rendered them unstyled. Values are copied
+   verbatim from the canonical, tokenized story-demo-styles.ts (converged by S034); the
+   docs demo layer keeps only its own presentation chrome (see docs/style-scale.md,
+   "Demo-chrome exemption list"). */
+
+/* Base surface card — Layout .tcrn-surface / .tcrn-disclosure-panel, Feedback
+   .tcrn-state-view / .tcrn-state-surface / .tcrn-gate-readiness-panel, DataDisplay
+   .tcrn-detail-inspector, Overlay .tcrn-popover / .tcrn-dialog / .tcrn-confirm-dialog /
+   .tcrn-detail-drawer / .tcrn-action-drawer. */
+.tcrn-surface,
+.tcrn-detail-inspector,
+.tcrn-gate-readiness-panel,
+.tcrn-state-view,
+.tcrn-state-surface,
+.tcrn-disclosure-panel,
+.tcrn-popover,
+.tcrn-dialog,
+.tcrn-confirm-dialog,
+.tcrn-detail-drawer,
+.tcrn-action-drawer {
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-surface);
+  background: var(--tcrn-color-surface-panel);
+  padding: var(--tcrn-space-3);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.tcrn-surface,
+.tcrn-detail-inspector,
+.tcrn-gate-readiness-panel,
+.tcrn-confirm-dialog,
+.tcrn-detail-drawer,
+.tcrn-action-drawer {
+  display: grid;
+  gap: var(--tcrn-space-2h);
+}
+
+/* Typography highlight */
+.tcrn-highlight-text {
+  display: inline;
+}
+
+.tcrn-highlight-mark {
+  border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-brand-primary-bg);
+  color: var(--tcrn-color-text-primary);
+  font-weight: var(--tcrn-type-weight-medium);
+  padding: 0 var(--tcrn-space-0h);
+}
+
+/* Feedback state view */
+.tcrn-state-view {
+  display: grid;
+  gap: var(--tcrn-space-2);
+}
+
+.tcrn-state-view h3,
+.tcrn-state-view p {
+  margin: 0;
+}
+
+/* Feedback skeleton */
+.tcrn-skeleton,
+.tcrn-skeleton-group {
+  display: block;
+  max-width: 100%;
+}
+
+.tcrn-skeleton {
+  position: relative;
+  overflow: hidden;
+  min-height: 18px;
+  border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-surface-muted);
+}
+
+.tcrn-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.62), transparent);
+  animation: tcrn-skeleton-shimmer var(--tcrn-motion-skeleton-loop) infinite;
+}
+
+.tcrn-skeleton--text {
+  width: 100%;
+  height: 1em;
+}
+
+.tcrn-skeleton--rectangular {
+  width: 100%;
+  height: 56px;
+}
+
+.tcrn-skeleton--circular {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--tcrn-radius-pill);
+}
+
+.tcrn-skeleton-group {
+  display: grid;
+  gap: var(--tcrn-space-2);
+}
+
+.tcrn-skeleton-group .tcrn-skeleton:last-child {
+  width: 72%;
+}
+
+@keyframes tcrn-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Feedback state surface */
+.tcrn-state-surface {
+  display: grid;
+  place-items: center;
+  gap: var(--tcrn-space-2);
+  text-align: center;
+  min-height: 144px;
+  color: var(--tcrn-color-text-secondary);
+}
+
+.tcrn-state-surface__icon {
+  color: var(--tcrn-color-text-muted);
+}
+
+.tcrn-state-surface__title,
+.tcrn-state-surface__description {
+  margin: 0;
+}
+
+.tcrn-state-surface--warning .tcrn-state-surface__title,
+.tcrn-state-surface--warning .tcrn-state-surface__icon {
+  color: var(--tcrn-color-state-warning);
+}
+
+.tcrn-state-surface--danger .tcrn-state-surface__title,
+.tcrn-state-surface--danger .tcrn-state-surface__icon {
+  color: var(--tcrn-color-state-blocked);
+}
+
+.tcrn-state-surface__action {
+  display: flex;
+  gap: var(--tcrn-space-2);
+  margin-top: var(--tcrn-space-2);
+}
+
+/* Overlay tooltip — genuine :hover / :focus-within reveal only. The storybook
+   static-preview hook (a docs-only attribute variant the component never emits) stays in
+   the docs demo layer. */
+.tcrn-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+}
+
+.tcrn-tooltip__content {
+  position: absolute;
+  z-index: var(--tcrn-z-popover);
+  pointer-events: none;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 32px));
+  border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-text-primary);
+  color: var(--tcrn-color-surface-panel);
+  padding: var(--tcrn-space-1h) var(--tcrn-space-2);
+  font-size: var(--tcrn-type-size-meta);
+  line-height: 1.35;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--tcrn-motion-standard), transform var(--tcrn-motion-standard);
+  box-shadow: var(--tcrn-elevation-floating);
+}
+
+.tcrn-tooltip:hover .tcrn-tooltip__content,
+.tcrn-tooltip:focus-within .tcrn-tooltip__content {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.tcrn-tooltip[data-placement="top"] .tcrn-tooltip__content {
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+}
+
+.tcrn-tooltip[data-placement="top"]:hover .tcrn-tooltip__content,
+.tcrn-tooltip[data-placement="top"]:focus-within .tcrn-tooltip__content {
+  transform: translate(-50%, 0);
+}
+
+.tcrn-tooltip[data-placement="bottom"] .tcrn-tooltip__content {
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translate(-50%, -4px);
+}
+
+.tcrn-tooltip[data-placement="bottom"]:hover .tcrn-tooltip__content,
+.tcrn-tooltip[data-placement="bottom"]:focus-within .tcrn-tooltip__content {
+  transform: translate(-50%, 0);
+}
+
+.tcrn-tooltip[data-placement="right"] .tcrn-tooltip__content {
+  top: 50%;
+  left: calc(100% + 8px);
+  transform: translate(-4px, -50%);
+}
+
+.tcrn-tooltip[data-placement="right"]:hover .tcrn-tooltip__content,
+.tcrn-tooltip[data-placement="right"]:focus-within .tcrn-tooltip__content {
+  transform: translate(0, -50%);
+}
+
+.tcrn-tooltip[data-placement="left"] .tcrn-tooltip__content {
+  top: 50%;
+  right: calc(100% + 8px);
+  transform: translate(4px, -50%);
+}
+
+.tcrn-tooltip[data-placement="left"]:hover .tcrn-tooltip__content,
+.tcrn-tooltip[data-placement="left"]:focus-within .tcrn-tooltip__content {
+  transform: translate(0, -50%);
+}
+
+/* Layout collapsible + disclosure */
+.tcrn-collapsible-region {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0.4;
+  transition: grid-template-rows var(--tcrn-motion-emphasis), opacity var(--tcrn-motion-standard);
+}
+
+.tcrn-collapsible-region[data-expanded="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.tcrn-collapsible-region[aria-hidden="true"] {
+  visibility: hidden;
+}
+
+.tcrn-collapsible-region__inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tcrn-disclosure-panel {
+  display: grid;
+  gap: var(--tcrn-space-2);
+}
+
+.tcrn-disclosure-panel__title {
+  margin: 0;
+}
+
+/* Form field */
+.tcrn-field {
+  display: grid;
+  gap: var(--tcrn-space-1);
+  margin-bottom: 10px;
+  border-radius: var(--tcrn-radius-control);
+  background-color: transparent;
+  outline: 1px solid transparent;
+  outline-offset: 2px;
+  transition:
+    background-color 150ms ease-out,
+    outline-color 150ms ease-out;
+}
+
+.tcrn-field:focus-within {
+  background-color: color-mix(in srgb, var(--tcrn-color-surface-muted) 56%, transparent);
+  outline-color: color-mix(in srgb, var(--tcrn-color-border-strong) 66%, transparent);
+}
+
+.tcrn-field--error {
+  background-color: color-mix(in srgb, var(--tcrn-color-state-blocked-bg) 62%, transparent);
+  outline-color: var(--tcrn-color-state-blocked);
+}
+
+.tcrn-field__label {
+  font-weight: 600;
+}
+
+.tcrn-field__hint {
+  color: var(--tcrn-color-text-secondary);
+}
+
+.tcrn-field__error {
+  color: var(--tcrn-color-state-blocked);
+}
+
+/* Form input + select (.tcrn-input--short is a docs-only demo width and stays there) */
+.tcrn-input,
+.tcrn-select {
+  min-height: 34px;
+  border: 1px solid var(--tcrn-color-border-strong);
+  border-radius: var(--tcrn-radius-control);
+  max-width: 100%;
+  padding: 0 var(--tcrn-space-2h);
+}
+/* Textarea is a modifier on .tcrn-input (border/bg/radius/font come from the base);
+   these deltas give it a multi-line box and a vertical resize handle. */
+.tcrn-textarea {
+  min-height: 96px;
+  padding: var(--tcrn-space-2) var(--tcrn-space-3);
+  resize: vertical;
+  line-height: var(--tcrn-type-line-ui);
+}
+
+/* Navigation breadcrumb */
+.tcrn-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-1h);
+  min-width: 0;
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-caption);
+  line-height: 1.35;
+}
+
+.tcrn-breadcrumb__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tcrn-space-1h);
+  min-width: 0;
+}
+
+.tcrn-breadcrumb__separator {
+  width: 14px;
+  height: 14px;
+  color: var(--tcrn-color-text-muted);
+}
+
+.tcrn-breadcrumb [aria-current="page"] {
+  color: var(--tcrn-color-text-primary);
+  font-weight: 700;
+}
+
+/* An ancestor crumb is now a link (it previously rendered as an inert span, so
+   there was nothing to style). Quiet by default and underlined on hover: the
+   trail is chrome, and a row of permanently underlined links competes with the
+   page title it sits above. */
+.tcrn-breadcrumb a {
+  color: inherit;
+  text-decoration: none;
+}
+.tcrn-breadcrumb a:hover {
+  color: var(--tcrn-color-brand-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+/* Pagination container. Pagination renders an empty nav today; this readies the
+   row layout for page controls without asserting markup S036 does not ship. */
+.tcrn-pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+}
+
+/* Navigation tab families — .tcrn-filter-bar stays doc-side (already package-owned via
+   the scoped .tcrn-table-toolbar .tcrn-filter-bar rule; introducing a top-level
+   .tcrn-filter-bar here would trip the shell-fidelity duplicate-selector gate). */
+/* The same segmented track, for the button-based selectors. These previously
+   said "selected" with a brand-tinted border plus a floating shadow — a lift,
+   which competed with the shell's real elevation language. */
+.tcrn-product-launcher,
+.tcrn-product-switcher,
+.tcrn-module-tabs,
+.tcrn-section-tabs,
+.tcrn-segmented-nav {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--tcrn-space-0h);
+  padding: var(--tcrn-space-0h);
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-surface);
+  background: var(--tcrn-color-surface-panel);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tcrn-product-launcher button,
+.tcrn-product-switcher button,
+.tcrn-module-tabs button,
+.tcrn-section-tabs button,
+.tcrn-segmented-nav button {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--tcrn-radius-control);
+  background: transparent;
+  color: var(--tcrn-color-text-secondary);
+  padding: 0 var(--tcrn-space-2h);
+  white-space: nowrap;
+}
+
+.tcrn-product-launcher button[data-selected="true"],
+.tcrn-product-switcher button[data-selected="true"],
+.tcrn-module-tabs button[data-selected="true"],
+.tcrn-section-tabs button[data-selected="true"],
+.tcrn-segmented-nav button[data-selected="true"],
+.tcrn-product-launcher button[aria-current="page"],
+.tcrn-product-switcher button[aria-current="page"],
+.tcrn-module-tabs button[aria-current="page"],
+.tcrn-section-tabs button[aria-current="page"],
+.tcrn-segmented-nav button[aria-current="page"] {
+  background: var(--tcrn-selection-fill);
+  color: var(--tcrn-color-text-primary);
+}
+
+/* TCRN-DS-STORY-063: interactive feedback family completion. Every clickable navigation / row /
+   tab / button surface now answers hover + keyboard focus, and the pressable button families
+   answer the press — matching the shell control language (surface-muted hover, focus-ring
+   outline, press-scale). Previously these had no hover and fell to the UA default focus ring
+   outside the product-shell scope. */
+/* Hover is half a step toward selection in the same material, so the two states
+   read as one scale rather than as two unrelated effects. */
+.tcrn-work-management-subnav > a:hover,
+.tcrn-work-view-tabs > a:hover,
+.tcrn-work-quick-filters > a:hover,
+.tcrn-product-launcher button:hover,
+.tcrn-product-switcher button:hover,
+.tcrn-module-tabs button:hover,
+.tcrn-section-tabs button:hover,
+.tcrn-segmented-nav button:hover,
+.tcrn-knowledge-page-tree__item > a:hover,
+.tcrn-knowledge-toc-rail nav > a:hover {
+  background: var(--tcrn-selection-fill-hover);
+  color: var(--tcrn-color-text-primary);
+}
+.tcrn-work-item-row[href]:hover {
+  border-color: var(--tcrn-color-border-control);
+  color: var(--tcrn-color-text-primary);
+}
+.tcrn-work-management-subnav > a:focus-visible,
+.tcrn-work-view-tabs > a:focus-visible,
+.tcrn-work-quick-filters > a:focus-visible,
+.tcrn-work-item-row[href]:focus-visible,
+.tcrn-knowledge-page-tree__item > a:focus-visible,
+.tcrn-knowledge-toc-rail nav > a:focus-visible,
+.tcrn-knowledge-search-results__head a:focus-visible,
+.tcrn-product-launcher button:focus-visible,
+.tcrn-product-switcher button:focus-visible,
+.tcrn-module-tabs button:focus-visible,
+.tcrn-section-tabs button:focus-visible,
+.tcrn-segmented-nav button:focus-visible {
+  outline: 2px solid var(--tcrn-color-focus-ring);
+  outline-offset: 2px;
+}
+.tcrn-product-launcher button:active,
+.tcrn-product-switcher button:active,
+.tcrn-module-tabs button:active,
+.tcrn-section-tabs button:active,
+.tcrn-segmented-nav button:active {
+  transform: scale(var(--tcrn-motion-press-scale));
+}
+/* KnowledgeSearchResults head anchor previously had no color/decoration at all — bare UA blue
+   for package consumers. It reads as an inline result link: brand ink + quiet underline that
+   answers hover. */
+.tcrn-knowledge-search-results__head a {
+  color: var(--tcrn-color-brand-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in srgb, var(--tcrn-color-brand-primary) 35%, transparent);
+}
+.tcrn-knowledge-search-results__head a:hover {
+  text-decoration-color: var(--tcrn-color-brand-primary);
+}
+
+/* Component-loop primitives: each rule stays package-owned and token-led so the
+   exported CSS can be consumed without importing the React implementation. */
+.tcrn-switch {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--tcrn-space-1) var(--tcrn-space-2);
+  align-items: center;
+  min-width: 0;
+  color: var(--tcrn-color-text-primary);
+  cursor: pointer;
+}
+.tcrn-switch__control {
+  appearance: none;
+  inline-size: 42px;
+  block-size: 24px;
+  margin: 0;
+  border: 1px solid var(--tcrn-color-border-control);
+  border-radius: var(--tcrn-radius-pill);
+  background: var(--tcrn-color-surface-muted);
+  box-shadow: inset 0 0 0 3px var(--tcrn-color-surface-muted);
+  cursor: pointer;
+}
+.tcrn-switch__control::before {
+  display: block;
+  inline-size: 16px;
+  block-size: 16px;
+  margin: 3px;
+  border-radius: 50%;
+  background: var(--tcrn-color-text-secondary);
+  content: "";
+  transition: transform var(--tcrn-motion-fast) var(--tcrn-motion-comprehension), background var(--tcrn-motion-fast) var(--tcrn-motion-comprehension);
+}
+.tcrn-switch__control:checked {
+  border-color: var(--tcrn-color-brand-primary);
+  background: var(--tcrn-color-brand-primary-bg);
+}
+.tcrn-switch__control:checked::before {
+  background: var(--tcrn-color-brand-primary);
+  transform: translateX(18px);
+}
+.tcrn-switch__control:focus-visible {
+  outline: 3px solid var(--tcrn-color-focus-ring);
+  outline-offset: 2px;
+}
+.tcrn-switch__label {
+  min-width: 0;
+  font-weight: var(--tcrn-type-weight-medium);
+}
+.tcrn-switch__description {
+  grid-column: 2;
+  min-width: 0;
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+  line-height: var(--tcrn-type-line-caption);
+}
+.tcrn-switch--disabled {
+  color: var(--tcrn-color-text-muted);
+  cursor: not-allowed;
+}
+.tcrn-switch--disabled .tcrn-switch__control {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.tcrn-stat-card {
+  display: grid;
+  gap: var(--tcrn-space-1);
+  min-width: 0;
+  padding: var(--tcrn-space-3);
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-surface);
+  background: var(--tcrn-color-surface-panel);
+}
+.tcrn-stat-card__label,
+.tcrn-stat-card__note {
+  min-width: 0;
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+  line-height: var(--tcrn-type-line-caption);
+}
+.tcrn-stat-card__value {
+  min-width: 0;
+  color: var(--tcrn-color-text-primary);
+  font-size: var(--tcrn-type-size-heading-2);
+  line-height: var(--tcrn-type-line-section);
+  overflow-wrap: anywhere;
+}
+.tcrn-stat-card--positive .tcrn-stat-card__value {
+  color: var(--tcrn-color-state-ready);
+}
+.tcrn-stat-card--warning .tcrn-stat-card__value {
+  color: var(--tcrn-color-state-warning);
+}
+.tcrn-stat-card--danger .tcrn-stat-card__value {
+  color: var(--tcrn-color-state-blocked);
+}
+
+.tcrn-setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.8fr) max-content;
+  gap: var(--tcrn-space-3);
+  align-items: center;
+  min-width: 0;
+  padding-block: var(--tcrn-space-2);
+  border-block-end: 1px solid var(--tcrn-color-border-subtle);
+}
+.tcrn-setting-row__label,
+.tcrn-setting-row__control,
+.tcrn-setting-row__tools {
+  min-width: 0;
+}
+.tcrn-setting-row__label {
+  display: grid;
+  gap: var(--tcrn-space-0h);
+}
+.tcrn-setting-row__key {
+  color: var(--tcrn-color-text-tertiary);
+  font-family: var(--tcrn-type-family-mono);
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-setting-row__name {
+  color: var(--tcrn-color-text-primary);
+  font-weight: var(--tcrn-type-weight-medium);
+}
+.tcrn-setting-row__description {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+  line-height: var(--tcrn-type-line-caption);
+}
+.tcrn-setting-row__control {
+  display: flex;
+  justify-content: flex-start;
+}
+.tcrn-setting-row__tools {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--tcrn-space-2);
+}
+.tcrn-setting-row__modified {
+  inline-size: var(--tcrn-state-dot-size);
+  block-size: var(--tcrn-state-dot-size);
+  border-radius: 50%;
+  background: var(--tcrn-color-state-warning);
+}
+.tcrn-setting-row__reset {
+  min-height: 32px;
+  padding-inline: var(--tcrn-space-2);
+  border: 1px solid var(--tcrn-color-border-control);
+  border-radius: var(--tcrn-radius-control);
+  background: transparent;
+  color: var(--tcrn-color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.tcrn-setting-row__reset:hover {
+  border-color: var(--tcrn-color-brand-primary);
+  color: var(--tcrn-color-brand-primary);
+}
+
+.tcrn-field-provenance {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  gap: var(--tcrn-space-2);
+  align-items: center;
+  min-width: 0;
+  padding: var(--tcrn-space-2);
+  border: 1px dashed var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-surface-muted);
+}
+.tcrn-field-provenance__value {
+  min-width: 0;
+  color: var(--tcrn-color-text-primary);
+  overflow-wrap: anywhere;
+}
+.tcrn-field-provenance__source {
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-field-provenance__action {
+  display: inline-flex;
+  align-items: center;
+}
+.tcrn-field-provenance--overridden {
+  border-style: solid;
+  border-color: var(--tcrn-selection-edge);
+  background: var(--tcrn-selection-fill);
+}
+
+.tcrn-line-numbered-editor {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--tcrn-color-border-control);
+  border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-surface-panel);
+}
+.tcrn-line-numbered-editor__gutter {
+  min-inline-size: 44px;
+  max-block-size: 260px;
+  margin: 0;
+  padding: var(--tcrn-space-2) var(--tcrn-space-2) var(--tcrn-space-2) var(--tcrn-space-1);
+  overflow: hidden;
+  border-inline-end: 1px solid var(--tcrn-color-border-subtle);
+  color: var(--tcrn-color-text-tertiary);
+  font-family: var(--tcrn-type-family-mono);
+  font-size: var(--tcrn-type-size-meta);
+  line-height: var(--tcrn-type-line-ui);
+  list-style: none;
+  text-align: end;
+  user-select: none;
+}
+.tcrn-line-numbered-editor__gutter li {
+  min-block-size: var(--tcrn-type-line-ui);
+}
+.tcrn-line-numbered-editor__gutter li[data-editor-line-finding="true"] {
+  color: var(--tcrn-color-state-warning);
+  font-weight: var(--tcrn-type-weight-strong);
+}
+.tcrn-line-numbered-editor__gutter li.tcrn-line-numbered-editor__line--danger {
+  color: var(--tcrn-color-state-blocked);
+}
+.tcrn-line-numbered-editor__content {
+  display: grid;
+  gap: var(--tcrn-space-2);
+  min-width: 0;
+}
+.tcrn-line-numbered-editor__control {
+  min-block-size: 260px;
+  resize: vertical;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--tcrn-type-family-mono);
+  line-height: var(--tcrn-type-line-ui);
+}
+.tcrn-line-numbered-editor__control:focus-visible {
+  outline: 3px solid var(--tcrn-color-focus-ring);
+  outline-offset: -3px;
+}
+.tcrn-line-numbered-editor__findings {
+  display: grid;
+  gap: var(--tcrn-space-1);
+  margin: 0;
+  padding: 0 var(--tcrn-space-2) var(--tcrn-space-2);
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+  list-style: none;
+}
+.tcrn-line-numbered-editor__finding--warning,
+.tcrn-line-numbered-editor__finding--danger {
+  color: var(--tcrn-color-state-warning);
+}
+.tcrn-line-numbered-editor__finding--danger {
+  color: var(--tcrn-color-state-blocked);
+}
+.tcrn-line-numbered-editor__finding-line {
+  margin-inline-end: var(--tcrn-space-2);
+  font-family: var(--tcrn-type-family-mono);
+  font-weight: var(--tcrn-type-weight-strong);
+}
+
+.tcrn-app-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tcrn-space-2) var(--tcrn-space-3);
+  min-width: 0;
+  padding: var(--tcrn-space-2) var(--tcrn-space-3);
+  border-block-start: 1px solid var(--tcrn-color-border-subtle);
+  background: var(--tcrn-color-surface-muted);
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+}
+.tcrn-app-status-bar__command {
+  min-width: 0;
+  color: var(--tcrn-color-text-secondary);
+  font-family: var(--tcrn-type-family-mono);
+  overflow-wrap: anywhere;
+}
+.tcrn-app-status-bar__state {
+  min-width: 0;
+  color: var(--tcrn-color-text-primary);
+  font-weight: var(--tcrn-type-weight-medium);
+}
+.tcrn-app-status-bar__action {
+  margin-inline-start: auto;
+}
+
+.tcrn-definition-list {
+  display: grid;
+  gap: var(--tcrn-space-3);
+  margin: 0;
+}
+.tcrn-definition-list__item {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
+  gap: var(--tcrn-space-3);
+  min-width: 0;
+}
+.tcrn-definition-list__term {
+  color: var(--tcrn-color-text-secondary);
+  font-weight: var(--tcrn-type-weight-medium);
+}
+.tcrn-definition-list__definition {
+  min-width: 0;
+  margin: 0;
+  color: var(--tcrn-color-text-primary);
+  overflow-wrap: anywhere;
+}
+.tcrn-definition-list--dense {
+  gap: var(--tcrn-space-1);
+}
+.tcrn-definition-list--dense .tcrn-definition-list__item {
+  gap: var(--tcrn-space-2);
+}
+
+.tcrn-lock-hint {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--tcrn-space-1);
+  max-inline-size: 100%;
+  color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
+  line-height: var(--tcrn-type-line-caption);
+}
+.tcrn-lock-hint__icon {
+  flex: 0 0 auto;
+  color: var(--tcrn-color-state-warning);
+}
+.tcrn-lock-hint__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .tcrn-setting-row {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  .tcrn-setting-row__control {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .tcrn-setting-row__tools {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .tcrn-definition-list__item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--tcrn-space-1);
+  }
+}
+
+/* Overlay dialog + popover grid (.alpha-overlay-demo__dialog stays doc-side) */
+.tcrn-dialog,
+.tcrn-popover {
+  display: grid;
+  gap: var(--tcrn-space-2h);
+}
+
+.tcrn-popover {
+  z-index: var(--tcrn-z-popover);
+  max-width: 420px;
+  border-color: color-mix(in srgb, var(--tcrn-color-brand-primary) 24%, transparent);
+  box-shadow: var(--tcrn-elevation-floating);
+}
+
+/* Reduced-motion + forced-colors handling for the relocated component families. */
+@media (prefers-reduced-motion: reduce) {
+  .tcrn-skeleton::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .tcrn-tooltip__content,
+  .tcrn-collapsible-region,
+  .tcrn-field {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .tcrn-field:focus-within,
+  .tcrn-field--error {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}

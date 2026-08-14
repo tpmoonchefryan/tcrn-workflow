@@ -1011,6 +1011,24 @@
         "CQ-08b: the conflicts list is empty for every operation and conflicts_planned stays reachable"
       ]
     },
+    "tests/init033-install-surface.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 16,
+      "testNames": [
+        "S261 install manifest is closed, placeholder-only, and complete",
+        "S261 independent required-item catalog rejects a manifest item deletion",
+        "install-manifest is a deterministic read-only CLI verb"
+      ]
+    },
+    "tests/cross-repo-privacy.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 11,
+      "testNames": [
+        "cross-repo privacy scans every manifest project, including exact lowercase joi-button, and stays green",
+        "cross-repo privacy red leg names an absolute path and an identity marker, then returns green after cleanup",
+        "cross-repo privacy requires a platform root"
+      ]
+    },
     "tests/p7-public-aos-requirements.test.mjs": {
       "testCount": 6,
       "assertionCount": 15,
@@ -1031,6 +1049,50 @@
         "P8 creates a closed unpublished release candidate without supported AOS releases",
         "P8 projects the generated eight-profile Core Reference bundle through the closed sanitizer",
         "P8 dogfood completes one disposable local_primary initiative with Knowledge and dry-run artifacts"
+      ]
+    },
+    "tests/platform-doctor.test.mjs": {
+      "testCount": 28,
+      "assertionCount": 69,
+      "testNames": [
+        "a complete synthetic platform container is green",
+        "an empty platform AGENTS.md is a load-bearing red leg",
+        "a missing platform AGENTS.md is named separately",
+        "a missing chain container is a distinct red leg",
+        "a container inside Git ancestry is refused",
+        "a missing Claude bridge is named separately",
+        "an empty misplaced AGENTS.md remains visible before the root is repaired",
+        "a missing --platform-root argument fails closed",
+        "S259 bridge syntax is green when root and direct-child references resolve",
+        "S259 bridge syntax names a double-at reference independently",
+        "S259 bridge syntax names a dangling target independently",
+        "S259 bridge syntax skips hidden directories and the workspace container",
+        "S264 four install-completeness legs are green on a synthetic full fixture",
+        "S264 each install-completeness leg has a distinct synthetic red reason",
+        "S264 manifest mutation is automatically probed by the wiring leg",
+        "S267 hook leg expands the container root and checks all four root-bound events",
+        "S267 hook leg turns red for a missing target independently",
+        "S267 missing settings stays a wiring red leg and does not become a hook false green",
+        "S269 launchd is green only when the manifest duty, exit status, and fresh success state agree",
+        "S269 launchd recent failure is distinct from absence",
+        "S269 launchd absence remains its own duty red leg",
+        "S269 stale successful-output state is red after a successful scheduler exit",
+        "S269 launchd label mutation is followed from the manifest",
+        "S270 install wiring executes every safe manifest probe, including codex config and three launchers",
+        "S270 helper copies reject a declared digest mismatch",
+        "S270 lstat plus file-kind probing rejects a directory in a file residence",
+        "S270 unsupported acceptanceProbe syntax is a red leg rather than a shell execution",
+        "S273 trust archive freshness compares the archive to all installed consumers and marker versions"
+      ]
+    },
+    "tests/platform-chain-backup.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 17,
+      "testNames": [
+        "S272 backup CLI requires an explicit platform root and rejects extra flags",
+        "S272 creates a tar snapshot, manifest, chain-version sidecar and local receipt",
+        "S272 retention verifies the newest snapshot before keeping fourteen",
+        "S272 uses an external gpg reference without placing encryption material in the repository"
       ]
     },
     "tests/preflight.test.mjs": {

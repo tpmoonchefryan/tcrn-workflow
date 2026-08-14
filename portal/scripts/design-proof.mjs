@@ -31,6 +31,7 @@ const upstream = process.env.TCRN_DESIGN_SYSTEM_TOKENS
 const digest = (text) => createHash("sha256").update(text).digest("hex");
 const indexPath = process.env.TCRN_PORTAL_INDEX ?? join(portalRoot, "index.html");
 const styled = [{ label: "index.html", path: indexPath }];
+const DS_COMPONENT_STYLE = /<style id="tcrn-ds-component-css" data-source="snapshot">[\s\S]*?<\/style>/u;
 
 // Literal colours in any notation. Values inside the vendored token file are
 // the design system's own definitions and are not scanned here.
@@ -71,7 +72,10 @@ try {
 // Leg 2 — no literal colours outside the token file.
 const findings = [];
 for (const target of styled) {
-  const text = await readFile(target.path, "utf8");
+  // The vendored Design System snapshot is package truth, just like tokens.css;
+  // its own literals are not portal-authored palette declarations. The separate
+  // S252 reconciliation gate proves snapshot/source/inline byte identity.
+  const text = (await readFile(target.path, "utf8")).replace(DS_COMPONENT_STYLE, "");
   for (const [index, line] of text.split("\n").entries()) {
     for (const match of line.matchAll(LITERAL_COLOUR)) {
       findings.push({ file: target.label, line: index + 1, literal: match[0], context: line.trim().slice(0, 100) });

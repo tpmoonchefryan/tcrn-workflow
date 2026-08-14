@@ -68,7 +68,7 @@ try {
     && problem?.difference?.offset > 0
     && result.restored.exitCode === 0
     && result.restored.ok === true
-    && result.restored.blockCount === 4;
+    && result.restored.blockCount >= 4;
   if (!valid) process.exitCode = 1;
 } finally {
   await rm(directory, { recursive: true, force: true });

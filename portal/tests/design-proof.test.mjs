@@ -39,13 +39,13 @@ test("S242 design-proof new legs turn red for injected violations and green afte
   assert.equal(green.report.legs.find((leg) => leg.leg === "interactive-tcrn-class-coverage").ok, true);
 
   const styled = join(directory, "inline-style.html");
-  await writeFile(styled, source.replace('<main class="tcrn-main" id="main-content">', '<main class="tcrn-main" id="main-content" style="display:block">'), "utf8");
+  await writeFile(styled, source.replace('<main class="tcrn-product-shell__main tcrn-main" id="main-content">', '<main class="tcrn-product-shell__main tcrn-main" id="main-content" style="display:block">'), "utf8");
   const redStyle = await runProof(styled);
   assert.notEqual(redStyle.status, 0);
   assert.equal(redStyle.report.legs.find((leg) => leg.leg === "no-inline-style-attributes").reasonCode, "INLINE_STYLE_ATTRIBUTE_FOUND");
 
   const unclassed = join(directory, "unclassed-control.html");
-  await writeFile(unclassed, source.replace('<button class="tcrn-nav__item"', "<button"), "utf8");
+  await writeFile(unclassed, source.replace('<button class="tcrn-nav-item"', "<button"), "utf8");
   const redClass = await runProof(unclassed);
   assert.notEqual(redClass.status, 0);
   assert.equal(redClass.report.legs.find((leg) => leg.leg === "interactive-tcrn-class-coverage").reasonCode, "INTERACTIVE_ELEMENT_CLASS_MISSING");

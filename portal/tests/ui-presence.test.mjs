@@ -41,6 +41,14 @@ const COMPONENTS = Object.freeze([
   ["engine connection", '[data-ui="engine-connection"]'],
   ["setting modified dot", '[data-ui="setting-modified-dot"]'],
   ["setting dictionary link", '[data-ui="setting-dictionary-link"]'],
+  ["returned switch", ".tcrn-switch"],
+  ["returned stat card", ".tcrn-stat-card"],
+  ["returned setting row", ".tcrn-setting-row"],
+  ["returned field provenance", ".tcrn-field-provenance"],
+  ["returned line-numbered editor", ".tcrn-line-numbered-editor"],
+  ["returned app status bar", ".tcrn-app-status-bar"],
+  ["returned definition list", ".tcrn-definition-list"],
+  ["returned lock hint", ".tcrn-lock-hint"],
   ["receipt chip", '[data-ui="receipt-chip"]'],
   ["receipt drawer", '[data-ui="receipt-drawer"]'],
 ]);
@@ -86,6 +94,8 @@ function mutateSource(source, mutation) {
   if (mutation === "persona-ghost-restore") return source.replaceAll('data-ui="persona-ghost"', 'data-ui="persona-ghost-mutated"').replaceAll('data-ui="persona-restore-field"', 'data-ui="persona-restore-field-mutated"').replaceAll('data-ui="persona-restore-all"', 'data-ui="persona-restore-all-mutated"');
   if (mutation === "receipt-click") return source.replace('$("#receipt-chip").addEventListener("click", openReceipt); ', "");
   if (mutation === "receipt-stale") return source.replace(/setText\("#receipt-chip-text", state\.receipt\.version \? [\s\S]*?\);\n    renderReceipt\(\);/u, 'setText("#receipt-chip-text", "idle");\n    renderReceipt();');
+  if (mutation === "s253-old-class") return source.replace('class="tcrn-top-bar"', 'class="tcrn-topbar"');
+  if (mutation === "s255-missing-component-css") return source.replace(".tcrn-switch {", ".tcrn-switch-mutated {");
   return source;
 }
 
@@ -196,6 +206,51 @@ async function preparePage(env = {}) {
 
 function assertDomContract(document) {
   assert.equal(document.querySelectorAll("template#ui-contract-markers").length, 0, "contract must inspect rendered DOM; marker template must be removed");
+  const dsStyle = document.querySelector('style#tcrn-ds-component-css[data-source="snapshot"]');
+  assert.ok(dsStyle, "the rendered page must inline the signed-in DS component CSS snapshot");
+  const dsCss = dsStyle?.textContent ?? "";
+  assert.deepEqual(
+    ["tcrn-button", "tcrn-field", "tcrn-input", "tcrn-select", "tcrn-textarea", "tcrn-sr-only"].filter((name) => !dsCss.includes(`.${name}`)),
+    [],
+    "the six shared component roots must come from the inlined DS snapshot",
+  );
+  const sharedRoots = ["tcrn-button", "tcrn-field", "tcrn-input", "tcrn-select", "tcrn-textarea", "tcrn-sr-only"];
+  assert.deepEqual(
+    sharedRoots.filter((name) => document.querySelectorAll(`.${name}`).length === 0),
+    [],
+    "the executed DOM must render every shared component root",
+  );
+  const returnedRoots = ["tcrn-switch", "tcrn-stat-card", "tcrn-setting-row", "tcrn-field-provenance", "tcrn-line-numbered-editor", "tcrn-app-status-bar", "tcrn-definition-list", "tcrn-lock-hint"];
+  const hasCssRoot = (name) => new RegExp(`\\.${name}(?=[\\s,{:>+~]|$)`, "u").test(dsCss);
+  assert.deepEqual(
+    returnedRoots.filter((name) => !hasCssRoot(name)),
+    [],
+    "the executed page must consume every returned construct from the inlined DS snapshot",
+  );
+  assert.deepEqual(
+    returnedRoots.filter((name) => document.querySelectorAll(`.${name}`).length === 0),
+    [],
+    "the executed DOM must render every returned DS construct",
+  );
+  const alignedSelectors = [
+    ["product shell", ".tcrn-product-shell"],
+    ["top bar", "header.tcrn-top-bar"],
+    ["side navigation", ".tcrn-side-nav"],
+    ["workspace section tabs", '[data-ui="workspace-tabs"].tcrn-section-tabs'],
+    ["entity section tabs", '[data-ui="entity-tabs"].tcrn-section-tabs'],
+    ["surface", ".tcrn-surface"],
+    ["detail inspector", "#persona-detail.tcrn-detail-inspector"],
+    ["knowledge TOC rail", "#prose-directory.tcrn-knowledge-toc-rail"],
+    ["receipt badge", "#receipt-chip.tcrn-badge"],
+    ["detail drawer", "#receipt-drawer.tcrn-detail-drawer"],
+    ["readback panel", "#receipt-body.tcrn-readback-panel"],
+    ["activity feed", "#dashboard-audit.tcrn-work-activity-feed"],
+  ];
+  assert.deepEqual(
+    alignedSelectors.filter(([, selector]) => !document.querySelector(selector)),
+    [],
+    "the executed DOM must expose the S253 DS class alignment",
+  );
   const missing = missingComponents(document);
   assert.deepEqual(missing, [], `rendered DOM components absent: ${JSON.stringify(missing)}`);
   assert.ok(document.querySelector('[data-ui="assignment-addline"] select, [data-ui="assignment-addline"] input, [data-ui="assignment-addline"] button'), "assignment addline must expose controls");
@@ -278,7 +333,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
     const fixture = await scratch("tcrn-inc151-health-dom-");
     const page = await loadExecutedDom(fixture, { TCRN_PORTAL_ACTOR: "   " });
     try {
-      assert.match(page.document.querySelector("#health-chip").className, /tcrn-chip--blocked/u);
+      assert.match(page.document.querySelector("#health-chip").className, /tcrn-badge--danger/u);
       assert.equal(page.document.querySelector("#stat-health").textContent, "2/3");
       assert.match(page.document.querySelector("#health-list").textContent, /actor.*failed/iu);
     } finally { page.child.kill(); await rm(fixture.base, { recursive: true, force: true }); }
@@ -290,7 +345,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
       const locale = page.document.querySelector("#locale-select");
       locale.value = "zh-CN";
       locale.dispatchEvent(new page.window.Event("change", { bubbles: true }));
-      const definition = page.document.querySelector(".tcrn-term__definition")?.textContent || "";
+      const definition = page.document.querySelector(".tcrn-definition-list__definition")?.textContent || "";
       assert.match(definition, /协调受约束的工作流决策|将意图转为可执行计划|检查证据并报告差异/u);
       assert.doesNotMatch(definition, /Coordinates bounded workflow decisions|Turns intent into an executable plan|Checks evidence and reports discrepancies/u);
       assert.equal(page.document.querySelector('[data-i18n="dashboard.chain"]')?.textContent, "链版本");

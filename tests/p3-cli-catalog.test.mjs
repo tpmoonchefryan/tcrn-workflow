@@ -53,7 +53,7 @@ test("unknown verbs fail closed and every cataloged verb dispatches", async () =
     const outcome = await invoke([entry.name]);
     // `commands` and the read-only vocabulary surface are zero-argument verbs.
     // requires an explicit closed-roster --profile-id and must fail without it.
-    if (entry.name === "commands" || entry.name === "vocabulary") {
+    if (entry.name === "commands" || entry.name === "install-manifest" || entry.name === "vocabulary") {
       assert.equal(outcome.ok, true, `${entry.name} resolves with no flags`);
       continue;
     }

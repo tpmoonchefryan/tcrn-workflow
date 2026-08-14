@@ -14,7 +14,10 @@ import { pathToFileURL } from "node:url";
 import { repositoryRoot, toPosixPath, walkFiles } from "./lib/files.mjs";
 
 const execFileAsync = promisify(execFile);
-const EVIDENCE_ROOT = "docs/reports/init-028-design/evidence/";
+const EVIDENCE_ROOTS = [
+  "docs/reports/init-028-design/evidence/",
+  "docs/reports/init-029-component-loop/evidence/",
+];
 const DESIGN_PROOF = "portal/scripts/design-proof.mjs";
 const HOST_ROLE_SCAN = "rg -n 'claude-code|codex|reviewer|role ===|host ===|host \\?' portal/index.html";
 const EXPECTED_DESIGN_LEGS = [
@@ -124,7 +127,7 @@ async function evidenceBlocks() {
   }
   const files = (await walkFiles())
     .map((path) => toPosixPath(relative(repositoryRoot, path)))
-    .filter((path) => path.startsWith(EVIDENCE_ROOT) && path.endsWith(".md"))
+    .filter((path) => EVIDENCE_ROOTS.some((root) => path.startsWith(root)) && path.endsWith(".md"))
     .sort();
   const blocks = [];
   for (const path of files) blocks.push(...parseVerbatimBlocks(await readFile(resolve(repositoryRoot, path), "utf8"), path));
