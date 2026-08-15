@@ -62,7 +62,7 @@ design-proof 腿名由下面的 verbatim 块逐字校验：
 ```verbatim:node scripts/verbatim-evidence-proof.mjs inc140-design-proof
 {
   "proof": "portal/scripts/design-proof.mjs",
-  "legCount": 12,
+  "legCount": 13,
   "legNames": [
     "token-fidelity",
     "brand-asset-fidelity",
@@ -75,7 +75,8 @@ design-proof 腿名由下面的 verbatim 块逐字校验：
     "portal-layout-invariants",
     "editor-focus-boundary",
     "topbar-four-width-single-line",
-    "sidenav-v4-style-invariants"
+    "sidenav-v4-style-invariants",
+    "ds-control-box-ownership"
   ]
 }
 ```

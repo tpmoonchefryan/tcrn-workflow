@@ -56,6 +56,25 @@ test("INIT-036 S276 design-proof legs turn red for injected violations and green
   assert.equal(green.report.legs.find((leg) => leg.leg === "sidenav-v4-style-invariants").ok, true);
   assert.equal(green.report.legs.find((leg) => leg.leg === "no-inline-style-attributes").ok, true);
   assert.equal(green.report.legs.find((leg) => leg.leg === "interactive-tcrn-class-coverage").ok, true);
+  assert.equal(green.report.legs.find((leg) => leg.leg === "ds-control-box-ownership").ok, true);
+
+  // INC-196: the switch shipped carrying .tcrn-input beside .tcrn-switch__control,
+  // so the text-field base won min-height and padding and the 42x24 pill rendered
+  // 42x34. Re-injecting that second class is the red direction. The leg is green
+  // for the compositions the DS itself reconciles — search control, textarea
+  // editor, brand lockup, icon button — which the green assertion above covers.
+  const contestedBox = join(directory, "contested-control-box.html");
+  await writeFile(
+    contestedBox,
+    source.replace('<input class="tcrn-switch__control" type="checkbox" role="switch"', '<input class="tcrn-switch__control tcrn-input" type="checkbox" role="switch"'),
+    "utf8",
+  );
+  const redBox = await runProof(contestedBox);
+  assert.notEqual(redBox.status, 0);
+  const contestedLeg = redBox.report.legs.find((leg) => leg.leg === "ds-control-box-ownership");
+  assert.equal(contestedLeg.reasonCode, "DS_CONTROL_BOX_CONTESTED");
+  assert.ok(contestedLeg.findings.some((finding) => finding.owner === "tcrn-switch__control"
+    && finding.conflicting === "tcrn-input"));
 
   const styled = join(directory, "inline-style.html");
   await writeFile(styled, source.replace('<main class="tcrn-product-shell__main tcrn-main" id="main-content">', '<main class="tcrn-product-shell__main tcrn-main" id="main-content" style="display:block">'), "utf8");
@@ -179,11 +198,38 @@ test("INIT-036 S276 design-proof legs turn red for injected violations and green
   assert.notEqual(redDeclaration.status, 0);
   assert.equal(redDeclaration.report.legs.find((leg) => leg.leg === "public-v4-baseline").reasonCode, "PUBLIC_V4_BASELINE_INVALID");
 
+  // INC-197: the count is compared against the versioned roster rather than pinned
+  // to a literal here. A literal was the original defect in two places at once —
+  // the gate froze 51 while reading its baseline from HEAD, so committing the
+  // portal rewrite moved the baseline to 64 and turned this assertion red on a
+  // change that added nothing unregistered.
   const coverageGreen = await runCoverageProof(baseline);
   assert.equal(coverageGreen.status, 0);
   assert.equal(coverageGreen.report.reasonCode, "COMPONENT_COVERAGE_CONSERVATION_GREEN");
-  assert.equal(coverageGreen.report.portalOwnedClassBaseline.actualCount, 51);
+  assert.equal(
+    coverageGreen.report.portalOwnedClassBaseline.actualCount,
+    coverageGreen.report.portalOwnedClassBaseline.expectedCount,
+  );
+  assert.ok(coverageGreen.report.portalOwnedClassBaseline.expectedCount > 0);
   assert.equal(coverageGreen.report.returnedComponents.rows.length, 9);
+
+  // The second direction the HEAD baseline could not express: a class root the
+  // portal defines without listing it in the roster.
+  const unregisteredRoot = join(directory, "coverage-unregistered-root.html");
+  const portalStyleClose = source.lastIndexOf("</style>");
+  await writeFile(
+    unregisteredRoot,
+    `${source.slice(0, portalStyleClose)}\n.tcrn-unregistered-probe { color: inherit; }\n${source.slice(portalStyleClose)}`,
+    "utf8",
+  );
+  const redUnregistered = await runCoverageProof(unregisteredRoot);
+  assert.notEqual(redUnregistered.status, 0);
+  assert.equal(redUnregistered.report.reasonCode, "COMPONENT_COVERAGE_CONSERVATION_RED");
+  assert.equal(
+    redUnregistered.report.portalOwnedClassBaseline.rows
+      .find((row) => row.className === "tcrn-unregistered-probe").status,
+    "unregistered",
+  );
 
   const renamedClasses = join(directory, "coverage-renamed.html");
   await writeFile(renamedClasses, source.replaceAll("tcrn-top-bar", "tcrn-topbar"), "utf8");

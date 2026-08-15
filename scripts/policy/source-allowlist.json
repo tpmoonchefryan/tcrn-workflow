@@ -402,6 +402,7 @@
     "scripts/policy/failure-pattern-register.json",
     "scripts/policy/guard-registry.json",
     "scripts/policy/history-policy.json",
+    "scripts/policy/portal-class-roots.json",
     "scripts/policy/rc1-inputs.json",
     "scripts/policy/source-allowlist.json",
     "scripts/policy/ssh-breakglass-allowlist.json",

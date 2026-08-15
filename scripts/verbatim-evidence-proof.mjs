@@ -33,6 +33,7 @@ const EXPECTED_DESIGN_LEGS = [
   "editor-focus-boundary",
   "topbar-four-width-single-line",
   "sidenav-v4-style-invariants",
+  "ds-control-box-ownership",
 ];
 
 function json(value) {

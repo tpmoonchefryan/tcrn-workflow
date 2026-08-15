@@ -134,10 +134,16 @@ CLEAN_VERIFY_EXIT=0
 ```
 
 上面的元判据一和健康树块是历史复现的摘录，明确标为 `excerpt`，不冒充
-当前 HEAD 的逐字输出。当前实现的 i18n 读回统一走真实 `legs` 容器；下面的
-`verbatim:` 块由 INC-156 机械脚本每次在当前树重跑并逐字比对：
+当前 HEAD 的逐字输出。当前实现的 i18n 读回统一走真实 `legs` 容器。
 
-```verbatim:node scripts/verbatim-evidence-proof.mjs inc149-i18n-current
+下面这块原为 `verbatim:`，INC-197 将其降为 `excerpt`：`i18n-proof` 的
+`addedKeyCount` 以 `HEAD:portal/locales.js` 为基线，量的是"相对 HEAD 新增了
+多少键"。INC-192 的十六条 ⓘ 文案（五语共 79 键）被提交带入 HEAD 之后，同一条
+命令在当前树上必然读出 `0`，与此处记录的 `79` 不再逐字相同。79 是 INC-149 当时
+测得的事实，故保留原数不改；能被逐字重跑的只有不依赖 HEAD 的块，此块不在其列。
+该命令本身今日仍返回 `I18N_CONTRACT_SATISFIED`。
+
+```excerpt
 {
   "sourceCommand": "node portal/scripts/i18n-proof.mjs",
   "ok": true,

@@ -504,6 +504,68 @@ legs.push({
   findings: sidenavFindings,
 });
 
+// INC-196: a DS class whose own rule declares a complete control box owns that
+// box, and no second DS class may redeclare its metrics. The switch shipped with
+// .tcrn-input beside .tcrn-switch__control, so the text-field base won min-height
+// and padding: the 42x24 pill measured 42x34 and the knob floated inside it. The
+// INC-191 legs assert that a control carries the *right* DS class; none asserted
+// that it carries no conflicting one, so the defect stayed green.
+//
+// Ownership is read out of the snapshot rather than a local roster: only a
+// standalone `.class` rule that sets appearance:none *and* both fixed axes counts
+// as a self-contained box. That is what keeps the four legitimate compositions
+// green — the search control and the editor control own no standalone rule (the
+// DS scopes and neutralises them itself), and the icon button sets no appearance,
+// so none of them is an owner and none is flagged.
+// Comments are stripped first: a selector list is captured as everything since
+// the previous rule, so a comment sitting above it would ride along and no
+// single-class selector would ever match. That is not hypothetical — it made
+// this leg green against the very defect it was written for until the red leg
+// caught it.
+const dsBlock = (DS_COMPONENT_STYLE.exec(indexText)?.[0] ?? "").replace(/\/\*[\s\S]*?\*\//gu, "");
+const declarationsByClass = new Map();
+for (const rule of dsBlock.matchAll(/([^{}]+)\{([^{}]*)\}/gu)) {
+  const body = rule[2];
+  for (const selector of rule[1].split(",")) {
+    const standalone = /^\s*\.(tcrn-[a-z0-9_-]+)\s*$/u.exec(selector);
+    if (!standalone) continue;
+    const existing = declarationsByClass.get(standalone[1]) ?? "";
+    declarationsByClass.set(standalone[1], `${existing}${body}`);
+  }
+}
+const declares = (className, property) =>
+  new RegExp(`(?:^|;)\\s*${property}\\s*:`, "u").test(declarationsByClass.get(className) ?? "");
+const ownsItsBox = (className) => declares(className, "appearance")
+  && declares(className, "inline-size")
+  && declares(className, "block-size");
+const redeclaresBox = (className) => ["min-height", "padding", "border-radius"]
+  .some((property) => declares(className, property));
+
+const boxFindings = [];
+for (const attribute of indexText.matchAll(/class=(?:"|')([^"']*)(?:"|')/gu)) {
+  const classes = attribute[1].split(/\s+/u)
+    .filter((name) => name.startsWith("tcrn-") && !name.includes("${") && declarationsByClass.has(name));
+  for (const owner of classes.filter(ownsItsBox)) {
+    for (const intruder of classes.filter((name) => name !== owner && redeclaresBox(name))) {
+      boxFindings.push({
+        owner,
+        conflicting: intruder,
+        classAttribute: attribute[1].slice(0, 120),
+        reason: "a second DS class redeclares metrics the owner already fixes",
+      });
+    }
+  }
+}
+legs.push({
+  leg: "ds-control-box-ownership",
+  ok: boxFindings.length === 0,
+  reasonCode: boxFindings.length === 0 ? "DS_CONTROL_BOXES_UNCONTESTED" : "DS_CONTROL_BOX_CONTESTED",
+  reference: "TCRN-CROSS-INC-196",
+  scanned: "index.html",
+  ownersFound: [...declarationsByClass.keys()].filter(ownsItsBox),
+  findings: boxFindings,
+});
+
 const ok = legs.every((leg) => leg.ok);
 process.stdout.write(`${JSON.stringify({
   ok,
