@@ -585,7 +585,15 @@ if (process.argv[2] === "status" && actual.status === 0) {
       const content = tip.querySelector('[role="tooltip"]');
       assert.ok(trigger && content);
       assert.equal(trigger.getAttribute("aria-describedby"), content.getAttribute("id"));
-      assert.ok(trigger.className.includes("tcrn-icon-button"), "the trigger names a design-system button component");
+      // INC-201: the contract is that the trigger names *a* design-system button
+      // component, which is what design-proof's button-family leg enforces. It used to
+      // be pinned to tcrn-icon-button specifically, and that class is a 38x38 control
+      // box — carrying it and then overriding its every declaration is the collision
+      // INC-196 was about, so the 16px info affordance names tcrn-button instead.
+      assert.ok(
+        ["tcrn-button", "tcrn-icon-button", "tcrn-link-button"].some((name) => trigger.classList.contains(name)),
+        "the trigger names a design-system button component",
+      );
       assert.ok(trigger.querySelector("svg"), "the icon is inline SVG, not a character the shipped font may not have");
       assert.equal(trigger.textContent.trim(), "", "no glyph stands in for the icon");
       assert.equal(content.querySelectorAll("a,button,input,select,textarea").length, 0, "the design system forbids interactive content inside a tooltip");

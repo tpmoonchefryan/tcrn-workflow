@@ -38,10 +38,10 @@
   "scan": "rg -n 'claude-code|codex|reviewer|role ===|host ===|host \\?' portal/index.html",
   "exitCode": 0,
   "matches": [
-    "3835:  const roleValue = (role) => typeof role === \"string\" ? role : role?.value;",
-    "3943:  const activePlan = (host) => { const entry = planSettingForHost(host); return state.execution?.plans?.find((plan) => plan.host === host && plan.name === entry?.currentValue); };",
-    "3945:    const values = entry.key.includes(\"SubagentPlan\") ? [\"\", ...(state.execution?.plans || []).filter((plan) => plan.host === hostFromPlanKey(entry.key)).map((plan) => plan.name)] : [...(entry.allowedValues || [])];",
-    "4067:      const hostPlans = plans.filter((plan) => plan.host === host);"
+    "3861:  const roleValue = (role) => typeof role === \"string\" ? role : role?.value;",
+    "3969:  const activePlan = (host) => { const entry = planSettingForHost(host); return state.execution?.plans?.find((plan) => plan.host === host && plan.name === entry?.currentValue); };",
+    "3971:    const values = entry.key.includes(\"SubagentPlan\") ? [\"\", ...(state.execution?.plans || []).filter((plan) => plan.host === hostFromPlanKey(entry.key)).map((plan) => plan.name)] : [...(entry.allowedValues || [])];",
+    "4093:      const hostPlans = plans.filter((plan) => plan.host === host);"
   ]
 }
 ```

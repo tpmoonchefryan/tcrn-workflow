@@ -3334,6 +3334,11 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-section-tabs { margin-bottom: var(--tcrn-space-4); }
 .tcrn-manage { display: grid; grid-template-columns: 208px minmax(0, 860px); gap: var(--tcrn-space-6); align-items: start; }
 .tcrn-subnav { display: grid; gap: var(--tcrn-space-1); position: sticky; top: 0; }
+/* INC-201: the subnav is a one-column grid, so an explanation trigger emitted as the
+   item's sibling became its own row. A button may not nest inside a button, so the two
+   share one grid cell through this row instead. */
+.tcrn-subnav__row { display: flex; align-items: center; gap: var(--tcrn-space-1); }
+.tcrn-subnav__row .tcrn-subnav__item { flex: 1 1 auto; min-width: 0; }
 .tcrn-subnav__item { display: flex; align-items: center; gap: var(--tcrn-space-2); width: 100%; min-height: 34px; padding: 0 var(--tcrn-space-2h); border: 1px solid transparent; border-radius: var(--tcrn-radius-control); background: transparent; color: var(--tcrn-color-text-secondary); text-align: left; }
 .tcrn-subnav__item:hover { background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-primary); }
 .tcrn-subnav__item[aria-current="page"] { background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); font-weight: var(--tcrn-type-weight-medium); }
@@ -3402,14 +3407,35 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
    toolbar, so it takes a smaller box than the design system's default icon button.
    Everything else — the tooltip surface, its placement, and the hover/focus rule that
    reveals it — comes from the design system unchanged. */
+/* INC-201: this is a 16px icon affordance sitting beside a label, not a control box.
+   The design system's button base is a 38px box (min-height plus horizontal padding),
+   so the two axes have to be neutralised explicitly here — the same way the design
+   system neutralises its input base for its own search control. Without the
+   reset the trigger measured 16x38 and pushed every row it sat in to 38px. */
 .tcrn-concept-tip__trigger {
   inline-size: var(--tcrn-space-4);
   block-size: var(--tcrn-space-4);
+  min-block-size: 0;
+  padding: 0;
   border-color: transparent;
   color: var(--tcrn-color-text-muted);
   vertical-align: middle;
 }
+/* Hover is the only time the explanation is on screen, so the button base's hover box
+   — a control border plus a filled ground — was visible every single time anyone read
+   a tooltip. An info affordance answers with its colour, not with a box; the border
+   measured transparent at rest and a solid control grey on hover before this reset.
+   The :not([disabled]) is not decoration: the design system's own button hover rule
+   carries it, and a plain one-class-plus-pseudo selector loses to that on specificity. Matching the selector's shape is how this wins without
+   reaching for !important. */
+.tcrn-concept-tip__trigger:not([disabled]):hover,
+.tcrn-concept-tip__trigger:not([disabled]):active,
+.tcrn-concept-tip__trigger:not([disabled]):focus { border-color: transparent; background: transparent; }
 .tcrn-concept-tip__trigger:hover { color: var(--tcrn-color-text-primary); }
+/* An info affordance should not answer a mouse click with a selection box. It must
+   still answer the keyboard, or the explanation becomes mouse-only and INC-192's
+   whole point is lost — so the ring stays for :focus-visible and is tightened to
+   suit a 16px icon rather than the shell's 3px control ring. */
 .tcrn-concept-tip__trigger svg { inline-size: 13px; block-size: 13px; }
 .tcrn-vendor-directory__list .tcrn-link-button { justify-content: flex-start; text-decoration: none; }
 .tcrn-action-row { display: flex; justify-content: flex-end; gap: var(--tcrn-space-2); }
@@ -3930,7 +3956,7 @@ const BOOT = __PORTAL_BOOT__;
     if (body === `concept.${key}`) return "";
     const id = `concept-tip-${conceptTipSequence += 1}`;
     return `<span class="tcrn-tooltip" data-placement="${esc(placement)}" data-tooltip-scope="supplemental" data-tooltip-interactive-content="forbidden" data-concept-tip="${esc(key)}">`
-      + `<button type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md tcrn-icon-button tcrn-concept-tip__trigger" aria-describedby="${id}" aria-label="${esc(t("concept.explain"))}">`
+      + `<button type="button" class="tcrn-button tcrn-button--quiet tcrn-concept-tip__trigger" aria-describedby="${id}" aria-label="${esc(t("concept.explain"))}">`
       + `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v4"/><path d="M8 4.8h.01"/></svg>`
       + `</button>`
       + `<span id="${id}" role="tooltip" class="tcrn-tooltip__content">${esc(body)}</span>`
@@ -4324,7 +4350,7 @@ const BOOT = __PORTAL_BOOT__;
     // setting the engine stopped publishing — so it is checked against the list rather
     // than trusted, and falls back to the first entry instead of rendering nothing.
     if (!categories.includes(state.selectedVocabulary)) state.selectedVocabulary = categories[0];
-    $("#vocabulary-nav").innerHTML = categories.map((category) => `<button class="tcrn-subnav__item" data-vocabulary-category="${esc(category)}" aria-current="${state.selectedVocabulary === category ? "page" : "false"}">${esc(vocabularyCategoryLabel(category))}</button>${conceptTip("vocabulary." + category, "bottom")}`).join("");
+    $("#vocabulary-nav").innerHTML = categories.map((category) => `<span class="tcrn-subnav__row"><button class="tcrn-subnav__item" data-vocabulary-category="${esc(category)}" aria-current="${state.selectedVocabulary === category ? "page" : "false"}">${esc(vocabularyCategoryLabel(category))}</button>${conceptTip("vocabulary." + category, "bottom")}</span>`).join("");
     $$('[data-vocabulary-category]').forEach((button) => button.addEventListener("click", () => { state.selectedVocabulary = button.dataset.vocabularyCategory; renderVocabulary(); }));
     const terms = vocabularyRows(state.selectedVocabulary);
     const columns = vocabularyColumns(state.selectedVocabulary);
