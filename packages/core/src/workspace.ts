@@ -1922,10 +1922,35 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
   };
 }
 
+// INC-198: a view may not grow without bound. Both the graph digest and the index
+// used to canonicalise the whole record set in one value, and `canonicalJson`
+// refuses past one MiB — so a workspace that simply accumulated enough governed
+// prose stopped being readable at all, because every read verifies its views. The
+// cross-project chain crossed that line at 611 records (1.55 MiB canonical, 48%
+// over) and could no longer validate, list, show, or export.
+//
+// Both replacements keep full detection power while staying linear in record
+// count rather than in prose length. The digest hashes each record first and then
+// hashes the vector of hashes: any byte that changes inside any record still
+// changes the result. The index keeps every record's identity and status verbatim
+// and carries each extension as the digest of its value — the extension's content
+// is not lost, because views are derived and rebuildable and no read path sources
+// prose from here (reads materialise from the event log). `.v2` marks the shape.
+function digestedExtensions(extensions: WorkRecord["extensions"]): Record<string, string> {
+  const digests: Record<string, string> = {};
+  for (const key of Object.keys(extensions).sort(compareCanonicalText)) {
+    digests[key] = canonicalSha256(extensions[key]);
+  }
+  return digests;
+}
+
 function viewDocuments(state: WorkspaceState): Readonly<Record<string, string>> {
   const activeProjects = state.projects.filter((record) => !record.tombstone);
   const activeWork = state.work.filter((record) => !record.tombstone);
-  const graphDigest = canonicalSha256({ projects: activeProjects, work: activeWork });
+  const graphDigest = canonicalSha256({
+    projects: activeProjects.map((record) => canonicalSha256(record)),
+    work: activeWork.map((record) => canonicalSha256(record)),
+  });
   const readback = {
     schemaVersion: "tcrn.workspace-readback.v1",
     workspaceId: state.metadata.workspaceId,
@@ -1949,7 +1974,11 @@ function viewDocuments(state: WorkspaceState): Readonly<Record<string, string>> 
   ].join("\n");
   const views: Record<string, string> = {
     "STATUS.md": status,
-    "index.json": canonicalJson({ schemaVersion: "tcrn.workspace-index.v1", projects: activeProjects, work: activeWork }),
+    "index.json": canonicalJson({
+      schemaVersion: "tcrn.workspace-index.v2",
+      projects: activeProjects,
+      work: activeWork.map((record) => ({ ...record, extensions: digestedExtensions(record.extensions) })),
+    }),
     "readback.json": canonicalJson(readback),
   };
   // WSD-1: the extension index is a fourth view emitted ONLY when the workspace

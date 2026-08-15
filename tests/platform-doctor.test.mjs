@@ -182,6 +182,54 @@ test("S264 each install-completeness leg has a distinct synthetic red reason", a
   assert.equal(launchdRed.reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
 });
 
+test("INC-195 the snapshot train is owed only when a chain declares an automatic cadence", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const partitions = ["cross-project", "TCRN-AOS", "TCRN-Design-System", "TCRN-TMS", "Joi-Button"];
+  const allManual = Object.fromEntries(partitions.map((name) => [name, "manual"]));
+  const launchd = (result) => result.checks.find((entry) => entry.name === "launchd");
+
+  // Declared manual: an off-duty train is the declaration being honoured, not a
+  // defect. Green, but it has to say so — a silent pass would be the roster-shaped
+  // outcome Owner ruled against.
+  const manual = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [], declaredBackupCadence: allManual });
+  assert.equal(launchd(manual).ok, true);
+  assert.equal(launchd(manual).reasonCode, "PLATFORM_BACKUP_DECLARED_MANUAL");
+  assert.equal(launchd(manual).onDuty, false);
+  assert.equal(launchd(manual).freshnessAsserted, false);
+  // "supplied" rather than "chain-declaration": the field distinguishes a value
+  // this fixture injected from one actually read off a chain, so a synthetic run
+  // can never be mistaken for evidence about the real platform.
+  assert.equal(launchd(manual).cadenceSource, "supplied");
+
+  // Either automatic cadence still owes a train.
+  for (const cadence of ["gate-close", "session-end"]) {
+    const automatic = await inspectPlatform(fixture.root, {
+      homeRoot: fixture.home,
+      launchdLabels: [],
+      declaredBackupCadence: { ...allManual, "TCRN-AOS": cadence },
+    });
+    assert.equal(launchd(automatic).ok, false);
+    assert.equal(launchd(automatic).reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
+  }
+
+  // Freshness is asserted only against an automatic expectation; under `manual`
+  // the last snapshot is reported rather than required.
+  const staleButManual = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [],
+    declaredBackupCadence: allManual,
+    localSnapshotFreshness: { ok: false, latestAt: "2020-01-01T00:00:00Z", ageHours: 99_999 },
+  });
+  assert.equal(launchd(staleButManual).ok, true);
+
+  // The declaration may only relax. When it cannot be read the strict
+  // expectation stands, and the report names the read as unreadable.
+  const unreadable = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [], engineCli: "/nonexistent/engine.mjs" });
+  assert.equal(launchd(unreadable).ok, false);
+  assert.equal(launchd(unreadable).reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
+  assert.equal(launchd(unreadable).cadenceSource, "unreadable");
+});
+
 test("S264 manifest mutation is automatically probed by the wiring leg", async (context) => {
   const fixture = await completeInstallFixture(context);
   const extra = {

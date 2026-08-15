@@ -532,6 +532,43 @@ test("hand-crafted event logs fail replay closed: unknown operations, openness, 
   }
 });
 
+test("INC-198 index size follows record count rather than extension prose, and still detects a prose change", async (context) => {
+  const fixture = await workspaceFixture(context, { externalKey: "WORKSPACE-BOUNDED" });
+  const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(1) });
+  context.after(() => lease.release().catch(() => undefined));
+  let state = await createProject(fixture.workspace, lease, {
+    expectedVersion: 0, occurredAt: instant(1), externalKey: "PROJECT-BOUNDED", name: "Bounded",
+  });
+  state = await createWork(fixture.workspace, lease, {
+    expectedVersion: 1, occurredAt: instant(2), projectId: state.projects[0].id, externalKey: "INITIATIVE-BOUNDED", kind: "Initiative", parentId: null,
+  });
+  const viewsRoot = join(fixture.workspace, ".tcrn-workflow", "views");
+  const indexBytes = async () => (await readFile(join(viewsRoot, "index.json"), "utf8")).length;
+  const digest = async () => JSON.parse(await readFile(join(viewsRoot, "readback.json"), "utf8")).graphDigest;
+
+  const small = await annotateWork(fixture.workspace, lease, {
+    expectedVersion: 2, occurredAt: instant(3), id: state.work[0].id, scope: "x",
+  });
+  const smallSize = await indexBytes();
+  const smallDigest = await digest();
+
+  // 8_000 characters is just under PROTOCOL_LIMITS.maxStringLength. Under the
+  // previous index — which carried extension values verbatim — this single record
+  // would have added those 8_000 bytes to the index, and a few hundred such records
+  // pushed the whole view past the one-MiB canonical ceiling and made the workspace
+  // unreadable. The index now carries the extension's digest, so the growth here is
+  // a fixed-width hash, not the prose.
+  await annotateWork(fixture.workspace, lease, {
+    expectedVersion: small.version, occurredAt: instant(4), id: state.work[0].id, scope: "y".repeat(8_000),
+  });
+  const largeSize = await indexBytes();
+  const largeDigest = await digest();
+
+  assert.ok(largeSize - smallSize < 200, `index grew by ${largeSize - smallSize} bytes; prose must not enter the index`);
+  // Detection power is the half that must not be traded away for the bound.
+  assert.notEqual(largeDigest, smallDigest, "a scope change must still move the graph digest");
+});
+
 test("a workspace with zero conference/gate events keeps pre-change golden view bytes, view set, and export digest", async (context) => {
   const fixture = await workspaceFixture(context, { externalKey: "WORKSPACE-GOLDEN" });
   const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(1) });
@@ -551,8 +588,24 @@ test("a workspace with zero conference/gate events keeps pre-change golden view 
   assert.deepEqual(state.gates, []);
   const viewsRoot = join(fixture.workspace, ".tcrn-workflow", "views");
   assert.deepEqual((await readdir(viewsRoot)).sort(), ["STATUS.md", "index.json", "readback.json"], "extensions.json is absent");
-  // Golden bytes captured from the pre-WSD-1 build of this exact scenario: the
-  // legacy views must stay byte-identical for extension-free workspaces.
+  // Golden bytes. These were the pre-WSD-1 bytes until INC-198 re-derived both the
+  // graph digest and the index payload; the values below are that build's.
+  //
+  // Residual-applicability analysis for replacing rather than coexisting, per the
+  // platform's constraint-evolution convention: the previous form canonicalised the
+  // entire record set into one value, and `canonicalJson` fails closed past one
+  // MiB. A workspace that accumulated enough governed prose therefore stopped
+  // validating, listing, showing and exporting — cross-project reached 1.55 MiB at
+  // 611 records and could not be read at all. So the old path does not still hold
+  // for some supported user; it holds only until a chain grows, and then it bricks
+  // it. Keeping it as a conditional would make view bytes depend on workspace size,
+  // which is a worse invariant than changing them once. Hence a replacement with a
+  // schema bump (`tcrn.workspace-index.v2`) rather than a coexisting variant, and
+  // hence this fixture moves.
+  //
+  // Detection power is unchanged: the digest hashes each record and then the vector
+  // of hashes, and the index carries each extension's digest, so any byte that
+  // changes anywhere in a record still moves these bytes.
   assert.equal(await readFile(join(viewsRoot, "STATUS.md"), "utf8"), [
     "# Workspace Status",
     "",
@@ -560,17 +613,17 @@ test("a workspace with zero conference/gate events keeps pre-change golden view 
     "- Version: 3",
     "- Projects: 1",
     "- Work records: 1",
-    "- Graph digest: `07828d3f4177f8e9db723b6d0d8194f47b7c66185413b59718aa58443f5be835`",
+    "- Graph digest: `6d239441516ff6820afdd3f15a31f149ce3d3928606d3e76f115ba6e1addb336`",
     "- Authority: derived and rebuildable from the event chain",
     "",
   ].join("\n"));
   assert.equal(
     await readFile(join(viewsRoot, "index.json"), "utf8"),
-    "{\"projects\":[{\"externalKey\":\"PROJECT-GOLDEN\",\"id\":\"project:0bf1a7f60bdb47a6be9f4586\",\"name\":\"Golden\",\"revision\":1,\"schemaVersion\":\"tcrn.project.v1\",\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:01Z\"}],\"schemaVersion\":\"tcrn.workspace-index.v1\",\"work\":[{\"extensions\":{},\"externalKey\":\"INITIATIVE-GOLDEN\",\"id\":\"work:7370232bfce90e21835d2977\",\"kind\":\"Initiative\",\"parentId\":null,\"projectId\":\"project:0bf1a7f60bdb47a6be9f4586\",\"revision\":2,\"schemaVersion\":\"tcrn.work.v1\",\"status\":\"ready\",\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:03Z\"}]}\n",
+    "{\"projects\":[{\"externalKey\":\"PROJECT-GOLDEN\",\"id\":\"project:0bf1a7f60bdb47a6be9f4586\",\"name\":\"Golden\",\"revision\":1,\"schemaVersion\":\"tcrn.project.v1\",\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:01Z\"}],\"schemaVersion\":\"tcrn.workspace-index.v2\",\"work\":[{\"extensions\":{},\"externalKey\":\"INITIATIVE-GOLDEN\",\"id\":\"work:7370232bfce90e21835d2977\",\"kind\":\"Initiative\",\"parentId\":null,\"projectId\":\"project:0bf1a7f60bdb47a6be9f4586\",\"revision\":2,\"schemaVersion\":\"tcrn.work.v1\",\"status\":\"ready\",\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:03Z\"}]}\n",
   );
   assert.equal(
     await readFile(join(viewsRoot, "readback.json"), "utf8"),
-    "{\"authority\":\"derived-rebuildable\",\"graphDigest\":\"07828d3f4177f8e9db723b6d0d8194f47b7c66185413b59718aa58443f5be835\",\"headEventHash\":\"ed12d354e1286fa89f897ad8b5259d4bc2bc90f56a586ae02c46bb58e1c0ffa4\",\"projectCount\":1,\"schemaVersion\":\"tcrn.workspace-readback.v1\",\"version\":3,\"workCount\":1,\"workspaceId\":\"workspace:fefacf6fbd4eba98d40fdf99\"}\n",
+    "{\"authority\":\"derived-rebuildable\",\"graphDigest\":\"6d239441516ff6820afdd3f15a31f149ce3d3928606d3e76f115ba6e1addb336\",\"headEventHash\":\"ed12d354e1286fa89f897ad8b5259d4bc2bc90f56a586ae02c46bb58e1c0ffa4\",\"projectCount\":1,\"schemaVersion\":\"tcrn.workspace-readback.v1\",\"version\":3,\"workCount\":1,\"workspaceId\":\"workspace:fefacf6fbd4eba98d40fdf99\"}\n",
   );
   const exported = await exportWorkspace(fixture.workspace);
   assert.equal(canonicalSha256(assertCanonicalJson(exported)).length, 64);

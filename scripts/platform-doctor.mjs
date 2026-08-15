@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { promisify } from "node:util";
 import { dirname, join, parse, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // The install manifest is the only path/residence authority. The doctor consumes
 // the built public core so the same bytes are used by the CLI's install-manifest
@@ -557,13 +557,80 @@ async function inspectTrustArchiveFreshness(platformRoot, homeRoot, manifest, op
   }
 }
 
+// INC-195. Whether an automatic snapshot train is owed is a question the chains
+// already answer: `backup.cadence` is the workspace's declaration of how backup
+// happens, and `manual` is the legal way to say "on request, not on a timer".
+// The probe's label stays the authority on *which* job, never on whether one is
+// owed, and there is no roster of hosts excused from the requirement — Owner
+// ruled against passing a red by local memory, so the relaxation is derived from
+// the declaration or it does not happen.
+//
+// The declaration can only relax, never tighten: an unreadable chain leaves the
+// strict expectation standing and says so in `cadenceSource`. Reading it through
+// the sibling CLI rather than the installed copy is deliberate — the doctor
+// judges the tree it ships in, and the installed copy cannot currently replay
+// cross-project at all (INC-194).
+const AUTOMATIC_CADENCES = new Set(["gate-close", "session-end"]);
+
+async function declaredBackupCadences(options, platformRoot) {
+  if (options.declaredBackupCadence && typeof options.declaredBackupCadence === "object") {
+    return { cadences: options.declaredBackupCadence, source: "supplied" };
+  }
+  // fileURLToPath, not URL.pathname: this repository lives under a directory whose
+  // name contains a space, and pathname hands back the percent-encoded form.
+  const cli = options.engineCli ?? join(dirname(fileURLToPath(import.meta.url)), "tcrn-workflow.mjs");
+  const containerPath = join(platformRoot, ".tcrn-workspace");
+  let entries;
+  try {
+    entries = await readdir(containerPath, { withFileTypes: true });
+  } catch (error) {
+    return { cadences: null, source: "unreadable", error: error?.code ?? "WORKSPACE_CONTAINER_UNREADABLE" };
+  }
+  const cadences = {};
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const workspacePath = join(containerPath, entry.name, "workspace");
+    if (!(await existingPath(workspacePath))?.isDirectory()) continue;
+    try {
+      const result = await execFileAsync(process.execPath, [cli, "settings-catalog", "--workspace", workspacePath], { timeout: 30_000, maxBuffer: 8 * 1_048_576 });
+      const catalog = JSON.parse(result.stdout);
+      const rows = Object.values(catalog).find((value) => Array.isArray(value)) ?? [];
+      const cadence = rows.find((row) => row?.key === "backup.cadence");
+      if (cadence === undefined) return { cadences: null, source: "unreadable", error: "BACKUP_CADENCE_ABSENT", partition: entry.name };
+      cadences[entry.name] = cadence.currentValue ?? cadence.defaultValue ?? null;
+    } catch (error) {
+      return { cadences: null, source: "unreadable", error: error?.code ?? "SETTINGS_CATALOG_FAILED", partition: entry.name };
+    }
+  }
+  if (Object.keys(cadences).length === 0) return { cadences: null, source: "unreadable", error: "NO_PARTITION_READ" };
+  return { cadences, source: "chain-declaration" };
+}
+
 async function inspectLaunchdDuty(options, manifest) {
   const entry = manifest.items.find((candidate) => candidate.acceptanceProbe.startsWith("probe:launchd-duty"));
   const probe = parseLaunchdProbe(entry);
   if (!probe) return check("launchd", false, { reasonCode: "PLATFORM_LAUNCHD_PROBE_INVALID" });
+  const declared = await declaredBackupCadences(options, options.platformRoot);
+  const automatic = declared.cadences === null
+    || Object.values(declared.cadences).some((cadence) => AUTOMATIC_CADENCES.has(cadence));
   const labels = await launchdLabels(options);
+  if (!automatic) {
+    // Green, but never silently: the reason code says the expectation came off
+    // the chain, and the last snapshot is reported as a fact rather than asserted.
+    const localFreshness = await localSnapshotFreshness(options, options.platformRoot, manifest, probe.maxAgeHours);
+    return check("launchd", true, {
+      reasonCode: "PLATFORM_BACKUP_DECLARED_MANUAL",
+      requiredLabel: probe.label,
+      onDuty: labels.includes(probe.label),
+      declaredCadence: declared.cadences,
+      cadenceSource: declared.source,
+      lastLocalSnapshotAt: localFreshness.latestAt ?? null,
+      freshnessAsserted: false,
+      source: "chain backup.cadence + install-manifest",
+    });
+  }
   if (!labels.includes(probe.label)) {
-    return check("launchd", false, { reasonCode: "PLATFORM_LAUNCHD_NOT_ON_DUTY", requiredLabel: probe.label, observedLabels: labels, source: "install-manifest" });
+    return check("launchd", false, { reasonCode: "PLATFORM_LAUNCHD_NOT_ON_DUTY", requiredLabel: probe.label, observedLabels: labels, declaredCadence: declared.cadences, cadenceSource: declared.source, source: "install-manifest" });
   }
   const status = await launchdStatus(probe.label, options);
   if (status.unavailable) return check("launchd", false, { reasonCode: "PLATFORM_LAUNCHD_STATUS_UNAVAILABLE", requiredLabel: probe.label, error: status.error });
@@ -578,7 +645,7 @@ async function inspectLaunchdDuty(options, manifest) {
   if (!offsiteFreshness.ok) {
     return check("launchd", false, { reasonCode: "PLATFORM_OFFSITE_PUSH_STALE", requiredLabel: probe.label, lastExitCode: status.lastExitCode, freshness: offsiteFreshness, maxAgeHours: probe.maxAgeHours, source: "offsite push receipt" });
   }
-  return check("launchd", true, { requiredLabel: probe.label, lastExitCode: status.lastExitCode, localFreshness, offsiteFreshness, source: "install-manifest + launchctl + local/offsite receipts" });
+  return check("launchd", true, { requiredLabel: probe.label, lastExitCode: status.lastExitCode, localFreshness, offsiteFreshness, declaredCadence: declared.cadences, cadenceSource: declared.source, source: "chain backup.cadence + install-manifest + launchctl + local/offsite receipts" });
 }
 
 export async function inspectPlatform(platformRootArgument, options = {}) {
