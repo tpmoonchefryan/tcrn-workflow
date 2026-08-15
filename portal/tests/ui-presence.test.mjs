@@ -193,6 +193,38 @@ function missingComponents(document) {
     .map(([name, selector]) => ({ name, selector }));
 }
 
+// A fixed sleep after a governed write is a race, not a wait: too short and the
+// assertion reads a DOM that has not re-rendered, too long and every run pays for
+// the worst case. Lengthening it only moves the boundary — the S280 leg below
+// failed roughly one run in three at 500ms while its own receipt-chip assertion
+// passed, i.e. the write had landed and only the row was behind.
+//
+// This polls for the condition instead, and fails with the name of what never
+// arrived rather than with an empty-string diff. Callers wait for the *settle
+// signal* and assert content separately, so a genuine regression still surfaces as
+// an assertion difference rather than as a timeout.
+async function waitFor(predicate, label, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = predicate();
+    if (value) return value;
+    if (Date.now() >= deadline) assert.fail(`timed out after ${timeoutMs}ms waiting for ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+// The portal's own "the governed write landed" signal: the chip carries the
+// version it read back. It must be waited on as a *change*, because the pattern
+// alone is already true from whichever write came before — waiting for the shape
+// returns instantly, the test runs ahead of the request it was supposed to wait
+// for, and cleanup then kills the child mid-flight (ECONNRESET). Capture the text
+// before the click and wait for it to move.
+const receiptText = (document) => document.querySelector("#receipt-chip-text")?.textContent ?? "";
+const receiptAdvanced = (document, before) => () => {
+  const current = receiptText(document);
+  return current !== before && /^✓v\d+$/u.test(current) ? current : null;
+};
+
 async function preparePage(env = {}) {
   const fixture = await scratch("tcrn-inc148-dom-");
   await seed(fixture);
@@ -287,14 +319,16 @@ async function assertBehaviorContract(page) {
   assert.ok(restoreAll, "persona full restore must be rendered for the overridden preset");
   assert.equal(restoreAll.dataset.restoreAll, "true", "persona full restore must omit a field selector");
   assert.equal(restoreAll.dataset.restoreField, undefined, "persona full restore must call the no-field engine path");
+  const beforeRestore = receiptText(document);
   restoreAll.click();
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await waitFor(receiptAdvanced(document, beforeRestore), "the receipt chip to advance after the persona restore");
   const chip = document.querySelector('[data-ui="receipt-chip"]');
   const drawer = document.querySelector('[data-ui="receipt-drawer"]');
   chip.click();
   assert.equal(drawer.dataset.open, "true", "receipt chip click must open the drawer");
   assert.equal(drawer.getAttribute("aria-hidden"), "false", "receipt drawer must expose its open state");
   document.querySelector("#drawer-close").click();
+  const beforeSetting = receiptText(document);
   const control = document.querySelector('#settings-rows [data-setting-control]');
   assert.ok(control, "fixture must expose a settings control for the write leg");
   if (control.tagName === "BUTTON") control.click();
@@ -302,7 +336,7 @@ async function assertBehaviorContract(page) {
     if (control.tagName === "SELECT") control.value = control.value;
     control.dispatchEvent(new window.Event("change", { bubbles: true }));
   }
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await waitFor(receiptAdvanced(document, beforeSetting), "the receipt chip to advance after the settings write");
   const chipText = document.querySelector("#receipt-chip-text").textContent;
   assert.match(chipText, /^✓v\d+$/u, `receipt chip must update after a successful write, got ${JSON.stringify(chipText)}`);
 }
@@ -460,8 +494,9 @@ if (process.argv[2] === "status" && actual.status === 0) {
       const clear = [...claudeRow.querySelectorAll("[data-setting-control]")]
         .find((control) => control.tagName === "BUTTON" && control.dataset.settingValue === "");
       assert.ok(clear, "a bound plan setting must offer a way back to unset");
+      const beforeClear = receiptText(page.document);
       clear.dispatchEvent(new page.window.Event("click", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      await waitFor(receiptAdvanced(page.document, beforeClear), "the receipt chip to advance after clearing the bound setting");
       assert.match(page.document.querySelector("#receipt-chip-text")?.textContent ?? "", /^✓v\d+$/u, "clearing a bound setting reaches the engine and returns a receipt");
     } finally { await page.cleanup(); }
   });
@@ -672,11 +707,19 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(modelInput && assign, "the model plan addline must expose assignment controls");
       modelInput.value = "claude-sonnet-4-5";
       effortSelect.value = "high";
+      const beforeAssign = receiptText(page.document);
       assign.click();
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Two signals, both waited for rather than slept through: the write reaching
+      // the chain, and the assignment list re-rendering at all. The row's *content*
+      // is then asserted, so a wrong effort value still fails as a diff.
+      await waitFor(receiptAdvanced(page.document, beforeAssign), "the receipt chip to advance past the written version");
+      const assignment = await waitFor(
+        () => page.document.querySelector(".tcrn-assignment")?.textContent || null,
+        "the assignment row to re-render after the write",
+      );
 
       assert.match(page.document.querySelector("#receipt-chip-text")?.textContent ?? "", /^✓v\d+$/u);
-      assert.match(page.document.querySelector(".tcrn-assignment")?.textContent ?? "", /Effort: high/u);
+      assert.match(assignment, /Effort: high/u);
     } finally { await page.cleanup(); }
   });
 }
