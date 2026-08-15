@@ -5,6 +5,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TCRN Workflow Portal</title>
+<script>
+  // The reader's view preferences live in this browser, not on the chain: they are
+  // personal presentation, and sending them to a loopback server with every request
+  // would make them look like governed state. Read here rather than with the rest of
+  // the page script so the first painted frame is already in the chosen theme.
+  // A value outside the known set is ignored rather than trusted — localStorage is
+  // editable by hand, and the page must not render an attribute it did not define.
+  window.TCRN_PORTAL_PREFERENCE_PREFIX = "tcrn.workflow.portal.";
+  window.tcrnReadPreference = function (name, allowed, fallback) {
+    try {
+      const stored = window.localStorage.getItem(window.TCRN_PORTAL_PREFERENCE_PREFIX + name);
+      return allowed.includes(stored) ? stored : fallback;
+    } catch { return fallback; }
+  };
+  window.tcrnWritePreference = function (name, value) {
+    try { window.localStorage.setItem(window.TCRN_PORTAL_PREFERENCE_PREFIX + name, value); } catch { /* private mode */ }
+  };
+  document.documentElement.dataset.tcrnTheme = window.tcrnReadPreference("theme", ["light", "dark"], "light");
+</script>
 <link rel="stylesheet" href="/tokens.css">
 <style id="tcrn-ds-component-css" data-source="snapshot">
 :root {
@@ -13,6 +32,7 @@
   --tcrn-color-brand-secondary-readable: #246f80;
   --tcrn-brand-accent-aos: #187c7c;
   --tcrn-brand-accent-tms: #2c63c8;
+  --tcrn-brand-accent-workflow: #3b5272;
   --tcrn-brand-accent-design-system-1: #6577f3;
   --tcrn-brand-accent-design-system-2: #3096f4;
   --tcrn-brand-accent-design-system-3: #43d4cf;
@@ -22,6 +42,7 @@
   --tcrn-color-brand-secondary-readable: #a6e8ef;
   --tcrn-brand-accent-aos: #69d6d0;
   --tcrn-brand-accent-tms: #9bb8ff;
+  --tcrn-brand-accent-workflow: #9db5d4;
   --tcrn-brand-accent-design-system-1: #aeb8ff;
   --tcrn-brand-accent-design-system-2: #83c8ff;
   --tcrn-brand-accent-design-system-3: #7ce4df;
@@ -308,6 +329,9 @@
 }
 .tcrn-brand-wordmark__suffix--tms {
   color: var(--tcrn-brand-accent-tms);
+}
+.tcrn-brand-wordmark__suffix--workflow {
+  color: var(--tcrn-brand-accent-workflow);
 }
 .tcrn-brand-wordmark__suffix--design-system {
   background: linear-gradient(
@@ -2624,6 +2648,12 @@ a.tcrn-relationship-chip:focus-visible {
 /* Form field */
 .tcrn-field {
   display: grid;
+  /* The field's rows are label and control, both content-sized. Left to stretch, a
+     field that a layout has made taller than its content hands the extra height to
+     those rows, and the control inside grows past the min-height it declares — a
+     select stating 34px was observed at 44.1px this way. The field keeps its own
+     size; whatever gave it extra height is the layout's business, not the control's. */
+  align-content: start;
   gap: var(--tcrn-space-1);
   margin-bottom: 10px;
   border-radius: var(--tcrn-radius-control);
@@ -3233,6 +3263,19 @@ a.tcrn-relationship-chip:focus-visible {
 }
 </style>
 <style>
+/* The Workflow accent and its suffix rule are the design system's now (registered as a
+   product in the logo registry), so the portal consumes them from the snapshot instead
+   of declaring its own. Only the colour scheme stays here.
+
+   Measure provenance (INC-174). Every raw pixel value in this block is one of:
+   v4-pinned measures (48px top bar row, 30px echo row, 860px prose measure, 1040px
+   dashboard measure, 980/760/680px breakpoints, 208px group-nav column, 430px search
+   max-width), DS control metrics carried by the snapshot's components, or a label
+   column of a two-column row (120–250px). Spacing never uses raw pixels — gaps,
+   paddings and margins are space tokens throughout, which the design-proof layout
+   leg asserts. Content columns are never fixed pixels: the 1000px shell and 800px
+   vocabulary column were this family's recurring disease, and the layout leg now
+   refuses a grid whose content column is a fixed width. */
 :root { color-scheme: light; }
 [data-tcrn-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
@@ -3240,17 +3283,27 @@ body { margin: 0; min-width: 320px; background: var(--tcrn-color-surface-canvas)
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: 0.55; }
-.tcrn-app { min-height: 100vh; display: grid; grid-template-rows: minmax(0, 1fr) 30px; }
+.tcrn-app { min-height: 100dvh; display: grid; grid-template-rows: minmax(0, 1fr); }
 .tcrn-brand { display: inline-flex; align-items: baseline; gap: var(--tcrn-space-2); min-width: 196px; padding: 0; border: 0; background: transparent; color: var(--tcrn-color-text-primary); text-align: left; }
 .tcrn-brand__name { font-weight: var(--tcrn-type-weight-strong); letter-spacing: -0.02em; }
 .tcrn-brand__sub { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
-.tcrn-top-bar__actions { display: flex; align-items: center; gap: var(--tcrn-space-2); }
+.tcrn-top-bar__actions { display: flex; align-items: center; gap: var(--tcrn-space-2); min-width: 0; }
 .tcrn-top-bar__actions .tcrn-select { width: auto; min-width: 92px; }
 .tcrn-top-bar__partition { width: 160px; }
+/* fieldset/legend for the grouping semantics a screen reader needs, without the
+   browser's default box: the design system has no fieldset precedent, and a legend
+   straddling a border is not part of its visual language. The legend reads as the
+   caption-weight group heading the rest of the portal uses. */
+.tcrn-form__group { display: grid; gap: var(--tcrn-space-3); margin: 0; padding: 0; border: 0; }
+.tcrn-form__group > legend { padding: 0; margin-bottom: var(--tcrn-space-1); color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); }
 .tcrn-rail__mark { display: grid; gap: var(--tcrn-space-1); padding: 0 var(--tcrn-space-2); }
+.tcrn-rail__workspace { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tcrn-color-text-primary); font-size: var(--tcrn-type-size-ui); font-weight: var(--tcrn-type-weight-strong); }
 .tcrn-eyebrow { margin: 0 0 var(--tcrn-space-2); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); letter-spacing: 0.06em; text-transform: uppercase; }
 .tcrn-rail__footer { margin-top: auto; padding: var(--tcrn-space-3) var(--tcrn-space-2); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); line-height: var(--tcrn-type-line-caption); }
-.tcrn-main { min-width: 0; min-height: 0; overflow: auto; padding: var(--tcrn-space-6); }
+/* The top of the content area follows the v4 page head (preview.html:215, which pads
+   space-4 above the title); space-6 all round left a band of empty canvas under the
+   top bar at wide viewports. Sides and bottom keep the v4 paneview measure. */
+.tcrn-main { min-width: 0; min-height: 0; overflow: auto; padding: var(--tcrn-space-4) var(--tcrn-space-6) var(--tcrn-space-6); }
 .tcrn-page { width: min(1040px, 100%); margin: 0 auto; }
 .tcrn-page--manage { width: min(1100px, 100%); }
 .tcrn-page__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--tcrn-space-4); margin-bottom: var(--tcrn-space-5); }
@@ -3259,7 +3312,12 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-page__actions { display: flex; align-items: center; gap: var(--tcrn-space-2); }
 .tcrn-dot { width: var(--tcrn-state-dot-size); height: var(--tcrn-state-dot-size); border-radius: var(--tcrn-radius-pill); background: currentColor; }
 .tcrn-grid { display: grid; gap: var(--tcrn-space-3); }
-.tcrn-dashboard-grid { margin-top: var(--tcrn-space-3); }
+/* Grid items stretch by default, so one column growing drags its row-mates to the
+   same height — the dashboard's two panels and the entity list beside its inspector
+   both did this. v4 states the rule for the same construct (preview.html:279
+   .dashcols { align-items: start }), and .tcrn-manage / .tcrn-vocabulary here already
+   follow it; these two were simply never brought along. */
+.tcrn-dashboard-grid { margin-top: var(--tcrn-space-3); align-items: start; }
 .tcrn-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tcrn-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .tcrn-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -3281,7 +3339,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-subnav__item[aria-current="page"] { background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); font-weight: var(--tcrn-type-weight-medium); }
 .tcrn-section { margin-bottom: var(--tcrn-space-5); }
 .tcrn-section__title { display: flex; align-items: center; gap: var(--tcrn-space-2); margin: 0 0 var(--tcrn-space-2); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); letter-spacing: 0.06em; text-transform: uppercase; }
-.tcrn-input--search { min-width: 200px; }
+.tcrn-top-bar__actions .tcrn-search-input { min-width: 0; flex: 1 1 auto; max-width: 430px; }
 .tcrn-form { display: grid; gap: var(--tcrn-space-3); }
 .tcrn-form__row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--tcrn-space-3); }
 .tcrn-model-plan { display: grid; gap: var(--tcrn-space-3); margin-top: var(--tcrn-space-4); }
@@ -3304,7 +3362,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-directory__item:hover { border-left-color: var(--tcrn-color-brand-primary); background: var(--tcrn-color-surface-muted); }
 .tcrn-finding-link { display: flex; align-items: center; gap: var(--tcrn-space-2); width: 100%; padding: var(--tcrn-space-2); border: 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); background: transparent; color: var(--tcrn-color-state-warning); text-align: left; }
 .tcrn-finding-link:hover { background: var(--tcrn-color-state-warning-bg); }
-.tcrn-entity-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: var(--tcrn-space-4); }
+.tcrn-entity-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: var(--tcrn-space-4); align-items: start; }
 .tcrn-entity-list { min-height: 520px; }
 .tcrn-entity-section { display: grid; gap: var(--tcrn-space-1); margin-bottom: var(--tcrn-space-3); }
 .tcrn-entity-section__label { padding: 0 var(--tcrn-space-2); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); letter-spacing: 0.04em; text-transform: uppercase; }
@@ -3325,8 +3383,57 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-model-resolution { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: var(--tcrn-space-2); align-items: baseline; padding: var(--tcrn-space-1) 0; }
 .tcrn-confirm-dialog { margin-top: var(--tcrn-space-3); }
 .tcrn-confirm-dialog__actions { display: flex; gap: var(--tcrn-space-2); margin-top: var(--tcrn-space-2); }
-.tcrn-vocabulary { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: var(--tcrn-space-6); }
+/* Same grammar as .tcrn-manage: without align-items start the group nav cell stretches
+   to the term list's full height and grid spreads its rows across it, which reads as
+   group names scattered through the content. */
+.tcrn-vocabulary { display: grid; grid-template-columns: 208px minmax(0, 860px); gap: var(--tcrn-space-6); align-items: start; }
 .tcrn-vocabulary__terms { display: grid; gap: var(--tcrn-space-2); }
+/* Cell shapes for the vocabulary table. The table itself is the design system's
+   tcrn-table-shell; these only say how a semantics map and a source link sit inside
+   a cell, which no DS construct covers. */
+/* The design system groups form buttons in a tcrn-action-row (its storybook uses that
+   construct), but the class carries no CSS in the distributable snapshot, so the row's
+   two rules live here. Without it a primary button inherits the form grid's stretch and
+   spans the whole column, which is not how a form action reads. */
+.tcrn-plan-effort-preview { display: grid; gap: var(--tcrn-space-1); }
+.tcrn-plan-effort-preview__list { display: flex; flex-wrap: wrap; gap: var(--tcrn-space-1); }
+.tcrn-vendor-directory__list { display: grid; gap: var(--tcrn-space-2); }
+/* The concept trigger sits inline beside a label rather than standing alone in a
+   toolbar, so it takes a smaller box than the design system's default icon button.
+   Everything else — the tooltip surface, its placement, and the hover/focus rule that
+   reveals it — comes from the design system unchanged. */
+.tcrn-concept-tip__trigger {
+  inline-size: var(--tcrn-space-4);
+  block-size: var(--tcrn-space-4);
+  border-color: transparent;
+  color: var(--tcrn-color-text-muted);
+  vertical-align: middle;
+}
+.tcrn-concept-tip__trigger:hover { color: var(--tcrn-color-text-primary); }
+.tcrn-concept-tip__trigger svg { inline-size: 13px; block-size: 13px; }
+.tcrn-vendor-directory__list .tcrn-link-button { justify-content: flex-start; text-decoration: none; }
+.tcrn-action-row { display: flex; justify-content: flex-end; gap: var(--tcrn-space-2); }
+.tcrn-action-row .tcrn-button { width: auto; }
+/* The design system's table shell takes its column track list from a custom property,
+   which its storybook sets inline. The portal forbids inline style attributes, so the
+   same variable is set per column count here — same contract, no inline attribute.
+   A count with no rule here leaves both variables unset and the shell falls back to a
+   single track, which reads as "every column crammed into one cell" rather than as an
+   error. That is exactly what adding a fifth column to one domain did, so the roster
+   below must cover every count any domain declares and `design-proof` fails closed on
+   a declared count that has no rule. */
+[data-vocabulary-columns="1"] { --tcrn-table-column-count: 1; --tcrn-table-shell-columns: minmax(var(--tcrn-table-shell-column-min-width, 160px), 1fr); }
+[data-vocabulary-columns="2"] { --tcrn-table-column-count: 2; --tcrn-table-shell-columns: repeat(2, minmax(var(--tcrn-table-shell-column-min-width, 160px), 1fr)); }
+[data-vocabulary-columns="3"] { --tcrn-table-column-count: 3; --tcrn-table-shell-columns: repeat(3, minmax(var(--tcrn-table-shell-column-min-width, 160px), 1fr)); }
+[data-vocabulary-columns="4"] { --tcrn-table-column-count: 4; --tcrn-table-shell-columns: repeat(4, minmax(var(--tcrn-table-shell-column-min-width, 160px), 1fr)); }
+[data-vocabulary-columns="5"] { --tcrn-table-column-count: 5; --tcrn-table-shell-columns: repeat(5, minmax(var(--tcrn-table-shell-column-min-width, 160px), 1fr)); }
+[data-vocabulary-columns="6"] { --tcrn-table-column-count: 6; --tcrn-table-shell-columns: repeat(6, minmax(var(--tcrn-table-shell-column-min-width, 160px), 1fr)); }
+.tcrn-vocabulary__semantic { display: block; }
+.tcrn-vocabulary__semantic + .tcrn-vocabulary__semantic { margin-top: var(--tcrn-space-1); }
+.tcrn-vocabulary__semantic .tcrn-meta { display: block; }
+.tcrn-vocabulary__source { display: block; color: var(--tcrn-color-brand-primary); text-decoration: none; }
+.tcrn-vocabulary__source + .tcrn-vocabulary__source { margin-top: var(--tcrn-space-1); }
+.tcrn-vocabulary__source:hover { text-decoration: underline; }
 .tcrn-paths { display: grid; gap: var(--tcrn-space-1); }
 .tcrn-path { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: var(--tcrn-space-2); align-items: center; min-height: 32px; }
 .tcrn-path__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tcrn-color-text-secondary); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
@@ -3367,12 +3474,246 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .tcrn-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 680px) {
-  .tcrn-top-bar__module, .tcrn-top-bar__actions .tcrn-input--search, .tcrn-top-bar__partition { display: none; }
+  .tcrn-top-bar__module, .tcrn-top-bar__actions .tcrn-search-input, .tcrn-top-bar__partition { display: none; }
   .tcrn-top-bar { padding: 0 var(--tcrn-space-2); }
   .tcrn-grid--2, .tcrn-grid--3, .tcrn-grid--4, .tcrn-form__row, .tcrn-entity-layout, .tcrn-assignment-addline { grid-template-columns: 1fr; }
   .tcrn-page__head { display: grid; }
   .tcrn-editor-shell { grid-template-columns: 1fr; }
   .tcrn-editor__directory { position: static; }
+}
+/* INIT-036 S274/S275: the portal consumes the platform shell contract directly, and
+   INC-167 stopped narrowing it. The sidebar width is the design system's 280px: the
+   brand lockup lives in the sidebar header, and at 196px "TCRN Workflow" wrapped. */
+.tcrn-product-shell {
+  min-height: 100vh;
+}
+/* The top bar's height is the design system's, not a constant carried over from the
+   v4 mock: that mock's 48px row had zero vertical padding and 30px hand-drawn controls,
+   while this bar holds DS controls at 38px. The snapshot states min-height 68px with
+   space-3 padding (ds-component-css.snapshot.css:496 and :628, no shorter variant in
+   the whole snapshot); 38 + 12×2 + 1 = 63px is the floor those controls need, and the
+   old 48px sat 15px under it, pushing 7px of every control out of the content box.
+   The row track is auto so it follows the bar rather than contradicting it. */
+.tcrn-product-shell__workspace {
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+/* The shell carries the status row, and the sidebar fills its row rather than the
+   viewport: the design system gives the sidebar height: 100dvh because its shell has
+   no row below it. With one, 100dvh would overhang the status strip by its height. */
+.tcrn-product-shell {
+  height: 100dvh;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.tcrn-product-shell > .tcrn-app-status-bar {
+  grid-column: 1 / -1;
+}
+.tcrn-product-shell__sidebar {
+  height: 100%;
+  overflow-y: auto;
+}
+.tcrn-product-shell__workspace > .tcrn-top-bar {
+  /* The actions track is shrinkable rather than content-sized: with a plain `auto`
+     the actions always take their max-content width, so the flex rules inside them
+     never get a chance to compress and the path column absorbs the whole shortfall
+     alone. Measured at 1280px before this change: actions 793px fixed, path squeezed
+     to 151px. */
+  /* The path column carries a floor and the actions column does not: the path is
+     identity — every partition shares its prefix and differs only in the last two
+     segments — while the search is a convenience with its shortcut beside it. Without
+     the floor the path column absorbed the entire shortfall and reached 0px at 1000px
+     while the actions still held 664px. 163px is the measured width of
+     "…/cross-project/workspace" at this type size; `min()` keeps the floor from
+     forcing overflow on a viewport narrower than the floor itself. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+}
+/* The floor applies only where the actions still fit beside it. Measured: at 1280px
+   the bar settles at 163 + 781 with no overflow; at 1000px the actions cannot compress
+   below what is left and the page gains a horizontal scrollbar, which is worse than a
+   short path — the full path is on the title and on the dashboard either way. */
+@media (min-width: 1200px) {
+  .tcrn-product-shell__workspace > .tcrn-top-bar {
+    grid-template-columns: minmax(163px, 1fr) minmax(0, auto);
+  }
+}
+/* The brand lives in the sidebar header, which is where the design system's
+   product shell puts it: __sidebar-header is a grid of the lockup and the collapse
+   control, and __brand is defined as its child. Only the mark's size at this scale
+   is the portal's to state; the wordmark, the workflow suffix colour and the second
+   line all come from the product-logo family in the snapshot. */
+.tcrn-product-shell__sidebar-header .tcrn-brand-mark {
+  --tcrn-brand-mark-size: 28px;
+}
+.tcrn-product-shell__sidebar-header .tcrn-product-shell__brand {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tcrn-color-text-primary);
+  text-align: left;
+  gap: var(--tcrn-space-1h);
+  cursor: pointer;
+}
+.tcrn-top-bar__module {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The workspace path is distinguished by its tail — every partition shares the same
+   prefix and differs only in the last two segments — so a tail-side ellipsis removes
+   the only part worth reading. Measured at 1440px: the default clips to
+   "…/cross-project/" and drops "workspace"; with the truncation moved to the head it
+   keeps "…/cross-project/workspace" with the segment order intact. The full path is
+   also on the element's title. */
+.tcrn-top-bar__module--path {
+  direction: rtl;
+  text-align: left;
+}
+.tcrn-top-bar__actions .tcrn-badge {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+/* The search gives way before the path does: the path is identity, the search is a
+   convenience with a keyboard shortcut beside it. Floor sized to keep the icon and a
+   few characters legible. */
+.tcrn-top-bar__actions .tcrn-search-input {
+  min-width: 7ch;
+  flex: 1 1 auto;
+  max-width: 430px;
+}
+.tcrn-product-shell__sidebar {
+  background: transparent;
+}
+.tcrn-product-shell__sidebar .tcrn-side-nav {
+  gap: 1px;
+}
+.tcrn-product-shell__sidebar .tcrn-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--tcrn-space-2);
+  padding: var(--tcrn-space-1h) var(--tcrn-space-2);
+  border: 0;
+  background: transparent;
+  border-radius: var(--tcrn-radius-control);
+  font-size: var(--tcrn-type-size-ui);
+  color: var(--tcrn-color-text-secondary);
+  text-align: left;
+}
+.tcrn-product-shell__sidebar .tcrn-nav-item__content {
+  flex: 0 0 16px;
+  width: 16px;
+  opacity: .8;
+  font-size: 12px;
+  text-align: center;
+}
+.tcrn-product-shell__sidebar .tcrn-nav-item[aria-current="page"] {
+  background: var(--tcrn-color-brand-primary-bg);
+  color: var(--tcrn-color-brand-primary);
+  font-weight: var(--tcrn-type-weight-medium);
+}
+.tcrn-product-shell__sidebar .tcrn-nav-item:hover:not([aria-current="page"]) {
+  background: var(--tcrn-color-surface-muted);
+}
+.tcrn-product-shell .tcrn-line-numbered-editor__control:focus-visible {
+  outline: none;
+  outline-width: 0;
+  outline-offset: 0;
+}
+.tcrn-line-numbered-editor:focus-within {
+  border-color: var(--tcrn-color-brand-primary);
+  box-shadow: 0 0 0 3px var(--tcrn-color-brand-primary-bg);
+}
+.tcrn-assignment-addline {
+  grid-template-columns: minmax(120px, 1fr) minmax(140px, 1fr) minmax(120px, 1fr) auto;
+}
+.tcrn-page[data-page="prose"] {
+  max-width: 860px;
+}
+.tcrn-page[data-page="dashboard"],
+.tcrn-page[data-page="settings"],
+.tcrn-page[data-page="entities"],
+.tcrn-page[data-page="vocabulary"] {
+  max-width: 1040px;
+}
+.tcrn-editor-shell {
+  grid-template-columns: minmax(184px, 208px) minmax(0, 1fr);
+  grid-template-areas:
+    "directory bar"
+    "directory editor";
+  align-items: start;
+}
+.tcrn-editor__directory {
+  grid-area: directory;
+}
+.tcrn-editor__bar {
+  grid-area: bar;
+  grid-column: auto;
+}
+.tcrn-line-numbered-editor {
+  grid-area: editor;
+  min-width: 0;
+}
+.tcrn-definition-list__item {
+  grid-template-columns: minmax(230px, max-content) minmax(0, 1fr);
+}
+.tcrn-definition-list__detail {
+  display: block;
+  margin-top: var(--tcrn-space-1);
+  color: var(--tcrn-color-text-muted);
+  font-size: var(--tcrn-type-size-caption);
+}
+.tcrn-stepper {
+  display: inline-grid;
+  grid-template-columns: 30px minmax(56px, 1fr) 30px max-content;
+  align-items: center;
+  gap: var(--tcrn-space-1);
+  max-width: 220px;
+  padding: var(--tcrn-space-0h);
+  border: 1px solid var(--tcrn-color-border-subtle);
+  border-radius: var(--tcrn-radius-control);
+  background: var(--tcrn-color-surface-panel);
+}
+.tcrn-stepper__button {
+  min-width: 30px;
+  min-height: 30px;
+  padding-inline: var(--tcrn-space-1);
+}
+.tcrn-stepper__input {
+  min-width: 0;
+  width: 64px;
+  text-align: center;
+}
+.tcrn-stepper__bound {
+  padding-inline-end: var(--tcrn-space-2);
+  color: var(--tcrn-color-text-muted);
+  font-size: var(--tcrn-type-size-caption);
+  white-space: nowrap;
+}
+@media (max-width: 980px) {
+  .tcrn-product-shell {
+    grid-template-columns: 1fr;
+  }
+  .tcrn-product-shell__workspace {
+    min-height: auto;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .tcrn-definition-list__item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 680px) {
+  .tcrn-editor-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "bar"
+      "directory"
+      "editor";
+  }
+  .tcrn-assignment-addline {
+    grid-template-columns: 1fr;
+  }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: var(--tcrn-motion-reduced-duration) !important; animation-duration: var(--tcrn-motion-reduced-duration) !important; } }
 </style>
@@ -3381,33 +3722,56 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 <div class="tcrn-app">
   <div class="tcrn-product-shell">
     <aside class="tcrn-product-shell__sidebar">
-      <div class="tcrn-rail__mark"><span class="tcrn-eyebrow" data-i18n="nav.label">Public surfaces</span><span class="tcrn-meta" id="partition-label"></span></div>
+      <div class="tcrn-product-shell__sidebar-header">
+        <button class="tcrn-product-shell__brand tcrn-product-logo tcrn-shell-brand-lockup" id="brand-button" data-page-target="dashboard" aria-label="TCRN Workflow" data-i18n-aria-label="app.brand" data-product-id="workflow" data-product-logo-asset-id="tcrn-workflow-two-line">
+          <img class="tcrn-brand-mark" src="/tcrn-brand-mark.svg" alt="" data-brand-asset="tcrn-brand-mark" data-brand-asset-registration="workflow">
+          <span class="tcrn-product-logo__copy" aria-hidden="true">
+            <span class="tcrn-product-logo__line-one"><span class="tcrn-product-logo__line-one-base">TCRN</span><span class="tcrn-product-logo__line-one-suffix tcrn-brand-wordmark__suffix--workflow">Workflow</span></span>
+            <span class="tcrn-product-logo__line-two" data-i18n="app.subtitle">Portal</span>
+          </span>
+        </button>
+      </div>
+      <div class="tcrn-rail__mark"><strong class="tcrn-rail__workspace" id="rail-workspace-label"></strong><span class="tcrn-meta tcrn-rail__partition" id="partition-label" hidden></span></div>
       <nav class="tcrn-side-nav" aria-label="Portal navigation">
-        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="dashboard" aria-current="page"><span class="tcrn-nav-item__content">◌</span><span class="tcrn-nav-item__label" data-i18n="nav.dashboard">Dashboard</span></button>
-        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="settings"><span class="tcrn-nav-item__content">◫</span><span class="tcrn-nav-item__label" data-i18n="nav.settings">Settings</span></button>
-        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="prose"><span class="tcrn-nav-item__content">¶</span><span class="tcrn-nav-item__label" data-i18n="nav.prose">Rules</span></button>
-        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="entities"><span class="tcrn-nav-item__content">◎</span><span class="tcrn-nav-item__label" data-i18n="nav.entities">Entities</span></button>
-        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="vocabulary"><span class="tcrn-nav-item__content">≡</span><span class="tcrn-nav-item__label" data-i18n="nav.vocabulary">Vocabulary</span></button>
+        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="dashboard" aria-current="page" aria-label="Dashboard" data-i18n-aria-label="nav.dashboard"><span class="tcrn-nav-item__content" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="1.8" width="5.2" height="5.2" rx="1"/><rect x="9" y="1.8" width="5.2" height="5.2" rx="1"/><rect x="1.8" y="9" width="5.2" height="5.2" rx="1"/><rect x="9" y="9" width="5.2" height="5.2" rx="1"/></svg></span><span class="tcrn-nav-item__label" data-i18n="nav.dashboard">Dashboard</span></button>
+        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="settings" aria-label="Settings" data-i18n-aria-label="nav.settings"><span class="tcrn-nav-item__content" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.4"/><path d="M8 1.6v2M8 12.4v2M1.6 8h2M12.4 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M12.5 3.5l-1.4 1.4M4.9 11.1l-1.4 1.4"/></svg></span><span class="tcrn-nav-item__label" data-i18n="nav.settings">Settings</span></button>
+        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="prose" aria-label="Rules" data-i18n-aria-label="nav.prose"><span class="tcrn-nav-item__content" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2.5h10M3 5.5h10M3 8.5h6.5"/><path d="M3 12.5h4"/></svg></span><span class="tcrn-nav-item__label" data-i18n="nav.prose">Rules</span></button>
+        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="entities" aria-label="Entities" data-i18n-aria-label="nav.entities"><span class="tcrn-nav-item__content" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.6" cy="8" r="3.6"/><circle cx="10.4" cy="8" r="3.6"/></svg></span><span class="tcrn-nav-item__label" data-i18n="nav.entities">Entities</span></button>
+        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="vocabulary" aria-label="Vocabulary" data-i18n-aria-label="nav.vocabulary"><span class="tcrn-nav-item__content" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.8C6.6 1.9 4.4 1.7 2.2 2.2v10.6c2.2-.5 4.4-.3 5.8.6 1.4-.9 3.6-1.1 5.8-.6V2.2C11.6 1.7 9.4 1.9 8 2.8Z"/><path d="M8 2.8v10.6"/></svg></span><span class="tcrn-nav-item__label" data-i18n="nav.vocabulary">Vocabulary</span></button>
       </nav>
       <div class="tcrn-rail__footer"><span data-i18n="app.boundaryBody">Writes use the public CLI and return the engine receipt.</span></div>
     </aside>
     <div class="tcrn-product-shell__workspace">
       <header class="tcrn-top-bar">
-        <button class="tcrn-top-bar__brand tcrn-brand" id="brand-button" data-page-target="dashboard" aria-label="TCRN Workflow">
-          <span class="tcrn-brand__name" data-i18n="app.brand">TCRN Workflow</span>
-          <span class="tcrn-brand__sub" data-i18n="app.subtitle">Portal</span>
-        </button>
-        <div class="tcrn-top-bar__module" id="workspace-label"></div>
+        <div class="tcrn-top-bar__module tcrn-top-bar__module--path" id="workspace-label"></div>
         <div class="tcrn-top-bar__actions">
           <label class="tcrn-sr-only" for="partition-select" data-i18n="partition.label">Partition</label>
           <select class="tcrn-select tcrn-top-bar__partition" id="partition-select" data-ui="partition-switcher" aria-label="Partition"></select>
-          <span class="tcrn-badge tcrn-badge--positive" id="engine-connection" data-ui="engine-connection" role="status"><span class="tcrn-dot"></span><span id="engine-connection-text">engine · local loopback</span></span>
-          <input class="tcrn-input tcrn-input--search" id="global-search" type="search" placeholder="Search" data-i18n-placeholder="search.placeholder" autocomplete="off">
-          <button class="tcrn-button tcrn-button--quiet" id="palette-button" data-i18n="search.command">⌘K</button>
-          <button class="tcrn-button tcrn-button--quiet" id="theme-button" data-i18n="theme.toggle">Theme</button>
-          <label class="tcrn-sr-only" for="locale-select" data-i18n="locale.label">Language</label>
-          <select class="tcrn-select" id="locale-select" aria-label="Language"><option value="en">EN</option><option value="zh-CN">中文</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="fr">FR</option></select>
-          <button class="tcrn-badge tcrn-badge--positive" id="receipt-chip" data-ui="receipt-chip" aria-controls="receipt-drawer" data-ui-action="open-receipt" type="button"><span class="tcrn-dot"></span><span id="receipt-chip-text" data-i18n="chip.idle">idle</span></button>
+          <span class="tcrn-badge tcrn-badge--positive" id="engine-connection" data-ui="engine-connection" role="status"><span id="engine-connection-text">engine · local loopback</span></span>
+          <span class="tcrn-search-input" data-search-input="true" data-shortcut-visible="true">
+            <span class="tcrn-search-input__icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg></span>
+            <input class="tcrn-input tcrn-search-input__control tcrn-search-input--compact" id="global-search" type="search" placeholder="Search" data-i18n-placeholder="search.placeholder" autocomplete="off" aria-keyshortcuts="Control+K Meta+K">
+            <kbd class="tcrn-search-input__shortcut" id="palette-button" data-shortcut-auto="search" data-i18n="search.command">⌘K</kbd>
+          </span>
+          <button class="tcrn-button tcrn-button--secondary tcrn-button--md tcrn-icon-button tcrn-shell-theme-toggle" id="theme-button" type="button" data-shell-control="theme-toggle" data-theme-toggle="true" data-current-theme="light" data-theme-next="dark" aria-pressed="false" aria-label="Theme" data-i18n-aria-label="theme.toggle" title="Theme">
+            <span class="tcrn-shell-theme-toggle__icon" data-theme-icon="light" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3.2"/><path d="M8 .8v2M8 13.2v2M.8 8h2M13.2 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg></span>
+            <span class="tcrn-shell-theme-toggle__icon" data-theme-icon="dark" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.4 9.6A5.8 5.8 0 0 1 6.4 2.6a5.8 5.8 0 1 0 7 7Z"/></svg></span>
+          </button>
+          <div class="tcrn-shell-locale-menu" id="locale-menu" data-shell-control="locale-menu" data-locale-menu-root="true" data-locale-menu-open="false" aria-label="Language" data-i18n-aria-label="locale.label">
+            <button class="tcrn-shell-locale-menu__trigger" id="locale-trigger" type="button" data-locale-menu-toggle="true" aria-haspopup="listbox" aria-expanded="false" aria-controls="locale-panel" aria-label="Language" data-i18n-aria-label="locale.label">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c1.7 1.8 2.6 3.9 2.6 6.2S9.7 12.4 8 14.2C6.3 12.4 5.4 10.3 5.4 8S6.3 3.6 8 1.8Z"/></svg>
+              <span class="tcrn-shell-locale-menu__current" data-locale-current="true">English</span>
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+            </button>
+            <div class="tcrn-shell-locale-menu__panel" id="locale-panel" role="listbox" aria-label="Language" hidden>
+              <button class="tcrn-shell-locale-menu__option" type="button" role="option" data-locale-option="en" aria-selected="true"><span class="tcrn-shell-locale-menu__name">English</span></button>
+              <button class="tcrn-shell-locale-menu__option" type="button" role="option" data-locale-option="zh-CN" aria-selected="false"><span class="tcrn-shell-locale-menu__name">中文</span></button>
+              <button class="tcrn-shell-locale-menu__option" type="button" role="option" data-locale-option="ja" aria-selected="false"><span class="tcrn-shell-locale-menu__name">日本語</span></button>
+              <button class="tcrn-shell-locale-menu__option" type="button" role="option" data-locale-option="ko" aria-selected="false"><span class="tcrn-shell-locale-menu__name">한국어</span></button>
+              <button class="tcrn-shell-locale-menu__option" type="button" role="option" data-locale-option="fr" aria-selected="false"><span class="tcrn-shell-locale-menu__name">Français</span></button>
+            </div>
+          </div>
+          <button class="tcrn-badge tcrn-badge--positive" id="receipt-chip" data-ui="receipt-chip" aria-controls="receipt-drawer" data-ui-action="open-receipt" type="button"><span id="receipt-chip-text" data-i18n="chip.idle">idle</span></button>
         </div>
       </header>
     <main class="tcrn-product-shell__main tcrn-main" id="main-content">
@@ -3422,7 +3786,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
       </section>
       <section class="tcrn-page tcrn-page--manage" data-page="settings" hidden>
         <div class="tcrn-page__head"><div><h1 data-i18n="page.settings">Settings</h1><p class="tcrn-page__lede" data-i18n="config.lede">Registered settings, read from the engine and changed through its public CLI.</p></div><div class="tcrn-page__actions"><span class="tcrn-badge" id="settings-count"></span></div></div>
-        <div class="tcrn-manage"><nav class="tcrn-subnav" aria-label="Settings groups"><button class="tcrn-subnav__item" data-setting-group="workspace" aria-current="page" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="models" data-i18n="settings.models">Subagent models</button></nav><div><div id="settings-rows"></div><div id="model-plans" hidden></div></div></div>
+        <div class="tcrn-manage"><nav class="tcrn-subnav" aria-label="Settings groups"><button class="tcrn-subnav__item" data-setting-group="workspace" aria-current="page" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="models" data-i18n="settings.models">Subagent models</button><button class="tcrn-subnav__item" data-setting-group="machine" data-i18n="settings.machine">Workflow</button></nav><div><div id="design-authority" hidden></div><div id="settings-rows"></div><div id="model-plans" hidden></div><div id="machine-settings" hidden></div></div></div>
       </section>
       <section class="tcrn-page tcrn-page--manage" data-page="prose" hidden>
         <div class="tcrn-page__head"><div><h1 data-i18n="page.prose">Rules</h1><p class="tcrn-page__lede" data-i18n="prose.lede">Workspace prose is edited as a plain file and checked against the live engine vocabulary.</p></div><div class="tcrn-page__actions"><span class="tcrn-badge" id="reconcile-chip">—</span><button class="tcrn-button tcrn-button--primary" id="save-agents" data-i18n="prose.save" data-cli-action="agents-write">Save</button></div></div>
@@ -3438,8 +3802,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
         <div class="tcrn-vocabulary"><nav class="tcrn-subnav" aria-label="Vocabulary categories" id="vocabulary-nav"></nav><div class="tcrn-vocabulary__terms" id="vocabulary-terms"></div></div>
       </section>
     </main>
-    <div class="tcrn-app-status-bar" role="status" data-app-status-bar="true"><span class="tcrn-app-status-bar__command" id="echo-command"><code data-i18n="echo.idle">agent:portal · public CLI</code></span><span class="tcrn-app-status-bar__state"><span class="tcrn-dot" aria-hidden="true"></span><span id="status-state" data-i18n="health.healthy">healthy</span></span><span class="tcrn-app-status-bar__action"><button class="tcrn-button tcrn-button--quiet" id="drawer-button" data-i18n="receipt.open">Receipt &amp; audit</button></span></div>
     </div>
+    <div class="tcrn-app-status-bar" role="status" data-app-status-bar="true"><span class="tcrn-app-status-bar__command" id="echo-command"><code data-i18n="echo.idle">agent:portal · public CLI</code></span><span class="tcrn-app-status-bar__state"><span class="tcrn-dot" aria-hidden="true"></span><span id="status-state" data-i18n="health.healthy">healthy</span></span><span class="tcrn-app-status-bar__action"><button class="tcrn-button tcrn-button--quiet" id="drawer-button" data-i18n="receipt.open">Receipt &amp; audit</button></span></div>
   </div>
 </div>
 <div class="tcrn-search-results" id="search-results" hidden aria-label="Search results"></div>
@@ -3453,7 +3817,15 @@ const BOOT = __PORTAL_BOOT__;
 (() => {
   "use strict";
   const LOCALES = window.PORTAL_LOCALES || {};
-  const state = { locale: BOOT.defaultLocale || "en", theme: "light", page: "dashboard", dashboardTab: "overview", entityTab: "personas", settingGroup: "workspace", settings: null, execution: null, vocabulary: null, status: null, commands: [], audit: [], selectedPersona: null, selectedVocabulary: "roles", receipt: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
+  // Browser preference > machine default > built-in fallback. The browser layer is
+  // read in <head> so the first frame is right; the machine layer can only be read
+  // once the boot payload exists, so it applies here and only when this browser has
+  // made no choice of its own.
+  const storedLocale = tcrnReadPreference("locale", Object.keys(LOCALES), null);
+  const storedTheme = tcrnReadPreference("theme", ["light", "dark"], null);
+  const machineTheme = ["light", "dark"].includes(BOOT.machineDefaults?.theme) ? BOOT.machineDefaults.theme : null;
+  if (storedTheme === null && machineTheme !== null) document.documentElement.dataset.tcrnTheme = machineTheme;
+  const state = { locale: storedLocale ?? (Object.keys(LOCALES).includes(BOOT.machineDefaults?.locale) ? BOOT.machineDefaults.locale : null) ?? BOOT.defaultLocale ?? "en", theme: document.documentElement.dataset.tcrnTheme, page: "dashboard", dashboardTab: "overview", entityTab: "personas", settingGroup: "workspace", settings: null, machineSettings: null, execution: null, vocabulary: null, status: null, commands: [], audit: [], selectedPersona: null, selectedVocabulary: "roles", receipt: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const esc = (value) => String(value ?? "").replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]);
@@ -3461,13 +3833,18 @@ const BOOT = __PORTAL_BOOT__;
   const t = (key, values = {}) => Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), localeText(key));
   const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = String(value ?? ""); };
   const roleValue = (role) => typeof role === "string" ? role : role?.value;
-  const termValue = (term) => typeof term === "string" ? term : term?.value ?? term?.key ?? "";
+  const termValue = (term) => typeof term === "string" ? term : term?.value ?? term?.key ?? term?.name ?? "";
   const vocabularyDefinition = (category, term) => {
     if (typeof term === "string") return t("vocabulary.readOnly");
     const value = termValue(term);
     const localized = t(`vocabulary.term.${category}.${value}.description`);
     if (localized !== `vocabulary.term.${category}.${value}.description`) return localized;
-    if (category === "settingsEnums" && term.key) return settingDescription(term.key);
+    if (settingKeyOf(category) !== null) {
+      const perValue = t(`setting.${term.settingKey}.value.${term.value}.description`);
+      if (perValue !== `setting.${term.settingKey}.value.${term.value}.description`) return perValue;
+      return settingDescription(term.settingKey);
+    }
+    if (category === "efforts") return Object.entries(term.semantics || {}).map(([host, semantic]) => `${host}: ${semantic}`).join(" · ") || t("vocabulary.readOnly");
     return term.description || `${t("vocabulary.enumValues")}: ${(term.allowedValues || term.coveredByIndependenceFloors || []).join(", ")}`;
   };
   const api = async (path, options = {}) => {
@@ -3505,7 +3882,9 @@ const BOOT = __PORTAL_BOOT__;
   };
   const renderReceipt = () => {
     const body = state.receipt || { reasonCode: "PORTAL_IDLE", message: t("receipt.empty"), actor: BOOT.actor };
-    const fields = [["receipt.reasonCode", t("receipt.reasonCode"), body.reasonCode], ["receipt.record", t("receipt.record"), recordValue(body)], ["receipt.version", t("receipt.version"), body.version ?? "—"], ["receipt.digest", t("receipt.digest"), body.receiptDigest ?? "—"], ["receipt.head", t("receipt.head"), body.headEventHash ?? "—"], ["receipt.actor", t("receipt.actor"), body.actor ?? BOOT.actor]];
+    const reasonHint = (code) => { const key = "reason." + String(code || ""); const hint = t(key); return hint === key ? "" : hint; };
+    const hint = reasonHint(body.reasonCode);
+    const fields = [["receipt.reasonCode", t("receipt.reasonCode"), body.reasonCode + (hint ? " — " + hint : "")], ["receipt.record", t("receipt.record"), recordValue(body)], ["receipt.version", t("receipt.version"), body.version ?? "—"], ["receipt.digest", t("receipt.digest"), body.receiptDigest ?? "—"], ["receipt.head", t("receipt.head"), body.headEventHash ?? "—"], ["receipt.actor", t("receipt.actor"), body.actor ?? BOOT.actor]];
     $("#receipt-body").innerHTML = fields.map(([, label, value]) => `<div class="tcrn-readback-panel__row"><span class="tcrn-readback-panel__key">${esc(label)}</span><span class="tcrn-readback-panel__value">${esc(value)}</span></div>`).join("");
     renderAudit("#drawer-audit");
   };
@@ -3519,7 +3898,14 @@ const BOOT = __PORTAL_BOOT__;
     document.documentElement.dataset.tcrnLocale = state.locale;
     $$('[data-i18n]').forEach((node) => { node.textContent = t(node.dataset.i18n); });
     $$('[data-i18n-placeholder]').forEach((node) => { node.placeholder = t(node.dataset.i18nPlaceholder); });
-    $("#locale-select").value = state.locale;
+    $$('[data-i18n-aria-label]').forEach((node) => { node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel)); });
+    // The locale menu is the design system's shell control, not a native select: the
+    // trigger shows the language in its own name, and the panel carries the selection.
+    const localeNames = { en: "English", "zh-CN": "中文", ja: "日本語", ko: "한국어", fr: "Français" };
+    $("#locale-trigger .tcrn-shell-locale-menu__current").textContent = localeNames[state.locale] ?? state.locale;
+    $$("[data-locale-option]").forEach((option) => {
+      option.setAttribute("aria-selected", String(option.dataset.localeOption === state.locale));
+    });
     renderReceipt();
   };
   const navigate = (page) => {
@@ -3529,8 +3915,27 @@ const BOOT = __PORTAL_BOOT__;
     setText("#echo-command", page === "dashboard" ? t("echo.idle") : `${page} · ${BOOT.actor}`);
     $("#search-results").hidden = true;
   };
-  const settingGroup = (key) => key.startsWith("backup.") ? "backup" : key.startsWith("execution.") && key.endsWith("SubagentPlan") ? "models" : key.startsWith("execution.") ? "execution" : "workspace";
+  const settingGroup = (key) => key.startsWith("design.") ? "workspace" : key.startsWith("backup.") ? "backup" : key.startsWith("execution.") && key.endsWith("SubagentPlan") ? "models" : key.startsWith("execution.") ? "execution" : "workspace";
   const settingLabel = (key) => t(`setting.${key}.label`);
+  // A supplemental explanation for a concept whose meaning is not on the surface. The
+  // markup is the design system's Tooltip verbatim: the wrapper carries the placement
+  // and scope attributes, the content carries role="tooltip", and the design system's
+  // own rule shows it on hover AND on focus-within — which is why the trigger has to be
+  // focusable, or the keyboard half of that rule can never fire. The icon is inline SVG
+  // for the reason INC-191 established: a character like ⓘ depends on whatever font
+  // resolves it, and the shipped face has no glyph for several of them.
+  let conceptTipSequence = 0;
+  const conceptTip = (key, placement = "top") => {
+    const body = t(`concept.${key}`);
+    if (body === `concept.${key}`) return "";
+    const id = `concept-tip-${conceptTipSequence += 1}`;
+    return `<span class="tcrn-tooltip" data-placement="${esc(placement)}" data-tooltip-scope="supplemental" data-tooltip-interactive-content="forbidden" data-concept-tip="${esc(key)}">`
+      + `<button type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md tcrn-icon-button tcrn-concept-tip__trigger" aria-describedby="${id}" aria-label="${esc(t("concept.explain"))}">`
+      + `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v4"/><path d="M8 4.8h.01"/></svg>`
+      + `</button>`
+      + `<span id="${id}" role="tooltip" class="tcrn-tooltip__content">${esc(body)}</span>`
+      + `</span>`;
+  };
   const settingDescription = (key) => t(`setting.${key}.description`);
   const currentSetting = (key) => state.settings?.settings?.find((entry) => entry.key === key);
   const hostFromPlanKey = (key) => key.slice("execution.".length, -"SubagentPlan".length).replace(/[A-Z]/gu, (character) => `-${character.toLowerCase()}`);
@@ -3540,10 +3945,72 @@ const BOOT = __PORTAL_BOOT__;
     const values = entry.key.includes("SubagentPlan") ? ["", ...(state.execution?.plans || []).filter((plan) => plan.host === hostFromPlanKey(entry.key)).map((plan) => plan.name)] : [...(entry.allowedValues || [])];
     const current = entry.currentValue ?? "";
     if (entry.controlType === "boolean") return `<label class="tcrn-switch" data-switch-state="${current === (entry.trueValue || "allowed") ? "on" : "off"}"><input class="tcrn-switch__control tcrn-input" type="checkbox" role="switch" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set" data-setting-value="${esc(entry.trueValue || "allowed")}" ${current === (entry.trueValue || "allowed") ? "checked" : ""}><span class="tcrn-switch__label">${esc(current === (entry.trueValue || "allowed") ? t("config.enabled") : t("config.disabled"))}</span></label>`;
-    if (entry.controlType === "number") return `<input class="tcrn-input" type="number" min="${esc(entry.min)}" max="${esc(entry.max)}" step="1" value="${esc(current)}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set">`;
+    if (entry.controlType === "number") return `<div class="tcrn-stepper" data-stepper="${esc(entry.key)}"><button type="button" class="tcrn-button tcrn-button--quiet tcrn-stepper__button" data-stepper-action="decrement" aria-label="${esc(t("config.decrease"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.5 8h9"/></svg></button><input class="tcrn-input tcrn-stepper__input" type="number" min="${esc(entry.min)}" max="${esc(entry.max)}" step="1" value="${esc(current)}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set"><button type="button" class="tcrn-button tcrn-button--quiet tcrn-stepper__button" data-stepper-action="increment" aria-label="${esc(t("config.increase"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg></button><span class="tcrn-stepper__bound">${esc(entry.min)}–${esc(entry.max)}</span></div>`;
     if (entry.controlType === "enum" && values.length > 0 && values.length <= 3) return `<div class="tcrn-segmented-nav" role="group" aria-label="${esc(settingLabel(entry.key))}">${values.map((value) => `<button type="button" class="tcrn-button" data-selected="${value === current ? "true" : "false"}" data-setting-control="${esc(entry.key)}" data-setting-value="${esc(value)}" data-cli-action="settings-set">${esc(value || t("config.unset"))}</button>`).join("")}</div>`;
     if (entry.controlType === "enum" && values.length > 0) return `<select class="tcrn-select" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set">${values.map((value) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(value || t("config.unset"))}</option>`).join("")}</select>`;
     return `<input class="tcrn-input" value="${esc(current)}" placeholder="${esc(entry.defaultValue ?? t("config.unset"))}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set">`;
+  };
+  // INC-193: the design authority is a declaration, and what is behind it is an
+  // external fact. Verified-true is green, verified-false is red, and "cannot be
+  // verified here" is yellow — a distinct state rather than a soft red, so it never
+  // changes an exit code and never becomes a place to park a defect. Every yellow
+  // states what would turn it green. The fetch happens in the reader's browser: the
+  // engine is offline by construction and the portal server never reaches out either.
+  const DESIGN_AUTHORITY_CONTRACT = "/tcrn-design-authority.json";
+  const designAuthorityState = { url: null, status: "unset", detail: null };
+  const readDesignAuthority = async (url) => {
+    if (!url) return { status: "unset", detail: null };
+    let contract;
+    try { contract = new URL(DESIGN_AUTHORITY_CONTRACT, url).href; } catch { return { status: "warning", detail: t("design.warnBadUrl") }; }
+    try {
+      const response = await fetch(contract, { mode: "cors", credentials: "omit", cache: "no-store" });
+      if (!response.ok) return { status: "warning", detail: t("design.warnStatus", { status: response.status }) };
+      const body = await response.json();
+      // The response is somebody else's bytes: it is checked for shape before anything
+      // from it reaches the page, and rendered escaped like any other untrusted input.
+      if (body?.schemaVersion !== "tcrn.design-authority.v1") return { status: "warning", detail: t("design.warnSchema") };
+      if (typeof body.name !== "string" || typeof body.version !== "string" || body.name.length === 0 || body.version.length === 0) {
+        return { status: "warning", detail: t("design.warnFields") };
+      }
+      return { status: "declared", detail: { name: body.name.slice(0, 120), version: body.version.slice(0, 60) } };
+    } catch { return { status: "warning", detail: t("design.warnUnreachable") }; }
+  };
+  const renderDesignAuthority = () => {
+    const host = $("#design-authority");
+    if (!host) return;
+    const { status, detail } = designAuthorityState;
+    if (status === "unset") { host.innerHTML = ""; host.hidden = true; return; }
+    host.hidden = false;
+    host.innerHTML = status === "declared"
+      ? `<div class="tcrn-inline-alert" data-design-authority-state="declared"><span>${esc(t("design.declared"))}: <strong>${esc(detail.name)}</strong> ${esc(detail.version)}</span></div>`
+      : `<div class="tcrn-inline-alert tcrn-inline-alert--warning" data-design-authority-state="warning" role="status"><span>${esc(detail)} ${esc(t("design.warnResolve"))}</span></div>`;
+  };
+  const refreshDesignAuthority = async () => {
+    const url = currentSetting("design.authority")?.currentValue ?? null;
+    if (url === designAuthorityState.url && designAuthorityState.status !== "unset") return;
+    designAuthorityState.url = url;
+    Object.assign(designAuthorityState, await readDesignAuthority(url), { url });
+    renderDesignAuthority();
+  };
+  const renderMachineSettings = () => {
+    const entries = state.machineSettings?.settings || [];
+    // The partition's legal values are this machine's workspaces, so they come from the
+    // boot payload rather than from a closed list — the engine says the value source is
+    // discovery and refuses to invent one.
+    const optionsFor = (entry) => entry.key === "portal.defaultPartition"
+      ? (BOOT.partitions || []).map((partition) => partition.id)
+      : entry.allowedValues || [];
+    const controlFor = (entry) => {
+      const current = entry.currentValue ?? "";
+      if (entry.controlType === "number") return `<input class="tcrn-input" type="number" min="${esc(entry.min)}" max="${esc(entry.max)}" step="1" value="${esc(current)}" data-machine-control="${esc(entry.key)}" data-cli-action="machine-settings-set">`;
+      const values = ["", ...optionsFor(entry)];
+      return `<select class="tcrn-select" data-machine-control="${esc(entry.key)}" data-cli-action="machine-settings-set">${values.map((value) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(value || t("config.unset"))}</option>`).join("")}</select>`;
+    };
+    $("#machine-settings").innerHTML = `<div class="tcrn-surface"><div class="tcrn-surface__head"><div><h2>${esc(t("settings.machine"))}</h2><p class="tcrn-surface__note">${esc(t("settings.machineNote"))}</p><p class="tcrn-scope-note">${esc(t("settings.machineScope"))}</p></div></div>`
+      + (entries.length === 0 ? `<div class="tcrn-state-surface">${esc(t("config.empty"))}</div>` : entries.map((entry) => `<div class="tcrn-setting-row" data-machine-row="${esc(entry.key)}"><div class="tcrn-setting-row__label"><code class="tcrn-setting-row__key">${esc(entry.key)}</code><span class="tcrn-setting-row__name">${esc(t("setting." + entry.key + ".label"))}</span><span class="tcrn-setting-row__description">${esc(t("setting." + entry.key + ".description"))}${entry.appliesOn === "restart" ? " " + esc(t("settings.machineRestart")) : ""}</span></div><div class="tcrn-setting-row__control">${controlFor(entry)}</div></div>`).join(""))
+      + `</div>`;
+    $$("[data-machine-control]").forEach((control) => control.addEventListener("change", () => saveMachineSetting(control.dataset.machineControl, control.value)));
+    attachEcho($("#machine-settings"));
   };
   const renderSettings = () => {
     const settings = state.settings?.settings || [];
@@ -3551,18 +4018,36 @@ const BOOT = __PORTAL_BOOT__;
     setText("#settings-count", `${visible.length} ${t("config.keyCount")}`);
     $("#settings-rows").innerHTML = visible.map((entry) => {
       const modified = entry.currentValue !== entry.defaultValue;
-      const reset = modified ? `<button type="button" class="tcrn-setting-row__reset" data-reset-setting="${esc(entry.key)}" data-cli-action="settings-remove" aria-label="${esc(t("config.reset"))}">↺</button>` : "";
-      const dictionary = entry.allowedValues?.length ? `<button type="button" class="tcrn-button tcrn-button--quiet" data-vocabulary-link="settingsEnums" data-ui="setting-dictionary-link" aria-label="${esc(t("config.dictionary"))}">📖</button>` : "";
-      const dot = `<span class="tcrn-setting-row__modified" data-ui="setting-modified-dot" role="img" aria-label="${esc(t("config.modified"))}" ${modified ? "" : "hidden"}>●</span>`;
-      return `<div class="tcrn-setting-row ${modified ? "tcrn-setting-row--modified tcrn-highlightable" : ""}" data-setting-row="${esc(entry.key)}" data-modified="${modified ? "true" : "false"}"><div class="tcrn-setting-row__label"><code class="tcrn-setting-row__key">${esc(entry.key)}</code><span class="tcrn-setting-row__name">${esc(settingLabel(entry.key))}</span><span class="tcrn-setting-row__description">${esc(settingDescription(entry.key))}</span></div><div class="tcrn-setting-row__control">${controlFor(entry)}</div><div class="tcrn-setting-row__tools">${dot}${dictionary}${reset}</div></div>`;
+      const reset = modified ? `<button type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md tcrn-icon-button tcrn-setting-row__reset" data-reset-setting="${esc(entry.key)}" data-cli-action="settings-remove" aria-label="${esc(t("config.reset"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5"/><path d="M2.6 2.8v2.6h2.6"/></svg></button>` : "";
+      // The dictionary link and the dictionary row must agree on who is in the domain:
+      // the vocabulary lists a key when its controlType is "enum", so the icon asks the
+      // same question. Keying the icon off allowedValues instead produced links that
+      // landed on a page with no matching row.
+      const dictionary = hasClosedValueSet(entry) ? `<button type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md tcrn-icon-button" data-vocabulary-link="setting:${esc(entry.key)}" data-ui="setting-dictionary-link" aria-label="${esc(t("config.dictionary"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 3.2h3.3c.9 0 1.7.4 2.2 1.1.5-.7 1.3-1.1 2.2-1.1h3.3v8.6h-3.3c-.9 0-1.7.4-2.2 1.1-.5-.7-1.3-1.1-2.2-1.1H2.5Z"/><path d="M8 4.3v8.6"/></svg></button>` : "";
+      const dot = `<span class="tcrn-setting-row__modified" data-ui="setting-modified-dot" role="img" aria-label="${esc(t("config.modified"))}" ${modified ? "" : "hidden"}><span class="tcrn-dot" aria-hidden="true"></span></span>`;
+      return `<div class="tcrn-setting-row ${modified ? "tcrn-setting-row--modified tcrn-highlightable" : ""}" data-setting-row="${esc(entry.key)}" data-modified="${modified ? "true" : "false"}"><div class="tcrn-setting-row__label"><code class="tcrn-setting-row__key">${esc(entry.key)}</code><span class="tcrn-setting-row__name">${esc(settingLabel(entry.key))}${conceptTip("setting." + entry.key)}</span><span class="tcrn-setting-row__description">${esc(settingDescription(entry.key))}</span></div><div class="tcrn-setting-row__control">${controlFor(entry)}</div><div class="tcrn-setting-row__tools">${dot}${dictionary}${reset}</div></div>`;
     }).join("") || `<div class="tcrn-state-surface">${esc(t("config.empty"))}</div>`;
     $("#model-plans").hidden = state.settingGroup !== "models";
     if (state.settingGroup === "models") renderPlans();
+    $("#design-authority").hidden = state.settingGroup !== "workspace" || designAuthorityState.status === "unset";
+    if (state.settingGroup === "workspace") { renderDesignAuthority(); refreshDesignAuthority(); }
+    $("#machine-settings").hidden = state.settingGroup !== "machine";
+    if (state.settingGroup === "machine") renderMachineSettings();
     $$('[data-setting-control]').forEach((control) => {
       if (control.tagName === "BUTTON") control.addEventListener("click", () => saveSetting(control.dataset.settingControl, control.dataset.settingValue));
       else control.addEventListener("change", () => saveSetting(control.dataset.settingControl, control.type === "checkbox" ? (control.checked ? control.dataset.settingValue : (currentSetting(control.dataset.settingControl)?.falseValue || "forbidden")) : control.value));
     });
     $$('[data-reset-setting]').forEach((button) => button.addEventListener("click", () => resetSetting(button.dataset.resetSetting)));
+    $$('[data-stepper-action]').forEach((button) => button.addEventListener("click", () => {
+      const input = button.closest("[data-stepper]")?.querySelector("[data-setting-control]");
+      if (!input) return;
+      const delta = button.dataset.stepperAction === "increment" ? 1 : -1;
+      const value = Math.min(Number(input.max), Math.max(Number(input.min), Number(input.value) + delta));
+      if (Number.isFinite(value) && value !== Number(input.value)) {
+        input.value = String(value);
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }));
     $$('[data-vocabulary-link]').forEach((button) => button.addEventListener("click", () => { state.selectedVocabulary = button.dataset.vocabularyLink; navigate("vocabulary"); renderVocabulary(); }));
     attachEcho($("#settings-rows"));
   };
@@ -3570,17 +4055,75 @@ const BOOT = __PORTAL_BOOT__;
     const plans = state.execution?.plans || [];
     const hosts = state.vocabulary?.hosts || [];
     const people = state.execution?.personas || [];
-    $("#model-plans").innerHTML = `<div class="tcrn-surface"><div class="tcrn-surface__head"><div><h2>${esc(t("models.title"))}</h2><p class="tcrn-surface__note">${esc(t("models.note"))}</p><p class="tcrn-scope-note">${esc(t("models.scope"))}</p></div></div><div class="tcrn-model-plan">${hosts.map((host) => {
+    // Assignment carries two filters, not one: the level must exist on this host and
+    // it must be assignable per persona. Offering a session level here would produce
+    // an option the engine refuses, so the same predicate the engine validates with
+    // decides what the dropdown shows.
+    const assignableEfforts = (host) => (state.vocabulary?.efforts || [])
+      .filter((effort) => (effort.applicableHosts || []).includes(host) && effort.assignableToSubagent !== false);
+    const effortOptions = (host) => [`<option value="">${esc(t("models.effortDefault"))}</option>`, ...assignableEfforts(host)
+      .map((effort) => `<option value="${esc(effort.name)}">${esc(effort.name)}</option>`)].join("");
+    $("#model-plans").innerHTML = `<div class="tcrn-surface"><div class="tcrn-surface__head"><div><h2>${esc(t("models.title"))}</h2><p class="tcrn-surface__note">${esc(t("models.note"))}</p><p class="tcrn-scope-note">${esc(t("models.scope"))}</p></div><button type="button" class="tcrn-button tcrn-button--secondary" id="vendor-directory-toggle" aria-expanded="false" aria-controls="vendor-directory-drawer" data-ui="vendor-directory-toggle">${esc(t("models.vendorDirectory"))}</button></div><aside class="tcrn-detail-drawer" id="vendor-directory-drawer" role="complementary" data-modal-scope="structural-drawer" data-ui="vendor-directory-drawer" data-open="false" aria-labelledby="vendor-directory-title" aria-hidden="true"><div class="tcrn-detail-drawer__head"><h2 id="vendor-directory-title">${esc(t("models.vendorDirectory"))}</h2><button type="button" class="tcrn-button tcrn-button--quiet" data-ui="vendor-directory-close" id="vendor-directory-close">${esc(t("models.vendorDirectoryClose"))}</button></div><p class="tcrn-meta">${esc(t("models.vendorDirectoryNote"))}</p><div class="tcrn-vendor-directory__list">${VENDOR_MODEL_DIRECTORIES.map((vendor) => `<a class="tcrn-link-button tcrn-link-button--secondary" href="${esc(vendor.url)}" target="_blank" rel="noreferrer noopener" data-vendor-directory="${esc(vendor.id)}">${esc(vendor.name)}</a>`).join("")}</div></aside><div class="tcrn-model-plan">${hosts.map((host) => {
       const hostPlans = plans.filter((plan) => plan.host === host);
       return `<section class="tcrn-model-plan__host"><h3>${esc(host)}</h3>${hostPlans.map((plan) => {
         const active = activePlan(host)?.name === plan.name;
-        return `<article class="tcrn-plan ${active ? "tcrn-plan--active" : ""}"><div class="tcrn-plan__head"><strong>${esc(plan.name)}</strong><span class="tcrn-machine-token tcrn-machine-token--compact"><span class="tcrn-machine-token__value">${esc(plan.defaultModel)}</span></span>${active ? `<span class="tcrn-badge tcrn-badge--positive" data-ui="plan-active-badge" role="status">${esc(t("models.active"))}</span>` : ""}</div><div class="tcrn-plan__assignments">${Object.entries(plan.assignments || {}).map(([persona, model]) => `<div class="tcrn-assignment"><span>${esc(persona)} → ${esc(model)}</span><button type="button" class="tcrn-button tcrn-button--quiet" data-unassign="${esc(JSON.stringify({ host, plan: plan.name, persona }))}" data-cli-action="model-plan-unassign" aria-label="${esc(t("models.unassign"))}">×</button></div>`).join("") || `<span class="tcrn-meta">${esc(t("models.defaultFallback"))}</span>`}</div><div class="tcrn-assignment-addline" data-ui="assignment-addline" role="group"><div class="tcrn-field"><label>${esc(t("models.persona"))}</label><select class="tcrn-select" data-assign-persona="${esc(JSON.stringify({ host, plan: plan.name }))}">${people.map((persona) => `<option value="${esc(persona.name)}">${esc(persona.name)}</option>`).join("")}</select></div><div class="tcrn-field"><label>${esc(t("models.model"))}</label><input class="tcrn-input" data-assign-model="${esc(JSON.stringify({ host, plan: plan.name }))}" required></div><button type="button" class="tcrn-button" data-assign="${esc(JSON.stringify({ host, plan: plan.name }))}" data-cli-action="model-plan-assign">${esc(t("models.assign"))}</button></div><button type="button" class="tcrn-button tcrn-button--quiet" data-remove-plan="${esc(JSON.stringify({ host, name: plan.name }))}" data-cli-action="model-plan-remove">${esc(t("models.remove"))}</button></article>`;
+        return `<article class="tcrn-plan ${active ? "tcrn-plan--active" : ""}"><div class="tcrn-plan__head"><strong>${esc(plan.name)}</strong><span class="tcrn-machine-token tcrn-machine-token--compact"><span class="tcrn-machine-token__value">${esc(plan.defaultModel)}</span></span>${active ? `<span class="tcrn-badge tcrn-badge--positive" data-ui="plan-active-badge" role="status">${esc(t("models.active"))}</span>` : ""}${plan.defaultEffort ? `<span class="tcrn-badge" data-ui="plan-default-effort">${esc(t("models.defaultEffort"))}: ${esc(plan.defaultEffort)}</span>` : ""}</div><div class="tcrn-plan__assignments">${Object.entries(plan.assignments || {}).map(([persona, model]) => { // Where the effort comes from is part of what the row says: a persona with no entry
+      // of its own inherits the plan default, and showing that is the difference between
+      // "nothing set" and "set here".
+      const effort = plan.efforts?.[persona] ?? plan.defaultEffort;
+      const inherited = plan.efforts?.[persona] === undefined && plan.defaultEffort !== undefined;
+      return `<div class="tcrn-assignment"><span>${esc(persona)} → ${esc(model)}${effort ? ` · ${esc(t("models.effort"))}: ${esc(effort)}${inherited ? ` (${esc(t("models.effortInherited"))})` : ""}` : ""}</span><button type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md tcrn-icon-button" data-unassign="${esc(JSON.stringify({ host, plan: plan.name, persona }))}" data-cli-action="model-plan-unassign" aria-label="${esc(t("models.unassign"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>`; }).join("") || `<span class="tcrn-meta">${esc(t("models.defaultFallback"))}</span>`}</div><div class="tcrn-assignment-addline" data-ui="assignment-addline" role="group"><div class="tcrn-field"><label>${esc(t("models.persona"))}</label><select class="tcrn-select" data-assign-persona="${esc(JSON.stringify({ host, plan: plan.name }))}">${people.map((persona) => `<option value="${esc(persona.name)}">${esc(persona.name)}</option>`).join("")}</select></div><div class="tcrn-field"><label>${esc(t("models.model"))}</label><input class="tcrn-input" data-assign-model="${esc(JSON.stringify({ host, plan: plan.name }))}" required></div><div class="tcrn-field"><label>${esc(t("models.effort"))}</label><select class="tcrn-select" data-assign-effort="${esc(JSON.stringify({ host, plan: plan.name }))}">${effortOptions(host)}</select></div><button type="button" class="tcrn-button" data-assign="${esc(JSON.stringify({ host, plan: plan.name }))}" data-cli-action="model-plan-assign">${esc(t("models.assign"))}</button></div><button type="button" class="tcrn-button tcrn-button--quiet" data-remove-plan="${esc(JSON.stringify({ host, name: plan.name }))}" data-cli-action="model-plan-remove">${esc(t("models.remove"))}</button></article>`;
       }).join("") || `<div class="tcrn-state-surface">${esc(t("models.noPlans"))}</div>`}</section>`;
-    }).join("")}</div><form class="tcrn-form" id="plan-form"><div class="tcrn-form__row"><div class="tcrn-field"><label for="plan-host">${esc(t("models.host"))}</label><select class="tcrn-select" id="plan-host">${hosts.map((host) => `<option value="${esc(host)}">${esc(host)}</option>`).join("")}</select></div><div class="tcrn-field"><label for="plan-name">${esc(t("models.name"))}</label><input class="tcrn-input" id="plan-name" required></div></div><div class="tcrn-field"><label for="plan-default-model">${esc(t("models.defaultModel"))}</label><input class="tcrn-input" id="plan-default-model" required></div><button class="tcrn-button tcrn-button--primary" type="submit" data-cli-action="model-plan-set">${esc(t("models.create"))}</button></form></div>`;
-    $$('[data-assign]').forEach((button) => button.addEventListener("click", () => { const value = JSON.parse(button.dataset.assign); const model = $(`[data-assign-model="${CSS.escape(JSON.stringify(value))}"]`)?.value || ""; writeExecution("model-plan-assign", { ...value, model }); }));
+    }).join("")}</div><form class="tcrn-form" id="plan-form"><fieldset class="tcrn-form__group"><legend>${esc(t("models.groupPlan"))}</legend><div class="tcrn-form__row"><div class="tcrn-field"><label for="plan-host">${esc(t("models.host"))}</label><select class="tcrn-select" id="plan-host">${hosts.map((host) => `<option value="${esc(host)}">${esc(host)}</option>`).join("")}</select></div><div class="tcrn-field"><label for="plan-name">${esc(t("models.name"))}</label><input class="tcrn-input" id="plan-name" required></div></div><div class="tcrn-field"><label for="plan-default-model">${esc(t("models.defaultModel"))}</label><input class="tcrn-input" id="plan-default-model" required></div><div class="tcrn-field"><label for="plan-default-effort">${esc(t("models.defaultEffort"))}</label><select class="tcrn-select" id="plan-default-effort"><option value="">${esc(t("models.effortDefault"))}</option></select><small class="tcrn-meta">${esc(t("models.defaultEffortNote"))}</small></div><div class="tcrn-field tcrn-plan-effort-preview" id="plan-effort-preview"></div><div class="tcrn-action-row"><button class="tcrn-button tcrn-button--primary" type="submit" data-cli-action="model-plan-set">${esc(t("models.create"))}</button></div></fieldset></form></div>`;
+    $$('[data-assign]').forEach((button) => button.addEventListener("click", () => { const value = JSON.parse(button.dataset.assign); const key = JSON.stringify(value); const persona = $(`[data-assign-persona="${CSS.escape(key)}"]`)?.value || ""; const model = $(`[data-assign-model="${CSS.escape(key)}"]`)?.value || ""; const effort = $(`[data-assign-effort="${CSS.escape(key)}"]`)?.value || undefined; writeExecution("model-plan-assign", { ...value, persona, model, effort }); }));
     $$('[data-unassign]').forEach((button) => button.addEventListener("click", () => writeExecution("model-plan-unassign", JSON.parse(button.dataset.unassign))));
     $$('[data-remove-plan]').forEach((button) => button.addEventListener("click", () => writeExecution("model-plan-remove", JSON.parse(button.dataset.removePlan))));
-    $("#plan-form").addEventListener("submit", (event) => { event.preventDefault(); writeExecution("model-plan-set", { host: $("#plan-host").value, name: $("#plan-name").value, defaultModel: $("#plan-default-model").value }); });
+    // One state, three expressions: the trigger's aria-expanded, the drawer's
+    // aria-hidden and its hidden attribute. Setting only the first would announce a
+    // drawer that screen readers still skip.
+    const vendorDrawer = $("#vendor-directory-drawer");
+    const vendorToggle = $("#vendor-directory-toggle");
+    const setVendorDrawer = (open) => {
+      vendorToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      vendorDrawer.setAttribute("aria-hidden", open ? "false" : "true");
+      vendorDrawer.setAttribute("data-open", open ? "true" : "false");
+      // The design system makes the drawer focusable only while open (tabIndex -1 when
+      // open, absent when closed). Without that attribute the focus() below is a no-op,
+      // so opening the drawer would leave the reader keyboard-stranded on the trigger.
+      if (open) vendorDrawer.setAttribute("tabindex", "-1"); else vendorDrawer.removeAttribute("tabindex");
+      if (open) vendorDrawer.focus();
+    };
+    vendorToggle.addEventListener("click", () => setVendorDrawer(vendorDrawer.getAttribute("data-open") !== "true"));
+    $("#vendor-directory-close").addEventListener("click", () => { setVendorDrawer(false); vendorToggle.focus(); });
+    vendorDrawer.addEventListener("keydown", (event) => { if (event.key === "Escape") { setVendorDrawer(false); vendorToggle.focus(); } });
+    // Effort belongs to an assignment, not to the plan itself, so the create form shows
+    // which levels this host will offer rather than a control that would imply otherwise.
+    const renderEffortPreview = () => {
+      const host = $("#plan-host")?.value;
+      const target = $("#plan-effort-preview");
+      if (!target || !host) return;
+      // The preview promises what the assignment dropdown will offer, so it filters
+      // by the same predicate; a session level shown here would be a promise the
+      // next control breaks.
+      const available = assignableEfforts(host);
+      const withheld = (state.vocabulary?.efforts || []).filter((effort) => (effort.applicableHosts || []).includes(host) && effort.assignableToSubagent === false);
+      // The control offers exactly what the preview promises, from the same list, so
+      // the form cannot offer a value the engine would refuse.
+      const effortSelect = $("#plan-default-effort");
+      if (effortSelect) {
+        const chosen = effortSelect.value;
+        effortSelect.innerHTML = [`<option value="">${esc(t("models.effortDefault"))}</option>`,
+          ...available.map((effort) => `<option value="${esc(effort.name)}">${esc(effort.name)}</option>`)].join("");
+        if (available.some((effort) => effort.name === chosen)) effortSelect.value = chosen;
+      }
+      target.innerHTML = `<span class="tcrn-field__label">${esc(t("models.effortPreview"))}</span>`
+        + (available.length === 0 ? `<span class="tcrn-meta">—</span>` : `<span class="tcrn-plan-effort-preview__list">${available.map((effort) => `<span class="tcrn-badge">${esc(effort.name)}</span>`).join(" ")}</span>`)
+        + (withheld.length === 0 ? "" : `<small class="tcrn-meta" data-ui="effort-session-only-note">${esc(t("models.effortSessionOnlyNote"))}</small>`)
+        + `<small class="tcrn-meta">${esc(t("models.effortPreviewNote"))}</small>`;
+    };
+    $("#plan-host").addEventListener("change", renderEffortPreview);
+    renderEffortPreview();
+    $("#plan-form").addEventListener("submit", (event) => { event.preventDefault(); writeExecution("model-plan-set", { host: $("#plan-host").value, name: $("#plan-name").value, defaultModel: $("#plan-default-model").value, ...($("#plan-default-effort")?.value ? { defaultEffort: $("#plan-default-effort").value } : {}) }); });
     attachEcho($("#model-plans"));
   };
   const renderDashboard = () => {
@@ -3601,12 +4144,12 @@ const BOOT = __PORTAL_BOOT__;
     $("#health-list").innerHTML = displayChecks.map((check) => `<div class="tcrn-list__row"><span>${esc(healthLabel(check.key))}</span><span class="tcrn-badge ${check.ok ? "tcrn-badge--positive" : "tcrn-badge--danger"}">${esc(check.ok ? t("health.ok") : t("health.failed"))}</span></div>`).join("") || `<div class="tcrn-state-surface">${esc(t("health.unavailable"))}</div>`;
     setText("#validate-chip", healthy ? t("health.healthy") : t("health.degraded"));
     $("#validate-chip").className = `tcrn-badge ${healthy ? "tcrn-badge--positive" : "tcrn-badge--danger"}`;
-    $("#workspace-paths").innerHTML = Object.entries(BOOT.paths || {}).map(([key, value]) => `<div class="tcrn-path"><strong>${esc(key)}</strong><span class="tcrn-path__value" title="${esc(value)}">${esc(value)}</span><button type="button" class="tcrn-button tcrn-button--quiet" data-ui="path-copy" data-path="${esc(value)}" aria-label="${esc(t("dashboard.copyPath"))}">⧉</button></div>`).join("");
+    $("#workspace-paths").innerHTML = Object.entries(BOOT.paths || {}).map(([key, value]) => `<div class="tcrn-path"><strong>${esc(key)}</strong><span class="tcrn-path__value" title="${esc(value)}">${esc(value)}</span><button type="button" type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md tcrn-icon-button" data-ui="path-copy" data-path="${esc(value)}" aria-label="${esc(t("dashboard.copyPath"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-1a1.5 1.5 0 0 0-1.5-1.5H4a1.5 1.5 0 0 0-1.5 1.5v5A1.5 1.5 0 0 0 4 11h1"/></svg></button></div>`).join("");
     $$('[data-path]').forEach((button) => button.addEventListener("click", async () => { try { await navigator.clipboard.writeText(button.dataset.path); button.textContent = "✓"; setTimeout(() => { button.textContent = "⧉"; }, 700); } catch { setText("#echo-command", t("dashboard.copyUnavailable")); } }));
     renderAudit("#dashboard-audit");
   };
   const personaFields = ["jobTitle", "mission", "refusals", "authorityBoundary", "contactWhen", "requiredInputs", "deliverables", "successCriteria"];
-  const renderPersonaButton = (persona) => `<button class="tcrn-entity" data-persona-name="${esc(persona.name)}" aria-current="${state.selectedPersona?.name === persona.name ? "true" : "false"}"><span><strong>${esc(persona.name)}</strong><span class="tcrn-entity__role">${esc(roleValue(persona.role))}</span></span><span class="tcrn-entity__source">${esc(persona.source === "custom" ? t("entities.custom") : persona.overridden ? t("entities.overridden") : t("entities.preset"))}${persona.overridden ? ` · <span data-ui="persona-override-dot" role="status" aria-label="${esc(t("entities.modified"))}">●</span>` : ""}</span></button>`;
+  const renderPersonaButton = (persona) => `<button class="tcrn-entity" data-persona-name="${esc(persona.name)}" aria-current="${state.selectedPersona?.name === persona.name ? "true" : "false"}"><span><strong>${esc(persona.name)}</strong><span class="tcrn-entity__role">${esc(roleValue(persona.role))}</span></span><span class="tcrn-entity__source">${esc(persona.source === "custom" ? t("entities.custom") : persona.overridden ? t("entities.overridden") : t("entities.preset"))}${persona.overridden ? ` · <span data-ui="persona-override-dot" role="status" aria-label="${esc(t("entities.modified"))}"><span class="tcrn-dot" aria-hidden="true"></span></span>` : ""}</span></button>`;
   const renderPersonaList = () => {
     const people = state.execution?.personas || [];
     setText("#persona-count", people.length);
@@ -3627,12 +4170,12 @@ const BOOT = __PORTAL_BOOT__;
     const preset = persona.source === "core-reference";
     const roleOptions = (state.vocabulary?.roles || []).map((role) => { const value = roleValue(role); return `<option value="${esc(value)}" ${value === roleValue(persona.role) ? "selected" : ""}>${esc(value)}</option>`; }).join("");
     const overridden = new Set(persona.overriddenFields || []);
-    const lockHint = (label) => `<span class="tcrn-lock-hint" data-ui="persona-name-lock" role="note"><span class="tcrn-lock-hint__icon" aria-hidden="true">🔒</span><span class="tcrn-lock-hint__text">${esc(label)}</span></span>`;
-    const editableField = (field) => `<div class="tcrn-field"><label for="persona-${esc(field)}">${esc(t(`entities.field.${field}`))}</label><textarea class="tcrn-textarea" id="persona-${esc(field)}" data-persona-field="${esc(field)}">${esc(persona[field] || "")}</textarea>${preset && overridden.has(field) ? `<div class="tcrn-field-provenance tcrn-field-provenance--overridden" data-ui="persona-ghost" data-provenance-state="overridden" role="note"><span class="tcrn-field-provenance__value">${esc(persona.factory?.[field] || "—")}</span><span class="tcrn-field-provenance__source">${esc(t("entities.factoryValue"))}</span><span class="tcrn-field-provenance__action"><button type="button" class="tcrn-button tcrn-button--quiet" data-restore-field="${esc(field)}" data-cli-action="persona-preset-restore" data-ui="persona-restore-field">↺ ${esc(t("entities.restoreField"))}</button></span></div>` : ""}</div>`;
+    const lockHint = (label) => `<span class="tcrn-lock-hint" data-ui="persona-name-lock" role="note"><span class="tcrn-lock-hint__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6" rx="1.5"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg></span><span class="tcrn-lock-hint__text">${esc(label)}</span></span>`;
+    const editableField = (field) => `<div class="tcrn-field"><label for="persona-${esc(field)}">${esc(t(`entities.field.${field}`))}</label><textarea class="tcrn-textarea" id="persona-${esc(field)}" data-persona-field="${esc(field)}">${esc(persona[field] || "")}</textarea>${preset && overridden.has(field) ? `<div class="tcrn-field-provenance tcrn-field-provenance--overridden" data-ui="persona-ghost" data-provenance-state="overridden" role="note"><span class="tcrn-field-provenance__value">${esc(persona.factory?.[field] || "—")}</span><span class="tcrn-field-provenance__source">${esc(t("entities.factoryValue"))}</span><span class="tcrn-field-provenance__action"><button type="button" class="tcrn-button tcrn-button--quiet" data-restore-field="${esc(field)}" data-cli-action="persona-preset-restore" data-ui="persona-restore-field"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5"/><path d="M2.6 2.8v2.6h2.6"/></svg> ${esc(t("entities.restoreField"))}</button></span></div>` : ""}</div>`;
     const primary = ["jobTitle", "mission", "refusals"].map(editableField).join("");
     const more = ["authorityBoundary", "contactWhen", "requiredInputs", "deliverables", "successCriteria"].map(editableField).join("");
     const resolutions = modelResolution(persona);
-    $("#persona-detail").innerHTML = `<div class="tcrn-detail-inspector__head"><div><div class="tcrn-detail-inspector__identity"><h2>${esc(persona.name || t("entities.newName"))}</h2><span class="tcrn-badge ${preset ? "" : "tcrn-badge--positive"}">${esc(preset ? t("entities.preset") : t("entities.custom"))}</span>${persona.overridden ? `<span class="tcrn-badge tcrn-badge--warning" data-ui="persona-modified-badge" role="status">${esc(t("entities.modified"))}</span>` : `<span data-ui="persona-modified-badge" role="status" hidden>${esc(t("entities.modified"))}</span>`}</div><span class="tcrn-meta">${esc(persona.id || t("entities.pendingId"))}</span></div><div class="tcrn-detail-inspector__actions">${preset ? lockHint(t("entities.nameLocked")) : ""}${preset && persona.overridden ? `<button type="button" class="tcrn-button tcrn-button--quiet" data-restore-all="true" data-cli-action="persona-preset-restore" data-ui="persona-restore-all">↺ ${esc(t("entities.restoreAll"))}</button>` : ""}<button class="tcrn-button tcrn-button--danger" id="remove-persona" data-cli-action="persona-remove">${esc(t("entities.remove"))}</button><button class="tcrn-button tcrn-button--primary" id="save-persona" data-cli-action="persona-set">${esc(t("entities.save"))}</button></div></div><form class="tcrn-form" id="persona-form"><div class="tcrn-form__row"><div class="tcrn-field"><label for="persona-name">${esc(t("entities.name"))}</label><input class="tcrn-input" id="persona-name" value="${esc(persona.name)}" ${preset ? "readonly" : ""} required>${preset ? lockHint(t("entities.nameLocked")) : ""}</div><div class="tcrn-field"><label for="persona-role">${esc(t("entities.role"))}</label><select class="tcrn-select" id="persona-role" data-persona-field="role">${roleOptions}</select></div></div>${primary}<details class="tcrn-more-fields" data-ui="persona-more-fields" role="group"><summary>${esc(t("entities.moreFields"))}</summary><div class="tcrn-more-fields__body">${more}</div></details><section class="tcrn-model-readonly" data-ui="persona-model-readonly" role="region" aria-label="${esc(t("entities.modelReadOnly"))}"><h3>${esc(t("entities.modelReadOnly"))}</h3>${resolutions.map((resolution) => `<div class="tcrn-model-resolution"><strong>${esc(resolution.host)}</strong><span class="tcrn-machine-token tcrn-machine-token--compact"><span class="tcrn-machine-token__value">${esc(resolution.model)}</span></span><span class="tcrn-meta">${esc(resolution.source)}</span></div>`).join("")}</section><div class="tcrn-confirm-dialog" id="persona-delete-confirm" data-ui="persona-delete-confirm" role="alertdialog" hidden><strong>${esc(t("entities.confirmRemove"))}</strong><div class="tcrn-confirm-dialog__actions"><button type="button" class="tcrn-button tcrn-button--danger" id="confirm-remove">${esc(t("entities.confirm"))}</button><button type="button" class="tcrn-button" id="cancel-remove">${esc(t("entities.cancel"))}</button></div></div></form>`;
+    $("#persona-detail").innerHTML = `<div class="tcrn-detail-inspector__head"><div><div class="tcrn-detail-inspector__identity"><h2>${esc(persona.name || t("entities.newName"))}</h2><span class="tcrn-badge ${preset ? "" : "tcrn-badge--positive"}">${esc(preset ? t("entities.preset") : t("entities.custom"))}</span>${persona.overridden ? `<span class="tcrn-badge tcrn-badge--warning" data-ui="persona-modified-badge" role="status">${esc(t("entities.modified"))}</span>` : `<span data-ui="persona-modified-badge" role="status" hidden>${esc(t("entities.modified"))}</span>`}</div><span class="tcrn-meta">${esc(persona.id || t("entities.pendingId"))}</span></div><div class="tcrn-detail-inspector__actions">${preset ? lockHint(t("entities.nameLocked")) : ""}${preset && persona.overridden ? `<button type="button" class="tcrn-button tcrn-button--quiet" data-restore-all="true" data-cli-action="persona-preset-restore" data-ui="persona-restore-all"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5"/><path d="M2.6 2.8v2.6h2.6"/></svg> ${esc(t("entities.restoreAll"))}</button>` : ""}<button class="tcrn-button tcrn-button--danger" id="remove-persona" data-cli-action="persona-remove">${esc(t("entities.remove"))}</button><button class="tcrn-button tcrn-button--primary" id="save-persona" data-cli-action="persona-set">${esc(t("entities.save"))}</button></div></div><form class="tcrn-form" id="persona-form"><div class="tcrn-form__row"><div class="tcrn-field"><label for="persona-name">${esc(t("entities.name"))}</label><input class="tcrn-input" id="persona-name" value="${esc(persona.name)}" ${preset ? "readonly" : ""} required>${preset ? lockHint(t("entities.nameLocked")) : ""}</div><div class="tcrn-field"><label for="persona-role">${esc(t("entities.role"))}</label><select class="tcrn-select" id="persona-role" data-persona-field="role">${roleOptions}</select></div></div>${primary}<details class="tcrn-more-fields" data-ui="persona-more-fields" role="group"><summary>${esc(t("entities.moreFields"))}</summary><div class="tcrn-more-fields__body">${more}</div></details><section class="tcrn-model-readonly" data-ui="persona-model-readonly" role="region" aria-label="${esc(t("entities.modelReadOnly"))}"><h3>${esc(t("entities.modelReadOnly"))}</h3><dl class="tcrn-definition-list tcrn-definition-list--dense" data-definition-list="true">${resolutions.map((resolution) => `<div class="tcrn-definition-list__item"><dt class="tcrn-definition-list__term">${esc(resolution.host)}</dt><dd class="tcrn-definition-list__definition"><span class="tcrn-machine-token tcrn-machine-token--compact"><span class="tcrn-machine-token__value">${esc(resolution.model)}</span></span><small class="tcrn-meta">${esc(resolution.source)}</small></dd></div>`).join("")}</dl></section><div class="tcrn-confirm-dialog" id="persona-delete-confirm" data-ui="persona-delete-confirm" role="alertdialog" hidden><strong>${esc(t("entities.confirmRemove"))}</strong><div class="tcrn-confirm-dialog__actions"><button type="button" class="tcrn-button tcrn-button--danger" id="confirm-remove">${esc(t("entities.confirm"))}</button><button type="button" class="tcrn-button" id="cancel-remove">${esc(t("entities.cancel"))}</button></div></div></form>`;
     normalizePersonaDetailAliases($("#persona-detail"));
     $("#save-persona").addEventListener("click", (event) => { event.preventDefault(); savePersona(); });
     $("#remove-persona").addEventListener("click", () => { $("#persona-delete-confirm").hidden = false; $("#confirm-remove").focus(); });
@@ -3642,19 +4185,155 @@ const BOOT = __PORTAL_BOOT__;
     $$('[data-restore-all]').forEach((button) => button.addEventListener("click", () => writeExecution("persona-preset-restore", { name: persona.name })));
     attachEcho($("#persona-detail"));
   };
+  // Each vocabulary domain is a table of its own fields, not one paragraph per term:
+  // the read surface publishes distinct columns (a name, what it means, where it
+  // applies, where it came from) and collapsing them into a single cell is what made
+  // this page unreadable. Columns are declared per domain from the fields the engine
+  // actually returns; the portal invents neither a field nor a value.
+  // Where each vendor publishes the models its API accepts. This is a jump list, not
+  // a mirror: the portal never fetches these pages, and a model name is typed into the
+  // plan by the reader, so the roster cannot go stale in the way a copied table would.
+  // Every URL was resolved (HTTP 200) on 2026-08-15; vendor names are proper nouns and
+  // stay untranslated in every locale.
+  const VENDOR_MODEL_DIRECTORIES = [
+    { id: "anthropic", name: "Anthropic", url: "https://docs.claude.com/en/docs/about-claude/models/overview" },
+    { id: "openai", name: "OpenAI", url: "https://platform.openai.com/docs/models" },
+    { id: "qwen", name: "Qwen", url: "https://www.alibabacloud.com/help/en/model-studio/models" },
+    { id: "minimax", name: "MiniMax", url: "https://platform.minimaxi.com/document/Models" },
+    { id: "deepseek", name: "DeepSeek", url: "https://api-docs.deepseek.com/quick_start/pricing" },
+    { id: "kimi", name: "Kimi", url: "https://platform.moonshot.ai/docs/pricing/chat" },
+    { id: "grok", name: "Grok", url: "https://docs.x.ai/docs/models" },
+    { id: "gemini", name: "Google Gemini", url: "https://ai.google.dev/gemini-api/docs/models" },
+    { id: "glm", name: "GLM", url: "https://docs.bigmodel.cn/cn/guide/start/model-overview" },
+  ];
+  const VOCABULARY_COLUMNS = {
+    roles: [
+      { key: "value", labelKey: "vocabulary.columnName" },
+      { key: "description", labelKey: "vocabulary.columnDescription", kind: "description" },
+      { key: "reviewOnlyDispatchable", labelKey: "vocabulary.columnReviewOnly", kind: "boolean" },
+    ],
+    hosts: [{ key: "@self", labelKey: "vocabulary.columnName" }],
+    efforts: [
+      { key: "name", labelKey: "vocabulary.columnName" },
+      { key: "semantics", labelKey: "vocabulary.columnSemantics", kind: "semantics" },
+      { key: "applicableHosts", labelKey: "vocabulary.columnApplicableHosts", kind: "badges" },
+      // A level the host applies to a whole session is real and belongs in the
+      // vocabulary, but a plan assigns effort to one persona and cannot carry it.
+      // The column says which is which, so the absence of such a level from the
+      // assignment dropdown reads as a stated rule rather than a missing option.
+      { key: "assignableToSubagent", labelKey: "vocabulary.columnAssignable", kind: "boolean" },
+      { key: "evidence", labelKey: "vocabulary.columnSource", kind: "evidence" },
+    ],
+    conferenceTypes: [
+      { key: "value", labelKey: "vocabulary.columnName" },
+      { key: "description", labelKey: "vocabulary.columnDescription", kind: "description" },
+      { key: "coveredByIndependenceFloors", labelKey: "vocabulary.columnFloors", kind: "badges" },
+    ],
+    executionForms: [
+      { key: "value", labelKey: "vocabulary.columnName" },
+      { key: "description", labelKey: "vocabulary.columnDescription", kind: "description" },
+    ],
+    // Every enum setting is its own dictionary entry (Owner, MIN-094): the shared
+    // "settings enums" domain is retired. It was a container named after the engine's
+    // internal grouping, not a term anyone looks up — a reader arrives wanting to know
+    // what `verification-and-risk` means, and had to first know it lived under a
+    // heading about enums. Each setting now stands beside Roles and Efforts under its
+    // own human name, and its rows are its values. These columns are shared by all of
+    // those entries: the setting is the entry, so no column repeats its key, and
+    // `controlType` is gone because every one of them is an enum by construction.
+    settingValues: [
+      { key: "value", labelKey: "vocabulary.columnValue", kind: "machine" },
+      { key: "description", labelKey: "vocabulary.columnDescription", kind: "description" },
+      { key: "isDefault", labelKey: "vocabulary.columnIsDefault", kind: "boolean" },
+    ],
+  };
+  // `settingValues` is a shape shared by the per-setting entries, not an entry itself,
+  // so it is excluded from the list the page navigates. It stays inside the table above
+  // so its column count is covered by the same gate as every other entry's.
+  const SHARED_COLUMN_SHAPES = ["settingValues"];
+  // A dictionary defines terms the engine publishes. A setting whose values come from
+  // workspace data — the subagent-plan settings, whose values are the plans the reader
+  // has created — has no closed set to define, and listing it made the dictionary grow
+  // by one row every time a plan was created: the portal inventing vocabulary, which
+  // this page's own lede forbids. Both the dictionary and its link ask this one
+  // question so they cannot answer it differently.
+  const hasClosedValueSet = (entry) => Array.isArray(entry?.allowedValues) && entry.allowedValues.length > 0;
+  const SETTING_ENTRY_PREFIX = "setting:";
+  const settingKeyOf = (category) => category.startsWith(SETTING_ENTRY_PREFIX) ? category.slice(SETTING_ENTRY_PREFIX.length) : null;
+  const vocabularyCategories = () => [
+    ...Object.keys(VOCABULARY_COLUMNS).filter((name) => !SHARED_COLUMN_SHAPES.includes(name)),
+    ...(state.vocabulary?.settingsEnums || []).filter(hasClosedValueSet).map((entry) => `${SETTING_ENTRY_PREFIX}${entry.key}`),
+  ];
+  const vocabularyColumns = (category) => settingKeyOf(category) === null
+    ? (VOCABULARY_COLUMNS[category] || VOCABULARY_COLUMNS.executionForms)
+    : VOCABULARY_COLUMNS.settingValues;
+  // A per-setting entry is named by the setting's own human label, which already exists
+  // in five locales for the settings page — the dictionary and the control it documents
+  // therefore always read the same name.
+  const vocabularyCategoryLabel = (category) => {
+    const key = settingKeyOf(category);
+    return key === null ? t("vocabulary." + category) : settingLabel(key);
+  };
+  // Rows come from what the engine returns; no value is invented here. Two settings
+  // draw their values from the plan list rather than a closed enum, so their rows are
+  // the plans this workspace actually has.
+  const vocabularyRows = (category) => {
+    const key = settingKeyOf(category);
+    if (key === null) return state.vocabulary?.[category] || [];
+    const entry = (state.vocabulary?.settingsEnums || []).find((candidate) => candidate.key === key);
+    if (entry === undefined || !hasClosedValueSet(entry)) return [];
+    return entry.allowedValues.map((value) => ({ value, settingKey: key, isDefault: value === entry.defaultValue }));
+  };
+  const vocabularyCell = (term, column, category) => {
+    if (column.key === "@self") return `<span>${esc(String(term))}</span>`;
+    // The description column is the localized one: the engine returns English prose and
+    // the portal has a per-term translation keyed by category and value.
+    if (column.kind === "description") return `<span>${esc(vocabularyDefinition(category, term))}</span>`;
+    const raw = term?.[column.key];
+    if (column.kind === "boolean") {
+      if (raw === null || raw === undefined) return `<span class="tcrn-meta">—</span>`;
+      return `<span class="tcrn-badge ${raw ? "tcrn-badge--positive" : ""}">${esc(t(raw ? "vocabulary.yes" : "vocabulary.no"))}</span>`;
+    }
+    if (column.kind === "badges") {
+      const items = Array.isArray(raw) ? raw : [];
+      return items.length === 0 ? `<span class="tcrn-meta">—</span>` : items.map((item) => `<span class="tcrn-badge">${esc(String(item))}</span>`).join(" ");
+    }
+    if (column.kind === "semantics") {
+      const entries = raw && typeof raw === "object" ? Object.entries(raw) : [];
+      return entries.length === 0 ? `<span class="tcrn-meta">—</span>`
+        : entries.map(([host, text]) => `<span class="tcrn-vocabulary__semantic"><span class="tcrn-meta">${esc(host)}</span>${esc(String(text))}</span>`).join("");
+    }
+    if (column.kind === "evidence") {
+      // The full URL stays in href and the official quote in the tooltip: the anchor
+      // loses nothing, but the page is not a wall of pasted documentation.
+      const items = Array.isArray(raw) ? raw : [];
+      return items.length === 0 ? `<span class="tcrn-meta">—</span>` : items.map((entry) => {
+        let domain = String(entry.url || "");
+        try { domain = new URL(entry.url).hostname.replace(/^www\./u, ""); } catch { /* keep raw */ }
+        return `<a class="tcrn-vocabulary__source" href="${esc(entry.url || "")}" title="${esc(entry.quote || "")}" target="_blank" rel="noreferrer">${esc(entry.sourceHost || "")} · ${esc(domain)} · ${esc(entry.accessedAt || "")}</a>`;
+      }).join("");
+    }
+    if (column.kind === "machine") return `<span class="tcrn-machine-token">${esc(raw === undefined || raw === null || raw === "" ? "—" : String(raw))}</span>`;
+    return `<span>${esc(raw === undefined || raw === null || raw === "" ? "—" : String(raw))}</span>`;
+  };
   const renderVocabulary = () => {
     const vocabulary = state.vocabulary || {};
     setText("#vocabulary-version", vocabulary.schemaVersion || "—");
-    const categories = ["roles", "hosts", "conferenceTypes", "executionForms", "settingsEnums"];
-    $("#vocabulary-nav").innerHTML = categories.map((category) => `<button class="tcrn-subnav__item" data-vocabulary-category="${category}" aria-current="${state.selectedVocabulary === category ? "page" : "false"}">${esc(t(`vocabulary.${category}`))}</button>`).join("");
+    const categories = vocabularyCategories();
+    // A selection can outlive the entry it named — the retired shared domain, or a
+    // setting the engine stopped publishing — so it is checked against the list rather
+    // than trusted, and falls back to the first entry instead of rendering nothing.
+    if (!categories.includes(state.selectedVocabulary)) state.selectedVocabulary = categories[0];
+    $("#vocabulary-nav").innerHTML = categories.map((category) => `<button class="tcrn-subnav__item" data-vocabulary-category="${esc(category)}" aria-current="${state.selectedVocabulary === category ? "page" : "false"}">${esc(vocabularyCategoryLabel(category))}</button>${conceptTip("vocabulary." + category, "bottom")}`).join("");
     $$('[data-vocabulary-category]').forEach((button) => button.addEventListener("click", () => { state.selectedVocabulary = button.dataset.vocabularyCategory; renderVocabulary(); }));
-    const terms = vocabulary[state.selectedVocabulary] || [];
-    $("#vocabulary-terms").innerHTML = terms.length === 0 ? `<div class="tcrn-state-surface">${esc(t("vocabulary.empty"))}</div>` : `<dl class="tcrn-definition-list" data-definition-list="true">${terms.map((term) => {
-      const value = termValue(term);
-      const definition = vocabularyDefinition(state.selectedVocabulary, term);
-      const detail = term.reviewOnlyDispatchable === undefined ? term.valueSource || (term.coveredByIndependenceFloors ? `${t("vocabulary.floor")}: ${term.coveredByIndependenceFloors.join(", ") || t("vocabulary.none")}` : "") : `${t("vocabulary.reviewOnlyDispatchable")}: ${term.reviewOnlyDispatchable ? t("vocabulary.yes") : t("vocabulary.no")}`;
-      return `<div class="tcrn-definition-list__item"><dt class="tcrn-definition-list__term">${esc(value)}</dt><dd class="tcrn-definition-list__definition">${esc(definition)}<small>${esc(detail || t("vocabulary.source"))}</small></dd></div>`;
-    }).join("")}</dl>`;
+    const terms = vocabularyRows(state.selectedVocabulary);
+    const columns = vocabularyColumns(state.selectedVocabulary);
+    $("#vocabulary-terms").innerHTML = terms.length === 0
+      ? `<div class="tcrn-state-surface">${esc(t("vocabulary.empty"))}</div>`
+      : `<div class="tcrn-table-shell" role="table" data-mobile-layout="stacked-cards" data-vocabulary-table="${esc(state.selectedVocabulary)}" data-vocabulary-columns="${columns.length}" tabindex="0">`
+        + `<div role="row" class="tcrn-table-shell__head">${columns.map((column) => `<span role="columnheader">${esc(t(column.labelKey))}${conceptTip("column." + column.labelKey, "bottom")}</span>`).join("")}</div>`
+        + terms.map((term) => `<div role="row" class="tcrn-table-shell__row">${columns.map((column) => `<span role="cell" data-label="${esc(t(column.labelKey))}" class="tcrn-table-shell__cell">${vocabularyCell(term, column, state.selectedVocabulary)}</span>`).join("")}</div>`).join("")
+        + `</div>`;
   };
   const lineFromText = (text) => text.split("\n");
   const renderProseDirectory = () => {
@@ -3677,22 +4356,56 @@ const BOOT = __PORTAL_BOOT__;
   const renderReconciliation = (result) => {
     state.reconciliation = result;
     const chip = $("#reconcile-chip"); chip.className = `tcrn-badge ${result.ok ? "tcrn-badge--positive" : "tcrn-badge--warning"}`; chip.textContent = result.ok ? t("reconcile.green") : `${result.findings?.length || result.mismatchCount || 0} ${t("reconcile.findings")}`;
-    $("#reconcile-findings").innerHTML = result.findings?.length ? result.findings.map((finding) => `<li class="tcrn-line-numbered-editor__finding--${finding.tone === "danger" ? "danger" : "warning"}" data-editor-finding-line="${esc(finding.line)}"><button type="button" class="tcrn-finding-link" data-ui="prose-finding-link" data-prose-line="${esc(finding.line)}"><span>●</span><span>${esc(finding.file)}:${esc(finding.line)}</span><span class="tcrn-machine-token tcrn-machine-token--compact tcrn-machine-token--key"><span class="tcrn-machine-token__value">${esc(finding.token || finding.key)}</span></span><span>${esc(finding.kind)}</span></button></li>`).join("") : `<li class="tcrn-meta">${esc(t("reconcile.green"))}</li>`;
+    $("#reconcile-findings").innerHTML = result.findings?.length ? result.findings.map((finding) => `<li class="tcrn-line-numbered-editor__finding--${finding.tone === "danger" ? "danger" : "warning"}" data-editor-finding-line="${esc(finding.line)}"><button type="button" class="tcrn-finding-link" data-ui="prose-finding-link" data-prose-line="${esc(finding.line)}"><span class="tcrn-dot" aria-hidden="true"></span><span>${esc(finding.file)}:${esc(finding.line)}</span><span class="tcrn-machine-token tcrn-machine-token--compact tcrn-machine-token--key"><span class="tcrn-machine-token__value">${esc(finding.token || finding.key)}</span></span><span>${esc(finding.kind)}</span></button></li>`).join("") : `<li class="tcrn-meta">${esc(t("reconcile.green"))}</li>`;
     renderGutter();
     $$('[data-prose-line]', $("#reconcile-findings")).forEach((button) => button.addEventListener("click", () => focusLine(Number(button.dataset.proseLine))));
   };
   const loadAgents = async () => { const [documentResult, reconciliation] = await Promise.all([api("/api/agents-md"), api("/api/agents-md/reconcile")]); state.agentsText = documentResult.text || ""; $("#agents-md").value = state.agentsText; setText("#agents-path", documentResult.path || "AGENTS.md"); renderProseDirectory(); renderGutter(); renderReconciliation(reconciliation); };
-  const saveSetting = async (key, value) => { echo("settings-set", ["--key", key, "--value", value]); const result = await api("/api/settings", { method: "POST", body: JSON.stringify({ key, value }) }); showReceipt(result); await refresh(); };
-  const resetSetting = async (key) => { echo("settings-remove", ["--key", key]); const result = await api("/api/settings", { method: "POST", body: JSON.stringify({ key, reset: true }) }); showReceipt(result); await refresh(); };
+  // An empty selection means "unset this key": the engine refuses an empty --value as a
+  // missing argument, and the honest verb for clearing a setting is settings-remove.
+  const saveSetting = async (key, value) => {
+    if (String(value ?? "").trim() === "") return resetSetting(key);
+    echo("settings-set", ["--key", key, "--value", value]); const result = await api("/api/settings", { method: "POST", body: JSON.stringify({ key, value }) }); showReceipt(result); await refresh(); };
+  const resetSetting = async (key) => {
+    // `settings-set` refuses an empty value, so no stored record can hold one: an
+    // effective value that is already empty means there is no record to remove. Asking
+    // the engine anyway returns WORKSPACE_INPUT_INVALID — an error for a state the
+    // reader has already reached. This is reachable in one click: a host with a single
+    // plan renders as a two-segment control, and pressing its "unset" segment while
+    // nothing is set used to error. Nothing is written and nothing is reported here,
+    // because the control already shows the requested state and a fabricated receipt
+    // would be worse than silence.
+    if (String(currentSetting(key)?.currentValue ?? "") === "") return;
+    echo("settings-remove", ["--key", key]);
+    const result = await api("/api/settings", { method: "POST", body: JSON.stringify({ key, reset: true }) });
+    showReceipt(result);
+    await refresh();
+  };
+  const saveMachineSetting = async (key, value) => {
+    const clearing = String(value ?? "").trim() === "";
+    // The guard reads the layer rather than the page's copy of it. `state` lags until
+    // the refresh after the previous write finishes, and two changes in quick
+    // succession then let a clear through against a value that is already gone — the
+    // reader sees MACHINE_SETTING_NOT_SET for a state they have already reached.
+    if (clearing) {
+      const live = await api("/api/machine-settings");
+      const current = live?.settings?.find((candidate) => candidate.key === key)?.currentValue ?? "";
+      if (current === "") return;
+    }
+    echo(clearing ? "machine-settings-remove" : "machine-settings-set", clearing ? ["--key", key] : ["--key", key, "--value", value]);
+    const result = await api("/api/machine-settings", { method: "POST", body: JSON.stringify(clearing ? { key, reset: true } : { key, value }) });
+    showReceipt(result);
+    await refresh();
+  };
   const writeExecution = async (action, body) => { echo(action); const result = await api("/api/execution", { method: "POST", body: JSON.stringify({ action, ...body }) }); showReceipt(result); await refresh(); };
   const savePersona = async () => { const persona = state.selectedPersona; if (!persona) return; const fields = Object.fromEntries($$('[data-persona-field]', $("#persona-form")).map((node) => [node.dataset.personaField, node.value])); const name = $("#persona-name").value || persona.name; if (!name) return; if (persona.source === "core-reference") await writeExecution("persona-preset-override", { name, fields }); else await writeExecution("persona-set", { name, ...fields }); };
   const loadPartitions = () => { const select = $("#partition-select"); select.innerHTML = (BOOT.partitions || [{ id: "workspace" }]).map((partition) => `<option value="${esc(partition.id)}" ${partition.id === BOOT.selectedPartition ? "selected" : ""}>${esc(partition.id)}</option>`).join(""); select.disabled = !BOOT.partitionMode; };
-  const refresh = async () => { try { const [settings, execution, vocabularyResult, status, commandsResult, audit] = await Promise.all([api("/api/settings"), api("/api/execution"), api("/api/vocabulary"), api("/api/status"), api("/api/commands"), api("/api/session-audit")]); state.settings = settings; state.execution = execution; state.vocabulary = vocabularyResult; state.status = status; state.commands = commandsResult.commands || []; state.audit = audit.writes || []; if (state.selectedPersona) state.selectedPersona = execution.personas.find((persona) => persona.name === state.selectedPersona.name) || null; renderDashboard(); renderSettings(); renderPersonaList(); renderPersonaDetails(); renderVocabulary(); rebuildSearchIndex(); } catch (error) { state.status = { ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE", checks: [{ key: "validate", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "catalog", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "actor", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }] }; renderDashboard(); showReceipt({ ok: false, reasonCode: "PORTAL_READ_FAILED", error: String(error?.message ?? error) }); } };
+  const refresh = async () => { try { const [settings, execution, vocabularyResult, status, commandsResult, audit, machine] = await Promise.all([api("/api/settings"), api("/api/execution"), api("/api/vocabulary"), api("/api/status"), api("/api/commands"), api("/api/session-audit"), api("/api/machine-settings")]); state.machineSettings = machine; state.settings = settings; state.execution = execution; state.vocabulary = vocabularyResult; state.status = status; state.commands = commandsResult.commands || []; state.audit = audit.writes || []; if (state.selectedPersona) state.selectedPersona = execution.personas.find((persona) => persona.name === state.selectedPersona.name) || null; renderDashboard(); renderSettings(); renderPersonaList(); renderPersonaDetails(); renderVocabulary(); rebuildSearchIndex(); } catch (error) { state.status = { ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE", checks: [{ key: "validate", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "catalog", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "actor", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }] }; renderDashboard(); showReceipt({ ok: false, reasonCode: "PORTAL_READ_FAILED", error: String(error?.message ?? error) }); } };
   const rebuildSearchIndex = () => {
     const rows = [];
     for (const entry of state.settings?.settings || []) rows.push({ text: `${entry.key} ${settingLabel(entry.key)} ${settingDescription(entry.key)}`, label: entry.key, meta: t("search.settings"), page: "settings", key: entry.key });
     for (const persona of state.execution?.personas || []) rows.push({ text: `${persona.name} ${persona.jobTitle || ""} ${roleValue(persona.role)}`, label: persona.name, meta: t("search.personas"), page: "entities", persona: persona.name });
-    for (const category of ["roles", "hosts", "conferenceTypes", "executionForms", "settingsEnums"]) for (const term of state.vocabulary?.[category] || []) rows.push({ text: `${termValue(term)} ${vocabularyDefinition(category, term)}`, label: termValue(term), meta: t("search.vocabulary"), page: "vocabulary", vocabulary: category });
+    for (const category of vocabularyCategories()) for (const term of vocabularyRows(category)) rows.push({ text: `${termValue(term)} ${vocabularyDefinition(category, term)}`, label: termValue(term), meta: t("search.vocabulary"), page: "vocabulary", vocabulary: category });
     state.searchIndex = rows;
   };
   const renderSearchResults = () => { const target = $("#search-results"); target.hidden = state.searchResults.length === 0; target.innerHTML = state.searchResults.map((result, index) => `<button type="button" class="tcrn-search-result" aria-current="${index === state.searchSelection ? "true" : "false"}" data-search-index="${index}"><strong>${esc(result.label)}</strong><span class="tcrn-search-result__meta">${esc(result.meta)} · ${esc(result.page)}</span></button>`).join(""); $$('[data-search-index]').forEach((button) => button.addEventListener("click", () => chooseSearch(Number(button.dataset.searchIndex)))); };
@@ -3707,14 +4420,60 @@ const BOOT = __PORTAL_BOOT__;
   $("#agents-md").addEventListener("scroll", () => { $("#prose-gutter").scrollTop = $("#agents-md").scrollTop; });
   $("#new-persona").addEventListener("click", () => { const firstRole = roleValue(state.vocabulary?.roles?.[0]) || ""; state.selectedPersona = { name: "", role: firstRole, id: "", source: "custom", jobTitle: "", mission: "", refusals: "", authorityBoundary: "", contactWhen: "", requiredInputs: "", deliverables: "", successCriteria: "" }; navigate("entities"); renderPersonaList(); renderPersonaDetails(); $("#persona-name")?.focus(); });
   $("#receipt-chip").addEventListener("click", openReceipt); $("#audit-button").addEventListener("click", () => { state.dashboardTab = "audit"; $$('[data-workspace-tab]').forEach((button) => button.setAttribute("aria-selected", button.dataset.workspaceTab === "audit" ? "true" : "false")); $$('[data-workspace-panel]').forEach((panel) => { panel.hidden = panel.dataset.workspacePanel !== "audit"; }); }); $("#drawer-button").addEventListener("click", openReceipt); $("#drawer-close").addEventListener("click", closeReceipt);
-  $("#partition-select").addEventListener("change", async (event) => { if (!BOOT.partitionMode) return; const selected = await api("/api/partition", { method: "POST", body: JSON.stringify({ partition: event.target.value }) }); if (selected.ok) { BOOT.selectedPartition = selected.selectedPartition; BOOT.workspace = selected.workspace; BOOT.proseRoot = selected.proseRoot; BOOT.paths = selected.paths; setText("#workspace-label", BOOT.workspace); setText("#partition-label", BOOT.selectedPartition); await refresh(); await loadAgents(); } else showReceipt(selected); });
-  $("#theme-button").addEventListener("click", () => { state.theme = state.theme === "light" ? "dark" : "light"; document.documentElement.dataset.tcrnTheme = state.theme; });
-  $("#locale-select").addEventListener("change", (event) => { state.locale = event.target.value; applyLocale(); renderDashboard(); renderSettings(); renderPersonaList(); renderPersonaDetails(); renderVocabulary(); renderReconciliation(state.reconciliation || { ok: true, findings: [] }); });
+  $("#partition-select").addEventListener("change", async (event) => { if (!BOOT.partitionMode) return; const selected = await api("/api/partition", { method: "POST", body: JSON.stringify({ partition: event.target.value }) }); if (selected.ok) { BOOT.selectedPartition = selected.selectedPartition; BOOT.workspace = selected.workspace; BOOT.workspaceName = selected.workspaceName; BOOT.proseRoot = selected.proseRoot; BOOT.paths = selected.paths; setText("#workspace-label", BOOT.workspace); $("#workspace-label").title = BOOT.workspace; applyRailIdentity(); await refresh(); await loadAgents(); } else showReceipt(selected); });
+  $("#theme-button").addEventListener("click", () => {
+    state.theme = state.theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.tcrnTheme = state.theme;
+    tcrnWritePreference("theme", state.theme);
+    // The design system's toggle shows exactly one icon per state, keyed on these two
+    // attributes; without them both icons collapse and the button renders empty.
+    const toggle = $("#theme-button");
+    toggle.dataset.currentTheme = state.theme;
+    toggle.dataset.themeNext = state.theme === "light" ? "dark" : "light";
+    toggle.setAttribute("aria-pressed", String(state.theme === "dark"));
+  });
+  // Locale menu: the dismissal contract the design system states for this control is
+  // selection, outside pointer, Escape, and focus return to the trigger.
+  const localeMenu = $("#locale-menu");
+  const localePanel = $("#locale-panel");
+  const localeTrigger = $("#locale-trigger");
+  const setLocaleMenuOpen = (open) => {
+    localeMenu.dataset.localeMenuOpen = String(open);
+    localeTrigger.setAttribute("aria-expanded", String(open));
+    localePanel.hidden = !open;
+  };
+  localeTrigger.addEventListener("click", () => setLocaleMenuOpen(localePanel.hidden));
+  $$("[data-locale-option]").forEach((option) => {
+    option.addEventListener("click", () => {
+      state.locale = option.dataset.localeOption;
+      tcrnWritePreference("locale", state.locale);
+      setLocaleMenuOpen(false);
+      localeTrigger.focus();
+      applyLocale(); renderDashboard(); renderSettings(); renderPersonaList(); renderPersonaDetails(); renderVocabulary(); renderReconciliation(state.reconciliation || { ok: true, findings: [] });
+    });
+  });
+  document.addEventListener("pointerdown", (event) => { if (!localeMenu.contains(event.target)) setLocaleMenuOpen(false); });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !localePanel.hidden) { setLocaleMenuOpen(false); localeTrigger.focus(); } });
   $("#palette-button").addEventListener("click", () => $("#global-search").focus());
   $("#global-search").addEventListener("input", (event) => search(event.target.value));
   $("#global-search").addEventListener("keydown", (event) => { if (event.key === "ArrowDown" && state.searchResults.length) { event.preventDefault(); state.searchSelection = (state.searchSelection + 1) % state.searchResults.length; renderSearchResults(); } if (event.key === "ArrowUp" && state.searchResults.length) { event.preventDefault(); state.searchSelection = (state.searchSelection + state.searchResults.length - 1) % state.searchResults.length; renderSearchResults(); } if (event.key === "Enter") { event.preventDefault(); chooseSearch(state.searchSelection); } if (event.key === "Escape") { state.searchResults = []; renderSearchResults(); event.target.blur(); } });
   document.addEventListener("keydown", (event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); $("#global-search").focus(); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s" && state.page === "prose") { event.preventDefault(); $("#save-agents").click(); } if (event.key === "Escape" && $("#receipt-drawer").dataset.open === "true") closeReceipt(); });
-  loadPartitions(); applyLocale(); setText("#workspace-label", BOOT.workspace); setText("#partition-label", BOOT.selectedPartition || "workspace"); renderReceipt(); refresh(); loadAgents();
+  // The rail states one identity: the workspace name as its section head, with the
+  // partition beneath it only when the two differ — for most partitions they are the
+  // same word, and printing it twice reads as a defect, not context.
+  const applyRailIdentity = () => {
+    const workspaceName = BOOT.workspaceName || BOOT.selectedPartition || "workspace";
+    const partition = BOOT.selectedPartition || "";
+    setText("#rail-workspace-label", workspaceName);
+    const partitionLabel = $("#partition-label");
+    partitionLabel.hidden = !partition || partition === workspaceName;
+    if (!partitionLabel.hidden) partitionLabel.textContent = partition;
+  };
+  const themeToggle = $("#theme-button");
+  themeToggle.dataset.currentTheme = state.theme;
+  themeToggle.dataset.themeNext = state.theme === "light" ? "dark" : "light";
+  themeToggle.setAttribute("aria-pressed", String(state.theme === "dark"));
+  loadPartitions(); applyLocale(); setText("#workspace-label", BOOT.workspace); $("#workspace-label").title = BOOT.workspace; applyRailIdentity(); renderReceipt(); refresh(); loadAgents();
 })();
 </script>
 </body>

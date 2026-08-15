@@ -1,0 +1,849 @@
+<!-- PUBLIC BASELINE: sanitized copy of the platform v4 preview; local paths and host identities were removed before inclusion. -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TCRN Workflow 门户 — 设计稿预览 v4(统一 Layout 语法)</title>
+<style>
+:root {
+  --tcrn-color-text-primary: #1c1d21;
+  --tcrn-color-text-secondary: #55575e;
+  --tcrn-color-text-muted: #8a8c93;
+  --tcrn-color-text-tertiary: #73757c;
+  --tcrn-color-text-inverse: #fafaf9;
+  --tcrn-color-surface-canvas: #fafaf9;
+  --tcrn-color-surface-panel: #ffffff;
+  --tcrn-color-surface-muted: #f2f2f0;
+  --tcrn-color-neutral-calibration-canvas: #f5f5f5;
+  --tcrn-color-neutral-calibration-panel: #fcfcfc;
+  --tcrn-color-neutral-calibration-muted: #eeeeee;
+  --tcrn-color-neutral-calibration-border: #808080;
+  --tcrn-color-border-subtle: #e7e7e3;
+  --tcrn-color-border-strong: #cfcfc9;
+  --tcrn-color-border-control: #8e8e88;
+  --tcrn-color-brand-teal: #17707f;
+  --tcrn-color-brand-primary: #17707f;
+  --tcrn-color-brand-primary-bg: #e6f1f3;
+  --tcrn-color-brand-secondary: #2a6b76;
+  --tcrn-color-brand-secondary-bg: #e3eff1;
+  --tcrn-color-brand-accent: #93332a;
+  --tcrn-color-brand-accent-bg: #f5e9e5;
+  --tcrn-color-brand-neutral: #55575e;
+  --tcrn-color-brand-neutral-bg: #f2f2f0;
+  --tcrn-color-focus-ring: #17707f;
+  --tcrn-color-focus-ring-calibrated: #0056a4;
+  --tcrn-color-progress-track-calibrated: #eeeeee;
+  --tcrn-color-progress-fill-start-calibrated: #2784d5;
+  --tcrn-color-progress-fill-end-calibrated: #6363c6;
+  --tcrn-color-state-ready: #15693a;
+  --tcrn-color-state-ready-bg: #eaf2ec;
+  --tcrn-color-state-blocked: #b3271e;
+  --tcrn-color-state-blocked-bg: #f7eae8;
+  --tcrn-color-state-warning: #8a5a08;
+  --tcrn-color-state-warning-bg: #f5eee1;
+  --tcrn-color-state-warning-calibrated: #604200;
+  --tcrn-color-state-warning-calibrated-bg: #fde1a7;
+  --tcrn-color-state-danger-calibrated: #742e2b;
+  --tcrn-color-state-danger-calibrated-bg: #ffd1ca;
+  --tcrn-type-family-ui: Inter, Avenir Next, Helvetica Neue, Arial, sans-serif;
+  --tcrn-type-family-latin: Inter, Avenir Next, Helvetica Neue, Arial, sans-serif;
+  --tcrn-type-family-distributable-latin: Inter, sans-serif;
+  --tcrn-type-family-distributable-zh-cn: Noto Sans CJK SC, Source Han Sans SC, sans-serif;
+  --tcrn-type-family-distributable-ja: Noto Sans CJK JP, Source Han Sans JP, sans-serif;
+  --tcrn-type-family-distributable-ko: Noto Sans CJK KR, Source Han Sans KR, sans-serif;
+  --tcrn-type-family-distributable-mono: Liberation Mono, monospace;
+  --tcrn-type-family-zh-cn: PingFang SC, Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, Heiti SC, sans-serif;
+  --tcrn-type-family-ja: Hiragino Sans, Yu Gothic, Noto Sans CJK JP, Source Han Sans JP, Meiryo, sans-serif;
+  --tcrn-type-family-ko: Apple SD Gothic Neo, Malgun Gothic, Noto Sans CJK KR, Source Han Sans KR, sans-serif;
+  --tcrn-type-family-mono: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+  --tcrn-type-family-stamp: Source Serif 4, Songti SC, Noto Serif CJK SC, Georgia, serif;
+  --tcrn-type-family-distributable-stamp-latin: Source Serif 4, serif;
+  --tcrn-type-family-distributable-stamp-zh-cn: Noto Serif CJK SC, serif;
+  --tcrn-type-size-stamp-min: 12px;
+  --tcrn-type-tracking-stamp: 0.06em;
+  --tcrn-type-size-ui: 13px;
+  --tcrn-type-size-reading: 14px;
+  --tcrn-type-size-caption: 11px;
+  --tcrn-type-size-meta: 12px;
+  --tcrn-type-size-body: 13px;
+  --tcrn-type-size-control: 13px;
+  --tcrn-type-size-section: 18px;
+  --tcrn-type-size-page: 28px;
+  --tcrn-type-size-heading-2: 22px;
+  --tcrn-type-size-heading-3: 16px;
+  --tcrn-type-line-ui: 1.35;
+  --tcrn-type-line-reading: 1.45;
+  --tcrn-type-line-caption: 1.35;
+  --tcrn-type-line-body: 1.45;
+  --tcrn-type-line-control: 1.2;
+  --tcrn-type-line-section: 1.25;
+  --tcrn-type-line-page: 1.3;
+  --tcrn-type-weight-regular: 400;
+  --tcrn-type-weight-medium: 600;
+  --tcrn-type-weight-strong: 700;
+  --tcrn-text-body-dense: var(--tcrn-type-weight-regular) var(--tcrn-type-size-ui)/var(--tcrn-type-line-ui) var(--tcrn-type-family-ui);
+  --tcrn-text-body-reading: var(--tcrn-type-weight-regular) var(--tcrn-type-size-reading)/var(--tcrn-type-line-reading) var(--tcrn-type-family-ui);
+  --tcrn-radius-panel: 6px;
+  --tcrn-elevation-floating: 0 1px 2px rgba(28, 29, 33, 0.06), 0 0 0 1px var(--tcrn-color-border-subtle);
+  --tcrn-state-dot-size: 6px;
+  --tcrn-state-chip-padding: 3px 8px 3px 6px;
+  --tcrn-space-0h: 2px;
+  --tcrn-space-1: 4px;
+  --tcrn-space-1h: 6px;
+  --tcrn-space-2: 8px;
+  --tcrn-space-2h: 10px;
+  --tcrn-space-3: 12px;
+  --tcrn-space-3h: 14px;
+  --tcrn-density-compact-row-height: 36px;
+  --tcrn-space-4: 16px;
+  --tcrn-space-4h: 18px;
+  --tcrn-space-5: 20px;
+  --tcrn-space-6: 32px;
+  --tcrn-selection-fill: rgba(28, 29, 33, 0.06);
+  --tcrn-selection-fill-hover: rgba(28, 29, 33, 0.032);
+  --tcrn-selection-edge: #1c1d21;
+  --tcrn-selection-glide: 220ms cubic-bezier(0.3, 0.8, 0.3, 1);
+  --tcrn-radius-control: 4px;
+  --tcrn-radius-surface: 6px;
+  --tcrn-radius-pill: 999px;
+  --tcrn-elevation-focus: 0 0 0 2px #fafaf9, 0 0 0 4px #17707f;
+  --tcrn-motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --tcrn-motion-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --tcrn-motion-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --tcrn-motion-comprehension: 160ms linear;
+  --tcrn-motion-press-scale: 0.97;
+  --tcrn-motion-spring-duration: 0.5s;
+  --tcrn-motion-spring-bounce: 0.15;
+  --tcrn-motion-fast: 120ms cubic-bezier(0.23, 1, 0.32, 1);
+  --tcrn-motion-instant: 80ms cubic-bezier(0.23, 1, 0.32, 1);
+  --tcrn-motion-standard: 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  --tcrn-motion-emphasis: 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  --tcrn-motion-loading-loop: 900ms linear;
+  --tcrn-motion-skeleton-loop: 1400ms ease-in-out;
+  --tcrn-motion-progress-loop: 1200ms ease-in-out;
+  --tcrn-motion-reduced-duration: 0.01ms;
+  --tcrn-z-overlay: 30;
+  --tcrn-z-popover: 20;
+  --tcrn-container-readable: 1120px;
+}
+[data-tcrn-theme="dark"] {
+  --tcrn-selection-fill: rgba(236, 236, 234, 0.09);
+  --tcrn-selection-fill-hover: rgba(236, 236, 234, 0.05);
+  --tcrn-selection-edge: #ececea;
+  --tcrn-color-border-control: #66686e;
+  --tcrn-color-text-tertiary: #83858b;
+  --tcrn-color-text-inverse: #0e1c20;
+  --tcrn-color-text-primary: #ececea;
+  --tcrn-color-text-secondary: #a9abb1;
+  --tcrn-color-text-muted: #7a7c82;
+  --tcrn-color-surface-canvas: #111214;
+  --tcrn-color-surface-panel: #18191c;
+  --tcrn-color-surface-muted: #212226;
+  --tcrn-color-neutral-calibration-canvas: #161616;
+  --tcrn-color-neutral-calibration-panel: #222222;
+  --tcrn-color-neutral-calibration-muted: #2f2f2f;
+  --tcrn-color-neutral-calibration-border: #808080;
+  --tcrn-color-border-subtle: #292b2f;
+  --tcrn-color-border-strong: #3f4147;
+  --tcrn-color-brand-teal: #62c3d2;
+  --tcrn-color-brand-primary: #62c3d2;
+  --tcrn-color-brand-primary-bg: #12333a;
+  --tcrn-color-brand-secondary: #62c3d2;
+  --tcrn-color-brand-secondary-bg: #12333a;
+  --tcrn-color-brand-accent: #d98d82;
+  --tcrn-color-brand-accent-bg: #3a211d;
+  --tcrn-color-brand-neutral: #a9abb1;
+  --tcrn-color-brand-neutral-bg: #212226;
+  --tcrn-color-focus-ring: #62c3d2;
+  --tcrn-color-focus-ring-calibrated: #5cb3ff;
+  --tcrn-color-progress-track-calibrated: #222222;
+  --tcrn-color-progress-fill-start-calibrated: #2784d5;
+  --tcrn-color-progress-fill-end-calibrated: #8d92f9;
+  --tcrn-color-state-ready: #5fbe8b;
+  --tcrn-color-state-ready-bg: #16261e;
+  --tcrn-color-state-blocked: #e0837b;
+  --tcrn-color-state-blocked-bg: #2b1a18;
+  --tcrn-color-state-warning: #d9ab52;
+  --tcrn-color-state-warning-bg: #2a2317;
+  --tcrn-color-state-warning-calibrated: #604200;
+  --tcrn-color-state-warning-calibrated-bg: #fde1a7;
+  --tcrn-color-state-danger-calibrated: #742e2b;
+  --tcrn-color-state-danger-calibrated-bg: #ffd1ca;
+  --tcrn-elevation-focus: 0 0 0 2px #111214, 0 0 0 4px #62c3d2;
+}
+
+
+</style>
+<style>
+/* =====================================================================
+   v4 — ONE layout grammar for every page:
+   topbar → sidenav → [page = header + (tabs?) + subnav | paneview] → echobar
+   ===================================================================== */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-family: var(--tcrn-type-family-ui); color: var(--tcrn-color-text-primary); }
+body { background: var(--tcrn-color-surface-canvas); font-size: var(--tcrn-type-size-body); line-height: var(--tcrn-type-line-body); }
+button, input, select, textarea { font: inherit; color: inherit; }
+.mono, code { font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-meta); }
+[hidden] { display: none !important; }
+.dim { opacity: .4; pointer-events: none; }
+a { color: var(--tcrn-color-brand-primary); text-decoration: none; }
+
+/* ---------- shell ---------- */
+.shell { display: grid; grid-template-rows: 48px 1fr 30px; height: 100vh; }
+.topbar { display: flex; align-items: center; gap: var(--tcrn-space-3); padding: 0 var(--tcrn-space-3); background: var(--tcrn-color-surface-panel); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.ws-switch { display: flex; align-items: center; gap: var(--tcrn-space-1h); padding: var(--tcrn-space-1) var(--tcrn-space-2); border: 0; background: transparent; border-radius: var(--tcrn-radius-control); cursor: pointer; font-weight: var(--tcrn-type-weight-medium); font-size: var(--tcrn-type-size-ui); }
+.ws-switch:hover { background: var(--tcrn-color-surface-muted); }
+.ws-switch .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tcrn-color-state-ready); }
+.searchbox { flex: 1; max-width: 430px; margin: 0 auto; display: flex; align-items: center; gap: var(--tcrn-space-1h); background: var(--tcrn-color-surface-muted); border-radius: var(--tcrn-radius-control); padding: var(--tcrn-space-1) var(--tcrn-space-2); color: var(--tcrn-color-text-tertiary); font-size: var(--tcrn-type-size-ui); cursor: text; border: 1px solid transparent; }
+.searchbox:hover { border-color: var(--tcrn-color-border-subtle); }
+.searchbox kbd { margin-left: auto; font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-meta); background: var(--tcrn-color-surface-panel); border: 1px solid var(--tcrn-color-border-subtle); border-radius: 3px; padding: 0 5px; }
+.top-right { display: flex; align-items: center; gap: var(--tcrn-space-2); margin-left: auto; }
+.chip { display: inline-flex; align-items: center; gap: var(--tcrn-space-1); font-size: var(--tcrn-type-size-caption); color: var(--tcrn-color-text-secondary); background: var(--tcrn-color-surface-muted); border-radius: var(--tcrn-radius-pill); padding: 3px var(--tcrn-space-2); }
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tcrn-color-state-ready); }
+.iconbtn { border: 0; background: transparent; border-radius: var(--tcrn-radius-control); width: 30px; height: 30px; cursor: pointer; color: var(--tcrn-color-text-secondary); }
+.iconbtn:hover { background: var(--tcrn-color-surface-muted); }
+
+.mid { display: grid; grid-template-columns: 196px 1fr; overflow: hidden; }
+.sidenav { padding: var(--tcrn-space-3) var(--tcrn-space-2); display: flex; flex-direction: column; gap: 1px; border-right: 1px solid var(--tcrn-color-border-subtle); }
+.sidenav button { display: flex; align-items: center; gap: var(--tcrn-space-2); padding: var(--tcrn-space-1h) var(--tcrn-space-2); border: 0; background: transparent; border-radius: var(--tcrn-radius-control); cursor: pointer; text-align: left; font-size: var(--tcrn-type-size-ui); color: var(--tcrn-color-text-secondary); }
+.sidenav button[aria-current="page"] { background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); font-weight: var(--tcrn-type-weight-medium); }
+.sidenav button:hover:not([aria-current]) { background: var(--tcrn-color-surface-muted); }
+.sidenav .ico { width: 16px; text-align: center; opacity: .8; font-size: 12px; }
+
+/* ---------- unified page grammar ---------- */
+.pagewrap { overflow: hidden; display: flex; flex-direction: column; }
+.pagehead { padding: var(--tcrn-space-4) var(--tcrn-space-5) 0; }
+.pagehead h2 { font-size: var(--tcrn-type-size-heading-2); line-height: var(--tcrn-type-line-page); font-weight: var(--tcrn-type-weight-strong); letter-spacing: -.01em; }
+.pagehead .sub { color: var(--tcrn-color-text-secondary); margin-top: var(--tcrn-space-0h); font-size: var(--tcrn-type-size-caption); max-width: 62em; }
+.tabsrow { display: inline-flex; gap: 2px; background: var(--tcrn-color-surface-muted); padding: 3px; border-radius: var(--tcrn-radius-control); margin: var(--tcrn-space-3) var(--tcrn-space-5) 0; align-self: flex-start; }
+.tabsrow button { border: 0; background: transparent; padding: var(--tcrn-space-1) var(--tcrn-space-3); border-radius: 3px; cursor: pointer; font-size: var(--tcrn-type-size-ui); color: var(--tcrn-color-text-secondary); }
+.tabsrow button[aria-selected="true"] { background: var(--tcrn-color-surface-panel); color: var(--tcrn-color-text-primary); font-weight: var(--tcrn-type-weight-medium); box-shadow: 0 1px 2px rgba(28,29,33,.08); }
+.pane { display: grid; grid-template-columns: 208px 1fr; flex: 1; min-height: 0; margin-top: var(--tcrn-space-3); }
+.subnav { border-right: 1px solid var(--tcrn-color-border-subtle); padding: 0 var(--tcrn-space-2) var(--tcrn-space-4) var(--tcrn-space-4); overflow-y: auto; }
+.subnav .sec { font-size: var(--tcrn-type-size-meta); color: var(--tcrn-color-text-tertiary); text-transform: uppercase; letter-spacing: .05em; margin: var(--tcrn-space-3) 0 var(--tcrn-space-1); }
+.subnav button { display: flex; align-items: center; gap: var(--tcrn-space-1h); width: 100%; border: 0; background: transparent; text-align: left; padding: var(--tcrn-space-1h) var(--tcrn-space-2); border-radius: var(--tcrn-radius-control); cursor: pointer; font-size: var(--tcrn-type-size-ui); color: var(--tcrn-color-text-secondary); }
+.subnav [aria-current="true"] { background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-primary); font-weight: var(--tcrn-type-weight-medium); }
+.subnav button:hover:not([aria-current]) { background: var(--tcrn-color-surface-muted); }
+.subnav .rl { margin-left: auto; font-size: var(--tcrn-type-size-meta); color: var(--tcrn-color-text-tertiary); font-weight: var(--tcrn-type-weight-regular); }
+.subnav .md { width: 6px; height: 6px; border-radius: 50%; background: var(--tcrn-color-brand-primary); flex: none; }
+.subnav .newbtn { margin: var(--tcrn-space-3) 0 0; justify-content: center; background: var(--tcrn-color-brand-primary); color: var(--tcrn-color-text-inverse); font-weight: var(--tcrn-type-weight-medium); }
+.subnav .newbtn:hover { background: var(--tcrn-color-brand-primary); opacity: .92; }
+.paneview { overflow-y: auto; padding: var(--tcrn-space-2) var(--tcrn-space-6) var(--tcrn-space-6); }
+.pv { max-width: 860px; margin: 0 auto; }
+.pv > h3 { font-size: var(--tcrn-type-size-heading-3); font-weight: var(--tcrn-type-weight-strong); margin-bottom: var(--tcrn-space-1); }
+.pv .note { color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-caption); margin-bottom: var(--tcrn-space-3); }
+
+/* ---------- rows & controls ---------- */
+.srow { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap: var(--tcrn-space-4); align-items: center; padding: var(--tcrn-space-2h) var(--tcrn-space-2); margin: 0 calc(-1 * var(--tcrn-space-2)); border-radius: var(--tcrn-radius-control); }
+.srow:hover { background: var(--tcrn-color-surface-muted); }
+.srow .nm { font-weight: var(--tcrn-type-weight-medium); font-size: var(--tcrn-type-size-ui); display: flex; align-items: center; gap: var(--tcrn-space-1h); }
+.keychip { font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-meta); color: var(--tcrn-color-text-tertiary); font-weight: var(--tcrn-type-weight-regular); }
+.dictlink { font-size: 11px; opacity: .7; cursor: pointer; }
+.moddot { width: 6px; height: 6px; border-radius: 50%; background: var(--tcrn-color-brand-primary); flex: none; }
+.reset { border: 0; background: transparent; color: var(--tcrn-color-text-tertiary); cursor: pointer; font-size: 12px; opacity: 0; border-radius: 3px; padding: 1px 4px; }
+.srow:hover .reset { opacity: 1; }
+.srow .ds { color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-caption); margin-top: 2px; }
+.srow .ctl { display: flex; align-items: center; gap: var(--tcrn-space-2); justify-content: flex-end; }
+.t-in { padding: var(--tcrn-space-1) var(--tcrn-space-2); border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control); background: var(--tcrn-color-surface-panel); height: 32px; min-width: 160px; }
+.t-in:disabled { background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-tertiary); border-color: var(--tcrn-color-border-subtle); }
+.t-in:focus-visible { outline: none; box-shadow: var(--tcrn-elevation-focus); }
+.seg { display: inline-flex; background: var(--tcrn-color-surface-muted); border-radius: var(--tcrn-radius-control); padding: 2px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: var(--tcrn-space-1) var(--tcrn-space-2); border-radius: 3px; cursor: pointer; font-size: var(--tcrn-type-size-control); color: var(--tcrn-color-text-secondary); height: 26px; }
+.seg button[aria-pressed="true"] { background: var(--tcrn-color-surface-panel); color: var(--tcrn-color-text-primary); font-weight: var(--tcrn-type-weight-medium); box-shadow: 0 1px 2px rgba(28,29,33,.08); }
+.switch { position: relative; width: 38px; height: 22px; border-radius: 11px; border: 0; background: var(--tcrn-color-border-strong); cursor: pointer; transition: background var(--tcrn-motion-fast) var(--tcrn-motion-ease-out); flex: none; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left var(--tcrn-motion-fast) var(--tcrn-motion-ease-out); box-shadow: 0 1px 2px rgba(28,29,33,.2); }
+.switch[aria-checked="true"] { background: var(--tcrn-color-brand-primary); }
+.switch[aria-checked="true"]::after { left: 19px; }
+.stepper { display: inline-flex; align-items: center; gap: 2px; background: var(--tcrn-color-surface-muted); border-radius: var(--tcrn-radius-control); padding: 2px; }
+.stepper button { border: 0; background: transparent; width: 26px; height: 26px; border-radius: 3px; cursor: pointer; color: var(--tcrn-color-text-secondary); }
+.stepper button:hover { background: var(--tcrn-color-surface-panel); }
+.stepper .val { min-width: 36px; text-align: center; font-variant-numeric: tabular-nums; font-weight: var(--tcrn-type-weight-medium); }
+.stepper .bound { font-size: var(--tcrn-type-size-meta); color: var(--tcrn-color-text-tertiary); padding: 0 var(--tcrn-space-1); }
+.btn { border: 1px solid var(--tcrn-color-border-control); background: var(--tcrn-color-surface-panel); border-radius: var(--tcrn-radius-control); padding: 0 var(--tcrn-space-2h); cursor: pointer; font-size: var(--tcrn-type-size-control); height: 30px; }
+.btn.primary { background: var(--tcrn-color-brand-primary); border-color: var(--tcrn-color-brand-primary); color: var(--tcrn-color-text-inverse); font-weight: var(--tcrn-type-weight-medium); }
+.btn.danger { color: var(--tcrn-color-state-blocked); }
+.rchip { display: inline-flex; align-items: center; gap: 4px; font-size: var(--tcrn-type-size-caption); font-family: var(--tcrn-type-family-mono); border-radius: var(--tcrn-radius-pill); padding: 2px var(--tcrn-space-2); cursor: pointer; opacity: 0; transition: opacity var(--tcrn-motion-standard) var(--tcrn-motion-ease-out); }
+.rchip.show { opacity: 1; }
+.rchip.ok { color: var(--tcrn-color-state-ready); background: var(--tcrn-color-state-ready-bg); }
+.rchip.err { color: var(--tcrn-color-state-blocked); background: var(--tcrn-color-state-blocked-bg); }
+.rchip.busy { color: var(--tcrn-color-text-tertiary); background: var(--tcrn-color-surface-muted); }
+.pbadge { font-size: var(--tcrn-type-size-meta); border-radius: var(--tcrn-radius-pill); padding: 1px var(--tcrn-space-2); background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-tertiary); }
+.pbadge.mod { background: var(--tcrn-color-state-warning-bg); color: var(--tcrn-color-state-warning); }
+.pbadge.live { background: var(--tcrn-color-state-ready-bg); color: var(--tcrn-color-state-ready); }
+.pbadge.cus { background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); }
+
+/* dashboard (工作区详情) */
+.dashwrap { overflow-y: auto; flex: 1; padding: var(--tcrn-space-4) var(--tcrn-space-6) var(--tcrn-space-6); }
+.dash { max-width: 1040px; margin: 0 auto; }
+.dash h3 { font-size: var(--tcrn-type-size-heading-3); font-weight: var(--tcrn-type-weight-strong); margin-bottom: var(--tcrn-space-2); }
+.dashcols { display: grid; grid-template-columns: 1fr 1.6fr; gap: var(--tcrn-space-6); margin-top: var(--tcrn-space-5); align-items: start; }
+@media (max-width: 980px) { .dashcols { grid-template-columns: 1fr; } }
+
+/* detail page pieces */
+.statrow { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--tcrn-space-3); margin: var(--tcrn-space-3) 0 0; }
+.stat { background: var(--tcrn-color-surface-muted); border-radius: var(--tcrn-radius-panel); padding: var(--tcrn-space-3) var(--tcrn-space-4); }
+.stat .n { font-size: 26px; font-weight: var(--tcrn-type-weight-strong); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.stat .l { color: var(--tcrn-color-text-tertiary); font-size: var(--tcrn-type-size-caption); margin-top: 2px; }
+.pathrow { display: grid; grid-template-columns: 128px 1fr auto; gap: var(--tcrn-space-2); padding: var(--tcrn-space-1h) 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); align-items: center; font-size: var(--tcrn-type-size-ui); }
+.pathrow:last-child { border-bottom: 0; }
+.pathrow .k { color: var(--tcrn-color-text-tertiary); font-size: var(--tcrn-type-size-caption); }
+.pathrow .v { font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-meta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pathrow .cp { border: 0; background: transparent; cursor: pointer; color: var(--tcrn-color-text-tertiary); opacity: 0; }
+.pathrow:hover .cp { opacity: 1; }
+.healthrow { display: flex; justify-content: space-between; padding: var(--tcrn-space-1h) 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); font-size: var(--tcrn-type-size-ui); }
+.healthrow:last-child { border-bottom: 0; }
+.ok { color: var(--tcrn-color-state-ready); }
+.tl { list-style: none; }
+.tl li { display: grid; grid-template-columns: 52px 1fr auto; gap: var(--tcrn-space-3); padding: var(--tcrn-space-2) var(--tcrn-space-2); margin: 0 calc(-1*var(--tcrn-space-2)); align-items: baseline; font-size: var(--tcrn-type-size-ui); border-radius: var(--tcrn-radius-control); cursor: pointer; }
+.tl li:hover { background: var(--tcrn-color-surface-muted); }
+.tl .t { color: var(--tcrn-color-text-tertiary); font-size: var(--tcrn-type-size-caption); font-variant-numeric: tabular-nums; }
+.tl .k { font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-meta); color: var(--tcrn-color-text-tertiary); }
+
+/* plan rows */
+.mrow { display: grid; grid-template-columns: 1fr auto 24px; gap: var(--tcrn-space-2); align-items: center; padding: var(--tcrn-space-1h) var(--tcrn-space-1); margin: 0 calc(-1*var(--tcrn-space-1)); border-radius: var(--tcrn-radius-control); font-size: var(--tcrn-type-size-ui); }
+.mrow:hover { background: var(--tcrn-color-surface-muted); }
+.mrow .mn { font-weight: var(--tcrn-type-weight-medium); }
+.mrow .mnote { font-size: var(--tcrn-type-size-caption); color: var(--tcrn-color-text-tertiary); font-weight: var(--tcrn-type-weight-regular); }
+.mrow .mm { font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-meta); color: var(--tcrn-color-text-secondary); }
+.mrow .del { border: 0; background: transparent; color: var(--tcrn-color-text-tertiary); cursor: pointer; opacity: 0; border-radius: 3px; }
+.mrow:hover .del { opacity: 1; }
+.mrow .del:hover { color: var(--tcrn-color-state-blocked); }
+.addline { display: flex; gap: var(--tcrn-space-1h); margin-top: var(--tcrn-space-2); }
+.addline input, .addline select { flex: 1; min-width: 0; height: 28px; padding: 0 var(--tcrn-space-1h); border: 1px solid var(--tcrn-color-border-subtle); border-radius: var(--tcrn-radius-control); background: var(--tcrn-color-surface-panel); font-size: var(--tcrn-type-size-caption); }
+.plansec { padding-top: var(--tcrn-space-3); margin-top: var(--tcrn-space-3); border-top: 1px solid var(--tcrn-color-border-subtle); }
+.empty { color: var(--tcrn-color-text-tertiary); font-size: var(--tcrn-type-size-caption); padding: var(--tcrn-space-3) 0; }
+
+/* persona detail */
+.phead { display: flex; align-items: center; gap: var(--tcrn-space-2); }
+.phead h3 { font-size: var(--tcrn-type-size-heading-3); font-weight: var(--tcrn-type-weight-strong); }
+.phead .pact { margin-left: auto; display: flex; gap: var(--tcrn-space-1h); }
+.pfield { margin-top: var(--tcrn-space-3); }
+.pfield > label { display: block; font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); color: var(--tcrn-color-text-secondary); margin-bottom: var(--tcrn-space-0h); }
+.lockhint { font-size: var(--tcrn-type-size-meta); color: var(--tcrn-color-text-tertiary); margin-top: 2px; }
+.pfield textarea { width: 100%; padding: var(--tcrn-space-2); border: 1px solid var(--tcrn-color-border-control); border-radius: var(--tcrn-radius-control); background: var(--tcrn-color-surface-panel); resize: vertical; font-size: var(--tcrn-type-size-ui); line-height: var(--tcrn-type-line-reading); }
+.pfield textarea:focus-visible, .pfield input:focus-visible { outline: none; box-shadow: var(--tcrn-elevation-focus); }
+.ghost { margin-top: var(--tcrn-space-1); font-size: var(--tcrn-type-size-caption); color: var(--tcrn-color-text-tertiary); display: flex; gap: var(--tcrn-space-2); align-items: baseline; }
+.ghost .gv { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30em; }
+.ghost button { border: 0; background: transparent; color: var(--tcrn-color-brand-primary); cursor: pointer; font-size: var(--tcrn-type-size-caption); flex: none; }
+.pfold { margin-top: var(--tcrn-space-3); }
+.pfold summary { cursor: pointer; font-size: var(--tcrn-type-size-caption); color: var(--tcrn-color-text-secondary); }
+.bindline { display: flex; align-items: center; gap: var(--tcrn-space-2); margin-top: var(--tcrn-space-1h); font-size: var(--tcrn-type-size-ui); }
+
+/* prose editor */
+.prosebar { display: flex; align-items: center; gap: var(--tcrn-space-2); margin-bottom: var(--tcrn-space-2); }
+.warnchip { display: inline-flex; gap: 4px; align-items: center; font-size: var(--tcrn-type-size-caption); color: var(--tcrn-color-state-warning); background: var(--tcrn-color-state-warning-bg); border-radius: var(--tcrn-radius-pill); padding: 2px var(--tcrn-space-2); }
+.editor { display: grid; grid-template-columns: 44px 1fr; border-radius: var(--tcrn-radius-panel); overflow: hidden; background: var(--tcrn-color-surface-panel); box-shadow: var(--tcrn-elevation-floating); min-height: 56vh; }
+.gutter { background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-tertiary); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-meta); text-align: right; padding: var(--tcrn-space-3) var(--tcrn-space-1h); line-height: 1.7; user-select: none; }
+.gutter .warn { color: var(--tcrn-color-state-warning); font-weight: 700; }
+.editor textarea { border: 0; resize: none; outline: none; padding: var(--tcrn-space-3); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-meta); line-height: 1.7; background: transparent; }
+.problem { display: flex; gap: var(--tcrn-space-2); align-items: baseline; padding: var(--tcrn-space-1h) var(--tcrn-space-2); font-size: var(--tcrn-type-size-caption); color: var(--tcrn-color-text-secondary); cursor: pointer; border-radius: var(--tcrn-radius-control); }
+.problem:hover { background: var(--tcrn-color-surface-muted); }
+.problem .ln { font-family: var(--tcrn-type-family-mono); color: var(--tcrn-color-state-warning); }
+
+/* dictionary */
+.term { display: grid; grid-template-columns: minmax(230px, auto) 1fr; gap: var(--tcrn-space-3); padding: var(--tcrn-space-2) var(--tcrn-space-2); margin: 0 calc(-1*var(--tcrn-space-2)); border-radius: var(--tcrn-radius-control); font-size: var(--tcrn-type-size-reading); line-height: var(--tcrn-type-line-reading); }
+.term:hover { background: var(--tcrn-color-surface-muted); }
+.term.hl { background: var(--tcrn-color-brand-primary-bg); }
+.term .tv { font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-meta); }
+.term .td small { display: block; color: var(--tcrn-color-text-tertiary); margin-top: 2px; font-size: var(--tcrn-type-size-caption); }
+
+/* echobar / drawer / palette */
+.echobar { display: flex; align-items: center; gap: var(--tcrn-space-3); padding: 0 var(--tcrn-space-3); background: var(--tcrn-color-surface-panel); border-top: 1px solid var(--tcrn-color-border-subtle); font-size: var(--tcrn-type-size-meta); }
+.echobar .cli { font-family: var(--tcrn-type-family-mono); color: var(--tcrn-color-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.echobar .cli .p { color: var(--tcrn-color-brand-primary); }
+.echobar .last { margin-left: auto; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 400px; background: var(--tcrn-color-surface-panel); border-left: 1px solid var(--tcrn-color-border-subtle); box-shadow: -8px 0 24px rgba(28,29,33,.10); /* 提案 --tcrn-elevation-raised */ transform: translateX(100%); transition: transform var(--tcrn-motion-emphasis) var(--tcrn-motion-ease-drawer); z-index: 30; display: flex; flex-direction: column; }
+.drawer.open { transform: translateX(0); }
+.drawer header { display: flex; align-items: center; padding: var(--tcrn-space-3) var(--tcrn-space-4); border-bottom: 1px solid var(--tcrn-color-border-subtle); font-weight: var(--tcrn-type-weight-medium); }
+.drawer header button { margin-left: auto; }
+.drawer .body { padding: var(--tcrn-space-4); overflow-y: auto; }
+.drawer dl { display: grid; grid-template-columns: 84px 1fr; gap: var(--tcrn-space-1) var(--tcrn-space-2); font-size: var(--tcrn-type-size-caption); background: var(--tcrn-color-surface-muted); border-radius: var(--tcrn-radius-control); padding: var(--tcrn-space-2h); }
+.drawer dt { color: var(--tcrn-color-text-tertiary); }
+.drawer dd { font-family: var(--tcrn-type-family-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer .tlh { font-size: var(--tcrn-type-size-caption); color: var(--tcrn-color-text-tertiary); text-transform: uppercase; letter-spacing: .05em; margin: var(--tcrn-space-4) 0 var(--tcrn-space-1); }
+.palette { position: fixed; inset: 0; background: rgba(28,29,33,.28); z-index: 40; display: none; align-items: flex-start; justify-content: center; padding-top: 14vh; }
+.palette.open { display: flex; }
+.palette .box { width: 480px; background: var(--tcrn-color-surface-panel); border-radius: var(--tcrn-radius-panel); box-shadow: -4px 12px 40px rgba(28,29,33,.18); overflow: hidden; }
+.palette input { width: 100%; border: 0; outline: none; padding: var(--tcrn-space-3) var(--tcrn-space-4); font-size: var(--tcrn-type-size-reading); background: transparent; border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.palette .ri { display: flex; gap: var(--tcrn-space-2); align-items: center; padding: var(--tcrn-space-2) var(--tcrn-space-2h); border-radius: var(--tcrn-radius-control); cursor: pointer; font-size: var(--tcrn-type-size-ui); margin: var(--tcrn-space-1h); }
+.palette .ri:hover, .palette .ri.sel { background: var(--tcrn-color-brand-primary-bg); }
+.palette .ri .tag { margin-left: auto; font-size: var(--tcrn-type-size-meta); color: var(--tcrn-color-text-tertiary); }
+.mock-tag { position: fixed; left: var(--tcrn-space-3); bottom: 40px; background: var(--tcrn-color-state-warning-bg); border: 1px solid var(--tcrn-color-border-strong); padding: 2px var(--tcrn-space-2); border-radius: var(--tcrn-radius-control); font-size: var(--tcrn-type-size-caption); z-index: 50; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <button class="ws-switch"><span class="dot"></span>cross-project<span style="color:var(--tcrn-color-text-tertiary);font-size:10px">▾</span></button>
+    <div class="searchbox" id="open-palette">🔍 搜索设置、实体、词条…<kbd>⌘K</kbd></div>
+    <div class="top-right">
+      <button class="iconbtn" title="语言">文A</button>
+      <button class="iconbtn" id="theme-toggle" title="主题">◐</button>
+      <span class="chip"><span class="dot"></span>引擎 0.11.14 · 本机回环</span>
+    </div>
+  </div>
+
+  <div class="mid">
+    <nav class="sidenav" id="nav">
+      <button data-p="detail"><span class="ico">▣</span>工作区详情</button>
+      <button data-p="settings" aria-current="page"><span class="ico">⚙</span>设置</button>
+      <button data-p="prose"><span class="ico">¶</span>规则文本</button>
+      <button data-p="entities"><span class="ico">◈</span>设置实体管理</button>
+      <button data-p="dict"><span class="ico">📖</span>系统词典</button>
+    </nav>
+
+    <!-- ================= 工作区详情(仪表盘页型:Tab 行 + 全宽) ================= -->
+    <div class="pagewrap" data-page="detail" hidden>
+      <div class="pagehead"><h2>工作区详情</h2><p class="sub">本分区的只读事实与写入历史。</p></div>
+      <div class="tabsrow">
+        <button aria-selected="true" data-sv="d-overview">概览</button>
+        <button aria-selected="false" data-sv="d-audit">审计 · 3</button>
+      </div>
+      <div class="dashwrap">
+        <div class="dash" data-sv-view="d-overview">
+          <h3 style="display:flex;align-items:baseline;gap:var(--tcrn-space-2)">cross-project <span class="keychip">TCRN-CROSS-WORKSPACE · workspace:7732a51d…</span></h3>
+          <div class="statrow">
+            <div class="stat"><div class="n">3,009</div><div class="l">链版本</div></div>
+            <div class="stat"><div class="n">3,009</div><div class="l">事件数</div></div>
+            <div class="stat"><div class="n">0.11.14</div><div class="l">引擎 · 满足下限</div></div>
+            <div class="stat"><div class="n ok">3/3</div><div class="l">健康检查通过</div></div>
+          </div>
+          <div class="dashcols">
+            <div>
+              <h3>健康</h3>
+              <div class="healthrow"><span>validate</span><span class="ok">✓ 完好</span></div>
+              <div class="healthrow"><span>knowledge</span><span class="ok">✓ 新鲜</span></div>
+              <div class="healthrow"><span>attestation</span><span class="ok">✓ 出生启用</span></div>
+            </div>
+            <div>
+              <h3>五根路径</h3>
+              <div class="pathrow"><span class="k">workspace</span><span class="v">[platform-root]/.tcrn-workspace/cross-project/workspace</span><button class="cp">⧉</button></div>
+              <div class="pathrow"><span class="k">framework</span><span class="v">~/.tcrn-workflow/tcrn-workflow</span><button class="cp">⧉</button></div>
+              <div class="pathrow"><span class="k">transient</span><span class="v">…/cross-project/transient</span><button class="cp">⧉</button></div>
+              <div class="pathrow"><span class="k">evidence-locator</span><span class="v">…/cross-project/evidence-locator</span><button class="cp">⧉</button></div>
+              <div class="pathrow"><span class="k">release-trust</span><span class="v">[platform-root]/.tcrn-workspace/release-trust</span><button class="cp">⧉</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="dash" data-sv-view="d-audit" hidden>
+          <h3>本会话写入</h3>
+          <ul class="tl">
+            <li onclick="openDrawer(event)"><span class="t">14:32</span><span>修改预设 Verity 的使命 <span class="k">persona-preset-override</span></span><span class="rchip ok show">✓ v3012</span></li>
+            <li onclick="openDrawer(event)"><span class="t">14:31</span><span>子代理政策 → review-only <span class="k">settings-set</span></span><span class="rchip ok show">✓ v3011</span></li>
+            <li onclick="openDrawer(event)"><span class="t">14:29</span><span>删除方案 省钱(claude-code) <span class="k">model-plan-remove</span></span><span class="rchip err show">✗ IN_USE</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 设置 ================= -->
+    <div class="pagewrap" data-page="settings">
+      <div class="pagehead"><h2>设置</h2><p class="sub">就地修改;每次写入返回引擎回执。enum 取值语义见系统词典(📖)。</p></div>
+      <div class="pane">
+        <nav class="subnav">
+          <div class="sec">分组</div>
+          <button data-sv="s-workspace">工作区<span class="rl">3</span></button>
+          <button data-sv="s-backup">备份<span class="rl">2</span></button>
+          <button aria-current="true" data-sv="s-execution">执行<span class="rl">5</span></button>
+          <button data-sv="s-models">子代理模型<span class="rl">2</span></button>
+        </nav>
+        <div class="paneview">
+
+          <div class="pv" data-sv-view="s-workspace" hidden>
+            <h3>工作区</h3><p class="note">分区的基座声明。</p>
+            <div class="srow" data-cli="tcrn settings-set --key engine.requiredVersion --value <版本>">
+              <div><div class="nm">引擎版本下限 <span class="keychip">engine.requiredVersion</span></div>
+                <div class="ds">本工作区要求的最低引擎版本;不满足的引擎被具名拒绝。</div></div>
+              <div class="ctl"><span class="rchip"></span><input class="t-in" placeholder="未设置 — 如 0.11.14" /></div>
+            </div>
+            <div class="srow" data-cli="tcrn settings-set --key driver.capabilityProfile --value <档位>">
+              <div><div class="nm"><span class="moddot" title="已偏离默认值"></span>驾驶能力档 <span class="keychip">driver.capabilityProfile</span><button class="reset" title="重置为默认">↺</button></div>
+                <div class="ds">部署方声明的驱动者档位;代理不自行推断。</div></div>
+              <div class="ctl"><span class="rchip"></span><input class="t-in" value="frontier" /></div>
+            </div>
+            <div class="srow" data-cli="tcrn settings-set --key workspace.generatedArtifactsPath --value <路径>">
+              <div><div class="nm">生成物目录 <span class="keychip">workspace.generatedArtifactsPath</span></div>
+                <div class="ds">工作区相对路径,存放可评审的生成物。</div></div>
+              <div class="ctl"><span class="rchip"></span><input class="t-in" style="min-width:230px" value=".tcrn-workflow/artifacts" /></div>
+            </div>
+          </div>
+
+          <div class="pv" data-sv-view="s-backup" hidden>
+            <h3>备份</h3><p class="note">快照的节奏与去处。节奏是声明性的——引擎没有调度器。</p>
+            <div class="srow" data-cli="tcrn settings-set --key backup.cadence --value manual">
+              <div><div class="nm">备份节奏 <span class="keychip">backup.cadence</span> <span class="dictlink" data-goto="dict">📖</span></div>
+                <div class="ds">何时提议一次受治快照。</div></div>
+              <div class="ctl"><span class="rchip ok show" onclick="openDrawer(event)">✓ v3010</span>
+                <div class="seg"><button aria-pressed="false">gate-close</button><button aria-pressed="false">session-end</button><button aria-pressed="true">manual</button></div></div>
+            </div>
+            <div class="srow" data-cli="tcrn settings-set --key backup.destination --value <绝对路径>">
+              <div><div class="nm">备份目的地 <span class="keychip">backup.destination</span></div>
+                <div class="ds">快照写入的绝对路径;控制树内的位置被拒绝。</div></div>
+              <div class="ctl"><span class="rchip"></span><input class="t-in" style="min-width:230px" placeholder="未设置" /></div>
+            </div>
+          </div>
+
+          <div class="pv" data-sv-view="s-execution">
+            <h3>执行</h3><p class="note">子代理如何被派出:政策、规模上限、审议独立性。声明性,由宿主遵守。</p>
+            <div class="srow" data-cli="tcrn settings-set --key execution.subagentPolicy --value <值>">
+              <div><div class="nm">子代理政策 <span class="keychip">execution.subagentPolicy</span> <span class="dictlink" data-goto="dict">📖</span></div>
+                <div class="ds">是否允许子代理并行展开。「仅复核」= 只有 reviewer 与 gatekeeper 角色可被派出。</div></div>
+              <div class="ctl"><span class="rchip" id="rc-policy"></span>
+                <div class="seg" id="seg-policy">
+                  <button aria-pressed="true" data-v="allowed">允许</button>
+                  <button aria-pressed="false" data-v="review-only">仅复核</button>
+                  <button aria-pressed="false" data-v="forbidden">禁止</button>
+                </div></div>
+            </div>
+            <div class="srow" data-cli="tcrn settings-set --key execution.personalessDispatch --value <值>">
+              <div><div class="nm">无 Persona 派发 <span class="keychip">execution.personalessDispatch</span></div>
+                <div class="ds">关闭后,每次派工必须署名一个 Persona,审计面才完整。</div></div>
+              <div class="ctl"><span class="rchip" id="rc-pl"></span><button class="switch" id="sw-pl" role="switch" aria-checked="true"></button></div>
+            </div>
+            <div class="srow" data-cli="tcrn settings-set --key execution.maxConcurrentSubagents --value <1-32>">
+              <div><div class="nm">最大并发子代理数 <span class="keychip">execution.maxConcurrentSubagents</span></div></div>
+              <div class="ctl"><span class="rchip" id="rc-cc"></span>
+                <div class="stepper"><button id="cc-m">−</button><span class="val" id="cc-v">8</span><button id="cc-p">＋</button><span class="bound">1–32</span></div></div>
+            </div>
+            <div class="srow" data-cli="tcrn settings-set --key execution.maxDispatchDepth --value <1-4>">
+              <div><div class="nm">最大派发深度 <span class="keychip">execution.maxDispatchDepth</span></div></div>
+              <div class="ctl"><span class="rchip"></span>
+                <div class="stepper"><button>−</button><span class="val">1</span><button>＋</button><span class="bound">1–4</span></div></div>
+            </div>
+            <div class="srow" data-cli="tcrn settings-set --key execution.independenceFloor --value <值>">
+              <div><div class="nm">独立性下限 <span class="keychip">execution.independenceFloor</span> <span class="dictlink" data-goto="dict">📖</span></div>
+                <div class="ds">覆盖的会议类型在关闭时必须声明分头独立执行,否则引擎拒绝。</div></div>
+              <div class="ctl"><span class="rchip"></span>
+                <select class="t-in"><option>none</option><option>verification</option><option>verification-and-risk</option><option>all</option></select></div>
+            </div>
+          </div>
+
+          <div class="pv" data-sv-view="s-models" hidden>
+            <h3>子代理模型</h3>
+            <p class="note">派发子代理前,宿主读取本组的生效方案,按方案的 persona→模型分配表选模型。方案 = 一张分配表;未显式分配的 persona 落到方案默认模型;生效方案未设置的宿主用自身默认。<b>只作用于子代理派发,不影响主会话。</b></p>
+
+            <div class="srow" data-cli="tcrn settings-set --key execution.claudeCodeSubagentPlan --value 日常">
+              <div><div class="nm">claude-code <span class="keychip">execution.claudeCodeSubagentPlan</span></div>
+                <div class="ds">该宿主派发子代理时采用的方案。</div></div>
+              <div class="ctl"><span class="rchip ok show" onclick="openDrawer(event)">✓ v3013</span>
+                <select class="t-in" style="min-width:120px"><option selected>日常</option><option>省钱</option><option>(未设置)</option></select></div>
+            </div>
+            <div class="srow" data-cli="tcrn settings-set --key execution.codexSubagentPlan --value <方案名>">
+              <div><div class="nm">codex <span class="keychip">execution.codexSubagentPlan</span></div>
+                <div class="ds">同上,作用于 codex 宿主。</div></div>
+              <div class="ctl"><span class="rchip"></span>
+                <select class="t-in" style="min-width:120px"><option selected>(未设置)</option></select></div>
+            </div>
+
+            <div class="plansec" style="margin-top:var(--tcrn-space-4)">
+              <div style="display:flex;align-items:center;gap:var(--tcrn-space-2)">
+                <h3 style="font-size:var(--tcrn-type-size-ui);font-weight:var(--tcrn-type-weight-strong)">claude-code 的方案</h3><span class="pbadge">2</span>
+              </div>
+              <div class="plansec">
+                <div style="display:flex;align-items:center;gap:var(--tcrn-space-2)">
+                  <span style="font-weight:var(--tcrn-type-weight-medium)">日常</span><span class="pbadge live">生效中</span>
+                  <button class="btn danger" style="margin-left:auto;height:26px" data-cli="tcrn model-plan-remove --host claude-code --name 日常">删除</button>
+                </div>
+                <div class="mrow" data-cli="tcrn model-plan-set --host claude-code --name 日常 --default-model claude-opus-5">
+                  <span class="mn">默认模型 <span class="mnote">未分配的 persona 落到它</span></span><span class="mm">claude-opus-5</span><span></span></div>
+                <div class="mrow" data-cli="tcrn model-plan-assign --host claude-code --plan 日常 --persona 审计员 --model claude-opus-5">
+                  <span>审计员 <span class="mnote">reviewer</span></span><span class="mm">claude-opus-5</span><button class="del">✕</button></div>
+                <div class="mrow" data-cli="tcrn model-plan-assign --host claude-code --plan 日常 --persona Ilya --model claude-sonnet-5">
+                  <span>Ilya <span class="mnote">implementer</span></span><span class="mm">claude-sonnet-5</span><button class="del">✕</button></div>
+                <div class="addline" data-cli="tcrn model-plan-assign --host claude-code --plan 日常 --persona <名> --model <模型>">
+                  <select><option>Verity</option><option>Janus</option><option>Mneme</option></select><input placeholder="模型(如 claude-opus-4-8)" /><button class="btn primary" style="height:28px">分配</button></div>
+              </div>
+              <div class="plansec">
+                <div style="display:flex;align-items:center;gap:var(--tcrn-space-2)">
+                  <span style="font-weight:var(--tcrn-type-weight-medium)">省钱</span>
+                  <button class="btn danger" style="margin-left:auto;height:26px">删除</button></div>
+                <div class="mrow"><span class="mn">默认模型</span><span class="mm">claude-opus-4-8</span><span></span></div>
+                <div class="mrow"><span>审计员</span><span class="mm">claude-opus-4-8</span><button class="del">✕</button></div>
+              </div>
+              <div class="addline" data-cli="tcrn model-plan-set --host claude-code --name <方案名> --default-model <模型>">
+                <input placeholder="新方案名称(不可再改)" /><input placeholder="默认模型(必填)" /><button class="btn primary" style="height:28px">新建方案</button></div>
+            </div>
+
+            <div class="plansec">
+              <div style="display:flex;align-items:center;gap:var(--tcrn-space-2)">
+                <h3 style="font-size:var(--tcrn-type-size-ui);font-weight:var(--tcrn-type-weight-strong)">codex 的方案</h3><span class="pbadge">0</span></div>
+              <div class="empty">暂无方案。新建前引擎返回空集;生效方案未设置,宿主用自身默认。</div>
+              <div class="addline"><input placeholder="方案名称" /><input placeholder="默认模型(必填)" /><button class="btn primary" style="height:28px">新建方案</button></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 规则文本 ================= -->
+    <div class="pagewrap" data-page="prose" hidden>
+      <div class="pagehead"><h2>规则文本</h2><p class="sub">AGENTS.md — 平台自定义规则的唯一真源。保存即落盘,对账同步标注。</p></div>
+      <div class="pane">
+        <nav class="subnav">
+          <div class="sec">目录</div>
+          <button aria-current="true"># 平台协作规则</button>
+          <button style="padding-left:var(--tcrn-space-4)">## 工作纪律</button>
+          <button style="padding-left:var(--tcrn-space-4)">## 方向裁定</button>
+          <button style="padding-left:var(--tcrn-space-4)">## 交付节奏</button>
+          <div class="sec">对账 · 1 警告</div>
+          <button class="problem"><span class="ln">L5</span><span>backup.destinatoin 未注册</span></button>
+        </nav>
+        <div class="paneview">
+          <div class="pv" style="max-width:820px">
+            <div class="prosebar">
+              <span class="warnchip">⚠ 1 处对账警告</span>
+              <span style="flex:1"></span>
+              <button class="btn primary" data-cli="(写入 AGENTS.md — 文件操作,非链上)">保存 ⌘S</button>
+              <span class="rchip ok show">✓ 已保存</span>
+            </div>
+            <div class="editor">
+              <div class="gutter">1<br>2<br>3<br>4<br><span class="warn">5 ●</span><br>6<br>7<br>8<br>9<br>10<br>11<br>12</div>
+              <textarea spellcheck="false"># AGENTS.md — 平台协作规则
+
+## 工作纪律
+
+发布前将 backup.cadence 设为 manual,并确认 backup.destinatoin 已指向外部卷。
+所有验收类会议须分头独立执行(见 execution.independenceFloor)。
+
+## 方向裁定
+
+方向题在拆单时决完;执行期不留方向真空。
+涉及外部消费者、难以逆转、封死替代架构的选择,先经 Owner 裁定再动手。
+…(散文可以很长——编辑器占满余高)</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 设置实体管理 ================= -->
+    <div class="pagewrap" data-page="entities" hidden>
+      <div class="pagehead"><h2>设置实体管理</h2><p class="sub">有独立身份、可被引用的受治实体。名称即身份,创建后不可更改。</p></div>
+      <div class="tabsrow" id="etabs">
+        <button aria-selected="true">Persona</button>
+        <button disabled style="opacity:.45">模板(预留)</button>
+      </div>
+      <div class="pane">
+        <nav class="subnav">
+          <button class="newbtn">＋ 新建 Persona</button>
+          <div class="sec">自定义</div>
+          <button class="pi" data-pd="pd-auditor"><span>审计员</span><span class="rl">reviewer</span></button>
+          <div class="sec">预设</div>
+          <button class="pi"><span>Arturo</span><span class="rl">orchestrator</span></button>
+          <button class="pi" aria-current="true" data-pd="pd-verity"><span class="md" title="存在链上覆盖"></span><span>Verity</span><span class="rl">reviewer</span></button>
+          <button class="pi"><span>Janus</span><span class="rl">gatekeeper</span></button>
+          <button class="pi"><span>Mneme</span><span class="rl">steward</span></button>
+        </nav>
+        <div class="paneview">
+          <div class="pv" data-pd-view="pd-verity">
+            <div class="phead"><h3>Verity</h3><span class="pbadge">预设</span><span class="pbadge mod">已修改</span>
+              <div class="pact">
+                <button class="btn" data-cli="tcrn persona-preset-restore --name Verity">恢复出厂</button>
+                <button class="btn danger" data-cli="tcrn persona-remove --name Verity">删除</button>
+              </div></div>
+            <div class="pfield"><label>名称(身份,不可更改)</label>
+              <input class="t-in" style="width:100%" value="Verity" disabled />
+              <div class="lockhint">🔒 名称派生实体 id;更名 = 新建一个并删除本条。</div></div>
+            <div class="pfield"><label>角色</label>
+              <select class="t-in" data-cli="tcrn persona-set --name Verity --role <角色> …"><option>orchestrator</option><option>planner</option><option>implementer</option><option selected>reviewer</option><option>gatekeeper</option><option>steward</option></select></div>
+            <div class="pfield"><label>职衔(选择器副标题)</label>
+              <input class="t-in" style="width:100%" value="Verification Engineer" /></div>
+            <div class="pfield"><label>使命 mission</label>
+              <textarea rows="3" data-cli="tcrn persona-set --name Verity --mission <文本> …">复核一切主张的可复现性,先找证伪路径;引用证据时给出可复现的命令。</textarea>
+              <div class="ghost"><span>出厂值:</span><span class="gv">Determine whether an exact immutable basis provides executable and reproducible proof…</span><button data-cli="tcrn persona-preset-restore --name Verity --field mission">恢复此字段</button></div></div>
+            <div class="pfield"><label>拒绝清单 refusals</label>
+              <textarea rows="2">Accepting green results without a red-leg proof; verifying a claim against the reporter's own summary.</textarea></div>
+            <details class="pfold"><summary>更多散文字段(5) — authorityBoundary · contactWhen · requiredInputs · deliverables · successCriteria</summary>
+              <div class="pfield"><label>权限边界 authorityBoundary</label><textarea rows="2">May demand evidence and block acceptance; may not rewrite scope.</textarea></div>
+            </details>
+            <div class="pfield"><label>模型(来自生效方案,只读)</label>
+              <div class="bindline"><span class="mono">claude-code</span> → <span class="mm mono">claude-opus-5</span><span class="lockhint">「日常」的默认模型 — 在「设置 · 子代理模型」为本 persona 单独分配</span></div>
+              <div class="bindline"><span class="mono">codex</span> → <span class="lockhint">生效方案未设置,宿主用自身默认</span></div></div>
+            <div style="margin-top:var(--tcrn-space-4);display:flex;gap:var(--tcrn-space-2);align-items:center">
+              <button class="btn primary" id="save-verity">保存修改</button>
+              <span class="rchip" id="rc-verity"></span>
+            </div>
+            <p class="lockhint" style="margin-top:var(--tcrn-space-2)">预设实体:出厂定义固定在引擎内;修改与删除保存为链上覆盖,「恢复出厂」撤销覆盖。</p>
+          </div>
+          <div class="pv" data-pd-view="pd-auditor" hidden>
+            <div class="phead"><h3>审计员</h3><span class="pbadge cus">自定义</span>
+              <div class="pact"><button class="btn danger">删除</button></div></div>
+            <div class="pfield"><label>名称(身份,不可更改)</label><input class="t-in" style="width:100%" value="审计员" disabled /></div>
+            <div class="pfield"><label>角色</label><select class="t-in"><option selected>reviewer</option><option>gatekeeper</option></select></div>
+            <div class="pfield"><label>职衔</label><input class="t-in" style="width:100%" value="对抗复核细节控" /></div>
+            <div class="pfield"><label>使命 mission</label><textarea rows="3">默认怀疑每一个主张,先找证伪路径;引用证据时给出可复现的命令。</textarea></div>
+            <div class="pfield"><label>拒绝清单 refusals</label><textarea rows="2">不接受没有红腿实证的绿。</textarea></div>
+            <details class="pfold"><summary>更多散文字段(5)</summary><p class="lockhint">自定义实体的进阶字段,可留空。</p></details>
+            <div class="pfield"><label>模型(来自生效方案,只读)</label>
+              <div class="bindline"><span class="mono">claude-code</span> → <span class="mm mono">claude-opus-5</span><span class="lockhint">「日常」中显式分配</span></div></div>
+            <div style="margin-top:var(--tcrn-space-4)"><button class="btn primary">保存修改</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 系统词典 ================= -->
+    <div class="pagewrap" data-page="dict" hidden>
+      <div class="pagehead"><h2>系统词典</h2><p class="sub">由开发者随引擎定义的变量分类与取值。只读;每一项来自引擎名册,门户不自拟。</p></div>
+      <div class="pane">
+        <nav class="subnav">
+          <div class="sec">分类</div>
+          <button aria-current="true" data-sv="dc-role">执行角色<span class="rl">6</span></button>
+          <button data-sv="dc-host">宿主<span class="rl">2</span></button>
+          <button data-sv="dc-conf">会议类型<span class="rl">7</span></button>
+          <button data-sv="dc-form">执行形态<span class="rl">2</span></button>
+          <button data-sv="dc-enum">设置取值<span class="rl">5</span></button>
+        </nav>
+        <div class="paneview">
+          <div class="pv" data-sv-view="dc-role">
+            <h3>执行角色 persona role</h3><p class="note">persona 的编排语义;「仅复核」政策据此判定谁可被派出。</p>
+            <div class="term hl"><span class="tv">reviewer</span><span class="td">对抗复核与验证<small><b>review-only 下仍可派</b> · Verity、Sable、审计员属此</small></span></div>
+            <div class="term"><span class="tv">gatekeeper</span><span class="td">验收与门裁<small><b>review-only 下仍可派</b></small></span></div>
+            <div class="term"><span class="tv">orchestrator</span><span class="td">可编排、可再派工的协调者<small>forbidden 下不可派</small></span></div>
+            <div class="term"><span class="tv">planner</span><span class="td">范围与架构裁剪<small>forbidden / review-only 下不可派</small></span></div>
+            <div class="term"><span class="tv">implementer</span><span class="td">交付实现切片<small>forbidden / review-only 下不可派</small></span></div>
+            <div class="term"><span class="tv">steward</span><span class="td">知识与治理照料<small>forbidden / review-only 下不可派</small></span></div>
+          </div>
+          <div class="pv" data-sv-view="dc-host" hidden>
+            <h3>宿主 execution host</h3><p class="note">封闭枚举,与 adapter 两族对齐;API/中转接入仍属对应宿主。</p>
+            <div class="term"><span class="tv">claude-code</span><span class="td">Claude Code 宿主</span></div>
+            <div class="term"><span class="tv">codex</span><span class="td">Codex 宿主</span></div>
+          </div>
+          <div class="pv" data-sv-view="dc-conf" hidden>
+            <h3>会议类型 conference type</h3><p class="note">independenceFloor 的覆盖粒度。</p>
+            <div class="term"><span class="tv">verification</span><span class="td">验收会议<small>floor ≥ verification 时覆盖</small></span></div>
+            <div class="term"><span class="tv">risk</span><span class="td">风险会议<small>floor ≥ verification-and-risk 时覆盖</small></span></div>
+            <div class="term"><span class="tv">strategy · architecture · release · incident · retrospective</span><span class="td">其余五型<small>floor = all 时覆盖</small></span></div>
+          </div>
+          <div class="pv" data-sv-view="dc-form" hidden>
+            <h3>执行形态 execution form</h3>
+            <div class="term"><span class="tv">independent</span><span class="td">立场由分头独立的上下文各自得出</span></div>
+            <div class="term"><span class="tv">single-context</span><span class="td">单上下文转录<small>floor 覆盖的会议不接受此值</small></span></div>
+          </div>
+          <div class="pv" data-sv-view="dc-enum" hidden>
+            <h3>设置取值(enum 键)</h3>
+            <div class="term"><span class="tv">backup.cadence</span><span class="td"><code>gate-close · session-end · manual</code></span></div>
+            <div class="term"><span class="tv">execution.subagentPolicy</span><span class="td"><code>allowed · review-only · forbidden</code></span></div>
+            <div class="term"><span class="tv">execution.independenceFloor</span><span class="td"><code>none · verification · verification-and-risk · all</code></span></div>
+            <div class="term"><span class="tv">execution.personalessDispatch</span><span class="td"><code>allowed · forbidden</code></span></div>
+            <div class="term"><span class="tv">execution.*SubagentPlan</span><span class="td">引用型:取值为该宿主已建的方案名<small>选项来自「设置 · 子代理模型」</small></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="echobar">
+    <span class="cli" id="echo"><span class="p">$</span> agent:portal · 写入经公开 CLI · 悬停任意控件查看等效命令</span>
+    <span class="last"><span class="rchip ok show" onclick="openDrawer(event)">最近:✓ v3012 ▸</span></span>
+  </div>
+</div>
+
+<aside class="drawer" id="drawer">
+  <header>引擎回执 <button class="iconbtn" onclick="closeDrawer()">✕</button></header>
+  <div class="body">
+    <dl>
+      <dt>原因码</dt><dd>PERSONA_WRITE_COMMITTED</dd>
+      <dt>记录</dt><dd>persona-preset-override · Verity</dd>
+      <dt>链版本</dt><dd>3012</dd>
+      <dt>回执摘要</dt><dd>8445d0294b83980b…</dd>
+      <dt>链头事件</dt><dd>5ed2d6853078493a…</dd>
+      <dt>执行者</dt><dd>agent:portal</dd>
+    </dl>
+    <div class="tlh">本会话写入</div>
+    <ul class="tl">
+      <li><span class="t">14:32</span><span>修改预设 Verity <span class="k">persona-preset-override</span></span><span class="rchip ok show">✓ v3012</span></li>
+      <li><span class="t">14:31</span><span>子代理政策 → review-only <span class="k">settings-set</span></span><span class="rchip ok show">✓ v3011</span></li>
+      <li><span class="t">14:29</span><span>删除方案 省钱 <span class="k">model-plan-remove</span></span><span class="rchip err show">✗ IN_USE</span></li>
+    </ul>
+  </div>
+</aside>
+
+<div class="palette" id="palette">
+  <div class="box">
+    <input placeholder="搜索设置、实体、词条…" id="palette-in" />
+    <div class="ri sel">⚙ <span>子代理政策</span><span class="mono" style="color:var(--tcrn-color-text-tertiary)">execution.subagentPolicy</span><span class="tag">设置 · 执行</span></div>
+    <div class="ri">◈ <span>Verity</span><span class="tag">Persona · 预设</span></div>
+    <div class="ri">📖 <span>reviewer</span><span class="tag">词典 · 执行角色</span></div>
+  </div>
+</div>
+
+<div class="mock-tag">设计稿预览 v4 · 统一 Layout 语法 · 假数据</div>
+
+<script>
+// 页导航
+const pages = document.querySelectorAll("[data-page]");
+document.getElementById("nav").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-p]"); if (!b) return;
+  document.querySelectorAll("#nav button").forEach(x => x.removeAttribute("aria-current"));
+  b.setAttribute("aria-current", "page");
+  pages.forEach(p => p.hidden = p.dataset.page !== b.dataset.p);
+});
+// 统一切换:data-sv 按钮切换同页 data-sv-view(子导航与 Tab 行共用)
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-sv]"); if (!b) return;
+  const scope = b.closest(".pagewrap");
+  const tab = !!b.closest(".tabsrow");
+  scope.querySelectorAll("[data-sv]").forEach(x => {
+    if (tab) x.setAttribute("aria-selected", x === b); else x.removeAttribute("aria-current");
+  });
+  if (!tab) b.setAttribute("aria-current", "true");
+  scope.querySelectorAll("[data-sv-view]").forEach(v => v.hidden = v.dataset.svView !== b.dataset.sv);
+});
+// persona 条目切换(data-pd)
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-pd]"); if (!b) return;
+  const pane = b.closest(".pane");
+  pane.querySelectorAll(".pi").forEach(x => x.removeAttribute("aria-current"));
+  b.setAttribute("aria-current", "true");
+  pane.querySelectorAll("[data-pd-view]").forEach(v => v.hidden = v.dataset.pdView !== b.dataset.pd);
+});
+// CLI 回声
+const echo = document.getElementById("echo");
+const idle = '<span class="p">$</span> agent:portal · 写入经公开 CLI · 悬停任意控件查看等效命令';
+document.addEventListener("mouseover", (e) => {
+  const host = e.target.closest("[data-cli]");
+  echo.innerHTML = host ? '<span class="p">$</span> ' + host.dataset.cli.replace(/</g, "&lt;") : idle;
+});
+// 抽屉
+function openDrawer(e) { document.getElementById("drawer").classList.add("open"); if (e) e.stopPropagation(); }
+function closeDrawer() { document.getElementById("drawer").classList.remove("open"); }
+// 微反馈
+function flash(id, ok, text) {
+  const el = document.getElementById(id); if (!el) return;
+  el.className = "rchip busy show"; el.textContent = "…";
+  setTimeout(() => { el.className = "rchip " + (ok ? "ok" : "err") + " show"; el.textContent = text; el.onclick = openDrawer; }, 420);
+}
+// 政策联动:forbidden 时实体管理灰显提示
+document.getElementById("seg-policy").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll("#seg-policy button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  flash("rc-policy", true, "✓ v3013");
+});
+document.getElementById("sw-pl").onclick = function () { this.setAttribute("aria-checked", this.getAttribute("aria-checked") !== "true"); flash("rc-pl", true, "✓ v3014"); };
+let cc = 8;
+document.getElementById("cc-p").onclick = () => { cc = Math.min(32, cc + 1); document.getElementById("cc-v").textContent = cc; flash("rc-cc", true, "✓ v3015"); };
+document.getElementById("cc-m").onclick = () => { cc = Math.max(1, cc - 1); document.getElementById("cc-v").textContent = cc; flash("rc-cc", true, "✓ v3015"); };
+document.getElementById("save-verity").onclick = () => flash("rc-verity", true, "✓ v3016(覆盖层)");
+// 词典深链
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-goto=dict]")) document.querySelector('#nav button[data-p=dict]').click();
+});
+// 主题 / ⌘K
+document.getElementById("theme-toggle").onclick = () => {
+  const root = document.documentElement;
+  root.dataset.tcrnTheme = root.dataset.tcrnTheme === "dark" ? "" : "dark";
+};
+const palette = document.getElementById("palette");
+document.getElementById("open-palette").onclick = () => { palette.classList.add("open"); document.getElementById("palette-in").focus(); };
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); palette.classList.add("open"); document.getElementById("palette-in").focus(); }
+  if (e.key === "Escape") { palette.classList.remove("open"); closeDrawer(); }
+});
+palette.addEventListener("click", (e) => { if (e.target === palette) palette.classList.remove("open"); });
+</script>
+</body>
+</html>

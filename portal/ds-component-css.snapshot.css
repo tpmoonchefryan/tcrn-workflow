@@ -5,6 +5,7 @@
   --tcrn-color-brand-secondary-readable: #246f80;
   --tcrn-brand-accent-aos: #187c7c;
   --tcrn-brand-accent-tms: #2c63c8;
+  --tcrn-brand-accent-workflow: #3b5272;
   --tcrn-brand-accent-design-system-1: #6577f3;
   --tcrn-brand-accent-design-system-2: #3096f4;
   --tcrn-brand-accent-design-system-3: #43d4cf;
@@ -14,6 +15,7 @@
   --tcrn-color-brand-secondary-readable: #a6e8ef;
   --tcrn-brand-accent-aos: #69d6d0;
   --tcrn-brand-accent-tms: #9bb8ff;
+  --tcrn-brand-accent-workflow: #9db5d4;
   --tcrn-brand-accent-design-system-1: #aeb8ff;
   --tcrn-brand-accent-design-system-2: #83c8ff;
   --tcrn-brand-accent-design-system-3: #7ce4df;
@@ -300,6 +302,9 @@
 }
 .tcrn-brand-wordmark__suffix--tms {
   color: var(--tcrn-brand-accent-tms);
+}
+.tcrn-brand-wordmark__suffix--workflow {
+  color: var(--tcrn-brand-accent-workflow);
 }
 .tcrn-brand-wordmark__suffix--design-system {
   background: linear-gradient(
@@ -2616,6 +2621,12 @@ a.tcrn-relationship-chip:focus-visible {
 /* Form field */
 .tcrn-field {
   display: grid;
+  /* The field's rows are label and control, both content-sized. Left to stretch, a
+     field that a layout has made taller than its content hands the extra height to
+     those rows, and the control inside grows past the min-height it declares — a
+     select stating 34px was observed at 44.1px this way. The field keeps its own
+     size; whatever gave it extra height is the layout's business, not the control's. */
+  align-content: start;
   gap: var(--tcrn-space-1);
   margin-bottom: 10px;
   border-radius: var(--tcrn-radius-control);

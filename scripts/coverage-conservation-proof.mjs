@@ -96,7 +96,8 @@ async function main() {
     const valid = deletedCase.exitCode !== 0
       && deletedCase.reasonCode === "COVERAGE_CONSERVATION_VIOLATION"
       && deletedCase.target?.path === s244Path
-      && deletedCase.target.testCountLoss > 0
+      && deletedCase.target.removedTests.includes("INC-145 M1/M3/M4: model-plan host and bounded text guards refuse")
+      && deletedCase.target.unwaivedTests.includes("INC-145 M1/M3/M4: model-plan host and bounded text guards refuse")
       && missingCase.exitCode !== 0
       && missingCase.reasonCode === "COVERAGE_BASELINE_INCOMPLETE"
       && missingCase.baselineCompleteness.missingFiles.includes(s244Path)

@@ -4,9 +4,9 @@
   "files": {
     "portal/tests/design-proof.test.mjs": {
       "testCount": 1,
-      "assertionCount": 8,
+      "assertionCount": 51,
       "testNames": [
-        "S242 design-proof new legs turn red for injected violations and green after restore"
+        "INIT-036 S276 design-proof legs turn red for injected violations and green after restore"
       ]
     },
     "portal/tests/portal.test.mjs": {
@@ -25,15 +25,22 @@
       ]
     },
     "portal/tests/ui-presence.test.mjs": {
-      "testCount": 6,
-      "assertionCount": 17,
+      "testCount": 13,
+      "assertionCount": 104,
       "testNames": [
         "INC-148 meta-criterion mutation ${MUTATION} must red",
         "INC-148 rendered DOM contract names every preview component",
         "INC-148 rendered DOM behavior changes receipt state",
         "INC-151 rendered engine card follows the engine status value",
         "INC-151 rendered health card turns red when actor configuration is absent",
-        "INC-150 vocabulary descriptions are localized in the executed DOM"
+        "INC-150 vocabulary descriptions are localized in the executed DOM",
+        "INC-183 every enum setting is its own dictionary entry",
+        "INC-187 unsetting a setting that is already unset writes nothing, and a bound plan can still be freed",
+        "INC-193 the design authority is declared, and what cannot be checked here is yellow",
+        "INC-192 abstract concepts carry a supplemental explanation the keyboard can reach",
+        "INC-186 the dictionary carries no workspace data",
+        "INC-185 the vendor model directory opens as the page",
+        "S280 portal filters effort options from vocabulary and keeps the receipt chip on the chain"
       ]
     },
     "tests/act1-claude-installer.test.mjs": {
@@ -455,6 +462,15 @@
         "kept"
       ]
     },
+    "tests/cross-repo-privacy.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 11,
+      "testNames": [
+        "cross-repo privacy scans every manifest project, including exact lowercase joi-button, and stays green",
+        "cross-repo privacy red leg names an absolute path and an identity marker, then returns green after cleanup",
+        "cross-repo privacy requires a platform root"
+      ]
+    },
     "tests/dependency-materialization.test.mjs": {
       "testCount": 2,
       "assertionCount": 9,
@@ -526,6 +542,15 @@
         "INC-074: a malformed sentinel fails closed rather than being treated as absent",
         "INC-074: CLI refuses a PG path whose schema does not match the sentinel (CLI_SCHEMA_MISMATCH)",
         "INC-074/INC-081: sealing a retained archive is idempotent and never overwrites a different binding"
+      ]
+    },
+    "tests/init033-install-surface.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 16,
+      "testNames": [
+        "S261 install manifest is closed, placeholder-only, and complete",
+        "S261 independent required-item catalog rejects a manifest item deletion",
+        "install-manifest is a deterministic read-only CLI verb"
       ]
     },
     "tests/io-boundaries.test.mjs": {
@@ -1011,24 +1036,6 @@
         "CQ-08b: the conflicts list is empty for every operation and conflicts_planned stays reachable"
       ]
     },
-    "tests/init033-install-surface.test.mjs": {
-      "testCount": 3,
-      "assertionCount": 16,
-      "testNames": [
-        "S261 install manifest is closed, placeholder-only, and complete",
-        "S261 independent required-item catalog rejects a manifest item deletion",
-        "install-manifest is a deterministic read-only CLI verb"
-      ]
-    },
-    "tests/cross-repo-privacy.test.mjs": {
-      "testCount": 3,
-      "assertionCount": 11,
-      "testNames": [
-        "cross-repo privacy scans every manifest project, including exact lowercase joi-button, and stays green",
-        "cross-repo privacy red leg names an absolute path and an identity marker, then returns green after cleanup",
-        "cross-repo privacy requires a platform root"
-      ]
-    },
     "tests/p7-public-aos-requirements.test.mjs": {
       "testCount": 6,
       "assertionCount": 15,
@@ -1049,6 +1056,16 @@
         "P8 creates a closed unpublished release candidate without supported AOS releases",
         "P8 projects the generated eight-profile Core Reference bundle through the closed sanitizer",
         "P8 dogfood completes one disposable local_primary initiative with Knowledge and dry-run artifacts"
+      ]
+    },
+    "tests/platform-chain-backup.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 17,
+      "testNames": [
+        "S272 backup CLI requires an explicit platform root and rejects extra flags",
+        "S272 creates a tar snapshot, manifest, chain-version sidecar and local receipt",
+        "S272 retention verifies the newest snapshot before keeping fourteen",
+        "S272 uses an external gpg reference without placing encryption material in the repository"
       ]
     },
     "tests/platform-doctor.test.mjs": {
@@ -1083,16 +1100,6 @@
         "S270 lstat plus file-kind probing rejects a directory in a file residence",
         "S270 unsupported acceptanceProbe syntax is a red leg rather than a shell execution",
         "S273 trust archive freshness compares the archive to all installed consumers and marker versions"
-      ]
-    },
-    "tests/platform-chain-backup.test.mjs": {
-      "testCount": 4,
-      "assertionCount": 17,
-      "testNames": [
-        "S272 backup CLI requires an explicit platform root and rejects extra flags",
-        "S272 creates a tar snapshot, manifest, chain-version sidecar and local receipt",
-        "S272 retention verifies the newest snapshot before keeping fourteen",
-        "S272 uses an external gpg reference without placing encryption material in the repository"
       ]
     },
     "tests/preflight.test.mjs": {
@@ -1311,12 +1318,15 @@
       ]
     },
     "tests/s244-model-plan.test.mjs": {
-      "testCount": 3,
-      "assertionCount": 3,
+      "testCount": 6,
+      "assertionCount": 23,
       "testNames": [
         "INC-145 M1/M3/M4: model-plan host and bounded text guards refuse",
         "INC-145 M6: an active-plan reference refuses removal",
-        "INC-152 MODEL_PLAN_IN_USE wiring names the settings reference"
+        "INC-152 MODEL_PLAN_IN_USE wiring names the settings reference",
+        "S279: one effort roster preserves vendor names, host applicability, and legacy replay",
+        "INC-184: a session level stays in the roster and is refused by the dispatch face",
+        "S282: a plan carries a default effort, held to the same rule as a per-persona one"
       ]
     },
     "tests/s245-subagent-plan-keys.test.mjs": {
@@ -1342,6 +1352,18 @@
       "testNames": [
         "INC-145 vocabulary derives role semantics, hosts, and conference relationships",
         "INC-145 vocabulary preserves catalog metadata and both plan sources"
+      ]
+    },
+    "tests/s281-machine-settings.test.mjs": {
+      "testCount": 6,
+      "assertionCount": 19,
+      "testNames": [
+        "S281: an untouched machine reads empty rather than failing, and leaves no file",
+        "S281: every value is checked against the catalogue before it is stored",
+        "S281: writes are canonical and key order does not depend on write order",
+        "S281: removing what is not set refuses, and the file disappears with the last value",
+        "S281: a corrupt file is an error, not an empty answer",
+        "S281: the layer states where its values come from and when they take effect"
       ]
     },
     "tests/s6-lessons.test.mjs": {

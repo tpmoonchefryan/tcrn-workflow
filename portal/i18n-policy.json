@@ -9,28 +9,35 @@
   },
   "locales": {
     "zh-CN": {
-      "maxEnglishMatches": 2,
+      "maxEnglishMatches": 3,
       "waivers": [
         "app.brand",
-        "search.command"
+        "search.command",
+        "settings.machine"
       ]
     },
     "ja": {
-      "maxEnglishMatches": 1,
+      "maxEnglishMatches": 2,
       "waivers": [
-        "app.brand"
+        "app.brand",
+        "settings.machine"
       ]
     },
     "ko": {
-      "maxEnglishMatches": 1,
+      "maxEnglishMatches": 2,
       "waivers": [
-        "app.brand"
+        "app.brand",
+        "settings.machine"
       ]
     },
     "fr": {
-      "maxEnglishMatches": 1,
+      "maxEnglishMatches": 5,
       "waivers": [
-        "app.brand"
+        "app.brand",
+        "models.groupPlan",
+        "settings.machine",
+        "vocabulary.columnDescription",
+        "vocabulary.columnSource"
       ]
     }
   }

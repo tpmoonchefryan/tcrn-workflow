@@ -353,6 +353,47 @@ test("S270 unsupported acceptanceProbe syntax is a red leg rather than a shell e
   assert.equal(result.checks.find((item) => item.name === "installWiring").invalid.find((item) => item.id === "machine.codex-config").reasonCode, "PLATFORM_ACCEPTANCE_PROBE_INVALID");
 });
 
+async function installTrustedHelperSource(fixture) {
+  const skill = await readFile(join(fixture.home, ".agents", "skills", "tcrn-workflow-helper", "SKILL.md"));
+  const archive = {
+    entries: [{ path: "SKILL.md", contentBase64: skill.toString("base64"), sha256: createHash("sha256").update(skill).digest("hex") }],
+    schemaVersion: "tcrn.workflow.helper.archive.v1",
+  };
+  const archiveBytes = Buffer.from(JSON.stringify(archive), "utf8");
+  await writeFile(join(fixture.home, ".tcrn-workflow", "skill-archive.json"), archiveBytes);
+  await writeFile(join(fixture.home, ".tcrn-workflow", "state.json"), JSON.stringify({
+    schemaVersion: "tcrn.workflow.helper.state.v1",
+    verifiedArchiveSha256: createHash("sha256").update(archiveBytes).digest("hex"),
+  }));
+}
+
+test("INC-161 helper digest probe resolves from the trusted archive/state and fails closed", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  await installTrustedHelperSource(fixture);
+  const options = { homeRoot: fixture.home, launchdLabels: [launchdLabel], enforceHelperDigest: true };
+  const green = await inspectPlatform(fixture.root, options);
+  const greenCheck = green.checks.find((item) => item.name === "helperCopies");
+  assert.equal(greenCheck.ok, true);
+  assert.equal(greenCheck.source, "trusted-archive-state");
+  assert.match(greenCheck.archiveDigest, /^[a-f0-9]{64}$/u);
+
+  await writeFile(join(fixture.home, ".codex", "skills", "tcrn-workflow-helper", "SKILL.md"), "tampered trusted helper\n");
+  const tampered = await inspectPlatform(fixture.root, options);
+  assert.equal(tampered.reasonCode, "PLATFORM_HELPER_COPY_DIGEST_MISMATCH");
+
+  await rm(join(fixture.home, ".tcrn-workflow", "skill-archive.json"));
+  const missingRoot = await inspectPlatform(fixture.root, options);
+  assert.equal(missingRoot.reasonCode, "PLATFORM_TRUST_ROOT_MISSING");
+
+  await installTrustedHelperSource(fixture);
+  await writeFile(join(fixture.home, ".tcrn-workflow", "state.json"), JSON.stringify({
+    schemaVersion: "tcrn.workflow.helper.state.v1",
+    verifiedArchiveSha256: "0".repeat(64),
+  }));
+  const mismatchedState = await inspectPlatform(fixture.root, options);
+  assert.equal(mismatchedState.reasonCode, "PLATFORM_TRUST_ROOT_STATE_MISMATCH");
+});
+
 test("S273 trust archive freshness compares the archive to all installed consumers and marker versions", async (context) => {
   const fixture = await completeInstallFixture(context);
   const skillPath = join(fixture.home, ".agents", "skills", "tcrn-workflow-helper", "SKILL.md");

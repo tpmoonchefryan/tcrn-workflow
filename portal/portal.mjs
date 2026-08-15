@@ -49,7 +49,7 @@ const containerArgument = argument("container", process.env.TCRN_PORTAL_CONTAINE
 const workspace = workspaceArgument ? resolve(workspaceArgument) : "";
 const containerRoot = containerArgument ? resolve(containerArgument) : "";
 const proseRootArgument = argument("prose-root", process.env.TCRN_PORTAL_PROSE_ROOT ?? "");
-const port = Number(argument("port", process.env.TCRN_PORTAL_PORT ?? "4319"));
+const portArgument = argument("port", process.env.TCRN_PORTAL_PORT ?? "");
 const attestDirArgument = argument("attest-dir", process.env.TCRN_PORTAL_ATTEST_DIR ?? "");
 const attestDir = attestDirArgument ? resolve(attestDirArgument) : "";
 const requestedPartition = argument("partition", process.env.TCRN_PORTAL_PARTITION ?? "");
@@ -106,6 +106,13 @@ const currentPartition = () => partitionCatalog.find((entry) => entry.id === sel
 // for callers that have already chosen a target.  This keeps a container read
 // local to its partition and never silently targets the platform root.
 const currentProseRoot = () => resolve(proseRootArgument || dirname(currentPartition().workspace));
+async function currentWorkspaceName() {
+  try {
+    const metadata = JSON.parse(await readFile(join(currentPartition().workspace, ".tcrn-workflow", "workspace.json"), "utf8"));
+    if (typeof metadata.externalKey === "string" && metadata.externalKey.length > 0) return metadata.externalKey;
+  } catch { /* legacy or incomplete workspace metadata falls back to the partition id */ }
+  return currentPartition().id;
+}
 const currentPaths = () => {
   const root = dirname(currentPartition().workspace);
   return Object.fromEntries(["framework", "workspace", "transient", "evidence-locator", "release-trust"].map((kind) => [kind, join(root, kind)]));
@@ -123,6 +130,18 @@ async function cli(args) {
     env: { ...process.env, NODE_NO_WARNINGS: "1" },
   });
   return JSON.parse(stdout);
+}
+
+// STORY-281: machine preferences are read through the engine, never by parsing the
+// file here — the engine owns validation, and a second reader would be a second set of
+// rules. An unreadable layer degrades to "no preference" rather than refusing to open
+// the portal: these are conveniences, and none of them is worth a startup failure.
+async function machineSettings() {
+  try { return await cli(["machine-settings-catalog"]); } catch { return null; }
+}
+async function machineValue(key) {
+  const catalogue = await machineSettings();
+  return catalogue?.settings?.find((entry) => entry.key === key)?.currentValue ?? null;
 }
 
 async function cliResult(args) {
@@ -214,8 +233,8 @@ function writeExecution(action, body) {
   const text = (value) => String(value ?? "");
   const json = (value) => JSON.stringify(value ?? {});
   const verbs = {
-    "model-plan-set": (common) => ["model-plan-set", ...common, "--host", text(body.host), "--name", text(body.name), "--default-model", text(body.defaultModel)],
-    "model-plan-assign": (common) => ["model-plan-assign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona), "--model", text(body.model)],
+    "model-plan-set": (common) => ["model-plan-set", ...common, "--host", text(body.host), "--name", text(body.name), "--default-model", text(body.defaultModel), ...(text(body.defaultEffort) ? ["--default-effort", text(body.defaultEffort)] : [])],
+    "model-plan-assign": (common) => ["model-plan-assign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona), "--model", text(body.model), ...(body.effort ? ["--effort", text(body.effort)] : [])],
     "model-plan-unassign": (common) => ["model-plan-unassign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona)],
     "model-plan-remove": (common) => ["model-plan-remove", ...common, "--host", text(body.host), "--name", text(body.name)],
     "persona-preset-override": (common) => ["persona-preset-override", ...common, "--name", text(body.name), "--fields", json(body.fields)],
@@ -328,6 +347,7 @@ const server = createServer(async (request, response) => {
       const boot = JSON.stringify({
         token: TOKEN,
         workspace: currentPartition().workspace,
+        workspaceName: await currentWorkspaceName(),
         container: containerRoot || null,
         partitionMode,
         partitions: partitionCatalog.map(({ id }) => ({ id })),
@@ -336,6 +356,11 @@ const server = createServer(async (request, response) => {
         paths: currentPaths(),
         actor: ACTOR,
         proseFiles: PROSE_FILES,
+        machineDefaults: {
+          locale: await machineValue("portal.defaultLocale"),
+          theme: await machineValue("portal.defaultTheme"),
+          partition: await machineValue("portal.defaultPartition"),
+        },
         ...LOCALE_CONTRACT,
       });
       response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
@@ -352,6 +377,11 @@ const server = createServer(async (request, response) => {
       response.end(await readFile(join(portalRoot, "tokens.css"), "utf8"));
       return;
     }
+    if (request.method === "GET" && pathname === "/tcrn-brand-mark.svg") {
+      response.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "no-store" });
+      response.end(await readFile(join(portalRoot, "tcrn-brand-mark.svg"), "utf8"));
+      return;
+    }
     if (!pathname.startsWith("/api/")) {
       response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       response.end("not found\n");
@@ -363,6 +393,10 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && pathname === "/api/settings") {
       send(response, 200, await settingsCatalog());
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/machine-settings") {
+      send(response, 200, (await machineSettings()) ?? { reasonCode: "MACHINE_SETTINGS_UNAVAILABLE", settings: [] });
       return;
     }
     if (request.method === "GET" && pathname === "/api/execution") {
@@ -418,7 +452,7 @@ const server = createServer(async (request, response) => {
       const selected = partitionCatalog.find((entry) => entry.id === next);
       if (!selected) { send(response, 404, { ok: false, reasonCode: "PORTAL_PARTITION_UNKNOWN", requestedPartition: next }); return; }
       selectedPartitionId = selected.id;
-      send(response, 200, { ok: true, reasonCode: "PORTAL_PARTITION_SELECTED", selectedPartition: selected.id, workspace: selected.workspace, proseRoot: currentProseRoot(), paths: currentPaths() });
+      send(response, 200, { ok: true, reasonCode: "PORTAL_PARTITION_SELECTED", selectedPartition: selected.id, workspace: selected.workspace, workspaceName: await currentWorkspaceName(), proseRoot: currentProseRoot(), paths: currentPaths() });
       return;
     }
     if (request.method === "POST" && pathname === "/api/settings") {
@@ -427,6 +461,17 @@ const server = createServer(async (request, response) => {
       const result = body.reset === true ? await removeSetting(key) : await writeSetting(key, String(body.value ?? ""));
       const readback = result.ok ? await settingsCatalog() : null;
       send(response, result.ok ? 200 : 409, { ...result.body, readback: readback?.settings.find((entry) => entry.key === key) ?? null });
+      return;
+    }
+    if (request.method === "POST" && pathname === "/api/machine-settings") {
+      const body = await readJsonBody(request);
+      const key = String(body.key ?? "");
+      const now = new Date().toISOString();
+      const result = body.reset === true
+        ? await cliResult(["machine-settings-remove", "--at", now, "--key", key])
+        : await cliResult(["machine-settings-set", "--at", now, "--key", key, "--value", String(body.value ?? "")]);
+      const readback = result.ok ? await machineSettings() : null;
+      send(response, result.ok ? 200 : 409, { ...result.body, readback: readback?.settings?.find((entry) => entry.key === key) ?? null });
       return;
     }
     if (request.method === "POST" && pathname === "/api/execution") {
@@ -456,6 +501,7 @@ const server = createServer(async (request, response) => {
   }
 });
 
+const port = Number(portArgument || (await machineValue("portal.port")) || "4319");
 server.listen(port, "127.0.0.1", () => {
   const bound = server.address().port;
   process.stdout.write(`${JSON.stringify({

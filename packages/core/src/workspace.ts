@@ -1804,6 +1804,10 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
             host: body.host,
             name: body.name,
             defaultModel: body.defaultModel,
+            // STORY-282: replay has to carry every field the write carried, or the
+            // reconstructed record differs from the stored body and the canonical
+            // comparison below refuses the event as corrupt.
+            ...(body.defaultEffort === undefined ? {} : { defaultEffort: body.defaultEffort }),
             updatedAt: String(body.updatedAt),
           });
           requireEventBoundTimestamp(String(body.updatedAt), event, `model plan ${String(body.name)}`);
@@ -1815,10 +1819,11 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
             name: body.name,
             persona: body.persona,
             model: body.model,
+            ...(body.effort === undefined ? {} : { effort: body.effort }),
             updatedAt: String(body.updatedAt),
           });
           requireEventBoundTimestamp(String(body.updatedAt), event, `model plan assignment ${String(body.persona)}`);
-          const canonicalBody = Object.fromEntries(Object.entries(body).filter(([key]) => key !== "persona" && key !== "model"));
+          const canonicalBody = Object.fromEntries(Object.entries(body).filter(([key]) => key !== "persona" && key !== "model" && key !== "effort"));
           if (canonicalJson(applied.record) !== canonicalJson(canonicalBody as unknown as JsonValue)) fail("WORKSPACE_EVENT_CORRUPT", "model plan assignment record is not canonical");
           executionConfig = applied.state;
         } else if (operation === "execution.model-plan.unassigned") {
@@ -3577,7 +3582,7 @@ export async function setCustomPersonaInWorkspace(workspaceRoot: string, lease: 
 }
 
 export async function setModelPlanInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
-  readonly host: string; readonly name: string; readonly defaultModel: string;
+  readonly host: string; readonly name: string; readonly defaultModel: string; readonly defaultEffort?: string;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
     const applied = applyModelPlanSetInExecutionConfig(state.executionConfig, { ...input, updatedAt: input.occurredAt });
@@ -3586,11 +3591,11 @@ export async function setModelPlanInWorkspace(workspaceRoot: string, lease: Work
 }
 
 export async function assignModelPlanInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
-  readonly host: string; readonly name: string; readonly persona: string; readonly model: string;
+  readonly host: string; readonly name: string; readonly persona: string; readonly model: string; readonly effort?: string;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
     const applied = applyModelPlanAssignInExecutionConfig(state.executionConfig, { ...input, updatedAt: input.occurredAt });
-    return { payload: buildEventPayload("execution.model-plan.assigned", { ...applied.record, persona: input.persona, model: input.model } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applied.state };
+    return { payload: buildEventPayload("execution.model-plan.assigned", { ...applied.record, persona: input.persona, model: input.model, ...(input.effort === undefined ? {} : { effort: input.effort }) } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applied.state };
   }, input);
 }
 

@@ -38,8 +38,15 @@ async function runChecker(file) {
 const directory = await mkdtemp(join(tmpdir(), "tcrn-inc156-verbatim-"));
 try {
   const source = await readFile(evidencePath, "utf8");
-  const mutated = source.replace('"legCount": 4', '"legCount": 5');
-  if (mutated === source) throw new Error("INC156_NUMBER_MUTATION_ANCHOR_MISSING");
+  // The number to mutate is read out of the evidence rather than written in here.
+  // A literal anchor goes missing the moment a leg is added, and a meta-proof that
+  // cannot find its anchor stops testing the checker instead of reporting on it —
+  // it fails loudly here, but only after the fact and for the wrong reason.
+  const anchor = source.match(/"legCount": (\d+)/u);
+  if (anchor === null) throw new Error("INC156_NUMBER_MUTATION_ANCHOR_MISSING");
+  const changed = `legCount ${anchor[1]} → ${Number(anchor[1]) + 1}`;
+  const mutated = source.replace(anchor[0], `"legCount": ${Number(anchor[1]) + 1}`);
+  if (mutated === source) throw new Error("INC156_NUMBER_MUTATION_NO_CHANGE");
   const mutatedPath = join(directory, "INC-140-mutated.md");
   await writeFile(mutatedPath, mutated, "utf8");
   const red = await runChecker(mutatedPath);
@@ -47,7 +54,7 @@ try {
   const result = {
     schemaVersion: "tcrn.inc156-verbatim-meta-proof.v1",
     mutation: {
-      changed: "legCount 4 → 5",
+      changed,
       exitCode: red.exitCode,
       reasonCode: red.report.reasonCode,
       problem: red.report.problems?.[0] ?? null,

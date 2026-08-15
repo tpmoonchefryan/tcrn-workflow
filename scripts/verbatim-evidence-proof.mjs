@@ -22,9 +22,17 @@ const DESIGN_PROOF = "portal/scripts/design-proof.mjs";
 const HOST_ROLE_SCAN = "rg -n 'claude-code|codex|reviewer|role ===|host ===|host \\?' portal/index.html";
 const EXPECTED_DESIGN_LEGS = [
   "token-fidelity",
+  "brand-asset-fidelity",
+  "portal-brand-token",
   "no-literal-colours",
   "no-inline-style-attributes",
   "interactive-tcrn-class-coverage",
+  "vocabulary-column-track-coverage",
+  "public-v4-baseline",
+  "portal-layout-invariants",
+  "editor-focus-boundary",
+  "topbar-four-width-single-line",
+  "sidenav-v4-style-invariants",
 ];
 
 function json(value) {

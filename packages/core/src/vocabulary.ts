@@ -6,6 +6,8 @@ import {
   independenceFloorCovers,
 } from "./conference.js";
 import { MODEL_PLAN_HOSTS } from "./model-plan.js";
+import { AGENT_EFFORT_ROSTER, AGENT_EFFORT_VERSION } from "./effort.js";
+import type { AgentEffortRecord } from "./effort.js";
 import { PERSONA_ROLE_DEFINITIONS } from "./persona-store.js";
 import { SETTINGS_CATALOG } from "./settings.js";
 
@@ -36,6 +38,8 @@ export function readVocabulary(): Readonly<{
   readonly schemaVersion: typeof VOCABULARY_VERSION;
   readonly roles: typeof PERSONA_ROLE_DEFINITIONS;
   readonly hosts: typeof MODEL_PLAN_HOSTS;
+  readonly effortSchemaVersion: typeof AGENT_EFFORT_VERSION;
+  readonly efforts: readonly AgentEffortRecord[];
   readonly conferenceTypes: readonly {
     readonly value: typeof CONFERENCE_TYPES[number];
     readonly description: string;
@@ -60,6 +64,8 @@ export function readVocabulary(): Readonly<{
     schemaVersion: VOCABULARY_VERSION,
     roles: PERSONA_ROLE_DEFINITIONS,
     hosts: MODEL_PLAN_HOSTS,
+    effortSchemaVersion: AGENT_EFFORT_VERSION,
+    efforts: Object.freeze(AGENT_EFFORT_ROSTER.map((record) => Object.freeze({ ...record }))),
     conferenceTypes: Object.freeze(CONFERENCE_TYPES.map((value) => Object.freeze({
       value,
       description: CONFERENCE_TYPE_DESCRIPTIONS[value],

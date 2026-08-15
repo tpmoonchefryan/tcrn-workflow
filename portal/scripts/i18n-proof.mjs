@@ -103,7 +103,16 @@ legs.push({
 // committed portal copy, so this leg reports the current batch's additions
 // without maintaining a second hand-written key list.  Any deliberate English
 // carry-over must be listed here with a reason and is visible in the report.
-const TRANSLATION_REALITY_EXEMPTIONS = Object.freeze({});
+const TRANSLATION_REALITY_EXEMPTIONS = Object.freeze({
+  // French for "plan" is « plan »: the homograph is the correct translation, the same
+  // way app.brand carries the product name unchanged. Waived in i18n-policy.json too.
+  "models.groupPlan": "fr homograph — « plan » is the French word",
+  "vocabulary.columnDescription": "fr homograph — « description » is the French word",
+  "vocabulary.columnSource": "fr homograph — « source » is the French word",
+  // STORY-281: the group is named after the product, so it reads the same everywhere —
+  // the same reason app.brand is waived. Translating it would rename the product.
+  "settings.machine": "product name — Workflow is not translated in any locale",
+});
 let baselineKeys = [];
 let baselineError = null;
 try {
@@ -177,11 +186,18 @@ legs.push({
 // makes the dynamic access reviewable.  Unknown/unlisted keys remain red.
 const sourceForReachability = `${await readFile(join(portalRoot, "index.html"), "utf8")}\n${await readFile(join(portalRoot, "portal.mjs"), "utf8")}`;
 const literalReachable = new Set();
-for (const match of sourceForReachability.matchAll(/data-i18n(?:-placeholder)?="([^"]+)"|\bt\(\s*["']([^"']+)["']/gu)) literalReachable.add(match[1] ?? match[2]);
+for (const match of sourceForReachability.matchAll(/data-i18n(?:-placeholder|-aria-label)?="([^"]+)"|\bt\(\s*["']([^"']+)["']/gu)) literalReachable.add(match[1] ?? match[2]);
 const dynamicFamilies = [
   { prefix: "entities.field.", marker: "t(`entities.field.", reason: "persona field names are assembled from the unified schema" },
   { prefix: "setting.", marker: "t(`setting.", reason: "setting labels/descriptions are assembled from the engine catalog" },
   { prefix: "vocabulary.", marker: "t(`vocabulary.", reason: "dictionary category labels are assembled from the vocabulary read surface" },
+  // INC-175: receipt hints are looked up by reason code; unmapped codes fall back to
+  // the code alone, so the family is reachable precisely when the receipt carries one.
+  { prefix: "reason.", marker: '"reason." + ', reason: "receipt hints are keyed by the engine reason code on the receipt" },
+  // INC-192: the supplemental explanation for a concept is looked up by the concept it
+  // belongs to, so the family is reachable exactly where conceptTip() is called — and a
+  // key with no call site simply renders nothing rather than leaking its own name.
+  { prefix: "concept.", marker: "t(`concept.", reason: "concept explanations are keyed by the concept the surface is showing" },
 ];
 const dynamicReachable = [];
 for (const family of dynamicFamilies) {
@@ -246,9 +262,30 @@ try {
       "--evidence-locator", roots["evidence-locator"], "--release-trust", roots["release-trust"],
       "--external-key", "TCRN-I18N-PROOF", "--at", "2026-01-01T00:00:00Z"]);
     const catalog = run(["settings-catalog", "--workspace", roots.workspace]).settings;
-    const registered = catalog.map((entry) => entry.key);
-    const undescribed = registered.filter((key) => !describedKeys.includes(key));
-    const orphaned = describedKeys.filter((key) => !registered.includes(key));
+    // STORY-281: the portal has two settings layers and this leg has to know both, or
+    // the machine keys read as descriptions for settings that do not exist. The machine
+    // roster comes from the engine's own verb, not from a list repeated here.
+    const machineCatalog = run(["machine-settings-catalog", "--home", base]).settings ?? [];
+    const registered = [...catalog.map((entry) => entry.key), ...machineCatalog.map((entry) => entry.key)];
+    // INC-183: the vocabulary defines one enum value per row, so a value carries its
+    // own description under `setting.<key>.value.<value>.description`. Those are held
+    // to the stricter of the two rules — the key must be registered AND the value
+    // must be one the engine allows — so a description for a value that no longer
+    // exists is a defect here rather than dead copy nobody reads.
+    const allowedByKey = new Map(catalog.map((entry) => [entry.key, entry.allowedValues ?? []]));
+    const valueDescribed = [];
+    const strandedValueDescriptions = [];
+    const keyDescribed = [];
+    for (const described of describedKeys) {
+      const split = described.indexOf(".value.");
+      if (split < 0) { keyDescribed.push(described); continue; }
+      const key = described.slice(0, split);
+      const value = described.slice(split + ".value.".length);
+      if (allowedByKey.get(key)?.includes(value)) valueDescribed.push(described);
+      else strandedValueDescriptions.push(described);
+    }
+    const undescribed = registered.filter((key) => !keyDescribed.includes(key));
+    const orphaned = keyDescribed.filter((key) => !registered.includes(key));
     // INIT-026 S235: the portal leads with a human name, so every registered key
     // must carry a label in EVERY locale — a missing label falls back to the raw
     // key, which is exactly the state this batch exists to remove.
@@ -261,15 +298,18 @@ try {
     const enumMissingAllowedValues = catalog
       .filter((entry) => entry.type === "enum" && (!Array.isArray(entry.allowedValues) || entry.allowedValues.length === 0))
       .map((entry) => entry.key);
-    const ok = undescribed.length === 0 && orphaned.length === 0 && enumMissingAllowedValues.length === 0 && unlabeled.length === 0;
+    const ok = undescribed.length === 0 && orphaned.length === 0 && enumMissingAllowedValues.length === 0
+      && unlabeled.length === 0 && strandedValueDescriptions.length === 0;
     settingLeg = {
       leg: "setting-descriptions",
       ok,
       reasonCode: enumMissingAllowedValues.length > 0
         ? "SETTING_ENUM_VALUES_GAP"
         : unlabeled.length > 0 ? "SETTING_LABEL_GAP"
+        : strandedValueDescriptions.length > 0 ? "SETTING_VALUE_DESCRIPTION_STRANDED"
         : ok ? "EVERY_SETTING_DESCRIBED" : "SETTING_DESCRIPTION_GAP",
       registered, describedKeys, undescribed, orphaned, enumMissingAllowedValues, unlabeled,
+      valueDescribed, strandedValueDescriptions,
     };
   } finally { rmSync(base, { recursive: true, force: true }); }
 } catch (error) {

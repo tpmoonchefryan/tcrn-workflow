@@ -33,6 +33,11 @@ test("S261 install manifest is closed, placeholder-only, and complete", async ()
     assert.equal(typeof entry.host, "string");
     assert.doesNotMatch(entry.pathTemplate, forbiddenPathPattern);
   }
+  for (const id of ["machine.agents-skill", "machine.claude-skill", "machine.codex-skill"]) {
+    const entry = manifest.items.find((candidate) => candidate.id === id);
+    assert.match(entry.acceptanceProbe, /^probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive\.json;state=state\.json;entry=SKILL\.md$/u);
+    assert.doesNotMatch(entry.acceptanceProbe, /sha256=/u);
+  }
   assertInstallManifestComplete(manifest);
 });
 

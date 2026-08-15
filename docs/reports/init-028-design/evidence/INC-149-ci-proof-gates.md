@@ -160,16 +160,16 @@ CLEAN_VERIFY_EXIT=0
       "leg": "key-coverage",
       "ok": true,
       "reasonCode": "EVERY_KEY_TRANSLATED",
-      "keyCount": 190,
+      "keyCount": 267,
       "localeCount": 5,
-      "expectedStrings": 950,
+      "expectedStrings": 1335,
       "gaps": []
     },
     {
       "leg": "translation-reality",
       "ok": true,
       "reasonCode": "TRANSLATIONS_DIFFER_FROM_ENGLISH",
-      "addedKeyCount": 0,
+      "addedKeyCount": 79,
       "gaps": []
     },
     {

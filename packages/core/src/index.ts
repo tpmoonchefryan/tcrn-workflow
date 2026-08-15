@@ -67,6 +67,27 @@ export {
   writeStorageHomeDeclaration,
 } from "./storage-home.js";
 export type { StorageHomeDeclaration } from "./storage-home.js";
+// STORY-281: machine-level portal preferences. Deliberately not chain-backed — see
+// the module header for why a laptop's default theme is not governed workspace state.
+export {
+  MACHINE_SETTINGS_CATALOG,
+  MACHINE_SETTINGS_DIRECTORY,
+  MACHINE_SETTINGS_FILE_NAME,
+  MACHINE_SETTINGS_LAYER_KIND,
+  MACHINE_SETTINGS_REASON_CODES,
+  MACHINE_SETTINGS_VERSION,
+  MACHINE_SETTING_KEYS,
+  MachineSettingsError,
+  applyMachineSettingRemove,
+  applyMachineSettingSet,
+  assertMachineSettingKey,
+  machineSettingsPath,
+  readMachineSettings,
+  readMachineSettingsCatalog,
+  validateMachineSettingValue,
+  validateMachineSettingsFile,
+} from "./machine-settings.js";
+export type { MachineSettingKey, MachineSettingsCatalogEntry, MachineSettingsFile, MachineSettingsReadback } from "./machine-settings.js";
 // STORY-177: the knowledge/artifact store data-plane backend is part of the public
 // core surface so a future PG store backend can implement it. StoreBackendError is
 // the fail-closed refusal shape; FileStoreBackend is the converged file
@@ -338,11 +359,20 @@ export {
   applyModelPlanSet,
   applyModelPlanUnassign,
   readModelPlans,
+  validateModelPlanEffort,
   validateModelPlanModel,
   validateModelPlanName,
   validateModelPlanState,
 } from "./model-plan.js";
 export type { ModelPlanHost, ModelPlanReasonCode, ModelPlanRecord } from "./model-plan.js";
+export {
+  AGENT_EFFORT_HOSTS,
+  AGENT_EFFORT_NAMES,
+  AGENT_EFFORT_ROSTER,
+  AGENT_EFFORT_VERSION,
+  effortForHost,
+} from "./effort.js";
+export type { AgentEffortHost, AgentEffortName, AgentEffortRecord } from "./effort.js";
 export type {
   ExecutionConfigState,
   ExecutionHost,

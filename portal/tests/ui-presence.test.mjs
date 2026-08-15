@@ -42,6 +42,8 @@ const COMPONENTS = Object.freeze([
   ["setting modified dot", '[data-ui="setting-modified-dot"]'],
   ["setting dictionary link", '[data-ui="setting-dictionary-link"]'],
   ["returned switch", ".tcrn-switch"],
+  ["returned stepper", ".tcrn-stepper"],
+  ["returned segmented control", ".tcrn-segmented-nav"],
   ["returned stat card", ".tcrn-stat-card"],
   ["returned setting row", ".tcrn-setting-row"],
   ["returned field provenance", ".tcrn-field-provenance"],
@@ -96,6 +98,8 @@ function mutateSource(source, mutation) {
   if (mutation === "receipt-stale") return source.replace(/setText\("#receipt-chip-text", state\.receipt\.version \? [\s\S]*?\);\n    renderReceipt\(\);/u, 'setText("#receipt-chip-text", "idle");\n    renderReceipt();');
   if (mutation === "s253-old-class") return source.replace('class="tcrn-top-bar"', 'class="tcrn-topbar"');
   if (mutation === "s255-missing-component-css") return source.replace(".tcrn-switch {", ".tcrn-switch-mutated {");
+  if (mutation === "s275-missing-nav-name") return source.replace('aria-label="Dashboard" data-i18n-aria-label="nav.dashboard"', "");
+  if (mutation === "s275-missing-brand-mark") return source.replace('data-brand-asset="tcrn-brand-mark"', 'data-brand-asset="tcrn-brand-mark-mutated"');
   return source;
 }
 
@@ -235,7 +239,22 @@ function assertDomContract(document) {
   const alignedSelectors = [
     ["product shell", ".tcrn-product-shell"],
     ["top bar", "header.tcrn-top-bar"],
+    // INC-167: the brand is the design system's shell lockup and it sits in the sidebar
+    // header, which is where the product shell defines __brand as a child.
+    ["brand lockup", "button.tcrn-product-shell__brand.tcrn-shell-brand-lockup"],
+    ["sidebar header", ".tcrn-product-shell__sidebar .tcrn-product-shell__sidebar-header"],
+    ["brand mark", 'img.tcrn-brand-mark[data-brand-asset="tcrn-brand-mark"]'],
     ["side navigation", ".tcrn-side-nav"],
+    // INC-168 selection-level invariants. The shell controls are the design system's
+    // own, not generic parts assembled to look like them: a quiet button wearing a
+    // "Theme" label and a bare <select> for language both passed every earlier gate
+    // while being the wrong components. Each entry here names the construct the
+    // storybook publishes for that role.
+    ["shell theme toggle", "button.tcrn-shell-theme-toggle"],
+    ["shell locale menu", ".tcrn-shell-locale-menu > .tcrn-shell-locale-menu__trigger"],
+    ["locale menu panel", '.tcrn-shell-locale-menu__panel[role="listbox"]'],
+    ["compound search input", "span.tcrn-search-input > input.tcrn-search-input__control"],
+    ["search shortcut", "kbd.tcrn-search-input__shortcut"],
     ["workspace section tabs", '[data-ui="workspace-tabs"].tcrn-section-tabs'],
     ["entity section tabs", '[data-ui="entity-tabs"].tcrn-section-tabs'],
     ["surface", ".tcrn-surface"],
@@ -253,6 +272,11 @@ function assertDomContract(document) {
   );
   const missing = missingComponents(document);
   assert.deepEqual(missing, [], `rendered DOM components absent: ${JSON.stringify(missing)}`);
+  const navigationItems = [...document.querySelectorAll(".tcrn-side-nav .tcrn-nav-item")];
+  assert.equal(navigationItems.length, 5, "the portal must render the five platform destinations");
+  assert.ok(navigationItems.every((button) => button.getAttribute("aria-label")?.trim()), "every destination must expose an accessible name");
+  assert.ok(navigationItems.every((button) => button.getAttribute("data-i18n-aria-label")?.trim()), "every destination name must come from the locale table");
+  assert.equal(document.querySelector('img.tcrn-brand-mark')?.getAttribute("alt"), "", "the decorative mark must not duplicate the brand accessible name");
   assert.ok(document.querySelector('[data-ui="assignment-addline"] select, [data-ui="assignment-addline"] input, [data-ui="assignment-addline"] button'), "assignment addline must expose controls");
   assert.ok(document.querySelector('[data-ui="receipt-chip"][data-ui-action="open-receipt"]'), "receipt chip must expose its action");
 }
@@ -342,14 +366,317 @@ if (process.argv[2] === "status" && actual.status === 0) {
   test("INC-150 vocabulary descriptions are localized in the executed DOM", async () => {
     const page = await preparePage();
     try {
-      const locale = page.document.querySelector("#locale-select");
-      locale.value = "zh-CN";
-      locale.dispatchEvent(new page.window.Event("change", { bubbles: true }));
-      const definition = page.document.querySelector(".tcrn-definition-list__definition")?.textContent || "";
+      // INC-167: language is chosen from the design system's locale menu, so the test
+      // drives the option the way a reader does rather than setting a select's value.
+      page.document.querySelector('[data-locale-option="zh-CN"]').dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      // INC-176: the vocabulary is a table now, so the localized description lives in
+      // the Description cell of the first row rather than a definition list.
+      // linkedom has no :nth-child, and the cell carries its column name in data-label
+      // anyway — which is the more honest anchor: it names the column, not a position.
+      const definition = [...page.document.querySelectorAll('[data-vocabulary-table] .tcrn-table-shell__cell')].find((cell) => cell.getAttribute("data-label") === "描述")?.textContent || "";
       assert.match(definition, /协调受约束的工作流决策|将意图转为可执行计划|检查证据并报告差异/u);
       assert.doesNotMatch(definition, /Coordinates bounded workflow decisions|Turns intent into an executable plan|Checks evidence and reports discrepancies/u);
       assert.equal(page.document.querySelector('[data-i18n="dashboard.chain"]')?.textContent, "链版本");
       assert.ok([...page.document.querySelectorAll("[data-i18n]")].every((node) => node.textContent.trim().length > 0), "every static i18n binding must render text in the executed DOM");
+    } finally { await page.cleanup(); }
+  });
+
+  test("INC-183 every enum setting is its own dictionary entry", async () => {
+    const page = await preparePage();
+    try {
+      const navFor = (category) => page.document.querySelector(`[data-vocabulary-category="${category}"]`);
+      // The shared "settings enums" domain is retired (Owner, MIN-094). Asserting its
+      // absence is the half that keeps this from passing on a page that simply added
+      // the new entries beside the old container.
+      assert.equal(navFor("settingsEnums"), null, "the retired shared settings-enum domain must not appear");
+      assert.equal(page.document.querySelector('[data-vocabulary-table="settingsEnums"]'), null);
+
+      // Each enum setting stands on its own, named by the same human label the settings
+      // page uses for that control.
+      const entries = [...page.document.querySelectorAll("[data-vocabulary-category]")]
+        .map((button) => button.dataset.vocabularyCategory)
+        .filter((category) => category.startsWith("setting:"));
+      assert.ok(entries.includes("setting:backup.cadence"));
+      assert.ok(entries.includes("setting:execution.independenceFloor"));
+      assert.ok(entries.includes("setting:execution.subagentPolicy"));
+      assert.notEqual(navFor("setting:backup.cadence").textContent.trim(), "backup.cadence", "an entry is named, not keyed");
+
+      navFor("setting:backup.cadence").dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const shell = page.document.querySelector('[data-vocabulary-table="setting:backup.cadence"]');
+      assert.ok(shell, "the entry must render its own table");
+      const rows = [...shell.querySelectorAll(".tcrn-table-shell__row")];
+      const cell = (row, label) => [...row.children].find((node) => node.getAttribute("data-label") === label)?.textContent.trim() ?? "";
+      const values = rows.map((row) => cell(row, "Value"));
+
+      // The entry IS the setting, so its rows are exactly that setting's values — all
+      // three of them, and nothing belonging to another setting.
+      assert.deepEqual(values, ["gate-close", "session-end", "manual"]);
+      // Anchored on the positive badge rather than its text: the label is localized,
+      // and a test that reads it is really testing which locale the fixture booted in.
+      const isDefaultRow = (row) => Boolean([...row.children]
+        .find((node) => node.getAttribute("data-label") === "Default")
+        ?.querySelector(".tcrn-badge--positive"));
+      assert.deepEqual(rows.filter(isDefaultRow).map((row) => cell(row, "Value")), ["gate-close"]);
+      // No cell is blank: the row unit is the value, and a description keyed by setting
+      // key alone would have left every value undefined.
+      assert.ok(rows.every((row) => [...row.children].every((node) => node.textContent.trim().length > 0)), "no cell may be blank");
+
+      // A hyphenated value survives, and a second entry proves the shape is shared
+      // rather than special-cased for the cadence.
+      navFor("setting:execution.independenceFloor").dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const floor = page.document.querySelector('[data-vocabulary-table="setting:execution.independenceFloor"]');
+      assert.deepEqual([...floor.querySelectorAll(".tcrn-table-shell__row")].map((row) => cell(row, "Value")),
+        ["none", "verification", "verification-and-risk", "all"]);
+    } finally { await page.cleanup(); }
+  });
+
+  test("INC-187 unsetting a setting that is already unset writes nothing, and a bound plan can still be freed", async () => {
+    const page = await preparePage();
+    try {
+      // The plan settings live in the subagent-models group, not the execution group.
+      page.document.querySelector('[data-setting-group="models"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      // A host with a single plan renders a two-segment control whose first segment is
+      // "unset". Pressing it while nothing is set used to call settings-remove, and the
+      // engine refuses to remove a record that does not exist.
+      const codexRow = page.document.querySelector('[data-setting-row="execution.codexSubagentPlan"]');
+      assert.ok(codexRow, "the execution group must render the Codex plan setting");
+      const before = page.document.querySelector("#receipt-chip-text")?.textContent ?? "";
+      const unsetControl = [...codexRow.querySelectorAll('[data-setting-control][data-setting-value=""], [data-setting-control]')]
+        .find((control) => control.tagName === "BUTTON" ? control.dataset.settingValue === "" : true);
+      if (unsetControl?.tagName === "BUTTON") {
+        unsetControl.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const after = page.document.querySelector("#receipt-chip-text")?.textContent ?? "";
+        assert.equal(after, before, "asking to unset what is already unset must not reach the engine at all");
+        assert.doesNotMatch(page.document.querySelector("#receipt-body")?.textContent ?? "", /WORKSPACE_INPUT_INVALID/u);
+      }
+
+      // The other half: a setting that IS set can be unset, which is what frees a bound
+      // plan for removal. The fixture binds "budget" to the Claude Code plan setting.
+      const claudeRow = page.document.querySelector('[data-setting-row="execution.claudeCodeSubagentPlan"]');
+      const clear = [...claudeRow.querySelectorAll("[data-setting-control]")]
+        .find((control) => control.tagName === "BUTTON" && control.dataset.settingValue === "");
+      assert.ok(clear, "a bound plan setting must offer a way back to unset");
+      clear.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      assert.match(page.document.querySelector("#receipt-chip-text")?.textContent ?? "", /^✓v\d+$/u, "clearing a bound setting reaches the engine and returns a receipt");
+    } finally { await page.cleanup(); }
+  });
+
+  test("INC-193 the design authority is declared, and what cannot be checked here is yellow", async () => {
+    const page = await preparePage();
+    try {
+      page.document.querySelector('[data-setting-group="workspace"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const row = page.document.querySelector('[data-setting-row="design.authority"]');
+      assert.ok(row, "the design authority is a workspace setting");
+      assert.ok(row.querySelector('[data-concept-tip="setting.design.authority"]'), "its ceiling is explained where it is set");
+
+      // Unset is the ordinary case for a workspace with no design system, and it is
+      // silent: no panel, no warning, nothing to resolve. A gate that could not be
+      // satisfied in this world would make the optional key effectively required.
+      const panel = page.document.querySelector("#design-authority");
+      assert.ok(panel, "the panel exists even when there is nothing to show");
+      assert.equal(panel.hidden, true, "an undeclared authority says nothing at all");
+
+      // The contract is fetched by the reader's browser. Both outcomes are exercised
+      // here because only one of them can be produced against a real address offline,
+      // and a state proven on one side only is half a state machine.
+      const realFetch = page.window.fetch;
+      const answerWith = (body, ok = true) => {
+        page.window.fetch = (input, options) => {
+          const target = String(input);
+          if (!target.includes("tcrn-design-authority.json")) return realFetch(input, options);
+          return Promise.resolve({ ok, status: ok ? 200 : 404, json: async () => body });
+        };
+      };
+
+      answerWith({ schemaVersion: "tcrn.design-authority.v1", name: "Example System", version: "9.9.9" });
+      const input = page.document.querySelector('[data-setting-control="design.authority"]');
+      input.value = "https://design.example.test/";
+      input.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const declared = page.document.querySelector("[data-design-authority-state]");
+      assert.equal(declared?.dataset.designAuthorityState, "declared");
+      assert.match(declared.textContent, /Example System/u);
+      assert.match(declared.textContent, /9\.9\.9/u);
+      assert.ok(!declared.className.includes("--warning"), "a contract that answered is not a warning");
+
+      // A response that is not this platform's contract is yellow, not red: the fact is
+      // outside this machine, so nothing here can be called false. The message has to
+      // say what would turn it green, or a yellow becomes a permanent decoration.
+      answerWith({ hello: "world" });
+      input.value = "https://other.example.test/";
+      input.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const warned = page.document.querySelector("[data-design-authority-state]");
+      assert.equal(warned?.dataset.designAuthorityState, "warning", "a response that is not this contract is yellow");
+      assert.ok(warned.className.includes("tcrn-inline-alert"), "the warning uses the design system's alert");
+      assert.ok(warned.className.includes("tcrn-inline-alert--warning"));
+      assert.match(warned.textContent, /turns green/u, "a yellow must say what resolves it");
+
+      // A body that is well-formed in every way EXCEPT the schema version isolates that
+      // check. Without this case the schema check could be deleted and nothing would
+      // notice, because the earlier sample was also missing its name and version and
+      // would keep landing yellow by a different route.
+      answerWith({ schemaVersion: "someone.elses.contract.v1", name: "Example System", version: "9.9.9" });
+      input.value = "https://third.example.test/";
+      input.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const wrongSchema = page.document.querySelector("[data-design-authority-state]");
+      assert.equal(wrongSchema?.dataset.designAuthorityState, "warning", "a well-formed body under another contract is still not ours");
+      assert.ok(!wrongSchema.textContent.includes("Example System"), "nothing from an unrecognised contract reaches the page");
+    } finally { await page.cleanup(); }
+  });
+
+  test("INC-192 abstract concepts carry a supplemental explanation the keyboard can reach", async () => {
+    const page = await preparePage();
+    try {
+      page.document.querySelector('[data-setting-group="execution"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const tip = page.document.querySelector('[data-concept-tip="setting.execution.independenceFloor"]');
+      assert.ok(tip, "the independence floor is the concept that prompted this batch and must carry one");
+
+      // The markup is the design system's Tooltip: the wrapper declares the scope and
+      // forbids interactive content, and the content is a real tooltip role wired to
+      // the trigger. The design system's rule reveals it on hover AND focus-within, so
+      // the trigger has to be focusable or the keyboard half can never fire.
+      assert.equal(tip.getAttribute("data-tooltip-scope"), "supplemental");
+      assert.equal(tip.getAttribute("data-tooltip-interactive-content"), "forbidden");
+      const trigger = tip.querySelector("button");
+      const content = tip.querySelector('[role="tooltip"]');
+      assert.ok(trigger && content);
+      assert.equal(trigger.getAttribute("aria-describedby"), content.getAttribute("id"));
+      assert.ok(trigger.className.includes("tcrn-icon-button"), "the trigger names a design-system button component");
+      assert.ok(trigger.querySelector("svg"), "the icon is inline SVG, not a character the shipped font may not have");
+      assert.equal(trigger.textContent.trim(), "", "no glyph stands in for the icon");
+      assert.equal(content.querySelectorAll("a,button,input,select,textarea").length, 0, "the design system forbids interactive content inside a tooltip");
+
+      // The explanation says the thing the surface does not — here, that the engine
+      // never checks the declaration is true. A tip that only repeated the label would
+      // train the icon into noise.
+      assert.match(content.textContent, /self-report|never that it is true/u);
+      assert.ok(!content.textContent.startsWith("concept."), "a tip must not show the reader its own key");
+
+      // Every dictionary category carries one; they had no explanation at all before.
+      page.document.querySelector('[data-page-target="vocabulary"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const categories = [...page.document.querySelectorAll("[data-vocabulary-category]")]
+        .map((button) => button.dataset.vocabularyCategory)
+        .filter((category) => !category.startsWith("setting:"));
+      const explained = [...page.document.querySelectorAll('#vocabulary-nav [data-concept-tip]')]
+        .map((node) => node.dataset.conceptTip.replace("vocabulary.", ""));
+      assert.deepEqual(explained.slice().sort(), categories.slice().sort(), "every dictionary category is explained");
+    } finally { await page.cleanup(); }
+  });
+
+  test("INC-186 the dictionary carries no workspace data", async () => {
+    const page = await preparePage();
+    try {
+      // The fixture creates a plan named "budget" and binds it to a setting, so if the
+      // dictionary drew its values from the plan list this sweep would find that name.
+      // That is the whole defect: the dictionary grew a row because the reader created
+      // a plan, which is the portal inventing vocabulary rather than publishing it.
+      const names = [...page.document.querySelectorAll("[data-vocabulary-category]")].map((button) => button.dataset.vocabularyCategory);
+      assert.ok(!names.includes("setting:execution.claudeCodeSubagentPlan"), "a setting whose values are plan names has no closed set to define");
+      assert.ok(!names.includes("setting:execution.codexSubagentPlan"));
+      // Both sides: settings the engine does publish a closed set for keep their entries.
+      assert.ok(names.includes("setting:backup.cadence"));
+      assert.ok(names.includes("setting:execution.subagentPolicy"));
+
+      for (const name of names) {
+        page.document.querySelector(`[data-vocabulary-category="${name}"]`).dispatchEvent(new page.window.Event("click", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        const rendered = page.document.querySelector("#vocabulary-terms")?.textContent ?? "";
+        assert.ok(!rendered.includes("budget"), `workspace data leaked into the ${name} entry`);
+      }
+
+      // The 📖 link and the dictionary answer the same question, so the link is present
+      // exactly where an entry exists to reach and absent where none does.
+      page.document.querySelector('[data-setting-group="backup"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      const cadenceRow = page.document.querySelector('[data-setting-row="backup.cadence"]');
+      assert.ok(cadenceRow?.querySelector("[data-vocabulary-link]"), "a closed-enum setting keeps its dictionary link");
+      page.document.querySelector('[data-setting-group="execution"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      const planRow = page.document.querySelector('[data-setting-row="execution.claudeCodeSubagentPlan"]');
+      if (planRow) assert.equal(planRow.querySelector("[data-vocabulary-link]"), null, "a plan-sourced setting must not offer a link to an entry that does not exist");
+    } finally { await page.cleanup(); }
+  });
+
+  test("INC-185 the vendor model directory opens as the page's own drawer", async () => {
+    const page = await preparePage();
+    try {
+      page.document.querySelector('[data-setting-group="models"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const toggle = page.document.querySelector("#vendor-directory-toggle");
+      const drawer = page.document.querySelector("#vendor-directory-drawer");
+      assert.ok(toggle && drawer, "the subagent-models surface must carry the trigger and its drawer");
+      // Same class as the drawer this page already has, so it inherits that drawer's
+      // anchoring and slide rather than carrying a second implementation of them.
+      assert.equal(drawer.className, page.document.querySelector("#receipt-drawer").className);
+      assert.equal(drawer.getAttribute("data-open"), "false");
+      assert.equal(toggle.getAttribute("aria-controls"), "vendor-directory-drawer");
+
+      const links = [...drawer.querySelectorAll("[data-vendor-directory]")];
+      assert.deepEqual(links.map((link) => link.dataset.vendorDirectory),
+        ["anthropic", "openai", "qwen", "minimax", "deepseek", "kimi", "grok", "gemini", "glm"]);
+      // Every link leaves the page safely and carries a design-system class: an <a>
+      // with no class is exactly what the interactive-coverage leg cannot see, because
+      // this markup is written by the page script rather than shipped in the HTML.
+      assert.ok(links.every((link) => link.getAttribute("target") === "_blank"));
+      assert.ok(links.every((link) => (link.getAttribute("rel") ?? "").includes("noreferrer")));
+      assert.ok(links.every((link) => link.className.includes("tcrn-link-button")));
+      assert.ok(links.every((link) => link.getAttribute("href").startsWith("https://")));
+
+      toggle.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      // Three expressions of one state; announcing only aria-expanded would leave the
+      // drawer skipped by the readers that follow aria-hidden.
+      assert.equal(drawer.getAttribute("data-open"), "true");
+      assert.equal(drawer.getAttribute("aria-hidden"), "false");
+      assert.equal(toggle.getAttribute("aria-expanded"), "true");
+
+      page.document.querySelector("#vendor-directory-close").dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      assert.equal(drawer.getAttribute("data-open"), "false");
+      assert.equal(drawer.getAttribute("aria-hidden"), "true");
+      assert.equal(toggle.getAttribute("aria-expanded"), "false");
+    } finally { await page.cleanup(); }
+  });
+
+  test("S280 portal filters effort options from vocabulary and keeps the receipt chip on the chain", async () => {
+    const page = await preparePage();
+    try {
+      page.document.querySelector('[data-setting-group="models"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const effortSelect = page.document.querySelector('[data-assign-effort]');
+      assert.ok(effortSelect, "the seeded Claude Code plan must render an effort selector");
+      const options = [...effortSelect.querySelectorAll("option")].map((option) => option.value);
+      assert.ok(options.includes("high"));
+      assert.ok(options.includes("xhigh"));
+      assert.ok(!options.includes("minimal"), "Codex-only effort values must not leak into Claude Code");
+      assert.ok(!options.includes("none"), "Codex-only effort values must not leak into Claude Code");
+      // INC-184: `ultracode` IS a Claude Code level, so host filtering alone would let
+      // it through. It is absent because assignment is per persona and this level is
+      // a property of the session — the engine refuses it, and the control must not
+      // offer what the engine refuses.
+      assert.ok(!options.includes("ultracode"), "a session-only level must not be offered as a per-persona assignment");
+      assert.ok(!options.includes("ultra"), "a Codex session level must not appear on a Claude Code plan");
+
+      const modelInput = page.document.querySelector('[data-assign-model]');
+      const assign = page.document.querySelector('[data-assign]');
+      assert.ok(modelInput && assign, "the model plan addline must expose assignment controls");
+      modelInput.value = "claude-sonnet-4-5";
+      effortSelect.value = "high";
+      assign.click();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      assert.match(page.document.querySelector("#receipt-chip-text")?.textContent ?? "", /^✓v\d+$/u);
+      assert.match(page.document.querySelector(".tcrn-assignment")?.textContent ?? "", /Effort: high/u);
     } finally { await page.cleanup(); }
   });
 }

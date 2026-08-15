@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { homedir } from "node:os";
+
 import {
   acquireWorkspaceLease,
+  applyMachineSettingRemove,
+  applyMachineSettingSet,
   breakWorkspaceLease,
   breakWorkspaceRecoveryClaim,
   inspectWorkspaceLease,
@@ -129,7 +133,9 @@ import {
   sealStorageHomeDeclaration,
   readSettingsCatalog,
   readInstallManifest,
+  readMachineSettingsCatalog,
   readVocabulary,
+  machineSettingsPath,
   FRAMEWORK_VERSION,
   assertModelPlanHost,
   allPersonaReadback,
@@ -923,14 +929,22 @@ export const COMMAND_CATALOG = Object.freeze([
   // order (execute/plan/rollback/verify). `to` names the target backend; `schema`
   // (optional) names the PG chain schema (e.g. `chain_cross`); it defaults to
   // $TCRN_PG_SCHEMA, and the PG connection defaults to $TCRN_PG_CONNECTION.
+  // STORY-281: machine-level portal preferences. No workspace and no expected-version:
+  // this layer is not chain-backed, so there is no head to compare against — see
+  // packages/core/src/machine-settings.ts for why a laptop's default theme is not
+  // governed workspace state. `home` exists so a test can point the verbs at a
+  // scratch directory instead of the real machine home.
+  { name: "machine-settings-catalog", availability: "cli", mutates: false, flags: [{ name: "home", required: false, valueKind: "string" }] },
+  { name: "machine-settings-remove", availability: "cli", mutates: true, flags: [{ name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "home", required: false, valueKind: "string" }] },
+  { name: "machine-settings-set", availability: "cli", mutates: true, flags: [{ name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "value", required: true, valueKind: "string" }, { name: "home", required: false, valueKind: "string" }] },
   { name: "migration-execute", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "to", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
   { name: "migration-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "target-version", required: true, valueKind: "integer" }, { name: "dry-run", required: true, valueKind: "boolean" }] },
   { name: "migration-rollback", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
   { name: "migration-verify", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "to", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
-  { name: "model-plan-assign", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "plan", required: true, valueKind: "string" }, { name: "persona", required: true, valueKind: "string" }, { name: "model", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "model-plan-assign", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "plan", required: true, valueKind: "string" }, { name: "persona", required: true, valueKind: "string" }, { name: "model", required: true, valueKind: "string" }, { name: "effort", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "model-plan-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "host", required: false, valueKind: "string" }] },
   { name: "model-plan-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "model-plan-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "default-model", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "model-plan-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "default-model", required: true, valueKind: "string" }, { name: "default-effort", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "model-plan-unassign", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "plan", required: true, valueKind: "string" }, { name: "persona", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
   { name: "persona-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
@@ -2032,6 +2046,25 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     io.write(canonicalJson(await inspectWorkspaceRelocation(values.workspace ?? "", { at: values.at ?? "" })));
     return;
   }
+  if (command === "machine-settings-catalog") {
+    const values = parseArguments(rest, ["home"]);
+    io.write(canonicalJson({ reasonCode: "MACHINE_SETTINGS_CATALOG_READY", ...await readMachineSettingsCatalog(machineSettingsPath(values.home ?? homedir())) }));
+    return;
+  }
+  if (command === "machine-settings-set") {
+    const values = parseArguments(rest, ["at", "key", "value", "home"]);
+    required(values, ["at", "key", "value"]);
+    const file = await applyMachineSettingSet({ key: values.key ?? "", value: values.value ?? "", occurredAt: values.at ?? "", path: machineSettingsPath(values.home ?? homedir()) });
+    io.write(canonicalJson({ reasonCode: "MACHINE_SETTINGS_WRITE_COMMITTED", ...file }));
+    return;
+  }
+  if (command === "machine-settings-remove") {
+    const values = parseArguments(rest, ["at", "key", "home"]);
+    required(values, ["at", "key"]);
+    const file = await applyMachineSettingRemove({ key: values.key ?? "", occurredAt: values.at ?? "", path: machineSettingsPath(values.home ?? homedir()) });
+    io.write(canonicalJson({ reasonCode: "MACHINE_SETTINGS_WRITE_COMMITTED", ...file }));
+    return;
+  }
   if (command === "settings-catalog") {
     const values = parseArguments(rest, ["workspace"]);
     required(values, ["workspace"]);
@@ -2067,9 +2100,9 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   }
   if (command === "model-plan-set" || command === "model-plan-assign" || command === "model-plan-unassign" || command === "model-plan-remove") {
     const names = command === "model-plan-set"
-      ? [...shared, "host", "name", "default-model", "actor"]
+      ? [...shared, "host", "name", "default-model", "default-effort", "actor"]
       : command === "model-plan-assign"
-        ? [...shared, "host", "plan", "persona", "model", "actor"]
+        ? [...shared, "host", "plan", "persona", "model", "effort", "actor"]
         : command === "model-plan-unassign"
           ? [...shared, "host", "plan", "persona", "actor"]
           : [...shared, "host", "name", "actor"];
@@ -2079,8 +2112,8 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => {
       const expectedVersion = await resolveExpectedVersion(values, workspace);
-      if (command === "model-plan-set") return setModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.name ?? "", defaultModel: values["default-model"] ?? "", ...(values.actor ? { actorId: values.actor } : {}) });
-      if (command === "model-plan-assign") return assignModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.plan ?? "", persona: values.persona ?? "", model: values.model ?? "", ...(values.actor ? { actorId: values.actor } : {}) });
+      if (command === "model-plan-set") return setModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.name ?? "", defaultModel: values["default-model"] ?? "", ...(values["default-effort"] ? { defaultEffort: values["default-effort"] } : {}), ...(values.actor ? { actorId: values.actor } : {}) });
+      if (command === "model-plan-assign") return assignModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.plan ?? "", persona: values.persona ?? "", model: values.model ?? "", ...(values.effort ? { effort: values.effort } : {}), ...(values.actor ? { actorId: values.actor } : {}) });
       if (command === "model-plan-unassign") return unassignModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.plan ?? "", persona: values.persona ?? "", ...(values.actor ? { actorId: values.actor } : {}) });
       return removeModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.name ?? "", ...(values.actor ? { actorId: values.actor } : {}) });
     });

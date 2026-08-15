@@ -349,7 +349,7 @@ export function applyModelPlanSetInExecutionConfig(state: ExecutionConfigState, 
 }
 
 export function applyModelPlanAssignInExecutionConfig(state: ExecutionConfigState, input: {
-  readonly host: unknown; readonly name: unknown; readonly persona: unknown; readonly model: unknown; readonly updatedAt: string;
+  readonly host: unknown; readonly name: unknown; readonly persona: unknown; readonly model: unknown; readonly effort?: unknown; readonly updatedAt: string;
 }): { readonly state: ExecutionConfigState; readonly record: ModelPlanRecord } {
   const applied = applyModelPlanAssign(state.modelPlans, input, (name) => personaNameExists({ personas: state.personas }, name, state.personaTombstones));
   return { state: { ...state, modelPlans: applied.records }, record: applied.record };

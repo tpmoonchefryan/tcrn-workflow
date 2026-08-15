@@ -20,12 +20,13 @@ export const SETTINGS_REASON_CODES = Object.freeze([
 ] as const);
 
 export type SettingsReasonCode = typeof SETTINGS_REASON_CODES[number];
-export type SettingValueType = "enum" | "path" | "string";
+export type SettingValueType = "enum" | "path" | "string" | "url";
 export type SettingControlType = "enum" | "boolean" | "number" | "text";
 
 export type SettingKey =
   | "backup.cadence"
   | "backup.destination"
+  | "design.authority"
   | "driver.capabilityProfile"
   | "engine.requiredVersion"
   | "execution.claudeCodeSubagentPlan"
@@ -133,6 +134,19 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
   {
     key: "backup.destination",
     type: "path",
+    controlType: "text",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: null,
+  },
+  {
+    // INC-193: which design system this workspace treats as its authority, named by the
+    // URL of that system's own documentation. Optional — a workspace with no design
+    // system leaves it unset — and purely declarative: the engine never fetches this
+    // address and never checks what is behind it, because doing so would cross the
+    // offline boundary. Its value set is the whole web, not a closed roster, so it is
+    // not vocabulary and does not appear in the dictionary.
+    key: "design.authority",
+    type: "url",
     controlType: "text",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: null,
@@ -293,6 +307,18 @@ export function validateSettingValue(key: unknown, value: unknown, workspaceRoot
   }
   if (entry.key === "execution.maxConcurrentSubagents" || entry.key === "execution.maxDispatchDepth") {
     orchestrationInteger(value, entry.key);
+  }
+  if (entry.type === "url") {
+    // Shape, never reachability: the engine is offline by construction, so "is this
+    // address real" is a question it cannot ask and must not pretend to answer. http is
+    // refused rather than upgraded — a declaration that names a plaintext address is a
+    // different declaration from one that names a secure address, and silently changing
+    // it would record something the writer did not say.
+    let parsed;
+    try { parsed = new URL(value); } catch { fail("SETTINGS_VALUE_INVALID", `${entry.key} must be a URL`); }
+    if (parsed.protocol !== "https:") fail("SETTINGS_VALUE_INVALID", `${entry.key} must use https`);
+    if (value.length > 512) fail("SETTINGS_VALUE_INVALID", `${entry.key} must be at most 512 characters`);
+    if (/[\u0000-\u001f\u007f]/u.test(value)) fail("SETTINGS_VALUE_INVALID", `${entry.key} must not contain control characters`);
   }
   if (entry.key === "workspace.generatedArtifactsPath") {
     assertWorkspaceRelativeSettingPath(value, entry.key);

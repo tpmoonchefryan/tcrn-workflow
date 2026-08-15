@@ -53,7 +53,7 @@ test("unknown verbs fail closed and every cataloged verb dispatches", async () =
     const outcome = await invoke([entry.name]);
     // `commands` and the read-only vocabulary surface are zero-argument verbs.
     // requires an explicit closed-roster --profile-id and must fail without it.
-    if (entry.name === "commands" || entry.name === "install-manifest" || entry.name === "vocabulary") {
+    if (entry.name === "commands" || entry.name === "install-manifest" || entry.name === "machine-settings-catalog" || entry.name === "vocabulary") {
       assert.equal(outcome.ok, true, `${entry.name} resolves with no flags`);
       continue;
     }
@@ -152,6 +152,22 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
     "project-create", "project-delete", "project-update", "relocation-plan", "relocation-vacate",
     "settings-remove", "settings-set", "storage-home-seal", "template-admit", "work-annotate", "work-create", "work-delete", "work-transition",
   ]);
+});
+
+test("S279 model-plan-assign catalog keeps effort optional and headSentinel on expected-version", async () => {
+  const entry = COMMAND_CATALOG.find((candidate) => candidate.name === "model-plan-assign");
+  assert.ok(entry);
+  assert.deepEqual(entry.flags.map((flag) => flag.name), [
+    "workspace", "expected-version", "at", "host", "plan", "persona", "model", "effort", "actor", "attest-dir",
+  ]);
+  assert.deepEqual(entry.flags.find((flag) => flag.name === "effort"), { name: "effort", required: false, valueKind: "string" });
+  assert.equal(entry.flags.find((flag) => flag.name === "expected-version")?.headSentinel, true);
+  assert.equal(entry.flags.find((flag) => flag.name === "effort")?.headSentinel, undefined);
+
+  const policy = JSON.parse(await readFile(new URL("../scripts/policy/source-allowlist.json", import.meta.url), "utf8"));
+  for (const path of ["packages/core/src/effort.ts", "portal/design-baseline.html", "scripts/s278-component-coverage.mjs"]) {
+    assert.ok(policy.allowedFiles.includes(path), `${path} must be source-allowlisted`);
+  }
 });
 
 test("INIT-009: operator pins make every non-fixture verb binary-invocable", () => {

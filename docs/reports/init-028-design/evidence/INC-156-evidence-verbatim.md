@@ -6,7 +6,8 @@
 
 - INC-140 的 design-proof 腿名已按实际执行结果订正为：
   `token-fidelity`、`no-literal-colours`、`no-inline-style-attributes`、
-  `interactive-tcrn-class-coverage`；旧的 `token-coverage`、
+  `interactive-tcrn-class-coverage`、`public-v4-baseline`、
+  `portal-layout-invariants`；旧的 `token-coverage`、
   `no-literal-colors`、`interactive-elements` 不再作为事实写入。
 - INC-153 的 host/role 扫描已承认真实结果是 exit 0、4 处匹配；匹配内容是
   `typeof` 守卫或对派生 host 的比较，不是硬编码 host/role 三元式。原先的
@@ -33,14 +34,14 @@
 ## 元判据红腿与恢复
 
 直接运行 `node scripts/verbatim-evidence-meta-proof.mjs`，把 INC-140
-verbatim 块的 `legCount` 从 4 改为 5（只在临时副本改写），要求校验脚本红；
+verbatim 块的 `legCount` 从 6 改为 7（只在临时副本改写），要求校验脚本红；
 随后不改工作树地恢复原文并要求绿。
 
 ```excerpt
 {
   "schemaVersion": "tcrn.inc156-verbatim-meta-proof.v1",
   "mutation": {
-    "changed": "legCount 4 → 5",
+    "changed": "legCount 6 → 7",
     "exitCode": 1,
     "reasonCode": "EVIDENCE_VERBATIM_MISMATCH",
     "problem": {
@@ -51,8 +52,8 @@ verbatim 块的 `legCount` 从 4 改为 5（只在临时副本改写），要求
       "reasonCode": "EVIDENCE_VERBATIM_MISMATCH",
       "difference": {
         "offset": 62,
-        "expected": "\"oof.mjs\\\",\\n  \\\"legCount\\\": 5,\\n  \\\"legNames\\\": [\\n    \\\"",
-        "actual": "\"oof.mjs\\\",\\n  \\\"legCount\\\": 4,\\n  \\\"legNames\\\": [\\n    \\\""
+        "expected": "\"oof.mjs\\\",\\n  \\\"legCount\\\": 7,\\n  \\\"legNames\\\": [\\n    \\\"",
+        "actual": "\"oof.mjs\\\",\\n  \\\"legCount\\\": 6,\\n  \\\"legNames\\\": [\\n    \\\""
       }
     }
   },

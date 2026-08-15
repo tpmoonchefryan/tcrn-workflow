@@ -209,6 +209,61 @@ function parseAcceptanceProbe(value) {
   return { kind, parameters };
 }
 
+function probeFailure(reasonCode, message, details = {}) {
+  return Object.assign(new Error(message), { reasonCode, ...details });
+}
+
+async function readTrustedHelperDigest(homeRoot, parameters) {
+  if (parameters.source !== "trusted-archive-state") {
+    throw probeFailure("PLATFORM_TRUST_ROOT_SOURCE_INVALID", "helper digest source is not the trusted archive/state surface", { source: parameters.source ?? null });
+  }
+  const trustRoot = join(homeRoot, ".tcrn-workflow");
+  const archivePath = join(trustRoot, parameters.archive ?? "skill-archive.json");
+  const statePath = join(trustRoot, parameters.state ?? "state.json");
+  const archiveStats = await existingPath(archivePath);
+  const stateStats = await existingPath(statePath);
+  if (!archiveStats?.isFile() || !stateStats?.isFile()) {
+    throw probeFailure("PLATFORM_TRUST_ROOT_MISSING", "trusted archive/state is unavailable", { archivePath, statePath });
+  }
+  const [archiveBytes, stateBytes] = await Promise.all([readFile(archivePath), readFile(statePath)]);
+  let archive;
+  let state;
+  try {
+    archive = JSON.parse(archiveBytes.toString("utf8"));
+    state = JSON.parse(stateBytes.toString("utf8"));
+  } catch (error) {
+    throw probeFailure("PLATFORM_TRUST_ROOT_INVALID", "trusted archive/state is not valid JSON", { archivePath, statePath, error: error?.code ?? "INVALID_JSON" });
+  }
+  if (archive?.schemaVersion !== "tcrn.workflow.helper.archive.v1" || state?.schemaVersion !== "tcrn.workflow.helper.state.v1") {
+    throw probeFailure("PLATFORM_TRUST_ROOT_INVALID", "trusted archive/state schema is unsupported", { archivePath, statePath });
+  }
+  const archiveDigest = createHash("sha256").update(archiveBytes).digest("hex");
+  if (state.verifiedArchiveSha256 !== archiveDigest) {
+    throw probeFailure("PLATFORM_TRUST_ROOT_STATE_MISMATCH", "state does not attest to the archive bytes", { archivePath, statePath, expectedArchiveSha256: state.verifiedArchiveSha256 ?? null, actualArchiveSha256: archiveDigest });
+  }
+  if (!Array.isArray(archive.entries) || archive.entries.length === 0) {
+    throw probeFailure("PLATFORM_TRUST_ROOT_INVALID", "trusted archive has no entries", { archivePath });
+  }
+  const declared = new Map();
+  for (const entry of archive.entries) {
+    if (entry === null || typeof entry !== "object" || typeof entry.path !== "string" || typeof entry.sha256 !== "string" || typeof entry.contentBase64 !== "string" || declared.has(entry.path)) {
+      throw probeFailure("PLATFORM_TRUST_ROOT_INVALID", "trusted archive entry is malformed or duplicated", { archivePath, entryPath: entry?.path ?? null });
+    }
+    const content = Buffer.from(entry.contentBase64, "base64");
+    const digest = createHash("sha256").update(content).digest("hex");
+    if (digest !== entry.sha256) {
+      throw probeFailure("PLATFORM_TRUST_ROOT_ARCHIVE_DIGEST_MISMATCH", "trusted archive entry digest does not match its bytes", { archivePath, entryPath: entry.path, expected: entry.sha256, actual: digest });
+    }
+    declared.set(entry.path, entry.sha256);
+  }
+  const entryPath = parameters.entry ?? "SKILL.md";
+  const digest = declared.get(entryPath);
+  if (typeof digest !== "string") {
+    throw probeFailure("PLATFORM_TRUST_ROOT_ENTRY_MISSING", "trusted archive does not contain the requested helper entry", { archivePath, entryPath });
+  }
+  return { digest, archiveDigest, archivePath, statePath, entryPath, declaredEntryCount: declared.size };
+}
+
 function hookCommands(settings) {
   const hooks = settings?.hooks;
   if (hooks === null || typeof hooks !== "object" || Array.isArray(hooks)) return [];
@@ -313,6 +368,25 @@ async function inspectHelperCopies(platformRoot, homeRoot, manifest, options) {
   const entries = manifest.items.filter((entry) => entry.acceptanceProbe.startsWith("probe:helper-skill-digest"));
   const missing = [];
   const mismatched = [];
+  const probe = entries.length > 0 ? parseAcceptanceProbe(entries[0].acceptanceProbe) : null;
+  let trustedSource = null;
+  const syntheticByEntry = options.helperSkillDigests && typeof options.helperSkillDigests === "object";
+  const syntheticLaunchd = Array.isArray(options.launchdLabels) && options.enforceHelperDigest !== true;
+  if (!syntheticByEntry && !syntheticLaunchd) {
+    try {
+      trustedSource = await readTrustedHelperDigest(homeRoot, probe?.parameters ?? {});
+    } catch (error) {
+      return check("helperCopies", false, {
+        reasonCode: error?.reasonCode ?? "PLATFORM_TRUST_ROOT_UNAVAILABLE",
+        source: "trusted-archive-state",
+        ...(error?.archivePath ? { archivePath: error.archivePath } : {}),
+        ...(error?.statePath ? { statePath: error.statePath } : {}),
+        ...(error?.entryPath ? { entryPath: error.entryPath } : {}),
+        ...(error?.expectedArchiveSha256 ? { expectedArchiveSha256: error.expectedArchiveSha256 } : {}),
+        ...(error?.actualArchiveSha256 ? { actualArchiveSha256: error.actualArchiveSha256 } : {}),
+      });
+    }
+  }
   for (const entry of entries) {
     const path = expandTemplate(entry.pathTemplate, platformRoot, homeRoot);
     const rootStats = path === null ? null : await existingPath(path);
@@ -322,17 +396,13 @@ async function inspectHelperCopies(platformRoot, homeRoot, manifest, options) {
       missing.push({ id: entry.id, pathTemplate: entry.pathTemplate, reasonCode: "PLATFORM_HELPER_COPY_NOT_REGULAR" });
       continue;
     }
-    const probe = parseAcceptanceProbe(entry.acceptanceProbe);
-    const expected = probe?.parameters.sha256;
     const actual = createHash("sha256").update(await readFile(skillPath)).digest("hex");
-    // Synthetic fixtures may use a disposable one-line skill. The real CLI has
-    // no launchdLabels seam and therefore always enforces the manifest digest.
-    const effectiveExpected = options.helperSkillDigests?.[entry.id]
-      ?? (Array.isArray(options.launchdLabels) && options.enforceHelperDigest !== true ? actual : expected);
-    if (actual !== effectiveExpected) mismatched.push({ id: entry.id, reasonCode: "PLATFORM_HELPER_COPY_DIGEST_MISMATCH", expected: effectiveExpected, declared: expected, actual });
+    const entryProbe = parseAcceptanceProbe(entry.acceptanceProbe);
+    const expected = options.helperSkillDigests?.[entry.id] ?? (syntheticLaunchd ? actual : trustedSource?.digest);
+    if (actual !== expected) mismatched.push({ id: entry.id, reasonCode: "PLATFORM_HELPER_COPY_DIGEST_MISMATCH", expected, actual, source: syntheticByEntry ? "synthetic-helper-digest" : syntheticLaunchd ? "synthetic-launchd-labels" : entryProbe?.parameters.source ?? "trusted-archive-state" });
   }
   return missing.length === 0 && mismatched.length === 0
-    ? check("helperCopies", true, { hosts: ["agents", "claude", "codex"], source: "manifest-declared-skill-digest" })
+    ? check("helperCopies", true, { hosts: ["agents", "claude", "codex"], source: syntheticByEntry ? "synthetic-helper-digest" : syntheticLaunchd ? "synthetic-launchd-labels" : "trusted-archive-state", archiveDigest: trustedSource?.archiveDigest ?? null, declaredEntryCount: trustedSource?.declaredEntryCount ?? null })
     : check("helperCopies", false, { reasonCode: missing.length > 0 ? "PLATFORM_HELPER_COPIES_INCOMPLETE" : "PLATFORM_HELPER_COPY_DIGEST_MISMATCH", missing, mismatched });
 }
 

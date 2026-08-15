@@ -45,8 +45,9 @@ test("S244: a plan is a named host record with default and persona assignments",
   const created = await json(write("model-plan-set", workspace, await version(), 1, ["--host", "claude-code", "--name", "daily", "--default-model", "opus-5"]));
   assert.equal(created.reasonCode, "MODEL_PLAN_WRITE_COMMITTED");
   assert.equal(created.plans[0].assignments && Object.keys(created.plans[0].assignments).length, 0);
-  const assigned = await json(write("model-plan-assign", workspace, await version(), 2, ["--host", "claude-code", "--plan", "daily", "--persona", "Verity", "--model", "sonnet-5"]));
+  const assigned = await json(write("model-plan-assign", workspace, await version(), 2, ["--host", "claude-code", "--plan", "daily", "--persona", "Verity", "--model", "sonnet-5", "--effort", "high"]));
   assert.equal(assigned.plans[0].assignments.Verity, "sonnet-5");
+  assert.equal(assigned.plans[0].efforts.Verity, "high");
   const readback = await json(["model-plan-list", "--workspace", workspace, "--host", "claude-code"]);
   assert.deepEqual(readback.plans.map((plan) => ({ host: plan.host, name: plan.name, defaultModel: plan.defaultModel, assignments: plan.assignments })), [{ host: "claude-code", name: "daily", defaultModel: "opus-5", assignments: { Verity: "sonnet-5" } }]);
 
