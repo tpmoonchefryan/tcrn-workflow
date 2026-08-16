@@ -135,12 +135,28 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
   await mkdir(home, { recursive: true });
   for (const entry of INSTALL_MANIFEST.items) {
     const path = entry.pathTemplate.replaceAll("<PLATFORM_ROOT>", root).replaceAll("<HOME>", home);
-    if (entry.acceptanceProbe.startsWith("probe:regular-directory") || entry.acceptanceProbe.startsWith("probe:helper-skill-digest") || entry.acceptanceProbe.startsWith("probe:engine-version")) await mkdir(path, { recursive: true });
+    if (entry.acceptanceProbe.startsWith("probe:regular-directory") || entry.acceptanceProbe.startsWith("probe:helper-skill-digest") || entry.acceptanceProbe.startsWith("probe:engine-version") || entry.acceptanceProbe.startsWith("probe:adapter-bundle-digest")) await mkdir(path, { recursive: true });
     else {
       await mkdir(join(path, ".."), { recursive: true });
       await writeFile(path, "{}\n");
       if (entry.acceptanceProbe.startsWith("probe:regular-executable")) await chmod(path, 0o755);
     }
+  }
+  // STORY-286: the adapter entries are accepted by their receipt's digests now, so a
+  // complete fixture has to install a bundle AND record what it installed — which is the
+  // whole point: "a directory is here" stopped being enough.
+  for (const entry of INSTALL_MANIFEST.items.filter((item) => item.acceptanceProbe.startsWith("probe:adapter-bundle-digest"))) {
+    const bundle = entry.pathTemplate.replaceAll("<PLATFORM_ROOT>", root).replaceAll("<HOME>", home);
+    const relativeFile = `${entry.pathTemplate.replace("<PLATFORM_ROOT>/", "")}/project.json`;
+    await writeFile(join(bundle, "project.json"), "{}\n");
+    const receiptTemplate = /receipt=([^;]+)/u.exec(entry.acceptanceProbe)?.[1] ?? "";
+    const receiptPath = receiptTemplate.replaceAll("<PLATFORM_ROOT>", root).replaceAll("<HOME>", home);
+    await mkdir(join(receiptPath, ".."), { recursive: true });
+    await writeFile(receiptPath, JSON.stringify({
+      schemaVersion: "tcrn.adapter-installation-generation.v1",
+      installationRoot: root,
+      entries: [{ path: relativeFile, contentDigest: createHash("sha256").update(await readFile(join(bundle, "project.json"))).digest("hex") }],
+    }));
   }
   await writeFile(join(root, "AGENTS.md"), `${topology}fixture\n`);
   await writeFile(join(root, "CLAUDE.md"), "@AGENTS.md\n");
@@ -535,4 +551,56 @@ test("STORY-286 a registered codex hook whose target cannot run turns the leg re
   const invalidHooks = invalid.checks.find((item) => item.name === "hooks");
   assert.equal(invalidHooks.ok, false);
   assert.equal(invalidHooks.reasonCode, "PLATFORM_CODEX_HOOKS_INVALID");
+});
+
+test("STORY-286 an adapter bundle is accepted by its receipt's digests, not by existing", async (context) => {
+  // INC-208 recorded the ceiling: the two adapter entries accepted a directory merely
+  // being there, so a bundle whose bytes had been edited passed. The receipt names each
+  // installed file with a content digest, which makes acceptance mean "still what was
+  // installed" rather than "something is at this path".
+  const fixture = await completeInstallFixture(context);
+  const bundle = join(fixture.root, ".codex", "tcrn-workflow");
+  await mkdir(bundle, { recursive: true });
+  await writeFile(join(bundle, "project.json"), "{}\n");
+  const receiptDir = join(fixture.root, ".tcrn-artifacts", "install-receipts", "platform-container");
+  await mkdir(receiptDir, { recursive: true });
+  const digestOf = async (path) => createHash("sha256").update(await readFile(path)).digest("hex");
+  const receiptPath = join(receiptDir, "codex.json");
+  const writeReceipt = async () => writeFile(receiptPath, JSON.stringify({
+    schemaVersion: "tcrn.codex-adapter-installation-generation.v1",
+    installationRoot: fixture.root,
+    entries: [{ path: ".codex/tcrn-workflow/project.json", contentDigest: await digestOf(join(bundle, "project.json")) }],
+  }));
+  await writeReceipt();
+
+  const entry = {
+    id: "container.codex-adapter-under-test",
+    layer: "container",
+    host: "codex",
+    pathTemplate: "<PLATFORM_ROOT>/.codex/tcrn-workflow",
+    writer: "engine-adapter",
+    acceptanceProbe: "probe:adapter-bundle-digest;receipt=<PLATFORM_ROOT>/.tcrn-artifacts/install-receipts/platform-container/codex.json",
+  };
+  const manifest = { ...INSTALL_MANIFEST, items: [...INSTALL_MANIFEST.items, entry] };
+  const wiring = async () => {
+    const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], manifest });
+    return result.checks.find((item) => item.name === "installWiring");
+  };
+
+  assert.equal((await wiring()).ok, true, "an untouched bundle matches its receipt");
+
+  await writeFile(join(bundle, "project.json"), "{}\n\n");
+  const drifted = await wiring();
+  assert.equal(drifted.ok, false);
+  const finding = drifted.invalid.find((item) => item.id === entry.id);
+  assert.equal(finding.reasonCode, "PLATFORM_ADAPTER_BUNDLE_DRIFTED");
+  assert.equal(finding.drifted[0].path, ".codex/tcrn-workflow/project.json", "a drift names the file");
+
+  await writeReceipt();
+  assert.equal((await wiring()).ok, true, "re-recording the receipt accepts the new bytes deliberately");
+
+  await writeFile(receiptPath, "{ not json");
+  const unreadable = await wiring();
+  assert.equal(unreadable.invalid.find((item) => item.id === entry.id).reasonCode, "PLATFORM_ADAPTER_RECEIPT_UNREADABLE",
+    "an unreadable receipt is the finding; it never falls back to the directory being there");
 });

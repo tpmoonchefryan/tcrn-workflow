@@ -183,6 +183,17 @@ async function inspectInstallWiring(platformRoot, homeRoot, manifest) {
           invalid.push({ id: entry.id, reasonCode: "PLATFORM_ACCEPTANCE_PROBE_FAILED", pathTemplate: entry.pathTemplate, probe: probe.kind, error: error?.code ?? "INVALID_JSON" });
         }
       }
+    } else if (probe.kind === "adapter-bundle-digest") {
+      // STORY-286. A directory that exists says nothing about what is in it — the ceiling
+      // INC-208 recorded, where an edited bundle passed. The receipt this bundle was
+      // installed from carries a digest per file, so acceptance means the bytes are still
+      // the bytes that were installed.
+      if (!stats.isDirectory()) {
+        invalid.push({ id: entry.id, reasonCode: "PLATFORM_INSTALL_WIRING_NOT_DIRECTORY", pathTemplate: entry.pathTemplate, probe: probe.kind });
+      } else {
+        const failure = await adapterBundleDrift(path, expandTemplate(probe.parameters.receipt ?? "", platformRoot, homeRoot));
+        if (failure !== null) invalid.push({ id: entry.id, reasonCode: failure.reasonCode, pathTemplate: entry.pathTemplate, probe: probe.kind, ...failure.detail });
+      }
     } else if (probe.kind === "regular-directory" || probe.kind === "helper-skill-digest" || probe.kind === "engine-version") {
       if (!stats.isDirectory()) invalid.push({ id: entry.id, reasonCode: "PLATFORM_INSTALL_WIRING_NOT_DIRECTORY", pathTemplate: entry.pathTemplate, probe: probe.kind });
     } else {
@@ -199,12 +210,53 @@ async function inspectInstallWiring(platformRoot, homeRoot, manifest) {
     });
 }
 
+/**
+ * Does an installed adapter bundle still carry the bytes its receipt recorded?
+ *
+ * Returns null when it does. The receipt names each installed file with a content digest;
+ * a drifted, deleted or added file is a bundle that is no longer the one that was
+ * accepted. An unreadable receipt is itself the finding — the probe never falls back to
+ * "the directory is there", because that fallback is the ceiling this replaces.
+ */
+async function adapterBundleDrift(bundlePath, receiptPath) {
+  if (!receiptPath) return { reasonCode: "PLATFORM_ADAPTER_RECEIPT_UNDECLARED", detail: {} };
+  let receipt;
+  try {
+    receipt = JSON.parse(await readFile(receiptPath, "utf8"));
+  } catch (error) {
+    return { reasonCode: "PLATFORM_ADAPTER_RECEIPT_UNREADABLE", detail: { receiptPath, error: error?.code ?? "INVALID_JSON" } };
+  }
+  const entries = Array.isArray(receipt?.entries) ? receipt.entries : null;
+  if (entries === null || entries.length === 0) {
+    return { reasonCode: "PLATFORM_ADAPTER_RECEIPT_EMPTY", detail: { receiptPath } };
+  }
+  const installationRoot = typeof receipt.installationRoot === "string" ? receipt.installationRoot : null;
+  const drifted = [];
+  for (const entry of entries) {
+    if (typeof entry?.path !== "string" || typeof entry?.contentDigest !== "string") {
+      drifted.push({ path: entry?.path ?? null, reason: "receipt entry is not path plus contentDigest" });
+      continue;
+    }
+    const target = installationRoot === null ? resolve(bundlePath, entry.path) : resolve(installationRoot, entry.path);
+    let bytes;
+    try {
+      bytes = await readFile(target);
+    } catch {
+      drifted.push({ path: entry.path, reason: "installed file is absent" });
+      continue;
+    }
+    const actual = createHash("sha256").update(bytes).digest("hex");
+    if (actual !== entry.contentDigest) drifted.push({ path: entry.path, reason: "content digest differs from the receipt" });
+  }
+  return drifted.length === 0 ? null : { reasonCode: "PLATFORM_ADAPTER_BUNDLE_DRIFTED", detail: { receiptPath, drifted } };
+}
+
 function parseAcceptanceProbe(value) {
   if (typeof value !== "string") return null;
   const [head, ...segments] = value.split(";");
   if (!head?.startsWith("probe:")) return null;
   const kind = head.slice("probe:".length);
-  if (!["regular-file", "regular-directory", "regular-executable", "receipt-json", "helper-skill-digest", "engine-version", "trust-archive-freshness", "local-snapshot-freshness", "offsite-push-freshness", "launchd-duty"].includes(kind)) return null;
+  if (!["regular-file", "regular-directory", "regular-executable", "receipt-json", "helper-skill-digest", "engine-version", "trust-archive-freshness", "local-snapshot-freshness", "offsite-push-freshness", "launchd-duty", "adapter-bundle-digest"].includes(kind)) return null;
   const parameters = Object.fromEntries(segments.map((segment) => segment.split("=")).filter(([key, val]) => typeof key === "string" && typeof val === "string" && key.length > 0 && val.length > 0));
   return { kind, parameters };
 }

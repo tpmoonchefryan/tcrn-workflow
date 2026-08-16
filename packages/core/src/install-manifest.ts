@@ -88,8 +88,14 @@ export const INSTALL_MANIFEST_ITEMS: readonly InstallManifestItem[] = Object.fre
   item("container.mcp", "container", "claude", "<PLATFORM_ROOT>/.mcp.json", "engine-adapter", "probe:regular-file"),
   item("container.platform-agents", "container", "shared", "<PLATFORM_ROOT>/AGENTS.md", "engine-adapter", "probe:regular-file"),
   item("container.platform-claude-bridge", "container", "claude", "<PLATFORM_ROOT>/CLAUDE.md", "engine-adapter", "probe:regular-file"),
-  item("container.claude-adapter", "container", "claude", "<PLATFORM_ROOT>/.claude/tcrn-workflow", "engine-adapter", "probe:regular-directory"),
-  item("container.codex-adapter", "container", "codex", "<PLATFORM_ROOT>/.codex/tcrn-workflow", "engine-adapter", "probe:regular-directory"),
+  item("container.claude-adapter", "container", "claude", "<PLATFORM_ROOT>/.claude/tcrn-workflow", "engine-adapter",
+    "probe:adapter-bundle-digest;receipt=<PLATFORM_ROOT>/.tcrn-artifacts/install-receipts/platform-container/claude.json"),
+  item("container.codex-adapter", "container", "codex", "<PLATFORM_ROOT>/.codex/tcrn-workflow", "engine-adapter",
+    "probe:adapter-bundle-digest;receipt=<PLATFORM_ROOT>/.tcrn-artifacts/install-receipts/platform-container/codex.json"),
+  // STORY-286: the two adapter entries used to accept a directory merely existing, which
+  // is the ceiling INC-208 recorded — a bundle whose bytes had been edited passed. They
+  // now verify against the digests their own install receipt recorded, so an accepted
+  // bundle is one that still is what was installed.
   item("container.platform-container.claude-receipt", "container", "claude", "<PLATFORM_ROOT>/.tcrn-artifacts/install-receipts/platform-container/claude.json", "engine-adapter", "probe:receipt-json"),
   item("container.platform-container.codex-receipt", "container", "codex", "<PLATFORM_ROOT>/.tcrn-artifacts/install-receipts/platform-container/codex.json", "engine-adapter", "probe:receipt-json"),
   // INC-208: the chain-write refusal lives at the machine layer because project
