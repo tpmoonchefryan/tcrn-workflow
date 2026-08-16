@@ -1596,7 +1596,7 @@
         "tests/operator-authority.test.mjs",
         "tests/p7-compatibility-modes.test.mjs"
       ],
-      "fixtureDigest": "565f46f4a40af8934ca1f81ba183c45029938a8e29976f7824720951cc4f2807",
+      "fixtureDigest": "b9021490eb16018afba9b51335666216292598eafb18624bdd0873381f190d19",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1779,7 +1779,7 @@
         "scripts/task.mjs",
         "tests/act13-authority-output.test.mjs"
       ],
-      "fixtureDigest": "391b85fb51468c36c23c93e1fb749af26c75cf5c14e9048e0f66470c1b179602",
+      "fixtureDigest": "9576b5aabd52b6f528532f4077225666c2ff65026cabb939f8cf95e0a8ffb34e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

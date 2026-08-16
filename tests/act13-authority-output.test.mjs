@@ -332,30 +332,170 @@ async function operatorAuthority(root, options = {}) {
   return { pinsPath, pinsDigest: rawSha(pinsBytes) };
 }
 
-function initializeRequest(id = 1) {
-  return {
-    jsonrpc: "2.0",
-    id,
-    method: "initialize",
-    params: {
-      protocolVersion: "2025-06-18",
-      capabilities: {},
-      clientInfo: { name: "act13", version: "1" },
-    },
-  };
+/**
+ * Drive `adapter-activation-record` over the operator CLI and return its receipt.
+ *
+ * These cases used to be driven through the retired MCP dispatcher. The dispatcher was
+ * only ever the driver — the guards live in core and the pins are read the same way — so
+ * they are driven over the surface that still exists (TCRN-CROSS-INC-218). One shape
+ * difference matters to a reader: the dispatcher answered a refusal as a structured
+ * result, the CLI throws it, so every refusal below is asserted through reasonAsync.
+ */
+async function activationRecord(authority, { receiptPath, observationPath, clock = () => NOW }) {
+  let output = "";
+  await runOperatorCli([
+    "--authority-pins",
+    authority.pinsPath,
+    "--authority-pins-digest",
+    authority.pinsDigest,
+    "adapter-activation-record",
+    "--activation-receipt",
+    receiptPath,
+    "--observation-file",
+    observationPath,
+  ], { write(value) { output += value; }, clock });
+  return JSON.parse(output);
 }
 
-async function toolCall(dispatcher, id, arguments_) {
-  return dispatcher.dispatch({
-    jsonrpc: "2.0",
-    id,
-    method: "tools/call",
-    params: {
-      name: "tcrn_workflow_adapter_activation_record",
-      arguments: arguments_,
-    },
-  });
-}
+test("ACT13: self-described, tampered, forged, cloned, and mismatched observations cannot mint activation", async () => {
+  const fixture = await activationFixture();
+  try {
+    const branded = admitCodexHostActivationObservation(
+      fixture.activationHost,
+      fixture.observation,
+    );
+    // Four ways to arrive without the brand, all refused before any receipt exists:
+    // the raw document, the document in a wrapper, an unbranded host, and — the one a
+    // caller reaches for — a structured clone of a context that WAS branded.
+    reason("CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED", () =>
+      createCodexHostActivationReceipt(fixture.installation, fixture.observation),
+    );
+    reason("CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED", () =>
+      createCodexHostActivationReceipt(fixture.installation, {
+        observation: fixture.observation,
+      }),
+    );
+    reason("CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED", () =>
+      admitCodexHostActivationObservation({}, fixture.observation),
+    );
+    reason("CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED", () =>
+      createCodexHostActivationReceipt(
+        fixture.installation,
+        structuredClone(branded),
+      ),
+    );
+
+    const complete = await operatorAuthority(fixture.root, {
+      name: "tamper",
+      installationAuthority: fixture.installed.authority,
+      observationAuthority: fixture.observationAuthority,
+      authorityOutputCommands: ["adapter-activation-record"],
+    });
+    // One trailing byte: pinned path, pinned identity, changed bytes.
+    await writeFile(fixture.observationPath, `${canonicalJson(fixture.observation)} `);
+    await reasonAsync("CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED", () =>
+      activationRecord(complete, {
+        receiptPath: fixture.installed.authority.expectedCanonicalPath,
+        observationPath: fixture.observationPath,
+      }));
+
+    // Correctly pinned, and still refused: it observes a different hook definition than
+    // the installation it is presented against.
+    const mismatchPath = join(fixture.root, "mismatched-observation.json");
+    const mismatched = observationFor(fixture.installed, fixture.activationHost, {
+      hookDefinitionDigest: hash("different-hook-definition"),
+      approvedHookDefinitionDigests: [hash("different-hook-definition")],
+    });
+    const mismatchBytes = canonicalJson(mismatched);
+    await writeFile(mismatchPath, mismatchBytes, { mode: 0o600 });
+    const mismatchAuthority = await operatorAuthority(fixture.root, {
+      name: "mismatch",
+      installationAuthority: fixture.installed.authority,
+      observationAuthority: {
+        expectedCanonicalPath: mismatchPath,
+        expectedFileSha256: rawSha(mismatchBytes),
+      },
+      authorityOutputCommands: ["adapter-activation-record"],
+    });
+    await reasonAsync("CODEX_ACTIVATION_HOST_MISMATCH", () =>
+      activationRecord(mismatchAuthority, {
+        receiptPath: fixture.installed.authority.expectedCanonicalPath,
+        observationPath: mismatchPath,
+      }));
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("INC-017: a pinned observation cannot be replayed past the window that admitted it", async () => {
+  const fixture = await activationFixture();
+  try {
+    // The exact INC-017 replay: the SAME pinned bytes, re-pinned under a ROTATED
+    // bundle whose window opens after the fire. Before the bound this minted another
+    // host_observed_active receipt, for as long as the operator kept issuing bundles.
+    const rotated = await operatorAuthority(fixture.root, {
+      name: "rotated",
+      installationAuthority: fixture.installed.authority,
+      observationAuthority: fixture.observationAuthority,
+      authorityOutputCommands: ["adapter-activation-record"],
+      issuedAt: "2026-07-25T01:00:00Z",
+      expiresAt: "2026-07-25T03:00:00Z",
+    });
+    await reasonAsync("CODEX_ACTIVATION_OBSERVATION_STALE", () =>
+      activationRecord(rotated, {
+        receiptPath: fixture.installed.authority.expectedCanonicalPath,
+        observationPath: fixture.observationPath,
+        clock: () => "2026-07-25T01:30:00Z",
+      }));
+
+    // An observedAt later than the clock that reads it is refused as well. It is
+    // inside the bundle window, so the window check alone would admit it -- and a
+    // far-future observedAt would otherwise survive every future window.
+    const futurePath = join(fixture.root, "future-observation.json");
+    const future = observationFor(fixture.installed, fixture.activationHost, {
+      observedAt: "2026-07-25T01:30:00Z",
+    });
+    const futureBytes = canonicalJson(future);
+    await writeFile(futurePath, futureBytes, { mode: 0o600 });
+    const futureAuthority = await operatorAuthority(fixture.root, {
+      name: "future",
+      installationAuthority: fixture.installed.authority,
+      observationAuthority: {
+        expectedCanonicalPath: futurePath,
+        expectedFileSha256: rawSha(futureBytes),
+      },
+      authorityOutputCommands: ["adapter-activation-record"],
+    });
+    await reasonAsync("CODEX_ACTIVATION_OBSERVATION_STALE", () =>
+      activationRecord(futureAuthority, {
+        receiptPath: fixture.installed.authority.expectedCanonicalPath,
+        observationPath: futurePath,
+      }));
+
+    // The branded route is bounded by the activation-host context window instead of a
+    // clock. That window is covered by hostDigest, which the observation binds, so it
+    // cannot be widened after the fact to admit an older or a later fire.
+    for (const observedAt of ["2026-07-25T02:30:00Z", "2026-07-24T23:59:59Z"]) {
+      reason("CODEX_ACTIVATION_OBSERVATION_STALE", () =>
+        admitCodexHostActivationObservation(
+          fixture.activationHost,
+          observationFor(fixture.installed, fixture.activationHost, { observedAt }),
+        ),
+      );
+    }
+
+    // A caller holding the pinned identity but no freshness bound gets a refusal
+    // before the file is opened, not an unbounded read.
+    await reasonAsync("CODEX_ACTIVATION_HOST_OBSERVATION_REQUIRED", () =>
+      readCodexHostActivationObservation(
+        fixture.observationPath,
+        fixture.observationAuthority,
+        undefined,
+      ));
+  } finally {
+    await fixture.close();
+  }
+});
 
 test("INC-012: authority-shaped output from a verb that does not declare it fails closed", () => {
   const hostState = canonicalJson({
