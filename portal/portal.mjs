@@ -101,6 +101,21 @@ if (requestedPartition && !partitionCatalog.some((entry) => entry.id === request
 const partitionMode = Boolean(containerRoot);
 let selectedPartitionId = requestedPartition || partitionCatalog[0].id;
 const currentPartition = () => partitionCatalog.find((entry) => entry.id === selectedPartitionId) ?? partitionCatalog[0];
+
+// INC-203: the catalog above is a snapshot of the container at boot. A partition
+// admitted afterwards stayed invisible here until someone happened to restart the
+// portal, with nothing on screen to suggest the list was stale — the switcher is the
+// portal's whole answer to "which partitions exist", so it has to answer from the
+// container rather than from a memory of it. A readdir per read is nothing on a
+// loopback tool. A failed rescan keeps the last good catalog: a transient filesystem
+// error should not empty the switcher.
+async function refreshPartitionCatalog() {
+  if (!containerRoot) return partitionCatalog;
+  try {
+    partitionCatalog = await discoverPartitions(containerRoot);
+  } catch { /* keep the last good catalog */ }
+  return partitionCatalog;
+}
 // Proposal for the unresolved container prose decision: resolve the document in
 // the selected partition root.  An explicit --prose-root remains authoritative
 // for callers that have already chosen a target.  This keeps a container read
@@ -350,7 +365,7 @@ const server = createServer(async (request, response) => {
         workspaceName: await currentWorkspaceName(),
         container: containerRoot || null,
         partitionMode,
-        partitions: partitionCatalog.map(({ id }) => ({ id })),
+        partitions: (await refreshPartitionCatalog()).map(({ id }) => ({ id })),
         selectedPartition: selectedPartitionId,
         proseRoot: currentProseRoot(),
         paths: currentPaths(),
@@ -443,7 +458,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (request.method === "GET" && pathname === "/api/partitions") {
-      send(response, 200, { ok: true, reasonCode: "PORTAL_PARTITIONS_READY", mode: partitionMode ? "container" : "workspace", partitions: partitionCatalog.map(({ id }) => ({ id })), selectedPartition: selectedPartitionId });
+      send(response, 200, { ok: true, reasonCode: "PORTAL_PARTITIONS_READY", mode: partitionMode ? "container" : "workspace", partitions: (await refreshPartitionCatalog()).map(({ id }) => ({ id })), selectedPartition: selectedPartitionId });
       return;
     }
     if (request.method === "POST" && pathname === "/api/partition") {

@@ -3333,7 +3333,14 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-list__sub { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
 .tcrn-section-tabs { margin-bottom: var(--tcrn-space-4); }
 .tcrn-manage { display: grid; grid-template-columns: 208px minmax(0, 860px); gap: var(--tcrn-space-6); align-items: start; }
-.tcrn-subnav { display: grid; gap: var(--tcrn-space-1); position: sticky; top: 0; }
+/* INC-202: sticky positioning always creates a stacking context, so a popover raised
+   inside this column is sealed into it — its own z-index counts only among the column's
+   own descendants. The column and the table shell's sticky head are then two positioned
+   siblings at `auto`, where paint order is DOM order, and the table comes later. The
+   explanation for a category was therefore drawn under the table on any viewport wide
+   enough for the two to overlap. A column that hosts popovers has to sit on the popover
+   layer itself; without that, no z-index on the tooltip can ever reach past the table. */
+.tcrn-subnav { display: grid; gap: var(--tcrn-space-1); position: sticky; top: 0; z-index: var(--tcrn-z-popover); }
 /* INC-201: the subnav is a one-column grid, so an explanation trigger emitted as the
    item's sibling became its own row. A button may not nest inside a button, so the two
    share one grid cell through this row instead. */
