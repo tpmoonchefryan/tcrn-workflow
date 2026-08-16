@@ -3,6 +3,33 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.17 — 2026-08-16
+
+- Views are bounded by record count rather than by prose length. The graph
+  digest hashes each record and then the vector of hashes; the index carries
+  each extension as the digest of its value (`tcrn.workspace-index.v2`).
+  Detection power is unchanged, the cross-project index drops from 1.55 MiB to
+  274 KB, and a workspace that had merely accumulated governed prose can be read
+  again. Existing workspaces take the new shape through `recover`.
+- Gates stop measuring against references that move. The portal coverage
+  baseline becomes a versioned roster instead of `git show HEAD`; the doctor
+  derives the snapshot train's duty from each chain's `backup.cadence` and
+  relaxes only, never tightens; an evidence block that quoted a HEAD-relative
+  count keeps its number and drops the claim it cannot honour. The practice is
+  written down as the gate-reference-stability convention.
+- The harness is declared at the container and machine layers only — 46 manifest
+  items become 23 — and a new doctor leg walks the governed area to report any
+  harness root the manifest places nothing under. The chain-write refusal moves
+  to the machine layer, where it holds regardless of which folder a session
+  opens.
+- Portal: the partition switcher reads the container instead of a snapshot taken
+  at boot; a switch, an explanation icon, and a tooltip stacking context are
+  corrected against measured contracts; and a leg that failed about one run in
+  three now waits for its condition rather than for a fixed interval.
+- Known ceiling: `export` still canonicalises the whole state, so a large chain
+  cannot export. That wants chunking rather than digests and is not in this
+  release.
+
 ## 0.11.16 — 2026-08-14
 
 - The install surface is engine data: `install-manifest` enumerates every
