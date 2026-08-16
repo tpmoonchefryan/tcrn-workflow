@@ -29,7 +29,7 @@
 // (`TCRN-CROSS-MIN-INTEGRATION-BOUNDARY`).
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -45,8 +45,15 @@ export const SCANNED_EXTENSIONS = Object.freeze([".mjs", ".js", ".ts", ".tsx"]);
  * A typed roster is a second copy of a fact the filesystem already holds, and it goes
  * stale exactly when it matters — the moment a new sibling is admitted. This is the same
  * defect this platform hit three times in one week with hand-copied partition rosters.
+ *
+ * `self` is read off the repository root rather than written down (TCRN-CROSS-INC-218).
+ * It used to be the constant `"tcrn-workflow"`, which is only this checkout's directory
+ * name: `pnpm preflight` clones into `<temp>/checkout`, so inside the one world that
+ * proves independence from siblings, this repository counted itself as its own sibling.
+ * A constant paired with a name the tree is free to change is exactly the shape the
+ * gate-reference-stability convention refuses.
  */
-export function siblingProjects(platformRoot = PLATFORM_ROOT, self = "tcrn-workflow") {
+export function siblingProjects(platformRoot = PLATFORM_ROOT, self = basename(REPO_ROOT)) {
   return readdirSync(platformRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
     .map((entry) => entry.name)

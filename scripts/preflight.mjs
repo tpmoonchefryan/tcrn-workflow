@@ -12,6 +12,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// The roster is shared with `verify:p1` rather than copied from it (TCRN-CROSS-INC-218).
+// This runner stays independent of P1 in the way that matters — collect-all against
+// fail-fast, isolated clone against working tree — and that independence was never a
+// licence to run a shorter list. It had become one: two gates P1 ran, this world did not.
+import { P1_GATE_SPECS } from "./p1-sequence.mjs";
+
+export { P1_GATE_SPECS };
+
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const ALLOWED_ENV_NAMES = Object.freeze([
   "CI",
@@ -22,29 +30,6 @@ const ALLOWED_ENV_NAMES = Object.freeze([
   "PATH",
   "PNPM_HOME",
   "TMPDIR",
-]);
-
-export const P1_GATE_SPECS = Object.freeze([
-  ["format", ["pnpm", "run", "--silent", "format:check"]],
-  ["lint", ["pnpm", "run", "--silent", "lint"]],
-  ["typecheck", ["pnpm", "run", "--silent", "typecheck"]],
-  ["build", ["pnpm", "run", "--silent", "build"]],
-  ["test", ["pnpm", "run", "--silent", "test"]],
-  ["test-trust", ["pnpm", "run", "--silent", "verify:trust"]],
-  ["archive", ["pnpm", "run", "--silent", "archive"]],
-  ["sbom", ["pnpm", "run", "--silent", "sbom"]],
-  ["licenses", ["pnpm", "run", "--silent", "verify:licenses"]],
-  ["vulnerabilities", ["pnpm", "run", "--silent", "verify:vulnerabilities"]],
-  ["source", ["pnpm", "run", "--silent", "verify:source"]],
-  ["lifecycle", ["pnpm", "run", "--silent", "verify:lifecycle"]],
-  ["offline", ["pnpm", "run", "--silent", "verify:offline"]],
-  ["governance", ["pnpm", "run", "--silent", "verify:governance"]],
-  ["workspace", ["pnpm", "run", "--silent", "verify:workspace"]],
-  ["privacy", ["pnpm", "run", "--silent", "verify:privacy"]],
-  ["roots", ["pnpm", "run", "--silent", "verify:roots"]],
-  ["ci", ["pnpm", "run", "--silent", "verify:ci"]],
-  ["verification-map", ["pnpm", "run", "--silent", "verify:map"]],
-  ["history", ["pnpm", "run", "--silent", "verify:history"]],
 ]);
 
 export const LESSON_GATE_SPECS = Object.freeze([

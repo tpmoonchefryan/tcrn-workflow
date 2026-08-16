@@ -16,6 +16,7 @@ import {
   toPosixPath,
   walkFiles,
 } from "./lib/files.mjs";
+import { P1_TASKS } from "./p1-sequence.mjs";
 import { compareCanonicalText } from "./lib/canonical-order.mjs";
 import { codeOnly, controlByteOffset } from "./lib/code-only.mjs";
 import { LocalCommandError, runLocalCommand } from "./lib/local-command.mjs";
@@ -2385,30 +2386,10 @@ async function verifyCi() {
 
 async function verifyP1() {
   assertCleanExclusiveSourceBasis(run("git", ["status", "--porcelain=v1", "--untracked-files=all"]));
-  const sequence = [
-    "format-check",
-    "lint",
-    "typecheck",
-    "build",
-    "test",
-    "portal",
-    "test-trust",
-    "archive",
-    "sbom",
-    "licenses",
-    "vulnerabilities",
-    "source",
-    "no-sibling-dependency",
-    "lifecycle",
-    "offline",
-    "governance",
-    "workspace",
-    "privacy",
-    "roots",
-    "ci",
-    "verification-map",
-    "history",
-  ];
+  // The roster lives in scripts/p1-sequence.mjs so preflight runs this same list rather
+  // than a copy of it (TCRN-CROSS-INC-218). The copy had lost `portal` and
+  // `no-sibling-dependency`, and nothing compared them.
+  const sequence = P1_TASKS;
   const results = [];
   for (const name of sequence) {
     results.push(await invoke(name));

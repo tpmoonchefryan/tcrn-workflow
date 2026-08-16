@@ -8,11 +8,15 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
   findReachingLines,
   judgeNoSiblingDependency,
   siblingProjects,
+  REPO_ROOT,
 } from "../scripts/no-sibling-dependency-proof.mjs";
 
 const SIBLINGS = ["TCRN-AOS", "TCRN-Design-System"];
@@ -35,13 +39,40 @@ test("the real repository carries no reaching line", () => {
 });
 
 test("siblings are discovered, not typed", () => {
-  const discovered = siblingProjects();
-  assert.ok(discovered.includes("TCRN-AOS"), "the product project must be seen");
-  assert.ok(!discovered.includes("tcrn-workflow"), "this repository is not its own sibling");
-  assert.ok(!discovered.includes("docs"), "the shared docs directory is not a project");
-  // A hand-kept roster goes stale exactly when a sibling is admitted — the failure this
-  // platform hit three times with copied partition lists.
-  assert.deepEqual(discovered, [...discovered].sort(), "discovery is ordered so a diff is readable");
+  // Built on a synthetic tree, not the real platform one. Asserting that `TCRN-AOS` is
+  // discovered would make this suite fail wherever the siblings are absent — including
+  // `pnpm preflight`, whose isolated clone is the one world that proves this repository
+  // stands up without them. A test that needs a sibling present to pass is itself the
+  // dependency this gate exists to forbid (TCRN-CROSS-INC-218).
+  const root = mkdtempSync(join(tmpdir(), "tcrn-siblings-"));
+  try {
+    for (const name of ["Zeta-Product", "Alpha-Product", "docs", "var", "tmp", ".hidden", "self-repo"]) {
+      mkdirSync(join(root, name));
+    }
+    writeFileSync(join(root, "loose-file.md"), "not a project\n");
+    const discovered = siblingProjects(root, "self-repo");
+    assert.deepEqual(discovered, ["Alpha-Product", "Zeta-Product"], "projects only, sorted so a diff is readable");
+    assert.ok(!discovered.includes("self-repo"), "this repository is not its own sibling");
+    assert.ok(!discovered.includes("docs"), "the shared docs directory is not a project");
+    assert.ok(!discovered.includes(".hidden"), "dot directories are not projects");
+    assert.ok(!discovered.includes("loose-file.md"), "a file is not a project");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("self is read off the checkout, not written down", () => {
+  // The constant `"tcrn-workflow"` was only ever this checkout's directory name. Under
+  // preflight the clone is called `checkout`, and the repository then discovered itself.
+  const root = mkdtempSync(join(tmpdir(), "tcrn-siblings-"));
+  try {
+    mkdirSync(join(root, basename(REPO_ROOT)));
+    mkdirSync(join(root, "Some-Product"));
+    assert.deepEqual(siblingProjects(root), ["Some-Product"], "the default self excludes this checkout by its real name");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  assert.ok(!siblingProjects().includes(basename(REPO_ROOT)), "and it holds against the real parent too");
 });
 
 test("REDS on a spawn of a sibling script", () => {
