@@ -1700,6 +1700,15 @@ async function verifySource() {
   return success("SOURCE_ALLOWLIST_VERIFIED", { files: records.length, exactEntries: policy.allowedFiles.length });
 }
 
+async function verifyNoSiblingDependency() {
+  // TCRN-CROSS-INC-215. The dependency-direction rule was prose and a hand-run grep;
+  // INC-214 cleared five reaching sites that way and nothing stopped a sixth.
+  const result = JSON.parse(run(process.execPath, [resolve(repositoryRoot, "scripts/no-sibling-dependency-proof.mjs")]));
+  assertion(result.ok === true, "SIBLING_DEPENDENCY_PRESENT",
+    result.findings.map((finding) => `${finding.file}:${finding.line} → ${finding.sibling}`).join(","));
+  return success("NO_SIBLING_DEPENDENCY", { siblings: result.siblings, scannedRoots: result.scannedRoots });
+}
+
 async function verifyLifecycle() {
   const manifests = (await walkFiles()).filter((path) => path.endsWith("package.json"));
   const forbidden = new Set(["preinstall", "install", "postinstall", "prepare", "prepublish", "prepublishOnly"]);
@@ -2413,6 +2422,7 @@ async function verifyP1() {
     "licenses",
     "vulnerabilities",
     "source",
+    "no-sibling-dependency",
     "lifecycle",
     "offline",
     "governance",
@@ -2535,6 +2545,7 @@ const handlers = {
   runtime: verifyRuntime,
   sbom,
   source: verifySource,
+  "no-sibling-dependency": verifyNoSiblingDependency,
   test: () => runTests(),
   "test-trust": () => runTests({ trustOnly: true }),
   typecheck,
