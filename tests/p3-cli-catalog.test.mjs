@@ -213,7 +213,7 @@ test("INC-016: no catalog entry is both a governed write and authority-bearing o
   }
   // The negative case: mcp.ts tests `mutates` FIRST, so a both-flags entry would be
   // satisfied by a writeCommands grant alone -- a write grant carrying
-  // authority-bearing output, which operator-authority-mcp-v1 forbids outright.
+  // authority-bearing output, which operator-authority-v1 forbids outright.
   const both = { name: "adapter-activation-record", availability: "cli", mutates: true, authorityBearing: true, flags: [] };
   assert.throws(
     () => assertCatalogCategoriesExclusive([both]),

@@ -10,7 +10,6 @@ import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
 
 import { COMMAND_CATALOG, runCli } from "../dist/build/packages/cli/src/index.js";
-import { WorkflowMcpDispatcher, workflowMcpTools } from "../dist/build/packages/cli/src/mcp.js";
 import {
   SnapshotError,
   canonicalRelocationAuthority,
@@ -1243,17 +1242,6 @@ test("WSR-1 T23: inspect reports the roots this hop does not move", async (t) =>
   assert.equal(inspect.state, "vacated");
 });
 
-test("WSR-1 T24: the three mutating relocation verbs are absent from the MCP surface", async () => {
-  const tools = workflowMcpTools().map((tool) => tool.name);
-  for (const name of ["relocation_vacate", "relocation_adopt", "relocation_abort"]) {
-    assert.ok(!tools.includes(`tcrn_workflow_${name}`), `${name} must not be MCP-exposed: an MCP grant is a standing command list and cannot carry a per-invocation authority`);
-  }
-  // Both sides differ: the read-only verb IS exposed, and so is a verb whose
-  // authority is optional rather than required.
-  assert.ok(tools.includes("tcrn_workflow_relocation_inspect"));
-  assert.ok(tools.includes("tcrn_workflow_gate_transition"));
-});
-
 test("WSR-1 T25: a workspace that never relocates has byte-identical metadata", async (t) => {
   const fixture = await relocationFixture();
   t.after(() => fixture.close());
@@ -1821,31 +1809,6 @@ test("WSR-1 T36: adopt binds the supplied manifest to the one the vacate recorde
   // Both sides differ: restore the byte and the recorded manifest adopts.
   await writeFile(victim, `${tamperedBytes.slice(0, -2)}\n}`.slice(0, 0) + await readFile(join(fixture.workspace, ".tcrn-workflow", "views", "index.json"), "utf8"));
   assert.equal((await adopt(fixture, authority, manifest, relocationId)).ok, true);
-});
-
-test("WSR-1 T37: the MCP dispatcher refuses a per-invocation-authority verb, not merely the tools/list surface", async () => {
-  // T24 asserted only on workflowMcpTools(). commandForTool() searches the FULL
-  // catalog, so the list-side filter is NOT a backstop for the call side: with the
-  // dispatcher clause deleted, a standing operator grant naming relocation-vacate
-  // executes a workspace takeover. That clause had no test and no guard.
-  const dispatcher = new WorkflowMcpDispatcher({ clock: () => "2026-07-11T00:00:00Z" });
-  await dispatcher.dispatch({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
-  let id = 1;
-  const call = async (name, args = {}) => {
-    id += 1;
-    const response = await dispatcher.dispatch({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } });
-    return response.result.structuredContent.reasonCode;
-  };
-  for (const verb of ["relocation_vacate", "relocation_adopt", "relocation_abort"]) {
-    assert.equal(await call(`tcrn_workflow_${verb}`), "MCP_TOOL_UNKNOWN", `${verb} must not be reachable through tools/call`);
-  }
-  // Both sides differ, and this is the half that matters: an ordinary mutating verb
-  // reaches the authority layer instead, so MCP_TOOL_UNKNOWN above is the exclusion
-  // firing rather than the dispatcher refusing everything it is handed.
-  assert.equal(await call("tcrn_workflow_project_create", {
-    workspace: "/nonexistent-workspace", "expected-version": 0, at: "2026-07-11T00:00:00Z",
-    "external-key": "PROJ-MCP", name: "MCP",
-  }), "OPERATOR_AUTHORITY_REQUIRED");
 });
 
 test("WSR-1 T38: the relocation authority parser has a negative matrix like every other consumer of the shared reader", async (t) => {

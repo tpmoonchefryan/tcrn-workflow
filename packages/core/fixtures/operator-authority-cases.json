@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "tcrn.operator-authority-mcp-cases.v1",
+  "schemaVersion": "tcrn.operator-authority-cases.v1",
   "historicalIoBlockedVerbs": [
     "adapter-generate",
     "adapter-rollback-plan",
@@ -42,16 +42,16 @@
   ],
   "authorityPositiveCases": 4,
   "authorityHostileCases": 10,
-  "mcpPositiveCases": 8,
-  "mcpHostileCases": 5,
   "authoritySource": "explicit-absolute-pins-path-plus-out-of-band-sha256",
   "ambientAuthoritySources": [],
   "antiRollbackBoundary": "caller-must-retain-newest-pins-digest",
-  "mcpTransport": "stdio-json-rpc-newline-delimited",
-  "mcpMutationPolicy": "exact-command-grant-plus-canonical-cli-semantics",
-  "mcpAuthorityOutputPolicy": "exact-separate-authority-output-grant-plus-pinned-observation",
   "authorityOutputCommands": [
     "adapter-activation-record"
   ],
-  "network": false
+  "network": false,
+  "retiredSurface": {
+    "surface": "mcp",
+    "reason": "the MCP transport was retired (TCRN-CROSS-STORY-287); its case counts described a surface that no longer exists",
+    "recordedOn": "2026-08-17"
+  }
 }

@@ -97,16 +97,12 @@
       ]
     },
     "tests/act13-authority-output.test.mjs": {
-      "testCount": 7,
-      "assertionCount": 30,
+      "testCount": 3,
+      "assertionCount": 12,
       "testNames": [
-        "ACT13: adapter-activation-record is the only authority-bearing catalog output",
         "INC-012: authority-shaped output from a verb that does not declare it fails closed",
         "INC-012: every dispatched write passes the guarded output boundary",
-        "INC-012: the guarded vocabulary covers every host-state field core declares",
-        "ACT13: authority output requires an exact grant and both pinned evidence files",
-        "ACT13: self-described, tampered, forged, cloned, and mismatched observations cannot mint activation",
-        "INC-017: a pinned observation cannot be replayed past the window that admitted it"
+        "INC-012: the guarded vocabulary covers every host-state field core declares"
       ]
     },
     "tests/act2-claude-activation.test.mjs": {
@@ -284,8 +280,8 @@
       ]
     },
     "tests/backup-snapshot.test.mjs": {
-      "testCount": 60,
-      "assertionCount": 286,
+      "testCount": 58,
+      "assertionCount": 281,
       "testNames": [
         "WSF-2 case 1: snapshot-manifest is byte-identical across two runs on an unchanged workspace",
         "WSF-2 case 2: snapshot-manifest fails WORKSPACE_LOCKED against a lease-held workspace",
@@ -323,7 +319,6 @@
         "WSR-1 T21: the target MEASURES the chain rather than quoting the ledger",
         "WSR-1 T22: segmentEventLimit is untouchable and a hand-changed limit corrupts the very next read",
         "WSR-1 T23: inspect reports the roots this hop does not move",
-        "WSR-1 T24: the three mutating relocation verbs are absent from the MCP surface",
         "WSR-1 T25: a workspace that never relocates has byte-identical metadata",
         "WSR-1 T-FORK: two truths are not prevented, they are made legible on both sides",
         "WSR-1 T14e: a permit scoped to a different destination does not admit this hop",
@@ -342,7 +337,6 @@
         "WSR-1 T34: a copy of an ADOPTED tree at a third address is a foreign address everywhere",
         "WSR-1 T35: a ledger entry must name itself, and a completion must restate its hop",
         "WSR-1 T36: adopt binds the supplied manifest to the one the vacate recorded",
-        "WSR-1 T37: the MCP dispatcher refuses a per-invocation-authority verb, not merely the tools/list surface",
         "WSR-1 T38: the relocation authority parser has a negative matrix like every other consumer of the shared reader",
         "WSR-1 T39: vacate",
         "WSR-1 T40: the ledger cap refuses a vacate while the source is still alive",
@@ -591,6 +585,23 @@
         "text behavior and stderr fail-closed semantics remain unchanged"
       ]
     },
+    "tests/no-sibling-dependency.test.mjs": {
+      "testCount": 11,
+      "testNames": [
+        "the real repository carries no reaching line",
+        "siblings are discovered, not typed",
+        "REDS on a spawn of a sibling script",
+        "REDS on a filesystem read of a sibling file",
+        "REDS on an existsSync probe — asking whether a sibling is there is still reaching in",
+        "REDS on a dynamic import of a sibling module",
+        "GREENS on a provenance citation: a string compared, never a file opened",
+        "GREENS on a classified command sample: the observer reads these, it does not run them",
+        "GREENS on a generic tool aimed at a directory",
+        "GREENS on a comment that explains the rule",
+        "a reaching line names its file, line, sibling and operation"
+      ],
+      "assertionCount": 21
+    },
     "tests/offline-boundary.test.mjs": {
       "testCount": 6,
       "assertionCount": 11,
@@ -603,18 +614,15 @@
         "ESM named imports resolve to the patched functions"
       ]
     },
-    "tests/operator-authority-mcp.test.mjs": {
-      "testCount": 9,
-      "assertionCount": 42,
+    "tests/operator-authority.test.mjs": {
+      "testCount": 6,
+      "assertionCount": 22,
       "testNames": [
         "historical twelve are reconciled to the seven remaining IO-only gaps",
         "pinned authority admits, rotates and reports source identity",
         "operator authority rejects missing pins, changed digest, rollback, revocation, expiry, binding, unknown fields and host forgery",
         "shipped operator wrapper supplies a request-bound Codex host and rejects prompt, environment and ambiguous authority",
         "pinned operator authority activates Codex without a duplicate receipt-digest authority source",
-        "MCP derives structured read-only tools from the catalog and preserves JSON values",
-        "MCP writes require an exact grant and preserve CAS, time, actor and reason codes",
-        "MCP rejects unknown fields, malformed typed arguments, calls before initialize and unterminated stdio frames",
         "fixture counts and boundaries remain exact"
       ]
     },

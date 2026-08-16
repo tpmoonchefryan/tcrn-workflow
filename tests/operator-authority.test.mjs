@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+// TCRN-CROSS-STORY-287: the MCP transport is retired; this file keeps the coverage of
+// packages/core/src/operator-authority.ts, which the CLI and the codex activation path
+// both depend on. The dispatcher-shaped cases went with the surface they described.
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -20,11 +23,6 @@ import {
   runOperatorCli,
 } from "../dist/build/packages/cli/src/index.js";
 import {
-  WorkflowMcpDispatcher,
-  runWorkflowMcpStdio,
-  workflowMcpTools,
-} from "../dist/build/packages/cli/src/mcp.js";
-import {
   CODEX_ADAPTER_ACTIVATION_HOST_VERSION,
   CODEX_ADAPTER_HOST_VERSION,
   CODEX_ADAPTER_REQUEST_VERSION,
@@ -43,7 +41,7 @@ import {
 
 const cases = JSON.parse(await readFile(
   new URL(
-    "../packages/core/fixtures/operator-authority-mcp-cases.json",
+    "../packages/core/fixtures/operator-authority-cases.json",
     import.meta.url,
   ),
   "utf8",
@@ -648,236 +646,15 @@ test("pinned operator authority activates Codex without a duplicate receipt-dige
   }
 });
 
-test("MCP derives structured read-only tools from the catalog and preserves JSON values", async () => {
-  const workspace = await workspaceFixture();
-  try {
-    const dispatcher = new WorkflowMcpDispatcher({ clock: () => NOW });
-    const initialized = await dispatcher.dispatch(initializeRequest());
-    assert.equal(initialized.result.protocolVersion, "2025-06-18");
-    const listed = await dispatcher.dispatch({
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/list",
-      params: {},
-    });
-    // WSR-1: two exclusions now, not one. `fixture-only` was always excluded;
-    // a verb that REQUIRES a per-invocation authority file plus its digest is
-    // excluded too, because an MCP grant is a standing command list and cannot
-    // carry one. The predicate is restated here from the catalog rather than
-    // hard-coding a count, so adding another such verb keeps this honest.
-    const mcpExpressible = COMMAND_CATALOG.filter((entry) =>
-      entry.availability !== "fixture-only" &&
-      !entry.flags.some((flag) => flag.required && flag.name.endsWith("-authority-digest")));
-    assert.equal(listed.result.tools.length, mcpExpressible.length);
-    assert.ok(
-      mcpExpressible.length < COMMAND_CATALOG.filter((entry) => entry.availability !== "fixture-only").length,
-      "the per-invocation-authority exclusion must actually exclude something, or it is not a filter",
-    );
-    assert.ok(
-      workflowMcpTools().some(
-        (tool) => tool.name === "tcrn_workflow_status",
-      ),
-    );
-    assert.ok(
-      !workflowMcpTools().some(
-        (tool) => tool.name === "tcrn_workflow_artifact_archive_apply",
-      ),
-    );
-    const read = await dispatcher.dispatch({
-      jsonrpc: "2.0",
-      id: 3,
-      method: "tools/call",
-      params: {
-        name: "tcrn_workflow_status",
-        arguments: { workspace: workspace.workspace },
-      },
-    });
-    assert.equal(read.result.isError, false);
-    assert.equal(
-      read.result.structuredContent.result.reasonCode,
-      "WORKSPACE_COMMAND_COMPLETED",
-    );
-  } finally {
-    await workspace.close();
-  }
-});
-
-test("MCP writes require an exact grant and preserve CAS, time, actor and reason codes", async () => {
-  const workspace = await workspaceFixture();
-  const denied = await authorityFixture();
-  const granted = await authorityFixture({
-    writeCommands: ["attestation-enable", "project-create"],
-  });
-  try {
-    const input = {
-      workspace: workspace.workspace,
-      "expected-version": 0,
-      at: NOW,
-      "external-key": "PROJECT-MCP",
-      name: "MCP Project",
-      actor: "agent:mcp-test",
-    };
-    const unpinned = new WorkflowMcpDispatcher({ clock: () => NOW });
-    await unpinned.dispatch(initializeRequest());
-    const missing = await unpinned.dispatch({
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/call",
-      params: {
-        name: "tcrn_workflow_project_create",
-        arguments: input,
-      },
-    });
-    assert.equal(
-      missing.result.structuredContent.reasonCode,
-      "OPERATOR_AUTHORITY_REQUIRED",
-    );
-
-    const notGranted = new WorkflowMcpDispatcher({
-      authorityPinsPath: denied.pinsPath,
-      authorityPinsDigest: denied.pinsDigest,
-      clock: () => NOW,
-    });
-    await notGranted.dispatch(initializeRequest());
-    const refused = await notGranted.dispatch({
-      jsonrpc: "2.0",
-      id: 3,
-      method: "tools/call",
-      params: {
-        name: "tcrn_workflow_project_create",
-        arguments: input,
-      },
-    });
-    assert.equal(
-      refused.result.structuredContent.reasonCode,
-      "OPERATOR_AUTHORITY_COMMAND_NOT_GRANTED",
-    );
-
-    const allowed = new WorkflowMcpDispatcher({
-      authorityPinsPath: granted.pinsPath,
-      authorityPinsDigest: granted.pinsDigest,
-      clock: () => NOW,
-    });
-    await allowed.dispatch(initializeRequest());
-    const enabled = await allowed.dispatch({
-      jsonrpc: "2.0",
-      id: 4,
-      method: "tools/call",
-      params: {
-        name: "tcrn_workflow_attestation_enable",
-        arguments: {
-          workspace: workspace.workspace,
-          "expected-version": 0,
-          at: NOW,
-          actor: "agent:mcp-admin",
-        },
-      },
-    });
-    assert.equal(enabled.result.isError, false);
-    const created = await allowed.dispatch({
-      jsonrpc: "2.0",
-      id: 5,
-      method: "tools/call",
-      params: {
-        name: "tcrn_workflow_project_create",
-        arguments: { ...input, "expected-version": 1 },
-      },
-    });
-    assert.equal(created.result.isError, false);
-    assert.equal(
-      created.result.structuredContent.result.reasonCode,
-      "WORKSPACE_COMMAND_COMPLETED",
-    );
-    const exported = JSON.parse(await exportWorkspace(workspace.workspace));
-    assert.equal(exported.events[1].occurredAt, NOW);
-    assert.equal(exported.events[1].payload.actor, "agent:mcp-test");
-    const stale = await allowed.dispatch({
-      jsonrpc: "2.0",
-      id: 6,
-      method: "tools/call",
-      params: {
-        name: "tcrn_workflow_project_create",
-        arguments: {
-          ...input,
-          "external-key": "PROJECT-MCP-STALE",
-        },
-      },
-    });
-    assert.equal(stale.result.isError, true);
-    assert.equal(
-      stale.result.structuredContent.reasonCode,
-      "WORKSPACE_CAS_MISMATCH",
-    );
-  } finally {
-    await Promise.all([
-      workspace.close(),
-      denied.close(),
-      granted.close(),
-    ]);
-  }
-});
-
-test("MCP rejects unknown fields, malformed typed arguments, calls before initialize and unterminated stdio frames", async () => {
-  const dispatcher = new WorkflowMcpDispatcher({ clock: () => NOW });
-  const early = await dispatcher.dispatch({
-    jsonrpc: "2.0",
-    id: 1,
-    method: "tools/list",
-    params: {},
-  });
-  assert.equal(early.error.code, -32002);
-  await dispatcher.dispatch(initializeRequest());
-  const unknown = await dispatcher.dispatch({
-    jsonrpc: "2.0",
-    id: 2,
-    method: "tools/call",
-    params: {
-      name: "tcrn_workflow_status",
-      arguments: { workspace: "/tmp", promptAuthority: true },
-    },
-  });
-  assert.equal(
-    unknown.result.structuredContent.reasonCode,
-    "MCP_ARGUMENT_UNKNOWN",
-  );
-  const malformed = await dispatcher.dispatch({
-    jsonrpc: "2.0",
-    id: 3,
-    method: "tools/call",
-    params: {
-      name: "tcrn_workflow_work_list",
-      arguments: { workspace: "/tmp", limit: "ten" },
-    },
-  });
-  assert.equal(
-    malformed.result.structuredContent.reasonCode,
-    "MCP_ARGUMENT_INVALID",
-  );
-
-  let output = "";
-  const sink = new Writable({
-    write(chunk, _encoding, callback) {
-      output += chunk.toString("utf8");
-      callback();
-    },
-  });
-  await runWorkflowMcpStdio(
-    Readable.from([JSON.stringify(initializeRequest())]),
-    sink,
-    { clock: () => NOW },
-  );
-  assert.equal(JSON.parse(output).error.code, -32700);
-});
-
 test("fixture counts and boundaries remain exact", async () => {
   assert.equal(cases.authorityPositiveCases, 4);
   assert.equal(cases.authorityHostileCases, 10);
-  assert.equal(cases.mcpPositiveCases, 8);
-  assert.equal(cases.mcpHostileCases, 5);
-  assert.equal(
-    cases.mcpAuthorityOutputPolicy,
-    "exact-separate-authority-output-grant-plus-pinned-observation",
-  );
+  // STORY-287: the mcp case counts and its transport policies described the retired
+  // surface. The fixture records that removal rather than dropping it silently, and the
+  // assertion moves to the record so a future reader sees the surface went on purpose.
+  assert.equal(cases.mcpPositiveCases, undefined, "the retired surface leaves no case count behind");
+  assert.equal(cases.retiredSurface.surface, "mcp");
+  assert.match(cases.retiredSurface.reason, /no longer exists/u);
   assert.deepEqual(cases.authorityOutputCommands, [
     "adapter-activation-record",
   ]);

@@ -193,16 +193,6 @@
       "testName": "INC-002: Claude hook command executes the admitted root from an attacker cwd"
     },
     {
-      "id": "INC-006-authority-output-gate",
-      "rationale": "adapter-activation-record returns host_observed_active, so MCP must require a separately granted authority-output capability before it parses caller arguments. Treating it as a read lets a no-pins caller ask the CLI to mint an authority-bearing receipt.",
-      "file": "packages/cli/src/mcp.ts",
-      "find": "if (entry.mutates || entry.authorityBearing === true) {",
-      "replace": "if (entry.mutates) {",
-      "expectedMatches": 1,
-      "test": "tests/act13-authority-output.test.mjs",
-      "testName": "ACT13: authority output requires an exact grant and both pinned evidence files"
-    },
-    {
       "id": "INC-006-observation-context-brand",
       "rationale": "A host_observed_active receipt can only be constructed from a WeakSet-branded activation-host observation context or a pinned observation file. Removing the brand check would let a caller forge a plain object or structured clone into the authority-bearing output path.",
       "file": "packages/core/src/codex-adapter-activation.ts",
@@ -234,7 +224,7 @@
     },
     {
       "id": "INC-016-catalog-write-and-authority-output-exclusive",
-      "rationale": "mutates and authorityBearing are two different authorization categories and the operator bundle keeps their grant lists disjoint. The MCP dispatcher tests mutates FIRST, so an entry declaring both is satisfied by a writeCommands grant alone -- a write grant carrying authority-bearing output, which operator-authority-mcp-v1 forbids. Nothing else refuses the flag pair: the schema declared authorityBearing with no dependency on mutates.",
+      "rationale": "mutates and authorityBearing are two different authorization categories and the operator bundle keeps their grant lists disjoint. A dispatcher that tested mutates first would satisfy an entry declaring both with a writeCommands grant alone -- a write grant carrying authority-bearing output, which operator-authority-v1 forbids. The MCP surface that did so is retired (STORY-287); the disjointness it depended on is asserted here so the rule outlives it. Nothing else refuses the flag pair: the schema declared authorityBearing with no dependency on mutates.",
       "file": "packages/cli/src/index.ts",
       "find": "if (entry.mutates && entry.authorityBearing === true) {",
       "replace": "if (entry.mutates && entry.authorityBearing === undefined) {",
@@ -491,16 +481,6 @@
       "expectedMatches": 1,
       "test": "tests/backup-snapshot.test.mjs",
       "testName": "WSR-1 T32: adopt restates the relocationId of the hop it is completing"
-    },
-    {
-      "id": "WSR-1-mcp-dispatcher-exclusion",
-      "rationale": "The entire boundary between a standing MCP grant and the three workspace-takeover verbs, and it shipped with no test and no guard. The tools/list filter is not a backstop: commandForTool searches the FULL catalog, so with this clause gone an operator bundle naming relocation-vacate executes a workspace vacate while the verb stays invisible in the listing.",
-      "file": "packages/cli/src/mcp.ts",
-      "find": "if (!entry || entry.availability === \"fixture-only\" || requiresPerInvocationAuthority(entry)) {",
-      "replace": "if (!entry || entry.availability === \"fixture-only\") {",
-      "expectedMatches": 1,
-      "test": "tests/backup-snapshot.test.mjs",
-      "testName": "WSR-1 T37: the MCP dispatcher refuses a per-invocation-authority verb, not merely the tools/list surface"
     },
     {
       "id": "WSR-1-vacate-workspace-root-must-move",

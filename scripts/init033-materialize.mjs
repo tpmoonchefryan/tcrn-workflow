@@ -53,7 +53,6 @@ const platformRoot = await realpath(resolve(suppliedRoot));
 const homeRoot = homedir();
 const archiveRoot = join(platformRoot, ".tcrn-artifacts", "init-033-install-surface");
 const receiptArchiveRoot = join(platformRoot, ".tcrn-artifacts", "install-receipts");
-const workflowMcp = join(homeRoot, ".tcrn-workflow", "tcrn-workflow", "scripts", "tcrn-workflow-mcp.mjs");
 const platformClassificationRoot = join(platformRoot, "TCRN Platform");
 
 function expand(template) {
@@ -302,7 +301,6 @@ async function materializeMcp() {
   // below stay: they launch the code-graph binary against a directory, so no foreign code
   // runs and an absent sibling leaves a dead entry rather than a broken dependency.
   const records = [
-    addMcpServer("tcrn-workflow", "node", [workflowMcp]),
     addMcpServer("codegraph-tms", "pnpm", ["--dir", tms, "exec", "codegraph", "serve", "--mcp", "--no-watch"]),
     addMcpServer("codegraph-ds", "pnpm", ["--dir", tms, "exec", "codegraph", "serve", "--mcp", "--no-watch", "--path", ds]),
     addMcpServer("codegraph-aos", "pnpm", ["--dir", tms, "exec", "codegraph", "serve", "--mcp", "--no-watch", "--path", aos]),

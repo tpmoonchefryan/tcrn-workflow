@@ -998,7 +998,7 @@ export const COMMAND_CATALOG = Object.freeze([
 // (validateOperatorAuthorityBundle refuses a command present in both). Nothing
 // refused the FLAG pair, and the MCP dispatcher tests `mutates` first -- so an entry
 // declaring both would be satisfied by a writeCommands grant alone: a write grant
-// carrying authority-bearing output, which operator-authority-mcp-v1 forbids
+// carrying authority-bearing output, which operator-authority-v1 forbids
 // outright ("A write grant never authorizes it").
 //
 // The exclusion lives at the declaration, not in a consumer. Three sites read the

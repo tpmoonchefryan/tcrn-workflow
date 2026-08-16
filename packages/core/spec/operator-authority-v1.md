@@ -78,47 +78,33 @@ still depended solely on in-memory `CliIo`: `adapter-generate`,
 Per-command digest flags remain available and are rejected when mixed with a
 bundle-supplied authority.
 
-## Host-neutral MCP surface
+## The retired MCP surface
 
-`tcrn-workflow-mcp` is a newline-delimited JSON-RPC stdio server. It implements
-MCP initialize, ping, tools/list and tools/call and derives every tool input schema
-from the canonical command catalog. JSON values arrive as JSON, lists as arrays,
-integers as integers and booleans as booleans; the facade performs no shell
-construction. Fixture-only commands are absent.
+This section used to specify `tcrn-workflow-mcp`, a JSON-RPC stdio server deriving its
+tool schemas from the command catalog. It was retired in `TCRN-CROSS-STORY-287`: no
+consumer remained, the CLI answers every question it answered, and the facade derived
+everything it knew from the catalog, so it can be regenerated from that catalog if a
+consumer ever appears. What it uniquely provided — a surface read-only by construction
+that refuses writes without a standing grant — served callers that must not hold a shell,
+and no such caller exists here.
 
-Read-only tools can operate without an authority bundle when the underlying CLI
-command needs none. A read that needs an existing authority still fails with that
-command family's reason code unless pins supply it. Every mutating MCP tool
-requires the current bundle to grant that exact command in `writeCommands`.
-Authority-bearing output is a separate category: it is not a write, but it can
-produce a receipt that carries authority. `adapter-activation-record` is the only
-such command and requires an exact `authorityOutputCommands` grant before MCP
-parses caller arguments. The category is enforced against emitted bytes, not the
-declaration: every CLI write passes an output-category boundary that refuses
-`CLI_AUTHORITY_OUTPUT_UNDECLARED` when a verb that declares neither `mutates` nor
-`authorityBearing` emits a guarded host-state field or state token (INC-012).
-A write grant never authorizes it. Its MCP descriptor is
-therefore neither read-only nor destructive. The command accepts an activation
-receipt, an optional direct receipt digest, and an observation-file path; old
-inline `approved-definition-digests` and `observation` JSON flags are unknown.
-The canonical CLI reads the installation receipt through its supplied authority
-and reads the observation only through the bundle-pinned file identity, unless a
-programmatic caller supplies the separately branded activation-host observation
-context. No raw object, forged object, structured clone, or zero-grant call can
-mint `host_observed_active`.
+Two things it defined outlive it:
 
-The MCP facade then calls the canonical CLI with the caller's exact
-`expected-version`, `at`, `actor` and other fields. It never derives CAS from
-head, invents time, substitutes an actor, retries a refusal or changes a reason
-code. Core and CLI validation therefore remain the authority on workspace
-mutation.
+- **The authority-bearing output category.** `adapter-activation-record` is the only
+  command in it, and a write grant never authorizes it. Enforcement is against emitted
+  bytes rather than the declaration: every CLI write passes an output-category boundary
+  that refuses `CLI_AUTHORITY_OUTPUT_UNDECLARED` when a verb declaring neither `mutates`
+  nor `authorityBearing` emits a guarded host-state field or state token (INC-012).
+- **How that command reads its inputs.** It accepts an activation receipt, an optional
+  direct receipt digest, and an observation-file path. The CLI reads the installation
+  receipt through its supplied authority and the observation only through the
+  bundle-pinned file identity, unless a programmatic caller supplies the separately
+  branded activation-host observation context. No raw object, forged object, structured
+  clone, or zero-grant call can mint `host_observed_active`.
 
-The server is offline and has no network transport. It is an operator surface,
-not an adapter, orchestrator, controller, identity provider or source-code
-transaction manager.
-
-This mechanism also does not upgrade actor attestation or time. An MCP caller
-must still supply the command's explicit actor and RFC 3339 instant; Workflow
-records the declared actor and the injected local-clock evidence under their
-existing contracts. Neither becomes authenticated identity or externally
-attested wall-clock truth merely because the command arrived through pinned MCP.
+The authority bundle still carries an `mcp` grant object with `writeCommands` and
+`authorityOutputCommands`. `tcrn.operator-authority-bundle.v1` requires that field, and
+removing a required field is a schema break rather than a cleanup — every bundle in
+existence would stop validating. The field and the two predicates that read it therefore
+wait for a bundle schema v2, recorded here so the wait is deliberate rather than
+forgotten.

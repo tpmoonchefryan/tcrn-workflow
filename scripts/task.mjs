@@ -397,10 +397,10 @@ async function runTests({
   p6Only = false,
   p6AdapterOnly = false,
   p6bAdapterOnly = false,
+  authorityOnly = false,
   dependencyOnly = false,
   conferenceOnly = false,
   executionOnly = false,
-  authorityMcpOnly = false,
   assignmentGateOnly = false,
   actorOnly = false,
   extensionStoreOnly = false,
@@ -441,7 +441,7 @@ async function runTests({
     .filter((path) => !dependencyOnly || path === "tests/dependency.test.mjs")
     .filter((path) => !conferenceOnly || path === "tests/conference.test.mjs")
     .filter((path) => !executionOnly || path === "tests/conference-execution.test.mjs")
-    .filter((path) => !authorityMcpOnly || path === "tests/operator-authority-mcp.test.mjs")
+    .filter((path) => !authorityOnly || path === "tests/operator-authority.test.mjs")
     .filter((path) => !assignmentGateOnly || path === "tests/assignment-gate.test.mjs")
     .filter((path) => !actorOnly || path === "tests/actor-attestation.test.mjs")
     .filter((path) => !extensionStoreOnly || path === "tests/workspace-extension-records.test.mjs")
@@ -519,8 +519,8 @@ async function runTests({
                   ? "DEPENDENCY_TESTS_VERIFIED"
                 : conferenceOnly
                   ? "CONFERENCE_TESTS_VERIFIED"
-                : authorityMcpOnly
-                  ? "OPERATOR_AUTHORITY_MCP_TESTS_VERIFIED"
+                : authorityOnly
+                  ? "OPERATOR_AUTHORITY_TESTS_VERIFIED"
                 : assignmentGateOnly
                   ? "ASSIGNMENT_GATE_TESTS_VERIFIED"
                 : actorOnly
@@ -1128,52 +1128,6 @@ async function verifyExecution() {
   });
 }
 
-async function verifyOperatorAuthorityMcp() {
-  const tests = await runTests({ authorityMcpOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/operator-authority-mcp-cases.json");
-  const specPath = resolve(repositoryRoot, "packages/core/spec/operator-authority-mcp-v1.md");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.operator-authority-mcp-cases.v1", "OPERATOR_AUTHORITY_FIXTURE_SCHEMA");
-  assertion(fixture.historicalIoBlockedVerbs.length === 12 &&
-    fixture.digestFlagResolvedBeforeEpic022.length === 5 &&
-    fixture.currentIoBlockedVerbsBeforeEpic022.length === 7,
-  "OPERATOR_AUTHORITY_RETEST_CORPUS");
-  assertion(JSON.stringify(fixture.operatorAuthorityResolvedVerbs) ===
-    JSON.stringify(fixture.currentIoBlockedVerbsBeforeEpic022),
-  "OPERATOR_AUTHORITY_REACHABILITY");
-  assertion(fixture.authorityPositiveCases === 4 &&
-    fixture.authorityHostileCases === 10 &&
-    fixture.mcpPositiveCases === 8 &&
-    fixture.mcpHostileCases === 5,
-  "OPERATOR_AUTHORITY_MCP_CORPUS");
-  assertion(fixture.authoritySource === "explicit-absolute-pins-path-plus-out-of-band-sha256" &&
-    fixture.ambientAuthoritySources.length === 0 &&
-    fixture.antiRollbackBoundary === "caller-must-retain-newest-pins-digest",
-  "OPERATOR_AUTHORITY_NO_AMBIENT_TRUST");
-  assertion(fixture.mcpTransport === "stdio-json-rpc-newline-delimited" &&
-    fixture.mcpMutationPolicy === "exact-command-grant-plus-canonical-cli-semantics" &&
-    fixture.mcpAuthorityOutputPolicy ===
-      "exact-separate-authority-output-grant-plus-pinned-observation" &&
-    JSON.stringify(fixture.authorityOutputCommands) ===
-      JSON.stringify(["adapter-activation-record"]) &&
-    fixture.network === false,
-  "OPERATOR_AUTHORITY_MCP_BOUNDARY");
-  return success("OPERATOR_AUTHORITY_MCP_VERIFIED", {
-    tests: tests.reasonCode,
-    historicalIoBlockedVerbs: fixture.historicalIoBlockedVerbs.length,
-    currentIoBlockedVerbsBeforeEpic022: fixture.currentIoBlockedVerbsBeforeEpic022.length,
-    operatorAuthorityResolvedVerbs: fixture.operatorAuthorityResolvedVerbs.length,
-    authorityCases: fixture.authorityPositiveCases + fixture.authorityHostileCases,
-    mcpCases: fixture.mcpPositiveCases + fixture.mcpHostileCases,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    authorityModuleDigest: (await fileRecord(resolve(repositoryRoot, "packages/core/src/operator-authority.ts"))).sha256,
-    mcpModuleDigest: (await fileRecord(resolve(repositoryRoot, "packages/cli/src/mcp.ts"))).sha256,
-    hostNeutral: true,
-    network: false,
-    ambientAuthoritySources: [],
-  });
-}
 
 async function verifyAssignmentGate() {
   const tests = await runTests({ assignmentGateOnly: true });
@@ -1700,6 +1654,28 @@ async function verifySource() {
   return success("SOURCE_ALLOWLIST_VERIFIED", { files: records.length, exactEntries: policy.allowedFiles.length });
 }
 
+async function verifyOperatorAuthority() {
+  // STORY-287: the MCP transport is retired, so the fixture's mcp case counts went with
+  // the surface they described. What stays is the authority module itself, which the CLI
+  // and the codex activation path both depend on.
+  const tests = await runTests({ authorityOnly: true });
+  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/operator-authority-cases.json");
+  const specPath = resolve(repositoryRoot, "packages/core/spec/operator-authority-v1.md");
+  const fixture = await readJson(fixturePath);
+  assertion(fixture.schemaVersion === "tcrn.operator-authority-cases.v1", "OPERATOR_AUTHORITY_FIXTURE_SCHEMA");
+  assertion(fixture.historicalIoBlockedVerbs.length === 12 &&
+    fixture.digestFlagResolvedBeforeEpic022.length === 5 &&
+    fixture.currentIoBlockedVerbsBeforeEpic022.length === 7,
+  "OPERATOR_AUTHORITY_RETEST_CORPUS");
+  assertion(JSON.stringify(fixture.operatorAuthorityResolvedVerbs) ===
+    JSON.stringify(fixture.currentIoBlockedVerbsBeforeEpic022),
+  "OPERATOR_AUTHORITY_REACHABILITY");
+  assertion(fixture.authorityPositiveCases === 4 && fixture.authorityHostileCases === 10,
+    "OPERATOR_AUTHORITY_CASE_CORPUS");
+  assertion((await readText(specPath)).length > 0, "OPERATOR_AUTHORITY_SPEC_MISSING");
+  return success("OPERATOR_AUTHORITY_VERIFIED", { tests: tests.reasonCode });
+}
+
 async function verifyNoSiblingDependency() {
   // TCRN-CROSS-INC-215. The dependency-direction rule was prose and a hand-run grep;
   // INC-214 cleared five reaching sites that way and nothing stopped a sixth.
@@ -1822,7 +1798,7 @@ const commandContracts = {
   dep: { exit: 0, reasonCode: "DEPENDENCY_VERIFIED" },
   conference: { exit: 0, reasonCode: "CONFERENCE_VERIFIED" },
   "ext-execution": { exit: 0, reasonCode: "EXECUTION_VERIFIED" },
-  "authority-mcp": { exit: 0, reasonCode: "OPERATOR_AUTHORITY_MCP_VERIFIED" },
+  authority: { exit: 0, reasonCode: "OPERATOR_AUTHORITY_VERIFIED" },
   "ext-ag": { exit: 0, reasonCode: "ASSIGNMENT_GATE_VERIFIED" },
   "ext-actor": { exit: 0, reasonCode: "ACTOR_ATTESTATION_VERIFIED" },
   "ext-store": { exit: 0, reasonCode: "EXT_STORE_VERIFIED" },
@@ -2526,7 +2502,6 @@ const handlers = {
   dep: verifyDependency,
   conference: verifyConference,
   "ext-execution": verifyExecution,
-  "authority-mcp": verifyOperatorAuthorityMcp,
   "ext-ag": verifyAssignmentGate,
   "ext-actor": verifyActorAttestation,
   "ext-store": verifyExtStore,
@@ -2545,6 +2520,7 @@ const handlers = {
   runtime: verifyRuntime,
   sbom,
   source: verifySource,
+  authority: verifyOperatorAuthority,
   "no-sibling-dependency": verifyNoSiblingDependency,
   test: () => runTests(),
   "test-trust": () => runTests({ trustOnly: true }),
@@ -2608,7 +2584,7 @@ function evidencePhase(name) {
   if (name === "ext-execution") {
     return "p2";
   }
-  if (name === "authority-mcp") {
+  if (name === "authority") {
     return "p2";
   }
   if (name === "ext-ag") {
