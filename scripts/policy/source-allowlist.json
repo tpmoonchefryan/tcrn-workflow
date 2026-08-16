@@ -407,6 +407,7 @@
     "scripts/policy/rc1-inputs.json",
     "scripts/policy/source-allowlist.json",
     "scripts/policy/ssh-breakglass-allowlist.json",
+    "scripts/policy/ssh-observer-target-roster.json",
     "scripts/policy/story-rule-conservation.json",
     "scripts/policy/test-wiring.json",
     "scripts/policy/vulnerability-policy.json",

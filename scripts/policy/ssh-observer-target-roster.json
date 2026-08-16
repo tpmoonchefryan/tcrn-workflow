@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "tcrn.ssh-observer-target-roster.v1",
+  "purpose": "Independent registration fingerprints for the SSH governance observer. Digests only — no host, runtime root, loopback or facade value crosses into this source, which is the property that let this roster move here from the sibling product project without moving anything private with it (TCRN-CROSS-INC-214).",
+  "targets": [
+    {
+      "id": "cross-project-governance",
+      "surface": "cross-project",
+      "hostSha256": "80e3658fd2db3f350ded070c7ef81257cece7b309143ba85a389147c39a9d989",
+      "runtimeRootSha256": "cc30e08f643adf6f7c2e0ec4ccdeca461fb3d9b647cc36d0b10439c2f2d70c47",
+      "loopbackSha256": "12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0",
+      "facadeEndpointSha256": "33344850e9f8c1000b99185ccd907313a95e23282db8634fbb2241e53dccf222"
+    }
+  ]
+}

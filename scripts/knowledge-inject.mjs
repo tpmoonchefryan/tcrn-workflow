@@ -37,7 +37,59 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-export const READ_FACE_SERVER = resolve(PLATFORM_ROOT, "TCRN-AOS/deploy/aos-local-client/remote-read-mcp.mjs");
+// The chain container sits beside the platform root; a partition's workspace is
+// `<container>/.tcrn-workspace/<partition>/workspace`. Resolved by the same convention
+// `platform-doctor.mjs` walks, so this repository answers from its own layout contract
+// rather than importing another project's roster.
+export function workspaceForPartition(partition, containerRoot = resolve(PLATFORM_ROOT, "..")) {
+  return resolve(containerRoot, ".tcrn-workspace", String(partition), "workspace");
+}
+
+export const ENGINE_CLI = resolve(PLATFORM_ROOT, "tcrn-workflow/scripts/tcrn-workflow.mjs");
+
+/**
+ * One read against this repository's own engine.
+ *
+ * This used to spawn the sibling product project's MCP read face — the engine repository
+ * executing another project's code in order to read its own chains, which is the
+ * dependency direction the platform forbids. That face also forwarded over SSH to a host
+ * the chains left in S199, so the round trip carried a remote-access shape for data
+ * sitting on this disk. The envelope is unchanged ({ ok, reasonCode, result }); callers
+ * already tolerated both `result.records` and `result.result.records`.
+ */
+export function callChainRead(verb, { partition, ...flags }, { timeoutMs = 120_000 } = {}) {
+  return new Promise((resolvePromise) => {
+    const argv = [ENGINE_CLI, verb, "--workspace", workspaceForPartition(partition)];
+    for (const [name, value] of Object.entries(flags)) {
+      if (value === undefined || value === null) continue;
+      argv.push(`--${name}`, String(value));
+    }
+    const child = spawn(process.execPath, argv, { stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    let err = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      resolvePromise({ ok: false, reasonCode: "CHAIN_READ_TIMEOUT", error: "the engine did not answer within the bound" });
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => { out += chunk.toString("utf8"); });
+    child.stderr.on("data", (chunk) => { err += chunk.toString("utf8"); });
+    child.on("close", () => {
+      clearTimeout(timer);
+      const lines = `${out}${err}`.trim().split("\n");
+      let parsed = null;
+      try { parsed = JSON.parse(lines[lines.length - 1] ?? ""); } catch { parsed = null; }
+      if (parsed === null) {
+        resolvePromise({ ok: false, reasonCode: "CHAIN_READ_UNPARSEABLE", error: `${err || out}`.slice(-200) });
+        return;
+      }
+      if (parsed.ok === false) {
+        resolvePromise({ ok: false, reasonCode: parsed.reasonCode ?? "CHAIN_READ_REFUSED", error: parsed.error ?? null, result: parsed });
+        return;
+      }
+      resolvePromise({ ok: true, reasonCode: parsed.reasonCode ?? null, result: parsed });
+    });
+  });
+}
 export const SETTINGS_PATH = resolve(PLATFORM_ROOT, ".claude/settings.json");
 export const DEFAULT_PARTITION = "cross-project";
 export const DEFAULT_ROLE_SCOPE = "implementation";
@@ -99,55 +151,6 @@ export function matchedTriggerKeywords(prompt, triggerKeywords) {
   return list.filter((kw) => text.includes(kw) || text.toLowerCase().includes(kw.toLowerCase()));
 }
 
-/** One JSON-RPC round-trip against the MCP read face server. */
-export function callReadFace(tool, args, { timeoutMs = 120_000 } = {}) {
-  return new Promise((resolvePromise) => {
-    const child = spawn(process.execPath, [READ_FACE_SERVER], { stdio: ["pipe", "pipe", "inherit"] });
-    let buffered = "";
-    const frames = [];
-    const timer = setTimeout(() => { child.kill("SIGTERM"); resolvePromise({ ok: false, reasonCode: "READ_FACE_TIMEOUT", error: "read face did not answer within the bound" }); }, timeoutMs);
-    child.stdout.on("data", (chunk) => {
-      buffered += chunk.toString("utf8");
-      while (buffered.includes("\n")) {
-        const newline = buffered.indexOf("\n");
-        frames.push(buffered.slice(0, newline));
-        buffered = buffered.slice(newline + 1);
-        if (frames.some((f) => f.includes(`"id":${frames.length}`))) { /* frame arriving */ }
-      }
-    });
-    const next = () => new Promise((r) => {
-      const poll = () => {
-        if (frames.length > 0) return r(frames.shift());
-        setTimeout(poll, 20);
-      };
-      poll();
-    });
-    const send = (v) => child.stdin.write(`${JSON.stringify(v)}\n`);
-    (async () => {
-      send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "knowledge-inject", version: "0.1.0" } } });
-      await next();
-      send({ jsonrpc: "2.0", method: "notifications/initialized" });
-      send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: tool, arguments: args } });
-      const frame = await next();
-      clearTimeout(timer);
-      child.kill("SIGTERM");
-      let parsed = null;
-      try { parsed = JSON.parse(frame); } catch { parsed = null; }
-      const result = parsed?.result;
-      if (result === undefined || result.isError === true) {
-        const sc = result?.structuredContent ?? null;
-        resolvePromise({ ok: false, reasonCode: sc?.reasonCode ?? "READ_FACE_REFUSED", error: sc?.error ?? "no structured result", result: sc });
-        return;
-      }
-      resolvePromise({ ok: true, reasonCode: "READ_FACE_OK", result: result.structuredContent ?? result });
-    })().catch((error) => {
-      clearTimeout(timer);
-      child.kill("SIGTERM");
-      resolvePromise({ ok: false, reasonCode: "READ_FACE_INTERNAL", error: String(error?.message ?? error) });
-    });
-  });
-}
-
 /** Byte-level budget cut, pure: `{ text, truncated }`. A CJK character can exceed the cut. */
 export function truncateToBudget(text, budget) {
   const bytes = Buffer.byteLength(text, "utf8");
@@ -174,7 +177,7 @@ export async function runInjection({ prompt, partition, roleScope, budget, trigg
   const seen = new Set();
   const candidates = [];
   for (const token of tokens) {
-    const call = await callReadFace("tcrn_remote_read_knowledge_candidates", {
+    const call = await callChainRead("knowledge-candidates", {
       partition,
       "role-scope": roleScope,
       search: token,

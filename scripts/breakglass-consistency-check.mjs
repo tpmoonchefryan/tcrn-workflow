@@ -4,13 +4,15 @@
 //
 //   node tcrn-workflow/scripts/breakglass-consistency-check.mjs
 //
-// The SSH break-glass allowlist is authoritative in TCRN-AOS and mirrored into this
-// repository (scripts/policy/ssh-breakglass-allowlist.json) so a lone clone of
-// tcrn-workflow — including its own CI — can run the observer against a real
-// allowlist. Two copies mean a drift risk; this gate diffs the digests and reds on
-// any difference, so "one list, two consumers" stays a single decision. A missing
-// authoritative file (outside the platform working tree) is reported, not silently
-// skipped.
+// The SSH break-glass allowlist in scripts/policy/ssh-breakglass-allowlist.json is this
+// repository's own, and this gate judges it on its own terms: present, parseable, and
+// carrying the shape the observer reads.
+//
+// It used to diff that file against a copy in a sibling product project, which was
+// declared the authority — so the engine repository read another project in order to
+// validate itself, the dependency direction the platform forbids (TCRN-CROSS-INC-214).
+// A cross-repository consistency check is still a reasonable thing to want; it belongs
+// on the other side, where reading this repository is the permitted direction.
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -19,7 +21,6 @@ import { fileURLToPath } from "node:url";
 
 export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export const WF_MIRROR = resolve(PLATFORM_ROOT, "tcrn-workflow/scripts/policy/ssh-breakglass-allowlist.json");
-export const AOS_AUTHORITY = resolve(PLATFORM_ROOT, "TCRN-AOS/deploy/aos-local-client/ssh-breakglass-allowlist.json");
 
 export function sha256(path) {
   return createHash("sha256").update(readFileSync(path, "utf8")).digest("hex");
@@ -37,33 +38,22 @@ export function checkConsistency() {
     };
   }
   const wfSha = sha256(WF_MIRROR);
-  // World-graded (INC-055): in the PLATFORM working tree the AOS file is the
-  // authoritative copy and a drift is red. In an ISOLATED clone of this repository
-  // (its own CI) there is no sibling checkout — the mirror itself being present and
-  // readable is the satisfiable criterion, and self-test exercises it. A missing
-  // authority is reported as the isolated-world outcome, never as a silent pass and
-  // never as a hard red in a world where it is structurally absent.
-  if (!existsSync(AOS_AUTHORITY)) {
-    return {
-      ok: true,
-      reasonCode: "WF_MIRROR_SELF_CONSISTENT",
-      problems: [],
-      wfSha,
-      aosSha: null,
-      world: "isolated"
-    };
+  let parsed = null;
+  try {
+    parsed = JSON.parse(readFileSync(WF_MIRROR, "utf8"));
+  } catch (error) {
+    problems.push(`allowlist is not parseable JSON: ${String(error?.message ?? error)}`);
   }
-  const aosSha = sha256(AOS_AUTHORITY);
-  if (wfSha !== aosSha) {
-    problems.push(`mirror drifted from authority: WF ${wfSha} ≠ AOS ${aosSha}`);
+  if (parsed !== null) {
+    if (parsed.schemaVersion !== "tcrn.ssh-breakglass-allowlist.v1") problems.push("allowlist schemaVersion is not the shape the observer reads");
+    if (!Array.isArray(parsed.entries)) problems.push("allowlist has no entries array");
+    if (!Array.isArray(parsed.classes)) problems.push("allowlist has no classes array");
   }
   return {
     ok: problems.length === 0,
-    reasonCode: problems.length === 0 ? "BREAKGLASS_ALLOWLISTS_CONSISTENT" : "BREAKGLASS_ALLOWLISTS_DRIFTED",
+    reasonCode: problems.length === 0 ? "BREAKGLASS_ALLOWLIST_WELL_FORMED" : "BREAKGLASS_ALLOWLIST_MALFORMED",
     problems,
-    wfSha,
-    aosSha,
-    world: "platform"
+    wfSha
   };
 }
 

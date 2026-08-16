@@ -295,10 +295,14 @@ async function materializeMcp() {
   const tms = join(platformClassificationRoot, "TCRN-TMS");
   const ds = join(platformClassificationRoot, "TCRN-Design-System");
   const aos = join(platformClassificationRoot, "TCRN-AOS");
+  // TCRN-CROSS-INC-214. This materializer no longer wires the sibling product project's
+  // own MCP faces. Writing config that launches another project's servers is this
+  // repository reaching into that project, which is the dependency direction the platform
+  // forbids — and a project's own faces are its own to declare. The code-graph entries
+  // below stay: they launch the code-graph binary against a directory, so no foreign code
+  // runs and an absent sibling leaves a dead entry rather than a broken dependency.
   const records = [
     addMcpServer("tcrn-workflow", "node", [workflowMcp]),
-    addMcpServer("tcrn-workflow-aos-read", "node", [join(aos, "deploy/aos-local-client/remote-read-mcp.mjs")]),
-    addMcpServer("aos-mcp-write", "node", [join(aos, "deploy/aos-mcp-write/server.mjs")]),
     addMcpServer("codegraph-tms", "pnpm", ["--dir", tms, "exec", "codegraph", "serve", "--mcp", "--no-watch"]),
     addMcpServer("codegraph-ds", "pnpm", ["--dir", tms, "exec", "codegraph", "serve", "--mcp", "--no-watch", "--path", ds]),
     addMcpServer("codegraph-aos", "pnpm", ["--dir", tms, "exec", "codegraph", "serve", "--mcp", "--no-watch", "--path", aos]),

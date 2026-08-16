@@ -17,14 +17,21 @@
 //
 // Re-measurement cadence (see docs/reports/init-018/S15/remeasure-policy.md):
 // after any 公约大改 (a platform-wide convention rewrite) or model-generation change.
-import { readFileSync, statSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PLATFORM_ROOT = resolve(REPO_ROOT, "..");
-const REPOS = ["TCRN-TMS", "TCRN-Design-System", "TCRN-AOS", "tcrn-workflow", "tcrn-workflow-helper"];
+// Derived from what is actually beside this repository rather than a typed list. A
+// hardcoded roster made this benchmark name a sibling product project, and a benchmark
+// that names one is a benchmark that fails when it is absent (TCRN-CROSS-INC-214).
+const REPOS = readdirSync(PLATFORM_ROOT, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+  .filter((entry) => existsSync(join(PLATFORM_ROOT, entry.name, "package.json")))
+  .map((entry) => entry.name)
+  .sort();
 
 function argument(name) {
   const index = process.argv.indexOf(`--${name}`);

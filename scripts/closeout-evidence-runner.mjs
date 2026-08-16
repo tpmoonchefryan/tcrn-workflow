@@ -27,7 +27,11 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-export const DEFAULT_BATCH = resolve(PLATFORM_ROOT, "TCRN-AOS/docs/reports/init-019/QA/closeout-batch.json");
+// No default batch. This used to point into a sibling product project's QA report, so
+// running the closeout runner with no argument read that project's evidence — the
+// dependency direction the platform forbids. The batch is now always named by the
+// caller, which also makes the run say which evidence it judged.
+export const DEFAULT_BATCH = null;
 
 /** One evidence command: run it, capture its exit code, judge against the expected sign. */
 export function runEvidence(entry, platformRoot = PLATFORM_ROOT) {
@@ -78,10 +82,15 @@ if (import.meta.url === new URL(`file://${process.argv[1]}`).href || process.arg
   const batchPath = process.argv.includes("--batch")
     ? resolve(process.argv[process.argv.indexOf("--batch") + 1])
     : DEFAULT_BATCH;
-  const result = runBatch(batchPath);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-  for (const row of result.rows ?? []) {
-    process.stderr.write(`[${row.ok ? "ok" : "RED"}] ${row.incident}: ${row.cmd} → exit ${row.exit} (expected ${row.expected})\n`);
+  if (batchPath === null) {
+    process.stdout.write(`${JSON.stringify({ ok: false, reasonCode: "CLOSEOUT_BATCH_REQUIRED", error: "name the batch with --batch <path>" }, null, 2)}\n`);
+    process.exitCode = 1;
+  } else {
+    const result = runBatch(batchPath);
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    for (const row of result.rows ?? []) {
+      process.stderr.write(`[${row.ok ? "ok" : "RED"}] ${row.incident}: ${row.cmd} → exit ${row.exit} (expected ${row.expected})\n`);
+    }
+    if (!result.ok) process.exitCode = 1;
   }
-  if (!result.ok) process.exitCode = 1;
 }

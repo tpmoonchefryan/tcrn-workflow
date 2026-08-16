@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "aos.ssh-breakglass-allowlist.v1",
-  "why": "SSH 直驱引擎 CLI 已降格为 break-glass(TCRN-CROSS-INIT-019 STORY-158, D1/D9)。门面(facade-read-service / facade-write-service,STORY-181/182)已是本平台唯一的读写门面;SSH 直驱只收两类残余适用场景,每条带日期与理由,并在 STORY-186 收缩了第一类的触发条件(MCP 面不可达 → 门面不可达)。本文件被两处共同消费:doc-topology-proof.mjs(157.3 判「文档里出现 SSH 直驱引擎命令且不在白名单」即红)与 tcrn-workflow/scripts/ssh-write-observer.mjs(164.2 判白名单内 PASS、白名单外 HIT)。一份名单、两处消费,防止漂移。两处都把 pattern 用在**完整命令行**上(INC-051:doc-topology 不再截断片段),故同一条目两处判决一致。",
+  "schemaVersion": "tcrn.ssh-breakglass-allowlist.v1",
+  "why": "SSH 直驱引擎 CLI 已降格为 break-glass(TCRN-CROSS-INIT-019 STORY-158, D1/D9)。门面(facade-read-service / facade-write-service,STORY-181/182)已是本平台唯一的读写门面;SSH 直驱只收两类残余适用场景,每条带日期与理由,并在 STORY-186 收缩了第一类的触发条件(MCP 面不可达 → 门面不可达)。本文件被两处共同消费:doc-topology-proof.mjs(157.3 判「文档里出现 SSH 直驱引擎命令且不在白名单」即红)与 tcrn-workflow/scripts/ssh-write-observer.mjs(164.2 判白名单内 PASS、白名单外 HIT)。一份名单、两处消费,防止漂移。两处都把 pattern 用在**完整命令行**上(INC-051:doc-topology 不再截断片段),故同一条目两处判决一致。 命名空间自 aos. 改为 tcrn.(TCRN-CROSS-INC-214):这份名册现由本仓自有并自判，而对侧读的是它自己那一份，故改名不波及任何读者;观察器从不读该串。",
   "classes": [
     {
       "id": "mcp-unreachable-fallback",

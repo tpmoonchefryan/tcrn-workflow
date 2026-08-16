@@ -89,9 +89,14 @@ const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 // INC-109: the observer's predicate may keep a value-free placeholder for pure
 // parser tests, but an installed hook may not operate on that placeholder. The
-// target roster is a separately maintained registration surface (in AOS), and
-// only digests cross into this public observer source.
-const DEFAULT_TARGET_ROSTER = resolve(PLATFORM_ROOT, "TCRN-AOS/deploy/aos-local-client/ssh-observer-target-roster.json");
+// target roster is a separately maintained registration surface, and only digests
+// cross into this public observer source. That property is what let the roster move
+// into this repository: it carries no host, runtime root, loopback or facade value,
+// so owning it here removes a read into a sibling project without publishing anything.
+// This repository's own roster. It used to default into a sibling product project,
+// so the observer could not run from a lone clone and the engine repository read
+// another project to configure itself. The env override is unchanged.
+const DEFAULT_TARGET_ROSTER = resolve(PLATFORM_ROOT, "tcrn-workflow/scripts/policy/ssh-observer-target-roster.json");
 const REQUIRED_RUNTIME_NAMES = [
   "TCRN_SSH_GOVERNED_HOST",
   "TCRN_SSH_RUNTIME_ROOT",

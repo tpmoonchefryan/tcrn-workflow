@@ -19,7 +19,59 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-export const READ_FACE_SERVER = resolve(PLATFORM_ROOT, "TCRN-AOS/deploy/aos-local-client/remote-read-mcp.mjs");
+// The chain container sits beside the platform root; a partition's workspace is
+// `<container>/.tcrn-workspace/<partition>/workspace`. Resolved by the same convention
+// `platform-doctor.mjs` walks, so this repository answers from its own layout contract
+// rather than importing another project's roster.
+export function workspaceForPartition(partition, containerRoot = resolve(PLATFORM_ROOT, "..")) {
+  return resolve(containerRoot, ".tcrn-workspace", String(partition), "workspace");
+}
+
+export const ENGINE_CLI = resolve(PLATFORM_ROOT, "tcrn-workflow/scripts/tcrn-workflow.mjs");
+
+/**
+ * One read against this repository's own engine.
+ *
+ * This used to spawn the sibling product project's MCP read face — the engine repository
+ * executing another project's code in order to read its own chains, which is the
+ * dependency direction the platform forbids. That face also forwarded over SSH to a host
+ * the chains left in S199, so the round trip carried a remote-access shape for data
+ * sitting on this disk. The envelope is unchanged ({ ok, reasonCode, result }); callers
+ * already tolerated both `result.records` and `result.result.records`.
+ */
+export function callChainRead(verb, { partition, ...flags }, { timeoutMs = 120_000 } = {}) {
+  return new Promise((resolvePromise) => {
+    const argv = [ENGINE_CLI, verb, "--workspace", workspaceForPartition(partition)];
+    for (const [name, value] of Object.entries(flags)) {
+      if (value === undefined || value === null) continue;
+      argv.push(`--${name}`, String(value));
+    }
+    const child = spawn(process.execPath, argv, { stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    let err = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      resolvePromise({ ok: false, reasonCode: "CHAIN_READ_TIMEOUT", error: "the engine did not answer within the bound" });
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => { out += chunk.toString("utf8"); });
+    child.stderr.on("data", (chunk) => { err += chunk.toString("utf8"); });
+    child.on("close", () => {
+      clearTimeout(timer);
+      const lines = `${out}${err}`.trim().split("\n");
+      let parsed = null;
+      try { parsed = JSON.parse(lines[lines.length - 1] ?? ""); } catch { parsed = null; }
+      if (parsed === null) {
+        resolvePromise({ ok: false, reasonCode: "CHAIN_READ_UNPARSEABLE", error: `${err || out}`.slice(-200) });
+        return;
+      }
+      if (parsed.ok === false) {
+        resolvePromise({ ok: false, reasonCode: parsed.reasonCode ?? "CHAIN_READ_REFUSED", error: parsed.error ?? null, result: parsed });
+        return;
+      }
+      resolvePromise({ ok: true, reasonCode: parsed.reasonCode ?? null, result: parsed });
+    });
+  });
+}
 
 // INC-041 四件代办 (STORY-170 只补票不执行). Declared here; the backfill tickets live
 // in docs/reports/init-019/BRIEFING.md section 7.
@@ -37,43 +89,8 @@ export const RELEASE_STOP = Object.freeze({
   evidence: "发布前不可被任何执行者触发;开发期推整合分支不触发"
 });
 
-function callReadFace(tool, args, timeoutMs = 120_000) {
-  return new Promise((resolvePromise) => {
-    const child = spawn(process.execPath, [READ_FACE_SERVER], { stdio: ["pipe", "pipe", "inherit"] });
-    let buffered = "";
-    const frames = [];
-    const timer = setTimeout(() => { child.kill("SIGTERM"); resolvePromise({ ok: false, reasonCode: "READ_FACE_TIMEOUT", error: "read face timeout" }); }, timeoutMs);
-    child.stdout.on("data", (chunk) => {
-      buffered += chunk.toString("utf8");
-      while (buffered.includes("\n")) {
-        const newline = buffered.indexOf("\n");
-        frames.push(buffered.slice(0, newline));
-        buffered = buffered.slice(newline + 1);
-      }
-    });
-    const next = () => new Promise((r) => { const poll = () => { if (frames.length) return r(frames.shift()); setTimeout(poll, 20); }; poll(); });
-    (async () => {
-      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "owner-queue", version: "0.1.0" } } })}\n`);
-      await next();
-      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
-      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: tool, arguments: args } })}\n`);
-      const frame = await next();
-      clearTimeout(timer);
-      child.kill("SIGTERM");
-      try {
-        const parsed = JSON.parse(frame);
-        const result = parsed?.result?.structuredContent ?? parsed?.result;
-        if (parsed?.result?.isError === true) return resolvePromise({ ok: false, reasonCode: result?.reasonCode ?? "READ_FACE_REFUSED", error: result?.error ?? "" });
-        resolvePromise({ ok: true, result });
-      } catch {
-        resolvePromise({ ok: false, reasonCode: "READ_FACE_NON_JSON", error: frame.slice(0, 120) });
-      }
-    })().catch((error) => { clearTimeout(timer); child.kill("SIGTERM"); resolvePromise({ ok: false, reasonCode: "READ_FACE_INTERNAL", error: String(error?.message ?? error) }); });
-  });
-}
-
 export async function renderOwnerQueue({ partition = "cross-project" } = {}) {
-  const blocked = await callReadFace("tcrn_remote_read_work_list", { partition, status: "blocked" });
+  const blocked = await callChainRead("work-list", { partition, status: "blocked" });
   let blockedRows = [];
   const readFailures = [];
   if (blocked.ok) {
