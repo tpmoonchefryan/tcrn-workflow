@@ -19,7 +19,7 @@
 ## 元判据红腿与恢复
 
 以下是直接运行 `node scripts/coverage-conservation-proof.mjs` 的原始输出。
-2026-08-17 重录(TCRN-CROSS-STORY-287):MCP 门面退役后基线文件数由 97 变 98，块中逐字引用的旧计数随之失配。重录而非放宽判据——逐字块的价值正在于它会因此变红。
+2026-08-17 两次重录:先随 MCP 门面退役由 97 变 98(TCRN-CROSS-STORY-287)，再随 tests/p1-roster.test.mjs 入册由 98 变 99(TCRN-CROSS-INC-218)。两次都是重录而非放宽判据——逐字块的价值正在于它会因此变红，而这一次红是在 preflight 的隔离世界里出现的，工作树上跑不出来。
 脚本通过真实 `coverage-conservation.mjs` 命令边界制造四种情形，不改写工作树
 中的测试文件或基线文件；临时 override 在退出时清理。
 
@@ -60,8 +60,8 @@
       "reasonCode": "COVERAGE_BASELINE_INCOMPLETE",
       "baselineCompleteness": {
         "ok": false,
-        "expectedFiles": 98,
-        "currentFiles": 99,
+        "expectedFiles": 99,
+        "currentFiles": 100,
         "missingFiles": [
           "tests/s244-model-plan.test.mjs"
         ],
@@ -98,8 +98,8 @@
       "ok": true,
       "baselineCompleteness": {
         "ok": true,
-        "expectedFiles": 99,
-        "currentFiles": 99,
+        "expectedFiles": 100,
+        "currentFiles": 100,
         "missingFiles": [],
         "staleFiles": []
       }

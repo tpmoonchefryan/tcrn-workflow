@@ -763,6 +763,17 @@
         "SIGKILL injection at each staged publication and release boundary resumes deterministically"
       ]
     },
+    "tests/p1-roster.test.mjs": {
+      "testCount": 5,
+      "assertionCount": 9,
+      "testNames": [
+        "preflight runs the roster, not a copy of it",
+        "every rostered script exists",
+        "a rostered script dispatches the verb it is listed beside",
+        "the two gates this drift hid are on the roster",
+        "the roster names each verb once"
+      ]
+    },
     "tests/p3-cli-catalog.test.mjs": {
       "testCount": 8,
       "assertionCount": 27,
