@@ -280,18 +280,89 @@ function hookCommands(settings) {
   return commands;
 }
 
+/**
+ * Is a hook command something this host can actually run?
+ *
+ * Shared by both hosts because the answer is the same question twice: resolve the target,
+ * confirm it is a file, and ask node to parse it. A registered hook whose target does not
+ * parse is a hook that fails at the moment it is supposed to protect something.
+ */
+async function hookTargetFailures(commands, resolveTarget) {
+  const failures = [];
+  let checked = 0;
+  for (const hook of commands) {
+    const target = resolveTarget(hook.command);
+    if (target === null) continue;
+    checked += 1;
+    if (target === undefined) {
+      failures.push({ event: hook.event, command: hook.command, reasonCode: "PLATFORM_HOOK_COMMAND_UNSUPPORTED" });
+      continue;
+    }
+    const targetStats = await existingPath(target);
+    if (!targetStats?.isFile()) {
+      failures.push({ event: hook.event, command: hook.command, target, reasonCode: "PLATFORM_HOOK_TARGET_UNAVAILABLE" });
+      continue;
+    }
+    try {
+      await execFileAsync(process.execPath, ["--check", target], { timeout: 10_000, maxBuffer: 1_048_576 });
+    } catch (error) {
+      failures.push({ event: hook.event, command: hook.command, target, reasonCode: "PLATFORM_HOOK_TARGET_UNUSABLE", error: error?.code ?? "NODE_CHECK_FAILED" });
+    }
+  }
+  return { failures, checked };
+}
+
+/**
+ * The codex arm (TCRN-CROSS-STORY-286).
+ *
+ * This leg only ever read the Claude settings, so a codex host could carry a broken or
+ * unparseable hook and the doctor would call the platform healthy. Codex writes an exact
+ * `.codex/hooks.json` at activation, in the same event → hooks → command shape, differing
+ * only in that its commands carry resolved absolute paths rather than a project-dir
+ * placeholder.
+ *
+ * Absence is deferral, not health: the adapter bundle installs inert and activation is a
+ * separate governed step, so a container with no hooks file has not failed anything — it
+ * has not been activated. Saying so is different from saying it passed.
+ */
+async function inspectCodexHooks(platformRoot) {
+  const hooksPath = resolve(platformRoot, ".codex/hooks.json");
+  const stats = await existingPath(hooksPath);
+  if (!stats) return { state: "absent" };
+  if (!stats.isFile()) return { state: "invalid", reasonCode: "PLATFORM_CODEX_HOOKS_NOT_FILE" };
+  let settings;
+  try {
+    settings = JSON.parse(await readFile(hooksPath, "utf8"));
+  } catch (error) {
+    return { state: "invalid", reasonCode: "PLATFORM_CODEX_HOOKS_INVALID", error: error?.message ?? "INVALID_JSON" };
+  }
+  const commands = hookCommands(settings);
+  const { failures, checked } = await hookTargetFailures(commands, (command) => {
+    const match = /^node\s+(?:"([^"]+)"|'([^']+)'|(\S+))/u.exec(command.trim());
+    if (!match) return undefined;
+    return resolve(match[1] ?? match[2] ?? match[3]);
+  });
+  return {
+    state: failures.length === 0 ? "live" : "broken",
+    checked,
+    failures,
+    events: [...new Set(commands.map((hook) => hook.event))].sort(),
+  };
+}
+
 async function inspectHookExecutability(platformRoot, manifest) {
+  const codex = await inspectCodexHooks(platformRoot);
   const entry = manifest.items.find((candidate) => candidate.id === "container.claude-settings");
-  if (!entry) return check("hooks", false, { reasonCode: "PLATFORM_MANIFEST_HOOK_SETTINGS_MISSING" });
+  if (!entry) return check("hooks", false, { reasonCode: "PLATFORM_MANIFEST_HOOK_SETTINGS_MISSING", codex });
   const settingsPath = expandTemplate(entry.pathTemplate, platformRoot, platformRoot);
   const stats = settingsPath === null ? null : await existingPath(settingsPath);
-  if (!stats) return check("hooks", true, { source: "installWiring", deferredTo: "installWiring" });
-  if (!stats.isFile()) return check("hooks", false, { reasonCode: "PLATFORM_HOOK_SETTINGS_NOT_FILE", pathTemplate: entry.pathTemplate });
+  if (!stats) return check("hooks", true, { source: "installWiring", deferredTo: "installWiring", codex });
+  if (!stats.isFile()) return check("hooks", false, { reasonCode: "PLATFORM_HOOK_SETTINGS_NOT_FILE", pathTemplate: entry.pathTemplate, codex });
   let settings;
   try {
     settings = JSON.parse(await readFile(settingsPath, "utf8"));
   } catch (error) {
-    return check("hooks", false, { reasonCode: "PLATFORM_HOOK_SETTINGS_INVALID", error: error?.message ?? "INVALID_JSON" });
+    return check("hooks", false, { reasonCode: "PLATFORM_HOOK_SETTINGS_INVALID", error: error?.message ?? "INVALID_JSON", codex });
   }
   const commands = hookCommands(settings);
   const failures = [];
@@ -316,9 +387,19 @@ async function inspectHookExecutability(platformRoot, manifest) {
       failures.push({ event: hook.event, command: hook.command, target, reasonCode: "PLATFORM_HOOK_TARGET_UNUSABLE", error: error?.code ?? "NODE_CHECK_FAILED" });
     }
   }
+  // A codex hooks file that exists and is broken is a finding of its own: activation
+  // wrote it, so something is registered and unrunnable. Absent stays deferral.
+  if (codex.state === "broken" || codex.state === "invalid") {
+    return check("hooks", false, {
+      reasonCode: codex.reasonCode ?? codex.failures?.[0]?.reasonCode ?? "PLATFORM_CODEX_HOOK_TARGET_UNUSABLE",
+      source: "container.codex-hooks",
+      codex,
+      claude: { checked, failures },
+    });
+  }
   return failures.length === 0
-    ? check("hooks", true, { source: "container.claude-settings", checked, events: [...new Set(commands.filter((hook) => hook.command.includes("${CLAUDE_PROJECT_DIR}")).map((hook) => hook.event))].sort() })
-    : check("hooks", false, { reasonCode: failures[0].reasonCode, failures, source: "container.claude-settings" });
+    ? check("hooks", true, { source: "container.claude-settings", checked, events: [...new Set(commands.filter((hook) => hook.command.includes("${CLAUDE_PROJECT_DIR}")).map((hook) => hook.event))].sort(), codex })
+    : check("hooks", false, { reasonCode: failures[0].reasonCode, failures, source: "container.claude-settings", codex });
 }
 
 function versionFromSkill(text) {

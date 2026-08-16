@@ -485,3 +485,54 @@ test("S273 trust archive freshness compares the archive to all installed consume
   assert.equal(redCheck.reasonCode, "PLATFORM_TRUST_ARCHIVE_STALE");
   assert.equal(redCheck.consumerProblems.length > 0, true);
 });
+
+test("STORY-286 the hook leg reads codex too, and absence is deferral rather than health", async (context) => {
+  // The leg only ever read the Claude settings, so a codex host could carry a broken hook
+  // while the doctor called the platform healthy. Codex writes an exact .codex/hooks.json
+  // at activation; its commands carry resolved absolute paths rather than a placeholder.
+  const fixture = await completeInstallFixture(context);
+  await mkdir(join(fixture.root, "scripts"), { recursive: true });
+  await writeFile(join(fixture.root, "scripts", "hook.mjs"), "export {}\n");
+  await writeFile(join(fixture.root, ".claude", "settings.json"), JSON.stringify({ hooks: {
+    Stop: [{ hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/scripts/hook.mjs"' }] }],
+  } }));
+
+  // The adapter bundle installs inert and activation is a separate governed step, so a
+  // container with no hooks file has not failed anything — it has not been activated.
+  const absent = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const absentHooks = absent.checks.find((item) => item.name === "hooks");
+  assert.equal(absentHooks.ok, true);
+  assert.equal(absentHooks.codex.state, "absent", "not activated is not the same claim as passed");
+
+  await mkdir(join(fixture.root, ".codex"), { recursive: true });
+  await writeFile(join(fixture.root, ".codex", "hooks.json"), JSON.stringify({ hooks: {
+    SessionStart: [{ matcher: "startup", hooks: [{ type: "command", command: `node "${join(fixture.root, "scripts", "hook.mjs")}"` }] }],
+  } }));
+  const live = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const liveHooks = live.checks.find((item) => item.name === "hooks");
+  assert.equal(liveHooks.ok, true);
+  assert.equal(liveHooks.codex.state, "live");
+  assert.deepEqual(liveHooks.codex.events, ["SessionStart"]);
+});
+
+test("STORY-286 a registered codex hook whose target cannot run turns the leg red", async (context) => {
+  // Activation wrote the file, so something is registered and unrunnable — a finding of
+  // its own, and distinct from never having been activated.
+  const fixture = await completeInstallFixture(context);
+  await writeFile(join(fixture.root, ".claude", "settings.json"), JSON.stringify({ hooks: {} }));
+  await mkdir(join(fixture.root, ".codex"), { recursive: true });
+  await writeFile(join(fixture.root, ".codex", "hooks.json"), JSON.stringify({ hooks: {
+    SessionStart: [{ matcher: "startup", hooks: [{ type: "command", command: `node "${join(fixture.root, "scripts", "missing.mjs")}"` }] }],
+  } }));
+  const missing = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const missingHooks = missing.checks.find((item) => item.name === "hooks");
+  assert.equal(missingHooks.ok, false);
+  assert.equal(missingHooks.reasonCode, "PLATFORM_HOOK_TARGET_UNAVAILABLE");
+  assert.equal(missingHooks.source, "container.codex-hooks");
+
+  await writeFile(join(fixture.root, ".codex", "hooks.json"), "{ not json");
+  const invalid = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const invalidHooks = invalid.checks.find((item) => item.name === "hooks");
+  assert.equal(invalidHooks.ok, false);
+  assert.equal(invalidHooks.reasonCode, "PLATFORM_CODEX_HOOKS_INVALID");
+});
