@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { promisify } from "node:util";
-import { dirname, join, parse, relative, resolve } from "node:path";
+import { dirname, join, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // The install manifest is the only path/residence authority. The doctor consumes
@@ -606,6 +606,69 @@ async function declaredBackupCadences(options, platformRoot) {
   return { cadences, source: "chain-declaration" };
 }
 
+// INC-206. The install surface knew every harness location it had put down and
+// nothing at all about the ones it had not. The pre-move container root kept a live
+// `.claude` and `.codex` for four days after the move — four hooks and six hooks
+// respectively, deciding what actually ran for anyone who opened a session there —
+// and no check could see them, because every check started from the manifest and
+// asked "is this present?" rather than from the tree and asking "is this declared?".
+//
+// This leg walks the container and reports any harness root the manifest does not
+// place something under. The manifest is the reference on purpose: it is versioned,
+// it fails closed, and adding a harness location means declaring it in the same
+// change — not a roster of known-acceptable strays, which is the shape the Owner
+// ruled out in MIN-099.
+// The governed area is derived from the manifest rather than listed here: the
+// container root, every declared project root, and the directories that lie between
+// them. That middle set is not incidental — the classification folder the strays
+// lived in is exactly a directory on the path to declared projects, governed by
+// virtue of position and by nothing else. Everything else under the container is an
+// unrelated project (AGENTS.md 二 says so plainly), and its own harness is none of
+// the platform's business; scanning the whole tree reports those and teaches the
+// reader to ignore the leg.
+const HARNESS_DIRECTORY_NAMES = Object.freeze([".claude", ".codex"]);
+
+async function inspectHarnessSurface(root, manifest) {
+  const declaredPrefixes = manifest.items
+    .filter((entry) => entry.pathTemplate.startsWith("<PLATFORM_ROOT>/"))
+    .map((entry) => join(root, entry.pathTemplate.slice("<PLATFORM_ROOT>/".length)));
+  const declaresSomethingUnder = (directory) =>
+    declaredPrefixes.some((path) => path === directory || path.startsWith(`${directory}${sep}`));
+
+  const governed = new Set([root]);
+  for (const project of manifest.projects ?? []) {
+    if (!project.pathTemplate?.startsWith("<PLATFORM_ROOT>/")) continue;
+    let current = join(root, project.pathTemplate.slice("<PLATFORM_ROOT>/".length));
+    while (current.startsWith(root) && current !== root) {
+      governed.add(current);
+      current = dirname(current);
+    }
+  }
+
+  const undeclared = [];
+  for (const directory of [...governed].sort(compareCanonicalTextLocal)) {
+    for (const name of HARNESS_DIRECTORY_NAMES) {
+      const path = join(directory, name);
+      if (!(await existingPath(path))?.isDirectory()) continue;
+      if (!declaresSomethingUnder(path)) undeclared.push(relative(root, path));
+    }
+  }
+
+  return undeclared.length === 0
+    ? check("harnessSurface", true, {
+      governedDirectories: [...governed].map((path) => relative(root, path) || ".").sort(compareCanonicalTextLocal),
+      source: "install-manifest",
+    })
+    : check("harnessSurface", false, {
+      reasonCode: "PLATFORM_HARNESS_UNDECLARED",
+      undeclared: undeclared.sort(compareCanonicalTextLocal),
+      hint: "declare it in the install manifest, or retire it — an undeclared harness decides what runs and no other leg can see it",
+      source: "install-manifest",
+    });
+}
+
+const compareCanonicalTextLocal = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
+
 async function inspectLaunchdDuty(options, manifest) {
   const entry = manifest.items.find((candidate) => candidate.acceptanceProbe.startsWith("probe:launchd-duty"));
   const probe = parseLaunchdProbe(entry);
@@ -680,6 +743,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
       await inspectDeploymentFreshness(homeRoot, manifest),
       await inspectTrustArchiveFreshness(root, homeRoot, manifest, options),
       await inspectLaunchdDuty({ ...options, platformRoot: root, homeRoot }, manifest),
+      await inspectHarnessSurface(root, manifest),
     );
   }
   const firstFailure = checks.find((item) => !item.ok);

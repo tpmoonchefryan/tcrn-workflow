@@ -163,7 +163,9 @@ test("S264 four install-completeness legs are green on a synthetic full fixture"
 test("S264 each install-completeness leg has a distinct synthetic red reason", async (context) => {
   const wiring = await completeInstallFixture(context);
   const wiringResult = await inspectPlatform(wiring.root, { homeRoot: wiring.home, launchdLabels: [launchdLabel] });
-  await rm(join(wiring.root, "joi-button", ".claude", "settings.json"));
+  // INC-207 moved the harness to the container root, so the deleted item is a
+  // container one now; joi-button no longer carries a declared settings file.
+  await rm(join(wiring.root, ".claude", "settings.json"));
   const wiringRed = await inspectPlatform(wiring.root, { homeRoot: wiring.home, launchdLabels: [launchdLabel] });
   assert.equal(wiringResult.ok, true);
   assert.equal(wiringRed.reasonCode, "PLATFORM_INSTALL_WIRING_INCOMPLETE");
@@ -180,6 +182,33 @@ test("S264 each install-completeness leg has a distinct synthetic red reason", a
   const launchd = await completeInstallFixture(context);
   const launchdRed = await inspectPlatform(launchd.root, { homeRoot: launchd.home, launchdLabels: [] });
   assert.equal(launchdRed.reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
+});
+
+test("INC-206 an undeclared harness inside the governed area is red, and an unrelated project's is not", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const surface = (result) => result.checks.find((entry) => entry.name === "harnessSurface");
+
+  const green = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  assert.equal(surface(green).ok, true);
+
+  // The classification folder is governed by position: it is on the path from the
+  // container root to declared projects. This is the exact shape that sat live and
+  // unseen for four days after the container moved.
+  await mkdir(join(fixture.root, "TCRN Platform", ".claude"), { recursive: true });
+  await writeFile(join(fixture.root, "TCRN Platform", ".claude", "settings.json"), "{}\n", "utf8");
+  const strayRed = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  assert.equal(surface(strayRed).ok, false);
+  assert.equal(surface(strayRed).reasonCode, "PLATFORM_HARNESS_UNDECLARED");
+  assert.ok(surface(strayRed).undeclared.includes(join("TCRN Platform", ".claude")));
+  await rm(join(fixture.root, "TCRN Platform", ".claude"), { recursive: true, force: true });
+
+  // The container also holds projects this platform does not govern. Reporting their
+  // harness would train the reader to skip the leg, so the governed area is derived
+  // from the manifest's own project roots rather than from "everything below here".
+  await mkdir(join(fixture.root, "unrelated-project", ".claude"), { recursive: true });
+  await writeFile(join(fixture.root, "unrelated-project", ".claude", "settings.json"), "{}\n", "utf8");
+  const unrelated = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  assert.equal(surface(unrelated).ok, true, "an unrelated project's own harness is not the platform's business");
 });
 
 test("INC-195 the snapshot train is owed only when a chain declares an automatic cadence", async (context) => {

@@ -67,13 +67,21 @@ const projects: readonly InstallManifestProject[] = Object.freeze([
   Object.freeze({ name: "joi-button", host: "shared", pathTemplate: "<PLATFORM_ROOT>/joi-button" }),
 ]);
 
-const projectItems = projects.flatMap((project) => [
-  item(`project.${project.name}.claude-adapter`, "project", "claude", `${project.pathTemplate}/.claude/tcrn-workflow`, "engine-adapter", "probe:regular-directory"),
-  item(`project.${project.name}.codex-adapter`, "project", "codex", `${project.pathTemplate}/.codex/tcrn-workflow`, "engine-adapter", "probe:regular-directory"),
-  item(`project.${project.name}.claude-settings`, "project", "claude", `${project.pathTemplate}/.claude/settings.json`, "engine-adapter", "probe:regular-file"),
-  item(`project.${project.name}.claude-receipt`, "project", "claude", `<PLATFORM_ROOT>/.tcrn-artifacts/install-receipts/${project.name}/claude.json`, "engine-adapter", "probe:receipt-json"),
-  item(`project.${project.name}.codex-receipt`, "project", "codex", `<PLATFORM_ROOT>/.tcrn-artifacts/install-receipts/${project.name}/codex.json`, "engine-adapter", "probe:receipt-json"),
-]);
+// INC-207: the harness is built at the chosen workspace root and nowhere else.
+// Materialising it into every project put a live `.claude` and `.codex` inside
+// directories whose repositories are deliberately clean of them, and made "which
+// hooks am I running" a function of which folder happened to be opened. The Owner
+// ruled on 2026-08-16 that harness files belong to the workspace root; the container
+// and machine layers below carry the whole surface now.
+//
+// One project entry survives, and it is not a materialisation: the engine
+// repository commits its own `.claude/settings.json` as a sanitised CI fixture —
+// git-tracked, covered by that repository's source allowlist, and read by two of its
+// tests. It stays declared here so the harness-surface leg can tell an accounted-for
+// directory from a stray, with its provenance stated rather than implied.
+const projectItems = [
+  item("project.tcrn-workflow.claude-settings", "project", "claude", "<PLATFORM_ROOT>/TCRN Platform/tcrn-workflow/.claude/settings.json", "host-self", "probe:regular-file"),
+];
 
 export const INSTALL_MANIFEST_ITEMS: readonly InstallManifestItem[] = Object.freeze([
   item("container.claude-settings", "container", "claude", "<PLATFORM_ROOT>/.claude/settings.json", "engine-adapter", "probe:regular-file"),
@@ -127,19 +135,10 @@ const REQUIRED_ITEM_ID_CATALOG = [
   "machine.portal-launcher-sh",
   "machine.trust-archive",
   "machine.workflow-engine",
-  ...[
-    "TCRN-AOS",
-    "TCRN-Design-System",
-    "TCRN-TMS",
-    "tcrn-workflow",
-    "joi-button",
-  ].flatMap((projectName) => [
-    `project.${projectName}.claude-adapter`,
-    `project.${projectName}.claude-receipt`,
-    `project.${projectName}.claude-settings`,
-    `project.${projectName}.codex-adapter`,
-    `project.${projectName}.codex-receipt`,
-  ]),
+  // INC-207: only the engine repository's own committed fixture remains at project
+  // layer. This catalog stays written out by hand rather than derived from the item
+  // list, so deleting the entry above still fails the completeness test.
+  "project.tcrn-workflow.claude-settings",
 ].sort(compareCanonicalText);
 export const INSTALL_MANIFEST_REQUIRED_ITEM_IDS = Object.freeze(REQUIRED_ITEM_ID_CATALOG);
 
