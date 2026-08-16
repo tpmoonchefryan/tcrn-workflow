@@ -92,6 +92,13 @@ export const INSTALL_MANIFEST_ITEMS: readonly InstallManifestItem[] = Object.fre
   item("container.codex-adapter", "container", "codex", "<PLATFORM_ROOT>/.codex/tcrn-workflow", "engine-adapter", "probe:regular-directory"),
   item("container.platform-container.claude-receipt", "container", "claude", "<PLATFORM_ROOT>/.tcrn-artifacts/install-receipts/platform-container/claude.json", "engine-adapter", "probe:receipt-json"),
   item("container.platform-container.codex-receipt", "container", "codex", "<PLATFORM_ROOT>/.tcrn-artifacts/install-receipts/platform-container/codex.json", "engine-adapter", "probe:receipt-json"),
+  // INC-208: the chain-write refusal lives at the machine layer because project
+  // settings do not inherit from a parent directory. INC-207 moved the harness to the
+  // container root, and the three project settings files it retired were the only
+  // thing refusing a write to the chain from a session opened at a project root —
+  // container rules never covered those sessions. Declared here it holds wherever a
+  // session is opened, which is a stronger guarantee than the per-project copies were.
+  item("machine.claude-settings", "machine", "claude", "<HOME>/.claude/settings.json", "user-guided", "probe:regular-file"),
   item("machine.codex-config", "machine", "codex", "<HOME>/.codex/config.toml", "user-guided", "probe:regular-file"),
   item("machine.claude-skill", "machine", "claude", "<HOME>/.claude/skills/tcrn-workflow-helper", "user-guided", "probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive.json;state=state.json;entry=SKILL.md"),
   item("machine.codex-skill", "machine", "codex", "<HOME>/.codex/skills/tcrn-workflow-helper", "user-guided", "probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive.json;state=state.json;entry=SKILL.md"),
@@ -122,6 +129,7 @@ const REQUIRED_ITEM_ID_CATALOG = [
   "container.platform-claude-bridge",
   "container.platform-container.claude-receipt",
   "container.platform-container.codex-receipt",
+  "machine.claude-settings",
   "machine.claude-skill",
   "machine.codex-config",
   "machine.codex-skill",
