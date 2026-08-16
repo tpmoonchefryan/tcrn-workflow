@@ -11,7 +11,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { buildPact } from "./pact.mjs";
 
@@ -66,6 +66,53 @@ function parseSettings(projectDir) {
     reason: "STOP_PACT_HOOK_NOT_REGISTERED",
     detail: `no Stop hook names ${REGISTRATION_MARKER}`,
   };
+}
+
+/**
+ * Ancestors of `startDir` that could hold the harness, nearest first.
+ *
+ * TCRN-CROSS-INC-218. This gate used to be handed two fixed directories — the repository
+ * and its parent — and on 2026-08-16 the platform ruled that harness is built at the
+ * chosen workspace root and nowhere else, archiving the project-local registrations. The
+ * fixed pair then named two places the harness is not: the classification folder never
+ * had settings, and the repository's own copy was archived. So the gate read red while
+ * the channel was live, which is the same as reading nothing.
+ *
+ * The walk stops at the home directory rather than the filesystem root, because
+ * `~/.claude/settings.json` is the USER settings layer, not a workspace root. It may
+ * legitimately register this same hook; counting it as a workspace registration would
+ * make the gate answer a question nobody asked.
+ */
+export function harnessSearchRoots(startDir, stopAt = homedir()) {
+  const boundary = resolve(stopAt);
+  const roots = [];
+  let current = resolve(startDir);
+  for (;;) {
+    roots.push(current);
+    if (current === boundary) break;
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return roots;
+}
+
+/**
+ * The nearest ancestor whose project settings register the stop-pact Stop hook.
+ *
+ * Nearest wins: a workspace root closer to the repository is the one a session opened
+ * there would actually read.
+ */
+export function discoverStopPactRegistration(startDir, stopAt = homedir(), parse = parseSettings) {
+  const searched = harnessSearchRoots(startDir, stopAt);
+  const considered = [];
+  for (const root of searched) {
+    const registration = parse(root);
+    if (registration.ok) return { found: true, registration, searched, considered };
+    // A directory with no settings at all is not a finding — most ancestors have none.
+    if (registration.reason !== "STOP_PACT_SETTINGS_MISSING") considered.push(registration);
+  }
+  return { found: false, registration: null, searched, considered };
 }
 
 function activePactProblem(path = process.env.TCRN_STOP_PACT_PATH ?? join(homedir(), ".claude/stop-pact/current.json")) {
@@ -126,9 +173,33 @@ function probeRegistration(registration) {
   return { ok: true, response: { decision: response.decision, reasonBytes: response.reason.length } };
 }
 
-export function verifyStopPactChannel({ projectDirs = [], pactPath } = {}) {
+export function verifyStopPactChannel({ projectDirs = [], pactPath, discoverFrom, stopAt } = {}) {
   const pactProblem = activePactProblem(pactPath);
   if (pactProblem) return { ok: false, reason: pactProblem.reason, detail: pactProblem.detail, pactPath: pactProblem.path, roots: [] };
+  if (discoverFrom !== undefined) {
+    const discovery = discoverStopPactRegistration(discoverFrom, stopAt ?? homedir());
+    if (!discovery.found) {
+      return {
+        ok: false,
+        status: "STOP_PACT_CHANNEL_SEVERED",
+        reason: "STOP_PACT_HOOK_NOT_REGISTERED",
+        detail: `no ancestor of ${resolve(discoverFrom)} up to ${resolve(stopAt ?? homedir())} names ${REGISTRATION_MARKER}`,
+        searched: discovery.searched,
+        roots: discovery.considered,
+      };
+    }
+    const probe = probeRegistration(discovery.registration);
+    const root = { ...discovery.registration, ...probe };
+    return {
+      ok: root.ok === true,
+      status: root.ok === true ? "STOP_PACT_CHANNEL_LIVE" : "STOP_PACT_CHANNEL_SEVERED",
+      discoveredAt: discovery.registration.projectDir,
+      searched: discovery.searched,
+      roots: [root],
+      reason: root.ok === true ? null : root.reason ?? null,
+      detail: root.ok === true ? null : root.detail ?? null,
+    };
+  }
   if (!Array.isArray(projectDirs) || projectDirs.length === 0) {
     return { ok: false, reason: "STOP_PACT_PROJECT_DIR_REQUIRED", detail: "pass at least one --project-dir", roots: [] };
   }
@@ -149,7 +220,7 @@ export function verifyStopPactChannel({ projectDirs = [], pactPath } = {}) {
 }
 
 function usage() {
-  process.stderr.write("usage: verify-channel.mjs --verify-channel --project-dir <dir> [--project-dir <dir> ...]\n");
+  process.stderr.write("usage: verify-channel.mjs --verify-channel (--discover-from <dir> | --project-dir <dir> [--project-dir <dir> ...])\n");
   process.exitCode = 64;
 }
 
@@ -158,17 +229,27 @@ if (process.argv[1]?.endsWith("verify-channel.mjs")) {
     usage();
   } else {
     const projectDirs = [];
+    let discoverFrom;
+    let malformed = false;
     for (let index = 3; index < process.argv.length; index += 2) {
-      if (process.argv[index] !== "--project-dir" || process.argv[index + 1] === undefined) {
+      const flag = process.argv[index];
+      const value = process.argv[index + 1];
+      if (value === undefined || (flag !== "--project-dir" && flag !== "--discover-from")) {
         usage();
+        malformed = true;
         break;
       }
-      projectDirs.push(process.argv[index + 1]);
+      if (flag === "--discover-from") discoverFrom = value;
+      else projectDirs.push(value);
     }
-    if (projectDirs.length > 0) {
-      const result = verifyStopPactChannel({ projectDirs });
+    if (!malformed && (discoverFrom !== undefined || projectDirs.length > 0)) {
+      const result = verifyStopPactChannel(
+        discoverFrom !== undefined ? { discoverFrom } : { projectDirs },
+      );
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       if (!result.ok) process.exitCode = 1;
+    } else if (!malformed) {
+      usage();
     }
   }
 }

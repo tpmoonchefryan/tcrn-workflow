@@ -100,7 +100,7 @@
     "verify:s6": "node scripts/verify-s6.mjs",
     "verify:schemas": "node scripts/task.mjs protocol-schemas",
     "verify:source": "node scripts/task.mjs source",
-    "verify:stop-pact": "node tools/stop-pact/verify-channel.mjs --verify-channel --project-dir . --project-dir ..",
+    "verify:stop-pact": "node tools/stop-pact/verify-channel.mjs --verify-channel --discover-from .",
     "verify:stop-pact:codex": "node --test tests/codex-stop-pact.test.mjs",
     "verify:story-193": "node --test tests/qa4-codex-hook-equivalence.test.mjs",
     "verify:trust": "node scripts/task.mjs test-trust",
