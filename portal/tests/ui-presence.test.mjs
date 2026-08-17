@@ -174,7 +174,26 @@ async function loadExecutedDom(fixture, env = {}) {
   source = mutateSource(source, MUTATION);
   const { window, document } = parseHTML(source, { url });
   installDomShims(window);
-  window.fetch = (path, options = {}) => nativeFetch(new URL(path, url), options);
+  // TCRN-CROSS-INC-221. This used to end in `setTimeout(900)`, which is the very thing the
+  // comment below `waitFor` warns against: too short and the assertion reads a DOM that has
+  // not been filled, too long and every run pays the worst case. It read `—` out of
+  // #stat-engine under load — in the sweep AND in preflight's isolated clone, so not a
+  // local-contention flake.
+  //
+  // The harness already owns the page's fetch, so it can count what is in flight and wait
+  // for the real settle signal instead of guessing at one. Waiting on in-flight requests
+  // rather than on any asserted field is deliberate: a test that waited for #stat-engine
+  // would turn a genuine regression into a timeout instead of a readable difference.
+  let inFlight = 0;
+  let lastSettled = Date.now();
+  window.fetch = (path, options = {}) => {
+    inFlight += 1;
+    lastSettled = Date.now();
+    return nativeFetch(new URL(path, url), options).finally(() => {
+      inFlight -= 1;
+      lastSettled = Date.now();
+    });
+  };
   const context = vm.createContext(window);
   for (const script of [...document.querySelectorAll("script")]) {
     if (script.src) {
@@ -184,7 +203,13 @@ async function loadExecutedDom(fixture, env = {}) {
       vm.runInContext(script.textContent, context);
     }
   }
-  await new Promise((resolve) => setTimeout(resolve, 900));
+  // The quiet period covers a handler that starts its next request from the previous
+  // response; a page that fetches nothing settles well inside the old 900ms.
+  await waitFor(
+    () => inFlight === 0 && Date.now() - lastSettled >= 150,
+    "the page's initial fetches to settle",
+    20_000,
+  );
   return { child, document, window };
 }
 
@@ -366,6 +391,19 @@ if (MUTATION) {
   test("INC-148 rendered DOM behavior changes receipt state", async () => {
     const page = await preparePage();
     try { assertDomContract(page.document); await assertBehaviorContract(page); } finally { await page.cleanup(); }
+  });
+
+  test("INC-221 a settle signal that never arrives fails by name, not by silent misread", async () => {
+    // The property that makes waiting safer than sleeping: a sleep that is too short
+    // reports a wrong value as if it were the truth, while a wait that never settles says
+    // what it was waiting for. loadExecutedDom now depends on this, so it is pinned here.
+    await assert.rejects(
+      () => waitFor(() => false, "a signal that cannot arrive", 60),
+      (error) => /timed out after 60ms waiting for a signal that cannot arrive/u.test(String(error?.message)),
+    );
+    // And it returns the predicate's value the moment it is truthy, so a settled page
+    // costs one poll interval rather than a fixed budget.
+    assert.equal(await waitFor(() => "settled", "an immediate signal"), "settled");
   });
 
   test("INC-151 rendered engine card follows the engine status value", async () => {
