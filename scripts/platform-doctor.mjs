@@ -15,6 +15,10 @@ import {
   INSTALL_MANIFEST,
   assertInstallManifestComplete,
 } from "../dist/build/packages/core/src/index.js";
+// The identity digest is computed by the engine's own canonicaliser rather than
+// reproduced here. A second implementation of a digest is a second answer waiting to
+// disagree with the first (TCRN-CROSS-INC-219).
+import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
 const execFileAsync = promisify(execFile);
 const TOPOLOGY_SECTION_MARKER = "## 三、分区拓扑";
@@ -249,6 +253,66 @@ async function adapterBundleDrift(bundlePath, receiptPath) {
     if (actual !== entry.contentDigest) drifted.push({ path: entry.path, reason: "content digest differs from the receipt" });
   }
   return drifted.length === 0 ? null : { reasonCode: "PLATFORM_ADAPTER_BUNDLE_DRIFTED", detail: { receiptPath, drifted } };
+}
+
+/**
+ * Installed adapter files whose bytes match their receipt but whose file identity moved.
+ *
+ * TCRN-CROSS-INC-219. This reports; it never decides. The two digests answer different
+ * questions: `contentDigest` answers "are these the bytes we installed", which is what an
+ * acceptance probe should ask and what the verdict stays bound to; `identityDigest` covers
+ * mtime and ctime and therefore moves on a chmod, an editor save or a restore from backup.
+ * Wiring identity into the verdict would turn benign touches into platform-red.
+ *
+ * Silence would be worse than either, though — two checks over one installation giving
+ * opposite answers, with only one of them visible, is how a green comes to mean nothing.
+ * So the drift is named here, with the timestamp that moved, and `adapter-rebind` is the
+ * governed way to clear it.
+ */
+export async function adapterIdentityObservations(manifest, platformRoot, homeRoot) {
+  const observations = [];
+  for (const entry of manifest.items ?? []) {
+    const probe = parseAcceptanceProbe(entry.acceptanceProbe);
+    if (probe?.kind !== "adapter-bundle-digest") continue;
+    const receiptPath = expandTemplate(probe.parameters.receipt ?? "", platformRoot, homeRoot);
+    if (!receiptPath) continue;
+    let receipt;
+    try {
+      receipt = JSON.parse(await readFile(receiptPath, "utf8"));
+    } catch {
+      continue; // An unreadable receipt is already the installWiring check's finding.
+    }
+    const installationRoot = typeof receipt?.installationRoot === "string" ? receipt.installationRoot : null;
+    for (const item of Array.isArray(receipt?.entries) ? receipt.entries : []) {
+      if (typeof item?.path !== "string" || typeof item?.identityDigest !== "string") continue;
+      const target = installationRoot === null
+        ? resolve(expandTemplate(entry.pathTemplate, platformRoot, homeRoot), item.path)
+        : resolve(installationRoot, item.path);
+      let stats;
+      try {
+        stats = await lstat(target);
+      } catch {
+        continue; // Absence is a content finding, not an identity one.
+      }
+      const observed = canonicalSha256({
+        dev: String(stats.dev),
+        ino: String(stats.ino),
+        size: String(stats.size),
+        mtimeMs: String(stats.mtimeMs),
+        ctimeMs: String(stats.ctimeMs),
+      });
+      if (observed === item.identityDigest) continue;
+      observations.push({
+        reasonCode: "PLATFORM_ADAPTER_IDENTITY_DRIFTED",
+        id: entry.id,
+        path: item.path,
+        receiptPath,
+        modifiedAt: new Date(stats.mtimeMs).toISOString(),
+        remedy: "adapter-rebind",
+      });
+    }
+  }
+  return observations;
 }
 
 function parseAcceptanceProbe(value) {
@@ -880,7 +944,13 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
     );
   }
   const firstFailure = checks.find((item) => !item.ok);
-  return { ok: !firstFailure, reasonCode: firstFailure?.reasonCode ?? "PLATFORM_LAYOUT_HEALTHY", checks };
+  // Observations are reported beside the verdict, never inside it: `firstFailure` reads
+  // `checks` only, so an identity drift is visible without being able to turn the
+  // platform red (TCRN-CROSS-INC-219).
+  const observations = options.includeInstallSurface === false
+    ? []
+    : await adapterIdentityObservations(manifest, root, homeRoot);
+  return { ok: !firstFailure, reasonCode: firstFailure?.reasonCode ?? "PLATFORM_LAYOUT_HEALTHY", checks, observations };
 }
 
 function platformRootFromArgv(argv) {

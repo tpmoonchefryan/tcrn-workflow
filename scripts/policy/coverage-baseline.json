@@ -249,6 +249,22 @@
         "WSE-2 replay: a duplicate enable event and a pre-enable actor both corrupt the chain"
       ]
     },
+    "tests/adapter-identity-rebind.test.mjs": {
+      "testCount": 10,
+      "assertionCount": 25,
+      "testNames": [
+        "INC-219 a benign touch wedges the strict reader — this is the state being recovered from",
+        "INC-219 rebind restores a drifted installation and names every file that moved",
+        "INC-219 a rebound installation is usable again — rollback can be planned from it",
+        "INC-219 rebind REFUSES when a byte changed, because content is the guarantee",
+        "INC-219 rebind REFUSES a missing installed file",
+        "INC-219 rebind REFUSES a symlink standing in for an installed file",
+        "INC-219 rebind REFUSES a receipt that does not match its out-of-band authority",
+        "INC-219 rebind writes nothing when no identity moved",
+        "INC-219 a drift-tolerating read is NOT branded, so nothing downstream can act on it",
+        "INC-219 chmod alone is enough to drift an identity — the case this exists for"
+      ]
+    },
     "tests/assignment-gate.test.mjs": {
       "testCount": 6,
       "assertionCount": 19,

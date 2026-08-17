@@ -551,6 +551,26 @@
       "expectedMatches": 1,
       "test": "tests/backup-snapshot.test.mjs",
       "testName": "WSR-1 T41: a destination stated in the wrong spelling is reported as a near miss, not just a foreign address"
+    },
+    {
+      "id": "INC-219-codex-drift-context-not-branded",
+      "rationale": "A read taken with identityDrift:\"collect\" must never be branded as an installation. Branding it would hand uninstall, rollback and activation the very installation the strict reader refuses, turning the rebind path's read option into a force flag by the back door.",
+      "file": "packages/core/src/codex-adapter.ts",
+      "find": "if (identityDrift.length === 0) installationContexts.add(context);",
+      "replace": "installationContexts.add(context);",
+      "expectedMatches": 1,
+      "test": "tests/adapter-identity-rebind.test.mjs",
+      "testName": "INC-219 a drift-tolerating read is NOT branded, so nothing downstream can act on it"
+    },
+    {
+      "id": "INC-219-codex-rebind-content-required",
+      "rationale": "Rebind relaxes identity and nothing else. Without the content comparison it would re-bind a receipt to files whose bytes had changed, which is precisely the substitution the installation receipt exists to detect.",
+      "file": "packages/core/src/codex-adapter.ts",
+      "find": "if (createHash(\"sha256\").update(entryContent).digest(\"hex\") !== entry.contentDigest) fail(\"ADAPTER_INSTALLATION_MISMATCH\", entry.path);",
+      "replace": "",
+      "expectedMatches": 1,
+      "test": "tests/adapter-identity-rebind.test.mjs",
+      "testName": "INC-219 rebind REFUSES when a byte changed, because content is the guarantee"
     }
   ]
 }

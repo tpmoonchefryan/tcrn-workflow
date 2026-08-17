@@ -474,6 +474,7 @@
     "tests/act8-app-server-observer.test.mjs",
     "tests/act9-codex-activation.test.mjs",
     "tests/actor-attestation.test.mjs",
+    "tests/adapter-identity-rebind.test.mjs",
     "tests/assignment-gate.test.mjs",
     "tests/background-resource.test.mjs",
     "tests/backup-snapshot.test.mjs",

@@ -2,8 +2,8 @@
 
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, open, realpath } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { lstat, open, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import { canonicalJson, canonicalSha256, assertProtocolId, compareCanonicalText, parseStrictInstant } from "../../protocol/src/index.js";
 import { validateContextRouteResult } from "./context-router.js";
@@ -37,6 +37,9 @@ export const CODEX_ADAPTER_REASON_CODES = Object.freeze([
   "ADAPTER_INSTALLATION_MALFORMED",
   "ADAPTER_INSTALLATION_MISMATCH",
   "ADAPTER_INSTALLATION_PATH",
+  "ADAPTER_INSTALLATION_REBIND_FAILED",
+  "ADAPTER_INSTALLATION_REBIND_NOT_NEEDED",
+  "ADAPTER_INSTALLATION_REBOUND",
   "ADAPTER_INSTALLATION_REQUIRED",
   "ADAPTER_INSTALLATION_SPECIAL_FILE",
   "ADAPTER_PATH_INVALID",
@@ -103,16 +106,37 @@ export interface CodexAdapterInstallationReceipt {
   readonly receiptDigest: string;
 }
 
+export interface CodexAdapterIdentityDrift {
+  readonly path: string;
+  readonly expected: string;
+  readonly observed: string;
+}
+
 export interface CodexAdapterInstallationContext {
   readonly receipt: CodexAdapterInstallationReceipt;
   readonly sourcePath: string;
   readonly authorityFileSha256: string;
   readonly sourceIdentityDigest: string;
+  // Always empty for a strict read: it refuses on the first drifted entry. Populated only
+  // under `identityDrift: "collect"`, and such a context is deliberately NOT branded.
+  readonly identityDrift: readonly CodexAdapterIdentityDrift[];
+  readonly observedIdentityDigests: readonly string[];
 }
 
 export interface CodexAdapterInstallationReadOptions {
   readonly afterReceiptLstat?: () => void | Promise<void>;
   readonly afterEntryLstat?: (path: string, index: number) => void | Promise<void>;
+  /**
+   * TCRN-CROSS-INC-219. `"refuse"` (the default) is the behaviour every caller had: an
+   * entry whose identity digest moved fails ADAPTER_INSTALLATION_MISMATCH.
+   *
+   * `"collect"` exists for one caller — the rebind path — and it changes nothing about
+   * what is checked: content, containment, realpath, link shape and read-time stability
+   * are all still enforced. It only lets the read finish so the drift can be reported
+   * entry by entry. The resulting context is NOT added to the installation brand, so
+   * uninstall, rollback and activation still refuse it exactly as before.
+   */
+  readonly identityDrift?: "refuse" | "collect";
 }
 
 export interface CodexAdapterFile {
@@ -451,6 +475,8 @@ export async function readCodexAdapterInstallationReceipt(
   const rootRealpath = await realpath(receipt.installationRoot).catch(() => fail("ADAPTER_INSTALLATION_PATH", receipt.installationRoot));
   const rootStat = await lstat(receipt.installationRoot).catch(() => fail("ADAPTER_INSTALLATION_PATH", receipt.installationRoot));
   if (rootRealpath !== receipt.installationRoot || rootStat.isSymbolicLink() || !rootStat.isDirectory()) fail("ADAPTER_INSTALLATION_PATH", receipt.installationRoot);
+  const identityDrift: CodexAdapterIdentityDrift[] = [];
+  const observedIdentityDigests: string[] = [];
   for (let index = 0; index < receipt.entries.length; index += 1) {
     const entry = receipt.entries[index] as CodexAdapterInstallationEntry;
     const expectedPath = resolve(receipt.installationRoot, entry.path);
@@ -472,11 +498,111 @@ export async function readCodexAdapterInstallationReceipt(
     } finally { await entryHandle.close(); }
     const namedRealpath = await realpath(expectedPath).catch(() => fail("ADAPTER_INSTALLATION_CHANGED", entry.path));
     if (namedRealpath !== entry.realpath) fail("ADAPTER_INSTALLATION_PATH", entry.path);
-    if (createHash("sha256").update(entryContent).digest("hex") !== entry.contentDigest || identityDigest(entryBefore) !== entry.identityDigest) fail("ADAPTER_INSTALLATION_MISMATCH", entry.path);
+    if (createHash("sha256").update(entryContent).digest("hex") !== entry.contentDigest) fail("ADAPTER_INSTALLATION_MISMATCH", entry.path);
+    const observed = identityDigest(entryBefore);
+    observedIdentityDigests.push(observed);
+    if (observed !== entry.identityDigest) {
+      if (options.identityDrift !== "collect") fail("ADAPTER_INSTALLATION_MISMATCH", entry.path);
+      identityDrift.push({ path: entry.path, expected: entry.identityDigest, observed });
+    }
   }
-  const context = deepFreeze({ receipt, sourcePath: path, authorityFileSha256: fileSha256, sourceIdentityDigest: identityDigest(before) });
-  installationContexts.add(context);
+  const context = deepFreeze({
+    receipt,
+    sourcePath: path,
+    authorityFileSha256: fileSha256,
+    sourceIdentityDigest: identityDigest(before),
+    identityDrift: deepFreeze(identityDrift.slice()),
+    observedIdentityDigests: deepFreeze(observedIdentityDigests.slice()),
+  });
+  // A read that tolerated drift is not an installation. Branding it would hand
+  // uninstall, rollback and activation the very installation the strict reader refuses,
+  // which would make `identityDrift: "collect"` a force flag by the back door.
+  if (identityDrift.length === 0) installationContexts.add(context);
   return context;
+}
+
+export const CODEX_ADAPTER_REBIND_VERSION = "tcrn.codex-adapter-installation-rebind.v1" as const;
+
+/**
+ * Re-bind an installation whose file identities moved but whose bytes did not.
+ *
+ * TCRN-CROSS-INC-219. `identityDigest` covers `mtimeMs` and `ctimeMs`, and `ctime` cannot
+ * be set — `utimes` moves `mtime` and stamps `ctime` with the present moment. So any
+ * benign touch of an installed file (a chmod, an editor save, a restore from backup) was
+ * permanent: uninstall refused on the mismatch, install refused because the target exists,
+ * and every verb needing an installation context went through the strict reader. The only
+ * exit was to delete the files outside the engine — a fail-closed design forcing an
+ * ungoverned act, which is the worst of both.
+ *
+ * What this does NOT relax is the part that carries the guarantee. Every entry's bytes
+ * must still hash to the recorded `contentDigest`; containment, realpath equality, link
+ * shape, special-file and read-time stability checks all still run; the receipt itself is
+ * still admitted under its out-of-band authority. Identity is the only field allowed to
+ * differ, and what it detects beyond content is "this file was touched", not "this file
+ * is not the one we installed" — replacement with different bytes is caught by content,
+ * and link substitution by `nlink` and `O_NOFOLLOW`.
+ *
+ * The new receipt supersedes the old one in place. Its schema and every other field are
+ * byte-identical; only the drifted `identityDigest` values and the derived `receiptDigest`
+ * change. It is written to a sibling temporary file and renamed, so a caller never
+ * observes a half-written receipt, and it is read back strictly before returning.
+ */
+export async function rebindCodexAdapterInstallation(
+  path: string,
+  authority?: CodexAdapterInstallationFileIdentity,
+  options: CodexAdapterInstallationReadOptions = {},
+): Promise<Readonly<Record<string, unknown>>> {
+  const inspected = await readCodexAdapterInstallationReceipt(path, authority, { ...options, identityDrift: "collect" });
+  const drifted = inspected.identityDrift.map((entry) => entry.path);
+  if (inspected.identityDrift.length === 0) {
+    return deepFreeze({
+      schemaVersion: CODEX_ADAPTER_REBIND_VERSION,
+      reasonCode: "ADAPTER_INSTALLATION_REBIND_NOT_NEEDED",
+      rebound: false,
+      receiptPath: inspected.sourcePath,
+      receiptDigest: inspected.receipt.receiptDigest,
+      previousReceiptDigest: inspected.receipt.receiptDigest,
+      drifted: [],
+    });
+  }
+  const entries = inspected.receipt.entries.map((entry, index) => ({
+    path: entry.path,
+    realpath: entry.realpath,
+    contentDigest: entry.contentDigest,
+    identityDigest: inspected.observedIdentityDigests[index] as string,
+  }));
+  const basis = {
+    schemaVersion: CODEX_ADAPTER_INSTALLATION_VERSION,
+    generationId: inspected.receipt.generationId,
+    bundleDigest: inspected.receipt.bundleDigest,
+    installationRoot: inspected.receipt.installationRoot,
+    entries,
+  };
+  const bytes = Buffer.from(canonicalJson({ ...basis, receiptDigest: canonicalSha256(basis) }), "utf8");
+  const temporary = join(dirname(inspected.sourcePath), `.${CODEX_ADAPTER_REBIND_VERSION}.${canonicalSha256(bytes.toString("utf8")).slice(0, 16)}.tmp`);
+  try {
+    await writeFile(temporary, bytes, { flag: "wx", mode: 0o600 });
+    await rename(temporary, inspected.sourcePath);
+  } catch {
+    await rm(temporary, { force: true }).catch(() => undefined);
+    fail("ADAPTER_INSTALLATION_REBIND_FAILED", inspected.sourcePath);
+  }
+  // Read the superseding receipt back the strict way. A rebind that cannot be admitted
+  // by the reader it exists to satisfy has not fixed anything.
+  const rebound = await readCodexAdapterInstallationReceipt(inspected.sourcePath, {
+    expectedCanonicalPath: inspected.sourcePath,
+    expectedFileSha256: createHash("sha256").update(bytes).digest("hex"),
+  });
+  return deepFreeze({
+    schemaVersion: CODEX_ADAPTER_REBIND_VERSION,
+    reasonCode: "ADAPTER_INSTALLATION_REBOUND",
+    rebound: true,
+    receiptPath: inspected.sourcePath,
+    receiptDigest: rebound.receipt.receiptDigest,
+    previousReceiptDigest: inspected.receipt.receiptDigest,
+    receiptFileSha256: rebound.authorityFileSha256,
+    drifted,
+  });
 }
 
 export function planCodexAdapterRollback(bundleValue: unknown, installationValue: unknown): Readonly<Record<string, unknown>> {

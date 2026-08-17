@@ -2,14 +2,15 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { inspectPlatform } from "../scripts/platform-doctor.mjs";
+import { adapterIdentityObservations, inspectPlatform } from "../scripts/platform-doctor.mjs";
 import { INSTALL_MANIFEST } from "../dist/build/packages/core/src/index.js";
+import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
 const topology = "## 三、分区拓扑\n";
 const launchdLabel = "com.tcrn.platform.local-snapshot";
@@ -603,4 +604,85 @@ test("STORY-286 an adapter bundle is accepted by its receipt's digests, not by e
   const unreadable = await wiring();
   assert.equal(unreadable.invalid.find((item) => item.id === entry.id).reasonCode, "PLATFORM_ADAPTER_RECEIPT_UNREADABLE",
     "an unreadable receipt is the finding; it never falls back to the directory being there");
+});
+
+// TCRN-CROSS-INC-219 — identity drift is reported beside the verdict, never inside it.
+// The observation leg is exercised directly against a synthetic receipt so it needs no
+// platform container: the question is only whether a drifted identity is named and
+// whether naming it can move the verdict.
+
+test("an identity drift is named as an observation, with the moment it happened", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "tcrn-doctor-identity-")));
+  try {
+    const installedDirectory = join(root, ".codex", "tcrn-workflow");
+    await mkdir(installedDirectory, { recursive: true });
+    const installed = join(installedDirectory, "project.json");
+    await writeFile(installed, "{}\n");
+    const receiptPath = join(root, "receipt.json");
+    const bytes = await readFile(installed);
+    await writeFile(receiptPath, `${JSON.stringify({
+      installationRoot: root,
+      entries: [{
+        path: ".codex/tcrn-workflow/project.json",
+        contentDigest: createHash("sha256").update(bytes).digest("hex"),
+        // A digest that cannot be the live one, so the leg must report.
+        identityDigest: createHash("sha256").update("not-the-live-identity").digest("hex"),
+      }],
+    })}\n`);
+    const manifest = {
+      items: [{
+        id: "container.codex-adapter",
+        // Templates, exactly as the real manifest writes them: expandTemplate returns
+        // null for a path carrying no <PLATFORM_ROOT>, so a raw path is silently skipped.
+        pathTemplate: "<PLATFORM_ROOT>/.codex/tcrn-workflow",
+        acceptanceProbe: "probe:adapter-bundle-digest;receipt=<PLATFORM_ROOT>/receipt.json",
+      }],
+    };
+    const observations = await adapterIdentityObservations(manifest, root, root);
+    assert.equal(observations.length, 1);
+    assert.equal(observations[0].reasonCode, "PLATFORM_ADAPTER_IDENTITY_DRIFTED");
+    assert.equal(observations[0].path, ".codex/tcrn-workflow/project.json");
+    assert.equal(observations[0].remedy, "adapter-rebind", "and it names the governed way back");
+    assert.ok(!Number.isNaN(Date.parse(observations[0].modifiedAt)), "with the timestamp that moved");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a matching identity produces no observation at all", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "tcrn-doctor-identity-")));
+  try {
+    const installedDirectory = join(root, ".codex", "tcrn-workflow");
+    await mkdir(installedDirectory, { recursive: true });
+    const installed = join(installedDirectory, "project.json");
+    await writeFile(installed, "{}\n");
+    const stats = await lstat(installed);
+    const receiptPath = join(root, "receipt.json");
+    await writeFile(receiptPath, `${JSON.stringify({
+      installationRoot: root,
+      entries: [{
+        path: ".codex/tcrn-workflow/project.json",
+        contentDigest: createHash("sha256").update(await readFile(installed)).digest("hex"),
+        identityDigest: canonicalSha256({
+          dev: String(stats.dev),
+          ino: String(stats.ino),
+          size: String(stats.size),
+          mtimeMs: String(stats.mtimeMs),
+          ctimeMs: String(stats.ctimeMs),
+        }),
+      }],
+    })}\n`);
+    const manifest = {
+      items: [{
+        id: "container.codex-adapter",
+        // Templates, exactly as the real manifest writes them: expandTemplate returns
+        // null for a path carrying no <PLATFORM_ROOT>, so a raw path is silently skipped.
+        pathTemplate: "<PLATFORM_ROOT>/.codex/tcrn-workflow",
+        acceptanceProbe: "probe:adapter-bundle-digest;receipt=<PLATFORM_ROOT>/receipt.json",
+      }],
+    };
+    assert.deepEqual(await adapterIdentityObservations(manifest, root, root), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

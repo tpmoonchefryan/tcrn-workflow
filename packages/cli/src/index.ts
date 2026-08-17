@@ -86,6 +86,7 @@ import {
   sessionStartScriptDigest,
   planClaudeAdapterRollback,
   readClaudeAdapterInstallationReceipt,
+  rebindClaudeAdapterInstallation,
   removeClaudeAdapterSettingsFragment,
   simulateClaudeAdapterLifecycle,
   validateClaudeAdapterBundle,
@@ -96,6 +97,7 @@ import {
   planCompatibilityMode,
   planCodexAdapterRollback,
   readCodexAdapterInstallationReceipt,
+  rebindCodexAdapterInstallation,
   readCodexActivationInstallationReceipt,
   readCodexHostActivationObservation,
   installCodexAdapterBundle,
@@ -856,6 +858,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }] },
+  { name: "adapter-rebind", availability: "cli", mutates: true, flags: [{ name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
   { name: "adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
@@ -876,6 +879,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "claude-adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
   { name: "claude-adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "step2", required: false, valueKind: "boolean" }, { name: "step3", required: false, valueKind: "boolean" }] },
+  { name: "claude-adapter-rebind", availability: "cli", mutates: true, flags: [{ name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "claude-adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "claude-adapter-settings-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "claude-adapter-settings-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
@@ -1544,6 +1548,17 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     io.write(canonicalJson(planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), installation)));
     return;
   }
+  if (command === "adapter-rebind") {
+    // TCRN-CROSS-INC-219. The recovery adapter-uninstall could not offer: an installation
+    // whose bytes are provably the ones installed but whose file identities were touched.
+    // Nothing here is relaxed except the identity comparison itself, and the superseding
+    // receipt is read back strictly before this returns.
+    const values = parseArguments(rest, ["installation-receipt", "installation-receipt-digest"]);
+    required(values, ["installation-receipt"]);
+    io.write(canonicalJson(await rebindCodexAdapterInstallation(values["installation-receipt"] ?? "",
+      suppliedAuthority(io.codexAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]))));
+    return;
+  }
   if (command === "adapter-uninstall") {
     // Reverse of adapter-install. The TOCTOU-hardened reader admits the receipt under
     // the out-of-band authority, the planner derives the identity-gated removal set,
@@ -1682,6 +1697,15 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const values = parseArguments(rest, ["lifecycle"]);
     required(values, ["lifecycle"]);
     io.write(canonicalJson(simulateClaudeAdapterLifecycle(jsonValue(values.lifecycle, "lifecycle"))));
+    return;
+  }
+  if (command === "claude-adapter-rebind") {
+    // The Claude twin of adapter-rebind (TCRN-CROSS-INC-219). Both readers ended on the
+    // same pair of comparisons, so the gap was symmetric and so is the recovery.
+    const values = parseArguments(rest, ["installation-receipt", "installation-receipt-digest"]);
+    required(values, ["installation-receipt"]);
+    io.write(canonicalJson(await rebindClaudeAdapterInstallation(values["installation-receipt"] ?? "",
+      suppliedAuthority(io.claudeAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]))));
     return;
   }
   if (command === "claude-adapter-uninstall") {

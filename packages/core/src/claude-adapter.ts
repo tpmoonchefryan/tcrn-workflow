@@ -2,8 +2,8 @@
 
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, open, realpath } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { lstat, open, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import { canonicalJson, canonicalSha256, assertProtocolId, compareCanonicalText, parseStrictInstant } from "../../protocol/src/index.js";
 import { validateContextRouteResult } from "./context-router.js";
@@ -44,6 +44,9 @@ export const CLAUDE_ADAPTER_REASON_CODES = Object.freeze([
   "ADAPTER_INSTALLATION_MALFORMED",
   "ADAPTER_INSTALLATION_MISMATCH",
   "ADAPTER_INSTALLATION_PATH",
+  "ADAPTER_INSTALLATION_REBIND_FAILED",
+  "ADAPTER_INSTALLATION_REBIND_NOT_NEEDED",
+  "ADAPTER_INSTALLATION_REBOUND",
   "ADAPTER_INSTALLATION_REQUIRED",
   "ADAPTER_INSTALLATION_SPECIAL_FILE",
   "ADAPTER_PATH_INVALID",
@@ -112,16 +115,33 @@ export interface ClaudeAdapterInstallationReceipt {
   readonly receiptDigest: string;
 }
 
+export interface ClaudeAdapterIdentityDrift {
+  readonly path: string;
+  readonly expected: string;
+  readonly observed: string;
+}
+
 export interface ClaudeAdapterInstallationContext {
   readonly receipt: ClaudeAdapterInstallationReceipt;
   readonly sourcePath: string;
   readonly authorityFileSha256: string;
   readonly sourceIdentityDigest: string;
+  // Always empty for a strict read: it refuses on the first drifted entry. Populated only
+  // under `identityDrift: "collect"`, and such a context is deliberately NOT branded.
+  readonly identityDrift: readonly ClaudeAdapterIdentityDrift[];
+  readonly observedIdentityDigests: readonly string[];
 }
 
 export interface ClaudeAdapterInstallationReadOptions {
   readonly afterReceiptLstat?: () => void | Promise<void>;
   readonly afterEntryLstat?: (path: string, index: number) => void | Promise<void>;
+  /**
+   * TCRN-CROSS-INC-219. The Codex-side twin of this option carries the reasoning; the
+   * gap was symmetric because both readers end on the same pair of comparisons.
+   * `"collect"` relaxes nothing except letting the read finish, and the context it
+   * produces is not branded, so no consumer can act on a drifted installation.
+   */
+  readonly identityDrift?: "refuse" | "collect";
 }
 
 export interface ClaudeAdapterFile {
@@ -587,6 +607,8 @@ export async function readClaudeAdapterInstallationReceipt(
   const rootRealpath = await realpath(receipt.installationRoot).catch(() => fail("ADAPTER_INSTALLATION_PATH", receipt.installationRoot));
   const rootStat = await lstat(receipt.installationRoot).catch(() => fail("ADAPTER_INSTALLATION_PATH", receipt.installationRoot));
   if (rootRealpath !== receipt.installationRoot || rootStat.isSymbolicLink() || !rootStat.isDirectory()) fail("ADAPTER_INSTALLATION_PATH", receipt.installationRoot);
+  const identityDrift: ClaudeAdapterIdentityDrift[] = [];
+  const observedIdentityDigests: string[] = [];
   for (let index = 0; index < receipt.entries.length; index += 1) {
     const entry = receipt.entries[index] as ClaudeAdapterInstallationEntry;
     const expectedPath = resolve(receipt.installationRoot, entry.path);
@@ -608,11 +630,94 @@ export async function readClaudeAdapterInstallationReceipt(
     } finally { await entryHandle.close(); }
     const namedRealpath = await realpath(expectedPath).catch(() => fail("ADAPTER_INSTALLATION_CHANGED", entry.path));
     if (namedRealpath !== entry.realpath) fail("ADAPTER_INSTALLATION_PATH", entry.path);
-    if (createHash("sha256").update(entryContent).digest("hex") !== entry.contentDigest || identityDigest(entryBefore) !== entry.identityDigest) fail("ADAPTER_INSTALLATION_MISMATCH", entry.path);
+    if (createHash("sha256").update(entryContent).digest("hex") !== entry.contentDigest) fail("ADAPTER_INSTALLATION_MISMATCH", entry.path);
+    const observed = identityDigest(entryBefore);
+    observedIdentityDigests.push(observed);
+    if (observed !== entry.identityDigest) {
+      if (options.identityDrift !== "collect") fail("ADAPTER_INSTALLATION_MISMATCH", entry.path);
+      identityDrift.push({ path: entry.path, expected: entry.identityDigest, observed });
+    }
   }
-  const context = deepFreeze({ receipt, sourcePath: path, authorityFileSha256: fileSha256, sourceIdentityDigest: identityDigest(before) });
-  installationContexts.add(context);
+  const context = deepFreeze({
+    receipt,
+    sourcePath: path,
+    authorityFileSha256: fileSha256,
+    sourceIdentityDigest: identityDigest(before),
+    identityDrift: deepFreeze(identityDrift.slice()),
+    observedIdentityDigests: deepFreeze(observedIdentityDigests.slice()),
+  });
+  // A read that tolerated drift is not an installation. Branding it would hand
+  // uninstall, rollback and activation the very installation the strict reader refuses.
+  if (identityDrift.length === 0) installationContexts.add(context);
   return context;
+}
+
+export const CLAUDE_ADAPTER_REBIND_VERSION = "tcrn.claude-adapter-installation-rebind.v1" as const;
+
+/**
+ * Re-bind an installation whose file identities moved but whose bytes did not.
+ *
+ * TCRN-CROSS-INC-219, and the Codex twin of this function carries the full reasoning.
+ * The short of it: `identityDigest` covers `ctime`, `ctime` cannot be set, so one benign
+ * touch of an installed file wedged the installation permanently — uninstall refused the
+ * mismatch, install refused the existing target, and the only exit was deleting the files
+ * outside the engine. Content, containment, realpath, link shape and read-time stability
+ * are all still enforced here; identity is the only field allowed to have moved.
+ */
+export async function rebindClaudeAdapterInstallation(
+  path: string,
+  authority?: ClaudeAdapterInstallationFileIdentity,
+  options: ClaudeAdapterInstallationReadOptions = {},
+): Promise<Readonly<Record<string, unknown>>> {
+  const inspected = await readClaudeAdapterInstallationReceipt(path, authority, { ...options, identityDrift: "collect" });
+  const drifted = inspected.identityDrift.map((entry) => entry.path);
+  if (inspected.identityDrift.length === 0) {
+    return deepFreeze({
+      schemaVersion: CLAUDE_ADAPTER_REBIND_VERSION,
+      reasonCode: "ADAPTER_INSTALLATION_REBIND_NOT_NEEDED",
+      rebound: false,
+      receiptPath: inspected.sourcePath,
+      receiptDigest: inspected.receipt.receiptDigest,
+      previousReceiptDigest: inspected.receipt.receiptDigest,
+      drifted: [],
+    });
+  }
+  const entries = inspected.receipt.entries.map((entry, index) => ({
+    path: entry.path,
+    realpath: entry.realpath,
+    contentDigest: entry.contentDigest,
+    identityDigest: inspected.observedIdentityDigests[index] as string,
+  }));
+  const basis = {
+    schemaVersion: CLAUDE_ADAPTER_INSTALLATION_VERSION,
+    generationId: inspected.receipt.generationId,
+    bundleDigest: inspected.receipt.bundleDigest,
+    installationRoot: inspected.receipt.installationRoot,
+    entries,
+  };
+  const bytes = Buffer.from(canonicalJson({ ...basis, receiptDigest: canonicalSha256(basis) }), "utf8");
+  const temporary = join(dirname(inspected.sourcePath), `.${CLAUDE_ADAPTER_REBIND_VERSION}.${canonicalSha256(bytes.toString("utf8")).slice(0, 16)}.tmp`);
+  try {
+    await writeFile(temporary, bytes, { flag: "wx", mode: 0o600 });
+    await rename(temporary, inspected.sourcePath);
+  } catch {
+    await rm(temporary, { force: true }).catch(() => undefined);
+    fail("ADAPTER_INSTALLATION_REBIND_FAILED", inspected.sourcePath);
+  }
+  const rebound = await readClaudeAdapterInstallationReceipt(inspected.sourcePath, {
+    expectedCanonicalPath: inspected.sourcePath,
+    expectedFileSha256: createHash("sha256").update(bytes).digest("hex"),
+  });
+  return deepFreeze({
+    schemaVersion: CLAUDE_ADAPTER_REBIND_VERSION,
+    reasonCode: "ADAPTER_INSTALLATION_REBOUND",
+    rebound: true,
+    receiptPath: inspected.sourcePath,
+    receiptDigest: rebound.receipt.receiptDigest,
+    previousReceiptDigest: inspected.receipt.receiptDigest,
+    receiptFileSha256: rebound.authorityFileSha256,
+    drifted,
+  });
 }
 
 export function planClaudeAdapterRollback(bundleValue: unknown, installationValue: unknown): Readonly<Record<string, unknown>> {
