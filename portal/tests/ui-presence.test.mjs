@@ -559,19 +559,34 @@ if (process.argv[2] === "status" && actual.status === 0) {
       // here because only one of them can be produced against a real address offline,
       // and a state proven on one side only is half a state machine.
       const realFetch = page.window.fetch;
+      // TCRN-CROSS-INC-221. The stub records when it answered, because the panel is the
+      // only other observable and two of the three cases below render byte-identically —
+      // deliberately, since a body under a foreign contract must leak nothing. There is no
+      // change to wait for, so the settle signal is the contract fetch being answered plus
+      // a quiet period for the handler to render it.
+      const traffic = { answered: 0, at: 0 };
       const answerWith = (body, ok = true) => {
         page.window.fetch = (input, options) => {
           const target = String(input);
           if (!target.includes("tcrn-design-authority.json")) return realFetch(input, options);
+          traffic.answered += 1;
+          traffic.at = Date.now();
           return Promise.resolve({ ok, status: ok ? 200 : 404, json: async () => body });
+        };
+      };
+      const rendered = (label) => {
+        const seen = traffic.answered;
+        return async () => {
+          await waitFor(() => traffic.answered > seen && Date.now() - traffic.at >= 120, label);
         };
       };
 
       answerWith({ schemaVersion: "tcrn.design-authority.v1", name: "Example System", version: "9.9.9" });
       const input = page.document.querySelector('[data-setting-control="design.authority"]');
+      const declaredRendered = rendered("the declared contract to be fetched and rendered");
       input.value = "https://design.example.test/";
       input.dispatchEvent(new page.window.Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await declaredRendered();
       const declared = page.document.querySelector("[data-design-authority-state]");
       assert.equal(declared?.dataset.designAuthorityState, "declared");
       assert.match(declared.textContent, /Example System/u);
@@ -582,9 +597,10 @@ if (process.argv[2] === "status" && actual.status === 0) {
       // outside this machine, so nothing here can be called false. The message has to
       // say what would turn it green, or a yellow becomes a permanent decoration.
       answerWith({ hello: "world" });
+      const warnedRendered = rendered("the foreign response to be fetched and rendered");
       input.value = "https://other.example.test/";
       input.dispatchEvent(new page.window.Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await warnedRendered();
       const warned = page.document.querySelector("[data-design-authority-state]");
       assert.equal(warned?.dataset.designAuthorityState, "warning", "a response that is not this contract is yellow");
       assert.ok(warned.className.includes("tcrn-inline-alert"), "the warning uses the design system's alert");
@@ -596,9 +612,10 @@ if (process.argv[2] === "status" && actual.status === 0) {
       // notice, because the earlier sample was also missing its name and version and
       // would keep landing yellow by a different route.
       answerWith({ schemaVersion: "someone.elses.contract.v1", name: "Example System", version: "9.9.9" });
+      const wrongSchemaRendered = rendered("the body under another contract to be fetched and rendered");
       input.value = "https://third.example.test/";
       input.dispatchEvent(new page.window.Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await wrongSchemaRendered();
       const wrongSchema = page.document.querySelector("[data-design-authority-state]");
       assert.equal(wrongSchema?.dataset.designAuthorityState, "warning", "a well-formed body under another contract is still not ours");
       assert.ok(!wrongSchema.textContent.includes("Example System"), "nothing from an unrecognised contract reaches the page");
