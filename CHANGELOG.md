@@ -3,6 +3,55 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.11.18 — 2026-08-17
+
+- The engine repository no longer reads or executes anything inside a sibling
+  project's tree, and the rule is a gate rather than a grep. Five reverse
+  dependencies were removed; `verify:no-sibling-dependency` discovers siblings
+  from the filesystem instead of a typed roster, so it cannot go stale the moment
+  a new one is admitted, and it stays quiet on the three shapes that name a
+  sibling without depending on it — a provenance citation, a classified command
+  sample, and a generic tool pointed at a directory.
+
+- Installed adapter bundles are accepted by their receipt's per-file content
+  digests rather than by the directory existing. The former ceiling let a bundle
+  with a changed byte pass; an unreadable or empty receipt is now itself the
+  finding rather than a fallback to "the directory is here".
+
+- An adapter installation whose files were touched but not changed has a governed
+  way back. `identityDigest` covers ctime, which cannot be set, so a chmod, an
+  editor save or a restore from backup wedged an installation permanently:
+  uninstall refused the mismatch and install refused the occupied target.
+  `adapter-rebind` and `claude-adapter-rebind` relax the identity comparison and
+  nothing else — content, containment, realpath, link shape and read-time
+  stability are all still enforced, and a read taken with drift tolerated is not
+  branded, so no other verb can act on it.
+
+- Both Agent App hosts are under the platform harness. It had lived only as
+  hand-kept JSON inside `.claude/settings.json`, so a Codex session ran under
+  none of it. One capability roster now renders per host, keyed on what must be
+  true rather than on which hook provides it, so a host missing a guarantee is
+  visible as such. Claude Code's declarative `permissions.deny` has no Codex
+  equivalent; the control-tree write refusal is a PreToolUse hook there, with its
+  three weaker properties recorded rather than glossed. `platform-doctor` gains a
+  coverage leg: a host with an adapter installed must have a complete harness.
+
+- The MCP transport is retired. It derived every tool from the command catalog
+  and held no logic of its own, all 126 catalog verbs were already `cli`, and the
+  authority contract it consumed is unchanged and exercised through the CLI. The
+  bundle keeps its `mcp` grant object, since dropping a required field of
+  `tcrn.operator-authority-bundle.v1` is a schema break rather than a cleanup.
+
+- `pnpm preflight` runs the P1 roster instead of a second copy of it. The copies
+  had drifted by two gates — `portal` and `no-sibling-dependency` — so the one
+  world that proves this repository stands up without its siblings was the world
+  not running the sibling gate.
+
+- The portal's UI tests wait for the page to settle instead of sleeping at it.
+  A fixed 900ms in the shared loader, and three 700ms sleeps after a fetch, read
+  the DOM before it was filled under load. Both now wait on a real signal, which
+  is also faster.
+
 ## 0.11.17 — 2026-08-16
 
 - Views are bounded by record count rather than by prose length. The graph

@@ -8,7 +8,7 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md) · 日本語 · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-0.11.17-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-20%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-78-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-0.11.18-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-22%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-78-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
@@ -304,7 +304,7 @@ PreToolUse/approval の enforce も、稼働中の App Server Controller も主�
 ## ステータス、正直に
 
 - `0.1.0` は**最初の正式リリース**です。セマンティックバージョニングが適用され、0.x の間は公開 API がマイナーバージョン間で変わる可能性があります。
-- 現在の受け入れ済みリリース候補は `0.11.17` です。Story-209 の十ブロック範囲契約、dispatch-readiness 検証、closeout 検証、ソースとルールの保存、独立した公開世界 preflight を含みます。公開は別の統治手順に従います。
+- 現在の受け入れ済みリリース候補は `0.11.18` です。Story-209 の十ブロック範囲契約、dispatch-readiness 検証、closeout 検証、ソースとルールの保存、独立した公開世界 preflight を含みます。公開は別の統治手順に従います。
 - **この版より前に十一の受け入れ済みリリースがあり、これが `0.10.0` です。** `0.2.0` はゲート同一性、`0.3.0` は助言的スコープ、`0.3.2` は `Incident` 作成経路とナレッジストアの余地、`0.4.0` はバックグラウンドリソース残渣統治、`0.5.0` はスプリント／リリーストレインを追加しました。`0.6.0` は統治された二ホストの操作者権威、MCP、activation、observe / execution レシート、conference provenance を出荷し、`0.7.0` は `work-list` サマリーに `externalKey` を載せ、ページ分割された `conference-position-list` と `conference-minutes-list` を追加し、`0.8.0` はページ分割された `event-list` を追加し、`0.9.0` は統治された再配置動詞群——チェーンのバイトを一つも動かさずにワークスペースの束縛だけを動かすもの——を追加します。各受け入れ済み版は再現可能な成果物一式を伴う不変タグであり、`0.10.0` は、未完の子を持つ Initiative を `done` にすることをチェーンエラーにします（`WORK_GRAPH_ACTIVE_CHILDREN_OF_DONE_INITIATIVE`）。「閉じた」INIT が未完了の作業を抱えたままになることはありません。承認済みの各版は再現可能な成果物一式を伴う不変タグであり、`CHANGELOG.md` が完全な台帳を携えています。
 - **`0.7.0` と `0.8.0` の読み取り面は一つの消費者のために切られたものであり、それ以上は主張しません。** どちらのリリースも、同じ消費者が提出したギャップを塞いでいます：第二のコンテナでチェーンを再導出する、コンテナ横断の一貫性マトリクスです。上限を超えたチェーンでは、十五の論点を抱えた熟議と一つも持たない熟議が同じに見え、レコードは列挙できても名前を呼べず、マトリクスの「追記のみ」と「ハッシュチェーン」の行には判定すべき A 側の対象がそもそも存在しませんでした——読むのが遅いのではなく、「読めない」が「空」として提示されていたのです。`event-list` がレコードを逐語的に返すのは、その再導出を可能にするためです。`export` をページ分割するものではなく、ストリーミングもせず、クエリの間に消費者の状態を保持することもありません。既定のウィンドウ 64 はエンジン自身のセグメントサイズであり、ここにある四つのライブチェーンで実測しています：単一イベントの最大は 7,008 バイト、95 パーセンタイルは 3,575 バイトです。
 - **Claude Code の証拠は狭く、definition ごとに割れています。** 履歴上の `2.1.201` activation receipt は、置換済み relative-path SessionStart バイトについて九件の観測を記録しています。現在の persona-free な admitted absolute-root SessionStart definition は、code/fixture proof のみに留まります。これとは別に、生成された EPIC-024 の fail-open handler そのものが Claude Code `2.1.201` 上で `SessionEnd` を三回 live 発火しました。残る五つの observe イベントは、モデルプローブが推論もツール使用も行う前に API status 402 を返したため、明示的な「計測不可（unavailable）」のセルのままです。
