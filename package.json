@@ -70,6 +70,7 @@
     "verify:ext-execution": "node scripts/task.mjs ext-execution",
     "verify:ext-store": "node scripts/task.mjs ext-store",
     "verify:governance": "node scripts/task.mjs governance",
+    "verify:host-harness": "node scripts/host-harness.mjs",
     "verify:history": "node scripts/task.mjs history",
     "verify:isolated": "node scripts/isolated-proof.mjs",
     "verify:licenses": "node scripts/task.mjs licenses",

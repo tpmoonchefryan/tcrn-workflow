@@ -9,6 +9,8 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { adapterIdentityObservations, inspectPlatform } from "../scripts/platform-doctor.mjs";
+import { GUARDED_TREES, HOSTS, claudeHookSettings, hookEntriesFor } from "../scripts/host-harness.mjs";
+import { applyHostHarness } from "../scripts/host-harness-apply.mjs";
 import { INSTALL_MANIFEST } from "../dist/build/packages/core/src/index.js";
 import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
@@ -127,7 +129,7 @@ test("S259 bridge syntax skips hidden directories and the workspace container", 
   assert.equal(result.checks.find((item) => item.name === "bridgeSyntax").ok, true);
 });
 
-async function completeInstallFixture(context, { engineVersion = "0.11.15", helperVersion = "0.11.15" } = {}) {
+async function completeInstallFixture(context, { engineVersion = "0.11.15", helperVersion = "0.11.15", harness = true } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-init033-doctor-")));
   context.after(() => rm(base, { recursive: true, force: true }));
   const root = join(base, "platform");
@@ -158,6 +160,28 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
       installationRoot: root,
       entries: [{ path: relativeFile, contentDigest: createHash("sha256").update(await readFile(join(bundle, "project.json"))).digest("hex") }],
     }));
+  }
+  // TCRN-CROSS-INC-220: a complete install now includes each host's harness, because
+  // Owner ruled a host is under the harness from the moment it installs its adapter. The
+  // fixture's idea of "complete" moves with that ruling rather than around it.
+  if (harness) {
+    // The handlers the roster names are stubbed INSIDE the fixture, so both renderings
+    // point at files that exist and pass `node --check` here rather than reaching into
+    // the developer's real checkout. A fixture whose hooks name absent targets would red
+    // on executability and teach nothing about coverage.
+    const fixtureRepo = join(root, "TCRN Platform", "tcrn-workflow");
+    for (const host of HOSTS) {
+      for (const entry of hookEntriesFor(host)) {
+        const handler = join(fixtureRepo, entry.handler);
+        await mkdir(join(handler, ".."), { recursive: true });
+        await writeFile(handler, "export {}\n");
+      }
+    }
+    await writeFile(join(root, ".claude", "settings.json"), `${JSON.stringify({
+      hooks: claudeHookSettings(),
+      permissions: { deny: GUARDED_TREES.map((tree) => `Write(//${tree}/**)`) },
+    }, null, 2)}\n`);
+    applyHostHarness("codex", root, { repoRoot: fixtureRepo });
   }
   await writeFile(join(root, "AGENTS.md"), `${topology}fixture\n`);
   await writeFile(join(root, "CLAUDE.md"), "@AGENTS.md\n");
@@ -507,7 +531,11 @@ test("STORY-286 the hook leg reads codex too, and absence is deferral rather tha
   // The leg only ever read the Claude settings, so a codex host could carry a broken hook
   // while the doctor called the platform healthy. Codex writes an exact .codex/hooks.json
   // at activation; its commands carry resolved absolute paths rather than a placeholder.
-  const fixture = await completeInstallFixture(context);
+  //
+  // harness:false on purpose — INC-220 made a complete fixture carry the harness, and the
+  // harness shares .codex/hooks.json with activation. This leg is about the state before
+  // either has written it, so the scenario now has to be asked for rather than assumed.
+  const fixture = await completeInstallFixture(context, { harness: false });
   await mkdir(join(fixture.root, "scripts"), { recursive: true });
   await writeFile(join(fixture.root, "scripts", "hook.mjs"), "export {}\n");
   await writeFile(join(fixture.root, ".claude", "settings.json"), JSON.stringify({ hooks: {

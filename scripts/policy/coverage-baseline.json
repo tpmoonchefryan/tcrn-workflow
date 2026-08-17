@@ -543,6 +543,25 @@
         "the decision record is self-contained and shape-checked"
       ]
     },
+    "tests/host-harness.test.mjs": {
+      "testCount": 13,
+      "assertionCount": 33,
+      "testNames": [
+        "INC-220 every capability is claimed by every host",
+        "INC-220 a host that reaches a capability without a hook must say how",
+        "INC-220 every rostered event exists on Codex",
+        "INC-220 the two renderings carry the same handlers for the same capabilities",
+        "INC-220 the Codex document is shaped the way the host documents it",
+        "INC-220 the Claude rendering keeps the project-dir form that host resolves",
+        "INC-220 harness drift is reported when a live Claude hook is gone",
+        "INC-220 applying the Codex harness is idempotent and atomic",
+        "INC-220 Claude",
+        "INC-220 the guard REFUSES an edit into a control tree",
+        "INC-220 the guard finds a target nested anywhere in the tool input",
+        "INC-220 the guard does NOT touch Bash, or the engine could not read its own chain",
+        "INC-220 the guard leaves ordinary edits and reads alone"
+      ]
+    },
     "tests/inc074-storage-home.test.mjs": {
       "testCount": 5,
       "assertionCount": 15,

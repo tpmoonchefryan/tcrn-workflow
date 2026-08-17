@@ -19,6 +19,12 @@ import {
 // reproduced here. A second implementation of a digest is a second answer waiting to
 // disagree with the first (TCRN-CROSS-INC-219).
 import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
+import {
+  HOSTS,
+  claudeHarnessDrift,
+  codexHookDocument,
+  hookEntriesFor,
+} from "./host-harness.mjs";
 
 const execFileAsync = promisify(execFile);
 const TOPOLOGY_SECTION_MARKER = "## 三、分区拓扑";
@@ -464,6 +470,69 @@ async function inspectCodexHooks(platformRoot) {
     failures,
     events: [...new Set(commands.map((hook) => hook.event))].sort(),
   };
+}
+
+/**
+ * Is every host that installed an adapter actually under the harness?
+ *
+ * TCRN-CROSS-INC-220, and the predicate is Owner's ruling written down: a host comes under
+ * the harness from the moment it installs its adapter. So the requirement is conditional
+ * on the adapter, not on the host being in a list — a machine that never installed Codex
+ * is not missing anything, and one that did is missing something real. Before this leg,
+ * Codex carried four inert declaration files and no harness at all, and nothing said so.
+ *
+ * This red has a governed way back to green (`scripts/host-harness-apply.mjs`), which is
+ * what makes it a fair red rather than an ornament.
+ */
+export async function inspectHarnessCoverage(platformRoot) {
+  const hosts = [];
+  const failures = [];
+  for (const host of HOSTS) {
+    const adapterRoot = join(platformRoot, `.${host}`, "tcrn-workflow");
+    const adapter = await existingPath(adapterRoot);
+    if (!adapter?.isDirectory()) {
+      hosts.push({ host, adapterInstalled: false, harness: "not-required" });
+      continue;
+    }
+    if (host === "claude") {
+      const drift = claudeHarnessDrift(join(platformRoot, ".claude", "settings.json"));
+      hosts.push({ host, adapterInstalled: true, harness: drift.length === 0 ? "complete" : "incomplete", findings: drift });
+      if (drift.length > 0) failures.push({ host, reasonCode: "PLATFORM_HARNESS_INCOMPLETE", findings: drift });
+      continue;
+    }
+    const hooksPath = join(platformRoot, ".codex", "hooks.json");
+    const stats = await existingPath(hooksPath);
+    if (!stats?.isFile()) {
+      hosts.push({ host, adapterInstalled: true, harness: "absent" });
+      failures.push({ host, reasonCode: "PLATFORM_HARNESS_ABSENT", path: hooksPath, remedy: "scripts/host-harness-apply.mjs" });
+      continue;
+    }
+    let live;
+    try {
+      live = JSON.parse(await readFile(hooksPath, "utf8"));
+    } catch (error) {
+      hosts.push({ host, adapterInstalled: true, harness: "unreadable" });
+      failures.push({ host, reasonCode: "PLATFORM_HARNESS_UNREADABLE", path: hooksPath, error: error?.code ?? "INVALID_JSON" });
+      continue;
+    }
+    // Compared capability by capability rather than by whole-document equality: the file
+    // is a two-zone document that may legitimately acquire user-owned hooks, and refusing
+    // those would push someone to delete this leg rather than keep it.
+    const missing = [];
+    for (const entry of hookEntriesFor(host)) {
+      const groups = Array.isArray(live?.hooks?.[entry.event]) ? live.hooks[entry.event] : [];
+      const commands = groups.flatMap((group) => (Array.isArray(group?.hooks) ? group.hooks : []))
+        .map((hook) => String(hook?.command ?? ""));
+      if (!commands.some((command) => command.includes(entry.handler))) {
+        missing.push({ capability: entry.id, event: entry.event, handler: entry.handler });
+      }
+    }
+    hosts.push({ host, adapterInstalled: true, harness: missing.length === 0 ? "complete" : "incomplete", findings: missing });
+    if (missing.length > 0) failures.push({ host, reasonCode: "PLATFORM_HARNESS_INCOMPLETE", findings: missing, remedy: "scripts/host-harness-apply.mjs" });
+  }
+  return failures.length === 0
+    ? check("harnessCoverage", true, { hosts, capabilities: hookEntriesFor("codex").length })
+    : check("harnessCoverage", false, { reasonCode: failures[0].reasonCode, hosts, failures });
 }
 
 async function inspectHookExecutability(platformRoot, manifest) {
@@ -941,6 +1010,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
       await inspectTrustArchiveFreshness(root, homeRoot, manifest, options),
       await inspectLaunchdDuty({ ...options, platformRoot: root, homeRoot }, manifest),
       await inspectHarnessSurface(root, manifest),
+      await inspectHarnessCoverage(root),
     );
   }
   const firstFailure = checks.find((item) => !item.ok);

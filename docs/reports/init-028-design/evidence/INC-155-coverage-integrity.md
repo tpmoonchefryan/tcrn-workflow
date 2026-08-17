@@ -19,7 +19,7 @@
 ## 元判据红腿与恢复
 
 以下是直接运行 `node scripts/coverage-conservation-proof.mjs` 的原始输出。
-2026-08-17 三次重录:随 MCP 门面退役由 97 变 98(TCRN-CROSS-STORY-287)、随 tests/p1-roster.test.mjs 入册由 98 变 99、随 tests/adapter-identity-rebind.test.mjs 入册由 99 变 100(两者皆 TCRN-CROSS-INC-218/219)。三次都是重录而非放宽判据——逐字块的价值正在于它会因此变红。这个块因此是一条对「新增测试文件必须同时入册覆盖基线」的独立复核:两次红都由它先叫出来，而不是由改动者记得。
+2026-08-17 四次重录:随 MCP 门面退役由 97 变 98(TCRN-CROSS-STORY-287)、随 tests/p1-roster.test.mjs 入册由 98 变 99、随 tests/adapter-identity-rebind.test.mjs 由 99 变 100、随 tests/host-harness.test.mjs 由 100 变 101(TCRN-CROSS-INC-218/219/220)。四次都是重录而非放宽判据。这个块因此是一条对「新增测试文件必须同时入册覆盖基线」的独立复核:每次都先于改动者叫出来。
 脚本通过真实 `coverage-conservation.mjs` 命令边界制造四种情形，不改写工作树
 中的测试文件或基线文件；临时 override 在退出时清理。
 
@@ -60,8 +60,8 @@
       "reasonCode": "COVERAGE_BASELINE_INCOMPLETE",
       "baselineCompleteness": {
         "ok": false,
-        "expectedFiles": 100,
-        "currentFiles": 101,
+        "expectedFiles": 101,
+        "currentFiles": 102,
         "missingFiles": [
           "tests/s244-model-plan.test.mjs"
         ],
@@ -98,8 +98,8 @@
       "ok": true,
       "baselineCompleteness": {
         "ok": true,
-        "expectedFiles": 101,
-        "currentFiles": 101,
+        "expectedFiles": 102,
+        "currentFiles": 102,
         "missingFiles": [],
         "staleFiles": []
       }
