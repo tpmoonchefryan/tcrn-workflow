@@ -199,7 +199,12 @@ for (const [source, spec] of Object.entries(coverage.sources)) {
   const ext = source.slice(dot + 1);
   const englishDigest = createHash("sha256").update(await readFile(resolve(repositoryRoot, source))).digest("hex");
   for (const language of coverage.languages) {
-    const mirror = `${base}.${language}.${ext}`;
+    // STORY-300: mirrors may live beside their source or in a declared directory.
+    // The code of conduct's had to move, because GitHub resolves that family by
+    // matching the name and taking the first, and `.fr` sorts before `.md`.
+    const mirror = spec.mirrorDirectory === undefined
+      ? `${base}.${language}.${ext}`
+      : `${spec.mirrorDirectory}/${base}.${language}.${ext}`;
     let body;
     try { body = await read(mirror); } catch { fail("PUSH_GATE_TRANSLATION_MISSING", mirror); continue; }
     checkCjkEmphasis(mirror, body);

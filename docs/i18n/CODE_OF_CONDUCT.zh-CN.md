@@ -1,8 +1,8 @@
-<!-- tcrn-doc-synced-to: CODE_OF_CONDUCT.md cf759ae396293b39e3135cb6e64aec319d0dd4a309baa015d5da2fe2ac149642 -->
+<!-- tcrn-doc-synced-to: CODE_OF_CONDUCT.md 0152029bb35b7254a8ed0ed7eb42be0c49598dd1615fcd260a2426354ca194fe -->
 
-> **英文版本为权威版本。** 本翻译仅供参考；若两者存在差异，以 [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) 处的英文文本为准。
+> **英文版本为权威版本。** 本翻译仅供参考；若两者存在差异，以 [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md) 处的英文文本为准。
 
-[English](./CODE_OF_CONDUCT.md) · 简体中文 · [日本語](./CODE_OF_CONDUCT.ja.md) · [한국어](./CODE_OF_CONDUCT.ko.md) · [Français](./CODE_OF_CONDUCT.fr.md)
+[English](../../CODE_OF_CONDUCT.md) · 简体中文 · [日本語](./CODE_OF_CONDUCT.ja.md) · [한국어](./CODE_OF_CONDUCT.ko.md) · [Français](./CODE_OF_CONDUCT.fr.md)
 
 # 行为准则
 

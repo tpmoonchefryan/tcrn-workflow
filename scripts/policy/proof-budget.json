@@ -46,6 +46,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.6024,
       "rationale": "The host-role evidence block was anchored on line numbers, so every edit above a match reddened a file whose meaning had not changed — INC-153 was refreshed three times in one day for exactly that, and the audited week counted twenty-seven such refusals across fifty-four blocks. It now records the matched line content, trimmed, deduplicated and canonically ordered. Both directions were proven before landing: altering one matched line still turns it red, and inserting a line above every match no longer does. Small proof mass, paid to retire a recurring one."
+    },
+    {
+      "id": "OD-29-code-of-conduct-mirror-directory",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.6025,
+      "rationale": "GitHub was publishing this repository's French translation as its code of conduct, because that document is resolved by matching the family and taking the first name in sort order, and .fr precedes .md. Moving the four mirrors under docs/i18n/ leaves exactly one root file in the family, and following them cost push-gate a three-line branch on a new mirrorDirectory field. The three lines are the whole overage. They are worth the budget because the alternative was to compress the branch to one line to fit under it, which is writing worse code to satisfy a metric -- the exact move this exception list exists to make unnecessary."
     }
   ]
 }

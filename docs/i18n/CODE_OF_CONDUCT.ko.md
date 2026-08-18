@@ -1,8 +1,8 @@
-<!-- tcrn-doc-synced-to: CODE_OF_CONDUCT.md cf759ae396293b39e3135cb6e64aec319d0dd4a309baa015d5da2fe2ac149642 -->
+<!-- tcrn-doc-synced-to: CODE_OF_CONDUCT.md 0152029bb35b7254a8ed0ed7eb42be0c49598dd1615fcd260a2426354ca194fe -->
 
-> **영어가 정본입니다.** 이 번역은 편의를 위해 제공되며, 둘이 다를 경우 [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)의 영어 텍스트가 우선합니다.
+> **영어가 정본입니다.** 이 번역은 편의를 위해 제공되며, 둘이 다를 경우 [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md)의 영어 텍스트가 우선합니다.
 
-[English](./CODE_OF_CONDUCT.md) · [简体中文](./CODE_OF_CONDUCT.zh-CN.md) · [日本語](./CODE_OF_CONDUCT.ja.md) · 한국어 · [Français](./CODE_OF_CONDUCT.fr.md)
+[English](../../CODE_OF_CONDUCT.md) · [简体中文](./CODE_OF_CONDUCT.zh-CN.md) · [日本語](./CODE_OF_CONDUCT.ja.md) · 한국어 · [Français](./CODE_OF_CONDUCT.fr.md)
 
 # 행동 강령
 
