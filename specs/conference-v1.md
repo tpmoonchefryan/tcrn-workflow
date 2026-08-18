@@ -28,7 +28,12 @@ A `position` binds `conferenceId`, `projectId`, an `actorId`, a bounded
 `minutes` bind `conferenceId`, a `summary`, an `outcomeClass` (discussion_only,
 recommendation, role_decision, blocked, owner_intent_required — a truthful class,
 `owner_intent_required` where that is the fact), `decisions`, and
-`unresolvedIssues`. All records carry `id`, `projectId`, `revision`, a strict
+`unresolvedIssues`. All five stay valid in the schema and in replay; the write
+path declines to mint `blocked`, which names a state rather than an outcome and
+has never been used on this surface (`TCRN-CROSS-MIN-102` 裁定三).
+`discussion_only` is deliberately kept: minutes are the record of a deliberation,
+and one that reached no ruling still needs a truthful class to close under —
+cancelling instead produces no minutes at all and loses the summary. All records carry `id`, `projectId`, `revision`, a strict
 `updatedAt` instant, `tombstone`, and a closed `extensions` map;
 `additionalProperties` is closed and text fields are byte-budgeted.
 

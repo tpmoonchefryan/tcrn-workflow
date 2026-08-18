@@ -1424,9 +1424,21 @@ function assertWorkAnnotationExtensions(
 
 // WSD-4: the designated set is exactly "a transition whose target is done".
 // cancelled/blocked/ready targets are exempt so cleanup can never wedge. A
-// non-tombstoned pending gate anchored to the work item blocks the move. The
+// non-tombstoned unsatisfied gate anchored to the work item blocks the move. The
 // identical predicate runs on the verb (WORKSPACE_GATE_PENDING) and in replay
 // (WORKSPACE_EVENT_CORRUPT), so a hand-tampered log cannot bypass the live check.
+//
+// TCRN-CROSS-MIN-102 裁定一: this counted `pending` alone, while GATE_TRANSITIONS
+// lets a gate move pending↔blocked freely and without evidence. Flipping a gate to
+// blocked therefore *released* the work item — two legal commands took an
+// unsatisfied gate out of the way of done, in a state whose name says the opposite.
+// The predicate is now "not satisfied", which is what a gate means: satisfied is
+// the only state reached by citing resolving minutes, and it is terminal. The
+// documented deadlock escape is unchanged and is still the tombstone route, not
+// blocked. No gate on this platform has ever held blocked, so the reducer side of
+// this tightening is retroactive over an empty set here; for a foreign chain that
+// did use it, replay now refuses a work record that was driven to done past a
+// blocked gate, which is the defect being named rather than a new rule.
 function assertGateClearance(gates: Iterable<GateRecord>, workId: string, targetStatus: string, reasonCode: WorkspaceReasonCode): void {
   if (targetStatus !== "done") {
     return;
@@ -1437,7 +1449,7 @@ function assertGateClearance(gates: Iterable<GateRecord>, workId: string, target
   // fires at most once per work record rather than once per work.updated.
   recordCollectionScan(candidates.length);
   const blocking = candidates
-    .filter((gate) => !gate.tombstone && gate.status === "pending" && gate.workId === workId)
+    .filter((gate) => !gate.tombstone && gate.status !== "satisfied" && gate.workId === workId)
     .map((gate) => gate.id)
     .sort(compareCanonicalText);
   if (blocking.length > 0) {
@@ -3849,8 +3861,11 @@ export async function transitionGateInWorkspace(workspaceRoot: string, lease: Wo
       // gate-v1: a gate created as owner_intent_required declares that closing it takes
       // owner intent. Until now that declaration was inert -- whichever actor ran the
       // command could satisfy it. The class is the opt-in: a deployment that does not
-      // want identity checked has four other classes to choose from, and the choice is
-      // made per gate by whoever creates it, so no chain-wide switch is needed.
+      // want identity checked creates the gate as role_decision instead, and the choice
+      // is made per gate by whoever creates it, so no chain-wide switch is needed.
+      // (This used to say "four other classes". Since TCRN-CROSS-MIN-102 裁定三 the write
+      // path mints two, so the opt-out is one named alternative rather than a set. The
+      // mechanism is unchanged; the count in the sentence was not.)
       //
       // Enforcement lives here, at the verb, and deliberately not on replay. Replay must
       // rebuild a chain on a machine that has never seen the roster -- a clone, a restore

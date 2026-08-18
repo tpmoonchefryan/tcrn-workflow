@@ -721,9 +721,13 @@ test("WSD-2: the eight governed verbs plus gate-delete mutate and read under lea
     "--title", "Decision gate", "--outcome-class", "role_decision"])).output);
   assert.equal(gateReceipt.version, 8);
   assert.equal(gateReceipt.recordId, deriveStableId("gate", "GATE-CLI"));
+  // MIN-102 裁定三: a gate is minted as role_decision or owner_intent_required now;
+  // the other three classes reached no engine behaviour and were never used on any
+  // gate here. The record vocabulary is unchanged, so this fixture's second gate just
+  // uses a class the write path still mints.
   await invokeCli(["gate-create", "--workspace", ws, "--expected-version", "8", "--at", instant(9),
     "--external-key", "GATE-CLI-2", "--project-id", fx.projectId, "--work-id", fx.workId,
-    "--title", "Second gate", "--outcome-class", "recommendation"]);
+    "--title", "Second gate", "--outcome-class", "role_decision"]);
 
   // gate-transition pending -> satisfied, carrying the resolving minutes locator.
   const transitionReceipt = assertCanonicalJson((await invokeCli(["gate-transition", "--workspace", ws,
@@ -893,6 +897,38 @@ test("WSD-4: a pending gate fails a work transition to done closed at the verb a
     expectedVersion: version, occurredAt: instant(6), id: fx.workId, status: "done",
   }));
   assert.equal((await materializeWorkspace(fx.workspace)).version, version, "the blocked transition appended no event");
+});
+
+// MIN-102 裁定一. The clearance predicate counted `pending` alone while
+// GATE_TRANSITIONS lets a gate move pending↔blocked freely and without evidence, so
+// two legal commands took an unsatisfied gate out of the way of done — in a state
+// whose name says the opposite. `satisfied` is the only state reached by citing
+// resolving minutes, so it is the only one that may clear.
+test("MIN-102 flipping a gate to blocked does not release the work item", async (context) => {
+  const fx = await activeGatedFixture(context);
+  const seeded = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 4, occurredAt: instant(5), externalKey: "GATE-DISARM", projectId: fx.projectId, workId: fx.workId,
+    title: "Decision gate", outcomeClass: "role_decision",
+  });
+  const gateId = seeded.gates[0].id;
+  const blocked = await transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: seeded.version, occurredAt: instant(6), id: gateId, status: "blocked",
+  });
+  assert.equal(blocked.gates[0].status, "blocked", "the move itself stays legal — cleanup must never wedge");
+  await expectReasonAsync("WORKSPACE_GATE_PENDING", () => transitionWork(fx.workspace, fx.lease, {
+    expectedVersion: blocked.version, occurredAt: instant(7), id: fx.workId, status: "done",
+  }));
+  assert.equal((await materializeWorkspace(fx.workspace)).version, blocked.version, "the refused transition appended no event");
+
+  // The escape is unchanged and is still the tombstone, not the blocked state.
+  const removed = await deleteGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: blocked.version, occurredAt: instant(8), id: gateId,
+  });
+  const done = await transitionWork(fx.workspace, fx.lease, {
+    expectedVersion: removed.version, occurredAt: instant(9), id: fx.workId, status: "done",
+  });
+  assert.equal(done.work.find((entry) => entry.id === fx.workId).status, "done");
+  assert.deepEqual(await materializeWorkspace(fx.workspace), done, "the committed delta equals a full replay");
 });
 
 test("WSD-4: minutes-backed satisfaction unblocks the transition to done and the whole chain replays deterministically", async (context) => {
@@ -1607,6 +1643,41 @@ test("INIT-004: the CLI opens Incident for creation and it materializes outside 
     assert.equal(r.ok, false);
     assert.equal(r.reasonCode, "CLI_ARGUMENT_MALFORMED", `${closed} should stay closed at the CLI`);
   }
+});
+
+// MIN-102 裁定三. The narrowing is on what the write path mints, never on what a
+// record may hold: the schema and the replay reducer still accept all five classes,
+// so every historical event reads exactly as before. The asymmetry with a garbage
+// value is the part worth pinning — a retired-but-legal class is refused here, while
+// anything unrecognised still travels uncast so the engine answers with its own code
+// (the WSD-2 pass-through contract, which is what makes a typo diagnosable).
+test("MIN-102 the write path stops minting the retired outcome classes, and still passes garbage through", async (context) => {
+  const fx = await cliSeededFixture(context);
+  const ws = fx.ws;
+
+  for (const [index, retired] of ["blocked", "discussion_only", "recommendation"].entries()) {
+    const r = await invokeCli(["gate-create", "--workspace", ws, "--expected-version", "head",
+      "--at", instant(20), "--external-key", `GATE-RETIRED-${index + 1}`, "--project-id", fx.projectId,
+      "--work-id", fx.workId, "--title", "retired", "--outcome-class", retired]);
+    assert.equal(r.ok, false, retired);
+    assert.equal(r.reasonCode, "CLI_ARGUMENT_MALFORMED", `gate ${retired} must not be mintable`);
+  }
+
+  // The two that carry meaning stay mintable. External keys are indexed rather than
+  // built from the class name: the key grammar admits no underscore, so
+  // `owner_intent_required` cannot appear in one.
+  for (const [index, kept] of ["role_decision", "owner_intent_required"].entries()) {
+    const r = await invokeCli(["gate-create", "--workspace", ws, "--expected-version", "head", "--at", instant(21 + index),
+      "--external-key", `GATE-KEPT-${index + 1}`, "--project-id", fx.projectId, "--work-id", fx.workId,
+      "--title", "kept", "--outcome-class", kept]);
+    assert.equal(r.ok, true, `${kept} must still be mintable: ${r.reasonCode}`);
+  }
+
+  const garbage = await invokeCli(["gate-create", "--workspace", ws, "--expected-version", "head",
+    "--at", instant(22), "--external-key", "GATE-GARBAGE", "--project-id", fx.projectId,
+    "--work-id", fx.workId, "--title", "garbage", "--outcome-class", "not-a-class"]);
+  assert.equal(garbage.ok, false);
+  assert.equal(garbage.reasonCode, "GATE_SCHEMA_INVALID", "an unrecognised value must still reach the engine");
 });
 
 // INIT-008: the sprint / release-train mechanism — a Release is a top-level batch

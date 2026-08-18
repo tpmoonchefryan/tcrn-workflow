@@ -338,6 +338,30 @@ function required(values: Readonly<Record<string, string>>, names: readonly stri
   }
 }
 
+/**
+ * Outcome classes this write path will no longer mint (TCRN-CROSS-MIN-102 裁定三).
+ *
+ * The five-class vocabulary stays in the schema and in replay, so every record ever
+ * written still validates and every chain still reads. What changes is what a new
+ * record may be born as. On a gate, three of the five were pure labels — only
+ * `owner_intent_required` reaches any engine behaviour, and across this platform's
+ * 35 gates none was ever created with the other three. On a conference,
+ * `discussion_only` is kept: minutes are the record of a deliberation, and a
+ * deliberation that reached no ruling has to have a truthful class to close under.
+ * `blocked` is retired on both — it names a state, not an outcome, and it has never
+ * been used on either surface.
+ */
+const RETIRED_OUTCOME_CLASSES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  "gate-create": Object.freeze(["blocked", "discussion_only", "recommendation"]),
+  "conference-close": Object.freeze(["blocked"]),
+});
+
+function assertMintableOutcomeClass(verb: keyof typeof RETIRED_OUTCOME_CLASSES, value: string | undefined): void {
+  if (value !== undefined && RETIRED_OUTCOME_CLASSES[verb]?.includes(value)) {
+    fail("CLI_ARGUMENT_MALFORMED", `outcome-class=${value}`);
+  }
+}
+
 function expectedVersion(values: Readonly<Record<string, string>>): number {
   const version = Number(values["expected-version"]);
   if (!Number.isSafeInteger(version) || version < 0) {
@@ -2729,6 +2753,13 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   // schema validators fail closed with their verbatim reason code (e.g.
   // CONFERENCE_SCHEMA_INVALID / GATE_SCHEMA_INVALID). The two list verbs take no
   // lease and read the materialized head, emitting the utf8-byte-ordered record array.
+  //
+  // TCRN-CROSS-MIN-102 裁定三 narrows what this path will *mint* without narrowing
+  // what the records may *contain*: `assertMintableOutcomeClass` refuses the retired
+  // classes here, and everything else — including a garbage value — still travels
+  // uncast so the engine keeps answering with its own code. That asymmetry is
+  // deliberate: the pass-through contract above is what makes a malformed value
+  // diagnosable, and a full CLI whitelist would have taken that away to buy nothing.
   if (command === "conference-open") {
     const values = parseArguments(rest, [...shared, "external-key", "project-id", "type", "title", "work-ids", "desired-outcome", "participant-ids", "actor"]);
     required(values, [...requiredShared, "external-key", "project-id", "type", "title", "work-ids", "desired-outcome", "participant-ids"]);
@@ -2791,6 +2822,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // desync the rebind before capture.
     const values = parseArguments(rest, [...shared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues", "execution-form", "actor", "distill", "accountable-owner-id", "stale-days", "evidence-ids"]);
     required(values, [...requiredShared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues"]);
+    assertMintableOutcomeClass("conference-close", values["outcome-class"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const conferenceId = values["conference-id"] ?? "";
@@ -2904,6 +2936,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   if (command === "gate-create") {
     const values = parseArguments(rest, [...shared, "external-key", "project-id", "work-id", "title", "outcome-class", "actor"]);
     required(values, [...requiredShared, "external-key", "project-id", "work-id", "title", "outcome-class"]);
+    assertMintableOutcomeClass("gate-create", values["outcome-class"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => createGateInWorkspace(workspace, lease, {
