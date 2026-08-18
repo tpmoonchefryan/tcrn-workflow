@@ -1,5 +1,7 @@
 # Contributing
 
+English · [简体中文](./CONTRIBUTING.zh-CN.md) · [日本語](./CONTRIBUTING.ja.md) · [한국어](./CONTRIBUTING.ko.md) · [Français](./CONTRIBUTING.fr.md)
+
 Use the pinned Node and pnpm versions. Do not enable package lifecycle scripts,
 add an unpinned executable, introduce telemetry, or make a project command
 implicitly access the network.

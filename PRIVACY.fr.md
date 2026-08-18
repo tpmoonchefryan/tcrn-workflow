@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: PRIVACY.md 12de23e4d33599a564d6978c87db100681c6f2add40859451064652d333567ae -->
+<!-- tcrn-doc-synced-to: PRIVACY.md 6f95447d986dc694988233e433650c82fd3c76d8dfc74c27db7a0ab08d7f39bf -->
 
-> **La version anglaise fait autorité.** Cette traduction est fournie par commodité ; en cas de divergence, le texte anglais de PRIVACY.md prévaut.
+> **La version anglaise fait autorité.** Cette traduction est fournie par commodité ; en cas de divergence, le texte anglais de [PRIVACY.md](./PRIVACY.md) prévaut.
+
+[English](./PRIVACY.md) · [简体中文](./PRIVACY.zh-CN.md) · [日本語](./PRIVACY.ja.md) · [한국어](./PRIVACY.ko.md) · Français
 
 # Confidentialité
 

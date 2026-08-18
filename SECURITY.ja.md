@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: SECURITY.md 9a60da68a5a0fb833409778cb8d1c0709178170b037e52a3ff8b64f30410e994 -->
+<!-- tcrn-doc-synced-to: SECURITY.md c3f50325f0ca058e41c5d9173e03b5670103466dba85f0bbf6fd37120713bd05 -->
 
-> **英語版が正本です。** この翻訳は便宜のために提供されるものであり、両者に相違がある場合は SECURITY.md の英語テキストが優先されます。
+> **英語版が正本です。** この翻訳は便宜のために提供されるものであり、両者に相違がある場合は [SECURITY.md](./SECURITY.md) の英語テキストが優先されます。
+
+[English](./SECURITY.md) · [简体中文](./SECURITY.zh-CN.md) · 日本語 · [한국어](./SECURITY.ko.md) · [Français](./SECURITY.fr.md)
 
 # セキュリティポリシー
 

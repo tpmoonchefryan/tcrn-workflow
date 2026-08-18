@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: PRIVACY.md 12de23e4d33599a564d6978c87db100681c6f2add40859451064652d333567ae -->
+<!-- tcrn-doc-synced-to: PRIVACY.md 6f95447d986dc694988233e433650c82fd3c76d8dfc74c27db7a0ab08d7f39bf -->
 
-> **英語版が正式版です。** この翻訳は便宜のために提供されるものであり、両者が異なる場合は PRIVACY.md の英語テキストが優先されます。
+> **英語版が正式版です。** この翻訳は便宜のために提供されるものであり、両者が異なる場合は [PRIVACY.md](./PRIVACY.md) の英語テキストが優先されます。
+
+[English](./PRIVACY.md) · [简体中文](./PRIVACY.zh-CN.md) · 日本語 · [한국어](./PRIVACY.ko.md) · [Français](./PRIVACY.fr.md)
 
 # プライバシー
 

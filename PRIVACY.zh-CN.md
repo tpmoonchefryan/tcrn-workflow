@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: PRIVACY.md 12de23e4d33599a564d6978c87db100681c6f2add40859451064652d333567ae -->
+<!-- tcrn-doc-synced-to: PRIVACY.md 6f95447d986dc694988233e433650c82fd3c76d8dfc74c27db7a0ab08d7f39bf -->
 
-> **英文版本为权威版本。** 本翻译仅供参考；如两者有出入，以 PRIVACY.md 的英文文本为准。
+> **英文版本为权威版本。** 本翻译仅供参考；如两者有出入，以 [PRIVACY.md](./PRIVACY.md) 的英文文本为准。
+
+[English](./PRIVACY.md) · 简体中文 · [日本語](./PRIVACY.ja.md) · [한국어](./PRIVACY.ko.md) · [Français](./PRIVACY.fr.md)
 
 # 隐私
 

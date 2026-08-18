@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: CONTRIBUTING.md 6f7f5b3c6c3f927d93cad2129a79848a8983cd9ea4a7cc50ebe1a89a6cf3e663 -->
+<!-- tcrn-doc-synced-to: CONTRIBUTING.md b3ab92e983b0fa51919e7e4f1b12cbfbda751b7193f6eead4ab4083550ad7b0f -->
 
-> **英語版が正本です。** この翻訳は便宜のために提供されるものであり、両者が異なる場合は CONTRIBUTING.md にある英語のテキストが優先されます。
+> **英語版が正本です。** この翻訳は便宜のために提供されるものであり、両者が異なる場合は [CONTRIBUTING.md](./CONTRIBUTING.md) にある英語のテキストが優先されます。
+
+[English](./CONTRIBUTING.md) · [简体中文](./CONTRIBUTING.zh-CN.md) · 日本語 · [한국어](./CONTRIBUTING.ko.md) · [Français](./CONTRIBUTING.fr.md)
 
 # コントリビューション
 

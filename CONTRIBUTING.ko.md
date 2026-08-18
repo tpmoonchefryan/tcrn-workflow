@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: CONTRIBUTING.md 6f7f5b3c6c3f927d93cad2129a79848a8983cd9ea4a7cc50ebe1a89a6cf3e663 -->
+<!-- tcrn-doc-synced-to: CONTRIBUTING.md b3ab92e983b0fa51919e7e4f1b12cbfbda751b7193f6eead4ab4083550ad7b0f -->
 
-> **영어가 권위 있는 버전입니다.** 이 번역은 편의를 위해 제공됩니다. 둘이 다를 경우 CONTRIBUTING.md의 영어 텍스트가 우선합니다.
+> **영어가 권위 있는 버전입니다.** 이 번역은 편의를 위해 제공됩니다. 둘이 다를 경우 [CONTRIBUTING.md](./CONTRIBUTING.md)의 영어 텍스트가 우선합니다.
+
+[English](./CONTRIBUTING.md) · [简体中文](./CONTRIBUTING.zh-CN.md) · [日本語](./CONTRIBUTING.ja.md) · 한국어 · [Français](./CONTRIBUTING.fr.md)
 
 # 기여
 

@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: PRIVACY.md 12de23e4d33599a564d6978c87db100681c6f2add40859451064652d333567ae -->
+<!-- tcrn-doc-synced-to: PRIVACY.md 6f95447d986dc694988233e433650c82fd3c76d8dfc74c27db7a0ab08d7f39bf -->
 
-> **영어가 정본입니다.** 이 번역은 편의를 위해 제공되며, 둘이 다를 경우 PRIVACY.md의 영어 텍스트가 우선합니다.
+> **영어가 정본입니다.** 이 번역은 편의를 위해 제공되며, 둘이 다를 경우 [PRIVACY.md](./PRIVACY.md)의 영어 텍스트가 우선합니다.
+
+[English](./PRIVACY.md) · [简体中文](./PRIVACY.zh-CN.md) · [日本語](./PRIVACY.ja.md) · 한국어 · [Français](./PRIVACY.fr.md)
 
 # 프라이버시
 

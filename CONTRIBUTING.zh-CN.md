@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: CONTRIBUTING.md 6f7f5b3c6c3f927d93cad2129a79848a8983cd9ea4a7cc50ebe1a89a6cf3e663 -->
+<!-- tcrn-doc-synced-to: CONTRIBUTING.md b3ab92e983b0fa51919e7e4f1b12cbfbda751b7193f6eead4ab4083550ad7b0f -->
 
-> **英文版为权威版本。** 本翻译仅供参考；如有出入，以 CONTRIBUTING.md 的英文文本为准。
+> **英文版为权威版本。** 本翻译仅供参考；如有出入，以 [CONTRIBUTING.md](./CONTRIBUTING.md) 的英文文本为准。
+
+[English](./CONTRIBUTING.md) · 简体中文 · [日本語](./CONTRIBUTING.ja.md) · [한국어](./CONTRIBUTING.ko.md) · [Français](./CONTRIBUTING.fr.md)
 
 # 参与贡献
 

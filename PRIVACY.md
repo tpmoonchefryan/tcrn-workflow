@@ -1,5 +1,7 @@
 # Privacy
 
+English · [简体中文](./PRIVACY.zh-CN.md) · [日本語](./PRIVACY.ja.md) · [한국어](./PRIVACY.ko.md) · [Français](./PRIVACY.fr.md)
+
 TCRN Workflow contains no telemetry client. P1 project commands run with a Node
 process network guard, an exact child-process allowlist, offline package-manager
 defaults, and static checks for network-capable imports and tools. This is not a

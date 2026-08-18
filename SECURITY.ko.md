@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: SECURITY.md 9a60da68a5a0fb833409778cb8d1c0709178170b037e52a3ff8b64f30410e994 -->
+<!-- tcrn-doc-synced-to: SECURITY.md c3f50325f0ca058e41c5d9173e03b5670103466dba85f0bbf6fd37120713bd05 -->
 
-> **영어가 정본입니다.** 이 번역은 편의를 위해 제공되며, 둘이 다를 경우 SECURITY.md의 영어 텍스트가 우선합니다.
+> **영어가 정본입니다.** 이 번역은 편의를 위해 제공되며, 둘이 다를 경우 [SECURITY.md](./SECURITY.md)의 영어 텍스트가 우선합니다.
+
+[English](./SECURITY.md) · [简体中文](./SECURITY.zh-CN.md) · [日本語](./SECURITY.ja.md) · 한국어 · [Français](./SECURITY.fr.md)
 
 # 보안 정책
 

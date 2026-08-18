@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: CONTRIBUTING.md 6f7f5b3c6c3f927d93cad2129a79848a8983cd9ea4a7cc50ebe1a89a6cf3e663 -->
+<!-- tcrn-doc-synced-to: CONTRIBUTING.md b3ab92e983b0fa51919e7e4f1b12cbfbda751b7193f6eead4ab4083550ad7b0f -->
 
-> **La version anglaise fait autorité.** Cette traduction est fournie par commodité ; en cas de divergence entre les deux, c'est le texte anglais de CONTRIBUTING.md qui prévaut.
+> **La version anglaise fait autorité.** Cette traduction est fournie par commodité ; en cas de divergence entre les deux, c'est le texte anglais de [CONTRIBUTING.md](./CONTRIBUTING.md) qui prévaut.
+
+[English](./CONTRIBUTING.md) · [简体中文](./CONTRIBUTING.zh-CN.md) · [日本語](./CONTRIBUTING.ja.md) · [한국어](./CONTRIBUTING.ko.md) · Français
 
 # Contribution
 

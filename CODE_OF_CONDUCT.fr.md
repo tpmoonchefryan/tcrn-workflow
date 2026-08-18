@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: CODE_OF_CONDUCT.md 4b5b0612ea4732bbc147c47ea544b9c884b018685e50336ded2e4a05754a28dc -->
+<!-- tcrn-doc-synced-to: CODE_OF_CONDUCT.md cf759ae396293b39e3135cb6e64aec319d0dd4a309baa015d5da2fe2ac149642 -->
 
-> **La version anglaise fait foi.** Cette traduction est fournie par commodité ; en cas de divergence, c'est le texte anglais de CODE_OF_CONDUCT.md qui prévaut.
+> **La version anglaise fait foi.** Cette traduction est fournie par commodité ; en cas de divergence, c'est le texte anglais de [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) qui prévaut.
+
+[English](./CODE_OF_CONDUCT.md) · [简体中文](./CODE_OF_CONDUCT.zh-CN.md) · [日本語](./CODE_OF_CONDUCT.ja.md) · [한국어](./CODE_OF_CONDUCT.ko.md) · Français
 
 # Code de conduite
 

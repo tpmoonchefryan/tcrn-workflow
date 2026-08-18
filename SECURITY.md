@@ -1,5 +1,7 @@
 # Security Policy
 
+English · [简体中文](./SECURITY.zh-CN.md) · [日本語](./SECURITY.ja.md) · [한국어](./SECURITY.ko.md) · [Français](./SECURITY.fr.md)
+
 ## Supported versions
 
 Security fixes target the current default branch and the latest tagged release

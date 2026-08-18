@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: SECURITY.md 9a60da68a5a0fb833409778cb8d1c0709178170b037e52a3ff8b64f30410e994 -->
+<!-- tcrn-doc-synced-to: SECURITY.md c3f50325f0ca058e41c5d9173e03b5670103466dba85f0bbf6fd37120713bd05 -->
 
-> **La version anglaise fait autorité.** Cette traduction est fournie par commodité ; en cas de divergence entre les deux, c'est le texte anglais de SECURITY.md qui prévaut.
+> **La version anglaise fait autorité.** Cette traduction est fournie par commodité ; en cas de divergence entre les deux, c'est le texte anglais de [SECURITY.md](./SECURITY.md) qui prévaut.
+
+[English](./SECURITY.md) · [简体中文](./SECURITY.zh-CN.md) · [日本語](./SECURITY.ja.md) · [한국어](./SECURITY.ko.md) · Français
 
 # Politique de sécurité
 

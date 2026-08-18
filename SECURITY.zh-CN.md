@@ -1,6 +1,8 @@
-<!-- tcrn-doc-synced-to: SECURITY.md 9a60da68a5a0fb833409778cb8d1c0709178170b037e52a3ff8b64f30410e994 -->
+<!-- tcrn-doc-synced-to: SECURITY.md c3f50325f0ca058e41c5d9173e03b5670103466dba85f0bbf6fd37120713bd05 -->
 
-> **英文版本为权威版本。** 本翻译仅供参考；若两者有出入，以 SECURITY.md 处的英文文本为准。
+> **英文版本为权威版本。** 本翻译仅供参考；若两者有出入，以 [SECURITY.md](./SECURITY.md) 处的英文文本为准。
+
+[English](./SECURITY.md) · 简体中文 · [日本語](./SECURITY.ja.md) · [한국어](./SECURITY.ko.md) · [Français](./SECURITY.fr.md)
 
 # 安全策略
 
