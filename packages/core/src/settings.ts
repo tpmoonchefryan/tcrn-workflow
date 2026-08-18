@@ -26,6 +26,7 @@ export type SettingControlType = "enum" | "boolean" | "number" | "text";
 export type SettingKey =
   | "backup.cadence"
   | "backup.destination"
+  | "conference.positionBudgetBytes"
   | "design.authority"
   | "driver.capabilityProfile"
   | "engine.requiredVersion"
@@ -137,6 +138,23 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     controlType: "text",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: null,
+  },
+  {
+    // MIN-102 裁定四: how many bytes one conference position may carry in this
+    // workspace. Enforced on the write path only. The replay reducer knows a single
+    // fixed ceiling (CONFERENCE_POSITION_CEILING_BYTES) and nothing about this key,
+    // because a record whose validity depended on a setting would be legal or illegal
+    // according to where it sits in the chain — which is precisely the store-independence
+    // conference-v1 promises. So this is a deployment's own writing budget, not a
+    // definition of what a valid position is: lowering it never invalidates anything
+    // already written, and raising it can never exceed the ceiling.
+    key: "conference.positionBudgetBytes",
+    type: "string",
+    controlType: "number",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "4096",
+    min: 512,
+    max: 8192,
   },
   {
     // INC-193: which design system this workspace treats as its authority, named by the
@@ -263,10 +281,16 @@ function engineVersionParts(value: string): readonly [number, number, number] {
   return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
-function orchestrationInteger(value: string, key: SettingKey): void {
-  const maximum = key === "execution.maxConcurrentSubagents" ? 32 : 4;
-  if (!/^(?:0|[1-9][0-9]*)$/u.test(value) || Number(value) < 1 || Number(value) > maximum) {
-    fail("SETTINGS_VALUE_INVALID", `${key} must be a decimal integer from 1 to ${maximum}`);
+// The bounds come from the catalog entry that already declares them rather than from
+// a second table keyed by name: the entry is what the portal renders its stepper from,
+// so a separate copy here would be two answers to one question with nothing comparing
+// them. Every numeric setting is validated by this one function, which is also why
+// adding a numeric key needs no edit here.
+function boundedInteger(value: string, entry: SettingsCatalogEntry): void {
+  const minimum = entry.min ?? 1;
+  const maximum = entry.max ?? Number.MAX_SAFE_INTEGER;
+  if (!/^(?:0|[1-9][0-9]*)$/u.test(value) || Number(value) < minimum || Number(value) > maximum) {
+    fail("SETTINGS_VALUE_INVALID", `${entry.key} must be a decimal integer from ${minimum} to ${maximum}`);
   }
 }
 
@@ -305,8 +329,8 @@ export function validateSettingValue(key: unknown, value: unknown, workspaceRoot
   if (entry.key === "engine.requiredVersion") {
     engineVersionParts(value);
   }
-  if (entry.key === "execution.maxConcurrentSubagents" || entry.key === "execution.maxDispatchDepth") {
-    orchestrationInteger(value, entry.key);
+  if (entry.controlType === "number") {
+    boundedInteger(value, entry);
   }
   if (entry.type === "url") {
     // Shape, never reachability: the engine is offline by construction, so "is this

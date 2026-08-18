@@ -106,6 +106,26 @@ binary reading a workspace that contains these events fails closed with
 `WORKSPACE_EVENT_CORRUPT` (unknown operation), and a workspace that never uses
 them stays fully readable by old binaries.
 
+The `position` ceiling follows the same shape, and carries the same warning. Up
+to 2,048 bytes every binary agrees; a chain that has written a position larger
+than that is refused by any engine older than the release which raised the
+ceiling to 8,192, with `CONFERENCE_BUDGET_EXCEEDED` folded into
+`WORKSPACE_EVENT_CORRUPT`. **That refusal is indistinguishable from real byte
+damage**, so the upgrade is ordered rather than assumed: every copy that will
+read a chain is raised first, and only then may the first oversized position be
+written. A deployment states the floor it depends on in `engine.requiredVersion`;
+`platform-doctor`'s `engineAlignment` leg is what compares that declaration
+against the copies actually installed.
+
+The per-workspace `conference.positionBudgetBytes` setting (default 4,096, bounded
+by the ceiling) is a **write-path** budget and is deliberately invisible to replay.
+Record validity stays a pure function of the record's own bytes, which is what
+keeps the store-independence promise below true and lets the JSON Schema state a
+bound at all: were the admissible size read from chain state, the same position
+would be valid or invalid according to its position in the chain. Lowering the
+setting therefore refuses new writes without invalidating anything already
+written.
+
 ## Residuals
 
 There is no scheduler, participant notification, cross-project conference, or

@@ -38,8 +38,8 @@
     "position": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 2048,
-      "x-tcrn-maxUtf8Bytes": 2048
+      "maxLength": 8192,
+      "x-tcrn-maxUtf8Bytes": 8192
     },
     "risks": {
       "type": "array",

@@ -68,6 +68,32 @@ const maximumExtensionProperties = 64;
  */
 export const CONFERENCE_DISTILL_SUMMARY_BYTES = 2_048;
 
+/**
+ * The hard ceiling on a single `position`, and the only budget replay knows about.
+ *
+ * A deliberation's positions are carried verbatim — summarising one is exactly the
+ * thing the deliberation-adoption convention forbids — and at 2,048 bytes a CJK
+ * position ran out at roughly 680 characters, which forced 23 of this platform's
+ * deliberations to be split across continuation records purely to fit.
+ *
+ * Why a ceiling *and* a setting, rather than the setting alone: this predicate runs
+ * in the replay reducer, so if the admissible size depended on a workspace setting
+ * then the same bytes would be legal or illegal according to where they sit in the
+ * chain. That would falsify conference-v1's store-independent promise and leave the
+ * schema unable to state a bound at all. So replay knows only this constant, record
+ * validity stays a pure function of the bytes, and the per-deployment budget
+ * (`conference.positionBudgetBytes`) is enforced on the write path instead — the
+ * shape `execution.independenceFloor` already uses.
+ *
+ * Raising this is a one-way step for a chain that uses it: an engine older than the
+ * release that introduced it reads an over-2,048 position as WORKSPACE_EVENT_CORRUPT,
+ * which is why it is version-gated once here rather than nudged upward repeatedly.
+ * Only `position` is raised; every other conference text field keeps 2,048, which
+ * also keeps the per-segment envelope within its 1 MiB canonical bound.
+ * TCRN-CROSS-MIN-102 裁定四.
+ */
+export const CONFERENCE_POSITION_CEILING_BYTES = 8_192;
+
 export class ConferenceError extends Error {
   readonly reasonCode: ConferenceReasonCode;
   constructor(reasonCode: ConferenceReasonCode, message: string) {
@@ -99,9 +125,9 @@ function id(value: unknown, label: string): string {
   return value as string;
 }
 
-function text(value: unknown, label: string): string {
+function text(value: unknown, label: string, budget: number = maximumTextBytes): string {
   if (typeof value !== "string" || !value.isWellFormed() || value.length === 0) fail("CONFERENCE_UNICODE_INVALID", label);
-  if (Buffer.byteLength(value, "utf8") > maximumTextBytes) fail("CONFERENCE_BUDGET_EXCEEDED", label);
+  if (Buffer.byteLength(value, "utf8") > budget) fail("CONFERENCE_BUDGET_EXCEEDED", label);
   return value;
 }
 
@@ -215,7 +241,7 @@ export function validateConferencePosition(value: unknown): ConferencePosition {
     conferenceId: id(document.conferenceId, "conferenceId"),
     projectId: id(document.projectId, "projectId"),
     actorId: id(document.actorId, "actorId"),
-    position: text(document.position, "position"),
+    position: text(document.position, "position", CONFERENCE_POSITION_CEILING_BYTES),
     risks: boundedTextArray(document.risks, "risks", 32),
     recommendations: boundedTextArray(document.recommendations, "recommendations", 32),
     evidenceIds: idArray(document.evidenceIds, "evidenceIds", { max: 32 }),

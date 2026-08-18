@@ -3,6 +3,54 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.13.0 — 2026-08-18
+
+Carries `TCRN-CROSS-MIN-102`, the ruling that closed a review of this engine's
+own surface and constraint quality. Two of the four changes are defect fixes
+that tighten behaviour; read the compatibility note at the end before upgrading
+a chain that other copies also read.
+
+- **Only a satisfied gate clears the way to `done`.** The clearance predicate
+  counted `pending` alone while `GATE_TRANSITIONS` lets a gate move
+  `pending`↔`blocked` freely and without evidence, so flipping a gate to
+  `blocked` released the work item — two legal commands took an unsatisfied gate
+  out of the way, in a state whose name says the opposite. `assertGateClearance`
+  is shared by the verb and the replay reducer, so one predicate tightened both
+  sides and the "identical predicate" invariant still holds. The documented
+  deadlock escape is unchanged and is still the tombstone.
+- **The Owner-acceptance gate no longer depends on the language a scope is
+  written in.** The four Goal purpose anchors accept `为谁`/`beneficiary`,
+  `目的锚`/`purpose anchor`, `符合性判据`/`compliance criterion`, and
+  `判定人`/`decider`; `storyScopeNamesOwnerDecider` moved with them in the same
+  change, because an English scope naming Owner as decider while that probe
+  stayed Chinese-only would have reached `done` with no deciding-minutes
+  backlink. Measured against all 590 live Story scopes, none changed verdict.
+- **A single conference position may now carry up to 8,192 bytes**, with a
+  per-workspace writing budget `conference.positionBudgetBytes` (default 4,096,
+  bounded by the ceiling) enforced on the write path. Replay knows only the
+  fixed ceiling, so a record's validity stays a pure function of its own bytes
+  and `conference-v1`'s store-independence promise survives.
+- **The write path stops minting outcome classes that meant nothing.**
+  `gate-create` mints `role_decision` and `owner_intent_required`;
+  `conference-close` declines only `blocked`. `discussion_only` is kept on
+  conferences on purpose — minutes are the record of a deliberation, and one
+  that reached no ruling still needs a truthful class. All five classes remain
+  valid in the schema and in replay, so no existing record is affected, and an
+  unrecognised value still reaches the engine's own reason code.
+- `platform-doctor` gains an `engineAlignment` leg that compares each partition's
+  declared `engine.requiredVersion` against every installed engine copy.
+- Retired the `legacyDecision` scope check (it could not fail unless the Goal
+  decider anchor had already failed) and the duplicate acceptance-shape
+  evaluation; pinned the distilled summary to the knowledge store's own bound.
+
+**Compatibility.** A chain that has written a position larger than 2,048 bytes
+is refused by any older engine with `WORKSPACE_EVENT_CORRUPT`, which is
+indistinguishable from real byte damage. Upgrade every copy that reads a chain
+before writing the first oversized position, declare the floor in
+`engine.requiredVersion`, and let `platform-doctor` check it. Chains that stay
+under the old bound are unaffected. The gate tightening is retroactive by
+design: a work record driven to `done` past a blocked gate no longer replays.
+
 ## 0.11.18 — 2026-08-17
 
 - The engine repository no longer reads or executes anything inside a sibling

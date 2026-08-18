@@ -120,6 +120,7 @@ import {
   SettingsError,
   compareEngineVersions,
   createWorkspaceSettingRecord,
+  settingsCatalogEntry,
   sortWorkspaceSettings,
   validateWorkspaceSettingRecord,
 } from "./settings.js";
@@ -3501,6 +3502,20 @@ export async function appendConferencePositionInWorkspace(workspaceRoot: string,
     const conference = openConferenceById(state, input.conferenceId);
     if (state.conferencePositions.some((entry) => entry.id === id)) {
       fail("WORKSPACE_INPUT_INVALID", `conference position ${id} already exists`);
+    }
+    // MIN-102 裁定四. The deployment's own writing budget for a position, read the way
+    // execution.independenceFloor is read: on the write path, from the state this
+    // mutation is building on. Replay never consults it — CONFERENCE_POSITION_CEILING_BYTES
+    // is the only bound a record's validity depends on — so lowering this setting can
+    // never invalidate a position already on the chain, and raising it can never admit
+    // one the ceiling would refuse. The reason code is the budget's own, because from
+    // the writer's side this is the same event: the position did not fit.
+    const positionBudget = Number(
+      state.settings.find((entry) => entry.key === "conference.positionBudgetBytes")?.value
+        ?? settingsCatalogEntry("conference.positionBudgetBytes").defaultValue,
+    );
+    if (Buffer.byteLength(input.position, "utf8") > positionBudget) {
+      throw new ConferenceError("CONFERENCE_BUDGET_EXCEEDED", `position exceeds conference.positionBudgetBytes=${positionBudget}`);
     }
     const record = appendConferencePosition({
       schemaVersion: CONFERENCE_POSITION_VERSION,

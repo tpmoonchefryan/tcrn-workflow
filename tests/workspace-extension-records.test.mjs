@@ -17,6 +17,7 @@ import {
   acquireWorkspaceLease,
   annotateWork,
   appendConferencePositionInWorkspace,
+  CONFERENCE_POSITION_CEILING_BYTES,
   cancelConferenceInWorkspace,
   closeConferenceInWorkspace,
   createGateInWorkspace,
@@ -30,6 +31,7 @@ import {
   materializeWorkspace,
   openConferenceInWorkspace,
   recoverWorkspace,
+  setWorkspaceSetting,
   transitionGateInWorkspace,
   transitionWork,
   validateWorkspace,
@@ -1795,4 +1797,51 @@ test("sprint: the CLI opens Release create and work-list --sprint filters member
   const noop = await invokeCli(["work-annotate", "--workspace", ws, "--expected-version", "4", "--at", instant(6), "--id", fx.workId, "--sprint", qualified]);
   assert.equal(noop.ok, false);
   assert.equal(noop.reasonCode, "WORKSPACE_INPUT_INVALID");
+});
+
+// MIN-102 裁定四. A position is carried verbatim — summarising one is what the
+// deliberation-adoption convention forbids — and 2,048 bytes ran out at roughly 680
+// CJK characters, which split 23 of this platform's deliberations across continuation
+// records purely to fit. The raise is deliberately split in two: a fixed ceiling that
+// replay knows, and a per-deployment budget that only the write path consults.
+test("MIN-102 the position ceiling is fixed for replay while the budget is a write-path setting", async (context) => {
+  const fx = await seededFixture(context);
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-BUDGET", projectId: fx.projectId,
+    type: "architecture", title: "Budget", linkedWorkIds: [fx.workId], desiredOutcome: "size a position", participantIds: [],
+  });
+  const conferenceId = state.conferences[0].id;
+  const append = (version, key, size) => appendConferencePositionInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: version, occurredAt: instant(4), conferenceId, externalKey: key,
+    authorActorId: "actor:minerva", position: "x".repeat(size), risks: [], recommendations: [], evidenceIds: [],
+  });
+
+  // The default budget is 4096: past the old 2048 bound, short of the ceiling.
+  state = await append(state.version, "POS-DEFAULT", 4096);
+  assert.equal(state.conferencePositions[0].position.length, 4096);
+  await expectReasonAsync("CONFERENCE_BUDGET_EXCEEDED", () => append(state.version, "POS-OVER-DEFAULT", 4097));
+
+  // Raising the setting admits more, up to the ceiling and never past it.
+  state = await setWorkspaceSetting(fx.workspace, fx.lease, {
+    expectedVersion: state.version, occurredAt: instant(5), key: "conference.positionBudgetBytes", value: "8192",
+  });
+  state = await append(state.version, "POS-AT-CEILING", CONFERENCE_POSITION_CEILING_BYTES);
+  await expectReasonAsync("CONFERENCE_BUDGET_EXCEEDED", () => append(state.version, "POS-PAST-CEILING", CONFERENCE_POSITION_CEILING_BYTES + 1));
+
+  // Lowering the budget refuses new writes and leaves the written ones readable: the
+  // record's validity is a function of its bytes, not of where it sits in the chain.
+  state = await setWorkspaceSetting(fx.workspace, fx.lease, {
+    expectedVersion: state.version, occurredAt: instant(6), key: "conference.positionBudgetBytes", value: "1024",
+  });
+  await expectReasonAsync("CONFERENCE_BUDGET_EXCEEDED", () => append(state.version, "POS-AFTER-LOWERING", 2048));
+  const replayed = await materializeWorkspace(fx.workspace);
+  assert.deepEqual(replayed, state, "positions written under a higher budget still replay");
+  assert.equal(replayed.conferencePositions.length, 2);
+
+  // The setting is bounded by the ceiling at the catalog layer too, so a deployment
+  // cannot declare a budget the reducer would then refuse.
+  await expectReasonAsync("SETTINGS_VALUE_INVALID", () => setWorkspaceSetting(fx.workspace, fx.lease, {
+    expectedVersion: state.version, occurredAt: instant(7), key: "conference.positionBudgetBytes",
+    value: String(CONFERENCE_POSITION_CEILING_BYTES + 1),
+  }));
 });
