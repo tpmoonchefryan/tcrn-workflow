@@ -18,8 +18,10 @@ code; the catalog is what the engine enforces. Reading a verb's name in a docume
 assuming its flags is how an agent writes a command that has never been valid.
 
 The catalog does not carry the *legal values* a flag accepts. Those come from the source.
-Work-status transitions, for one, are `planned → ready → active → done`; a `planned` item
-cannot go straight to `active`, and the engine refuses with `INVALID_TRANSITION` rather
+Work-status transitions, for one, are `planned → ready → active → done` for a record that
+already exists — but `work-create --status` sets the birth state directly, so a new item
+that is already being worked starts at `ready` or `active` rather than being walked there.
+A `planned` item cannot go straight to `active`, and the engine refuses with `INVALID_TRANSITION` rather
 than guessing what you meant.
 
 ### 2. Probe with reads, never with writes
