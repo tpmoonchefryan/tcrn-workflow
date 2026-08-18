@@ -1596,7 +1596,7 @@
         "tests/operator-authority.test.mjs",
         "tests/p7-compatibility-modes.test.mjs"
       ],
-      "fixtureDigest": "f4889ac5c267034e90b8fa5037543fd5139bd7a6e90cc3c3834c3da7cdbb0dba",
+      "fixtureDigest": "7158e36e18ce09e459bdfc693e79bc66a4a98363d17c035a43317a3c432cb222",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1746,7 +1746,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "a93d882e8cbf8b7951f1ff560e2bb6a48cf5e48889f38d1a352dcdc07dfc2eb3",
+      "fixtureDigest": "624b25cf4af08e0bcf8e2ed8f00fd09b36c3bf258eabf1490fd3fc4f870b9225",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1779,7 +1779,7 @@
         "scripts/task.mjs",
         "tests/act13-authority-output.test.mjs"
       ],
-      "fixtureDigest": "ae5592940e09aa3a1d83a92387583fafa8bf78542766600082863cba3de6b246",
+      "fixtureDigest": "65f6e40d64569b56cff66e784cbf4a0c9d60fcb0b792e0a6d81b3880899e8768",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
