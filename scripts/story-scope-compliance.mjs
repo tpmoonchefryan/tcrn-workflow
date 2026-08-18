@@ -40,6 +40,19 @@ function hasAny(content, expressions) {
   return expressions.some((expression) => expression.test(content));
 }
 
+// Kept byte-for-byte in step with PURPOSE_ANCHORS / OWNER_DECIDER in the TypeScript
+// original.  The parity test compares both a green and a red fixture through both
+// implementations, so a drift here shows up as a failing assertion rather than as
+// a closeout gate quietly disagreeing with the write path.
+const PURPOSE_ANCHORS = Object.freeze([
+  /为谁|\bbeneficiary\b/iu,
+  /目的锚|\bpurpose[\s-]?anchor\b/iu,
+  /符合性判据|\bcompliance[\s-]?criteri(?:on|a)\b/iu,
+  /判定人|\bdecider\b/iu,
+]);
+
+const OWNER_DECIDER = /(?:判定人|\bdecider\b)\s*[=:：]\s*[^\n。；;]*(?:\bOwner\b|所有者)/iu;
+
 export function validateStoryScope(scope) {
   const problems = [];
   if (typeof scope !== "string" || scope.trim().length === 0) {
@@ -77,7 +90,7 @@ export function validateStoryScope(scope) {
   const requirements = byHeading.get("Requirements") ?? "";
   const acceptance = byHeading.get("Acceptance Criteria") ?? "";
   const all = scope;
-  if (![/为谁/u, /目的锚/u, /符合性判据/u, /判定人/u].every((expression) => expression.test(goal))) {
+  if (!PURPOSE_ANCHORS.every((expression) => expression.test(goal))) {
     problems.push({ code: "STORY_SCOPE_PURPOSE_INVALID", heading: "Goal", message: "Goal must name beneficiary, purpose anchor, compliance criterion, and decider" });
   }
   if (!hasOrderedGwt(acceptance) && !isBulletList(acceptance)) {
@@ -85,11 +98,8 @@ export function validateStoryScope(scope) {
   }
   const legacyEvidence = hasAny(all, [/现象|现状|问题|来源|实证|证据|命令|实测|复核|evidence|command|observed/iu]);
   const legacyFix = hasAny(`${requirements}\n${byHeading.get("Implementation Notes") ?? ""}`, [/修复|改造|交付|落点|改什么|实现|新增|移除|调整|fix|implement|deliver/iu]);
-  const legacyDecision = hasAny(all, [/决策|裁定|状态|判定人|Owner|planned|ready|active|blocked|done|待/iu]);
   if (!legacyEvidence) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Requirements", message: "legacy phenomenon/evidence element is not mapped" });
   if (!legacyFix) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Requirements", message: "legacy fix-items element is not mapped" });
-  if (!hasOrderedGwt(acceptance) && !isBulletList(acceptance)) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Acceptance Criteria", message: "legacy red/green acceptance element is not mapped" });
-  if (!legacyDecision) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Implementation Notes", message: "legacy decision/state element is not mapped" });
   return { ok: problems.length === 0, problems, sections };
 }
 
@@ -117,5 +127,5 @@ export function storyScopeProblems(records) {
 export function storyScopeNamesOwnerDecider(scope) {
   if (typeof scope !== "string") return false;
   const goal = validateStoryScope(scope).sections.find((section) => section.heading === "Goal")?.content ?? "";
-  return /判定人\s*[=:：]\s*[^\n。；;]*(?:\bOwner\b|所有者)/u.test(goal);
+  return OWNER_DECIDER.test(goal);
 }

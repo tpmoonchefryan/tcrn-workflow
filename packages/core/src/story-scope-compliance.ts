@@ -83,6 +83,37 @@ function hasAny(content: string, expressions: readonly RegExp[]): boolean {
 }
 
 /**
+ * The four purpose anchors, in either working language.
+ *
+ * The anchors were the last Chinese-only island in this file — the three legacy
+ * families beside them have always been bilingual — which made a deployment's
+ * working language a property of the validator rather than of the deployment.
+ * Accepting both is a widening: every scope that passed before still passes, and
+ * the language a deployment writes in is now a setting about generation and
+ * display (`portal.defaultLocale`) rather than about what counts as compliant.
+ * Per TCRN-CROSS-MIN-102 裁定二.
+ */
+const PURPOSE_ANCHORS: readonly RegExp[] = Object.freeze([
+  /为谁|\bbeneficiary\b/iu,
+  /目的锚|\bpurpose[\s-]?anchor\b/iu,
+  /符合性判据|\bcompliance[\s-]?criteri(?:on|a)\b/iu,
+  /判定人|\bdecider\b/iu,
+]);
+
+/**
+ * The label half of the Owner-decider probe, in either language.
+ *
+ * This one is load-bearing in the fail-open direction and has to move in the same
+ * change as the anchors above: it decides when WORKSPACE_OWNER_ACCEPTANCE_REQUIRED
+ * fires, so an English scope naming Owner as decider while this stayed
+ * Chinese-only would reach `done` with no deciding-minutes backlink at all.
+ * The value half deliberately keeps its original character class — adding `.` to
+ * it would stop matching Chinese scopes whose decider clause contains a version
+ * number, which is the same fail-open by another route.
+ */
+const OWNER_DECIDER = /(?:判定人|\bdecider\b)\s*[=:：]\s*[^\n。；;]*(?:\bOwner\b|所有者)/iu;
+
+/**
  * Parse and validate a Story scope.  `无——原因` is valid section content; an
  * absent section is not.  The four historic dispatch elements are checked by
  * explicit semantic anchors so the ten headings cannot become a hollow wrapper.
@@ -142,23 +173,27 @@ export function validateStoryScope(scope: unknown): StoryScopeValidation {
   const acceptance = byHeading.get("Acceptance Criteria") ?? "";
   const all = scope;
 
-  if (![/为谁/u, /目的锚/u, /符合性判据/u, /判定人/u].every((expression) => expression.test(goal))) {
+  if (!PURPOSE_ANCHORS.every((expression) => expression.test(goal))) {
     problems.push({ code: "STORY_SCOPE_PURPOSE_INVALID", heading: "Goal", message: "Goal must name beneficiary, purpose anchor, compliance criterion, and decider" });
   }
+  // One evaluation, one code.  The acceptance shape used to be judged twice and
+  // reported under two codes for the same defect; the ledger's red leg anchors on
+  // STORY_SCOPE_ACCEPTANCE_INVALID, so that is the one that survives.
   if (!hasOrderedGwt(acceptance) && !isBulletList(acceptance)) {
     problems.push({ code: "STORY_SCOPE_ACCEPTANCE_INVALID", heading: "Acceptance Criteria", message: "Acceptance Criteria must use ordered GIVEN/WHEN/THEN or bullet points" });
   }
 
-  // The legacy four-element contract remains independently visible.  These
-  // anchors are intentionally broader than one language so existing bilingual
-  // records can be migrated without weakening the rule.
+  // These two are token-shape checks, not semantic ones: they establish that the
+  // scope talks about evidence and about fix items, never that what it says is
+  // true.  Naming that here rather than implying otherwise — the accountable
+  // decider named in Goal is what judges the content.  The old fourth check
+  // (decision/state) is gone: `判定人`/`decider` is required inside Goal, which
+  // strictly implies the token it looked for anywhere in the scope, so it could
+  // never fail on its own.  See story-rule-conservation.json DISPATCH-LEGACY-004.
   const legacyEvidence = hasAny(all, [/现象|现状|问题|来源|实证|证据|命令|实测|复核|evidence|command|observed/iu]);
   const legacyFix = hasAny(requirements + "\n" + (byHeading.get("Implementation Notes") ?? ""), [/修复|改造|交付|落点|改什么|实现|新增|移除|调整|fix|implement|deliver/iu]);
-  const legacyDecision = hasAny(all, [/决策|裁定|状态|判定人|Owner|planned|ready|active|blocked|done|待/iu]);
   if (!legacyEvidence) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Requirements", message: "legacy phenomenon/evidence element is not mapped" });
   if (!legacyFix) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Requirements", message: "legacy fix-items element is not mapped" });
-  if (!hasOrderedGwt(acceptance) && !isBulletList(acceptance)) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Acceptance Criteria", message: "legacy red/green acceptance element is not mapped" });
-  if (!legacyDecision) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Implementation Notes", message: "legacy decision/state element is not mapped" });
 
   return { ok: problems.length === 0, problems, sections };
 }
@@ -181,7 +216,7 @@ export function validateStoryRecord(record: Pick<WorkRecord, "kind" | "tombstone
 export function storyScopeNamesOwnerDecider(scope: unknown): boolean {
   if (typeof scope !== "string") return false;
   const goal = validateStoryScope(scope).sections.find((section) => section.heading === "Goal")?.content ?? "";
-  return /判定人\s*[=:：]\s*[^\n。；;]*(?:\bOwner\b|所有者)/u.test(goal);
+  return OWNER_DECIDER.test(goal);
 }
 
 /**
@@ -200,7 +235,15 @@ export interface ScopeTemplateDefinition {
 
 const TEMPLATE_BRACKET_HEADING = /^\s*(?:【([^】]+)】|\[([^\]]+)\])(.*)$/u;
 const TEMPLATE_MARKDOWN_HEADING = /^\s*#{1,6}\s+(.+?)\s*$/u;
-const TEMPLATE_BASE_ANCHORS = Object.freeze(["为谁", "目的锚", "符合性判据", "判定人"] as const);
+// The template floor reuses the same bilingual anchors as the legacy path rather
+// than keeping a second list: two anchor rosters is exactly the drift the
+// gate-reference inventory calls class F, and nothing here would have compared them.
+const TEMPLATE_BASE_ANCHORS: readonly { readonly name: string; readonly expression: RegExp }[] = Object.freeze([
+  { name: "为谁 / beneficiary", expression: PURPOSE_ANCHORS[0]! },
+  { name: "目的锚 / purpose anchor", expression: PURPOSE_ANCHORS[1]! },
+  { name: "符合性判据 / compliance criterion", expression: PURPOSE_ANCHORS[2]! },
+  { name: "判定人 / decider", expression: PURPOSE_ANCHORS[3]! },
+]);
 const TEMPLATE_REFERENCE_VALUE = /^(?:(?:ref|reference|vault|credential|secret|attachment):[^\s]+|https?:\/\/[^\s]+)$/iu;
 
 interface ParsedTemplateHeading {
@@ -273,16 +316,14 @@ export function validateTemplateScope(scope: unknown, template: ScopeTemplateDef
   const byHeading = new Map(sections.map((section) => [section.heading, section.content]));
   const all = scope;
   for (const anchor of TEMPLATE_BASE_ANCHORS) {
-    if (!all.includes(anchor)) {
-      problems.push({ code: "STORY_SCOPE_PURPOSE_INVALID", heading: "Goal", message: `template scope is missing base anchor ${anchor}` });
+    if (!anchor.expression.test(all)) {
+      problems.push({ code: "STORY_SCOPE_PURPOSE_INVALID", heading: "Goal", message: `template scope is missing base anchor ${anchor.name}` });
     }
   }
   const legacyEvidence = /现象|现状|问题|来源|实证|证据|命令|实测|复核|evidence|command|observed/iu.test(all);
   const legacyFix = /修复|改造|交付|落点|改什么|实现|新增|移除|调整|fix|implement|deliver/iu.test(all);
-  const legacyDecision = /决策|裁定|状态|判定人|Owner|planned|ready|active|blocked|done|待/iu.test(all);
   if (!legacyEvidence) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Requirements", message: "legacy phenomenon/evidence element is not mapped" });
   if (!legacyFix) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Requirements", message: "legacy fix-items element is not mapped" });
-  if (!legacyDecision) problems.push({ code: "STORY_SCOPE_LEGACY_ELEMENT_MISSING", heading: "Implementation Notes", message: "legacy decision/state element is not mapped" });
 
   const acceptanceHeadings = template.acceptanceHeadings ?? ["Acceptance Criteria"];
   const primaryAcceptanceHeading = acceptanceHeadings[0] ?? "Acceptance Criteria";

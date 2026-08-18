@@ -7,9 +7,11 @@ import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
 
 import {
+  CONFERENCE_DISTILL_SUMMARY_BYTES,
   CONFERENCE_MINUTES_VERSION,
   CONFERENCE_POSITION_VERSION,
   CONFERENCE_REQUEST_VERSION,
+  KNOWLEDGE_LIMITS,
   appendConferencePosition,
   closeConference,
   distillConferenceKnowledge,
@@ -229,4 +231,15 @@ test("extension registration binds appliesTo work and the conference schema dige
     schemaDigest: createHash("sha256").update(schemaBytes).digest("hex"),
   };
   assert.equal(validate(registration), true);
+});
+
+// MIN-102 批1. `--distill` truncates the minutes summary and hands it to the
+// knowledge store, whose own summary bound then decides whether the candidate is
+// admissible. Truncating with the conference text budget worked only because the
+// two numbers were equal; the moment the conference budget rises (批4 does exactly
+// that) a distill would start failing *after* conference.closed is on the chain,
+// leaving a half-completed governed operation that append-only history cannot undo.
+// This pins the restated constant to the bound it is restating.
+test("MIN-102 the distilled summary is bounded by the knowledge store's limit, not the conference budget", () => {
+  assert.equal(CONFERENCE_DISTILL_SUMMARY_BYTES, KNOWLEDGE_LIMITS.maximumSummaryBytes);
 });

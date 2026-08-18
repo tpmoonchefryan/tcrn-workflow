@@ -170,12 +170,13 @@
     {
       "id": "DISPATCH-LEGACY-004",
       "source": "docs/dispatch-readiness-convention.md#第一层-决策点及其裁定状态",
-      "semantics": "scope records open or settled decision/state",
-      "landing": "packages/core/src/story-scope-compliance.ts legacyDecision",
+      "semantics": "scope records open or settled decision/state; carried by the Goal decider anchor",
+      "landing": "packages/core/src/story-scope-compliance.ts PURPOSE_ANCHORS decider leg",
       "enforcementHost": "tcrn-workflow",
-      "positiveLeg": "state/decider anchor fixture",
-      "redLeg": "delete state and decider anchors and expect STORY_SCOPE_LEGACY_ELEMENT_MISSING",
-      "disposition": "retained"
+      "positiveLeg": "compliant Story whose Goal names a decider",
+      "redLeg": "delete the decider anchor from Goal and expect STORY_SCOPE_PURPOSE_INVALID",
+      "disposition": "superseded-by-stricter",
+      "strictnessProof": "The decider anchor is required inside Goal; the retired scan looked for any of decision/ruling/state/decider/Owner/planned/ready/active/blocked/done anywhere in the scope. Decider-in-Goal implies decider-in-scope implies the retired predicate is true, so the retired check could never fail unless the anchor check had already failed, and its passing set is a strict superset of the anchor's. Removing it drops no red. What the anchor does not carry is the *ruling status* half of the old wording — a scope naming its decider but not whether the decision is open or settled is now green where the retired scan was already green too, so this is a narrowing of the written rule to what was ever machine-enforced, not of what the gate caught. The prose obligation for ruling status stays in the ten-block contract under Implementation Notes (TCRN-CROSS-MIN-102 裁定, Owner)."
     },
     {
       "id": "DISPATCH-BRIEF-001",
@@ -271,40 +272,40 @@
       "id": "CLOSEOUT-005",
       "source": "docs/dispatch-readiness-convention.md#第三层-done附生效证据",
       "semantics": "an Owner-decided Story cannot self-close without a deciding-minutes backlink",
-      "landing": "packages/core/src/workspace.ts assertStoryCompletionAdmission",
+      "landing": "packages/core/src/workspace.ts assertStoryCompletionAdmission via OWNER_DECIDER (either language)",
       "enforcementHost": "tcrn-workflow",
       "positiveLeg": "Owner-decided Story with decided-by reaches done",
-      "redLeg": "Owner-decided Story without decided-by returns WORKSPACE_OWNER_ACCEPTANCE_REQUIRED",
+      "redLeg": "Owner-decided Story without decided-by returns WORKSPACE_OWNER_ACCEPTANCE_REQUIRED; an English 'decider=Owner' Goal arms the same gate, and a non-Owner decider does not",
       "disposition": "retained"
     },
     {
       "id": "PURPOSE-001",
       "source": "docs/dispatch-readiness-convention.md#目的三件套",
       "semantics": "scope names who changes what",
-      "landing": "Goal purpose anchors and live Story validator",
+      "landing": "packages/core/src/story-scope-compliance.ts PURPOSE_ANCHORS (Goal beneficiary anchor, accepted as 为谁 or beneficiary)",
       "enforcementHost": "tcrn-workflow",
-      "positiveLeg": "Goal purpose fixture",
-      "redLeg": "remove beneficiary phrase and reject",
+      "positiveLeg": "Chinese and English Goal fixtures both green",
+      "redLeg": "replace the beneficiary anchor in either language and expect STORY_SCOPE_PURPOSE_INVALID",
       "disposition": "retained"
     },
     {
       "id": "PURPOSE-002",
       "source": "docs/dispatch-readiness-convention.md#目的三件套",
       "semantics": "scope names purpose anchor and compliance criterion",
-      "landing": "Goal purpose anchors and live Story validator",
+      "landing": "packages/core/src/story-scope-compliance.ts PURPOSE_ANCHORS (Goal purpose-anchor and compliance-criterion anchors, accepted in either language)",
       "enforcementHost": "tcrn-workflow",
-      "positiveLeg": "Goal purpose fixture",
-      "redLeg": "remove purpose anchor/criterion and reject",
+      "positiveLeg": "Chinese and English Goal fixtures both green",
+      "redLeg": "replace either anchor in either language and expect STORY_SCOPE_PURPOSE_INVALID",
       "disposition": "retained"
     },
     {
       "id": "PURPOSE-003",
       "source": "docs/dispatch-readiness-convention.md#目的三件套",
       "semantics": "scope names accountable decider",
-      "landing": "Goal purpose anchors and live Story validator",
+      "landing": "packages/core/src/story-scope-compliance.ts PURPOSE_ANCHORS (Goal decider anchor, accepted as 判定人 or decider)",
       "enforcementHost": "tcrn-workflow",
-      "positiveLeg": "Goal decider fixture",
-      "redLeg": "remove decider and reject",
+      "positiveLeg": "Chinese and English Goal fixtures both green",
+      "redLeg": "replace the decider anchor in either language and expect STORY_SCOPE_PURPOSE_INVALID",
       "disposition": "retained"
     },
     {

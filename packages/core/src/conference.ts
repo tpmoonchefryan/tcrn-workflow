@@ -49,6 +49,25 @@ export type ConferenceReasonCode = typeof CONFERENCE_REASON_CODES[number];
 const maximumTextBytes = 2_048;
 const maximumExtensionProperties = 64;
 
+/**
+ * The bound the *knowledge store* puts on a summary, restated here.
+ *
+ * `--distill` truncates the minutes summary with a conference budget and hands the
+ * result to the knowledge store, which applies its own summary bound. That works
+ * only while the two numbers happen to be equal: raise the conference budget and
+ * the distill starts failing *after* `conference.closed` is already on the chain —
+ * a half-completed governed operation rather than a refusal, because the close
+ * event cannot be taken back. Truncating to the receiving bound removes the
+ * coupling to whatever this module's text budget becomes.
+ *
+ * Stated as a local constant rather than imported from knowledge-core: that module
+ * is reached at runtime through workspace, and a value import here would close an
+ * ESM cycle. `tests/conference.test.mjs` pins it to KNOWLEDGE_LIMITS.maximumSummaryBytes,
+ * so the restatement cannot drift silently — which is the only reason restating a
+ * number is acceptable at all.
+ */
+export const CONFERENCE_DISTILL_SUMMARY_BYTES = 2_048;
+
 export class ConferenceError extends Error {
   readonly reasonCode: ConferenceReasonCode;
   constructor(reasonCode: ConferenceReasonCode, message: string) {
@@ -368,7 +387,7 @@ export function distillConferenceKnowledge(minutesValue: unknown, requestValue: 
     kind: "decision",
     tags,
     subject: truncateOnCodePoint(`${request.title}: ${decision}`, maximumSubjectBytes),
-    summary: truncateOnCodePoint(minutes.summary, maximumTextBytes),
+    summary: truncateOnCodePoint(minutes.summary, CONFERENCE_DISTILL_SUMMARY_BYTES),
     snippet: truncateOnCodePoint(decision, maximumSnippetBytes),
     accountableOwnerId: options.accountableOwnerId ?? "",
     sourceReferences,

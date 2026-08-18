@@ -5,8 +5,8 @@ import { describe, test } from "node:test";
 
 import { COMMAND_CATALOG, runCli } from "../dist/build/packages/cli/src/index.js";
 import { acquireWorkspaceLease, annotateWork, createProject, createWork, initializeWorkspace, transitionWork } from "../dist/build/packages/core/src/index.js";
-import { validateStoryScope } from "../dist/build/packages/core/src/story-scope-compliance.js";
-import { validateStoryScope as validateCloseoutStoryScope } from "../scripts/story-scope-compliance.mjs";
+import { storyScopeNamesOwnerDecider, validateStoryScope } from "../dist/build/packages/core/src/story-scope-compliance.js";
+import { storyScopeNamesOwnerDecider as closeoutNamesOwnerDecider, validateStoryScope as validateCloseoutStoryScope } from "../scripts/story-scope-compliance.mjs";
 
 const headings = [
   "Goal",
@@ -42,6 +42,23 @@ describe("STORY-209 Story scope contract", () => {
     const closeout = validateCloseoutStoryScope(scope());
     assert.equal(compliant.ok, true, JSON.stringify(compliant.problems));
     assert.deepEqual(closeout, compliant);
+    // MIN-102 批1: parity used to be asserted on the green fixture alone, which is
+    // the half that cannot drift — two implementations agree trivially when neither
+    // reports anything. The failure paths are where a twin actually diverges, so
+    // every red case below is compared through both as well.
+    for (const [label, candidate] of [
+      ["missing heading", scope().split("\n").filter((line) => !line.startsWith("【Permissions】")).join("\n")],
+      ["duplicate heading", `${scope()}\n【Goal】重复标题必须红`],
+      ["empty section", scope().replace("【Permissions】Owner 负责判定，执行方只写代码与测试。", "【Permissions】")],
+      ["missing purpose anchor", scope().replace("判定人=Owner。", "")],
+      ["unusable acceptance", scope().replace(/GIVEN[^；。]*[；。]/gu, "")],
+      ["not a string", 42],
+      ["empty scope", "   "],
+    ]) {
+      const core = validateStoryScope(candidate);
+      assert.equal(core.ok, false, label);
+      assert.deepEqual(validateCloseoutStoryScope(candidate), core, `twin diverges on: ${label}`);
+    }
     for (const heading of headings) {
       const missing = scope().split("\n").filter((line) => !line.startsWith(`【${heading}】`)).join("\n");
       const result = validateStoryScope(missing);
@@ -69,15 +86,68 @@ describe("STORY-209 Story scope contract", () => {
       assert.ok(result.problems.some((problem) => problem.code === "STORY_SCOPE_PURPOSE_INVALID"), anchor);
     }
     const legacyCases = [
-      [scope().replace(/现象与证据=命令可复跑；/u, "").replace(/证据=历史单据曾缺少机器约束。/u, ""), "legacy evidence"],
-      [scope().replace(/修复项=实现规则门。/u, "").replace(/修复项由实现记录，/u, ""), "legacy fix"],
-      [scope().replace(/GIVEN[^；。]*[；。]/gu, ""), "legacy acceptance"],
-      [scope().replace(/判定人=Owner。/u, "").replace(/Owner/gu, "").replace(/(?:决策点及裁定|)状态=planned[；。]/gu, ""), "legacy decision"],
+      // The evidence family is scanned over the whole scope, so this case has to
+      // clear it everywhere and still leave every section non-empty. The previous
+      // fixture emptied Business Background and left `命令` standing in Use Cases,
+      // so it went red on STORY_SCOPE_SECTION_EMPTY and this check never fired at
+      // all — visible only once parity started asserting the exact code.
+      [scope()
+        .replace("现象与证据=命令可复跑；", "背景=规则门尚未存在；")
+        .replace("【Business Background】证据=历史单据曾缺少机器约束。", "【Business Background】历史单据曾缺少机器约束。")
+        .replace("示例由验收命令覆盖。", "示例由验收步骤覆盖。"), "legacy evidence", "STORY_SCOPE_LEGACY_ELEMENT_MISSING"],
+      [scope().replace(/修复项=实现规则门。/u, "").replace(/修复项由实现记录，/u, ""), "legacy fix", "STORY_SCOPE_LEGACY_ELEMENT_MISSING"],
+      [scope().replace(/GIVEN[^；。]*[；。]/gu, ""), "legacy acceptance", "STORY_SCOPE_ACCEPTANCE_INVALID"],
+      // MIN-102 批1: the decision/state element is carried by the Goal decider anchor
+      // rather than by a fourth scan of the whole scope. Removing it is still red — the
+      // code it reports under is now the anchor's, which is the point: the old check
+      // could not fail unless this one had already failed, so it never had a red of
+      // its own to lose. story-rule-conservation.json DISPATCH-LEGACY-004 records it.
+      [scope().replace(/判定人=Owner。/u, ""), "legacy decision via Goal anchor", "STORY_SCOPE_PURPOSE_INVALID"],
     ];
-    for (const [candidate, label] of legacyCases) {
+    for (const [candidate, label, code] of legacyCases) {
       const result = validateStoryScope(candidate);
       assert.equal(result.ok, false, label);
-      assert.ok(result.problems.some((problem) => ["STORY_SCOPE_LEGACY_ELEMENT_MISSING", "STORY_SCOPE_ACCEPTANCE_INVALID", "STORY_SCOPE_SECTION_EMPTY"].includes(problem.code)), label);
+      assert.ok(result.problems.some((problem) => problem.code === code), `${label} expects ${code}, got ${JSON.stringify(result.problems.map((problem) => problem.code))}`);
+    }
+  });
+
+  // MIN-102 裁定二. The anchors were the last Chinese-only island in a file whose
+  // other three families were already bilingual, which made a deployment's working
+  // language a property of the validator. Accepting both is a widening — measured
+  // against all 590 live Story scopes, not one moved in either direction — but the
+  // widening has one dangerous neighbour, and it is asserted here in the same test
+  // so the two can never be changed apart.
+  test("MIN-102 the purpose anchors accept either working language, and the Owner gate moves with them", () => {
+    const english = [
+      "【Goal】beneficiary=the Owner's Story delivery; purpose anchor=MIN-102; compliance criterion=gate output is rerunnable; decider=Owner.",
+      "【Requirements】evidence=the command reruns; fix=implement the rule gate.",
+      "【Acceptance Criteria】GIVEN ten blocks WHEN the gate runs THEN it returns green; GIVEN a deleted block WHEN the gate runs THEN it returns red.",
+      "【Business Background】observed=earlier records carried no machine constraint.",
+      "【Preconditions】none — the rule baseline is frozen.",
+      "【Assumptions】none — event history is unchanged.",
+      "【Use Cases & Examples】none — covered by the acceptance commands.",
+      "【Feature Toggle & Setting】none — no permanent bypass.",
+      "【Permissions】Owner decides; the implementer writes code and tests.",
+      "【Implementation Notes】state=planned; fix items are recorded by the implementation.",
+    ].join("\n");
+    const result = validateStoryScope(english);
+    assert.equal(result.ok, true, JSON.stringify(result.problems));
+    assert.deepEqual(validateCloseoutStoryScope(english), result);
+
+    // The fail-open this pairing exists to prevent: an English scope naming Owner as
+    // decider must still arm WORKSPACE_OWNER_ACCEPTANCE_REQUIRED. Before the anchors
+    // went bilingual this returned false, and such a Story could reach done with no
+    // deciding-minutes backlink at all.
+    assert.equal(storyScopeNamesOwnerDecider(english), true);
+    assert.equal(closeoutNamesOwnerDecider(english), true);
+    assert.equal(storyScopeNamesOwnerDecider(scope()), true, "the Chinese form is unchanged");
+    assert.equal(storyScopeNamesOwnerDecider(english.replace("decider=Owner.", "decider=the machine lane.")), false);
+
+    // Each anchor is independently required in the English form too.
+    for (const [anchor, replacement] of [["beneficiary=", "audience="], ["purpose anchor=", "reason="], ["compliance criterion=", "check="], ["decider=", "signer="]]) {
+      const broken = validateStoryScope(english.replace(anchor, replacement));
+      assert.equal(broken.ok, false, anchor);
+      assert.ok(broken.problems.some((problem) => problem.code === "STORY_SCOPE_PURPOSE_INVALID"), anchor);
     }
   });
 
