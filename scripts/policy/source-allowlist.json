@@ -495,6 +495,7 @@
     "tests/dependency-policy.test.mjs",
     "tests/dependency.test.mjs",
     "tests/dispatch-readiness-compliance.test.mjs",
+    "tests/ds-component-css-observation.test.mjs",
     "tests/e2e-governed-loop-commands.mjs",
     "tests/e2e-governed-loop.test.mjs",
     "tests/fixtures/s6-lessons/corpus.mjs",

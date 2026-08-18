@@ -73,30 +73,43 @@ try {
   const result = {
     schemaVersion: "tcrn.inc252-ds-component-css-meta-proof.v1",
     cases: [
-      { name: "baseline source and inline snapshot", exitCode: green.exitCode, reasonCode: green.report.reasonCode, sourceStatus: green.report.reconciliation?.sourceStatus, countedAsGreen: green.report.reconciliation?.countedAsGreen },
-      { name: "mutated DS source byte", exitCode: sourceRed.exitCode, reasonCode: sourceRed.report.reasonCode, sourceMatchesSnapshot: sourceRed.report.reconciliation?.sourceMatchesSnapshot, countedAsGreen: sourceRed.report.reconciliation?.countedAsGreen },
+      { name: "baseline source and inline snapshot", exitCode: green.exitCode, reasonCode: green.report.reasonCode, sourceStatus: green.report.reconciliation?.sourceStatus, sourceReconciled: green.report.reconciliation?.sourceReconciled },
+      { name: "mutated DS source byte", exitCode: sourceRed.exitCode, reasonCode: sourceRed.report.reasonCode, sourceMatchesSnapshot: sourceRed.report.reconciliation?.sourceMatchesSnapshot, sourceReconciled: sourceRed.report.reconciliation?.sourceReconciled, observedReasonCodes: (sourceRed.report.observations ?? []).map((entry) => entry.reasonCode) },
       { name: "mutated snapshot byte", exitCode: snapshotRed.exitCode, reasonCode: snapshotRed.report.reasonCode, sourceMatchesSnapshot: snapshotRed.report.reconciliation?.sourceMatchesSnapshot, inlineMatchesSnapshot: snapshotRed.report.inline?.matchesSnapshot },
-      { name: "DS source absent in CI", exitCode: absent.exitCode, reasonCode: absent.report.reasonCode, sourceStatus: absent.report.reconciliation?.sourceStatus, countedAsGreen: absent.report.reconciliation?.countedAsGreen },
-      { name: "restore all mutations", exitCode: restored.exitCode, reasonCode: restored.report.reasonCode, sourceStatus: restored.report.reconciliation?.sourceStatus, countedAsGreen: restored.report.reconciliation?.countedAsGreen },
+      { name: "DS source absent in CI", exitCode: absent.exitCode, reasonCode: absent.report.reasonCode, sourceStatus: absent.report.reconciliation?.sourceStatus, sourceReconciled: absent.report.reconciliation?.sourceReconciled },
+      { name: "restore all mutations", exitCode: restored.exitCode, reasonCode: restored.report.reasonCode, sourceStatus: restored.report.reconciliation?.sourceStatus, sourceReconciled: restored.report.reconciliation?.sourceReconciled },
     ],
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   const [baseline, source, snapshotCase, missing, restore] = result.cases;
+  // INC-223 rewrites two of these five legs, in opposite directions.
+  //
+  // A mutated DS source is no longer red. It is green, it says so with its own reason
+  // code, and it carries the drift as an observation — that observation is what this
+  // leg now proves, because "downgraded to an observation" and "silently dropped"
+  // look identical from the verdict alone.
+  //
+  // A mutated snapshot is still red, and its accepted reason code is now exactly one.
+  // The old alternation admitted DS_COMPONENT_CSS_SOURCE_DRIFT as a second way to
+  // pass; after the split that code can never be a verdict, so leaving it in the list
+  // would be an always-true branch — the shape the platform has paid for repeatedly.
   const valid = baseline.exitCode === 0
     && baseline.reasonCode === "DS_COMPONENT_CSS_RECONCILED"
-    && baseline.countedAsGreen === true
-    && source.exitCode !== 0
-    && source.reasonCode === "DS_COMPONENT_CSS_SOURCE_DRIFT"
+    && baseline.sourceReconciled === true
+    && source.exitCode === 0
+    && source.reasonCode === "DS_COMPONENT_CSS_INLINE_RECONCILED"
     && source.sourceMatchesSnapshot === false
+    && source.sourceReconciled === false
+    && source.observedReasonCodes.includes("DS_COMPONENT_CSS_SOURCE_DRIFT")
     && snapshotCase.exitCode !== 0
-    && ["DS_COMPONENT_CSS_INLINE_DRIFT", "DS_COMPONENT_CSS_SOURCE_DRIFT"].includes(snapshotCase.reasonCode)
+    && snapshotCase.reasonCode === "DS_COMPONENT_CSS_INLINE_DRIFT"
     && missing.exitCode === 0
     && missing.reasonCode === "DS_COMPONENT_CSS_SNAPSHOT_SELF_SUFFICIENT"
     && missing.sourceStatus === "unverified"
-    && missing.countedAsGreen === false
+    && missing.sourceReconciled === false
     && restore.exitCode === 0
     && restore.reasonCode === "DS_COMPONENT_CSS_RECONCILED"
-    && restore.countedAsGreen === true;
+    && restore.sourceReconciled === true;
   if (!valid) process.exitCode = 1;
 } finally {
   await rm(directory, { recursive: true, force: true });

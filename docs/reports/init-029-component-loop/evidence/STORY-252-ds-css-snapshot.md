@@ -59,14 +59,17 @@ no-inline-style-attributes、interactive-tcrn-class-coverage。
       "exitCode": 0,
       "reasonCode": "DS_COMPONENT_CSS_RECONCILED",
       "sourceStatus": "verified",
-      "countedAsGreen": true
+      "sourceReconciled": true
     },
     {
       "name": "mutated DS source byte",
-      "exitCode": 1,
-      "reasonCode": "DS_COMPONENT_CSS_SOURCE_DRIFT",
+      "exitCode": 0,
+      "reasonCode": "DS_COMPONENT_CSS_INLINE_RECONCILED",
       "sourceMatchesSnapshot": false,
-      "countedAsGreen": false
+      "sourceReconciled": false,
+      "observedReasonCodes": [
+        "DS_COMPONENT_CSS_SOURCE_DRIFT"
+      ]
     },
     {
       "name": "mutated snapshot byte",
@@ -80,14 +83,14 @@ no-inline-style-attributes、interactive-tcrn-class-coverage。
       "exitCode": 0,
       "reasonCode": "DS_COMPONENT_CSS_SNAPSHOT_SELF_SUFFICIENT",
       "sourceStatus": "unverified",
-      "countedAsGreen": false
+      "sourceReconciled": false
     },
     {
       "name": "restore all mutations",
       "exitCode": 0,
       "reasonCode": "DS_COMPONENT_CSS_RECONCILED",
       "sourceStatus": "verified",
-      "countedAsGreen": true
+      "sourceReconciled": true
     }
   ]
 }

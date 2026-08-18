@@ -22,6 +22,12 @@ const commands = [
 ];
 
 const unverified = [];
+// INC-223: what the train saw but did not judge on. Until the DS reconciliation was
+// split, this list could only ever be filled by a machine with no Design System
+// checkout at all, because a drift on a machine that had one exited non-zero above
+// and never reached here. It now carries the drift itself, which is what makes the
+// word honest — reported in the receipt, absent from the verdict.
+const observations = [];
 for (const [executable, args] of commands) {
   const result = spawnSync(executable, args, { encoding: "utf8", env: { ...process.env, npm_config_offline: "true" } });
   // Only the receipt goes to stdout. Callers parse this command's whole stdout as one
@@ -36,11 +42,12 @@ for (const [executable, args] of commands) {
   if (args[0] === "scripts/ds-component-css-reconcile.mjs") {
     const lines = result.stdout.trim().split("\n").filter(Boolean);
     const report = JSON.parse(lines.at(-1) ?? "{}");
-    if (report.reconciliation?.countedAsGreen === false) unverified.push("ds-component-css-source-reconciliation");
+    if (report.reconciliation?.sourceReconciled === false) unverified.push("ds-component-css-source-reconciliation");
+    observations.push(...(report.observations ?? []));
   }
 }
 // The receipt names the interpreter as "node", never process.execPath: this output is
 // pasted into evidence and printed in public CI logs, and execPath carries the runner's
 // home directory. Execution above still uses the real interpreter.
 const reportedName = (executable) => (executable === process.execPath ? "node" : executable);
-process.stdout.write(JSON.stringify({ ok: true, reasonCode: "PORTAL_VERIFY_TRAIN_GREEN", commands: commands.map(([executable, args]) => [reportedName(executable), ...args]), unverified }) + "\n");
+process.stdout.write(JSON.stringify({ ok: true, reasonCode: "PORTAL_VERIFY_TRAIN_GREEN", commands: commands.map(([executable, args]) => [reportedName(executable), ...args]), unverified, observations }) + "\n");

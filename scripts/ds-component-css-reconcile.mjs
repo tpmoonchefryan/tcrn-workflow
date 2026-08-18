@@ -55,18 +55,37 @@ export async function reconcile({ snapshotPath = SNAPSHOT_PATH, indexPath = INDE
   const sourceMatches = source === null ? null : source === snapshot;
   const sourceReconciled = sourceMatches === true;
   const inlineReconciled = inlineMatches;
-  const ok = inlineReconciled && (source === null || sourceReconciled);
+  // TCRN-CROSS-INC-223. The verdict reads the inline leg alone. Both legs used to
+  // decide it, which made a sibling repository's working tree this gate's baseline:
+  // someone edits the Design System, this repository's own bytes do not move, and its
+  // P1 goes red — taking the sixteen gates behind it down with it. Worse, the verdict
+  // was host-dependent, since CI has no sibling checkout and therefore always found
+  // the snapshot self-sufficient while a developer machine did not. "Does this tree
+  // agree with itself" is what this repository owns and can answer identically
+  // everywhere; "has the Design System moved on" is real and worth reporting, so it
+  // is reported — as an observation beside the verdict, never inside it. The refresh
+  // it calls for is triggered from the Design System side (design-authority-convention).
+  const ok = inlineReconciled;
   const reasonCode = !inlineReconciled
     ? "DS_COMPONENT_CSS_INLINE_DRIFT"
     : source === null
-      ? "DS_COMPONENT_CSS_SOURCE_ABSENT"
+      ? "DS_COMPONENT_CSS_SNAPSHOT_SELF_SUFFICIENT"
       : sourceReconciled
         ? "DS_COMPONENT_CSS_RECONCILED"
-        : "DS_COMPONENT_CSS_SOURCE_DRIFT";
+        : "DS_COMPONENT_CSS_INLINE_RECONCILED";
 
   return {
     ok,
-    reasonCode: ok && source === null ? "DS_COMPONENT_CSS_SNAPSHOT_SELF_SUFFICIENT" : reasonCode,
+    reasonCode,
+    observations: sourceMatches === false
+      ? [{
+        reasonCode: "DS_COMPONENT_CSS_SOURCE_DRIFT",
+        source: relativePath(sourcePath),
+        sourceSha256: digest(source),
+        snapshotSha256: digest(snapshot),
+        remedy: "node scripts/generate-ds-component-css-snapshot.mjs && node scripts/embed-ds-component-css-snapshot.mjs",
+      }]
+      : [],
     snapshot: {
       path: relativePath(snapshotPath),
       bytes: Buffer.byteLength(snapshot),
@@ -85,7 +104,10 @@ export async function reconcile({ snapshotPath = SNAPSHOT_PATH, indexPath = INDE
       sourceBytes: source === null ? null : Buffer.byteLength(source),
       sourceSha256: source === null ? null : digest(source),
       sourceMatchesSnapshot: sourceMatches,
-      countedAsGreen: sourceReconciled,
+      // Renamed from countedAsGreen: since INC-223 this is precisely the quantity that
+      // is *not* counted toward the verdict, and a field whose name says the opposite
+      // is the shape this platform has paid for more than once.
+      sourceReconciled,
       ...(source === null ? { note: "run reconciliation on the platform that holds the Design System source" } : {}),
     },
   };

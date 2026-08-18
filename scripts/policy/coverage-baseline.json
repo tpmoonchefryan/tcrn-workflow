@@ -524,6 +524,16 @@
         "a dispatch brief without a compliant Story scope is refused"
       ]
     },
+    "tests/ds-component-css-observation.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 20,
+      "testNames": [
+        "INC-223 all three agreeing is a plain green with nothing to observe",
+        "INC-223 a moved Design System source is observed, not judged",
+        "INC-223 the leg this repository owns still goes red",
+        "INC-223 a machine without the Design System says so rather than claiming agreement"
+      ]
+    },
     "tests/e2e-governed-loop.test.mjs": {
       "testCount": 1,
       "assertionCount": 20,
