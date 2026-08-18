@@ -1430,6 +1430,16 @@
         "S281: the layer states where its values come from and when they take effect"
       ]
     },
+    "tests/s300-append-events.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 21,
+      "testNames": [
+        "STORY-300: each member of a batch sees what the members before it wrote",
+        "STORY-300: a batch that crosses a segment boundary writes ascending and replays clean",
+        "STORY-300: a member that refuses leaves the chain untouched",
+        "STORY-300: a batch takes one concurrency decision, not one per member"
+      ]
+    },
     "tests/s300-catalog-behaviour.test.mjs": {
       "testCount": 2,
       "assertionCount": 13,

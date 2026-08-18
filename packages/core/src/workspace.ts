@@ -3192,11 +3192,52 @@ interface MutationDelta {
   readonly templates?: readonly TemplateAdmissionRecord[];
 }
 
-async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, buildDelta: (state: WorkspaceState) => MutationDelta, options: WorkspaceMutationOptions): Promise<WorkspaceState> {
+// STORY-300. One append and many appends are the same operation with a different
+// count, so there is one implementation of it and `appendEvent` is the N=1 case.
+//
+// That framing is the point rather than a tidiness preference. A separate batch
+// path would be a road only batches travel: it would rot quietly, because every
+// existing verb -- all thirty-two of them -- would keep exercising the other one.
+// Written this way, a defect in the batch path is a defect in every single write,
+// which is the only arrangement that keeps both honest.
+function committedFrom(
+  prior: WorkspaceState,
+  delta: MutationDelta,
+  event: EventRecord,
+  isEnableEvent: boolean,
+  events: readonly EventRecord[],
+): WorkspaceState {
+  return {
+    metadata: prior.metadata,
+    version: event.sequence,
+    headEventHash: event.eventHash,
+    projects: delta.projects,
+    work: delta.work,
+    conferences: delta.conferences ?? prior.conferences,
+    conferencePositions: delta.conferencePositions ?? prior.conferencePositions,
+    conferenceMinutes: delta.conferenceMinutes ?? prior.conferenceMinutes,
+    gates: delta.gates ?? prior.gates,
+    settings: delta.settings ?? prior.settings,
+    executionConfig: delta.executionConfig ?? prior.executionConfig,
+    templates: delta.templates ?? prior.templates,
+    events,
+    attestationEnabledAtSequence: isEnableEvent ? event.sequence : prior.attestationEnabledAtSequence,
+  };
+}
+
+export async function appendEvents(
+  workspaceRootInput: string,
+  lease: WorkspaceLease,
+  buildDeltas: readonly ((state: WorkspaceState) => MutationDelta)[],
+  options: WorkspaceMutationOptions,
+): Promise<WorkspaceState> {
   // STORY-299: clear before the attempt, so a note left by an earlier command can
   // never be reported against this one.
   pendingViewWriteFailure = null;
   assertStrictInstant(options.occurredAt);
+  if (buildDeltas.length === 0) {
+    fail("WORKSPACE_INPUT_INVALID", "an append carries at least one event");
+  }
   const workspace = await resolveWorkspace(workspaceRootInput);
   await assertLease(workspace.root, lease);
   const claim = await createMutationClaim(workspace.root, lease);
@@ -3205,89 +3246,108 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
     await assertLease(workspace.root, lease);
     // WSA-1: the single full replay per mutation. Input validation runs against
     // this claim-fresh state (via buildDelta), closing the entry-path TOCTOU gap.
+    // A batch replays once too -- it is one mutation, so it takes one lease, one
+    // claim, one replay, one concurrency decision and one clock reading.
     const state = materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
     if (!Number.isSafeInteger(options.expectedVersion) || options.expectedVersion !== state.version) {
       fail("WORKSPACE_CAS_MISMATCH", `expected=${String(options.expectedVersion)} actual=${state.version}`);
     }
-    const delta = buildDelta(state);
-    assertWorkspaceRecordCount(state.version + 1);
-    const sequence = state.version + 1;
-    // WSE-2: actor injection is single-sourced here so every mutation verb only
-    // forwards options.actorId (like occurredAt — no clock, no randomness). Once
-    // attestation is enabled, or on the enabling event itself, a valid actor is
-    // mandatory (WORKSPACE_ACTOR_REQUIRED) and validated (WORKSPACE_ACTOR_INVALID),
-    // and it joins the hashed payload. Before enablement no actor is written even
-    // when one is supplied — the default stays actor-optional and byte-identical
-    // to rc.4 — so the enable event is the boundary. The reducer re-derives that
-    // boundary and re-enforces the identical rule, so this write path cannot
-    // outrun replay.
-    const deltaPayload = delta.payload;
-    const isEnableEvent = isJsonObject(deltaPayload) && deltaPayload.operation === ACTOR_ATTESTATION_ENABLE_OPERATION;
-    const actorRequired = state.attestationEnabledAtSequence !== null || isEnableEvent;
-    let payload: JsonValue = deltaPayload;
-    if (actorRequired) {
-      if (options.actorId === undefined) {
-        fail("WORKSPACE_ACTOR_REQUIRED", "a valid actor is mandatory once attestation is enabled");
-      }
-      try {
-        assertActorId(options.actorId);
-      } catch (error) {
-        if (error instanceof ActorAttestationError) {
-          fail("WORKSPACE_ACTOR_INVALID", options.actorId);
-        }
-        throw error;
-      }
-      payload = { ...(deltaPayload as Readonly<Record<string, JsonValue>>), actor: options.actorId };
-    }
     const streamId = workspaceStreamId(workspace.metadata);
-    const event = createEvent({
-      id: workspaceEventId(streamId, sequence),
-      streamId,
-      sequence,
-      occurredAt: options.occurredAt,
-      priorHash: state.headEventHash,
-      payload,
-    });
-    const segmentIndex = Math.floor((sequence - 1) / workspace.metadata.segmentEventLimit) + 1;
-    const segmentName = `${String(segmentIndex).padStart(6, "0")}.json`;
-    const current = sequence % workspace.metadata.segmentEventLimit === 1 && sequence !== 1
-      ? []
-      : state.events.slice((segmentIndex - 1) * workspace.metadata.segmentEventLimit);
-    const segmentBytes = canonicalJson([...current, event]);
-    const backend = backendFor(workspace.root);
+    const appended: EventRecord[] = [];
+    let current = state;
+    for (const buildDelta of buildDeltas) {
+      // Each member sees the state the members before it produced, which is what
+      // makes an ordered batch express a dependency -- a parent created by member
+      // one is there for member two.
+      const delta = buildDelta(current);
+      const sequence = current.version + 1;
+      // WSE-2: actor injection is single-sourced here so every mutation verb only
+      // forwards options.actorId (like occurredAt — no clock, no randomness). Once
+      // attestation is enabled, or on the enabling event itself, a valid actor is
+      // mandatory (WORKSPACE_ACTOR_REQUIRED) and validated (WORKSPACE_ACTOR_INVALID),
+      // and it joins the hashed payload. Before enablement no actor is written even
+      // when one is supplied — the default stays actor-optional and byte-identical
+      // to rc.4 — so the enable event is the boundary. The reducer re-derives that
+      // boundary and re-enforces the identical rule, so this write path cannot
+      // outrun replay. In a batch the boundary is re-evaluated per member, so a
+      // batch whose first member enables attestation requires an actor from its
+      // second member onward -- the same rule replay will apply.
+      const deltaPayload = delta.payload;
+      const isEnableEvent = isJsonObject(deltaPayload) && deltaPayload.operation === ACTOR_ATTESTATION_ENABLE_OPERATION;
+      const actorRequired = current.attestationEnabledAtSequence !== null || isEnableEvent;
+      let payload: JsonValue = deltaPayload;
+      if (actorRequired) {
+        if (options.actorId === undefined) {
+          fail("WORKSPACE_ACTOR_REQUIRED", "a valid actor is mandatory once attestation is enabled");
+        }
+        try {
+          assertActorId(options.actorId);
+        } catch (error) {
+          if (error instanceof ActorAttestationError) {
+            fail("WORKSPACE_ACTOR_INVALID", options.actorId);
+          }
+          throw error;
+        }
+        payload = { ...(deltaPayload as Readonly<Record<string, JsonValue>>), actor: options.actorId };
+      }
+      const event = createEvent({
+        id: workspaceEventId(streamId, sequence),
+        streamId,
+        sequence,
+        occurredAt: options.occurredAt,
+        priorHash: current.headEventHash,
+        payload,
+      });
+      appended.push(event);
+      current = committedFrom(current, delta, event, isEnableEvent, [...state.events, ...appended]);
+    }
+    assertWorkspaceRecordCount(state.version + buildDeltas.length);
     // STORY-299. The committed state is pure computation over state, delta and the
     // new event, so it can be built -- and its views projected -- before a single
     // byte reaches the disk. Projecting here is what makes an over-budget view a
     // clean refusal: version has not moved, no segment exists, and the caller may
     // fix the cause and retry. Doing it after writeSegment is precisely how
     // INC-198's event seq 3842 came to exist under a command that reported failure.
-    const committed: WorkspaceState = {
-      metadata: workspace.metadata,
-      version: sequence,
-      headEventHash: event.eventHash,
-      projects: delta.projects,
-      work: delta.work,
-      conferences: delta.conferences ?? state.conferences,
-      conferencePositions: delta.conferencePositions ?? state.conferencePositions,
-      conferenceMinutes: delta.conferenceMinutes ?? state.conferenceMinutes,
-      gates: delta.gates ?? state.gates,
-      settings: delta.settings ?? state.settings,
-      executionConfig: delta.executionConfig ?? state.executionConfig,
-      templates: delta.templates ?? state.templates,
-      events: [...state.events, event],
-      attestationEnabledAtSequence: isEnableEvent ? sequence : state.attestationEnabledAtSequence,
-    };
-    const documents = viewDocuments(committed, options.viewBudgetBytes ?? PROTOCOL_LIMITS.maxCanonicalBytes);
-    await backend.writeSegment(segmentName, Buffer.from(segmentBytes, "utf8"), options.crashAt);
+    // A batch projects once, at its end: an intermediate state can be momentarily
+    // over budget while the final one is not, so judging each member would refuse
+    // batches that are perfectly legal.
+    const documents = viewDocuments(current, options.viewBudgetBytes ?? PROTOCOL_LIMITS.maxCanonicalBytes);
+    // Every segment's bytes are canonicalised before any of them is written. The
+    // canonical form fails closed at one MiB, so computing them lazily would let
+    // the first segment land and the second refuse -- the shape INC-198 recorded,
+    // rebuilt one layer down.
+    const limit = workspace.metadata.segmentEventLimit;
+    const grouped = new Map<number, EventRecord[]>();
+    for (const event of appended) {
+      const index = Math.floor((event.sequence - 1) / limit) + 1;
+      const list = grouped.get(index) ?? [];
+      list.push(event);
+      grouped.set(index, list);
+    }
+    // Ascending segment order is a hard invariant, not a preference: a non-final
+    // segment left under-full reads as chain corruption, and that refusal lives
+    // inside materialize, so writing a later segment first would take `status` and
+    // `recover` down together.
+    const writes = [...grouped.keys()].sort((left, right) => left - right).map((index) => ({
+      index,
+      name: `${String(index).padStart(6, "0")}.json`,
+      bytes: canonicalJson([...state.events.slice((index - 1) * limit, index * limit), ...(grouped.get(index) ?? [])]),
+    }));
+    const backend = backendFor(workspace.root);
+    for (const write of writes) {
+      await backend.writeSegment(write.name, Buffer.from(write.bytes, "utf8"), options.crashAt);
+    }
     crash("after-event-commit", options.crashAt);
     // WSA-1: durability readback bounded to the just-committed segment replaces the
     // full-chain re-materialize; atomicWrite already fsync+rename+identity-verified,
     // and the chain was validated under this claim, so re-reading it wholesale was
     // redundant. The committed state is applied from the validated delta, and equals
     // a fresh materialize by construction.
-    const readback = await backend.readSegment(segmentName);
-    if (readback.toString("utf8") !== segmentBytes) {
-      fail("WORKSPACE_EVENT_CORRUPT", `segment ${segmentIndex} readback mismatch`);
+    for (const write of writes) {
+      const readback = await backend.readSegment(write.name);
+      if (readback.toString("utf8") !== write.bytes) {
+        fail("WORKSPACE_EVENT_CORRUPT", `segment ${write.index} readback mismatch`);
+      }
     }
     try {
       await writeViewDocuments(workspace.root, documents, options.crashAt);
@@ -3306,10 +3366,14 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
         cause: error instanceof WorkspaceError ? error.reasonCode : "WORKSPACE_VIEW_WRITE_FAILED",
       };
     }
-    return committed;
+    return current;
   } finally {
     await releaseMutationClaim(workspace.root, lease, claim);
   }
+}
+
+async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, buildDelta: (state: WorkspaceState) => MutationDelta, options: WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvents(workspaceRootInput, lease, [buildDelta], options);
 }
 
 function sortedProjects(records: readonly ProjectRecord[]): readonly ProjectRecord[] {

@@ -55,6 +55,7 @@ const routeAdditions = new Set([
   "docs/releases/0.14.0.md",
   "tests/s300-catalog-behaviour.test.mjs",
   "tests/s301-proof-budget.test.mjs",
+  "tests/s300-append-events.test.mjs",
   "scripts/policy/proof-budget.json",
   "scripts/lib/scoped-strip-types.mjs",
   "scripts/test-controller-bootstrap.mjs",

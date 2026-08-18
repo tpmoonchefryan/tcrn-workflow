@@ -10,6 +10,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.5925,
       "rationale": "The ratchet refused the change that installed it, three times, and each time the honest move was to record rather than to move the frozen line. Its reasoning lives in scripts/, its criteria live in tests/, and admitting both to the generated-source roster costs a few lines more — all of it proof mass by the rule's own definition. A mechanism that stops proof mass growing cannot be installed without growing some. Recorded because a mechanism whose first act is to quietly raise its own limit teaches exactly the habit it was built to stop. 1.5925 is the measured ratio with the ratchet, its four criteria and their registration in the tree; the frozen line stays at 1.5888 so the cost of this installation stays legible rather than absorbed."
+    },
+    {
+      "id": "OD-23-STORY-300-append-fold",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.5944,
+      "rationale": "STORY-300 slice 2 generalised the append kernel so a single write is the N=1 case of a batch, and the rest of the suite proves that half by passing unchanged. What it cannot reach is the fold itself — a member seeing its predecessor state, a batch crossing a segment boundary, and refusal leaving the chain untouched — so those criteria are new proof mass with no product counterpart to offset them. Paid deliberately: the fold is now the code path every one of the thirty-two chain-write call sites takes, and shipping it on the strength of tests that only exercise N=1 would be the untested-guard shape this platform has paid for before. First time the ratchet fired on a change other than its own installation."
     }
   ]
 }

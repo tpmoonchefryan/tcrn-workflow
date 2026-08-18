@@ -193,6 +193,7 @@ export {
   createWorkspaceArchive,
   createWork,
   annotateWork,
+  appendEvents,
   consumeViewWriteFailure,
   deleteProject,
   deleteWork,
