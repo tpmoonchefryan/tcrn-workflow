@@ -587,7 +587,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "184e97dd38388d662642843e7934c9bca949e130b581ab6fb001a4594a489f33",
+      "fixtureDigest": "e055f131e289e89657b9e02e629db09182ed3282f68a59065d46a0986109a8d2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2144,7 +2144,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "101625ecac7802a1cdaa7a0752a3ec3d919ca20ce431b03a4d0eaab81aa7ffba",
+      "fixtureDigest": "02f1e41d16d4725ac5a7598904ba6c25076d2f1ebfa2bdb0a5ae89c56700baa4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
