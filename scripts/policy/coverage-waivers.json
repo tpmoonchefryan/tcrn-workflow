@@ -6,6 +6,12 @@
       "testName": "each exact Ajv transitive is checked by the vulnerability denylist",
       "reason": "test was renamed to cover every exact transitive dependency, preserving the same assertion surface",
       "replacement": "tests/dependency-policy.test.mjs:each exact transitive package is checked by the vulnerability denylist"
+    },
+    {
+      "path": "tests/output-session-lifecycle.test.mjs",
+      "testName": "dead-owner recovery has one claim winner and leaves neither lock nor sibling claim",
+      "reason": "renamed with its assertion: 421bdca established that exactly-one-winner was never a promise the recoverer makes, and corrected the width-three tests only; this width-two one kept asserting it and went red in CI. The name changed because the claim changed, and the assertion surface grew rather than shrank (the causal-rejection check is new).",
+      "replacement": "tests/output-session-lifecycle.test.mjs:dead-owner recovery leaves at most one claim winner and neither lock nor sibling claim"
     }
   ]
 }
