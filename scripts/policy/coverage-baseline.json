@@ -1133,10 +1133,13 @@
       ]
     },
     "tests/platform-doctor.test.mjs": {
-      "testCount": 28,
-      "assertionCount": 69,
+      "testCount": 41,
+      "assertionCount": 139,
       "testNames": [
         "a complete synthetic platform container is green",
+        "STORY-300: an absent acceptance roster is a red leg, not a tolerated gap",
+        "STORY-300: an acceptance roster that lost a group is refused with the count",
+        "STORY-300: an acceptance roster entry missing a field is named by id",
         "an empty platform AGENTS.md is a load-bearing red leg",
         "a missing platform AGENTS.md is named separately",
         "a missing chain container is a distinct red leg",
@@ -1150,6 +1153,8 @@
         "S259 bridge syntax skips hidden directories and the workspace container",
         "S264 four install-completeness legs are green on a synthetic full fixture",
         "S264 each install-completeness leg has a distinct synthetic red reason",
+        "INC-206 an undeclared harness inside the governed area is red, and an unrelated project",
+        "INC-195 the snapshot train is owed only when a chain declares an automatic cadence",
         "S264 manifest mutation is automatically probed by the wiring leg",
         "S267 hook leg expands the container root and checks all four root-bound events",
         "S267 hook leg turns red for a missing target independently",
@@ -1163,7 +1168,15 @@
         "S270 helper copies reject a declared digest mismatch",
         "S270 lstat plus file-kind probing rejects a directory in a file residence",
         "S270 unsupported acceptanceProbe syntax is a red leg rather than a shell execution",
-        "S273 trust archive freshness compares the archive to all installed consumers and marker versions"
+        "INC-161 helper digest probe resolves from the trusted archive/state and fails closed",
+        "S273 trust archive freshness compares the archive to all installed consumers and marker versions",
+        "STORY-286 the hook leg reads codex too, and absence is deferral rather than health",
+        "STORY-286 a registered codex hook whose target cannot run turns the leg red",
+        "STORY-286 an adapter bundle is accepted by its receipt",
+        "an identity drift is named as an observation, with the moment it happened",
+        "a matching identity produces no observation at all",
+        "MIN-102 engine alignment names a copy that is behind a chain declaration",
+        "MIN-103 the platform names a setting the placed Helper never teaches"
       ]
     },
     "tests/preflight.test.mjs": {

@@ -17,7 +17,24 @@ import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 const topology = "## 三、分区拓扑\n";
 const launchdLabel = "com.tcrn.platform.local-snapshot";
 
-async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, claude = "@AGENTS.md\n" } = {}) {
+// STORY-300: a complete container now carries the acceptance-lane roster, so the
+// synthetic one does too. `roster: false` builds a container without it, which is
+// what the roster leg's red case looks like -- and what every container looked like
+// until 2026-08-19, while forty-four records were landing done against it.
+function syntheticRoster(count = 9) {
+  return {
+    schemaVersion: "tcrn.acceptance-gate-groups.v1",
+    groups: Array.from({ length: count }, (_, index) => ({
+      id: `group-${index}`,
+      title: `Group ${index}`,
+      repository: "fixture",
+      command: "pnpm fixture",
+      proves: "fixture",
+    })),
+  };
+}
+
+async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, claude = "@AGENTS.md\n", roster = syntheticRoster() } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-platform-doctor-")));
   context.after(() => rm(base, { recursive: true, force: true }));
   const root = join(base, "platform");
@@ -26,6 +43,10 @@ async function fixture(context, { agents = `${topology}fixture\n`, chain = true,
   if (claude !== null) await writeFile(join(root, "CLAUDE.md"), claude);
   if (chain) await mkdir(join(root, ".tcrn-workspace", "cross-project", "workspace"), { recursive: true });
   if (git) await mkdir(join(root, ".git"));
+  if (roster !== null) {
+    await mkdir(join(root, "TCRN Platform", "docs"), { recursive: true });
+    await writeFile(join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json"), `${JSON.stringify(roster, null, 2)}\n`);
+  }
   return root;
 }
 
@@ -34,7 +55,37 @@ test("a complete synthetic platform container is green", async (context) => {
   const result = await inspectPlatform(root, { includeInstallSurface: false });
   assert.equal(result.ok, true);
   assert.equal(result.reasonCode, "PLATFORM_LAYOUT_HEALTHY");
-  assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true]);
+  assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true, true]);
+});
+
+// Red legs for the roster, both observed before this landed: an absent roster is
+// named as absent rather than tolerated, and a roster that has quietly lost a group
+// is refused with the count reported. Nine is the number the acceptance ruling
+// names, so a different count is a change to the criterion and belongs in a ruling
+// rather than in a file edit.
+test("STORY-300: an absent acceptance roster is a red leg, not a tolerated gap", async (context) => {
+  const root = await fixture(context, { roster: null });
+  const result = await inspectPlatform(root, { includeInstallSurface: false });
+  assert.equal(result.ok, false);
+  assert.equal(result.checks.find((item) => item.name === "acceptanceGateGroups").reasonCode, "PLATFORM_ACCEPTANCE_ROSTER_MISSING");
+});
+
+test("STORY-300: an acceptance roster that lost a group is refused with the count", async (context) => {
+  const root = await fixture(context, { roster: syntheticRoster(8) });
+  const result = await inspectPlatform(root, { includeInstallSurface: false });
+  assert.equal(result.ok, false);
+  const leg = result.checks.find((item) => item.name === "acceptanceGateGroups");
+  assert.equal(leg.reasonCode, "PLATFORM_ACCEPTANCE_ROSTER_INVALID");
+  assert.equal(leg.declaredGroups, 8);
+});
+
+test("STORY-300: an acceptance roster entry missing a field is named by id", async (context) => {
+  const roster = syntheticRoster();
+  roster.groups[3] = { ...roster.groups[3], command: "" };
+  const root = await fixture(context, { roster });
+  const result = await inspectPlatform(root, { includeInstallSurface: false });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.checks.find((item) => item.name === "acceptanceGateGroups").incomplete, ["group-3"]);
 });
 
 test("an empty platform AGENTS.md is a load-bearing red leg", async (context) => {
@@ -136,6 +187,9 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
   const home = join(base, "home");
   await mkdir(join(root, ".tcrn-workspace", "cross-project", "workspace"), { recursive: true });
   await mkdir(home, { recursive: true });
+  // STORY-300: a complete container carries the acceptance-lane roster.
+  await mkdir(join(root, "TCRN Platform", "docs"), { recursive: true });
+  await writeFile(join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json"), `${JSON.stringify(syntheticRoster(), null, 2)}\n`);
   for (const entry of INSTALL_MANIFEST.items) {
     const path = entry.pathTemplate.replaceAll("<PLATFORM_ROOT>", root).replaceAll("<HOME>", home);
     if (entry.acceptanceProbe.startsWith("probe:regular-directory") || entry.acceptanceProbe.startsWith("probe:helper-skill-digest") || entry.acceptanceProbe.startsWith("probe:engine-version") || entry.acceptanceProbe.startsWith("probe:adapter-bundle-digest")) await mkdir(path, { recursive: true });
