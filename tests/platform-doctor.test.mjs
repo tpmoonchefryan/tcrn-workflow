@@ -34,7 +34,7 @@ function syntheticRoster(count = 9) {
   };
 }
 
-async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, claude = "@AGENTS.md\n", roster = syntheticRoster() } = {}) {
+async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, claude = "@AGENTS.md\n", roster = syntheticRoster(), trackedAgents = true } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-platform-doctor-")));
   context.after(() => rm(base, { recursive: true, force: true }));
   const root = join(base, "platform");
@@ -47,6 +47,12 @@ async function fixture(context, { agents = `${topology}fixture\n`, chain = true,
     await mkdir(join(root, "TCRN Platform", "docs"), { recursive: true });
     await writeFile(join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json"), `${JSON.stringify(roster, null, 2)}\n`);
   }
+  // STORY-300 Wave 2.2: the identity file's tracked copy, byte-identical unless a
+  // case deliberately diverges them.
+  if (agents !== null && trackedAgents !== false) {
+    await mkdir(join(root, "TCRN Platform", "docs"), { recursive: true });
+    await writeFile(join(root, "TCRN Platform", "docs", "platform-root-agents.md"), trackedAgents === true || trackedAgents === undefined ? agents : trackedAgents);
+  }
   return root;
 }
 
@@ -55,7 +61,7 @@ test("a complete synthetic platform container is green", async (context) => {
   const result = await inspectPlatform(root, { includeInstallSurface: false });
   assert.equal(result.ok, true);
   assert.equal(result.reasonCode, "PLATFORM_LAYOUT_HEALTHY");
-  assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true, true]);
+  assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true, true, true]);
 });
 
 // Red legs for the roster, both observed before this landed: an absent roster is
@@ -77,6 +83,24 @@ test("STORY-300: an acceptance roster that lost a group is refused with the coun
   const leg = result.checks.find((item) => item.name === "acceptanceGateGroups");
   assert.equal(leg.reasonCode, "PLATFORM_ACCEPTANCE_ROSTER_INVALID");
   assert.equal(leg.declaredGroups, 8);
+});
+
+// Red legs for the identity file's history, both observed before this landed. Two
+// copies of a governing document is normally the defect; it is admissible only
+// because one is checked against the other on every run, and these are what make
+// that check real.
+test("STORY-300: an untracked platform identity file is a red leg", async (context) => {
+  const root = await fixture(context, { trackedAgents: false });
+  const result = await inspectPlatform(root, { includeInstallSurface: false });
+  assert.equal(result.ok, false);
+  assert.equal(result.checks.find((item) => item.name === "platformAgentsHistory").reasonCode, "PLATFORM_AGENTS_UNTRACKED");
+});
+
+test("STORY-300: the identity file and its tracked copy may not diverge in silence", async (context) => {
+  const root = await fixture(context, { trackedAgents: `${topology}fixture\nan edit that never reached the tracked copy\n` });
+  const result = await inspectPlatform(root, { includeInstallSurface: false });
+  assert.equal(result.ok, false);
+  assert.equal(result.checks.find((item) => item.name === "platformAgentsHistory").reasonCode, "PLATFORM_AGENTS_HISTORY_DIVERGED");
 });
 
 test("STORY-300: an acceptance roster entry missing a field is named by id", async (context) => {
@@ -190,6 +214,7 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
   // STORY-300: a complete container carries the acceptance-lane roster.
   await mkdir(join(root, "TCRN Platform", "docs"), { recursive: true });
   await writeFile(join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json"), `${JSON.stringify(syntheticRoster(), null, 2)}\n`);
+  await writeFile(join(root, "TCRN Platform", "docs", "platform-root-agents.md"), `${topology}fixture\n`);
   for (const entry of INSTALL_MANIFEST.items) {
     const path = entry.pathTemplate.replaceAll("<PLATFORM_ROOT>", root).replaceAll("<HOME>", home);
     if (entry.acceptanceProbe.startsWith("probe:regular-directory") || entry.acceptanceProbe.startsWith("probe:helper-skill-digest") || entry.acceptanceProbe.startsWith("probe:engine-version") || entry.acceptanceProbe.startsWith("probe:adapter-bundle-digest")) await mkdir(path, { recursive: true });

@@ -62,6 +62,48 @@ function expandTemplate(template, platformRoot, homeRoot) {
 // which the platform forbids outright; what this can settle is that the roster is
 // present, complete, and says for every group which repository proves it and how.
 // The rest is the operator's to run and the record's to cite.
+// STORY-300, Wave 2.2. The platform identity file governs every repository below
+// this container and had no revision history: it is not in a repository, and the
+// container deliberately is not one either -- a gate below refuses a container
+// inside Git ancestry, and that gate is right.
+//
+// So the file gets a history the only way it can without moving: a tracked copy
+// inside the platform documents repository, and this leg holding the two to each
+// other. Two copies of a governing document is normally the defect, not the fix.
+// It is admissible here only because exactly one of them is checked against the
+// other on every run -- an unchecked second copy is how "the roster said six while
+// the catalog carried twenty-eight" happened three times in one week.
+//
+// Which one is canonical does not matter to this check and is deliberately not
+// encoded: what matters is that they cannot diverge in silence.
+async function inspectAgentsHistory(root) {
+  const live = join(root, "AGENTS.md");
+  const tracked = join(root, "TCRN Platform", "docs", "platform-root-agents.md");
+  const liveStats = await existingPath(live);
+  const trackedStats = await existingPath(tracked);
+  if (!liveStats?.isFile() || !trackedStats?.isFile()) {
+    // An absent live AGENTS.md is already named by the leg above; this one reports
+    // only the half it owns.
+    if (!trackedStats?.isFile()) {
+      return check("platformAgentsHistory", false, {
+        reasonCode: "PLATFORM_AGENTS_UNTRACKED",
+        path: "TCRN Platform/docs/platform-root-agents.md",
+      });
+    }
+    return check("platformAgentsHistory", true, { skipped: "no live AGENTS.md to compare" });
+  }
+  const liveBytes = await readFile(live);
+  const trackedBytes = await readFile(tracked);
+  if (!liveBytes.equals(trackedBytes)) {
+    return check("platformAgentsHistory", false, {
+      reasonCode: "PLATFORM_AGENTS_HISTORY_DIVERGED",
+      liveBytes: liveBytes.length,
+      trackedBytes: trackedBytes.length,
+    });
+  }
+  return check("platformAgentsHistory", true, { bytes: liveBytes.length });
+}
+
 async function inspectAcceptanceGateGroups(root) {
   const path = join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json");
   let roster;
@@ -1289,6 +1331,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
     check("platformRoot", true, { path: root }),
     await inspectAcceptanceGateGroups(root),
     await inspectAgents(root),
+    await inspectAgentsHistory(root),
     await inspectWorkspaceContainer(root),
     await inspectGitAncestors(root),
     await inspectClaudeBridge(root),
