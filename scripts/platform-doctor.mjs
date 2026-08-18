@@ -49,6 +49,49 @@ function expandTemplate(template, platformRoot, homeRoot) {
   return resolve(template.replaceAll("<PLATFORM_ROOT>", platformRoot).replaceAll("<HOME>", homeRoot));
 }
 
+// STORY-300 / TCRN-CROSS-MIN-ACCEPTANCE-LANES. The machine-checked acceptance lane
+// releases a work item to done on "the named nine gate groups all green", and until
+// 2026-08-19 the roster of those nine existed nowhere -- not in a repository, not in
+// the platform documents, not on the chain -- while forty-four records had already
+// landed against it. A criterion whose members are remembered rather than written is
+// the executor choosing which tests count, which is the thing that criterion exists
+// to replace.
+//
+// This checks the roster's shape, not that each command passes. Running another
+// repository's gates from here would be the engine reaching into a sibling's tree,
+// which the platform forbids outright; what this can settle is that the roster is
+// present, complete, and says for every group which repository proves it and how.
+// The rest is the operator's to run and the record's to cite.
+async function inspectAcceptanceGateGroups(root) {
+  const path = join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json");
+  let roster;
+  try {
+    roster = JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    return check("acceptanceGateGroups", false, { reasonCode: "PLATFORM_ACCEPTANCE_ROSTER_MISSING", path: "TCRN Platform/docs/acceptance-gate-groups.json" });
+  }
+  if (roster?.schemaVersion !== "tcrn.acceptance-gate-groups.v1" || !Array.isArray(roster.groups)) {
+    return check("acceptanceGateGroups", false, { reasonCode: "PLATFORM_ACCEPTANCE_ROSTER_INVALID", detail: "schemaVersion or groups" });
+  }
+  const incomplete = roster.groups
+    .filter((group) => !["id", "title", "repository", "command", "proves"].every((field) => typeof group?.[field] === "string" && group[field].length > 0))
+    .map((group, index) => (typeof group?.id === "string" ? group.id : `#${index}`));
+  const ids = roster.groups.map((group) => group?.id);
+  const duplicated = ids.filter((id, index) => ids.indexOf(id) !== index);
+  // Nine is the number the ruling names. If the roster ever holds a different count,
+  // that is a change to the acceptance criterion and belongs in a ruling rather than
+  // in a file edit, so it is reported rather than accommodated.
+  if (roster.groups.length !== 9 || incomplete.length > 0 || duplicated.length > 0) {
+    return check("acceptanceGateGroups", false, {
+      reasonCode: "PLATFORM_ACCEPTANCE_ROSTER_INVALID",
+      declaredGroups: roster.groups.length,
+      incomplete,
+      duplicated,
+    });
+  }
+  return check("acceptanceGateGroups", true, { declaredGroups: roster.groups.length });
+}
+
 async function inspectAgents(root) {
   const path = join(root, "AGENTS.md");
   const stats = await existingPath(path);
@@ -1244,6 +1287,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
   assertInstallManifestComplete(manifest);
   const checks = [
     check("platformRoot", true, { path: root }),
+    await inspectAcceptanceGateGroups(root),
     await inspectAgents(root),
     await inspectWorkspaceContainer(root),
     await inspectGitAncestors(root),

@@ -16,6 +16,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.5944,
       "rationale": "STORY-300 slice 2 generalised the append kernel so a single write is the N=1 case of a batch, and the rest of the suite proves that half by passing unchanged. What it cannot reach is the fold itself — a member seeing its predecessor state, a batch crossing a segment boundary, and refusal leaving the chain untouched — so those criteria are new proof mass with no product counterpart to offset them. Paid deliberately: the fold is now the code path every one of the thirty-two chain-write call sites takes, and shipping it on the strength of tests that only exercise N=1 would be the untested-guard shape this platform has paid for before. First time the ratchet fired on a change other than its own installation."
+    },
+    {
+      "id": "OD-24-acceptance-roster-leg",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.5956,
+      "rationale": "The acceptance-lane roster was written on 2026-08-19 after the audit found it had never existed anywhere while forty-four records had landed done against it. A roster nothing checks rots the same way the absent one did, so platform-doctor gained a leg that holds it to nine complete, uniquely identified groups — proven non-tautological by removing one group and observing the red. The leg is proof mass with no product counterpart, and it is worth paying because the alternative is a criterion whose members are remembered rather than written, which is the thing the criterion exists to replace."
     }
   ]
 }
