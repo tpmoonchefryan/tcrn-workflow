@@ -2454,7 +2454,48 @@ async function reportBudget() {
     }
   }
   const ratio = productLines === 0 ? 0 : Number((proofLines / productLines).toFixed(4));
-  return success("PROOF_BUDGET_REPORT", { proofLines, productLines, ratio });
+  // STORY-301. This verb reported for as long as it existed and judged nothing: its
+  // reason code was success unconditionally, so the rule in CONTRIBUTING.md -- which
+  // has bound since adoption -- was enforced by whoever remembered it. Gates were
+  // added anyway, and the ratio walked from 1.62 to here without any of the three
+  // outcomes that rule names ever being taken.
+  //
+  // The ratchet is a proxy and says so. The written rule is about introducing gates;
+  // this measures whether proof mass grew faster than the product it proves, which is
+  // the economic content of the rule in a form a machine can settle. It is therefore
+  // stricter in one direction (a test added for a genuinely new capability can trip
+  // it) and blind in another (deleting product code raises the ratio without adding
+  // any proof). Both are stated rather than smoothed over, because the alternative --
+  // classifying every change as gate-or-not-gate -- is a judgement no check can make
+  // and the reason the rule went unenforced for a year.
+  const policy = await readJson(resolve(repositoryRoot, "scripts/policy/proof-budget.json"));
+  const frozenRatio = policy.frozenRatio;
+  assertion(typeof frozenRatio === "number" && Number.isFinite(frozenRatio), "PROOF_BUDGET_POLICY_INVALID", "frozenRatio");
+  assertion(Array.isArray(policy.exceptions), "PROOF_BUDGET_POLICY_INVALID", "exceptions");
+  // The line moves only by an entry that says who moved it and why. Each exception
+  // carries the ratio it authorises, so the effective line is the highest one written
+  // down -- and the file reads as the history of every time this was paid rather than
+  // as a number someone edited.
+  for (const entry of policy.exceptions) {
+    assertion(entry !== null && typeof entry === "object", "PROOF_BUDGET_POLICY_INVALID", "exception entry");
+    assertion(typeof entry.id === "string" && entry.id.length > 0, "PROOF_BUDGET_POLICY_INVALID", "exception id");
+    assertion(typeof entry.recordedAt === "string" && entry.recordedAt.length > 0, "PROOF_BUDGET_POLICY_INVALID", `${entry.id}: recordedAt`);
+    assertion(typeof entry.rationale === "string" && entry.rationale.length > 0, "PROOF_BUDGET_POLICY_INVALID", `${entry.id}: rationale`);
+    assertion(typeof entry.ratio === "number" && Number.isFinite(entry.ratio), "PROOF_BUDGET_POLICY_INVALID", `${entry.id}: ratio`);
+  }
+  const effectiveRatio = policy.exceptions.reduce((highest, entry) => Math.max(highest, entry.ratio), frozenRatio);
+  if (ratio > effectiveRatio) {
+    fail("PROOF_BUDGET_EXCEEDED",
+      `proof-to-product ratio ${String(ratio)} exceeds the line ${String(effectiveRatio)}; retire equivalent proof mass, or record an exception in scripts/policy/proof-budget.json with the ratio it authorises and the reason it is worth paying`);
+  }
+  return success("PROOF_BUDGET_VERIFIED", {
+    proofLines,
+    productLines,
+    ratio,
+    frozenRatio,
+    effectiveRatio,
+    exceptions: policy.exceptions.length,
+  });
 }
 
 const handlers = {

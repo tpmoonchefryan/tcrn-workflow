@@ -51,6 +51,9 @@ export const P1_SEQUENCE = Object.freeze([
   { task: "ci", script: "verify:ci" },
   { task: "verification-map", script: "verify:map" },
   { task: "history", script: "verify:history" },
+  // STORY-301: last, because it measures the tree the gates above just proved, and
+  // because a budget that runs first would judge a build nobody had checked yet.
+  { task: "budget", script: "verify:budget" },
 ].map((entry) => Object.freeze({ dispatchesThroughTask: true, ...entry })));
 
 /** The verb names, in order — what `verify:p1` walks. */

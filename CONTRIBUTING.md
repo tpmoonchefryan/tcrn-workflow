@@ -49,6 +49,32 @@ not proof scaffolding.
 (corrected baseline, with the `packages/protocol` package included in product
 mass per its definition), well above the `1.0` threshold, so the rule binds.
 
+**Machine enforcement — 2026-08-19, TCRN-CROSS-STORY-301.** Until this date the
+rule above bound and judged nothing: `pnpm verify:budget` reported the ratio and
+returned success unconditionally, so the rule was enforced by whoever remembered
+it, and the ratio walked from `1.62` to `1.59` while gates were added without any
+of the three named outcomes ever being taken. The verb now refuses a ratio above
+the line recorded in `scripts/policy/proof-budget.json`, and it runs inside P1.
+
+The check is a proxy and is written down as one. The rule is about introducing
+gates; the check measures whether proof mass grew faster than the product it
+proves. That is stricter in one direction — a test written for a genuinely new
+capability can trip it — and blind in another: deleting product code raises the
+ratio while adding no proof at all. Both are accepted rather than papered over,
+because the alternative is asking a script to decide what counts as a gate, and
+that judgement is exactly what went unmade for a year.
+
+The line moves only by an entry naming the ratio it authorises and the reason,
+so the policy file reads as the history of every time this was paid.
+
+**Recorded exception — OD-22, 2026-08-19, the ratchet's own installation.** The
+first thing the ratchet did was refuse the change that installed it: the verb's
+reasoning lives in `scripts/` and its criteria live in `tests/`, both of which are
+proof mass by the definition above. A mechanism that stops proof mass growing
+cannot be installed without growing some. The allowance is recorded rather than
+absorbed by editing the frozen line, because a mechanism whose first act is to
+quietly raise its own limit teaches the habit it was built to stop.
+
 **Recorded exception — OD-21, 2026-07-19, `pnpm guard-check`.** The Owner grants
 one written exception for the guard registry and its mutation checker
 (`scripts/guard-check.mjs`, `scripts/policy/guard-registry.json`).

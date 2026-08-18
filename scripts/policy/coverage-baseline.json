@@ -1438,6 +1438,16 @@
         "STORY-300: --help returns the verb"
       ]
     },
+    "tests/s301-proof-budget.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 15,
+      "testNames": [
+        "STORY-301: the proof budget runs inside the gate train",
+        "STORY-301: the budget verb refuses a ratio above the recorded line",
+        "STORY-301: every recorded exception says what it authorises and why",
+        "STORY-301: reading the budget policy does not change it"
+      ]
+    },
     "tests/s6-lessons.test.mjs": {
       "testCount": 5,
       "assertionCount": 12,

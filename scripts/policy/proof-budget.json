@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "tcrn.proof-budget.v1",
+  "note": "The high-water mark for the proof-to-product ratio defined in CONTRIBUTING.md. The rule there has bound since adoption and judged nothing: the budget verb reported a number and always succeeded, so the ratio drifted from 1.62 through 1.5902 to here while gates were added without any of the three outcomes the rule names. This file is the line the verb now enforces. Raising it is a decision that leaves a trace; letting it rise silently is what this replaces.",
+  "frozenRatio": 1.5888,
+  "recordedAt": "2026-08-19",
+  "rationale": "Frozen at the ratio measured when the ratchet was installed, not at the rule's 1.0 threshold. 1.0 is unreachable from here without retiring roughly a third of the proof mass, and a line nothing can satisfy is a line nobody reads. This one binds today: any change that raises the ratio must retire equivalent proof mass or record an exception below.",
+  "exceptions": [
+    {
+      "id": "OD-22-STORY-301-ratchet-installation",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.5925,
+      "rationale": "The ratchet refused the change that installed it, three times, and each time the honest move was to record rather than to move the frozen line. Its reasoning lives in scripts/, its criteria live in tests/, and admitting both to the generated-source roster costs a few lines more — all of it proof mass by the rule's own definition. A mechanism that stops proof mass growing cannot be installed without growing some. Recorded because a mechanism whose first act is to quietly raise its own limit teaches exactly the habit it was built to stop. 1.5925 is the measured ratio with the ratchet, its four criteria and their registration in the tree; the frozen line stays at 1.5888 so the cost of this installation stays legible rather than absorbed."
+    }
+  ]
+}
