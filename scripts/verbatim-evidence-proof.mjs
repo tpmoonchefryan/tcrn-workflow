@@ -11,6 +11,7 @@ import { promisify } from "node:util";
 import { relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { compareCanonicalText } from "./lib/canonical-order.mjs";
 import { repositoryRoot, toPosixPath, walkFiles } from "./lib/files.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -19,7 +20,18 @@ const EVIDENCE_ROOTS = [
   "docs/reports/init-029-component-loop/evidence/",
 ];
 const DESIGN_PROOF = "portal/scripts/design-proof.mjs";
-const HOST_ROLE_SCAN = "rg -n 'claude-code|codex|reviewer|role ===|host ===|host \\?' portal/index.html";
+// STORY-300. The scan used to carry `-n`, so every match arrived with its line
+// number and the evidence block was pinned to where the code sat rather than to
+// what it said. Editing anything above a match shifted every number below it and
+// the byte comparison went red for a file whose meaning had not changed:
+// TCRN-CROSS-INC-153 was refreshed three times in one day for exactly this, and
+// the audited week counted twenty-seven such refusals across fifty-four blocks.
+//
+// What the block exists to establish is which host and role expressions the portal
+// contains. That set is what is recorded now: matched text, trimmed, deduplicated
+// and canonically ordered. Adding, removing or altering one of these expressions
+// still moves the evidence; moving code no longer does.
+const HOST_ROLE_SCAN = "rg --no-line-number 'claude-code|codex|reviewer|role ===|host ===|host \\?' portal/index.html | sed 's/^ *//' | sort -u";
 const EXPECTED_DESIGN_LEGS = [
   "token-fidelity",
   "brand-asset-fidelity",
@@ -60,12 +72,16 @@ async function designProofLegNames() {
 
 async function hostRoleScan() {
   const source = await readFile(resolve(repositoryRoot, "portal/index.html"), "utf8");
-  const matches = source.split("\n")
-    .map((line, index) => ({ line: index + 1, text: line }))
-    .filter(({ text }) => /claude-code|codex|reviewer|role ===|host ===|host \?/u.test(text))
-    .map(({ line, text }) => `${line}:${text}`);
+  const expression = /claude-code|codex|reviewer|role ===|host ===|host \?/u;
+  // The whole matching line is kept, trimmed of indentation and deduplicated: the
+  // content is what the block establishes, and indentation and position are what
+  // used to make it red for changes it was never watching. Sorting canonically
+  // removes the last positional term -- reordering two functions is not a change
+  // to what the portal supports.
+  const found = new Set(source.split("\n").filter((line) => expression.test(line)).map((line) => line.trim()));
+  const matches = [...found].sort(compareCanonicalText);
   if (matches.length === 0) throw new Error("HOST_ROLE_SCAN_NO_MATCHES");
-  return { scan: HOST_ROLE_SCAN, exitCode: 0, matches };
+  return { scan: HOST_ROLE_SCAN, exitCode: 0, matchCount: matches.length, matches };
 }
 
 async function i18nCurrentSummary() {

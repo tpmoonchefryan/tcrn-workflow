@@ -40,6 +40,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.6019,
       "rationale": "AC-1 stated that its own absence blocks the release and nothing checked it — the audit went looking for the consumer and found none, while the receipt sat twenty-nine days and nineteen host minor versions behind through more than thirty releases. The release gate now checks presence and a thirty-day window, proven red by backdating the receipt before it was trusted green. Proof mass in scripts/ with no product counterpart, paid because a stated release consequence with no consumer is worse than no statement at all."
+    },
+    {
+      "id": "OD-28-verbatim-content-anchor",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.6024,
+      "rationale": "The host-role evidence block was anchored on line numbers, so every edit above a match reddened a file whose meaning had not changed — INC-153 was refreshed three times in one day for exactly that, and the audited week counted twenty-seven such refusals across fifty-four blocks. It now records the matched line content, trimmed, deduplicated and canonically ordered. Both directions were proven before landing: altering one matched line still turns it red, and inserting a line above every match no longer does. Small proof mass, paid to retire a recurring one."
     }
   ]
 }
