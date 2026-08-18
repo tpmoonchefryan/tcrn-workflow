@@ -1612,12 +1612,13 @@
       ]
     },
     "tests/workspace-extension-records.test.mjs": {
-      "testCount": 39,
-      "assertionCount": 179,
+      "testCount": 49,
+      "assertionCount": 223,
       "testNames": [
         "conference and gate mutations round-trip through the event log with chained hashes, sorted collections, fresh views, and materialize parity",
         "mutation-time rules fail closed without appending an event",
         "hand-crafted event logs fail replay closed: unknown operations, openness, binding, pinning, tombstone, and validator rules",
+        "INC-198 index size follows record count rather than extension prose, and still detects a prose change",
         "a workspace with zero conference/gate events keeps pre-change golden view bytes, view set, and export digest",
         "a crash across conference.closed leaves the event durable and recover() rebuilds extensions.json",
         "WSD-2: the eight governed verbs plus gate-delete mutate and read under lease and CAS with canonical receipts and deterministic list ordering",
@@ -1626,6 +1627,7 @@
         "WSD-3: conference-close --distill governs each decision into a promotable knowledge candidate under one lease",
         "WSD-3: --distill with no knowledge store fails closed BEFORE the close event is appended",
         "WSD-4: a pending gate fails a work transition to done closed at the verb and appends no event",
+        "MIN-102 flipping a gate to blocked does not release the work item",
         "WSD-4: minutes-backed satisfaction unblocks the transition to done and the whole chain replays deterministically",
         "WSD-4: the gate.deleted tombstone is the deadlock escape that lets a wedged work item reach done",
         "WSD-4: the designated set is exactly done — a pending gate leaves other targets unaffected",
@@ -1647,13 +1649,21 @@
         "smuggled extension",
         "empty delta",
         "INIT-004: the CLI opens Incident for creation and it materializes outside the planning tree",
+        "MIN-102 the write path stops minting the retired outcome classes, and still passes garbage through",
         "sprint: a Release is created parentless",
         "sprint: a Release cannot take a parent",
         "sprint: a valid sprint annotation is stored and round-trips",
         "sprint: a malformed sprint reference fails closed at the verb",
         "sprint: a forged advisory:sprint value fails replay closed",
         "sprint: a forged work.created carrying a malformed advisory value fails replay closed",
-        "sprint: the CLI opens Release create and work-list --sprint filters members"
+        "sprint: the CLI opens Release create and work-list --sprint filters members",
+        "MIN-102 the position ceiling is fixed for replay while the budget is a write-path setting",
+        "STORY-299: extension view size is independent of the prose inside the records",
+        "STORY-299: ten times the records changes the extension view by less than 64 bytes",
+        "STORY-299: any single byte inside any extension record still moves the view",
+        "STORY-299: an over-budget projection is refused with the chain untouched",
+        "STORY-299: a view write failure after commit keeps the command successful and the fact durable",
+        "STORY-299: the budget report covers every view and the record cap"
       ]
     }
   }

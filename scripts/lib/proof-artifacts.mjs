@@ -52,6 +52,7 @@ const routeAdditions = new Set([
   "docs/releases/0.11.5.md",
   "docs/releases/0.11.6.md",
   "docs/releases/0.11.7.md",
+  "docs/releases/0.14.0.md",
   "scripts/lib/scoped-strip-types.mjs",
   "scripts/test-controller-bootstrap.mjs",
   "scripts/test-controller-child-policy.mjs",

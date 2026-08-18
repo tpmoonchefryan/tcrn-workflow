@@ -193,6 +193,7 @@ export {
   createWorkspaceArchive,
   createWork,
   annotateWork,
+  consumeViewWriteFailure,
   deleteProject,
   deleteWork,
   enableActorAttestation,
@@ -225,6 +226,7 @@ export {
   validateWorkspace,
   withStorageBackendFactory,
   withWorkspaceLease,
+  workspaceBudgets,
 } from "./workspace.js";
 export type {
   ProjectRecord,

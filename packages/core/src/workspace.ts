@@ -24,6 +24,7 @@ import {
   assertStrictInstant,
   assertWorkTransition,
   canonicalExternalKey,
+  canonicalByteLength,
   canonicalJson,
   canonicalSha256,
   compareCanonicalText,
@@ -199,6 +200,16 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_STORY_SCOPE_INVALID",
   "WORKSPACE_OWNER_ACCEPTANCE_REQUIRED",
   "WORKSPACE_VIEW_STALE",
+  // STORY-299. Two codes, two different moments, deliberately not one code.
+  // BUDGET_EXCEEDED is raised while nothing has been written: the projection was
+  // measured before the segment was committed and does not fit, so the command
+  // fails with the chain untouched and must not be retried unchanged.
+  // UNWRITTEN is the opposite case and never appears as a command's reason code:
+  // the fact is committed and durable, only the derived view could not be
+  // persisted. It rides on a successful receipt so the caller learns the truth
+  // without being told its write failed -- the defect INC-198 recorded.
+  "WORKSPACE_VIEW_BUDGET_EXCEEDED",
+  "WORKSPACE_VIEW_UNWRITTEN",
 ] as const);
 
 export type WorkspaceReasonCode = typeof WORKSPACE_REASON_CODES[number];
@@ -337,6 +348,12 @@ export interface WorkspaceMutationOptions {
   readonly actorId?: string;
   readonly crashAt?: WorkspaceCrashPoint;
   readonly afterMutationClaimForTest?: () => Promise<void>;
+  // STORY-299: a test-facing knob for the pre-commit view budget, the same shape
+  // and the same purpose as crashAt above. It only ever narrows -- a caller cannot
+  // raise the protocol ceiling with it -- so the refusal it exercises is the same
+  // refusal a real chain gets, reachable without first building a chain large
+  // enough to fill a megabyte.
+  readonly viewBudgetBytes?: number;
 }
 
 export interface WorkspaceMigrationPlan {
@@ -1957,7 +1974,44 @@ function digestedExtensions(extensions: WorkRecord["extensions"]): Record<string
   return digests;
 }
 
-function viewDocuments(state: WorkspaceState): Readonly<Record<string, string>> {
+// STORY-299. Hash each record, then hash the vector of hashes: any byte that
+// changes inside any record still changes the result, and so does reordering two
+// records, because the vector is not sorted or deduplicated. Unlike the shape
+// above, the result does not grow with the collection -- which is the whole point.
+//
+// This is the single place the collection-summary shape is written. The work index
+// still uses the per-record shape (STORY-302 carries that ceiling); when it moves,
+// it moves by calling this, not by growing a second copy of the idea.
+function collectionDigest(records: readonly unknown[]): string {
+  return canonicalSha256(records.map((record) => canonicalSha256(record)));
+}
+
+// STORY-299. Measure, then serialise -- never the other way round. `canonicalJson`
+// fails closed at the ceiling, so asking it first turns "this view is 40 KB over
+// budget" into a bare refusal carrying no number, and turns the capacity meter
+// into something that stops reading exactly when it matters.
+function canonicalViewDocument(name: string, value: unknown, budgetBytes: number): string {
+  const bytes = canonicalByteLength(value);
+  if (bytes > budgetBytes) {
+    fail("WORKSPACE_VIEW_BUDGET_EXCEEDED", `${name} projects to ${bytes} bytes against a ${budgetBytes} byte budget`);
+  }
+  return canonicalJson(value);
+}
+
+function summarisedCollection(records: readonly unknown[]): { readonly count: number; readonly digest: string } {
+  return { count: records.length, digest: collectionDigest(records) };
+}
+
+// STORY-299. One writing of the view shapes, two readers of it: the projection
+// below serialises them and enforces the budget, and the meter reports their size
+// without enforcing anything. Keeping them apart is what lets `status` still
+// answer on a workspace that has crossed the ceiling -- a gauge built out of the
+// failing path would go silent exactly when it is needed.
+type ViewSource =
+  | { readonly name: string; readonly text: string }
+  | { readonly name: string; readonly value: unknown };
+
+function viewSources(state: WorkspaceState): readonly ViewSource[] {
   const activeProjects = state.projects.filter((record) => !record.tombstone);
   const activeWork = state.work.filter((record) => !record.tombstone);
   const graphDigest = canonicalSha256({
@@ -1985,40 +2039,174 @@ function viewDocuments(state: WorkspaceState): Readonly<Record<string, string>> 
     "- Authority: derived and rebuildable from the event chain",
     "",
   ].join("\n");
-  const views: Record<string, string> = {
-    "STATUS.md": status,
-    "index.json": canonicalJson({
-      schemaVersion: "tcrn.workspace-index.v2",
-      projects: activeProjects,
-      work: activeWork.map((record) => ({ ...record, extensions: digestedExtensions(record.extensions) })),
-    }),
-    "readback.json": canonicalJson(readback),
-  };
+  const sources: ViewSource[] = [
+    { name: "STATUS.md", text: status },
+    {
+      name: "index.json",
+      value: {
+        schemaVersion: "tcrn.workspace-index.v2",
+        projects: activeProjects,
+        work: activeWork.map((record) => ({ ...record, extensions: digestedExtensions(record.extensions) })),
+      },
+    },
+    { name: "readback.json", value: readback },
+  ];
   // WSD-1: the extension index is a fourth view emitted ONLY when the workspace
   // holds at least one conference or gate record (positions and minutes cannot
   // exist without their conference), so the three views above and the view set
-  // stay byte-identical for every workspace without extension records.
+  // stay byte-identical for every workspace without extension records. STORY-299
+  // does not touch that condition: the view set stays four, so no view is ever
+  // orphaned and no deletion mechanism is owed.
   if (state.conferences.length + state.gates.length + state.settings.length + state.templates.length > 0) {
-    views["extensions.json"] = canonicalJson({
-      schemaVersion: "tcrn.workspace-extension-index.v1",
-      conferences: state.conferences,
-      conferencePositions: state.conferencePositions,
-      conferenceMinutes: state.conferenceMinutes,
-      gates: state.gates,
-      ...(state.settings.length === 0 ? {} : { settings: state.settings }),
-      ...(state.templates.length === 0 ? {} : { templates: state.templates }),
+    // STORY-299: v2 is a fixed-length verification summary, not an index. v1 carried
+    // every conference, position, minutes and gate record whole, so the file grew with
+    // the governed prose written into the chain and crossed the one MiB canonical
+    // ceiling at 532 records (INC-198), taking eight read verbs down with it.
+    //
+    // The shape deliberately does NOT copy what 0.11.17 did to the work index. That
+    // fix keeps each record's identity and status verbatim and digests only the
+    // extension bag, which removes the prose term but keeps the per-record one -- it
+    // is linear, and measurement puts its own ceiling eight weeks out (STORY-302).
+    // Applied literally here it would not even help: extension-record prose lives in
+    // first-class fields rather than in an extension bag, so digesting the bag alone
+    // grows this file by 537 bytes on the cross-project chain. What is copied is the
+    // method -- hash each record, hash the vector, bump the schema version, keep no
+    // compatibility read path -- not the target.
+    //
+    // Every collection follows the same rule, settings and templates included. An
+    // exception for a collection that happens to be small today is how the linear
+    // term comes back the day one of its fields grows.
+    //
+    // Nothing is lost: views are derived and rebuildable, no code anywhere parses
+    // this file (its only readers are the byte-equality check in validateWorkspace
+    // and an opaque copy in migration), and the prose is served from replay through
+    // conference-position-list and conference-minutes-list. What is given up is
+    // browsing identities by opening the file, which the helper payload already
+    // advises against.
+    const collections: Record<string, { readonly count: number; readonly digest: string }> = {
+      conferences: summarisedCollection(state.conferences),
+      conferencePositions: summarisedCollection(state.conferencePositions),
+      conferenceMinutes: summarisedCollection(state.conferenceMinutes),
+      gates: summarisedCollection(state.gates),
+      ...(state.settings.length === 0 ? {} : { settings: summarisedCollection(state.settings) }),
+      ...(state.templates.length === 0 ? {} : { templates: summarisedCollection(state.templates) }),
+    };
+    const digestsOnly: Record<string, string> = {};
+    for (const key of Object.keys(collections).sort(compareCanonicalText)) {
+      digestsOnly[key] = collections[key]?.digest ?? "";
+    }
+    sources.push({
+      name: "extensions.json",
+      value: {
+        schemaVersion: "tcrn.workspace-extension-index.v2",
+        ...collections,
+        extensionsDigest: canonicalSha256(digestsOnly),
+      },
     });
   }
-  return views;
+  return sources;
+}
+
+function viewDocuments(state: WorkspaceState, budgetBytes: number = PROTOCOL_LIMITS.maxCanonicalBytes): Readonly<Record<string, string>> {
+  const documents: Record<string, string> = {};
+  for (const source of viewSources(state)) {
+    if ("text" in source) {
+      if (Buffer.byteLength(source.text, "utf8") > budgetBytes) {
+        fail("WORKSPACE_VIEW_BUDGET_EXCEEDED", `${source.name} projects past a ${budgetBytes} byte budget`);
+      }
+      documents[source.name] = source.text;
+      continue;
+    }
+    documents[source.name] = canonicalViewDocument(source.name, source.value, budgetBytes);
+  }
+  return documents;
+}
+
+export interface WorkspaceBudgetReport {
+  readonly views: readonly {
+    readonly name: string;
+    readonly bytes: number;
+    readonly limitBytes: number;
+    readonly headroomBytes: number;
+  }[];
+  readonly maxSegmentBytes: number;
+  readonly events: { readonly count: number; readonly limit: number; readonly headroomEvents: number };
+}
+
+/**
+ * What is left before each ceiling, reported rather than judged.
+ *
+ * Every number here was a wall someone hit without warning first: the view ceiling
+ * that locked eight read verbs (INC-198), the segment ceiling, and the record cap
+ * -- which is the hardest of the three, because it is checked inside materialize
+ * and so takes `status` and `recover` down with it rather than merely refusing
+ * writes. Names only, never a host path.
+ */
+export function workspaceBudgets(state: WorkspaceState): WorkspaceBudgetReport {
+  const limitBytes = PROTOCOL_LIMITS.maxCanonicalBytes;
+  const views = viewSources(state).map((source) => {
+    const bytes = "text" in source ? Buffer.byteLength(source.text, "utf8") : canonicalByteLength(source.value);
+    return { name: source.name, bytes, limitBytes, headroomBytes: limitBytes - bytes };
+  });
+  let maxSegmentBytes = 0;
+  const segmentLimit = state.metadata.segmentEventLimit;
+  for (let start = 0; start < state.events.length; start += segmentLimit) {
+    const bytes = canonicalByteLength(state.events.slice(start, start + segmentLimit));
+    if (bytes > maxSegmentBytes) maxSegmentBytes = bytes;
+  }
+  return {
+    views,
+    maxSegmentBytes,
+    events: {
+      count: state.events.length,
+      limit: PROTOCOL_LIMITS.maxRecords,
+      headroomEvents: PROTOCOL_LIMITS.maxRecords - state.events.length,
+    },
+  };
+}
+
+// STORY-299. The projection is a pure function of state and is now evaluated
+// before anything is written; persistence is the half below. Splitting them is
+// what lets a projection that cannot fit be refused with the chain untouched,
+// while leaving the write loop -- and the crash point that four fault-injection
+// cases and three crash tests are anchored on -- exactly where it was.
+async function writeViewDocuments(
+  workspaceRoot: string,
+  documents: Readonly<Record<string, string>>,
+  crashAt?: WorkspaceCrashPoint,
+): Promise<void> {
+  crash("before-view-commit", crashAt);
+  const backend = backendFor(workspaceRoot);
+  for (const name of Object.keys(documents).sort(compareCanonicalText)) {
+    await backend.writeView(name, documents[name] ?? "");
+  }
 }
 
 async function writeViews(workspaceRoot: string, state: WorkspaceState, crashAt?: WorkspaceCrashPoint): Promise<void> {
-  crash("before-view-commit", crashAt);
-  const views = viewDocuments(state);
-  const backend = backendFor(workspaceRoot);
-  for (const name of Object.keys(views).sort(compareCanonicalText)) {
-    await backend.writeView(name, views[name] ?? "");
-  }
+  await writeViewDocuments(workspaceRoot, viewDocuments(state), crashAt);
+}
+
+// STORY-299. A view that could not be persisted after the event was committed is
+// news for the caller, not a failure of the call: the fact is durable, and saying
+// otherwise is the defect INC-198 recorded, where a command reported rejection
+// while its event sat in the chain and the agent's retry appended a second one.
+//
+// The signal travels out of band because the mutation path returns WorkspaceState
+// and that type is the byte-equality contract with a fresh materialize -- widening
+// it to carry an operational note would put a non-state field inside the thing the
+// engine proves is pure state. The sink is cleared on entry to every append, and
+// consumed exactly once by whichever receipt writer runs next.
+interface ViewWriteFailure {
+  readonly reasonCode: "WORKSPACE_VIEW_UNWRITTEN";
+  readonly cause: string;
+}
+
+let pendingViewWriteFailure: ViewWriteFailure | null = null;
+
+export function consumeViewWriteFailure(): ViewWriteFailure | null {
+  const failure = pendingViewWriteFailure;
+  pendingViewWriteFailure = null;
+  return failure;
 }
 
 async function assertLease(workspaceRoot: string, lease: WorkspaceLease): Promise<void> {
@@ -3005,6 +3193,9 @@ interface MutationDelta {
 }
 
 async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, buildDelta: (state: WorkspaceState) => MutationDelta, options: WorkspaceMutationOptions): Promise<WorkspaceState> {
+  // STORY-299: clear before the attempt, so a note left by an earlier command can
+  // never be reported against this one.
+  pendingViewWriteFailure = null;
   assertStrictInstant(options.occurredAt);
   const workspace = await resolveWorkspace(workspaceRootInput);
   await assertLease(workspace.root, lease);
@@ -3064,17 +3255,12 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
       : state.events.slice((segmentIndex - 1) * workspace.metadata.segmentEventLimit);
     const segmentBytes = canonicalJson([...current, event]);
     const backend = backendFor(workspace.root);
-    await backend.writeSegment(segmentName, Buffer.from(segmentBytes, "utf8"), options.crashAt);
-    crash("after-event-commit", options.crashAt);
-    // WSA-1: durability readback bounded to the just-committed segment replaces the
-    // full-chain re-materialize; atomicWrite already fsync+rename+identity-verified,
-    // and the chain was validated under this claim, so re-reading it wholesale was
-    // redundant. The committed state is applied from the validated delta, and equals
-    // a fresh materialize by construction.
-    const readback = await backend.readSegment(segmentName);
-    if (readback.toString("utf8") !== segmentBytes) {
-      fail("WORKSPACE_EVENT_CORRUPT", `segment ${segmentIndex} readback mismatch`);
-    }
+    // STORY-299. The committed state is pure computation over state, delta and the
+    // new event, so it can be built -- and its views projected -- before a single
+    // byte reaches the disk. Projecting here is what makes an over-budget view a
+    // clean refusal: version has not moved, no segment exists, and the caller may
+    // fix the cause and retry. Doing it after writeSegment is precisely how
+    // INC-198's event seq 3842 came to exist under a command that reported failure.
     const committed: WorkspaceState = {
       metadata: workspace.metadata,
       version: sequence,
@@ -3091,7 +3277,35 @@ async function appendEvent(workspaceRootInput: string, lease: WorkspaceLease, bu
       events: [...state.events, event],
       attestationEnabledAtSequence: isEnableEvent ? sequence : state.attestationEnabledAtSequence,
     };
-    await writeViews(workspace.root, committed, options.crashAt);
+    const documents = viewDocuments(committed, options.viewBudgetBytes ?? PROTOCOL_LIMITS.maxCanonicalBytes);
+    await backend.writeSegment(segmentName, Buffer.from(segmentBytes, "utf8"), options.crashAt);
+    crash("after-event-commit", options.crashAt);
+    // WSA-1: durability readback bounded to the just-committed segment replaces the
+    // full-chain re-materialize; atomicWrite already fsync+rename+identity-verified,
+    // and the chain was validated under this claim, so re-reading it wholesale was
+    // redundant. The committed state is applied from the validated delta, and equals
+    // a fresh materialize by construction.
+    const readback = await backend.readSegment(segmentName);
+    if (readback.toString("utf8") !== segmentBytes) {
+      fail("WORKSPACE_EVENT_CORRUPT", `segment ${segmentIndex} readback mismatch`);
+    }
+    try {
+      await writeViewDocuments(workspace.root, documents, options.crashAt);
+    } catch (error) {
+      // The projection already succeeded above, so a ProtocolError here is a bug in
+      // this module rather than a capacity fact, and must stay loud. A fault
+      // injection is a simulated process death: a dead process returns no receipt,
+      // so swallowing it would make the crash tests assert the opposite of what
+      // they were written to assert. Everything else -- including the Postgres
+      // backend's own write errors, which are not StorageError and would slip
+      // through a type-narrowed catch -- is a durable fact with an unwritten view.
+      if (error instanceof ProtocolError) throw error;
+      if (error instanceof WorkspaceError && error.reasonCode === "WORKSPACE_FAULT_INJECTED") throw error;
+      pendingViewWriteFailure = {
+        reasonCode: "WORKSPACE_VIEW_UNWRITTEN",
+        cause: error instanceof WorkspaceError ? error.reasonCode : "WORKSPACE_VIEW_WRITE_FAILED",
+      };
+    }
     return committed;
   } finally {
     await releaseMutationClaim(workspace.root, lease, claim);

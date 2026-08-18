@@ -42,7 +42,9 @@ import {
   initializeWorkspace,
   knowledgeContextCandidates,
   listKnowledgeMetadata,
+  consumeViewWriteFailure,
   materializeWorkspace,
+  workspaceBudgets,
   planWorkspaceMigration,
   executeMigration,
   verifyMigration,
@@ -783,6 +785,22 @@ async function emitTimeAttestation(io: CliIo, values: Readonly<Record<string, st
   await writeFile(join(directory, `${headEventHash}.json`), receipt);
 }
 
+// STORY-299. A committed fact whose derived view could not be written is still a
+// committed fact. The receipt says so in additional fields and keeps its success
+// reason code: five checks across the platform compare that string for equality,
+// so minting a second success code would read as failure to every one of them.
+// The fields appear only on the degraded path; an ordinary receipt is unchanged
+// byte for byte.
+function viewProjectionFields(): Readonly<Record<string, unknown>> {
+  const failure = consumeViewWriteFailure();
+  return failure === null ? {} : {
+    viewProjection: "unwritten",
+    viewFailureReasonCode: failure.reasonCode,
+    viewFailureCause: failure.cause,
+    remedy: "recover",
+  };
+}
+
 function writeState(io: CliIo, state: Awaited<ReturnType<typeof validateWorkspace>>, record?: Readonly<Record<string, unknown>>): void {
   io.write(canonicalJson({
     reasonCode: "WORKSPACE_COMMAND_COMPLETED",
@@ -791,6 +809,7 @@ function writeState(io: CliIo, state: Awaited<ReturnType<typeof validateWorkspac
     headEventHash: state.headEventHash,
     projects: state.projects.filter((entry) => !entry.tombstone).length,
     work: state.work.filter((entry) => !entry.tombstone).length,
+    ...viewProjectionFields(),
     ...(record ? { record } : {}),
   }));
 }
@@ -808,6 +827,7 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
     version: state.version,
     headEventHash: state.headEventHash,
     recordId,
+    ...viewProjectionFields(),
   }));
 }
 
@@ -823,6 +843,7 @@ function writePersonaState(
     workspaceId: state.metadata.workspaceId,
     version: state.version,
     headEventHash: state.headEventHash,
+    ...viewProjectionFields(),
     ...(record === undefined ? {} : { record }),
     personas: allPersonaReadback({ personas: state.executionConfig.personas }, state.executionConfig.personaOverrides, state.executionConfig.personaTombstones),
     modelPlans: state.executionConfig.modelPlans,
@@ -1836,6 +1857,13 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
         ...(storageHome.workspaceId === undefined ? {} : { workspaceId: storageHome.workspaceId }),
         migratedAt: storageHome.migratedAt,
       },
+      // STORY-299: headroom belongs on the one verb that still answers past a
+      // ceiling. The view-verifying verbs fail closed when a view is over budget,
+      // so a gauge hung on any of them would be readable only while it had nothing
+      // to report. It covers every view and the record cap, not just the file that
+      // happened to fill up first: the work index and the event cap are the next
+      // two walls, and both were found by measurement rather than by an incident.
+      budgets: workspaceBudgets(state),
     }));
     return;
   }

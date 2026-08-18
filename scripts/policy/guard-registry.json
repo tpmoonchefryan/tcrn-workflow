@@ -571,6 +571,36 @@
       "expectedMatches": 1,
       "test": "tests/adapter-identity-rebind.test.mjs",
       "testName": "INC-219 rebind REFUSES when a byte changed, because content is the guarantee"
+    },
+    {
+      "id": "S299-1-extension-view-fixed-length",
+      "rationale": "The extension index must summarise its collections, never carry them. Carrying them made the file grow with every line of governed prose written into the chain, and at 532 records it crossed the one-MiB canonical ceiling and took eight read verbs down with it (INC-198). Returning the records instead of their digest restores exactly that growth, so a test that does not notice is not proving the bound.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "  return canonicalSha256(records.map((record) => canonicalSha256(record)));",
+      "replace": "  return canonicalJson(records);",
+      "expectedMatches": 1,
+      "test": "tests/workspace-extension-records.test.mjs",
+      "testName": "STORY-299: extension view size is independent of the prose inside the records"
+    },
+    {
+      "id": "S299-2-extension-digest-detection-power",
+      "rationale": "The bound is only allowed because detection power is kept: each record is hashed whole, then the vector of hashes is hashed. Narrowing the per-record hash to the identifier keeps the file the same size and the same shape while making every edit inside every record invisible -- the cheapest way to turn a summary into a lie, and the one a size-only assertion would never catch.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "records.map((record) => canonicalSha256(record))",
+      "replace": "records.map((record) => canonicalSha256((record as { readonly id?: string }).id ?? \"\"))",
+      "expectedMatches": 1,
+      "test": "tests/workspace-extension-records.test.mjs",
+      "testName": "STORY-299: any single byte inside any extension record still moves the view"
+    },
+    {
+      "id": "S299-3-projection-precedes-commit",
+      "rationale": "The projection is evaluated before the segment is written so that a view which cannot fit is refused with the chain untouched. Swapping the two statements restores the ordering that produced INC-198 event seq 3842: the event lands, the projection then fails, and the caller is told its write was rejected while the fact is durable. Until this entry existed the platform had no machine criterion for that defect at all -- it was found by a person reading an incident.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "    const documents = viewDocuments(committed, options.viewBudgetBytes ?? PROTOCOL_LIMITS.maxCanonicalBytes);\n    await backend.writeSegment(segmentName, Buffer.from(segmentBytes, \"utf8\"), options.crashAt);",
+      "replace": "    await backend.writeSegment(segmentName, Buffer.from(segmentBytes, \"utf8\"), options.crashAt);\n    const documents = viewDocuments(committed, options.viewBudgetBytes ?? PROTOCOL_LIMITS.maxCanonicalBytes);",
+      "expectedMatches": 1,
+      "test": "tests/workspace-extension-records.test.mjs",
+      "testName": "STORY-299: an over-budget projection is refused with the chain untouched"
     }
   ]
 }

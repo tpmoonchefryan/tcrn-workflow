@@ -44,8 +44,11 @@ Two consequences follow from keeping `storageVersion` at `1`:
   event is still readable by rc.4. Byte-stability for the no-extension case is a
   proven property, not a hope (see `EXT-CONFERENCE-GATE-STORE`): views, export,
   and archive bytes are identical to rc.4 for a workspace with no extension
-  events, and the `views/extensions.json` index is emitted only when extension
-  records exist.
+  events, and the `views/extensions.json` verification summary is emitted only
+  when extension records exist. That file's shape changed in 0.14.0 from an
+  index carrying the records to a fixed-length summary carrying their digests;
+  the emission condition, and therefore the no-extension byte-stability claim
+  above, is unchanged.
 - Because the version was not raised, there is no numeric downgrade signal. rc.4
   does not report `WORKSPACE_MIGRATION_FUTURE` (that fires only when an on-disk
   `storageVersion` is numerically greater than the binary's, and it is not).

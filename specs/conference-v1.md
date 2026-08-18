@@ -100,8 +100,13 @@ bound by `conferenceId` and `projectId`. Violations fail closed:
 replay time.
 
 Workspaces containing a conference event additionally emit a
-`views/extensions.json` index; workspaces without extension records keep their
-views, export, and archive bytes unchanged. `storageVersion` stays 1: an old
+`views/extensions.json` verification summary; workspaces without extension
+records keep their views, export, and archive bytes unchanged. The summary
+carries a count and a digest per collection rather than the records themselves,
+so its size does not grow with the deliberation prose written into the chain
+while any byte inside any record, and any reordering of two records, still moves
+it. Position and minutes prose is read from the event log through
+`conference-position-list` and `conference-minutes-list`, never from this file. `storageVersion` stays 1: an old
 binary reading a workspace that contains these events fails closed with
 `WORKSPACE_EVENT_CORRUPT` (unknown operation), and a workspace that never uses
 them stays fully readable by old binaries.

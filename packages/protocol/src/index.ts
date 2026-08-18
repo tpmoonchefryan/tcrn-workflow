@@ -292,6 +292,23 @@ export function canonicalJson(value: unknown): string {
   return canonical;
 }
 
+/**
+ * The size a value would canonicalise to, measured rather than judged.
+ *
+ * A capacity meter cannot be built out of `canonicalJson`, because that function
+ * fails closed at exactly the ceiling the meter exists to warn about: wrapping it
+ * would make the gauge stop reading at the moment it matters. So this shares the
+ * serialiser and skips only the `maxCanonicalBytes` verdict. The record-level
+ * limits inside `canonicalValue` (string length, array and property counts) still
+ * throw, because those are defects in the value rather than facts about its size.
+ *
+ * It returns a number and never the string: there must be no route through this
+ * function that writes bytes past the ceiling.
+ */
+export function canonicalByteLength(value: unknown): number {
+  return Buffer.byteLength(`${canonicalValue(value, 0)}\n`, "utf8");
+}
+
 export function canonicalSha256(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
 }

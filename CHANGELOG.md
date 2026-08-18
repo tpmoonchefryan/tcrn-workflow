@@ -3,6 +3,92 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 0.14.0 — 2026-08-19
+
+Carries `TCRN-CROSS-STORY-299`. The extension view stops growing with the prose
+written into the chain, and a write whose view cannot be projected stops being
+reported as a rejection after its event has already committed. Both halves ship
+together on purpose: the second alone would close `recover`'s only exit, and the
+first alone would leave the false rejection in place.
+
+- **The extension view is a fixed-length verification summary.**
+  `views/extensions.json` carried every conference, position, minutes and gate
+  record whole, so it grew with the governed prose in the chain and crossed the
+  one-MiB canonical ceiling at 532 records, taking eight read verbs down with it
+  (`TCRN-CROSS-INC-198`). It now carries a count and a digest per collection:
+  each record is hashed, then the vector of hashes is hashed. Measured on the six
+  chains this platform runs, the file goes from 740,123 / 185,537 / 168,006 /
+  59,575 / 37,759 / 27,132 bytes to between 656 and 662 bytes, and stays there —
+  the shape is fixed-length, not merely smaller. Detection is unchanged: any byte
+  inside any record, and any reordering of two records, still moves the file.
+  `schemaVersion` becomes `tcrn.workspace-extension-index.v2`.
+
+- **A projection that cannot fit is refused before anything is written.** The
+  view projection moved ahead of the event-segment write, so an over-budget
+  workspace now fails with `WORKSPACE_VIEW_BUDGET_EXCEEDED` at an untouched
+  chain — same version, same head, no segment — instead of failing after the
+  event is durable.
+
+- **A view that cannot be written no longer reports the write as rejected.**
+  When the segment has committed and only the derived view fails to persist, the
+  receipt stays successful and carries `viewProjection: "unwritten"`,
+  `viewFailureReasonCode: "WORKSPACE_VIEW_UNWRITTEN"` and `remedy: "recover"`.
+  This is the defect INC-198 recorded: a command reported rejection while its
+  event sat in the chain, and the natural retry appended a second event for a
+  fact that had already landed. The success reason code is deliberately
+  unchanged — five checks across this platform compare that string for equality,
+  and a second success code would read as failure to every one of them.
+
+- **`status` reports what is left before each ceiling.** A new `budgets` block
+  gives every view's bytes, limit and headroom, the largest event segment, and
+  the record count against its cap. It hangs on `status` because `status` is the
+  one verb that still answers past a ceiling; a gauge on a view-verifying verb
+  would be readable only while it had nothing to report. `canonicalByteLength`
+  is added to the protocol package for this: it shares the serialiser with
+  `canonicalJson` and skips only the ceiling verdict, so the meter does not
+  inherit the failure it exists to warn about.
+
+**Residual-applicability analysis.** The old shape is not retained for any
+supported reader, and this is a replacement rather than a conditional path.
+(1) It does not hold for some deployments and fail for others: any chain that
+accumulates enough governed prose reaches the ceiling, so the old shape is
+defective everywhere and merely has not finished failing yet. Switching on size
+would make a view's bytes depend on how large the workspace is, which is a worse
+invariant than the one being replaced. (2) The literal 0.11.17 treatment of the
+work index — keep identity and status verbatim, digest the extension bag — was
+measured and rejected rather than assumed unsuitable: applied here it *grows*
+the cross-project file by 537 bytes, because extension-record prose lives in
+first-class fields rather than in an extension bag. What is carried over from
+that change is its method, not its target. (3) No identity rows are kept at all,
+because every per-record shape is linear; the work index is that shape today, at
+446.6 bytes per record, and its own ceiling is measured eight weeks out and
+carried by `TCRN-CROSS-STORY-302`. The view's purpose is staleness verification,
+not indexing: no code on this platform parses it, its only readers are the
+byte-equality check in `validateWorkspace` and an opaque copy in migration, and
+record contents are served from the event log through `conference-position-list`
+and `conference-minutes-list`.
+
+**A correction this release carries.** `TCRN-CROSS-INC-198` and the 0.11.17 notes
+state that the canonical form escapes non-ASCII and that Chinese prose therefore
+costs about six times its byte length, and report the affected view as 1.55 MiB,
+48% over the ceiling. That is wrong. `canonicalValue` serialises strings with
+`JSON.stringify`, which does not escape non-ASCII; three independent
+recomputations, each calibrated against on-disk bytes until equal, put the true
+overshoot at about 0.1%. Capacity planning that used the six-fold figure
+misestimates every ceiling here by roughly half. The original records are not
+edited; the correction is appended, which is what an append-only chain is for.
+
+**Compatibility.** `storageVersion` stays 1 and no event is transformed, but the
+derived views change shape, so every chain's on-disk views become stale the
+moment a 0.14.0 engine reads them. Upgrade **all** engine copies that read a
+given chain before recovering any of them: an older copy computes the old shape,
+and running its `recover` writes the view back, leaving two copies alternating
+and the view-verifying verbs red either way. Then, per chain, acquire the lease
+and run `recover`, and confirm with `validate`. During that window the eight
+view-verifying verbs raise `WORKSPACE_VIEW_STALE` on any chain not yet
+recovered; `status`, `settings-catalog`, `gate-list`, `conference-list-by-work`
+and `persona-list` are unaffected.
+
 ## 0.13.0 — 2026-08-18
 
 Carries `TCRN-CROSS-MIN-102`, the ruling that closed a review of this engine's

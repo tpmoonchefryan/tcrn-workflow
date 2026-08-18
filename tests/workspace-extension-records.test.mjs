@@ -35,6 +35,10 @@ import {
   transitionGateInWorkspace,
   transitionWork,
   validateWorkspace,
+  workspaceBudgets,
+  materializeWorkspace as materializeWorkspaceForBudgets,
+  FileBackend,
+  withStorageBackendFactory,
 } from "../dist/build/packages/core/src/index.js";
 import {
   assertCanonicalJson,
@@ -302,10 +306,14 @@ test("conference and gate mutations round-trip through the event log with chaine
   assert.deepEqual((await readdir(viewsRoot)).sort(), ["STATUS.md", "extensions.json", "index.json", "readback.json"]);
   const extensionsBytes = await readFile(join(viewsRoot, "extensions.json"), "utf8");
   const extensionsIndex = assertCanonicalJson(extensionsBytes);
-  assert.equal(extensionsIndex.schemaVersion, "tcrn.workspace-extension-index.v1");
-  assert.deepEqual(Object.keys(extensionsIndex).sort(), ["conferenceMinutes", "conferencePositions", "conferences", "gates", "schemaVersion"]);
-  assert.equal(extensionsIndex.conferences.length, 2);
-  assert.equal(extensionsIndex.gates.length, 2);
+  assert.equal(extensionsIndex.schemaVersion, "tcrn.workspace-extension-index.v2");
+  assert.deepEqual(Object.keys(extensionsIndex).sort(), ["conferenceMinutes", "conferencePositions", "conferences", "extensionsDigest", "gates", "schemaVersion"]);
+  // STORY-299: v2 keeps the counts and replaces the records with a digest per
+  // collection. The count assertions are the direct survivors of v1's `.length`
+  // checks, not a weakening of them -- what a record contains is proved by the
+  // detection legs below, and what it says is read from the event log.
+  assert.equal(extensionsIndex.conferences.count, 2);
+  assert.equal(extensionsIndex.gates.count, 2);
   const firstRead = await readFile(join(viewsRoot, "extensions.json"));
   assert.deepEqual(await readFile(join(viewsRoot, "extensions.json")), firstRead, "view bytes are stable across reads");
 
@@ -660,8 +668,18 @@ test("a crash across conference.closed leaves the event durable and recover() re
       const validated = await validateWorkspace(fx.workspace);
       assert.equal(validated.version, 4);
       const extensionsIndex = assertCanonicalJson(await readFile(join(fx.workspace, ".tcrn-workflow", "views", "extensions.json"), "utf8"));
-      assert.equal(extensionsIndex.conferences[0].status, "closed");
-      assert.equal(extensionsIndex.conferenceMinutes.length, 1);
+      assert.equal(extensionsIndex.conferenceMinutes.count, 1);
+      // STORY-299 replaces v1's single-field check (`conferences[0].status === "closed"`)
+      // with a stronger one: every collection digest in the rebuilt view must equal the
+      // digest computed independently from the recovered state. v1 could only assert one
+      // field of one record; this covers every byte of every record, which is what the
+      // digest shape has to be held to if it is to replace the records themselves.
+      // Red leg: let recover rebuild from stale state and the digests stop matching.
+      const digestOf = (records) => canonicalSha256(records.map((record) => canonicalSha256(record)));
+      assert.equal(extensionsIndex.conferences.digest, digestOf(recovered.conferences));
+      assert.equal(extensionsIndex.conferencePositions.digest, digestOf(recovered.conferencePositions));
+      assert.equal(extensionsIndex.conferenceMinutes.digest, digestOf(recovered.conferenceMinutes));
+      assert.equal(extensionsIndex.gates.digest, digestOf(recovered.gates));
     });
   }
 });
@@ -1844,4 +1862,201 @@ test("MIN-102 the position ceiling is fixed for replay while the budget is a wri
     expectedVersion: state.version, occurredAt: instant(7), key: "conference.positionBudgetBytes",
     value: String(CONFERENCE_POSITION_CEILING_BYTES + 1),
   }));
+});
+
+// ---------------------------------------------------------------------------
+// STORY-299. The extension index is a fixed-length verification summary, and the
+// three properties below are what that claim has to be held to. They come as a
+// set on purpose: boundedness alone is satisfied by writing nothing, and
+// detection alone is satisfied by writing everything, which is the shape that
+// locked the cross-project chain at 532 records (INC-198).
+// ---------------------------------------------------------------------------
+
+async function extensionIndexBytes(workspace) {
+  return Buffer.byteLength(await readFile(join(workspace, ".tcrn-workflow", "views", "extensions.json"), "utf8"), "utf8");
+}
+
+// Grow one conference's governed prose by three orders of magnitude and the view
+// must not notice. Red leg: put any record body back into the projection and this
+// difference tracks the prose instead of staying flat.
+test("STORY-299: extension view size is independent of the prose inside the records", async (context) => {
+  const fx = await seededFixture(context);
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-BOUND", projectId: fx.projectId, type: "release",
+    title: "Bounded", linkedWorkIds: [fx.workId], desiredOutcome: "short", participantIds: [],
+  });
+  const smallBytes = await extensionIndexBytes(fx.workspace);
+  const smallDigest = assertCanonicalJson(await readFile(join(fx.workspace, ".tcrn-workflow", "views", "extensions.json"), "utf8")).conferences.digest;
+
+  state = await appendConferencePositionInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: state.version, occurredAt: instant(4), conferenceId: state.conferences[0].id,
+    externalKey: "POS-BOUND", authorActorId: "profile:analyst-01",
+    position: "z".repeat(2_000), risks: [], recommendations: [], evidenceIds: [],
+  });
+  const largeBytes = await extensionIndexBytes(fx.workspace);
+  const largeDigest = assertCanonicalJson(await readFile(join(fx.workspace, ".tcrn-workflow", "views", "extensions.json"), "utf8")).conferences.digest;
+
+  assert.ok(largeBytes - smallBytes < 200, `view grew by ${largeBytes - smallBytes} bytes; prose must not enter the view`);
+  // The bound is only worth having if the view still moves when a record does.
+  assert.equal(state.conferencePositions.length, 1);
+  assert.notEqual(
+    assertCanonicalJson(await readFile(join(fx.workspace, ".tcrn-workflow", "views", "extensions.json"), "utf8")).conferencePositions.digest,
+    smallDigest,
+    "a new position must move its collection digest",
+  );
+  assert.equal(largeDigest, smallDigest, "an unrelated collection's digest must not move");
+});
+
+// The discriminating leg against every per-record shape, including the one the
+// work index still uses. Ten times the records, and the file may only grow by the
+// decimal width of the counts. Red leg: restore a per-record row and this fails
+// by roughly a hundred kilobytes.
+test("STORY-299: ten times the records changes the extension view by less than 64 bytes", async (context) => {
+  const fx = await seededFixture(context);
+  let version = 2;
+  let bytesAtTen = 0;
+  for (let index = 1; index <= 100; index += 1) {
+    const state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+      expectedVersion: version, occurredAt: instant(3 + index), externalKey: `CONF-SCALE-${index}`, projectId: fx.projectId,
+      type: "release", title: `Scale ${index}`, linkedWorkIds: [fx.workId],
+      desiredOutcome: `outcome ${"w".repeat(200)}`, participantIds: [],
+    });
+    version = state.version;
+    if (index === 10) bytesAtTen = await extensionIndexBytes(fx.workspace);
+  }
+  const bytesAtHundred = await extensionIndexBytes(fx.workspace);
+  assert.ok(
+    Math.abs(bytesAtHundred - bytesAtTen) < 64,
+    `view moved ${bytesAtHundred - bytesAtTen} bytes between 10 and 100 conferences; the shape is not fixed-length`,
+  );
+});
+
+// Four single-point mutations, four required movements. Red leg: narrow
+// collectionDigest to hash only record ids and the first two fail; drop the
+// per-record hash and hash a set instead, and the reorder leg fails.
+test("STORY-299: any single byte inside any extension record still moves the view", async (context) => {
+  const fx = await seededFixture(context);
+  let state = await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-DETECT", projectId: fx.projectId, type: "release",
+    title: "Detect", linkedWorkIds: [fx.workId], desiredOutcome: "detect", participantIds: [],
+  });
+  const conferenceId = state.conferences[0].id;
+  state = await createGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: state.version, occurredAt: instant(4), externalKey: "GATE-DETECT", projectId: fx.projectId,
+    workId: fx.workId, title: "Gate detect", outcomeClass: "role_decision",
+  });
+  const readView = async () => assertCanonicalJson(await readFile(join(fx.workspace, ".tcrn-workflow", "views", "extensions.json"), "utf8"));
+  const before = await readView();
+
+  state = await appendConferencePositionInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: state.version, occurredAt: instant(5), conferenceId,
+    externalKey: "POS-DETECT", authorActorId: "profile:analyst-01",
+    position: "first position", risks: [], recommendations: [], evidenceIds: [],
+  });
+  const afterFirstPosition = await readView();
+  assert.notEqual(afterFirstPosition.conferencePositions.digest, before.conferencePositions.digest, "a position's body must move its digest");
+
+  state = await appendConferencePositionInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: state.version, occurredAt: instant(6), conferenceId,
+    externalKey: "POS-DETECT-2", authorActorId: "profile:reviewer-01",
+    position: "second position", risks: [], recommendations: [], evidenceIds: [],
+  });
+  const afterSecondPosition = await readView();
+  assert.notEqual(afterSecondPosition.conferencePositions.digest, afterFirstPosition.conferencePositions.digest);
+  // Order is part of what the digest attests: the vector is hashed as a sequence,
+  // never sorted or deduplicated, so two collections with the same members in a
+  // different order are different facts and must read as different.
+  assert.notEqual(
+    canonicalSha256([canonicalSha256(state.conferencePositions[0]), canonicalSha256(state.conferencePositions[1])]),
+    canonicalSha256([canonicalSha256(state.conferencePositions[1]), canonicalSha256(state.conferencePositions[0])]),
+    "reordering two records must change the collection digest",
+  );
+
+  state = await transitionGateInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: state.version, occurredAt: instant(7), id: state.gates[0].id, status: "blocked",
+  });
+  const afterGate = await readView();
+  assert.notEqual(afterGate.gates.digest, before.gates.digest, "a gate's status must move its digest");
+  assert.notEqual(afterGate.extensionsDigest, before.extensionsDigest, "the roll-up digest must move with any collection");
+});
+
+// The pre-commit half of the fix. Nothing may reach the disk when the projection
+// does not fit. Red leg: move the projection back below writeSegment and version
+// advances while the command still reports failure -- INC-198's seq 3842, exactly.
+test("STORY-299: an over-budget projection is refused with the chain untouched", async (context) => {
+  const fx = await seededFixture(context);
+  const before = await materializeWorkspaceForBudgets(fx.workspace);
+  await expectReasonAsync("WORKSPACE_VIEW_BUDGET_EXCEEDED", () => openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-BUDGET", projectId: fx.projectId, type: "release",
+    title: "Over budget", linkedWorkIds: [fx.workId], desiredOutcome: "refused", participantIds: [],
+    viewBudgetBytes: 128,
+  }));
+  const after = await materializeWorkspaceForBudgets(fx.workspace);
+  assert.equal(after.version, before.version, "a refused projection must not advance the version");
+  assert.equal(after.headEventHash, before.headEventHash, "a refused projection must not move the head");
+  assert.equal(after.conferences.length, 0, "a refused projection must not leave a record behind");
+  // And the workspace is still usable: the refusal is a property of the attempted
+  // write, not a verdict on the chain.
+  const validated = await validateWorkspace(fx.workspace);
+  assert.equal(validated.version, before.version);
+});
+
+// The post-commit half. A view that could not be written is reported as news on a
+// successful receipt, never as a rejected command. Red leg: restore the throw and
+// the command fails while its event sits in the chain.
+test("STORY-299: a view write failure after commit keeps the command successful and the fact durable", async (context) => {
+  const fx = await seededFixture(context);
+  const failingBackend = () => {
+    const backend = new FileBackend(fx.workspace);
+    return new Proxy(backend, {
+      get(target, property, receiver) {
+        if (property === "writeView") return async () => { throw new Error("view sink is unavailable"); };
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  };
+  const committed = await withStorageBackendFactory(failingBackend, () => openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-UNWRITTEN", projectId: fx.projectId, type: "release",
+    title: "Unwritten", linkedWorkIds: [fx.workId], desiredOutcome: "durable", participantIds: [],
+  }));
+  assert.equal(committed.version, 3, "the fact is committed even though its view could not be written");
+  assert.equal(committed.conferences.length, 1);
+  // The chain agrees on rematerialize, and the stale view is exactly what validate
+  // is for -- the failure is visible, it is simply not reported as a rejected write.
+  const rematerialized = await materializeWorkspaceForBudgets(fx.workspace);
+  assert.equal(rematerialized.version, 3);
+  await expectReasonAsync("WORKSPACE_VIEW_STALE", () => validateWorkspace(fx.workspace));
+  const recovered = await recoverWorkspace(fx.workspace, fx.lease);
+  assert.equal(recovered.version, 3);
+  assert.equal((await validateWorkspace(fx.workspace)).version, 3);
+});
+
+// The budget report is the reason the next ceiling arrives as a scheduled item
+// rather than as an incident. Red leg: report only the extension view and the
+// work index -- the next wall by measurement -- goes unwatched again.
+test("STORY-299: the budget report covers every view and the record cap", async (context) => {
+  const fx = await seededFixture(context);
+  await openConferenceInWorkspace(fx.workspace, fx.lease, {
+    expectedVersion: 2, occurredAt: instant(3), externalKey: "CONF-BUDGETS", projectId: fx.projectId, type: "release",
+    title: "Budgets", linkedWorkIds: [fx.workId], desiredOutcome: "measured", participantIds: [],
+  });
+  const budgets = workspaceBudgets(await materializeWorkspaceForBudgets(fx.workspace));
+  assert.deepEqual(
+    budgets.views.map((entry) => entry.name).sort(),
+    ["STATUS.md", "extensions.json", "index.json", "readback.json"],
+    "every view is metered, not just the one that filled up first",
+  );
+  for (const entry of budgets.views) {
+    assert.equal(entry.headroomBytes, entry.limitBytes - entry.bytes);
+    assert.ok(entry.bytes > 0);
+    // Names only. A budget report that leaked a host path would put local
+    // filesystem layout into every receipt that carries it.
+    assert.equal(entry.name.includes("/"), false);
+  }
+  const onDisk = await extensionIndexBytes(fx.workspace);
+  assert.equal(budgets.views.find((entry) => entry.name === "extensions.json").bytes, onDisk, "the meter reports the bytes actually written");
+  assert.equal(budgets.events.count, 3);
+  assert.equal(budgets.events.headroomEvents, budgets.events.limit - budgets.events.count);
+  assert.ok(budgets.maxSegmentBytes > 0);
 });

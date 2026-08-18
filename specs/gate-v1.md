@@ -102,8 +102,11 @@ the persisted locator against already-materialized minutes and fails closed with
 `WORKSPACE_EVENT_CORRUPT` on any mismatch or a smuggled extensions delta.
 
 Workspaces containing a gate record additionally emit a `views/extensions.json`
-index; workspaces without extension records keep their views, export, and
-archive bytes unchanged. `storageVersion` stays 1: an old binary reading a
+verification summary; workspaces without extension records keep their views,
+export, and archive bytes unchanged. The summary carries a count and a digest
+per collection rather than the gate records themselves, so its size is fixed
+rather than proportional to the number of gates, while any byte inside any gate
+record still moves it. Gate records are read through `gate-list-by-work-item`. `storageVersion` stays 1: an old binary reading a
 workspace that contains these events fails closed with
 `WORKSPACE_EVENT_CORRUPT` (unknown operation).
 
