@@ -12,7 +12,6 @@
   "packageManager": "pnpm@11.3.0",
   "bin": {
     "tcrn-workflow": "scripts/tcrn-workflow.mjs",
-    "tcrn-workflow-mcp": "scripts/tcrn-workflow-mcp.mjs",
     "tcrn-workflow-release-verify": "scripts/verify-release-trust.mjs"
   },
   "scripts": {

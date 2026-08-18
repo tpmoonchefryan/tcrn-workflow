@@ -781,6 +781,104 @@ async function inspectEngineAlignment(root, homeRoot, manifest, options) {
   });
 }
 
+// TCRN-CROSS-MIN-103. The Helper teaches a settings surface, and something has to
+// check that what it teaches is still what the engine has. That comparison used to
+// live in the Helper's own test suite, which read the engine's source out of a
+// sibling checkout — a repository reaching into another's tree, forbidden by the
+// platform's dependency-direction rule, and impossible in the Helper's CI, which
+// checks out one repository. So it was ENOENT there and green locally: three
+// consecutive pushes red on a check that could only ever pass on a developer's
+// machine, which is the same defect shape as INC-223's DS reconciliation.
+//
+// The platform layer is where a cross-repository question can be asked honestly:
+// this doctor already reads the engine, the installed Helper copies, and the chain.
+// The Helper now declares the roster it teaches and holds itself to it; this leg
+// answers whether that declaration still matches the engine's own catalog, read
+// through the engine's read face rather than by pattern-matching its source.
+async function inspectHelperSettingsCoverage(root, homeRoot, manifest, options) {
+  if (options.helperSettingKeys && typeof options.helperSettingKeys === "object") {
+    return checkHelperSettingsCoverage(options.helperSettingKeys.catalog, options.helperSettingKeys.taught, "synthetic");
+  }
+  const entry = manifest.items.find((item) => item.id === "machine.claude-skill");
+  const skillRoot = entry ? expandTemplate(entry.pathTemplate, "<PLATFORM_ROOT>", homeRoot) : null;
+  if (skillRoot === null) return check("helperSettingsCoverage", false, { reasonCode: "PLATFORM_MANIFEST_PATH_INVALID" });
+
+  const catalogKeys = await engineSettingKeys(root, options);
+  if (catalogKeys === null) {
+    // Unreadable is reported, not red: with no catalog there is nothing to compare,
+    // which is the same epistemic position as engineAlignment's undeclared case.
+    return check("helperSettingsCoverage", true, {
+      reasonCode: "PLATFORM_HELPER_SETTINGS_UNREADABLE",
+      coverageAsserted: false,
+      source: "engine settings-catalog + installed helper payload",
+    });
+  }
+  let taught;
+  try {
+    taught = await taughtSettingKeys(skillRoot, catalogKeys);
+  } catch (error) {
+    return check("helperSettingsCoverage", true, {
+      reasonCode: "PLATFORM_HELPER_PAYLOAD_UNREADABLE",
+      coverageAsserted: false,
+      error: error?.code ?? "UNREADABLE",
+      source: "engine settings-catalog + installed helper payload",
+    });
+  }
+  return checkHelperSettingsCoverage(catalogKeys, taught, "engine settings-catalog + installed helper payload");
+}
+
+function checkHelperSettingsCoverage(catalogKeys, taught, source) {
+  const untaught = catalogKeys.filter((key) => !taught.includes(key)).sort(compareCanonicalTextLocal);
+  return untaught.length === 0
+    ? check("helperSettingsCoverage", true, { catalogKeys: [...catalogKeys].sort(compareCanonicalTextLocal), coverageAsserted: true, source })
+    : check("helperSettingsCoverage", false, {
+      reasonCode: "PLATFORM_HELPER_SETTINGS_UNTAUGHT",
+      untaught,
+      hint: "the engine registered a setting the placed Helper never mentions — teach it in the payload and re-pin, or the operator meets a key no guidance covers",
+      source,
+    });
+}
+
+async function engineSettingKeys(root, options) {
+  const cli = options.engineCli ?? join(dirname(fileURLToPath(import.meta.url)), "tcrn-workflow.mjs");
+  const containerPath = join(root, ".tcrn-workspace");
+  let entries;
+  try {
+    entries = await readdir(containerPath, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const workspacePath = join(containerPath, entry.name, "workspace");
+    if (!(await existingPath(workspacePath))?.isDirectory()) continue;
+    try {
+      const result = await execFileAsync(process.execPath, [cli, "settings-catalog", "--workspace", workspacePath], { timeout: 30_000, maxBuffer: 8 * 1_048_576 });
+      const catalog = JSON.parse(result.stdout);
+      const rows = Object.values(catalog).find((value) => Array.isArray(value)) ?? [];
+      const keys = rows.map((row) => row?.key).filter((key) => typeof key === "string");
+      if (keys.length > 0) return keys;
+    } catch {
+      // Any readable partition answers the same catalog; try the next one.
+    }
+  }
+  return null;
+}
+
+async function taughtSettingKeys(skillRoot, catalogKeys) {
+  const documents = [];
+  const walk = async (directory) => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) await walk(path);
+      else if (entry.name.endsWith(".md")) documents.push(await readFile(path, "utf8"));
+    }
+  };
+  await walk(skillRoot);
+  const prose = documents.join("\n");
+  return catalogKeys.filter((key) => prose.includes(key));
+}
+
 async function inspectHelperCopies(platformRoot, homeRoot, manifest, options) {
   const entries = manifest.items.filter((entry) => entry.acceptanceProbe.startsWith("probe:helper-skill-digest"));
   const missing = [];
@@ -1159,6 +1257,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
       await inspectHookExecutability(root, manifest),
       await inspectDeploymentFreshness(homeRoot, manifest),
       await inspectEngineAlignment(root, homeRoot, manifest, options),
+      await inspectHelperSettingsCoverage(root, homeRoot, manifest, options),
       await inspectTrustArchiveFreshness(root, homeRoot, manifest, options),
       await inspectLaunchdDuty({ ...options, platformRoot: root, homeRoot }, manifest),
       await inspectHarnessSurface(root, manifest),

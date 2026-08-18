@@ -41,9 +41,10 @@ ordering that a local one-liner cannot prove.
 ### 3. There is no code graph here — and know which copy, *on which host*, you are driving
 
 This repository is not indexed by codegraph (the product repositories on this platform
-are). Its instruments are the command catalog, the test suite, and — from `v0.6.0` — the
-MCP facade (`scripts/tcrn-workflow-mcp.mjs`), which derives its tool schemas from the same
-catalog and performs no shell construction.
+are). Its instruments are the command catalog and the test suite. The MCP facade that
+`v0.6.0` added and `v0.11.18` retired is gone from the tree; guidance naming
+`scripts/tcrn-workflow-mcp.mjs` is describing a file that no longer exists, and the CLI
+is the only transport.
 
 The freshness trap that a stale index is elsewhere, a stale *copy* is here: the working
 tree in this repository and the installed copy a governed session actually drives are two

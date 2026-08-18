@@ -774,3 +774,44 @@ test("MIN-102 engine alignment names a copy that is behind a chain declaration",
   assert.equal(lexicalTrap.ok, true);
   assert.equal(alignment(lexicalTrap).ok, true);
 });
+
+// MIN-103. The Helper's own suite used to check its settings teaching against the
+// engine by reading a sibling checkout — forbidden by the dependency-direction rule
+// and impossible in the Helper's CI, which checks out one repository. It was ENOENT
+// there and green locally, so three consecutive pushes were red on a check that
+// could only pass on a developer machine. The question is legitimate; the layer was
+// wrong. Here both trees are in scope by design, so here is where it is asked.
+test("MIN-103 the platform names a setting the placed Helper never teaches", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const coverage = (result) => result.checks.find((entry) => entry.name === "helperSettingsCoverage");
+  const catalog = ["backup.cadence", "conference.positionBudgetBytes", "design.authority"];
+
+  const taught = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    helperSettingKeys: { catalog, taught: catalog },
+  });
+  assert.equal(coverage(taught).ok, true);
+  assert.equal(coverage(taught).coverageAsserted, true);
+
+  // The red leg: the engine registered a key and the payload never mentions it, so
+  // an operator would meet a setting no guidance covers.
+  const gap = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    helperSettingKeys: { catalog, taught: ["backup.cadence", "design.authority"] },
+  });
+  assert.equal(gap.ok, false);
+  assert.equal(coverage(gap).ok, false);
+  assert.equal(coverage(gap).reasonCode, "PLATFORM_HELPER_SETTINGS_UNTAUGHT");
+  assert.deepEqual(coverage(gap).untaught, ["conference.positionBudgetBytes"]);
+
+  // A payload teaching more than the catalog registers is not a fault: the Helper
+  // may still carry guidance for a key a given engine build does not ship.
+  const extra = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    helperSettingKeys: { catalog, taught: [...catalog, "some.future.key"] },
+  });
+  assert.equal(coverage(extra).ok, true);
+});

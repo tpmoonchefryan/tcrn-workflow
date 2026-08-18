@@ -53,8 +53,10 @@ The two global values are public trust pins, not credentials. They bind a
 canonical pins document whose digest, generation floor and revocation set bind a
 separate authority bundle. A command-local `--authority` token remains unknown.
 No receipt body, secret or ambient authority is accepted from argv, prompt text
-or environment variables. Operators that do not want paths and public digests in
-shell history use the structured `tcrn-workflow-mcp` stdio surface.
+or environment variables. The structured `tcrn-workflow-mcp` stdio surface that once
+offered an alternative to shell history was retired in `v0.11.18`; the CLI is the
+only transport, so an operator who wants paths and public digests kept out of
+shell history handles that in how the CLI is invoked.
 
 The command catalog (`commands` verb) records both planning verbs as `cli`.
 Fixture-only artifact maintenance remains the only non-CLI surface.
