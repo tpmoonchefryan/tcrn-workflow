@@ -462,8 +462,10 @@ async function closeMigrationBackends(options: Parameters<typeof executeMigratio
 // resolves, under the already-held workspace lease, to the current materialized
 // version. Lease acquisition plus the mutation claim serialize writers, so this
 // single in-lease read cannot race the append that follows it — derivation is
-// exact and needs no retry loop. Valid ONLY on the six workspace-event mutation
-// verbs (project-*/work-*); knowledge-marker mutations keep numeric-only
+// exact and needs no retry loop. Which verbs accept it is declared by the catalog
+// (`headSentinel` on their expected-version flag) and asserted behaviourally by
+// tests/s300-catalog-behaviour.test.mjs; this comment used to name a count, and the
+// count was wrong. Knowledge-marker mutations keep numeric-only
 // expectedVersion() and so reject "head" with CLI_ARGUMENT_MALFORMED by
 // construction. head forfeits intent-level lost-update detection (see WSB-6),
 // so numeric stays the documented default; cross-writer CAS is unweakened.
@@ -1028,7 +1030,7 @@ export const COMMAND_CATALOG = Object.freeze([
   // archive must not be overwritten or treated as a resumable prefix. The PG
   // wrapper proves the live chain first; this verb writes only the engine-owned
   // storage-home declaration and is idempotent for the same declaration.
-  { name: "storage-home-seal", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "schema", required: true, valueKind: "string" }] },
+  { name: "storage-home-seal", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "schema", required: true, valueKind: "string" }] },
   { name: "storage-home-status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "template-admit", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "template", required: true, valueKind: "string" }, { name: "owner", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "template-validate", availability: "cli", mutates: false, flags: [{ name: "template", required: true, valueKind: "string" }] },
@@ -1260,6 +1262,21 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   // catalog-OPTIONAL flag on every mutation verb.
   const requiredShared = ["workspace", "expected-version", "at"];
   const shared = [...requiredShared, "attest-dir"];
+  // STORY-300. The catalog has always carried every flag's name, whether it is
+  // required, and what kind of value it takes; there was simply no way to ask it
+  // about one verb. So the way to learn a verb's arguments was to run it wrong and
+  // read the refusal, or to open the engine -- and `--help`, the thing everyone
+  // tries first, was itself refused as a malformed argument 35 times in this
+  // chain's history, which makes it the most expensive single refusal in it.
+  //
+  // This answers from the same array `commands` returns, so the two can never
+  // disagree, and reuses that verb's reason code rather than minting one.
+  if (rest.includes("--help") || rest.includes("-h")) {
+    const entry = COMMAND_CATALOG.find((candidate) => candidate.name === command);
+    if (entry === undefined) fail("CLI_COMMAND_UNKNOWN", command);
+    io.write(canonicalJson({ reasonCode: "CLI_CATALOG_READY", schemaVersion: "tcrn.cli-catalog.v1", commands: [entry] }));
+    return;
+  }
   if (command === "commands") {
     parseArguments(rest, []);
     io.write(canonicalJson({ reasonCode: "CLI_CATALOG_READY", schemaVersion: "tcrn.cli-catalog.v1", commands: COMMAND_CATALOG }));

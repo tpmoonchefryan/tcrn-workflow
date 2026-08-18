@@ -1430,6 +1430,14 @@
         "S281: the layer states where its values come from and when they take effect"
       ]
     },
+    "tests/s300-catalog-behaviour.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 13,
+      "testNames": [
+        "STORY-300: every verb that declares the head sentinel is reached by, and accepts, the sentinel",
+        "STORY-300: --help returns the verb"
+      ]
+    },
     "tests/s6-lessons.test.mjs": {
       "testCount": 5,
       "assertionCount": 12,

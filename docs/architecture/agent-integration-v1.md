@@ -92,11 +92,11 @@ Flag-value sentinels carry a fixed meaning across verbs.
   Numeric `--expected-version` is the default and the correct choice whenever the
   mutation is derived from previously read record contents. `head` is rejected on
   knowledge-marker mutations (`knowledge-create`, `knowledge-promote`) with
-  `CLI_ARGUMENT_MALFORMED`. The verbs accepting `head` are: `project-create`,
-  `project-update`, `project-delete`, `work-create`, `work-transition`,
-  `work-delete`, `conference-open`, `conference-append-position`,
-  `conference-close`, `conference-cancel`, `gate-create`, `gate-transition`, and
-  `gate-delete`.
+  `CLI_ARGUMENT_MALFORMED`. Ask the catalog which verbs accept it rather than
+  trusting a list here — `commands`, or `<verb> --help` for a single one, reports
+  `headSentinel` on the `expected-version` flag of every verb that does. This
+  paragraph carried a list of thirteen while the catalog carried twenty-eight,
+  which is the argument for asking rather than reading.
 
 The `--flag=value` attached form (split on the first `=`) lets a value legitimately
 begin with `--`; the two-token `--flag value` form rejects a value beginning with

@@ -128,6 +128,7 @@ async function fixture(context) {
     "docs/releases/0.11.6.md": "# release fixture\n",
     "docs/releases/0.11.7.md": "# release fixture\n",
     "docs/releases/0.14.0.md": "# release fixture\n",
+    "tests/s300-catalog-behaviour.test.mjs": "// route fixture\n",
     "tests/ci-bootstrap.test.mjs": "// route fixture\n",
     "scripts/lib/scoped-strip-types.mjs": "// route fixture\n",
     "scripts/test-controller-bootstrap.mjs": "// route fixture\n",

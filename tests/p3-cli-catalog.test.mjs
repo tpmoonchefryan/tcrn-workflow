@@ -150,7 +150,7 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
     "model-plan-assign", "model-plan-remove", "model-plan-set", "model-plan-unassign",
     "persona-preset-override", "persona-preset-restore", "persona-remove", "persona-set",
     "project-create", "project-delete", "project-update", "relocation-plan", "relocation-vacate",
-    "settings-remove", "settings-set", "storage-home-seal", "template-admit", "work-annotate", "work-create", "work-delete", "work-transition",
+    "settings-remove", "settings-set", "template-admit", "work-annotate", "work-create", "work-delete", "work-transition",
   ]);
 });
 
