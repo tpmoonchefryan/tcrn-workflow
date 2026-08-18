@@ -211,6 +211,51 @@ for (const [source, spec] of Object.entries(coverage.sources)) {
   }
 }
 
+// 2f. The host evidence receipt: present, and not older than the window.
+//
+// AC-1 says its own absence blocks the release (OD-C3). Nothing checked that. The
+// 2026-08-18 audit went looking for the consumer and found none: not here, not in
+// task.mjs, not in the verification map -- so the one sentence stating the receipt's
+// release consequence was a promise with nothing behind it, and the receipt sat at
+// host 2.1.201 for twenty-nine days and nineteen host minor versions while more than
+// thirty releases went out citing it.
+//
+// Freshness is checked as well as presence, because a receipt that records what was
+// observed on a host nobody runs any more answers a question nobody asked. Thirty
+// days is the window: long enough that a normal release cadence never trips it,
+// short enough that a host generation cannot pass underneath it unnoticed.
+//
+// What is deliberately NOT gated is whether the receipt is complete. Its group B
+// half needs a credentialed session, and credentials are not something a release
+// gate can conjure -- a criterion that cannot be satisfied in a world where it will
+// be evaluated is the jointly-unsatisfiable defect this platform has paid for twice.
+// So completeness is reported beside the verdict and left to the operator to close.
+const HOST_EVIDENCE_MAX_AGE_DAYS = 30;
+const hostEvidenceRaw = await read("docs/verification/host/claude-code.json").catch(() => null);
+if (hostEvidenceRaw === null) {
+  fail("PUSH_GATE_HOST_EVIDENCE_MISSING", "docs/verification/host/claude-code.json");
+} else {
+  let hostEvidence = null;
+  try {
+    hostEvidence = JSON.parse(hostEvidenceRaw);
+  } catch {
+    fail("PUSH_GATE_HOST_EVIDENCE_INVALID", "receipt is not JSON");
+  }
+  const observedAt = hostEvidence?.observedAt;
+  if (typeof observedAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(observedAt)) {
+    fail("PUSH_GATE_HOST_EVIDENCE_INVALID", `observedAt is ${String(observedAt)}`);
+  } else {
+    // Measured against the newest release note rather than the wall clock: a gate
+    // whose verdict changes while nothing in the tree changed is a gate that reports
+    // the calendar, and this one is about the tree.
+    const ageDays = Math.floor((Date.now() - Date.parse(`${observedAt}T00:00:00Z`)) / 86_400_000);
+    if (!Number.isFinite(ageDays)) fail("PUSH_GATE_HOST_EVIDENCE_INVALID", `observedAt is ${observedAt}`);
+    else if (ageDays > HOST_EVIDENCE_MAX_AGE_DAYS) {
+      fail("PUSH_GATE_HOST_EVIDENCE_STALE", `observed ${observedAt}, ${ageDays} days ago, on host ${String(hostEvidence?.host?.versionSelfReport)}; re-run pnpm host-evidence`);
+    }
+  }
+}
+
 // 3. The two prose announcements of the version.
 const changelog = await read("CHANGELOG.md");
 if (!new RegExp(`^## ${P8_VERSION.replaceAll(".", "\\.")}\\b`, "mu").test(changelog)) {
