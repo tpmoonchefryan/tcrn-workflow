@@ -1,4 +1,4 @@
-<!-- tcrn-doc-synced-to: CONTRIBUTING.md 3e2f9b9f05b1b55b1518b5de2b17887ec6f1076d7b02dfc9ba89ae457dedd6f2 -->
+<!-- tcrn-doc-synced-to: CONTRIBUTING.md 6f7f5b3c6c3f927d93cad2129a79848a8983cd9ea4a7cc50ebe1a89a6cf3e663 -->
 
 > **La version anglaise fait autorité.** Cette traduction est fournie par commodité ; en cas de divergence entre les deux, c'est le texte anglais de CONTRIBUTING.md qui prévaut.
 
@@ -33,6 +33,34 @@ Le comportement de release doit échouer en fermeture lorsqu'une racine de confi
 **Règle.** Tant que le ratio est égal ou supérieur à `1.0`, aucune pull request ne peut introduire une NOUVELLE porte de vérification — c'est-à-dire un nouveau gestionnaire `scripts/task.mjs`, un nouveau script `verify:*` ou une nouvelle revendication de la carte de vérification dont la catégorie est `framework-hygiene` — à moins que la même pull request ne retire au moins l'équivalent en masse de preuve, ou que l'Owner ne consigne une exception écrite. Les revendications dont la catégorie est `runtime-capability` sont exemptées : elles sont le produit qui fait son travail, non de l'échafaudage de preuve.
 
 **Base de référence.** Lors de l'adoption, le ratio mesuré était d'environ `1.62` (base de référence corrigée, le paquet `packages/protocol` étant inclus dans la masse de produit conformément à sa définition), bien au-dessus du seuil de `1.0`, de sorte que la règle s'impose.
+
+**Application par la machine — 2026-08-19, TCRN-CROSS-STORY-301.** Jusqu'à cette date,
+la règle ci-dessus s'imposait sans rien juger : `pnpm verify:budget` rapportait le ratio
+et renvoyait un succès inconditionnel, si bien que la règle n'était appliquée que par qui
+s'en souvenait, et le ratio est passé de `1.62` à `1.59` pendant que des gardes étaient
+ajoutées sans qu'aucune des trois issues nommées par la règle ne soit jamais prise. Le
+verbe refuse désormais un ratio supérieur à la ligne consignée dans
+`scripts/policy/proof-budget.json`, et il s'exécute à l'intérieur de P1.
+
+Ce contrôle est un indicateur indirect, et il le dit. La règle parle d'introduire des
+gardes ; le contrôle mesure si la masse de preuve a crû plus vite que le produit qu'elle
+prouve. Il est donc plus strict dans un sens — un test écrit pour une capacité réellement
+nouvelle peut le déclencher — et aveugle dans l'autre : supprimer du code produit fait
+monter le ratio sans ajouter la moindre preuve. Les deux sont assumés plutôt que
+maquillés, car l'alternative est de demander à un script de décider ce qui compte comme
+une garde, et c'est précisément ce jugement qui n'a pas été rendu pendant un an.
+
+La ligne ne bouge que par une entrée nommant le ratio qu'elle autorise et la raison ; le
+fichier de politique se lit donc comme l'historique de chaque fois où cela a été payé.
+
+**Exception consignée — OD-22, 2026-08-19, l'installation du cliquet lui-même.** La
+première chose qu'a faite le cliquet a été de refuser la modification qui l'installait :
+le raisonnement du verbe vit dans `scripts/`, ses critères dans `tests/`, et les deux sont
+de la masse de preuve selon la définition ci-dessus. Un mécanisme qui empêche la masse de
+preuve de croître ne peut pas être installé sans en faire croître un peu. L'allocation est
+consignée plutôt qu'absorbée en modifiant la ligne gelée, car un mécanisme dont le premier
+acte est de relever discrètement sa propre limite enseigne exactement l'habitude qu'il
+était censé arrêter.
 
 **Exception consignée — OD-21, 2026-07-19, `pnpm guard-check`.** L'Owner accorde une exception écrite pour le registre de gardes et son vérificateur par mutation (`scripts/guard-check.mjs`, `scripts/policy/guard-registry.json`).
 
