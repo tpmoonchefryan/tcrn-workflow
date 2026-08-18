@@ -190,6 +190,10 @@ export interface CreateKnowledgeUnitInput {
 export interface KnowledgeReadOptions {
   readonly beforeDescriptorReadForTest?: (path: string) => Promise<void>;
   readonly afterDescriptorOpenForTest?: (path: string) => Promise<void>;
+  // TCRN-CROSS-INC-226: admit a metadata-first read against a store whose marker
+  // trails the chain head, and label the answer rather than refusing it. Off by
+  // default, so every existing caller keeps the exact refusal it has today.
+  readonly allowTrailing?: boolean;
 }
 
 export interface KnowledgeMutationOptions extends KnowledgeReadOptions {
@@ -755,7 +759,18 @@ async function scanKnowledgeStore(
   ));
   // WSC-2: a rebase deliberately runs against an advanced head, so it skips only
   // the high-water equality; workspace identity binding stays mandatory.
-  if (marker.workspaceId !== workspace.metadata.workspaceId || (!rebase && marker.eventHighWaterDigest !== workspace.headEventHash)) {
+  //
+  // TCRN-CROSS-INC-226 adds the second exemption. Requiring exact equality on the
+  // read path made the retrieval surface answer only in a workspace nobody was
+  // working in: one work-create was measured taking all six partitions dark until
+  // a hand-run rebase, because any event moves the head. The exemption is deliberately
+  // narrow -- `bodyMode === "metadata-only"` is precisely the five metadata-first read
+  // entry points and nothing else, so `validate`, every mutation and the rebase itself
+  // keep the strict equality they had. What the strictness bought is not discarded but
+  // moved into the answer: a trailing read is labelled with both heads (see
+  // `trailingDisclosure`), so a stale card is impossible to mistake for a current one.
+  const trailingAdmitted = options.allowTrailing === true && bodyMode === "metadata-only" && !rebase;
+  if (marker.workspaceId !== workspace.metadata.workspaceId || (!rebase && !trailingAdmitted && marker.eventHighWaterDigest !== workspace.headEventHash)) {
     fail("KNOWLEDGE_HIGH_WATER_MISMATCH", marker.workspaceId);
   }
   const metadataNames = await backend.listKnowledgeMetadata();
@@ -1253,6 +1268,21 @@ function selectKnowledgeMetadata(scan: KnowledgeStoreScan, query: KnowledgeListQ
   }).sort((left, right) => compareCanonicalText(left.id, right.id));
 }
 
+// TCRN-CROSS-INC-226: the price of admitting a trailing read is that the answer says
+// so. When the store is aligned this contributes nothing, so an aligned response is
+// byte-identical to what it was before the exemption existed and no caller reading
+// today's shape has to change. When it trails, three fields appear together: the flag
+// a caller can branch on, and both digests, so "how stale" is answerable from the
+// response rather than by a second round trip.
+function trailingDisclosure(scan: KnowledgeStoreScan): Readonly<Record<string, JsonValue>> {
+  if (scan.marker.eventHighWaterDigest === scan.workspace.headEventHash) return {};
+  return {
+    knowledgeStoreTrailing: true,
+    storeHighWaterDigest: scan.marker.eventHighWaterDigest,
+    chainHeadEventHash: scan.workspace.headEventHash,
+  };
+}
+
 export async function listKnowledgeMetadata(workspaceRoot: string, query: KnowledgeListQuery): Promise<Readonly<Record<string, JsonValue>>> {
   const normalized = normalizeListQuery(query);
   const scan = await scanKnowledgeStore(workspaceRoot, query, false, "metadata-only");
@@ -1263,6 +1293,7 @@ export async function listKnowledgeMetadata(workspaceRoot: string, query: Knowle
   return {
     schemaVersion: "tcrn.knowledge-list.v1",
     reasonCode: "KNOWLEDGE_LIST_READY",
+    ...trailingDisclosure(scan),
     selection: normalized.selection,
     at: query.at,
     total: matched.length,
@@ -1310,6 +1341,7 @@ export async function knowledgeContextCandidates(workspaceRoot: string, query: K
   return {
     schemaVersion: "tcrn.knowledge-context-candidates.v1",
     reasonCode: "KNOWLEDGE_LIST_READY",
+    ...trailingDisclosure(scan),
     selection: normalized.selection,
     at: query.at,
     total: matched.length,
@@ -1333,6 +1365,7 @@ export async function readKnowledgeSnippet(workspaceRoot: string, id: string, op
   if (!unit) fail("KNOWLEDGE_NOT_FOUND", id);
   return {
     schemaVersion: "tcrn.knowledge-snippet.v1",
+    ...trailingDisclosure(scan),
     id,
     subject: unit.metadata.subject,
     summary: unit.metadata.summary,
@@ -1362,6 +1395,7 @@ export async function readKnowledgeBody(workspaceRoot: string, id: string, optio
   validateMetadataBody(unit.metadata, body, scan.workspace);
   return {
     schemaVersion: "tcrn.knowledge-body-read.v1",
+    ...trailingDisclosure(scan),
     id,
     revision: unit.metadata.revision,
     freshness,
@@ -1384,6 +1418,7 @@ export async function evaluateKnowledgeFreshness(workspaceRoot: string, at: stri
   return {
     schemaVersion: "tcrn.knowledge-freshness-evaluation.v1",
     reasonCode: "KNOWLEDGE_FRESHNESS_EVALUATED",
+    ...trailingDisclosure(scan),
     at,
     records,
     evaluationDigest: canonicalSha256(records),

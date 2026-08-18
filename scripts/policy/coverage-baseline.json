@@ -583,6 +583,17 @@
         "INC-074/INC-081: sealing a retained archive is idempotent and never overwrites a different binding"
       ]
     },
+    "tests/inc226-trailing-read.test.mjs": {
+      "testCount": 5,
+      "assertionCount": 10,
+      "testNames": [
+        "INC-226: a metadata-first read answers after the chain advances, when asked to",
+        "INC-226: a trailing answer carries both heads, so staleness is answerable from it",
+        "INC-226: validate is not exempt, however the flag is passed",
+        "INC-226: a write is not exempt -- filing still demands an aligned store",
+        "INC-226: an aligned read is byte-identical to what it was before the exemption"
+      ]
+    },
     "tests/init033-install-surface.test.mjs": {
       "testCount": 3,
       "assertionCount": 16,
