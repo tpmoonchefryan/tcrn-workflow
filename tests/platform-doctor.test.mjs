@@ -714,3 +714,63 @@ test("a matching identity produces no observation at all", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// TCRN-CROSS-MIN-102 批0. The alignment leg has to be able to go red, and it has to
+// go red for the one condition that actually bites: a copy older than what a chain
+// declares it needs. Its green case is deliberately two different greens — nothing
+// declared (enforcing nothing, and saying so) versus declared and satisfied — so a
+// run can never report "aligned" when no floor exists to be aligned against.
+test("MIN-102 engine alignment names a copy that is behind a chain declaration", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const alignment = (result) => result.checks.find((entry) => entry.name === "engineAlignment");
+  const copies = { installed: "0.11.15", worktree: "0.11.15" };
+
+  // Undeclared is green, but never a silent green: the reason code says the leg is
+  // enforcing nothing, and requirementAsserted records that in the verdict itself.
+  const undeclared = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    engineCopyVersions: copies,
+    engineRequiredVersions: { "cross-project": null },
+  });
+  assert.equal(alignment(undeclared).ok, true);
+  assert.equal(alignment(undeclared).reasonCode, "PLATFORM_ENGINE_REQUIREMENT_UNDECLARED");
+  assert.equal(alignment(undeclared).requirementAsserted, false);
+
+  // A satisfied declaration is the other green, and it asserts.
+  const satisfied = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    engineCopyVersions: copies,
+    engineRequiredVersions: { "cross-project": "0.11.15" },
+  });
+  assert.equal(alignment(satisfied).ok, true);
+  assert.equal(alignment(satisfied).requirementAsserted, true);
+  assert.deepEqual(alignment(satisfied).declaringPartitions, ["cross-project"]);
+
+  // The red leg: one copy behind one partition's floor. Both the partition and the
+  // offending copy are named, because "something is stale" is not actionable.
+  const behind = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    engineCopyVersions: { installed: "0.11.15", worktree: "0.12.0" },
+    engineRequiredVersions: { "cross-project": "0.12.0" },
+  });
+  assert.equal(behind.ok, false);
+  assert.equal(alignment(behind).ok, false);
+  assert.equal(alignment(behind).reasonCode, "PLATFORM_ENGINE_BEHIND_CHAIN");
+  assert.deepEqual(alignment(behind).behind, [
+    { partition: "cross-project", required: "0.12.0", copy: "installed", version: "0.11.15", reason: "BEHIND" },
+  ]);
+
+  // Semantic precedence, not string order: 0.11.15 vs 0.9.0 is the case a lexical
+  // compare gets backwards, and it is exactly the shape a real version bump takes.
+  const lexicalTrap = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    engineCopyVersions: { installed: "0.11.15" },
+    engineRequiredVersions: { "cross-project": "0.9.0" },
+  });
+  assert.equal(lexicalTrap.ok, true);
+  assert.equal(alignment(lexicalTrap).ok, true);
+});

@@ -14,6 +14,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   INSTALL_MANIFEST,
   assertInstallManifestComplete,
+  compareEngineVersions,
 } from "../dist/build/packages/core/src/index.js";
 // The identity digest is computed by the engine's own canonicaliser rather than
 // reproduced here. A second implementation of a digest is a second answer waiting to
@@ -630,6 +631,156 @@ async function inspectDeploymentFreshness(homeRoot, manifest) {
   }
 }
 
+// TCRN-CROSS-MIN-102 批0. Four of the adversarial verdicts made the same thing a
+// release condition — every engine copy that will read a chain is new enough
+// before the first write in a new format lands — and no check could see it.
+// `deploymentFreshness` compares the installed copy's own package.json against the
+// two helper pins, which says nothing about whether a copy can read a given chain.
+// A copy that is too old does not degrade: it fails the whole workspace closed as
+// WORKSPACE_EVENT_CORRUPT, indistinguishable from real byte damage.
+//
+// The baseline is each partition's own `engine.requiredVersion` declaration — a
+// chain declaration, class B in the gate-reference inventory, not something the
+// tree can move without an edit. The targets are discovered rather than listed:
+// partitions by walking the container, engine copies from the install manifest
+// (the installed copy is an item, the working tree is a declared project), so a
+// partition added tomorrow is covered the day it exists and no second roster
+// exists for anything to drift against.
+//
+// An undeclared partition is green with the reason code saying so, never a silent
+// green: nothing has been declared, so there is nothing to enforce, and the
+// observed versions are reported as facts rather than asserted as healthy. This is
+// the launchd leg's shape, for the same reason.
+async function engineCopyVersions(root, homeRoot, manifest, options) {
+  if (options.engineCopyVersions && typeof options.engineCopyVersions === "object") {
+    return { copies: options.engineCopyVersions, source: "synthetic" };
+  }
+  const copies = {};
+  const engineEntry = manifest.items.find((entry) => entry.id === "machine.workflow-engine");
+  const installedRoot = engineEntry ? expandTemplate(engineEntry.pathTemplate, "<PLATFORM_ROOT>", homeRoot) : null;
+  const engineProject = (manifest.projects ?? []).find((project) => project.name === "tcrn-workflow");
+  const worktreeRoot = engineProject?.pathTemplate?.startsWith("<PLATFORM_ROOT>/")
+    ? join(root, engineProject.pathTemplate.slice("<PLATFORM_ROOT>/".length))
+    : null;
+  const candidates = [
+    ["installed", installedRoot === null ? null : join(installedRoot, "tcrn-workflow", "package.json")],
+    ["worktree", worktreeRoot === null ? null : join(worktreeRoot, "package.json")],
+  ];
+  for (const [name, packagePath] of candidates) {
+    if (packagePath === null) continue;
+    try {
+      const value = JSON.parse(await readFile(packagePath, "utf8"));
+      if (typeof value.version === "string" && value.version.length > 0) copies[name] = value.version;
+    } catch {
+      // A copy that is absent is not a copy that is stale. Only present copies are
+      // compared; `deploymentFreshness` already owns "the installed copy is missing".
+    }
+  }
+  return { copies, source: "install-manifest" };
+}
+
+async function declaredEngineRequirements(root, options) {
+  if (options.engineRequiredVersions && typeof options.engineRequiredVersions === "object") {
+    return { declarations: options.engineRequiredVersions, source: "synthetic" };
+  }
+  const containerPath = join(root, ".tcrn-workspace");
+  // Same resolution as declaredBackupCadences: fileURLToPath rather than pathname,
+  // because this repository lives under a directory whose name contains a space.
+  const cli = options.engineCli ?? join(dirname(fileURLToPath(import.meta.url)), "tcrn-workflow.mjs");
+  let entries;
+  try {
+    entries = await readdir(containerPath, { withFileTypes: true });
+  } catch (error) {
+    return { declarations: null, source: "unreadable", error: error?.code ?? "CONTAINER_UNREADABLE" };
+  }
+  const declarations = {};
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const workspacePath = join(containerPath, entry.name, "workspace");
+    if (!(await existingPath(workspacePath))?.isDirectory()) continue;
+    try {
+      const result = await execFileAsync(process.execPath, [cli, "settings-catalog", "--workspace", workspacePath], { timeout: 30_000, maxBuffer: 8 * 1_048_576 });
+      const catalog = JSON.parse(result.stdout);
+      const rows = Object.values(catalog).find((value) => Array.isArray(value)) ?? [];
+      const row = rows.find((candidate) => candidate?.key === "engine.requiredVersion");
+      declarations[entry.name] = row?.currentValue ?? null;
+    } catch (error) {
+      return { declarations: null, source: "unreadable", error: error?.code ?? "SETTINGS_CATALOG_FAILED", partition: entry.name };
+    }
+  }
+  return { declarations, source: "chain-declaration" };
+}
+
+async function inspectEngineAlignment(root, homeRoot, manifest, options) {
+  const observed = await engineCopyVersions(root, homeRoot, manifest, options);
+  const copies = observed.copies;
+  if (Object.keys(copies).length === 0) {
+    return check("engineAlignment", false, { reasonCode: "PLATFORM_ENGINE_COPY_UNREADABLE", source: observed.source });
+  }
+  const declared = await declaredEngineRequirements(root, options);
+  if (declared.declarations === null) {
+    // Unreadable is reported, not red. This leg's claim is "no copy is behind a
+    // declared floor"; with no readable declaration there is no floor, which is the
+    // same epistemic position as none being declared — and a container without a
+    // live chain (a fixture, a partial checkout) is not a platform fault any more
+    // than it is a passing one. `requirementAsserted` carries the distinction into
+    // the verdict so this can never be read as "aligned".
+    return check("engineAlignment", true, {
+      reasonCode: "PLATFORM_ENGINE_REQUIREMENT_UNREADABLE",
+      copies,
+      error: declared.error,
+      partition: declared.partition ?? null,
+      requirementAsserted: false,
+      source: declared.source,
+    });
+  }
+  const behind = [];
+  for (const [partition, required] of Object.entries(declared.declarations).sort(([left], [right]) => compareCanonicalTextLocal(left, right))) {
+    if (typeof required !== "string" || required.length === 0) continue;
+    for (const [copy, version] of Object.entries(copies).sort(([left], [right]) => compareCanonicalTextLocal(left, right))) {
+      let ordering;
+      try {
+        ordering = compareEngineVersions(version, required);
+      } catch {
+        behind.push({ partition, required, copy, version, reason: "UNPARSEABLE" });
+        continue;
+      }
+      if (ordering < 0) behind.push({ partition, required, copy, version, reason: "BEHIND" });
+    }
+  }
+  if (behind.length > 0) {
+    return check("engineAlignment", false, {
+      reasonCode: "PLATFORM_ENGINE_BEHIND_CHAIN",
+      behind,
+      copies,
+      hint: "that copy fails the whole workspace closed as WORKSPACE_EVENT_CORRUPT — upgrade it before the next write, or the failure will read as byte damage",
+      source: "chain engine.requiredVersion + install-manifest",
+    });
+  }
+  const declaringPartitions = Object.entries(declared.declarations)
+    .filter(([, required]) => typeof required === "string" && required.length > 0)
+    .map(([partition]) => partition)
+    .sort(compareCanonicalTextLocal);
+  if (declaringPartitions.length === 0) {
+    // Green, but never silently: no partition has declared a floor, so this leg is
+    // enforcing nothing. The copy versions are reported as observations so the
+    // reader can see what is actually installed without the leg claiming it is right.
+    return check("engineAlignment", true, {
+      reasonCode: "PLATFORM_ENGINE_REQUIREMENT_UNDECLARED",
+      copies,
+      partitions: Object.keys(declared.declarations).sort(compareCanonicalTextLocal),
+      requirementAsserted: false,
+      source: "chain engine.requiredVersion + install-manifest",
+    });
+  }
+  return check("engineAlignment", true, {
+    copies,
+    declaringPartitions,
+    requirementAsserted: true,
+    source: "chain engine.requiredVersion + install-manifest",
+  });
+}
+
 async function inspectHelperCopies(platformRoot, homeRoot, manifest, options) {
   const entries = manifest.items.filter((entry) => entry.acceptanceProbe.startsWith("probe:helper-skill-digest"));
   const missing = [];
@@ -1007,6 +1158,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
       await inspectInstallWiring(root, homeRoot, manifest),
       await inspectHookExecutability(root, manifest),
       await inspectDeploymentFreshness(homeRoot, manifest),
+      await inspectEngineAlignment(root, homeRoot, manifest, options),
       await inspectTrustArchiveFreshness(root, homeRoot, manifest, options),
       await inspectLaunchdDuty({ ...options, platformRoot: root, homeRoot }, manifest),
       await inspectHarnessSurface(root, manifest),

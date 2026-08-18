@@ -286,6 +286,7 @@ export {
   SETTINGS_REASON_CODES,
   WORKSPACE_SETTING_VERSION,
   SettingsError,
+  compareEngineVersions,
   createWorkspaceSettingRecord,
   readSettingsCatalog,
   settingsCatalogEntry,
