@@ -1452,11 +1452,31 @@ test("EEXIST publication cleans only the losing stage and preserves the competin
   assert.deepEqual(await snapshotFilesystem(paths), snapshot);
 });
 
-test("dead-owner recovery has one claim winner and leaves neither lock nor sibling claim", async (context) => {
+test("dead-owner recovery leaves at most one claim winner and neither lock nor sibling claim", async (context) => {
   const { root, lock } = await deadOwnerLock(context);
   const results = await Promise.allSettled([recoverStaleOutputSessionLock(root), recoverStaleOutputSessionLock(root)]);
-  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
-  assert.equal(results.filter((result) => result.status === "rejected" && result.reason.reasonCode === "OUTPUT_SESSION_RECOVERY_CONCURRENT").length, 1);
+  const fulfilled = results.filter((result) => result.status === "fulfilled");
+  // At most one, not exactly one — the same contract the two tests below already
+  // state at length, for the same reason: the winning path removes the lock before
+  // it reconciles, so a recoverer can do the work and still surrender on its own
+  // post-work check when a peer moves the claim underneath it. Nothing consumes the
+  // winner signal; both production call sites discard the return value and retry.
+  //
+  // 421bdca corrected this invariant when CI produced zero winners at width three,
+  // but corrected only the width-three tests — this width-two one kept demanding
+  // exactly one and went red in CI on 2026-08-18 for precisely the reason that
+  // commit had already written down. The lesson is not about this race: a finding
+  // that a stated invariant was never promised applies to every test asserting it,
+  // and fixing only the case that happened to go red leaves the rest as scheduled
+  // failures.
+  assert.ok(fulfilled.length <= 1, `two recoverers reported ${fulfilled.length} winners`);
+  // Two winners is the catastrophic direction and stays exactly asserted above.
+  // Every rejection must still be causal rather than incidental.
+  for (const result of results.filter((entry) => entry.status === "rejected")) {
+    assert.ok(["OUTPUT_SESSION_RECOVERY_CONCURRENT", "OUTPUT_SESSION_RECOVERY_MISSING"].includes(result.reason.reasonCode), result.reason?.reasonCode);
+  }
+  // What actually has to hold: the lock is gone and no claim is left behind, whether
+  // or not anyone was told they did it.
   await assert.rejects(lstat(lock), { code: "ENOENT" });
   await assert.rejects(lstat(resolve(root, ".git/.tcrn-workflow-output-recovery-claim")), { code: "ENOENT" });
 });
