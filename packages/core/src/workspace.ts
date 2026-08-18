@@ -101,7 +101,7 @@ import type { GateIdentityAuthorityContext, GateIdentityDecision } from "./gate-
 import type { CanonicalRoot } from "./root-identity.js";
 import { FRAMEWORK_VERSION } from "./index.js";
 import type { ExplicitRoot } from "./index.js";
-import { storyScopeFromRecord, storyScopeNamesOwnerDecider, validateStoryRecord } from "./story-scope-compliance.js";
+import { describeStoryScopeProblems, storyScopeFromRecord, storyScopeNamesOwnerDecider, validateStoryRecord } from "./story-scope-compliance.js";
 import {
   TemplateAdmissionError,
   admitTemplate,
@@ -3528,7 +3528,7 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
     if (record.kind === "Story" && templateRecord === undefined) {
       const compliance = validateStoryRecord(record);
       if (!compliance.ok) {
-        fail("WORKSPACE_STORY_SCOPE_INVALID", compliance.problems.map((problem) => problem.message).join("; "));
+        fail("WORKSPACE_STORY_SCOPE_INVALID", describeStoryScopeProblems(compliance.problems));
       }
     }
     validateBoundTemplateWork(record, state.templates);
@@ -3573,7 +3573,7 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
       if (!compliance.ok) {
         const hasScope = storyScopeFromRecord(current) !== null;
         fail(hasScope ? "WORKSPACE_STORY_SCOPE_INVALID" : "WORKSPACE_STORY_SCOPE_REQUIRED",
-          compliance.problems.map((problem) => problem.message).join("; "));
+          describeStoryScopeProblems(compliance.problems));
       }
     }
     assertStoryCompletionAdmission(current, input.status);
@@ -3651,7 +3651,7 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
     if (record.kind === "Story" && input.scope !== undefined && !templateBound) {
       const compliance = validateStoryRecord(record);
       if (!compliance.ok) {
-        fail("WORKSPACE_STORY_SCOPE_INVALID", compliance.problems.map((problem) => problem.message).join("; "));
+        fail("WORKSPACE_STORY_SCOPE_INVALID", describeStoryScopeProblems(compliance.problems));
       }
     }
     validateBoundTemplateWork(record, state.templates);

@@ -198,6 +198,47 @@ export function validateStoryScope(scope: unknown): StoryScopeValidation {
   return { ok: problems.length === 0, problems, sections };
 }
 
+/**
+ * The refusal, written so the caller can act on it without opening this file.
+ *
+ * Until STORY-300 the message was the problem list joined by semicolons: it said
+ * which block was missing but never what the full set is, never which of the four
+ * purpose anchors the Goal lacked, and never that the anchors are matched as
+ * literal tokens rather than by meaning. Sessions were measured reading this
+ * module's source twice, nine days apart, to learn a contract the module already
+ * knew -- and `--help` did not exist yet either, so reading the source was the
+ * only route left. Two of the audited ceremonies each spent eight rounds on
+ * exactly this class of discovery.
+ *
+ * The rule is the one the whole engine follows: a refusal names the remedy. What
+ * it costs is a longer string on a path that is already failing.
+ */
+export function describeStoryScopeProblems(problems: readonly StoryScopeProblem[]): string {
+  const summary = problems.map((problem) => problem.message).join("; ");
+  const lines = [summary, "", `required blocks, in this order: ${STORY_SCOPE_HEADINGS.join(" / ")}`];
+  if (problems.some((problem) => problem.code === "STORY_SCOPE_PURPOSE_INVALID")) {
+    lines.push(
+      "Goal must contain all four purpose anchors, matched as literal tokens in either working language: "
+      + "beneficiary (为谁), purpose anchor (目的锚), compliance criterion (符合性判据), decider (判定人). "
+      + "The match is on the token, not on the meaning, so naming a beneficiary without writing the word does not satisfy it.",
+    );
+  }
+  if (problems.some((problem) => problem.code === "STORY_SCOPE_ACCEPTANCE_INVALID")) {
+    lines.push("Acceptance Criteria must be an ordered GIVEN/WHEN/THEN, or a bullet list.");
+  }
+  if (problems.some((problem) => problem.code === "STORY_SCOPE_LEGACY_ELEMENT_MISSING")) {
+    lines.push(
+      "Two token-shape checks are unmet. Evidence: some block must use one of 现象/现状/问题/来源/实证/证据/命令/实测/复核/evidence/command/observed. "
+      + "Fix items: Requirements or Implementation Notes must use one of 修复/改造/交付/落点/改什么/实现/新增/移除/调整/fix/implement/deliver. "
+      + "These establish that the scope talks about evidence and about what changes; they do not judge whether what it says is true.",
+    );
+  }
+  if (problems.some((problem) => problem.code === "STORY_SCOPE_SECTION_EMPTY")) {
+    lines.push("An empty block is a refusal; `无——原因` (none, with the reason) is valid content.");
+  }
+  return lines.join("\n");
+}
+
 export function storyScopeFromRecord(record: Pick<WorkRecord, "kind" | "tombstone" | "extensions"> | null | undefined): string | null {
   if (record === null || record === undefined || record.kind !== "Story" || record.tombstone) return null;
   const extension = record.extensions["advisory:scope"];

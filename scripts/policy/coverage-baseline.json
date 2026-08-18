@@ -1463,6 +1463,17 @@
         "STORY-300: --help returns the verb"
       ]
     },
+    "tests/s300-story-refusal.test.mjs": {
+      "testCount": 5,
+      "assertionCount": 16,
+      "testNames": [
+        "STORY-300: a refused scope is told the full block roster, in order",
+        "STORY-300: a missing purpose anchor is told which anchors exist and that they are literal",
+        "STORY-300: a malformed acceptance block is told both accepted shapes",
+        "STORY-300: the legacy token checks name the vocabulary they scan for",
+        "STORY-300: the contract itself is unchanged -- a compliant scope still passes"
+      ]
+    },
     "tests/s301-proof-budget.test.mjs": {
       "testCount": 4,
       "assertionCount": 15,

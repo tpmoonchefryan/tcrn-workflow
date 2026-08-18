@@ -562,6 +562,7 @@
     "tests/s281-machine-settings.test.mjs",
     "tests/s300-append-events.test.mjs",
     "tests/s300-catalog-behaviour.test.mjs",
+    "tests/s300-story-refusal.test.mjs",
     "tests/s301-proof-budget.test.mjs",
     "tests/s6-lessons.test.mjs",
     "tests/s7-behavior-surface.test.mjs",
