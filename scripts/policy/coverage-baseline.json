@@ -647,6 +647,18 @@
         "the dependency-manifest reader refuses a path outside node_modules"
       ]
     },
+    "tests/knowledge-batch.test.mjs": {
+      "testCount": 6,
+      "assertionCount": 22,
+      "testNames": [
+        "knowledge-batch: align, four cards and a promote in one act",
+        "knowledge-batch: the caller reads the store version once, however many members follow",
+        "knowledge-batch: a mid-batch failure names what landed, what failed, and what was never judged",
+        "knowledge-batch: every shape problem is reported at once, before any mutation",
+        "knowledge-batch: acting on an untouched card demands an explicit revision",
+        "knowledge-batch: a batch that is not a batch is refused whole"
+      ]
+    },
     "tests/knowledge-inject.test.mjs": {
       "testCount": 6,
       "assertionCount": 13,

@@ -1190,3 +1190,5 @@ export type {
 } from "./generic-profile.js";
 export { WORK_BATCH_SCHEMA_VERSION, WORK_BATCH_VERBS, applyWorkBatch, workBatchReceipt } from "./work-batch.js";
 export type { WorkBatchOptions, WorkBatchProblem } from "./work-batch.js";
+export { KNOWLEDGE_BATCH_SCHEMA_VERSION, KNOWLEDGE_BATCH_VERBS, applyKnowledgeBatch } from "./knowledge-batch.js";
+export type { KnowledgeBatchOptions, KnowledgeBatchProblem } from "./knowledge-batch.js";

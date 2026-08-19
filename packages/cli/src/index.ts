@@ -27,6 +27,7 @@ import {
   artifactSizeReport,
   createKnowledgeUnit,
   createProject,
+  applyKnowledgeBatch,
   applyWorkBatch,
   createWork,
   deleteProject,
@@ -962,6 +963,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "minutes-locator", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "identity-authority", required: false, valueKind: "string" }, { name: "identity-authority-digest", required: false, valueKind: "string" }] },
   { name: "init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "segment-events", required: false, valueKind: "integer" }] },
   { name: "install-manifest", availability: "cli", mutates: false, flags: [] },
+  { name: "knowledge-batch", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "from-file", required: true, valueKind: "string" }, { name: "align-first", required: false, valueKind: "boolean" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-checkpoint", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
@@ -2537,6 +2539,27 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       expectedRevision: integerValue(values, "expected-revision"),
       occurredAt: values.at ?? "",
       id: values.id ?? "",
+    })));
+    return;
+  }
+  if (command === "knowledge-batch") {
+    // Same shape as work-batch: --from-file because a batch is ordinarily generated.
+    // --expected-version is the STORE's version (the meaning every knowledge verb gives
+    // that flag), and --align-first folds the rebase a chain-written workspace always
+    // needs into the same invocation -- N cards, one round trip.
+    const values = parseArguments(rest, ["workspace", "expected-version", "at", "from-file", "align-first"]);
+    required(values, ["workspace", "expected-version", "at", "from-file"]);
+    const { readFileSync } = await import("node:fs");
+    let document: unknown;
+    try {
+      document = JSON.parse(readFileSync(values["from-file"] ?? "", "utf8"));
+    } catch (error) {
+      fail("WORK_BATCH_MALFORMED", `${values["from-file"] ?? ""}: ${(error as { message?: string }).message ?? "unreadable"}`);
+    }
+    io.write(canonicalJson(await applyKnowledgeBatch(values.workspace ?? "", document, {
+      expectedVersion: integerValue(values, "expected-version"),
+      occurredAt: values.at ?? "",
+      alignFirst: booleanValue(values["align-first"], "align-first"),
     })));
     return;
   }
