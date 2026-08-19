@@ -894,3 +894,54 @@ test("MIN-103 the platform names a setting the placed Helper never teaches", asy
   });
   assert.equal(coverage(extra).ok, true);
 });
+
+// TCRN-CROSS-INC-233. Two internal-consistency checks were green while every host ran a
+// skill payload from the day before. `helperCopies` proves the deployed copies match the
+// locally trusted archive; `deploymentFreshness` proves the engine version string agrees
+// across them. Neither can see a trust root and its deployed copies going stale together,
+// which is what happened -- and the payload can move without the version string moving at
+// all, which is what made it invisible.
+//
+// The leg these criteria pin makes the one comparison nobody was making: the locally
+// trusted archive against what the helper repository has actually released.
+test("INC-233: helper release alignment separates stale, aligned, uncomparable and missing", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const leg = (result) => result.checks.find((entry) => entry.name === "helperReleaseAlignment");
+  const run = (helperReleaseAlignment) => inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    helperReleaseAlignment,
+  });
+
+  // Stale: the state this platform was actually in on 2026-08-19, with both existing
+  // checks green. Red leg: drop the inequality branch and it reads as aligned.
+  const stale = leg(await run({ published: "a".repeat(64), trusted: "b".repeat(64) }));
+  assert.equal(stale.ok, false);
+  assert.equal(stale.reasonCode, "PLATFORM_HELPER_PAYLOAD_STALE");
+  assert.equal(stale.published, "a".repeat(12));
+  assert.equal(stale.trusted, "b".repeat(12));
+  // The remedy must say deploying is an Owner stop. A red whose obvious fix looks like
+  // something the reader may simply do is how a separate stop gets inferred from a gate.
+  assert.match(stale.remedy, /Owner stop/u);
+
+  // Aligned. Red leg: return ok on any input and the leg stops distinguishing anything.
+  const digest = "c".repeat(64);
+  const aligned = leg(await run({ published: digest, trusted: digest }));
+  assert.equal(aligned.ok, true);
+  assert.equal(aligned.comparable, true);
+  assert.equal(aligned.digest, "c".repeat(12));
+
+  // A container that consumes the helper without checking it out cannot compare and must
+  // not be failed for that -- but "nothing to compare" must never read as "compared and
+  // equal". Red leg: drop `comparable` and those two answers become one.
+  const uncomparable = leg(await run({ published: null, trusted: "d".repeat(64) }));
+  assert.equal(uncomparable.ok, true, "a consumer container is not broken");
+  assert.equal(uncomparable.comparable, false);
+  assert.match(uncomparable.reason, /unknown here/u);
+
+  // Red leg: treat a missing trust root as uncomparable too, and a host with no installed
+  // helper at all reports the same green as one that is correctly aligned.
+  const missing = leg(await run({ published: "e".repeat(64), trusted: null }));
+  assert.equal(missing.ok, false);
+  assert.equal(missing.reasonCode, "PLATFORM_HELPER_TRUST_ROOT_MISSING");
+});

@@ -104,6 +104,63 @@ async function inspectAgentsHistory(root) {
   return check("platformAgentsHistory", true, { bytes: liveBytes.length });
 }
 
+// TCRN-CROSS-INC-233: the one comparison nobody was making. `helperCopies` proves the
+// deployed skill copies match the locally trusted archive, and `deploymentFreshness`
+// proves the engine version string in each host's SKILL.md matches the engine's
+// package.json. Both were green on 2026-08-19 while every host carried a skill payload
+// from the day before -- because the payload can change without the version string
+// moving, and the deployed copies and the trust root were stale together, which is
+// exactly the state internal-consistency checks cannot see.
+//
+// What that cost: the corrected retrieval pipeline, the trailing-read guidance and the
+// commit-citation amendment were all published and none of them had reached either host.
+// A session on Claude Code or Codex was still reading a document naming five commands
+// the engine does not have.
+//
+// The helper repository is the authority for what has been released, and it may legally
+// be absent from a container that only consumes the helper. Absent is reported as
+// uncomparable rather than passed quietly, because "nothing to compare" and "compared
+// and equal" are the two answers this leg exists to keep apart.
+async function inspectHelperReleaseAlignment(platformRoot, homeRoot, options) {
+  if (options.helperReleaseAlignment && typeof options.helperReleaseAlignment === "object") {
+    const { published, trusted } = options.helperReleaseAlignment;
+    return helperReleaseVerdict(published ?? null, trusted ?? null, "synthetic");
+  }
+  const bootstrapPath = join(platformRoot, "TCRN Platform", "tcrn-workflow-helper", "bootstrap", "trusted-bootstrap.mjs");
+  let published = null;
+  try {
+    published = /EXPECTED_ARCHIVE_SHA256\s*=\s*'([0-9a-f]{64})'/u.exec(await readFile(bootstrapPath, "utf8"))?.[1] ?? null;
+  } catch (error) {
+    if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+  }
+  let trusted = null;
+  try {
+    trusted = createHash("sha256").update(await readFile(join(homeRoot, ".tcrn-workflow", "skill-archive.json"))).digest("hex");
+  } catch (error) {
+    if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+  }
+  return helperReleaseVerdict(published, trusted, "helper-repository");
+}
+
+function helperReleaseVerdict(published, trusted, source) {
+  if (published === null) {
+    return check("helperReleaseAlignment", true, { comparable: false, reason: "no helper repository in this container, so the released payload is unknown here", source });
+  }
+  if (trusted === null) {
+    return check("helperReleaseAlignment", false, { reasonCode: "PLATFORM_HELPER_TRUST_ROOT_MISSING", published: published.slice(0, 12), source });
+  }
+  if (published !== trusted) {
+    return check("helperReleaseAlignment", false, {
+      reasonCode: "PLATFORM_HELPER_PAYLOAD_STALE",
+      published: published.slice(0, 12),
+      trusted: trusted.slice(0, 12),
+      remedy: "the hosts carry a skill payload older than the helper's released one; deploying it is an Owner stop, not a consequence of the push that released it",
+      source,
+    });
+  }
+  return check("helperReleaseAlignment", true, { comparable: true, digest: trusted.slice(0, 12), source });
+}
+
 async function inspectAcceptanceGateGroups(root) {
   const path = join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json");
   let roster;
@@ -1340,6 +1397,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
   if (options.includeInstallSurface !== false) {
     checks.push(
       await inspectHelperCopies(root, homeRoot, manifest, options),
+      await inspectHelperReleaseAlignment(root, homeRoot, options),
       await inspectInstallWiring(root, homeRoot, manifest),
       await inspectHookExecutability(root, manifest),
       await inspectDeploymentFreshness(homeRoot, manifest),

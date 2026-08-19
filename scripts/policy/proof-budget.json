@@ -88,6 +88,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.627,
       "rationale": "The largest single step this line has taken, and the cheapest to justify. It buys a Markdown link gate that this repository never had -- a published code of conduct spent a day telling readers the authoritative text was at a path that did not exist, through twenty-three P1 gates, sixty-one guard mutations and eighteen doctor legs, and its first run found three further broken citations nobody had noticed. It buys three criteria over the CLI, the only transport a governed session has, whose five hand-written argument lists and five hand-written option objects had nothing asserting the flag survived the trip. And it buys the repair of two criteria written the same day that could not fail -- one passing a flag into an argument nothing reads, one folding case against an already-lowercase fixture. A criterion that cannot fail is worse than no criterion, because it is counted; retiring proof mass to stay under the line would have meant keeping some of that."
+    },
+    {
+      "id": "OD-36-helper-release-alignment",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.6301,
+      "rationale": "One doctor leg and four criteria for a comparison the platform had never made. Two existing checks were green all day while both hosts ran yesterday's skill payload: one proves the deployed copies match the local trust root, the other proves a version string agrees, and a trust root stale together with its copies is invisible to both -- especially since the payload moves without the version string moving. Three of the leg's four answers can collapse into one another, which is where the criteria go: uncomparable must not read as compared-and-equal, and a missing trust root must not read as uncomparable, or a host with no helper at all reports the same green as a correctly aligned one."
     }
   ]
 }

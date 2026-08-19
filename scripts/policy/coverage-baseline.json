@@ -1163,8 +1163,8 @@
       ]
     },
     "tests/platform-doctor.test.mjs": {
-      "testCount": 43,
-      "assertionCount": 143,
+      "testCount": 44,
+      "assertionCount": 156,
       "testNames": [
         "a complete synthetic platform container is green",
         "STORY-300: an absent acceptance roster is a red leg, not a tolerated gap",
@@ -1208,7 +1208,8 @@
         "an identity drift is named as an observation, with the moment it happened",
         "a matching identity produces no observation at all",
         "MIN-102 engine alignment names a copy that is behind a chain declaration",
-        "MIN-103 the platform names a setting the placed Helper never teaches"
+        "MIN-103 the platform names a setting the placed Helper never teaches",
+        "INC-233: helper release alignment separates stale, aligned, uncomparable and missing"
       ]
     },
     "tests/preflight.test.mjs": {
