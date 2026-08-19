@@ -3,6 +3,21 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 1.0.0 — 2026-08-20
+
+The first accepted release. No event transforms, `storageVersion` stays 1, no
+verb removed, no successful command's reason code changed, and no `recover`
+required — an engine at `0.14.0` and one at `1.0.0` read the same chains.
+
+Carries the batch primitives (`work-batch`, `knowledge-batch`), a retrieval
+surface that answers in a workspace being written to (`--allow-trailing`), the
+separation of `maxChainEvents` from `maxRecords`, and four gates that measure
+things nothing measured before: Markdown link resolution, acceptance verdicts,
+chain headroom against a review trigger, and dispatch field budgets.
+
+Full note, including the two measured failures that produced the fixes and what
+this release does not claim: `docs/releases/1.0.0.md`.
+
 ## 0.14.0 — 2026-08-19
 
 Carries `TCRN-CROSS-STORY-299`. The extension view stops growing with the prose

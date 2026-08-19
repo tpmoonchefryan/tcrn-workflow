@@ -1,6 +1,6 @@
 {
   "name": "@tcrn-workflow/pg-backend",
-  "version": "0.14.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "license": "Apache-2.0",
