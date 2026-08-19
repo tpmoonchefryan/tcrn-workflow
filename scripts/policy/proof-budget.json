@@ -76,6 +76,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.6135,
       "rationale": "Eight lines of comment on a one-line precondition fix. The criterion waited on the lock directory rather than the owner record and so raced a lock that was not yet established, failing about half of full-suite runs. The comment costs the budget because the thing worth preserving is not the fix but what the fix declined to do: a contender arriving mid-establishment really does get METADATA_INVALID, that really is defensible fail-closed behaviour, and no criterion covers it. Without those lines the next reader sees a green suite and no trace of an untested path, which is how the shortcut this fix rejected gets taken later by someone with less context."
+    },
+    {
+      "id": "OD-34-snippet-search-and-sealed-owner",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.6175,
+      "rationale": "Two changes to the same budget line. Four criteria for searching the knowledge snippet -- the found case, the three existing fields staying matched, the body staying unsearched, and case folding on the new field -- of which the last two exist only to stop the widening from swallowing the metadata-first discipline it sits next to. And a sealed-owner precondition whose comment costs more than its one line of code, because what it preserves is the boundary the previous attempt mislocated: owner.json is published twice, the second rename replaces the inode, and a read spanning it is refused on identity rather than content. Without that written down the next reader repeats the same wrong fix, which is not hypothetical -- it is what happened here, and the retraction of its three-run proof is in the same commit."
     }
   ]
 }

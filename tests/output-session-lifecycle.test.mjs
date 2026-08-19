@@ -214,6 +214,25 @@ async function waitForPath(path, diagnostic) {
   assert.fail(`timed out waiting for ${path}${result ? `: ${JSON.stringify(result)}` : ""}`);
 }
 
+// TCRN-CROSS-INC-231: an owner is not established when owner.json appears -- it is
+// established when the record carries its process group, because the group publication
+// replaces the file with a different inode and any read spanning that replacement is
+// refused on identity change rather than on content.
+async function waitForSealedOwner(root, diagnostic) {
+  const ownerPath = resolve(lockPath(root), "owner.json");
+  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+    try {
+      const owner = JSON.parse(await readFile(ownerPath, "utf8"));
+      if (owner?.processGroup !== null && owner?.processGroup !== undefined) return owner;
+    } catch (error) {
+      if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const result = diagnostic ? await diagnostic : undefined;
+  assert.fail(`timed out waiting for a sealed owner at ${ownerPath}${result ? `: ${JSON.stringify(result)}` : ""}`);
+}
+
 async function readJsonWhenReady(path, diagnostic) {
   for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
     try {
@@ -2560,15 +2579,18 @@ test("a concurrent real task entrypoint preserves its live command-wide owner an
     "",
   ].join("\n"));
   const owner = startTaskEntrypoint(root);
-  // TCRN-CROSS-INC-229: wait for the owner RECORD, not the lock directory. The
-  // directory appears first and owner.json is published into it a moment later, so
-  // waiting on the directory starts the contender against a lock that is not yet
-  // established -- which returns OUTPUT_SESSION_METADATA_INVALID rather than the
-  // OWNER_LIVE this criterion is about, roughly half the time under full-suite load
-  // and almost never in isolation. That is a real behaviour and a legitimate
-  // fail-closed one; it is simply not the behaviour named on the next line, and no
-  // criterion covers it yet.
-  await waitForPath(resolve(lockPath(root), "owner.json"), owner.result);
+  // TCRN-CROSS-INC-231, superseding the INC-229 attempt at this same line. Establishing
+  // an owner publishes owner.json TWICE: once with processGroup null, and again --
+  // staged and renamed over the first, so a different inode -- once the process group
+  // is known. readOutputLockMetadataAt re-stats after reading and refuses on an
+  // identity change, so a contender reading between the two renames gets
+  // OUTPUT_SESSION_METADATA_INVALID even though it read a complete, valid record.
+  //
+  // Waiting on the lock directory started the contender before either rename. Waiting
+  // on owner.json merely moved it to the first, which is squarely inside the window.
+  // The precondition this criterion actually needs is a SEALED owner: the record
+  // present, parseable, and carrying its process group.
+  await waitForSealedOwner(root, owner.result);
   const contender = await startTaskEntrypoint(root).result;
   assert.equal(contender.code, 1);
   assert.equal(contender.signal, null);
