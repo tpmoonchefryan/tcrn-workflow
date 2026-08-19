@@ -36,10 +36,22 @@ function nonEmptyList(value, field) {
 // while the thing it names goes unmeasured.
 //
 // Two failures are mechanical, expensive, and the same failure twice: a citation that
-// is not real. A file pointer resolving to nothing and a verification command that
-// cannot run both send the executor looking for something absent -- and a model that
-// cannot find what it was pointed at does not stop, it fills the gap. Checking that a
-// citation is true constrains nobody's thinking; it checks that what was written is so.
+// is not real. Checking that a citation is true constrains nobody's thinking; it checks
+// that what was written is so.
+//
+// The cost is measured rather than asserted, because the first version of this comment
+// asserted it and was wrong. It claimed a model that cannot find what it was pointed at
+// fills the gap instead of stopping. Tested the same day against Haiku 4.5, two runs per
+// arm, identical task and repository differing only in whether the citations resolve:
+// both stale-brief runs named the unresolved pointers, found the real files, and
+// corrected the verification command -- one of them surfacing a package script the
+// author of this check did not know existed. Neither invented anything.
+//
+// What the stale brief actually cost, averaged over the two runs: 11 tool calls against
+// 2, and 38.6 seconds against 17.2 -- roughly five times the tool calls and twice the
+// wall clock to arrive at the same answer, for about 10% more tokens. That is the honest
+// argument for this check. It does not prevent a wrong answer; it prevents an executor
+// paying to rediscover what the brief already knew (TCRN-CROSS-INC-228).
 function unresolvedCitation(entry, root) {
   // A pointer may carry a :line or :line:column suffix; the file is the claim.
   const path = entry.replace(/:\d+(?::\d+)?$/u, "");

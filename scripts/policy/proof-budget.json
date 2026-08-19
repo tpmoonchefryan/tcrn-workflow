@@ -64,6 +64,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.6129,
       "rationale": "The dispatch readiness gate measured presence, which a single-character string satisfies, while claiming to enforce the rule that a ticket must be granular enough for an economy model to execute without inventing. Five criteria: the two citation checks themselves, the file:line form that would otherwise report every conventionally-written pointer as missing, and two that exist only to stop the check overclaiming -- an unparseable command must be counted rather than passed, and a brief with no declared root must say its citations went unchecked. The last two are the whole reason this is worth budget: without them a weaker answer wears the stronger one's clothes, which is the defect class this gate was extended to close, reproduced inside the fix."
+    },
+    {
+      "id": "OD-32-dispatch-cost-measured-not-asserted",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.6133,
+      "rationale": "Four lines of comment, and they are the only reason the budget moved. OD-31 bought five criteria for the citation check; this buys the correction of the argument those criteria were shipped under. The original comment predicted that an executor which cannot find its citation invents rather than stops, and an adversarial run against the economy model the same day refuted it: both stale-brief runs disclosed, recovered, and corrected the command. The measured cost -- five times the tool calls, twice the wall clock, same answer -- replaces the asserted one in place. A comment that states a refuted behavioural claim is worse than no comment, because the next reader inherits it as evidence."
     }
   ]
 }

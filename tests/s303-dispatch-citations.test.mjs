@@ -55,7 +55,9 @@ const briefFor = (root, overrides = {}) => ({
 });
 
 // Red leg: drop unresolvedCitation and a brief pointing at a file that does not exist
-// is dispatched as ready -- the executor then invents what it could not find.
+// is dispatched as ready -- the executor then pays to rediscover it. Measured against
+// Haiku 4.5 (TCRN-CROSS-INC-228): five times the tool calls and twice the wall clock,
+// not the invention this comment originally claimed.
 test("STORY-303: a file pointer that does not resolve is refused and named", async () => {
   const root = await repository();
   try {
