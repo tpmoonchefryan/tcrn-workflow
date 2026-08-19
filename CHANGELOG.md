@@ -3,6 +3,18 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 1.0.1 — 2026-08-20
+
+A patch release with one fix, cut because `v1.0.0`'s commit is red in CI and a
+published release must point at a verified lineage.
+
+The Markdown link gate added in `1.0.0` resolved targets with `existsSync` alone,
+so a cross-repository citation written as a `../../` filesystem path resolved on
+a machine holding a sibling checkout and failed on a runner holding one
+repository. Five consecutive pushes were red while every local run was green.
+Escape is now judged on the link's shape before any filesystem question, and
+reported as its own verdict. See `docs/releases/1.0.1.md`.
+
 ## 1.0.0 — 2026-08-20
 
 The first accepted release. No event transforms, `storageVersion` stays 1, no
