@@ -21,7 +21,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -54,6 +54,18 @@ export function resolveLinkTarget(target, fromFile, root = REPOSITORY_ROOT) {
   if (path.length === 0) return { checked: false, reason: "fragment-only" };
   const base = path.startsWith("/") ? root : dirname(resolve(root, fromFile));
   const absolute = path.startsWith("/") ? resolve(root, `.${path}`) : resolve(base, path);
+  // TCRN-CROSS-INC-238: a link that climbs out of this repository is refused on its shape,
+  // never on whether the file happens to be there. The first version asked existsSync and
+  // nothing else, so a `../../../../TCRN-Design-System/...` citation PASSED on a machine
+  // with a sibling checkout and FAILED in CI, which has none -- five consecutive pushes
+  // red while every local run was green. That is precisely what the host-independence
+  // convention forbids: a gate whose verdict depends on what else is on the disk.
+  //
+  // Escaping is now its own verdict rather than a missing file, because the two have
+  // different remedies: a broken in-repo link is fixed by correcting the path, and an
+  // escaping one by not writing a filesystem path to another repository at all.
+  const contained = absolute === root || absolute.startsWith(`${root}${sep}`);
+  if (!contained) return { checked: true, absolute, resolves: false, escapes: true };
   return { checked: true, absolute, resolves: existsSync(absolute) };
 }
 
@@ -76,7 +88,7 @@ export async function inspectMarkdownLinks(root = REPOSITORY_ROOT, files) {
       const verdict = resolveLinkTarget(target, file, root);
       if (!verdict.checked) continue;
       checked += 1;
-      if (!verdict.resolves) broken.push({ file, target });
+      if (!verdict.resolves) broken.push({ file, target, ...(verdict.escapes ? { escapes: true } : {}) });
     }
   }
   broken.sort((left, right) => (left.file === right.file ? (left.target < right.target ? -1 : 1) : left.file < right.file ? -1 : 1));

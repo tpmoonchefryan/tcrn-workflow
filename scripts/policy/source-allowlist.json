@@ -515,6 +515,7 @@
     "tests/inc226-trailing-read.test.mjs",
     "tests/inc230-snippet-search.test.mjs",
     "tests/inc232-trailing-cli-surface.test.mjs",
+    "tests/inc238-markdown-link-gate.test.mjs",
     "tests/init033-install-surface.test.mjs",
     "tests/io-boundaries.test.mjs",
     "tests/knowledge-batch.test.mjs",

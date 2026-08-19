@@ -623,6 +623,18 @@
         "INC-232: a checkpoint refuses a trailing store however the flag is passed"
       ]
     },
+    "tests/inc238-markdown-link-gate.test.mjs": {
+      "testCount": 6,
+      "assertionCount": 18,
+      "testNames": [
+        "INC-238: a link climbing out of the repository is refused on its shape",
+        "INC-238: escaping and merely-missing are different verdicts",
+        "INC-238: an escaping link is refused even when the target really exists",
+        "INC-238: ordinary in-repo links still resolve, absolute and relative",
+        "INC-238: every broken link is reported, with the escaping ones marked",
+        "INC-238: schemes and anchors are left unjudged rather than guessed"
+      ]
+    },
     "tests/init033-install-surface.test.mjs": {
       "testCount": 3,
       "assertionCount": 16,

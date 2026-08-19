@@ -100,6 +100,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.6342,
       "rationale": "Four criteria for separating the chain's lifetime event bound from the protocol's per-document shape bound, and three for the headroom leg that watches the new one. The criterion earning most of this is the second: that raising the chain bound did not loosen the document bound. The change was one edit away from raising the shared constant, which would have quietly permitted eleven-thousand-element canonical arrays and eleven-thousand-key objects to buy chain headroom -- six input bounds loosened, none of them measured, to fix one lifetime bound that had been. Nothing else in the suite would have noticed; that criterion is the only thing that does."
+    },
+    {
+      "id": "OD-38-link-gate-host-independence",
+      "recordedAt": "2026-08-20",
+      "ratio": 1.6348,
+      "rationale": "Six criteria for a gate that shipped with none, which is how it carried a host dependency into five consecutive red CI runs while every local run was green. The one that earns this outright puts a real file OUTSIDE the repository and asserts the link to it is still refused -- that is the CI condition asserted rather than hoped for, and nothing else in the suite can see it, because on this machine the sibling checkout makes the broken form resolve. Retiring proof mass to stay under the line would mean keeping a gate whose verdict depends on what else is on the disk, which the host-independence convention forbids outright."
     }
   ]
 }

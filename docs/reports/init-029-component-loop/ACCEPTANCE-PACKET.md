@@ -31,7 +31,7 @@ EPIC-082 (`work:2005f19c395258ff67f93ade`) 与 EPIC-083 (`work:39371a357b7bc2ac9
 
 - [S252 DS CSS snapshot evidence](./evidence/STORY-252-ds-css-snapshot.md)
 - [S253 class alignment evidence](./evidence/STORY-253-class-alignment.md)
-- [S254 DS component return evidence](../../../../TCRN-Design-System/docs/reports/init-029-component-loop/evidence/STORY-254-component-return.md)
+- S254 DS component return evidence: `TCRN-Design-System` repository, `docs/reports/init-029-component-loop/evidence/STORY-254-component-return.md`
 - [S255 portal consumption evidence](./evidence/STORY-255-portal-consumption.md)
 - [S255 dashboard browser capture](./evidence/STORY-255-portal-dashboard.png)
 - [S255 settings browser capture](./evidence/STORY-255-portal-settings.png)
