@@ -19,6 +19,80 @@ export const DISPATCH_BRIEF_FIELDS = Object.freeze([
   "effectiveEvidenceCommands",
 ]);
 
+// TCRN-CROSS-INC-235: a brief that names a target field must carry that field's limit,
+// and the requirements it states must fit inside it.
+//
+// Measured, not supposed. Ten dispatch briefs each demanded four literal strings inside a
+// knowledge card's `snippet`. KNOWLEDGE_LIMITS.maximumSnippetBytes is 512; the briefs never
+// said so; four of ten results ran 518-530 bytes and the store refused them. The control
+// arm -- a frontier model on three of the same tickets -- went over on three of three, at
+// 608, 625 and 848 bytes. Writing more thoroughly violated the unstated ceiling MORE, which
+// is what settles that the variable was the brief and not the model tier.
+//
+// WHAT THIS CHECK DOES AND DOES NOT CATCH, stated plainly because the tempting overclaim
+// is that it prevents INC-235. It does not. Those four specifics total 55 bytes plus three
+// separators -- a 58-byte floor under a 512-byte ceiling -- so a satisfiability check
+// passes the exact brief that produced the failure. What actually went wrong was that four
+// specifics plus enough prose to read as a card do not fit 512 bytes, and no arithmetic
+// decides "enough prose" without inventing a number.
+//
+// So the remedy this carries is the DECLARATION, not the arithmetic. A brief that names a
+// bounded target field now has somewhere to put the bound, which means the dispatched
+// worker is told the ceiling exists -- and neither model in the experiment was. The floor
+// check is the smaller, decidable half: it refuses a brief whose literal requirements
+// cannot fit its own stated ceiling under any prose at all.
+//
+// The check never knows a target system's limits and must not pretend to: the BRIEF
+// declares them. An undeclared field is unjudged, exactly as an unjudgeable command is,
+// and `fieldBudgets.checked` travels with the result so a caller cannot read "nothing
+// declared" as "budgets verified". Inventing a limit nobody declared would be the mirror
+// of the defect this exists to reduce.
+const FIELD_BUDGET_RULES = Object.freeze(["maxBytes", "requiredStrings"]);
+
+function fieldBudgetProblems(budgets) {
+  if (budgets === undefined) return { problems: [], declared: 0 };
+  if (budgets === null || typeof budgets !== "object" || Array.isArray(budgets)) {
+    return { problems: [{ field: "fieldBudgets", message: "fieldBudgets must be an object keyed by field name" }], declared: 0 };
+  }
+  const problems = [];
+  let declared = 0;
+  for (const [field, spec] of Object.entries(budgets)) {
+    if (spec === null || typeof spec !== "object" || Array.isArray(spec)) {
+      problems.push({ field: `fieldBudgets.${field}`, message: "a field budget is an object" });
+      continue;
+    }
+    const unknown = Object.keys(spec).filter((key) => !FIELD_BUDGET_RULES.includes(key));
+    if (unknown.length > 0) {
+      problems.push({ field: `fieldBudgets.${field}`, message: `unknown budget rules: ${unknown.join(", ")}` });
+    }
+    const { maxBytes, requiredStrings } = spec;
+    if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+      problems.push({ field: `fieldBudgets.${field}`, message: "maxBytes must be a positive integer -- the limit of the surface this field is written to" });
+      continue;
+    }
+    declared += 1;
+    if (requiredStrings === undefined) continue;
+    if (!Array.isArray(requiredStrings) || requiredStrings.some((value) => typeof value !== "string" || value.length === 0)) {
+      problems.push({ field: `fieldBudgets.${field}`, message: "requiredStrings must be a list of non-empty strings" });
+      continue;
+    }
+    // The floor is the required strings themselves plus one separating byte between each.
+    // A brief demanding more literal content than its own ceiling admits is unsatisfiable
+    // before anyone is dispatched against it, and that is decidable here rather than at the
+    // target system after the work is done.
+    const floor = requiredStrings.reduce((total, value) => total + Buffer.byteLength(value, "utf8"), 0)
+      + Math.max(0, requiredStrings.length - 1);
+    if (floor > maxBytes) {
+      problems.push({
+        field: `fieldBudgets.${field}`,
+        message: `requiredStrings need at least ${floor} bytes but the declared ceiling is ${maxBytes}`,
+        code: "DISPATCH_FIELD_BUDGET_UNSATISFIABLE",
+      });
+    }
+  }
+  return { problems, declared };
+}
+
 // The subcommands a package manager answers itself. A brief naming one is running the
 // package manager, not a script, and this check cannot say whether it will succeed.
 const PACKAGE_MANAGER_SUBCOMMANDS = new Set([
@@ -183,12 +257,17 @@ export function validateDispatchBrief(brief) {
   // DISPATCH_BRIEF_READY with exit 0. The reason code now carries it. Still a pass --
   // presence-only was always a legitimate verdict -- but no longer the same word as the
   // checked one, so `reasonCode == "DISPATCH_BRIEF_READY"` is an assertion a gate can make.
+  const budgets = fieldBudgetProblems(brief.fieldBudgets);
+  for (const problem of budgets.problems) problems.push(problem);
   const ready = citations.checked ? "DISPATCH_BRIEF_READY" : "DISPATCH_BRIEF_READY_CITATIONS_UNCHECKED";
   return {
     ok: problems.length === 0,
     reasonCode: problems.length === 0 ? ready : "DISPATCH_BRIEF_INCOMPLETE",
     problems,
     citations,
+    // Reported the same way citations are: a brief that declared no budget is not being
+    // called compliant, it is being called unjudged on this axis.
+    fieldBudgets: { checked: brief.fieldBudgets !== undefined, declared: budgets.declared },
   };
 }
 

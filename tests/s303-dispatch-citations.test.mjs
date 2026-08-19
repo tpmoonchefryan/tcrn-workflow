@@ -132,3 +132,78 @@ test("STORY-303: a brief with no repositoryRoot says its citations went unchecke
   assert.equal(result.citations.checked, false);
   assert.match(result.citations.reason, /not resolved/u, "and says why");
 });
+
+// TCRN-CROSS-INC-235: a brief that names a bounded target field can now carry the bound.
+//
+// The experiment that produced this: ten briefs each demanded four literal strings inside a
+// knowledge card's snippet, whose store limit is 512 bytes. No brief said so. Four of ten
+// economy results ran 518-530 bytes and the store refused them; the frontier control arm
+// went over on three of three, at 608, 625 and 848. Writing more thoroughly violated the
+// unstated ceiling more, which is what settles that the brief was the variable.
+test("INC-235: a declared budget travels with the verdict, and an absent one is unjudged", async () => {
+  const root = await repository();
+  const brief = briefFor(root);
+  const plain = validateDispatchBrief(brief);
+  assert.equal(plain.ok, true, JSON.stringify(plain.problems));
+  assert.deepEqual(plain.fieldBudgets, { checked: false, declared: 0 },
+    "a brief declaring no budget is unjudged on this axis, not compliant on it");
+  const declared = validateDispatchBrief({
+    ...brief,
+    fieldBudgets: { snippet: { maxBytes: 512, requiredStrings: ["segment", "ascending order"] } },
+  });
+  assert.equal(declared.ok, true, JSON.stringify(declared.problems));
+  assert.deepEqual(declared.fieldBudgets, { checked: true, declared: 1 });
+});
+
+// The decidable half. Red leg: drop the floor arithmetic and a brief demanding more literal
+// content than its own ceiling admits is dispatched, to fail at the target system after the
+// work is done rather than before anyone starts.
+test("INC-235: requirements that cannot fit their own declared ceiling refuse the brief", async () => {
+  const root = await repository();
+  const brief = briefFor(root);
+  const result = validateDispatchBrief({
+    ...brief,
+    fieldBudgets: { snippet: { maxBytes: 10, requiredStrings: ["KNOWLEDGE_CAS_MISMATCH"] } },
+  });
+  assert.equal(result.ok, false);
+  const problem = result.problems.find((entry) => entry.code === "DISPATCH_FIELD_BUDGET_UNSATISFIABLE");
+  assert.ok(problem, "the unsatisfiable budget is named with its own code");
+  assert.match(problem.message, /at least 22 bytes but the declared ceiling is 10/u,
+    "and it reports both numbers, because the next question is always how far past");
+});
+
+// The honest limit of this check, asserted so nobody later reads it as preventing INC-235.
+// Those four specifics total 55 bytes plus three separators: a 58-byte floor under a
+// 512-byte ceiling. Satisfiability passes the exact brief that produced the failure. What
+// this buys is the declaration reaching the dispatched worker, not the arithmetic.
+test("INC-235: the satisfiability check does NOT catch the case that motivated it", async () => {
+  const root = await repository();
+  const brief = briefFor(root);
+  const result = validateDispatchBrief({
+    ...brief,
+    fieldBudgets: {
+      snippet: { maxBytes: 512, requiredStrings: ["allowTrailing", "options parameter", "lowercase fixture", "mutation"] },
+    },
+  });
+  assert.equal(result.ok, true,
+    "the brief that produced four over-limit cards is satisfiable on paper and passes here");
+  assert.equal(result.fieldBudgets.checked, true,
+    "what changed is that the ceiling is now declared, which is what the workers were never told");
+});
+
+// Red leg: accept a malformed budget silently and a caller believes a budget was checked
+// when the declaration itself was unusable.
+test("INC-235: a malformed budget declaration is refused rather than ignored", async () => {
+  const root = await repository();
+  const brief = briefFor(root);
+  for (const budgets of [
+    { snippet: { maxBytes: 0 } },
+    { snippet: { maxBytes: 512, requiredStrings: "not-a-list" } },
+    { snippet: { maxBytes: 512, unknownRule: true } },
+    { snippet: "not-an-object" },
+    "not-an-object",
+  ]) {
+    const result = validateDispatchBrief({ ...brief, fieldBudgets: budgets });
+    assert.equal(result.ok, false, JSON.stringify(budgets));
+  }
+});
