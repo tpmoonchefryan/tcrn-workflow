@@ -1263,8 +1263,16 @@ function selectKnowledgeMetadata(scan: KnowledgeStoreScan, query: KnowledgeListQ
       (!query.category || metadata.category === query.category) && (!query.kind || metadata.kind === query.kind) &&
       (!query.tag || metadata.tags.includes(query.tag)) && (!query.freshness || freshness === query.freshness) &&
       (!query.promotionState || metadata.promotionState === query.promotionState) &&
+      // TCRN-CROSS-INC-230: the snippet is searched too. It was the one bounded metadata
+      // field the filter held in hand and did not look at, so a card was unfindable by the
+      // specifics it stores -- and the snippet is exactly where a card puts specifics,
+      // being the field defined as its bounded excerpt. Found by filing a card whose
+      // snippet said "flake", then searching for it and getting nothing. Bodies stay
+      // unsearched on purpose: that is the metadata-first budget discipline, and it is a
+      // different rule from overlooking a field already loaded.
       (search === undefined || metadata.subject.toLowerCase().includes(search) ||
-        metadata.summary.toLowerCase().includes(search) || metadata.tags.some((tag) => tag.includes(search)));
+        metadata.summary.toLowerCase().includes(search) || metadata.snippet.toLowerCase().includes(search) ||
+        metadata.tags.some((tag) => tag.includes(search)));
   }).sort((left, right) => compareCanonicalText(left.id, right.id));
 }
 
