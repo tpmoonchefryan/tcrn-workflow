@@ -70,6 +70,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.6133,
       "rationale": "Four lines of comment, and they are the only reason the budget moved. OD-31 bought five criteria for the citation check; this buys the correction of the argument those criteria were shipped under. The original comment predicted that an executor which cannot find its citation invents rather than stops, and an adversarial run against the economy model the same day refuted it: both stale-brief runs disclosed, recovered, and corrected the command. The measured cost -- five times the tool calls, twice the wall clock, same answer -- replaces the asserted one in place. A comment that states a refuted behavioural claim is worse than no comment, because the next reader inherits it as evidence."
+    },
+    {
+      "id": "OD-33-output-session-owner-record-precondition",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.6135,
+      "rationale": "Eight lines of comment on a one-line precondition fix. The criterion waited on the lock directory rather than the owner record and so raced a lock that was not yet established, failing about half of full-suite runs. The comment costs the budget because the thing worth preserving is not the fix but what the fix declined to do: a contender arriving mid-establishment really does get METADATA_INVALID, that really is defensible fail-closed behaviour, and no criterion covers it. Without those lines the next reader sees a green suite and no trace of an untested path, which is how the shortcut this fix rejected gets taken later by someone with less context."
     }
   ]
 }

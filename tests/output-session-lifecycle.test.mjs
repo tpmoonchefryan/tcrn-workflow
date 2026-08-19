@@ -2560,7 +2560,15 @@ test("a concurrent real task entrypoint preserves its live command-wide owner an
     "",
   ].join("\n"));
   const owner = startTaskEntrypoint(root);
-  await waitForPath(lockPath(root), owner.result);
+  // TCRN-CROSS-INC-229: wait for the owner RECORD, not the lock directory. The
+  // directory appears first and owner.json is published into it a moment later, so
+  // waiting on the directory starts the contender against a lock that is not yet
+  // established -- which returns OUTPUT_SESSION_METADATA_INVALID rather than the
+  // OWNER_LIVE this criterion is about, roughly half the time under full-suite load
+  // and almost never in isolation. That is a real behaviour and a legitimate
+  // fail-closed one; it is simply not the behaviour named on the next line, and no
+  // criterion covers it yet.
+  await waitForPath(resolve(lockPath(root), "owner.json"), owner.result);
   const contender = await startTaskEntrypoint(root).result;
   assert.equal(contender.code, 1);
   assert.equal(contender.signal, null);
