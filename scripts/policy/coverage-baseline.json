@@ -860,8 +860,8 @@
       ]
     },
     "tests/p3-cli-catalog.test.mjs": {
-      "testCount": 8,
-      "assertionCount": 27,
+      "testCount": 9,
+      "assertionCount": 33,
       "testNames": [
         "commands emits schema-valid, deterministic catalog JSON",
         "catalog and dispatcher are in two-way name parity",
@@ -869,6 +869,7 @@
         "required flags in the catalog match the dispatcher",
         "WSB-4: exactly the nullable flags carry the ",
         "WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel, only on expected-version",
+        "S279 model-plan-assign catalog keeps effort optional and headSentinel on expected-version",
         "INIT-009: operator pins make every non-fixture verb binary-invocable",
         "INC-016: no catalog entry is both a governed write and authority-bearing output"
       ]
@@ -1516,6 +1517,21 @@
         "STORY-300: a malformed acceptance block is told both accepted shapes",
         "STORY-300: the legacy token checks name the vocabulary they scan for",
         "STORY-300: the contract itself is unchanged -- a compliant scope still passes"
+      ]
+    },
+    "tests/s300-work-batch.test.mjs": {
+      "testCount": 9,
+      "assertionCount": 32,
+      "testNames": [
+        "STORY-300: heterogeneous members act on what earlier members created, by external key",
+        "STORY-300: a member failing mid-batch leaves the chain exactly where it was",
+        "STORY-300: the member that failed is named with its rule; the rest are unevaluated, not invalid",
+        "STORY-300: every shape problem is reported together, before any state is consulted",
+        "STORY-300: an explicit id wins over a derivable one",
+        "STORY-300: a batch that is not a batch is refused before anything else happens",
+        "STORY-300: a batch spanning segments writes ascending, and every crash window is a legal prefix",
+        "STORY-300: the last member can fail, and it is attributed like any other",
+        "STORY-300: a failure before any member ran blames no member"
       ]
     },
     "tests/s301-proof-budget.test.mjs": {

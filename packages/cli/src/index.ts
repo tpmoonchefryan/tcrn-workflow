@@ -27,6 +27,7 @@ import {
   artifactSizeReport,
   createKnowledgeUnit,
   createProject,
+  applyWorkBatch,
   createWork,
   deleteProject,
   deleteWork,
@@ -44,6 +45,7 @@ import {
   listKnowledgeMetadata,
   consumeViewWriteFailure,
   materializeWorkspace,
+  workBatchReceipt,
   workspaceBudgets,
   planWorkspaceMigration,
   executeMigration,
@@ -1037,6 +1039,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "vocabulary", availability: "cli", mutates: false, flags: [] },
   { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "sprint", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "work-batch", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "from-file", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "template-receipt", required: false, valueKind: "json" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "sprint", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
@@ -2679,6 +2682,32 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const id = deriveStableId("work", canonicalExternalKey(values["external-key"] ?? ""));
     await emitTimeAttestation(io, values, state.headEventHash);
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === id)!));
+    return;
+  }
+  if (command === "work-batch") {
+    // STORY-300 slice 3. --from-file rather than an inline argument because a batch is
+    // ordinarily generated, and because an argv-sized batch would defeat the point.
+    const values = parseArguments(rest, [...shared, "from-file", "actor", "attest-dir"]);
+    required(values, [...requiredShared, "from-file"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    const { readFileSync } = await import("node:fs");
+    let document: unknown;
+    try {
+      document = JSON.parse(readFileSync(values["from-file"] ?? "", "utf8"));
+    } catch (error) {
+      fail("WORK_BATCH_MALFORMED", `${values["from-file"] ?? ""}: ${(error as { message?: string }).message ?? "unreadable"}`);
+    }
+    const members = Array.isArray((document as { members?: unknown }).members) ? (document as { members: unknown[] }).members.length : 0;
+    const state = await withLease(workspace, at, async (lease) => applyWorkBatch(workspace, lease, document, {
+      expectedVersion: await resolveExpectedVersion(values, workspace),
+      occurredAt: at,
+      ...(values.actor ? { actorId: values.actor } : {}),
+    }));
+    // One attestation for the batch, not one per member: the specification defines the
+    // receipt per mutation, and a batch is one mutation.
+    await emitTimeAttestation(io, values, state.headEventHash);
+    writeState(io, state, workBatchReceipt(state, members));
     return;
   }
   if (command === "work-transition") {

@@ -192,7 +192,9 @@ export {
   createProject,
   createWorkspaceArchive,
   createWork,
+  createWorkDelta,
   annotateWork,
+  annotateWorkDelta,
   appendEvents,
   consumeViewWriteFailure,
   deleteProject,
@@ -223,6 +225,7 @@ export {
   removeWorkspaceSetting,
   transitionGateInWorkspace,
   transitionWork,
+  transitionWorkDelta,
   updateProject,
   validateWorkspace,
   withStorageBackendFactory,
@@ -1185,3 +1188,5 @@ export type {
   GenericProfileStarterBundle,
   GenericProfileTrustLevel,
 } from "./generic-profile.js";
+export { WORK_BATCH_SCHEMA_VERSION, WORK_BATCH_VERBS, applyWorkBatch, workBatchReceipt } from "./work-batch.js";
+export type { WorkBatchOptions, WorkBatchProblem } from "./work-batch.js";

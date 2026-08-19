@@ -139,6 +139,12 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
   // unsettled tree the operator sees WORKSPACE_EVENT_CORRUPT rather than the
   // verb's own WORKSPACE_RELOCATION_UNSETTLED (see WSR-1 T10).
   //
+  // STORY-300 slice 3 adds work-batch, which is the ordinary case rather than an
+  // exception: it appends a whole ordered sequence under one lease and one CAS decision,
+  // so head means exactly what it means for a single appender -- resolve against whatever
+  // the chain's head is right now and refuse if it moved. That it writes several events
+  // instead of one changes nothing about the question the sentinel answers.
+  //
   // relocation-plan carries it for one reason: it must resolve the version exactly
   // as the vacate will, or the relocationId it emits — the id the operator mints an
   // authority against — would be a prediction of a hop the engine is not about to
@@ -150,7 +156,7 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
     "model-plan-assign", "model-plan-remove", "model-plan-set", "model-plan-unassign",
     "persona-preset-override", "persona-preset-restore", "persona-remove", "persona-set",
     "project-create", "project-delete", "project-update", "relocation-plan", "relocation-vacate",
-    "settings-remove", "settings-set", "template-admit", "work-annotate", "work-create", "work-delete", "work-transition",
+    "settings-remove", "settings-set", "template-admit", "work-annotate", "work-batch", "work-create", "work-delete", "work-transition",
   ]);
 });
 

@@ -210,6 +210,11 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   // without being told its write failed -- the defect INC-198 recorded.
   "WORKSPACE_VIEW_BUDGET_EXCEEDED",
   "WORKSPACE_VIEW_UNWRITTEN",
+  // STORY-300 slice 3: a batch is refused for its shape before any state is consulted,
+  // or by the first member that fails against accumulated state. The two are separate
+  // codes because they answer different questions about whose fault it is.
+  "WORK_BATCH_MALFORMED",
+  "WORK_BATCH_REFUSED",
 ] as const);
 
 export type WorkspaceReasonCode = typeof WORKSPACE_REASON_CODES[number];
@@ -3180,7 +3185,7 @@ export async function validateWorkspace(workspaceRootInput: string, checkViews =
 // returns both the event payload and the already-validated next-state record sets.
 // projects must be id-sorted and work must be validateWorkGraph output so the
 // constructed committed state is byte-identical to a fresh materialize.
-interface MutationDelta {
+export interface MutationDelta {
   readonly payload: JsonValue;
   readonly projects: readonly ProjectRecord[];
   readonly work: readonly WorkRecord[];
@@ -3259,7 +3264,16 @@ export async function appendEvents(
     const streamId = workspaceStreamId(workspace.metadata);
     const appended: EventRecord[] = [];
     let current = state;
-    for (const buildDelta of buildDeltas) {
+    for (const [memberIndex, buildDelta] of buildDeltas.entries()) {
+      // STORY-300 slice 3: appendEvents owns the member index because it is the only
+      // thing that knows it. A caller counting completed members from outside cannot:
+      // its counter advances when the closure returns, while actor injection and
+      // createEvent below run afterwards and throw too, so a failure there would be
+      // blamed on the member after the one that caused it. `phase` separates those,
+      // because "the closure refused this member" and "the event this member produced
+      // could not be built" are different facts about the same index.
+      let phase: "delta" | "actor" | "event" = "delta";
+      try {
       // Each member sees the state the members before it produced, which is what
       // makes an ordered batch express a dependency -- a parent created by member
       // one is there for member two.
@@ -3276,6 +3290,7 @@ export async function appendEvents(
       // outrun replay. In a batch the boundary is re-evaluated per member, so a
       // batch whose first member enables attestation requires an actor from its
       // second member onward -- the same rule replay will apply.
+      phase = "actor";
       const deltaPayload = delta.payload;
       const isEnableEvent = isJsonObject(deltaPayload) && deltaPayload.operation === ACTOR_ATTESTATION_ENABLE_OPERATION;
       const actorRequired = current.attestationEnabledAtSequence !== null || isEnableEvent;
@@ -3294,6 +3309,7 @@ export async function appendEvents(
         }
         payload = { ...(deltaPayload as Readonly<Record<string, JsonValue>>), actor: options.actorId };
       }
+      phase = "event";
       const event = createEvent({
         id: workspaceEventId(streamId, sequence),
         streamId,
@@ -3304,6 +3320,13 @@ export async function appendEvents(
       });
       appended.push(event);
       current = committedFrom(current, delta, event, isEnableEvent, [...state.events, ...appended]);
+      } catch (error) {
+        // Attribution is attached, never substituted: the member's own reason code and
+        // message are what a caller needs, and a wrapper that replaced them would be the
+        // batch reporting its own opinion of a refusal it did not make.
+        Object.assign(error as object, { memberIndex, memberPhase: phase });
+        throw error;
+      }
     }
     assertWorkspaceRecordCount(state.version + buildDeltas.length);
     // STORY-299. The committed state is pure computation over state, delta and the
@@ -3450,6 +3473,23 @@ export async function deleteProject(workspaceRoot: string, lease: WorkspaceLease
   }, input);
 }
 
+// STORY-300 slice 3: createWork's delta, exposed so a batch can compose it. createWork
+// already did all its validation inside the closure, so unlike transitionWork nothing
+// moves -- this only gives the batch a handle on what the single verb already ran.
+export function createWorkDelta(input: {
+  readonly projectId: string;
+  readonly externalKey: string;
+  readonly kind: WorkKind;
+  readonly parentId: string | null;
+  readonly status?: WorkStatus;
+  readonly scope?: string;
+  readonly decidedBy?: readonly string[];
+  readonly templateAdmission?: unknown;
+  readonly occurredAt: string;
+}): (state: WorkspaceState) => MutationDelta {
+  return (state) => createWorkReducerDelta(state, input);
+}
+
 export async function createWork(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly projectId: string;
   readonly externalKey: string;
@@ -3460,9 +3500,23 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
   readonly decidedBy?: readonly string[];
   readonly templateAdmission?: unknown;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  return appendEvent(workspaceRoot, lease, (state) => createWorkReducerDelta(state, input), input);
+}
+
+function createWorkReducerDelta(state: WorkspaceState, input: {
+  readonly projectId: string;
+  readonly externalKey: string;
+  readonly kind: WorkKind;
+  readonly parentId: string | null;
+  readonly status?: WorkStatus;
+  readonly scope?: string;
+  readonly decidedBy?: readonly string[];
+  readonly templateAdmission?: unknown;
+  readonly occurredAt: string;
+}): MutationDelta {
   const externalKey = canonicalExternalKey(input.externalKey);
   const id = deriveStableId("work", externalKey);
-  return appendEvent(workspaceRoot, lease, (state) => {
+  {
     projectById(state, input.projectId);
     if (state.work.some((record) => record.id === id)) {
       fail("WORKSPACE_INPUT_INVALID", `work ${id} already exists`);
@@ -3539,8 +3593,9 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
     assertStoryCompletionAdmission(record, record.status);
     const work = validateWorkGraph([...state.work, record], templateRegistry(state.templates));
     return { payload: { operation: "work.created", record: workJsonFields(record) }, projects: state.projects, work };
-  }, input);
+  }
 }
+
 
 /**
  * WSA-3 write-path admission: whether the subtree below `recordId` in `work`
@@ -3559,19 +3614,33 @@ function hasLiveNonTerminalDescendant(work: readonly WorkRecord[], recordId: str
   return false;
 }
 
-export async function transitionWork(workspaceRoot: string, lease: WorkspaceLease, input: {
-  readonly id: string;
-  readonly status: WorkStatus;
-} & WorkspaceMutationOptions): Promise<WorkspaceState> {
-  // Scope is a live write-path admission rule. Historical chains remain
-  // replayable; unbound Stories use the legacy ten-block contract, while a
-  // bound Story is checked against its admitted template and the same engine
-  // floor before it enters an execution or completion state.
+// STORY-300 slice 3: both of transitionWork's admission rules, evaluated against a
+// supplied state rather than against a freshly materialized one.
+//
+// They used to run before appendEvent, each re-materializing the persisted workspace.
+// That is correct for a single transition and wrong inside a batch: a member closing a
+// record an earlier member of the same batch created would read a workspace where it does
+// not exist yet, and fail indistinguishably from the record genuinely not existing. It was
+// also two full replays per transition, so a batch of N transitions built the naive way
+// would pay 2N of them -- the batch's O(1) round-trip claim failing quietly inside a verb
+// that looks batched from outside.
+//
+// Moving them into the delta closure is safe, and the safety is specific rather than
+// assumed. The closure runs only on the write path: materialize() reconstructs state from
+// stored event payloads and never receives or invokes it. What IS shared with replay is
+// validateWorkGraph, which materialize calls over the reconstructed set -- and that is
+// exactly what the WSA-3 comment below was warning about. A rule placed there would refuse
+// a chain that legitimately closed an Initiative before 0.10.0 while descendants were open.
+// A rule placed here fires on live mutations only, which is what it always did.
+function assertTransitionAdmission(state: WorkspaceState, input: { readonly id: string; readonly status: WorkStatus }): void {
+  // Scope is a live write-path admission rule. Historical chains remain replayable;
+  // unbound Stories use the legacy ten-block contract, while a bound Story is checked
+  // against its admitted template and the same engine floor before it enters an execution
+  // or completion state.
   if (["ready", "active", "done"].includes(input.status)) {
-    const before = await materializeWorkspace(workspaceRoot);
-    const current = workById(before, input.id);
+    const current = workById(state, input.id);
     const templateBound = templateBindingFromWorkRecord(current) !== null;
-    validateBoundTemplateWork(current, before.templates);
+    validateBoundTemplateWork(current, state.templates);
     if (current.kind === "Story" && !templateBound) {
       const compliance = validateStoryRecord(current);
       if (!compliance.ok) {
@@ -3584,22 +3653,39 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
   }
   // WSA-3 (write-path admission): closing an Initiative to `done` is an act of
   // completion — its whole subtree must already be terminal, or the close is
-  // premature. This check lives OUTSIDE appendEvent's reducer on purpose: a
-  // reducer check is replayed over history, so it would refuse a chain that
-  // legitimately closed an INIT before 0.10.0 while descendants were still open.
-  // As write-path admission it fires only on a live "close this INIT" mutation,
-  // never on replay, so historical chains stay readable and the rule still
-  // holds going forward. (A tombstoned descendant holds no open work.)
+  // premature. This must never reach validateWorkGraph, which replay runs over every
+  // historical event: as write-path admission it fires only on a live "close this INIT"
+  // mutation, so historical chains stay readable and the rule still holds going forward.
+  // (A tombstoned descendant holds no open work.)
   if (input.status === "done") {
-    const before = await materializeWorkspace(workspaceRoot);
-    const current = before.work.find((entry) => entry.id === input.id);
+    const current = state.work.find((entry) => entry.id === input.id);
     if (current && current.kind === "Initiative" && !current.tombstone
-      && hasLiveNonTerminalDescendant(before.work, current.id)) {
+      && hasLiveNonTerminalDescendant(state.work, current.id)) {
       fail("WORKSPACE_INPUT_INVALID",
         `cannot close Initiative ${input.id} to done: it still holds live non-terminal work`);
     }
   }
+}
+
+export function transitionWorkDelta(input: { readonly id: string; readonly status: WorkStatus; readonly occurredAt: string }): (state: WorkspaceState) => MutationDelta {
+  return (state) => {
+    assertTransitionAdmission(state, input);
+    return transitionWorkReducerDelta(state, input);
+  };
+}
+
+export async function transitionWork(workspaceRoot: string, lease: WorkspaceLease, input: {
+  readonly id: string;
+  readonly status: WorkStatus;
+} & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
+    assertTransitionAdmission(state, input);
+    return transitionWorkReducerDelta(state, input);
+  }, input);
+}
+
+function transitionWorkReducerDelta(state: WorkspaceState, input: { readonly id: string; readonly status: WorkStatus; readonly occurredAt: string }): MutationDelta {
+  {
     const current = workById(state, input.id);
     assertWorkTransition(current.status, input.status);
     // WSD-4: a non-tombstoned pending gate anchored to this work item blocks a
@@ -3610,7 +3696,7 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
     validateBoundTemplateWork(record, state.templates);
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
     return { payload: { operation: "work.updated", record: workJsonFields(record) }, projects: state.projects, work };
-  }, input);
+  }
 }
 
 // E05 (scope-on-record): attach advisory fields to a live work record. It never changes
@@ -3619,13 +3705,36 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
 // validateWorkGraph re-validates the merged extensions (rejecting a
 // required:true advisory key, which carries no registry row), and the reducer replays
 // the advisory-only delta as WORKSPACE_EVENT_CORRUPT.
+// STORY-300 slice 3: annotateWork's delta, exposed so a batch can compose it. Like
+// createWork and unlike transitionWork, all of its validation already lived inside the
+// closure, so nothing moves across the replay boundary here.
+export function annotateWorkDelta(input: {
+  readonly id: string;
+  readonly scope?: string;
+  readonly decidedBy?: readonly string[];
+  readonly sprint?: SprintReference;
+  readonly occurredAt: string;
+}): (state: WorkspaceState) => MutationDelta {
+  return (state) => annotateWorkReducerDelta(state, input);
+}
+
 export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly id: string;
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly sprint?: SprintReference;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
-  return appendEvent(workspaceRoot, lease, (state) => {
+  return appendEvent(workspaceRoot, lease, (state) => annotateWorkReducerDelta(state, input), input);
+}
+
+function annotateWorkReducerDelta(state: WorkspaceState, input: {
+  readonly id: string;
+  readonly scope?: string;
+  readonly decidedBy?: readonly string[];
+  readonly sprint?: SprintReference;
+  readonly occurredAt: string;
+}): MutationDelta {
+  {
     const current = workById(state, input.id);
     if (current.tombstone) {
       fail("WORKSPACE_INPUT_INVALID", `work ${input.id} is deleted`);
@@ -3661,8 +3770,9 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
     validateBoundTemplateWork(record, state.templates);
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
     return { payload: { operation: "work.annotated", record: workJsonFields(record) }, projects: state.projects, work };
-  }, input);
+  }
 }
+
 
 export async function deleteWork(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly id: string;
