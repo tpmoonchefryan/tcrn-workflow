@@ -45,7 +45,7 @@ Two consequences follow from keeping `storageVersion` at `1`:
   proven property, not a hope (see `EXT-CONFERENCE-GATE-STORE`): views, export,
   and archive bytes are identical to rc.4 for a workspace with no extension
   events, and the `views/extensions.json` verification summary is emitted only
-  when extension records exist. That file's shape changed in 0.14.0 from an
+  when extension records exist. That file's shape changed in 1.0.0 from an
   index carrying the records to a fixed-length summary carrying their digests;
   the emission condition, and therefore the no-extension byte-stability claim
   above, is unchanged.
