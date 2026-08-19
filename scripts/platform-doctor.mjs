@@ -19,7 +19,7 @@ import {
 // The identity digest is computed by the engine's own canonicaliser rather than
 // reproduced here. A second implementation of a digest is a second answer waiting to
 // disagree with the first (TCRN-CROSS-INC-219).
-import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
+import { PROTOCOL_LIMITS, canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 import {
   HOSTS,
   claudeHarnessDrift,
@@ -159,6 +159,69 @@ function helperReleaseVerdict(published, trusted, source) {
     });
   }
   return check("helperReleaseAlignment", true, { comparable: true, digest: trusted.slice(0, 12), source });
+}
+
+// TCRN-CROSS-INC-224: headroom on the chain's lifetime event bound, reported before the
+// wall rather than at it. The cap moved from 10,000 to 20,000 on measured evidence that
+// replay is linear at ~117 microseconds an event, so 20,000 costs about 2.3 seconds per
+// materialize against 0.51 measured at 4,316. That is a budget, not a reprieve: the next
+// ceiling is real and arrives at whatever rate governance is written.
+//
+// The trigger is 15,000, which at the busiest observed rate (about 210 events a day
+// during a governance-heavy stretch) leaves roughly three and a half weeks to decide.
+// A gate that fires at the ceiling leaves none, which is how INC-224 was discovered --
+// by counting, not by being warned.
+const CHAIN_EVENT_REVIEW_TRIGGER = 15_000;
+
+async function inspectChainHeadroom(root, options) {
+  const observed = options.chainEventCounts && typeof options.chainEventCounts === "object"
+    ? options.chainEventCounts
+    : await chainEventCounts(root, options);
+  if (observed === null) {
+    return check("chainHeadroom", false, { reasonCode: "PLATFORM_CHAIN_COUNTS_UNREADABLE" });
+  }
+  const ceiling = options.chainEventCeiling ?? PROTOCOL_LIMITS.maxChainEvents;
+  const over = Object.entries(observed)
+    .filter(([, count]) => typeof count === "number" && count >= CHAIN_EVENT_REVIEW_TRIGGER)
+    .map(([partition, count]) => ({ partition, events: count, headroom: ceiling - count }))
+    .sort((left, right) => right.events - left.events);
+  if (over.length > 0) {
+    return check("chainHeadroom", false, {
+      reasonCode: "PLATFORM_CHAIN_REVIEW_TRIGGER_REACHED",
+      trigger: CHAIN_EVENT_REVIEW_TRIGGER,
+      ceiling,
+      partitions: over,
+      remedy: "a partition has passed the review trigger; the disposition of the next ceiling is an Owner decision and the headroom above is how long there is to take it",
+    });
+  }
+  const counted = Object.entries(observed).map(([partition, events]) => ({ partition, events })).sort((left, right) => right.events - left.events);
+  return check("chainHeadroom", true, { trigger: CHAIN_EVENT_REVIEW_TRIGGER, ceiling, largest: counted[0] ?? null, partitions: counted.length });
+}
+
+async function chainEventCounts(root, options) {
+  const containerPath = join(root, ".tcrn-workspace");
+  const cli = options.engineCli ?? join(dirname(fileURLToPath(import.meta.url)), "tcrn-workflow.mjs");
+  let entries;
+  try {
+    entries = await readdir(containerPath, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const counts = {};
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const workspacePath = join(containerPath, entry.name, "workspace");
+    if (!(await existingPath(workspacePath))?.isDirectory()) continue;
+    try {
+      const result = await execFileAsync(process.execPath, [cli, "status", "--workspace", workspacePath], { timeout: 120_000, maxBuffer: 8 * 1_048_576 });
+      const version = JSON.parse(result.stdout)?.version;
+      if (typeof version === "number") counts[entry.name] = version;
+    } catch {
+      // A partition the engine cannot read is workspaceContainer's question, not this
+      // leg's; two owners for one defect is how a red gets argued about instead of fixed.
+    }
+  }
+  return counts;
 }
 
 async function inspectAcceptanceGateGroups(root) {
@@ -1398,6 +1461,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
     checks.push(
       await inspectHelperCopies(root, homeRoot, manifest, options),
       await inspectHelperReleaseAlignment(root, homeRoot, options),
+      await inspectChainHeadroom(root, options),
       await inspectInstallWiring(root, homeRoot, manifest),
       await inspectHookExecutability(root, manifest),
       await inspectDeploymentFreshness(homeRoot, manifest),

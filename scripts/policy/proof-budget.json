@@ -94,6 +94,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.6301,
       "rationale": "One doctor leg and four criteria for a comparison the platform had never made. Two existing checks were green all day while both hosts ran yesterday's skill payload: one proves the deployed copies match the local trust root, the other proves a version string agrees, and a trust root stale together with its copies is invisible to both -- especially since the payload moves without the version string moving. Three of the leg's four answers can collapse into one another, which is where the criteria go: uncomparable must not read as compared-and-equal, and a missing trust root must not read as uncomparable, or a host with no helper at all reports the same green as a correctly aligned one."
+    },
+    {
+      "id": "OD-37-chain-event-bound-separation",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.6342,
+      "rationale": "Four criteria for separating the chain's lifetime event bound from the protocol's per-document shape bound, and three for the headroom leg that watches the new one. The criterion earning most of this is the second: that raising the chain bound did not loosen the document bound. The change was one edit away from raising the shared constant, which would have quietly permitted eleven-thousand-element canonical arrays and eleven-thousand-key objects to buy chain headroom -- six input bounds loosened, none of them measured, to fix one lifetime bound that had been. Nothing else in the suite would have noticed; that criterion is the only thing that does."
     }
   ]
 }

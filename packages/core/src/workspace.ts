@@ -556,8 +556,12 @@ export async function assertSupportedWorkspaceFilesystem(root: string, detectedT
   return detected;
 }
 
+// TCRN-CROSS-INC-224: this is the chain's LIFETIME event bound and it is the only caller
+// of maxChainEvents. Every other use of the old shared constant bounds the shape of one
+// document or call; conflating the two meant a year of accumulated governance was
+// measured against the same number as a single canonical array's length.
 export function assertWorkspaceRecordCount(count: number): void {
-  if (!Number.isSafeInteger(count) || count < 0 || count > PROTOCOL_LIMITS.maxRecords) {
+  if (!Number.isSafeInteger(count) || count < 0 || count > PROTOCOL_LIMITS.maxChainEvents) {
     fail("WORKSPACE_RECORD_LIMIT", String(count));
   }
 }

@@ -945,3 +945,54 @@ test("INC-233: helper release alignment separates stale, aligned, uncomparable a
   assert.equal(missing.ok, false);
   assert.equal(missing.reasonCode, "PLATFORM_HELPER_TRUST_ROOT_MISSING");
 });
+
+// TCRN-CROSS-INC-224. Headroom is reported before the wall, not at it.
+//
+// The cap moved from 10,000 to 20,000 on measured evidence that replay is linear. That
+// buys time rather than removing the ceiling, so the thing worth gating is not the
+// ceiling but the moment there is still room to decide what happens at it. INC-224 was
+// found by someone counting; this leg is so the next one is found by being told.
+test("INC-224: headroom passes below the trigger and names the largest chain", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const result = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    chainEventCounts: { "cross-project": 4316, "TCRN-AOS": 1054, "TCRN-TMS": 243 },
+  });
+  const leg = result.checks.find((entry) => entry.name === "chainHeadroom");
+  assert.equal(leg.ok, true);
+  assert.equal(leg.trigger, 15_000);
+  assert.deepEqual(leg.largest, { partition: "cross-project", events: 4316 });
+});
+
+// Red leg: compare against the ceiling instead of the trigger and this passes at 19,999,
+// leaving one event of notice for a decision that needs weeks.
+test("INC-224: crossing the trigger is red, with the remaining headroom and whose call it is", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const result = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    chainEventCounts: { "cross-project": 15_001, "TCRN-AOS": 1054 },
+  });
+  const leg = result.checks.find((entry) => entry.name === "chainHeadroom");
+  assert.equal(leg.ok, false);
+  assert.equal(leg.reasonCode, "PLATFORM_CHAIN_REVIEW_TRIGGER_REACHED");
+  assert.deepEqual(leg.partitions, [{ partition: "cross-project", events: 15_001, headroom: 4_999 }]);
+  // The remedy must say the disposition is Owner's. A red that reads as a chore gets
+  // treated as one, and the decision it exists to prompt is not a chore.
+  assert.match(leg.remedy, /Owner decision/u);
+});
+
+// Red leg: report only the first partition over the trigger and a platform with two
+// chains near the wall looks like a platform with one.
+test("INC-224: every partition over the trigger is named, largest first", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const result = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    chainEventCounts: { "TCRN-AOS": 16_000, "cross-project": 18_000, "TCRN-TMS": 243 },
+  });
+  const leg = result.checks.find((entry) => entry.name === "chainHeadroom");
+  assert.equal(leg.ok, false);
+  assert.deepEqual(leg.partitions.map((entry) => entry.partition), ["cross-project", "TCRN-AOS"]);
+});

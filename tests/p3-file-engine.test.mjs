@@ -53,11 +53,12 @@ import {
   withQuarantineReplacementTestInstrumentation,
 } from "../dist/build/packages/core/src/workspace-test-instrumentation.js";
 import {
-  ProtocolError,
   canonicalJson,
   canonicalSha256,
   createEvent,
   deriveStableId,
+  PROTOCOL_LIMITS,
+  ProtocolError,
 } from "../dist/build/packages/protocol/src/index.js";
 
 const STORY_SCOPE = [
@@ -1650,7 +1651,12 @@ test("unsafe or active recovery claims fail closed", async () => {
 test("path, link, Unicode, size, record, filesystem, and migration boundaries have stable failures", async () => {
   expectReason("WORKSPACE_PATH_ESCAPE", () => assertWorkspaceRelativePath("../escape"));
   expectReason("WORKSPACE_PATH_ESCAPE", () => assertWorkspaceRelativePath("a\\b"));
-  expectReason("WORKSPACE_RECORD_LIMIT", () => assertWorkspaceRecordCount(10_001));
+  // TCRN-CROSS-INC-224: derived from the constant rather than typed, because this
+  // assertion hard-coded 10,001 and so broke on a change that was correct. 10,001 is now
+  // a legal chain length -- the lifetime bound and the per-document shape bound stopped
+  // sharing a number -- and that behavioural change is asserted beside the refusal.
+  assert.doesNotThrow(() => assertWorkspaceRecordCount(PROTOCOL_LIMITS.maxRecords + 1));
+  expectReason("WORKSPACE_RECORD_LIMIT", () => assertWorkspaceRecordCount(PROTOCOL_LIMITS.maxChainEvents + 1));
   await expectReasonAsync("WORKSPACE_FILESYSTEM_UNSUPPORTED", () => assertSupportedWorkspaceFilesystem(tmpdir(), 0x7fffffff));
 
   const malformed = await workspaceFixture();

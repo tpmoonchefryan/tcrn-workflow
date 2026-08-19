@@ -583,6 +583,16 @@
         "INC-074/INC-081: sealing a retained archive is idempotent and never overwrites a different binding"
       ]
     },
+    "tests/inc224-chain-event-bound.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 10,
+      "testNames": [
+        "INC-224: the chain accepts more events than a single document may hold elements",
+        "INC-224: raising the chain bound did not loosen the document shape bound",
+        "INC-224: the chain bound still refuses past its own ceiling, and refuses nonsense",
+        "INC-224: a refused count is reported, not just refused"
+      ]
+    },
     "tests/inc226-trailing-read.test.mjs": {
       "testCount": 5,
       "assertionCount": 10,
@@ -898,7 +908,7 @@
     },
     "tests/p3-file-engine.test.mjs": {
       "testCount": 33,
-      "assertionCount": 159,
+      "assertionCount": 160,
       "testNames": [
         "Workspace metadata schema, five-root initialization, CLI readback, and standalone boundary are exact",
         "Workspace root entries have exact Ajv/runtime field and type parity",
@@ -1163,8 +1173,8 @@
       ]
     },
     "tests/platform-doctor.test.mjs": {
-      "testCount": 44,
-      "assertionCount": 156,
+      "testCount": 47,
+      "assertionCount": 165,
       "testNames": [
         "a complete synthetic platform container is green",
         "STORY-300: an absent acceptance roster is a red leg, not a tolerated gap",
@@ -1209,7 +1219,10 @@
         "a matching identity produces no observation at all",
         "MIN-102 engine alignment names a copy that is behind a chain declaration",
         "MIN-103 the platform names a setting the placed Helper never teaches",
-        "INC-233: helper release alignment separates stale, aligned, uncomparable and missing"
+        "INC-233: helper release alignment separates stale, aligned, uncomparable and missing",
+        "INC-224: headroom passes below the trigger and names the largest chain",
+        "INC-224: crossing the trigger is red, with the remaining headroom and whose call it is",
+        "INC-224: every partition over the trigger is named, largest first"
       ]
     },
     "tests/preflight.test.mjs": {

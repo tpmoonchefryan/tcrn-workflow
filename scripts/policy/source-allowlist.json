@@ -508,6 +508,7 @@
     "tests/gate-identity.test.mjs",
     "tests/host-harness.test.mjs",
     "tests/inc074-storage-home.test.mjs",
+    "tests/inc224-chain-event-bound.test.mjs",
     "tests/inc226-trailing-read.test.mjs",
     "tests/inc230-snippet-search.test.mjs",
     "tests/inc232-trailing-cli-surface.test.mjs",

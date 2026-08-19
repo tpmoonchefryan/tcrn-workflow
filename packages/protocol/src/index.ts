@@ -14,9 +14,31 @@ export const PROTOCOL_STATUS = "implemented-p2-v1" as const;
 export const PROTOCOL_VERSION = 1 as const;
 export const P3_ACCEPTANCE_MARKER_PATH = ".context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json" as const;
 
+// TCRN-CROSS-INC-224: maxRecords and maxChainEvents are two different questions that
+// shared one constant by an accident of naming. Every protocol-side use of maxRecords
+// bounds the shape of a SINGLE document or call -- a canonical array's length, an
+// object's property count, the context record inputs, the exchange entries, the work
+// graph inputs. maxChainEvents bounds what an append-only log accumulates over its
+// lifetime, which is a different quantity with a different failure mode and a different
+// remedy. A chain holding twelve thousand events after a year has nothing to say about
+// whether one canonical array may hold twelve thousand elements.
+//
+// Raising the shared constant to buy chain headroom would have loosened six unrelated
+// input bounds to fix one lifetime bound. Nothing measured argues for that, so the input
+// bound stays where it was and only the lifetime bound moves.
+//
+// 20,000 comes from measurement rather than preference. Replay is linear: across the six
+// live partitions on 2026-08-19, spanning 243 to 4,316 events -- a seventeen-fold range --
+// per-event materialize cost stayed flat between 95 and 133 microseconds with no
+// superlinear term, fitting 117 us/event. That projects 2.34 s at 20,000 against 0.51 s
+// measured at 4,316. The cost is real, felt on every command, and predictable, which is
+// what makes it a budget rather than a gamble. No timing gate enforces it: this
+// repository's own convention is that a gate must be host-independent, and wall clock is
+// the opposite of that. The linearity is asserted by counting instead.
 export const PROTOCOL_LIMITS = Object.freeze({
   maxCanonicalBytes: 1_048_576,
   maxRecords: 10_000,
+  maxChainEvents: 20_000,
   maxStringLength: 8_192,
   maxExtensions: 64,
 });
