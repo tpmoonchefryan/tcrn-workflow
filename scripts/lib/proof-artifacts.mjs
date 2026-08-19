@@ -52,7 +52,7 @@ const routeAdditions = new Set([
   "docs/releases/0.11.5.md",
   "docs/releases/0.11.6.md",
   "docs/releases/0.11.7.md",
-  "docs/releases/1.0.0.md",
+  "docs/releases/1.0.1.md",
   "tests/s300-catalog-behaviour.test.mjs",
   "tests/s301-proof-budget.test.mjs",
   "tests/s300-append-events.test.mjs",
