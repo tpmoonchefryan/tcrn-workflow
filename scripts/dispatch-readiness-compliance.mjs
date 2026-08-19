@@ -6,6 +6,9 @@
 // the chain prevents execution detail from becoming append-only scope, while
 // making the old "missing element means no dispatch" rule executable.
 
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
+
 import { validateStoryScope } from "./story-scope-compliance.mjs";
 
 export const DISPATCH_BRIEF_FIELDS = Object.freeze([
@@ -24,6 +27,68 @@ function nonEmptyList(value, field) {
     return { field, message: `${field} must contain only non-empty strings` };
   }
   return null;
+}
+
+// TCRN-CROSS-STORY-303: presence is not sufficiency. Every field above is satisfied by
+// a single-character string, so a brief can be shaped-valid and still leave an executor
+// guessing -- which is the failure the granularity rule exists to prevent, and exactly
+// the shape of gate this audit was commissioned to find: one that reports diligence
+// while the thing it names goes unmeasured.
+//
+// Two failures are mechanical, expensive, and the same failure twice: a citation that
+// is not real. A file pointer resolving to nothing and a verification command that
+// cannot run both send the executor looking for something absent -- and a model that
+// cannot find what it was pointed at does not stop, it fills the gap. Checking that a
+// citation is true constrains nobody's thinking; it checks that what was written is so.
+function unresolvedCitation(entry, root) {
+  // A pointer may carry a :line or :line:column suffix; the file is the claim.
+  const path = entry.replace(/:\d+(?::\d+)?$/u, "");
+  const absolute = isAbsolute(path) ? path : resolve(root, path);
+  return existsSync(absolute) ? null : `${entry} does not resolve under the declared repositoryRoot`;
+}
+
+function packageScripts(root) {
+  try {
+    return JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).scripts ?? {};
+  } catch {
+    // An absent or unreadable manifest is not a failure. It means script names cannot
+    // be judged here, and the unjudged count says so rather than passing them silently.
+    return null;
+  }
+}
+
+function unrunnableCommand(entry, root, scripts) {
+  const tokens = entry.trim().split(/\s+/u);
+  if (tokens[0] === "pnpm" || tokens[0] === "npm") {
+    const script = tokens[1] === "run" ? tokens[2] : tokens[1];
+    if (script === undefined || script.startsWith("-")) return { unjudged: true };
+    if (scripts === null) return { unjudged: true };
+    return script in scripts ? {} : { message: `${entry} names a script this repository does not define` };
+  }
+  if (tokens[0] === "node" && tokens[1] !== undefined && !tokens[1].startsWith("-")) {
+    return existsSync(isAbsolute(tokens[1]) ? tokens[1] : resolve(root, tokens[1]))
+      ? {}
+      : { message: `${entry} runs a file that does not exist` };
+  }
+  // Anything else this validator cannot judge, and an unjudged command must never read
+  // as a checked one.
+  return { unjudged: true };
+}
+
+function resolveCitations(brief, root) {
+  const problems = [];
+  for (const pointer of brief.filePointers) {
+    const message = unresolvedCitation(pointer, root);
+    if (message) problems.push({ field: "filePointers", message, code: "DISPATCH_POINTER_UNRESOLVED" });
+  }
+  const scripts = packageScripts(root);
+  let unjudged = 0;
+  for (const command of brief.verificationCommands) {
+    const verdict = unrunnableCommand(command, root, scripts);
+    if (verdict.unjudged) unjudged += 1;
+    if (verdict.message) problems.push({ field: "verificationCommands", message: verdict.message, code: "DISPATCH_COMMAND_UNRUNNABLE" });
+  }
+  return { problems, citations: { checked: true, unjudgedCommands: unjudged } };
 }
 
 export function validateDispatchBrief(brief) {
@@ -48,10 +113,24 @@ export function validateDispatchBrief(brief) {
       problems.push({ field: "storyScope", message: problem.message, code: problem.code });
     }
   }
+  // Citations are only resolvable against a root, and a brief that names none gets the
+  // presence-only verdict it always got. What it does not get is silence about that:
+  // `citations.checked: false` travels with the result, so a caller cannot read a
+  // presence pass as a resolvability pass. Same discipline as the trailing-read
+  // disclosure -- the weaker answer is labelled rather than dressed as the stronger one.
+  const root = brief.repositoryRoot;
+  const citations = typeof root === "string" && root.trim().length > 0 && Array.isArray(brief.filePointers) && Array.isArray(brief.verificationCommands)
+    ? (() => {
+      const resolved = resolveCitations(brief, root);
+      problems.push(...resolved.problems);
+      return resolved.citations;
+    })()
+    : { checked: false, reason: "no repositoryRoot declared, so pointers and commands were not resolved" };
   return {
     ok: problems.length === 0,
     reasonCode: problems.length === 0 ? "DISPATCH_BRIEF_READY" : "DISPATCH_BRIEF_INCOMPLETE",
     problems,
+    citations,
   };
 }
 
@@ -63,7 +142,6 @@ if (process.argv[1]?.endsWith("dispatch-readiness-compliance.mjs")) {
   } else {
     let result;
     try {
-      const { readFileSync } = await import("node:fs");
       result = validateDispatchBrief(JSON.parse(readFileSync(process.argv[pathIndex + 1], "utf8")));
     } catch (error) {
       result = {

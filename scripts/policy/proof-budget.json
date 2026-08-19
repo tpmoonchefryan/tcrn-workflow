@@ -58,6 +58,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.6068,
       "rationale": "Five criteria for the narrowest useful version of a fail-closed exemption. The knowledge store had to equal the chain head exactly, on reads as well as writes, so one governed write took all six partitions' retrieval surfaces offline until a hand-run rebase -- which is the whole of the audited week's 38 context injections against 0 knowledge citations. Admitting a trailing read is cheap to write and easy to get wrong in four directions at once, so four of the five criteria are about where the exemption must NOT reach: validate, writes, the disclosure that keeps a stale answer from passing for a current one, and the byte-identical aligned response that means no existing caller has to change. A one-line widening of the guard would satisfy the feature and fail four of them."
+    },
+    {
+      "id": "OD-31-dispatch-citation-resolution",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.6129,
+      "rationale": "The dispatch readiness gate measured presence, which a single-character string satisfies, while claiming to enforce the rule that a ticket must be granular enough for an economy model to execute without inventing. Five criteria: the two citation checks themselves, the file:line form that would otherwise report every conventionally-written pointer as missing, and two that exist only to stop the check overclaiming -- an unparseable command must be counted rather than passed, and a brief with no declared root must say its citations went unchecked. The last two are the whole reason this is worth budget: without them a weaker answer wears the stronger one's clothes, which is the defect class this gate was extended to close, reproduced inside the fix."
     }
   ]
 }

@@ -1495,6 +1495,17 @@
         "STORY-301: reading the budget policy does not change it"
       ]
     },
+    "tests/s303-dispatch-citations.test.mjs": {
+      "testCount": 5,
+      "assertionCount": 18,
+      "testNames": [
+        "STORY-303: a file pointer that does not resolve is refused and named",
+        "STORY-303: a file:line pointer resolves on the file, not the whole string",
+        "STORY-303: a verification command naming an undefined script is refused",
+        "STORY-303: a command the validator cannot judge is counted rather than passed quietly",
+        "STORY-303: a brief with no repositoryRoot says its citations went unchecked"
+      ]
+    },
     "tests/s6-lessons.test.mjs": {
       "testCount": 5,
       "assertionCount": 12,
