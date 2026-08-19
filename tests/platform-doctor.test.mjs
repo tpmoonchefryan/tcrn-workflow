@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -46,6 +46,16 @@ async function fixture(context, { agents = `${topology}fixture\n`, chain = true,
   if (roster !== null) {
     await mkdir(join(root, "TCRN Platform", "docs"), { recursive: true });
     await writeFile(join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json"), `${JSON.stringify(roster, null, 2)}\n`);
+    // INC-234: a container carrying the roster and no verdicts is exactly the state that
+    // let product-gates sit red for two days, so "complete" has to include them. The
+    // timestamps are pinned to the roster file's own mtime, which is what the leg
+    // measures against -- a fixture anchored to the wall clock would age out mid-suite.
+    const recordedAt = new Date((await stat(join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json"))).mtimeMs).toISOString();
+    await writeFile(join(root, "TCRN Platform", "docs", "acceptance-verdicts.json"), `${JSON.stringify({
+      schemaVersion: "tcrn.acceptance-verdicts.v1",
+      maxAgeHours: 26,
+      verdicts: Object.fromEntries(roster.groups.map((group) => [group.id, { verdict: "green", recordedAt }])),
+    }, null, 2)}\n`);
   }
   // STORY-300 Wave 2.2: the identity file's tracked copy, byte-identical unless a
   // case deliberately diverges them.
@@ -211,9 +221,20 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
   const home = join(base, "home");
   await mkdir(join(root, ".tcrn-workspace", "cross-project", "workspace"), { recursive: true });
   await mkdir(home, { recursive: true });
-  // STORY-300: a complete container carries the acceptance-lane roster.
+  // STORY-300: a complete container carries the acceptance-lane roster. INC-234: and its
+  // verdicts, because a roster with no verdicts is exactly the state that let a group sit
+  // red for two days. Timestamps are pinned to the roster's own mtime, which is what the
+  // leg measures against -- anchoring a fixture to the wall clock ages it out mid-suite.
   await mkdir(join(root, "TCRN Platform", "docs"), { recursive: true });
-  await writeFile(join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json"), `${JSON.stringify(syntheticRoster(), null, 2)}\n`);
+  const rosterPath = join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json");
+  const completeRoster = syntheticRoster();
+  await writeFile(rosterPath, `${JSON.stringify(completeRoster, null, 2)}\n`);
+  const rosterRecordedAt = new Date((await stat(rosterPath)).mtimeMs).toISOString();
+  await writeFile(join(root, "TCRN Platform", "docs", "acceptance-verdicts.json"), `${JSON.stringify({
+    schemaVersion: "tcrn.acceptance-verdicts.v1",
+    maxAgeHours: 26,
+    verdicts: Object.fromEntries(completeRoster.groups.map((group) => [group.id, { verdict: "green", recordedAt: rosterRecordedAt }])),
+  }, null, 2)}\n`);
   await writeFile(join(root, "TCRN Platform", "docs", "platform-root-agents.md"), `${topology}fixture\n`);
   for (const entry of INSTALL_MANIFEST.items) {
     const path = entry.pathTemplate.replaceAll("<PLATFORM_ROOT>", root).replaceAll("<HOME>", home);
@@ -995,4 +1016,64 @@ test("INC-224: every partition over the trigger is named, largest first", async 
   const leg = result.checks.find((entry) => entry.name === "chainHeadroom");
   assert.equal(leg.ok, false);
   assert.deepEqual(leg.partitions.map((entry) => entry.partition), ["cross-project", "TCRN-AOS"]);
+});
+
+// TCRN-CROSS-INC-234. The lane could not tell "green" from "nobody looked".
+//
+// product-gates was red from 2026-08-17 and six records landed done against the
+// nine-group criterion in that window, because nothing consults the roster at the moment
+// it binds. This leg cannot verify a group is green -- only running it can -- so what it
+// pins is narrower and is the failure that actually happened: an unrecorded run must not
+// be indistinguishable from a passing one.
+test("INC-234: missing, stale and red verdicts are each refused, and named", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const leg = (result) => result.checks.find((entry) => entry.name === "acceptanceVerdicts");
+  const run = (acceptanceVerdicts) => inspectPlatform(fixture.root, {
+    homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceVerdicts,
+  });
+  const fresh = new Date(Date.now()).toISOString();
+
+  // No verdicts at all: the state on 2026-08-19, and the one this leg exists for.
+  const none = leg(await run({ verdicts: {} }));
+  assert.equal(none.ok, false);
+  assert.equal(none.reasonCode, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
+  assert.equal(none.missing.length, 9, "every roster group is named as unrecorded");
+
+  // A red verdict stays visible rather than being absorbed. Red leg: treat any recorded
+  // entry as satisfaction and a group that ran and failed reads the same as one that passed.
+  const withRed = { verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh }])) };
+  // The synthetic roster names its groups group-0..group-8; using a real group id here
+  // would silently add an entry the roster does not contain and assert nothing.
+  const [firstGroup] = none.missing;
+  withRed.verdicts[firstGroup] = { verdict: "red", recordedAt: fresh, detail: "AOS verify" };
+  const red = leg(await run(withRed));
+  assert.equal(red.ok, false);
+  assert.deepEqual(red.failing.map((entry) => entry.group), [firstGroup]);
+  assert.equal(red.missing, undefined, "a red group is not also reported as missing");
+
+  // Staleness, because a verdict from last month is a record of a different tree. Red
+  // leg: drop the age comparison and one run certifies the lane forever.
+  const withStale = { verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh }])) };
+  withStale.verdicts[firstGroup] = { verdict: "green", recordedAt: "2026-07-01T00:00:00.000Z" };
+  const stale = leg(await run(withStale));
+  assert.equal(stale.ok, false);
+  assert.deepEqual(stale.stale.map((entry) => entry.group), [firstGroup]);
+
+  // All nine fresh and green is the only pass. Red leg: return ok unconditionally and the
+  // leg stops distinguishing anything at all.
+  const green = leg(await run({ verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh }])) }));
+  assert.equal(green.ok, true);
+  assert.equal(green.groups, 9);
+});
+
+// The remedy has to say what a recorded verdict is and is not, or the file becomes a
+// place to write "green" and move on. Red leg: drop the wording and the next reader
+// treats the record as the proof.
+test("INC-234: the refusal says a record of a run is not proof the run passed", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const result = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceVerdicts: { verdicts: {} },
+  });
+  const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
+  assert.match(leg.remedy, /not proof the run passed/u);
 });

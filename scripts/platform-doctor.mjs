@@ -3,7 +3,7 @@
 
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstat, readFile, readdir, realpath } from "node:fs/promises";
+import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { promisify } from "node:util";
 import { dirname, join, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -222,6 +222,91 @@ async function chainEventCounts(root, options) {
     }
   }
   return counts;
+}
+
+// TCRN-CROSS-INC-234: the acceptance lane could not tell "green" from "nobody looked".
+//
+// TCRN-CROSS-MIN-ACCEPTANCE-LANES makes "the named nine gate groups all green" the
+// criterion that releases machine-checkable work to done, and INC-232 wrote the roster
+// down because until then it existed nowhere. Both left the same hole: nothing consults
+// the roster at the moment it is supposed to bind. On 2026-08-19 the product-gates group
+// had been failing since the 17th -- AOS importing an engine module retired in v0.11.18 --
+// and six records landed done in that window against a criterion one of whose members was
+// red, because the criterion is honoured by the executor choosing to run it.
+//
+// This leg cannot verify a group is green; only running it can. What it can do is refuse
+// to let "not run" look like "passed", which is the failure that actually happened. Every
+// roster group needs a recorded verdict, recorded verdicts go stale, and a red one stays
+// visible. Same shape as the snapshot receipts this platform already keeps at 26 hours,
+// and the same honesty: the record is evidence that someone looked, never proof they were
+// right.
+const ACCEPTANCE_VERDICT_MAX_AGE_HOURS = 26;
+
+async function inspectAcceptanceVerdicts(root, options) {
+  const rosterPath = join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json");
+  const verdictPath = join(root, "TCRN Platform", "docs", "acceptance-verdicts.json");
+  let roster;
+  try {
+    roster = JSON.parse(await readFile(rosterPath, "utf8"));
+  } catch {
+    // acceptanceGateGroups already owns "the roster is missing or malformed"; reporting it
+    // twice would give one defect two owners and two arguments about who fixes it.
+    return check("acceptanceVerdicts", true, { comparable: false, reason: "no roster to check verdicts against" });
+  }
+  const groups = Array.isArray(roster?.groups) ? roster.groups.map((group) => group?.id).filter((id) => typeof id === "string") : [];
+  if (groups.length === 0) {
+    return check("acceptanceVerdicts", true, { comparable: false, reason: "no roster to check verdicts against" });
+  }
+  let document = options.acceptanceVerdicts;
+  if (document === undefined) {
+    try {
+      document = JSON.parse(await readFile(verdictPath, "utf8"));
+    } catch {
+      return check("acceptanceVerdicts", false, {
+        reasonCode: "PLATFORM_ACCEPTANCE_VERDICTS_MISSING",
+        groups: groups.length,
+        remedy: "run the nine groups and record each verdict in TCRN Platform/docs/acceptance-verdicts.json; an unrecorded run cannot be told from an unrun one",
+      });
+    }
+  }
+  // Anchored to the roster's own write time rather than the wall clock, so a doctor run
+  // gives the same verdict twice -- the same rule the chain-headroom leg follows.
+  let now;
+  try {
+    now = (await stat(rosterPath)).mtimeMs;
+  } catch {
+    return check("acceptanceVerdicts", false, { reasonCode: "PLATFORM_ACCEPTANCE_VERDICTS_MISSING", groups: groups.length });
+  }
+  const verdicts = document?.verdicts && typeof document.verdicts === "object" ? document.verdicts : {};
+  const missing = [];
+  const stale = [];
+  const failing = [];
+  for (const id of groups) {
+    const entry = verdicts[id];
+    if (!entry || typeof entry.recordedAt !== "string" || typeof entry.verdict !== "string") {
+      missing.push(id);
+      continue;
+    }
+    if (entry.verdict !== "green") {
+      failing.push({ group: id, verdict: entry.verdict, ...(typeof entry.detail === "string" ? { detail: entry.detail } : {}) });
+      continue;
+    }
+    const recorded = Date.parse(entry.recordedAt);
+    if (!Number.isFinite(recorded) || (now - recorded) / 3_600_000 > ACCEPTANCE_VERDICT_MAX_AGE_HOURS) {
+      stale.push({ group: id, recordedAt: entry.recordedAt });
+    }
+  }
+  if (missing.length > 0 || stale.length > 0 || failing.length > 0) {
+    return check("acceptanceVerdicts", false, {
+      reasonCode: "PLATFORM_ACCEPTANCE_LANE_UNPROVEN",
+      maxAgeHours: ACCEPTANCE_VERDICT_MAX_AGE_HOURS,
+      ...(missing.length > 0 ? { missing } : {}),
+      ...(stale.length > 0 ? { stale } : {}),
+      ...(failing.length > 0 ? { failing } : {}),
+      remedy: "the machine-checked lane is not satisfied: a group is unrecorded, stale, or red, and a record of a run is not proof the run passed",
+    });
+  }
+  return check("acceptanceVerdicts", true, { groups: groups.length, maxAgeHours: ACCEPTANCE_VERDICT_MAX_AGE_HOURS });
 }
 
 async function inspectAcceptanceGateGroups(root) {
@@ -1462,6 +1547,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
       await inspectHelperCopies(root, homeRoot, manifest, options),
       await inspectHelperReleaseAlignment(root, homeRoot, options),
       await inspectChainHeadroom(root, options),
+      await inspectAcceptanceVerdicts(root, options),
       await inspectInstallWiring(root, homeRoot, manifest),
       await inspectHookExecutability(root, manifest),
       await inspectDeploymentFreshness(homeRoot, manifest),

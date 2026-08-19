@@ -1174,8 +1174,8 @@
       ]
     },
     "tests/platform-doctor.test.mjs": {
-      "testCount": 47,
-      "assertionCount": 165,
+      "testCount": 49,
+      "assertionCount": 176,
       "testNames": [
         "a complete synthetic platform container is green",
         "STORY-300: an absent acceptance roster is a red leg, not a tolerated gap",
@@ -1223,7 +1223,9 @@
         "INC-233: helper release alignment separates stale, aligned, uncomparable and missing",
         "INC-224: headroom passes below the trigger and names the largest chain",
         "INC-224: crossing the trigger is red, with the remaining headroom and whose call it is",
-        "INC-224: every partition over the trigger is named, largest first"
+        "INC-224: every partition over the trigger is named, largest first",
+        "INC-234: missing, stale and red verdicts are each refused, and named",
+        "INC-234: the refusal says a record of a run is not proof the run passed"
       ]
     },
     "tests/preflight.test.mjs": {
