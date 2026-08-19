@@ -15,6 +15,7 @@ import { INSTALL_MANIFEST } from "../dist/build/packages/core/src/index.js";
 import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
 const topology = "## 三、分区拓扑\n";
+const FIXTURE_COMMIT = "f".repeat(40);
 const launchdLabel = "com.tcrn.platform.local-snapshot";
 
 // STORY-300: a complete container now carries the acceptance-lane roster, so the
@@ -53,8 +54,7 @@ async function fixture(context, { agents = `${topology}fixture\n`, chain = true,
     const recordedAt = new Date((await stat(join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json"))).mtimeMs).toISOString();
     await writeFile(join(root, "TCRN Platform", "docs", "acceptance-verdicts.json"), `${JSON.stringify({
       schemaVersion: "tcrn.acceptance-verdicts.v1",
-      maxAgeHours: 26,
-      verdicts: Object.fromEntries(roster.groups.map((group) => [group.id, { verdict: "green", recordedAt }])),
+      verdicts: Object.fromEntries(roster.groups.map((group) => [group.id, { verdict: "green", recordedAt, commit: FIXTURE_COMMIT }])),
     }, null, 2)}\n`);
   }
   // STORY-300 Wave 2.2: the identity file's tracked copy, byte-identical unless a
@@ -232,8 +232,7 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
   const rosterRecordedAt = new Date((await stat(rosterPath)).mtimeMs).toISOString();
   await writeFile(join(root, "TCRN Platform", "docs", "acceptance-verdicts.json"), `${JSON.stringify({
     schemaVersion: "tcrn.acceptance-verdicts.v1",
-    maxAgeHours: 26,
-    verdicts: Object.fromEntries(completeRoster.groups.map((group) => [group.id, { verdict: "green", recordedAt: rosterRecordedAt }])),
+    verdicts: Object.fromEntries(completeRoster.groups.map((group) => [group.id, { verdict: "green", recordedAt: rosterRecordedAt, commit: FIXTURE_COMMIT }])),
   }, null, 2)}\n`);
   await writeFile(join(root, "TCRN Platform", "docs", "platform-root-agents.md"), `${topology}fixture\n`);
   for (const entry of INSTALL_MANIFEST.items) {
@@ -296,28 +295,28 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
 
 test("S264 four install-completeness legs are green on a synthetic full fixture", async (context) => {
   const fixture = await completeInstallFixture(context);
-  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(result.ok, true);
   assert.deepEqual(["helperCopies", "installWiring", "hooks", "deploymentFreshness"].map((name) => result.checks.find((item) => item.name === name).ok), [true, true, true, true]);
 });
 
 test("S264 each install-completeness leg has a distinct synthetic red reason", async (context) => {
   const wiring = await completeInstallFixture(context);
-  const wiringResult = await inspectPlatform(wiring.root, { homeRoot: wiring.home, launchdLabels: [launchdLabel] });
+  const wiringResult = await inspectPlatform(wiring.root, { homeRoot: wiring.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   // INC-207 moved the harness to the container root, so the deleted item is a
   // container one now; joi-button no longer carries a declared settings file.
   await rm(join(wiring.root, ".claude", "settings.json"));
-  const wiringRed = await inspectPlatform(wiring.root, { homeRoot: wiring.home, launchdLabels: [launchdLabel] });
+  const wiringRed = await inspectPlatform(wiring.root, { homeRoot: wiring.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(wiringResult.ok, true);
   assert.equal(wiringRed.reasonCode, "PLATFORM_INSTALL_WIRING_INCOMPLETE");
 
   const stale = await completeInstallFixture(context, { engineVersion: "0.11.14" });
-  const staleRed = await inspectPlatform(stale.root, { homeRoot: stale.home, launchdLabels: [launchdLabel] });
+  const staleRed = await inspectPlatform(stale.root, { homeRoot: stale.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(staleRed.reasonCode, "PLATFORM_DEPLOYMENT_STALE");
 
   const helper = await completeInstallFixture(context);
   await rm(join(helper.home, ".codex", "skills", "tcrn-workflow-helper"), { recursive: true, force: true });
-  const helperRed = await inspectPlatform(helper.root, { homeRoot: helper.home, launchdLabels: [launchdLabel] });
+  const helperRed = await inspectPlatform(helper.root, { homeRoot: helper.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(helperRed.reasonCode, "PLATFORM_HELPER_COPIES_INCOMPLETE");
 
   const launchd = await completeInstallFixture(context);
@@ -329,7 +328,7 @@ test("INC-206 an undeclared harness inside the governed area is red, and an unre
   const fixture = await completeInstallFixture(context);
   const surface = (result) => result.checks.find((entry) => entry.name === "harnessSurface");
 
-  const green = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const green = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(surface(green).ok, true);
 
   // The classification folder is governed by position: it is on the path from the
@@ -337,7 +336,7 @@ test("INC-206 an undeclared harness inside the governed area is red, and an unre
   // unseen for four days after the container moved.
   await mkdir(join(fixture.root, "TCRN Platform", ".claude"), { recursive: true });
   await writeFile(join(fixture.root, "TCRN Platform", ".claude", "settings.json"), "{}\n", "utf8");
-  const strayRed = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const strayRed = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(surface(strayRed).ok, false);
   assert.equal(surface(strayRed).reasonCode, "PLATFORM_HARNESS_UNDECLARED");
   assert.ok(surface(strayRed).undeclared.includes(join("TCRN Platform", ".claude")));
@@ -348,7 +347,7 @@ test("INC-206 an undeclared harness inside the governed area is red, and an unre
   // from the manifest's own project roots rather than from "everything below here".
   await mkdir(join(fixture.root, "unrelated-project", ".claude"), { recursive: true });
   await writeFile(join(fixture.root, "unrelated-project", ".claude", "settings.json"), "{}\n", "utf8");
-  const unrelated = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const unrelated = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(surface(unrelated).ok, true, "an unrelated project's own harness is not the platform's business");
 });
 
@@ -411,7 +410,7 @@ test("S264 manifest mutation is automatically probed by the wiring leg", async (
     acceptanceProbe: "synthetic probe",
   };
   const manifest = { ...INSTALL_MANIFEST, items: [...INSTALL_MANIFEST.items, extra] };
-  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], manifest });
+  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT, manifest });
   assert.equal(result.reasonCode, "PLATFORM_INSTALL_WIRING_INCOMPLETE");
   assert.equal(result.checks.find((item) => item.name === "installWiring").missing.some((item) => item.id === extra.id), true);
 });
@@ -426,7 +425,7 @@ test("S267 hook leg expands the container root and checks all four root-bound ev
     PreToolUse: [{ hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/scripts/hook.mjs"' }] }],
     Stop: [{ hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/scripts/hook.mjs"' }] }],
   } }));
-  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   const hooks = result.checks.find((item) => item.name === "hooks");
   assert.equal(hooks.ok, true);
   assert.equal(hooks.checked, 4);
@@ -438,7 +437,7 @@ test("S267 hook leg turns red for a missing target independently", async (contex
   await writeFile(join(fixture.root, ".claude", "settings.json"), JSON.stringify({ hooks: {
     Stop: [{ hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/scripts/missing.mjs"' }] }],
   } }));
-  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(result.reasonCode, "PLATFORM_HOOK_TARGET_UNAVAILABLE");
   assert.equal(result.checks.find((item) => item.name === "hooks").failures[0].event, "Stop");
 });
@@ -446,7 +445,7 @@ test("S267 hook leg turns red for a missing target independently", async (contex
 test("S267 missing settings stays a wiring red leg and does not become a hook false green", async (context) => {
   const fixture = await completeInstallFixture(context);
   await rm(join(fixture.root, ".claude", "settings.json"));
-  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(result.reasonCode, "PLATFORM_INSTALL_WIRING_INCOMPLETE");
   assert.equal(result.checks.find((item) => item.name === "hooks").ok, true);
   assert.equal(result.checks.find((item) => item.name === "hooks").deferredTo, "installWiring");
@@ -456,7 +455,7 @@ test("S269 launchd is green only when the manifest duty, exit status, and fresh 
   const fixture = await completeInstallFixture(context);
   const result = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     launchdStatus: { lastExitCode: 0 },
     backupFreshness: { ok: true, latestBackupAt: "synthetic", ageHours: 0 },
   });
@@ -470,7 +469,7 @@ test("S269 launchd recent failure is distinct from absence", async (context) => 
   const fixture = await completeInstallFixture(context);
   const result = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     launchdStatus: { lastExitCode: 1 },
     backupFreshness: { ok: true, latestBackupAt: "synthetic", ageHours: 0 },
   });
@@ -492,7 +491,7 @@ test("S269 stale successful-output state is red after a successful scheduler exi
   const fixture = await completeInstallFixture(context);
   const result = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     launchdStatus: { lastExitCode: 0 },
     backupFreshness: { ok: false, latestBackupAt: null, ageHours: Number.POSITIVE_INFINITY, stateOk: false },
   });
@@ -522,7 +521,7 @@ test("S269 launchd label mutation is followed from the manifest", async (context
 
 test("S270 install wiring executes every safe manifest probe, including codex config and three launchers", async (context) => {
   const fixture = await completeInstallFixture(context);
-  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   const wiring = result.checks.find((item) => item.name === "installWiring");
   assert.equal(wiring.ok, true);
   assert.equal(wiring.itemCount, INSTALL_MANIFEST.items.length);
@@ -542,7 +541,7 @@ test("S270 helper copies reject a declared digest mismatch", async (context) => 
   await writeFile(codex, "tampered synthetic helper\n");
   const result = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     enforceHelperDigest: true,
     helperSkillDigests: digests,
   });
@@ -555,7 +554,7 @@ test("S270 lstat plus file-kind probing rejects a directory in a file residence"
   const config = join(fixture.home, ".codex", "config.toml");
   await rm(config);
   await mkdir(config);
-  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(result.reasonCode, "PLATFORM_INSTALL_WIRING_INCOMPLETE");
   assert.equal(result.checks.find((item) => item.name === "installWiring").invalid.find((item) => item.id === "machine.codex-config").reasonCode, "PLATFORM_INSTALL_WIRING_NOT_FILE");
 });
@@ -566,7 +565,7 @@ test("S270 unsupported acceptanceProbe syntax is a red leg rather than a shell e
     ...INSTALL_MANIFEST,
     items: INSTALL_MANIFEST.items.map((entry) => entry.id === "machine.codex-config" ? { ...entry, acceptanceProbe: "node -e arbitrary" } : entry),
   };
-  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, manifest, launchdLabels: [launchdLabel] });
+  const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, manifest, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(result.reasonCode, "PLATFORM_INSTALL_WIRING_INCOMPLETE");
   assert.equal(result.checks.find((item) => item.name === "installWiring").invalid.find((item) => item.id === "machine.codex-config").reasonCode, "PLATFORM_ACCEPTANCE_PROBE_INVALID");
 });
@@ -588,7 +587,7 @@ async function installTrustedHelperSource(fixture) {
 test("INC-161 helper digest probe resolves from the trusted archive/state and fails closed", async (context) => {
   const fixture = await completeInstallFixture(context);
   await installTrustedHelperSource(fixture);
-  const options = { homeRoot: fixture.home, launchdLabels: [launchdLabel], enforceHelperDigest: true };
+  const options = { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT, enforceHelperDigest: true };
   const green = await inspectPlatform(fixture.root, options);
   const greenCheck = green.checks.find((item) => item.name === "helperCopies");
   assert.equal(greenCheck.ok, true);
@@ -620,7 +619,7 @@ test("S273 trust archive freshness compares the archive to all installed consume
   await writeFile(join(fixture.home, ".tcrn-workflow", "skill-archive.json"), JSON.stringify({ schemaVersion: "tcrn.workflow.helper.archive.v1", entries: [entry] }));
   for (const host of ["claude", "codex"]) await writeFile(join(fixture.home, ".tcrn-workflow", `installed-copy-${host}.json`), JSON.stringify({ version: "v0.11.14" }));
   await writeFile(join(fixture.home, ".agents", "skills", "tcrn-workflow-helper", "extra.md"), "drift\n");
-  const red = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], enforceTrustArchive: true });
+  const red = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT, enforceTrustArchive: true });
   const redCheck = red.checks.find((item) => item.name === "trustArchive");
   assert.equal(redCheck.ok, false);
   assert.equal(redCheck.reasonCode, "PLATFORM_TRUST_ARCHIVE_STALE");
@@ -644,7 +643,7 @@ test("STORY-286 the hook leg reads codex too, and absence is deferral rather tha
 
   // The adapter bundle installs inert and activation is a separate governed step, so a
   // container with no hooks file has not failed anything — it has not been activated.
-  const absent = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const absent = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   const absentHooks = absent.checks.find((item) => item.name === "hooks");
   assert.equal(absentHooks.ok, true);
   assert.equal(absentHooks.codex.state, "absent", "not activated is not the same claim as passed");
@@ -653,7 +652,7 @@ test("STORY-286 the hook leg reads codex too, and absence is deferral rather tha
   await writeFile(join(fixture.root, ".codex", "hooks.json"), JSON.stringify({ hooks: {
     SessionStart: [{ matcher: "startup", hooks: [{ type: "command", command: `node "${join(fixture.root, "scripts", "hook.mjs")}"` }] }],
   } }));
-  const live = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const live = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   const liveHooks = live.checks.find((item) => item.name === "hooks");
   assert.equal(liveHooks.ok, true);
   assert.equal(liveHooks.codex.state, "live");
@@ -669,14 +668,14 @@ test("STORY-286 a registered codex hook whose target cannot run turns the leg re
   await writeFile(join(fixture.root, ".codex", "hooks.json"), JSON.stringify({ hooks: {
     SessionStart: [{ matcher: "startup", hooks: [{ type: "command", command: `node "${join(fixture.root, "scripts", "missing.mjs")}"` }] }],
   } }));
-  const missing = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const missing = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   const missingHooks = missing.checks.find((item) => item.name === "hooks");
   assert.equal(missingHooks.ok, false);
   assert.equal(missingHooks.reasonCode, "PLATFORM_HOOK_TARGET_UNAVAILABLE");
   assert.equal(missingHooks.source, "container.codex-hooks");
 
   await writeFile(join(fixture.root, ".codex", "hooks.json"), "{ not json");
-  const invalid = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel] });
+  const invalid = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   const invalidHooks = invalid.checks.find((item) => item.name === "hooks");
   assert.equal(invalidHooks.ok, false);
   assert.equal(invalidHooks.reasonCode, "PLATFORM_CODEX_HOOKS_INVALID");
@@ -712,7 +711,7 @@ test("STORY-286 an adapter bundle is accepted by its receipt's digests, not by e
   };
   const manifest = { ...INSTALL_MANIFEST, items: [...INSTALL_MANIFEST.items, entry] };
   const wiring = async () => {
-    const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], manifest });
+    const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT, manifest });
     return result.checks.find((item) => item.name === "installWiring");
   };
 
@@ -829,7 +828,7 @@ test("MIN-102 engine alignment names a copy that is behind a chain declaration",
   // enforcing nothing, and requirementAsserted records that in the verdict itself.
   const undeclared = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     engineCopyVersions: copies,
     engineRequiredVersions: { "cross-project": null },
   });
@@ -840,7 +839,7 @@ test("MIN-102 engine alignment names a copy that is behind a chain declaration",
   // A satisfied declaration is the other green, and it asserts.
   const satisfied = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     engineCopyVersions: copies,
     engineRequiredVersions: { "cross-project": "0.11.15" },
   });
@@ -852,7 +851,7 @@ test("MIN-102 engine alignment names a copy that is behind a chain declaration",
   // offending copy are named, because "something is stale" is not actionable.
   const behind = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     engineCopyVersions: { installed: "0.11.15", worktree: "0.12.0" },
     engineRequiredVersions: { "cross-project": "0.12.0" },
   });
@@ -867,7 +866,7 @@ test("MIN-102 engine alignment names a copy that is behind a chain declaration",
   // compare gets backwards, and it is exactly the shape a real version bump takes.
   const lexicalTrap = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     engineCopyVersions: { installed: "0.11.15" },
     engineRequiredVersions: { "cross-project": "0.9.0" },
   });
@@ -888,7 +887,7 @@ test("MIN-103 the platform names a setting the placed Helper never teaches", asy
 
   const taught = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     helperSettingKeys: { catalog, taught: catalog },
   });
   assert.equal(coverage(taught).ok, true);
@@ -898,7 +897,7 @@ test("MIN-103 the platform names a setting the placed Helper never teaches", asy
   // an operator would meet a setting no guidance covers.
   const gap = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     helperSettingKeys: { catalog, taught: ["backup.cadence", "design.authority"] },
   });
   assert.equal(gap.ok, false);
@@ -910,7 +909,7 @@ test("MIN-103 the platform names a setting the placed Helper never teaches", asy
   // may still carry guidance for a key a given engine build does not ship.
   const extra = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     helperSettingKeys: { catalog, taught: [...catalog, "some.future.key"] },
   });
   assert.equal(coverage(extra).ok, true);
@@ -930,7 +929,7 @@ test("INC-233: helper release alignment separates stale, aligned, uncomparable a
   const leg = (result) => result.checks.find((entry) => entry.name === "helperReleaseAlignment");
   const run = (helperReleaseAlignment) => inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     helperReleaseAlignment,
   });
 
@@ -977,7 +976,7 @@ test("INC-224: headroom passes below the trigger and names the largest chain", a
   const fixture = await completeInstallFixture(context);
   const result = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     chainEventCounts: { "cross-project": 4316, "TCRN-AOS": 1054, "TCRN-TMS": 243 },
   });
   const leg = result.checks.find((entry) => entry.name === "chainHeadroom");
@@ -992,7 +991,7 @@ test("INC-224: crossing the trigger is red, with the remaining headroom and whos
   const fixture = await completeInstallFixture(context);
   const result = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     chainEventCounts: { "cross-project": 15_001, "TCRN-AOS": 1054 },
   });
   const leg = result.checks.find((entry) => entry.name === "chainHeadroom");
@@ -1010,7 +1009,7 @@ test("INC-224: every partition over the trigger is named, largest first", async 
   const fixture = await completeInstallFixture(context);
   const result = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
-    launchdLabels: [launchdLabel],
+    launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
     chainEventCounts: { "TCRN-AOS": 16_000, "cross-project": 18_000, "TCRN-TMS": 243 },
   });
   const leg = result.checks.find((entry) => entry.name === "chainHeadroom");
@@ -1029,7 +1028,7 @@ test("INC-234: missing, stale and red verdicts are each refused, and named", asy
   const fixture = await completeInstallFixture(context);
   const leg = (result) => result.checks.find((entry) => entry.name === "acceptanceVerdicts");
   const run = (acceptanceVerdicts) => inspectPlatform(fixture.root, {
-    homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceVerdicts,
+    homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT, acceptanceVerdicts,
   });
   const fresh = new Date(Date.now()).toISOString();
 
@@ -1041,11 +1040,11 @@ test("INC-234: missing, stale and red verdicts are each refused, and named", asy
 
   // A red verdict stays visible rather than being absorbed. Red leg: treat any recorded
   // entry as satisfaction and a group that ran and failed reads the same as one that passed.
-  const withRed = { verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh }])) };
+  const withRed = { verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh, commit: FIXTURE_COMMIT }])) };
   // The synthetic roster names its groups group-0..group-8; using a real group id here
   // would silently add an entry the roster does not contain and assert nothing.
   const [firstGroup] = none.missing;
-  withRed.verdicts[firstGroup] = { verdict: "red", recordedAt: fresh, detail: "AOS verify" };
+  withRed.verdicts[firstGroup] = { verdict: "red", recordedAt: fresh, commit: FIXTURE_COMMIT, detail: "AOS verify" };
   const red = leg(await run(withRed));
   assert.equal(red.ok, false);
   assert.deepEqual(red.failing.map((entry) => entry.group), [firstGroup]);
@@ -1053,15 +1052,19 @@ test("INC-234: missing, stale and red verdicts are each refused, and named", asy
 
   // Staleness, because a verdict from last month is a record of a different tree. Red
   // leg: drop the age comparison and one run certifies the lane forever.
-  const withStale = { verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh }])) };
-  withStale.verdicts[firstGroup] = { verdict: "green", recordedAt: "2026-07-01T00:00:00.000Z" };
+  const withStale = { verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh, commit: FIXTURE_COMMIT }])) };
+  // STORY-304 rewrote staleness from a clock question into a tree question: a verdict
+  // is stale when it names a commit other than the one being inspected. The old form
+  // measured age from the roster file's own mtime and, measured on the live tree,
+  // could never fire for any input at all.
+  withStale.verdicts[firstGroup] = { verdict: "green", recordedAt: fresh, commit: "9".repeat(40) };
   const stale = leg(await run(withStale));
   assert.equal(stale.ok, false);
   assert.deepEqual(stale.stale.map((entry) => entry.group), [firstGroup]);
 
   // All nine fresh and green is the only pass. Red leg: return ok unconditionally and the
   // leg stops distinguishing anything at all.
-  const green = leg(await run({ verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh }])) }));
+  const green = leg(await run({ verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh, commit: FIXTURE_COMMIT }])) }));
   assert.equal(green.ok, true);
   assert.equal(green.groups, 9);
 });
@@ -1072,8 +1075,97 @@ test("INC-234: missing, stale and red verdicts are each refused, and named", asy
 test("INC-234: the refusal says a record of a run is not proof the run passed", async (context) => {
   const fixture = await completeInstallFixture(context);
   const result = await inspectPlatform(fixture.root, {
-    homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceVerdicts: { verdicts: {} },
+    homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT, acceptanceVerdicts: { verdicts: {} },
   });
   const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
   assert.match(leg.remedy, /not proof the run passed/u);
+});
+
+// TCRN-CROSS-STORY-304. The acceptance-verdict leg has to be able to fail.
+//
+// It shipped anchoring freshness to the ROSTER FILE's mtime. Measured on the live tree
+// before this repair: roster mtime 2026-08-19T07:29:56Z against every recordedAt
+// 2026-08-20T02:30:00Z gave an age of -11.00 hours for all nine groups, so the 26-hour
+// bound was unreachable for every input the leg could ever receive. A staleness check that
+// cannot go red is not a weaker check; it is no check, reported as a passing one.
+//
+// It was also host-dependent: git does not track mtime, so a fresh clone stamps it with
+// checkout time and the identical tree answers differently elsewhere -- the shape
+// TCRN-CROSS-MIN-103 names, and the same host-dependence that made INC-238's link gate
+// pass locally and fail in CI.
+//
+// The reference is now the engine commit a verdict names, compared against the commit
+// being inspected. A git object id is a content hash, so the question has one answer on
+// every host.
+const boundVerdicts = (commit) => ({
+  verdicts: Object.fromEntries(syntheticRoster().groups.map((group) => [
+    group.id, { verdict: "green", recordedAt: "2026-08-20T02:30:00.000Z", commit },
+  ])),
+});
+
+test("STORY-304: a verdict recorded against another commit is stale, and names both", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const result = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    acceptanceHeadCommit: "a".repeat(40),
+    acceptanceVerdicts: boundVerdicts("b".repeat(40)),
+  });
+  const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
+  assert.equal(leg.ok, false);
+  assert.equal(leg.reasonCode, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
+  assert.equal(leg.stale.length, 9, "every verdict recorded against another tree is stale");
+  assert.equal(leg.stale[0].recordedAgainst, "b".repeat(12));
+  assert.equal(leg.stale[0].head, "a".repeat(12), "and the commit it should have named is reported");
+});
+
+// Red leg: restore the mtime anchor and this passes for a verdict recorded against any
+// tree at all -- the state all nine were in when v1.0.0 was tagged on a red commit.
+test("STORY-304: verdicts recorded against the inspected commit pass", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const result = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    acceptanceHeadCommit: "c".repeat(40),
+    acceptanceVerdicts: boundVerdicts("c".repeat(40)),
+  });
+  const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
+  assert.equal(leg.ok, true, JSON.stringify(leg));
+  assert.equal(leg.head, "c".repeat(12), "a green verdict states which tree it is about");
+});
+
+// A verdict naming no commit is worse than a stale one: it cannot be told from a verdict
+// recorded against any tree at all. Red leg: accept a missing commit and the leg goes back
+// to admitting exactly the shape it had before this repair.
+test("STORY-304: a verdict that names no commit is refused as unbound", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const unbound = boundVerdicts("d".repeat(40));
+  const [first] = Object.keys(unbound.verdicts);
+  delete unbound.verdicts[first].commit;
+  const result = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    acceptanceHeadCommit: "d".repeat(40),
+    acceptanceVerdicts: unbound,
+  });
+  const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
+  assert.equal(leg.ok, false);
+  assert.deepEqual(leg.stale, [{ group: first, recordedAt: "2026-08-20T02:30:00.000Z", reason: "verdict names no commit" }]);
+});
+
+// A container with no readable engine checkout is not a platform whose lane has failed; it
+// is one this leg cannot speak about. Red leg: report it as red and every synthetic fixture
+// in this file turns red for a reason unrelated to what it tests -- which is what the first
+// attempt at this repair actually did, to thirteen criteria at once.
+test("STORY-304: an unreadable engine HEAD is not comparable rather than failed", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const result = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    acceptanceVerdicts: boundVerdicts("e".repeat(40)),
+  });
+  const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
+  assert.equal(leg.ok, true);
+  assert.equal(leg.comparable, false);
+  assert.match(leg.reason, /no readable engine HEAD/u);
 });

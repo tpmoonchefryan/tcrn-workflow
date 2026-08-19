@@ -237,10 +237,13 @@ async function chainEventCounts(root, options) {
 // This leg cannot verify a group is green; only running it can. What it can do is refuse
 // to let "not run" look like "passed", which is the failure that actually happened. Every
 // roster group needs a recorded verdict, recorded verdicts go stale, and a red one stays
-// visible. Same shape as the snapshot receipts this platform already keeps at 26 hours,
-// and the same honesty: the record is evidence that someone looked, never proof they were
-// right.
-const ACCEPTANCE_VERDICT_MAX_AGE_HOURS = 26;
+// visible, and the same honesty holds: the record is evidence that someone looked, never
+// proof they were right.
+//
+// STORY-304 replaced the staleness reference. It was 26 hours measured from the roster
+// file's mtime, which could never fire and varied by host; it is now the engine commit the
+// verdict names, compared against the commit being inspected. "Stale" therefore means
+// "recorded against a different tree" -- a question with one answer everywhere.
 
 async function inspectAcceptanceVerdicts(root, options) {
   const rosterPath = join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json");
@@ -269,13 +272,47 @@ async function inspectAcceptanceVerdicts(root, options) {
       });
     }
   }
-  // Anchored to the roster's own write time rather than the wall clock, so a doctor run
-  // gives the same verdict twice -- the same rule the chain-headroom leg follows.
-  let now;
-  try {
-    now = (await stat(rosterPath)).mtimeMs;
-  } catch {
-    return check("acceptanceVerdicts", false, { reasonCode: "PLATFORM_ACCEPTANCE_VERDICTS_MISSING", groups: groups.length });
+  // TCRN-CROSS-STORY-304: this leg used to anchor freshness to the ROSTER FILE's own mtime.
+  // Two defects, both measured on the live tree before this change:
+  //
+  // It could never fire. Roster mtime was 2026-08-19T07:29:56Z while every recordedAt was
+  // 2026-08-20T02:30:00Z, so every group computed an age of -11.00 hours and the 26-hour
+  // bound was unreachable for any input. A staleness check that cannot go red is not a
+  // weaker check than intended; it is no check, reported as a passing one.
+  //
+  // And mtime is not tracked by git, so a fresh clone stamps it with checkout time: the
+  // identical tree gives different answers on different hosts. That is the shape
+  // TCRN-CROSS-MIN-103 names and the gate-reference-stability convention forbids, and it
+  // is the same host-dependence that made INC-238's link gate pass locally and fail in CI.
+  //
+  // The reference is now the inspected repository's HEAD commit. A verdict states the
+  // commit it was recorded against, and a commit that is not HEAD is stale by construction
+  // -- no clock, no filesystem attribute, and identical on every host because a git object
+  // id is a content hash. This is also what makes the leg able to answer the question it
+  // was written for: v1.0.0 was tagged on a commit whose CI was red while all nine
+  // verdicts read green, and nothing here compared a verdict to a tree.
+  const verdictsPresent = document?.verdicts && typeof document.verdicts === "object" && Object.keys(document.verdicts).length > 0;
+  const engineRoot = join(root, "TCRN Platform", "tcrn-workflow");
+  let headCommit = options.acceptanceHeadCommit ?? null;
+  // Resolved only when there are verdicts to bind. A platform with no verdicts recorded is
+  // already answered below by `missing`, and reaching for HEAD first would report a git
+  // problem for a governance one -- two owners for a single defect, which this file's
+  // other legs are careful not to create.
+  if (headCommit === null && verdictsPresent) {
+    try {
+      headCommit = (await execFileAsync("git", ["-C", engineRoot, "rev-parse", "HEAD"], { timeout: 30_000 })).stdout.trim();
+    } catch {
+      // Not comparable rather than red. A container without a readable engine checkout is
+      // not a platform whose acceptance lane has failed -- it is one this leg cannot speak
+      // about, the same answer it already gives when the roster is absent. Reporting a git
+      // problem as a governance failure would give one defect two owners, and would make
+      // every synthetic fixture in the suite red for a reason that has nothing to do with
+      // what it is testing.
+      return check("acceptanceVerdicts", true, {
+        comparable: false,
+        reason: "no readable engine HEAD to bind verdicts against",
+      });
+    }
   }
   const verdicts = document?.verdicts && typeof document.verdicts === "object" ? document.verdicts : {};
   const missing = [];
@@ -291,22 +328,27 @@ async function inspectAcceptanceVerdicts(root, options) {
       failing.push({ group: id, verdict: entry.verdict, ...(typeof entry.detail === "string" ? { detail: entry.detail } : {}) });
       continue;
     }
-    const recorded = Date.parse(entry.recordedAt);
-    if (!Number.isFinite(recorded) || (now - recorded) / 3_600_000 > ACCEPTANCE_VERDICT_MAX_AGE_HOURS) {
-      stale.push({ group: id, recordedAt: entry.recordedAt });
+    // A verdict that names no commit is not stale -- it is unbound, which is worse, because
+    // it cannot be told from one recorded against any tree at all.
+    if (typeof entry.commit !== "string" || entry.commit.length === 0) {
+      stale.push({ group: id, recordedAt: entry.recordedAt, reason: "verdict names no commit" });
+      continue;
+    }
+    if (entry.commit !== headCommit) {
+      stale.push({ group: id, recordedAt: entry.recordedAt, recordedAgainst: entry.commit.slice(0, 12), head: headCommit.slice(0, 12) });
     }
   }
   if (missing.length > 0 || stale.length > 0 || failing.length > 0) {
     return check("acceptanceVerdicts", false, {
       reasonCode: "PLATFORM_ACCEPTANCE_LANE_UNPROVEN",
-      maxAgeHours: ACCEPTANCE_VERDICT_MAX_AGE_HOURS,
+      ...(headCommit === null ? {} : { head: headCommit.slice(0, 12) }),
       ...(missing.length > 0 ? { missing } : {}),
       ...(stale.length > 0 ? { stale } : {}),
       ...(failing.length > 0 ? { failing } : {}),
       remedy: "the machine-checked lane is not satisfied: a group is unrecorded, stale, or red, and a record of a run is not proof the run passed",
     });
   }
-  return check("acceptanceVerdicts", true, { groups: groups.length, maxAgeHours: ACCEPTANCE_VERDICT_MAX_AGE_HOURS });
+  return check("acceptanceVerdicts", true, { groups: groups.length, ...(headCommit === null ? {} : { head: headCommit.slice(0, 12) }) });
 }
 
 async function inspectAcceptanceGateGroups(root) {

@@ -106,6 +106,12 @@
       "recordedAt": "2026-08-20",
       "ratio": 1.6348,
       "rationale": "Six criteria for a gate that shipped with none, which is how it carried a host dependency into five consecutive red CI runs while every local run was green. The one that earns this outright puts a real file OUTSIDE the repository and asserts the link to it is still refused -- that is the CI condition asserted rather than hoped for, and nothing else in the suite can see it, because on this machine the sibling checkout makes the broken form resolve. Retiring proof mass to stay under the line would mean keeping a gate whose verdict depends on what else is on the disk, which the host-independence convention forbids outright."
+    },
+    {
+      "id": "OD-39-story-304-acceptance-commit-binding",
+      "recordedAt": "2026-08-20",
+      "ratio": 1.6386,
+      "rationale": "The acceptance-verdict leg now binds each green result to the inspected engine commit and refuses an unbound or different-tree result. This pays for the three red-leg tests that prove a verdict from another commit is stale, a verdict on the current commit passes, and a missing commit is refused, plus the unreadable-HEAD deferral that keeps synthetic fixtures from inheriting a false failure. The old roster-mtime bound had measured negative ages on every live entry and was host-dependent because mtime is not tracked by git; retiring these tests would leave the platform able to report green for a run from a different tree, the exact failure STORY-304 exists to close."
     }
   ]
 }
