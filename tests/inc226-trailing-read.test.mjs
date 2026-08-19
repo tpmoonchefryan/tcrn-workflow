@@ -179,8 +179,11 @@ test("INC-226: a write is not exempt -- filing still demands an aligned store", 
         lastVerified: instant(19, 5),
         stalenessPolicy: { maximumAgeDays: 30, unknownDisposition: "fail-closed" },
         exportDisposition: "metadata-only", body: "Must not be admitted.",
-        allowTrailing: true,
-      }),
+      // TCRN-CROSS-INC-232: allowTrailing belongs in the OPTIONS parameter, not the input
+      // object. Passed inside the input it was read by nothing, so widening the guard to
+      // reach writes left this criterion green -- it asserted that a write refuses while
+      // never handing the write the flag that would have exempted it.
+      }, { allowTrailing: true }),
       (error) => error?.reasonCode === "KNOWLEDGE_HIGH_WATER_MISMATCH",
     );
   } finally {

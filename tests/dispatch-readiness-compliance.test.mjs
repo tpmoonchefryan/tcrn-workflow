@@ -30,7 +30,13 @@ const brief = Object.freeze({
 test("dispatch brief accepts all five execution elements", () => {
   const result = validateDispatchBrief(brief);
   assert.equal(result.ok, true, JSON.stringify(result.problems));
-  assert.equal(result.reasonCode, "DISPATCH_BRIEF_READY");
+  // TCRN-CROSS-INC-232: this fixture declares no repositoryRoot, so its citations are
+  // genuinely unresolved and the reason code now says which pass this is. Presence-only
+  // remains a pass -- ok is still true, and that is the half of this criterion that has
+  // not moved. Before the split, a brief that skipped the citation check entirely was
+  // indistinguishable here from one that survived it.
+  assert.equal(result.reasonCode, "DISPATCH_BRIEF_READY_CITATIONS_UNCHECKED");
+  assert.equal(result.citations.checked, false);
 });
 
 test("removing each dispatch element is a stable red leg", () => {

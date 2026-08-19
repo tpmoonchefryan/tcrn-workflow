@@ -54,6 +54,12 @@ export const P1_SEQUENCE = Object.freeze([
   // STORY-301: last, because it measures the tree the gates above just proved, and
   // because a budget that runs first would judge a build nobody had checked yet.
   { task: "budget", script: "verify:budget" },
+  // TCRN-CROSS-INC-232: after the budget, because it is the cheapest leg in the train
+  // and ordering it early would delay every expensive gate behind a documentation
+  // question. It exists because a published code of conduct spent a day telling readers
+  // the authoritative text was at a path that did not exist, and every gate above was
+  // green throughout -- nothing here had ever checked a documentation link.
+  { task: "links", script: "verify:links" },
 ].map((entry) => Object.freeze({ dispatchesThroughTask: true, ...entry })));
 
 /** The verb names, in order — what `verify:p1` walks. */

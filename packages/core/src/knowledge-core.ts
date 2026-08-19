@@ -764,9 +764,13 @@ async function scanKnowledgeStore(
   // read path made the retrieval surface answer only in a workspace nobody was
   // working in: one work-create was measured taking all six partitions dark until
   // a hand-run rebase, because any event moves the head. The exemption is deliberately
-  // narrow -- `bodyMode === "metadata-only"` is precisely the five metadata-first read
-  // entry points and nothing else, so `validate`, every mutation and the rebase itself
-  // keep the strict equality they had. What the strictness bought is not discarded but
+  // narrow. `bodyMode === "metadata-only"` selects the SIX scans that read metadata: the
+  // five metadata-first read verbs, and exportKnowledgeCheckpoint, which opts back out at
+  // its own call site because an export artifact must not be stale-able. An earlier
+  // version of this comment asserted there were five, and the checkpoint inherited the
+  // exemption unnoticed and undisclosed for exactly as long as the miscount stood
+  // (TCRN-CROSS-INC-232). `validate`, every mutation and the rebase itself keep the
+  // strict equality they had. What the strictness bought is not discarded but
   // moved into the answer: a trailing read is labelled with both heads (see
   // `trailingDisclosure`), so a stale card is impossible to mistake for a current one.
   const trailingAdmitted = options.allowTrailing === true && bodyMode === "metadata-only" && !rebase;
@@ -1666,7 +1670,15 @@ export async function reverifyKnowledgeUnit(workspaceRoot: string, input: {
 
 export async function exportKnowledgeCheckpoint(workspaceRoot: string, at: string, options: KnowledgeReadOptions = {}): Promise<string> {
   assertEvaluationInstant(at);
-  const scan = await scanKnowledgeStore(workspaceRoot, options, false, "metadata-only");
+  // TCRN-CROSS-INC-232: a checkpoint is never taken against a trailing store, whatever
+  // the caller passes. This is the sixth metadata-only scan while the INC-226 comment
+  // said there were five, so it inherited the read exemption unnoticed -- and it is the
+  // only one of the six whose result carries no trailing disclosure, which left its
+  // eventHighWaterDigest (a field the strict equality used to guarantee was the chain
+  // head) free to be a stale head reported with nothing beside it for comparison. A
+  // checkpoint is this surface's export artifact: the strongest answer it produces and
+  // the one a reader is least able to re-derive. It takes the strict rule, not a label.
+  const scan = await scanKnowledgeStore(workspaceRoot, { ...options, allowTrailing: false }, false, "metadata-only");
   const records = scan.units.map((unit) => unit.metadata).filter((metadata) => isDefaultSelectable(metadata, at));
   records.sort((left, right) => compareCanonicalText(left.id, right.id));
   return canonicalJson({

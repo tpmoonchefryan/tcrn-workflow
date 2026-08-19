@@ -106,7 +106,8 @@
     "verify:trust": "node scripts/task.mjs test-trust",
     "verify:vulnerabilities": "node scripts/task.mjs vulnerabilities",
     "verify:workspace": "node scripts/task.mjs workspace",
-    "verify:budget": "node scripts/task.mjs budget"
+    "verify:budget": "node scripts/task.mjs budget",
+    "verify:links": "node scripts/task.mjs links"
   },
   "devDependencies": {
     "@types/node": "24.13.2",

@@ -42,7 +42,9 @@ no-inline-style-attributes、interactive-tcrn-class-coverage。
 | | 改动前 | 改动后 |
 | --- | --- | --- |
 | 视觉基线 | 门户自写 `.tcrn-button` 的 32px 基线、较轻字重与旧 hover；表单根由门户 style 块定义 | 六根由签入 DS 快照提供；按钮、焦点/交互反馈与表单基线切换到 DS CSS |
-| 取证文件 | ![改动前](./STORY-252-before.png) | ![改动后](./STORY-252-after.png) |
+| 取证文件 | 未入库 | 未入库 |
+
+> 取证截图 `STORY-252-before.png` / `STORY-252-after.png` 在本仓从未存在。表格原先以图片链接形式引用它们，读起来像是证据已保留。发现于 `TCRN-CROSS-INC-232` 新增的链接门首跑；同批 STORY-255 的两张截图确实在册，所以这不是整类证据的约定，是这一条漏了归档。此处记录缺失而非移除引用。
 
 截图是本地静态渲染的前后对照，不冒充 Owner 的视觉接受；视觉差异的接受度仍归 Owner 裁定。
 

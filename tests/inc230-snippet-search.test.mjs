@@ -58,7 +58,11 @@ async function storeWithOneCard() {
     // deliberately free of it, so a hit can only come from the snippet being scanned.
     subject: "A measurement can be narrower than the claim it supports",
     summary: "Each wrong reading used an instrument that could only return the expected answer.",
-    snippet: "A load-sensitive criterion was declared a flake after two isolated runs passed.",
+    // TCRN-CROSS-INC-232: the distinguishing word is MIXED CASE on purpose. With a
+    // lowercase snippet the fold is unobservable -- the search term is lowercased before
+    // comparison, so a lowercase haystack matches with or without folding, and the
+    // case-folding criterion below could not fail.
+    snippet: "A load-sensitive criterion was declared a FlAkE after two isolated runs passed.",
     accountableOwnerId: deriveStableId("owner", "INC230-OWNER"),
     sourceReferences: ["evidence://fixture/inc230"],
     sourceDigest: canonicalSha256({ key: "INC230-CARD" }),
@@ -118,7 +122,7 @@ test("INC-230: the body is still not searched", async () => {
 test("INC-230: snippet matching folds case like the fields beside it", async () => {
   const { base, workspace } = await storeWithOneCard();
   try {
-    for (const term of ["FLAKE", "Flake", "fLaKe"]) {
+    for (const term of ["FLAKE", "Flake", "fLaKe", "flake"]) {
       assert.equal((await search(workspace, term)).total, 1, `${term} must match`);
     }
   } finally {

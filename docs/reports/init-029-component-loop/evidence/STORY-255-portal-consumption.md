@@ -112,7 +112,7 @@ dashboard 读回：`page=dashboard`、`statusVisible=true`、`statusRect={x:280,
 
 settings/execution 读回：`page=settings`、`settingGroup=execution`、`statusVisible=true`、同一 `snapshotBytes=98206`；`.tcrn-switch` count=1/display=`grid`，`.tcrn-setting-row` count=5/display=`grid`，`.tcrn-app-status-bar` count=1/display=`flex`，背景为 `rgb(242, 242, 240)`。prose 路由实际 editor 根 count=1/display=`grid`；vocabulary 路由实际 definition list count=1/display=`grid`；entities/Verity browser state 的 lock hint count=2/display=`flex`。persona provenance 的 overridden state 由上述 executed-DOM fixture 以 `persona-preset-override` 写入并断言，未把当前 live workspace 的 absence 冒充成真实账户状态。
 
-DS 构件源侧的对应主证据见 [STORY-254 component return](../../../../TCRN-Design-System/docs/reports/init-029-component-loop/evidence/STORY-254-component-return.md)：Storybook 实际 DOM proof 读回 `switchOn=true`、`statTones=[positive,warning]`、`settingModified=true`、`fieldOverridden=true`、`editorWarning=true`、`statusRole=true`、`definitionTerms=2`、`lockHint=true`，并明确第九槽 `ModifiedIndicator` 的合并仍为 `ownerDecision=unresolved_until_owner_acceptance`。
+DS 构件源侧的对应主证据见 `TCRN-Design-System` 仓 `docs/reports/init-029-component-loop/evidence/STORY-254-component-return.md`：Storybook 实际 DOM proof 读回 `switchOn=true`、`statTones=[positive,warning]`、`settingModified=true`、`fieldOverridden=true`、`editorWarning=true`、`statusRole=true`、`definitionTerms=2`、`lockHint=true`，并明确第九槽 `ModifiedIndicator` 的合并仍为 `ownerDecision=unresolved_until_owner_acceptance`。
 
 ## 其它门与串行列车
 

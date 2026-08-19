@@ -604,6 +604,15 @@
         "INC-230: snippet matching folds case like the fields beside it"
       ]
     },
+    "tests/inc232-trailing-cli-surface.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 10,
+      "testNames": [
+        "INC-232: every read verb the catalog says takes --allow-trailing actually honours it",
+        "INC-232: a trailing snippet and a trailing body both say so at the library level",
+        "INC-232: a checkpoint refuses a trailing store however the flag is passed"
+      ]
+    },
     "tests/init033-install-surface.test.mjs": {
       "testCount": 3,
       "assertionCount": 16,

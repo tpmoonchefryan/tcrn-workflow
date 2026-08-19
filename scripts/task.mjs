@@ -2498,6 +2498,20 @@ async function reportBudget() {
   });
 }
 
+// TCRN-CROSS-INC-232: every relative Markdown link in a tracked file must resolve.
+// Dispatched through here like every other leg rather than pointed straight at its
+// script -- the p1 roster criterion asserts exactly that, and caught it when this one
+// was wired the short way.
+async function verifyLinks() {
+  const { inspectMarkdownLinks } = await import("./markdown-link-resolution.mjs");
+  const result = await inspectMarkdownLinks(repositoryRoot);
+  if (!result.ok) {
+    fail("MARKDOWN_LINK_BROKEN",
+      result.broken.map((entry) => `${entry.file} -> ${entry.target}`).join("; "));
+  }
+  return success("MARKDOWN_LINKS_RESOLVED", { files: result.files, checked: result.checked });
+}
+
 const handlers = {
   aos: verifyAosRequirements,
   archive,
@@ -2510,6 +2524,7 @@ const handlers = {
   governance: verifyGovernance,
   history: verifyHistory,
   licenses: verifyLicenses,
+  links: verifyLinks,
   lifecycle: verifyLifecycle,
   lint,
   offline: verifyOfflineBoundary,

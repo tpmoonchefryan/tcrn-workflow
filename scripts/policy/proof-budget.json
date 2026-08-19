@@ -82,6 +82,12 @@
       "recordedAt": "2026-08-19",
       "ratio": 1.6175,
       "rationale": "Two changes to the same budget line. Four criteria for searching the knowledge snippet -- the found case, the three existing fields staying matched, the body staying unsearched, and case folding on the new field -- of which the last two exist only to stop the widening from swallowing the metadata-first discipline it sits next to. And a sealed-owner precondition whose comment costs more than its one line of code, because what it preserves is the boundary the previous attempt mislocated: owner.json is published twice, the second rename replaces the inode, and a read spanning it is refused on identity rather than content. Without that written down the next reader repeats the same wrong fix, which is not hypothetical -- it is what happened here, and the retraction of its three-run proof is in the same commit."
+    },
+    {
+      "id": "OD-35-adversarial-review-remediation",
+      "recordedAt": "2026-08-19",
+      "ratio": 1.627,
+      "rationale": "The largest single step this line has taken, and the cheapest to justify. It buys a Markdown link gate that this repository never had -- a published code of conduct spent a day telling readers the authoritative text was at a path that did not exist, through twenty-three P1 gates, sixty-one guard mutations and eighteen doctor legs, and its first run found three further broken citations nobody had noticed. It buys three criteria over the CLI, the only transport a governed session has, whose five hand-written argument lists and five hand-written option objects had nothing asserting the flag survived the trip. And it buys the repair of two criteria written the same day that could not fail -- one passing a flag into an argument nothing reads, one folding case against an already-lowercase fixture. A criterion that cannot fail is worse than no criterion, because it is counted; retiring proof mass to stay under the line would have meant keeping some of that."
     }
   ]
 }

@@ -6,8 +6,8 @@
 // the chain prevents execution detail from becoming append-only scope, while
 // making the old "missing element means no dispatch" rule executable.
 
-import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, resolve, sep } from "node:path";
 
 import { validateStoryScope } from "./story-scope-compliance.mjs";
 
@@ -17,6 +17,15 @@ export const DISPATCH_BRIEF_FIELDS = Object.freeze([
   "verificationCommands",
   "chainCloseoutActions",
   "effectiveEvidenceCommands",
+]);
+
+// The subcommands a package manager answers itself. A brief naming one is running the
+// package manager, not a script, and this check cannot say whether it will succeed.
+const PACKAGE_MANAGER_SUBCOMMANDS = new Set([
+  "add", "audit", "ci", "config", "dedupe", "dlx", "exec", "fetch", "import", "init",
+  "install", "install-test", "link", "list", "ls", "outdated", "pack", "patch", "ping",
+  "prune", "publish", "rebuild", "remove", "root", "setup", "store", "uninstall",
+  "unlink", "update", "why",
 ]);
 
 function nonEmptyList(value, field) {
@@ -56,7 +65,24 @@ function unresolvedCitation(entry, root) {
   // A pointer may carry a :line or :line:column suffix; the file is the claim.
   const path = entry.replace(/:\d+(?::\d+)?$/u, "");
   const absolute = isAbsolute(path) ? path : resolve(root, path);
-  return existsSync(absolute) ? null : `${entry} does not resolve under the declared repositoryRoot`;
+  // TCRN-CROSS-INC-232: the message said "under the declared repositoryRoot" and the
+  // check never asked. An absolute path from the author's own machine, or a ../ chain
+  // out of the tree, was certified as resolving under a root it had left -- so a brief
+  // stayed green after the file moved inside the repository the executor checks out,
+  // which is the one failure this check exists to catch. Containment is now the claim
+  // and the check, in that order.
+  const base = resolve(root);
+  const contained = absolute === base || absolute.startsWith(`${base}${sep}`);
+  if (!contained) return `${entry} resolves outside the declared repositoryRoot`;
+  // A directory satisfying a FILE pointer sent the executor to a folder and called it
+  // a citation. statSync rather than existsSync is the whole difference.
+  let stats;
+  try {
+    stats = statSync(absolute);
+  } catch {
+    return `${entry} does not resolve under the declared repositoryRoot`;
+  }
+  return stats.isFile() ? null : `${entry} names a directory, not a file`;
 }
 
 function packageScripts(root) {
@@ -72,10 +98,17 @@ function packageScripts(root) {
 function unrunnableCommand(entry, root, scripts) {
   const tokens = entry.trim().split(/\s+/u);
   if (tokens[0] === "pnpm" || tokens[0] === "npm") {
-    const script = tokens[1] === "run" ? tokens[2] : tokens[1];
+    const explicitRun = tokens[1] === "run";
+    const script = explicitRun ? tokens[2] : tokens[1];
     if (script === undefined || script.startsWith("-")) return { unjudged: true };
+    // TCRN-CROSS-INC-232: without `run`, the first token may be a package-manager
+    // subcommand rather than a script name. `pnpm install --frozen-lockfile` -- copied
+    // verbatim out of this repository's own README -- was refused as "a script this
+    // repository does not define", which is a false refusal wearing a specific and
+    // wrong reason. A builtin is not judgeable by this check and is counted as such.
+    if (!explicitRun && PACKAGE_MANAGER_SUBCOMMANDS.has(script)) return { unjudged: true };
     if (scripts === null) return { unjudged: true };
-    return script in scripts ? {} : { message: `${entry} names a script this repository does not define` };
+    return Object.hasOwn(scripts, script) ? {} : { message: `${entry} names a script this repository does not define` };
   }
   if (tokens[0] === "node" && tokens[1] !== undefined && !tokens[1].startsWith("-")) {
     return existsSync(isAbsolute(tokens[1]) ? tokens[1] : resolve(root, tokens[1]))
@@ -137,10 +170,23 @@ export function validateDispatchBrief(brief) {
       problems.push(...resolved.problems);
       return resolved.citations;
     })()
-    : { checked: false, reason: "no repositoryRoot declared, so pointers and commands were not resolved" };
+    : {
+      checked: false,
+      reason: typeof root === "string" && root.trim().length > 0
+        ? "repositoryRoot was declared but filePointers or verificationCommands is not a list, so nothing was resolved"
+        : "no repositoryRoot declared, so pointers and commands were not resolved",
+    };
+  // TCRN-CROSS-INC-232: citations.checked was the only place the weaker verdict showed,
+  // and it is the one place a shell gate does not look. `ok`, `reasonCode` and the exit
+  // code all came from problems.length, which the unchecked branch never touches, so a
+  // brief opted out of the whole citation check by omitting one field and still reported
+  // DISPATCH_BRIEF_READY with exit 0. The reason code now carries it. Still a pass --
+  // presence-only was always a legitimate verdict -- but no longer the same word as the
+  // checked one, so `reasonCode == "DISPATCH_BRIEF_READY"` is an assertion a gate can make.
+  const ready = citations.checked ? "DISPATCH_BRIEF_READY" : "DISPATCH_BRIEF_READY_CITATIONS_UNCHECKED";
   return {
     ok: problems.length === 0,
-    reasonCode: problems.length === 0 ? "DISPATCH_BRIEF_READY" : "DISPATCH_BRIEF_INCOMPLETE",
+    reasonCode: problems.length === 0 ? ready : "DISPATCH_BRIEF_INCOMPLETE",
     problems,
     citations,
   };
