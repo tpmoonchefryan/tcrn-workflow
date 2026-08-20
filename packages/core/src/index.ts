@@ -522,6 +522,7 @@ export {
   knowledgeLinkIndexCountsForTest,
   listKnowledgeMetadata,
   readKnowledgeBody,
+  readKnowledgeStoreMarker,
   readKnowledgeSnippet,
   rebaseKnowledgeStore,
   retireKnowledgeUnit,

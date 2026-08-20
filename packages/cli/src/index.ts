@@ -55,6 +55,7 @@ import {
   readGenericProfileAdmissionReceipt,
   readContextRouteAuthorityReceipt,
   readKnowledgeBody,
+  readKnowledgeStoreMarker,
   readKnowledgeSnippet,
   rebaseKnowledgeStore,
   retireKnowledgeUnit,
@@ -189,6 +190,7 @@ import type {
   RelocationAuthorityFileIdentity,
   RelocationDestination,
 } from "../../core/src/index.js";
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
@@ -614,10 +616,41 @@ async function emitRelocationAttestation(
   await writeFile(join(directory, `${relocationId.slice("relocation:".length)}-${stage}.json`), body);
 }
 
+function workspaceHeadOf(value: unknown): string | null {
+  if (value === null || typeof value !== "object") return null;
+  const record = value as { readonly headEventHash?: unknown; readonly state?: unknown };
+  if (typeof record.headEventHash === "string") return record.headEventHash;
+  return workspaceHeadOf(record.state);
+}
+
+// INC-244: a successful workspace event must not leave the derived knowledge
+// store frozen at the previous high-water. The event is already authoritative,
+// so this is deliberately a post-commit repair: a blocked rebase is surfaced to
+// the caller with its original reason code, never hidden behind a green write.
+// A missing store is a no-op because knowledge is an optional derived surface.
+async function autoRebaseKnowledgeAfterWorkspaceWrite(workspace: string, at: string, beforeHead: string | null, result: unknown): Promise<void> {
+  const afterHead = workspaceHeadOf(result);
+  if (beforeHead === null || afterHead === null || afterHead === beforeHead) return;
+  const storeRoot = join(workspace, ".tcrn-workflow", "knowledge");
+  if (!existsSync(join(storeRoot, "store.json"))) return;
+  const current = await readKnowledgeStoreMarker(workspace);
+  if (current.eventHighWaterDigest === afterHead) return;
+  await rebaseKnowledgeStore(workspace, { expectedVersion: Number(current.version), at, retireInvalid: false });
+}
+
 async function withLease<T>(workspace: string, at: string, operation: (lease: Awaited<ReturnType<typeof acquireWorkspaceLease>>) => Promise<T>): Promise<T> {
   const lease = await acquireWorkspaceLease(workspace, { now: at });
   try {
-    return await operation(lease);
+    let beforeHead: string | null = null;
+    try {
+      beforeHead = (await materializeWorkspace(workspace)).headEventHash;
+    } catch {
+      // Recovery verbs deliberately repair residue that makes a pre-read fail.
+      // Their own operation remains the authority for whether repair is allowed.
+    }
+    const result = await operation(lease);
+    await autoRebaseKnowledgeAfterWorkspaceWrite(workspace, at, beforeHead, result);
+    return result;
   } finally {
     await lease.release();
   }

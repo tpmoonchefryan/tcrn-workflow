@@ -8,7 +8,7 @@ The portal is installed at `~/.tcrn-workflow/portal` for machine-level use.
 There is no package dependency to install and nothing to build.
 
 ```bash
-node ~/.tcrn-workflow/portal/portal.mjs --container <platform>/.tcrn-workspace
+node ~/.tcrn-workflow/tcrn-workflow/portal/portal.mjs --container <platform>/.tcrn-workspace
 # → http://127.0.0.1:4319/
 ```
 
@@ -53,8 +53,8 @@ supply either.
 The server binds `127.0.0.1` only. Each run mints a token, injects it into the
 page, and refuses any mutating request without it, so another page in the same
 browser cannot post to it. The acting identity is declared at startup
-(`--actor`, default `agent:portal`); a browser payload can never nominate who
-wrote to a chain.
+(`TCRN_PORTAL_ACTOR`, default `agent:portal`); a browser payload can never
+nominate who wrote to a chain.
 
 ## Languages
 
@@ -88,7 +88,7 @@ evidence, where reproducing them verbatim is the point.
 | `--partition` | first discovered partition | Initial partition in container mode |
 | `--prose-root` | container parent | Directory holding `AGENTS.md` |
 | `--port` | `4319` | Loopback port (`0` picks a free one) |
-| `--actor` / `TCRN_PORTAL_ACTOR` | `agent:portal` | Actor recorded on governed writes |
+| `TCRN_PORTAL_ACTOR` | `agent:portal` | Actor recorded on governed writes |
 | `--attest-dir` | *(unset)* | Attestation directory passed through to writes |
 | `TCRN_WORKFLOW_CLI` | `~/.tcrn-workflow/tcrn-workflow/scripts/tcrn-workflow.mjs` | CLI entry point |
 

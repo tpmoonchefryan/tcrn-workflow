@@ -1061,6 +1061,23 @@ export async function initializeKnowledgeStore(workspaceRootInput: string, optio
   };
 }
 
+export async function readKnowledgeStoreMarker(workspaceRoot: string, options: KnowledgeReadOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
+  // INC-244: this is the bounded diagnostic read used before automatic rebase.
+  // It is separate from validateKnowledgeStore so the strict validation contract
+  // cannot accidentally become a trailing-read exemption.
+  const scan = await scanKnowledgeStore(workspaceRoot, { ...options, allowTrailing: true }, false, "metadata-only");
+  return {
+    schemaVersion: "tcrn.knowledge-store-marker-read.v1",
+    reasonCode: "KNOWLEDGE_STORE_MARKER_READ",
+    workspaceId: scan.marker.workspaceId,
+    version: scan.marker.version,
+    records: scan.units.length,
+    indexDigest: scan.index.indexDigest ?? "",
+    eventHighWaterDigest: scan.marker.eventHighWaterDigest,
+    ...trailingDisclosure(scan),
+  };
+}
+
 export async function validateKnowledgeStore(workspaceRoot: string, options: KnowledgeReadOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
   const scan = await scanKnowledgeStore(workspaceRoot, options);
   return {
