@@ -635,6 +635,13 @@
         "INC-238: schemes and anchors are left unjudged rather than guessed"
       ]
     },
+    "tests/inc244-auto-rebase.test.mjs": {
+      "testCount": 1,
+      "assertionCount": 4,
+      "testNames": [
+        "INC-244: a CLI workspace event automatically rebinds the knowledge high-water"
+      ]
+    },
     "tests/init033-install-surface.test.mjs": {
       "testCount": 3,
       "assertionCount": 16,

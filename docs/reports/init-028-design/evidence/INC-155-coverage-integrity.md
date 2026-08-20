@@ -60,8 +60,8 @@
       "reasonCode": "COVERAGE_BASELINE_INCOMPLETE",
       "baselineCompleteness": {
         "ok": false,
-        "expectedFiles": 114,
-        "currentFiles": 115,
+        "expectedFiles": 115,
+        "currentFiles": 116,
         "missingFiles": [
           "tests/s244-model-plan.test.mjs"
         ],
@@ -98,8 +98,8 @@
       "ok": true,
       "baselineCompleteness": {
         "ok": true,
-        "expectedFiles": 115,
-        "currentFiles": 115,
+        "expectedFiles": 116,
+        "currentFiles": 116,
         "missingFiles": [],
         "staleFiles": []
       }
