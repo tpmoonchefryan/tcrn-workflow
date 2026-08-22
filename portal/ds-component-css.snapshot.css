@@ -412,7 +412,7 @@
   min-width: 0;
   padding: var(--tcrn-space-4);
   border-right: 1px solid var(--tcrn-color-border-subtle);
-  background: var(--tcrn-color-surface-panel);
+  background: var(--tcrn-color-brand-secondary-bg);
   /*
    * The rail is exactly one viewport tall and sticky, so navigation taller than
    * the viewport used to paint outside its own box with nothing to scroll: the
@@ -425,6 +425,9 @@
    */
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+.tcrn-product-shell__sidebar .tcrn-brand-wordmark__suffix--aos {
+  color: var(--tcrn-color-brand-primary);
 }
 .tcrn-product-shell__sidebar-header {
   display: grid;
@@ -669,15 +672,17 @@
   color: var(--tcrn-color-text-primary);
 }
 .tcrn-nav-item {
+  --tcrn-nav-item-depth: 0;
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
   gap: var(--tcrn-space-2);
-  min-height: 38px;
-  padding: var(--tcrn-space-2);
+  min-height: calc(var(--tcrn-space-6) - var(--tcrn-space-0h));
+  padding: var(--tcrn-space-1) var(--tcrn-space-2h) var(--tcrn-space-1) calc(var(--tcrn-space-6) + (var(--tcrn-nav-item-depth) * var(--tcrn-space-3)));
   border: 1px solid transparent;
   border-radius: var(--tcrn-radius-control);
   color: var(--tcrn-color-text-secondary);
+  font-size: var(--tcrn-type-size-meta);
   text-decoration: none;
 }
 .tcrn-nav-item[data-nav-item-has-icon="false"] {
@@ -919,7 +924,7 @@ html[data-tcrn-theme="dark"] [data-theme-icon="dark"],
   outline-offset: 2px;
 }
 /* TCRN-DS-STORY-087 — "selection is ink", applied to a chip that carries a frame.
-   This chip and WorkQuickFilters are both exported filter chips with the same
+   This chip and QuickFilters are both exported filter chips with the same
    "this filter is chosen" meaning, and they carried two different grammars until
    now: this one painted brand, that one inked. One grammar does not mean one
    declaration — ink takes over whatever structural layer the control already
@@ -977,6 +982,18 @@ html[data-tcrn-theme="dark"] [data-theme-icon="dark"],
 .tcrn-inline-alert--warning {
   background: var(--tcrn-color-state-warning-bg);
 }
+.tcrn-inline-alert--neutral {
+  background: var(--tcrn-color-brand-neutral-bg);
+  color: var(--tcrn-color-text-secondary);
+}
+.tcrn-inline-alert--positive {
+  background: var(--tcrn-color-state-ready-bg);
+  color: var(--tcrn-color-state-ready);
+}
+.tcrn-inline-alert--danger {
+  background: var(--tcrn-color-state-blocked-bg);
+  color: var(--tcrn-color-state-blocked);
+}
 .tcrn-heading {
   margin: 0;
   letter-spacing: 0;
@@ -990,6 +1007,10 @@ html[data-tcrn-theme="dark"] [data-theme-icon="dark"],
 }
 .tcrn-heading--3 {
   font-size: var(--tcrn-type-size-heading-3);
+}
+.tcrn-heading--4 {
+  font-size: var(--tcrn-type-size-ui);
+  line-height: var(--tcrn-type-line-reading);
 }
 .tcrn-text {
   margin: var(--tcrn-space-2) 0 0;
@@ -1049,6 +1070,12 @@ html[data-tcrn-theme="dark"] [data-theme-icon="dark"],
   margin-block-start: calc(var(--tcrn-state-dot-size) / -2);
   border-radius: 50%;
   background: currentColor;
+}
+/* INC-013: the explicit wrapping variant anchors its dot to the first line's
+   optical center. This follows the base pseudo-element so the override remains
+   effective without changing the ordinary single-line safety band. */
+.tcrn-badge--wrap::before {
+  inset-block-start: var(--tcrn-space-2h);
 }
 .tcrn-badge--warning {
   background: var(--tcrn-color-state-warning-bg);
@@ -1110,12 +1137,6 @@ html[data-tcrn-theme="dark"] [data-theme-icon="dark"],
 }
 .tcrn-readback-panel > .tcrn-heading + * {
   margin-top: 0;
-}
-.tcrn-evidence-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--tcrn-space-2);
-  margin-top: var(--tcrn-space-3);
 }
 .tcrn-key-value-list {
   display: grid;
@@ -1344,110 +1365,98 @@ a.tcrn-relationship-chip:focus-visible {
   min-width: 0;
   max-width: 100%;
 }
-.tcrn-work-management-subnav,
+.tcrn-sub-nav,
 .tcrn-saved-view-toolbar,
-.tcrn-work-page-header,
-.tcrn-work-view-tabs,
-.tcrn-work-quick-filters,
-.tcrn-work-item-row,
-.tcrn-work-list,
-.tcrn-work-split-view,
-.tcrn-work-backlog-group,
-.tcrn-work-inline-create-static,
-.tcrn-work-board-view,
-.tcrn-gate-pipeline,
-.tcrn-evidence-attachment-list,
-.tcrn-work-hierarchy,
-.tcrn-work-field-panel,
+.tcrn-page-header,
+.tcrn-view-tabs,
+.tcrn-quick-filters,
+.tcrn-record-row,
+.tcrn-record-table,
+.tcrn-split-view,
+.tcrn-row-group,
+.tcrn-inline-create,
+.tcrn-stage-pipeline,
+.tcrn-attachment-list,
+.tcrn-relation-graph,
 .tcrn-metadata-rail,
-.tcrn-work-activity-feed,
-.tcrn-work-detail-layout,
-.tcrn-work-item-inspector {
+.tcrn-activity-feed,
+.tcrn-detail-layout,
+.tcrn-record-inspector {
   min-width: 0;
 }
-.tcrn-work-page-header,
-.tcrn-work-view-tabs,
-.tcrn-work-quick-filters,
-.tcrn-work-item-row,
-.tcrn-work-list,
-.tcrn-work-split-view,
-.tcrn-work-backlog-group,
-.tcrn-work-board,
-.tcrn-work-board-view,
-.tcrn-work-detail-layout,
-.tcrn-work-field-panel,
+.tcrn-page-header,
+.tcrn-view-tabs,
+.tcrn-quick-filters,
+.tcrn-record-row,
+.tcrn-record-table,
+.tcrn-split-view,
+.tcrn-row-group,
+.tcrn-lane-board,
+.tcrn-detail-layout,
 .tcrn-metadata-rail,
-.tcrn-work-activity-feed {
-  --tcrn-work-density-gap: var(--tcrn-space-2);
-  --tcrn-work-density-padding: var(--tcrn-space-3);
-  --tcrn-work-density-row-min: 40px;
+.tcrn-activity-feed {
+  --tcrn-density-gap: var(--tcrn-space-2);
+  --tcrn-density-padding: var(--tcrn-space-3);
+  --tcrn-density-row-min: 40px;
 }
-.tcrn-work-page-header--dense,
-.tcrn-work-view-tabs--dense,
-.tcrn-work-quick-filters--dense,
-.tcrn-work-item-row--dense,
-.tcrn-work-list--dense,
-.tcrn-work-split-view--dense,
-.tcrn-work-backlog-group--dense,
-.tcrn-work-board--dense,
-.tcrn-work-board-view--dense,
-.tcrn-work-detail-layout--dense,
-.tcrn-work-field-panel--dense,
+.tcrn-page-header--dense,
+.tcrn-view-tabs--dense,
+.tcrn-quick-filters--dense,
+.tcrn-record-row--dense,
+.tcrn-record-table--dense,
+.tcrn-split-view--dense,
+.tcrn-row-group--dense,
+.tcrn-lane-board--dense,
+.tcrn-detail-layout--dense,
 .tcrn-metadata-rail--dense,
-.tcrn-work-activity-feed--dense {
-  --tcrn-work-density-gap: var(--tcrn-space-1);
-  --tcrn-work-density-padding: var(--tcrn-space-2);
-  --tcrn-work-density-row-min: 34px;
+.tcrn-activity-feed--dense {
+  --tcrn-density-gap: var(--tcrn-space-1);
+  --tcrn-density-padding: var(--tcrn-space-2);
+  --tcrn-density-row-min: 34px;
 }
-.tcrn-work-board-view__toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--tcrn-work-density-gap);
-  margin-bottom: var(--tcrn-space-3);
-}
-.tcrn-work-page-header {
+.tcrn-page-header {
   display: grid;
-  gap: var(--tcrn-work-density-gap);
+  gap: var(--tcrn-density-gap);
   padding-block-end: var(--tcrn-space-3);
   border-bottom: 1px solid var(--tcrn-color-border-subtle);
 }
-.tcrn-work-page-header__breadcrumbs,
-.tcrn-work-page-header__breadcrumb,
-.tcrn-work-page-header__meta,
-.tcrn-work-page-header__actions {
+.tcrn-page-header__breadcrumbs,
+.tcrn-page-header__breadcrumb,
+.tcrn-page-header__meta,
+.tcrn-page-header__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--tcrn-space-2);
   min-width: 0;
 }
-.tcrn-work-page-header__breadcrumbs {
+.tcrn-page-header__breadcrumbs {
   color: var(--tcrn-color-text-secondary);
   font-size: var(--tcrn-type-size-meta);
   font-weight: var(--tcrn-type-weight-strong);
 }
-.tcrn-work-page-header__breadcrumbs a {
+.tcrn-page-header__breadcrumbs a {
   color: inherit;
   text-decoration: none;
 }
-.tcrn-work-page-header__body {
+.tcrn-page-header__body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: var(--tcrn-space-3);
   min-width: 0;
 }
-.tcrn-work-page-header__title {
+.tcrn-page-header__title {
   min-width: 0;
 }
-.tcrn-work-page-header__title .tcrn-heading,
-.tcrn-work-page-header__title .tcrn-text {
+.tcrn-page-header__title .tcrn-heading,
+.tcrn-page-header__title .tcrn-text {
   margin: 0;
 }
-.tcrn-work-page-header__meta {
+.tcrn-page-header__meta {
   justify-content: flex-end;
 }
-.tcrn-work-page-header__actions {
+.tcrn-page-header__actions {
   grid-column: 1 / -1;
 }
 /* TCRN-DS-STORY-087 — the segmented track.
@@ -1455,7 +1464,7 @@ a.tcrn-relationship-chip:focus-visible {
    frameless and selection inks the item's own surface. This replaces the
    per-item bordered pill, which put a frame around every option and then had to
    add a second mark on top of it to say which one was chosen. */
-.tcrn-work-management-subnav {
+.tcrn-sub-nav {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1466,8 +1475,8 @@ a.tcrn-relationship-chip:focus-visible {
   background: var(--tcrn-color-surface-panel);
   max-width: 100%;
 }
-.tcrn-work-management-subnav > a,
-.tcrn-work-management-subnav > span {
+.tcrn-sub-nav > a,
+.tcrn-sub-nav > span {
   display: inline-flex;
   align-items: center;
   gap: var(--tcrn-space-2);
@@ -1484,7 +1493,7 @@ a.tcrn-relationship-chip:focus-visible {
   display: grid;
   gap: var(--tcrn-space-3);
 }
-.tcrn-work-view-tabs {
+.tcrn-view-tabs {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1498,21 +1507,21 @@ a.tcrn-relationship-chip:focus-visible {
 /* Quick filters wrap across lines by design, so they get no track — a frame that
    wraps is not a frame. The item grammar is the same either way, which is the
    point of inking the item rather than decorating the container. */
-.tcrn-work-quick-filters {
+.tcrn-quick-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--tcrn-space-0h);
 }
-.tcrn-work-view-tabs > a,
-.tcrn-work-view-tabs > span,
-.tcrn-work-quick-filters > a,
-.tcrn-work-quick-filters > span {
+.tcrn-view-tabs > a,
+.tcrn-view-tabs > span,
+.tcrn-quick-filters > a,
+.tcrn-quick-filters > span {
   display: inline-flex;
   align-items: center;
   gap: var(--tcrn-space-2);
   min-width: 0;
-  min-height: var(--tcrn-work-density-row-min);
+  min-height: var(--tcrn-density-row-min);
   padding: var(--tcrn-space-0h) var(--tcrn-space-2h);
   border: 1px solid transparent;
   border-radius: var(--tcrn-radius-control);
@@ -1529,8 +1538,8 @@ a.tcrn-relationship-chip:focus-visible {
  * Natural width plus the wrap the row already has; max-width caps the one
  * pathological label longer than the column itself.
  */
-.tcrn-work-quick-filters > a,
-.tcrn-work-quick-filters > span {
+.tcrn-quick-filters > a,
+.tcrn-quick-filters > span {
   flex-shrink: 0;
   max-width: 100%;
 }
@@ -1541,9 +1550,9 @@ a.tcrn-relationship-chip:focus-visible {
    read as two different products when placed on the same page — DS-INC-003.
    Brand colour leaves selection entirely and stays with actionability and focus,
    so colour means "you can act" and structure means "this is the state". */
-.tcrn-work-management-subnav [data-selected="true"],
-.tcrn-work-view-tabs [data-selected="true"],
-.tcrn-work-quick-filters [data-selected="true"] {
+.tcrn-sub-nav [data-selected="true"],
+.tcrn-view-tabs [data-selected="true"],
+.tcrn-quick-filters [data-selected="true"] {
   background: var(--tcrn-selection-fill);
   color: var(--tcrn-color-text-primary);
 }
@@ -1615,30 +1624,29 @@ a.tcrn-relationship-chip:focus-visible {
   display: grid;
   gap: var(--tcrn-space-2);
 }
-.tcrn-work-quick-filters__value {
+.tcrn-quick-filters__value {
   color: var(--tcrn-color-text-secondary);
   font-size: var(--tcrn-type-size-meta);
 }
-.tcrn-work-item-row,
-.tcrn-work-backlog-group,
-.tcrn-work-activity-feed__item,
-.tcrn-work-detail-layout,
-.tcrn-work-field-panel {
+.tcrn-record-row,
+.tcrn-row-group,
+.tcrn-activity-feed__item,
+.tcrn-detail-layout {
   border: 1px solid var(--tcrn-color-border-subtle);
   border-radius: var(--tcrn-radius-panel);
   background: var(--tcrn-color-surface-panel);
 }
-.tcrn-work-item-row {
+.tcrn-record-row {
   display: grid;
   grid-template-columns: minmax(112px, 0.18fr) minmax(180px, 1fr) minmax(220px, 0.8fr);
   align-items: center;
-  gap: var(--tcrn-work-density-gap);
-  min-height: var(--tcrn-work-density-row-min);
-  padding: var(--tcrn-work-density-padding);
+  gap: var(--tcrn-density-gap);
+  min-height: var(--tcrn-density-row-min);
+  padding: var(--tcrn-density-padding);
   color: var(--tcrn-color-text-primary);
   text-decoration: none;
 }
-.tcrn-work-item-row--compact {
+.tcrn-record-row--compact {
   grid-template-columns: minmax(96px, 0.16fr) minmax(160px, 1fr) minmax(192px, 0.72fr);
   gap: var(--tcrn-space-2);
   padding: var(--tcrn-space-2) var(--tcrn-space-3);
@@ -1658,18 +1666,17 @@ a.tcrn-relationship-chip:focus-visible {
  * consumer whose rail is a different width — and a second consumer arrives with
  * a different shell. The container can answer it for all of them.
  */
-.tcrn-work-list,
-[data-work-list] {
-  container: tcrn-work-row / inline-size;
+.tcrn-record-table {
+  container: tcrn-record-row / inline-size;
 }
-@container tcrn-work-row (max-width: 464px) {
-  .tcrn-work-item-row,
-  .tcrn-work-item-row--compact,
-  .tcrn-work-item-row--dense {
+@container tcrn-record-row (max-width: 464px) {
+  .tcrn-record-row,
+  .tcrn-record-row--compact,
+  .tcrn-record-row--dense {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.tcrn-work-item-row--dense {
+.tcrn-record-row--dense {
   grid-template-columns: minmax(92px, 0.14fr) minmax(180px, 1fr) minmax(172px, 0.62fr);
   padding: var(--tcrn-space-1) var(--tcrn-space-2);
   font-size: var(--tcrn-type-size-ui);
@@ -1677,61 +1684,59 @@ a.tcrn-relationship-chip:focus-visible {
 /* The framed half of the grammar. A row already has a border, so selection
    promotes that border to ink rather than drawing a second mark inside it —
    which is exactly what produced the double frame consumers reported. */
-.tcrn-work-item-row[data-selected="true"] {
+.tcrn-record-row[data-selected="true"] {
   border-color: var(--tcrn-selection-edge);
 }
-.tcrn-work-item-row__id,
-.tcrn-work-item-row__summary,
-.tcrn-work-item-row__meta,
-.tcrn-work-item-row__relationships {
+.tcrn-record-row__id,
+.tcrn-record-row__summary,
+.tcrn-record-row__meta,
+.tcrn-record-row__relationships {
   min-width: 0;
 }
-.tcrn-work-item-row__id,
-.tcrn-work-item-row__meta,
-.tcrn-work-item-row__relationships {
+.tcrn-record-row__id,
+.tcrn-record-row__meta,
+.tcrn-record-row__relationships {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--tcrn-space-2);
 }
-.tcrn-work-item-row__summary {
+.tcrn-record-row__summary {
   display: grid;
   gap: var(--tcrn-space-0h);
 }
-.tcrn-work-item-row__summary strong {
+.tcrn-record-row__summary strong {
   overflow-wrap: anywhere;
 }
-.tcrn-work-item-row__summary .tcrn-text {
+.tcrn-record-row__summary .tcrn-text {
   margin: 0;
 }
-.tcrn-work-item-row__field,
-.tcrn-work-board__card-field {
+.tcrn-record-row__field,
+.tcrn-lane-board__card-field {
   display: inline-grid;
   gap: var(--tcrn-space-0h);
   min-width: 0;
   font-size: var(--tcrn-type-size-meta);
 }
-.tcrn-work-item-row__field span,
-.tcrn-work-board__card-field span {
+.tcrn-record-row__field span,
+.tcrn-lane-board__card-field span {
   color: var(--tcrn-color-text-secondary);
 }
-.tcrn-work-board__card-meta {
+.tcrn-lane-board__card-meta {
   color: var(--tcrn-color-text-secondary);
   font-size: var(--tcrn-type-size-meta);
 }
-.tcrn-work-item-row__relationships {
+.tcrn-record-row__relationships {
   grid-column: 1 / -1;
 }
-.tcrn-work-list,
-.tcrn-work-board-view,
-.tcrn-work-backlog-group,
-.tcrn-work-field-panel,
+.tcrn-record-table,
+.tcrn-row-group,
 .tcrn-metadata-rail,
-.tcrn-work-activity-feed,
-.tcrn-work-detail-layout__main,
-.tcrn-work-detail-layout__rail {
+.tcrn-activity-feed,
+.tcrn-detail-layout__main,
+.tcrn-detail-layout__rail {
   display: grid;
-  gap: var(--tcrn-work-density-gap);
+  gap: var(--tcrn-density-gap);
 }
 /*
  * The frame is the size container; the section is the grid. An element cannot
@@ -1742,8 +1747,8 @@ a.tcrn-relationship-chip:focus-visible {
  * for its own shell width; a second consumer with a different shell would have
  * needed a different number.
  */
-.tcrn-work-split-view-frame {
-  container: tcrn-work-split-view / inline-size;
+.tcrn-split-view-frame {
+  container: tcrn-split-view / inline-size;
   min-width: 0;
   /*
    * inline-size containment means this box contributes no intrinsic width, so
@@ -1757,19 +1762,19 @@ a.tcrn-relationship-chip:focus-visible {
    */
   width: 100%;
 }
-.tcrn-work-split-view {
+.tcrn-split-view {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
-  gap: var(--tcrn-work-density-gap);
+  gap: var(--tcrn-density-gap);
   align-items: start;
 }
-.tcrn-work-split-view__list,
-.tcrn-work-split-view__detail {
+.tcrn-split-view__list,
+.tcrn-split-view__detail {
   min-width: 0;
 }
 /* 780px of actual container: below it the 280px detail column starves the list. */
-@container tcrn-work-split-view (max-width: 780px) {
-  .tcrn-work-split-view {
+@container tcrn-split-view (max-width: 780px) {
+  .tcrn-split-view {
     grid-template-columns: minmax(0, 1fr);
   }
   /*
@@ -1778,93 +1783,90 @@ a.tcrn-relationship-chip:focus-visible {
    * with one it is what the reader chose, so it leads. Without the attribute
    * both regions render in source order, which is the pre-admission layout.
    */
-  .tcrn-work-split-view[data-detail-populated="false"] .tcrn-work-split-view__detail {
+  .tcrn-split-view[data-detail-populated="false"] .tcrn-split-view__detail {
     display: none;
   }
-  .tcrn-work-split-view[data-detail-populated="true"] .tcrn-work-split-view__detail {
+  .tcrn-split-view[data-detail-populated="true"] .tcrn-split-view__detail {
     order: -1;
   }
 }
-.tcrn-work-backlog-group,
-.tcrn-work-field-panel,
-.tcrn-work-activity-feed__item,
-.tcrn-work-detail-layout {
-  padding: var(--tcrn-work-density-padding);
+.tcrn-row-group,
+.tcrn-activity-feed__item,
+.tcrn-detail-layout {
+  padding: var(--tcrn-density-padding);
 }
-.tcrn-work-backlog-group__head {
+.tcrn-row-group__head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--tcrn-space-2);
   min-width: 0;
 }
-.tcrn-work-backlog-group__head > div:first-child {
+.tcrn-row-group__head > div:first-child {
   min-width: 0;
   margin-right: auto;
 }
-.tcrn-work-backlog-group__head .tcrn-heading,
-.tcrn-work-backlog-group__head .tcrn-text,
-.tcrn-work-field-panel .tcrn-heading {
+.tcrn-row-group__head .tcrn-heading,
+.tcrn-row-group__head .tcrn-text {
   margin: 0;
 }
-.tcrn-work-field-panel .tcrn-key-value-list > div,
 .tcrn-metadata-rail .tcrn-key-value-list > div {
   grid-template-columns: minmax(0, 1fr);
 }
-.tcrn-work-backlog-group__actions,
-.tcrn-work-inline-create-static,
+.tcrn-row-group__actions,
+.tcrn-inline-create,
 .tcrn-metadata-rail__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--tcrn-space-2);
 }
-.tcrn-work-inline-create-static .tcrn-text {
+.tcrn-inline-create .tcrn-text {
   margin: 0;
 }
-.tcrn-work-board {
+.tcrn-lane-board {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--tcrn-work-density-gap);
+  gap: var(--tcrn-density-gap);
   min-width: 0;
 }
-.tcrn-work-board--compact {
+.tcrn-lane-board--compact {
   grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
   gap: var(--tcrn-space-2);
 }
-.tcrn-work-board--dense {
+.tcrn-lane-board--dense {
   grid-template-columns: repeat(auto-fit, minmax(188px, 1fr));
 }
-.tcrn-work-board__lane {
+.tcrn-lane-board__lane {
   display: grid;
   gap: var(--tcrn-space-3);
   min-width: 0;
   max-height: 620px;
   overflow: auto;
 }
-.tcrn-work-board__lane-head,
-.tcrn-work-board__card-head,
-.tcrn-work-item-inspector__head {
+.tcrn-lane-board__lane-head,
+.tcrn-lane-board__card-head,
+.tcrn-record-inspector__head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--tcrn-space-2);
   min-width: 0;
 }
-.tcrn-work-board__lane-head > .tcrn-heading,
-.tcrn-work-item-inspector__head > div {
+.tcrn-lane-board__lane-head > .tcrn-heading,
+.tcrn-record-inspector__head > div {
   min-width: 0;
   margin-right: auto;
 }
-.tcrn-work-board__cards {
+.tcrn-lane-board__cards {
   display: grid;
   gap: var(--tcrn-space-2);
 }
-.tcrn-work-board__card {
+.tcrn-lane-board__card {
   display: grid;
-  gap: var(--tcrn-work-density-gap);
+  gap: var(--tcrn-density-gap);
   min-width: 0;
-  padding: var(--tcrn-work-density-padding);
+  padding: var(--tcrn-density-padding);
   border: 1px solid var(--tcrn-color-border-subtle);
   border-radius: var(--tcrn-radius-panel);
   background: var(--tcrn-color-surface-muted);
@@ -1877,26 +1879,26 @@ a.tcrn-relationship-chip:focus-visible {
  * an anchor inside an anchor is not a document. The chips row raises itself
  * above the stretched surface so both stay clickable.
  */
-.tcrn-work-board__card-link {
+.tcrn-lane-board__card-link {
   color: inherit;
   text-decoration: none;
 }
-.tcrn-work-board__card-link::after {
+.tcrn-lane-board__card-link::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: var(--tcrn-radius-panel);
 }
-.tcrn-work-board__card:has(.tcrn-work-board__card-link):hover {
+.tcrn-lane-board__card:has(.tcrn-lane-board__card-link):hover {
   border-color: var(--tcrn-color-border-strong);
 }
-.tcrn-work-board__card-link:hover,
-.tcrn-work-board__card-link:focus-visible {
+.tcrn-lane-board__card-link:hover,
+.tcrn-lane-board__card-link:focus-visible {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.15em;
 }
-.tcrn-work-board__card-link:focus-visible::after {
+.tcrn-lane-board__card-link:focus-visible::after {
   outline: 2px solid var(--tcrn-color-focus-ring);
   outline-offset: 2px;
 }
@@ -1908,156 +1910,156 @@ a.tcrn-relationship-chip:focus-visible {
  * swallow all three without any diagnostic. The card stays one click target
  * everywhere the consumer put nothing of its own.
  */
-.tcrn-work-board__relations,
-.tcrn-work-board__card-meta,
-.tcrn-work-board__card-fields {
+.tcrn-lane-board__relations,
+.tcrn-lane-board__card-meta,
+.tcrn-lane-board__card-fields {
   position: relative;
   z-index: 1;
 }
-.tcrn-work-board__card > strong {
+.tcrn-lane-board__card > strong {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.tcrn-work-board__card .tcrn-text {
+.tcrn-lane-board__card .tcrn-text {
   margin: 0;
 }
-.tcrn-work-board--compact .tcrn-work-board__lane,
-.tcrn-work-board--compact .tcrn-work-board__card {
+.tcrn-lane-board--compact .tcrn-lane-board__lane,
+.tcrn-lane-board--compact .tcrn-lane-board__card {
   gap: var(--tcrn-space-2);
 }
-.tcrn-work-board--compact .tcrn-work-board__card {
+.tcrn-lane-board--compact .tcrn-lane-board__card {
   padding: var(--tcrn-space-2);
 }
-.tcrn-work-board__card-fields {
+.tcrn-lane-board__card-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--tcrn-space-2);
   min-width: 0;
 }
-.tcrn-work-board__relations,
-.tcrn-work-item-inspector__relationships,
-.tcrn-work-detail-layout__actions {
+.tcrn-lane-board__relations,
+.tcrn-record-inspector__relationships,
+.tcrn-detail-layout__actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--tcrn-space-2);
   min-width: 0;
 }
-.tcrn-work-hierarchy {
+.tcrn-relation-graph {
   display: grid;
   gap: var(--tcrn-space-3);
 }
-.tcrn-work-hierarchy__levels {
+.tcrn-relation-graph__levels {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--tcrn-space-3);
   min-width: 0;
 }
-.tcrn-work-hierarchy__node {
+.tcrn-relation-graph__node {
   display: grid;
   gap: var(--tcrn-space-2);
   min-width: 0;
 }
-.tcrn-work-hierarchy__node .tcrn-heading,
-.tcrn-work-hierarchy__node .tcrn-text {
+.tcrn-relation-graph__node .tcrn-heading,
+.tcrn-relation-graph__node .tcrn-text {
   margin: 0;
 }
-.tcrn-work-item-inspector {
+.tcrn-record-inspector {
   display: grid;
   gap: var(--tcrn-space-4);
 }
-.tcrn-work-item-inspector__grid {
+.tcrn-record-inspector__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--tcrn-space-3);
   min-width: 0;
 }
-.tcrn-work-item-inspector__grid > section {
+.tcrn-record-inspector__grid > section {
   min-width: 0;
 }
-.tcrn-work-item-inspector__actions {
+.tcrn-record-inspector__actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--tcrn-space-2);
 }
-.tcrn-work-activity-feed__head,
-.tcrn-work-detail-layout__head {
+.tcrn-activity-feed__head,
+.tcrn-detail-layout__head {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--tcrn-space-2);
   min-width: 0;
 }
-.tcrn-work-activity-feed__head time {
+.tcrn-activity-feed__head time {
   color: var(--tcrn-color-text-secondary);
   font-size: var(--tcrn-type-size-meta);
   margin-left: auto;
 }
-.tcrn-work-activity-feed__item .tcrn-text,
-.tcrn-work-detail-layout__head .tcrn-heading,
-.tcrn-work-detail-layout__head .tcrn-text {
+.tcrn-activity-feed__item .tcrn-text,
+.tcrn-detail-layout__head .tcrn-heading,
+.tcrn-detail-layout__head .tcrn-text {
   margin: 0;
 }
-.tcrn-work-detail-layout {
-  gap: var(--tcrn-work-density-gap);
-  padding: var(--tcrn-work-density-padding);
+.tcrn-detail-layout {
+  gap: var(--tcrn-density-gap);
+  padding: var(--tcrn-density-padding);
 }
-.tcrn-work-detail-layout__head > div {
+.tcrn-detail-layout__head > div {
   min-width: 0;
   margin-right: auto;
 }
-.tcrn-work-detail-layout__grid {
+.tcrn-detail-layout__grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(240px, 0.34fr);
   gap: var(--tcrn-space-3);
   min-width: 0;
   align-items: start;
 }
-.tcrn-knowledge-page-tree,
-.tcrn-knowledge-document-canvas,
-.tcrn-knowledge-toc-rail,
-.tcrn-knowledge-inline-comment-list,
-.tcrn-knowledge-metadata-rail,
-.tcrn-knowledge-attachment-list,
-.tcrn-knowledge-label-set,
-.tcrn-knowledge-version-history,
+.tcrn-tree-nav,
+.tcrn-document-canvas,
+.tcrn-toc-rail,
+.tcrn-inline-comment-list,
+.tcrn-metadata-rail,
+.tcrn-attachment-list,
+.tcrn-label-set,
+.tcrn-version-history,
 .tcrn-template-gallery,
-.tcrn-knowledge-search-results {
+.tcrn-search-result-list {
   min-width: 0;
 }
-.tcrn-knowledge-page-tree,
-.tcrn-knowledge-document-canvas,
-.tcrn-knowledge-toc-rail,
-.tcrn-knowledge-inline-comment-list__item,
-.tcrn-knowledge-metadata-rail,
-.tcrn-knowledge-version-history__item,
-.tcrn-knowledge-search-results__item {
+.tcrn-tree-nav,
+.tcrn-document-canvas,
+.tcrn-toc-rail,
+.tcrn-inline-comment-list__item,
+.tcrn-metadata-rail,
+.tcrn-version-history__item,
+.tcrn-search-result-list__item {
   border: 1px solid var(--tcrn-color-border-subtle);
   border-radius: var(--tcrn-radius-panel);
   background: var(--tcrn-color-surface-panel);
 }
-.tcrn-knowledge-page-tree,
-.tcrn-knowledge-document-canvas,
-.tcrn-knowledge-toc-rail,
-.tcrn-knowledge-inline-comment-list__item,
-.tcrn-knowledge-metadata-rail,
-.tcrn-knowledge-version-history__item,
-.tcrn-knowledge-search-results__item {
+.tcrn-tree-nav,
+.tcrn-document-canvas,
+.tcrn-toc-rail,
+.tcrn-inline-comment-list__item,
+.tcrn-metadata-rail,
+.tcrn-version-history__item,
+.tcrn-search-result-list__item {
   padding: var(--tcrn-space-3);
 }
-.tcrn-knowledge-page-tree__list {
+.tcrn-tree-nav__list {
   display: grid;
   gap: var(--tcrn-space-1);
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.tcrn-knowledge-page-tree__item {
+.tcrn-tree-nav__item {
   min-width: 0;
 }
-.tcrn-knowledge-page-tree__item > a,
-.tcrn-knowledge-page-tree__item > span,
-.tcrn-knowledge-toc-rail nav > a,
-.tcrn-knowledge-toc-rail nav > span {
+.tcrn-tree-nav__item > a,
+.tcrn-tree-nav__item > span,
+.tcrn-toc-rail nav > a,
+.tcrn-toc-rail nav > span {
   display: flex;
   align-items: center;
   gap: var(--tcrn-space-2);
@@ -2070,83 +2072,83 @@ a.tcrn-relationship-chip:focus-visible {
 }
 /* TCRN-DS-STORY-062: same single-axis selection as the doc shell — 3px left rail + brand
    text, no row fill, zero radius on the selected element. */
-.tcrn-knowledge-page-tree__item > [data-selected="true"],
-.tcrn-knowledge-toc-rail nav > [data-selected="true"] {
+.tcrn-tree-nav__item > [data-selected="true"],
+.tcrn-toc-rail nav > [data-selected="true"] {
   color: var(--tcrn-color-text-primary);
   font-weight: var(--tcrn-type-weight-strong);
   background: var(--tcrn-selection-fill);
 }
-.tcrn-knowledge-page-tree__item[data-tree-level="2"] > a,
-.tcrn-knowledge-page-tree__item[data-tree-level="2"] > span {
+.tcrn-tree-nav__item[data-tree-level="2"] > a,
+.tcrn-tree-nav__item[data-tree-level="2"] > span {
   padding-inline-start: var(--tcrn-space-4);
 }
-.tcrn-knowledge-page-tree__item[data-tree-level="3"] > a,
-.tcrn-knowledge-page-tree__item[data-tree-level="3"] > span {
+.tcrn-tree-nav__item[data-tree-level="3"] > a,
+.tcrn-tree-nav__item[data-tree-level="3"] > span {
   padding-inline-start: var(--tcrn-space-6);
 }
-.tcrn-knowledge-page-tree__title {
+.tcrn-tree-nav__title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tcrn-knowledge-document-canvas,
-.tcrn-knowledge-inline-comment-list,
-.tcrn-knowledge-metadata-rail,
-.tcrn-knowledge-attachment-list,
-.tcrn-knowledge-version-history,
+.tcrn-document-canvas,
+.tcrn-inline-comment-list,
+.tcrn-metadata-rail,
+.tcrn-attachment-list,
+.tcrn-version-history,
 .tcrn-template-gallery,
-.tcrn-knowledge-search-results {
+.tcrn-search-result-list {
   display: grid;
   gap: var(--tcrn-space-2);
 }
-.tcrn-knowledge-document-canvas__head,
-.tcrn-knowledge-inline-comment-list__head,
-.tcrn-knowledge-search-results__head {
+.tcrn-document-canvas__head,
+.tcrn-inline-comment-list__head,
+.tcrn-search-result-list__head {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--tcrn-space-2);
   min-width: 0;
 }
-.tcrn-knowledge-document-canvas__head > div:first-child,
-.tcrn-knowledge-search-results__head > strong {
+.tcrn-document-canvas__head > div:first-child,
+.tcrn-search-result-list__head > strong {
   min-width: 0;
   margin-right: auto;
 }
-.tcrn-knowledge-document-canvas__meta {
+.tcrn-document-canvas__meta {
   color: var(--tcrn-color-text-secondary);
   font-size: var(--tcrn-type-size-meta);
 }
-.tcrn-knowledge-document-canvas__head .tcrn-heading,
-.tcrn-knowledge-document-canvas__head .tcrn-text,
-.tcrn-knowledge-document-canvas__section .tcrn-heading,
-.tcrn-knowledge-document-canvas__section .tcrn-text,
-.tcrn-knowledge-inline-comment-list__item .tcrn-text,
+.tcrn-document-canvas__head .tcrn-heading,
+.tcrn-document-canvas__head .tcrn-text,
+.tcrn-document-canvas__section .tcrn-heading,
+.tcrn-document-canvas__section .tcrn-text,
+.tcrn-inline-comment-list__item .tcrn-text,
 .tcrn-template-gallery__card .tcrn-heading,
 .tcrn-template-gallery__card .tcrn-text,
-.tcrn-knowledge-search-results__item .tcrn-text,
-.tcrn-knowledge-toc-rail .tcrn-heading {
+.tcrn-search-result-list__item .tcrn-text,
+.tcrn-toc-rail .tcrn-heading {
   margin: 0;
 }
-.tcrn-knowledge-document-canvas__body {
+.tcrn-document-canvas__body {
   display: grid;
   gap: var(--tcrn-space-4);
   max-width: 74ch;
 }
-.tcrn-knowledge-document-canvas__section {
+.tcrn-document-canvas__section {
   display: grid;
   gap: var(--tcrn-space-2);
 }
-.tcrn-knowledge-label-set,
-.tcrn-knowledge-metadata-rail__actions,
-.tcrn-knowledge-version-history__item {
+.tcrn-label-set,
+.tcrn-metadata-rail__actions,
+.tcrn-version-history__item {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--tcrn-space-2);
 }
-.tcrn-knowledge-toc-rail nav {
+.tcrn-toc-rail nav {
   display: grid;
   gap: var(--tcrn-space-1);
 }
@@ -2158,18 +2160,18 @@ a.tcrn-relationship-chip:focus-visible {
   gap: var(--tcrn-space-2);
   min-width: 0;
 }
-.tcrn-knowledge-version-history__item {
+.tcrn-version-history__item {
   justify-content: flex-start;
 }
-.tcrn-knowledge-version-history__item > strong,
-.tcrn-knowledge-search-results__head a,
-.tcrn-knowledge-search-results__head span {
+.tcrn-version-history__item > strong,
+.tcrn-search-result-list__head a,
+.tcrn-search-result-list__head span {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.tcrn-work-detail-layout__main,
-.tcrn-work-detail-layout__rail,
-.tcrn-work-detail-layout__activity {
+.tcrn-detail-layout__main,
+.tcrn-detail-layout__rail,
+.tcrn-detail-layout__activity {
   min-width: 0;
 }
 .tcrn-skip-link {
@@ -2268,27 +2270,27 @@ a.tcrn-relationship-chip:focus-visible {
     top: 0;
     z-index: 2;
   }
-  .tcrn-work-board,
-  .tcrn-work-hierarchy__levels,
-  .tcrn-work-item-inspector__grid,
-  .tcrn-work-page-header__body,
-  .tcrn-work-item-row,
-  .tcrn-work-item-row--compact,
-  .tcrn-work-split-view,
-  .tcrn-work-detail-layout__grid {
+  .tcrn-lane-board,
+  .tcrn-relation-graph__levels,
+  .tcrn-record-inspector__grid,
+  .tcrn-page-header__body,
+  .tcrn-record-row,
+  .tcrn-record-row--compact,
+  .tcrn-split-view,
+  .tcrn-detail-layout__grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .tcrn-work-page-header__meta,
-  .tcrn-work-page-header__actions,
-  .tcrn-work-detail-layout__actions {
+  .tcrn-page-header__meta,
+  .tcrn-page-header__actions,
+  .tcrn-detail-layout__actions {
     justify-content: flex-start;
   }
-  .tcrn-work-management-subnav > a,
-  .tcrn-work-management-subnav > span,
-  .tcrn-work-view-tabs > a,
-  .tcrn-work-view-tabs > span,
-  .tcrn-work-quick-filters > a,
-  .tcrn-work-quick-filters > span {
+  .tcrn-sub-nav > a,
+  .tcrn-sub-nav > span,
+  .tcrn-view-tabs > a,
+  .tcrn-view-tabs > span,
+  .tcrn-quick-filters > a,
+  .tcrn-quick-filters > span {
     /*
      * Lever 3. These wrapped into four and three rows, spending 380px of the
      * fold on chrome before the first work item. One scrolling row each: the
@@ -2303,8 +2305,8 @@ a.tcrn-relationship-chip:focus-visible {
     flex: 0 0 auto;
     max-width: 100%;
   }
-  .tcrn-work-view-tabs,
-  .tcrn-work-quick-filters {
+  .tcrn-view-tabs,
+  .tcrn-quick-filters {
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: thin;
@@ -2432,6 +2434,22 @@ a.tcrn-relationship-chip:focus-visible {
 .tcrn-state-view h3,
 .tcrn-state-view p {
   margin: 0;
+}
+.tcrn-state-view--neutral {
+  border-color: var(--tcrn-color-brand-neutral);
+  color: var(--tcrn-color-text-secondary);
+}
+.tcrn-state-view--positive {
+  border-color: var(--tcrn-color-state-ready);
+  color: var(--tcrn-color-state-ready);
+}
+.tcrn-state-view--warning {
+  border-color: var(--tcrn-color-state-warning);
+  color: var(--tcrn-color-state-warning);
+}
+.tcrn-state-view--danger {
+  border-color: var(--tcrn-color-state-blocked);
+  color: var(--tcrn-color-state-blocked);
 }
 
 /* Feedback skeleton */
@@ -2839,30 +2857,30 @@ a.tcrn-relationship-chip:focus-visible {
    outside the product-shell scope. */
 /* Hover is half a step toward selection in the same material, so the two states
    read as one scale rather than as two unrelated effects. */
-.tcrn-work-management-subnav > a:hover,
-.tcrn-work-view-tabs > a:hover,
-.tcrn-work-quick-filters > a:hover,
+.tcrn-sub-nav > a:hover,
+.tcrn-view-tabs > a:hover,
+.tcrn-quick-filters > a:hover,
 .tcrn-product-launcher button:hover,
 .tcrn-product-switcher button:hover,
 .tcrn-module-tabs button:hover,
 .tcrn-section-tabs button:hover,
 .tcrn-segmented-nav button:hover,
-.tcrn-knowledge-page-tree__item > a:hover,
-.tcrn-knowledge-toc-rail nav > a:hover {
+.tcrn-tree-nav__item > a:hover,
+.tcrn-toc-rail nav > a:hover {
   background: var(--tcrn-selection-fill-hover);
   color: var(--tcrn-color-text-primary);
 }
-.tcrn-work-item-row[href]:hover {
+.tcrn-record-row[href]:hover {
   border-color: var(--tcrn-color-border-control);
   color: var(--tcrn-color-text-primary);
 }
-.tcrn-work-management-subnav > a:focus-visible,
-.tcrn-work-view-tabs > a:focus-visible,
-.tcrn-work-quick-filters > a:focus-visible,
-.tcrn-work-item-row[href]:focus-visible,
-.tcrn-knowledge-page-tree__item > a:focus-visible,
-.tcrn-knowledge-toc-rail nav > a:focus-visible,
-.tcrn-knowledge-search-results__head a:focus-visible,
+.tcrn-sub-nav > a:focus-visible,
+.tcrn-view-tabs > a:focus-visible,
+.tcrn-quick-filters > a:focus-visible,
+.tcrn-record-row[href]:focus-visible,
+.tcrn-tree-nav__item > a:focus-visible,
+.tcrn-toc-rail nav > a:focus-visible,
+.tcrn-search-result-list__head a:focus-visible,
 .tcrn-product-launcher button:focus-visible,
 .tcrn-product-switcher button:focus-visible,
 .tcrn-module-tabs button:focus-visible,
@@ -2878,17 +2896,17 @@ a.tcrn-relationship-chip:focus-visible {
 .tcrn-segmented-nav button:active {
   transform: scale(var(--tcrn-motion-press-scale));
 }
-/* KnowledgeSearchResults head anchor previously had no color/decoration at all — bare UA blue
+/* SearchResultList head anchor previously had no color/decoration at all — bare UA blue
    for package consumers. It reads as an inline result link: brand ink + quiet underline that
    answers hover. */
-.tcrn-knowledge-search-results__head a {
+.tcrn-search-result-list__head a {
   color: var(--tcrn-color-brand-primary);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
   text-decoration-color: color-mix(in srgb, var(--tcrn-color-brand-primary) 35%, transparent);
 }
-.tcrn-knowledge-search-results__head a:hover {
+.tcrn-search-result-list__head a:hover {
   text-decoration-color: var(--tcrn-color-brand-primary);
 }
 
