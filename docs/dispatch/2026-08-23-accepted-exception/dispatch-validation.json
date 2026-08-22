@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-08-23T00:00:00.000Z",
+  "validator": "scripts/dispatch-readiness-compliance.mjs",
+  "resultCount": 1,
+  "readyCount": 1,
+  "note": "从 cross-project live 链 rev 2 回读 scope 生成（rev 2 即 Owner 取第①条的注记）。",
+  "results": [
+    {
+      "story": "TCRN-CROSS-INC-246",
+      "ok": true,
+      "reasonCode": "DISPATCH_BRIEF_READY",
+      "citations": {
+        "checked": true,
+        "unjudgedCommands": 0
+      }
+    }
+  ]
+}
