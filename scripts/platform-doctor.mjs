@@ -29,6 +29,8 @@ import {
 
 const execFileAsync = promisify(execFile);
 const TOPOLOGY_SECTION_MARKER = "## 三、分区拓扑";
+const PLATFORM_DOCS_RELATIVE = "platform-docs";
+const LEGACY_PLATFORM_DOCS_RELATIVE = join("TCRN Platform", "docs");
 
 function check(name, ok, details = {}) {
   return { name, ok, ...details };
@@ -41,6 +43,21 @@ async function existingPath(path) {
     if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
     throw error;
   }
+}
+
+// INC-247 migration bridge. The container-root location is canonical; the legacy
+// classification-folder location remains readable only during the move window so
+// the doctor never answers from a missing roster.
+async function platformDocsRoot(root, { allowLegacy = true } = {}) {
+  const candidates = [
+    { relativePath: PLATFORM_DOCS_RELATIVE, path: join(root, PLATFORM_DOCS_RELATIVE) },
+    ...(allowLegacy ? [{ relativePath: LEGACY_PLATFORM_DOCS_RELATIVE, path: join(root, LEGACY_PLATFORM_DOCS_RELATIVE) }] : []),
+  ];
+  for (const candidate of candidates) {
+    const stats = await existingPath(candidate.path);
+    if (stats?.isDirectory()) return candidate;
+  }
+  return candidates[0];
 }
 
 function expandTemplate(template, platformRoot, homeRoot) {
@@ -78,7 +95,8 @@ function expandTemplate(template, platformRoot, homeRoot) {
 // encoded: what matters is that they cannot diverge in silence.
 async function inspectAgentsHistory(root) {
   const live = join(root, "AGENTS.md");
-  const tracked = join(root, "TCRN Platform", "docs", "platform-root-agents.md");
+  const docsRoot = await platformDocsRoot(root);
+  const tracked = join(docsRoot.path, "platform-root-agents.md");
   const liveStats = await existingPath(live);
   const trackedStats = await existingPath(tracked);
   if (!liveStats?.isFile() || !trackedStats?.isFile()) {
@@ -87,7 +105,7 @@ async function inspectAgentsHistory(root) {
     if (!trackedStats?.isFile()) {
       return check("platformAgentsHistory", false, {
         reasonCode: "PLATFORM_AGENTS_UNTRACKED",
-        path: "TCRN Platform/docs/platform-root-agents.md",
+        path: join(docsRoot.relativePath, "platform-root-agents.md"),
       });
     }
     return check("platformAgentsHistory", true, { skipped: "no live AGENTS.md to compare" });
@@ -246,8 +264,9 @@ async function chainEventCounts(root, options) {
 // "recorded against a different tree" -- a question with one answer everywhere.
 
 async function inspectAcceptanceVerdicts(root, options) {
-  const rosterPath = join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json");
-  const verdictPath = join(root, "TCRN Platform", "docs", "acceptance-verdicts.json");
+  const docsRoot = await platformDocsRoot(root);
+  const rosterPath = join(docsRoot.path, "acceptance-gate-groups.json");
+  const verdictPath = join(docsRoot.path, "acceptance-verdicts.json");
   let roster;
   try {
     roster = JSON.parse(await readFile(rosterPath, "utf8"));
@@ -315,9 +334,11 @@ async function inspectAcceptanceVerdicts(root, options) {
     }
   }
   const verdicts = document?.verdicts && typeof document.verdicts === "object" ? document.verdicts : {};
+  const groupsById = new Map((Array.isArray(roster?.groups) ? roster.groups : []).map((group) => [group?.id, group]));
   const missing = [];
   const stale = [];
   const failing = [];
+  const acceptedExceptions = [];
   for (const id of groups) {
     const entry = verdicts[id];
     if (!entry || typeof entry.recordedAt !== "string" || typeof entry.verdict !== "string") {
@@ -325,6 +346,18 @@ async function inspectAcceptanceVerdicts(root, options) {
       continue;
     }
     if (entry.verdict !== "green") {
+      const reasonCode = typeof entry.detail === "string"
+        ? /(?:^|\s)reasonCode=([A-Z0-9_:-]+)(?:$|[\s;])/u.exec(entry.detail)?.[1]
+        : null;
+      const accepted = entry.verdict === "red"
+        && reasonCode !== null
+        && (Array.isArray(groupsById.get(id)?.acceptedExceptions)
+          ? groupsById.get(id).acceptedExceptions.find((candidate) => candidate?.reasonCode === reasonCode)
+          : null);
+      if (accepted) {
+        acceptedExceptions.push({ group: id, ...accepted });
+        continue;
+      }
       failing.push({ group: id, verdict: entry.verdict, ...(typeof entry.detail === "string" ? { detail: entry.detail } : {}) });
       continue;
     }
@@ -345,19 +378,25 @@ async function inspectAcceptanceVerdicts(root, options) {
       ...(missing.length > 0 ? { missing } : {}),
       ...(stale.length > 0 ? { stale } : {}),
       ...(failing.length > 0 ? { failing } : {}),
+      ...(acceptedExceptions.length > 0 ? { acceptedExceptions } : {}),
       remedy: "the machine-checked lane is not satisfied: a group is unrecorded, stale, or red, and a record of a run is not proof the run passed",
     });
   }
-  return check("acceptanceVerdicts", true, { groups: groups.length, ...(headCommit === null ? {} : { head: headCommit.slice(0, 12) }) });
+  return check("acceptanceVerdicts", true, {
+    groups: groups.length,
+    ...(acceptedExceptions.length > 0 ? { acceptedExceptions } : {}),
+    ...(headCommit === null ? {} : { head: headCommit.slice(0, 12) }),
+  });
 }
 
 async function inspectAcceptanceGateGroups(root) {
-  const path = join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json");
+  const docsRoot = await platformDocsRoot(root);
+  const path = join(docsRoot.path, "acceptance-gate-groups.json");
   let roster;
   try {
     roster = JSON.parse(await readFile(path, "utf8"));
   } catch {
-    return check("acceptanceGateGroups", false, { reasonCode: "PLATFORM_ACCEPTANCE_ROSTER_MISSING", path: "TCRN Platform/docs/acceptance-gate-groups.json" });
+    return check("acceptanceGateGroups", false, { reasonCode: "PLATFORM_ACCEPTANCE_ROSTER_MISSING", path: join(docsRoot.relativePath, "acceptance-gate-groups.json") });
   }
   if (roster?.schemaVersion !== "tcrn.acceptance-gate-groups.v1" || !Array.isArray(roster.groups)) {
     return check("acceptanceGateGroups", false, { reasonCode: "PLATFORM_ACCEPTANCE_ROSTER_INVALID", detail: "schemaVersion or groups" });
@@ -367,18 +406,43 @@ async function inspectAcceptanceGateGroups(root) {
     .map((group, index) => (typeof group?.id === "string" ? group.id : `#${index}`));
   const ids = roster.groups.map((group) => group?.id);
   const duplicated = ids.filter((id, index) => ids.indexOf(id) !== index);
+  const invalidAcceptedExceptions = [];
+  const acceptedExceptionKeys = new Set();
+  for (const group of roster.groups) {
+    if (group?.acceptedExceptions === undefined) continue;
+    if (!Array.isArray(group.acceptedExceptions) || group.acceptedExceptions.length === 0) {
+      invalidAcceptedExceptions.push(group?.id ?? "#unknown");
+      continue;
+    }
+    for (const exception of group.acceptedExceptions) {
+      const valid = exception
+        && typeof exception.reasonCode === "string"
+        && /^[A-Z0-9_:-]+$/u.test(exception.reasonCode)
+        && typeof exception.acceptedAt === "string"
+        && /^\d{4}-\d{2}-\d{2}$/u.test(exception.acceptedAt)
+        && typeof exception.reason === "string"
+        && /^[A-Z0-9_:-]+$/u.test(exception.reason);
+      const key = `${group?.id}:${exception?.reasonCode}`;
+      if (!valid || acceptedExceptionKeys.has(key)) invalidAcceptedExceptions.push(group?.id ?? "#unknown");
+      acceptedExceptionKeys.add(key);
+    }
+  }
   // Nine is the number the ruling names. If the roster ever holds a different count,
   // that is a change to the acceptance criterion and belongs in a ruling rather than
   // in a file edit, so it is reported rather than accommodated.
-  if (roster.groups.length !== 9 || incomplete.length > 0 || duplicated.length > 0) {
+  if (roster.groups.length !== 9 || incomplete.length > 0 || duplicated.length > 0 || invalidAcceptedExceptions.length > 0) {
     return check("acceptanceGateGroups", false, {
       reasonCode: "PLATFORM_ACCEPTANCE_ROSTER_INVALID",
       declaredGroups: roster.groups.length,
       incomplete,
       duplicated,
+      invalidAcceptedExceptions,
     });
   }
-  return check("acceptanceGateGroups", true, { declaredGroups: roster.groups.length });
+  return check("acceptanceGateGroups", true, {
+    declaredGroups: roster.groups.length,
+    acceptedExceptionCount: acceptedExceptionKeys.size,
+  });
 }
 
 async function inspectAgents(root) {

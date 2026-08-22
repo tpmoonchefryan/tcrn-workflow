@@ -35,7 +35,7 @@ function syntheticRoster(count = 9) {
   };
 }
 
-async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, claude = "@AGENTS.md\n", roster = syntheticRoster(), trackedAgents = true } = {}) {
+async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, claude = "@AGENTS.md\n", roster = syntheticRoster(), trackedAgents = true, docsDirectory = join("TCRN Platform", "docs") } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-platform-doctor-")));
   context.after(() => rm(base, { recursive: true, force: true }));
   const root = join(base, "platform");
@@ -45,14 +45,14 @@ async function fixture(context, { agents = `${topology}fixture\n`, chain = true,
   if (chain) await mkdir(join(root, ".tcrn-workspace", "cross-project", "workspace"), { recursive: true });
   if (git) await mkdir(join(root, ".git"));
   if (roster !== null) {
-    await mkdir(join(root, "TCRN Platform", "docs"), { recursive: true });
-    await writeFile(join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json"), `${JSON.stringify(roster, null, 2)}\n`);
+    await mkdir(join(root, docsDirectory), { recursive: true });
+    await writeFile(join(root, docsDirectory, "acceptance-gate-groups.json"), `${JSON.stringify(roster, null, 2)}\n`);
     // INC-234: a container carrying the roster and no verdicts is exactly the state that
     // let product-gates sit red for two days, so "complete" has to include them. The
     // timestamps are pinned to the roster file's own mtime, which is what the leg
     // measures against -- a fixture anchored to the wall clock would age out mid-suite.
-    const recordedAt = new Date((await stat(join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json"))).mtimeMs).toISOString();
-    await writeFile(join(root, "TCRN Platform", "docs", "acceptance-verdicts.json"), `${JSON.stringify({
+    const recordedAt = new Date((await stat(join(root, docsDirectory, "acceptance-gate-groups.json"))).mtimeMs).toISOString();
+    await writeFile(join(root, docsDirectory, "acceptance-verdicts.json"), `${JSON.stringify({
       schemaVersion: "tcrn.acceptance-verdicts.v1",
       verdicts: Object.fromEntries(roster.groups.map((group) => [group.id, { verdict: "green", recordedAt, commit: FIXTURE_COMMIT }])),
     }, null, 2)}\n`);
@@ -60,8 +60,8 @@ async function fixture(context, { agents = `${topology}fixture\n`, chain = true,
   // STORY-300 Wave 2.2: the identity file's tracked copy, byte-identical unless a
   // case deliberately diverges them.
   if (agents !== null && trackedAgents !== false) {
-    await mkdir(join(root, "TCRN Platform", "docs"), { recursive: true });
-    await writeFile(join(root, "TCRN Platform", "docs", "platform-root-agents.md"), trackedAgents === true || trackedAgents === undefined ? agents : trackedAgents);
+    await mkdir(join(root, docsDirectory), { recursive: true });
+    await writeFile(join(root, docsDirectory, "platform-root-agents.md"), trackedAgents === true || trackedAgents === undefined ? agents : trackedAgents);
   }
   return root;
 }
@@ -72,6 +72,13 @@ test("a complete synthetic platform container is green", async (context) => {
   assert.equal(result.ok, true);
   assert.equal(result.reasonCode, "PLATFORM_LAYOUT_HEALTHY");
   assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true, true, true]);
+});
+
+test("INC-247: the container-root platform docs location is accepted before the move", async (context) => {
+  const root = await fixture(context, { docsDirectory: "platform-docs" });
+  const result = await inspectPlatform(root, { includeInstallSurface: false });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.checks.find((entry) => entry.name === "acceptanceGateGroups").acceptedExceptionCount, 0);
 });
 
 // Red legs for the roster, both observed before this landed: an absent roster is
@@ -225,16 +232,17 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
   // verdicts, because a roster with no verdicts is exactly the state that let a group sit
   // red for two days. Timestamps are pinned to the roster's own mtime, which is what the
   // leg measures against -- anchoring a fixture to the wall clock ages it out mid-suite.
-  await mkdir(join(root, "TCRN Platform", "docs"), { recursive: true });
-  const rosterPath = join(root, "TCRN Platform", "docs", "acceptance-gate-groups.json");
+  const docsDirectory = "platform-docs";
+  await mkdir(join(root, docsDirectory), { recursive: true });
+  const rosterPath = join(root, docsDirectory, "acceptance-gate-groups.json");
   const completeRoster = syntheticRoster();
   await writeFile(rosterPath, `${JSON.stringify(completeRoster, null, 2)}\n`);
   const rosterRecordedAt = new Date((await stat(rosterPath)).mtimeMs).toISOString();
-  await writeFile(join(root, "TCRN Platform", "docs", "acceptance-verdicts.json"), `${JSON.stringify({
+  await writeFile(join(root, docsDirectory, "acceptance-verdicts.json"), `${JSON.stringify({
     schemaVersion: "tcrn.acceptance-verdicts.v1",
     verdicts: Object.fromEntries(completeRoster.groups.map((group) => [group.id, { verdict: "green", recordedAt: rosterRecordedAt, commit: FIXTURE_COMMIT }])),
   }, null, 2)}\n`);
-  await writeFile(join(root, "TCRN Platform", "docs", "platform-root-agents.md"), `${topology}fixture\n`);
+  await writeFile(join(root, docsDirectory, "platform-root-agents.md"), `${topology}fixture\n`);
   for (const entry of INSTALL_MANIFEST.items) {
     const path = entry.pathTemplate.replaceAll("<PLATFORM_ROOT>", root).replaceAll("<HOME>", home);
     if (entry.acceptanceProbe.startsWith("probe:regular-directory") || entry.acceptanceProbe.startsWith("probe:helper-skill-digest") || entry.acceptanceProbe.startsWith("probe:engine-version") || entry.acceptanceProbe.startsWith("probe:adapter-bundle-digest")) await mkdir(path, { recursive: true });
@@ -1067,6 +1075,55 @@ test("INC-234: missing, stale and red verdicts are each refused, and named", asy
   const green = leg(await run({ verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh, commit: FIXTURE_COMMIT }])) }));
   assert.equal(green.ok, true);
   assert.equal(green.groups, 9);
+});
+
+test("INC-246: an accepted red names its exact reason and does not exempt the group", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const rosterPath = join(fixture.root, "platform-docs", "acceptance-gate-groups.json");
+  const roster = JSON.parse(await readFile(rosterPath, "utf8"));
+  roster.groups[0].acceptedExceptions = [{
+    acceptedAt: "2026-08-15",
+    reasonCode: "PLATFORM_LAUNCHD_NOT_ON_DUTY",
+    reason: "OWNER_RULING_BACKUP_LAYERS_STOPPED",
+  }];
+  await writeFile(rosterPath, `${JSON.stringify(roster, null, 2)}\n`);
+  const fresh = new Date(Date.now()).toISOString();
+  const verdicts = Object.fromEntries(roster.groups.map((group) => [group.id, {
+    verdict: "green",
+    recordedAt: fresh,
+    commit: FIXTURE_COMMIT,
+  }]));
+  verdicts["group-0"] = {
+    verdict: "red",
+    recordedAt: fresh,
+    commit: FIXTURE_COMMIT,
+    detail: "node scripts/platform-doctor.mjs -> reasonCode=PLATFORM_LAUNCHD_NOT_ON_DUTY; requiredLabel=com.tcrn.platform.local-snapshot",
+  };
+  const acceptedResult = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    acceptanceHeadCommit: FIXTURE_COMMIT,
+    acceptanceVerdicts: { verdicts },
+  });
+  const acceptedLeg = acceptedResult.checks.find((entry) => entry.name === "acceptanceVerdicts");
+  assert.equal(acceptedLeg.ok, true, JSON.stringify(acceptedLeg));
+  assert.deepEqual(acceptedLeg.acceptedExceptions, [{
+    group: "group-0",
+    acceptedAt: "2026-08-15",
+    reasonCode: "PLATFORM_LAUNCHD_NOT_ON_DUTY",
+    reason: "OWNER_RULING_BACKUP_LAYERS_STOPPED",
+  }]);
+
+  verdicts["group-0"].detail = "node scripts/platform-doctor.mjs -> reasonCode=PLATFORM_LAUNCHD_LAST_RUN_FAILED; requiredLabel=com.tcrn.platform.local-snapshot";
+  const unacceptedResult = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    acceptanceHeadCommit: FIXTURE_COMMIT,
+    acceptanceVerdicts: { verdicts },
+  });
+  const unacceptedLeg = unacceptedResult.checks.find((entry) => entry.name === "acceptanceVerdicts");
+  assert.equal(unacceptedLeg.ok, false);
+  assert.deepEqual(unacceptedLeg.failing.map((entry) => entry.group), ["group-0"]);
 });
 
 // The remedy has to say what a recorded verdict is and is not, or the file becomes a
