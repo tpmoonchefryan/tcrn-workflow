@@ -112,6 +112,12 @@
       "recordedAt": "2026-08-20",
       "ratio": 1.6386,
       "rationale": "The acceptance-verdict leg now binds each green result to the inspected engine commit and refuses an unbound or different-tree result. This pays for the three red-leg tests that prove a verdict from another commit is stale, a verdict on the current commit passes, and a missing commit is refused, plus the unreadable-HEAD deferral that keeps synthetic fixtures from inheriting a false failure. The old roster-mtime bound had measured negative ages on every live entry and was host-dependent because mtime is not tracked by git; retiring these tests would leave the platform able to report green for a run from a different tree, the exact failure STORY-304 exists to close."
+    },
+    {
+      "id": "TCRN-CROSS-INC-249-container-batch-proof",
+      "recordedAt": "2026-08-23",
+      "ratio": 1.6425,
+      "rationale": "The container batch adds the executable red legs for a scoped acceptance exception, canonical platform-docs migration, whitelist-root admission, and the runtime observation sink move. The extra proof mass is the evidence that these changes do not turn a real failure green or reintroduce a second container authority; it is paid explicitly so the P1 ratchet remains visible rather than being weakened or bypassed."
     }
   ]
 }
