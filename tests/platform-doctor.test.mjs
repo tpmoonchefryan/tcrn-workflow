@@ -35,7 +35,7 @@ function syntheticRoster(count = 9) {
   };
 }
 
-async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, whitelistGit = false, claude = "@AGENTS.md\n", roster = syntheticRoster(), trackedAgents = true, docsDirectory = join("TCRN Platform", "docs") } = {}) {
+async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, whitelistGit = false, claude = "@AGENTS.md\n", roster = syntheticRoster(), trackedAgents = true, docsDirectory = "platform-docs" } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-platform-doctor-")));
   context.after(() => rm(base, { recursive: true, force: true }));
   const root = join(base, "platform");
@@ -77,11 +77,18 @@ test("a complete synthetic platform container is green", async (context) => {
   assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true, true, true]);
 });
 
-test("INC-247: the container-root platform docs location is accepted before the move", async (context) => {
+test("INC-247: the container-root platform docs location is canonical", async (context) => {
   const root = await fixture(context, { docsDirectory: "platform-docs" });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.checks.find((entry) => entry.name === "acceptanceGateGroups").acceptedExceptionCount, 0);
+});
+
+test("INC-247: the former classification-folder docs location is rejected", async (context) => {
+  const root = await fixture(context, { docsDirectory: join("TCRN Platform", "docs") });
+  const result = await inspectPlatform(root, { includeInstallSurface: false });
+  assert.equal(result.ok, false);
+  assert.equal(result.checks.find((entry) => entry.name === "acceptanceGateGroups").reasonCode, "PLATFORM_ACCEPTANCE_ROSTER_MISSING");
 });
 
 // Red legs for the roster, both observed before this landed: an absent roster is

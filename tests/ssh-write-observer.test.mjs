@@ -53,7 +53,7 @@ Object.assign(process.env, {
 const SOURCE_PATH = process.env.INC037_SOURCE ?? resolve(HERE, "../scripts/ssh-write-observer.mjs");
 const source = await readFile(SOURCE_PATH, "utf8");
 
-// The mutant copies live in a temp workdir, so PLATFORM_ROOT (derived from the
+// The mutant copies live in a temp workdir, so the container root (derived from the
 // script's own location) points nowhere. Pin the break-glass allowlist to this
 // repository's own policy file before importing any copy (INC-051): otherwise a
 // mutant sees an empty allowlist and samples that should ride a break-glass entry go
@@ -447,7 +447,7 @@ test("the default sink is outside the repository checkout (the INC-040 root caus
       !path.startsWith(`${repoRoot}/`),
       `the default sink must not live inside the checkout — a repo-local evidence move deleted it once already (got ${path})`,
     );
-    assert.equal(path, resolve(repoRoot, "..", "var/tcrn-observe/ssh-write-hits.jsonl"));
+    assert.equal(path, resolve(repoRoot, "..", "..", ".tcrn-artifacts/observe/var/tcrn-observe/ssh-write-hits.jsonl"));
   } finally {
     if (saved === undefined) delete process.env.S2_OBSERVE_LOG;
     else process.env.S2_OBSERVE_LOG = saved;

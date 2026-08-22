@@ -30,7 +30,6 @@ import {
 const execFileAsync = promisify(execFile);
 const TOPOLOGY_SECTION_MARKER = "## 三、分区拓扑";
 const PLATFORM_DOCS_RELATIVE = "platform-docs";
-const LEGACY_PLATFORM_DOCS_RELATIVE = join("TCRN Platform", "docs");
 
 function check(name, ok, details = {}) {
   return { name, ok, ...details };
@@ -45,19 +44,11 @@ async function existingPath(path) {
   }
 }
 
-// INC-247 migration bridge. The container-root location is canonical; the legacy
-// classification-folder location remains readable only during the move window so
-// the doctor never answers from a missing roster.
-async function platformDocsRoot(root, { allowLegacy = true } = {}) {
-  const candidates = [
-    { relativePath: PLATFORM_DOCS_RELATIVE, path: join(root, PLATFORM_DOCS_RELATIVE) },
-    ...(allowLegacy ? [{ relativePath: LEGACY_PLATFORM_DOCS_RELATIVE, path: join(root, LEGACY_PLATFORM_DOCS_RELATIVE) }] : []),
-  ];
-  for (const candidate of candidates) {
-    const stats = await existingPath(candidate.path);
-    if (stats?.isDirectory()) return candidate;
-  }
-  return candidates[0];
+// INC-247: platform-level documents live at the container root. The classification
+// folder is deliberately not a fallback: a future move must fail visibly rather than
+// silently reintroduce a second authority.
+async function platformDocsRoot(root) {
+  return { relativePath: PLATFORM_DOCS_RELATIVE, path: join(root, PLATFORM_DOCS_RELATIVE) };
 }
 
 function expandTemplate(template, platformRoot, homeRoot) {
@@ -98,7 +89,12 @@ async function inspectAgentsHistory(root) {
   const docsRoot = await platformDocsRoot(root);
   const tracked = join(docsRoot.path, "platform-root-agents.md");
   const liveStats = await existingPath(live);
-  const trackedStats = await existingPath(tracked);
+  let trackedStats = null;
+  try {
+    trackedStats = await stat(tracked);
+  } catch (error) {
+    if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+  }
   if (!liveStats?.isFile() || !trackedStats?.isFile()) {
     // An absent live AGENTS.md is already named by the leg above; this one reports
     // only the half it owns.
@@ -287,7 +283,7 @@ async function inspectAcceptanceVerdicts(root, options) {
       return check("acceptanceVerdicts", false, {
         reasonCode: "PLATFORM_ACCEPTANCE_VERDICTS_MISSING",
         groups: groups.length,
-        remedy: "run the nine groups and record each verdict in TCRN Platform/docs/acceptance-verdicts.json; an unrecorded run cannot be told from an unrun one",
+        remedy: "run the nine groups and record each verdict in platform-docs/acceptance-verdicts.json; an unrecorded run cannot be told from an unrun one",
       });
     }
   }

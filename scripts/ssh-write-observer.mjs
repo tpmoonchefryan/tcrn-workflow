@@ -68,13 +68,12 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // predicate is "the observation period produced no false positive", and a severed
 // channel makes "no false positive" and "no observation at all" the same byte sequence.
 //
-// Two changes follow from that. The sink now lives OUTSIDE any git checkout — the
-// platform root is not a repository, so a runtime log under `var/` there pollutes no
-// working tree and cannot be deleted by a repo-local evidence move again (same shape as
-// TCRN-AOS/deploy/aos-local-client/ceremony-spans.mjs). And the channel now has a gate
-// that can go red: see `verifyChannel` below.
-const PLATFORM_ROOT = resolve(REPO_ROOT, "..");
-const DEFAULT_LOG = resolve(PLATFORM_ROOT, "var/tcrn-observe/ssh-write-hits.jsonl");
+// Two changes follow from that. The sink now lives OUTSIDE any project checkout under
+// the container archive — a runtime log there cannot be deleted by a repo-local evidence
+// move again (same shape as TCRN-AOS/deploy/aos-local-client/ceremony-spans.mjs). And the
+// channel now has a gate that can go red: see `verifyChannel` below.
+const CONTAINER_ROOT = resolve(REPO_ROOT, "..", "..");
+const DEFAULT_LOG = resolve(CONTAINER_ROOT, ".tcrn-artifacts/observe/var/tcrn-observe/ssh-write-hits.jsonl");
 
 // Keep deployment topology configurable without publishing a literal private
 // host/path in the candidate source. The deployed hook supplies the same values
@@ -96,7 +95,7 @@ const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 // This repository's own roster. It used to default into a sibling product project,
 // so the observer could not run from a lone clone and the engine repository read
 // another project to configure itself. The env override is unchanged.
-const DEFAULT_TARGET_ROSTER = resolve(PLATFORM_ROOT, "tcrn-workflow/scripts/policy/ssh-observer-target-roster.json");
+const DEFAULT_TARGET_ROSTER = resolve(REPO_ROOT, "scripts/policy/ssh-observer-target-roster.json");
 const REQUIRED_RUNTIME_NAMES = [
   "TCRN_SSH_GOVERNED_HOST",
   "TCRN_SSH_RUNTIME_ROOT",

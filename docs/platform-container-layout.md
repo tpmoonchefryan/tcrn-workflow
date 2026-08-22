@@ -23,8 +23,10 @@ A classification folder may organize repositories at the repository layer. It
 
 ## Container invariants
 
-- The platform container is the user's code root and is not itself inside any
-  Git repository.
+- The platform container is the user's code root. It may carry a minimal
+  whitelist Git repository for container identity and wiring, but that
+  repository is not a code repository and must not track governed repositories,
+  the chain, or the archive area.
 - The container may hold any number of governed repositories and unrelated
   projects. A repository's sibling position is not evidence of its platform
   partition.
