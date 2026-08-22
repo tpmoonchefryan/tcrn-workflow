@@ -35,7 +35,7 @@ function syntheticRoster(count = 9) {
   };
 }
 
-async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, claude = "@AGENTS.md\n", roster = syntheticRoster(), trackedAgents = true, docsDirectory = join("TCRN Platform", "docs") } = {}) {
+async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, whitelistGit = false, claude = "@AGENTS.md\n", roster = syntheticRoster(), trackedAgents = true, docsDirectory = join("TCRN Platform", "docs") } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-platform-doctor-")));
   context.after(() => rm(base, { recursive: true, force: true }));
   const root = join(base, "platform");
@@ -43,7 +43,10 @@ async function fixture(context, { agents = `${topology}fixture\n`, chain = true,
   if (agents !== null) await writeFile(join(root, "AGENTS.md"), agents);
   if (claude !== null) await writeFile(join(root, "CLAUDE.md"), claude);
   if (chain) await mkdir(join(root, ".tcrn-workspace", "cross-project", "workspace"), { recursive: true });
-  if (git) await mkdir(join(root, ".git"));
+  if (git) {
+    await mkdir(join(root, ".git"));
+    if (whitelistGit) await writeFile(join(root, ".gitignore"), "/*\n!/AGENTS.md\n!/CLAUDE.md\n!/docs/\n");
+  }
   if (roster !== null) {
     await mkdir(join(root, docsDirectory), { recursive: true });
     await writeFile(join(root, docsDirectory, "acceptance-gate-groups.json"), `${JSON.stringify(roster, null, 2)}\n`);
@@ -157,6 +160,14 @@ test("a container inside Git ancestry is refused", async (context) => {
   assert.equal(result.ok, false);
   assert.equal(result.reasonCode, "PLATFORM_ROOT_INSIDE_GIT_REPOSITORY");
   assert.equal(result.checks.find((item) => item.name === "containerOutsideGit").ok, false);
+});
+
+test("the container whitelist repository is allowed, while code-repository ancestry is not", async (context) => {
+  const root = await fixture(context, { git: true, whitelistGit: true });
+  const result = await inspectPlatform(root, { includeInstallSurface: false });
+  const leg = result.checks.find((item) => item.name === "containerOutsideGit");
+  assert.equal(leg.ok, true, JSON.stringify(leg));
+  assert.equal(leg.repository, "container-whitelist");
 });
 
 test("a missing Claude bridge is named separately", async (context) => {

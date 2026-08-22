@@ -503,6 +503,12 @@ async function inspectGitAncestors(root) {
   while (true) {
     visited.push(current);
     if (await existingPath(join(current, ".git"))) {
+      if (current === root && await isContainerWhitelistRepository(root)) {
+        return check("containerOutsideGit", true, {
+          ancestorsChecked: visited.length,
+          repository: "container-whitelist",
+        });
+      }
       return check("containerOutsideGit", false, { reasonCode: "PLATFORM_ROOT_INSIDE_GIT_REPOSITORY", gitAncestor: current });
     }
     const parent = dirname(current);
@@ -510,6 +516,19 @@ async function inspectGitAncestors(root) {
     current = parent;
   }
   return check("containerOutsideGit", true, { ancestorsChecked: visited.length });
+}
+
+async function isContainerWhitelistRepository(root) {
+  try {
+    const ignore = await readFile(join(root, ".gitignore"), "utf8");
+    const lines = ignore.split(/\r?\n/u);
+    return lines.includes("/*")
+      && lines.includes("!/AGENTS.md")
+      && lines.includes("!/CLAUDE.md")
+      && lines.includes("!/docs/");
+  } catch {
+    return false;
+  }
 }
 
 async function inspectClaudeBridge(root) {
