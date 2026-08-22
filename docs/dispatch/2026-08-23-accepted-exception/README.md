@@ -6,12 +6,12 @@
 单在 **cross-project 分区**（`TCRN-CROSS-INC-246`），代码在**本仓**
 （`scripts/platform-doctor.mjs`）—— 载荷放这里，是因为交接书与病因同处。
 
-## 一件动手前要知道的
+## 一处更正
 
-判据名册 `TCRN Platform/docs/acceptance-gate-groups.json` **不在任何 Git 仓里**：
-容器根按 `AGENTS.md` 的设计不是仓，而 `platform-doctor.mjs:249` 以绝对路径读它。
-所以本单交付的例外记录，其载体当前**不受版本控制** ——
-这一条不要就地解决（搬仓属容器布局变更），但要在实现注释与报告里记下来。
+首版 README 写着判据名册不在任何 Git 仓里。**那是错的**：`TCRN Platform/docs/` 本身就是一个
+本地（无远端）Git 仓，`acceptance-gate-groups.json` 自始受追踪。
+写单人当时只查了 tcrn-workflow / DS / AOS 三个仓，没查 docs 目录自己是不是仓。
+例外记录因此有提交历史背书，不需要额外安排。
 
 ## 验证
 
