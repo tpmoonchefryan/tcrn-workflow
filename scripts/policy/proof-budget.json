@@ -118,6 +118,12 @@
       "recordedAt": "2026-08-23",
       "ratio": 1.6425,
       "rationale": "The container batch adds the executable red legs for a scoped acceptance exception, canonical platform-docs migration, whitelist-root admission, and the runtime observation sink move. The extra proof mass is the evidence that these changes do not turn a real failure green or reintroduce a second container authority; it is paid explicitly so the P1 ratchet remains visible rather than being weakened or bypassed."
+    },
+    {
+      "id": "TCRN-CROSS-INC-250-acceptance-binding",
+      "recordedAt": "2026-08-23",
+      "ratio": 1.6507,
+      "rationale": "The acceptance lane now resolves each roster repository independently, binds git verdicts to full object ids, binds the non-git chain to a digest of partition workspace ids and event-head hashes, and refuses an unresolved repository instead of falling back to the engine. The additional red/green proof covers helper-versus-engine independence, product-versus-engine independence, chain movement without a recording loop, and the missing-tree refusal. This proof mass is the evidence that the done lane cannot be satisfied by a verdict on a different tree; it is recorded explicitly so the frozen P1 line is not weakened silently."
     }
   ]
 }
