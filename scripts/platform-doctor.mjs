@@ -61,6 +61,7 @@ const CHAIN_CONTAINER_REPOSITORY = "chain container";
 const CHAIN_CONTAINER_DIRECTORY = [".tcrn", "workspace"].join("-");
 const WORKFLOW_DIRECTORY = [".tcrn", "workflow"].join("-");
 const ACCEPTANCE_BINDING_SCHEMA = "tcrn.acceptance-binding.v1";
+const CHAIN_VALIDATE_GROUP_ID = "chain-validate";
 
 function pathInside(root, candidate) {
   const relativePath = relative(root, candidate);
@@ -144,6 +145,113 @@ async function resolveChainAcceptanceBinding(root, repository) {
   } catch (error) {
     return { ok: false, reasonCode: "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED", repository, reason: error?.code ?? error?.message ?? "chain container is unreadable" };
   }
+}
+
+// TCRN-CROSS-INC-251: chain validation measures the current event log and its
+// projections. It is cheap enough to run at doctor time, and unlike a recorded
+// verdict it cannot be invalidated by the governance write that the lane is
+// supposed to release.
+async function currentChainPartitions(root) {
+  const chainRoot = join(root, CHAIN_CONTAINER_DIRECTORY);
+  let entries;
+  try {
+    entries = await readdir(chainRoot, { withFileTypes: true });
+  } catch (error) {
+    return { ok: false, reason: error?.code ?? "chain container is unreadable" };
+  }
+  const partitions = [];
+  for (const entry of entries.filter((candidate) => candidate.isDirectory()).sort((left, right) => compareCanonicalTextLocal(left.name, right.name))) {
+    const workspacePath = join(chainRoot, entry.name, "workspace");
+    if (!(await existingPath(workspacePath))?.isDirectory()) continue;
+    partitions.push({ partition: entry.name, workspacePath });
+  }
+  if (partitions.length === 0) return { ok: false, reason: "chain container has no partition workspaces" };
+  return { ok: true, partitions };
+}
+
+function parseCommandJson(output) {
+  const text = typeof output === "string" ? output : Buffer.isBuffer(output) ? output.toString("utf8") : "";
+  if (text.trim().length === 0) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+export async function inspectChainValidation(root, options = {}) {
+  // The legacy synthetic hook keeps the existing hermetic doctor fixtures from
+  // reaching a developer's engine. Production invocations have no
+  // acceptanceHeadCommit and always take the live path below.
+  if (options.chainValidation !== undefined) {
+    const supplied = typeof options.chainValidation === "function"
+      ? await options.chainValidation(root, options)
+      : options.chainValidation;
+    return check("chainValidation", supplied?.ok !== false, {
+      ...(supplied && typeof supplied === "object" ? supplied : {}),
+      source: "synthetic-test-input",
+    });
+  }
+  if (options.acceptanceHeadCommit !== undefined) {
+    return check("chainValidation", true, {
+      comparable: false,
+      reason: "synthetic acceptance fixture; live chain validation is exercised by its dedicated probe",
+      source: "synthetic-test-input",
+    });
+  }
+  const discovered = await currentChainPartitions(root);
+  if (!discovered.ok) {
+    return check("chainValidation", false, {
+      reasonCode: "PLATFORM_CHAIN_VALIDATION_UNAVAILABLE",
+      reason: discovered.reason,
+      source: "live engine validate",
+    });
+  }
+  const cli = options.engineCli ?? join(dirname(fileURLToPath(import.meta.url)), "tcrn-workflow.mjs");
+  const started = process.hrtime.bigint();
+  const results = await Promise.all(discovered.partitions.map(async ({ partition, workspacePath }) => {
+    try {
+      const result = await execFileAsync(process.execPath, [cli, "validate", "--workspace", workspacePath], {
+        timeout: 120_000,
+        maxBuffer: 8 * 1_048_576,
+      });
+      const output = parseCommandJson(result.stdout);
+      return {
+        partition,
+        workspace: relative(root, workspacePath),
+        exitCode: 0,
+        reasonCode: output?.reasonCode ?? "WORKSPACE_COMMAND_COMPLETED",
+        ...(output === null ? { outputValid: false } : {}),
+      };
+    } catch (error) {
+      const output = parseCommandJson(error?.stdout) ?? parseCommandJson(error?.stderr);
+      return {
+        partition,
+        workspace: relative(root, workspacePath),
+        exitCode: typeof error?.status === "number" ? error.status : null,
+        reasonCode: output?.reasonCode ?? (typeof error?.status === "number" ? `PLATFORM_CHAIN_VALIDATE_EXIT_${error.status}` : typeof error?.code === "number" ? `PLATFORM_CHAIN_VALIDATE_EXIT_${error.code}` : typeof error?.code === "string" ? error.code : "PLATFORM_CHAIN_VALIDATE_FAILED"),
+        ...(typeof output?.error === "string" ? { detail: output.error } : typeof error?.stderr === "string" && error.stderr.trim().length > 0 ? { detail: error.stderr.trim().slice(0, 500) } : {}),
+      };
+    }
+  }));
+  const durationMs = Number(process.hrtime.bigint() - started) / 1_000_000;
+  const failed = results.filter((result) => result.exitCode !== 0);
+  if (failed.length > 0) {
+    return check("chainValidation", false, {
+      reasonCode: "PLATFORM_CHAIN_VALIDATION_FAILED",
+      partitionCount: results.length,
+      durationMs: Number(durationMs.toFixed(2)),
+      failed,
+      partitions: results,
+      source: "live engine validate",
+    });
+  }
+  return check("chainValidation", true, {
+    partitionCount: results.length,
+    durationMs: Number(durationMs.toFixed(2)),
+    partitions: results,
+    source: "live engine validate",
+  });
 }
 
 async function resolveAcceptanceBinding(root, group, options) {
@@ -419,8 +527,9 @@ async function inspectAcceptanceVerdicts(root, options) {
     // twice would give one defect two owners and two arguments about who fixes it.
     return check("acceptanceVerdicts", true, { comparable: false, reason: "no roster to check verdicts against" });
   }
-  const groups = Array.isArray(roster?.groups) ? roster.groups.map((group) => group?.id).filter((id) => typeof id === "string") : [];
-  if (groups.length === 0) {
+  const allGroups = Array.isArray(roster?.groups) ? roster.groups.map((group) => group?.id).filter((id) => typeof id === "string") : [];
+  const groups = allGroups.filter((id) => id !== CHAIN_VALIDATE_GROUP_ID);
+  if (allGroups.length === 0) {
     return check("acceptanceVerdicts", true, { comparable: false, reason: "no roster to check verdicts against" });
   }
   let document = options.acceptanceVerdicts;
@@ -445,8 +554,9 @@ async function inspectAcceptanceVerdicts(root, options) {
   const groupsById = new Map((Array.isArray(roster?.groups) ? roster.groups : []).map((group) => [group?.id, group]));
   const currentBindings = new Map();
   const unresolved = [];
+  const liveGroupRecorded = Object.hasOwn(verdicts, CHAIN_VALIDATE_GROUP_ID);
   if (verdictsPresent) {
-    for (const group of Array.isArray(roster?.groups) ? roster.groups : []) {
+    for (const group of (Array.isArray(roster?.groups) ? roster.groups : []).filter((candidate) => candidate?.id !== CHAIN_VALIDATE_GROUP_ID)) {
       const resolved = await resolveAcceptanceBinding(root, group, options);
       if (!resolved.ok) {
         unresolved.push({ group: group.id, repository: group.repository, reasonCode: resolved.reasonCode, reason: resolved.reason });
@@ -513,9 +623,10 @@ async function inspectAcceptanceVerdicts(root, options) {
       stale.push(staleEntry);
     }
   }
-  if (unresolved.length > 0 || missing.length > 0 || stale.length > 0 || failing.length > 0) {
+  if (liveGroupRecorded || unresolved.length > 0 || missing.length > 0 || stale.length > 0 || failing.length > 0) {
     return check("acceptanceVerdicts", false, {
       reasonCode: "PLATFORM_ACCEPTANCE_LANE_UNPROVEN",
+      ...(liveGroupRecorded ? { liveGroupRecorded: CHAIN_VALIDATE_GROUP_ID } : {}),
       ...(unresolved.length > 0 ? { unresolved } : {}),
       ...(missing.length > 0 ? { missing } : {}),
       ...(stale.length > 0 ? { stale } : {}),
@@ -526,6 +637,7 @@ async function inspectAcceptanceVerdicts(root, options) {
   }
   return check("acceptanceVerdicts", true, {
     groups: groups.length,
+    liveGroups: [CHAIN_VALIDATE_GROUP_ID],
     ...(acceptedExceptions.length > 0 ? { acceptedExceptions } : {}),
     bindings: [...currentBindings.entries()].map(([group, binding]) => ({ group, kind: binding.kind, repository: binding.repository, identity: bindingIdentity(binding) })),
     ...(options.acceptanceHeadCommit !== undefined ? { head: options.acceptanceHeadCommit.slice(0, 12) } : {}),
@@ -1815,6 +1927,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
       await inspectHelperCopies(root, homeRoot, manifest, options),
       await inspectHelperReleaseAlignment(root, homeRoot, options),
       await inspectChainHeadroom(root, options),
+      await inspectChainValidation(root, options),
       await inspectAcceptanceVerdicts(root, options),
       await inspectInstallWiring(root, homeRoot, manifest),
       await inspectHookExecutability(root, manifest),

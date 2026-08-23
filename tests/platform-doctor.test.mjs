@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { adapterIdentityObservations, inspectPlatform } from "../scripts/platform-doctor.mjs";
+import { adapterIdentityObservations, inspectChainValidation, inspectPlatform } from "../scripts/platform-doctor.mjs";
 import { GUARDED_TREES, HOSTS, claudeHookSettings, hookEntriesFor } from "../scripts/host-harness.mjs";
 import { applyHostHarness } from "../scripts/host-harness-apply.mjs";
 import { INSTALL_MANIFEST } from "../dist/build/packages/core/src/index.js";
@@ -82,7 +82,7 @@ function inc250Bindings(roster, { engine = "a", helper = "b", chain = "c", desig
 function verdictDocumentForBindings(roster, bindings) {
   return {
     schemaVersion: "tcrn.acceptance-verdicts.v1",
-    verdicts: Object.fromEntries(roster.groups.map((group) => [group.id, {
+    verdicts: Object.fromEntries(roster.groups.filter((group) => group.id !== "chain-validate").map((group) => [group.id, {
       verdict: "green",
       recordedAt: "2026-08-23T04:00:00.000Z",
       binding: bindings[group.id],
@@ -1207,6 +1207,7 @@ test("INC-250: each verdict binds to the repository named by its roster entry", 
   const run = (currentBindings, document = verdictDocumentForBindings(roster, bindings)) => inspectPlatform(platform.root, {
     homeRoot: platform.home,
     launchdLabels: [launchdLabel],
+    chainValidation: { ok: true, reason: "synthetic acceptance probe" },
     acceptanceBindings: currentBindings,
     acceptanceVerdicts: document,
   });
@@ -1214,7 +1215,19 @@ test("INC-250: each verdict binds to the repository named by its roster entry", 
   const green = await run(bindings);
   const greenLeg = green.checks.find((item) => item.name === "acceptanceVerdicts");
   assert.equal(green.ok, true, JSON.stringify(greenLeg));
-  assert.equal(greenLeg.bindings.length, 9);
+  assert.equal(greenLeg.bindings.length, 8);
+  assert.deepEqual(greenLeg.liveGroups, ["chain-validate"]);
+  const withLiveRecord = {
+    ...verdictDocumentForBindings(roster, bindings),
+    verdicts: {
+      ...verdictDocumentForBindings(roster, bindings).verdicts,
+      "chain-validate": { verdict: "green", recordedAt: "2026-08-23T04:00:00.000Z", binding: bindings["chain-validate"] },
+    },
+  };
+  const liveRecordRed = await run(bindings, withLiveRecord);
+  const liveRecordLeg = liveRecordRed.checks.find((item) => item.name === "acceptanceVerdicts");
+  assert.equal(liveRecordLeg.ok, false);
+  assert.equal(liveRecordLeg.liveGroupRecorded, "chain-validate");
 
   const helperMoved = { ...bindings };
   helperMoved["helper-suite"] = gitAcceptanceBinding("TCRN Platform/tcrn-workflow-helper", "e".repeat(40));
@@ -1241,30 +1254,42 @@ test("INC-250: each verdict binds to the repository named by its roster entry", 
   assert.equal(designSystemLeg.stale.some((entry) => entry.group === "engine-suite"), false, "product movement must not stale the engine tree");
 });
 
-test("INC-250: chain binding has reachable green/red worlds and verdict-file recording is not a chain write", async (context) => {
-  const roster = inc250Roster();
-  const platform = await completeInstallFixture(context, { roster });
-  const bindings = inc250Bindings(roster, { chain: "a" });
-  const run = (currentBindings, document) => inspectPlatform(platform.root, {
-    homeRoot: platform.home,
-    launchdLabels: [launchdLabel],
-    acceptanceBindings: currentBindings,
-    acceptanceVerdicts: document,
-  });
-  const firstDocument = verdictDocumentForBindings(roster, bindings);
-  const firstGreen = await run(bindings, firstDocument);
-  assert.equal(firstGreen.ok, true, JSON.stringify(firstGreen));
+test("INC-251: live chain validation enumerates current partitions and reports elapsed time", async (context) => {
+  const root = await fixture(context);
+  const chainDirectory = [".tcrn", "workspace"].join("-");
+  await mkdir(join(root, chainDirectory, "second-partition", "workspace"), { recursive: true });
+  const cli = join(root, "synthetic-engine.mjs");
+  await writeFile(cli, `
+const workspace = process.argv.at(-1);
+process.stdout.write(JSON.stringify({ reasonCode: "WORKSPACE_COMMAND_COMPLETED", workspace }) + "\\n");
+`);
+  const result = await inspectChainValidation(root, { engineCli: cli });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.source, "live engine validate");
+  assert.deepEqual(result.partitions.map((entry) => entry.partition), ["cross-project", "second-partition"]);
+  assert.equal(result.partitionCount, 2);
+  assert.equal(typeof result.durationMs, "number");
+  assert.ok(result.durationMs >= 0);
+});
 
-  const reRecordedDocument = JSON.parse(JSON.stringify(firstDocument));
-  reRecordedDocument.verdicts["chain-validate"].recordedAt = "2026-08-23T04:00:01.000Z";
-  const reRecordedGreen = await run(bindings, reRecordedDocument);
-  assert.equal(reRecordedGreen.ok, true, "rewriting the verdict file does not advance the chain binding");
-
-  const movedChain = { ...bindings, "chain-validate": chainAcceptanceBinding("b") };
-  const chainRed = await run(movedChain, firstDocument);
-  const chainLeg = chainRed.checks.find((item) => item.name === "acceptanceVerdicts");
-  assert.deepEqual(chainLeg.stale.map((entry) => entry.group), ["chain-validate"]);
-  assert.equal(chainLeg.stale[0].changed[0].partition, "cross-project");
+test("INC-251: one live partition failure names that partition and reason", async (context) => {
+  const root = await fixture(context);
+  const chainDirectory = [".tcrn", "workspace"].join("-");
+  await mkdir(join(root, chainDirectory, "broken-partition", "workspace"), { recursive: true });
+  const cli = join(root, "synthetic-engine.mjs");
+  await writeFile(cli, `
+const workspace = process.argv.at(-1);
+if (workspace.includes("broken-partition")) {
+  process.exitCode = 1;
+} else {
+  process.stdout.write(JSON.stringify({ reasonCode: "WORKSPACE_COMMAND_COMPLETED" }) + "\\n");
+}
+`);
+  const result = await inspectChainValidation(root, { engineCli: cli });
+  assert.equal(result.ok, false);
+  assert.equal(result.reasonCode, "PLATFORM_CHAIN_VALIDATION_FAILED");
+  assert.deepEqual(result.failed.map((entry) => entry.partition), ["broken-partition"]);
+  assert.equal(result.failed[0].reasonCode, "PLATFORM_CHAIN_VALIDATE_EXIT_1");
 });
 
 test("INC-250: an unresolvable roster repository is a named red condition, never an engine fallback", async (context) => {
