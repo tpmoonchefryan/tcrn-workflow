@@ -35,6 +35,61 @@ function syntheticRoster(count = 9) {
   };
 }
 
+function inc250Roster() {
+  const repositories = [
+    ["engine-suite", "TCRN Platform/tcrn-workflow"],
+    ["engine-p1", "TCRN Platform/tcrn-workflow"],
+    ["engine-guards", "TCRN Platform/tcrn-workflow"],
+    ["engine-release", "TCRN Platform/tcrn-workflow"],
+    ["helper-suite", "TCRN Platform/tcrn-workflow-helper"],
+    ["helper-release", "TCRN Platform/tcrn-workflow-helper"],
+    ["platform-layout", "TCRN Platform/tcrn-workflow"],
+    ["chain-validate", "chain container"],
+    ["product-gates", "TCRN Platform/TCRN-Design-System"],
+  ];
+  return {
+    schemaVersion: "tcrn.acceptance-gate-groups.v1",
+    groups: repositories.map(([id, repository]) => ({ id, title: id, repository, command: "fixture", proves: "fixture" })),
+  };
+}
+
+function gitAcceptanceBinding(repository, commit) {
+  return { schemaVersion: "tcrn.acceptance-binding.v1", kind: "git", repository, commit };
+}
+
+function chainAcceptanceBinding(marker) {
+  const partitions = [{ partition: "cross-project", workspaceId: "workspace:fixture", headEventHash: marker.repeat(64) }];
+  return {
+    schemaVersion: "tcrn.acceptance-binding.v1",
+    kind: "chain",
+    repository: "chain container",
+    partitions,
+    digest: canonicalSha256(partitions),
+  };
+}
+
+function inc250Bindings(roster, { engine = "a", helper = "b", chain = "c", designSystem = "d" } = {}) {
+  const bindings = {};
+  for (const group of roster.groups) {
+    if (group.repository === "TCRN Platform/tcrn-workflow") bindings[group.id] = gitAcceptanceBinding(group.repository, engine.repeat(40));
+    else if (group.repository === "TCRN Platform/tcrn-workflow-helper") bindings[group.id] = gitAcceptanceBinding(group.repository, helper.repeat(40));
+    else if (group.repository === "TCRN Platform/TCRN-Design-System") bindings[group.id] = gitAcceptanceBinding(group.repository, designSystem.repeat(40));
+    else bindings[group.id] = chainAcceptanceBinding(chain);
+  }
+  return bindings;
+}
+
+function verdictDocumentForBindings(roster, bindings) {
+  return {
+    schemaVersion: "tcrn.acceptance-verdicts.v1",
+    verdicts: Object.fromEntries(roster.groups.map((group) => [group.id, {
+      verdict: "green",
+      recordedAt: "2026-08-23T04:00:00.000Z",
+      binding: bindings[group.id],
+    }])),
+  };
+}
+
 async function fixture(context, { agents = `${topology}fixture\n`, chain = true, git = false, whitelistGit = false, claude = "@AGENTS.md\n", roster = syntheticRoster(), trackedAgents = true, docsDirectory = "platform-docs" } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-platform-doctor-")));
   context.after(() => rm(base, { recursive: true, force: true }));
@@ -239,7 +294,7 @@ test("S259 bridge syntax skips hidden directories and the workspace container", 
   assert.equal(result.checks.find((item) => item.name === "bridgeSyntax").ok, true);
 });
 
-async function completeInstallFixture(context, { engineVersion = "0.11.15", helperVersion = "0.11.15", harness = true } = {}) {
+async function completeInstallFixture(context, { engineVersion = "0.11.15", helperVersion = "0.11.15", harness = true, roster = syntheticRoster() } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-init033-doctor-")));
   context.after(() => rm(base, { recursive: true, force: true }));
   const root = join(base, "platform");
@@ -253,7 +308,7 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
   const docsDirectory = "platform-docs";
   await mkdir(join(root, docsDirectory), { recursive: true });
   const rosterPath = join(root, docsDirectory, "acceptance-gate-groups.json");
-  const completeRoster = syntheticRoster();
+  const completeRoster = roster;
   await writeFile(rosterPath, `${JSON.stringify(completeRoster, null, 2)}\n`);
   const rosterRecordedAt = new Date((await stat(rosterPath)).mtimeMs).toISOString();
   await writeFile(join(root, docsDirectory, "acceptance-verdicts.json"), `${JSON.stringify({
@@ -346,7 +401,7 @@ test("S264 each install-completeness leg has a distinct synthetic red reason", a
   assert.equal(helperRed.reasonCode, "PLATFORM_HELPER_COPIES_INCOMPLETE");
 
   const launchd = await completeInstallFixture(context);
-  const launchdRed = await inspectPlatform(launchd.root, { homeRoot: launchd.home, launchdLabels: [] });
+  const launchdRed = await inspectPlatform(launchd.root, { homeRoot: launchd.home, launchdLabels: [], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(launchdRed.reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
 });
 
@@ -507,6 +562,7 @@ test("S269 launchd absence remains its own duty red leg", async (context) => {
   const result = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
     launchdLabels: [],
+    acceptanceHeadCommit: FIXTURE_COMMIT,
     launchdStatus: { lastExitCode: 0 },
     backupFreshness: { ok: true, latestBackupAt: "synthetic", ageHours: 0 },
   });
@@ -1144,6 +1200,94 @@ test("INC-246: an accepted red names its exact reason and does not exempt the gr
   assert.deepEqual(unacceptedLeg.failing.map((entry) => entry.group), ["group-0"]);
 });
 
+test("INC-250: each verdict binds to the repository named by its roster entry", async (context) => {
+  const roster = inc250Roster();
+  const platform = await completeInstallFixture(context, { roster });
+  const bindings = inc250Bindings(roster);
+  const run = (currentBindings, document = verdictDocumentForBindings(roster, bindings)) => inspectPlatform(platform.root, {
+    homeRoot: platform.home,
+    launchdLabels: [launchdLabel],
+    acceptanceBindings: currentBindings,
+    acceptanceVerdicts: document,
+  });
+
+  const green = await run(bindings);
+  const greenLeg = green.checks.find((item) => item.name === "acceptanceVerdicts");
+  assert.equal(green.ok, true, JSON.stringify(greenLeg));
+  assert.equal(greenLeg.bindings.length, 9);
+
+  const helperMoved = { ...bindings };
+  helperMoved["helper-suite"] = gitAcceptanceBinding("TCRN Platform/tcrn-workflow-helper", "e".repeat(40));
+  helperMoved["helper-release"] = gitAcceptanceBinding("TCRN Platform/tcrn-workflow-helper", "e".repeat(40));
+  const helperRed = await run(helperMoved);
+  const helperLeg = helperRed.checks.find((item) => item.name === "acceptanceVerdicts");
+  assert.deepEqual(helperLeg.stale.map((entry) => entry.group), ["helper-suite", "helper-release"]);
+  assert.match(helperLeg.stale[0].recordedAgainst, /tcrn-workflow-helper/u);
+  assert.match(helperLeg.stale[0].current, /e{12}/u);
+
+  const engineMoved = { ...bindings };
+  for (const id of ["engine-suite", "engine-p1", "engine-guards", "engine-release", "platform-layout"]) {
+    engineMoved[id] = gitAcceptanceBinding("TCRN Platform/tcrn-workflow", "f".repeat(40));
+  }
+  const engineRed = await run(engineMoved);
+  const engineLeg = engineRed.checks.find((item) => item.name === "acceptanceVerdicts");
+  assert.deepEqual(engineLeg.stale.map((entry) => entry.group), ["engine-suite", "engine-p1", "engine-guards", "engine-release", "platform-layout"]);
+  assert.equal(engineLeg.stale.some((entry) => entry.group === "product-gates"), false, "engine movement must not stale the product tree");
+
+  const designSystemMoved = { ...bindings, "product-gates": gitAcceptanceBinding("TCRN Platform/TCRN-Design-System", "e".repeat(40)) };
+  const designSystemRed = await run(designSystemMoved);
+  const designSystemLeg = designSystemRed.checks.find((item) => item.name === "acceptanceVerdicts");
+  assert.deepEqual(designSystemLeg.stale.map((entry) => entry.group), ["product-gates"]);
+  assert.equal(designSystemLeg.stale.some((entry) => entry.group === "engine-suite"), false, "product movement must not stale the engine tree");
+});
+
+test("INC-250: chain binding has reachable green/red worlds and verdict-file recording is not a chain write", async (context) => {
+  const roster = inc250Roster();
+  const platform = await completeInstallFixture(context, { roster });
+  const bindings = inc250Bindings(roster, { chain: "a" });
+  const run = (currentBindings, document) => inspectPlatform(platform.root, {
+    homeRoot: platform.home,
+    launchdLabels: [launchdLabel],
+    acceptanceBindings: currentBindings,
+    acceptanceVerdicts: document,
+  });
+  const firstDocument = verdictDocumentForBindings(roster, bindings);
+  const firstGreen = await run(bindings, firstDocument);
+  assert.equal(firstGreen.ok, true, JSON.stringify(firstGreen));
+
+  const reRecordedDocument = JSON.parse(JSON.stringify(firstDocument));
+  reRecordedDocument.verdicts["chain-validate"].recordedAt = "2026-08-23T04:00:01.000Z";
+  const reRecordedGreen = await run(bindings, reRecordedDocument);
+  assert.equal(reRecordedGreen.ok, true, "rewriting the verdict file does not advance the chain binding");
+
+  const movedChain = { ...bindings, "chain-validate": chainAcceptanceBinding("b") };
+  const chainRed = await run(movedChain, firstDocument);
+  const chainLeg = chainRed.checks.find((item) => item.name === "acceptanceVerdicts");
+  assert.deepEqual(chainLeg.stale.map((entry) => entry.group), ["chain-validate"]);
+  assert.equal(chainLeg.stale[0].changed[0].partition, "cross-project");
+});
+
+test("INC-250: an unresolvable roster repository is a named red condition, never an engine fallback", async (context) => {
+  const roster = inc250Roster();
+  roster.groups.find((group) => group.id === "product-gates").repository = "missing/design-system";
+  const platform = await completeInstallFixture(context, { roster });
+  const originalRoster = inc250Roster();
+  const bindings = inc250Bindings(originalRoster);
+  delete bindings["product-gates"];
+  const document = verdictDocumentForBindings(originalRoster, inc250Bindings(originalRoster));
+  const result = await inspectPlatform(platform.root, {
+    homeRoot: platform.home,
+    launchdLabels: [launchdLabel],
+    acceptanceBindings: bindings,
+    acceptanceVerdicts: document,
+  });
+  const leg = result.checks.find((item) => item.name === "acceptanceVerdicts");
+  assert.equal(result.ok, false);
+  assert.deepEqual(leg.unresolved.map((entry) => entry.group), ["product-gates"]);
+  assert.equal(leg.unresolved[0].reasonCode, "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED");
+  assert.equal(Object.hasOwn(leg, "head"), false, "the missing tree must not be replaced by engine HEAD");
+});
+
 // The remedy has to say what a recorded verdict is and is not, or the file becomes a
 // place to write "green" and move on. Red leg: drop the wording and the next reader
 // treats the record as the proof.
@@ -1228,11 +1372,9 @@ test("STORY-304: a verdict that names no commit is refused as unbound", async (c
   assert.deepEqual(leg.stale, [{ group: first, recordedAt: "2026-08-20T02:30:00.000Z", reason: "verdict names no commit" }]);
 });
 
-// A container with no readable engine checkout is not a platform whose lane has failed; it
-// is one this leg cannot speak about. Red leg: report it as red and every synthetic fixture
-// in this file turns red for a reason unrelated to what it tests -- which is what the first
-// attempt at this repair actually did, to thirteen criteria at once.
-test("STORY-304: an unreadable engine HEAD is not comparable rather than failed", async (context) => {
+// A declared repository that is not present is not comparable. INC-250 requires that
+// state to be red, because falling back to the engine tree is the defect being removed.
+test("INC-250: an unresolved declared repository is red rather than an engine-HEAD fallback", async (context) => {
   const fixture = await completeInstallFixture(context);
   const result = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
@@ -1240,7 +1382,8 @@ test("STORY-304: an unreadable engine HEAD is not comparable rather than failed"
     acceptanceVerdicts: boundVerdicts("e".repeat(40)),
   });
   const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
-  assert.equal(leg.ok, true);
-  assert.equal(leg.comparable, false);
-  assert.match(leg.reason, /no readable engine HEAD/u);
+  assert.equal(leg.ok, false);
+  assert.equal(leg.reasonCode, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
+  assert.equal(leg.unresolved.length, 9);
+  assert.equal(leg.unresolved[0].reasonCode, "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED");
 });

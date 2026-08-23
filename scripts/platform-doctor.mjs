@@ -57,6 +57,154 @@ function expandTemplate(template, platformRoot, homeRoot) {
   return resolve(template.replaceAll("<PLATFORM_ROOT>", platformRoot).replaceAll("<HOME>", homeRoot));
 }
 
+const CHAIN_CONTAINER_REPOSITORY = "chain container";
+const CHAIN_CONTAINER_DIRECTORY = [".tcrn", "workspace"].join("-");
+const WORKFLOW_DIRECTORY = [".tcrn", "workflow"].join("-");
+const ACCEPTANCE_BINDING_SCHEMA = "tcrn.acceptance-binding.v1";
+
+function pathInside(root, candidate) {
+  const relativePath = relative(root, candidate);
+  return relativePath === "" || (relativePath !== ".." && !relativePath.startsWith(`..${sep}`) && !parse(relativePath).root);
+}
+
+async function resolveGitAcceptanceBinding(root, repository) {
+  if (typeof repository !== "string" || repository.trim().length === 0 || repository.startsWith("/")) {
+    return { ok: false, reasonCode: "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED", repository, reason: "repository must be a relative path" };
+  }
+  const requested = resolve(root, repository);
+  if (!pathInside(root, requested)) {
+    return { ok: false, reasonCode: "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED", repository, reason: "repository escapes platform root" };
+  }
+  let repositoryRoot;
+  try {
+    repositoryRoot = await realpath(requested);
+  } catch (error) {
+    return { ok: false, reasonCode: "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED", repository, reason: error?.code ?? "repository path is unreadable" };
+  }
+  const stats = await existingPath(repositoryRoot);
+  if (!stats?.isDirectory()) {
+    return { ok: false, reasonCode: "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED", repository, reason: "repository is not a directory" };
+  }
+  if (!pathInside(root, repositoryRoot)) {
+    return { ok: false, reasonCode: "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED", repository, reason: "resolved repository escapes platform root" };
+  }
+  try {
+    const commit = (await execFileAsync("git", ["-C", repositoryRoot, "rev-parse", "--verify", "HEAD"], { timeout: 30_000 })).stdout.trim();
+    if (!/^[0-9a-f]{40}$/iu.test(commit)) throw new Error("git HEAD is not a full object id");
+    return { ok: true, binding: { schemaVersion: ACCEPTANCE_BINDING_SCHEMA, kind: "git", repository, commit } };
+  } catch (error) {
+    return { ok: false, reasonCode: "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED", repository, reason: error?.code ?? error?.message ?? "git HEAD is unreadable" };
+  }
+}
+
+async function readChainPartitionBinding(root, partition) {
+  const workspaceRoot = join(root, CHAIN_CONTAINER_DIRECTORY, partition, "workspace");
+  const eventsRoot = join(workspaceRoot, WORKFLOW_DIRECTORY, "events");
+  try {
+    const workspace = JSON.parse(await readFile(join(workspaceRoot, WORKFLOW_DIRECTORY, "workspace.json"), "utf8"));
+    const eventFiles = (await readdir(eventsRoot)).filter((name) => /^\d+\.json$/u.test(name)).sort();
+    if (eventFiles.length === 0) throw new Error("chain has no event segments");
+    const segment = JSON.parse(await readFile(join(eventsRoot, eventFiles[eventFiles.length - 1]), "utf8"));
+    const events = Array.isArray(segment) ? segment : [segment];
+    const event = events.at(-1);
+    if (typeof workspace.workspaceId !== "string" || !/^[0-9a-f]{64}$/iu.test(event?.eventHash ?? "")) {
+      throw new Error("chain head identity is malformed");
+    }
+    return { partition, workspaceId: workspace.workspaceId, headEventHash: event.eventHash };
+  } catch (error) {
+    return { error: error?.code ?? error?.message ?? "chain partition is unreadable", partition };
+  }
+}
+
+async function resolveChainAcceptanceBinding(root, repository) {
+  const chainRoot = join(root, CHAIN_CONTAINER_DIRECTORY);
+  try {
+    const entries = await readdir(chainRoot, { withFileTypes: true });
+    const partitions = [];
+    for (const entry of entries.filter((candidate) => candidate.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
+      const workspacePath = join(chainRoot, entry.name, "workspace");
+      const workspaceStats = await existingPath(workspacePath);
+      if (!workspaceStats?.isDirectory()) continue;
+      const identity = await readChainPartitionBinding(root, entry.name);
+      if (identity.error) return { ok: false, reasonCode: "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED", repository, reason: `${identity.partition}: ${identity.error}` };
+      partitions.push(identity);
+    }
+    if (partitions.length === 0) throw new Error("chain container has no partition workspaces");
+    const bindingParts = partitions.map(({ partition, workspaceId, headEventHash }) => ({ partition, workspaceId, headEventHash }));
+    return {
+      ok: true,
+      binding: {
+        schemaVersion: ACCEPTANCE_BINDING_SCHEMA,
+        kind: "chain",
+        repository,
+        partitions: bindingParts,
+        digest: canonicalSha256(bindingParts),
+      },
+    };
+  } catch (error) {
+    return { ok: false, reasonCode: "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED", repository, reason: error?.code ?? error?.message ?? "chain container is unreadable" };
+  }
+}
+
+async function resolveAcceptanceBinding(root, group, options) {
+  // Test fixtures may inject the observed tree identity without creating real
+  // repositories. This is an explicit observation override, never a production
+  // fallback; the live path below always resolves group.repository itself.
+  const override = options.acceptanceBindings?.[group.id] ?? options.acceptanceBindings?.[group.repository];
+  if (override !== undefined) return { ok: true, binding: override };
+  // Retain the old synthetic-test hook so existing platform fixtures stay hermetic.
+  // It is only reachable when the caller explicitly supplies acceptanceHeadCommit.
+  if (options.acceptanceHeadCommit !== undefined) {
+    return { ok: true, binding: { schemaVersion: ACCEPTANCE_BINDING_SCHEMA, kind: "git", repository: group.repository, commit: options.acceptanceHeadCommit } };
+  }
+  if (group.repository === CHAIN_CONTAINER_REPOSITORY) return resolveChainAcceptanceBinding(root, group.repository);
+  return resolveGitAcceptanceBinding(root, group.repository);
+}
+
+function recordedAcceptanceBinding(entry, group, options) {
+  if (entry?.binding && typeof entry.binding === "object") return entry.binding;
+  // Legacy shape is accepted only by explicit synthetic fixtures. A real platform
+  // verdict without the machine-readable binding is unbound and must go red.
+  if (options.acceptanceHeadCommit !== undefined && typeof entry?.commit === "string") {
+    return { schemaVersion: ACCEPTANCE_BINDING_SCHEMA, kind: "git", repository: group.repository, commit: entry.commit };
+  }
+  return null;
+}
+
+function bindingIdentity(binding) {
+  if (binding?.kind === "git") return `git:${binding.repository}@${binding.commit ?? "<missing>"}`;
+  if (binding?.kind === "chain") return `chain:${binding.repository}@${binding.digest ?? "<missing>"}`;
+  return `<unbound:${typeof binding?.kind === "string" ? binding.kind : "missing"}>`;
+}
+
+function compareAcceptanceBindings(recorded, current) {
+  if (!recorded || !current || recorded.kind !== current.kind || recorded.repository !== current.repository) {
+    return { equal: false, changed: [] };
+  }
+  if (recorded.kind === "git") {
+    return { equal: recorded.commit === current.commit, changed: [{ recorded: recorded.commit, current: current.commit }] };
+  }
+  if (recorded.kind !== "chain" || !Array.isArray(recorded.partitions) || !Array.isArray(current.partitions)) {
+    return { equal: false, changed: [{ recorded: recorded.digest ?? null, current: current.digest ?? null }] };
+  }
+  const recordedByPartition = new Map(recorded.partitions.map((part) => [part.partition, part]));
+  const currentByPartition = new Map(current.partitions.map((part) => [part.partition, part]));
+  const changed = [];
+  for (const partition of new Set([...recordedByPartition.keys(), ...currentByPartition.keys()])) {
+    const before = recordedByPartition.get(partition);
+    const after = currentByPartition.get(partition);
+    if (!before || !after || before.workspaceId !== after.workspaceId || before.headEventHash !== after.headEventHash) {
+      changed.push({
+        partition,
+        recorded: before ? { workspaceId: before.workspaceId, headEventHash: before.headEventHash } : null,
+        current: after ? { workspaceId: after.workspaceId, headEventHash: after.headEventHash } : null,
+      });
+    }
+  }
+  if (changed.length === 0 && recorded.digest !== current.digest) changed.push({ partition: "<chain-digest>", recorded: recorded.digest ?? null, current: current.digest ?? null });
+  return { equal: changed.length === 0, changed };
+}
+
 // STORY-300 / TCRN-CROSS-MIN-ACCEPTANCE-LANES. The machine-checked acceptance lane
 // releases a work item to done on "the named nine gate groups all green", and until
 // 2026-08-19 the roster of those nine existed nowhere -- not in a repository, not in
@@ -287,50 +435,26 @@ async function inspectAcceptanceVerdicts(root, options) {
       });
     }
   }
-  // TCRN-CROSS-STORY-304: this leg used to anchor freshness to the ROSTER FILE's own mtime.
-  // Two defects, both measured on the live tree before this change:
-  //
-  // It could never fire. Roster mtime was 2026-08-19T07:29:56Z while every recordedAt was
-  // 2026-08-20T02:30:00Z, so every group computed an age of -11.00 hours and the 26-hour
-  // bound was unreachable for any input. A staleness check that cannot go red is not a
-  // weaker check than intended; it is no check, reported as a passing one.
-  //
-  // And mtime is not tracked by git, so a fresh clone stamps it with checkout time: the
-  // identical tree gives different answers on different hosts. That is the shape
-  // TCRN-CROSS-MIN-103 names and the gate-reference-stability convention forbids, and it
-  // is the same host-dependence that made INC-238's link gate pass locally and fail in CI.
-  //
-  // The reference is now the inspected repository's HEAD commit. A verdict states the
-  // commit it was recorded against, and a commit that is not HEAD is stale by construction
-  // -- no clock, no filesystem attribute, and identical on every host because a git object
-  // id is a content hash. This is also what makes the leg able to answer the question it
-  // was written for: v1.0.0 was tagged on a commit whose CI was red while all nine
-  // verdicts read green, and nothing here compared a verdict to a tree.
+  // TCRN-CROSS-INC-250: a verdict is bound to the tree named by its roster entry.
+  // Git repositories use their full HEAD object id. The chain container has no git
+  // commit, so its binding is a content digest over every partition's workspace id
+  // and event-chain head hash. The chain version is deliberately not the identity:
+  // it is a counter that changes whenever the workflow records another fact.
   const verdictsPresent = document?.verdicts && typeof document.verdicts === "object" && Object.keys(document.verdicts).length > 0;
-  const engineRoot = join(root, "TCRN Platform", "tcrn-workflow");
-  let headCommit = options.acceptanceHeadCommit ?? null;
-  // Resolved only when there are verdicts to bind. A platform with no verdicts recorded is
-  // already answered below by `missing`, and reaching for HEAD first would report a git
-  // problem for a governance one -- two owners for a single defect, which this file's
-  // other legs are careful not to create.
-  if (headCommit === null && verdictsPresent) {
-    try {
-      headCommit = (await execFileAsync("git", ["-C", engineRoot, "rev-parse", "HEAD"], { timeout: 30_000 })).stdout.trim();
-    } catch {
-      // Not comparable rather than red. A container without a readable engine checkout is
-      // not a platform whose acceptance lane has failed -- it is one this leg cannot speak
-      // about, the same answer it already gives when the roster is absent. Reporting a git
-      // problem as a governance failure would give one defect two owners, and would make
-      // every synthetic fixture in the suite red for a reason that has nothing to do with
-      // what it is testing.
-      return check("acceptanceVerdicts", true, {
-        comparable: false,
-        reason: "no readable engine HEAD to bind verdicts against",
-      });
-    }
-  }
   const verdicts = document?.verdicts && typeof document.verdicts === "object" ? document.verdicts : {};
   const groupsById = new Map((Array.isArray(roster?.groups) ? roster.groups : []).map((group) => [group?.id, group]));
+  const currentBindings = new Map();
+  const unresolved = [];
+  if (verdictsPresent) {
+    for (const group of Array.isArray(roster?.groups) ? roster.groups : []) {
+      const resolved = await resolveAcceptanceBinding(root, group, options);
+      if (!resolved.ok) {
+        unresolved.push({ group: group.id, repository: group.repository, reasonCode: resolved.reasonCode, reason: resolved.reason });
+      } else {
+        currentBindings.set(group.id, resolved.binding);
+      }
+    }
+  }
   const missing = [];
   const stale = [];
   const failing = [];
@@ -357,20 +481,42 @@ async function inspectAcceptanceVerdicts(root, options) {
       failing.push({ group: id, verdict: entry.verdict, ...(typeof entry.detail === "string" ? { detail: entry.detail } : {}) });
       continue;
     }
-    // A verdict that names no commit is not stale -- it is unbound, which is worse, because
-    // it cannot be told from one recorded against any tree at all.
-    if (typeof entry.commit !== "string" || entry.commit.length === 0) {
-      stale.push({ group: id, recordedAt: entry.recordedAt, reason: "verdict names no commit" });
+    const group = groupsById.get(id) ?? { id, repository: null };
+    const recordedBinding = recordedAcceptanceBinding(entry, group, options);
+    if (recordedBinding === null) {
+      stale.push({
+        group: id,
+        recordedAt: entry.recordedAt,
+        reason: options.acceptanceHeadCommit !== undefined
+          ? "verdict names no commit"
+          : "verdict names no machine-readable tree binding",
+      });
       continue;
     }
-    if (entry.commit !== headCommit) {
-      stale.push({ group: id, recordedAt: entry.recordedAt, recordedAgainst: entry.commit.slice(0, 12), head: headCommit.slice(0, 12) });
+    const currentBinding = currentBindings.get(id);
+    if (!currentBinding) continue;
+    const comparison = compareAcceptanceBindings(recordedBinding, currentBinding);
+    if (!comparison.equal) {
+      const staleEntry = {
+        group: id,
+        repository: group.repository,
+        recordedAt: entry.recordedAt,
+        recordedAgainst: options.acceptanceHeadCommit !== undefined && recordedBinding.kind === "git"
+          ? recordedBinding.commit?.slice(0, 12)
+          : bindingIdentity(recordedBinding),
+        current: options.acceptanceHeadCommit !== undefined && currentBinding.kind === "git"
+          ? currentBinding.commit?.slice(0, 12)
+          : bindingIdentity(currentBinding),
+        ...(comparison.changed.length > 0 ? { changed: comparison.changed } : {}),
+      };
+      if (options.acceptanceHeadCommit !== undefined && currentBinding.kind === "git") staleEntry.head = currentBinding.commit.slice(0, 12);
+      stale.push(staleEntry);
     }
   }
-  if (missing.length > 0 || stale.length > 0 || failing.length > 0) {
+  if (unresolved.length > 0 || missing.length > 0 || stale.length > 0 || failing.length > 0) {
     return check("acceptanceVerdicts", false, {
       reasonCode: "PLATFORM_ACCEPTANCE_LANE_UNPROVEN",
-      ...(headCommit === null ? {} : { head: headCommit.slice(0, 12) }),
+      ...(unresolved.length > 0 ? { unresolved } : {}),
       ...(missing.length > 0 ? { missing } : {}),
       ...(stale.length > 0 ? { stale } : {}),
       ...(failing.length > 0 ? { failing } : {}),
@@ -381,7 +527,8 @@ async function inspectAcceptanceVerdicts(root, options) {
   return check("acceptanceVerdicts", true, {
     groups: groups.length,
     ...(acceptedExceptions.length > 0 ? { acceptedExceptions } : {}),
-    ...(headCommit === null ? {} : { head: headCommit.slice(0, 12) }),
+    bindings: [...currentBindings.entries()].map(([group, binding]) => ({ group, kind: binding.kind, repository: binding.repository, identity: bindingIdentity(binding) })),
+    ...(options.acceptanceHeadCommit !== undefined ? { head: options.acceptanceHeadCommit.slice(0, 12) } : {}),
   });
 }
 
