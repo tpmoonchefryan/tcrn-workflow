@@ -124,6 +124,12 @@
       "recordedAt": "2026-08-23",
       "ratio": 1.6507,
       "rationale": "The acceptance lane now resolves each roster repository independently, binds git verdicts to full object ids, binds the non-git chain to a digest of partition workspace ids and event-head hashes, and refuses an unresolved repository instead of falling back to the engine. The additional red/green proof covers helper-versus-engine independence, product-versus-engine independence, chain movement without a recording loop, and the missing-tree refusal. This proof mass is the evidence that the done lane cannot be satisfied by a verdict on a different tree; it is recorded explicitly so the frozen P1 line is not weakened silently."
+    },
+    {
+      "id": "TCRN-CROSS-INC-251-live-chain-validation",
+      "recordedAt": "2026-08-24",
+      "ratio": 1.6546,
+      "rationale": "The acceptance lane now executes validate against every partition workspace discovered at doctor time, reports the measured wall time, and proves both a live green run and a named partition failure. The tests are new proof mass because the defect was a stale chain-head verdict that could only be reproduced after a real governance write; retiring them would return the exact write-invalidates-the-gate loop this incident closes. The product-gates binding remains unchanged and is intentionally still a separate, slower tree-based check."
     }
   ]
 }
