@@ -8,10 +8,10 @@
       "purpose": "Node 24 standard library declarations for the pinned typecheck gate",
       "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
     },
-    "ajv@8.17.1": {
+    "ajv@8.20.0": {
       "direct": true,
       "license": "MIT",
-      "integrity": "sha512-B/gBuNg5SiMTrPkC+A2+cW0RszwxYmn6VYxB/inlBStS5nx6xHIt/ehKRhIMhqusl7a8LjQoZnjCs5vhwxOQ1g==",
+      "integrity": "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==",
       "purpose": "offline Draft 2020-12 schema evaluation",
       "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
     },

@@ -67,7 +67,13 @@
           "date": "2026-07-19",
           "evidence": "core-reference-personas.ts was asserted to be an RC1 normative input to argue against editing it. It is not: zero persona entries among the 59 normativeInputs. Two models then reasoned a full round on that premise."
         }
-      ]
+      ],
+      "response": {
+        "date": "2026-08-30",
+        "work": "TCRN-CROSS-INC-253",
+        "status": "implemented",
+        "mechanism": "verify:p1 surfaces VULNERABILITY_POLICY_EXPIRING during the final 7 days before the dated denylist becomes stale; the policy still fails closed after maxAgeDays"
+      }
     },
     {
       "id": "scope-that-lives-only-in-prose",

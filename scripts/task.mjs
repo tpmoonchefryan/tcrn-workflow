@@ -23,6 +23,7 @@ import { LocalCommandError, runLocalCommand } from "./lib/local-command.mjs";
 import {
   DependencyGraphError,
   assertNoKnownVulnerabilities,
+  evaluateVulnerabilityPolicyFreshness,
   validateFrozenDependencyGraph,
 } from "./lib/dependency-graph.mjs";
 import {
@@ -1434,17 +1435,15 @@ async function verifyVulnerabilities() {
   const dependencyPolicy = await readJson(resolve(repositoryRoot, "scripts/policy/dependency-policy.json"));
   const lockContent = (await readSourceFile(resolve(repositoryRoot, "pnpm-lock.yaml"))).toString("utf8");
   const policy = await readJson(resolve(repositoryRoot, "scripts/policy/vulnerability-policy.json"));
-  const [year, month, day] = policy.snapshotDate.split("-").map(Number);
-  assertion(year && month && day, "VULNERABILITY_POLICY_DATE_INVALID");
-  const snapshot = Date.UTC(year, month - 1, day);
-  const ageDays = Math.floor((Date.now() - snapshot) / 86_400_000);
-  assertion(ageDays >= 0 && ageDays <= policy.maxAgeDays, "VULNERABILITY_POLICY_STALE", String(ageDays));
+  const freshness = evaluateVulnerabilityPolicyFreshness(policy);
   const graph = validateFrozenDependencyGraph({ packageJson, dependencyPolicy, lockContent });
   const vulnerabilityReadback = assertNoKnownVulnerabilities(graph, policy.knownVulnerabilities);
   return success("VULNERABILITY_POLICY_VERIFIED", {
     disposition: policy.disposition,
     snapshotDate: policy.snapshotDate,
-    ageDays,
+    maxAgeDays: policy.maxAgeDays,
+    noticeBeforeDays: policy.noticeBeforeDays,
+    ...freshness,
     dependencyGraphPackages: vulnerabilityReadback.checkedPackages,
     directPackages: graph.directIdentities.length,
     transitivePackages: graph.transitiveIdentities.length,
@@ -2394,9 +2393,15 @@ async function verifyP1() {
   for (const name of sequence) {
     results.push(await invoke(name));
   }
+  const notices = results.flatMap((result, index) => (
+    result.notice === null || result.notice === undefined
+      ? []
+      : [{ command: sequence[index], ...result.notice }]
+  ));
   return success("P1_VERIFIED", {
     commands: sequence,
     observedReasonCodes: results.map((result) => result.reasonCode),
+    notices,
   });
 }
 

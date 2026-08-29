@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   DependencyGraphError,
   assertNoKnownVulnerabilities,
+  evaluateVulnerabilityPolicyFreshness,
   validateFrozenDependencyGraph,
 } from "../scripts/lib/dependency-graph.mjs";
 
@@ -24,7 +25,7 @@ test("the exact frozen dependency graph has complete policy and integrity closur
   assert.equal(graph.records.length, 40);
   assert.deepEqual(graph.directIdentities, [
     "@types/node@24.13.2",
-    "ajv@8.17.1",
+    "ajv@8.20.0",
     "linkedom@0.18.12",
     "pg@8.22.0",
     "typescript@5.9.3",
@@ -99,10 +100,30 @@ test("unapproved lock packages and integrity drift fail closed", async () => {
     () => validateFrozenDependencyGraph({ ...inputs, dependencyPolicy: wrongIntegrity }),
     (error) => error instanceof DependencyGraphError && error.reasonCode === "DEPENDENCY_GRAPH_INTEGRITY_MISMATCH",
   );
-  const importerDrift = inputs.lockContent.replace("specifier: 8.17.1", "specifier: 8.17.0");
+  const importerDrift = inputs.lockContent.replace("specifier: 8.20.0", "specifier: 8.19.0");
   assert.throws(
     () => validateFrozenDependencyGraph({ ...inputs, lockContent: importerDrift }),
     (error) => error instanceof DependencyGraphError && error.reasonCode === "DEPENDENCY_LOCK_IMPORTER_NOT_EXACT",
+  );
+});
+
+test("vulnerability policy gives seven days of visible notice before failing closed", () => {
+  const policy = { snapshotDate: "2026-08-01", maxAgeDays: 30, noticeBeforeDays: 7 };
+  assert.deepEqual(evaluateVulnerabilityPolicyFreshness(policy, Date.parse("2026-08-23T00:00:00Z")), {
+    ageDays: 22,
+    daysRemaining: 8,
+    freshnessState: "current",
+    notice: null,
+  });
+  assert.deepEqual(evaluateVulnerabilityPolicyFreshness(policy, Date.parse("2026-08-24T00:00:00Z")), {
+    ageDays: 23,
+    daysRemaining: 7,
+    freshnessState: "expiring",
+    notice: { reasonCode: "VULNERABILITY_POLICY_EXPIRING", daysRemaining: 7 },
+  });
+  assert.throws(
+    () => evaluateVulnerabilityPolicyFreshness(policy, Date.parse("2026-09-01T00:00:00Z")),
+    (error) => error instanceof DependencyGraphError && error.reasonCode === "VULNERABILITY_POLICY_STALE",
   );
 });
 
