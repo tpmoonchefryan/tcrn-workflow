@@ -130,6 +130,12 @@
       "recordedAt": "2026-08-24",
       "ratio": 1.6546,
       "rationale": "The acceptance lane now executes validate against every partition workspace discovered at doctor time, reports the measured wall time, and proves both a live green run and a named partition failure. The tests are new proof mass because the defect was a stale chain-head verdict that could only be reproduced after a real governance write; retiring them would return the exact write-invalidates-the-gate loop this incident closes. The product-gates binding remains unchanged and is intentionally still a separate, slower tree-based check."
+    },
+    {
+      "id": "TCRN-CROSS-INC-253-vulnerability-expiry-notice",
+      "recordedAt": "2026-08-30",
+      "ratio": 1.6564,
+      "rationale": "The dated vulnerability denylist now emits a seven-day pre-expiry notice through verify:p1 while retaining the existing fail-closed maximum age. The added criterion constructs the day before the notice window, its first day, and the first stale day; without all three, a notice that never appears or a stale policy that stays green would satisfy the implementation by assertion. This is new proof mass with no product counterpart, recorded explicitly rather than weakening either the freshness limit or the proof-budget ratchet."
     }
   ]
 }
