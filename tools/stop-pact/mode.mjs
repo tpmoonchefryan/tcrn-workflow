@@ -71,6 +71,47 @@ export function resolveModelFromTranscript(transcriptPath, { tailBytes = 262144 
   }
 }
 
+// STORY-332: the response-style Stop check needs the last assistant text blocks,
+// not the model field. It uses the same bounded-tail and partial-leading-line
+// handling as resolveModelFromTranscript so a large transcript cannot turn the
+// Stop hook into an unbounded read.
+export function resolveLastAssistantText(transcriptPath, { tailBytes = 262144 } = {}) {
+  if (typeof transcriptPath !== "string" || transcriptPath.length === 0) return null;
+  let fd;
+  try {
+    fd = openSync(transcriptPath, "r");
+    const size = fstatSync(fd).size;
+    const start = Math.max(0, size - tailBytes);
+    const length = size - start;
+    if (length <= 0) return null;
+    const buffer = Buffer.allocUnsafe(length);
+    readSync(fd, buffer, 0, length, start);
+    const lines = buffer.toString("utf8").split("\n").filter((line) => line.trim().length > 0);
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      if (i === 0 && start > 0) {
+        try { JSON.parse(lines[0]); } catch { continue; }
+      }
+      let entry;
+      try { entry = JSON.parse(lines[i]); } catch { continue; }
+      if (entry?.type !== "assistant") continue;
+      const content = entry?.message?.content ?? entry?.content;
+      if (typeof content === "string") return content;
+      if (Array.isArray(content)) {
+        const text = content
+          .filter((block) => block?.type === "text" && typeof block.text === "string")
+          .map((block) => block.text)
+          .join("\n");
+        if (text.length > 0) return text;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) { try { closeSync(fd); } catch { /* ignore */ } }
+  }
+}
+
 function modelOfLine(line) {
   let entry;
   try { entry = JSON.parse(line); } catch { return null; }

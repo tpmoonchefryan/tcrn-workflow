@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   link,
   mkdir,
@@ -25,6 +26,7 @@ import {
   KNOWLEDGE_LIMITS,
   KnowledgeCoreError,
   acquireWorkspaceLease,
+  checkKnowledgeSources,
   createKnowledgeUnit,
   knowledgeLinkIndexCountsForTest,
   createProject,
@@ -122,7 +124,8 @@ function unitInput(fixture, key, options = {}) {
     snippet: options.snippet ?? `Snippet ${key}`,
     accountableOwnerId: options.accountableOwnerId ?? deriveStableId("owner", `${key}-OWNER`),
     sourceReferences: options.sourceReferences ?? [`evidence://fixture/${key.toLowerCase()}`],
-    sourceDigest: options.sourceDigest ?? canonicalSha256({ key, source: "current-explicit" }),
+    sourceDigest: options.sourceDigest === undefined ? canonicalSha256({ key, source: "current-explicit" }) : options.sourceDigest,
+    supersedes: options.supersedes ?? null,
     linkedWorkIds: options.linkedWorkIds ?? [fixture.workId],
     linkedDecisionIds: options.linkedDecisionIds ?? [deriveStableId("decision", `${key}-DECISION`)],
     linkedGateIds: options.linkedGateIds ?? [deriveStableId("gate", `${key}-GATE`)],
@@ -411,15 +414,13 @@ test("unknown freshness fails closed and metadata filters remain deterministic",
       category: "testing",
       tags: ["review", "testing"],
     }));
-    assert.equal((await evaluateKnowledgeFreshness(fixture.workspace, instant(12))).records[0].state, "unknown");
+    assert.equal((await evaluateKnowledgeFreshness(fixture.workspace, instant(12))).records[0].state, "fresh");
     assert.equal((await listKnowledgeMetadata(fixture.workspace, { at: instant(12) })).records.length, 0);
     const filtered = await listKnowledgeMetadata(fixture.workspace, {
-      at: instant(12), selection: "all", roleScope: "reviewer", category: "testing", tag: "review", freshness: "unknown",
+      at: instant(12), selection: "all", roleScope: "reviewer", category: "testing", tag: "review", freshness: "fresh",
     });
     assert.equal(filtered.records.length, 1);
-    await expectReason("KNOWLEDGE_BODY_ACCESS_DENIED", () => readKnowledgeBody(fixture.workspace, created.id, {
-      at: instant(12), allowUnpromoted: true,
-    }));
+    assert.equal((await readKnowledgeBody(fixture.workspace, created.id, { at: instant(12), allowUnpromoted: true })).body, "Body KNOWLEDGE-UNKNOWN");
   } finally {
     await fixture.close();
   }
@@ -1034,12 +1035,17 @@ test("link, special-file, source-replacement, unknown-field, and partial-state a
 test("record-count and query-result limits are executable", async () => {
   const count = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-COUNT" });
   try {
-    for (let index = 0; index <= KNOWLEDGE_LIMITS.maximumRecords + KNOWLEDGE_LIMITS.maximumRetiredRecords; index += 1) {
-      const id = `knowledge:${index.toString(16).padStart(24, "0")}`;
-      await writeFile(join(count.store, "metadata", `${id}.json`), "{}");
-      await writeFile(join(count.store, "bodies", `${id}.body`), "");
+    assert.equal(Object.hasOwn(KNOWLEDGE_LIMITS, "maximumRecords"), false);
+    for (let index = 0; index < 65; index += 1) {
+      await createKnowledgeUnit(count.workspace, unitInput(count, `KNOWLEDGE-COUNT-${index}`, {
+        expectedVersion: index,
+        occurredAt: instant(11, 3),
+        body: "small",
+      }));
     }
-    await expectReason("KNOWLEDGE_LIMIT_EXCEEDED", () => validateKnowledgeStore(count.workspace));
+    const inventory = await listKnowledgeMetadata(count.workspace, { at: instant(12), selection: "all", limit: 100 });
+    assert.equal(inventory.total, 65);
+    assert.equal(inventory.records.length, 65);
   } finally {
     await count.close();
   }
@@ -1066,11 +1072,11 @@ test("record-count and query-result limits are executable", async () => {
   const aggregate = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-AGGREGATE" });
   try {
     let rejected = false;
-    for (let index = 0; index < KNOWLEDGE_LIMITS.maximumRecords; index += 1) {
+    for (let index = 0; index < 200; index += 1) {
       try {
         await createKnowledgeUnit(aggregate.workspace, unitInput(aggregate, `KNOWLEDGE-AGGREGATE-${index}`, {
           expectedVersion: index,
-          occurredAt: instant(11, 3 + index),
+          occurredAt: instant(11, 3),
           body: "x".repeat(7_500),
         }));
       } catch (error) {
@@ -1325,10 +1331,10 @@ test("TCRN-CROSS-STORY-023: the aggregate cap counts marker+metadata+body but no
   try {
     const storeRoot = join(fx.workspace, ".tcrn-workflow/knowledge");
     let admitted = 0, rejected = false;
-    for (let i = 0; i < KNOWLEDGE_LIMITS.maximumRecords; i += 1) {
+    for (let i = 0; i < 200; i += 1) {
       try {
         await createKnowledgeUnit(fx.workspace, unitInput(fx, `S023-${i}`, {
-          expectedVersion: i, occurredAt: instant(11, 3 + i), body: "x".repeat(7_500),
+          expectedVersion: i, occurredAt: instant(11, 3), body: "x".repeat(7_500),
         }));
         admitted += 1;
       } catch (error) {
@@ -1388,5 +1394,70 @@ test("TCRN-CROSS-STORY-024: retiring reclaims the body, keeps the store valid, a
     const live = await createKnowledgeUnit(fx.workspace, unitInput(fx, "S024-LIVE", { expectedVersion: 2, occurredAt: instant(11, 5) }));
     await rm(join(bodiesDir, `${live.id}.body`));
     await expectReason("KNOWLEDGE_PARTIAL_STATE", () => validateKnowledgeStore(fx.workspace));
+  } finally { await fx.close(); }
+});
+
+test("INIT-047: relevance ordering changes with the query and source-free fragments are selectable", async () => {
+  const fx = await workspaceFixture({ externalKey: "FIXTURE-INIT047-RANK" });
+  try {
+    const fragment = (key, subject, summary, expectedVersion) => unitInput(fx, key, {
+      expectedVersion,
+      kind: "fact",
+      sourceReferences: [],
+      sourceDigest: null,
+      linkedWorkIds: [],
+      linkedEvidenceIds: [],
+      stalenessPolicy: { maximumAgeDays: null, unknownDisposition: "fail-closed" },
+      lastVerified: null,
+      freshnessState: "fresh",
+      subject,
+      summary,
+    });
+    const alpha = await createKnowledgeUnit(fx.workspace, fragment("INIT047-ALPHA", "shared alpha", "shared beta", 0));
+    await createKnowledgeUnit(fx.workspace, fragment("INIT047-BETA", "shared beta", "shared alpha", 1));
+    assert.equal(alpha.promotionState, "promoted");
+    const alphaOrder = (await listKnowledgeMetadata(fx.workspace, { at: instant(12), search: "alpha" })).records.map((record) => record.externalKey);
+    const betaOrder = (await listKnowledgeMetadata(fx.workspace, { at: instant(12), search: "beta" })).records.map((record) => record.externalKey);
+    assert.deepEqual(alphaOrder, ["INIT047-ALPHA", "INIT047-BETA"]);
+    assert.deepEqual(betaOrder, ["INIT047-BETA", "INIT047-ALPHA"]);
+    assert.equal((await evaluateKnowledgeFreshness(fx.workspace, instant(12))).records.find((record) => record.id === alpha.id).state, "fresh");
+  } finally { await fx.close(); }
+});
+
+test("INIT-047: supersedes is validated, source digests are computed and source changes are reported", async () => {
+  const fx = await workspaceFixture({ externalKey: "FIXTURE-INIT047-SOURCES" });
+  try {
+    const fragment = (key, expectedVersion, overrides = {}) => unitInput(fx, key, {
+      expectedVersion,
+      kind: "fact",
+      sourceReferences: [], sourceDigest: null, linkedWorkIds: [], linkedEvidenceIds: [],
+      stalenessPolicy: { maximumAgeDays: null, unknownDisposition: "fail-closed" }, lastVerified: null, freshnessState: "fresh",
+      ...overrides,
+    });
+    const old = await createKnowledgeUnit(fx.workspace, fragment("INIT047-OLD", 0));
+    const replacement = await createKnowledgeUnit(fx.workspace, fragment("INIT047-NEW", 1, { supersedes: old.id }));
+    const listed = await listKnowledgeMetadata(fx.workspace, { at: instant(12), selection: "all" });
+    assert.equal(listed.records.find((record) => record.id === replacement.id).supersedes, old.id);
+    await retireKnowledgeUnit(fx.workspace, { expectedVersion: 2, expectedRevision: 1, occurredAt: instant(11, 4), id: old.id });
+    await expectReason("KNOWLEDGE_LINK_INVALID", () => createKnowledgeUnit(fx.workspace, fragment("INIT047-AFTER-RETIRE", 3, { supersedes: old.id })));
+
+    await writeFile(join(fx.workspace, "source.md"), "source-v1");
+    const sourced = await createKnowledgeUnit(fx.workspace, unitInput(fx, "INIT047-SOURCE", {
+      expectedVersion: 3,
+      kind: "reference",
+      sourceReferences: ["source.md"], sourceDigest: null, linkedEvidenceIds: [deriveStableId("evidence", "INIT047-SOURCE")],
+      retrievalDisposition: "explicit-only", lastVerified: instant(11, 3), freshnessState: "fresh",
+    }));
+    const metadata = JSON.parse(await readFile(join(fx.store, "metadata", `${sourced.id}.json`), "utf8"));
+    assert.equal(metadata.sourceDigest, createHash("sha256").update("source-v1").digest("hex"));
+    const promoted = await transitionKnowledgePromotion(fx.workspace, { expectedVersion: 4, expectedRevision: 1, occurredAt: instant(11, 5), id: sourced.id, promotionState: "promoted" });
+    assert.equal(promoted.reasonCode, "KNOWLEDGE_PROMOTION_UPDATED");
+    assert.equal((await checkKnowledgeSources(fx.workspace)).records.find((record) => record.id === sourced.id).status, "unchanged");
+    await writeFile(join(fx.workspace, "source.md"), "source-v2");
+    assert.equal((await checkKnowledgeSources(fx.workspace)).records.find((record) => record.id === sourced.id).status, "changed");
+    await rm(join(fx.workspace, "source.md"));
+    assert.equal((await checkKnowledgeSources(fx.workspace)).records.find((record) => record.id === sourced.id).status, "missing");
+    assert.equal((await listKnowledgeMetadata(fx.workspace, { at: instant(12), search: "INIT047-SOURCE" })).records.length, 1);
+    assert.equal((await knowledgeContextCandidates(fx.workspace, { at: instant(12), search: "INIT047-SOURCE" })).candidates.length, 0);
   } finally { await fx.close(); }
 });

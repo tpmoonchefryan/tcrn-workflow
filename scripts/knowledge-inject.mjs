@@ -10,7 +10,7 @@
 // relevance machine (knowledge-candidates via the MCP read face — never a second
 // relevance routine written here), applies a HARD byte budget, and emits a
 // metadata-level injection (never full bodies). The hook side registers it on
-// SessionStart (baseline, once) and UserPromptSubmit (keyword-gated).
+// SessionStart (baseline, once) and UserPromptSubmit (every prompt).
 //
 // THE DIVISION OF LABOUR IS THE ENGINE'S, NOT MINE. Relevance selection = the
 // knowledge-candidates verb. Budget / freshness / authority = context-route, which in
@@ -20,32 +20,31 @@
 // carries. A self-written relevance routine is forbidden; a self-written budget is the
 // documented interim, not the design.
 //
-// KEYWORD GATE (STORY-162.1): UserPromptSubmit must not fire a candidate query on every
-// turn (context budget is a hard constraint). `--trigger-keywords` is a local, cheap
-// gate: if the prompt contains none of them, the script emits an empty injection and
-// exits 0 without touching the read face. SessionStart passes a fixed baseline keyword
-// set and no prompt.
+// Prompt admission is not controlled by a hand-maintained keyword list. The optional
+// trigger-keywords flag remains accepted for old callers, but the production hook does
+// not supply it and runInjection never gates a prompt on it.
 //
 // RETRIEVAL QUALITY (STORY-161.5, measured): knowledge-candidates search is AND-token
 // FTS over the card text. A natural-language prompt's connective words pull the query to
-// zero. So the script extracts MEANINGFUL tokens (ASCII alnum words, CJK bigrams) minus
-// stopwords, and queries with those — never the raw sentence.
+// zero. So the script extracts MEANINGFUL tokens (ASCII alnum words and contiguous CJK
+// phrases) minus stopwords, and queries with those — never the raw sentence.
 
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
+export const PLATFORM_ROOT = resolve(SCRIPT_DIRECTORY, "../../..");
 // The chain container sits beside the platform root; a partition's workspace is
 // `<container>/.tcrn-workspace/<partition>/workspace`. Resolved by the same convention
 // `platform-doctor.mjs` walks, so this repository answers from its own layout contract
 // rather than importing another project's roster.
-export function workspaceForPartition(partition, containerRoot = resolve(PLATFORM_ROOT, "..")) {
+export function workspaceForPartition(partition, containerRoot = PLATFORM_ROOT) {
   return resolve(containerRoot, ".tcrn-workspace", String(partition), "workspace");
 }
 
-export const ENGINE_CLI = resolve(PLATFORM_ROOT, "tcrn-workflow/scripts/tcrn-workflow.mjs");
+export const ENGINE_CLI = resolve(SCRIPT_DIRECTORY, "tcrn-workflow.mjs");
 
 /**
  * One read against this repository's own engine.
@@ -93,17 +92,16 @@ export function callChainRead(verb, { partition, ...flags }, { timeoutMs = 120_0
 export const SETTINGS_PATH = resolve(PLATFORM_ROOT, ".claude/settings.json");
 export const DEFAULT_PARTITION = "cross-project";
 export const DEFAULT_ROLE_SCOPE = "implementation";
-export const DEFAULT_BUDGET = 8000;
+export const DEFAULT_BUDGET = 32768;
 export const MAX_TOKENS_IN_QUERY = 6;
+export const INJECTION_RESULT_LIMIT = 1_048_576;
 
-// Connectors / function words that carry no retrieval signal. Chinese bigrams are kept;
-// these single tokens are dropped. Deliberately small — the FTS is the relevance judge,
-// this list only trims noise, and a token wrongly dropped is a miss, never a wrong hit.
 const STOPWORDS = new Set([
   "怎么", "应该", "没有", "为什么", "如果", "可以", "一个", "这个", "那个",
   "在", "里", "了", "的", "吗", "呢", "做", "写", "查", "对", "是", "不",
-  "要", "给", "和", "或", "与", "我", "你", "它", "们", "条", "次", "吗"
+  "要", "给", "和", "或", "与", "我", "你", "它", "们", "条", "次", "什么",
 ]);
+
 
 function parseFlags(argv) {
   const flags = {};
@@ -118,7 +116,7 @@ function parseFlags(argv) {
   return flags;
 }
 
-/** Meaningful query tokens: ASCII alnum words (>=2) + CJK bigrams, minus stopwords. */
+/** Meaningful query tokens: ASCII words and contiguous CJK phrases. */
 export function extractQueryTokens(prompt) {
   const tokens = new Set();
   for (const match of String(prompt ?? "").toLowerCase().matchAll(/[a-z0-9][a-z0-9_-]{1,31}/gu)) {
@@ -126,11 +124,7 @@ export function extractQueryTokens(prompt) {
   }
   const cjk = String(prompt ?? "").match(/[一-鿿]+/gu) ?? [];
   for (const phrase of cjk) {
-    if (phrase.length === 2 && !STOPWORDS.has(phrase)) tokens.add(phrase);
-    for (let i = 0; i + 1 < phrase.length; i += 1) {
-      const bigram = phrase.slice(i, i + 2);
-      if (!STOPWORDS.has(bigram)) tokens.add(bigram);
-    }
+    if (phrase.length > 0 && !STOPWORDS.has(phrase)) tokens.add(phrase);
   }
   return [...tokens].slice(0, MAX_TOKENS_IN_QUERY);
 }
@@ -158,19 +152,13 @@ export function truncateToBudget(text, budget) {
   return { text: Buffer.from(text, "utf8").subarray(0, budget).toString("utf8"), truncated: true };
 }
 
-/** The injection chain: gate -> candidates -> budget -> metadata-level output. */
+/** The injection chain: query -> candidates -> budget report -> metadata-level output. */
 export async function runInjection({ prompt, partition, roleScope, budget, triggerKeywords }) {
-  if (!promptTriggers(prompt, triggerKeywords)) {
-    return { ok: true, injected: false, reason: "TRIGGER_GATE_NO_MATCH", candidates: [], injectedBytes: 0 };
-  }
-  const matched = matchedTriggerKeywords(prompt, triggerKeywords);
-  // Query with the matched trigger keywords (clean, curated terms) when available; else
-  // fall back to the first few extracted tokens. Never the raw sentence — the AND-token
-  // FTS rejects connective words (measured in STORY-161.5). Multi-word: query each term
-  // SEPARATELY and union the candidate ids (OR semantics), because a multi-term AND
-  // query pulls to zero whenever any term is absent from a card (measured in the QA
-  // review: "判据+CAS+marker" → 0, single "CAS" → 1).
-  const tokens = matched.length > 0 ? matched : extractQueryTokens(prompt).slice(0, 3);
+  void triggerKeywords;
+  const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : DEFAULT_BUDGET;
+  // Query each meaningful term separately and union the candidates. The engine owns
+  // relevance ordering; this wrapper never gates a prompt on a hand-maintained list.
+  const tokens = extractQueryTokens(prompt);
   if (tokens.length === 0) {
     return { ok: true, injected: false, reason: "NO_QUERY_TOKENS", candidates: [], injectedBytes: 0 };
   }
@@ -181,6 +169,8 @@ export async function runInjection({ prompt, partition, roleScope, budget, trigg
       partition,
       "role-scope": roleScope,
       search: token,
+      limit: INJECTION_RESULT_LIMIT,
+      "allow-trailing": true,
       at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
     });
     if (!call.ok) {
@@ -196,16 +186,20 @@ export async function runInjection({ prompt, partition, roleScope, budget, trigg
     const line = `· [${candidate.id}] ${candidate.title ?? candidate.subject ?? ""} — ${candidate.summary ?? ""}`;
     lines.push(line);
   }
-  const { text: joined, truncated } = truncateToBudget(lines.join("\n"), budget);
+  const joined = lines.join("\n");
+  const injectedBytes = Buffer.byteLength(joined, "utf8");
+  const budgetExceeded = injectedBytes > effectiveBudget;
   return {
     ok: true,
     injected: true,
-    reason: "INJECTION_PRODUCED",
+    reason: budgetExceeded ? "INJECTION_BUDGET_EXCEEDED" : "INJECTION_PRODUCED",
+    ...(budgetExceeded ? { reasonCode: "INJECTION_BUDGET_EXCEEDED", warning: { reasonCode: "INJECTION_BUDGET_EXCEEDED", actualBytes: injectedBytes, budget: effectiveBudget } } : {}),
     queryTokens: tokens,
     candidateCount: candidates.length,
-    injectedBytes: Buffer.byteLength(joined, "utf8"),
-    truncated,
-    budget,
+    injectedBytes,
+    truncated: false,
+    budgetExceeded,
+    budget: effectiveBudget,
     injection: joined.length === 0 ? null : joined
   };
 }
@@ -234,7 +228,7 @@ function parseArgv(argv) {
     prompt: typeof flags.prompt === "string" ? flags.prompt : "",
     partition: typeof flags.partition === "string" ? flags.partition : DEFAULT_PARTITION,
     roleScope: typeof flags["role-scope"] === "string" ? flags["role-scope"] : DEFAULT_ROLE_SCOPE,
-    budget: typeof flags.budget === "string" ? Number(flags.budget) : DEFAULT_BUDGET,
+    budget: typeof flags.budget === "string" ? Number(flags.budget) : (Number(process.env.TCRN_KNOWLEDGE_INJECTION_BUDGET) || DEFAULT_BUDGET),
     triggerKeywords: typeof flags["trigger-keywords"] === "string" ? flags["trigger-keywords"] : "",
     selfTest: flags["self-test"] === true,
     verifyChannel: flags["verify-channel"] === true

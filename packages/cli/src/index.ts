@@ -26,6 +26,7 @@ import {
   artifactDoctor,
   artifactSizeReport,
   createKnowledgeUnit,
+  checkKnowledgeSources,
   createProject,
   applyKnowledgeBatch,
   applyWorkBatch,
@@ -143,6 +144,7 @@ import {
   readInstallManifest,
   readMachineSettingsCatalog,
   readVocabulary,
+  STORY_SCOPE_HEADINGS,
   machineSettingsPath,
   FRAMEWORK_VERSION,
   assertModelPlanHost,
@@ -522,6 +524,12 @@ function nullableValue(value: string | undefined): string | null {
   return value === undefined || value === "-" || value === "null" ? null : value;
 }
 
+function nullableIntegerValue(values: Readonly<Record<string, string>>, name: string): number | null {
+  const raw = values[name];
+  if (raw === "-" || raw === "null") return null;
+  return integerValue(values, name);
+}
+
 function booleanValue(value: string | undefined, name: string): boolean {
   if (value === undefined || value === "false") return false;
   if (value === "true") return true;
@@ -684,6 +692,52 @@ function workSummary(record: WorkRecord): Readonly<Record<string, unknown>> {
     revision: record.revision,
     tombstone: record.tombstone,
     ...(templateBinding === null ? {} : { templateBinding }),
+  };
+}
+
+function workScope(record: WorkRecord): string {
+  const entry = record.extensions["advisory:scope"];
+  const value = entry?.value;
+  return typeof value === "string" ? value : "";
+}
+
+function truncateUtf8(value: string, maximumBytes: number): string {
+  const bytes = Buffer.from(value, "utf8");
+  if (bytes.length <= maximumBytes) return value;
+  let end = maximumBytes;
+  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end -= 1;
+  return bytes.subarray(0, end).toString("utf8");
+}
+
+function workSearchSummary(record: WorkRecord, scopeBytes: number): Readonly<Record<string, unknown>> {
+  return { ...workSummary(record), scope: truncateUtf8(workScope(record), scopeBytes) };
+}
+
+function workDraft(
+  state: Awaited<ReturnType<typeof validateWorkspace>>,
+  kind: string,
+  projectId: string,
+): Readonly<Record<string, unknown>> {
+  const headings = kind === "Story" ? [...STORY_SCOPE_HEADINGS] : [];
+  const scopeTemplate = headings.map((heading) => `【${heading}】\n<填写 ${heading}>`).join("\n\n");
+  const examples = state.work
+    .filter((record) => !record.tombstone && record.kind === kind && record.projectId === projectId && workScope(record).length > 0)
+    .slice(-3)
+    .reverse()
+    .map((record) => ({ id: record.id, externalKey: record.externalKey, kind: record.kind, scope: workScope(record) }));
+  return {
+    schemaVersion: "tcrn.work-draft.v1",
+    reasonCode: "WORKSPACE_WORK_DRAFT_READY",
+    workspaceId: state.metadata.workspaceId,
+    version: state.version,
+    headEventHash: state.headEventHash,
+    kind,
+    projectId,
+    headings,
+    scopeTemplate,
+    skeleton: scopeTemplate,
+    template: scopeTemplate,
+    examples,
   };
 }
 
@@ -1000,7 +1054,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-checkpoint", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
-  { name: "knowledge-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "scope", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "role-scopes", required: true, valueKind: "list" }, { name: "category", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "tags", required: true, valueKind: "list" }, { name: "subject", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "snippet", required: true, valueKind: "string" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "source-references", required: true, valueKind: "list" }, { name: "source-digest", required: true, valueKind: "string" }, { name: "work-ids", required: true, valueKind: "list" }, { name: "decision-ids", required: true, valueKind: "list" }, { name: "gate-ids", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "lifecycle", required: true, valueKind: "string" }, { name: "retrieval", required: true, valueKind: "string" }, { name: "freshness", required: true, valueKind: "string" }, { name: "last-verified", required: true, valueKind: "instant", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "stale-days", required: true, valueKind: "integer" }, { name: "export", required: true, valueKind: "string" }, { name: "body", required: true, valueKind: "string" }] },
+  { name: "knowledge-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "scope", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "role-scopes", required: true, valueKind: "list" }, { name: "category", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "tags", required: true, valueKind: "list" }, { name: "subject", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "snippet", required: true, valueKind: "string" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "source-references", required: true, valueKind: "list" }, { name: "source-digest", required: false, valueKind: "string" }, { name: "supersedes", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "work-ids", required: true, valueKind: "list" }, { name: "decision-ids", required: true, valueKind: "list" }, { name: "gate-ids", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "lifecycle", required: true, valueKind: "string" }, { name: "retrieval", required: true, valueKind: "string" }, { name: "freshness", required: true, valueKind: "string" }, { name: "last-verified", required: true, valueKind: "instant", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "stale-days", required: true, valueKind: "integer", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "export", required: true, valueKind: "string" }, { name: "body", required: true, valueKind: "string" }] },
   { name: "knowledge-freshness", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "acknowledge-disposable", required: false, valueKind: "boolean" }] },
   { name: "knowledge-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
@@ -1009,6 +1063,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "knowledge-retire", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "expected-revision", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "knowledge-reverify", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "expected-revision", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "knowledge-snippet", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
+  { name: "knowledge-source-check", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "lease-break", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "owner-token", required: true, valueKind: "string" }] },
   { name: "lease-inspect", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
@@ -1077,7 +1132,8 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "work-batch", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "from-file", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "template-receipt", required: false, valueKind: "json" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "sprint", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
+  { name: "work-draft", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }] },
+  { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "sprint", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "scope-bytes", required: false, valueKind: "integer" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "work-show", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
 ] as const);
@@ -2401,6 +2457,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     io.write(canonicalJson(await validateKnowledgeStore(values.workspace ?? "")));
     return;
   }
+  if (command === "knowledge-source-check") {
+    const values = parseArguments(rest, ["workspace", "allow-trailing"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await checkKnowledgeSources(values.workspace ?? "", {
+      allowTrailing: booleanValue(values["allow-trailing"], "allow-trailing"),
+    })));
+    return;
+  }
   if (command === "knowledge-rebase") {
     const values = parseArguments(rest, ["workspace", "expected-version", "at", "retire-invalid"]);
     required(values, ["workspace", "expected-version", "at"]);
@@ -2414,11 +2478,11 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   if (command === "knowledge-create") {
     const names = [
       "workspace", "expected-version", "at", "external-key", "scope", "project-id", "role-scopes", "category", "kind", "tags",
-      "subject", "summary", "snippet", "accountable-owner-id", "source-references", "source-digest", "work-ids", "decision-ids", "gate-ids", "evidence-ids",
+      "subject", "summary", "snippet", "accountable-owner-id", "source-references", "source-digest", "supersedes", "work-ids", "decision-ids", "gate-ids", "evidence-ids",
       "lifecycle", "retrieval", "freshness", "last-verified", "stale-days", "export", "body",
     ];
     const values = parseArguments(rest, names);
-    required(values, names);
+    required(values, names.filter((name) => name !== "source-digest" && name !== "supersedes"));
     // Pre-validate enum-valued flags against their literal unions so an invalid
     // value fails closed here naming the flag, rather than casting uncast into core.
     const enumFlags: readonly (readonly [string, readonly string[]])[] = [
@@ -2449,7 +2513,8 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       snippet: values.snippet ?? "",
       accountableOwnerId: values["accountable-owner-id"] ?? "",
       sourceReferences: listValue(values["source-references"]),
-      sourceDigest: values["source-digest"] ?? "",
+      sourceDigest: values["source-digest"] ?? null,
+      supersedes: nullableValue(values.supersedes),
       linkedWorkIds: listValue(values["work-ids"]),
       linkedDecisionIds: listValue(values["decision-ids"]),
       linkedGateIds: listValue(values["gate-ids"]),
@@ -2458,7 +2523,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       retrievalDisposition: values.retrieval as "default" | "explicit-only" | "excluded",
       freshnessState: values.freshness as KnowledgeFreshnessState,
       lastVerified: nullableValue(values["last-verified"]),
-      stalenessPolicy: { maximumAgeDays: integerValue(values, "stale-days"), unknownDisposition: "fail-closed" },
+      stalenessPolicy: { maximumAgeDays: nullableIntegerValue(values, "stale-days"), unknownDisposition: "fail-closed" },
       exportDisposition: values.export as "metadata-only" | "excluded",
       body: values.body ?? "",
     })));
@@ -2483,8 +2548,8 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       // for target-version. Bare Number() sent NaN into core, which then reported a
       // typo as KNOWLEDGE_INPUT_INVALID "limit" -- a syntax error dressed as a range
       // judgement. The minimum stays unbounded on purpose: core holds the real window
-      // rule (>= 1, <= maximumRecords, offset >= 0 at knowledge-core.ts:1262/:1270), and
-      // a CLI-side floor would pre-empt half of it while silently keeping the ceiling.
+      // rule (>= 1, <= the canonical view-byte budget, offset >= 0), and a CLI-side
+      // floor would pre-empt half of it while silently keeping the ceiling.
       ...(values.limit !== undefined ? { limit: integerValue(values, "limit") } : {}),
       ...(values.offset !== undefined ? { offset: integerValue(values, "offset") } : {}),
     })));
@@ -2821,8 +2886,13 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "work-list") {
-    const values = parseArguments(rest, ["workspace", "project-id", "kind", "status", "parent-id", "sprint", "limit", "offset"]);
+    const values = parseArguments(rest, ["workspace", "project-id", "kind", "status", "parent-id", "sprint", "search", "scope-bytes", "limit", "offset"]);
     required(values, ["workspace"]);
+    if (values.search !== undefined && (values.search.length === 0 || values.search.length > 256 || !values.search.isWellFormed())) {
+      fail("CLI_ARGUMENT_MALFORMED", "search");
+    }
+    const scopeBytes = values["scope-bytes"] === undefined ? 512 : integerValue(values, "scope-bytes");
+    if (scopeBytes < 1 || scopeBytes > 65_536) fail("CLI_ARGUMENT_MALFORMED", "scope-bytes");
     if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident", "Release"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
     if (values.status !== undefined && !isWorkStatus(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     // INIT-008: filter members of a sprint. The flag carries the qualified reference in the
@@ -2830,10 +2900,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // against the stored advisory:sprint value by canonical bytes so the round trip is closed.
     const sprintFilter = values.sprint === undefined ? undefined : canonicalJson(sprintReference(values.sprint));
     const state = await validateWorkspace(values.workspace ?? "");
+    const search = values.search?.toLowerCase();
     const records = state.work.filter((entry) => !entry.tombstone &&
       (values["project-id"] === undefined || entry.projectId === values["project-id"]) &&
       (values.kind === undefined || entry.kind === values.kind) &&
       (values.status === undefined || entry.status === values.status) &&
+      (search === undefined || entry.externalKey.toLowerCase().includes(search) || workScope(entry).toLowerCase().includes(search)) &&
       (sprintFilter === undefined || canonicalJson((entry.extensions["advisory:sprint"] as { readonly value: unknown } | undefined)?.value ?? null) === sprintFilter) &&
       // CQ-05(c2): the null sentinel must be spelled the same on the way in and on the way
       // out. work-create routes --parent-id through nullableValue, which accepts BOTH "-"
@@ -2843,8 +2915,21 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       // silent wrong answer (total=0), not a cosmetic inconsistency. Sharing nullableValue
       // makes the round trip closed for every spelling the writer accepts, by construction.
       (values["parent-id"] === undefined || (nullableValue(values["parent-id"]) === null ? entry.parentId === null : entry.parentId === values["parent-id"])))
-      .map(workSummary);
+      .map((entry) => search === undefined ? workSummary(entry) : workSearchSummary(entry, scopeBytes));
     io.write(canonicalJson(paginate(state, "work", records, values)));
+    return;
+  }
+  if (command === "work-draft") {
+    const values = parseArguments(rest, ["workspace", "kind", "project-id"]);
+    required(values, ["workspace", "kind", "project-id"]);
+    if (!(values.kind === "Initiative" || values.kind === "Epic" || values.kind === "Story" || values.kind === "Subtask" || values.kind === "Incident" || values.kind === "Release")) {
+      fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
+    }
+    const state = await validateWorkspace(values.workspace ?? "");
+    if (!state.projects.some((project) => !project.tombstone && project.id === values["project-id"])) {
+      fail("WORKSPACE_PROJECT_NOT_FOUND", `project ${values["project-id"] ?? ""} does not exist in this workspace`);
+    }
+    io.write(canonicalJson(workDraft(state, values.kind, values["project-id"] ?? "")));
     return;
   }
   if (command === "work-show") {

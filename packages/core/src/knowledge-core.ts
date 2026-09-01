@@ -27,6 +27,7 @@ import {
   compareCanonicalText,
   deriveStableId,
   parseStrictInstant,
+  PROTOCOL_LIMITS,
   validateKnowledgeRecord,
 } from "../../protocol/src/index.js";
 import type { JsonValue, KnowledgeRecord, WorkRecord } from "../../protocol/src/index.js";
@@ -43,14 +44,14 @@ export const KNOWLEDGE_LIMITS = Object.freeze({
   maximumSummaryBytes: 2_048,
   maximumSnippetBytes: 512,
   maximumMetadataBytes: 32_768,
-  maximumRecords: 64,
-  // WSC-5: retired records are tombstoned audit entries that no longer occupy a
-  // live-record slot; the physical file bound exceeds the live cap by this
-  // allowance so retire genuinely frees a create slot without the store ever
-  // scanning as over-limit.
-  maximumRetiredRecords: 64,
+  // STORY-330: source-of-truth knowledge bytes are bounded by the same canonical
+  // view ceiling as the protocol. The previous 128 KiB value was a historical
+  // record count surrogate: 35 cards measured 63,316 bytes of source data while
+  // their derived index measured 52,851 bytes (5.0% of the 1 MiB view ceiling).
+  // The index remains byte-verified separately; charging it twice made the old
+  // budget reject a store before the protocol view could be full.
+  maximumAggregateBytes: PROTOCOL_LIMITS.maxCanonicalBytes,
   maximumQueryResults: 8,
-  maximumAggregateBytes: 131_072,
   maximumLocators: 16,
   maximumLinksPerClass: 64,
   maximumTags: 32,
@@ -88,6 +89,9 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_REVERIFIED",
   "KNOWLEDGE_SELECTION_INVALID",
   "KNOWLEDGE_SOURCE_CHANGED",
+  "KNOWLEDGE_SOURCES_ALIGNED",
+  "KNOWLEDGE_SOURCE_MISSING",
+  "KNOWLEDGE_SOURCE_UNCHECKABLE",
   "KNOWLEDGE_SPECIAL_FILE",
   "KNOWLEDGE_STORE_INITIALIZED",
   "KNOWLEDGE_STORE_REBASED",
@@ -117,8 +121,8 @@ export class KnowledgeCoreError extends Error {
 }
 
 export interface KnowledgeStalenessPolicy {
-  readonly maximumAgeDays: number;
-  readonly unknownDisposition: "fail-closed";
+  readonly maximumAgeDays: number | null;
+  readonly unknownDisposition: "fail-closed" | "fail-open";
 }
 
 export interface KnowledgeUnitMetadata {
@@ -137,6 +141,7 @@ export interface KnowledgeUnitMetadata {
   readonly accountableOwnerId: string;
   readonly sourceReferences: readonly string[];
   readonly sourceDigest: string;
+  readonly supersedes: string | null;
   readonly linkedWorkIds: readonly string[];
   readonly linkedDecisionIds: readonly string[];
   readonly linkedGateIds: readonly string[];
@@ -173,7 +178,8 @@ export interface CreateKnowledgeUnitInput {
   readonly snippet: string;
   readonly accountableOwnerId: string;
   readonly sourceReferences: readonly string[];
-  readonly sourceDigest: string;
+  readonly sourceDigest: string | null;
+  readonly supersedes?: string | null;
   readonly linkedWorkIds: readonly string[];
   readonly linkedDecisionIds: readonly string[];
   readonly linkedGateIds: readonly string[];
@@ -268,12 +274,26 @@ interface KnowledgeStoreScan {
 const markerFields = ["schemaVersion", "workspaceId", "eventHighWaterDigest", "version", "disposable", "authority"];
 const metadataFields = [
   "schemaVersion", "id", "externalKey", "scope", "projectId", "roleScopes", "category", "kind", "tags", "subject",
-  "summary", "snippet", "accountableOwnerId", "sourceReferences", "sourceDigest", "linkedWorkIds", "linkedDecisionIds", "linkedGateIds",
+  "summary", "snippet", "accountableOwnerId", "sourceReferences", "sourceDigest", "supersedes", "linkedWorkIds", "linkedDecisionIds", "linkedGateIds",
   "linkedEvidenceIds", "lifecycle", "retrievalDisposition", "promotionState", "freshnessState", "lastVerified",
   "stalenessPolicy", "redactionDisposition", "exportDisposition", "authority", "sourceProvenance", "bodySha256",
   "bodyBytes", "revision", "updatedAt", "extensions",
 ];
 const stalenessFields = ["maximumAgeDays", "unknownDisposition"];
+
+// STORY-327: provenance is configured by the existing knowledge kinds. Small
+// fact/decision/summary cards can be captured without a source or evidence link;
+// article-like guide/reference cards retain the strict provenance floor. Keeping
+// this roster outside assertPromotableProvenance makes the policy extendable
+// without changing the validation algorithm.
+export const KNOWLEDGE_PROVENANCE_POLICY = Object.freeze({
+  relaxedKinds: Object.freeze(["fact", "decision", "summary"] as const),
+  strictKinds: Object.freeze(["guide", "reference"] as const),
+});
+
+function isRelaxedProvenanceKind(kind: KnowledgeKind): boolean {
+  return (KNOWLEDGE_PROVENANCE_POLICY.relaxedKinds as readonly string[]).includes(kind);
+}
 
 function fail(reasonCode: KnowledgeReasonCode, message: string): never {
   throw new KnowledgeCoreError(reasonCode, message);
@@ -290,6 +310,91 @@ function inside(parent: string, candidate: string): boolean {
 
 function sha256(value: Buffer | string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function sourceReferenceIsFile(reference: string): boolean {
+  return !reference.includes("://") && !/^[a-z][a-z0-9+.-]*:/iu.test(reference);
+}
+
+function sourceRoots(workspaceRoot: string, workspace: WorkspaceState): readonly string[] {
+  const roots = workspace.metadata.roots.map((root) => root.canonicalPath);
+  const containerRoot = resolve(workspaceRoot, "../../..");
+  return [...new Set([workspaceRoot, containerRoot, process.cwd(), ...roots])];
+}
+
+async function resolveSourceFile(reference: string, workspaceRoot: string, workspace: WorkspaceState): Promise<string | null> {
+  if (!sourceReferenceIsFile(reference)) return null;
+  if (reference.startsWith("/") || reference.includes("\\")) return null;
+  for (const root of sourceRoots(workspaceRoot, workspace)) {
+    const candidate = resolve(root, reference);
+    if (!inside(root, candidate)) continue;
+    try {
+      const before = await lstat(candidate);
+      if (before.isSymbolicLink() || !before.isFile() || before.nlink !== 1) continue;
+      const canonical = await realpath(candidate);
+      if (!inside(root, canonical)) continue;
+      const after = await lstat(canonical);
+      if (after.isSymbolicLink() || !after.isFile() || after.nlink !== 1 || !sameIdentity(before, after)) continue;
+      return canonical;
+    } catch {
+      // Try the next declared source root. A missing source is reported by the
+      // explicit check command rather than making a metadata-only read fail.
+    }
+  }
+  return null;
+}
+
+async function hashSourceFile(path: string): Promise<string> {
+  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const hash = createHash("sha256");
+  try {
+    const initial = await handle.stat();
+    if (!initial.isFile() || initial.nlink !== 1) fail("KNOWLEDGE_SPECIAL_FILE", path);
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    let position = 0;
+    for (;;) {
+      const result = await handle.read(buffer, 0, buffer.length, position);
+      if (result.bytesRead === 0) break;
+      hash.update(buffer.subarray(0, result.bytesRead));
+      position += result.bytesRead;
+    }
+    const final = await handle.stat();
+    if (!sameIdentity(initial, final) || initial.size !== final.size) fail("KNOWLEDGE_SOURCE_CHANGED", path);
+    return hash.digest("hex");
+  } finally {
+    await handle.close();
+  }
+}
+
+async function sourceDigestParts(
+  workspaceRoot: string,
+  workspace: WorkspaceState,
+  references: readonly string[],
+): Promise<readonly { readonly reference: string; readonly path: string | null; readonly digest: string | null }[]> {
+  const parts = [];
+  for (const reference of references) {
+    const path = await resolveSourceFile(reference, workspaceRoot, workspace);
+    parts.push({ reference, path, digest: path === null ? null : await hashSourceFile(path) });
+  }
+  return parts;
+}
+
+// STORY-328: one source uses its raw SHA-256 so the stored digest is directly
+// comparable with the file; multiple sources use a canonical digest of their
+// ordered reference/digest pairs. Cards without file-backed references still get
+// a deterministic self-computed digest, but the explicit check reports them as
+// uncheckable rather than pretending a URI is a file.
+export async function calculateKnowledgeSourceDigest(
+  workspaceRoot: string,
+  workspace: WorkspaceState,
+  references: readonly string[],
+  fallbackBody: string,
+): Promise<string> {
+  const parts = await sourceDigestParts(workspaceRoot, workspace, references);
+  const fileParts = parts.filter((part) => part.digest !== null);
+  if (fileParts.length === 1 && parts.length === 1) return fileParts[0]!.digest!;
+  if (fileParts.length > 0) return sha256(canonicalJson(parts.map((part) => ({ reference: part.reference, digest: part.digest }))));
+  return sha256(fallbackBody);
 }
 
 function exactFields(value: unknown, expected: readonly string[], label: string, reasonCode: KnowledgeReasonCode): asserts value is Readonly<Record<string, unknown>> {
@@ -389,7 +494,7 @@ const knowledgeBackendProfile: FileStoreBackendProfile = Object.freeze({
     markerBytes: 16_384,
     metadataBytes: KNOWLEDGE_LIMITS.maximumMetadataBytes,
     bodyBytes: KNOWLEDGE_LIMITS.maximumBodyBytes,
-    viewBytes: KNOWLEDGE_LIMITS.maximumAggregateBytes + KNOWLEDGE_LIMITS.maximumMetadataBytes,
+    viewBytes: PROTOCOL_LIMITS.maxCanonicalBytes,
     recordBytes: 0,
   }),
 });
@@ -493,8 +598,15 @@ function assertPromotableProvenance(metadata: KnowledgeUnitMetadata): void {
   } catch (error) {
     fail("KNOWLEDGE_PROVENANCE_INVALID", `accountable owner:${String(error)}`);
   }
-  if (!metadata.accountableOwnerId.startsWith("owner:") || metadata.sourceReferences.length === 0 || metadata.linkedEvidenceIds.length === 0) {
-    fail("KNOWLEDGE_PROVENANCE_INVALID", `${metadata.id}:source, evidence, and accountable owner are required`);
+  if (!metadata.accountableOwnerId.startsWith("owner:")) {
+    fail("KNOWLEDGE_PROVENANCE_INVALID", `${metadata.id}:accountable owner is required`);
+  }
+  const relaxed = isRelaxedProvenanceKind(metadata.kind);
+  if (!relaxed && (metadata.sourceReferences.length === 0 || metadata.linkedEvidenceIds.length === 0)) {
+    fail("KNOWLEDGE_PROVENANCE_INVALID", `${metadata.id}:source and evidence are required for ${metadata.kind} knowledge`);
+  }
+  if (relaxed && ((metadata.sourceReferences.length === 0) !== (metadata.linkedEvidenceIds.length === 0))) {
+    fail("KNOWLEDGE_PROVENANCE_INVALID", `${metadata.id}:source and evidence must be supplied together when present`);
   }
   // WSC-6 / OD-18: unconditional promote-time machine checks — a promoted record
   // must carry at least one retrieval tag, a non-empty snippet, and at least one
@@ -506,43 +618,61 @@ function assertPromotableProvenance(metadata: KnowledgeUnitMetadata): void {
   }
 }
 
+// STORY-326: records written before `supersedes` existed are admitted as the
+// explicit null value. The derived index keeps null fields omitted for those
+// legacy records, so an existing store remains byte-valid until its next normal
+// mutation rewrites the derived view.
+function normalizeMetadataRecord(value: Readonly<Record<string, JsonValue>>): Readonly<Record<string, JsonValue>> {
+  return Object.hasOwn(value, "supersedes") ? value : { ...value, supersedes: null };
+}
+
 function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, workspace: WorkspaceState, deferLinks = false): KnowledgeUnitMetadata {
-  exactFields(value, metadataFields, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID");
-  exactFields(value.stalenessPolicy, stalenessFields, "knowledge staleness policy", "KNOWLEDGE_RECORD_INVALID");
-  if (value.schemaVersion !== KNOWLEDGE_METADATA_SCHEMA_VERSION || typeof value.id !== "string" ||
-    typeof value.externalKey !== "string" || typeof value.scope !== "string" ||
-    !["workspace", "project", "role"].includes(value.scope) ||
-    (value.projectId !== null && typeof value.projectId !== "string") || typeof value.category !== "string" ||
-    !["architecture", "domain", "implementation", "standards", "testing", "workflow", "decision", "evidence"].includes(value.category) ||
-    typeof value.kind !== "string" || !["fact", "guide", "decision", "reference", "summary"].includes(value.kind) ||
-    typeof value.subject !== "string" || typeof value.summary !== "string" || typeof value.snippet !== "string" ||
-    typeof value.accountableOwnerId !== "string" ||
-    typeof value.sourceDigest !== "string" || !/^[a-f0-9]{64}$/u.test(value.sourceDigest) ||
-    typeof value.lifecycle !== "string" || !["candidate", "active", "retired"].includes(value.lifecycle) ||
-    typeof value.retrievalDisposition !== "string" || !["default", "explicit-only", "excluded"].includes(value.retrievalDisposition) ||
-    typeof value.promotionState !== "string" || !["candidate", "promoted", "rejected"].includes(value.promotionState) ||
-    typeof value.freshnessState !== "string" || !["fresh", "stale", "unknown"].includes(value.freshnessState) ||
-    (value.lastVerified !== null && typeof value.lastVerified !== "string") ||
-    value.redactionDisposition !== "focused-reference-redaction-v1" ||
-    typeof value.exportDisposition !== "string" || !["metadata-only", "excluded"].includes(value.exportDisposition) ||
-    value.authority !== "workspace-knowledge-metadata" || value.sourceProvenance !== "explicit-current-source-reference" ||
-    typeof value.bodySha256 !== "string" || !/^[a-f0-9]{64}$/u.test(value.bodySha256) ||
-    !Number.isSafeInteger(value.bodyBytes) || Number(value.bodyBytes) < 0 ||
-    !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || typeof value.updatedAt !== "string" ||
-    value.extensions === null || typeof value.extensions !== "object" || Array.isArray(value.extensions) || Object.keys(value.extensions).length !== 0) {
-    fail("KNOWLEDGE_RECORD_INVALID", String(value.id ?? "unknown"));
+  const normalizedValue = normalizeMetadataRecord(value);
+  exactFields(normalizedValue, metadataFields, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID");
+  exactFields(normalizedValue.stalenessPolicy, stalenessFields, "knowledge staleness policy", "KNOWLEDGE_RECORD_INVALID");
+  if (normalizedValue.schemaVersion !== KNOWLEDGE_METADATA_SCHEMA_VERSION || typeof normalizedValue.id !== "string" ||
+    typeof normalizedValue.externalKey !== "string" || typeof normalizedValue.scope !== "string" ||
+    !["workspace", "project", "role"].includes(normalizedValue.scope) ||
+    (normalizedValue.projectId !== null && typeof normalizedValue.projectId !== "string") || typeof normalizedValue.category !== "string" ||
+    !["architecture", "domain", "implementation", "standards", "testing", "workflow", "decision", "evidence"].includes(normalizedValue.category) ||
+    typeof normalizedValue.kind !== "string" || !["fact", "guide", "decision", "reference", "summary"].includes(normalizedValue.kind) ||
+    typeof normalizedValue.subject !== "string" || typeof normalizedValue.summary !== "string" || typeof normalizedValue.snippet !== "string" ||
+    typeof normalizedValue.accountableOwnerId !== "string" ||
+    typeof normalizedValue.sourceDigest !== "string" || !/^[a-f0-9]{64}$/u.test(normalizedValue.sourceDigest) ||
+    (normalizedValue.supersedes !== null && typeof normalizedValue.supersedes !== "string") ||
+    typeof normalizedValue.lifecycle !== "string" || !["candidate", "active", "retired"].includes(normalizedValue.lifecycle) ||
+    typeof normalizedValue.retrievalDisposition !== "string" || !["default", "explicit-only", "excluded"].includes(normalizedValue.retrievalDisposition) ||
+    typeof normalizedValue.promotionState !== "string" || !["candidate", "promoted", "rejected"].includes(normalizedValue.promotionState) ||
+    typeof normalizedValue.freshnessState !== "string" || !["fresh", "stale", "unknown"].includes(normalizedValue.freshnessState) ||
+    (normalizedValue.lastVerified !== null && typeof normalizedValue.lastVerified !== "string") ||
+    normalizedValue.redactionDisposition !== "focused-reference-redaction-v1" ||
+    typeof normalizedValue.exportDisposition !== "string" || !["metadata-only", "excluded"].includes(normalizedValue.exportDisposition) ||
+    normalizedValue.authority !== "workspace-knowledge-metadata" || normalizedValue.sourceProvenance !== "explicit-current-source-reference" ||
+    typeof normalizedValue.bodySha256 !== "string" || !/^[a-f0-9]{64}$/u.test(normalizedValue.bodySha256) ||
+    !Number.isSafeInteger(normalizedValue.bodyBytes) || Number(normalizedValue.bodyBytes) < 0 ||
+    !Number.isSafeInteger(normalizedValue.revision) || Number(normalizedValue.revision) < 1 || typeof normalizedValue.updatedAt !== "string" ||
+    normalizedValue.extensions === null || typeof normalizedValue.extensions !== "object" || Array.isArray(normalizedValue.extensions) || Object.keys(normalizedValue.extensions).length !== 0) {
+    fail("KNOWLEDGE_RECORD_INVALID", String(normalizedValue.id ?? "unknown"));
   }
-  if (!Number.isSafeInteger(value.stalenessPolicy.maximumAgeDays) || Number(value.stalenessPolicy.maximumAgeDays) < 1 ||
-    Number(value.stalenessPolicy.maximumAgeDays) > 3_650 || value.stalenessPolicy.unknownDisposition !== "fail-closed") {
+  if ((normalizedValue.stalenessPolicy.maximumAgeDays !== null &&
+    (!Number.isSafeInteger(normalizedValue.stalenessPolicy.maximumAgeDays) || Number(normalizedValue.stalenessPolicy.maximumAgeDays) < 1 || Number(normalizedValue.stalenessPolicy.maximumAgeDays) > 3_650)) ||
+    (normalizedValue.stalenessPolicy.unknownDisposition !== "fail-closed" && normalizedValue.stalenessPolicy.unknownDisposition !== "fail-open")) {
     fail("KNOWLEDGE_RECORD_INVALID", "staleness policy is invalid");
   }
-  const metadata = value as unknown as KnowledgeUnitMetadata;
+  const metadata = normalizedValue as unknown as KnowledgeUnitMetadata;
   try {
     assertProtocolId(metadata.id);
     canonicalExternalKey(metadata.externalKey);
     assertStrictInstant(metadata.updatedAt);
     if (metadata.lastVerified !== null) assertStrictInstant(metadata.lastVerified);
+    if (metadata.supersedes !== null) {
+      assertProtocolId(metadata.supersedes);
+      if (!metadata.supersedes.startsWith("knowledge:") || metadata.supersedes === metadata.id) {
+        fail("KNOWLEDGE_LINK_INVALID", `${metadata.id}:supersedes`);
+      }
+    }
   } catch (error) {
+    if (error instanceof KnowledgeCoreError) throw error;
     fail(error instanceof ProtocolError && error.reasonCode === "CANONICAL_VALUE_INVALID" ? "KNOWLEDGE_CANONICAL_INVALID" : "KNOWLEDGE_RECORD_INVALID", String(error));
   }
   if (deriveStableId("knowledge", metadata.externalKey) !== metadata.id) {
@@ -581,7 +711,7 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
   if (!deferLinks && metadata.lifecycle !== "retired") {
     validateMetadataLinks(metadata, workspace);
   }
-  if ((metadata.freshnessState === "unknown") !== (metadata.lastVerified === null)) {
+  if (metadata.freshnessState === "unknown" && metadata.lastVerified !== null) {
     fail("KNOWLEDGE_RECORD_INVALID", `${metadata.id}:freshness`);
   }
   return metadata;
@@ -664,6 +794,20 @@ function validateMetadataLinks(metadata: KnowledgeUnitMetadata, workspace: Works
   }
 }
 
+function validateSupersedesLink(
+  metadata: KnowledgeUnitMetadata,
+  records: ReadonlyMap<string, KnowledgeUnitMetadata>,
+): void {
+  if (metadata.supersedes === null) return;
+  const target = records.get(metadata.supersedes);
+  // The write path rejects a retired target. Once a valid replacement exists,
+  // retiring the superseded record must remain a valid inventory operation, so
+  // replay checks existence rather than reapplying the historical admission rule.
+  if (target === undefined) {
+    fail("KNOWLEDGE_LINK_INVALID", `${metadata.id}:supersedes:${metadata.supersedes}`);
+  }
+}
+
 function validateMetadataBody(metadata: KnowledgeUnitMetadata, body: Buffer, workspace: WorkspaceState): void {
   if (metadata.bodyBytes !== body.length || sha256(body) !== metadata.bodySha256) {
     fail("KNOWLEDGE_RECORD_INVALID", `${metadata.id}:body binding`);
@@ -695,7 +839,13 @@ function requireBody(unit: ScannedKnowledgeUnit): Buffer {
 }
 
 function knowledgeIndex(marker: KnowledgeStoreMarker, metadata: readonly KnowledgeUnitMetadata[]): Readonly<Record<string, JsonValue>> {
-  const records = [...metadata].sort((left, right) => compareCanonicalText(left.id, right.id));
+  const records = [...metadata]
+    .sort((left, right) => compareCanonicalText(left.id, right.id))
+    // Existing stores predate STORY-326. Keep the derived view byte-compatible
+    // for the default null value while metadata-first reads expose supersedes:null.
+    .map((record) => record.supersedes === null
+      ? Object.fromEntries(Object.entries(record).filter(([key]) => key !== "supersedes"))
+      : record);
   return {
     schemaVersion: "tcrn.knowledge-index.v1",
     authority: "derived-rebuildable",
@@ -779,12 +929,6 @@ async function scanKnowledgeStore(
   }
   const metadataNames = await backend.listKnowledgeMetadata();
   const bodyNames = await backend.listKnowledgeBodies();
-  // WSC-5: the physical file bound is the live cap plus the retired allowance, so
-  // a store at the live cap with retired records still scans cleanly.
-  const maximumStoredRecords = KNOWLEDGE_LIMITS.maximumRecords + KNOWLEDGE_LIMITS.maximumRetiredRecords;
-  if (metadataNames.length > maximumStoredRecords || bodyNames.length > maximumStoredRecords) {
-    fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge record count");
-  }
   const metadataIds = metadataNames.map((name) => name.endsWith(".json") ? name.slice(0, -5) : "");
   const bodyIds = bodyNames.map((name) => name.endsWith(".body") ? name.slice(0, -5) : "");
   const bodyIdSet = new Set(bodyIds);
@@ -845,6 +989,8 @@ async function scanKnowledgeStore(
     units.push({ metadataPath, bodyPath, metadata, body });
   }
   units.sort((left, right) => compareCanonicalText(left.metadata.id, right.metadata.id));
+  const metadataById = new Map(units.map((unit) => [unit.metadata.id, unit.metadata]));
+  for (const unit of units) validateSupersedesLink(unit.metadata, metadataById);
   const index = knowledgeIndex(marker, units.map((unit) => unit.metadata));
   const viewEntries = await readdir(viewsRoot);
   if (JSON.stringify(viewEntries.sort(compareCanonicalText)) !== JSON.stringify(["index.json"])) {
@@ -926,7 +1072,15 @@ function computeFreshness(metadata: KnowledgeUnitMetadata, at: string): Knowledg
   } catch (error) {
     fail("KNOWLEDGE_INPUT_INVALID", String(error));
   }
-  if (metadata.lastVerified === null || metadata.freshnessState === "unknown") return "unknown";
+  // STORY-327: freshness is change-driven. A null policy means the card never
+  // expires by clock, and an absent verification instant is no longer a reason
+  // to hide a card from default retrieval. Keep an explicit stale state visible
+  // until a re-verification, but do not manufacture a stale result from time.
+  if (metadata.stalenessPolicy.maximumAgeDays === null) {
+    return metadata.freshnessState === "stale" ? "stale" : "fresh";
+  }
+  if (metadata.lastVerified === null) return metadata.freshnessState === "stale" ? "stale" : "fresh";
+  if (metadata.freshnessState === "unknown") return "fresh";
   let verified: bigint;
   try {
     verified = parseStrictInstant(metadata.lastVerified);
@@ -969,6 +1123,14 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
   } catch (error) {
     fail(error instanceof ProtocolError && error.reasonCode === "CANONICAL_VALUE_INVALID" ? "KNOWLEDGE_CANONICAL_INVALID" : "KNOWLEDGE_INPUT_INVALID", String(error));
   }
+  // Reference cards are rejected at capture when their source/evidence contract
+  // is absent (the explicit write-time boundary in STORY-327). Guide cards keep
+  // the historical cheap-capture path but remain unable to promote without the
+  // strict provenance assertion above.
+  if (input.kind === "reference" && (input.sourceReferences.length === 0 || input.linkedEvidenceIds.length === 0)) {
+    fail("KNOWLEDGE_PROVENANCE_INVALID", `${input.kind} knowledge requires source and evidence links`);
+  }
+  const directCapture = isRelaxedProvenanceKind(input.kind) && input.sourceReferences.length === 0 && input.linkedEvidenceIds.length === 0;
   const metadata: KnowledgeUnitMetadata = {
     schemaVersion: KNOWLEDGE_METADATA_SCHEMA_VERSION,
     id: deriveStableId("knowledge", externalKey),
@@ -987,14 +1149,18 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
     snippet: input.snippet,
     accountableOwnerId: input.accountableOwnerId,
     sourceReferences: [...input.sourceReferences].sort(compareCanonicalText),
-    sourceDigest: input.sourceDigest,
+    sourceDigest: input.sourceDigest ?? "",
+    supersedes: input.supersedes ?? null,
     linkedWorkIds: [...input.linkedWorkIds].sort(compareCanonicalText),
     linkedDecisionIds: [...input.linkedDecisionIds].sort(compareCanonicalText),
     linkedGateIds: [...input.linkedGateIds].sort(compareCanonicalText),
     linkedEvidenceIds: [...input.linkedEvidenceIds].sort(compareCanonicalText),
     lifecycle: input.lifecycle,
     retrievalDisposition: input.retrievalDisposition,
-    promotionState: "candidate",
+    // STORY-327: a source-free fragment is ready for retrieval at capture time;
+    // sourced records retain the legacy candidate state for compatibility with
+    // the explicit provenance promotion path.
+    promotionState: directCapture ? "promoted" : "candidate",
     freshnessState: input.freshnessState,
     lastVerified: input.lastVerified,
     stalenessPolicy: input.stalenessPolicy,
@@ -1098,7 +1264,10 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
   assertBoundedString(input.body, KNOWLEDGE_LIMITS.maximumBodyBytes, "body");
   const body = Buffer.from(input.body, "utf8");
   const workspace = await materializeWorkspace(workspaceRoot);
-  const metadata = buildMetadata(input, body, workspace);
+  const sourceDigest = input.sourceDigest && input.sourceDigest.length > 0
+    ? input.sourceDigest
+    : await calculateKnowledgeSourceDigest(workspaceRoot, workspace, input.sourceReferences, input.body);
+  const metadata = buildMetadata({ ...input, sourceDigest }, body, workspace);
   const initial = await mutationAdmissionScan(workspaceRoot, options);
   const claim = await acquireMutationClaim(initial);
   // WSC-6: every escape from the claim-held region that leaves this process alive must
@@ -1119,6 +1288,12 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
     if (scan.marker.version !== input.expectedVersion) {
       fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
     }
+    if (metadata.supersedes !== null) {
+      const target = scan.units.find((unit) => unit.metadata.id === metadata.supersedes);
+      if (target === undefined || target.metadata.lifecycle === "retired") {
+        fail("KNOWLEDGE_LINK_INVALID", `${metadata.id}:supersedes:${metadata.supersedes}`);
+      }
+    }
     const metadataBytes = Buffer.from(canonicalJson(metadata), "utf8");
     const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
     const projectedMetadata = [...scan.units.map((unit) => unit.metadata), metadata];
@@ -1128,13 +1303,9 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
     const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
       scan.units.reduce((total, unit) => total + Buffer.byteLength(canonicalJson(unit.metadata), "utf8") + (unit.body?.length ?? 0), 0) +
       metadataBytes.length + body.length;
-    // WSC-5: only live (non-retired) records count against the create cap, so
-    // retiring a record genuinely frees a create slot; the physical file total is
-    // still bounded by the live cap plus the retired allowance.
-    const liveRecords = scan.units.filter((unit) => unit.metadata.lifecycle !== "retired").length;
-    const maximumStoredRecords = KNOWLEDGE_LIMITS.maximumRecords + KNOWLEDGE_LIMITS.maximumRetiredRecords;
-    if (metadataBytes.length > KNOWLEDGE_LIMITS.maximumMetadataBytes || liveRecords >= KNOWLEDGE_LIMITS.maximumRecords ||
-      scan.units.length >= maximumStoredRecords || projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
+    // STORY-330: no record-count admission branch remains. The aggregate source
+    // bytes and the canonical metadata/body limits are the capacity checks.
+    if (metadataBytes.length > KNOWLEDGE_LIMITS.maximumMetadataBytes || projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
       fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge create budget");
     }
     if (scan.units.some((unit) => unit.metadata.id === metadata.id || unit.metadata.externalKey === metadata.externalKey)) {
@@ -1259,7 +1430,7 @@ function normalizeListQuery(query: KnowledgeListQuery): NormalizedListQuery {
   // variable really holds whichever caller-supplied page size is within bounds.
   let limit: number = KNOWLEDGE_LIMITS.maximumQueryResults;
   if (query.limit !== undefined) {
-    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > KNOWLEDGE_LIMITS.maximumRecords) {
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
       fail("KNOWLEDGE_INPUT_INVALID", "limit");
     }
     limit = query.limit;
@@ -1274,11 +1445,58 @@ function normalizeListQuery(query: KnowledgeListQuery): NormalizedListQuery {
   return { selection, search, limit, offset };
 }
 
-function selectKnowledgeMetadata(scan: KnowledgeStoreScan, query: KnowledgeListQuery, normalized: NormalizedListQuery): readonly KnowledgeUnitMetadata[] {
+function occurrenceCount(text: string, token: string): number {
+  if (token.length === 0) return 0;
+  let count = 0;
+  let offset = 0;
+  while (offset < text.length) {
+    const found = text.indexOf(token, offset);
+    if (found < 0) break;
+    count += 1;
+    offset = found + token.length;
+  }
+  return count;
+}
+
+function relevanceTokens(search: string): readonly string[] {
+  const tokens = [...search.toLowerCase().matchAll(/[a-z0-9][a-z0-9_-]{1,31}|[一-鿿]+/gu)].map((match) => match[0]);
+  return tokens.length === 0 ? [search.toLowerCase()] : [...new Set(tokens)];
+}
+
+// STORY-321: this is intentionally a small, dependency-free field-weighted
+// scorer. Subject and exact tags carry the strongest signal, summary carries
+// supporting context, and snippet carries bounded detail. Ties retain the old
+// canonical-id order, while different queries can change the order whenever
+// their field matches differ.
+export function knowledgeRelevanceScore(metadata: KnowledgeUnitMetadata, search: string | undefined): number {
+  if (search === undefined) return 0;
+  const tokens = relevanceTokens(search);
+  const subject = metadata.subject.toLowerCase();
+  const summary = metadata.summary.toLowerCase();
+  const snippet = metadata.snippet.toLowerCase();
+  return tokens.reduce((score, token) => score
+    + occurrenceCount(subject, token) * 8
+    + occurrenceCount(summary, token) * 4
+    + occurrenceCount(snippet, token) * 2
+    + metadata.tags.reduce((tagScore, tag) => tagScore + (tag.toLowerCase() === token ? 12 : occurrenceCount(tag.toLowerCase(), token) * 3), 0), 0);
+}
+
+function explicitlySelectable(metadata: KnowledgeUnitMetadata, at: string): boolean {
+  return metadata.promotionState === "promoted" && metadata.lifecycle === "active" &&
+    metadata.retrievalDisposition !== "excluded" && metadata.exportDisposition === "metadata-only" &&
+    computeFreshness(metadata, at) !== "stale";
+}
+
+function selectKnowledgeMetadata(
+  scan: KnowledgeStoreScan,
+  query: KnowledgeListQuery,
+  normalized: NormalizedListQuery,
+  includeExplicitOnly = false,
+): readonly KnowledgeUnitMetadata[] {
   const { selection, search } = normalized;
-  return scan.units.map((unit) => unit.metadata).filter((metadata) => {
+  const selected = scan.units.map((unit) => unit.metadata).filter((metadata) => {
     const freshness = computeFreshness(metadata, query.at);
-    if (selection === "default" && !isDefaultSelectable(metadata, query.at)) return false;
+    if (selection === "default" && !(includeExplicitOnly && search !== undefined ? explicitlySelectable(metadata, query.at) : isDefaultSelectable(metadata, query.at))) return false;
     return (!query.projectId || metadata.projectId === query.projectId) &&
       (!query.roleScope || metadata.roleScopes.includes(query.roleScope)) &&
       (!query.category || metadata.category === query.category) && (!query.kind || metadata.kind === query.kind) &&
@@ -1294,7 +1512,11 @@ function selectKnowledgeMetadata(scan: KnowledgeStoreScan, query: KnowledgeListQ
       (search === undefined || metadata.subject.toLowerCase().includes(search) ||
         metadata.summary.toLowerCase().includes(search) || metadata.snippet.toLowerCase().includes(search) ||
         metadata.tags.some((tag) => tag.includes(search)));
-  }).sort((left, right) => compareCanonicalText(left.id, right.id));
+  });
+  return selected.sort((left, right) => {
+    const scoreDifference = knowledgeRelevanceScore(right, search) - knowledgeRelevanceScore(left, search);
+    return scoreDifference === 0 ? compareCanonicalText(left.id, right.id) : scoreDifference;
+  });
 }
 
 // TCRN-CROSS-INC-226: the price of admitting a trailing read is that the answer says
@@ -1315,7 +1537,7 @@ function trailingDisclosure(scan: KnowledgeStoreScan): Readonly<Record<string, J
 export async function listKnowledgeMetadata(workspaceRoot: string, query: KnowledgeListQuery): Promise<Readonly<Record<string, JsonValue>>> {
   const normalized = normalizeListQuery(query);
   const scan = await scanKnowledgeStore(workspaceRoot, query, false, "metadata-only");
-  const matched = selectKnowledgeMetadata(scan, query, normalized);
+  const matched = selectKnowledgeMetadata(scan, query, normalized, true);
   // WSC-4: truncate with a continuation window instead of failing when more than
   // one page matches — the metadata-first surface stays usable past a single page.
   const records = matched.slice(normalized.offset, normalized.offset + normalized.limit);
@@ -1451,6 +1673,57 @@ export async function evaluateKnowledgeFreshness(workspaceRoot: string, at: stri
     at,
     records,
     evaluationDigest: canonicalSha256(records),
+  };
+}
+
+// STORY-328: source verification is an explicit, bounded operation. Ordinary
+// metadata reads do not walk source files; this command visits at most the
+// declared sourceReferences of each admitted card and turns changed/missing
+// files into actionable report records instead of hiding the card or rejecting
+// the whole knowledge store.
+export async function checkKnowledgeSources(workspaceRoot: string, options: KnowledgeReadOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
+  const scan = await scanKnowledgeStore(workspaceRoot, { ...options, allowTrailing: options.allowTrailing ?? true }, false, "metadata-only");
+  const reports: Array<Record<string, JsonValue>> = [];
+  for (const unit of scan.units) {
+    const references = unit.metadata.sourceReferences.filter(sourceReferenceIsFile);
+    if (references.length === 0) {
+      reports.push({ id: unit.metadata.id, status: "uncheckable", sourceReferences: unit.metadata.sourceReferences as unknown as JsonValue, expectedDigest: unit.metadata.sourceDigest, action: "none" });
+      continue;
+    }
+    try {
+      const parts = await sourceDigestParts(scan.workspaceRoot, scan.workspace, references);
+      const missing = parts.filter((part) => part.path === null).map((part) => part.reference);
+      if (missing.length > 0) {
+        reports.push({ id: unit.metadata.id, status: "missing", sourceReferences: missing, expectedDigest: unit.metadata.sourceDigest, action: "report-and-reverify-or-retire" });
+        continue;
+      }
+      const actualDigest = parts.length === 1 ? parts[0]!.digest! : sha256(canonicalJson(parts.map((part) => ({ reference: part.reference, digest: part.digest }))));
+      const changed = actualDigest !== unit.metadata.sourceDigest;
+      reports.push({ id: unit.metadata.id, status: changed ? "changed" : "unchanged", sourceReferences: references as unknown as JsonValue, expectedDigest: unit.metadata.sourceDigest, actualDigest, action: changed ? "reverify-or-retire" : "none" });
+    } catch (error) {
+      reports.push({ id: unit.metadata.id, status: "changed", sourceReferences: references as unknown as JsonValue, expectedDigest: unit.metadata.sourceDigest, action: "report-and-reverify-or-retire", detail: "source could not be hashed consistently" });
+    }
+  }
+  reports.sort((left, right) => compareCanonicalText(String(left.id), String(right.id)));
+  const changed = reports.filter((report) => report.status === "changed");
+  const missing = reports.filter((report) => report.status === "missing");
+  const uncheckable = reports.filter((report) => report.status === "uncheckable");
+  const reasonCode = changed.length > 0
+    ? "KNOWLEDGE_SOURCE_CHANGED"
+    : missing.length > 0
+      ? "KNOWLEDGE_SOURCE_MISSING"
+      : uncheckable.length === reports.length && reports.length > 0
+        ? "KNOWLEDGE_SOURCE_UNCHECKABLE"
+        : "KNOWLEDGE_SOURCES_ALIGNED";
+  return {
+    schemaVersion: "tcrn.knowledge-source-check.v1",
+    reasonCode,
+    ...trailingDisclosure(scan),
+    records: reports,
+    changed: changed.length,
+    missing: missing.length,
+    uncheckable: uncheckable.length,
+    resultDigest: canonicalSha256(reports),
   };
 }
 

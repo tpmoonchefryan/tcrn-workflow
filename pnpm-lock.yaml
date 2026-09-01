@@ -31,6 +31,8 @@ importers:
 
   packages/core: {}
 
+  packages/mcp: {}
+
   packages/pg-backend:
     dependencies:
       pg:

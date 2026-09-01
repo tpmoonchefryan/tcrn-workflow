@@ -21,6 +21,14 @@ test("extractQueryTokens keeps ASCII words and CJK bigrams, drops stopwords", ()
   assert.ok(tokens.length > 0);
 });
 
+test("CJK query extraction does not split phrases into bigrams", () => {
+  const tokens = extractQueryTokens("引擎设计 约束模型 工单格式");
+  assert.deepEqual(tokens, ["引擎设计", "约束模型", "工单格式"]);
+  assert.equal(tokens.includes("引擎"), false);
+  assert.equal(tokens.includes("擎设"), false);
+  assert.equal(tokens.includes("设计"), false);
+});
+
 test("a prompt with no trigger keyword is gated off", () => {
   assert.equal(promptTriggers("今天天气如何", "hook,仪式,rebase"), false);
   assert.equal(promptTriggers("hook 没有生效", "hook,仪式,rebase"), true);

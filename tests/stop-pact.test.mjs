@@ -29,10 +29,32 @@ import {
 } from "../tools/stop-pact/pact.mjs";
 import { resolveMode, resolveModelFromTranscript, toolUseCount, workedSinceLastBlock } from "../tools/stop-pact/mode.mjs";
 import { osascriptArgs } from "../tools/stop-pact/notify.mjs";
+import { checkResponseText } from "../tools/stop-pact/response-style-hook.mjs";
+import { buildHookResponse, readZeroSection } from "../scripts/agents-zero-hook.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HOOK = join(HERE, "..", "tools", "stop-pact", "hook.mjs");
 const CLI = join(HERE, "..", "tools", "stop-pact", "cli.mjs");
+
+test("STORY-332 response checks distinguish prose violations from quoted/table content", () => {
+  assert.equal(checkResponseText("中文".repeat(401)).violations[0].rule, 7);
+  assert.equal(checkResponseText("本次采用门税方案").violations[0].rule, 3);
+  assert.equal(checkResponseText("`门税`\n| 门税 |\n| --- |\n前后对比").ok, true);
+});
+
+test("STORY-331 re-reads the platform AGENTS section on every prompt", () => {
+  const dir = mkdtempSync(join(tmpdir(), "agents-zero-"));
+  try {
+    writeFileSync(join(dir, "AGENTS.md"), "## 零、输出行文（硬约束）\n\n1. first\n2. second\n\n## 一、平台身份\nnext\n");
+    const first = buildHookResponse({ hook_event_name: "UserPromptSubmit" }, { root: dir });
+    assert.ok(first.hookSpecificOutput.additionalContext.includes("1. first"));
+    writeFileSync(join(dir, "AGENTS.md"), "## 零、输出行文（硬约束）\n\n1. changed\n\n## 一、平台身份\nnext\n");
+    assert.ok(buildHookResponse({ hook_event_name: "UserPromptSubmit" }, { root: dir }).hookSpecificOutput.additionalContext.includes("1. changed"));
+    assert.equal(readZeroSection(dir).includes("## 一、平台身份"), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 const NOW = "2026-08-01T12:00:00Z";
 function runningPact(overrides = {}) {

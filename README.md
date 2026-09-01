@@ -14,7 +14,7 @@ English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [
 
 [Why](#why-this-project-exists) · [Is this for you?](#is-this-for-you) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Using it](#using-it-for-real-work) · [Plain answers](#plain-answers-to-fair-questions) · [Known limits](#known-limits) · [License](#license)
 
-`Verified claims: 78 (hygiene 13 · inertness 13 · runtime 52)`
+`Verified claims: 90 (hygiene 13 · inertness 13 · runtime 64)`
 
 </div>
 

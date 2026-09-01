@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { COMMAND_CATALOG, runCli } from "../dist/build/packages/cli/src/index.js";
+import { dispatchMessage } from "../dist/build/packages/mcp/src/index.js";
 import {
   acquireWorkspaceLease,
   annotateWork,
@@ -15,6 +16,8 @@ import {
   createWork,
   deleteWork,
   initializeWorkspace,
+  STORY_SCOPE_HEADINGS,
+  validateWorkspace,
 } from "../dist/build/packages/core/src/index.js";
 import { PROTOCOL_LIMITS, validateEventChain } from "../dist/build/packages/protocol/src/index.js";
 
@@ -76,6 +79,60 @@ async function run(args) {
 function reasonOf(args) {
   return runCli(args, { write() {} }).then(() => null, (error) => error?.reasonCode);
 }
+
+test("INIT-047 MCP read face performs the real handshake and stays read-only", async (context) => {
+  const fx = await fixture(context);
+  const initialized = JSON.parse(await dispatchMessage({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05" } }));
+  assert.equal(initialized.result.serverInfo.name, "tcrn-workflow");
+  const listed = JSON.parse(await dispatchMessage({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }));
+  assert.deepEqual(listed.result.tools.map((tool) => tool.name), ["work_search", "work_show", "knowledge_search", "work_draft", "status"]);
+  const before = JSON.parse(await dispatchMessage({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "status", arguments: { workspace: fx.workspace } } }));
+  const search = JSON.parse(await dispatchMessage({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "work_search", arguments: { workspace: fx.workspace, query: "INIT-A" } } }));
+  assert.equal(search.result.structuredContent.records.length, 1);
+  assert.equal(search.result.structuredContent.records[0].scope, "");
+  const after = JSON.parse(await dispatchMessage({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "status", arguments: { workspace: fx.workspace } } }));
+  assert.equal(after.result.structuredContent.version, before.result.structuredContent.version);
+  await rm(fx.base, { recursive: true, force: true });
+});
+
+test("INIT-047 work-list search returns bounded scope and work-draft uses canonical headings", async (context) => {
+  const fx = await fixture(context);
+  const lease = await acquireWorkspaceLease(fx.workspace, { now: instant(20) });
+  try {
+    const before = await validateWorkspace(fx.workspace);
+    await annotateWork(fx.workspace, lease, {
+      expectedVersion: before.version,
+      occurredAt: instant(21),
+      id: fx.ids.initA,
+      scope: "引擎检索范围与 scope 片段",
+    });
+    let state = await validateWorkspace(fx.workspace);
+    for (let index = 0; index < 3; index += 1) {
+      state = await createWork(fx.workspace, lease, {
+        expectedVersion: state.version,
+        occurredAt: instant(22),
+        projectId: fx.ids.projectA,
+        externalKey: `DRAFT-STORY-${index}`,
+        kind: "Story",
+        parentId: fx.ids.epicA,
+        status: "planned",
+        scope: STORY_SCOPE,
+      });
+    }
+  } finally {
+    await lease.release();
+  }
+  const searched = await run(["work-list", "--workspace", fx.workspace, "--search", "引擎", "--scope-bytes", "10"]);
+  assert.equal(searched.total, 1);
+  assert.ok(Object.hasOwn(searched.records[0], "scope"));
+  assert.ok(Buffer.byteLength(searched.records[0].scope, "utf8") <= 10);
+  const ordinary = await run(["work-list", "--workspace", fx.workspace, "--project-id", fx.ids.projectA]);
+  assert.equal(Object.hasOwn(ordinary.records.find((record) => record.id === fx.ids.initA), "scope"), false);
+  const draft = await run(["work-draft", "--workspace", fx.workspace, "--kind", "Story", "--project-id", fx.ids.projectA]);
+  assert.deepEqual(draft.headings, [...STORY_SCOPE_HEADINGS]);
+  assert.equal(draft.examples.length, 3);
+  assert.ok(draft.scopeTemplate.includes("【Goal】"));
+});
 
 // INC-027: the page-ceiling assertions are about BYTES, so they need the receipt as it
 // was written, not as it survives a JSON round trip.
@@ -345,9 +402,9 @@ test("CQ-05: malformed knowledge pagination flags are syntax errors, not range r
 
   // The other half of the contract, and the reason no minimum is passed at the CLI: every
   // value that IS an integer must still reach core, so core keeps the whole window rule
-  // (>= 1, <= maximumRecords, offset >= 0) rather than half of it. A CLI-side floor would
-  // silently take the lower bound and leave the ceiling behind.
-  for (const [flag, value] of [["limit", "0"], ["offset", "-1"], ["limit", "1000000"]]) {
+  // (>= 1, <= canonical view-byte budget, offset >= 0) rather than half of it. A CLI-side
+  // floor would silently take the lower bound and leave the ceiling behind.
+  for (const [flag, value] of [["limit", "0"], ["offset", "-1"], ["limit", "1048577"]]) {
     const reason = await reasonOf(["knowledge-list", ...ws, `--${flag}`, value]);
     assert.equal(reason, "KNOWLEDGE_INPUT_INVALID", `--${flag} ${value} stays core's judgement`);
   }

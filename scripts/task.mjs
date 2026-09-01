@@ -424,6 +424,7 @@ async function runTests({
   adapterAcceptanceOnly = false,
   hookRootBindingOnly = false,
   authorityOutputOnly = false,
+  init047Only = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -465,13 +466,16 @@ async function runTests({
     .filter((path) => !adapterAcceptanceOnly || path === "tests/act11-adapter-acceptance.test.mjs")
     .filter((path) => !hookRootBindingOnly || path === "tests/act12-hook-root-binding.test.mjs")
     .filter((path) => !authorityOutputOnly || path === "tests/act13-authority-output.test.mjs")
+    .filter((path) => !init047Only || ["tests/knowledge-inject.test.mjs", "tests/p3-cli-read-surface.test.mjs", "tests/p4-knowledge-core.test.mjs", "tests/stop-pact.test.mjs"].includes(path))
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
   });
   return success(
-    e2eOnly
+    init047Only
+      ? "INIT047_MODEL_CENTERED_TESTS_VERIFIED"
+      : e2eOnly
       ? "E2E_GOVERNED_LOOP_TESTS_VERIFIED"
       : trustOnly
       ? "TRUST_NEGATIVE_MATRIX_VERIFIED"
@@ -722,8 +726,8 @@ async function verifyP4() {
     /^[a-f0-9]{64}$/u.test(knowledgeFixture.permutationCorpusDigest), "P4_KNOWLEDGE_REAL_PERMUTATION_CORPUS");
   assertion(knowledgeFixture.maximumBodyBytes === 8_192 && knowledgeFixture.maximumSummaryBytes === 2_048 &&
     knowledgeFixture.maximumSnippetBytes === 512 && knowledgeFixture.maximumMetadataBytes === 32_768 &&
-    knowledgeFixture.maximumRecords === 16 && knowledgeFixture.maximumQueryResults === 8 &&
-    knowledgeFixture.maximumAggregateBytes === 131_072, "P4_KNOWLEDGE_LIMIT_CONTRACT");
+    !Object.hasOwn(knowledgeFixture, "maximumRecords") && knowledgeFixture.maximumQueryResults === 8 &&
+    knowledgeFixture.maximumAggregateBytes === 1_048_576, "P4_KNOWLEDGE_LIMIT_CONTRACT");
   const packages = await Promise.all([
     readJson(resolve(repositoryRoot, "packages/core/package.json")),
     readJson(resolve(repositoryRoot, "packages/cli/package.json")),
@@ -1791,6 +1795,7 @@ const commandContracts = {
   p3: { exit: 0, reasonCode: "P3_VERIFIED" },
   p4: { exit: 0, reasonCode: "P4_ARTIFACT_LIFECYCLE_VERIFIED" },
   "p4-knowledge": { exit: 0, reasonCode: "P4_KNOWLEDGE_CORE_VERIFIED" },
+  init047: { exit: 0, reasonCode: "INIT047_MODEL_CENTERED_TESTS_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
@@ -1878,6 +1883,15 @@ async function verifyMap() {
     } else {
       assertion(claim.fixtureDigest === null, "VERIFICATION_MAP_PLANNED_DIGEST", claim.id);
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
+    }
+    if (typeof claim.id === "string" && claim.id.startsWith("INIT047-GOAL-")) {
+      assertion(claim.positiveLeg !== null && typeof claim.positiveLeg === "object" && !Array.isArray(claim.positiveLeg), "VERIFICATION_MAP_POSITIVE_LEG", claim.id);
+      assertion(typeof claim.positiveLeg.command === "string" && claim.positiveLeg.command.length > 0, "VERIFICATION_MAP_POSITIVE_COMMAND", claim.id);
+      assertion(claim.positiveLeg.expectedExit === claim.expectedExit && claim.positiveLeg.expectedReasonCode === claim.expectedReasonCode, "VERIFICATION_MAP_POSITIVE_EXPECTATION", claim.id);
+      assertion(claim.redLeg !== null && typeof claim.redLeg === "object" && !Array.isArray(claim.redLeg), "VERIFICATION_MAP_RED_LEG", claim.id);
+      assertion(typeof claim.redLeg.mutation === "string" && claim.redLeg.mutation.length > 0, "VERIFICATION_MAP_RED_MUTATION", claim.id);
+      assertion(typeof claim.redLeg.test === "string" && claim.redLeg.test.length > 0, "VERIFICATION_MAP_RED_TEST", claim.id);
+      assertion(typeof claim.redLeg.expectedReasonCode === "string" && claim.redLeg.expectedReasonCode.length > 0, "VERIFICATION_MAP_RED_EXPECTATION", claim.id);
     }
   }
   // WSF-2: BK joins the completeness loop with its first claim (BK-SNAPSHOT-WITNESS);
@@ -2537,6 +2551,7 @@ const handlers = {
   p3: verifyP3,
   p4: verifyP4,
   "p4-knowledge": verifyP4Knowledge,
+  init047: () => runTests({ init047Only: true }),
   p5: verifyP5,
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,

@@ -111,6 +111,7 @@ const routeAdditions = new Set([
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
 ];
+const init047LegFields = ["positiveLeg", "redLeg"];
 const claimCategories = ["framework-hygiene", "inertness-proof", "runtime-capability"];
 const manifestFields = ["schemaVersion", "status", "accepted", "basisDigest", "inputs", "roleVerdictSlots"];
 const roleNames = ["platform-workflow-architect", "workflow-verification-engineer", "security-risk-reviewer", "reality-checker"];
@@ -236,7 +237,10 @@ function validateMap(map) {
   assert(map.schemaVersion === "tcrn.verification-map.v1" && Array.isArray(map.claims), "PROOF_ARTIFACT_MAP_INVALID", "verification map");
   const ids = new Set();
   for (const claim of map.claims) {
-    exactKeys(claim, claimFields, "PROOF_ARTIFACT_CLAIM_FIELDS", claim?.id ?? "unknown");
+    const fields = typeof claim?.id === "string" && claim.id.startsWith("INIT047-GOAL-")
+      ? [...claimFields, ...init047LegFields]
+      : claimFields;
+    exactKeys(claim, fields, "PROOF_ARTIFACT_CLAIM_FIELDS", claim?.id ?? "unknown");
     assert(typeof claim.id === "string" && !ids.has(claim.id), "PROOF_ARTIFACT_MAP_INVALID", claim?.id ?? "unknown");
     ids.add(claim.id);
     assert(["implemented", "candidate", "planned"].includes(claim.status), "PROOF_ARTIFACT_MAP_INVALID", claim.id);

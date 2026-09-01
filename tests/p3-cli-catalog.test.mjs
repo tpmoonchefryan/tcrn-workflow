@@ -93,7 +93,7 @@ test("WSB-4: exactly the nullable flags carry the '-' sentinel, and only knowled
     // WSD-2: gate-create's --work-id is nullable ("-" for a workspace-level gate with
     // no work anchor).
     "gate-create": ["work-id"],
-    "knowledge-create": ["last-verified", "project-id"],
+    "knowledge-create": ["last-verified", "project-id", "stale-days", "supersedes"],
     "profile-authorize": ["command", "project-id", "workspace-id"],
     "work-create": ["parent-id"],
   });
@@ -107,7 +107,7 @@ test("WSB-4: exactly the nullable flags carry the '-' sentinel, and only knowled
   // behaviour, so the two can no longer drift apart silently.
   assert.deepEqual(aliasFlags, {
     "gate-create": ["work-id"],
-    "knowledge-create": ["last-verified", "project-id"],
+    "knowledge-create": ["last-verified", "project-id", "stale-days", "supersedes"],
     "work-create": ["parent-id"],
   });
 });

@@ -210,13 +210,24 @@
             },
             {
               "type": "array",
-              "minItems": 1,
+              "minItems": 0,
               "maxItems": 16
             }
           ]
         },
         "sourceDigest": {
           "$ref": "#/$defs/digest"
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^knowledge:[a-f0-9]{24}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "linkedWorkIds": {
           "allOf": [
@@ -258,7 +269,7 @@
             },
             {
               "type": "array",
-              "minItems": 1,
+              "minItems": 0,
               "maxItems": 64
             }
           ]
@@ -310,12 +321,22 @@
           ],
           "properties": {
             "maximumAgeDays": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 3650
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 3650
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "unknownDisposition": {
-              "const": "fail-closed"
+              "enum": [
+                "fail-closed",
+                "fail-open"
+              ]
             }
           }
         },

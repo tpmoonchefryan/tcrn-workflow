@@ -153,7 +153,7 @@ const knowledgeStoreProfile: FileStoreBackendProfile = {
     markerBytes: 16_384,
     metadataBytes: KNOWLEDGE_LIMITS.maximumMetadataBytes,
     bodyBytes: KNOWLEDGE_LIMITS.maximumBodyBytes,
-    viewBytes: KNOWLEDGE_LIMITS.maximumAggregateBytes + KNOWLEDGE_LIMITS.maximumMetadataBytes,
+    viewBytes: KNOWLEDGE_LIMITS.maximumAggregateBytes,
     recordBytes: 0,
   },
 };

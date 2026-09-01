@@ -6,8 +6,8 @@
 // UserPromptSubmit carries `prompt`). This wrapper:
 //   1. reads stdin;
 //   2. runs the injection chain (tcrn-workflow/scripts/knowledge-inject.mjs) with the
-//      prompt and a curated trigger-keyword list (local, cheap gate — no network when
-//      the prompt matches nothing);
+//      prompt; every prompt reaches relevance search and there is no keyword roster
+//      that can silently suppress an otherwise relevant query;
 //   3. writes the hook protocol response with `additionalContext` = the metadata-level
 //      injection (or an empty string when nothing matches — INC-044/060).
 //
@@ -19,17 +19,15 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-export const INJECT_SCRIPT = resolve(PLATFORM_ROOT, "tcrn-workflow/scripts/knowledge-inject.mjs");
-export const TRIGGER_KEYWORDS = process.env.TCRN_KNOWLEDGE_TRIGGER_KEYWORDS
-  ?? "hook,仪式,rebase,门,探针,复核,证据,判据,CI,验证,CAS,marker,store,SSH,ssh";
+export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+export const INJECT_SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "knowledge-inject.mjs");
 
 function readStdin() {
   try { return JSON.parse(readFileSync(0, "utf8")); } catch { return {}; }
 }
 
-function runInject(prompt, triggerKeywords = TRIGGER_KEYWORDS) {
-  const result = spawnSync(process.execPath, [INJECT_SCRIPT, "--prompt", prompt, "--trigger-keywords", triggerKeywords], {
+function runInject(prompt) {
+  const result = spawnSync(process.execPath, [INJECT_SCRIPT, "--prompt", prompt], {
     encoding: "utf8", timeout: 25_000
   });
   try { return JSON.parse(result.stdout); } catch { return { ok: false, reasonCode: "INJECT_OUTPUT_UNPARSEABLE" }; }
@@ -43,8 +41,8 @@ export function buildHookResponse(input) {
   // Code hooks documentation, INC-044). Empty string when nothing matches.
   const chunks = [];
 
-  const inject = (p, triggers = TRIGGER_KEYWORDS) => {
-    const result = runInject(p, triggers);
+  const inject = (p) => {
+    const result = runInject(p);
     if (result.ok === true && result.injected === true && typeof result.injection === "string" && result.injection.length > 0) {
       chunks.push(`[平台知识注入 · ${result.candidateCount} 条 · 来源 cross-project 知识面]${result.injection}`);
     }

@@ -32,7 +32,8 @@ closed. P1 Option-B remains the ancestor-component threat boundary.
 `KnowledgeUnitMetadata` is closed and binds its stable ID/external key, scope,
 project and role scopes, category, kind, ordered tags, subject, bounded summary
 and snippet, a P4-only accountable-owner protocol reference, inert current-source
-references and digest, ordered work/decision/gate/evidence links, lifecycle,
+references and digest, an optional `supersedes` knowledge id, ordered
+work/decision/gate/evidence links, lifecycle,
 retrieval and export dispositions, promotion,
 freshness, last verification instant, staleness policy, focused redaction,
 authority, provenance, body digest/size, revision, and update instant.
@@ -43,24 +44,21 @@ semantics.
 
 ## Freshness, promotion, and retrieval
 
-Freshness is evaluated at an explicit strict instant. Missing verification is
-`unknown`; an expired age window is `stale`. Default selection and checkpoints
-fail closed by excluding stale and unknown records, candidates, rejected or
-retired records, non-default retrieval, and excluded export disposition.
+Freshness is evaluated at an explicit strict instant. A null
+`stalenessPolicy.maximumAgeDays` is change-driven and never expires by the clock;
+cards with no verification instant are still selectable. A finite policy marks
+an expired age window `stale`, but a missing verification instant is not made
+unselectable by an `unknown` result. Default selection and checkpoints exclude
+stale records, candidates, rejected or retired records, non-default retrieval,
+and excluded export disposition.
 
-Capture is cheap: a candidate is written without full provenance, and array
-fields are canonically sorted server-side. Promotion is the gate. A record can be
-promoted only when it carries a nonempty admitted source-reference set, a nonempty
-linked-evidence set, an `owner:*` accountable-owner reference, at least one
-retrieval tag, and a nonempty snippet — the machine-checkable half of the
-promotion checklist (the judgment half, cross-work-item reuse and
-standalone-within-budget, stays in the guiding skill prose). The owner reference
-is provenance accountability only: it does not claim P5 profile admission or
-identity resolution. Creation always starts in `candidate` promotion state; the
-only V1 transitions are candidate to `promoted` or `rejected`, and promoted and
-rejected states are terminal. Rejecting a candidate requires none of the
-promotion gates. Candidate bodies require an explicit override on the explicit
-body surface and are never checkpointed.
+Fragment kinds (`fact`, `decision`, and `summary`) may be written without source
+or evidence links and are directly selectable when their other fields admit it.
+`guide` and `reference` retain their source/evidence provenance floor; a
+`reference` without those links is rejected at capture. Sourced records may still
+use the compatibility promotion transition, while a source-free fragment is
+ready at capture. The owner reference remains provenance accountability only; it
+does not claim P5 profile admission or identity resolution.
 
 Promotion input is admitted as exactly `promoted|rejected` before the mutation
 claim is acquired. Every non-crash error after claim acquisition releases only
@@ -72,13 +70,16 @@ valid mutation.
 
 V1 limits body bytes to 8192, subject bytes to 512, summary bytes to 2048,
 snippet bytes to 512, each source-reference string to 512,
-metadata bytes to 32768, records to 64 (a ratified Tier-0 limit revision from the
-fixture-scale 16), the default query page to 8 results, aggregate store
-bytes to 128 KiB, source locators to 16, each link class to 64, tags to 32, and
-role scopes to 16. Listing more matches than one page truncates with a
+metadata bytes to 32768, the default query page to 8 results, aggregate store
+bytes to 1 MiB, source locators to 16, each link class to 64, tags to 32, and
+role scopes to 16. The aggregate limit is the protocol canonical-view ceiling:
+35 measured cards occupied 63,316 source-of-truth bytes and their derived index
+occupied 52,851 bytes, or 5.0% of 1,048,576 bytes. The index is verified
+separately and is not charged twice. Listing more matches than one page truncates with a
 `{total, offset, truncated}` continuation window rather than failing closed, and a
-bounded case-insensitive substring over subject and tags narrows results without
-loading bodies.
+bounded case-insensitive substring over subject, summary, snippet, and tags narrows
+results without loading bodies. `knowledge-source-check` is the explicit source
+file comparison surface; ordinary reads do not scan every source file.
 
 These text budgets are UTF-8 byte budgets. Draft 2020-12 `maxLength` counts
 Unicode code points and is retained only as a structural bound. P4 schema proof
@@ -117,13 +118,10 @@ does not decay irreversibly out of default selection; only a promoted, non-retir
 record admits it. A record of any lifecycle can be `retire`d — it becomes a
 tombstoned audit entry (lifecycle `retired`) whose dangling backlinks are durably
 tolerated and which leaves default selection. Retiring frees a live create slot:
-only non-retired records count against the live record cap, and the physical
-file bound exceeds that cap by a retired allowance so the store never scans as
-over-limit after a retire-then-create. The aggregate-byte budget is a separate,
-tighter constraint that a retired record does not relieve (its bytes remain on
-disk), so for records of realistic size the byte budget, not the record count,
-binds first — retire relieves count pressure, checkpoint/compaction relieves byte
-pressure.
+there is no independent record-count cap. Retired metadata remains an audit entry
+and its body may be reclaimed, while the aggregate source-byte budget still counts
+the metadata that remains on disk. Capacity is therefore controlled by the
+canonical byte ceiling, not by a historical count or by a retired-record allowance.
 
 ## Governed surfaces
 

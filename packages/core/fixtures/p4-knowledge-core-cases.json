@@ -82,7 +82,6 @@
   "maximumSummaryBytes": 2048,
   "maximumSnippetBytes": 512,
   "maximumMetadataBytes": 32768,
-  "maximumRecords": 16,
   "maximumQueryResults": 8,
-  "maximumAggregateBytes": 131072
+  "maximumAggregateBytes": 1048576
 }
