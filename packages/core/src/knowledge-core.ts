@@ -79,6 +79,7 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_NOT_FOUND",
   "KNOWLEDGE_PARTIAL_STATE",
   "KNOWLEDGE_PATH_INVALID",
+  "KNOWLEDGE_POLICY_UPDATED",
   "KNOWLEDGE_PROMOTION_INVALID",
   "KNOWLEDGE_PROMOTION_UPDATED",
   "KNOWLEDGE_PROVENANCE_INVALID",
@@ -1951,6 +1952,89 @@ export async function reverifyKnowledgeUnit(workspaceRoot: string, input: {
   } catch (error) {
     // WSC-6: same crash exemption as createKnowledgeUnit -- a simulated crash must leave
     // the claim exactly where a real SIGKILL would, since finally never runs for one.
+    if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_FAULT_INJECTED") released = true;
+    throw error;
+  } finally {
+    if (!released) await releaseMutationClaim(initial.storeRoot, claim);
+  }
+}
+
+// INC-256: change the freshness policy without changing the card's content or
+// verification instant. This is a metadata migration operation, so it advances
+// the disposable store version and revision exactly like the other mutations.
+// A null maximum age also clears a stale state that was produced by the old
+// calendar policy; a later explicit source check or re-verification can mark the
+// record stale again when a current source actually warrants it.
+export async function updateKnowledgeStalenessPolicy(workspaceRoot: string, input: {
+  readonly expectedVersion: number;
+  readonly expectedRevision: number;
+  readonly occurredAt: string;
+  readonly id: string;
+  readonly stalenessPolicy: KnowledgeStalenessPolicy;
+}, options: KnowledgeMutationOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
+  try {
+    assertProtocolId(input.id);
+    assertStrictInstant(input.occurredAt);
+  } catch (error) {
+    fail("KNOWLEDGE_INPUT_INVALID", String(error));
+  }
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0 ||
+    !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
+    fail("KNOWLEDGE_INPUT_INVALID", "policy versions");
+  }
+  const maximumAgeDays = input.stalenessPolicy?.maximumAgeDays;
+  const unknownDisposition = input.stalenessPolicy?.unknownDisposition;
+  if ((maximumAgeDays !== null && (!Number.isSafeInteger(maximumAgeDays) || maximumAgeDays < 1 || maximumAgeDays > 3_650)) ||
+    (unknownDisposition !== "fail-closed" && unknownDisposition !== "fail-open")) {
+    fail("KNOWLEDGE_INPUT_INVALID", "staleness policy");
+  }
+  const initial = await mutationAdmissionScan(workspaceRoot, options);
+  const claim = await acquireMutationClaim(initial);
+  let released = false;
+  try {
+    const scan = await scanKnowledgeStore(workspaceRoot, options, true);
+    if (scan.marker.version !== input.expectedVersion) {
+      fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
+    }
+    const unit = scan.units.find((entry) => entry.metadata.id === input.id);
+    if (!unit) fail("KNOWLEDGE_NOT_FOUND", input.id);
+    if (unit.metadata.revision !== input.expectedRevision) {
+      fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedRevision}:${unit.metadata.revision}`);
+    }
+    if (unit.metadata.lifecycle === "retired") {
+      fail("KNOWLEDGE_LIFECYCLE_INVALID", "a retired record cannot change freshness policy");
+    }
+    const metadata: KnowledgeUnitMetadata = {
+      ...unit.metadata,
+      stalenessPolicy: input.stalenessPolicy,
+      freshnessState: maximumAgeDays === null ? "fresh" : unit.metadata.freshnessState,
+      revision: unit.metadata.revision + 1,
+      updatedAt: input.occurredAt,
+    };
+    const unitBody = requireBody(unit);
+    const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace);
+    validateMetadataBody(validated, unitBody, scan.workspace);
+    const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
+    const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
+    const backend = storeBackendFor(scan.storeRoot, options);
+    await backend.writeKnowledgeMetadata(unit.metadata.id, canonicalJson(metadata));
+    crash("after-metadata-write", options.faultAt);
+    await backend.writeKnowledgeMarker(canonicalJson(marker));
+    crash("after-marker-write", options.faultAt);
+    await writeIndex(backend, marker, projectedMetadata);
+    await releaseMutationClaim(scan.storeRoot, claim);
+    released = true;
+    await scanKnowledgeStore(workspaceRoot, options);
+    return {
+      schemaVersion: "tcrn.knowledge-policy-result.v1",
+      reasonCode: "KNOWLEDGE_POLICY_UPDATED",
+      id: metadata.id,
+      maximumAgeDays: metadata.stalenessPolicy.maximumAgeDays,
+      unknownDisposition: metadata.stalenessPolicy.unknownDisposition,
+      revision: metadata.revision,
+      version: marker.version,
+    };
+  } catch (error) {
     if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_FAULT_INJECTED") released = true;
     throw error;
   } finally {

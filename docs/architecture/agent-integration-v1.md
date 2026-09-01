@@ -33,8 +33,9 @@ test). Never hardcode a verb list an agent could instead read from `commands`.
 
 The optional `packages/mcp` entrypoint exposes five read-only structured MCP tools
 over stdio: `work_search`, `work_show`, `knowledge_search`, `work_draft`, and
-`status`. It uses JSON-RPC Content-Length framing and calls the core read surface
-in-process; it is not a second mutation or authority channel. The host registers
+`status`. It accepts newline-delimited JSON, the MCP stdio framing, and retains
+JSON-RPC Content-Length framing for existing clients. It calls the core read
+surface in-process; it is not a second mutation or authority channel. The host registers
 it explicitly when needed, so the default CLI surface and its numeric CAS,
 explicit-time, actor, and reason-code semantics remain unchanged.
 

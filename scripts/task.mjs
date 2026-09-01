@@ -425,6 +425,8 @@ async function runTests({
   hookRootBindingOnly = false,
   authorityOutputOnly = false,
   init047Only = false,
+  inc255Only = false,
+  inc256Only = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -467,13 +469,19 @@ async function runTests({
     .filter((path) => !hookRootBindingOnly || path === "tests/act12-hook-root-binding.test.mjs")
     .filter((path) => !authorityOutputOnly || path === "tests/act13-authority-output.test.mjs")
     .filter((path) => !init047Only || ["tests/knowledge-inject.test.mjs", "tests/p3-cli-read-surface.test.mjs", "tests/p4-knowledge-core.test.mjs", "tests/stop-pact.test.mjs"].includes(path))
+    .filter((path) => !inc255Only || path === "tests/inc255-mcp-framing.test.mjs")
+    .filter((path) => !inc256Only || path === "tests/inc256-knowledge-policy.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
   });
   return success(
-    init047Only
+    inc255Only
+      ? "INC255_MCP_FRAMING_VERIFIED"
+      : inc256Only
+      ? "INC256_KNOWLEDGE_MIGRATION_VERIFIED"
+      : init047Only
       ? "INIT047_MODEL_CENTERED_TESTS_VERIFIED"
       : e2eOnly
       ? "E2E_GOVERNED_LOOP_TESTS_VERIFIED"
@@ -1796,6 +1804,8 @@ const commandContracts = {
   p4: { exit: 0, reasonCode: "P4_ARTIFACT_LIFECYCLE_VERIFIED" },
   "p4-knowledge": { exit: 0, reasonCode: "P4_KNOWLEDGE_CORE_VERIFIED" },
   init047: { exit: 0, reasonCode: "INIT047_MODEL_CENTERED_TESTS_VERIFIED" },
+  inc255: { exit: 0, reasonCode: "INC255_MCP_FRAMING_VERIFIED" },
+  inc256: { exit: 0, reasonCode: "INC256_KNOWLEDGE_MIGRATION_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
@@ -1884,7 +1894,7 @@ async function verifyMap() {
       assertion(claim.fixtureDigest === null, "VERIFICATION_MAP_PLANNED_DIGEST", claim.id);
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
-    if (typeof claim.id === "string" && claim.id.startsWith("INIT047-GOAL-")) {
+    if (typeof claim.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))) {
       assertion(claim.positiveLeg !== null && typeof claim.positiveLeg === "object" && !Array.isArray(claim.positiveLeg), "VERIFICATION_MAP_POSITIVE_LEG", claim.id);
       assertion(typeof claim.positiveLeg.command === "string" && claim.positiveLeg.command.length > 0, "VERIFICATION_MAP_POSITIVE_COMMAND", claim.id);
       assertion(claim.positiveLeg.expectedExit === claim.expectedExit && claim.positiveLeg.expectedReasonCode === claim.expectedReasonCode, "VERIFICATION_MAP_POSITIVE_EXPECTATION", claim.id);
@@ -2552,6 +2562,8 @@ const handlers = {
   p4: verifyP4,
   "p4-knowledge": verifyP4Knowledge,
   init047: () => runTests({ init047Only: true }),
+  inc255: () => runTests({ inc255Only: true }),
+  inc256: () => runTests({ inc256Only: true }),
   p5: verifyP5,
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,
@@ -2618,6 +2630,9 @@ function evidencePhase(name) {
     return name;
   }
   if (name === "p4-knowledge") {
+    return "p4";
+  }
+  if (name === "inc255" || name === "inc256") {
     return "p4";
   }
   if (name === "p5") {

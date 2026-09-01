@@ -60,6 +60,13 @@ use the compatibility promotion transition, while a source-free fragment is
 ready at capture. The owner reference remains provenance accountability only; it
 does not claim P5 profile admission or identity resolution.
 
+`knowledge-batch` accepts `knowledge-policy` members for a bounded metadata
+migration. Each member supplies an id (or external key), an expected revision,
+and the replacement `{maximumAgeDays, unknownDisposition}` policy. The member
+advances the disposable store version and metadata revision without changing the
+body, source digest, or verification instant; setting `maximumAgeDays` to `null`
+also removes a stale posture that came only from the retired calendar policy.
+
 Promotion input is admitted as exactly `promoted|rejected` before the mutation
 claim is acquired. Every non-crash error after claim acquisition releases only
 the identity-bound claim generation before returning its frozen reason code, so

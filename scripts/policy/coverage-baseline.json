@@ -642,6 +642,21 @@
         "INC-244: a CLI workspace event automatically rebinds the knowledge high-water"
       ]
     },
+    "tests/inc255-mcp-framing.test.mjs": {
+      "testCount": 1,
+      "assertionCount": 8,
+      "testNames": [
+        "INC-255 stdio accepts newline JSON and retains Content-Length compatibility"
+      ]
+    },
+    "tests/inc256-knowledge-policy.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 15,
+      "testNames": [
+        "INC-256 knowledge-batch migrates all existing cards to no expiry and preserves retrieval",
+        "INC-256 malformed policy red leg refuses the batch before any migration"
+      ]
+    },
     "tests/init033-install-surface.test.mjs": {
       "testCount": 3,
       "assertionCount": 16,

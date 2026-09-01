@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // TCRN-CROSS-STORY-325 — a dependency-free MCP stdio read surface. The wire
-// framing is JSON-RPC 2.0 Content-Length, which is the protocol a real MCP
-// client performs during initialize/tools/list/tools/call. No CLI child process
-// is spawned; the five handlers call the core read functions in-process.
+// framing accepts newline-delimited JSON (the MCP stdio transport) and retains
+// Content-Length for existing clients. No CLI child process is spawned; the
+// five handlers call the core read functions in-process.
 
 import { stdin, stdout } from "node:process";
 import { resolve } from "node:path";
@@ -248,7 +248,13 @@ function errorResponse(id: JsonRpcId, code: number, message: string): string {
   return JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } });
 }
 
-function writeMessage(value: string): void {
+type MessageFraming = "newline" | "content-length";
+
+function writeMessage(value: string, framing: MessageFraming): void {
+  if (framing === "newline") {
+    stdout.write(`${value}\n`);
+    return;
+  }
   const bytes = Buffer.byteLength(value, "utf8");
   stdout.write(`Content-Length: ${bytes}\r\n\r\n${value}`);
 }
@@ -285,30 +291,57 @@ export async function dispatchMessage(message: unknown): Promise<string | null> 
 let inputBuffer = Buffer.alloc(0);
 let expectedBodyBytes: number | null = null;
 
+interface InputFrame {
+  readonly body: Buffer;
+  readonly framing: MessageFraming;
+}
+
+function nextInputFrame(): InputFrame | null {
+  if (expectedBodyBytes !== null) {
+    if (inputBuffer.length < expectedBodyBytes) return null;
+    const body = inputBuffer.subarray(0, expectedBodyBytes);
+    inputBuffer = inputBuffer.subarray(expectedBodyBytes);
+    expectedBodyBytes = null;
+    return { body, framing: "content-length" };
+  }
+
+  // A header candidate is identified from the first complete header block. A
+  // JSON-lines message cannot contain a literal newline, so this does not
+  // steal a valid newline-delimited message from the other branch.
+  const headerSeparator = inputBuffer.indexOf("\r\n\r\n");
+  if (headerSeparator >= 0) {
+    const header = inputBuffer.subarray(0, headerSeparator).toString("ascii");
+    const match = header.match(/(?:^|\r\n)Content-Length:\s*(\d+)(?:\r\n|$)/iu);
+    if (match !== null) {
+      const length = Number(match[1]);
+      inputBuffer = inputBuffer.subarray(headerSeparator + 4);
+      if (!Number.isSafeInteger(length) || length < 0) {
+        return { body: Buffer.alloc(0), framing: "content-length" };
+      }
+      expectedBodyBytes = length;
+      return nextInputFrame();
+    }
+  }
+
+  const newline = inputBuffer.indexOf(0x0a);
+  if (newline < 0) return null;
+  let body = inputBuffer.subarray(0, newline);
+  inputBuffer = inputBuffer.subarray(newline + 1);
+  if (body.length > 0 && body[body.length - 1] === 0x0d) body = body.subarray(0, body.length - 1);
+  if (body.length === 0) return nextInputFrame();
+  return { body, framing: "newline" };
+}
+
 async function consumeInput(): Promise<void> {
   for (;;) {
-    if (expectedBodyBytes === null) {
-      const separator = inputBuffer.indexOf("\r\n\r\n");
-      if (separator < 0) return;
-      const header = inputBuffer.subarray(0, separator).toString("ascii");
-      const match = header.match(/(?:^|\r\n)Content-Length:\s*(\d+)(?:\r\n|$)/iu);
-      if (!match) {
-        inputBuffer = inputBuffer.subarray(separator + 4);
-        continue;
-      }
-      expectedBodyBytes = Number(match[1]);
-      inputBuffer = inputBuffer.subarray(separator + 4);
-    }
-    const bodyBytes = expectedBodyBytes;
-    if (bodyBytes === null || inputBuffer.length < bodyBytes) return;
-    const body = inputBuffer.subarray(0, bodyBytes).toString("utf8");
-    inputBuffer = inputBuffer.subarray(bodyBytes);
-    expectedBodyBytes = null;
+    const frame = nextInputFrame();
+    if (frame === null) return;
+    const body = frame.body.toString("utf8");
     try {
       const output = await dispatchMessage(JSON.parse(body));
-      if (output !== null) writeMessage(output);
+      if (output !== null) writeMessage(output, frame.framing);
     } catch (error) {
-      writeMessage(errorResponse(null, -32700, String(error instanceof Error ? error.message : error)));
+      writeMessage(errorResponse(null, -32700, String(error instanceof Error ? error.message : error)), frame.framing);
     }
   }
 }

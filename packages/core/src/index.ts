@@ -531,6 +531,7 @@ export {
   rebaseKnowledgeStore,
   retireKnowledgeUnit,
   reverifyKnowledgeUnit,
+  updateKnowledgeStalenessPolicy,
   transitionKnowledgePromotion,
   validateKnowledgeStore,
 } from "./knowledge-core.js";
