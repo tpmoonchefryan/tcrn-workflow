@@ -134,6 +134,54 @@ test("INIT-047 work-list search returns bounded scope and work-draft uses canoni
   assert.ok(draft.scopeTemplate.includes("【Goal】"));
 });
 
+test("INIT-047 work-list search has an independent bounded scope projection", async (context) => {
+  const fx = await fixture(context);
+  const lease = await acquireWorkspaceLease(fx.workspace, { now: instant(23) });
+  try {
+    const before = await validateWorkspace(fx.workspace);
+    await annotateWork(fx.workspace, lease, {
+      expectedVersion: before.version,
+      occurredAt: instant(24),
+      id: fx.ids.initA,
+      scope: "独立 work-list 搜索范围与 scope 投影",
+    });
+  } finally {
+    await lease.release();
+  }
+  const searched = await run(["work-list", "--workspace", fx.workspace, "--search", "独立", "--scope-bytes", "10"]);
+  assert.equal(searched.total, 1);
+  assert.equal(searched.records.length, 1);
+  assert.equal(searched.records[0].id, fx.ids.initA);
+  assert.ok(Buffer.byteLength(searched.records[0].scope, "utf8") <= 10);
+});
+
+test("INIT-047 work-draft has an independent canonical heading and example projection", async (context) => {
+  const fx = await fixture(context);
+  const lease = await acquireWorkspaceLease(fx.workspace, { now: instant(25) });
+  try {
+    let state = await validateWorkspace(fx.workspace);
+    for (let index = 0; index < 3; index += 1) {
+      state = await createWork(fx.workspace, lease, {
+        expectedVersion: state.version,
+        occurredAt: instant(26),
+        projectId: fx.ids.projectA,
+        externalKey: `INDEPENDENT-DRAFT-${index}`,
+        kind: "Story",
+        parentId: fx.ids.epicA,
+        status: "planned",
+        scope: STORY_SCOPE,
+      });
+    }
+  } finally {
+    await lease.release();
+  }
+  const draft = await run(["work-draft", "--workspace", fx.workspace, "--kind", "Story", "--project-id", fx.ids.projectA]);
+  assert.deepEqual(draft.headings, [...STORY_SCOPE_HEADINGS]);
+  assert.equal(draft.examples.length, 3);
+  assert.equal(draft.examples[0].kind, "Story");
+  assert.ok(draft.scopeTemplate.includes("【Goal】"));
+});
+
 // INC-027: the page-ceiling assertions are about BYTES, so they need the receipt as it
 // was written, not as it survives a JSON round trip.
 async function runRaw(args) {

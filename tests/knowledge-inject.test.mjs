@@ -10,7 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  extractQueryTokens, promptTriggers, matchedTriggerKeywords, truncateToBudget
+  extractQueryTokens, promptTriggers, matchedTriggerKeywords, runInjection, truncateToBudget
 } from "../scripts/knowledge-inject.mjs";
 
 test("extractQueryTokens keeps ASCII words and CJK bigrams, drops stopwords", () => {
@@ -27,6 +27,20 @@ test("CJK query extraction does not split phrases into bigrams", () => {
   assert.equal(tokens.includes("引擎"), false);
   assert.equal(tokens.includes("擎设"), false);
   assert.equal(tokens.includes("设计"), false);
+});
+
+test("INIT-047 injection budget=10 reports exceeded without truncation", async () => {
+  const result = await runInjection({
+    prompt: "hook",
+    partition: "cross-project",
+    roleScope: "implementation",
+    budget: 10,
+    triggerKeywords: "",
+  });
+  assert.equal(result.reasonCode, "INJECTION_BUDGET_EXCEEDED");
+  assert.equal(result.truncated, false);
+  assert.equal(result.budget, 10);
+  assert.ok(result.injectedBytes > 10);
 });
 
 test("a prompt with no trigger keyword is gated off", () => {

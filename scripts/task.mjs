@@ -425,6 +425,9 @@ async function runTests({
   hookRootBindingOnly = false,
   authorityOutputOnly = false,
   init047Only = false,
+  focusedTestPath = undefined,
+  focusedTestNamePattern = undefined,
+  focusedReasonCode = undefined,
   inc255Only = false,
   inc256Only = false,
   e2eOnly = false,
@@ -469,15 +472,18 @@ async function runTests({
     .filter((path) => !hookRootBindingOnly || path === "tests/act12-hook-root-binding.test.mjs")
     .filter((path) => !authorityOutputOnly || path === "tests/act13-authority-output.test.mjs")
     .filter((path) => !init047Only || ["tests/knowledge-inject.test.mjs", "tests/p3-cli-read-surface.test.mjs", "tests/p4-knowledge-core.test.mjs", "tests/stop-pact.test.mjs"].includes(path))
+    .filter((path) => focusedTestPath === undefined || path === focusedTestPath)
     .filter((path) => !inc255Only || path === "tests/inc255-mcp-framing.test.mjs")
     .filter((path) => !inc256Only || path === "tests/inc256-knowledge-policy.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
-  await runDetachedTestController(["--test", ...tests], {
+  await runDetachedTestController(["--test", ...(focusedTestNamePattern === undefined ? [] : [`--test-name-pattern=${focusedTestNamePattern}`]), ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
   });
   return success(
-    inc255Only
+    focusedReasonCode
+      ? focusedReasonCode
+      : inc255Only
       ? "INC255_MCP_FRAMING_VERIFIED"
       : inc256Only
       ? "INC256_KNOWLEDGE_MIGRATION_VERIFIED"
@@ -556,6 +562,33 @@ async function runTests({
               : "TESTS_VERIFIED",
     { tests, result: "passed" },
   );
+}
+
+const INIT047_GOAL_TESTS = Object.freeze({
+  goal01: { path: "tests/knowledge-inject.test.mjs", pattern: "CJK query extraction does not split phrases into bigrams", reasonCode: "INIT047_GOAL_01_VERIFIED" },
+  goal02: { path: "tests/knowledge-inject.test.mjs", pattern: "INIT-047 injection budget=10 reports exceeded without truncation", reasonCode: "INIT047_GOAL_02_VERIFIED" },
+  goal03: { path: "tests/p3-cli-read-surface.test.mjs", pattern: "INIT-047 work-list search has an independent bounded scope projection", reasonCode: "INIT047_GOAL_03_VERIFIED" },
+  goal04: { path: "tests/p3-cli-read-surface.test.mjs", pattern: "INIT-047 work-draft has an independent canonical heading and example projection", reasonCode: "INIT047_GOAL_04_VERIFIED" },
+  goal05: { path: "tests/p3-cli-read-surface.test.mjs", pattern: "INIT-047 MCP read face performs the real handshake and stays read-only", reasonCode: "INIT047_GOAL_05_VERIFIED" },
+  goal06: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 supersedes rejects an unavailable target before writing", reasonCode: "INIT047_GOAL_06_VERIFIED" },
+  goal07: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047: relevance ordering changes with the query and source-free fragments are selectable", reasonCode: "INIT047_GOAL_07_VERIFIED" },
+  goal08: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 source digest check reports changes without hiding metadata", reasonCode: "INIT047_GOAL_08_VERIFIED" },
+  goal09: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 article index cards stay explicit-only for default context", reasonCode: "INIT047_GOAL_09_VERIFIED" },
+  goal10: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 knowledge inventory admits more than 64 records while query pages remain bounded", reasonCode: "INIT047_GOAL_10_VERIFIED" },
+  goal11: { path: "tests/stop-pact.test.mjs", pattern: "STORY-331 re-reads the platform AGENTS section on every prompt", reasonCode: "INIT047_GOAL_11_VERIFIED" },
+  goal12: { path: "tests/stop-pact.test.mjs", pattern: "STORY-332 response checks distinguish prose violations from quoted/table content", reasonCode: "INIT047_GOAL_12_VERIFIED" },
+});
+
+async function runInit047Goal(name) {
+  const spec = INIT047_GOAL_TESTS[name];
+  assertion(spec !== undefined, "INIT047_GOAL_TEST_UNKNOWN", name);
+  const source = await readText(resolve(repositoryRoot, spec.path));
+  assertion(source.includes(`test("${spec.pattern}"`), "INIT047_GOAL_TEST_NOT_FOUND", name);
+  return runTests({
+    focusedTestPath: spec.path,
+    focusedTestNamePattern: spec.pattern,
+    focusedReasonCode: spec.reasonCode,
+  });
 }
 
 async function verifyP8() {
@@ -1804,6 +1837,18 @@ const commandContracts = {
   p4: { exit: 0, reasonCode: "P4_ARTIFACT_LIFECYCLE_VERIFIED" },
   "p4-knowledge": { exit: 0, reasonCode: "P4_KNOWLEDGE_CORE_VERIFIED" },
   init047: { exit: 0, reasonCode: "INIT047_MODEL_CENTERED_TESTS_VERIFIED" },
+  goal01: { exit: 0, reasonCode: "INIT047_GOAL_01_VERIFIED" },
+  goal02: { exit: 0, reasonCode: "INIT047_GOAL_02_VERIFIED" },
+  goal03: { exit: 0, reasonCode: "INIT047_GOAL_03_VERIFIED" },
+  goal04: { exit: 0, reasonCode: "INIT047_GOAL_04_VERIFIED" },
+  goal05: { exit: 0, reasonCode: "INIT047_GOAL_05_VERIFIED" },
+  goal06: { exit: 0, reasonCode: "INIT047_GOAL_06_VERIFIED" },
+  goal07: { exit: 0, reasonCode: "INIT047_GOAL_07_VERIFIED" },
+  goal08: { exit: 0, reasonCode: "INIT047_GOAL_08_VERIFIED" },
+  goal09: { exit: 0, reasonCode: "INIT047_GOAL_09_VERIFIED" },
+  goal10: { exit: 0, reasonCode: "INIT047_GOAL_10_VERIFIED" },
+  goal11: { exit: 0, reasonCode: "INIT047_GOAL_11_VERIFIED" },
+  goal12: { exit: 0, reasonCode: "INIT047_GOAL_12_VERIFIED" },
   inc255: { exit: 0, reasonCode: "INC255_MCP_FRAMING_VERIFIED" },
   inc256: { exit: 0, reasonCode: "INC256_KNOWLEDGE_MIGRATION_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
@@ -1904,6 +1949,12 @@ async function verifyMap() {
       assertion(typeof claim.redLeg.expectedReasonCode === "string" && claim.redLeg.expectedReasonCode.length > 0, "VERIFICATION_MAP_RED_EXPECTATION", claim.id);
     }
   }
+  const init047Goals = map.claims.filter((claim) => typeof claim.id === "string" && /^INIT047-GOAL-\d{2}$/u.test(claim.id));
+  assertion(init047Goals.length === 12, "VERIFICATION_MAP_INIT047_GOAL_COUNT", String(init047Goals.length));
+  for (const field of ["command", "expectedReasonCode"]) {
+    assertion(new Set(init047Goals.map((claim) => claim[field])).size === 12, "VERIFICATION_MAP_INIT047_GOAL_NOT_INDEPENDENT", field);
+  }
+  assertion(new Set(init047Goals.map((claim) => claim.redLeg.test)).size === 12, "VERIFICATION_MAP_INIT047_GOAL_RED_LEGS_NOT_INDEPENDENT");
   // WSF-2: BK joins the completeness loop with its first claim (BK-SNAPSHOT-WITNESS);
   // ACT stays admitted-only until WSG-2 lands the first activation claim.
   // WSG-2: ACT joins the completeness loop with its first activation-ladder claim
@@ -2562,6 +2613,18 @@ const handlers = {
   p4: verifyP4,
   "p4-knowledge": verifyP4Knowledge,
   init047: () => runTests({ init047Only: true }),
+  goal01: () => runInit047Goal("goal01"),
+  goal02: () => runInit047Goal("goal02"),
+  goal03: () => runInit047Goal("goal03"),
+  goal04: () => runInit047Goal("goal04"),
+  goal05: () => runInit047Goal("goal05"),
+  goal06: () => runInit047Goal("goal06"),
+  goal07: () => runInit047Goal("goal07"),
+  goal08: () => runInit047Goal("goal08"),
+  goal09: () => runInit047Goal("goal09"),
+  goal10: () => runInit047Goal("goal10"),
+  goal11: () => runInit047Goal("goal11"),
+  goal12: () => runInit047Goal("goal12"),
   inc255: () => runTests({ inc255Only: true }),
   inc256: () => runTests({ inc256Only: true }),
   p5: verifyP5,
@@ -2623,6 +2686,9 @@ function errorReason(error) {
 }
 
 function evidencePhase(name) {
+  if (/^goal(?:0[1-9]|1[0-2])$/u.test(name)) {
+    return "p4";
+  }
   if (["aos", "p2", "protocol-schemas", "protocol-test"].includes(name)) {
     return "p2";
   }

@@ -695,10 +695,12 @@
       ]
     },
     "tests/knowledge-inject.test.mjs": {
-      "testCount": 6,
-      "assertionCount": 13,
+      "testCount": 8,
+      "assertionCount": 21,
       "testNames": [
         "extractQueryTokens keeps ASCII words and CJK bigrams, drops stopwords",
+        "CJK query extraction does not split phrases into bigrams",
+        "INIT-047 injection budget=10 reports exceeded without truncation",
         "a prompt with no trigger keyword is gated off",
         "matchedTriggerKeywords returns exactly the keywords present",
         "an empty trigger list does not gate",
@@ -922,9 +924,13 @@
       ]
     },
     "tests/p3-cli-read-surface.test.mjs": {
-      "testCount": 14,
-      "assertionCount": 90,
+      "testCount": 18,
+      "assertionCount": 110,
       "testNames": [
+        "INIT-047 MCP read face performs the real handshake and stays read-only",
+        "INIT-047 work-list search returns bounded scope and work-draft uses canonical headings",
+        "INIT-047 work-list search has an independent bounded scope projection",
+        "INIT-047 work-draft has an independent canonical heading and example projection",
         "project-list is deterministic, tombstone-free, and budgeted",
         "work-list filters conjunctively, excludes tombstones, and is byte-stable",
         "work-show returns one record and fails closed on unknown ids and malformed filters",
@@ -1013,8 +1019,8 @@
       ]
     },
     "tests/p4-knowledge-core.test.mjs": {
-      "testCount": 34,
-      "assertionCount": 177,
+      "testCount": 39,
+      "assertionCount": 200,
       "testNames": [
         "WSC-1: real workspace knowledge admission requires explicit disposability acknowledgment",
         "WSC-1: fixture workspace admits with no flag and reports fixture admission",
@@ -1041,7 +1047,7 @@
         "custom schema proof enforces the normative UTF-8 byte budgets",
         "duplicate, CAS, promotion, and concurrent writer integrity fail closed",
         "link, special-file, source-replacement, unknown-field, and partial-state attacks fail closed",
-        "record-count and query-result limits are executable",
+        "INIT-047 knowledge inventory admits more than 64 records while query pages remain bounded",
         "Knowledge implementation has no predecessor, network, database, or AOS read authority",
         "WSC-7: knowledge metadata maps to digest-valid context-metadata candidates with lossy role scope",
         "CQ-02c: knowledge metadata scope refuses values that only coerce to a member",
@@ -1049,7 +1055,12 @@
         "CQ-10: the link index still refuses links that are absent from the workspace",
         "TCRN-CROSS-STORY-023: the aggregate cap counts marker+metadata+body but not the derived index, and still fires",
         "TCRN-CROSS-STORY-025: search matches the summary, not only subject and tags",
-        "TCRN-CROSS-STORY-024: retiring reclaims the body, keeps the store valid, and still requires a live body"
+        "TCRN-CROSS-STORY-024: retiring reclaims the body, keeps the store valid, and still requires a live body",
+        "INIT-047: relevance ordering changes with the query and source-free fragments are selectable",
+        "INIT-047 supersedes rejects an unavailable target before writing",
+        "INIT-047 source digest check reports changes without hiding metadata",
+        "INIT-047 article index cards stay explicit-only for default context",
+        "INIT-047: supersedes is validated, source digests are computed and source changes are reported"
       ]
     },
     "tests/p5-core-reference-personas.test.mjs": {

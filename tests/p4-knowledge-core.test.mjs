@@ -1032,7 +1032,7 @@ test("link, special-file, source-replacement, unknown-field, and partial-state a
   }
 });
 
-test("record-count and query-result limits are executable", async () => {
+test("INIT-047 knowledge inventory admits more than 64 records while query pages remain bounded", async () => {
   const count = await workspaceFixture({ externalKey: "FIXTURE-KNOWLEDGE-COUNT" });
   try {
     assert.equal(Object.hasOwn(KNOWLEDGE_LIMITS, "maximumRecords"), false);
@@ -1421,6 +1421,64 @@ test("INIT-047: relevance ordering changes with the query and source-free fragme
     assert.deepEqual(alphaOrder, ["INIT047-ALPHA", "INIT047-BETA"]);
     assert.deepEqual(betaOrder, ["INIT047-BETA", "INIT047-ALPHA"]);
     assert.equal((await evaluateKnowledgeFreshness(fx.workspace, instant(12))).records.find((record) => record.id === alpha.id).state, "fresh");
+  } finally { await fx.close(); }
+});
+
+test("INIT-047 supersedes rejects an unavailable target before writing", async () => {
+  const fx = await workspaceFixture({ externalKey: "FIXTURE-INIT047-SUPERSEDES" });
+  try {
+    await expectReason("KNOWLEDGE_LINK_INVALID", () => createKnowledgeUnit(fx.workspace, unitInput(fx, "INIT047-MISSING-TARGET", {
+      expectedVersion: 0,
+      supersedes: deriveStableId("knowledge", "INIT047-MISSING-TARGET-NOT-HERE"),
+    })));
+    assert.equal((await validateKnowledgeStore(fx.workspace)).records, 0);
+  } finally { await fx.close(); }
+});
+
+test("INIT-047 source digest check reports changes without hiding metadata", async () => {
+  const fx = await workspaceFixture({ externalKey: "FIXTURE-INIT047-SOURCE-CHECK" });
+  try {
+    await writeFile(join(fx.workspace, "source.md"), "source-v1");
+    const sourced = await createKnowledgeUnit(fx.workspace, unitInput(fx, "INIT047-SOURCE-CHECK", {
+      expectedVersion: 0,
+      kind: "reference",
+      sourceReferences: ["source.md"],
+      sourceDigest: null,
+      linkedEvidenceIds: [deriveStableId("evidence", "INIT047-SOURCE-CHECK")],
+      retrievalDisposition: "explicit-only",
+      lastVerified: instant(11, 3),
+      freshnessState: "fresh",
+    }));
+    await transitionKnowledgePromotion(fx.workspace, {
+      expectedVersion: 1, expectedRevision: sourced.revision, occurredAt: instant(11, 4), id: sourced.id, promotionState: "promoted",
+    });
+    assert.equal((await checkKnowledgeSources(fx.workspace)).records.find((record) => record.id === sourced.id).status, "unchanged");
+    await writeFile(join(fx.workspace, "source.md"), "source-v2");
+    assert.equal((await checkKnowledgeSources(fx.workspace)).records.find((record) => record.id === sourced.id).status, "changed");
+    assert.equal((await listKnowledgeMetadata(fx.workspace, { at: instant(12), selection: "all", search: "source-check" })).records.length, 1);
+  } finally { await fx.close(); }
+});
+
+test("INIT-047 article index cards stay explicit-only for default context", async () => {
+  const fx = await workspaceFixture({ externalKey: "FIXTURE-INIT047-ARTICLE-INDEX" });
+  try {
+    await writeFile(join(fx.workspace, "article.md"), "article-v1");
+    const article = await createKnowledgeUnit(fx.workspace, unitInput(fx, "INIT047-ARTICLE-INDEX", {
+      expectedVersion: 0,
+      kind: "reference",
+      sourceReferences: ["article.md"],
+      sourceDigest: null,
+      linkedEvidenceIds: [deriveStableId("evidence", "INIT047-ARTICLE-INDEX")],
+      retrievalDisposition: "explicit-only",
+      lastVerified: instant(11, 3),
+      freshnessState: "fresh",
+    }));
+    await transitionKnowledgePromotion(fx.workspace, {
+      expectedVersion: 1, expectedRevision: article.revision, occurredAt: instant(11, 4), id: article.id, promotionState: "promoted",
+    });
+    assert.equal((await listKnowledgeMetadata(fx.workspace, { at: instant(12) })).records.length, 0);
+    assert.equal((await listKnowledgeMetadata(fx.workspace, { at: instant(12), search: "article-index" })).records.length, 1);
+    assert.equal((await knowledgeContextCandidates(fx.workspace, { at: instant(12), search: "article-index" })).candidates.length, 0);
   } finally { await fx.close(); }
 });
 
