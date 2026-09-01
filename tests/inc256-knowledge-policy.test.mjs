@@ -17,6 +17,7 @@ import {
   initializeKnowledgeStore,
   initializeWorkspace,
   listKnowledgeMetadata,
+  retireKnowledgeUnit,
   transitionKnowledgePromotion,
   validateKnowledgeStore,
 } from "../dist/build/packages/core/src/index.js";
@@ -140,6 +141,30 @@ test("INC-256 malformed policy red leg refuses the batch before any migration", 
     const unchanged = await listKnowledgeMetadata(fx.workspace, { at: instant(8), selection: "all" });
     assert.equal(unchanged.records[0].stalenessPolicy.maximumAgeDays, 180);
     assert.equal((await validateKnowledgeStore(fx.workspace)).version, 1);
+  } finally {
+    await rm(fx.base, { recursive: true, force: true });
+  }
+});
+
+test("INC-256 policy migration also updates retired metadata without requiring a body", async () => {
+  const fx = await fixture();
+  try {
+    const created = await createKnowledgeUnit(fx.workspace, card(fx, "CARD-RETIRED", "guide", 0));
+    const promoted = await transitionKnowledgePromotion(fx.workspace, {
+      expectedVersion: 1, expectedRevision: created.revision, occurredAt: instant(6), id: created.id, promotionState: "promoted",
+    });
+    await retireKnowledgeUnit(fx.workspace, {
+      expectedVersion: promoted.version, expectedRevision: promoted.revision, occurredAt: instant(7), id: created.id,
+    });
+    const result = await applyKnowledgeBatch(fx.workspace, policyBatch([{
+      verb: "knowledge-policy", id: created.id, expectedRevision: 3,
+      stalenessPolicy: { maximumAgeDays: null, unknownDisposition: "fail-closed" },
+    }]), { expectedVersion: 3, occurredAt: instant(8) });
+    assert.equal(result.reasonCode, "KNOWLEDGE_BATCH_APPLIED");
+    const retired = (await listKnowledgeMetadata(fx.workspace, { at: instant(9), selection: "all" })).records.find((record) => record.id === created.id);
+    assert.equal(retired.lifecycle, "retired");
+    assert.equal(retired.stalenessPolicy.maximumAgeDays, null);
+    assert.equal((await validateKnowledgeStore(fx.workspace)).records, 1);
   } finally {
     await rm(fx.base, { recursive: true, force: true });
   }

@@ -2001,9 +2001,6 @@ export async function updateKnowledgeStalenessPolicy(workspaceRoot: string, inpu
     if (unit.metadata.revision !== input.expectedRevision) {
       fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedRevision}:${unit.metadata.revision}`);
     }
-    if (unit.metadata.lifecycle === "retired") {
-      fail("KNOWLEDGE_LIFECYCLE_INVALID", "a retired record cannot change freshness policy");
-    }
     const metadata: KnowledgeUnitMetadata = {
       ...unit.metadata,
       stalenessPolicy: input.stalenessPolicy,
@@ -2011,9 +2008,8 @@ export async function updateKnowledgeStalenessPolicy(workspaceRoot: string, inpu
       revision: unit.metadata.revision + 1,
       updatedAt: input.occurredAt,
     };
-    const unitBody = requireBody(unit);
     const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace);
-    validateMetadataBody(validated, unitBody, scan.workspace);
+    if (unit.metadata.lifecycle !== "retired") validateMetadataBody(validated, requireBody(unit), scan.workspace);
     const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
     const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
     const backend = storeBackendFor(scan.storeRoot, options);

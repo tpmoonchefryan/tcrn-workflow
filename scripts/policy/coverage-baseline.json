@@ -650,11 +650,12 @@
       ]
     },
     "tests/inc256-knowledge-policy.test.mjs": {
-      "testCount": 2,
-      "assertionCount": 15,
+      "testCount": 3,
+      "assertionCount": 19,
       "testNames": [
         "INC-256 knowledge-batch migrates all existing cards to no expiry and preserves retrieval",
-        "INC-256 malformed policy red leg refuses the batch before any migration"
+        "INC-256 malformed policy red leg refuses the batch before any migration",
+        "INC-256 policy migration also updates retired metadata without requiring a body"
       ]
     },
     "tests/init033-install-surface.test.mjs": {
