@@ -2573,7 +2573,7 @@
         "expectedReasonCode": "INIT047_GOAL_05_VERIFIED"
       },
       "redLeg": {
-        "mutation": "Replace Content-Length framing or add a mutating call path.",
+        "mutation": "Return an empty page from the MCP work_search handler.",
         "test": "INIT-047 MCP read face performs the real handshake and stays read-only",
         "expectedReasonCode": "INIT047_RED_LEG_REQUIRED"
       }
@@ -2644,7 +2644,7 @@
         "expectedReasonCode": "INIT047_GOAL_07_VERIFIED"
       },
       "redLeg": {
-        "mutation": "Require finite freshness or relax guide/reference provenance.",
+        "mutation": "Set every relevance score weight to zero.",
         "test": "INIT-047: relevance ordering changes with the query and source-free fragments are selectable",
         "expectedReasonCode": "INIT047_RED_LEG_REQUIRED"
       }
@@ -2716,7 +2716,7 @@
         "expectedReasonCode": "INIT047_GOAL_09_VERIFIED"
       },
       "redLeg": {
-        "mutation": "Use retrievalDisposition=default for article cards.",
+        "mutation": "Drop the explicit-only inclusion branch from knowledge-list search.",
         "test": "INIT-047 article index cards stay explicit-only for default context",
         "expectedReasonCode": "INIT047_RED_LEG_REQUIRED"
       }
@@ -2786,7 +2786,7 @@
         "expectedReasonCode": "INIT047_GOAL_11_VERIFIED"
       },
       "redLeg": {
-        "mutation": "Register a bare relative command or inline a second copy of section zero.",
+        "mutation": "Read section zero from DEFAULT_CONTAINER_ROOT instead of the fire-time root.",
         "test": "STORY-331 re-reads the platform AGENTS section on every prompt",
         "expectedReasonCode": "INIT047_RED_LEG_REQUIRED"
       }
@@ -2822,7 +2822,7 @@
         "expectedReasonCode": "INIT047_GOAL_12_VERIFIED"
       },
       "redLeg": {
-        "mutation": "Count quoted/table/code references as prose violations or throw from the hook.",
+        "mutation": "Remove rule 3 from checkResponseText.",
         "test": "STORY-332 response checks distinguish prose violations from quoted/table content",
         "expectedReasonCode": "INIT047_RED_LEG_REQUIRED"
       }
