@@ -1692,8 +1692,8 @@
       ]
     },
     "tests/stop-pact.test.mjs": {
-      "testCount": 37,
-      "assertionCount": 106,
+      "testCount": 39,
+      "assertionCount": 112,
       "testNames": [
         "no pact, or an inactive pact, always allows",
         "a pact bound to another session allows without disturbing its counter",
@@ -1731,7 +1731,9 @@
         "hook: a large scope produces a valid, untruncated block decision",
         "hook: completed pact (inactive) → allows the stop",
         "cli: start → status → block enforces the ticket vocabulary and records it",
-        "cli: complete migrates a running pact to done and deactivates it"
+        "cli: complete migrates a running pact to done and deactivates it",
+        "STORY-332 response checks distinguish prose violations from quoted/table content",
+        "STORY-331 re-reads the platform AGENTS section on every prompt"
       ]
     },
     "tests/story-173-equivalence-redleg.test.mjs": {
