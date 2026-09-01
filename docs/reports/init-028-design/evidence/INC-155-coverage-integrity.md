@@ -60,8 +60,8 @@
       "reasonCode": "COVERAGE_BASELINE_INCOMPLETE",
       "baselineCompleteness": {
         "ok": false,
-        "expectedFiles": 115,
-        "currentFiles": 116,
+        "expectedFiles": 117,
+        "currentFiles": 118,
         "missingFiles": [
           "tests/s244-model-plan.test.mjs"
         ],
@@ -98,8 +98,8 @@
       "ok": true,
       "baselineCompleteness": {
         "ok": true,
-        "expectedFiles": 116,
-        "currentFiles": 116,
+        "expectedFiles": 118,
+        "currentFiles": 118,
         "missingFiles": [],
         "staleFiles": []
       }
@@ -110,7 +110,7 @@
 
 关键红点分别是：删除 s244 test 块红并指名文件（即使当前计数因新增测试未下降）；不更新基线红并列出新文件；
 保留 test 名但抽空断言仍红且 `removedTests=[]`、`assertionLoss=20`；恢复后
-97/97 完整性与守恒同时转绿。
+118/118 完整性与守恒同时转绿。
 
 ## 边界
 
