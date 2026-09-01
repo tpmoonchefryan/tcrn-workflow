@@ -644,7 +644,7 @@
     },
     "tests/inc255-mcp-framing.test.mjs": {
       "testCount": 1,
-      "assertionCount": 8,
+      "assertionCount": 12,
       "testNames": [
         "INC-255 stdio accepts newline JSON and retains Content-Length compatibility"
       ]

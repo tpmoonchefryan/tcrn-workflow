@@ -2841,7 +2841,7 @@
         "scripts/task.mjs",
         "tests/inc255-mcp-framing.test.mjs"
       ],
-      "fixtureDigest": "a7381934490518916ae9bf4199bbf45c98882888ee4790f3b6f2e91ec52a7dcd",
+      "fixtureDigest": "3091459146fd0406d2739071409e4f04406628f991dc8aacc43b1efd006434e2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

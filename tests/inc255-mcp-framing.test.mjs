@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
   acquireWorkspaceLease,
   createProject,
@@ -20,6 +21,12 @@ import {
 
 const SERVER = fileURLToPath(new URL("../dist/build/packages/mcp/src/index.js", import.meta.url));
 const instant = (second) => `2026-09-02T00:00:${String(second).padStart(2, "0")}Z`;
+
+async function cliJson(arguments_) {
+  let output = "";
+  await runCli(arguments_, { write: (value) => { output += value; } });
+  return JSON.parse(output);
+}
 
 async function fixture() {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-inc255-")));
@@ -129,11 +136,18 @@ test("INC-255 stdio accepts newline JSON and retains Content-Length compatibilit
     client.notify({ jsonrpc: "2.0", method: "notifications/initialized" }, "newline");
     const listed = await client.request({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }, "newline");
     assert.deepEqual(listed.result.tools.map((tool) => tool.name), ["work_search", "work_show", "knowledge_search", "work_draft", "status"]);
+    for (const tool of listed.result.tools) {
+      assert.equal(tool.inputSchema.type, "object");
+      assert.equal(tool.inputSchema.additionalProperties, false);
+      assert.ok(Array.isArray(tool.inputSchema.required));
+    }
     const searched = await client.request({
       jsonrpc: "2.0", id: 3, method: "tools/call",
       params: { name: "work_search", arguments: { workspace: fx.workspace, query: "INC-255" } },
     }, "newline");
     assert.equal(searched.result.structuredContent.records.length, 1);
+    const cli = await cliJson(["work-list", "--workspace", fx.workspace, "--search", "INC-255"]);
+    assert.deepEqual(searched.result.structuredContent.records, cli.records, "MCP work_search matches CLI work-list");
     const legacy = await client.request({ jsonrpc: "2.0", id: 4, method: "tools/list", params: {} }, "content-length");
     assert.equal(legacy.result.tools.length, 5);
     client.notify({ jsonrpc: "2.0", method: "notifications/initialized" }, "content-length");
