@@ -67,6 +67,7 @@ import {
   recoverWorkspace,
   createSnapshotManifest,
   readSnapshotManifestFile,
+  rebuildReplaySnapshot,
   verifySnapshotManifest,
   restoreArtifactArchive,
   resolveGenericProfile,
@@ -1192,6 +1193,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "settings-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "settings-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "value", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "snapshot-manifest", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
+  { name: "snapshot-replay-rebuild", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "snapshot-verify", availability: "cli", mutates: false, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "manifest", required: true, valueKind: "string" }] },
   { name: "status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   // INC-074/INC-081: seal a retained file archive to an already authoritative
@@ -2517,6 +2519,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     io.write(manifest);
     return;
   }
+  if (command === "snapshot-replay-rebuild") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await rebuildReplaySnapshot(values.workspace ?? "")));
+    return;
+  }
   if (command === "snapshot-verify") {
     // WSF-2: recompute a copied control tree against a saved manifest receipt. No
     // lease and no mutation — the target is a copy, not a live workspace.
@@ -2985,8 +2993,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     if (values.search !== undefined && (values.search.length === 0 || values.search.length > 256 || !values.search.isWellFormed())) {
       fail("CLI_ARGUMENT_MALFORMED", "search");
     }
-    const scopeBytes = values["scope-bytes"] === undefined ? 512 : integerValue(values, "scope-bytes");
-    if (scopeBytes < 1 || scopeBytes > 65_536) fail("CLI_ARGUMENT_MALFORMED", "scope-bytes");
     if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident", "Release"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
     if (values.status !== undefined && !isWorkStatus(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     // INIT-008: filter members of a sprint. The flag carries the qualified reference in the
@@ -2994,6 +3000,9 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // against the stored advisory:sprint value by canonical bytes so the round trip is closed.
     const sprintFilter = values.sprint === undefined ? undefined : canonicalJson(sprintReference(values.sprint));
     const state = await validateWorkspace(values.workspace ?? "");
+    const configuredScopeBytes = state.settings.find((entry) => entry.key === "retrieval.scopeExcerptBytes")?.value;
+    const scopeBytes = values["scope-bytes"] === undefined ? Number(configuredScopeBytes ?? "512") : integerValue(values, "scope-bytes");
+    if (scopeBytes < 1 || scopeBytes > 65_536) fail("CLI_ARGUMENT_MALFORMED", "scope-bytes");
     const search = values.search?.toLowerCase();
     const records = state.work.filter((entry) => !entry.tombstone &&
       (values["project-id"] === undefined || entry.projectId === values["project-id"]) &&

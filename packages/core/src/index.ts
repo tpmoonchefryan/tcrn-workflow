@@ -219,6 +219,7 @@ export {
   openConferenceInWorkspace,
   planWorkspaceMigration,
   rebuildWorkspaceViews,
+  rebuildReplaySnapshot,
   recoverWorkspace,
   removeHostConfigurationInWorkspace,
   removeCustomPersonaInWorkspace,

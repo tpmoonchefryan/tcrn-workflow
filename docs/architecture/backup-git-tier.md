@@ -14,6 +14,13 @@ All paths below are workspace-relative placeholders. `<root>` is the Workspace
 authority root — the directory that contains `.tcrn-workflow/`. Paths with spaces
 are first-class; always double-quote them.
 
+The current local storage shape adds numbered byte-bounded event segments and
+derived `.idx`, label/time, and manifest sidecars. Replay checkpoints are
+atomic files under `snapshots/`; they belong in the whole-tree integrity witness
+but do not become a second authority. Disposable knowledge bodies and external
+time-attestation receipts can be migrated to segmented NDJSON with full-value
+readback before legacy files are removed.
+
 ## Where to `git init`
 
 Initialize the repository at the **workspace root**, so the control tree is tracked

@@ -27,6 +27,13 @@ replacement uses exclusive no-follow temporary files. Link, special-file,
 source-replacement, partial/crash, count, size, and aggregate violations fail
 closed. P1 Option-B remains the ancestor-component threat boundary.
 
+The legacy body-file wording above describes the compatibility reader. Current
+local migrations may replace the body files with canonical NDJSON segments,
+point indexes, and a manifest; metadata remains one record per id and is still
+the authority. `knowledge.aggregateBytes` is the workspace setting for the
+marker/metadata/body source bytes, with the fixed canonical ceiling as its upper
+bound.
+
 ## Metadata
 
 `KnowledgeUnitMetadata` is closed and binds its stable ID/external key, scope,
@@ -87,6 +94,10 @@ separately and is not charged twice. Listing more matches than one page truncate
 bounded case-insensitive substring over subject, summary, snippet, and tags narrows
 results without loading bodies. `knowledge-source-check` is the explicit source
 file comparison surface; ordinary reads do not scan every source file.
+
+The one-MiB value above is the fixed engine ceiling. A workspace may select a
+lower `knowledge.aggregateBytes` value (default 131,072); changing that setting
+changes future store admission without rewriting metadata or bodies.
 
 These text budgets are UTF-8 byte budgets. Draft 2020-12 `maxLength` counts
 Unicode code points and is retained only as a structural bound. P4 schema proof

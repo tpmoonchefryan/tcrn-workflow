@@ -195,6 +195,10 @@ export class FileStoreBackend implements StoreBackend {
     await this.writeAtomic(this.path(`bodies/${id}.body`), bytes);
   }
 
+  async removeKnowledgeBody(id: string): Promise<void> {
+    await this.removeKnowledgeBodyFile(`${id}.body`);
+  }
+
   // STORY-341: the segmented knowledge backend reuses the same bounded path and
   // atomic-write primitives for its body segments and sidecars. These methods
   // intentionally stay outside StoreBackend so ordinary store verbs retain the
@@ -553,6 +557,17 @@ export class SegmentedKnowledgeStoreBackend implements StoreBackend {
     const existing = records.findIndex((record) => record.id === id);
     if (existing < 0) records.push({ id, bytes: replacement });
     else records[existing] = { id, bytes: replacement };
+    await this.writeKnowledgeBodiesSegmented(records);
+  }
+
+  async removeKnowledgeBody(id: string): Promise<void> {
+    const manifest = await this.readSegmentedManifest();
+    if (manifest === null) return this.delegate.removeKnowledgeBody(id);
+    const records: { readonly id: string; readonly bytes: Buffer }[] = [];
+    for (const name of await this.listKnowledgeBodies()) {
+      const currentId = name.endsWith(".body") ? name.slice(0, -5) : name;
+      if (currentId !== id) records.push({ id: currentId, bytes: await this.readKnowledgeBody(currentId) });
+    }
     await this.writeKnowledgeBodiesSegmented(records);
   }
 

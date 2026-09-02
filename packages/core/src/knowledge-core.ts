@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createHash, randomBytes } from "node:crypto";
-import { constants } from "node:fs";
+import { constants, readFileSync } from "node:fs";
 import {
   lstat,
   mkdir,
@@ -57,6 +57,17 @@ export const KNOWLEDGE_LIMITS = Object.freeze({
   maximumTags: 32,
   maximumRoleScopes: 16,
 });
+
+const KNOWLEDGE_AGGREGATE_DEFAULT = 131_072 as const;
+
+function knowledgeAggregateLimit(workspace: WorkspaceState): number {
+  const configured = workspace.settings.find((entry) => entry.key === "knowledge.aggregateBytes")?.value;
+  const value = configured === undefined ? KNOWLEDGE_AGGREGATE_DEFAULT : Number(configured);
+  if (!Number.isSafeInteger(value) || value < 4_096 || value > PROTOCOL_LIMITS.maxCanonicalBytes) {
+    fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge.aggregateBytes is outside its declared bounds");
+  }
+  return value;
+}
 
 export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_ALREADY_EXISTS",
@@ -282,15 +293,33 @@ const metadataFields = [
 ];
 const stalenessFields = ["maximumAgeDays", "unknownDisposition"];
 
-// STORY-327: provenance is configured by the existing knowledge kinds. Small
-// fact/decision/summary cards can be captured without a source or evidence link;
-// article-like guide/reference cards retain the strict provenance floor. Keeping
-// this roster outside assertPromotableProvenance makes the policy extendable
-// without changing the validation algorithm.
-export const KNOWLEDGE_PROVENANCE_POLICY = Object.freeze({
-  relaxedKinds: Object.freeze(["fact", "decision", "summary"] as const),
-  strictKinds: Object.freeze(["guide", "reference"] as const),
-});
+// STORY-327/348: provenance is data, not code. The policy file is loaded from
+// the repository's own policy directory so adding a kind changes behavior without
+// editing this algorithm; the fallback URLs cover both source execution and the
+// compiled CLI invoked from the platform container.
+function readKnowledgeProvenancePolicy(): Readonly<{ readonly relaxedKinds: readonly string[]; readonly strictKinds: readonly string[] }> {
+  const candidates = [
+    resolve(process.cwd(), "scripts/policy/knowledge-provenance.json"),
+    resolve(process.cwd(), "TCRN Platform/tcrn-workflow/scripts/policy/knowledge-provenance.json"),
+    new URL("../../../scripts/policy/knowledge-provenance.json", import.meta.url),
+    new URL("../../../../../scripts/policy/knowledge-provenance.json", import.meta.url),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(readFileSync(candidate, "utf8")) as { readonly schemaVersion?: unknown; readonly relaxedKinds?: unknown; readonly strictKinds?: unknown };
+      if (parsed.schemaVersion === "tcrn.knowledge-provenance-policy.v1" && Array.isArray(parsed.relaxedKinds) && Array.isArray(parsed.strictKinds) &&
+        parsed.relaxedKinds.every((kind) => typeof kind === "string") && parsed.strictKinds.every((kind) => typeof kind === "string")) {
+        return Object.freeze({ relaxedKinds: Object.freeze([...parsed.relaxedKinds] as string[]), strictKinds: Object.freeze([...parsed.strictKinds] as string[]) });
+      }
+    } catch {
+      // Try the next repository-relative candidate; an absent policy is a hard
+      // source error below, never an implicit fallback to a stale code roster.
+    }
+  }
+  throw new Error("KNOWLEDGE_PROVENANCE_POLICY_UNREADABLE");
+}
+
+export const KNOWLEDGE_PROVENANCE_POLICY = readKnowledgeProvenancePolicy();
 
 function isRelaxedProvenanceKind(kind: KnowledgeKind): boolean {
   return (KNOWLEDGE_PROVENANCE_POLICY.relaxedKinds as readonly string[]).includes(kind);
@@ -960,6 +989,7 @@ async function scanKnowledgeStore(
   }
   const units: ScannedKnowledgeUnit[] = [];
   const linkInvalid: string[] = [];
+  const aggregateLimit = knowledgeAggregateLimit(workspace);
   let aggregateBytes = markerBytes.length;
   for (const id of metadataIds) {
     const metadataPath = resolve(metadataRoot, `${id}.json`);
@@ -995,7 +1025,7 @@ async function scanKnowledgeStore(
       : null;
     if (body !== null) validateMetadataBody(metadata, body, workspace);
     aggregateBytes += metadataBytes.length + (body?.length ?? 0);
-    if (aggregateBytes > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
+    if (aggregateBytes > aggregateLimit) {
       fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge aggregate bytes");
     }
     if (metadata.id !== id) {
@@ -1320,7 +1350,7 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
       metadataBytes.length + body.length;
     // STORY-330: no record-count admission branch remains. The aggregate source
     // bytes and the canonical metadata/body limits are the capacity checks.
-    if (metadataBytes.length > KNOWLEDGE_LIMITS.maximumMetadataBytes || projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
+    if (metadataBytes.length > KNOWLEDGE_LIMITS.maximumMetadataBytes || projectedAggregate > knowledgeAggregateLimit(scan.workspace)) {
       fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge create budget");
     }
     if (scan.units.some((unit) => unit.metadata.id === metadata.id || unit.metadata.externalKey === metadata.externalKey)) {
@@ -1445,7 +1475,7 @@ function normalizeListQuery(query: KnowledgeListQuery): NormalizedListQuery {
   // variable really holds whichever caller-supplied page size is within bounds.
   let limit: number = KNOWLEDGE_LIMITS.maximumQueryResults;
   if (query.limit !== undefined) {
-    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > PROTOCOL_LIMITS.maxCanonicalBytes) {
       fail("KNOWLEDGE_INPUT_INVALID", "limit");
     }
     limit = query.limit;
@@ -1803,7 +1833,7 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
     const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
       scan.units.reduce((total, entry) => total +
         Buffer.byteLength(canonicalJson(entry.metadata.id === metadata.id ? metadata : entry.metadata), "utf8") + (entry.body?.length ?? 0), 0);
-    if (projectedAggregate > KNOWLEDGE_LIMITS.maximumAggregateBytes) {
+    if (projectedAggregate > knowledgeAggregateLimit(scan.workspace)) {
       fail("KNOWLEDGE_LIMIT_EXCEEDED", "knowledge promotion aggregate bytes");
     }
     const backend = storeBackendFor(scan.storeRoot, options);
@@ -1884,7 +1914,8 @@ export async function retireKnowledgeUnit(workspaceRoot: string, input: {
     // after the retire is durably committed. A crash before this leaves a valid
     // retired-with-body record (tolerated by the scan); after it, a valid
     // retired-without-body one — either way the store stays consistent.
-    await rm(unit.bodyPath, { force: true });
+    if (backend instanceof SegmentedKnowledgeStoreBackend) await backend.removeKnowledgeBody(unit.metadata.id);
+    else await rm(unit.bodyPath, { force: true });
     await releaseMutationClaim(scan.storeRoot, claim);
     released = true;
     await scanKnowledgeStore(workspaceRoot, options);

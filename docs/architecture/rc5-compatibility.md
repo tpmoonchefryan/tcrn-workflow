@@ -21,6 +21,12 @@ describes.
 | rc.5 workspace carrying conference / gate / attestation events → rc.4 binary | **Fails closed as corruption (intentional).** See the next section — this is forward-incompatibility, not data loss. |
 | Attestation-enabled workspace → any binary | **One-way.** Once enabled, actor attestation cannot be turned off. See "Attestation is one-way". |
 
+The current local storage revision is additive: new event writes use byte-bounded
+NDJSON segments and derived sidecars, while old count-based JSON segments remain
+readable. Read paths may load an atomic replay checkpoint and apply only the
+tail. This performance layout does not alter append-only history or the
+forward-incompatibility rule described below.
+
 ## Forward incompatibility is intentional, not data loss
 
 The rc.5 surface adds additive workspace event-log operations —

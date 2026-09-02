@@ -37,6 +37,9 @@ export type SettingKey =
   | "execution.maxDispatchDepth"
   | "execution.personalessDispatch"
   | "execution.subagentPolicy"
+  | "injection.budgetBytes"
+  | "knowledge.aggregateBytes"
+  | "retrieval.scopeExcerptBytes"
   | "storage.backend"
   | "storage.segmentBytes"
   | "storage.snapshotEveryEvents"
@@ -253,6 +256,33 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "allowed",
     allowedValues: ["allowed", "review-only", "forbidden"],
+  },
+  {
+    key: "injection.budgetBytes",
+    type: "string",
+    controlType: "number",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "32768",
+    min: 1,
+    max: 1_048_576,
+  },
+  {
+    key: "knowledge.aggregateBytes",
+    type: "string",
+    controlType: "number",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "131072",
+    min: 4096,
+    max: 1_048_576,
+  },
+  {
+    key: "retrieval.scopeExcerptBytes",
+    type: "string",
+    controlType: "number",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "512",
+    min: 1,
+    max: 65_536,
   },
   {
     key: "storage.backend",

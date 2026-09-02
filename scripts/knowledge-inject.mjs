@@ -145,6 +145,15 @@ export function matchedTriggerKeywords(prompt, triggerKeywords) {
   return list.filter((kw) => text.includes(kw) || text.toLowerCase().includes(kw.toLowerCase()));
 }
 
+async function configuredInjectionBudget(partition) {
+  const call = await callChainRead("settings-catalog", { partition });
+  if (!call.ok) return DEFAULT_BUDGET;
+  const payload = call.result?.result ?? call.result;
+  const setting = payload?.settings?.find((entry) => entry.key === "injection.budgetBytes");
+  const value = setting?.currentValue ?? setting?.defaultValue;
+  return /^(?:0|[1-9][0-9]*)$/u.test(String(value ?? "")) ? Number(value) : DEFAULT_BUDGET;
+}
+
 /** Byte-level budget cut, pure: `{ text, truncated }`. A CJK character can exceed the cut. */
 export function truncateToBudget(text, budget) {
   const bytes = Buffer.byteLength(text, "utf8");
@@ -155,7 +164,7 @@ export function truncateToBudget(text, budget) {
 /** The injection chain: query -> candidates -> budget report -> metadata-level output. */
 export async function runInjection({ prompt, partition, roleScope, budget, triggerKeywords }) {
   void triggerKeywords;
-  const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : DEFAULT_BUDGET;
+  const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : await configuredInjectionBudget(partition);
   // Query each meaningful term separately and union the candidates. The engine owns
   // relevance ordering; this wrapper never gates a prompt on a hand-maintained list.
   const tokens = extractQueryTokens(prompt);
@@ -228,7 +237,7 @@ function parseArgv(argv) {
     prompt: typeof flags.prompt === "string" ? flags.prompt : "",
     partition: typeof flags.partition === "string" ? flags.partition : DEFAULT_PARTITION,
     roleScope: typeof flags["role-scope"] === "string" ? flags["role-scope"] : DEFAULT_ROLE_SCOPE,
-    budget: typeof flags.budget === "string" ? Number(flags.budget) : (Number(process.env.TCRN_KNOWLEDGE_INJECTION_BUDGET) || DEFAULT_BUDGET),
+    budget: typeof flags.budget === "string" ? Number(flags.budget) : (Number(process.env.TCRN_KNOWLEDGE_INJECTION_BUDGET) || undefined),
     triggerKeywords: typeof flags["trigger-keywords"] === "string" ? flags["trigger-keywords"] : "",
     selfTest: flags["self-test"] === true,
     verifyChannel: flags["verify-channel"] === true

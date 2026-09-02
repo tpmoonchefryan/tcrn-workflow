@@ -2,6 +2,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { deflateSync, inflateSync } from "node:zlib";
 import { constants } from "node:fs";
 import {
   lstat,
@@ -384,7 +385,8 @@ interface ReplaySnapshotManifest {
   readonly workspaceId: string;
   readonly version: number;
   readonly headEventHash: string | null;
-  readonly snapshot: string;
+  readonly snapshot?: string;
+  readonly snapshotParts?: readonly string[];
   readonly stateDigest: string;
   readonly eventPrefixDigest: string;
   readonly segments: readonly ReplaySnapshotSegmentDigest[];
@@ -1076,12 +1078,34 @@ function sha256Bytes(content: Buffer): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
+function unboundedCanonicalValue(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "string" || typeof value === "boolean" || typeof value === "number") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((entry) => unboundedCanonicalValue(entry)).join(",")}]`;
+  if (typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object).sort(compareCanonicalText).map((key) => `${JSON.stringify(key)}:${unboundedCanonicalValue(object[key])}`).join(",")}}`;
+  }
+  throw new Error("WORKSPACE_SNAPSHOT_INVALID: non-JSON snapshot value");
+}
+
+function unboundedCanonicalJson(value: unknown): string {
+  return `${unboundedCanonicalValue(value)}\n`;
+}
+
+function replaySnapshotDigest(value: unknown): string {
+  return sha256Bytes(Buffer.from(unboundedCanonicalJson(value), "utf8"));
+}
+
 function assertReplaySnapshotManifest(value: unknown): asserts value is ReplaySnapshotManifest {
-  exactFields(value, ["eventPrefixDigest", "headEventHash", "schemaVersion", "segments", "snapshot", "stateDigest", "version", "workspaceId"], "WORKSPACE_SNAPSHOT_INVALID", "replay snapshot manifest");
   const manifest = value as Record<string, unknown>;
+  const legacySnapshot = manifest !== null && typeof manifest === "object" && Object.hasOwn(manifest, "snapshot");
+  exactFields(value, ["eventPrefixDigest", "headEventHash", "schemaVersion", "segments", legacySnapshot ? "snapshot" : "snapshotParts", "stateDigest", "version", "workspaceId"], "WORKSPACE_SNAPSHOT_INVALID", "replay snapshot manifest");
   if (manifest.schemaVersion !== WORKSPACE_REPLAY_SNAPSHOT_MANIFEST_VERSION || typeof manifest.workspaceId !== "string" ||
-    !Number.isSafeInteger(manifest.version) || Number(manifest.version) < 1 || typeof manifest.snapshot !== "string" ||
-    !/^\d{12}\.json$/u.test(manifest.snapshot) || typeof manifest.stateDigest !== "string" ||
+    !Number.isSafeInteger(manifest.version) || Number(manifest.version) < 1 ||
+    (legacySnapshot ? (typeof manifest.snapshot !== "string" || !/^\d{12}\.json$/u.test(manifest.snapshot)) :
+      (!Array.isArray(manifest.snapshotParts) || manifest.snapshotParts.length === 0 || manifest.snapshotParts.some((part) => typeof part !== "string" || !/^\d{12}\.part\d{4}$/u.test(part)))) ||
+    typeof manifest.stateDigest !== "string" ||
     !/^[a-f0-9]{64}$/u.test(manifest.stateDigest) || typeof manifest.eventPrefixDigest !== "string" ||
     !/^[a-f0-9]{64}$/u.test(manifest.eventPrefixDigest) ||
     (manifest.headEventHash !== null && (typeof manifest.headEventHash !== "string" || !/^[a-f0-9]{64}$/u.test(manifest.headEventHash))) ||
@@ -1116,7 +1140,7 @@ function assertReplaySnapshotState(value: unknown, metadata: WorkspaceMetadata, 
   }
   const stateWithoutDigest = { ...snapshot };
   delete stateWithoutDigest.stateDigest;
-  if (canonicalSha256(stateWithoutDigest as JsonValue) !== snapshot.stateDigest || snapshot.stateDigest !== manifest.stateDigest) {
+  if (replaySnapshotDigest(stateWithoutDigest) !== snapshot.stateDigest || snapshot.stateDigest !== manifest.stateDigest) {
     replaySnapshotFail("replay snapshot state digest mismatch");
   }
   try {
@@ -1154,11 +1178,50 @@ async function readReplaySnapshot(workspaceRoot: string, metadata: WorkspaceMeta
     replaySnapshotFail("snapshot manifest is not bound to this workspace");
   }
   let stateValue: JsonValue;
-  try {
-    stateValue = assertCanonicalJson((await backend.readControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${manifestValue.snapshot}`, PROTOCOL_LIMITS.maxCanonicalBytes)).toString("utf8"));
-  } catch (error) {
-    replaySnapshotFail(`snapshot state cannot be read: ${String(error)}`);
+  if (manifestValue.snapshotParts !== undefined) {
+    try {
+      const compressed = Buffer.concat(await Promise.all(manifestValue.snapshotParts.map((part) => backend.readControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${part}`, 1_048_576))));
+      const decompressed = inflateSync(compressed).toString("utf8");
+      const decoded = JSON.parse(decompressed) as unknown;
+      if (unboundedCanonicalJson(decoded) !== decompressed) replaySnapshotFail("replay snapshot payload is not canonical");
+      stateValue = decoded as JsonValue;
+    } catch (error) {
+      if (error instanceof WorkspaceError) throw error;
+      replaySnapshotFail(`replay snapshot payload cannot be decoded: ${String(error)}`);
+    }
+  } else {
+    let snapshotBytes: Buffer;
+    try {
+      snapshotBytes = await backend.readControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${manifestValue.snapshot ?? ""}`, 67_108_864);
+    } catch (error) {
+      replaySnapshotFail(`snapshot envelope cannot be read: ${String(error)}`);
+    }
+    const snapshotValue = assertCanonicalJson(snapshotBytes.toString("utf8"));
+    // A short-lived pre-compression checkpoint may exist on disk from the
+    // migration window. It is still verified against its digest.
+    if (isJsonObject(snapshotValue) && snapshotValue.schemaVersion === WORKSPACE_REPLAY_SNAPSHOT_VERSION) {
+      assertReplaySnapshotState(snapshotValue, metadata, manifestValue);
+      return { ...(snapshotValue as ReplaySnapshotState), manifest: manifestValue, prefixEvents: [] };
+    }
+    exactFields(snapshotValue, ["encoding", "payload", "schemaVersion", "stateDigest"], "WORKSPACE_SNAPSHOT_INVALID", "replay snapshot envelope");
+    const envelope = snapshotValue as Readonly<Record<string, unknown>>;
+    if (envelope.schemaVersion !== "tcrn.workspace-replay-snapshot-envelope.v1" || envelope.encoding !== "deflate-base64" ||
+      typeof envelope.stateDigest !== "string" || envelope.stateDigest !== manifestValue.stateDigest || !/^[a-f0-9]{64}$/u.test(envelope.stateDigest) ||
+      !Array.isArray(envelope.payload) || envelope.payload.some((chunk) => typeof chunk !== "string" || chunk.length > 8_192 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(chunk))) {
+      replaySnapshotFail("replay snapshot envelope fields are invalid");
+    }
+    try {
+      const encodedPayload = (envelope.payload as readonly unknown[]).join("");
+      const decompressed = inflateSync(Buffer.from(encodedPayload, "base64")).toString("utf8");
+      const decoded = JSON.parse(decompressed) as unknown;
+      if (unboundedCanonicalJson(decoded) !== decompressed) replaySnapshotFail("replay snapshot payload is not canonical");
+      stateValue = decoded as JsonValue;
+    } catch (error) {
+      if (error instanceof WorkspaceError) throw error;
+      replaySnapshotFail(`replay snapshot payload cannot be decoded: ${String(error)}`);
+    }
   }
+  stateValue = { ...(stateValue as Readonly<Record<string, JsonValue>>), stateDigest: manifestValue.stateDigest };
   assertReplaySnapshotState(stateValue, metadata, manifestValue);
   return { ...(stateValue as ReplaySnapshotState), manifest: manifestValue, prefixEvents: [] };
 }
@@ -1322,7 +1385,7 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
       if (firstSequence <= snapshot.version) replaySnapshotFail(`unexpected pre-snapshot segment ${name}`);
       void content;
     }
-    const prefixDigest = canonicalSha256(events.slice(0, snapshot.version));
+    const prefixDigest = replaySnapshotDigest(events.slice(0, snapshot.version));
     if (prefixDigest !== snapshot.manifest.eventPrefixDigest) {
       replaySnapshotFail("snapshot event prefix digest mismatch");
     }
@@ -3640,8 +3703,8 @@ function backendKindForState(state: WorkspaceState): "file" | "file-segmented" {
   fail("WORKSPACE_SCHEMA_INVALID", `storage.backend has an unsupported value ${configured}`);
 }
 
-async function writeReplaySnapshot(state: WorkspaceState, backend: StorageBackend): Promise<void> {
-  if (state.version < 1 || state.version % snapshotIntervalForState(state) !== 0 || backend.backendKind === "pg") return;
+async function writeReplaySnapshot(state: WorkspaceState, backend: StorageBackend, force = false): Promise<void> {
+  if ((!force && (state.version < 1 || state.version % snapshotIntervalForState(state) !== 0)) || backend.backendKind === "pg") return;
   await backend.ensureControlDirectory(WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY);
   const segmentEntries: ReplaySnapshotSegmentDigest[] = [];
   for (const name of await backend.listSegmentNames()) {
@@ -3649,26 +3712,42 @@ async function writeReplaySnapshot(state: WorkspaceState, backend: StorageBacken
     segmentEntries.push({ name, bytes: content.length, sha256: sha256Bytes(content) });
   }
   const stateValue = replaySnapshotStateValue(state);
-  const snapshotDocument: ReplaySnapshotState = {
-    ...stateValue,
-    stateDigest: canonicalSha256(stateValue as unknown as JsonValue),
-  };
-  const snapshotName = `${String(state.version).padStart(12, "0")}.json`;
+  const stateDigest = replaySnapshotDigest(stateValue);
+  const compressed = deflateSync(Buffer.from(unboundedCanonicalJson(stateValue), "utf8"));
+  const snapshotParts: string[] = [];
+  for (let offset = 0; offset < compressed.length; offset += 900_000) {
+    const partName = `${String(state.version).padStart(12, "0")}.part${String(snapshotParts.length + 1).padStart(4, "0")}`;
+    snapshotParts.push(partName);
+    await backend.writeControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${partName}`, compressed.subarray(offset, offset + 900_000));
+  }
   const manifest: ReplaySnapshotManifest = {
     schemaVersion: WORKSPACE_REPLAY_SNAPSHOT_MANIFEST_VERSION,
     workspaceId: state.metadata.workspaceId,
     version: state.version,
     headEventHash: state.headEventHash,
-    snapshot: snapshotName,
-    stateDigest: snapshotDocument.stateDigest,
-    eventPrefixDigest: canonicalSha256(state.events.slice(0, state.version)),
+    snapshotParts,
+    stateDigest,
+    eventPrefixDigest: replaySnapshotDigest(state.events.slice(0, state.version)),
     segments: segmentEntries,
   };
   // The state is committed first. A crash before the manifest write leaves the
   // old manifest authoritative; the manifest is replaced last and atomically,
   // so it can only name a complete snapshot file.
-  await backend.writeControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${snapshotName}`, canonicalJson(snapshotDocument as unknown as JsonValue));
   await backend.writeControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${WORKSPACE_REPLAY_SNAPSHOT_MANIFEST}`, canonicalJson(manifest as unknown as JsonValue));
+}
+
+export async function rebuildReplaySnapshot(workspaceRootInput: string): Promise<Readonly<Record<string, JsonValue>>> {
+  const workspace = await resolveWorkspace(workspaceRootInput);
+  const state = await materializeResolvedWorkspace(workspace);
+  const backend = backendForStorage(workspace.root, workspace.metadata.storageVersion, backendKindForState(state));
+  await writeReplaySnapshot(state, backend, true);
+  const checkpoint = await readReplaySnapshot(workspace.root, workspace.metadata);
+  return {
+    schemaVersion: "tcrn.workspace-replay-snapshot-rebuild.v1",
+    version: state.version,
+    headEventHash: state.headEventHash,
+    ...(checkpoint?.manifest.snapshotParts === undefined ? { snapshot: checkpoint?.manifest.snapshot ?? null } : { snapshotParts: checkpoint.manifest.snapshotParts }),
+  };
 }
 
 // STORY-300. One append and many appends are the same operation with a different

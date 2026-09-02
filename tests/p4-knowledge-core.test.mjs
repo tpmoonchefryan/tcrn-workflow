@@ -1348,7 +1348,7 @@ test("TCRN-CROSS-STORY-023: the aggregate cap counts marker+metadata+body but no
     for (const n of await readdir(join(storeRoot, "bodies"))) sumBody += (await readFile(join(storeRoot, "bodies", n))).length;
     const marker = (await readFile(join(storeRoot, "store.json"))).length;
     const index = (await readFile(join(storeRoot, "views/index.json"))).length;
-    const cap = KNOWLEDGE_LIMITS.maximumAggregateBytes;
+    const cap = 131_072;
     const current = marker + sumMeta + sumBody;
     assert.ok(current <= cap, `admitted records must fit the new cap: ${current} <= ${cap}`);
     assert.ok(current + index > cap, `the same records would have exceeded the old index-inclusive cap: ${current + index} > ${cap}`);

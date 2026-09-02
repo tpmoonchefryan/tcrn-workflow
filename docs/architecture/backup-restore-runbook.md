@@ -32,6 +32,14 @@ are first-class here — always double-quote them.
    `KNOWLEDGE_HIGH_WATER_MISMATCH`. Whole-control-tree byte-identical restore keeps
    both stores in lockstep by construction — never restore one store alone.
 
+The control tree may contain numbered byte-bounded `events/*.ndjson` segments,
+matching point/label/time/manifest sidecars, and `snapshots/manifest.json` for
+the engine's read-path checkpoint. The checkpoint is included in this whole-tree
+backup but is not a backup receipt or an alternate source of truth. Knowledge
+body segments and migrated attestation receipt segments are likewise derived
+files; their metadata/receipt values must be verified before legacy files are
+removed.
+
 ## SNAPSHOT
 
 1. **Quiesce.** End every agent session against `<root>`. A snapshot proves a

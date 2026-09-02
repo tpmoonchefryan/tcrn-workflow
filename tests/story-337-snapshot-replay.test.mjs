@@ -91,10 +91,8 @@ test("STORY-337 corrupted replay snapshot fails closed without falling back to f
     assert.equal(state.version, 2);
     const manifestPath = join(fx.workspace, controlDirectory, "snapshots", "manifest.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    const snapshotPath = join(fx.workspace, controlDirectory, "snapshots", manifest.snapshot);
-    const snapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
-    snapshot.stateDigest = "0".repeat(64);
-    await writeFile(snapshotPath, `${JSON.stringify(snapshot)}\n`, "utf8");
+    manifest.stateDigest = "0".repeat(64);
+    await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`, "utf8");
     await assert.rejects(() => materializeWorkspace(fx.workspace), (error) => error?.reasonCode === "WORKSPACE_SNAPSHOT_INVALID");
   } finally {
     await fx.lease.release();
@@ -114,7 +112,7 @@ test("STORY-337 snapshot interval setting controls checkpoint versions", async (
     assert.equal(state.version, 4);
     const manifest = JSON.parse(await readFile(join(fx.workspace, controlDirectory, "snapshots", "manifest.json"), "utf8"));
     assert.equal(manifest.version, 4);
-    assert.match(manifest.snapshot, /^000000000004\.json$/u);
+    assert.deepEqual(manifest.snapshotParts, ["000000000004.part0001"]);
   } finally {
     await fx.lease.release();
   }
