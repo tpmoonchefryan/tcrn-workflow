@@ -10,7 +10,7 @@ import test from "node:test";
 
 import { inspectArchiveInventory, parseArchiveInventory } from "../scripts/archive-inventory.mjs";
 
-const containerRoot = fileURLToPath(new URL("../../", import.meta.url));
+const containerRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const archiveRoot = resolve(containerRoot, ".tcrn-artifacts");
 const agentsPath = resolve(containerRoot, "AGENTS.md");
 
@@ -33,7 +33,7 @@ test("STORY-339 inventory detects both an undocumented disk entry and a document
 });
 
 test("STORY-338 and STORY-339 use a baseline-gated destructive list and a two-sided checker", async () => {
-  const cleanup = await (await import("../scripts/archive-cleanup.mjs")).then((module) => module);
+  const cleanup = await import("../scripts/archive-cleanup.mjs");
   assert.ok(cleanup.APPROVED_ARCHIVE_DELETIONS.includes("outer-git-backup-20260615"));
   assert.match(cleanup.LATEST_CHAIN_SNAPSHOT, /^chain-snapshot-20260816T132815656Z\.tar\.gz$/u);
 });

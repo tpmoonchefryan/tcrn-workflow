@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "3eb7a080dddb19a0dad804ee3bf8554b7fe50c883689944c6e49cfc0dc83fe07",
+  "basisDigest": "a39f339248d5dabc5580b7a9f5aa3338ba1e8a41db766186ed1acc7b1df80535",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -327,7 +327,7 @@
     {
       "path": "verification-map.yaml",
       "size": 199105,
-      "sha256": "ddcf2bded2a5f8b37ee4457d0cf4f8cae96f1e42380084caee5feb90fe27cb30"
+      "sha256": "e5eb77bce596d754b661bcdd797bd793698c60b8a8380b49a69cf079e7176cec"
     }
   ],
   "roleVerdictSlots": {

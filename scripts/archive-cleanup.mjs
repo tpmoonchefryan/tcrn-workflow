@@ -13,7 +13,6 @@ export const APPROVED_ARCHIVE_DELETIONS = Object.freeze([
   "premove-backup-2026-08-12",
   "vacated-container-2026-08-12",
   "inc249-filter-probe-20260823",
-  "inc249-pre-filter-20260823.bundle",
   "aos-stalled-worktree-20260817",
   "chain-backup-20260813T170751Z",
   "helper-trust-backup-20260814T101401Z",
