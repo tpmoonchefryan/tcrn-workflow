@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "tcrn.ceremony-cost.v1",
+  "initiative": "TCRN-CROSS-INIT-048",
+  "scope": [
+    {
+      "name": "story-scopes",
+      "bytes": 35967
+    }
+  ],
+  "claimIds": [
+    "INIT048-STORY-333",
+    "INIT048-STORY-334",
+    "INIT048-STORY-335",
+    "INIT048-STORY-336",
+    "INIT048-STORY-337",
+    "INIT048-STORY-338",
+    "INIT048-STORY-339",
+    "INIT048-STORY-340",
+    "INIT048-STORY-341",
+    "INIT048-STORY-342",
+    "INIT048-STORY-343",
+    "INIT048-STORY-344",
+    "INIT048-STORY-345",
+    "INIT048-STORY-346",
+    "INIT048-STORY-347",
+    "INIT048-STORY-348"
+  ],
+  "prework": [
+    {
+      "name": "scope-generator",
+      "bytes": 39078
+    },
+    {
+      "name": "dispatch-prompt",
+      "bytes": 7764
+    }
+  ]
+}

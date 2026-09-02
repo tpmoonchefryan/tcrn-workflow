@@ -606,6 +606,7 @@ async function runInit047Goal(name) {
 const INCIDENT_TESTS = Object.freeze({
   inc265: { path: "tests/stop-pact.test.mjs", pattern: "INC-265 removes the unsupported prose length rule without weakening rules 3 and 5", reasonCode: "INC265_STOP_RULES_VERIFIED" },
   inc264: { path: "tests/dispatch-readiness-compliance.test.mjs", pattern: "INC-264 dispatch briefs require the exact autonomous-operation and scope-restraint declarations", reasonCode: "INC264_DISPATCH_DECLARATIONS_VERIFIED" },
+  inc263: { path: "tests/inc263-closeout.test.mjs", pattern: "INC-263 closeout verification is wired and ceremony cost measurement is deterministic", reasonCode: "INC263_CLOSEOUT_AND_COST_TESTS_VERIFIED" },
 });
 
 async function runIncidentTest(name) {
@@ -618,6 +619,30 @@ async function runIncidentTest(name) {
     focusedTestNamePattern: spec.pattern,
     focusedReasonCode: spec.reasonCode,
   });
+}
+
+async function verifyCloseoutGate() {
+  const { verifyCloseout } = await import("./closeout-verify.mjs");
+  const manifest = await readJson(resolve(repositoryRoot, "scripts/policy/closeout-inc263-baseline.json"));
+  const result = verifyCloseout(manifest);
+  assertion(result.ok, "CLOSEOUT_VERIFY_RED", result.problems.join("; "));
+  return success("CLOSEOUT_VERIFY_GATE_VERIFIED", {
+    itemCount: result.itemCount,
+    dispositionCount: result.dispositionCount,
+  });
+}
+
+async function measureCeremonyCostGate() {
+  const { measureCeremonyCost } = await import("./ceremony-cost.mjs");
+  const manifest = await readJson(resolve(repositoryRoot, "scripts/policy/ceremony-cost-init048.json"));
+  return measureCeremonyCost(manifest);
+}
+
+async function verifyInc263() {
+  const closeout = await verifyCloseoutGate();
+  const ceremonyCost = await measureCeremonyCostGate();
+  const tests = await runIncidentTest("inc263");
+  return success("INC263_CLOSEOUT_AND_COST_VERIFIED", { closeout, ceremonyCost, tests });
 }
 
 const INIT048_STORY_TESTS = Object.freeze({
@@ -1932,6 +1957,8 @@ const commandContracts = {
   inc260: { exit: 0, reasonCode: "INC260_SNAPSHOT_READ_OPTIMIZED" },
   inc265: { exit: 0, reasonCode: "INC265_STOP_RULES_VERIFIED" },
   inc264: { exit: 0, reasonCode: "INC264_DISPATCH_DECLARATIONS_VERIFIED" },
+  closeout: { exit: 0, reasonCode: "CLOSEOUT_VERIFY_GATE_VERIFIED" },
+  inc263: { exit: 0, reasonCode: "INC263_CLOSEOUT_AND_COST_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
@@ -2729,6 +2756,8 @@ const handlers = {
   inc260: () => runTests({ inc260Only: true }),
   inc265: () => runIncidentTest("inc265"),
   inc264: () => runIncidentTest("inc264"),
+  closeout: verifyCloseoutGate,
+  inc263: verifyInc263,
   p5: verifyP5,
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,
@@ -2810,6 +2839,9 @@ function evidencePhase(name) {
     return "act2";
   }
   if (name === "inc264") {
+    return "p2";
+  }
+  if (name === "closeout" || name === "inc263") {
     return "p2";
   }
   if (name === "p5") {

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "tcrn.closeout-verify.v1",
+  "incident": "TCRN-CROSS-INC-263",
+  "items": [
+    "INC-263"
+  ],
+  "chainItems": [
+    {
+      "externalKey": "INC-263"
+    }
+  ],
+  "chainNotes": {
+    "INC-263": "red-leg receipt evidence/inc263-closeout.json"
+  },
+  "dispositions": {
+    "INC-263": {
+      "kind": "fixed"
+    }
+  }
+}
