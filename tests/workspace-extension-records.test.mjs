@@ -1778,8 +1778,10 @@ test("sprint: a forged work.created carrying a malformed advisory value fails re
   // would admit. The create-path check now closes that door.
   const fx = await seededFixture(context);
   await rewriteEventChain(fx.workspace, (events) => events.map((event) => event.payload.operation === "work.created" && event.payload.record.kind === "Initiative"
-    ? { ...event, payload: { ...event.payload, record: { ...event.payload.record,
-        extensions: { ...event.payload.record.extensions, "advisory:sprint": { required: false, value: "not-a-qualified-reference" } } } } }
+    ? (() => {
+      const extensions = { ...event.payload.record.extensions, "advisory:sprint": { required: false, value: "not-a-qualified-reference" } };
+      return { ...event, payload: { ...event.payload, record: { ...event.payload.record, extensions, scopeDigest: canonicalSha256(extensions) } } };
+    })()
     : event));
   await expectReasonAsync("WORKSPACE_EVENT_CORRUPT", () => materializeWorkspace(fx.workspace));
 });
