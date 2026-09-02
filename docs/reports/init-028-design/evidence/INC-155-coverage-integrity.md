@@ -8,7 +8,7 @@
   `portal/tests/` 两个 test root；同级 `packages/pg-backend/test/` 不在这条
   train 中，故不被误报为缺失。
 - `coverage-baseline.json` 保留既有计数，补入本批新增的
-  43 个覆盖面文件，共 130 项；每项带 `testNames`，name-based waiver 不再是
+  43 个覆盖面文件，共 133 项；每项带 `testNames`，name-based waiver 不再是
   结构性死分支。
 - `coverage-conservation.mjs` 新增 coverage-surface 完整性腿：当前覆盖面与
   基线键集合必须相等。新增 test 文件不更新基线、删除基线文件或移出覆盖面
@@ -60,8 +60,8 @@
       "reasonCode": "COVERAGE_BASELINE_INCOMPLETE",
       "baselineCompleteness": {
         "ok": false,
-        "expectedFiles": 129,
-        "currentFiles": 130,
+        "expectedFiles": 132,
+        "currentFiles": 133,
         "missingFiles": [
           "tests/s244-model-plan.test.mjs"
         ],
@@ -98,8 +98,8 @@
       "ok": true,
       "baselineCompleteness": {
         "ok": true,
-        "expectedFiles": 130,
-        "currentFiles": 130,
+        "expectedFiles": 133,
+        "currentFiles": 133,
         "missingFiles": [],
         "staleFiles": []
       }
