@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "4827c02e12df4e7e23fcc5b5c64533faf7eada33de6c1bf94ef86e7ee11b7ebf",
+      "fixtureDigest": "8816578e7751868f457a0a24b79f866a86fe1b0617e385e0e89683f6dff50221",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -29,7 +29,12 @@
       "evidencePath": "dist/evidence/p1/history.json",
       "invalidationTriggers": [
         "Root commit, object database, ref, reflog, remote, history policy, or source input identity changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate scripts/task.mjs so the P1-CLEAN-HISTORY invalidation trigger is true: Root commit, object database, ref, reflog, remote, history policy, or source input identity changes",
+        "test": "INC-262 red-leg probe for P1-CLEAN-HISTORY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P1-NO-PRIVATE-MIGRATION",
@@ -50,7 +55,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "a353ae60d75da68eb8facb5bbbbedb31aeebed3bd36c1c4a6839b7184a4411e8",
+      "fixtureDigest": "20c1b60ca291cec93a6e9a4bc23e96e23796b7bcd63ca3b8c67d859fd9272668",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -61,7 +66,12 @@
       "evidencePath": "dist/evidence/p1/privacy.json",
       "invalidationTriggers": [
         "Privacy patterns, public-metadata allowance, source paths, archive format, Git metadata, or input-read policy changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate PRIVACY.md so the P1-NO-PRIVATE-MIGRATION invalidation trigger is true: Privacy patterns, public-metadata allowance, source paths, archive format, Git metadata, or input-read policy changes",
+        "test": "INC-262 red-leg probe for P1-NO-PRIVATE-MIGRATION",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P1-OFFLINE-STANDALONE",
@@ -82,7 +92,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "811a42d8c5c11ccc9c4d763353346779879aa3b27e5d8e41a7443fdbb172bca8",
+      "fixtureDigest": "9e2e574a936d8c2c6dedbb90193f8a79f429c12ef37dfb3502a43eef074f3265",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -94,7 +104,12 @@
       "evidencePath": "dist/evidence/p1/verify-p1.json",
       "invalidationTriggers": [
         "Toolchain, command, process allowlist, network guard, telemetry, test, or offline configuration changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate README.md so the P1-OFFLINE-STANDALONE invalidation trigger is true: Toolchain, command, process allowlist, network guard, telemetry, test, or offline configuration changes",
+        "test": "INC-262 red-leg probe for P1-OFFLINE-STANDALONE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P1-EXTERNAL-TRUST",
@@ -128,7 +143,12 @@
       "evidencePath": "dist/evidence/p1/test-trust.json",
       "invalidationTriggers": [
         "Trust schema, canonicalization, time, encoding, file identity, verifier, fixture, key, claim, or external authority changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate docs/release-trust/external-release-trust-root-v1.md so the P1-EXTERNAL-TRUST invalidation trigger is true: Trust schema, canonicalization, time, encoding, file identity, verifier, fixture, key, claim, or external authority changes",
+        "test": "INC-262 red-leg probe for P1-EXTERNAL-TRUST",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P1-GOVERNANCE-TOOLCHAIN",
@@ -156,7 +176,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "766c95eddc687fc4f31ddbd011e3d6043943eb3b63e477a8d615402ab22d2b5e",
+      "fixtureDigest": "b6914c5d19d1a66db588820be3ee8f9e4be89f8462a5c1bb807034ab632f7762",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -167,7 +187,12 @@
       "evidencePath": "dist/evidence/p1/governance.json",
       "invalidationTriggers": [
         "Governance, license, source-header, dependency, lifecycle, Node, pnpm, or package-manifest changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate LICENSE so the P1-GOVERNANCE-TOOLCHAIN invalidation trigger is true: Governance, license, source-header, dependency, lifecycle, Node, pnpm, or package-manifest changes",
+        "test": "INC-262 red-leg probe for P1-GOVERNANCE-TOOLCHAIN",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P1-DEPENDENCY-GRAPH",
@@ -186,7 +211,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "666820fde65e2728dc9435ec2cc3c9bc7a08e1e8154038d6108a5c8ea8c48621",
+      "fixtureDigest": "a084d6cbe91bee9e5c711bdfc13257f4a72e5c1c0c372bd036dcf301760edcbf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -197,7 +222,12 @@
       "evidencePath": "dist/evidence/p1/vulnerabilities.json",
       "invalidationTriggers": [
         "Direct dependency, transitive lock edge, exact identity, integrity, license, dependency policy, denylist tuple, SBOM closure, or advisory-boundary claim changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P1-DEPENDENCY-GRAPH invalidation trigger is true: Direct dependency, transitive lock edge, exact identity, integrity, license, dependency policy, denylist tuple, SBOM closure, or advisory-boundary claim changes",
+        "test": "INC-262 red-leg probe for P1-DEPENDENCY-GRAPH",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P1-PINNED-WORKSPACE",
@@ -219,7 +249,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "ade7a242c169d32674c3329582f2402aca42c1adc2baf9f647a2b4da57f90219",
+      "fixtureDigest": "24e3c89ad15324e15265b79f3313442f05ef4db30df740d60058cb87887f4a5a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -230,7 +260,12 @@
       "evidencePath": "dist/evidence/p1/workspace.json",
       "invalidationTriggers": [
         "Toolchain, workspace, compiler policy, lockfile, output identity, or dependency changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate .node-version so the P1-PINNED-WORKSPACE invalidation trigger is true: Toolchain, workspace, compiler policy, lockfile, output identity, or dependency changes",
+        "test": "INC-262 red-leg probe for P1-PINNED-WORKSPACE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P1-ROOT-BOUNDARIES",
@@ -256,7 +291,12 @@
       "evidencePath": "dist/evidence/p1/roots.json",
       "invalidationTriggers": [
         "Root taxonomy, canonicalization, filesystem identity, case-folding, symlink, or containment behavior changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate docs/architecture/root-model.md so the P1-ROOT-BOUNDARIES invalidation trigger is true: Root taxonomy, canonicalization, filesystem identity, case-folding, symlink, or containment behavior changes",
+        "test": "INC-262 red-leg probe for P1-ROOT-BOUNDARIES",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P1-CI-HARDENING",
@@ -273,7 +313,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "e504d75911dacaf1c01440ec2f32436df6d59e0cdb5b6f544df46b7876897ac5",
+      "fixtureDigest": "9d977e34e391764fc65e515536b75d7c01e013df9f5d95e0c41af17dc262adc8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -284,7 +324,12 @@
       "evidencePath": "dist/evidence/p1/ci.json",
       "invalidationTriggers": [
         "Workflow action, permission, trigger, runner, install, or pin-provenance changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate .github/workflows/ci.yml so the P1-CI-HARDENING invalidation trigger is true: Workflow action, permission, trigger, runner, install, or pin-provenance changes",
+        "test": "INC-262 red-leg probe for P1-CI-HARDENING",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P1-ISOLATED-CHECKOUT",
@@ -302,7 +347,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "7bde594d7a64ff408aafc141db6f0663816751e1d4006eb73c5d7f20f7c3089b",
+      "fixtureDigest": "12e961bc15600d6d2b336e7cc9186ea610437a63d27a86812341241167efc89d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -313,7 +358,12 @@
       "evidencePath": "dist/evidence/p1/isolated.json",
       "invalidationTriggers": [
         "Commit, tree, origin, isolated-clone procedure, evidence contract, toolchain, or source-basis mutation changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate scripts/isolated-proof.mjs so the P1-ISOLATED-CHECKOUT invalidation trigger is true: Commit, tree, origin, isolated-clone procedure, evidence contract, toolchain, or source-basis mutation changes",
+        "test": "INC-262 red-leg probe for P1-ISOLATED-CHECKOUT",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P2-PROTOCOL-DETERMINISM",
@@ -354,7 +404,12 @@
       "evidencePath": "dist/evidence/p2/p2.json",
       "invalidationTriggers": [
         "Protocol schemas, canonicalization, stable-ID rules, ordering, limits, fixtures, reason codes, or property tests change"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/protocol/src/index.ts so the P2-PROTOCOL-DETERMINISM invalidation trigger is true: Protocol schemas, canonicalization, stable-ID rules, ordering, limits, fixtures, reason codes, or property tests change",
+        "test": "INC-262 red-leg probe for P2-PROTOCOL-DETERMINISM",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P2-WORK-GRAPH-VALIDITY",
@@ -389,7 +444,12 @@
       "evidencePath": "dist/evidence/p2/p2.json",
       "invalidationTriggers": [
         "Work/knowledge schemas, hierarchy, extension, transition, tombstone, ordering, or conformance rules change"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/protocol/src/index.ts so the P2-WORK-GRAPH-VALIDITY invalidation trigger is true: Work/knowledge schemas, hierarchy, extension, transition, tombstone, ordering, or conformance rules change",
+        "test": "INC-262 red-leg probe for P2-WORK-GRAPH-VALIDITY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P2-EXTERNAL-RUNTIME-NO-OVERCLAIM",
@@ -414,7 +474,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "9f6dadf83376faf2e406a0de44fcf3ffb3182f077a0bbdcff4d9ad6bf56adccf",
+      "fixtureDigest": "86439ec4951c80ab5091cb40f77381bee702a4ead1bfcda21fd401199085a548",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -425,7 +485,12 @@
       "evidencePath": "dist/evidence/p2/p2.json",
       "invalidationTriggers": [
         "AOS requirement IDs, links, maturity, prohibited implementation assumptions, or compatibility claims change"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate extensions/aos-requirements-v1.json so the P2-EXTERNAL-RUNTIME-NO-OVERCLAIM invalidation trigger is true: AOS requirement IDs, links, maturity, prohibited implementation assumptions, or compatibility claims change",
+        "test": "INC-262 red-leg probe for P2-EXTERNAL-RUNTIME-NO-OVERCLAIM",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P2-P3-MARKER-CONTRACT",
@@ -454,7 +519,12 @@
       "evidencePath": "dist/evidence/p2/p2.json",
       "invalidationTriggers": [
         "P3 marker path, schema, required verdicts, privacy allowance, absence check, or capability language changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate schemas/p3-acceptance-marker-v1.schema.json so the P2-P3-MARKER-CONTRACT invalidation trigger is true: P3 marker path, schema, required verdicts, privacy allowance, absence check, or capability language changes",
+        "test": "INC-262 red-leg probe for P2-P3-MARKER-CONTRACT",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-FILE-NATIVE-WORK-GRAPH",
@@ -485,7 +555,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Workspace roots, stable IDs, project/work CRUD, hierarchy, CLI admission, or protocol imports change"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/index.ts so the P3-FILE-NATIVE-WORK-GRAPH invalidation trigger is true: Workspace roots, stable IDs, project/work CRUD, hierarchy, CLI admission, or protocol imports change",
+        "test": "INC-262 red-leg probe for P3-FILE-NATIVE-WORK-GRAPH",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "CLI-ACTOR-SURFACE",
@@ -513,7 +588,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "attestation-enable verb, the --actor flag on any workspace-event mutation verb, the catalog-optional required:false declaration, the actor payload threading, or the engine reason codes (WORKSPACE_ACTOR_REQUIRED/INVALID, WORKSPACE_INPUT_INVALID) surfaced by the CLI change"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/cli/src/index.ts so the CLI-ACTOR-SURFACE invalidation trigger is true: attestation-enable verb, the --actor flag on any workspace-event mutation verb, the catalog-optional required:false declaration, the actor payload threading, or the engine reason codes (WORKSPACE_ACTOR_REQUIRED/INVALID, WORKSPACE_INPUT_INVALID) surfaced by the CLI change",
+        "test": "INC-262 red-leg probe for CLI-ACTOR-SURFACE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "TIME-ATTESTATION-ADVISORY",
@@ -539,7 +619,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "the --attest-dir flag on any workspace-event mutation verb, the CliIo.clock member, the emitTimeAttestation containment/clock-presence fail-closed checks, the tcrn.time-attestation.v1 receipt shape, or any engine-side clock read that would break the ordering-only claim"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/cli/src/index.ts so the TIME-ATTESTATION-ADVISORY invalidation trigger is true: the --attest-dir flag on any workspace-event mutation verb, the CliIo.clock member, the emitTimeAttestation containment/clock-presence fail-closed checks, the tcrn.time-attestation.v1 receipt shape, or any engine-side clock read that would break the ordering-only claim",
+        "test": "INC-262 red-leg probe for TIME-ATTESTATION-ADVISORY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-EVENT-INTEGRITY-RECOVERY",
@@ -565,7 +650,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Operation admission, lifecycle, Workspace event identity, stale or ownerless lease generation quarantine, delayed creator identity, mutation/recovery claim, CAS, atomic write, segment, view, corruption, or filesystem boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/workspace.ts so the P3-EVENT-INTEGRITY-RECOVERY invalidation trigger is true: Operation admission, lifecycle, Workspace event identity, stale or ownerless lease generation quarantine, delayed creator identity, mutation/recovery claim, CAS, atomic write, segment, view, corruption, or filesystem boundary changes",
+        "test": "INC-262 red-leg probe for P3-EVENT-INTEGRITY-RECOVERY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-STANDALONE-MIGRATION-BOUNDARY",
@@ -587,7 +677,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "03e4af8c671be248fc0bcd4d2414ed22231f2fd6ebd6ce7ead7db63814486068",
+      "fixtureDigest": "b044da6045bef8b3877ae1d96aeb4019b9377fb41248b9f56913aa06b5c6bfab",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -598,7 +688,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Runtime dependencies, standalone claims, schema windows, migration contracts, or marker state change"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P3-STANDALONE-MIGRATION-BOUNDARY invalidation trigger is true: Runtime dependencies, standalone claims, schema windows, migration contracts, or marker state change",
+        "test": "INC-262 red-leg probe for P3-STANDALONE-MIGRATION-BOUNDARY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-CLI-MUTATION-RECORD-READBACK",
@@ -624,7 +719,12 @@
       "invalidationTriggers": [
         "Mutation response record projection, id derivation, or envelope key set changes",
         "Argument grammar or enum-flag validation changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/cli/src/index.ts so the P3-CLI-MUTATION-RECORD-READBACK invalidation trigger is true: Mutation response record projection, id derivation, or envelope key set changes",
+        "test": "INC-262 red-leg probe for P3-CLI-MUTATION-RECORD-READBACK",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-CLI-GOVERNED-READ-SURFACE",
@@ -639,7 +739,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "2d4a90ad3d5db010833f936e72c930b007b750f8fca9d53945f68e4d35c730c6",
+      "fixtureDigest": "0732c95dbf928c5449c986b3ad91968042a89d787011f2dc46339686a8efeb37",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -650,7 +750,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Read-verb filter/ordering/pagination semantics, view-staleness enforcement, or read-surface argument validation changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/cli/src/index.ts so the P3-CLI-GOVERNED-READ-SURFACE invalidation trigger is true: Read-verb filter/ordering/pagination semantics, view-staleness enforcement, or read-surface argument validation changes",
+        "test": "INC-262 red-leg probe for P3-CLI-GOVERNED-READ-SURFACE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-CLI-COMMAND-CATALOG",
@@ -666,7 +771,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "27f28807ee75d4257c37c2c62a80fa2e726bb5e1c3cc5497d35eb5b3a4f41c20",
+      "fixtureDigest": "265a4dafc1047845fac4430961354570a418153b0076fd9144e75657b63997e5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -678,7 +783,12 @@
       "invalidationTriggers": [
         "Command catalog entries, the commands verb, catalog schema/spec, or catalog-dispatcher parity semantics change",
         "`authorityBearing` declaration/documentation or the schema-constrained exclusion of `mutates: true` changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/cli/src/index.ts so the P3-CLI-COMMAND-CATALOG invalidation trigger is true: Command catalog entries, the commands verb, catalog schema/spec, or catalog-dispatcher parity semantics change",
+        "test": "INC-262 red-leg probe for P3-CLI-COMMAND-CATALOG",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-AGENT-INTEGRATION-CONTRACT",
@@ -703,7 +813,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Agent-integration doc surfaces/envelopes/retry-table/sentinels wording changes, the programmatic-only catalog surface changes, or the drift-guard assertions change"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate docs/architecture/agent-integration-v1.md so the P3-AGENT-INTEGRATION-CONTRACT invalidation trigger is true: Agent-integration doc surfaces/envelopes/retry-table/sentinels wording changes, the programmatic-only catalog surface changes, or the drift-guard assertions change",
+        "test": "INC-262 red-leg probe for P3-AGENT-INTEGRATION-CONTRACT",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-CLI-LEASE-SCOPED-VERSION-DERIVATION",
@@ -727,7 +842,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "expected-version head derivation scope, the lease-scoped resolution path, or numeric CAS staleness semantics change"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/cli/src/index.ts so the P3-CLI-LEASE-SCOPED-VERSION-DERIVATION invalidation trigger is true: expected-version head derivation scope, the lease-scoped resolution path, or numeric CAS staleness semantics change",
+        "test": "INC-262 red-leg probe for P3-CLI-LEASE-SCOPED-VERSION-DERIVATION",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-LEASE-PID-REUSE-ESCAPE-HATCH",
@@ -752,7 +872,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Lease inspection/break gating (token match, expiry requirement, processAlive bypass), reason codes, or acquirability-after-break semantics change"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/workspace.ts so the P3-LEASE-PID-REUSE-ESCAPE-HATCH invalidation trigger is true: Lease inspection/break gating (token match, expiry requirement, processAlive bypass), reason codes, or acquirability-after-break semantics change",
+        "test": "INC-262 red-leg probe for P3-LEASE-PID-REUSE-ESCAPE-HATCH",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-ENGINE-SINGLE-REPLAY-PIPELINE",
@@ -767,7 +892,7 @@
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "5d1646b2c965e19bdf72831bc0322bf3930988d8770bbbd3c9d85591e3af1972",
+      "fixtureDigest": "324dc88a4635986bf496d81ef629fcc9d889e0e979cbb250e1ec564aac8bf424",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -778,7 +903,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Mutation replay pipeline, single-materialization invariant, or the operation-count instrumentation changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/workspace.ts so the P3-ENGINE-SINGLE-REPLAY-PIPELINE invalidation trigger is true: Mutation replay pipeline, single-materialization invariant, or the operation-count instrumentation changes",
+        "test": "INC-262 red-leg probe for P3-ENGINE-SINGLE-REPLAY-PIPELINE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P3-ENGINE-INCREMENTAL-REPLAY",
@@ -793,7 +923,7 @@
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "5d1646b2c965e19bdf72831bc0322bf3930988d8770bbbd3c9d85591e3af1972",
+      "fixtureDigest": "324dc88a4635986bf496d81ef629fcc9d889e0e979cbb250e1ec564aac8bf424",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -804,7 +934,12 @@
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Per-event closure validation, terminal-validation-once invariant, or the complexity instrumentation changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/workspace.ts so the P3-ENGINE-INCREMENTAL-REPLAY invalidation trigger is true: Per-event closure validation, terminal-validation-once invariant, or the complexity instrumentation changes",
+        "test": "INC-262 red-leg probe for P3-ENGINE-INCREMENTAL-REPLAY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P4-ARTIFACT-LIFECYCLE-REPORTING",
@@ -824,7 +959,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "b4aa46b3529e6ded1b71c24da6e1a38bcec06abb0a5533310ad8eafdef9ddba2",
+      "fixtureDigest": "5d626a892e5751379b81339d643f8b1bd581fa5dece2bfd62387c86f5ae04f66",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -835,7 +970,12 @@
       "evidencePath": "dist/evidence/p4/p4.json",
       "invalidationTriggers": [
         "Artifact kind/classification, record schema, redaction, doctor budget, incremental size accounting, transient pre-read count, archive generation storage, compact/archive projection, transient exclusion, or high-water preservation changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P4-ARTIFACT-LIFECYCLE-REPORTING invalidation trigger is true: Artifact kind/classification, record schema, redaction, doctor budget, incremental size accounting, transient pre-read count, archive generation storage, compact/archive projection, transient exclusion, or high-water preservation changes",
+        "test": "INC-262 red-leg probe for P4-ARTIFACT-LIFECYCLE-REPORTING",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P4-DISPOSABLE-ARCHIVE-RESTORE",
@@ -863,7 +1003,12 @@
       "evidencePath": "dist/evidence/p4/p4.json",
       "invalidationTriggers": [
         "Disposable admission, archive generation, bundle encoding, restore claim, source identity, overwrite, crash/partial, high-water, limit, path/link/special-file, or legacy-read boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/artifact-lifecycle.ts so the P4-DISPOSABLE-ARCHIVE-RESTORE invalidation trigger is true: Disposable admission, archive generation, bundle encoding, restore claim, source identity, overwrite, crash/partial, high-water, limit, path/link/special-file, or legacy-read boundary changes",
+        "test": "INC-262 red-leg probe for P4-DISPOSABLE-ARCHIVE-RESTORE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P4-FILE-NATIVE-KNOWLEDGE-CORE",
@@ -888,7 +1033,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "015093dedda6a200897d1c19ad6d9f9c848da240500cc3b1636076d87749aa13",
+      "fixtureDigest": "f650f7a776b70d730d9951e1701cf17d368e4c9d1b215ad83cc75325b0571fc0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -899,7 +1044,12 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Knowledge metadata/schema, P2 binding, body-open separation, promotion pre-claim admission or cleanup, accountable provenance, strict instant, selection/default/checkpoint policy, UTF-8 byte budget, real insertion corpus, locator redaction, limit, filesystem identity, fault, CLI, standalone, or live-store boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P4-FILE-NATIVE-KNOWLEDGE-CORE invalidation trigger is true: Knowledge metadata/schema, P2 binding, body-open separation, promotion pre-claim admission or cleanup, accountable provenance, strict instant, selection/default/checkpoint policy, UTF-8 byte budget, real insertion corpus, locator redaction, limit, filesystem identity, fault, CLI, standalone, or live-store boundary changes",
+        "test": "INC-262 red-leg probe for P4-FILE-NATIVE-KNOWLEDGE-CORE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "WORK-LOG-EVENT-LINKAGE",
@@ -917,7 +1067,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7af831aa00c793111ae748f325bf47a10406bd93be23ccc80f3c7a9ce019a83e",
+      "fixtureDigest": "c7af26b838ee158a0f493f22015afb6dcfc3d0471c7d9a960d8fe4b3cf5c18e1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -928,7 +1078,12 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "The event-reference source-reference grammar, the accountable-owner match rule, the knowledge promotion provenance enforcement, or the work-log/actor-attestation event-linkage convention text changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the WORK-LOG-EVENT-LINKAGE invalidation trigger is true: The event-reference source-reference grammar, the accountable-owner match rule, the knowledge promotion provenance enforcement, or the work-log/actor-attestation event-linkage convention text changes",
+        "test": "INC-262 red-leg probe for WORK-LOG-EVENT-LINKAGE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P4-KNOWLEDGE-REAL-WORKSPACE-ADMISSION",
@@ -944,7 +1099,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7c887bd2a5d9a0759e42751afe92550704a3a74dd9aadfbe83439c335dfb058f",
+      "fixtureDigest": "c70ce143188ab257e9f07340883aa21ae7741d891a563dc1d99f7915472de28e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -955,7 +1110,12 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Knowledge store admission guard, disposability acknowledgment flag, admission-mode reporting, or the KNOWLEDGE_DISPOSABLE_ACK_REQUIRED reason code changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-REAL-WORKSPACE-ADMISSION invalidation trigger is true: Knowledge store admission guard, disposability acknowledgment flag, admission-mode reporting, or the KNOWLEDGE_DISPOSABLE_ACK_REQUIRED reason code changes",
+        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-REAL-WORKSPACE-ADMISSION",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P4-KNOWLEDGE-HIGH-WATER-REBASE",
@@ -971,7 +1131,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7c887bd2a5d9a0759e42751afe92550704a3a74dd9aadfbe83439c335dfb058f",
+      "fixtureDigest": "c70ce143188ab257e9f07340883aa21ae7741d891a563dc1d99f7915472de28e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -982,7 +1142,12 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Knowledge high-water binding, rebase re-validation, offender detection, retire-invalid semantics, retired-record link relaxation, or rebase fault/claim behavior changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-HIGH-WATER-REBASE invalidation trigger is true: Knowledge high-water binding, rebase re-validation, offender detection, retire-invalid semantics, retired-record link relaxation, or rebase fault/claim behavior changes",
+        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-HIGH-WATER-REBASE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P4-KNOWLEDGE-CAPTURE-CHEAP",
@@ -996,7 +1161,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9ad7f179e387afb3732ae0bd855ff0a2e916b7fd8764b9f8031ab9128281ed5a",
+      "fixtureDigest": "d0c5865ea88c7d9800848bde1153894bd6f0d154d6d6dfb6a46aa442b1f59b16",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1007,7 +1172,12 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Server-side array sorting at capture, promote-time provenance enforcement, or the capture/promote provenance boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-CAPTURE-CHEAP invalidation trigger is true: Server-side array sorting at capture, promote-time provenance enforcement, or the capture/promote provenance boundary changes",
+        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-CAPTURE-CHEAP",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P4-KNOWLEDGE-RETRIEVAL",
@@ -1023,7 +1193,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7c887bd2a5d9a0759e42751afe92550704a3a74dd9aadfbe83439c335dfb058f",
+      "fixtureDigest": "c70ce143188ab257e9f07340883aa21ae7741d891a563dc1d99f7915472de28e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1034,7 +1204,12 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Query truncation/continuation, substring search over subject/tags, the record-count Tier-0 limit, or list determinism changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-RETRIEVAL invalidation trigger is true: Query truncation/continuation, substring search over subject/tags, the record-count Tier-0 limit, or list determinism changes",
+        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-RETRIEVAL",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P4-KNOWLEDGE-LIFECYCLE",
@@ -1050,7 +1225,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7c887bd2a5d9a0759e42751afe92550704a3a74dd9aadfbe83439c335dfb058f",
+      "fixtureDigest": "c70ce143188ab257e9f07340883aa21ae7741d891a563dc1d99f7915472de28e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1061,7 +1236,12 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Reverify/retire lifecycle transitions, the retired-allowance capacity rule, physical file bound, or lifecycle CAS/admission changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-LIFECYCLE invalidation trigger is true: Reverify/retire lifecycle transitions, the retired-allowance capacity rule, physical file bound, or lifecycle CAS/admission changes",
+        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-LIFECYCLE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P4-KNOWLEDGE-PROMOTION-CHECKS",
@@ -1076,7 +1256,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "03a81fb23b76d5e2887a191859e79a1749af8accc6dd3c2d92cb9cee848b4f72",
+      "fixtureDigest": "cc86ca0a65d7c74190d98248537d6d9ac3c7974997e55f15c4d05bd78de4ea58",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1087,7 +1267,12 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Promote-time machine checks (tags, snippet, backlink), the promotion gate set, or reject exemption changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-PROMOTION-CHECKS invalidation trigger is true: Promote-time machine checks (tags, snippet, backlink), the promotion gate set, or reject exemption changes",
+        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-PROMOTION-CHECKS",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P4-CLI-SENTINEL-UNIFORMITY",
@@ -1101,7 +1286,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "bbcfe754017d5d0e1949dab4013550edf45eb91061a20778eb1c47cc7deebc38",
+      "fixtureDigest": "b723aa321d8509b007d333f0873d34a55564c0acde985eee0b37a54833217d3b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1112,7 +1297,12 @@
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "The nullable-flag sentinel unification, the \"-\" canonical spelling, or the deprecated \"null\" alias acceptance for knowledge-create project-id/last-verified changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/cli/src/index.ts so the P4-CLI-SENTINEL-UNIFORMITY invalidation trigger is true: The nullable-flag sentinel unification, the \"-\" canonical spelling, or the deprecated \"null\" alias acceptance for knowledge-create project-id/last-verified changes",
+        "test": "INC-262 red-leg probe for P4-CLI-SENTINEL-UNIFORMITY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P5-GENERIC-PROFILE-POLICY",
@@ -1139,7 +1329,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "31b549734ca0dbdef1a11ee630485d0298933d9fef45f7a706f2a3a18ccafda1",
+      "fixtureDigest": "8e16aaad8f68ee8efe218e6bcf278edca0eeec34469c7c7b51cbc693b0b35199",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1150,7 +1340,12 @@
       "evidencePath": "dist/evidence/p5/p5.json",
       "invalidationTriggers": [
         "Persona source manifest, roster, field matrix, privacy/inert-data policy, release-layer integration, profile trust admission, canonical digest, CLI, or standalone boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P5-GENERIC-PROFILE-POLICY invalidation trigger is true: Persona source manifest, roster, field matrix, privacy/inert-data policy, release-layer integration, profile trust admission, canonical digest, CLI, or standalone boundary changes",
+        "test": "INC-262 red-leg probe for P5-GENERIC-PROFILE-POLICY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P5-GENERIC-COLD-START",
@@ -1178,7 +1373,12 @@
       "evidencePath": "dist/evidence/p5/p5.json",
       "invalidationTriggers": [
         "Starter bundle, disposable Workspace flow, operation authorization, expected-version CAS, live-store absence, or external-project/persona boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/generic-profile.ts so the P5-GENERIC-COLD-START invalidation trigger is true: Starter bundle, disposable Workspace flow, operation authorization, expected-version CAS, live-store absence, or external-project/persona boundary changes",
+        "test": "INC-262 red-leg probe for P5-GENERIC-COLD-START",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P6-CONTEXT-ROUTER",
@@ -1204,7 +1404,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "23e133aeb30526cbf520ddf816c40fabaddbfc07ec82ebc2edd849eed978a6de",
+      "fixtureDigest": "a9ec37b7bc1f5d382e616cc6752b69d77e5afba64d6cc10efe1b479a46be3995",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1215,7 +1415,12 @@
       "evidencePath": "dist/evidence/p6/p6.json",
       "invalidationTriggers": [
         "Context request, authority admission, profile binding, scope/freshness selection, explicit-read, privacy receipt, budget, determinism, latency, CLI, storeless, Codex Adapter, RC3, knowledge-candidate bridge basis, or activation boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P6-CONTEXT-ROUTER invalidation trigger is true: Context request, authority admission, profile binding, scope/freshness selection, explicit-read, privacy receipt, budget, determinism, latency, CLI, storeless, Codex Adapter, RC3, knowledge-candidate bridge basis, or activation boundary changes",
+        "test": "INC-262 red-leg probe for P6-CONTEXT-ROUTER",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P6-KNOWLEDGE-CONTEXT-CANDIDATE-BRIDGE",
@@ -1236,7 +1441,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "531ef4b2f592cc95e90b143ce9d4228cf94b12fd5d7925e25021a7dd43ab9ffc",
+      "fixtureDigest": "c93cc1b4ec1a40b04157fac56bf0cf09dedcb98585630d8a190fb5cb52505a1f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1247,7 +1452,12 @@
       "evidencePath": "dist/evidence/p6/p6.json",
       "invalidationTriggers": [
         "Knowledge metadata-to-context-candidate mapping, candidateDigest basis field set, scope/freshness carry-through, role-scope projectId nulling, knowledge-candidates CLI surface, or context-router metadataCandidate() basis changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P6-KNOWLEDGE-CONTEXT-CANDIDATE-BRIDGE invalidation trigger is true: Knowledge metadata-to-context-candidate mapping, candidateDigest basis field set, scope/freshness carry-through, role-scope projectId nulling, knowledge-candidates CLI surface, or context-router metadataCandidate() basis changes",
+        "test": "INC-262 red-leg probe for P6-KNOWLEDGE-CONTEXT-CANDIDATE-BRIDGE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P6-CODEX-ADAPTER",
@@ -1270,7 +1480,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "6c4e11368896aefa018ce6184a36c21a29645e2ef391bde513f3ebf7f1463039",
+      "fixtureDigest": "09c7886f41a7a508477f5e37795c4051c5ecd0bc49038209b729fac87f8f5b79",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1281,7 +1491,12 @@
       "evidencePath": "dist/evidence/p6/p6-adapter.json",
       "invalidationTriggers": [
         "Adapter request, trusted host injection, Context binding, template closed set, path/content/manifest digest, fallback, final-hop, rollback identity, CLI, property corpus, activation, OG-04, RC3, storeless, or privacy boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P6-CODEX-ADAPTER invalidation trigger is true: Adapter request, trusted host injection, Context binding, template closed set, path/content/manifest digest, fallback, final-hop, rollback identity, CLI, property corpus, activation, OG-04, RC3, storeless, or privacy boundary changes",
+        "test": "INC-262 red-leg probe for P6-CODEX-ADAPTER",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P6B-CLAUDE-ADAPTER",
@@ -1305,7 +1520,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "dcf67f10e824d302e58d7859fd42c6e5c0a5c6d038017206a7c3c8b3d57b7618",
+      "fixtureDigest": "4f697dd8a52c41a71241f9fab71dea30febe03c53167f6292665f418be7bee7e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1316,7 +1531,12 @@
       "evidencePath": "dist/evidence/p6/p6b.json",
       "invalidationTriggers": [
         "Claude adapter request, trusted host injection, host identity/version readback, Context binding, template closed set, path/content/manifest digest, settings fragment reversibility, forbidden-path guard, fallback, final-hop, rollback identity, CLI, property corpus, cross-host parity, Codex adapter coupling, activation, OG-04, RC3, storeless, or privacy boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P6B-CLAUDE-ADAPTER invalidation trigger is true: Claude adapter request, trusted host injection, host identity/version readback, Context binding, template closed set, path/content/manifest digest, settings fragment reversibility, forbidden-path guard, fallback, final-hop, rollback identity, CLI, property corpus, cross-host parity, Codex adapter coupling, activation, OG-04, RC3, storeless, or privacy boundary changes",
+        "test": "INC-262 red-leg probe for P6B-CLAUDE-ADAPTER",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "EXT-DEPENDENCY",
@@ -1337,7 +1557,7 @@
         "tests/dependency.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "a4407ddef905f626a62fe737fd09e0429be7297d90e4eda7777f2aa50ae18648",
+      "fixtureDigest": "a11454b4baa4e7eb0cce40f3e89d65181740a983f66b489688aa8c9ee2399b63",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1348,7 +1568,12 @@
       "evidencePath": "dist/evidence/p2/dependency.json",
       "invalidationTriggers": [
         "Dependency record schema, kind/status vocabulary, waived-audit rule, canonical hash, ordering, endpoint/cross-project/self-edge rule, cycle detection, read paths, extension registration, or store boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the EXT-DEPENDENCY invalidation trigger is true: Dependency record schema, kind/status vocabulary, waived-audit rule, canonical hash, ordering, endpoint/cross-project/self-edge rule, cycle detection, read paths, extension registration, or store boundary changes",
+        "test": "INC-262 red-leg probe for EXT-DEPENDENCY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "EXT-CONFERENCE",
@@ -1372,7 +1597,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "2ae8606b65de63c243068dbc1e70735637836bf3c7e64c258d19459056096521",
+      "fixtureDigest": "dcd4095aefc635eb5d1788f49e34ec5fbfbf1aa8c02c34f65edf2b66fa2def6e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1383,7 +1608,12 @@
       "evidencePath": "dist/evidence/p2/conference.json",
       "invalidationTriggers": [
         "Conference request/position/minutes schema, type/status/outcome vocabulary, operation binding, close distillation, backlink locator, extension registration, or scope-boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the EXT-CONFERENCE invalidation trigger is true: Conference request/position/minutes schema, type/status/outcome vocabulary, operation binding, close distillation, backlink locator, extension registration, or scope-boundary changes",
+        "test": "INC-262 red-leg probe for EXT-CONFERENCE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "EXT-ASSIGNMENT",
@@ -1404,7 +1634,7 @@
         "tests/assignment-gate.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f80647d2e004e0b0d3d906b6ce956941c5c1ea702952fa5be4dbde902cfa0d24",
+      "fixtureDigest": "cba7979f28db1f398c2cc982c5ce6e06701bf27abafaed1a7cedeeb4b19a7924",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1415,7 +1645,12 @@
       "evidencePath": "dist/evidence/p2/assignment-gate.json",
       "invalidationTriggers": [
         "Assignment record schema, status vocabulary, accountable-actor field, read path, extension registration, or scope-boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the EXT-ASSIGNMENT invalidation trigger is true: Assignment record schema, status vocabulary, accountable-actor field, read path, extension registration, or scope-boundary changes",
+        "test": "INC-262 red-leg probe for EXT-ASSIGNMENT",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "EXT-GATE",
@@ -1437,7 +1672,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "7afef5c887aa72528bb90b49ade5810b506cbc1161c38824464f6478a85ce253",
+      "fixtureDigest": "0d23ed6b95f9a4d7a9182e835fbf339fe5fb0ab6b23c4cd132f6a30004031c03",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1448,7 +1683,12 @@
       "evidencePath": "dist/evidence/p2/assignment-gate.json",
       "invalidationTriggers": [
         "Gate record schema, outcome/status vocabulary, optional work anchor, read path, extension registration, knowledge linkedGateIds grounding, or scope-boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the EXT-GATE invalidation trigger is true: Gate record schema, outcome/status vocabulary, optional work anchor, read path, extension registration, knowledge linkedGateIds grounding, or scope-boundary changes",
+        "test": "INC-262 red-leg probe for EXT-GATE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "EXT-ACTOR-ATTESTATION",
@@ -1469,7 +1709,7 @@
         "tests/actor-attestation.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "e5293a8f1a9629fbf53ef83f6a6e9babb813a96f155aef01942882865e4da0fe",
+      "fixtureDigest": "c4bc223727a255c7a01680df450cba3ccbe6d672d756d37fc586081dd28bceb6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1480,7 +1720,12 @@
       "evidencePath": "dist/evidence/p2/actor-attestation.json",
       "invalidationTriggers": [
         "Actor-attestation record schema, extension registration scope/default, actor-id prefix vocabulary, payload constructor, enable-event record, the engine enable-boundary enforcement (live append or replay reducer), the WORKSPACE_ACTOR_REQUIRED/INVALID reason codes, or frozen-schema byte changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the EXT-ACTOR-ATTESTATION invalidation trigger is true: Actor-attestation record schema, extension registration scope/default, actor-id prefix vocabulary, payload constructor, enable-event record, the engine enable-boundary enforcement (live append or replay reducer), the WORKSPACE_ACTOR_REQUIRED/INVALID reason codes, or frozen-schema byte changes",
+        "test": "INC-262 red-leg probe for EXT-ACTOR-ATTESTATION",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "EXT-CONFERENCE-GATE-STORE",
@@ -1503,7 +1748,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "ed7d4b43d312ed4f197d8efcc018ca578650dbf0e0ecaab48ecdc82e931665b0",
+      "fixtureDigest": "9764847ed65141b8071a419d04873ed87d156d07be6eda9500b5d6ebc7a07d46",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1514,7 +1759,12 @@
       "evidencePath": "dist/evidence/p2/ext-store.json",
       "invalidationTriggers": [
         "Conference/gate operation vocabulary, payload extras registration, event-binding or pinning rules, openness/tombstone/anchoring rules, reducer complexity contract, extensions.json emission condition, export shape, storage version posture, or legacy byte-stability changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the EXT-CONFERENCE-GATE-STORE invalidation trigger is true: Conference/gate operation vocabulary, payload extras registration, event-binding or pinning rules, openness/tombstone/anchoring rules, reducer complexity contract, extensions.json emission condition, export shape, storage version posture, or legacy byte-stability changes",
+        "test": "INC-262 red-leg probe for EXT-CONFERENCE-GATE-STORE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "EXT-EXECUTION",
@@ -1532,7 +1782,7 @@
         "tests/conference-execution.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "46c2d0a908b41bfeeabe8eda3f344b59940705795f3c00a99351e90aacf01c5a",
+      "fixtureDigest": "1d5742aec2a8d016ea5a4668d8f01546b4346f3fec1b870fa310db47bb1297a1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1543,7 +1793,12 @@
       "evidencePath": "dist/evidence/p2/ext-execution.json",
       "invalidationTriggers": [
         "executionMode declaration, legacy-unverified read, host-execution receipt schema, attribution-not-identity boundary, architecture/strategy default, or fail-closed classifier binding changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the EXT-EXECUTION invalidation trigger is true: executionMode declaration, legacy-unverified read, host-execution receipt schema, attribution-not-identity boundary, architecture/strategy default, or fail-closed classifier binding changes",
+        "test": "INC-262 red-leg probe for EXT-EXECUTION",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "EXT-EXECUTION-COLLECTION",
@@ -1561,7 +1816,7 @@
         "tests/act7-execution-collection.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "5b8dda307e9004cd9e7a949d7032e6c81ec8201edc6a0606661b0a6f89ffcd57",
+      "fixtureDigest": "ca1f5f4976d65a47f0adc837a1b19cae945f1d890a6d1893cd03201504b35e11",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1572,7 +1827,12 @@
       "evidencePath": "dist/evidence/act2/act7.json",
       "invalidationTriggers": [
         "Observed-invocation admission, receipt binding fields, duplicate-invocation refusal, transcript drift verification, the attribution-not-identity disclosure, or the classifier round trip changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the EXT-EXECUTION-COLLECTION invalidation trigger is true: Observed-invocation admission, receipt binding fields, duplicate-invocation refusal, transcript drift verification, the attribution-not-identity disclosure, or the classifier round trip changes",
+        "test": "INC-262 red-leg probe for EXT-EXECUTION-COLLECTION",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "ROOT-OPERATOR-AUTHORITY",
@@ -1596,7 +1856,7 @@
         "tests/operator-authority.test.mjs",
         "tests/p7-compatibility-modes.test.mjs"
       ],
-      "fixtureDigest": "a4d2d4e687d63a9439c82134e8e791eddb290ec690d40ebd716ad64bda9130d3",
+      "fixtureDigest": "15d77ea69341eb2693070818280ad7585e02e08001d4dd6c92c4480b6a72ffb0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1608,7 +1868,12 @@
       "invalidationTriggers": [
         "Outer pins trust anchor, authority bundle schema, rotation/revocation/generation policy, inert-generation or activation host-input admission mapping, pinned host-observation identity, CLI global argument boundary, write grant, CAS/time/actor forwarding, reason-code preservation, ambient-authority refusal, anti-rollback boundary, or network/orchestration claim changes",
         "Authorization-category flag exclusion or pinned host-observation freshness bound changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the ROOT-OPERATOR-AUTHORITY invalidation trigger is true: Outer pins trust anchor, authority bundle schema, rotation/revocation/generation policy, inert-generation or activation host-input admission mapping, pinned host-observation identity, CLI global argument boundary, write grant, CAS/time/actor forwarding, reason-code preservation, ambient-authority refusal, anti-rollback boundary, or network/orchestration claim changes",
+        "test": "INC-262 red-leg probe for ROOT-OPERATOR-AUTHORITY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "LADDER-CODEX-INSTALL",
@@ -1627,7 +1892,7 @@
         "tests/act4-codex-installer.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "5785c3c7c05337bb15824b8180500bb939c9085d946460035e65e91dc35db91c",
+      "fixtureDigest": "2b410a77aa3c66831fd0557b3379f8ee2b9e15ac7a6bff0e9b40d990e8f8bbb5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1638,7 +1903,12 @@
       "evidencePath": "dist/evidence/act2/act4.json",
       "invalidationTriggers": [
         "Codex installer root/receipt-path admission, exclusive-write behaviour, receipt entry pinning, generation-id validation, rollback identity gating, or the no-host-configuration boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the LADDER-CODEX-INSTALL invalidation trigger is true: Codex installer root/receipt-path admission, exclusive-write behaviour, receipt entry pinning, generation-id validation, rollback identity gating, or the no-host-configuration boundary changes",
+        "test": "INC-262 red-leg probe for LADDER-CODEX-INSTALL",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "OBSERVE-RECEIPT-SIDECAR",
@@ -1655,7 +1925,7 @@
         "tests/act5-receipt-sidecar.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1c7a2aa7a7797dd70e2c90ea1caf6416faf1f7fbd88f787fb3a600f37fa887d3",
+      "fixtureDigest": "83d55a97441286c0703cf33095644fbe93a0fdec83a4c2f42c10a1b7a86bde05",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1666,7 +1936,12 @@
       "evidencePath": "dist/evidence/act2/act5.json",
       "invalidationTriggers": [
         "Observe event enumeration, receipt chain linking, coverage classification, batch budgets, anchor summary or its coverage note, prune semantics, or the no-IO boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the OBSERVE-RECEIPT-SIDECAR invalidation trigger is true: Observe event enumeration, receipt chain linking, coverage classification, batch budgets, anchor summary or its coverage note, prune semantics, or the no-IO boundary changes",
+        "test": "INC-262 red-leg probe for OBSERVE-RECEIPT-SIDECAR",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "OBSERVE-HOOK-HANDLER",
@@ -1684,7 +1959,7 @@
         "tests/act6-observe-hook.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "f03b583b58b6f529e4ba586a6fec9bfa48b6ed65c131dbda8942d6396450ee7b",
+      "fixtureDigest": "26e46600b710b51d32d4d3ed1c05b1bd2530adee6972fe108d233e216d211ef1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1695,7 +1970,12 @@
       "evidencePath": "dist/evidence/act2/act6.json",
       "invalidationTriggers": [
         "Observe handler event admission, fail-open exit behaviour, stdout silence, manifest drift self-check, payload digest retention, determinism of the generated source, or log parsing tolerance changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the OBSERVE-HOOK-HANDLER invalidation trigger is true: Observe handler event admission, fail-open exit behaviour, stdout silence, manifest drift self-check, payload digest retention, determinism of the generated source, or log parsing tolerance changes",
+        "test": "INC-262 red-leg probe for OBSERVE-HOOK-HANDLER",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "APP-SERVER-OBSERVER",
@@ -1713,7 +1993,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b263bd4b71f1a1dcbeac638593cbb46a7119235497d0d2a7414fb5ef629cfd4c",
+      "fixtureDigest": "f7ab2983e86c4c9afce2882328db05966712d366459ac248136224075a5bb4aa",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1724,7 +2004,12 @@
       "evidencePath": "dist/evidence/act2/act8.json",
       "invalidationTriggers": [
         "Observed notification vocabulary, protocol binding classification, param retention, unknown or malformed frame accounting, the read-only boundary, or the controller feasibility assessment changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the APP-SERVER-OBSERVER invalidation trigger is true: Observed notification vocabulary, protocol binding classification, param retention, unknown or malformed frame accounting, the read-only boundary, or the controller feasibility assessment changes",
+        "test": "INC-262 red-leg probe for APP-SERVER-OBSERVER",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "HOOK-ABSOLUTE-ROOT-BINDING",
@@ -1746,7 +2031,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "ad91ef1708c5e33969edc7c38c410e28d2019fb89f9ebd61ba8b9005c08c8832",
+      "fixtureDigest": "c0921168501ffe91d3f990839a834021e37a3271ca2658f3c0700db9467c69e1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1758,7 +2043,12 @@
       "invalidationTriggers": [
         "Installation-root admission, absolute handler path derivation, shell quoting, artifact/fragment root binding, installer root comparison, fire-time cwd behavior, machine-specific definition digest semantics, or interpreter resolution (bare-name PATH lookup versus a pinned absolute interpreter) change",
         "Claude hook-command handler-digest argument changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the HOOK-ABSOLUTE-ROOT-BINDING invalidation trigger is true: Installation-root admission, absolute handler path derivation, shell quoting, artifact/fragment root binding, installer root comparison, fire-time cwd behavior, machine-specific definition digest semantics, or interpreter resolution (bare-name PATH lookup versus a pinned absolute interpreter) change",
+        "test": "INC-262 red-leg probe for HOOK-ABSOLUTE-ROOT-BINDING",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "AUTHORITY-BEARING-ACTIVATION-RECORD",
@@ -1779,7 +2069,7 @@
         "scripts/task.mjs",
         "tests/act13-authority-output.test.mjs"
       ],
-      "fixtureDigest": "ce5105f7198c991ba70464870aba3b9e20598d8537f734e662f3dc719e656780",
+      "fixtureDigest": "0d18d68a2c69990797a79cdffd70b7cdf6c96714dcb3001f6d087321ba6e7a9e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1792,7 +2082,12 @@
         "Authority-output catalog category, grant inventory, MCP pre-argument pin check or annotations, observation file identity, activation-host observation brand, receipt binding fields, inline JSON removal, refusal matrix, or live-boundary wording changes",
         "Catalog authorization-category exclusion, or observation freshness bound (branded host-context window, operator bundle window, verification-time ceiling) changes",
         "Output-category boundary vocabulary or the definition-comparison document shape changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate docs/activation/activation-ladder-v1.md so the AUTHORITY-BEARING-ACTIVATION-RECORD invalidation trigger is true: Authority-output catalog category, grant inventory, MCP pre-argument pin check or annotations, observation file identity, activation-host observation brand, receipt binding fields, inline JSON removal, refusal matrix, or live-boundary wording changes",
+        "test": "INC-262 red-leg probe for AUTHORITY-BEARING-ACTIVATION-RECORD",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "CODEX-SESSIONSTART-ACTIVATION",
@@ -1816,7 +2111,7 @@
         "docs/verification/host/codex-session-start-activation.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "ae7027929d29a46acec8864ef35021d151929fc3d679d8c6aa4dd4689d1b6db6",
+      "fixtureDigest": "d1843151bf70e91833a676f1a23a7abc30de8c4095dfd5040fb90d01b169bba8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1827,7 +2122,12 @@
       "evidencePath": "dist/evidence/act2/act9.json",
       "invalidationTriggers": [
         "Codex independent activation-host authority, admitted-root binding, SessionStart hook surface, matcher, handler/summary byte binding, 1024-byte budget, persona-free main-session scope, ordinary repository authority wording, capability-manifest binding, local approved-definition set semantics, installation-versus-host-activation distinction, current-live boundary, opaque host trust hash boundary, or activation-only rollback changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the CODEX-SESSIONSTART-ACTIVATION invalidation trigger is true: Codex independent activation-host authority, admitted-root binding, SessionStart hook surface, matcher, handler/summary byte binding, 1024-byte budget, persona-free main-session scope, ordinary repository authority wording, capability-manifest binding, local approved-definition set semantics, installation-versus-host-activation distinction, current-live boundary, opaque host trust hash boundary, or activation-only rollback changes",
+        "test": "INC-262 red-leg probe for CODEX-SESSIONSTART-ACTIVATION",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "CODEX-EXECUTION-COLLECTION",
@@ -1851,7 +2151,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b4dee8b37dd95884304b248b8037beaae34ae2fbd18ffc5c51a7dbe38b58cca6",
+      "fixtureDigest": "fb8fcc56fae0d616306300869389f4a7df1c9aafc68b9544f16d772d75615d6b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1862,7 +2162,12 @@
       "evidencePath": "dist/evidence/act2/act10.json",
       "invalidationTriggers": [
         "Codex lower-case notification/readback vocabulary, spawn lifecycle and receiver binding, optional child thread/started handling, thread/read source/parent/fork/time proof, raw/readback final-message correlation, fresh-context derivation, session/thread/turn receipt bindings, unavailable downgrade rules, duplicate/cross-session refusal, live evidence-manifest binding, transcript disclosure, unsigned attribution boundary, or collector-versus-live-harness boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the CODEX-EXECUTION-COLLECTION invalidation trigger is true: Codex lower-case notification/readback vocabulary, spawn lifecycle and receiver binding, optional child thread/started handling, thread/read source/parent/fork/time proof, raw/readback final-message correlation, fresh-context derivation, session/thread/turn receipt bindings, unavailable downgrade rules, duplicate/cross-session refusal, live evidence-manifest binding, transcript disclosure, unsigned attribution boundary, or collector-versus-live-harness boundary changes",
+        "test": "INC-262 red-leg probe for CODEX-EXECUTION-COLLECTION",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "ADAPTER-ACCEPTANCE-MATRIX",
@@ -1885,7 +2190,7 @@
         "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "98553aaf8e858f4d704e638b15e00d3570ecd0351b4110c55c8b158f7794dfc6",
+      "fixtureDigest": "799d6aca8072e9dd573128768e09046af4528a841a35ab87d3fb035fa1a8cd93",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1896,7 +2201,12 @@
       "evidencePath": "dist/evidence/act2/act11.json",
       "invalidationTriggers": [
         "Cross-host surface inventory, six-event observe coverage cells, version/account unavailable dispositions, governance level, evidence classification, live/exact flags, negative corpus, SessionEnd-versus-Stop boundary, story disposition, or enforce authorization changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the ADAPTER-ACCEPTANCE-MATRIX invalidation trigger is true: Cross-host surface inventory, six-event observe coverage cells, version/account unavailable dispositions, governance level, evidence classification, live/exact flags, negative corpus, SessionEnd-versus-Stop boundary, story disposition, or enforce authorization changes",
+        "test": "INC-262 red-leg probe for ADAPTER-ACCEPTANCE-MATRIX",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P9-CONFERENCE-GATE-CLI",
@@ -1916,7 +2226,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "bb964f9517cde61e0b184b877b5e8769a169fef292fce71795972a64ce43a442",
+      "fixtureDigest": "a9a8e5db1d3a3af6e157ece72ece70b084333f98b3b78238844e1eb9b043f9d1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1927,7 +2237,12 @@
       "evidencePath": "dist/evidence/p2/ext-store.json",
       "invalidationTriggers": [
         "Conference/gate verb set, flag allowlist, receipt shape, headSentinel or CAS discipline, list ordering/read-surface behavior, enum-passthrough fail-closed codes, or catalog/parity registration changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P9-CONFERENCE-GATE-CLI invalidation trigger is true: Conference/gate verb set, flag allowlist, receipt shape, headSentinel or CAS discipline, list ordering/read-surface behavior, enum-passthrough fail-closed codes, or catalog/parity registration changes",
+        "test": "INC-262 red-leg probe for P9-CONFERENCE-GATE-CLI",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P9-GATE-TRANSITION-ENFORCEMENT",
@@ -1947,7 +2262,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "336868492f4e94874e396be15ac8c3a69474b28abd2e8bf994c219df820da0ac",
+      "fixtureDigest": "ca8807141809d18126139db286fe8f641510b3276d876fb7a8b650eb9fcc6196",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1958,7 +2273,12 @@
       "evidencePath": "dist/evidence/p2/ext-store.json",
       "invalidationTriggers": [
         "Designated transition set (target done), the pending-gate precondition or its verb/replay reason codes, satisfaction evidence locator grammar or resolution rule, evidence extensions key/shape, gate lifecycle graph including satisfied terminality and the gate.deleted escape, or off-by-default posture changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P9-GATE-TRANSITION-ENFORCEMENT invalidation trigger is true: Designated transition set (target done), the pending-gate precondition or its verb/replay reason codes, satisfaction evidence locator grammar or resolution rule, evidence extensions key/shape, gate lifecycle graph including satisfied terminality and the gate.deleted escape, or off-by-default posture changes",
+        "test": "INC-262 red-leg probe for P9-GATE-TRANSITION-ENFORCEMENT",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P9-CONFERENCE-DISTILL-GOVERNED",
@@ -1979,7 +2299,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "0959a9c36e777b9401fbdf73062fa330e9eb2e063447d0cdca3308491cb8a188",
+      "fixtureDigest": "ec60bbbbe25830d3725c2bc72351b95c568f2837ad82efda9bf83c1f22a87037",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1990,7 +2310,12 @@
       "evidencePath": "dist/evidence/p2/conference.json",
       "invalidationTriggers": [
         "distillConferenceKnowledge field mapping, external-key/tag/snippet/digest/evidence rules, code-point truncation, the opt-in --distill close-then-rebind-then-capture ordering, the pre-close store read, the knowledge-wiring flag allowlist or catalog entry, or the byte-identical non-distill close posture"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P9-CONFERENCE-DISTILL-GOVERNED invalidation trigger is true: distillConferenceKnowledge field mapping, external-key/tag/snippet/digest/evidence rules, code-point truncation, the opt-in --distill close-then-rebind-then-capture ordering, the pre-close store read, the knowledge-wiring flag allowlist or catalog entry, or the byte-identical non-distill close posture",
+        "test": "INC-262 red-leg probe for P9-CONFERENCE-DISTILL-GOVERNED",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P7-CANONICAL-EXCHANGE",
@@ -2010,7 +2335,7 @@
         "tests/p7-canonical-exchange.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "243a9bf175643d7af82c1af95f5fb11b23616233e8ca680c1a3d7dd4a0b90bef",
+      "fixtureDigest": "d0da2025719684d2df0af1a87f110140313134f4c5f030cb92cfa70ec027f523",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2021,7 +2346,12 @@
       "evidencePath": "dist/evidence/p7/p7.json",
       "invalidationTriggers": [
         "Exchange request, frozen envelope import, chunk identity, canonical bytes, manifest, transaction, resume, idempotency, semantic digest, filesystem admission, limit, CLI, offline, code-execution, compatibility-mode, AOS-requirement, or RC4 boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P7-CANONICAL-EXCHANGE invalidation trigger is true: Exchange request, frozen envelope import, chunk identity, canonical bytes, manifest, transaction, resume, idempotency, semantic digest, filesystem admission, limit, CLI, offline, code-execution, compatibility-mode, AOS-requirement, or RC4 boundary changes",
+        "test": "INC-262 red-leg probe for P7-CANONICAL-EXCHANGE",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P7-COMPATIBILITY-MODES",
@@ -2042,7 +2372,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "ec37b208b0a879076e37317540de0279f8eb8af7908e7fc825c5496b3b52f391",
+      "fixtureDigest": "864645fc94d08f16f3b08b6cd7ff5751abcd76519a599f359d9085c57440cfa2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2053,7 +2383,12 @@
       "evidencePath": "dist/evidence/p7/p7-compatibility.json",
       "invalidationTriggers": [
         "Compatibility manifest, pair receipt, governed authority path/digest/file identity/bounded-read cap, opaque context, exact request/effective-plan binding, Workspace lock, signer/issuer/audience/nonce, expiry/revocation/replay, policy floor, instance/data epoch, canonical semantic set, recursive JSON/document limit, field ownership, checkpoint, external-effect, planner, unavailable-surface, CLI, supported-release, AOS, network, mutation, or RC4 boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P7-COMPATIBILITY-MODES invalidation trigger is true: Compatibility manifest, pair receipt, governed authority path/digest/file identity/bounded-read cap, opaque context, exact request/effective-plan binding, Workspace lock, signer/issuer/audience/nonce, expiry/revocation/replay, policy floor, instance/data epoch, canonical semantic set, recursive JSON/document limit, field ownership, checkpoint, external-effect, planner, unavailable-surface, CLI, supported-release, AOS, network, mutation, or RC4 boundary changes",
+        "test": "INC-262 red-leg probe for P7-COMPATIBILITY-MODES",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P7-COMPATIBILITY-CLI-BOUNDARY",
@@ -2079,7 +2414,12 @@
       "evidencePath": "dist/evidence/p7/p7-compatibility.json",
       "invalidationTriggers": [
         "Shipped-binary CLI IO construction, compatibility-plan/compatibility-dry-run programmatic-only availability, COMPATIBILITY_AUTHORITY_REQUIRED fail-closed gate, argv authority rejection, status read-verb exit contract, or catalog availability partition changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate scripts/tcrn-workflow.mjs so the P7-COMPATIBILITY-CLI-BOUNDARY invalidation trigger is true: Shipped-binary CLI IO construction, compatibility-plan/compatibility-dry-run programmatic-only availability, COMPATIBILITY_AUTHORITY_REQUIRED fail-closed gate, argv authority rejection, status read-verb exit contract, or catalog availability partition changes",
+        "test": "INC-262 red-leg probe for P7-COMPATIBILITY-CLI-BOUNDARY",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P7-PUBLIC-AOS-REQUIREMENTS",
@@ -2100,7 +2440,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "9a1da706e9cb684e7661700f723dd2cfcb97c3a43a72c4c35234233ffc8af1bc",
+      "fixtureDigest": "d38d4e792d73c1cbadb4c7eda32fb4853dde9bb25b32a954a19d23a9a842e20d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2111,7 +2451,12 @@
       "evidencePath": "dist/evidence/p7/p7-aos-requirements.json",
       "invalidationTriggers": [
         "Public requirement fields, maturity/status, fixtures, schema, canonical validation, CLI, no-overclaim boundary, or offline proof change"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P7-PUBLIC-AOS-REQUIREMENTS invalidation trigger is true: Public requirement fields, maturity/status, fixtures, schema, canonical validation, CLI, no-overclaim boundary, or offline proof change",
+        "test": "INC-262 red-leg probe for P7-PUBLIC-AOS-REQUIREMENTS",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "P8-WORKFLOW-RC",
@@ -2144,7 +2489,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "73466e09260cfdb3ab0096292991dcdd0c4463a7edbaa747f776df69cdfa693c",
+      "fixtureDigest": "53fcbc247842c8432f0ca6d3e62d309ef6945d8625dc0c1e61a65028b65ff1df",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2155,7 +2500,12 @@
       "evidencePath": "dist/evidence/p8/p8.json",
       "invalidationTriggers": [
         "Candidate version, package/version surface, source allowlist, archive records, deterministic USTAR format, SBOM, manifest, checksum, provenance, release notes, privacy policy, trust verifier, CI, supported-release boundary, dogfood fixture, release artifact or publication boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate package.json so the P8-WORKFLOW-RC invalidation trigger is true: Candidate version, package/version surface, source allowlist, archive records, deterministic USTAR format, SBOM, manifest, checksum, provenance, release notes, privacy policy, trust verifier, CI, supported-release boundary, dogfood fixture, release artifact or publication boundary changes",
+        "test": "INC-262 red-leg probe for P8-WORKFLOW-RC",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "RC1-IMMUTABLE-PROOF-BASIS",
@@ -2178,7 +2528,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "04bd2a55267d8572fba1afaa78ace361bc17cb2d455c3428949bfdcdcc3918bc",
+      "fixtureDigest": "a77d608b22655f72862b9770d9b4d6502d8fd70d6133dfbbd744c9470f78033e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2189,7 +2539,12 @@
       "evidencePath": "dist/evidence/rc1/rc1.json",
       "invalidationTriggers": [
         "Any normative P1/P2 input, candidate manifest, RC1 role contract, verdict slot, or proof-manifest algorithm changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate specs/rc1-candidate-proof-manifest-v1.md so the RC1-IMMUTABLE-PROOF-BASIS invalidation trigger is true: Any normative P1/P2 input, candidate manifest, RC1 role contract, verdict slot, or proof-manifest algorithm changes",
+        "test": "INC-262 red-leg probe for RC1-IMMUTABLE-PROOF-BASIS",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "BK-SNAPSHOT-WITNESS",
@@ -2219,7 +2574,12 @@
       "evidencePath": "dist/evidence/bk/backup.json",
       "invalidationTriggers": [
         "Snapshot manifest exclusion or residue taxonomy, workspace lease acquisition or owner.json format, control-tree walk or per-file digest semantics, workspace root-identity binding, knowledge high-water marker semantics, ADR 0002 snapshot-not-mirror doctrine, ADR 0003 relocation doctrine, or the git tier-2 .gitignore residue prescription changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate docs/adr/0002-snapshot-not-mirror-backup.md so the BK-SNAPSHOT-WITNESS invalidation trigger is true: Snapshot manifest exclusion or residue taxonomy, workspace lease acquisition or owner.json format, control-tree walk or per-file digest semantics, workspace root-identity binding, knowledge high-water marker semantics, ADR 0002 snapshot-not-mirror doctrine, ADR 0003 relocation doctrine, or the git tier-2 .gitignore residue prescription changes",
+        "test": "INC-262 red-leg probe for BK-SNAPSHOT-WITNESS",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "BK-RELOCATION-BINDING",
@@ -2252,7 +2612,12 @@
       "evidencePath": "dist/evidence/bk/backup.json",
       "invalidationTriggers": [
         "Relocation ledger shape or validator rules, the readMetadata admission parameter or its default, the activeBinding accessor or its four call sites, the relocation authority permit shape or its scoping terms, the relocationId derivation or the plan/vacate shared preparation, the abort fork-risk ceremony or its target-inspection check, the control-tree skeleton or transport-residue assertions, the snapshot manifest exclusion taxonomy, the MCP per-invocation-authority exclusion predicate, or ADR 0003 relocation doctrine changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate docs/adr/0003-workspace-relocation.md so the BK-RELOCATION-BINDING invalidation trigger is true: Relocation ledger shape or validator rules, the readMetadata admission parameter or its default, the activeBinding accessor or its four call sites, the relocation authority permit shape or its scoping terms, the relocationId derivation or the plan/vacate shared preparation, the abort fork-risk ceremony or its target-inspection check, the control-tree skeleton or transport-residue assertions, the snapshot manifest exclusion taxonomy, the MCP per-invocation-authority exclusion predicate, or ADR 0003 relocation doctrine changes",
+        "test": "INC-262 red-leg probe for BK-RELOCATION-BINDING",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "ACT1-CLAUDE-INSTALLER",
@@ -2269,7 +2634,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "4322e1a7223010f2f04c4f39b057875d31412e0331000ec705e85635d90a9927",
+      "fixtureDigest": "770ef357759d69732e2ccdba80bac78b305d9ea1716c80d1916674c78ad4dcdc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2280,7 +2645,12 @@
       "evidencePath": "dist/evidence/act/act1.json",
       "invalidationTriggers": [
         "Installer write policy, receipt shape, rollback execution, forbidden-path guard, or activation boundary changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/claude-adapter-installer.ts so the ACT1-CLAUDE-INSTALLER invalidation trigger is true: Installer write policy, receipt shape, rollback execution, forbidden-path guard, or activation boundary changes",
+        "test": "INC-262 red-leg probe for ACT1-CLAUDE-INSTALLER",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "ACT2-CLAUDE-SESSIONSTART",
@@ -2298,7 +2668,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "11d7df52509c92135d4adb10a4244f88492ff4928159d07c020d3cb717ba2d39",
+      "fixtureDigest": "8e059d44cd1c9b3c9bf2ea6fc539757c133785212110cec01b605af99daf16fc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2310,7 +2680,12 @@
       "invalidationTriggers": [
         "v2 fragment shape, admitted absolute-root binding, merge/remove byte-inverse, hook-surface bound, injection budget, installer root admission, or v2 receipt/rollback coverage changes",
         "Hook command argument set or handler-digest binding changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/claude-adapter-activation.ts so the ACT2-CLAUDE-SESSIONSTART invalidation trigger is true: v2 fragment shape, admitted absolute-root binding, merge/remove byte-inverse, hook-surface bound, injection budget, installer root admission, or v2 receipt/rollback coverage changes",
+        "test": "INC-262 red-leg probe for ACT2-CLAUDE-SESSIONSTART",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "ACT2-FAIL-OPEN",
@@ -2328,7 +2703,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "11d7df52509c92135d4adb10a4244f88492ff4928159d07c020d3cb717ba2d39",
+      "fixtureDigest": "8e059d44cd1c9b3c9bf2ea6fc539757c133785212110cec01b605af99daf16fc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2340,7 +2715,12 @@
       "invalidationTriggers": [
         "SessionStart handler fail-open wrapper, injection budget, dependency surface, or scriptDigest binding changes",
         "Handler self-digest argv contract, control-character screen, or emitted generator-version interpolation changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/claude-adapter-activation.ts so the ACT2-FAIL-OPEN invalidation trigger is true: SessionStart handler fail-open wrapper, injection budget, dependency surface, or scriptDigest binding changes",
+        "test": "INC-262 red-leg probe for ACT2-FAIL-OPEN",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "ACT3-PERSONA-RENDER",
@@ -2362,7 +2742,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "4d6830b798aa62842be16f8824aa0a89be3ef4c00046e9681dcfe6f07c93f274",
+      "fixtureDigest": "f99215ff4a51bfd93349093e9fc5269c242f60339d7734ef8f0a2f0283e40672",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2373,7 +2753,12 @@
       "evidencePath": "dist/evidence/act2/act3.json",
       "invalidationTriggers": [
         "conference persona reference schema/scope, closed eight-role allowlist, source-manifest digest binding, 1024-byte budget, explicit --profile-id CLI contract, main-session profile rejection, SessionStart persona absence, single-emit hygiene, or persona-free --step3 receipt/rollback coverage changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate packages/core/src/core-reference-personas.ts so the ACT3-PERSONA-RENDER invalidation trigger is true: conference persona reference schema/scope, closed eight-role allowlist, source-manifest digest binding, 1024-byte budget, explicit --profile-id CLI contract, main-session profile rejection, SessionStart persona absence, single-emit hygiene, or persona-free --step3 receipt/rollback coverage changes",
+        "test": "INC-262 red-leg probe for ACT3-PERSONA-RENDER",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "E2E-GOVERNED-LOOP",
@@ -2389,7 +2774,7 @@
         "packages/core/src/index.ts",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "079ec3e239460ebecb2c64515d104d655ac61596e13460443e0578d3cb2ba3a6",
+      "fixtureDigest": "ebc835796e6f6ea102764378f6bc301aa15400e0c30d20880d96db45734a2243",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2400,7 +2785,12 @@
       "evidencePath": "dist/evidence/e2e/e2e.json",
       "invalidationTriggers": [
         "The governed-loop storyline (tests/e2e-governed-loop-commands.mjs), the tutorial fenced commands, the replayed CLI verb set or their receipts/reason codes, the trace digest-chain edges (work record, gate card, conference minutes, knowledge candidate, promotion receipt), or the conference distillation sourceDigest basis changes"
-      ]
+      ],
+      "redLeg": {
+        "mutation": "Mutate docs/tutorial/governed-loop.md so the E2E-GOVERNED-LOOP invalidation trigger is true: The governed-loop storyline (tests/e2e-governed-loop-commands.mjs), the tutorial fenced commands, the replayed CLI verb set or their receipts/reason codes, the trace digest-chain edges (work record, gate card, conference minutes, knowledge candidate, promotion receipt), or the conference distillation sourceDigest basis changes",
+        "test": "INC-262 red-leg probe for E2E-GOVERNED-LOOP",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
     },
     {
       "id": "INIT047-GOAL-01",
@@ -2841,7 +3231,7 @@
         "scripts/task.mjs",
         "tests/inc255-mcp-framing.test.mjs"
       ],
-      "fixtureDigest": "9aa6826ad6cd24e266085dc6d4eb6bdd8aeb2b3d1b6d3b61b4005b2f8d697e5f",
+      "fixtureDigest": "1ae289e25cc822e8a194a759c530aaca66c751e254dbf2101d4464f4bc4644f4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2880,7 +3270,7 @@
         "scripts/task.mjs",
         "tests/inc256-knowledge-policy.test.mjs"
       ],
-      "fixtureDigest": "abd4bf68081f57414e2ccfb78b3ec35fd7479d805ed415f6bb74f18ab0f4eecf",
+      "fixtureDigest": "a4ab3e872337946db6a55abcefd50338ae780198940be3595a39a147647ac8d6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2917,7 +3307,7 @@
         "scripts/task.mjs",
         "tests/inc258-install-manifest.test.mjs"
       ],
-      "fixtureDigest": "d3087e78cf5a26aacb6c6c20318ba4d9f3e99086eba40d919ac53869e25e350c",
+      "fixtureDigest": "6232263eb0baa3b065563f687c4bf92e1ab6fa8033c73d218ab0c52c636acf23",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2957,7 +3347,7 @@
         "scripts/task.mjs",
         "tests/inc259-storage-migration.test.mjs"
       ],
-      "fixtureDigest": "50c341f370018794ef64ee5f4d4e3ab54512f12bfeb1d058c8a46945281692d8",
+      "fixtureDigest": "5ceb50dce9c54aa0255d6f123e84b8a993a823e615945199895581c40e97f8be",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2993,7 +3383,7 @@
         "scripts/task.mjs",
         "tests/inc260-snapshot-read-optimization.test.mjs"
       ],
-      "fixtureDigest": "f71cfca16da84163484eb999a4ecdd3c666cf38b38da3999090491934998c686",
+      "fixtureDigest": "eb73450abd3ddf681eccc31e4a6eaac4b81f88157f92746b0378d5f7d1533474",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3029,7 +3419,7 @@
         "tests/stop-pact.test.mjs",
         "tools/stop-pact/response-style-hook.mjs"
       ],
-      "fixtureDigest": "d7426b763aaed027ea521370a6b3ccb30fd3bbdd8278eae3fb55c78575c33157",
+      "fixtureDigest": "5782fedcb9397e21e11061c0c7c2adc25a8ce583164e26f9495cd4b3c8803764",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3066,7 +3456,7 @@
         "tests/dispatch-readiness-compliance.test.mjs",
         "tests/s303-dispatch-citations.test.mjs"
       ],
-      "fixtureDigest": "d780c6eb85e7c9ed3fc11e5d34488e854f2d29dde8eef89f095e591de1cd538c",
+      "fixtureDigest": "43c0f36a68dcf07d0a10769a5960ecaaf60013a046834a900c59dc9e6a81438d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3105,7 +3495,7 @@
         "scripts/task.mjs",
         "tests/inc263-closeout.test.mjs"
       ],
-      "fixtureDigest": "6b443e7ba250659a74a14779592711fd882f862a26820df400da525a4ad6ed9c",
+      "fixtureDigest": "703bc056eedf543dd0e1dbe2650a7c2413b996b2abe50335d7c27d66f8eb913b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3129,6 +3519,43 @@
       }
     },
     {
+      "id": "INIT048-INC-262",
+      "phase": "P2",
+      "category": "runtime-capability",
+      "status": "implemented",
+      "subject": "The verification map requires every claim to carry an independently named red leg, with no unapproved exemptions.",
+      "command": "pnpm verify:inc262",
+      "fixturePaths": [
+        "package.json",
+        "scripts/lib/proof-artifacts.mjs",
+        "scripts/task.mjs",
+        "scripts/verification-red-legs.mjs",
+        "tests/inc262-red-leg-coverage.test.mjs"
+      ],
+      "fixtureDigest": "cf6f6e2c12643a006def3f30af328a0e54aeddb3616e90974af6942619a8f0a4",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "INC262_RED_LEG_COVERAGE_VERIFIED",
+      "evidencePath": "dist/evidence/p2/inc262.json",
+      "invalidationTriggers": [
+        "Allow a claim without a red leg, accept a malformed exemption, or reuse a red-leg mutation or test name."
+      ],
+      "positiveLeg": {
+        "command": "pnpm verify:inc262",
+        "expectedExit": 0,
+        "expectedReasonCode": "INC262_RED_LEG_COVERAGE_VERIFIED"
+      },
+      "redLeg": {
+        "mutation": "Delete the redLeg field from INIT048-INC-262 and run the global coverage gate.",
+        "test": "INC-262 red-leg coverage requires every claim to be independently falsifiable",
+        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+      }
+    },
+    {
       "id": "INIT048-STORY-344",
       "phase": "P4",
       "category": "runtime-capability",
@@ -3141,7 +3568,7 @@
         "scripts/task.mjs",
         "tests/story-344-storage-boundary.test.mjs"
       ],
-      "fixtureDigest": "a8090d1c8265dbc6c60abd6fb64f0f1e0ec25ebdad39d14d7263e472c1f9286c",
+      "fixtureDigest": "7424f38fa4bef1c601110e9d4790a5683db0900f90d6df1bca34d5810cf178c3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3177,7 +3604,7 @@
         "scripts/task.mjs",
         "tests/story-333-byte-segments.test.mjs"
       ],
-      "fixtureDigest": "212f9edbf086d50de1e7be1f3f405a6c4a6c299eba7ecfac60f2c8ae297749ca",
+      "fixtureDigest": "9bd5437dc5bc7edd92250be01119172bae31cccb1acb52701ed6dff9247cc8f6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3214,7 +3641,7 @@
         "scripts/task.mjs",
         "tests/story-345-backend-selection.test.mjs"
       ],
-      "fixtureDigest": "7d9445a3cedf4c2044da9a3cc41c82c59b8e3cd619d07d536a9f87d60d818f43",
+      "fixtureDigest": "42f9064cbdc8eb865b9a2467128cf8eaa0164e463688042a9705e2214465b38e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3250,7 +3677,7 @@
         "scripts/task.mjs",
         "tests/story-334-segment-index.test.mjs"
       ],
-      "fixtureDigest": "01e44cb5a4fa56ee96bf5d8ec748be87531c96289f9547afb352b6961671fd92",
+      "fixtureDigest": "6e201448958489ed88e3d1556bd46dfb18edda3e0d2bc0c4b98127e9615bbc69",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3286,7 +3713,7 @@
         "scripts/task.mjs",
         "tests/story-335-336-work-fields.test.mjs"
       ],
-      "fixtureDigest": "579e5cd39edb14209beff6f4d9194bee3240be87e03d83d382e23cd889268067",
+      "fixtureDigest": "2ce8fd06b410e9bff7a90ba7086d3d58424aa0ded94a8ba9436e4dff5795fe6b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3323,7 +3750,7 @@
         "scripts/task.mjs",
         "tests/story-335-336-work-fields.test.mjs"
       ],
-      "fixtureDigest": "0815cb87e188470027f41669401226e88fbd9200dc7fa0a67f598cf11555f7cf",
+      "fixtureDigest": "367eb48f8b41cbfad6778676aec9e6d9a06f3bac5fba89b04c80a1ee78aeb66d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3360,7 +3787,7 @@
         "scripts/task.mjs",
         "tests/story-337-snapshot-replay.test.mjs"
       ],
-      "fixtureDigest": "cb33a27a46c3b388e6e3d07b4dd61f46dd0d61a8c0dcb34e4dc4e71b9536d04d",
+      "fixtureDigest": "9669a88e58a97173a5bae77ab793aabc5406ad3f94590eb481adfab0335176ff",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3397,7 +3824,7 @@
         "scripts/task.mjs",
         "tests/story-346-pg-disabled.test.mjs"
       ],
-      "fixtureDigest": "9a197c62e7e7e41a04bb9c644c524800fd09163f10de247b2b10ca5f8dc101bc",
+      "fixtureDigest": "6576c3546405f817975347e1b17a19f0bae5ffa17d2cab11f15fb70fc513bbbe",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3434,7 +3861,7 @@
         "scripts/task.mjs",
         "tests/story-347-348-settings-policy.test.mjs"
       ],
-      "fixtureDigest": "d3185814bb65de5975460dc325e4c16ff66f2772e7e058bf32ce31827575c36a",
+      "fixtureDigest": "1f1bceb3acfd669a52cc09b5a048f852a5d570dedf53b277beb2d997916e9a3b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3472,7 +3899,7 @@
         "scripts/task.mjs",
         "tests/story-347-348-settings-policy.test.mjs"
       ],
-      "fixtureDigest": "577b72061358a8d35edf4f5b5459f0f84fcfbb38960c7fa062468717b24cf339",
+      "fixtureDigest": "33b666c5a0ab80045283c588683b3c34c475a243caf3a3e8c04d918cef12dd93",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3507,7 +3934,7 @@
         "scripts/task.mjs",
         "tests/story-338-339-archive-inventory.test.mjs"
       ],
-      "fixtureDigest": "5e8780a895b6c8713b459fd91e5e97a70ce04a879f895b3bf24521cca2533e4e",
+      "fixtureDigest": "c07fa7286f3cadd99085bd3e3cf10d185b8a4e09d4d91e96f4dbd5d18128ee31",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3542,7 +3969,7 @@
         "scripts/task.mjs",
         "tests/story-338-339-archive-inventory.test.mjs"
       ],
-      "fixtureDigest": "818afc85e281739bdc568bc7df3fbeb0d5f8e4caf0cc586d9ac0ca5f13b18102",
+      "fixtureDigest": "6745cbc72c7f3d11e90e628998b37f94ccd834399619353854e84ed752963858",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3579,7 +4006,7 @@
         "scripts/task.mjs",
         "tests/story-340-attestation-migration.test.mjs"
       ],
-      "fixtureDigest": "db644483720dc12ee67f14ffe2a2579513298a435d26a40ffc16c9cf17052f20",
+      "fixtureDigest": "fd62f1118b9613692bce1c31476fa0f349e25fae34facc360bc1a5c81ea98d29",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3615,7 +4042,7 @@
         "scripts/task.mjs",
         "tests/story-341-knowledge-body-migration.test.mjs"
       ],
-      "fixtureDigest": "efb9b2e0ba8058433da8a61bf349ade5d65aec5bfe8fc1cbe244c3888429d759",
+      "fixtureDigest": "c62d71107752218ed4b72bac8f5d1d79f11ed7950be44ef5e478db320e7b6e2b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3651,7 +4078,7 @@
         "scripts/task.mjs",
         "tests/story-342-343-map-docs.test.mjs"
       ],
-      "fixtureDigest": "3f1d7f3c45b1a828c7a78a6577c5dbad53651b9e26b328fe3e01f4fa4f5d9fed",
+      "fixtureDigest": "f13ae2995a6ffc07cab60fdb17c1da0c9c8098c5b498ddb6e5afd0264e2a12a4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3690,7 +4117,7 @@
         "scripts/task.mjs",
         "tests/story-342-343-map-docs.test.mjs"
       ],
-      "fixtureDigest": "f7545be4b55a869da28dd9926ec0548f8edbfd596c6f507ebaa464018ea88321",
+      "fixtureDigest": "7d9e88b28c5d033cf0c0d1e7b1aef1a3296ce49e0757fe3e2d3166bf9229f31f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

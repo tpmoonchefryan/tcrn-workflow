@@ -607,6 +607,7 @@ const INCIDENT_TESTS = Object.freeze({
   inc265: { path: "tests/stop-pact.test.mjs", pattern: "INC-265 removes the unsupported prose length rule without weakening rules 3 and 5", reasonCode: "INC265_STOP_RULES_VERIFIED" },
   inc264: { path: "tests/dispatch-readiness-compliance.test.mjs", pattern: "INC-264 dispatch briefs require the exact autonomous-operation and scope-restraint declarations", reasonCode: "INC264_DISPATCH_DECLARATIONS_VERIFIED" },
   inc263: { path: "tests/inc263-closeout.test.mjs", pattern: "INC-263 closeout verification is wired and ceremony cost measurement is deterministic", reasonCode: "INC263_CLOSEOUT_AND_COST_TESTS_VERIFIED" },
+  inc262: { path: "tests/inc262-red-leg-coverage.test.mjs", pattern: "INC-262 red-leg coverage requires every claim to be independently falsifiable", reasonCode: "INC262_RED_LEG_COVERAGE_TESTS_VERIFIED" },
 });
 
 async function runIncidentTest(name) {
@@ -643,6 +644,24 @@ async function verifyInc263() {
   const ceremonyCost = await measureCeremonyCostGate();
   const tests = await runIncidentTest("inc263");
   return success("INC263_CLOSEOUT_AND_COST_VERIFIED", { closeout, ceremonyCost, tests });
+}
+
+async function verifyRedLegGate() {
+  const { verifyRedLegCoverage } = await import("./verification-red-legs.mjs");
+  const map = JSON.parse(await readText(resolve(repositoryRoot, "verification-map.yaml")));
+  const result = verifyRedLegCoverage(map);
+  assertion(result.ok, "RED_LEG_COVERAGE_INCOMPLETE", result.problems.join("; "));
+  return success("RED_LEG_COVERAGE_VERIFIED", {
+    total: result.total,
+    redLegCount: result.redLegCount,
+    exemptionCount: result.exemptionCount,
+  });
+}
+
+async function verifyInc262() {
+  const tests = await runIncidentTest("inc262");
+  const coverage = await verifyRedLegGate();
+  return success("INC262_RED_LEG_COVERAGE_VERIFIED", { coverage, tests });
 }
 
 const INIT048_STORY_TESTS = Object.freeze({
@@ -1959,6 +1978,8 @@ const commandContracts = {
   inc264: { exit: 0, reasonCode: "INC264_DISPATCH_DECLARATIONS_VERIFIED" },
   closeout: { exit: 0, reasonCode: "CLOSEOUT_VERIFY_GATE_VERIFIED" },
   inc263: { exit: 0, reasonCode: "INC263_CLOSEOUT_AND_COST_VERIFIED" },
+  "red-legs": { exit: 0, reasonCode: "RED_LEG_COVERAGE_VERIFIED" },
+  inc262: { exit: 0, reasonCode: "INC262_RED_LEG_COVERAGE_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
@@ -1996,6 +2017,7 @@ const commandContracts = {
 async function verifyMap() {
   const map = JSON.parse(await readText(resolve(repositoryRoot, "verification-map.yaml")));
   const packageJson = await readJson(resolve(repositoryRoot, "package.json"));
+  const { verifyRedLegCoverage } = await import("./verification-red-legs.mjs");
   assertion(map.schemaVersion === "tcrn.verification-map.v1", "VERIFICATION_MAP_SCHEMA");
   assertion(Array.isArray(map.claims) && map.claims.length > 0, "VERIFICATION_MAP_EMPTY");
   const ids = new Set();
@@ -2057,6 +2079,8 @@ async function verifyMap() {
       assertion(typeof claim.redLeg.expectedReasonCode === "string" && claim.redLeg.expectedReasonCode.length > 0, "VERIFICATION_MAP_RED_EXPECTATION", claim.id);
     }
   }
+  const redLegCoverage = verifyRedLegCoverage(map);
+  assertion(redLegCoverage.ok, "VERIFICATION_MAP_RED_LEG_COVERAGE", redLegCoverage.problems.join("; "));
   const init047Goals = map.claims.filter((claim) => typeof claim.id === "string" && /^INIT047-GOAL-\d{2}$/u.test(claim.id));
   assertion(init047Goals.length === 12, "VERIFICATION_MAP_INIT047_GOAL_COUNT", String(init047Goals.length));
   for (const field of ["command", "expectedReasonCode"]) {
@@ -2190,6 +2214,8 @@ async function verifyMap() {
     candidate: map.claims.filter((claim) => claim.status === "candidate").length,
     observableReasonCodes: map.claims.length,
     ...categoryCounts,
+    redLegCount: redLegCoverage.redLegCount,
+    redLegExemptions: redLegCoverage.exemptionCount,
   });
 }
 
@@ -2758,6 +2784,8 @@ const handlers = {
   inc264: () => runIncidentTest("inc264"),
   closeout: verifyCloseoutGate,
   inc263: verifyInc263,
+  "red-legs": verifyRedLegGate,
+  inc262: verifyInc262,
   p5: verifyP5,
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,
@@ -2842,6 +2870,9 @@ function evidencePhase(name) {
     return "p2";
   }
   if (name === "closeout" || name === "inc263") {
+    return "p2";
+  }
+  if (name === "red-legs" || name === "inc262") {
     return "p2";
   }
   if (name === "p5") {

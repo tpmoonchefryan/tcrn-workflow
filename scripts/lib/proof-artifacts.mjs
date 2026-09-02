@@ -120,6 +120,14 @@ const claimRouteAdditions = new Map([
   ["P1-NO-PRIVATE-MIGRATION", ["scripts/lib/local-command.mjs", "tests/local-command-byte-fidelity.test.mjs"]],
   ["P8-WORKFLOW-RC", ["scripts/lib/local-command.mjs", "scripts/lib/privacy.mjs", "tests/local-command-byte-fidelity.test.mjs"]],
 ]);
+
+function fieldsForClaim(claim) {
+  const legBearing = typeof claim?.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id));
+  if (legBearing) return [...claimFields, ...init047LegFields];
+  if (Object.hasOwn(claim ?? {}, "redLeg")) return [...claimFields, "redLeg"];
+  if (Object.hasOwn(claim ?? {}, "redLegExemption")) return [...claimFields, "redLegExemption"];
+  return claimFields;
+}
 const stagePrefix = ".tcrn-proof-artifact-";
 let sequence = 0;
 
@@ -237,10 +245,7 @@ function validateMap(map) {
   assert(map.schemaVersion === "tcrn.verification-map.v1" && Array.isArray(map.claims), "PROOF_ARTIFACT_MAP_INVALID", "verification map");
   const ids = new Set();
   for (const claim of map.claims) {
-    const fields = typeof claim?.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))
-      ? [...claimFields, ...init047LegFields]
-      : claimFields;
-    exactKeys(claim, fields, "PROOF_ARTIFACT_CLAIM_FIELDS", claim?.id ?? "unknown");
+    exactKeys(claim, fieldsForClaim(claim), "PROOF_ARTIFACT_CLAIM_FIELDS", claim?.id ?? "unknown");
     assert(typeof claim.id === "string" && !ids.has(claim.id), "PROOF_ARTIFACT_MAP_INVALID", claim?.id ?? "unknown");
     ids.add(claim.id);
     assert(["implemented", "candidate", "planned"].includes(claim.status), "PROOF_ARTIFACT_MAP_INVALID", claim.id);
