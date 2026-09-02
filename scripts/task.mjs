@@ -593,7 +593,9 @@ async function runInit047Goal(name) {
 
 const INIT048_STORY_TESTS = Object.freeze({
   story333: { path: "tests/story-333-byte-segments.test.mjs", pattern: "STORY-333", reasonCode: "INIT048_STORY_333_VERIFIED" },
+  story334: { path: "tests/story-334-segment-index.test.mjs", pattern: "STORY-334", reasonCode: "INIT048_STORY_334_VERIFIED" },
   story344: { path: "tests/story-344-storage-boundary.test.mjs", pattern: "STORY-344", reasonCode: "INIT048_STORY_344_VERIFIED" },
+  story345: { path: "tests/story-345-backend-selection.test.mjs", pattern: "STORY-345", reasonCode: "INIT048_STORY_345_VERIFIED" },
 });
 
 async function runInit048Story(name) {
@@ -1867,7 +1869,9 @@ const commandContracts = {
   goal11: { exit: 0, reasonCode: "INIT047_GOAL_11_VERIFIED" },
   goal12: { exit: 0, reasonCode: "INIT047_GOAL_12_VERIFIED" },
   story333: { exit: 0, reasonCode: "INIT048_STORY_333_VERIFIED" },
+  story334: { exit: 0, reasonCode: "INIT048_STORY_334_VERIFIED" },
   story344: { exit: 0, reasonCode: "INIT048_STORY_344_VERIFIED" },
+  story345: { exit: 0, reasonCode: "INIT048_STORY_345_VERIFIED" },
   inc255: { exit: 0, reasonCode: "INC255_MCP_FRAMING_VERIFIED" },
   inc256: { exit: 0, reasonCode: "INC256_KNOWLEDGE_MIGRATION_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
@@ -2645,7 +2649,9 @@ const handlers = {
   goal11: () => runInit047Goal("goal11"),
   goal12: () => runInit047Goal("goal12"),
   story333: () => runInit048Story("story333"),
+  story334: () => runInit048Story("story334"),
   story344: () => runInit048Story("story344"),
+  story345: () => runInit048Story("story345"),
   inc255: () => runTests({ inc255Only: true }),
   inc256: () => runTests({ inc256Only: true }),
   p5: verifyP5,
@@ -2710,7 +2716,7 @@ function evidencePhase(name) {
   if (/^goal(?:0[1-9]|1[0-2])$/u.test(name)) {
     return "p4";
   }
-  if (/^story(?:333|344)$/u.test(name)) {
+  if (/^story(?:333|334|344|345)$/u.test(name)) {
     return "p4";
   }
   if (["aos", "p2", "protocol-schemas", "protocol-test"].includes(name)) {

@@ -36,6 +36,8 @@ export interface StorageDirectoryEntry {
   readonly isSymbolicLink: boolean;
 }
 
+export type StorageBackendKind = "file" | "file-segmented" | "pg";
+
 /** The failure the file backend raises. Same shape as workspace.ts's
  * WorkspaceError so tests asserting `error.reasonCode` keep working — the PG
  * backend (STORY-175) maps SQL failures to these same reason codes. */
@@ -51,7 +53,7 @@ export class StorageError extends Error {
 
 export interface StorageBackend {
   /** The concrete data-plane kind, used by sentinel admission gates. */
-  readonly backendKind: "file" | "pg";
+  readonly backendKind: StorageBackendKind;
   /** Read the workspace.json metadata bytes, fail-closed on any unsafe file. */
   readMetadataBytes(): Promise<Buffer>;
   /** Atomically replace workspace.json. */
@@ -71,6 +73,9 @@ export interface StorageBackend {
    * migration and ADR-0004 §9 criterion-4 equivalence need the full view set,
    * not just the views a caller happens to know about. */
   listViewNames(): Promise<string[]>;
+  /** Read/write a backend-owned auxiliary file inside the control tree. */
+  readControlFile(relativePath: string, maximumBytes?: number): Promise<Buffer>;
+  writeControlFile(relativePath: string, content: Buffer | string, crashAt?: WorkspaceCrashPoint): Promise<void>;
   /** Create the control root exclusively. Initialization uses this instead of
    * reaching around the backend for a filesystem call. */
   createControlDirectory(): Promise<void>;
@@ -117,7 +122,7 @@ export class FileBackend implements StorageBackend {
     const root = await this.boundDirectory(this.controlPath("events"));
     const entries = await readdir(root, { withFileTypes: true });
     entries.sort((left, right) => this.compare(left.name, right.name));
-    return entries.map((entry) => entry.name);
+    return entries.filter((entry) => entry.isFile() && /^(?:\d{6})\.(?:json|ndjson)$/u.test(entry.name)).map((entry) => entry.name);
   }
 
   async readSegment(name: string): Promise<Buffer> {
@@ -129,6 +134,14 @@ export class FileBackend implements StorageBackend {
       return deviated;
     }
     return content;
+  }
+
+  async readControlFile(relativePath: string, maximumBytes: number = PROTOCOL_LIMITS.maxCanonicalBytes): Promise<Buffer> {
+    return this.boundFile(this.controlPath(relativePath), maximumBytes);
+  }
+
+  async writeControlFile(relativePath: string, content: Buffer | string, crashAt?: WorkspaceCrashPoint): Promise<void> {
+    await this.atomicWrite(this.controlPath(relativePath), content, crashAt);
   }
 
   async writeSegment(name: string, content: Buffer, crashAt?: WorkspaceCrashPoint): Promise<void> {

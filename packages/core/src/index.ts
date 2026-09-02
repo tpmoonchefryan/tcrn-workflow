@@ -51,7 +51,9 @@ export type { CanonicalRoot } from "./root-identity.js";
 // fail-closed refusal shape; StorageBackend/FileBackend are the interface and
 // the converged file implementation.
 export { StorageError, FileBackend, WORKSPACE_CONTROL_DIRECTORY } from "./storage-backend.js";
-export type { StorageBackend, WorkspaceCrashPoint } from "./storage-backend.js";
+export type { StorageBackend, StorageBackendKind, StorageDirectoryEntry, WorkspaceCrashPoint } from "./storage-backend.js";
+export { SegmentedBackend, SEGMENTED_BACKEND_PROFILE } from "./segmented-backend.js";
+export type { SegmentIndexDocument, SegmentIndexEntry, SegmentManifest, SegmentManifestEntry, SegmentedBackendProfile } from "./segmented-backend.js";
 // INC-074: the storage-home sentinel declares where a workspace's chain lives
 // after a file→pg migration. The file backend refuses mutating verbs on a
 // sentinel workspace (WORKSPACE_STORAGE_RELOCATED), and a PG-facing path must

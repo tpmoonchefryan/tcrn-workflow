@@ -85,7 +85,7 @@ test("STORY-333 byte threshold creates bounded segments and preserves legacy seg
     const entries = (await readdir(join(modern.workspace, controlDirectory, "events"))).sort();
     const segments = entries.filter((entry) => entry.endsWith(".ndjson"));
     assert.ok(segments.length >= 3, `byte rolling should create several segments, got ${segments.length}`);
-    assert.deepEqual(entries.filter((entry) => entry.endsWith(".json")), []);
+    assert.deepEqual(entries.filter((entry) => /^\d{6}\.json$/u.test(entry)), []);
     const sizes = await Promise.all(segments.map(async (entry) => (await stat(join(modern.workspace, controlDirectory, "events", entry))).size));
     assert.ok(sizes.every((size) => size <= 4096), `every modern segment must stay within the configured byte limit: ${sizes.join(",")}`);
     assert.equal((await materializeWorkspace(modern.workspace)).version, 13);

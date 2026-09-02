@@ -38,6 +38,7 @@ export type SettingKey =
   | "execution.personalessDispatch"
   | "execution.subagentPolicy"
   | "storage.segmentBytes"
+  | "storage.backend"
   | "workspace.generatedArtifactsPath";
 
 export interface SettingsCatalogEntry {
@@ -260,6 +261,14 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     defaultValue: "16777216",
     min: 4096,
     max: 67108864,
+  },
+  {
+    key: "storage.backend",
+    type: "enum",
+    controlType: "enum",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "file-segmented",
+    allowedValues: ["file", "file-segmented"],
   },
   {
     key: "workspace.generatedArtifactsPath",

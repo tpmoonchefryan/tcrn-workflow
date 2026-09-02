@@ -376,6 +376,14 @@ export class PgBackend implements StorageBackend {
     // not apply to this retained, disconnected backend.
   }
 
+  async readControlFile(_relativePath: string, _maximumBytes?: number): Promise<Buffer> {
+    throw new StorageError("WORKSPACE_PATH_INVALID", "auxiliary control files have no PG representation");
+  }
+
+  async writeControlFile(_relativePath: string, _content: Buffer | string, _crashAt?: WorkspaceCrashPoint): Promise<void> {
+    throw new StorageError("WORKSPACE_PATH_INVALID", "auxiliary control files have no PG representation");
+  }
+
   async ensureControlDirectory(_relativePath: string): Promise<void> {
     // PG schemas are created by the DDL (chain-ddl.sql); the workspace root
     // directory concept does not apply. No-op, documented rather than implicit.

@@ -1771,6 +1771,23 @@
         "STORY-333 byte rolling is not replaced by event-count rolling"
       ]
     },
+    "tests/story-334-segment-index.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 12,
+      "testNames": [
+        "STORY-334 segmented backend writes NDJSON and all sidecars, with O(1) point lookup",
+        "STORY-334 sidecar profile controls the index suffix",
+        "STORY-334 sidecar point lookup refuses a missing index instead of scanning"
+      ]
+    },
+    "tests/story-345-backend-selection.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 9,
+      "testNames": [
+        "STORY-345 default segmented and explicit file backends produce the same work state",
+        "STORY-345 backend selection rejects unknown values and does not silently fall back"
+      ]
+    },
     "tests/story-344-storage-boundary.test.mjs": {
       "testCount": 2,
       "assertionCount": 6,

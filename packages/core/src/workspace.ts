@@ -45,6 +45,7 @@ import type {
 import { assertDistinctRootShape, assertDistinctRoots, rootPortableIdentity } from "./root-identity.js";
 import { FileBackend, StorageError } from "./storage-backend.js";
 import type { StorageBackend } from "./storage-backend.js";
+import { SegmentedBackend } from "./segmented-backend.js";
 import { readStorageHomeDeclaration } from "./storage-home.js";
 import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
 import { recordClosureValidation, recordCollectionScan, recordExtensionClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
@@ -450,6 +451,7 @@ const relocationRootKindOrder = ["framework", "workspace", "transient", "evidenc
 // counter must persist across consecutive atomicWrites in one process, so one
 // instance is cached per workspace root.
 const fileBackends = new Map<string, FileBackend>();
+const segmentedBackends = new Map<string, SegmentedBackend>();
 
 // STORY-176: a package-private backend-factory override so the equivalence gate
 // can run the SAME engine verbs against the PG backend and compare byte output
@@ -475,6 +477,20 @@ function backendFor(workspaceRoot: string): StorageBackend {
     fileBackends.set(workspaceRoot, backend);
   }
   return backend;
+}
+
+function backendForStorage(workspaceRoot: string, storageVersion: WorkspaceMetadata["storageVersion"], requestedKind?: "file" | "file-segmented"): StorageBackend {
+  const factory = backendFactoryOverride.getStore();
+  if (factory !== undefined) return factory();
+  if (storageVersion === WORKSPACE_STORAGE_VERSION && requestedKind !== "file") {
+    let backend = segmentedBackends.get(workspaceRoot);
+    if (backend === undefined) {
+      backend = new SegmentedBackend(workspaceRoot);
+      segmentedBackends.set(workspaceRoot, backend);
+    }
+    return backend;
+  }
+  return backendFor(workspaceRoot);
 }
 
 function activeOverrideBackendKind(): StorageBackend["backendKind"] | undefined {
@@ -1000,7 +1016,7 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
   // shape/gap validation stays at the engine layer so both backends enforce the
   // same segment contract. A non-conforming entry (e.g. `special-entry`) fails
   // WORKSPACE_EVENT_CORRUPT exactly as before.
-  const backend = backendFor(workspaceRoot);
+  const backend = backendForStorage(workspaceRoot, metadata.storageVersion);
   const entries = await backend.listSegmentNames();
   const segmentedStorage = metadata.storageVersion === WORKSPACE_STORAGE_VERSION;
   const suffix = segmentedStorage ? "ndjson" : "json";
@@ -3076,7 +3092,7 @@ export async function writeWorkspaceMetadataAt(
 ): Promise<string> {
   const text = canonicalJson(metadata);
   validateMetadata(assertCanonicalJson(text));
-  await backendFor(workspaceRoot).writeMetadataBytes(Buffer.from(text, "utf8"), crashAt);
+  await backendForStorage(workspaceRoot, metadata.storageVersion).writeMetadataBytes(Buffer.from(text, "utf8"), crashAt);
   return text;
 }
 
@@ -3136,7 +3152,7 @@ export async function initializeWorkspace(options: {
       ? "segment event limit must be 2-1024"
       : `segment byte limit must be ${WORKSPACE_SEGMENT_BYTES_MIN}-${WORKSPACE_SEGMENT_BYTES_MAX}`);
   }
-  const backend = backendFor(workspace.canonicalPath);
+  const backend = backendForStorage(workspace.canonicalPath, storageVersion);
   try {
     await backend.createControlDirectory();
   } catch (error) {
@@ -3213,7 +3229,7 @@ export async function validateWorkspace(workspaceRootInput: string, checkViews =
   const state = await materializeWorkspace(workspaceRootInput);
   if (checkViews) {
     const expected = viewDocuments(state);
-    const backend = backendFor(activeWorkspaceRoot(state.metadata) ?? "");
+    const backend = backendForStorage(activeWorkspaceRoot(state.metadata) ?? "", state.metadata.storageVersion);
     for (const name of Object.keys(expected).sort(compareCanonicalText)) {
       let actual: Buffer;
       try {
@@ -3259,6 +3275,13 @@ function segmentBytesForState(state: WorkspaceState): number {
     fail("WORKSPACE_SCHEMA_INVALID", "storage.segmentBytes is outside its declared bounds");
   }
   return value;
+}
+
+function backendKindForState(state: WorkspaceState): "file" | "file-segmented" {
+  const configured = state.settings.find((entry) => entry.key === "storage.backend")?.value;
+  if (configured === undefined || configured === "file-segmented") return "file-segmented";
+  if (configured === "file") return "file";
+  fail("WORKSPACE_SCHEMA_INVALID", `storage.backend has an unsupported value ${configured}`);
 }
 
 // STORY-300. One append and many appends are the same operation with a different
@@ -3445,7 +3468,7 @@ export async function appendEvents(
           bytes: events.map((event) => canonicalJson(event)).join(""),
         }));
       })();
-    const backend = backendFor(workspace.root);
+    const backend = backendForStorage(workspace.root, workspace.metadata.storageVersion, backendKindForState(current));
     for (const write of writes) {
       await backend.writeSegment(write.name, Buffer.from(write.bytes, "utf8"), options.crashAt);
     }
