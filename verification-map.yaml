@@ -3426,7 +3426,7 @@
         "scripts/task.mjs",
         "tests/story-342-343-map-docs.test.mjs"
       ],
-      "fixtureDigest": "fde3e57635cdba6aa20f99754bc517298201921dd0e4b0e21b2edbd4ea15f372",
+      "fixtureDigest": "03607983fdc05c62a3724134bc111a4ccdfe3c1cda683301ccfef2171a194446",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3465,7 +3465,7 @@
         "scripts/task.mjs",
         "tests/story-342-343-map-docs.test.mjs"
       ],
-      "fixtureDigest": "e19d723b72dd3c3c78e474d5e09bbcf05919509891abf3b1126b5ca870f735a5",
+      "fixtureDigest": "9df3cc87d4dabfdaa2ccafeb1f8e4cf6c3105713353ba440e347c5a51fd804ad",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

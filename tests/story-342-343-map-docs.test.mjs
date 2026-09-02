@@ -32,9 +32,18 @@ test("STORY-343 engine and helper documents describe segmented events, replay sn
     "skill/tcrn-workflow-helper/references/backup-elicitation.md",
     "skill/tcrn-workflow-helper/references/reason-codes.md",
   ];
+  const requiredHelperLayout = {
+    "skill/tcrn-workflow-helper/SKILL.md": ["New event", "history is canonical", "replay snapshot", "file-segmented", "Knowledge bodies", "time-attestation"],
+    "skill/tcrn-workflow-helper/references/platform-layout.md": ["events/000001.ndjson", "000001.idx", "labels.idx", "time.idx", "snapshots/manifest.json", "metadata/<id>.json", "bodies/*.ndjson", "<eventHash>.json"],
+    "skill/tcrn-workflow-helper/references/workflow-operations.md": ["events/*.ndjson", "snapshots/manifest.json", "same segmented form", "time-attestation"],
+    "skill/tcrn-workflow-helper/references/first-run-wizard.md": ["events/*.ndjson", "snapshots/", "metadata/", "knowledge bodies"],
+    "skill/tcrn-workflow-helper/references/backup-elicitation.md": ["snapshots/", "snapshot-manifest"],
+    "skill/tcrn-workflow-helper/references/reason-codes.md": ["snapshot", "WORKSPACE_SNAPSHOT_INVALID"],
+  };
   for (const relative of helperFiles) {
     const text = await readFile(resolve(helperRoot, relative), "utf8");
     assert.match(text, /(?:ndjson|segmented|snapshot|sidecar)/iu, relative);
+    for (const token of requiredHelperLayout[relative]) assert.ok(text.includes(token), `${relative} is missing documented layout token ${token}`);
   }
   const engineFiles = [
     "packages/core/spec/knowledge-core-v1.md",
