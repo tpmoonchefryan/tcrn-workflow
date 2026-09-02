@@ -1780,12 +1780,85 @@
         "STORY-334 sidecar point lookup refuses a missing index instead of scanning"
       ]
     },
+    "tests/story-335-336-work-fields.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 17,
+      "testNames": [
+        "STORY-335 unchanged status updates store a scope reference and replay the full extensions",
+        "STORY-336 first-class fields are accepted by the protocol and old records remain readable",
+        "STORY-336 work summaries expose title and creation time without dropping the eleven existing fields",
+        "STORY-336 labels remain first-class instead of becoming an extension key"
+      ]
+    },
+    "tests/story-337-snapshot-replay.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 14,
+      "testNames": [
+        "STORY-337 snapshot replay matches full replay and avoids a full materialize",
+        "STORY-337 corrupted replay snapshot fails closed without falling back to full replay",
+        "STORY-337 snapshot interval setting controls checkpoint versions",
+        "STORY-337 snapshot replay source has an explicit fail-closed corruption path"
+      ]
+    },
+    "tests/story-338-339-archive-inventory.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 6,
+      "testNames": [
+        "STORY-338 cleanup leaves only the approved archive inventory and the newest chain snapshot",
+        "STORY-339 inventory detects both an undocumented disk entry and a documented missing entry",
+        "STORY-338 and STORY-339 use a baseline-gated destructive list and a two-sided checker"
+      ]
+    },
+    "tests/story-340-attestation-migration.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 11,
+      "testNames": [
+        "STORY-340 attestation migration preserves full values, supports point lookup, and deletes only after baseline proof",
+        "STORY-340 attestation migration has a fail-closed full-value comparison"
+      ]
+    },
+    "tests/story-341-knowledge-body-migration.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 10,
+      "testNames": [
+        "STORY-341 disposable knowledge bodies migrate with byte-exact readback and point reads",
+        "STORY-341 knowledge body migration is explicit and keeps metadata outside the body segments"
+      ]
+    },
+    "tests/story-342-343-map-docs.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 10,
+      "testNames": [
+        "STORY-342 every INIT-048 story claim has an independent command, reason code, and red leg",
+        "STORY-343 engine and helper documents describe segmented events, replay snapshots, and body migration",
+        "STORY-343 documentation proof names the helper archive refresh as a required step"
+      ]
+    },
     "tests/story-345-backend-selection.test.mjs": {
       "testCount": 2,
       "assertionCount": 9,
       "testNames": [
         "STORY-345 default segmented and explicit file backends produce the same work state",
         "STORY-345 backend selection rejects unknown values and does not silently fall back"
+      ]
+    },
+    "tests/story-346-pg-disabled.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 6,
+      "testNames": [
+        "STORY-346 local backend catalog excludes PostgreSQL and ADR states the MVP revision",
+        "STORY-346 the pg implementation remains present while the verification map has no pg fixture",
+        "STORY-346 production backend selection has no pg branch"
+      ]
+    },
+    "tests/story-347-348-settings-policy.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 17,
+      "testNames": [
+        "STORY-347 settings catalog exposes all six new keys and numeric bounds",
+        "STORY-347 settings reject below-minimum values and retrieval setting supplies the default excerpt window",
+        "STORY-348 provenance policy is an external JSON source and the aggregate setting is bounded by the canonical ceiling",
+        "STORY-348 protocol validity values remain hardcoded rather than becoming settings"
       ]
     },
     "tests/story-344-storage-boundary.test.mjs": {
