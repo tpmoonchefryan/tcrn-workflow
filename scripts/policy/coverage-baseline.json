@@ -684,6 +684,32 @@
         "INC-260 the reader does not compute a second full event-prefix digest"
       ]
     },
+    "tests/inc261-verification-links.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 12,
+      "testNames": [
+        "INC-261 Story verification links support forward query, reverse lookup, and GWT validation",
+        "INC-261 a scoped Story cannot reach done without a verification claim",
+        "INC-261 the stored map link uses a protocol work id and named GWTs"
+      ]
+    },
+    "tests/inc262-red-leg-coverage.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 10,
+      "testNames": [
+        "INC-262 red-leg coverage requires every claim to be independently falsifiable",
+        "INC-262 the global gate reds on a missing redLeg or an unapproved exemption",
+        "INC-262 a malformed exemption is red even when its timing is present"
+      ]
+    },
+    "tests/inc263-closeout.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 13,
+      "testNames": [
+        "INC-263 closeout verification is wired and ceremony cost measurement is deterministic",
+        "INC-263 a closeout wiring omission and malformed cost input are red"
+      ]
+    },
     "tests/init033-install-surface.test.mjs": {
       "testCount": 3,
       "assertionCount": 16,
@@ -1718,8 +1744,8 @@
       ]
     },
     "tests/stop-pact.test.mjs": {
-      "testCount": 39,
-      "assertionCount": 112,
+      "testCount": 40,
+      "assertionCount": 116,
       "testNames": [
         "no pact, or an inactive pact, always allows",
         "a pact bound to another session allows without disturbing its counter",
@@ -1758,8 +1784,9 @@
         "hook: completed pact (inactive) → allows the stop",
         "cli: start → status → block enforces the ticket vocabulary and records it",
         "cli: complete migrates a running pact to done and deactivates it",
-        "STORY-332 response checks distinguish prose violations from quoted/table content",
-        "STORY-331 re-reads the platform AGENTS section on every prompt"
+        "STORY-332 response checks keep rules 3 and 5 while ignoring quoted/table content",
+        "STORY-331 re-reads the platform AGENTS section on every prompt",
+        "INC-265 removes the unsupported prose length rule without weakening rules 3 and 5"
       ]
     },
     "tests/story-173-equivalence-redleg.test.mjs": {
