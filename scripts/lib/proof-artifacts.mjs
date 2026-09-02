@@ -123,10 +123,16 @@ const claimRouteAdditions = new Map([
 
 function fieldsForClaim(claim) {
   const legBearing = typeof claim?.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id));
-  if (legBearing) return [...claimFields, ...init047LegFields];
-  if (Object.hasOwn(claim ?? {}, "redLeg")) return [...claimFields, "redLeg"];
-  if (Object.hasOwn(claim ?? {}, "redLegExemption")) return [...claimFields, "redLegExemption"];
-  return claimFields;
+  const base = legBearing
+    ? [...claimFields, ...init047LegFields]
+    : Object.hasOwn(claim ?? {}, "redLeg")
+      ? [...claimFields, "redLeg"]
+      : Object.hasOwn(claim ?? {}, "redLegExemption")
+        ? [...claimFields, "redLegExemption"]
+        : [...claimFields];
+  if (Object.hasOwn(claim ?? {}, "workId")) base.push("workId");
+  if (Object.hasOwn(claim ?? {}, "gwt")) base.push("gwt");
+  return base;
 }
 const stagePrefix = ".tcrn-proof-artifact-";
 let sequence = 0;
