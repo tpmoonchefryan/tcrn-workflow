@@ -658,6 +658,32 @@
         "INC-256 policy migration also updates retired metadata without requiring a body"
       ]
     },
+    "tests/inc258-install-manifest.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 6,
+      "testNames": [
+        "INC-258 install wiring accepts the stopped backup removal",
+        "INC-258 install manifest matches the post-removal surface and rejects restored receipts"
+      ]
+    },
+    "tests/inc259-storage-migration.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 20,
+      "testNames": [
+        "INC-259 migration preserves materialized values and emits bounded segmented files",
+        "INC-259 the live eight partitions use storage version 2 and the 4 MiB bound",
+        "INC-259 an over-large segment limit is a red migration verification"
+      ]
+    },
+    "tests/inc260-snapshot-read-optimization.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 8,
+      "testNames": [
+        "INC-260 snapshot-backed state equals a full replay and rejects snapshot or segment corruption",
+        "INC-260 live snapshot reads have a regression slope below the 75 microsecond baseline",
+        "INC-260 the reader does not compute a second full event-prefix digest"
+      ]
+    },
     "tests/init033-install-surface.test.mjs": {
       "testCount": 3,
       "assertionCount": 16,
