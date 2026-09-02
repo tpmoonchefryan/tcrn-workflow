@@ -3335,7 +3335,7 @@
         "expectedReasonCode": "INIT048_STORY_339_VERIFIED"
       },
       "redLeg": {
-        "mutation": "Remove the documented-missing-entry assertion from the archive checker.",
+        "mutation": "Make the archive checker omit documented-but-missing entries from its result.",
         "test": "STORY-339 inventory detects both an undocumented disk entry and a documented missing entry",
         "expectedReasonCode": "INIT048_RED_LEG_REQUIRED"
       }
