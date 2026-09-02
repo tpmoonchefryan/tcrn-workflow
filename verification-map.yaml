@@ -3282,7 +3282,7 @@
         "scripts/task.mjs",
         "tests/story-338-339-archive-inventory.test.mjs"
       ],
-      "fixtureDigest": "326f371c18fddd9a13fb1150d927cb2cf863ad7cc3800628dd0f777dff2f9572",
+      "fixtureDigest": "ab12c6faae3571a933bdd31fe1dbaeeefc43ae3a5cd4726f0eb501ecb0d5982f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3317,7 +3317,7 @@
         "scripts/task.mjs",
         "tests/story-338-339-archive-inventory.test.mjs"
       ],
-      "fixtureDigest": "d4c84f7c9466c89644227fa900dd846b31eb41600983c6c22b2cdca07479ea47",
+      "fixtureDigest": "c294a3a9c8d96b32a019b29892d59db8c69983a3d110bf641d392bfa981e8fd4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

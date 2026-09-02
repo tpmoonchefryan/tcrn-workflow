@@ -2,12 +2,13 @@
 // STORY-338/339: archive cleanup and bidirectional container inventory.
 
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { APPROVED_ARCHIVE_DELETIONS, LATEST_CHAIN_SNAPSHOT, applyArchiveCleanup, archiveBaseline } from "../scripts/archive-cleanup.mjs";
 import { inspectArchiveInventory, parseArchiveInventory } from "../scripts/archive-inventory.mjs";
 
 const containerRoot = fileURLToPath(new URL("../../../", import.meta.url));
@@ -19,6 +20,20 @@ test("STORY-338 cleanup leaves only the approved archive inventory and the newes
   const entries = parseArchiveInventory(document);
   const result = await inspectArchiveInventory(archiveRoot, entries);
   assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(await readdir(resolve(archiveRoot, "chain-snapshots")), [LATEST_CHAIN_SNAPSHOT]);
+
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-s338-")));
+  try {
+    await mkdir(join(base, "chain-snapshots"));
+    await writeFile(join(base, "chain-snapshots", LATEST_CHAIN_SNAPSHOT), "latest", "utf8");
+    await writeFile(join(base, "chain-snapshots", "older.tar.gz"), "older", "utf8");
+    for (const name of APPROVED_ARCHIVE_DELETIONS) await mkdir(join(base, name));
+    const baseline = await archiveBaseline(base);
+    await applyArchiveCleanup(base, baseline);
+    assert.deepEqual(await readdir(join(base, "chain-snapshots")), [LATEST_CHAIN_SNAPSHOT]);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
 });
 
 test("STORY-339 inventory detects both an undocumented disk entry and a documented missing entry", async (context) => {
