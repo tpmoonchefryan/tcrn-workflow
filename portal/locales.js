@@ -195,6 +195,9 @@ const PORTAL_COPY = Object.freeze({
   "setting.execution.personalessDispatch.description": "Whether dispatch may run without a persona. The closed policy is either allowed or forbidden.",
   "setting.workspace.generatedArtifactsPath.label": "Artifacts directory",
   "setting.workspace.generatedArtifactsPath.description": "Workspace-relative directory for generated, reviewable artifacts. Absolute paths are refused.",
+  "setting.storage.segmentBytes.label": "Event segment byte limit",
+  "setting.storage.segmentBytes.description": "Maximum serialized bytes per new event segment. Lower values roll segments sooner; the setting is bounded and does not rewrite history.",
+  "concept.setting.storage.segmentBytes": "The byte ceiling used when new event segments roll. Existing history remains unchanged; the workspace storage version keeps legacy count-based segments readable.",
   "entities.field.jobTitle": "Job title",
   "entities.field.mission": "Mission",
   "entities.field.refusals": "Refusals",
@@ -271,6 +274,9 @@ const ZH_CN = {
 };
 
 Object.assign(JA, {
+  "setting.storage.segmentBytes.label": "イベントセグメントのバイト上限",
+  "setting.storage.segmentBytes.description": "新しいイベントセグメントのシリアライズ済みバイト上限。値を下げると早くロールし、履歴は書き換えません。",
+  "concept.setting.storage.segmentBytes": "新しいイベントセグメントをロールするバイト上限です。既存の履歴は変更せず、ワークスペースのストレージ版が旧来の件数分割を読み取り可能にします。",
   "health.actor": "アクター", "health.catalog": "カタログ", "health.validate": "検証", "search.command": "⌘K を開く",
   "vocabulary.conferenceTypes": "会議種別", "vocabulary.executionForms": "実行形式", "vocabulary.hosts": "ホスト", "vocabulary.roles": "ペルソナの役割", "vocabulary.efforts": "推論強度", "vocabulary.applicableHosts": "適用ホスト", "vocabulary.sourceEvidence": "公式根拠",
   "partition.label": "パーティション", "locale.label": "言語", "config.keyCount": "登録済みキー", "config.unset": "未設定", "prose.save": "ファイルを保存", "receipt.title": "エンジンのレシート", "receipt.empty": "まだ書き込みはありません。ここに表示されるのはページが組み立てた値ではなく、理由コード、チェーン版、レシートダイジェストを含むエンジン自身の回答です。", "receipt.reasonCode": "理由コード", "receipt.record": "レコード", "receipt.version": "チェーン版", "receipt.digest": "レシートダイジェスト", "receipt.head": "ヘッドイベント", "entities.restoreAll": "すべてのフィールドを復元",
@@ -279,6 +285,9 @@ Object.assign(JA, {
   "vocabulary.term.conferenceTypes.strategy.description": "方向性と目標の成果を定めます", "vocabulary.term.conferenceTypes.architecture.description": "構造上および技術上の選択を検討します", "vocabulary.term.conferenceTypes.risk.description": "脅威、緩和策、露出を明らかにします", "vocabulary.term.conferenceTypes.verification.description": "主張または成果物が妥当かを検証します", "vocabulary.term.conferenceTypes.release.description": "リリースまたは公開の判断を調整します", "vocabulary.term.conferenceTypes.incident.description": "進行中の障害または不一致に対応します", "vocabulary.term.conferenceTypes.retrospective.description": "実行サイクル後の学びを記録します", "vocabulary.term.executionForms.independent.description": "立場は別々のコンテキストで形成されました", "vocabulary.term.executionForms.single-context.description": "立場は1つの共有コンテキストで形成されました",
 });
 Object.assign(KO, {
+  "setting.storage.segmentBytes.label": "이벤트 세그먼트 바이트 상한",
+  "setting.storage.segmentBytes.description": "새 이벤트 세그먼트의 직렬화 바이트 상한입니다. 값을 낮추면 더 빨리 분할되며 기존 기록은 다시 쓰지 않습니다.",
+  "concept.setting.storage.segmentBytes": "새 이벤트 세그먼트를 분할할 때 사용하는 바이트 상한입니다. 기존 기록은 변경하지 않으며 워크스페이스 저장소 버전으로 이전 건수 기반 세그먼트를 읽을 수 있습니다.",
   "health.actor": "행위자", "health.catalog": "카탈로그", "health.validate": "검증", "search.command": "⌘K 열기",
   "vocabulary.conferenceTypes": "회의 유형", "vocabulary.executionForms": "실행 형식", "vocabulary.hosts": "호스트", "vocabulary.roles": "페르소나 역할", "vocabulary.efforts": "추론 강도", "vocabulary.applicableHosts": "적용 호스트", "vocabulary.sourceEvidence": "공식 근거",
   "partition.label": "파티션", "locale.label": "언어", "config.keyCount": "등록된 키", "config.unset": "설정되지 않음", "prose.save": "파일 저장", "receipt.title": "엔진 영수증", "receipt.empty": "아직 쓰기가 없습니다. 여기에 표시되는 것은 페이지가 조합한 값이 아니라 이유 코드, 체인 버전, 영수증 다이제스트를 포함하는 엔진 자체의 답변입니다.", "receipt.reasonCode": "이유 코드", "receipt.record": "레코드", "receipt.version": "체인 버전", "receipt.digest": "영수증 다이제스트", "receipt.head": "헤드 이벤트", "entities.restoreAll": "모든 필드 복원",
@@ -287,6 +296,9 @@ Object.assign(KO, {
   "vocabulary.term.conferenceTypes.strategy.description": "방향과 의도한 결과를 정합니다", "vocabulary.term.conferenceTypes.architecture.description": "구조적·기술적 선택을 검토합니다", "vocabulary.term.conferenceTypes.risk.description": "위협, 완화책, 노출을 드러냅니다", "vocabulary.term.conferenceTypes.verification.description": "주장이나 산출물이 타당한지 시험합니다", "vocabulary.term.conferenceTypes.release.description": "릴리스 또는 공개 결정을 조정합니다", "vocabulary.term.conferenceTypes.incident.description": "현재의 장애나 불일치에 대응합니다", "vocabulary.term.conferenceTypes.retrospective.description": "실행 주기 후의 학습을 기록합니다", "vocabulary.term.executionForms.independent.description": "입장은 서로 다른 맥락에서 형성되었습니다", "vocabulary.term.executionForms.single-context.description": "입장은 하나의 공유 맥락에서 형성되었습니다",
 });
 Object.assign(FR, {
+  "setting.storage.segmentBytes.label": "Limite d’octets des segments d’événements",
+  "setting.storage.segmentBytes.description": "Limite d’octets sérialisés pour chaque nouveau segment d’événements. Une valeur plus basse déclenche le roulement plus tôt ; l’historique n’est pas réécrit.",
+  "concept.setting.storage.segmentBytes": "Le plafond d’octets utilisé pour faire rouler les nouveaux segments d’événements. L’historique existant reste inchangé ; la version de stockage conserve la lecture des segments hérités par nombre.",
   "dashboard.audit": "Contrôle de session", "dashboard.auditTab": "Contrôles", "entities.field.mission": "Mandat", "entities.list": "Identités", "entities.personasTab": "Fiches", "health.actor": "acteur", "health.catalog": "catalogue", "health.validate": "valider", "models.persona": "Identité", "search.command": "⌘K ouvrir", "search.personas": "identité",
   "vocabulary.conferenceTypes": "Types de conférence", "vocabulary.executionForms": "Formes d'exécution", "vocabulary.hosts": "Hôtes", "vocabulary.roles": "Rôles des personas", "vocabulary.efforts": "Niveaux d'effort", "vocabulary.applicableHosts": "Hôtes applicables", "vocabulary.sourceEvidence": "Preuve officielle",
   "partition.label": "Partition active", "locale.label": "Langue", "config.keyCount": "clés enregistrées", "config.unset": "non défini", "prose.save": "Enregistrer le fichier", "receipt.title": "Reçu du moteur", "receipt.empty": "Aucune écriture pour le moment. Ce qui apparaît ici est la réponse du moteur lui-même — code de raison, version de chaîne et empreinte du reçu — jamais une valeur composée par cette page.", "receipt.reasonCode": "code de raison", "receipt.record": "enregistrement", "receipt.version": "version de chaîne", "receipt.digest": "empreinte du reçu", "receipt.head": "événement de tête", "entities.restoreAll": "Restaurer tous les champs",
@@ -295,6 +307,9 @@ Object.assign(FR, {
   "vocabulary.term.conferenceTypes.strategy.description": "Définit la direction et les résultats visés", "vocabulary.term.conferenceTypes.architecture.description": "Examine les choix structurels et techniques", "vocabulary.term.conferenceTypes.risk.description": "Met en évidence menaces, mesures et exposition", "vocabulary.term.conferenceTypes.verification.description": "Teste la solidité d'une affirmation ou d'une livraison", "vocabulary.term.conferenceTypes.release.description": "Coordonne une décision de publication ou de mise en production", "vocabulary.term.conferenceTypes.incident.description": "Répond à une panne ou un écart en cours", "vocabulary.term.conferenceTypes.retrospective.description": "Capture les enseignements après un cycle d'exécution", "vocabulary.term.executionForms.independent.description": "Les positions ont été formées dans des contextes distincts", "vocabulary.term.executionForms.single-context.description": "Les positions ont été formées dans un contexte partagé",
 });
 Object.assign(ZH_CN, {
+  "setting.storage.segmentBytes.label": "事件段字节上限",
+  "setting.storage.segmentBytes.description": "每个新事件段允许的序列化字节上限。值越低，分段越早滚动；设置有边界且不会改写历史。",
+  "concept.setting.storage.segmentBytes": "新事件段滚动所使用的字节上限。既有历史不变；工作区存储版本保持旧的按条数分段仍可读取。",
   "app.subtitle": "门户", "app.boundaryBody": "写入使用公共 CLI，并返回引擎回执。", "partition.label": "分区", "locale.label": "语言", "config.keyCount": "个已注册键", "config.unset": "未设置", "prose.save": "保存文件", "receipt.title": "引擎回执", "receipt.empty": "尚未写入。这里显示的是引擎自己的回答——原因码、链版本和回执摘要——绝不是页面自行拼出的值。", "receipt.reasonCode": "原因码", "receipt.record": "记录", "receipt.version": "链版本", "receipt.digest": "回执摘要", "receipt.head": "头部事件", "entities.restoreAll": "恢复全部字段", "chip.idle": "空闲", "health.actor": "操作者", "health.catalog": "目录", "health.validate": "校验", "config.lede": "从引擎读取已注册设置，并通过公共 CLI 修改。", "prose.lede": "工作区规则文档以普通文件编辑，并与实时引擎词汇核对。", "prose.fileNote": "普通文件", "reconcile.green": "文档中的所有命名键都已注册。", "entities.personasTab": "角色档案", "models.persona": "角色", "search.personas": "角色",
   "vocabulary.roles": "角色", "vocabulary.hosts": "宿主", "vocabulary.conferenceTypes": "会议类型", "vocabulary.executionForms": "执行形式", "vocabulary.efforts": "推理强度", "vocabulary.applicableHosts": "适用宿主", "vocabulary.sourceEvidence": "官方证据",
   "vocabulary.term.roles.orchestrator.description": "协调受约束的工作流决策", "vocabulary.term.roles.planner.description": "将意图转为可执行计划", "vocabulary.term.roles.implementer.description": "修改范围内的实现", "vocabulary.term.roles.reviewer.description": "检查证据并报告差异", "vocabulary.term.roles.gatekeeper.description": "执行命名的质量或权限门", "vocabulary.term.roles.steward.description": "维护受治理工作区的健康",
