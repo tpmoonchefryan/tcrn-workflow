@@ -122,7 +122,9 @@ export class FileBackend implements StorageBackend {
     const root = await this.boundDirectory(this.controlPath("events"));
     const entries = await readdir(root, { withFileTypes: true });
     entries.sort((left, right) => this.compare(left.name, right.name));
-    return entries.filter((entry) => entry.isFile() && /^(?:\d{6})\.(?:json|ndjson)$/u.test(entry.name)).map((entry) => entry.name);
+    // Return every entry so the engine can reject a temporary, special, or
+    // directory entry instead of silently hiding it from chain validation.
+    return entries.map((entry) => entry.name);
   }
 
   async readSegment(name: string): Promise<Buffer> {

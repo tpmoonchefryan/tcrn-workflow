@@ -37,8 +37,8 @@ export type SettingKey =
   | "execution.maxDispatchDepth"
   | "execution.personalessDispatch"
   | "execution.subagentPolicy"
-  | "storage.segmentBytes"
   | "storage.backend"
+  | "storage.segmentBytes"
   | "storage.snapshotEveryEvents"
   | "workspace.generatedArtifactsPath";
 
@@ -255,6 +255,14 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     allowedValues: ["allowed", "review-only", "forbidden"],
   },
   {
+    key: "storage.backend",
+    type: "enum",
+    controlType: "enum",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "file-segmented",
+    allowedValues: ["file", "file-segmented"],
+  },
+  {
     key: "storage.segmentBytes",
     type: "string",
     controlType: "number",
@@ -262,14 +270,6 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     defaultValue: "16777216",
     min: 4096,
     max: 67108864,
-  },
-  {
-    key: "storage.backend",
-    type: "enum",
-    controlType: "enum",
-    layerKind: SETTINGS_LAYER_KIND,
-    defaultValue: "file-segmented",
-    allowedValues: ["file", "file-segmented"],
   },
   {
     key: "storage.snapshotEveryEvents",

@@ -96,7 +96,10 @@ export class SegmentedBackend implements StorageBackend {
   async listSegmentNames(): Promise<string[]> {
     const entries = await this.delegate.listControlEntries("events");
     return entries
-      .filter((entry) => entry.isFile && !entry.isSymbolicLink && /^\d{6}\.ndjson$/u.test(entry.name))
+      // Sidecars are backend-owned and are not event segments. Every other
+      // entry is surfaced so the engine's shape check fails closed on residue.
+      .filter((entry) => entry.name !== this.profile.labelsIndexName && entry.name !== this.profile.timeIndexName &&
+        entry.name !== this.profile.manifestName && !entry.name.endsWith(this.profile.indexExtension))
       .map((entry) => entry.name)
       .sort(compareCanonicalText);
   }

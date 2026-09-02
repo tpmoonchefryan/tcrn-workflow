@@ -448,10 +448,12 @@ export type {
 // STORY-178: file↔pg bidirectional migration of the workspace data plane
 // (event segments, workspace metadata, and the two derived stores).
 export {
+  WORK_RECORD_FIELDS_MIGRATION_VERSION,
   WORKSPACE_MIGRATION_REASON_CODES,
   WORKSPACE_MIGRATION_VERIFIED,
   WorkspaceMigrationError,
   executeMigration,
+  migrateWorkRecordFields,
   planMigration,
   rollbackMigration,
   verifyMigration,
@@ -461,6 +463,7 @@ export type {
   MigrationOptions,
   MigrationPlan,
   MigrationVerification,
+  WorkRecordFieldsMigrationReport,
   WorkspaceMigrationReasonCode,
 } from "./workspace-migration.js";
 export {

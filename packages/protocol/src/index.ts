@@ -115,6 +115,13 @@ export interface WorkRecord {
   readonly updatedAt: string;
   readonly tombstone: boolean;
   readonly extensions: Readonly<Record<string, ExtensionValue>>;
+  // INIT-048 STORY-336: the four-field form is emitted by current writers. The
+  // optional type keeps a pre-migration event readable; the engine projection
+  // fills the absent values with null/null/null/[] before exposing state.
+  readonly scopeDigest?: string | null;
+  readonly title?: string | null;
+  readonly createdAt?: string | null;
+  readonly labels?: readonly string[];
 }
 
 export interface EventRecord {
@@ -431,11 +438,20 @@ export function assertVersionWindow(version: number, minimum: number, maximum: n
 }
 
 function assertWorkRecordShape(record: WorkRecord): void {
-  const expectedFields = [
+  const legacyFields = [
     "schemaVersion", "id", "externalKey", "projectId", "kind", "parentId",
     "status", "revision", "updatedAt", "tombstone", "extensions",
   ];
-  assertExactFields(record, expectedFields, "Work records");
+  if (record === null || typeof record !== "object" || Array.isArray(record)) {
+    fail("RECORD_MALFORMED", "unknown");
+  }
+  const currentFields = [...legacyFields, "createdAt", "labels", "scopeDigest", "title"];
+  const actualFields = Object.keys(record).sort(compareCanonicalText);
+  const legacy = JSON.stringify(actualFields) === JSON.stringify([...legacyFields].sort(compareCanonicalText));
+  const current = JSON.stringify(actualFields) === JSON.stringify([...currentFields].sort(compareCanonicalText));
+  if (!legacy && !current) {
+    fail("RECORD_MALFORMED", String(record.id ?? "unknown"));
+  }
   if (record.schemaVersion !== "tcrn.work.v1" || !Number.isSafeInteger(record.revision) || record.revision < 1 ||
     typeof record.tombstone !== "boolean") {
     fail("RECORD_MALFORMED", String(record.id ?? "unknown"));
@@ -454,6 +470,15 @@ function assertWorkRecordShape(record: WorkRecord): void {
   }
   if (!isWorkStatus(record.status)) {
     fail("RECORD_MALFORMED", String(record.id));
+  }
+  if (current) {
+    if (record.scopeDigest !== null && (typeof record.scopeDigest !== "string" || !/^[a-f0-9]{64}$/u.test(record.scopeDigest)) ||
+      (record.title !== null && typeof record.title !== "string") ||
+      (record.createdAt !== null && (typeof record.createdAt !== "string" || (() => { try { assertStrictInstant(record.createdAt); return false; } catch { return true; } })())) ||
+      !Array.isArray(record.labels) || record.labels.some((label) => typeof label !== "string") ||
+      new Set(record.labels).size !== record.labels.length) {
+      fail("RECORD_MALFORMED", String(record.id));
+    }
   }
 }
 

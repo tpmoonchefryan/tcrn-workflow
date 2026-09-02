@@ -13,6 +13,7 @@
 import { resolve } from "node:path";
 
 import { canonicalJson } from "../../protocol/src/index.js";
+import type { WorkRecord } from "../../protocol/src/index.js";
 import { ARTIFACT_LIMITS } from "./artifact-lifecycle.js";
 import { KNOWLEDGE_LIMITS } from "./knowledge-core.js";
 import { FileBackend, StorageError, WORKSPACE_CONTROL_DIRECTORY } from "./storage-backend.js";
@@ -80,6 +81,34 @@ export const WORKSPACE_MIGRATION_REASON_CODES = Object.freeze([
 export type WorkspaceMigrationReasonCode = typeof WORKSPACE_MIGRATION_REASON_CODES[number];
 
 export const WORKSPACE_MIGRATION_VERIFIED = "WORKSPACE_MIGRATION_VERIFIED" as const;
+
+// STORY-336: the work-record field migration is a projection migration. It
+// upgrades the in-memory record shape while leaving every append-only event
+// byte untouched; a caller can therefore run it once over a read result and
+// prove that the event count and head remain unchanged.
+export const WORK_RECORD_FIELDS_MIGRATION_VERSION = "tcrn.work-record-fields-migration.v1" as const;
+
+export interface WorkRecordFieldsMigrationReport {
+  readonly schemaVersion: typeof WORK_RECORD_FIELDS_MIGRATION_VERSION;
+  readonly records: readonly WorkRecord[];
+  readonly migratedRecords: number;
+  readonly eventCountBefore: number;
+  readonly eventCountAfter: number;
+}
+
+export function migrateWorkRecordFields(records: readonly WorkRecord[], eventCount = 0): WorkRecordFieldsMigrationReport {
+  const migratedRecords = records.map((record) => {
+    const hasFields = ["scopeDigest", "title", "createdAt", "labels"].some((field) => Object.hasOwn(record, field));
+    return hasFields ? record : { ...record, scopeDigest: null, title: null, createdAt: null, labels: [] };
+  });
+  return {
+    schemaVersion: WORK_RECORD_FIELDS_MIGRATION_VERSION,
+    records: migratedRecords,
+    migratedRecords: migratedRecords.filter((record, index) => record !== records[index]).length,
+    eventCountBefore: eventCount,
+    eventCountAfter: eventCount,
+  };
+}
 
 export class WorkspaceMigrationError extends Error {
   readonly reasonCode: WorkspaceMigrationReasonCode;

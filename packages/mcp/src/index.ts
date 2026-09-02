@@ -126,7 +126,9 @@ function workSummary(record: WorkRecord): JsonObject {
   return {
     id: record.id, externalKey: record.externalKey, kind: record.kind, status: record.status,
     projectId: record.projectId, parentId: record.parentId, revision: record.revision,
-    tombstone: record.tombstone, ...(binding === null ? {} : { templateBinding: binding }),
+    tombstone: record.tombstone, scopeDigest: record.scopeDigest ?? null, title: record.title ?? null,
+    createdAt: record.createdAt ?? null, labels: record.labels ?? [],
+    ...(binding === null ? {} : { templateBinding: binding }),
   };
 }
 

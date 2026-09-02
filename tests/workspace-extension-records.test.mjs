@@ -623,23 +623,23 @@ test("a workspace with zero conference/gate events keeps pre-change golden view 
     "- Version: 3",
     "- Projects: 1",
     "- Work records: 1",
-    "- Graph digest: `6d239441516ff6820afdd3f15a31f149ce3d3928606d3e76f115ba6e1addb336`",
+    "- Graph digest: `77e1c3115d36c515376cbdb6529d0f2d4556f523d21389352269f6f8f0a821fa`",
     "- Authority: derived and rebuildable from the event chain",
     "",
   ].join("\n"));
   assert.equal(
     await readFile(join(viewsRoot, "index.json"), "utf8"),
-    "{\"projects\":[{\"externalKey\":\"PROJECT-GOLDEN\",\"id\":\"project:0bf1a7f60bdb47a6be9f4586\",\"name\":\"Golden\",\"revision\":1,\"schemaVersion\":\"tcrn.project.v1\",\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:01Z\"}],\"schemaVersion\":\"tcrn.workspace-index.v2\",\"work\":[{\"extensions\":{},\"externalKey\":\"INITIATIVE-GOLDEN\",\"id\":\"work:7370232bfce90e21835d2977\",\"kind\":\"Initiative\",\"parentId\":null,\"projectId\":\"project:0bf1a7f60bdb47a6be9f4586\",\"revision\":2,\"schemaVersion\":\"tcrn.work.v1\",\"status\":\"ready\",\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:03Z\"}]}\n",
+    "{\"projects\":[{\"externalKey\":\"PROJECT-GOLDEN\",\"id\":\"project:0bf1a7f60bdb47a6be9f4586\",\"name\":\"Golden\",\"revision\":1,\"schemaVersion\":\"tcrn.project.v1\",\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:01Z\"}],\"schemaVersion\":\"tcrn.workspace-index.v2\",\"work\":[{\"createdAt\":\"2026-07-11T00:00:02Z\",\"extensions\":{},\"externalKey\":\"INITIATIVE-GOLDEN\",\"id\":\"work:7370232bfce90e21835d2977\",\"kind\":\"Initiative\",\"labels\":[],\"parentId\":null,\"projectId\":\"project:0bf1a7f60bdb47a6be9f4586\",\"revision\":2,\"schemaVersion\":\"tcrn.work.v1\",\"scopeDigest\":\"ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356\",\"status\":\"ready\",\"title\":null,\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:03Z\"}]}\n",
   );
   assert.equal(
     await readFile(join(viewsRoot, "readback.json"), "utf8"),
-    "{\"authority\":\"derived-rebuildable\",\"graphDigest\":\"6d239441516ff6820afdd3f15a31f149ce3d3928606d3e76f115ba6e1addb336\",\"headEventHash\":\"ed12d354e1286fa89f897ad8b5259d4bc2bc90f56a586ae02c46bb58e1c0ffa4\",\"projectCount\":1,\"schemaVersion\":\"tcrn.workspace-readback.v1\",\"version\":3,\"workCount\":1,\"workspaceId\":\"workspace:fefacf6fbd4eba98d40fdf99\"}\n",
+    "{\"authority\":\"derived-rebuildable\",\"graphDigest\":\"77e1c3115d36c515376cbdb6529d0f2d4556f523d21389352269f6f8f0a821fa\",\"headEventHash\":\"29efbf05b00282b3397af716de32db409fe41c2ea516884b42d7b4640638537b\",\"projectCount\":1,\"schemaVersion\":\"tcrn.workspace-readback.v1\",\"version\":3,\"workCount\":1,\"workspaceId\":\"workspace:fefacf6fbd4eba98d40fdf99\"}\n",
   );
   const exported = await exportWorkspace(fixture.workspace);
   assert.equal(canonicalSha256(assertCanonicalJson(exported)).length, 64);
   assert.equal(
     (await import("node:crypto")).createHash("sha256").update(exported, "utf8").digest("hex"),
-    "1cfc48bea69a4c20a69771f09c050cb6880036460a2571dfb32d1dca99a274c0",
+    "8e66e6849bddcf4b062bdcfa47c8c43420d1831f4bfdc818c4ac1c24b50446e0",
     "export bytes match the pre-WSD-1 build",
   );
   assert.equal(exported.includes("conferences"), false, "no extension keys leak into legacy exports");

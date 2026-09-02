@@ -1589,6 +1589,7 @@ function readGateEvidenceLocator(extensions: Readonly<Record<string, unknown>>):
 // itself rather than reconstructing it from a compressed external key.
 const ADVISORY_SCOPE_KEY = "advisory:scope";
 const ADVISORY_DECIDED_BY_KEY = "advisory:decided-by";
+const WORK_SCOPE_REFERENCE_VERSION = "tcrn.work-scope-reference.v1" as const;
 // INIT-008: advisory:sprint is the member-side tag that puts a work record on a
 // sprint / release-train batch. Its value is a QUALIFIED reference to the sprint
 // (a Release record) -- {workspaceId, workId} of full protocol ids -- so a member
@@ -1644,6 +1645,98 @@ function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisor
     next[ADVISORY_SPRINT_KEY] = { required: false, value: { workspaceId: advisory.sprint.workspaceId, workId: advisory.sprint.workId } };
   }
   return next;
+}
+
+function workExtensionsDigest(extensions: Readonly<Record<string, unknown>>): string {
+  return canonicalSha256(extensions as JsonValue);
+}
+
+function workScopeReference(digest: string): Readonly<Record<string, unknown>> {
+  return { required: false, value: { schemaVersion: WORK_SCOPE_REFERENCE_VERSION, digest } };
+}
+
+function workEventExtensions(record: WorkRecord, deduplicateScope: boolean): WorkRecord["extensions"] {
+  if (!deduplicateScope || typeof record.extensions[ADVISORY_SCOPE_KEY]?.value !== "string" || record.scopeDigest === null || record.scopeDigest === undefined) {
+    return record.extensions;
+  }
+  return {
+    ...record.extensions,
+    [ADVISORY_SCOPE_KEY]: workScopeReference(record.scopeDigest),
+  } as unknown as WorkRecord["extensions"];
+}
+
+function normalizeWorkRecord(record: WorkRecord, reasonCode: WorkspaceReasonCode = "WORKSPACE_EVENT_CORRUPT"): WorkRecord {
+  const currentFields = ["scopeDigest", "title", "createdAt", "labels"];
+  const present = currentFields.filter((field) => Object.hasOwn(record, field)).length;
+  if (present === 0) {
+    return { ...record, scopeDigest: null, title: null, createdAt: null, labels: [] };
+  }
+  if (present !== currentFields.length ||
+    (record.scopeDigest !== null && (typeof record.scopeDigest !== "string" || !/^[a-f0-9]{64}$/u.test(record.scopeDigest))) ||
+    (record.title !== null && typeof record.title !== "string") ||
+    (record.createdAt !== null && (typeof record.createdAt !== "string" || (() => { try { assertStrictInstant(record.createdAt); return false; } catch { return true; } })())) ||
+    !Array.isArray(record.labels) || record.labels.some((label) => typeof label !== "string") || new Set(record.labels).size !== record.labels.length) {
+    fail(reasonCode, `work ${String(record.id)} field upgrade is invalid`);
+  }
+  return record;
+}
+
+function normalizeWorkLabels(value: unknown, reasonCode: WorkspaceReasonCode = "WORKSPACE_INPUT_INVALID"): readonly string[] {
+  if (!Array.isArray(value) || value.some((label) => typeof label !== "string" || label.length === 0 || label.length > 128) || new Set(value).size !== value.length) {
+    fail(reasonCode, "work labels must be unique bounded strings");
+  }
+  return [...value].sort(compareCanonicalText);
+}
+
+function normalizeWorkTitle(value: unknown, reasonCode: WorkspaceReasonCode = "WORKSPACE_INPUT_INVALID"): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || value.length === 0 || [...value].length > 512) {
+    fail(reasonCode, "work title must be a non-empty bounded string");
+  }
+  try {
+    canonicalJson(value);
+  } catch (error) {
+    if (error instanceof ProtocolError) fail(reasonCode, error.message);
+    throw error;
+  }
+  return value;
+}
+
+function workFieldsForWrite(record: WorkRecord): WorkRecord {
+  const normalized = normalizeWorkRecord(record);
+  return {
+    ...normalized,
+    scopeDigest: workExtensionsDigest(normalized.extensions),
+    title: normalized.title ?? null,
+    createdAt: normalized.createdAt ?? null,
+    labels: normalized.labels ?? [],
+  };
+}
+
+function resolveWorkRecord(raw: WorkRecord, current: WorkRecord | undefined, reasonCode: WorkspaceReasonCode): WorkRecord {
+  const record = normalizeWorkRecord(raw, reasonCode);
+  const scopeEntry = record.extensions[ADVISORY_SCOPE_KEY];
+  const scopeValue = scopeEntry?.value;
+  if (scopeValue !== null && typeof scopeValue === "object" && !Array.isArray(scopeValue)) {
+    exactFields(scopeValue, ["digest", "schemaVersion"], reasonCode, "work scope reference");
+    const reference = scopeValue as Readonly<Record<string, unknown>>;
+    if (reference.schemaVersion !== WORK_SCOPE_REFERENCE_VERSION || typeof reference.digest !== "string" || !/^[a-f0-9]{64}$/u.test(reference.digest) || record.scopeDigest !== reference.digest || current === undefined) {
+      fail(reasonCode, `work ${record.id} scope reference is not resolvable`);
+    }
+    const previousScope = current.extensions[ADVISORY_SCOPE_KEY];
+    if (previousScope === undefined || typeof previousScope.value !== "string" || workExtensionsDigest(current.extensions) !== reference.digest) {
+      fail(reasonCode, `work ${record.id} scope reference does not match its predecessor`);
+    }
+    const extensions = { ...record.extensions, [ADVISORY_SCOPE_KEY]: previousScope } as WorkRecord["extensions"];
+    if (workExtensionsDigest(extensions) !== record.scopeDigest) {
+      fail(reasonCode, `work ${record.id} scope reference would change extensions`);
+    }
+    return { ...record, extensions };
+  }
+  if (record.scopeDigest !== null && record.scopeDigest !== undefined && record.scopeDigest !== workExtensionsDigest(record.extensions)) {
+    fail(reasonCode, `work ${record.id} scope digest does not match extensions`);
+  }
+  return record;
 }
 
 function isMinutesId(value: unknown): boolean {
@@ -1856,8 +1949,9 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       continue;
     }
     if (workOperations.has(operation)) {
-      const record = payloadRecord(payload, operation, actorRequired) as unknown as WorkRecord;
-      const current = work.get(record.id);
+      const rawRecord = payloadRecord(payload, operation, actorRequired) as unknown as WorkRecord;
+      const current = work.get(rawRecord.id);
+      const record = resolveWorkRecord(rawRecord, current, "WORKSPACE_EVENT_CORRUPT");
       if (record.updatedAt !== event.occurredAt) {
         fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} timestamp is not event-bound`);
       }
@@ -3893,6 +3987,8 @@ export function createWorkDelta(input: {
   readonly status?: WorkStatus;
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
+  readonly title?: string | null;
+  readonly labels?: readonly string[];
   readonly templateAdmission?: unknown;
   readonly occurredAt: string;
 }): (state: WorkspaceState) => MutationDelta {
@@ -3907,6 +4003,8 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
   readonly status?: WorkStatus;
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
+  readonly title?: string | null;
+  readonly labels?: readonly string[];
   readonly templateAdmission?: unknown;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => createWorkReducerDelta(state, input), input);
@@ -3920,6 +4018,8 @@ function createWorkReducerDelta(state: WorkspaceState, input: {
   readonly status?: WorkStatus;
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
+  readonly title?: string | null;
+  readonly labels?: readonly string[];
   readonly templateAdmission?: unknown;
   readonly occurredAt: string;
 }): MutationDelta {
@@ -3957,6 +4057,8 @@ function createWorkReducerDelta(state: WorkspaceState, input: {
     if (input.decidedBy !== undefined && (input.decidedBy.length === 0 || !input.decidedBy.every((item) => isMinutesId(item)))) {
       fail("WORKSPACE_INPUT_INVALID", "advisory decided-by must be a non-empty list of minutes ids");
     }
+    const title = normalizeWorkTitle(input.title);
+    const labels = normalizeWorkLabels(input.labels ?? []);
     const templateReceipt = input.templateAdmission === undefined
       ? undefined
       : validateTemplateAdmissionReceipt(input.templateAdmission);
@@ -3988,6 +4090,10 @@ function createWorkReducerDelta(state: WorkspaceState, input: {
       updatedAt: input.occurredAt,
       tombstone: false,
       extensions: extensions as WorkRecord["extensions"],
+      scopeDigest: workExtensionsDigest(extensions),
+      title,
+      createdAt: input.occurredAt,
+      labels,
     };
     // A bound Story is governed by the admitted heading data, not by the
     // pre-template ten-heading parser.  Unbound records retain the legacy
@@ -4101,10 +4207,11 @@ function transitionWorkReducerDelta(state: WorkspaceState, input: { readonly id:
     // transition whose target is done (the designated set); the reducer replays
     // the identical predicate as WORKSPACE_EVENT_CORRUPT.
     assertGateClearance(state.gates, current.id, input.status, "WORKSPACE_GATE_PENDING");
-    const record: WorkRecord = { ...current, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
+    const record: WorkRecord = { ...workFieldsForWrite(current), status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
     validateBoundTemplateWork(record, state.templates);
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
-    return { payload: { operation: "work.updated", record: workJsonFields(record) }, projects: state.projects, work };
+    const storedRecord: WorkRecord = { ...record, extensions: workEventExtensions(record, true) };
+    return { payload: { operation: "work.updated", record: workJsonFields(storedRecord) }, projects: state.projects, work };
   }
 }
 
@@ -4122,6 +4229,8 @@ export function annotateWorkDelta(input: {
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly sprint?: SprintReference;
+  readonly title?: string | null;
+  readonly labels?: readonly string[];
   readonly occurredAt: string;
 }): (state: WorkspaceState) => MutationDelta {
   return (state) => annotateWorkReducerDelta(state, input);
@@ -4132,6 +4241,8 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly sprint?: SprintReference;
+  readonly title?: string | null;
+  readonly labels?: readonly string[];
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => annotateWorkReducerDelta(state, input), input);
 }
@@ -4141,6 +4252,8 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly sprint?: SprintReference;
+  readonly title?: string | null;
+  readonly labels?: readonly string[];
   readonly occurredAt: string;
 }): MutationDelta {
   {
@@ -4148,8 +4261,8 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     if (current.tombstone) {
       fail("WORKSPACE_INPUT_INVALID", `work ${input.id} is deleted`);
     }
-    if (input.scope === undefined && input.decidedBy === undefined && input.sprint === undefined) {
-      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, or sprint");
+    if (input.scope === undefined && input.decidedBy === undefined && input.sprint === undefined && input.title === undefined && input.labels === undefined) {
+      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, sprint, title, or labels");
     }
     if (input.scope !== undefined && input.scope.length === 0) {
       fail("WORKSPACE_INPUT_INVALID", "advisory scope must be a non-empty string");
@@ -4160,15 +4273,26 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     if (input.sprint !== undefined && !isSprintReference(input.sprint)) {
       fail("WORKSPACE_INPUT_INVALID", "advisory sprint must be a {workspaceId, workId} qualified reference");
     }
+    const title = input.title === undefined ? current.title ?? null : normalizeWorkTitle(input.title);
+    const labels = input.labels === undefined ? current.labels ?? [] : normalizeWorkLabels(input.labels);
     const extensions = workAdvisoryExtensions(current.extensions, {
       ...(input.scope !== undefined ? { scope: input.scope } : {}),
       ...(input.decidedBy !== undefined ? { decidedBy: input.decidedBy } : {}),
       ...(input.sprint !== undefined ? { sprint: input.sprint } : {}),
     });
-    if (canonicalJson(extensions as JsonValue) === canonicalJson(current.extensions as unknown as JsonValue)) {
-      fail("WORKSPACE_INPUT_INVALID", "annotation does not change any advisory field");
+    if (canonicalJson(extensions as JsonValue) === canonicalJson(current.extensions as unknown as JsonValue) &&
+      title === (current.title ?? null) && canonicalJson(labels as JsonValue) === canonicalJson((current.labels ?? []) as JsonValue)) {
+      fail("WORKSPACE_INPUT_INVALID", "annotation does not change any work field");
     }
-    const record: WorkRecord = { ...current, extensions: extensions as WorkRecord["extensions"], revision: current.revision + 1, updatedAt: input.occurredAt };
+    const record: WorkRecord = {
+      ...workFieldsForWrite(current),
+      extensions: extensions as WorkRecord["extensions"],
+      scopeDigest: workExtensionsDigest(extensions),
+      title,
+      labels,
+      revision: current.revision + 1,
+      updatedAt: input.occurredAt,
+    };
     const templateBound = templateBindingFromWorkRecord(record) !== null;
     if (record.kind === "Story" && input.scope !== undefined && !templateBound) {
       const compliance = validateStoryRecord(record);
@@ -4188,10 +4312,11 @@ export async function deleteWork(workspaceRoot: string, lease: WorkspaceLease, i
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
     const current = workById(state, input.id);
-    const record: WorkRecord = { ...current, revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true };
+    const record: WorkRecord = { ...workFieldsForWrite(current), revision: current.revision + 1, updatedAt: input.occurredAt, tombstone: true };
     validateBoundTemplateWork(record, state.templates);
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
-    return { payload: { operation: "work.deleted", record: workJsonFields(record) }, projects: state.projects, work };
+    const storedRecord: WorkRecord = { ...record, extensions: workEventExtensions(record, true) };
+    return { payload: { operation: "work.deleted", record: workJsonFields(storedRecord) }, projects: state.projects, work };
   }, input);
 }
 
