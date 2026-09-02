@@ -128,7 +128,11 @@ import {
 import type { WorkspaceSettingRecord } from "./settings.js";
 
 export const WORKSPACE_SCHEMA_VERSION = "tcrn.workspace.v1" as const;
-export const WORKSPACE_STORAGE_VERSION = 1 as const;
+export const WORKSPACE_STORAGE_VERSION = 2 as const;
+export const WORKSPACE_LEGACY_STORAGE_VERSION = 1 as const;
+export const WORKSPACE_SEGMENT_BYTES_DEFAULT = 16_777_216 as const;
+export const WORKSPACE_SEGMENT_BYTES_MIN = 4_096 as const;
+export const WORKSPACE_SEGMENT_BYTES_MAX = 67_108_864 as const;
 export const WORKSPACE_CONTROL_DIRECTORY = ".tcrn-workflow" as const;
 export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_ACTOR_INVALID",
@@ -290,9 +294,9 @@ export type WorkspaceAdmission = "live" | "adoption" | "abort" | "any";
 
 export interface WorkspaceMetadata {
   readonly schemaVersion: typeof WORKSPACE_SCHEMA_VERSION;
-  readonly storageVersion: 1;
+  readonly storageVersion: 1 | 2;
   readonly minimumStorageVersion: 1;
-  readonly maximumStorageVersion: 1;
+  readonly maximumStorageVersion: 1 | 2;
   readonly workspaceId: string;
   readonly externalKey: string;
   readonly createdAt: string;
@@ -891,13 +895,18 @@ function validateMetadata(value: unknown): WorkspaceMetadata {
   if (typeof value.storageVersion === "number" && value.storageVersion > WORKSPACE_STORAGE_VERSION) {
     fail("WORKSPACE_MIGRATION_FUTURE", String(value.storageVersion));
   }
-  if (typeof value.storageVersion === "number" && value.storageVersion < WORKSPACE_STORAGE_VERSION) {
+  if (typeof value.storageVersion === "number" && value.storageVersion < WORKSPACE_LEGACY_STORAGE_VERSION) {
     fail("WORKSPACE_MIGRATION_DOWNGRADE", String(value.storageVersion));
   }
-  if (value.schemaVersion !== WORKSPACE_SCHEMA_VERSION || value.storageVersion !== 1 || value.minimumStorageVersion !== 1 ||
-    value.maximumStorageVersion !== 1 || typeof value.workspaceId !== "string" || typeof value.externalKey !== "string" ||
-    typeof value.createdAt !== "string" || !Number.isSafeInteger(value.segmentEventLimit) || Number(value.segmentEventLimit) < 2 ||
-    Number(value.segmentEventLimit) > 1024 || !Array.isArray(value.roots) || value.roots.length !== 5) {
+  const legacyStorage = value.storageVersion === WORKSPACE_LEGACY_STORAGE_VERSION && value.minimumStorageVersion === 1 &&
+    value.maximumStorageVersion === 1 && Number.isSafeInteger(value.segmentEventLimit) &&
+    Number(value.segmentEventLimit) >= 2 && Number(value.segmentEventLimit) <= 1024;
+  const segmentedStorage = value.storageVersion === WORKSPACE_STORAGE_VERSION && value.minimumStorageVersion === 1 &&
+    value.maximumStorageVersion === WORKSPACE_STORAGE_VERSION && Number.isSafeInteger(value.segmentEventLimit) &&
+    Number(value.segmentEventLimit) >= WORKSPACE_SEGMENT_BYTES_MIN && Number(value.segmentEventLimit) <= WORKSPACE_SEGMENT_BYTES_MAX;
+  if (value.schemaVersion !== WORKSPACE_SCHEMA_VERSION || (!legacyStorage && !segmentedStorage) ||
+    typeof value.workspaceId !== "string" || typeof value.externalKey !== "string" ||
+    typeof value.createdAt !== "string" || !Array.isArray(value.roots) || value.roots.length !== 5) {
     fail("WORKSPACE_SCHEMA_INVALID", "workspace metadata is not V1");
   }
   try {
@@ -993,31 +1002,55 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
   // WORKSPACE_EVENT_CORRUPT exactly as before.
   const backend = backendFor(workspaceRoot);
   const entries = await backend.listSegmentNames();
+  const segmentedStorage = metadata.storageVersion === WORKSPACE_STORAGE_VERSION;
+  const suffix = segmentedStorage ? "ndjson" : "json";
   const segmentNames: string[] = [];
   for (const name of entries) {
-    if (!/^\d{6}\.json$/u.test(name)) {
+    if (!(new RegExp(`^\\d{6}\\.${suffix}$`, "u")).test(name)) {
       fail("WORKSPACE_EVENT_CORRUPT", `unexpected event entry ${name}`);
     }
     segmentNames.push(name);
   }
   const events: EventRecord[] = [];
   for (const [index, name] of segmentNames.entries()) {
-    if (name !== `${String(index + 1).padStart(6, "0")}.json`) {
+    if (name !== `${String(index + 1).padStart(6, "0")}.${suffix}`) {
       fail("WORKSPACE_EVENT_CORRUPT", `event segment gap at ${name}`);
     }
     const content = await backend.readSegment(name);
-    let parsed: JsonValue;
-    try {
-      parsed = assertCanonicalJson(content.toString("utf8"));
-    } catch (error) {
-      fail("WORKSPACE_EVENT_CORRUPT", String((error as { message?: string }).message ?? error));
-    }
-    if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > metadata.segmentEventLimit ||
-      (index < segmentNames.length - 1 && parsed.length !== metadata.segmentEventLimit)) {
-      fail("WORKSPACE_EVENT_CORRUPT", `${name} has an invalid segment length`);
-    }
-    for (const event of parsed) {
-      events.push(event as unknown as EventRecord);
+    if (segmentedStorage) {
+      const text = content.toString("utf8");
+      if (!text.endsWith("\n") || text.endsWith("\n\n")) {
+        fail("WORKSPACE_EVENT_CORRUPT", `${name} is not canonical NDJSON`);
+      }
+      for (const line of text.split("\n").slice(0, -1)) {
+        try {
+          const parsed = assertCanonicalJson(`${line}\n`);
+          if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+            fail("WORKSPACE_EVENT_CORRUPT", `${name} contains a non-event record`);
+          }
+          events.push(parsed as unknown as EventRecord);
+        } catch (error) {
+          if (error instanceof WorkspaceError) throw error;
+          fail("WORKSPACE_EVENT_CORRUPT", String((error as { message?: string }).message ?? error));
+        }
+      }
+      if (text.length === 1) {
+        fail("WORKSPACE_EVENT_CORRUPT", `${name} is empty`);
+      }
+    } else {
+      let parsed: JsonValue;
+      try {
+        parsed = assertCanonicalJson(content.toString("utf8"));
+      } catch (error) {
+        fail("WORKSPACE_EVENT_CORRUPT", String((error as { message?: string }).message ?? error));
+      }
+      if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > metadata.segmentEventLimit ||
+        (index < segmentNames.length - 1 && parsed.length !== metadata.segmentEventLimit)) {
+        fail("WORKSPACE_EVENT_CORRUPT", `${name} has an invalid segment length`);
+      }
+      for (const event of parsed) {
+        events.push(event as unknown as EventRecord);
+      }
     }
   }
   assertWorkspaceRecordCount(events.length);
@@ -2147,10 +2180,27 @@ export function workspaceBudgets(state: WorkspaceState): WorkspaceBudgetReport {
     return { name: source.name, bytes, limitBytes, headroomBytes: limitBytes - bytes };
   });
   let maxSegmentBytes = 0;
-  const segmentLimit = state.metadata.segmentEventLimit;
-  for (let start = 0; start < state.events.length; start += segmentLimit) {
-    const bytes = canonicalByteLength(state.events.slice(start, start + segmentLimit));
-    if (bytes > maxSegmentBytes) maxSegmentBytes = bytes;
+  if (state.metadata.storageVersion === WORKSPACE_LEGACY_STORAGE_VERSION) {
+    const segmentLimit = state.metadata.segmentEventLimit;
+    for (let start = 0; start < state.events.length; start += segmentLimit) {
+      const bytes = canonicalByteLength(state.events.slice(start, start + segmentLimit));
+      if (bytes > maxSegmentBytes) maxSegmentBytes = bytes;
+    }
+  } else {
+    const segmentLimit = segmentBytesForState(state);
+    let segmentBytes = 0;
+    let segmentEvents = 0;
+    for (const event of state.events) {
+      const eventBytes = Buffer.byteLength(canonicalJson(event), "utf8");
+      if (segmentEvents > 0 && segmentBytes + eventBytes > segmentLimit) {
+        if (segmentBytes > maxSegmentBytes) maxSegmentBytes = segmentBytes;
+        segmentBytes = 0;
+        segmentEvents = 0;
+      }
+      segmentBytes += eventBytes;
+      segmentEvents += 1;
+    }
+    if (segmentBytes > maxSegmentBytes) maxSegmentBytes = segmentBytes;
   }
   return {
     views,
@@ -3062,6 +3112,8 @@ export async function initializeWorkspace(options: {
   readonly externalKey: string;
   readonly createdAt: string;
   readonly segmentEventLimit?: number;
+  readonly segmentBytes?: number;
+  readonly storageVersion?: 1 | 2;
   readonly detectedFilesystemTypeForTest?: number;
 }): Promise<WorkspaceState> {
   const roots = await assertDistinctRoots(options.roots);
@@ -3072,9 +3124,17 @@ export async function initializeWorkspace(options: {
   await assertSupportedWorkspaceFilesystem(workspace.canonicalPath, options.detectedFilesystemTypeForTest);
   const externalKey = canonicalExternalKey(options.externalKey);
   assertStrictInstant(options.createdAt);
-  const segmentEventLimit = options.segmentEventLimit ?? 64;
-  if (!Number.isSafeInteger(segmentEventLimit) || segmentEventLimit < 2 || segmentEventLimit > 1024) {
-    fail("WORKSPACE_SCHEMA_INVALID", "segment event limit must be 2-1024");
+  const storageVersion = options.storageVersion ?? (options.segmentEventLimit === undefined ? WORKSPACE_STORAGE_VERSION : WORKSPACE_LEGACY_STORAGE_VERSION);
+  const segmentEventLimit = storageVersion === WORKSPACE_LEGACY_STORAGE_VERSION
+    ? options.segmentEventLimit ?? 64
+    : options.segmentBytes ?? options.segmentEventLimit ?? WORKSPACE_SEGMENT_BYTES_DEFAULT;
+  const segmentValid = storageVersion === WORKSPACE_LEGACY_STORAGE_VERSION
+    ? Number.isSafeInteger(segmentEventLimit) && segmentEventLimit >= 2 && segmentEventLimit <= 1024
+    : Number.isSafeInteger(segmentEventLimit) && segmentEventLimit >= WORKSPACE_SEGMENT_BYTES_MIN && segmentEventLimit <= WORKSPACE_SEGMENT_BYTES_MAX;
+  if (!segmentValid) {
+    fail("WORKSPACE_SCHEMA_INVALID", storageVersion === WORKSPACE_LEGACY_STORAGE_VERSION
+      ? "segment event limit must be 2-1024"
+      : `segment byte limit must be ${WORKSPACE_SEGMENT_BYTES_MIN}-${WORKSPACE_SEGMENT_BYTES_MAX}`);
   }
   const backend = backendFor(workspace.canonicalPath);
   try {
@@ -3090,9 +3150,9 @@ export async function initializeWorkspace(options: {
   await backend.ensureControlDirectory("backups");
   const metadata: WorkspaceMetadata = {
     schemaVersion: WORKSPACE_SCHEMA_VERSION,
-    storageVersion: 1,
+    storageVersion,
     minimumStorageVersion: 1,
-    maximumStorageVersion: 1,
+    maximumStorageVersion: storageVersion,
     workspaceId: deriveStableId("workspace", externalKey),
     externalKey,
     createdAt: options.createdAt,
@@ -3187,6 +3247,18 @@ export interface MutationDelta {
   readonly settings?: readonly WorkspaceSettingRecord[];
   readonly executionConfig?: ExecutionConfigState;
   readonly templates?: readonly TemplateAdmissionRecord[];
+}
+
+function segmentBytesForState(state: WorkspaceState): number {
+  if (state.metadata.storageVersion === WORKSPACE_LEGACY_STORAGE_VERSION) {
+    return state.metadata.segmentEventLimit;
+  }
+  const configured = state.settings.find((entry) => entry.key === "storage.segmentBytes")?.value;
+  const value = configured === undefined ? state.metadata.segmentEventLimit : Number(configured);
+  if (!Number.isSafeInteger(value) || value < WORKSPACE_SEGMENT_BYTES_MIN || value > WORKSPACE_SEGMENT_BYTES_MAX) {
+    fail("WORKSPACE_SCHEMA_INVALID", "storage.segmentBytes is outside its declared bounds");
+  }
+  return value;
 }
 
 // STORY-300. One append and many appends are the same operation with a different
@@ -3331,23 +3403,48 @@ export async function appendEvents(
     // canonical form fails closed at one MiB, so computing them lazily would let
     // the first segment land and the second refuse -- the shape INC-198 recorded,
     // rebuilt one layer down.
-    const limit = workspace.metadata.segmentEventLimit;
-    const grouped = new Map<number, EventRecord[]>();
-    for (const event of appended) {
-      const index = Math.floor((event.sequence - 1) / limit) + 1;
-      const list = grouped.get(index) ?? [];
-      list.push(event);
-      grouped.set(index, list);
-    }
-    // Ascending segment order is a hard invariant, not a preference: a non-final
-    // segment left under-full reads as chain corruption, and that refusal lives
-    // inside materialize, so writing a later segment first would take `status` and
-    // `recover` down together.
-    const writes = [...grouped.keys()].sort((left, right) => left - right).map((index) => ({
-      index,
-      name: `${String(index).padStart(6, "0")}.json`,
-      bytes: canonicalJson([...state.events.slice((index - 1) * limit, index * limit), ...(grouped.get(index) ?? [])]),
-    }));
+    const writes = workspace.metadata.storageVersion === WORKSPACE_LEGACY_STORAGE_VERSION
+      ? (() => {
+        const limit = workspace.metadata.segmentEventLimit;
+        const grouped = new Map<number, EventRecord[]>();
+        for (const event of appended) {
+          const index = Math.floor((event.sequence - 1) / limit) + 1;
+          const list = grouped.get(index) ?? [];
+          list.push(event);
+          grouped.set(index, list);
+        }
+        // Ascending segment order is a hard invariant, not a preference: a non-final
+        // segment left under-full reads as chain corruption, and that refusal lives
+        // inside materialize, so writing a later segment first would take `status` and
+        // `recover` down together.
+        return [...grouped.keys()].sort((left, right) => left - right).map((index) => ({
+          index,
+          name: `${String(index).padStart(6, "0")}.json`,
+          bytes: canonicalJson([...state.events.slice((index - 1) * limit, index * limit), ...(grouped.get(index) ?? [])]),
+        }));
+      })()
+      : (() => {
+        const limit = segmentBytesForState(current);
+        const segments: EventRecord[][] = [];
+        let currentSegment: EventRecord[] = [];
+        let currentBytes = 0;
+        for (const event of [...state.events, ...appended]) {
+          const eventBytes = Buffer.byteLength(canonicalJson(event), "utf8");
+          if (currentSegment.length > 0 && currentBytes + eventBytes > limit) {
+            segments.push(currentSegment);
+            currentSegment = [];
+            currentBytes = 0;
+          }
+          currentSegment.push(event);
+          currentBytes += eventBytes;
+        }
+        if (currentSegment.length > 0) segments.push(currentSegment);
+        return segments.map((events, index) => ({
+          index: index + 1,
+          name: `${String(index + 1).padStart(6, "0")}.ndjson`,
+          bytes: events.map((event) => canonicalJson(event)).join(""),
+        }));
+      })();
     const backend = backendFor(workspace.root);
     for (const write of writes) {
       await backend.writeSegment(write.name, Buffer.from(write.bytes, "utf8"), options.crashAt);

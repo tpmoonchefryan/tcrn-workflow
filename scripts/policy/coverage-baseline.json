@@ -1763,6 +1763,14 @@
         "positive generation and final-hop outcomes stay equivalent while template roots remain host-specific"
       ]
     },
+    "tests/story-333-byte-segments.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 13,
+      "testNames": [
+        "STORY-333 byte threshold creates bounded segments and preserves legacy segments",
+        "STORY-333 byte rolling is not replaced by event-count rolling"
+      ]
+    },
     "tests/story-344-storage-boundary.test.mjs": {
       "testCount": 2,
       "assertionCount": 6,

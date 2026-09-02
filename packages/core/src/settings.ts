@@ -37,6 +37,7 @@ export type SettingKey =
   | "execution.maxDispatchDepth"
   | "execution.personalessDispatch"
   | "execution.subagentPolicy"
+  | "storage.segmentBytes"
   | "workspace.generatedArtifactsPath";
 
 export interface SettingsCatalogEntry {
@@ -250,6 +251,15 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "allowed",
     allowedValues: ["allowed", "review-only", "forbidden"],
+  },
+  {
+    key: "storage.segmentBytes",
+    type: "string",
+    controlType: "number",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "16777216",
+    min: 4096,
+    max: 67108864,
   },
   {
     key: "workspace.generatedArtifactsPath",
