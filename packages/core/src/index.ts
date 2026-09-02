@@ -450,6 +450,9 @@ export {
   STORY_SCOPE_HEADINGS,
   storyScopeFromRecord,
   storyScopeNamesOwnerDecider,
+  validateStoryVerificationLinks,
+  verificationClaimsForWork,
+  verificationWorksForClaim,
   validateStoryRecord,
   validateStoryScope,
   validateTemplateScope,
@@ -461,6 +464,9 @@ export type {
   StoryScopeProblemCode,
   StoryScopeSection,
   StoryScopeValidation,
+  StoryVerificationLinkProblem,
+  StoryVerificationLinkValidation,
+  VerificationClaimLink,
 } from "./story-scope-compliance.js";
 // STORY-178: file↔pg bidirectional migration of the workspace data plane
 // (event segments, workspace metadata, and the two derived stores).

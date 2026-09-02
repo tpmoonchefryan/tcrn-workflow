@@ -109,6 +109,7 @@
     "verify:inc258": "node scripts/task.mjs inc258",
     "verify:inc259": "node scripts/task.mjs inc259",
     "verify:inc260": "node scripts/task.mjs inc260",
+    "verify:inc261": "node scripts/task.mjs inc261",
     "verify:inc262": "node scripts/task.mjs inc262",
     "verify:inc263": "node scripts/task.mjs inc263",
     "verify:inc264": "node scripts/task.mjs inc264",
