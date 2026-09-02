@@ -1763,6 +1763,14 @@
         "positive generation and final-hop outcomes stay equivalent while template roots remain host-specific"
       ]
     },
+    "tests/story-344-storage-boundary.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 6,
+      "testNames": [
+        "STORY-344 workspace lifecycle data-plane operations use StorageBackend",
+        "STORY-344 workspace lifecycle has no direct data-plane fs calls"
+      ]
+    },
     "tests/story-rule-conservation.test.mjs": {
       "testCount": 4,
       "assertionCount": 7,
