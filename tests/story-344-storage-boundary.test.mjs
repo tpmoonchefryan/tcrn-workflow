@@ -82,6 +82,7 @@ test("STORY-344 workspace lifecycle data-plane operations use StorageBackend", a
       "ensureControlDirectory:events",
       "ensureControlDirectory:views",
       "ensureControlDirectory:backups",
+      "ensureControlDirectory:snapshots",
     ]);
 
     const lease = await withStorageBackendFactory(
@@ -97,10 +98,12 @@ test("STORY-344 workspace lifecycle data-plane operations use StorageBackend", a
     } finally {
       await lease.release();
     }
-    assert.deepEqual(backend.calls.slice(4), [
+    assert.deepEqual(backend.calls.slice(5), [
       "listControlEntries:events",
       "removeControlFile:events/.tmp-story-344",
       "listControlEntries:views",
+      "listControlEntries:snapshots",
+      "listControlEntries:snapshots",
     ]);
   } finally {
     await fx.close();

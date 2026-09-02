@@ -120,9 +120,9 @@ test("STORY-333 byte threshold creates bounded segments and preserves legacy seg
 test("STORY-333 byte rolling is not replaced by event-count rolling", async () => {
   const source = await readFile(new URL("../packages/core/src/workspace.ts", import.meta.url), "utf8");
   const start = source.indexOf("const writes =");
-  const end = source.indexOf("const backend = backendFor", start);
+  const end = source.indexOf("for (const write of writes)", start);
   const relevant = source.slice(start, end);
   assert.match(relevant, /Buffer\.byteLength\(canonicalJson\(event\), "utf8"\)/u);
   assert.match(source, /entry\.key === "storage\.segmentBytes"/u);
-  assert.match(relevant, /name: `\$\{String\(index \+ 1\)\.padStart\(6, "0"\)\}\.ndjson`/u);
+  assert.match(relevant, /currentName = lastExistingName \?\? `\$\{String\(nextIndex \+ 1\)\.padStart\(6, "0"\)\}\.ndjson`/u);
 });

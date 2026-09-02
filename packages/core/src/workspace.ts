@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { constants } from "node:fs";
 import {
@@ -44,11 +44,11 @@ import type {
 } from "../../protocol/src/index.js";
 import { assertDistinctRootShape, assertDistinctRoots, rootPortableIdentity } from "./root-identity.js";
 import { FileBackend, StorageError } from "./storage-backend.js";
-import type { StorageBackend } from "./storage-backend.js";
+import type { StorageBackend, StorageDirectoryEntry } from "./storage-backend.js";
 import { SegmentedBackend } from "./segmented-backend.js";
 import { readStorageHomeDeclaration } from "./storage-home.js";
 import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
-import { recordClosureValidation, recordCollectionScan, recordExtensionClosureValidation, recordFullMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
+import { recordClosureValidation, recordCollectionScan, recordExtensionClosureValidation, recordFullMaterialize, recordSnapshotMaterialize, recordTerminalGraphValidation } from "./workspace-perf-instrumentation.js";
 import {
   ACTOR_ATTESTATION_ENABLE_OPERATION,
   ActorAttestationError,
@@ -193,6 +193,7 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_RELOCATION_LEDGER_INVALID",
   "WORKSPACE_RELOCATION_VACATED",
   "WORKSPACE_SCHEMA_INVALID",
+  "WORKSPACE_SNAPSHOT_INVALID",
   // INC-074: a workspace whose chain has been migrated to Postgres carries a
   // storage-home sentinel (`.tcrn-workflow/storage-home.json`). The file backend
   // refuses every mutating verb on such a workspace — the write door is closed, so
@@ -339,6 +340,59 @@ export interface WorkspaceState {
   // for every workspace that never enables attestation, actor stays absent and
   // the derived state and export bytes are byte-identical to rc.4.
   readonly attestationEnabledAtSequence: number | null;
+}
+
+// STORY-337: this is a read-path replay checkpoint, not the backup snapshot
+// manifest owned by workspace-snapshot.ts. It contains the reducer's derived
+// collections at one event boundary and never replaces the append-only event
+// history. The event prefix is supplied by the event reader when the public
+// WorkspaceState is assembled, so callers keep the existing state shape.
+const WORKSPACE_REPLAY_SNAPSHOT_VERSION = "tcrn.workspace-replay-snapshot.v1" as const;
+const WORKSPACE_REPLAY_SNAPSHOT_MANIFEST_VERSION = "tcrn.workspace-replay-snapshot-manifest.v1" as const;
+const WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY = "snapshots" as const;
+const WORKSPACE_REPLAY_SNAPSHOT_MANIFEST = "manifest.json" as const;
+const WORKSPACE_REPLAY_SNAPSHOT_INTERVAL_DEFAULT = 512 as const;
+const WORKSPACE_REPLAY_SNAPSHOT_INTERVAL_MIN = 1 as const;
+const WORKSPACE_REPLAY_SNAPSHOT_INTERVAL_MAX = 20_000 as const;
+
+interface ReplaySnapshotState {
+  readonly schemaVersion: typeof WORKSPACE_REPLAY_SNAPSHOT_VERSION;
+  readonly metadata: WorkspaceMetadata;
+  readonly version: number;
+  readonly headEventHash: string | null;
+  readonly projects: readonly ProjectRecord[];
+  readonly work: readonly WorkRecord[];
+  readonly conferences: readonly ConferenceRequest[];
+  readonly conferencePositions: readonly ConferencePosition[];
+  readonly conferenceMinutes: readonly ConferenceMinutes[];
+  readonly gates: readonly GateRecord[];
+  readonly settings: readonly WorkspaceSettingRecord[];
+  readonly executionConfig: ExecutionConfigState;
+  readonly templates: readonly TemplateAdmissionRecord[];
+  readonly attestationEnabledAtSequence: number | null;
+  readonly stateDigest: string;
+}
+
+interface ReplaySnapshotSegmentDigest {
+  readonly name: string;
+  readonly bytes: number;
+  readonly sha256: string;
+}
+
+interface ReplaySnapshotManifest {
+  readonly schemaVersion: typeof WORKSPACE_REPLAY_SNAPSHOT_MANIFEST_VERSION;
+  readonly workspaceId: string;
+  readonly version: number;
+  readonly headEventHash: string | null;
+  readonly snapshot: string;
+  readonly stateDigest: string;
+  readonly eventPrefixDigest: string;
+  readonly segments: readonly ReplaySnapshotSegmentDigest[];
+}
+
+interface ReplaySnapshotSeed extends ReplaySnapshotState {
+  readonly manifest: ReplaySnapshotManifest;
+  readonly prefixEvents: readonly EventRecord[];
 }
 
 export interface WorkspaceLease {
@@ -982,6 +1036,162 @@ function controlPath(workspaceRoot: string, relativePath = ""): string {
   return candidate;
 }
 
+function replaySnapshotStateValue(state: WorkspaceState): Omit<ReplaySnapshotState, "stateDigest"> {
+  return {
+    schemaVersion: WORKSPACE_REPLAY_SNAPSHOT_VERSION,
+    metadata: state.metadata,
+    version: state.version,
+    headEventHash: state.headEventHash,
+    projects: state.projects,
+    work: state.work,
+    conferences: state.conferences,
+    conferencePositions: state.conferencePositions,
+    conferenceMinutes: state.conferenceMinutes,
+    gates: state.gates,
+    settings: state.settings,
+    executionConfig: state.executionConfig,
+    templates: state.templates,
+    attestationEnabledAtSequence: state.attestationEnabledAtSequence,
+  };
+}
+
+function snapshotIntervalForState(state: WorkspaceState): number {
+  const configured = state.settings.find((entry) => entry.key === "storage.snapshotEveryEvents")?.value;
+  const value = configured === undefined ? WORKSPACE_REPLAY_SNAPSHOT_INTERVAL_DEFAULT : Number(configured);
+  if (!Number.isSafeInteger(value) || value < WORKSPACE_REPLAY_SNAPSHOT_INTERVAL_MIN || value > WORKSPACE_REPLAY_SNAPSHOT_INTERVAL_MAX) {
+    fail("WORKSPACE_SCHEMA_INVALID", "storage.snapshotEveryEvents is outside its declared bounds");
+  }
+  return value;
+}
+
+function isMissingStoragePath(error: unknown): boolean {
+  return error instanceof StorageError && /\bENOENT\b/u.test(error.message);
+}
+
+function replaySnapshotFail(message: string): never {
+  fail("WORKSPACE_SNAPSHOT_INVALID", message);
+}
+
+function sha256Bytes(content: Buffer): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function assertReplaySnapshotManifest(value: unknown): asserts value is ReplaySnapshotManifest {
+  exactFields(value, ["eventPrefixDigest", "headEventHash", "schemaVersion", "segments", "snapshot", "stateDigest", "version", "workspaceId"], "WORKSPACE_SNAPSHOT_INVALID", "replay snapshot manifest");
+  const manifest = value as Record<string, unknown>;
+  if (manifest.schemaVersion !== WORKSPACE_REPLAY_SNAPSHOT_MANIFEST_VERSION || typeof manifest.workspaceId !== "string" ||
+    !Number.isSafeInteger(manifest.version) || Number(manifest.version) < 1 || typeof manifest.snapshot !== "string" ||
+    !/^\d{12}\.json$/u.test(manifest.snapshot) || typeof manifest.stateDigest !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(manifest.stateDigest) || typeof manifest.eventPrefixDigest !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(manifest.eventPrefixDigest) ||
+    (manifest.headEventHash !== null && (typeof manifest.headEventHash !== "string" || !/^[a-f0-9]{64}$/u.test(manifest.headEventHash))) ||
+    !Array.isArray(manifest.segments)) {
+    replaySnapshotFail("replay snapshot manifest fields are invalid");
+  }
+  let previousName: string | null = null;
+  for (const entry of manifest.segments) {
+    exactFields(entry, ["bytes", "name", "sha256"], "WORKSPACE_SNAPSHOT_INVALID", "replay snapshot segment digest");
+    const digest = entry as Record<string, unknown>;
+    if (typeof digest.name !== "string" || !/^\d{6}\.(?:json|ndjson)$/u.test(digest.name) ||
+      (previousName !== null && compareCanonicalText(previousName, digest.name) >= 0) ||
+      !Number.isSafeInteger(digest.bytes) || Number(digest.bytes) < 0 || typeof digest.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(digest.sha256)) {
+      replaySnapshotFail("replay snapshot segment digest is invalid");
+    }
+    previousName = digest.name;
+  }
+}
+
+function assertReplaySnapshotState(value: unknown, metadata: WorkspaceMetadata, manifest: ReplaySnapshotManifest): asserts value is ReplaySnapshotState {
+  exactFields(value, ["attestationEnabledAtSequence", "conferences", "conferenceMinutes", "conferencePositions", "executionConfig", "gates", "headEventHash", "metadata", "projects", "schemaVersion", "settings", "stateDigest", "templates", "version", "work"], "WORKSPACE_SNAPSHOT_INVALID", "replay snapshot state");
+  const snapshot = value as Record<string, unknown>;
+  if (snapshot.schemaVersion !== WORKSPACE_REPLAY_SNAPSHOT_VERSION || canonicalJson(snapshot.metadata) !== canonicalJson(metadata) ||
+    snapshot.version !== manifest.version || snapshot.headEventHash !== manifest.headEventHash ||
+    !Array.isArray(snapshot.projects) || !Array.isArray(snapshot.work) || !Array.isArray(snapshot.conferences) ||
+    !Array.isArray(snapshot.conferencePositions) || !Array.isArray(snapshot.conferenceMinutes) || !Array.isArray(snapshot.gates) ||
+    !Array.isArray(snapshot.settings) || !Array.isArray(snapshot.templates) ||
+    !isJsonObject(snapshot.executionConfig as JsonValue | undefined) ||
+    (snapshot.attestationEnabledAtSequence !== null && !Number.isSafeInteger(snapshot.attestationEnabledAtSequence)) ||
+    typeof snapshot.stateDigest !== "string" || !/^[a-f0-9]{64}$/u.test(snapshot.stateDigest)) {
+    replaySnapshotFail("replay snapshot state fields are invalid");
+  }
+  const stateWithoutDigest = { ...snapshot };
+  delete stateWithoutDigest.stateDigest;
+  if (canonicalSha256(stateWithoutDigest as JsonValue) !== snapshot.stateDigest || snapshot.stateDigest !== manifest.stateDigest) {
+    replaySnapshotFail("replay snapshot state digest mismatch");
+  }
+  try {
+    for (const project of snapshot.projects) validateProject(project, "WORKSPACE_SNAPSHOT_INVALID");
+    validateWorkGraph(snapshot.work as unknown as readonly WorkRecord[], templateRegistry(snapshot.templates as unknown as readonly TemplateAdmissionRecord[]));
+  } catch (error) {
+    if (error instanceof WorkspaceError && error.reasonCode === "WORKSPACE_SNAPSHOT_INVALID") throw error;
+    if (error instanceof ProtocolError) replaySnapshotFail(`${error.reasonCode}:${error.message}`);
+    throw error;
+  }
+}
+
+async function readReplaySnapshot(workspaceRoot: string, metadata: WorkspaceMetadata): Promise<ReplaySnapshotSeed | null> {
+  const backend = backendForStorage(workspaceRoot, metadata.storageVersion);
+  let entries: readonly StorageDirectoryEntry[];
+  try {
+    entries = await backend.listControlEntries(WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY);
+  } catch (error) {
+    if (isMissingStoragePath(error)) return null;
+    replaySnapshotFail(`snapshot directory is unreadable: ${String(error)}`);
+  }
+  const names = entries.filter((entry) => entry.isFile && !entry.isSymbolicLink && !entry.name.startsWith(".tmp-")).map((entry) => entry.name);
+  if (names.length === 0) return null;
+  if (!names.includes(WORKSPACE_REPLAY_SNAPSHOT_MANIFEST)) {
+    replaySnapshotFail("snapshot manifest is missing");
+  }
+  let manifestValue: JsonValue;
+  try {
+    manifestValue = assertCanonicalJson((await backend.readControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${WORKSPACE_REPLAY_SNAPSHOT_MANIFEST}`, 65_536)).toString("utf8"));
+  } catch (error) {
+    replaySnapshotFail(`snapshot manifest cannot be parsed: ${String(error)}`);
+  }
+  assertReplaySnapshotManifest(manifestValue);
+  if (manifestValue.workspaceId !== metadata.workspaceId || manifestValue.version > PROTOCOL_LIMITS.maxChainEvents) {
+    replaySnapshotFail("snapshot manifest is not bound to this workspace");
+  }
+  let stateValue: JsonValue;
+  try {
+    stateValue = assertCanonicalJson((await backend.readControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${manifestValue.snapshot}`, PROTOCOL_LIMITS.maxCanonicalBytes)).toString("utf8"));
+  } catch (error) {
+    replaySnapshotFail(`snapshot state cannot be read: ${String(error)}`);
+  }
+  assertReplaySnapshotState(stateValue, metadata, manifestValue);
+  return { ...(stateValue as ReplaySnapshotState), manifest: manifestValue, prefixEvents: [] };
+}
+
+function validateReplaySnapshotTail(events: readonly EventRecord[], snapshot: ReplaySnapshotManifest): void {
+  const tail = events.slice(snapshot.version);
+  let priorHash = snapshot.headEventHash;
+  for (const event of tail) {
+    try {
+      const expected = createEvent({
+        id: event.id,
+        streamId: event.streamId,
+        sequence: event.sequence,
+        occurredAt: event.occurredAt,
+        priorHash: event.priorHash,
+        payload: event.payload,
+      });
+      if (event.payloadHash !== expected.payloadHash || event.eventHash !== expected.eventHash || event.priorHash !== priorHash) {
+        replaySnapshotFail(`tail event ${event.id} is not bound to the snapshot`);
+      }
+    } catch (error) {
+      if (error instanceof WorkspaceError) throw error;
+      if (error instanceof ProtocolError) replaySnapshotFail(`${error.reasonCode}:${error.message}`);
+      throw error;
+    }
+    priorHash = event.eventHash;
+  }
+  const actualHead = events.at(-1)?.eventHash ?? null;
+  if (actualHead !== (tail.at(-1)?.eventHash ?? snapshot.headEventHash)) {
+    replaySnapshotFail("snapshot tail head does not match the event log");
+  }
+}
+
 // WSR-1: readMetadata is the universal choke point — resolveWorkspace is NOT. Six
 // callers reach it, and acquireWorkspaceLease is one of them, so EVERY mutation
 // passes through here too. That is why the relocation admission check lives here
@@ -1011,7 +1221,7 @@ async function readMetadata(workspaceRoot: string, admit: WorkspaceAdmission = "
   return metadata;
 }
 
-async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetadata): Promise<readonly EventRecord[]> {
+async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetadata, options: { readonly snapshot?: ReplaySnapshotSeed } = {}): Promise<readonly EventRecord[]> {
   // STORY-174: enumeration and byte reads ride through the storage backend; the
   // shape/gap validation stays at the engine layer so both backends enforce the
   // same segment contract. A non-conforming entry (e.g. `special-entry`) fails
@@ -1028,11 +1238,14 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
     segmentNames.push(name);
   }
   const events: EventRecord[] = [];
+  const segmentBytes = new Map<string, Buffer>();
+  const segmentLastSequence = new Map<string, number>();
   for (const [index, name] of segmentNames.entries()) {
     if (name !== `${String(index + 1).padStart(6, "0")}.${suffix}`) {
       fail("WORKSPACE_EVENT_CORRUPT", `event segment gap at ${name}`);
     }
     const content = await backend.readSegment(name);
+    segmentBytes.set(name, content);
     if (segmentedStorage) {
       const text = content.toString("utf8");
       if (!text.endsWith("\n") || text.endsWith("\n\n")) {
@@ -1044,7 +1257,9 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
           if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
             fail("WORKSPACE_EVENT_CORRUPT", `${name} contains a non-event record`);
           }
-          events.push(parsed as unknown as EventRecord);
+          const event = parsed as unknown as EventRecord;
+          events.push(event);
+          segmentLastSequence.set(name, event.sequence);
         } catch (error) {
           if (error instanceof WorkspaceError) throw error;
           fail("WORKSPACE_EVENT_CORRUPT", String((error as { message?: string }).message ?? error));
@@ -1065,7 +1280,9 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
         fail("WORKSPACE_EVENT_CORRUPT", `${name} has an invalid segment length`);
       }
       for (const event of parsed) {
-        events.push(event as unknown as EventRecord);
+        const storedEvent = event as unknown as EventRecord;
+        events.push(storedEvent);
+        segmentLastSequence.set(name, storedEvent.sequence);
       }
     }
   }
@@ -1080,6 +1297,37 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
     if (event.streamId !== expectedStreamId || event.id !== workspaceEventId(expectedStreamId, event.sequence)) {
       fail("WORKSPACE_EVENT_CORRUPT", `event ${event.id} is not bound to Workspace ${metadata.workspaceId}`);
     }
+  }
+  const snapshot = options.snapshot;
+  if (snapshot !== undefined) {
+    if (snapshot.version > events.length || snapshot.version < 1) {
+      replaySnapshotFail("snapshot version is outside the event log");
+    }
+    const expectedSegments = new Map(snapshot.manifest.segments.map((entry) => [entry.name, entry]));
+    for (const expected of snapshot.manifest.segments) {
+      const content = segmentBytes.get(expected.name);
+      if (content === undefined) replaySnapshotFail(`snapshot segment ${expected.name} is missing`);
+      const lastSequence = segmentLastSequence.get(expected.name) ?? 0;
+      // A segment may have received post-snapshot events without changing its
+      // historical prefix (legacy JSON arrays and a final NDJSON segment both
+      // use this shape). The prefix digest below covers the event values; only
+      // closed pre-snapshot segments can use their raw-byte digest here.
+      if (lastSequence <= snapshot.version && (content.length !== expected.bytes || sha256Bytes(content) !== expected.sha256)) {
+        replaySnapshotFail(`snapshot segment ${expected.name} changed before the checkpoint`);
+      }
+    }
+    for (const [name, content] of segmentBytes) {
+      if (expectedSegments.has(name)) continue;
+      const firstSequence = events.find((event) => event.sequence === (segmentLastSequence.get(name) ?? 0))?.sequence ?? 0;
+      if (firstSequence <= snapshot.version) replaySnapshotFail(`unexpected pre-snapshot segment ${name}`);
+      void content;
+    }
+    const prefixDigest = canonicalSha256(events.slice(0, snapshot.version));
+    if (prefixDigest !== snapshot.manifest.eventPrefixDigest) {
+      replaySnapshotFail("snapshot event prefix digest mismatch");
+    }
+    validateReplaySnapshotTail(events, snapshot.manifest);
+    return events;
   }
   try {
     return validateEventChain(events);
@@ -1522,19 +1770,23 @@ function assertGateClearance(gates: Iterable<GateRecord>, workId: string, target
   }
 }
 
-function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]): WorkspaceState {
-  recordFullMaterialize();
-  const projects = new Map<string, ProjectRecord>();
-  const work = new Map<string, WorkRecord>();
-  const conferences = new Map<string, ConferenceRequest>();
-  const conferencePositions = new Map<string, ConferencePosition>();
-  const conferenceMinutes = new Map<string, ConferenceMinutes>();
-  const gates = new Map<string, GateRecord>();
-  const settings = new Map<string, WorkspaceSettingRecord>();
-  let executionConfig: ExecutionConfigState = EMPTY_EXECUTION_CONFIG;
-  const templates = new Map<string, TemplateAdmissionRecord>();
+function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[], snapshot?: ReplaySnapshotSeed): WorkspaceState {
+  if (snapshot === undefined) {
+    recordFullMaterialize();
+  } else {
+    recordSnapshotMaterialize();
+  }
+  const projects = new Map<string, ProjectRecord>((snapshot?.projects ?? []).map((record) => [record.id, record]));
+  const work = new Map<string, WorkRecord>((snapshot?.work ?? []).map((record) => [record.id, record]));
+  const conferences = new Map<string, ConferenceRequest>((snapshot?.conferences ?? []).map((record) => [record.id, record]));
+  const conferencePositions = new Map<string, ConferencePosition>((snapshot?.conferencePositions ?? []).map((record) => [record.id, record]));
+  const conferenceMinutes = new Map<string, ConferenceMinutes>((snapshot?.conferenceMinutes ?? []).map((record) => [record.id, record]));
+  const gates = new Map<string, GateRecord>((snapshot?.gates ?? []).map((record) => [record.id, record]));
+  const settings = new Map<string, WorkspaceSettingRecord>((snapshot?.settings ?? []).map((record) => [record.key, record]));
+  let executionConfig: ExecutionConfigState = snapshot?.executionConfig ?? EMPTY_EXECUTION_CONFIG;
+  const templates = new Map<string, TemplateAdmissionRecord>((snapshot?.templates ?? []).map((record) => [record.registrationId, record]));
   const workspaceRoot = metadata.roots.find((root) => root.kind === "workspace")?.path;
-  let attestationEnabledAtSequence: number | null = null;
+  let attestationEnabledAtSequence: number | null = snapshot?.attestationEnabledAtSequence ?? null;
   for (const event of events) {
     const payload = event.payload;
     if (!isJsonObject(payload) || typeof payload.operation !== "string") {
@@ -1983,8 +2235,8 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
   }
   return {
     metadata,
-    version: events.length,
-    headEventHash: events.at(-1)?.eventHash ?? null,
+    version: snapshot === undefined ? events.length : snapshot.version + events.length,
+    headEventHash: events.at(-1)?.eventHash ?? snapshot?.headEventHash ?? null,
     projects: projectRecords,
     work: workRecords,
     conferences: sortExtensionRecords(conferences.values()),
@@ -1994,7 +2246,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
     settings: settingRecords,
     executionConfig,
     templates: templateRecords,
-    events,
+    events: snapshot === undefined ? events : [...snapshot.prefixEvents, ...events],
     attestationEnabledAtSequence,
   };
 }
@@ -3164,6 +3416,7 @@ export async function initializeWorkspace(options: {
   await backend.ensureControlDirectory("events");
   await backend.ensureControlDirectory("views");
   await backend.ensureControlDirectory("backups");
+  await backend.ensureControlDirectory(WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY);
   const metadata: WorkspaceMetadata = {
     schemaVersion: WORKSPACE_SCHEMA_VERSION,
     storageVersion,
@@ -3222,7 +3475,16 @@ async function resolveWorkspace(workspaceRootInput: string): Promise<{ readonly 
 
 export async function materializeWorkspace(workspaceRootInput: string): Promise<WorkspaceState> {
   const workspace = await resolveWorkspace(workspaceRootInput);
-  return materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
+  return materializeResolvedWorkspace(workspace);
+}
+
+async function materializeResolvedWorkspace(workspace: { readonly root: string; readonly metadata: WorkspaceMetadata }): Promise<WorkspaceState> {
+  const snapshot = await readReplaySnapshot(workspace.root, workspace.metadata);
+  if (snapshot === null) {
+    return materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
+  }
+  const events = await readSegmentEvents(workspace.root, workspace.metadata, { snapshot });
+  return materialize(workspace.metadata, events.slice(snapshot.version), { ...snapshot, prefixEvents: events.slice(0, snapshot.version) });
 }
 
 export async function validateWorkspace(workspaceRootInput: string, checkViews = true): Promise<WorkspaceState> {
@@ -3284,6 +3546,37 @@ function backendKindForState(state: WorkspaceState): "file" | "file-segmented" {
   fail("WORKSPACE_SCHEMA_INVALID", `storage.backend has an unsupported value ${configured}`);
 }
 
+async function writeReplaySnapshot(state: WorkspaceState, backend: StorageBackend): Promise<void> {
+  if (state.version < 1 || state.version % snapshotIntervalForState(state) !== 0 || backend.backendKind === "pg") return;
+  await backend.ensureControlDirectory(WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY);
+  const segmentEntries: ReplaySnapshotSegmentDigest[] = [];
+  for (const name of await backend.listSegmentNames()) {
+    const content = await backend.readSegment(name);
+    segmentEntries.push({ name, bytes: content.length, sha256: sha256Bytes(content) });
+  }
+  const stateValue = replaySnapshotStateValue(state);
+  const snapshotDocument: ReplaySnapshotState = {
+    ...stateValue,
+    stateDigest: canonicalSha256(stateValue as unknown as JsonValue),
+  };
+  const snapshotName = `${String(state.version).padStart(12, "0")}.json`;
+  const manifest: ReplaySnapshotManifest = {
+    schemaVersion: WORKSPACE_REPLAY_SNAPSHOT_MANIFEST_VERSION,
+    workspaceId: state.metadata.workspaceId,
+    version: state.version,
+    headEventHash: state.headEventHash,
+    snapshot: snapshotName,
+    stateDigest: snapshotDocument.stateDigest,
+    eventPrefixDigest: canonicalSha256(state.events.slice(0, state.version)),
+    segments: segmentEntries,
+  };
+  // The state is committed first. A crash before the manifest write leaves the
+  // old manifest authoritative; the manifest is replaced last and atomically,
+  // so it can only name a complete snapshot file.
+  await backend.writeControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${snapshotName}`, canonicalJson(snapshotDocument as unknown as JsonValue));
+  await backend.writeControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${WORKSPACE_REPLAY_SNAPSHOT_MANIFEST}`, canonicalJson(manifest as unknown as JsonValue));
+}
+
 // STORY-300. One append and many appends are the same operation with a different
 // count, so there is one implementation of it and `appendEvent` is the N=1 case.
 //
@@ -3340,7 +3633,7 @@ export async function appendEvents(
     // this claim-fresh state (via buildDelta), closing the entry-path TOCTOU gap.
     // A batch replays once too -- it is one mutation, so it takes one lease, one
     // claim, one replay, one concurrency decision and one clock reading.
-    const state = materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
+    const state = await materializeResolvedWorkspace(workspace);
     if (!Number.isSafeInteger(options.expectedVersion) || options.expectedVersion !== state.version) {
       fail("WORKSPACE_CAS_MISMATCH", `expected=${String(options.expectedVersion)} actual=${state.version}`);
     }
@@ -3426,6 +3719,7 @@ export async function appendEvents(
     // canonical form fails closed at one MiB, so computing them lazily would let
     // the first segment land and the second refuse -- the shape INC-198 recorded,
     // rebuilt one layer down.
+    const backend = backendForStorage(workspace.root, workspace.metadata.storageVersion, backendKindForState(current));
     const writes = workspace.metadata.storageVersion === WORKSPACE_LEGACY_STORAGE_VERSION
       ? (() => {
         const limit = workspace.metadata.segmentEventLimit;
@@ -3446,29 +3740,35 @@ export async function appendEvents(
           bytes: canonicalJson([...state.events.slice((index - 1) * limit, index * limit), ...(grouped.get(index) ?? [])]),
         }));
       })()
-      : (() => {
+      : await (async () => {
         const limit = segmentBytesForState(current);
-        const segments: EventRecord[][] = [];
-        let currentSegment: EventRecord[] = [];
-        let currentBytes = 0;
-        for (const event of [...state.events, ...appended]) {
+        const existingSegments = await backend.listSegmentNames();
+        const lastExistingName = existingSegments.at(-1);
+        let nextIndex = lastExistingName === undefined ? 0 : Number(lastExistingName.slice(0, 6));
+        let currentName = lastExistingName ?? `${String(nextIndex + 1).padStart(6, "0")}.ndjson`;
+        let currentBytes = lastExistingName === undefined ? 0 : (await backend.readSegment(lastExistingName)).length;
+        const originalBytes = new Map<string, string>();
+        const pending = new Map<string, string>();
+        if (lastExistingName !== undefined) {
+          originalBytes.set(lastExistingName, (await backend.readSegment(lastExistingName)).toString("utf8"));
+        }
+        for (const event of appended) {
           const eventBytes = Buffer.byteLength(canonicalJson(event), "utf8");
-          if (currentSegment.length > 0 && currentBytes + eventBytes > limit) {
-            segments.push(currentSegment);
-            currentSegment = [];
+          if (currentBytes > 0 && currentBytes + eventBytes > limit) {
+            nextIndex += 1;
+            currentName = `${String(nextIndex).padStart(6, "0")}.ndjson`;
             currentBytes = 0;
           }
-          currentSegment.push(event);
+          const line = canonicalJson(event);
+          pending.set(currentName, `${pending.get(currentName) ?? originalBytes.get(currentName) ?? ""}${line}`);
           currentBytes += eventBytes;
         }
-        if (currentSegment.length > 0) segments.push(currentSegment);
-        return segments.map((events, index) => ({
-          index: index + 1,
-          name: `${String(index + 1).padStart(6, "0")}.ndjson`,
-          bytes: events.map((event) => canonicalJson(event)).join(""),
+        return [...pending.entries()].sort(([left], [right]) => compareCanonicalText(left, right)).map(([name, bytes]) => ({
+          index: Number(name.slice(0, 6)),
+          name,
+          bytes,
         }));
       })();
-    const backend = backendForStorage(workspace.root, workspace.metadata.storageVersion, backendKindForState(current));
     for (const write of writes) {
       await backend.writeSegment(write.name, Buffer.from(write.bytes, "utf8"), options.crashAt);
     }
@@ -3484,6 +3784,7 @@ export async function appendEvents(
         fail("WORKSPACE_EVENT_CORRUPT", `segment ${write.index} readback mismatch`);
       }
     }
+    await writeReplaySnapshot(current, backend);
     try {
       await writeViewDocuments(workspace.root, documents, options.crashAt);
     } catch (error) {
@@ -4532,8 +4833,15 @@ export async function recoverWorkspace(workspaceRoot: string, lease: WorkspaceLe
   const resolved = await boundDirectory(workspaceRoot);
   await assertLease(resolved, lease);
   const backend = backendFor(resolved);
-  for (const directoryName of ["events", "views"]) {
-    for (const entry of await backend.listControlEntries(directoryName)) {
+  for (const directoryName of ["events", "views", WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY]) {
+    let entries: readonly StorageDirectoryEntry[];
+    try {
+      entries = await backend.listControlEntries(directoryName);
+    } catch (error) {
+      if (isMissingStoragePath(error)) continue;
+      throw error;
+    }
+    for (const entry of entries) {
       if (entry.name.startsWith(".tmp-") && entry.isFile && !entry.isSymbolicLink) {
         await backend.removeControlFile(`${directoryName}/${entry.name}`);
       }

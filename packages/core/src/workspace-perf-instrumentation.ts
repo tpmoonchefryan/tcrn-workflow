@@ -10,6 +10,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 export interface WorkspacePerfMetrics {
   // Full event-log replays (materialize invocations).
   fullMaterialize: number;
+  // Snapshot-backed tail replays. A snapshot load is not a full event-log replay.
+  snapshotMaterialize: number;
   // Terminal full-graph validateWorkGraph calls over the whole work set.
   terminalGraphValidation: number;
   // Per-event O(delta) closure validations, with the summed record count they visit.
@@ -37,6 +39,7 @@ const store = new AsyncLocalStorage<WorkspacePerfMetrics>();
 export async function withWorkspacePerfInstrumentation<T>(operation: () => Promise<T>): Promise<{ readonly result: T; readonly metrics: WorkspacePerfMetrics }> {
   const metrics: WorkspacePerfMetrics = {
     fullMaterialize: 0,
+    snapshotMaterialize: 0,
     terminalGraphValidation: 0,
     closureValidation: 0,
     closureRecordsVisited: 0,
@@ -52,6 +55,11 @@ export async function withWorkspacePerfInstrumentation<T>(operation: () => Promi
 export function recordFullMaterialize(): void {
   const metrics = store.getStore();
   if (metrics) metrics.fullMaterialize += 1;
+}
+
+export function recordSnapshotMaterialize(): void {
+  const metrics = store.getStore();
+  if (metrics) metrics.snapshotMaterialize += 1;
 }
 
 export function recordTerminalGraphValidation(): void {

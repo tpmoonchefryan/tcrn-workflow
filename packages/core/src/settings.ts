@@ -39,6 +39,7 @@ export type SettingKey =
   | "execution.subagentPolicy"
   | "storage.segmentBytes"
   | "storage.backend"
+  | "storage.snapshotEveryEvents"
   | "workspace.generatedArtifactsPath";
 
 export interface SettingsCatalogEntry {
@@ -269,6 +270,15 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "file-segmented",
     allowedValues: ["file", "file-segmented"],
+  },
+  {
+    key: "storage.snapshotEveryEvents",
+    type: "string",
+    controlType: "number",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "512",
+    min: 1,
+    max: 20_000,
   },
   {
     key: "workspace.generatedArtifactsPath",
