@@ -218,6 +218,10 @@ export {
   materializeWorkspace,
   openConferenceInWorkspace,
   planWorkspaceMigration,
+  hasWorkspaceStorageMigration,
+  migrateWorkspaceStorage,
+  rollbackWorkspaceStorageMigration,
+  verifyWorkspaceStorageMigration,
   rebuildWorkspaceViews,
   rebuildReplaySnapshot,
   recoverWorkspace,
@@ -245,6 +249,7 @@ export {
   withStorageBackendFactory,
   withWorkspaceLease,
   workspaceBudgets,
+  WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES,
 } from "./workspace.js";
 export type {
   ProjectRecord,

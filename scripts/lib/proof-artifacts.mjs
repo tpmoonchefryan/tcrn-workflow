@@ -237,7 +237,7 @@ function validateMap(map) {
   assert(map.schemaVersion === "tcrn.verification-map.v1" && Array.isArray(map.claims), "PROOF_ARTIFACT_MAP_INVALID", "verification map");
   const ids = new Set();
   for (const claim of map.claims) {
-    const fields = typeof claim?.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))
+    const fields = typeof claim?.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))
       ? [...claimFields, ...init047LegFields]
       : claimFields;
     exactKeys(claim, fields, "PROOF_ARTIFACT_CLAIM_FIELDS", claim?.id ?? "unknown");

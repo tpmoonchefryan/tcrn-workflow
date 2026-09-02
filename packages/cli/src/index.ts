@@ -53,6 +53,10 @@ import {
   workBatchReceipt,
   workspaceBudgets,
   planWorkspaceMigration,
+  hasWorkspaceStorageMigration,
+  migrateWorkspaceStorage,
+  rollbackWorkspaceStorageMigration,
+  verifyWorkspaceStorageMigration,
   executeMigration,
   verifyMigration,
   rollbackMigration,
@@ -204,7 +208,7 @@ import { join, relative, resolve, sep } from "node:path";
 
 import { assertStrictInstant, canonicalExternalKey, canonicalJson, canonicalSha256, deriveStableId } from "../../protocol/src/index.js";
 import { isWorkStatus } from "../../protocol/src/index.js";
-import type { PlannedDeliveryKind, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
+import type { JsonValue, PlannedDeliveryKind, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
 // ProjectRecord is a core type, not a protocol one. The protocol package never exported
 // it, so this import resolved to nothing; import elision hid the mistake from every
 // runtime check the repo had.
@@ -2099,6 +2103,10 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   if (command === "migration-execute") {
     const values = parseArguments(rest, ["workspace", "to", "schema"]);
     required(values, ["workspace", "to"]);
+    if (values.to === "2") {
+      io.write(canonicalJson(await migrateWorkspaceStorage(values.workspace ?? "")));
+      return;
+    }
     const options = await migrationOptions(values["to"] ?? "", values["schema"]);
     try {
       io.write(canonicalJson(await executeMigration(values.workspace ?? "", migrationTarget(values["to"] ?? ""), options)));
@@ -2110,6 +2118,10 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   if (command === "migration-verify") {
     const values = parseArguments(rest, ["workspace", "to", "schema"]);
     required(values, ["workspace", "to"]);
+    if (values.to === "2") {
+      io.write(canonicalJson(await verifyWorkspaceStorageMigration(values.workspace ?? "") as unknown as JsonValue));
+      return;
+    }
     const options = await migrationOptions(values["to"] ?? "", values["schema"]);
     try {
       io.write(canonicalJson(await verifyMigration(values.workspace ?? "", migrationTarget(values["to"] ?? ""), options)));
@@ -2121,6 +2133,10 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   if (command === "migration-rollback") {
     const values = parseArguments(rest, ["workspace", "schema"]);
     required(values, ["workspace"]);
+    if (await hasWorkspaceStorageMigration(values.workspace ?? "")) {
+      io.write(canonicalJson(await rollbackWorkspaceStorageMigration(values.workspace ?? "")));
+      return;
+    }
     const options = await migrationOptions("pg", values["schema"]);
     try {
       io.write(canonicalJson(await rollbackMigration(values.workspace ?? "", options)));
@@ -2341,7 +2357,8 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const values = parseArguments(rest, ["workspace"]);
     required(values, ["workspace"]);
     const state = await materializeWorkspace(values.workspace ?? "");
-    io.write(canonicalJson({ reasonCode: "SETTINGS_CATALOG_READY", ...readSettingsCatalog(state.metadata.workspaceId, state.settings) }));
+    io.write(canonicalJson({ reasonCode: "SETTINGS_CATALOG_READY", ...readSettingsCatalog(state.metadata.workspaceId, state.settings,
+      state.metadata.storageVersion === 2 ? { "storage.segmentBytes": String(state.metadata.segmentEventLimit) } : {}) }));
     return;
   }
   if (command === "install-manifest") {

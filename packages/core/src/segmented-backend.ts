@@ -193,7 +193,7 @@ export class SegmentedBackend implements StorageBackend {
     }
   }
 
-  private async rebuildIndexes(): Promise<void> {
+  async rebuildIndexes(): Promise<void> {
     const segments = await this.listSegmentNames();
     const labels = new Map<string, Set<string>>();
     const times = new Map<string, Set<string>>();

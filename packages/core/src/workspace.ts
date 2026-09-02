@@ -135,6 +135,7 @@ export const WORKSPACE_LEGACY_STORAGE_VERSION = 1 as const;
 export const WORKSPACE_SEGMENT_BYTES_DEFAULT = 16_777_216 as const;
 export const WORKSPACE_SEGMENT_BYTES_MIN = 4_096 as const;
 export const WORKSPACE_SEGMENT_BYTES_MAX = 67_108_864 as const;
+export const WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES = 4_194_304 as const;
 export const WORKSPACE_CONTROL_DIRECTORY = ".tcrn-workflow" as const;
 export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_ACTOR_INVALID",
@@ -182,6 +183,11 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_MIGRATION_APPLY_UNAVAILABLE",
   "WORKSPACE_MIGRATION_DOWNGRADE",
   "WORKSPACE_MIGRATION_FUTURE",
+  "WORKSPACE_STORAGE_MIGRATION_IN_PROGRESS",
+  "WORKSPACE_STORAGE_MIGRATION_LIMIT_INVALID",
+  "WORKSPACE_STORAGE_MIGRATION_MISMATCH",
+  "WORKSPACE_STORAGE_MIGRATION_NOT_APPLIED",
+  "WORKSPACE_STORAGE_MIGRATION_VERIFIED",
   "WORKSPACE_PATH_ESCAPE",
   "WORKSPACE_PATH_INVALID",
   "WORKSPACE_RECORD_LIMIT",
@@ -388,7 +394,7 @@ interface ReplaySnapshotManifest {
   readonly snapshot?: string;
   readonly snapshotParts?: readonly string[];
   readonly stateDigest: string;
-  readonly eventPrefixDigest: string;
+  readonly eventPrefixDigest?: string;
   readonly segments: readonly ReplaySnapshotSegmentDigest[];
 }
 
@@ -431,8 +437,36 @@ export interface WorkspaceMigrationPlan {
   readonly backupRequired: true;
   readonly rollback: "restore-exact-pre-migration-backup-then-validate";
   readonly postValidation: "validate-exact-target-schema-and-full-event-chain";
-  readonly applyAvailable: false;
+  readonly applyAvailable: boolean;
   readonly basisDigest: string;
+}
+
+export interface WorkspaceStorageMigrationResult {
+  readonly schemaVersion: "tcrn.workspace-storage-migration.v1";
+  readonly reasonCode: "WORKSPACE_STORAGE_MIGRATION_VERIFIED";
+  readonly ok: true;
+  readonly fromVersion: 1;
+  readonly toVersion: 2;
+  readonly workspaceId: string;
+  readonly eventCount: number;
+  readonly headEventHash: string | null;
+  readonly segmentBytes: number;
+  readonly segmentCount: number;
+  readonly stateDigest: string;
+}
+
+export interface WorkspaceStorageMigrationVerification {
+  readonly schemaVersion: "tcrn.workspace-storage-migration-verify.v1";
+  readonly ok: boolean;
+  readonly reasonCode: string;
+  readonly fromVersion: 1;
+  readonly toVersion: 2;
+  readonly workspaceId: string;
+  readonly eventCount: number;
+  readonly headEventHash: string | null;
+  readonly segmentBytes: number | null;
+  readonly segmentCount: number;
+  readonly stateDigest: string | null;
 }
 
 const supportedFilesystemTypes = new Set([
@@ -1097,17 +1131,26 @@ function replaySnapshotDigest(value: unknown): string {
   return sha256Bytes(Buffer.from(unboundedCanonicalJson(value), "utf8"));
 }
 
+function validateLegacyReplaySnapshotPrefix(events: readonly EventRecord[], manifest: ReplaySnapshotManifest): void {
+  if (manifest.eventPrefixDigest !== undefined && replaySnapshotDigest(events.slice(0, manifest.version)) !== manifest.eventPrefixDigest) {
+    replaySnapshotFail("snapshot event prefix digest mismatch");
+  }
+}
+
 function assertReplaySnapshotManifest(value: unknown): asserts value is ReplaySnapshotManifest {
   const manifest = value as Record<string, unknown>;
   const legacySnapshot = manifest !== null && typeof manifest === "object" && Object.hasOwn(manifest, "snapshot");
-  exactFields(value, ["eventPrefixDigest", "headEventHash", "schemaVersion", "segments", legacySnapshot ? "snapshot" : "snapshotParts", "stateDigest", "version", "workspaceId"], "WORKSPACE_SNAPSHOT_INVALID", "replay snapshot manifest");
+  const legacyPrefixDigest = manifest !== null && typeof manifest === "object" && Object.hasOwn(manifest, "eventPrefixDigest");
+  const fields = ["headEventHash", "schemaVersion", "segments", legacySnapshot ? "snapshot" : "snapshotParts", "stateDigest", "version", "workspaceId"];
+  if (legacyPrefixDigest) fields.push("eventPrefixDigest");
+  exactFields(value, fields, "WORKSPACE_SNAPSHOT_INVALID", "replay snapshot manifest");
   if (manifest.schemaVersion !== WORKSPACE_REPLAY_SNAPSHOT_MANIFEST_VERSION || typeof manifest.workspaceId !== "string" ||
     !Number.isSafeInteger(manifest.version) || Number(manifest.version) < 1 ||
     (legacySnapshot ? (typeof manifest.snapshot !== "string" || !/^\d{12}\.json$/u.test(manifest.snapshot)) :
       (!Array.isArray(manifest.snapshotParts) || manifest.snapshotParts.length === 0 || manifest.snapshotParts.some((part) => typeof part !== "string" || !/^\d{12}\.part\d{4}$/u.test(part)))) ||
     typeof manifest.stateDigest !== "string" ||
-    !/^[a-f0-9]{64}$/u.test(manifest.stateDigest) || typeof manifest.eventPrefixDigest !== "string" ||
-    !/^[a-f0-9]{64}$/u.test(manifest.eventPrefixDigest) ||
+    !/^[a-f0-9]{64}$/u.test(manifest.stateDigest) ||
+    (legacyPrefixDigest && (typeof manifest.eventPrefixDigest !== "string" || !/^[a-f0-9]{64}$/u.test(manifest.eventPrefixDigest))) ||
     (manifest.headEventHash !== null && (typeof manifest.headEventHash !== "string" || !/^[a-f0-9]{64}$/u.test(manifest.headEventHash))) ||
     !Array.isArray(manifest.segments)) {
     replaySnapshotFail("replay snapshot manifest fields are invalid");
@@ -1371,12 +1414,18 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
       const content = segmentBytes.get(expected.name);
       if (content === undefined) replaySnapshotFail(`snapshot segment ${expected.name} is missing`);
       const lastSequence = segmentLastSequence.get(expected.name) ?? 0;
-      // A segment may have received post-snapshot events without changing its
-      // historical prefix (legacy JSON arrays and a final NDJSON segment both
-      // use this shape). The prefix digest below covers the event values; only
-      // closed pre-snapshot segments can use their raw-byte digest here.
-      if (lastSequence <= snapshot.version && (content.length !== expected.bytes || sha256Bytes(content) !== expected.sha256)) {
-        replaySnapshotFail(`snapshot segment ${expected.name} changed before the checkpoint`);
+      // NDJSON appends preserve the exact bytes that were present at the
+      // checkpoint. Hashing only the recorded segment prefix covers an active
+      // segment after it receives post-snapshot events without parsing the
+      // checkpoint prefix a second time. Legacy JSON snapshots retain their
+      // event-prefix digest as a compatibility path until they are rebuilt.
+      const checkpointBytes = expected.name.endsWith(".ndjson") && content.length >= expected.bytes
+        ? content.subarray(0, expected.bytes)
+        : content;
+      if (lastSequence <= snapshot.version || expected.name.endsWith(".ndjson")) {
+        if (checkpointBytes.length !== expected.bytes || sha256Bytes(checkpointBytes) !== expected.sha256) {
+          replaySnapshotFail(`snapshot segment ${expected.name} changed before the checkpoint`);
+        }
       }
     }
     for (const [name, content] of segmentBytes) {
@@ -1385,10 +1434,7 @@ async function readSegmentEvents(workspaceRoot: string, metadata: WorkspaceMetad
       if (firstSequence <= snapshot.version) replaySnapshotFail(`unexpected pre-snapshot segment ${name}`);
       void content;
     }
-    const prefixDigest = replaySnapshotDigest(events.slice(0, snapshot.version));
-    if (prefixDigest !== snapshot.manifest.eventPrefixDigest) {
-      replaySnapshotFail("snapshot event prefix digest mismatch");
-    }
+    validateLegacyReplaySnapshotPrefix(events, snapshot.manifest);
     validateReplaySnapshotTail(events, snapshot.manifest);
     return events;
   }
@@ -3727,7 +3773,6 @@ async function writeReplaySnapshot(state: WorkspaceState, backend: StorageBacken
     headEventHash: state.headEventHash,
     snapshotParts,
     stateDigest,
-    eventPrefixDigest: replaySnapshotDigest(state.events.slice(0, state.version)),
     segments: segmentEntries,
   };
   // The state is committed first. A crash before the manifest write leaves the
@@ -5104,6 +5149,26 @@ export async function planWorkspaceMigration(workspaceRoot: string, targetVersio
     fail("WORKSPACE_MIGRATION_DOWNGRADE", String(targetVersion));
   }
   const state = await materializeWorkspace(workspaceRoot);
+  if (targetVersion === WORKSPACE_STORAGE_VERSION && metadata.storageVersion === WORKSPACE_LEGACY_STORAGE_VERSION) {
+    const segments = storageMigrationSegments(state.events, WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES);
+    return {
+      schemaVersion: "tcrn.workspace-migration-plan.v1",
+      dryRun: true,
+      fromVersion: metadata.storageVersion,
+      toVersion: targetVersion,
+      steps: [
+        "write an exact pre-migration backup of metadata, legacy event segments, and replay snapshots",
+        `rewrite ${String(state.events.length)} event(s) as ${String(segments.length)} byte-bounded NDJSON segment(s)`,
+        `set the segmented storage limit to ${String(WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES)} bytes and rebuild sidecar indexes`,
+        "validate full event values, views, and the rebuilt replay snapshot",
+      ],
+      backupRequired: true,
+      rollback: "restore-exact-pre-migration-backup-then-validate",
+      postValidation: "validate-exact-target-schema-and-full-event-chain",
+      applyAvailable: true,
+      basisDigest: canonicalSha256({ metadata, headEventHash: state.headEventHash, version: state.version }),
+    };
+  }
   return {
     schemaVersion: "tcrn.workspace-migration-plan.v1",
     dryRun: true,
@@ -5116,6 +5181,435 @@ export async function planWorkspaceMigration(workspaceRoot: string, targetVersio
     applyAvailable: false,
     basisDigest: canonicalSha256({ metadata, headEventHash: state.headEventHash, version: state.version }),
   };
+}
+
+const STORAGE_MIGRATION_BACKUP_ROOT = "migration/storage-v1" as const;
+const STORAGE_MIGRATION_BACKUP_EVENTS = "migration/storage-v1/events" as const;
+const STORAGE_MIGRATION_BACKUP_SNAPSHOTS = "migration/storage-v1/snapshots" as const;
+const STORAGE_MIGRATION_MARKER = "migration/storage-v1/marker.json" as const;
+
+interface StorageMigrationMarker {
+  readonly schemaVersion: "tcrn.workspace-storage-migration-marker.v1";
+  readonly status: "prepared";
+  readonly workspaceId: string;
+  readonly eventCount: number;
+  readonly headEventHash: string | null;
+  readonly eventNames: readonly string[];
+  readonly snapshotNames: readonly string[];
+  readonly stateDigest: string;
+  readonly segmentBytes: number;
+}
+
+interface StorageMigrationSegment {
+  readonly name: string;
+  readonly bytes: Buffer;
+}
+
+function storageMigrationStateDigest(state: WorkspaceState): string {
+  const digest = createHash("sha256");
+  const update = (name: string, value: unknown): void => {
+    const bytes = Buffer.from(unboundedCanonicalJson(value), "utf8");
+    digest.update(Buffer.from(`${name}:${bytes.length}:`, "utf8"));
+    digest.update(bytes);
+  };
+  update("workspaceId", state.metadata.workspaceId);
+  update("version", state.version);
+  update("headEventHash", state.headEventHash);
+  update("projects", state.projects);
+  update("work", state.work);
+  update("conferences", state.conferences);
+  update("conferencePositions", state.conferencePositions);
+  update("conferenceMinutes", state.conferenceMinutes);
+  update("gates", state.gates);
+  update("settings", state.settings);
+  update("executionConfig", state.executionConfig);
+  update("templates", state.templates);
+  update("attestationEnabledAtSequence", state.attestationEnabledAtSequence);
+  for (const event of state.events) update("event", event);
+  return digest.digest("hex");
+}
+
+function storageMigrationLegacyStateDigest(state: WorkspaceState): string | null {
+  try {
+    return canonicalSha256({
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      projects: state.projects,
+      work: state.work,
+      conferences: state.conferences,
+      conferencePositions: state.conferencePositions,
+      conferenceMinutes: state.conferenceMinutes,
+      gates: state.gates,
+      settings: state.settings,
+      executionConfig: state.executionConfig,
+      templates: state.templates,
+      attestationEnabledAtSequence: state.attestationEnabledAtSequence,
+      events: state.events,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function storageMigrationSegments(events: readonly EventRecord[], limit: number): readonly StorageMigrationSegment[] {
+  if (!Number.isSafeInteger(limit) || limit < WORKSPACE_SEGMENT_BYTES_MIN || limit > WORKSPACE_SEGMENT_BYTES_MAX) {
+    fail("WORKSPACE_STORAGE_MIGRATION_LIMIT_INVALID", String(limit));
+  }
+  const segments: StorageMigrationSegment[] = [];
+  let index = 1;
+  let current = "";
+  let currentBytes = 0;
+  const flush = (): void => {
+    if (currentBytes === 0) return;
+    segments.push({ name: `${String(index).padStart(6, "0")}.ndjson`, bytes: Buffer.from(current, "utf8") });
+    index += 1;
+    current = "";
+    currentBytes = 0;
+  };
+  for (const event of events) {
+    const line = canonicalJson(event);
+    const bytes = Buffer.byteLength(line, "utf8");
+    if (bytes > limit) {
+      fail("WORKSPACE_STORAGE_MIGRATION_LIMIT_INVALID", `event ${event.id} exceeds ${String(limit)} bytes`);
+    }
+    if (currentBytes > 0 && currentBytes + bytes > limit) flush();
+    current += line;
+    currentBytes += bytes;
+  }
+  flush();
+  return segments;
+}
+
+async function ensureStorageMigrationBackupTree(backend: StorageBackend): Promise<void> {
+  for (const directory of ["migration", STORAGE_MIGRATION_BACKUP_ROOT, STORAGE_MIGRATION_BACKUP_EVENTS, STORAGE_MIGRATION_BACKUP_SNAPSHOTS]) {
+    await backend.ensureControlDirectory(directory);
+  }
+}
+
+async function readStorageMigrationMarker(workspaceRoot: string): Promise<StorageMigrationMarker | null> {
+  const backend = new FileBackend(workspaceRoot);
+  let bytes: Buffer;
+  try {
+    bytes = await backend.readControlFile(STORAGE_MIGRATION_MARKER, 1_048_576);
+  } catch (error) {
+    if (isMissingStoragePath(error)) return null;
+    throw error;
+  }
+  let value: unknown;
+  try {
+    value = assertCanonicalJson(bytes.toString("utf8"));
+  } catch (error) {
+    fail("WORKSPACE_STORAGE_MIGRATION_IN_PROGRESS", String((error as { message?: string }).message ?? error));
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    fail("WORKSPACE_STORAGE_MIGRATION_IN_PROGRESS", "migration marker is not an object");
+  }
+  const marker = value as Partial<StorageMigrationMarker>;
+  if (marker.schemaVersion !== "tcrn.workspace-storage-migration-marker.v1" || marker.status !== "prepared" ||
+    typeof marker.workspaceId !== "string" || !Number.isSafeInteger(marker.eventCount) ||
+    (marker.headEventHash !== null && typeof marker.headEventHash !== "string") ||
+    !Array.isArray(marker.eventNames) || !Array.isArray(marker.snapshotNames) ||
+    typeof marker.stateDigest !== "string" || !/^[a-f0-9]{64}$/u.test(marker.stateDigest) ||
+    !Number.isSafeInteger(marker.segmentBytes)) {
+    fail("WORKSPACE_STORAGE_MIGRATION_IN_PROGRESS", "migration marker is invalid");
+  }
+  return marker as StorageMigrationMarker;
+}
+
+function storageMigrationNow(): string {
+  return new Date().toISOString().replace(/\.\d{3}Z$/u, "Z");
+}
+
+async function removeControlFiles(backend: StorageBackend, directory: string, names: readonly string[]): Promise<void> {
+  for (const name of names) {
+    await backend.removeControlFile(`${directory}/${name}`);
+  }
+}
+
+async function cleanupStorageMigrationBackup(workspaceRoot: string): Promise<void> {
+  const marker = await readStorageMigrationMarker(workspaceRoot);
+  if (marker === null) return;
+  const backend = new FileBackend(workspaceRoot);
+  const paths = [STORAGE_MIGRATION_MARKER, `${STORAGE_MIGRATION_BACKUP_ROOT}/metadata.json`,
+    ...marker.eventNames.map((name) => `${STORAGE_MIGRATION_BACKUP_EVENTS}/${name}`),
+    ...marker.snapshotNames.map((name) => `${STORAGE_MIGRATION_BACKUP_SNAPSHOTS}/${name}`)];
+  for (const path of paths) {
+    try {
+      await backend.removeControlFile(path);
+    } catch (error) {
+      if (!isMissingStoragePath(error)) throw error;
+    }
+  }
+}
+
+function storageMigrationReport(state: WorkspaceState, segments: readonly StorageMigrationSegment[], segmentBytes: number): WorkspaceStorageMigrationResult {
+  return {
+    schemaVersion: "tcrn.workspace-storage-migration.v1",
+    reasonCode: "WORKSPACE_STORAGE_MIGRATION_VERIFIED",
+    ok: true,
+    fromVersion: 1,
+    toVersion: 2,
+    workspaceId: state.metadata.workspaceId,
+    eventCount: state.version,
+    headEventHash: state.headEventHash,
+    segmentBytes,
+    segmentCount: segments.length,
+    stateDigest: storageMigrationStateDigest(state),
+  };
+}
+
+export async function verifyWorkspaceStorageMigration(workspaceRootInput: string): Promise<WorkspaceStorageMigrationVerification> {
+  const root = await boundDirectory(workspaceRootInput);
+  const metadata = await readMetadata(root);
+  if (metadata.storageVersion !== WORKSPACE_STORAGE_VERSION) {
+    return {
+      schemaVersion: "tcrn.workspace-storage-migration-verify.v1",
+      ok: false,
+      reasonCode: "WORKSPACE_STORAGE_MIGRATION_NOT_APPLIED",
+      fromVersion: 1,
+      toVersion: 2,
+      workspaceId: metadata.workspaceId,
+      eventCount: 0,
+      headEventHash: null,
+      segmentBytes: null,
+      segmentCount: 0,
+      stateDigest: null,
+    };
+  }
+  const marker = await readStorageMigrationMarker(root);
+  if (metadata.segmentEventLimit !== WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES) {
+    return {
+      schemaVersion: "tcrn.workspace-storage-migration-verify.v1",
+      ok: false,
+      reasonCode: "WORKSPACE_STORAGE_MIGRATION_LIMIT_INVALID",
+      fromVersion: 1,
+      toVersion: 2,
+      workspaceId: metadata.workspaceId,
+      eventCount: marker?.eventCount ?? 0,
+      headEventHash: marker?.headEventHash ?? null,
+      segmentBytes: metadata.segmentEventLimit,
+      segmentCount: 0,
+      stateDigest: marker?.stateDigest ?? null,
+    };
+  }
+  const state = await materializeWorkspace(root);
+  const segmentBytes = segmentBytesForState(state);
+  const segments = storageMigrationSegments(state.events, segmentBytes);
+  const segmented = new SegmentedBackend(root);
+  const names = await segmented.listSegmentNames();
+  if (segmentBytes !== WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES) {
+    return {
+      schemaVersion: "tcrn.workspace-storage-migration-verify.v1",
+      ok: false,
+      reasonCode: "WORKSPACE_STORAGE_MIGRATION_LIMIT_INVALID",
+      fromVersion: 1,
+      toVersion: 2,
+      workspaceId: state.metadata.workspaceId,
+      eventCount: state.version,
+      headEventHash: state.headEventHash,
+      segmentBytes,
+      segmentCount: names.length,
+      stateDigest: storageMigrationStateDigest(state),
+    };
+  }
+  const manifest = await segmented.readManifest();
+  if (manifest.segments.length !== names.length || manifest.segments.length !== segments.length) {
+    return {
+      schemaVersion: "tcrn.workspace-storage-migration-verify.v1",
+      ok: false,
+      reasonCode: "WORKSPACE_STORAGE_MIGRATION_MISMATCH",
+      fromVersion: 1,
+      toVersion: 2,
+      workspaceId: state.metadata.workspaceId,
+      eventCount: state.version,
+      headEventHash: state.headEventHash,
+      segmentBytes,
+      segmentCount: names.length,
+      stateDigest: storageMigrationStateDigest(state),
+    };
+  }
+  for (const [index, expected] of segments.entries()) {
+    const actual = await segmented.readSegment(expected.name);
+    const manifestEntry = manifest.segments[index];
+    if (manifestEntry?.name !== expected.name || actual.length !== expected.bytes.length || actual.length > segmentBytes ||
+      sha256Bytes(actual) !== manifestEntry.sha256 || !actual.equals(expected.bytes)) {
+      return {
+        schemaVersion: "tcrn.workspace-storage-migration-verify.v1",
+        ok: false,
+        reasonCode: "WORKSPACE_STORAGE_MIGRATION_MISMATCH",
+        fromVersion: 1,
+        toVersion: 2,
+        workspaceId: state.metadata.workspaceId,
+        eventCount: state.version,
+        headEventHash: state.headEventHash,
+        segmentBytes,
+        segmentCount: names.length,
+        stateDigest: storageMigrationStateDigest(state),
+      };
+    }
+  }
+  const stateDigest = storageMigrationStateDigest(state);
+  const legacyStateDigest = marker === null || marker.stateDigest === stateDigest ? null : storageMigrationLegacyStateDigest(state);
+  if (marker !== null && (marker.workspaceId !== state.metadata.workspaceId || marker.eventCount !== state.version || marker.headEventHash !== state.headEventHash ||
+    (marker.stateDigest !== stateDigest && marker.stateDigest !== legacyStateDigest))) {
+    return {
+      schemaVersion: "tcrn.workspace-storage-migration-verify.v1",
+      ok: false,
+      reasonCode: "WORKSPACE_STORAGE_MIGRATION_MISMATCH",
+      fromVersion: 1,
+      toVersion: 2,
+      workspaceId: state.metadata.workspaceId,
+      eventCount: state.version,
+      headEventHash: state.headEventHash,
+      segmentBytes,
+      segmentCount: names.length,
+      stateDigest,
+    };
+  }
+  return {
+    schemaVersion: "tcrn.workspace-storage-migration-verify.v1",
+    ok: true,
+    reasonCode: "WORKSPACE_STORAGE_MIGRATION_VERIFIED",
+    fromVersion: 1,
+    toVersion: 2,
+    workspaceId: state.metadata.workspaceId,
+    eventCount: state.version,
+    headEventHash: state.headEventHash,
+    segmentBytes,
+    segmentCount: names.length,
+    stateDigest,
+  };
+}
+
+export async function migrateWorkspaceStorage(workspaceRootInput: string): Promise<WorkspaceStorageMigrationResult> {
+  const root = await boundDirectory(workspaceRootInput);
+  const metadata = await readMetadata(root);
+  if (metadata.storageVersion === WORKSPACE_STORAGE_VERSION) {
+    const verified = await verifyWorkspaceStorageMigration(root);
+    if (!verified.ok || verified.segmentBytes !== WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES) {
+      fail("WORKSPACE_STORAGE_MIGRATION_LIMIT_INVALID", verified.reasonCode);
+    }
+    const state = await materializeWorkspace(root);
+    await cleanupStorageMigrationBackup(root);
+    return storageMigrationReport(state, storageMigrationSegments(state.events, verified.segmentBytes), verified.segmentBytes);
+  }
+  if (metadata.storageVersion !== WORKSPACE_LEGACY_STORAGE_VERSION) {
+    fail("WORKSPACE_STORAGE_MIGRATION_NOT_APPLIED", String(metadata.storageVersion));
+  }
+  const existingMarker = await readStorageMigrationMarker(root);
+  if (existingMarker !== null) {
+    fail("WORKSPACE_STORAGE_MIGRATION_IN_PROGRESS", existingMarker.workspaceId);
+  }
+  const lease = await acquireWorkspaceLease(root, { now: storageMigrationNow() });
+  try {
+    const workspace = await resolveWorkspace(root);
+    const before = await materializeResolvedWorkspace(workspace);
+    const beforeDigest = storageMigrationStateDigest(before);
+    const legacy = new FileBackend(root);
+    const eventNames = (await legacy.listSegmentNames()).sort(compareCanonicalText);
+    if (eventNames.some((name) => !/^\d{6}\.json$/u.test(name))) {
+      fail("WORKSPACE_EVENT_CORRUPT", "legacy migration source contains a non-JSON event entry");
+    }
+    const eventBytes = new Map<string, Buffer>();
+    for (const name of eventNames) eventBytes.set(name, await legacy.readSegment(name));
+    const snapshotEntries = (await legacy.listControlEntries(WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY))
+      .filter((entry) => entry.isFile && !entry.isSymbolicLink)
+      .map((entry) => entry.name)
+      .sort(compareCanonicalText);
+    await ensureStorageMigrationBackupTree(legacy);
+    await legacy.writeControlFile(`${STORAGE_MIGRATION_BACKUP_ROOT}/metadata.json`, await legacy.readMetadataBytes());
+    for (const name of eventNames) {
+      await legacy.writeControlFile(`${STORAGE_MIGRATION_BACKUP_EVENTS}/${name}`, eventBytes.get(name) as Buffer);
+    }
+    for (const name of snapshotEntries) {
+      await legacy.writeControlFile(`${STORAGE_MIGRATION_BACKUP_SNAPSHOTS}/${name}`, await legacy.readControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${name}`, 67_108_864));
+    }
+    const marker: StorageMigrationMarker = {
+      schemaVersion: "tcrn.workspace-storage-migration-marker.v1",
+      status: "prepared",
+      workspaceId: before.metadata.workspaceId,
+      eventCount: before.version,
+      headEventHash: before.headEventHash,
+      eventNames,
+      snapshotNames: snapshotEntries,
+      stateDigest: beforeDigest,
+      segmentBytes: WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES,
+    };
+    await legacy.writeControlFile(STORAGE_MIGRATION_MARKER, canonicalJson(marker as unknown as JsonValue));
+    const segments = storageMigrationSegments(before.events, WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES);
+    for (const segment of segments) {
+      await legacy.writeControlFile(`events/${segment.name}`, segment.bytes);
+    }
+    await removeControlFiles(legacy, "events", eventNames);
+    await removeControlFiles(legacy, WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY, snapshotEntries);
+    const targetMetadata: WorkspaceMetadata = {
+      ...before.metadata,
+      storageVersion: WORKSPACE_STORAGE_VERSION,
+      maximumStorageVersion: WORKSPACE_STORAGE_VERSION,
+      segmentEventLimit: WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES,
+    };
+    await legacy.writeMetadataBytes(Buffer.from(canonicalJson(targetMetadata), "utf8"));
+    const segmented = new SegmentedBackend(root);
+    await segmented.rebuildIndexes();
+    const after = await materializeWorkspace(root);
+    if (storageMigrationStateDigest(before) !== storageMigrationStateDigest(after)) {
+      fail("WORKSPACE_STORAGE_MIGRATION_MISMATCH", "migration changed materialized values");
+    }
+    await validateWorkspace(root);
+    await writeReplaySnapshot(after, segmented, true);
+    await validateWorkspace(root);
+    await cleanupStorageMigrationBackup(root);
+    return storageMigrationReport(after, segments, WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES);
+  } finally {
+    await lease.release();
+  }
+}
+
+export async function hasWorkspaceStorageMigration(workspaceRoot: string): Promise<boolean> {
+  return (await readStorageMigrationMarker(workspaceRoot)) !== null;
+}
+
+export async function rollbackWorkspaceStorageMigration(workspaceRootInput: string): Promise<Readonly<Record<string, JsonValue>>> {
+  const root = await boundDirectory(workspaceRootInput);
+  const marker = await readStorageMigrationMarker(root);
+  if (marker === null) fail("WORKSPACE_STORAGE_MIGRATION_NOT_APPLIED", "no storage migration backup is present");
+  const lease = await acquireWorkspaceLease(root, { now: storageMigrationNow() });
+  try {
+    const backend = new FileBackend(root);
+    const eventEntries = await backend.listControlEntries("events");
+    for (const entry of eventEntries) {
+      if (entry.isFile && !entry.isSymbolicLink && (/^\d{6}\.ndjson$/u.test(entry.name) || /^\d{6}\.idx$/u.test(entry.name) || ["labels.idx", "time.idx", "manifest.json"].includes(entry.name))) {
+        await backend.removeControlFile(`events/${entry.name}`);
+      }
+    }
+    const snapshots = await backend.listControlEntries(WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY);
+    for (const entry of snapshots) {
+      if (entry.isFile && !entry.isSymbolicLink) await backend.removeControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${entry.name}`);
+    }
+    for (const name of marker.eventNames) {
+      await backend.writeControlFile(`events/${name}`, await backend.readControlFile(`${STORAGE_MIGRATION_BACKUP_EVENTS}/${name}`, 67_108_864));
+    }
+    for (const name of marker.snapshotNames) {
+      await backend.writeControlFile(`${WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY}/${name}`, await backend.readControlFile(`${STORAGE_MIGRATION_BACKUP_SNAPSHOTS}/${name}`, 67_108_864));
+    }
+    await backend.writeMetadataBytes(await backend.readControlFile(`${STORAGE_MIGRATION_BACKUP_ROOT}/metadata.json`, 1_048_576));
+    const restored = await validateWorkspace(root);
+    const markerFiles = [STORAGE_MIGRATION_MARKER, `${STORAGE_MIGRATION_BACKUP_ROOT}/metadata.json`,
+      ...marker.eventNames.map((name) => `${STORAGE_MIGRATION_BACKUP_EVENTS}/${name}`),
+      ...marker.snapshotNames.map((name) => `${STORAGE_MIGRATION_BACKUP_SNAPSHOTS}/${name}`)];
+    for (const path of markerFiles) await backend.removeControlFile(path);
+    return {
+      schemaVersion: "tcrn.workspace-storage-migration-rollback.v1",
+      reasonCode: "WORKSPACE_STORAGE_MIGRATION_ROLLED_BACK",
+      ok: true,
+      workspaceId: restored.metadata.workspaceId,
+      eventCount: restored.version,
+      headEventHash: restored.headEventHash,
+    } as unknown as Readonly<Record<string, JsonValue>>;
+  } finally {
+    await lease.release();
+  }
 }
 
 export async function applyWorkspaceMigration(): Promise<never> {

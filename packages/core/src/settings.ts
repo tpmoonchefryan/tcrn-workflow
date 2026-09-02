@@ -480,6 +480,7 @@ export function sortWorkspaceSettings(records: Iterable<WorkspaceSettingRecord>)
 export function readSettingsCatalog(
   workspaceId: string,
   records: readonly WorkspaceSettingRecord[],
+  effectiveValues: Partial<Record<SettingKey, string>> = {},
 ): SettingsCatalogReadback {
   return {
     schemaVersion: SETTINGS_CATALOG_VERSION,
@@ -491,7 +492,7 @@ export function readSettingsCatalog(
       controlType: entry.controlType,
       layer: entry.layerKind,
       defaultValue: entry.defaultValue,
-      currentValue: records.find((record) => record.key === entry.key)?.value ?? entry.defaultValue,
+      currentValue: records.find((record) => record.key === entry.key)?.value ?? effectiveValues[entry.key] ?? entry.defaultValue,
       ...(entry.allowedValues === undefined ? {} : { allowedValues: entry.allowedValues }),
       ...(entry.min === undefined ? {} : { min: entry.min }),
       ...(entry.max === undefined ? {} : { max: entry.max }),

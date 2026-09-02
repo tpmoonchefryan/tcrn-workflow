@@ -430,6 +430,9 @@ async function runTests({
   focusedReasonCode = undefined,
   inc255Only = false,
   inc256Only = false,
+  inc258Only = false,
+  inc259Only = false,
+  inc260Only = false,
   e2eOnly = false,
 } = {}) {
   await build();
@@ -475,6 +478,9 @@ async function runTests({
     .filter((path) => focusedTestPath === undefined || path === focusedTestPath)
     .filter((path) => !inc255Only || path === "tests/inc255-mcp-framing.test.mjs")
     .filter((path) => !inc256Only || path === "tests/inc256-knowledge-policy.test.mjs")
+    .filter((path) => !inc258Only || path === "tests/inc258-install-manifest.test.mjs")
+    .filter((path) => !inc259Only || path === "tests/inc259-storage-migration.test.mjs")
+    .filter((path) => !inc260Only || path === "tests/inc260-snapshot-read-optimization.test.mjs")
     .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
   await runDetachedTestController(["--test", ...(focusedTestNamePattern === undefined ? [] : [`--test-name-pattern=${focusedTestNamePattern}`]), ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
@@ -487,6 +493,12 @@ async function runTests({
       ? "INC255_MCP_FRAMING_VERIFIED"
       : inc256Only
       ? "INC256_KNOWLEDGE_MIGRATION_VERIFIED"
+      : inc258Only
+      ? "INC258_INSTALL_MANIFEST_VERIFIED"
+      : inc259Only
+      ? "INC259_STORAGE_MIGRATION_VERIFIED"
+      : inc260Only
+      ? "INC260_SNAPSHOT_READ_OPTIMIZED"
       : init047Only
       ? "INIT047_MODEL_CENTERED_TESTS_VERIFIED"
       : e2eOnly
@@ -1898,6 +1910,9 @@ const commandContracts = {
   story345: { exit: 0, reasonCode: "INIT048_STORY_345_VERIFIED" },
   inc255: { exit: 0, reasonCode: "INC255_MCP_FRAMING_VERIFIED" },
   inc256: { exit: 0, reasonCode: "INC256_KNOWLEDGE_MIGRATION_VERIFIED" },
+  inc258: { exit: 0, reasonCode: "INC258_INSTALL_MANIFEST_VERIFIED" },
+  inc259: { exit: 0, reasonCode: "INC259_STORAGE_MIGRATION_VERIFIED" },
+  inc260: { exit: 0, reasonCode: "INC260_SNAPSHOT_READ_OPTIMIZED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
@@ -1986,7 +2001,7 @@ async function verifyMap() {
       assertion(claim.fixtureDigest === null, "VERIFICATION_MAP_PLANNED_DIGEST", claim.id);
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
-    if (typeof claim.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))) {
+    if (typeof claim.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))) {
       assertion(claim.positiveLeg !== null && typeof claim.positiveLeg === "object" && !Array.isArray(claim.positiveLeg), "VERIFICATION_MAP_POSITIVE_LEG", claim.id);
       assertion(typeof claim.positiveLeg.command === "string" && claim.positiveLeg.command.length > 0, "VERIFICATION_MAP_POSITIVE_COMMAND", claim.id);
       assertion(claim.positiveLeg.expectedExit === claim.expectedExit && claim.positiveLeg.expectedReasonCode === claim.expectedReasonCode, "VERIFICATION_MAP_POSITIVE_EXPECTATION", claim.id);
@@ -2690,6 +2705,9 @@ const handlers = {
   story345: () => runInit048Story("story345"),
   inc255: () => runTests({ inc255Only: true }),
   inc256: () => runTests({ inc256Only: true }),
+  inc258: () => runTests({ inc258Only: true }),
+  inc259: () => runTests({ inc259Only: true }),
+  inc260: () => runTests({ inc260Only: true }),
   p5: verifyP5,
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,

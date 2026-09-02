@@ -838,7 +838,7 @@ async function inspectBridgeSyntax(root) {
     : check("bridgeSyntax", false, { reasonCode: failures[0].reasonCode, failures, source: "platform-and-direct-child-bridges" });
 }
 
-async function inspectInstallWiring(platformRoot, homeRoot, manifest) {
+export async function inspectInstallWiring(platformRoot, homeRoot, manifest = INSTALL_MANIFEST) {
   const required = manifest.items;
   const missing = [];
   const invalid = [];
