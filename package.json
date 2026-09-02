@@ -88,6 +88,8 @@
     "verify:goal10": "node scripts/task.mjs goal10",
     "verify:goal11": "node scripts/task.mjs goal11",
     "verify:goal12": "node scripts/task.mjs goal12",
+    "verify:story333": "node scripts/task.mjs story333",
+    "verify:story344": "node scripts/task.mjs story344",
     "verify:inc255": "node scripts/task.mjs inc255",
     "verify:inc256": "node scripts/task.mjs inc256",
     "verify:no-sibling-dependency": "node scripts/task.mjs no-sibling-dependency",

@@ -591,6 +591,23 @@ async function runInit047Goal(name) {
   });
 }
 
+const INIT048_STORY_TESTS = Object.freeze({
+  story333: { path: "tests/story-333-byte-segments.test.mjs", pattern: "STORY-333", reasonCode: "INIT048_STORY_333_VERIFIED" },
+  story344: { path: "tests/story-344-storage-boundary.test.mjs", pattern: "STORY-344", reasonCode: "INIT048_STORY_344_VERIFIED" },
+});
+
+async function runInit048Story(name) {
+  const spec = INIT048_STORY_TESTS[name];
+  assertion(spec !== undefined, "INIT048_STORY_TEST_UNKNOWN", name);
+  const source = await readText(resolve(repositoryRoot, spec.path));
+  assertion(source.includes(`test("${spec.pattern}`), "INIT048_STORY_TEST_NOT_FOUND", name);
+  return runTests({
+    focusedTestPath: spec.path,
+    focusedTestNamePattern: spec.pattern,
+    focusedReasonCode: spec.reasonCode,
+  });
+}
+
 async function verifyP8() {
   assertCleanExclusiveSourceBasis(run("git", ["status", "--porcelain=v1", "--untracked-files=all"]));
   const packagePaths = ["package.json", "packages/cli/package.json", "packages/core/package.json", "packages/protocol/package.json"];
@@ -1849,6 +1866,8 @@ const commandContracts = {
   goal10: { exit: 0, reasonCode: "INIT047_GOAL_10_VERIFIED" },
   goal11: { exit: 0, reasonCode: "INIT047_GOAL_11_VERIFIED" },
   goal12: { exit: 0, reasonCode: "INIT047_GOAL_12_VERIFIED" },
+  story333: { exit: 0, reasonCode: "INIT048_STORY_333_VERIFIED" },
+  story344: { exit: 0, reasonCode: "INIT048_STORY_344_VERIFIED" },
   inc255: { exit: 0, reasonCode: "INC255_MCP_FRAMING_VERIFIED" },
   inc256: { exit: 0, reasonCode: "INC256_KNOWLEDGE_MIGRATION_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
@@ -1939,7 +1958,7 @@ async function verifyMap() {
       assertion(claim.fixtureDigest === null, "VERIFICATION_MAP_PLANNED_DIGEST", claim.id);
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
-    if (typeof claim.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))) {
+    if (typeof claim.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))) {
       assertion(claim.positiveLeg !== null && typeof claim.positiveLeg === "object" && !Array.isArray(claim.positiveLeg), "VERIFICATION_MAP_POSITIVE_LEG", claim.id);
       assertion(typeof claim.positiveLeg.command === "string" && claim.positiveLeg.command.length > 0, "VERIFICATION_MAP_POSITIVE_COMMAND", claim.id);
       assertion(claim.positiveLeg.expectedExit === claim.expectedExit && claim.positiveLeg.expectedReasonCode === claim.expectedReasonCode, "VERIFICATION_MAP_POSITIVE_EXPECTATION", claim.id);
@@ -2625,6 +2644,8 @@ const handlers = {
   goal10: () => runInit047Goal("goal10"),
   goal11: () => runInit047Goal("goal11"),
   goal12: () => runInit047Goal("goal12"),
+  story333: () => runInit048Story("story333"),
+  story344: () => runInit048Story("story344"),
   inc255: () => runTests({ inc255Only: true }),
   inc256: () => runTests({ inc256Only: true }),
   p5: verifyP5,
@@ -2687,6 +2708,9 @@ function errorReason(error) {
 
 function evidencePhase(name) {
   if (/^goal(?:0[1-9]|1[0-2])$/u.test(name)) {
+    return "p4";
+  }
+  if (/^story(?:333|344)$/u.test(name)) {
     return "p4";
   }
   if (["aos", "p2", "protocol-schemas", "protocol-test"].includes(name)) {
