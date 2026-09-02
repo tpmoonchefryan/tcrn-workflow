@@ -1678,7 +1678,9 @@ test("path, link, Unicode, size, record, filesystem, and migration boundaries ha
     assert.equal(plan.rollback, "restore-exact-pre-migration-backup-then-validate");
     assert.equal(plan.postValidation, "validate-exact-target-schema-and-full-event-chain");
     await expectReasonAsync("WORKSPACE_MIGRATION_DOWNGRADE", () => planWorkspaceMigration(malformed.workspace, 0));
-    await expectReasonAsync("WORKSPACE_MIGRATION_FUTURE", () => planWorkspaceMigration(malformed.workspace, 2));
+    const upgrade = await planWorkspaceMigration(malformed.workspace, 2);
+    assert.equal(upgrade.fromVersion, 1);
+    assert.equal(upgrade.toVersion, 2);
     await expectReasonAsync("WORKSPACE_MIGRATION_APPLY_UNAVAILABLE", () => applyWorkspaceMigration());
   } finally {
     await malformed.close();
@@ -1705,7 +1707,7 @@ test("path, link, Unicode, size, record, filesystem, and migration boundaries ha
   try {
     const metadataPath = join(future.workspace, ".tcrn-workflow", "workspace.json");
     const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-    await writeFile(metadataPath, canonicalJson({ ...metadata, storageVersion: 2 }));
+    await writeFile(metadataPath, canonicalJson({ ...metadata, storageVersion: 3, minimumStorageVersion: 1, maximumStorageVersion: 3 }));
     await expectReasonAsync("WORKSPACE_MIGRATION_FUTURE", () => materializeWorkspace(future.workspace));
   } finally {
     await future.close();

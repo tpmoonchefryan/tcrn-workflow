@@ -4559,11 +4559,14 @@ export async function createWorkspaceArchive(workspaceRoot: string): Promise<Buf
 
 export async function planWorkspaceMigration(workspaceRoot: string, targetVersion: number): Promise<WorkspaceMigrationPlan> {
   const metadata = await readMetadata(await boundDirectory(workspaceRoot));
-  if (!Number.isSafeInteger(targetVersion) || targetVersion < WORKSPACE_STORAGE_VERSION) {
+  if (!Number.isSafeInteger(targetVersion) || targetVersion < WORKSPACE_LEGACY_STORAGE_VERSION) {
     fail("WORKSPACE_MIGRATION_DOWNGRADE", String(targetVersion));
   }
   if (targetVersion > WORKSPACE_STORAGE_VERSION) {
     fail("WORKSPACE_MIGRATION_FUTURE", String(targetVersion));
+  }
+  if (targetVersion < metadata.storageVersion) {
+    fail("WORKSPACE_MIGRATION_DOWNGRADE", String(targetVersion));
   }
   const state = await materializeWorkspace(workspaceRoot);
   return {
