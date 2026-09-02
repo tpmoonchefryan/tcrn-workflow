@@ -596,6 +596,8 @@
     "tests/story-191-adapter-equivalence.test.mjs",
     "tests/story-333-byte-segments.test.mjs",
     "tests/story-334-segment-index.test.mjs",
+    "tests/story-335-336-work-fields.test.mjs",
+    "tests/story-337-snapshot-replay.test.mjs",
     "tests/story-344-storage-boundary.test.mjs",
     "tests/story-345-backend-selection.test.mjs",
     "tests/story-rule-conservation.test.mjs",
