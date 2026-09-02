@@ -371,8 +371,21 @@ export class PgBackend implements StorageBackend {
     }
   }
 
+  async createControlDirectory(): Promise<void> {
+    // PG schemas are created by the DDL; the file control-root directory does
+    // not apply to this retained, disconnected backend.
+  }
+
   async ensureControlDirectory(_relativePath: string): Promise<void> {
     // PG schemas are created by the DDL (chain-ddl.sql); the workspace root
     // directory concept does not apply. No-op, documented rather than implicit.
+  }
+
+  async listControlEntries(_relativePath: string): Promise<readonly []> {
+    return [];
+  }
+
+  async removeControlFile(_relativePath: string): Promise<void> {
+    // Recovery temporary files have no PG counterpart.
   }
 }

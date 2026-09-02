@@ -29,6 +29,13 @@ export type WorkspaceCrashPoint =
   | "after-event-commit"
   | "before-view-commit";
 
+export interface StorageDirectoryEntry {
+  readonly name: string;
+  readonly isFile: boolean;
+  readonly isDirectory: boolean;
+  readonly isSymbolicLink: boolean;
+}
+
 /** The failure the file backend raises. Same shape as workspace.ts's
  * WorkspaceError so tests asserting `error.reasonCode` keep working — the PG
  * backend (STORY-175) maps SQL failures to these same reason codes. */
@@ -64,8 +71,15 @@ export interface StorageBackend {
    * migration and ADR-0004 §9 criterion-4 equivalence need the full view set,
    * not just the views a caller happens to know about. */
   listViewNames(): Promise<string[]>;
+  /** Create the control root exclusively. Initialization uses this instead of
+   * reaching around the backend for a filesystem call. */
+  createControlDirectory(): Promise<void>;
   /** Ensure a control-tree directory exists (mode 0700), fail-closed on symlink. */
   ensureControlDirectory(relativePath: string): Promise<void>;
+  /** Enumerate a control-tree directory for backend-owned recovery work. */
+  listControlEntries(relativePath: string): Promise<readonly StorageDirectoryEntry[]>;
+  /** Remove one backend-owned temporary file after validating its identity. */
+  removeControlFile(relativePath: string): Promise<void>;
 }
 
 /**
@@ -136,8 +150,46 @@ export class FileBackend implements StorageBackend {
     return entries.filter((entry) => entry.isFile() && !entry.name.startsWith(".tmp-")).map((entry) => entry.name);
   }
 
+  async createControlDirectory(): Promise<void> {
+    const path = this.controlPath("");
+    try {
+      await mkdir(path, { mode: 0o700 });
+    } catch (error) {
+      if ((error as { code?: string }).code === "EEXIST") {
+        throw new StorageError("WORKSPACE_ALREADY_EXISTS", path);
+      }
+      throw error;
+    }
+    await this.boundDirectory(path, this.workspaceRoot);
+  }
+
   async ensureControlDirectory(relativePath: string): Promise<void> {
     await this.ensureDirectory(this.controlPath(relativePath));
+  }
+
+  async listControlEntries(relativePath: string): Promise<readonly StorageDirectoryEntry[]> {
+    const root = await this.boundDirectory(this.controlPath(relativePath), this.workspaceRoot);
+    const entries = await readdir(root, { withFileTypes: true });
+    return entries.map((entry) => ({
+      name: entry.name,
+      isFile: entry.isFile(),
+      isDirectory: entry.isDirectory(),
+      isSymbolicLink: entry.isSymbolicLink(),
+    }));
+  }
+
+  async removeControlFile(relativePath: string): Promise<void> {
+    const path = this.controlPath(relativePath);
+    let metadata;
+    try {
+      metadata = await lstat(path);
+    } catch (error) {
+      throw new StorageError("WORKSPACE_PATH_INVALID", `${path}: ${String((error as { code?: string }).code ?? error)}`);
+    }
+    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1) {
+      throw new StorageError("WORKSPACE_PATH_INVALID", `${path} is not a safe removable file`);
+    }
+    await rm(path);
   }
 
   // ---- the four moved helpers (verbatim behaviour) ----

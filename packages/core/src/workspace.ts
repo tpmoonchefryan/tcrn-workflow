@@ -43,7 +43,7 @@ import type {
   WorkStatus,
 } from "../../protocol/src/index.js";
 import { assertDistinctRootShape, assertDistinctRoots, rootPortableIdentity } from "./root-identity.js";
-import { FileBackend } from "./storage-backend.js";
+import { FileBackend, StorageError } from "./storage-backend.js";
 import type { StorageBackend } from "./storage-backend.js";
 import { readStorageHomeDeclaration } from "./storage-home.js";
 import { consumeQuarantineReplacementTestInstrumentation } from "./workspace-test-instrumentation.js";
@@ -633,17 +633,6 @@ async function boundFile(path: string, maximumBytes: number = PROTOCOL_LIMITS.ma
   } finally {
     await handle?.close();
   }
-}
-
-async function ensureDirectory(path: string, workspaceRoot: string): Promise<string> {
-  try {
-    await mkdir(path, { mode: 0o700 });
-  } catch (error) {
-    if ((error as { code?: string }).code !== "EEXIST") {
-      throw error;
-    }
-  }
-  return boundDirectory(path, workspaceRoot);
 }
 
 function crash(point: WorkspaceCrashPoint, selected?: WorkspaceCrashPoint): void {
@@ -3087,19 +3076,18 @@ export async function initializeWorkspace(options: {
   if (!Number.isSafeInteger(segmentEventLimit) || segmentEventLimit < 2 || segmentEventLimit > 1024) {
     fail("WORKSPACE_SCHEMA_INVALID", "segment event limit must be 2-1024");
   }
-  const control = controlPath(workspace.canonicalPath);
+  const backend = backendFor(workspace.canonicalPath);
   try {
-    await mkdir(control, { mode: 0o700 });
+    await backend.createControlDirectory();
   } catch (error) {
-    if ((error as { code?: string }).code === "EEXIST") {
-      fail("WORKSPACE_ALREADY_EXISTS", control);
+    if (error instanceof StorageError && error.reasonCode === "WORKSPACE_ALREADY_EXISTS") {
+      fail("WORKSPACE_ALREADY_EXISTS", controlPath(workspace.canonicalPath));
     }
     throw error;
   }
-  await boundDirectory(control, workspace.canonicalPath);
-  await ensureDirectory(controlPath(workspace.canonicalPath, "events"), workspace.canonicalPath);
-  await ensureDirectory(controlPath(workspace.canonicalPath, "views"), workspace.canonicalPath);
-  await ensureDirectory(controlPath(workspace.canonicalPath, "backups"), workspace.canonicalPath);
+  await backend.ensureControlDirectory("events");
+  await backend.ensureControlDirectory("views");
+  await backend.ensureControlDirectory("backups");
   const metadata: WorkspaceMetadata = {
     schemaVersion: WORKSPACE_SCHEMA_VERSION,
     storageVersion: 1,
@@ -3111,7 +3099,7 @@ export async function initializeWorkspace(options: {
     segmentEventLimit,
     roots,
   };
-  await backendFor(workspace.canonicalPath).writeMetadataBytes(Buffer.from(canonicalJson(metadata), "utf8"));
+  await backend.writeMetadataBytes(Buffer.from(canonicalJson(metadata), "utf8"));
   const state = materialize(metadata, []);
   await writeViews(workspace.canonicalPath, state);
   return state;
@@ -4423,16 +4411,11 @@ export async function rebuildWorkspaceViews(workspaceRoot: string, lease: Worksp
 export async function recoverWorkspace(workspaceRoot: string, lease: WorkspaceLease): Promise<WorkspaceState> {
   const resolved = await boundDirectory(workspaceRoot);
   await assertLease(resolved, lease);
+  const backend = backendFor(resolved);
   for (const directoryName of ["events", "views"]) {
-    const directory = await boundDirectory(controlPath(resolved, directoryName), resolved);
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      if (entry.name.startsWith(".tmp-") && entry.isFile() && !entry.isSymbolicLink()) {
-        const path = resolve(directory, entry.name);
-        const metadata = await lstat(path);
-        if (metadata.nlink !== 1) {
-          fail("WORKSPACE_PATH_INVALID", `${path} is not a safe recovery temporary`);
-        }
-        await rm(path);
+    for (const entry of await backend.listControlEntries(directoryName)) {
+      if (entry.name.startsWith(".tmp-") && entry.isFile && !entry.isSymbolicLink) {
+        await backend.removeControlFile(`${directoryName}/${entry.name}`);
       }
     }
   }
