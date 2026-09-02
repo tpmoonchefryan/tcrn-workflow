@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { validateDispatchBrief } from "../scripts/dispatch-readiness-compliance.mjs";
+import { DISPATCH_BRIEF_DECLARATIONS, validateDispatchBrief } from "../scripts/dispatch-readiness-compliance.mjs";
 
 const storyScope = [
   "Goal 为谁：Owner；目的锚：STORY-303；符合性判据：引用可解析；判定人：机器判定车道。",
@@ -51,6 +51,7 @@ const briefFor = (root, overrides = {}) => ({
   verificationCommands: ["pnpm test"],
   chainCloseoutActions: ["annotate evidence, transition through ceremony, and read back"],
   effectiveEvidenceCommands: ["run the deployment-position proof after the final commit"],
+  ...DISPATCH_BRIEF_DECLARATIONS,
   ...overrides,
 });
 

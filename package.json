@@ -109,6 +109,7 @@
     "verify:inc258": "node scripts/task.mjs inc258",
     "verify:inc259": "node scripts/task.mjs inc259",
     "verify:inc260": "node scripts/task.mjs inc260",
+    "verify:inc264": "node scripts/task.mjs inc264",
     "verify:inc265": "node scripts/task.mjs inc265",
     "verify:no-sibling-dependency": "node scripts/task.mjs no-sibling-dependency",
     "verify:observe-channel": "node scripts/observe-channel-proof.mjs",

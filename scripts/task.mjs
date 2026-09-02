@@ -605,6 +605,7 @@ async function runInit047Goal(name) {
 
 const INCIDENT_TESTS = Object.freeze({
   inc265: { path: "tests/stop-pact.test.mjs", pattern: "INC-265 removes the unsupported prose length rule without weakening rules 3 and 5", reasonCode: "INC265_STOP_RULES_VERIFIED" },
+  inc264: { path: "tests/dispatch-readiness-compliance.test.mjs", pattern: "INC-264 dispatch briefs require the exact autonomous-operation and scope-restraint declarations", reasonCode: "INC264_DISPATCH_DECLARATIONS_VERIFIED" },
 });
 
 async function runIncidentTest(name) {
@@ -1930,6 +1931,7 @@ const commandContracts = {
   inc259: { exit: 0, reasonCode: "INC259_STORAGE_MIGRATION_VERIFIED" },
   inc260: { exit: 0, reasonCode: "INC260_SNAPSHOT_READ_OPTIMIZED" },
   inc265: { exit: 0, reasonCode: "INC265_STOP_RULES_VERIFIED" },
+  inc264: { exit: 0, reasonCode: "INC264_DISPATCH_DECLARATIONS_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
@@ -2726,6 +2728,7 @@ const handlers = {
   inc259: () => runTests({ inc259Only: true }),
   inc260: () => runTests({ inc260Only: true }),
   inc265: () => runIncidentTest("inc265"),
+  inc264: () => runIncidentTest("inc264"),
   p5: verifyP5,
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,
@@ -2805,6 +2808,9 @@ function evidencePhase(name) {
   }
   if (name === "inc265") {
     return "act2";
+  }
+  if (name === "inc264") {
+    return "p2";
   }
   if (name === "p5") {
     return "p5";

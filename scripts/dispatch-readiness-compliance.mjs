@@ -19,6 +19,23 @@ export const DISPATCH_BRIEF_FIELDS = Object.freeze([
   "effectiveEvidenceCommands",
 ]);
 
+export const DISPATCH_BRIEF_DECLARATIONS = Object.freeze({
+  autonomousOperation: "你在自主运行。使用者不在实时观看，无法在任务中途回答问题，所以问「要我……吗？」「是否继续？」只会让工作停摆。原始请求已涵盖的可逆动作，直接做。只有破坏性动作与真正的范围变更才停下来交给使用者定。任务做完后提出后续建议可以；动手前先请示不行。",
+  scopeRestraint: "在工作或测试中发现任务未提及的既有缺陷、性能问题或行为，不要在本次改动里修复、优化或扩展它，除非被要求的行为离开它无法工作；把它写进总结作为后续项。任务表述有歧义处，按其措辞与周边代码最直接支持的读法实现，在总结里写明这个假设，不要同时为另一种读法也建构。验证方式随你，草稿脚本与快速检查不必保留。只在任务要求、或本仓对这类改动本来就保留测试的地方提交测试，规模比照邻近测试文件，大致每条声明的行为一个聚焦测试；不要把草稿检查变成额外的永久测试文件。",
+});
+
+export const DISPATCH_BRIEF_DECLARATION_FIELDS = Object.freeze(Object.keys(DISPATCH_BRIEF_DECLARATIONS));
+
+function declarationProblems(brief) {
+  return DISPATCH_BRIEF_DECLARATION_FIELDS
+    .filter((field) => brief[field] !== DISPATCH_BRIEF_DECLARATIONS[field])
+    .map((field) => ({
+      field,
+      message: `${field} must carry the exact autonomous-operation or scope-restraint declaration`,
+      code: "DISPATCH_DECLARATION_MISSING",
+    }));
+}
+
 // TCRN-CROSS-INC-235: a brief that names a target field must carry that field's limit,
 // and the requirements it states must fit inside it.
 //
@@ -223,6 +240,7 @@ export function validateDispatchBrief(brief) {
     const problem = nonEmptyList(brief[field], field);
     if (problem) problems.push(problem);
   }
+  problems.push(...declarationProblems(brief));
   const storyScope = brief.storyScope;
   if (typeof storyScope !== "string" || storyScope.trim().length === 0) {
     problems.push({ field: "storyScope", message: "storyScope must carry the live Story ten-block scope" });

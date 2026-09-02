@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DISPATCH_BRIEF_FIELDS, validateDispatchBrief } from "../scripts/dispatch-readiness-compliance.mjs";
+import { DISPATCH_BRIEF_DECLARATIONS, DISPATCH_BRIEF_DECLARATION_FIELDS, DISPATCH_BRIEF_FIELDS, validateDispatchBrief } from "../scripts/dispatch-readiness-compliance.mjs";
 
 const storyScope = [
   "Goal 为谁：Owner；目的锚：STORY-209；符合性判据：五要素可复跑；判定人：Owner。",
@@ -25,6 +25,7 @@ const brief = Object.freeze({
   verificationCommands: ["pnpm typecheck", "pnpm test"],
   chainCloseoutActions: ["annotate evidence, transition through ceremony, and read back"],
   effectiveEvidenceCommands: ["run the deployment-position proof after the final commit"],
+  ...DISPATCH_BRIEF_DECLARATIONS,
 });
 
 test("dispatch brief accepts all five execution elements", () => {
@@ -56,6 +57,17 @@ test("empty and non-string dispatch entries do not count as equipment", () => {
   const nonString = validateDispatchBrief({ ...brief, verificationCommands: ["pnpm test", 42] });
   assert.equal(nonString.ok, false);
   assert.ok(nonString.problems.some((problem) => problem.field === "verificationCommands"));
+});
+
+test("INC-264 dispatch briefs require the exact autonomous-operation and scope-restraint declarations", () => {
+  for (const field of DISPATCH_BRIEF_DECLARATION_FIELDS) {
+    assert.equal(brief[field], DISPATCH_BRIEF_DECLARATIONS[field], field);
+    const incomplete = { ...brief };
+    delete incomplete[field];
+    const result = validateDispatchBrief(incomplete);
+    assert.equal(result.ok, false, `${field} deletion must be red`);
+    assert.ok(result.problems.some((problem) => problem.field === field && problem.code === "DISPATCH_DECLARATION_MISSING"), field);
+  }
 });
 
 test("a dispatch brief without a compliant Story scope is refused", () => {
