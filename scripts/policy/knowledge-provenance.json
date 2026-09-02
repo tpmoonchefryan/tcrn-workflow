@@ -1,5 +1,12 @@
 {
   "schemaVersion": "tcrn.knowledge-provenance-policy.v1",
-  "relaxedKinds": ["fact", "decision", "summary"],
-  "strictKinds": ["guide", "reference"]
+  "relaxedKinds": [
+    "fact",
+    "decision",
+    "summary"
+  ],
+  "strictKinds": [
+    "guide",
+    "reference"
+  ]
 }

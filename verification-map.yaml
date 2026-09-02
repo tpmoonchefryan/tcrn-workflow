@@ -3247,7 +3247,7 @@
         "scripts/task.mjs",
         "tests/story-347-348-settings-policy.test.mjs"
       ],
-      "fixtureDigest": "4710bd178ce472a7ec69e41516293020b834d062c5356d9d1cab315bd1df0e77",
+      "fixtureDigest": "89f2e6ab4aded436030bb2ce5cfa33f6ce30029ed4db0771e38c8efc3322d571",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
