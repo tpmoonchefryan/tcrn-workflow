@@ -36,10 +36,17 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const HOOK = join(HERE, "..", "tools", "stop-pact", "hook.mjs");
 const CLI = join(HERE, "..", "tools", "stop-pact", "cli.mjs");
 
-test("STORY-332 response checks distinguish prose violations from quoted/table content", () => {
-  assert.equal(checkResponseText("中文".repeat(401)).violations[0].rule, 7);
+test("STORY-332 response checks keep rules 3 and 5 while ignoring quoted/table content", () => {
+  assert.equal(checkResponseText("中文".repeat(401)).ok, true);
   assert.equal(checkResponseText("本次采用门税方案").violations[0].rule, 3);
   assert.equal(checkResponseText("`门税`\n| 门税 |\n| --- |\n前后对比").ok, true);
+  assert.equal(checkResponseText("前后对比").violations[0].rule, 5);
+});
+
+test("INC-265 removes the unsupported prose length rule without weakening rules 3 and 5", () => {
+  assert.equal(checkResponseText("中文".repeat(401)).ok, true);
+  assert.equal(checkResponseText("本次采用门税方案").violations[0].rule, 3);
+  assert.equal(checkResponseText("前后对比").violations[0].rule, 5);
 });
 
 test("STORY-331 re-reads the platform AGENTS section on every prompt", () => {

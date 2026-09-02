@@ -69,12 +69,6 @@ function cjkCount(text) {
   return (String(text ?? "").match(CJK) ?? []).length;
 }
 
-function rule7(text) {
-  const visible = maskedLines(text).join("\n");
-  const count = cjkCount(visible);
-  return count > 400 ? { rule: 7, cjkCharacters: count, message: `规则 7：散文含 ${count} 个 CJK 字符，超过 400 字上限` } : null;
-}
-
 function rule3(text, vocabulary) {
   const visible = maskedLines(text, { removeQuotes: true }).join("\n");
   const terms = vocabulary.filter((term) => visible.includes(term));
@@ -102,7 +96,7 @@ function rule5(text) {
 }
 
 export function checkResponseText(text, { vocabulary = readVocabulary() } = {}) {
-  const violations = [rule7(text), rule3(text, vocabulary), rule5(text)].filter(Boolean);
+  const violations = [rule3(text, vocabulary), rule5(text)].filter(Boolean);
   return {
     ok: violations.length === 0,
     violations,

@@ -588,7 +588,7 @@ const INIT047_GOAL_TESTS = Object.freeze({
   goal09: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 article index cards stay explicit-only for default context", reasonCode: "INIT047_GOAL_09_VERIFIED" },
   goal10: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 knowledge inventory admits more than 64 records while query pages remain bounded", reasonCode: "INIT047_GOAL_10_VERIFIED" },
   goal11: { path: "tests/stop-pact.test.mjs", pattern: "STORY-331 re-reads the platform AGENTS section on every prompt", reasonCode: "INIT047_GOAL_11_VERIFIED" },
-  goal12: { path: "tests/stop-pact.test.mjs", pattern: "STORY-332 response checks distinguish prose violations from quoted/table content", reasonCode: "INIT047_GOAL_12_VERIFIED" },
+  goal12: { path: "tests/stop-pact.test.mjs", pattern: "STORY-332 response checks keep rules 3 and 5 while ignoring quoted/table content", reasonCode: "INIT047_GOAL_12_VERIFIED" },
 });
 
 async function runInit047Goal(name) {
@@ -596,6 +596,22 @@ async function runInit047Goal(name) {
   assertion(spec !== undefined, "INIT047_GOAL_TEST_UNKNOWN", name);
   const source = await readText(resolve(repositoryRoot, spec.path));
   assertion(source.includes(`test("${spec.pattern}"`), "INIT047_GOAL_TEST_NOT_FOUND", name);
+  return runTests({
+    focusedTestPath: spec.path,
+    focusedTestNamePattern: spec.pattern,
+    focusedReasonCode: spec.reasonCode,
+  });
+}
+
+const INCIDENT_TESTS = Object.freeze({
+  inc265: { path: "tests/stop-pact.test.mjs", pattern: "INC-265 removes the unsupported prose length rule without weakening rules 3 and 5", reasonCode: "INC265_STOP_RULES_VERIFIED" },
+});
+
+async function runIncidentTest(name) {
+  const spec = INCIDENT_TESTS[name];
+  assertion(spec !== undefined, "INCIDENT_TEST_UNKNOWN", name);
+  const source = await readText(resolve(repositoryRoot, spec.path));
+  assertion(source.includes(`test("${spec.pattern}"`), "INCIDENT_TEST_NOT_FOUND", name);
   return runTests({
     focusedTestPath: spec.path,
     focusedTestNamePattern: spec.pattern,
@@ -1913,6 +1929,7 @@ const commandContracts = {
   inc258: { exit: 0, reasonCode: "INC258_INSTALL_MANIFEST_VERIFIED" },
   inc259: { exit: 0, reasonCode: "INC259_STORAGE_MIGRATION_VERIFIED" },
   inc260: { exit: 0, reasonCode: "INC260_SNAPSHOT_READ_OPTIMIZED" },
+  inc265: { exit: 0, reasonCode: "INC265_STOP_RULES_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
   "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
@@ -2708,6 +2725,7 @@ const handlers = {
   inc258: () => runTests({ inc258Only: true }),
   inc259: () => runTests({ inc259Only: true }),
   inc260: () => runTests({ inc260Only: true }),
+  inc265: () => runIncidentTest("inc265"),
   p5: verifyP5,
   p6: verifyP6,
   "p6-adapter": verifyP6Adapter,
@@ -2784,6 +2802,9 @@ function evidencePhase(name) {
   }
   if (name === "inc255" || name === "inc256") {
     return "p4";
+  }
+  if (name === "inc265") {
+    return "act2";
   }
   if (name === "p5") {
     return "p5";
