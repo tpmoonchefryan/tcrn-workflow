@@ -49,6 +49,7 @@ import {
   consumeViewWriteFailure,
   materializeWorkspace,
   migrateAttestationDirectory,
+  migrateKnowledgeBodies,
   workBatchReceipt,
   workspaceBudgets,
   planWorkspaceMigration,
@@ -918,6 +919,7 @@ async function runAttestationMigration(io: CliIo, values: Readonly<Record<string
     targets: [],
   };
   const rows: Record<string, unknown>[] = [];
+  const baselineRows: Record<string, unknown>[] = [];
   if (mode === "delete") {
     let baseline: { readonly schemaVersion?: string; readonly targets?: readonly { readonly partition?: string; readonly report?: unknown }[] };
     try {
@@ -935,9 +937,16 @@ async function runAttestationMigration(io: CliIo, values: Readonly<Record<string
   } else {
     for (const target of targets) {
       const before = await reportAttestationDirectory(target.directory);
+      baselineRows.push({ partition: target.partition, report: before });
       const after = mode === "prepare" ? await migrateAttestationDirectory(target.directory) : before;
       rows.push({ partition: target.partition, before, after });
     }
+  }
+  if (values["baseline-out"] !== undefined) {
+    await writeFile(resolve(values["baseline-out"]), canonicalJson({
+      schemaVersion: "tcrn.attestation-migration-baseline.v1",
+      targets: baselineRows,
+    }), "utf8");
   }
   output.targets = rows;
   io.write(canonicalJson(output));
@@ -1054,7 +1063,6 @@ function writeTemplateAdmissionState(
 // verb. New verbs MUST ship a catalog entry (SDC-1); the p3-cli-catalog parity
 // test enforces two-way name equality with the dispatcher.
 export const COMMAND_CATALOG = Object.freeze([
-  { name: "attestation-migrate", availability: "cli", mutates: true, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "mode", required: true, valueKind: "string" }, { name: "baseline", required: false, valueKind: "string" }] },
   { name: "adapter-activate", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "capability-manifest-digest", required: true, valueKind: "string" }, { name: "step3", required: false, valueKind: "boolean" }, { name: "observe-events", required: false, valueKind: "json" }] },
   { name: "adapter-activation-assess", availability: "cli", mutates: false, flags: [{ name: "binding", required: true, valueKind: "json" }, { name: "approved-definition-digests", required: true, valueKind: "json" }] },
   { name: "adapter-activation-record", availability: "cli", mutates: false, authorityBearing: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: false, valueKind: "string" }, { name: "observation-file", required: false, valueKind: "string" }] },
@@ -1076,6 +1084,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "artifact-doctor", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "warning-bytes", required: false, valueKind: "integer" }, { name: "critical-bytes", required: false, valueKind: "integer" }, { name: "warning-count", required: false, valueKind: "integer" }, { name: "critical-count", required: false, valueKind: "integer" }] },
   { name: "artifact-size", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "attestation-migrate", availability: "cli", mutates: true, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "mode", required: true, valueKind: "string" }, { name: "baseline", required: false, valueKind: "string" }, { name: "baseline-out", required: false, valueKind: "string" }] },
   { name: "claude-adapter-activation-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }] },
   { name: "claude-adapter-activation-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
   { name: "claude-adapter-activation-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
@@ -1118,6 +1127,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "segment-events", required: false, valueKind: "integer" }] },
   { name: "install-manifest", availability: "cli", mutates: false, flags: [] },
   { name: "knowledge-batch", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "from-file", required: true, valueKind: "string" }, { name: "align-first", required: false, valueKind: "boolean" }] },
+  { name: "knowledge-bodies-migrate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "segment-bytes", required: false, valueKind: "integer" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-checkpoint", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
@@ -1444,7 +1454,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "attestation-migrate") {
-    const values = parseArguments(rest, ["root", "mode", "baseline"]);
+    const values = parseArguments(rest, ["root", "mode", "baseline", "baseline-out"]);
     required(values, ["root", "mode"]);
     await runAttestationMigration(io, values);
     return;
@@ -2522,6 +2532,13 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     io.write(canonicalJson(await initializeKnowledgeStore(values.workspace ?? "", {
       disposableAcknowledged: booleanValue(values["acknowledge-disposable"], "acknowledge-disposable"),
     })));
+    return;
+  }
+  if (command === "knowledge-bodies-migrate") {
+    const values = parseArguments(rest, ["workspace", "segment-bytes"]);
+    required(values, ["workspace"]);
+    const segmentBytes = values["segment-bytes"] === undefined ? undefined : integerValue(values, "segment-bytes");
+    io.write(canonicalJson(await migrateKnowledgeBodies(values.workspace ?? "", segmentBytes)));
     return;
   }
   if (command === "knowledge-validate") {

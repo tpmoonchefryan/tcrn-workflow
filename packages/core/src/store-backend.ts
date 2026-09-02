@@ -521,7 +521,7 @@ export class SegmentedKnowledgeStoreBackend implements StoreBackend {
       const index = await this.readSegmentedIndex(segment.name);
       for (const id of Object.keys(index)) ids.add(id);
     }
-    return [...ids].sort(compareCanonicalText);
+    return [...ids].sort(compareCanonicalText).map((id) => `${id}.body`);
   }
 
   async readKnowledgeBody(id: string): Promise<Buffer> {
@@ -545,7 +545,8 @@ export class SegmentedKnowledgeStoreBackend implements StoreBackend {
     const manifest = await this.readSegmentedManifest();
     if (manifest === null) return this.delegate.writeKnowledgeBody(id, bytes);
     const records: { readonly id: string; readonly bytes: Buffer }[] = [];
-    for (const currentId of await this.listKnowledgeBodies()) {
+    for (const name of await this.listKnowledgeBodies()) {
+      const currentId = name.endsWith(".body") ? name.slice(0, -5) : name;
       records.push({ id: currentId, bytes: await this.readKnowledgeBody(currentId) });
     }
     const replacement = Buffer.from(bytes);

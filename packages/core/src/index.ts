@@ -537,6 +537,7 @@ export {
   evaluateKnowledgeFreshness,
   exportKnowledgeCheckpoint,
   initializeKnowledgeStore,
+  migrateKnowledgeBodies,
   knowledgeContextCandidates,
   knowledgeLinkIndexCountsForTest,
   knowledgeRelevanceScore,

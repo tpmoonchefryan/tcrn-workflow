@@ -597,6 +597,7 @@ const INIT048_STORY_TESTS = Object.freeze({
   story335: { path: "tests/story-335-336-work-fields.test.mjs", pattern: "STORY-335", reasonCode: "INIT048_STORY_335_VERIFIED" },
   story336: { path: "tests/story-335-336-work-fields.test.mjs", pattern: "STORY-336", reasonCode: "INIT048_STORY_336_VERIFIED" },
   story337: { path: "tests/story-337-snapshot-replay.test.mjs", pattern: "STORY-337", reasonCode: "INIT048_STORY_337_VERIFIED" },
+  story346: { path: "tests/story-346-pg-disabled.test.mjs", pattern: "STORY-346", reasonCode: "INIT048_STORY_346_VERIFIED" },
   story344: { path: "tests/story-344-storage-boundary.test.mjs", pattern: "STORY-344", reasonCode: "INIT048_STORY_344_VERIFIED" },
   story345: { path: "tests/story-345-backend-selection.test.mjs", pattern: "STORY-345", reasonCode: "INIT048_STORY_345_VERIFIED" },
 });
@@ -1876,6 +1877,7 @@ const commandContracts = {
   story335: { exit: 0, reasonCode: "INIT048_STORY_335_VERIFIED" },
   story336: { exit: 0, reasonCode: "INIT048_STORY_336_VERIFIED" },
   story337: { exit: 0, reasonCode: "INIT048_STORY_337_VERIFIED" },
+  story346: { exit: 0, reasonCode: "INIT048_STORY_346_VERIFIED" },
   story344: { exit: 0, reasonCode: "INIT048_STORY_344_VERIFIED" },
   story345: { exit: 0, reasonCode: "INIT048_STORY_345_VERIFIED" },
   inc255: { exit: 0, reasonCode: "INC255_MCP_FRAMING_VERIFIED" },
@@ -2659,6 +2661,7 @@ const handlers = {
   story335: () => runInit048Story("story335"),
   story336: () => runInit048Story("story336"),
   story337: () => runInit048Story("story337"),
+  story346: () => runInit048Story("story346"),
   story344: () => runInit048Story("story344"),
   story345: () => runInit048Story("story345"),
   inc255: () => runTests({ inc255Only: true }),

@@ -1,11 +1,18 @@
 # ADR 0004: PostgreSQL storage backend for governed workspaces
 
-Status: accepted (TCRN-CROSS-STORY-171, direction D1–D5′ of MIN-063/MIN-064)
+Status: accepted — historical D1–D5′ decision retained; INIT-048 MVP revision (2026-09-02) keeps PostgreSQL code and test tooling in the repository but does not wire it into the product path.
 
-Supersedes the file-tree storage backend as the **production track** for the five
-governed chains. The file backend remains the **local-mode track** and the
-**migration/verification instrument**. This ADR does not touch `MIN-060 D4`
+Current MVP disposition: local file and local segmented storage are the only
+selectable backends. `storage.backend` admits `file` and `file-segmented`; the
+PostgreSQL backend, migration scripts, and `pg` development dependency remain
+retained for future re-admission but are not connected by this release. No AOS
+or external database integration is part of this MVP. This ADR does not touch `MIN-060 D4`
 ("only local mode writes local files") — see section 8.
+
+The earlier accepted ruling below that described PostgreSQL as the production
+track remains historical context for the retained code. It is superseded for
+the INIT-048 MVP by the local-only disposition above and must not be read as a
+current deployment assertion.
 
 ## Context
 

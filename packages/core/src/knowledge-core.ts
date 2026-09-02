@@ -13,7 +13,7 @@ import {
 } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
-import { resolveStoreBackend } from "./store-backend.js";
+import { resolveStoreBackend, SegmentedKnowledgeStoreBackend } from "./store-backend.js";
 import type { FileStoreBackendProfile, StoreBackend } from "./store-backend.js";
 
 import {
@@ -505,6 +505,20 @@ function storeBackendFor(storeRoot: string, options: KnowledgeReadOptions = {}):
     beforeDescriptorReadForTest: options.beforeDescriptorReadForTest,
     afterDescriptorOpenForTest: options.afterDescriptorOpenForTest,
   });
+}
+
+export async function migrateKnowledgeBodies(workspaceRootInput: string, segmentBytes = 1_048_576): Promise<Readonly<Record<string, JsonValue>>> {
+  // Body migration is a disposable-store rewrite. It may run while the chain
+  // head has advanced past store.json; the ordinary metadata-only trailing read
+  // is the established way to locate the store without pretending its marker
+  // is current. The caller rebase/validates the marker after the rewrite.
+  const scan = await scanKnowledgeStore(workspaceRootInput, { allowTrailing: true }, false, "metadata-only");
+  const backend = storeBackendFor(scan.storeRoot);
+  if (!(backend instanceof SegmentedKnowledgeStoreBackend)) {
+    fail("KNOWLEDGE_PARTIAL_STATE", "the local segmented knowledge backend is unavailable");
+  }
+  const result = await backend.migrateKnowledgeBodies(segmentBytes);
+  return { schemaVersion: "tcrn.knowledge-body-migration.v1", ...result };
 }
 
 // The claim protocol is file-native (STORY-177, like STORY-174's workspace leases):
