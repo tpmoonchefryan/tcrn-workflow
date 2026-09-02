@@ -593,6 +593,7 @@
     "tests/story-173-equivalence-redleg.test.mjs",
     "tests/story-174-storage-redleg.test.mjs",
     "tests/story-191-adapter-equivalence.test.mjs",
+    "tests/story-344-storage-boundary.test.mjs",
     "tests/story-rule-conservation.test.mjs",
     "tests/story-scope-compliance.test.mjs",
     "tests/token-attribution.test.mjs",
