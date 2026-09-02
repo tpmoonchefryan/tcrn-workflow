@@ -54,6 +54,17 @@ export { StorageError, FileBackend, WORKSPACE_CONTROL_DIRECTORY } from "./storag
 export type { StorageBackend, StorageBackendKind, StorageDirectoryEntry, WorkspaceCrashPoint } from "./storage-backend.js";
 export { SegmentedBackend, SEGMENTED_BACKEND_PROFILE } from "./segmented-backend.js";
 export type { SegmentIndexDocument, SegmentIndexEntry, SegmentManifest, SegmentManifestEntry, SegmentedBackendProfile } from "./segmented-backend.js";
+export {
+  ATTESTATION_INDEX_VERSION,
+  ATTESTATION_MANIFEST_VERSION,
+  ATTESTATION_SEGMENT_BYTES,
+  deleteLegacyAttestations,
+  migrateAttestationDirectory,
+  readAttestationReceipt,
+  reportAttestationDirectory,
+  writeAttestationReceipt,
+} from "./attestation-storage.js";
+export type { AttestationDirectoryReport, AttestationFileRecord } from "./attestation-storage.js";
 // INC-074: the storage-home sentinel declares where a workspace's chain lives
 // after a file→pg migration. The file backend refuses mutating verbs on a
 // sentinel workspace (WORKSPACE_STORAGE_RELOCATED), and a PG-facing path must
@@ -94,7 +105,7 @@ export type { MachineSettingKey, MachineSettingsCatalogEntry, MachineSettingsFil
 // core surface so a future PG store backend can implement it. StoreBackendError is
 // the fail-closed refusal shape; FileStoreBackend is the converged file
 // implementation; withStoreBackendFactory is the test-seam injection.
-export { StoreBackendError, FileStoreBackend, withStoreBackendFactory } from "./store-backend.js";
+export { StoreBackendError, FileStoreBackend, SegmentedKnowledgeStoreBackend, withStoreBackendFactory } from "./store-backend.js";
 export type { StoreBackend } from "./store-backend.js";
 export {
   CONTROL_TREE_SKELETON_DIRECTORIES,

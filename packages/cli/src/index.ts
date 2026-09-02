@@ -6,6 +6,7 @@ import {
   acquireWorkspaceLease,
   applyMachineSettingRemove,
   applyMachineSettingSet,
+  deleteLegacyAttestations,
   breakWorkspaceLease,
   breakWorkspaceRecoveryClaim,
   inspectWorkspaceLease,
@@ -47,6 +48,7 @@ import {
   listKnowledgeMetadata,
   consumeViewWriteFailure,
   materializeWorkspace,
+  migrateAttestationDirectory,
   workBatchReceipt,
   workspaceBudgets,
   planWorkspaceMigration,
@@ -77,6 +79,8 @@ import {
   validateContextRouteResult,
   validateGenericStarterBundle,
   validateWorkspace,
+  reportAttestationDirectory,
+  writeAttestationReceipt,
   codexAdapterAuthorityEmptyFallback,
   claudeAdapterAuthorityEmptyFallback,
   executeClaudeAdapterRollback,
@@ -193,7 +197,7 @@ import type {
   RelocationDestination,
 } from "../../core/src/index.js";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
 import { assertStrictInstant, canonicalExternalKey, canonicalJson, canonicalSha256, deriveStableId } from "../../protocol/src/index.js";
@@ -877,8 +881,66 @@ async function emitTimeAttestation(io: CliIo, values: Readonly<Record<string, st
   // the digest-shape check below would have produced, keeping behaviour unchanged.
   if (headEventHash === null) fail("CLI_ARGUMENT_MALFORMED", "time-attestation eventHash is not a sha-256 digest");
   const receipt = buildTimeAttestationReceipt(headEventHash, values.at ?? "", io.clock());
-  await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, `${headEventHash}.json`), receipt);
+  await writeAttestationReceipt(directory, receipt);
+}
+
+interface AttestationMigrationTarget {
+  readonly partition: string;
+  readonly directory: string;
+}
+
+async function attestationMigrationTargets(root: string): Promise<readonly AttestationMigrationTarget[]> {
+  const direct = resolve(root);
+  if (direct.endsWith("/attestations")) return [{ partition: "attestations", directory: direct }];
+  const targets: AttestationMigrationTarget[] = [];
+  for (const entry of await readdir(direct, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const directory = join(direct, entry.name, "attestations");
+    try {
+      await readdir(directory);
+      targets.push({ partition: entry.name, directory });
+    } catch (error) {
+      if ((error as { code?: string }).code !== "ENOENT") throw error;
+    }
+  }
+  return targets.sort((left, right) => left.partition < right.partition ? -1 : left.partition > right.partition ? 1 : 0);
+}
+
+async function runAttestationMigration(io: CliIo, values: Readonly<Record<string, string>>): Promise<void> {
+  const mode = values.mode;
+  if (mode !== "report" && mode !== "prepare" && mode !== "delete") fail("CLI_ARGUMENT_MALFORMED", "mode must be report, prepare, or delete");
+  if (mode === "delete" && values.baseline === undefined) fail("CLI_ARGUMENT_MISSING", "--baseline");
+  const root = values.root ?? "";
+  const targets = await attestationMigrationTargets(root);
+  const output: Record<string, unknown> = {
+    schemaVersion: "tcrn.attestation-migration.v1",
+    mode,
+    targets: [],
+  };
+  const rows: Record<string, unknown>[] = [];
+  if (mode === "delete") {
+    let baseline: { readonly schemaVersion?: string; readonly targets?: readonly { readonly partition?: string; readonly report?: unknown }[] };
+    try {
+      baseline = JSON.parse(await readFile(values.baseline ?? "", "utf8")) as typeof baseline;
+    } catch (error) {
+      fail("CLI_ARGUMENT_MALFORMED", `baseline is unreadable: ${String((error as { message?: string }).message ?? error)}`);
+    }
+    if (baseline.schemaVersion !== "tcrn.attestation-migration-baseline.v1" || !Array.isArray(baseline.targets)) fail("CLI_ARGUMENT_MALFORMED", "baseline schema");
+    for (const target of targets) {
+      const expected = baseline.targets.find((entry) => entry.partition === target.partition)?.report;
+      if (expected === undefined) fail("CLI_ARGUMENT_MALFORMED", `baseline does not name ${target.partition}`);
+      const report = await deleteLegacyAttestations(target.directory, expected as Awaited<ReturnType<typeof reportAttestationDirectory>>);
+      rows.push({ partition: target.partition, report });
+    }
+  } else {
+    for (const target of targets) {
+      const before = await reportAttestationDirectory(target.directory);
+      const after = mode === "prepare" ? await migrateAttestationDirectory(target.directory) : before;
+      rows.push({ partition: target.partition, before, after });
+    }
+  }
+  output.targets = rows;
+  io.write(canonicalJson(output));
 }
 
 // STORY-299. A committed fact whose derived view could not be written is still a
@@ -992,6 +1054,7 @@ function writeTemplateAdmissionState(
 // verb. New verbs MUST ship a catalog entry (SDC-1); the p3-cli-catalog parity
 // test enforces two-way name equality with the dispatcher.
 export const COMMAND_CATALOG = Object.freeze([
+  { name: "attestation-migrate", availability: "cli", mutates: true, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "mode", required: true, valueKind: "string" }, { name: "baseline", required: false, valueKind: "string" }] },
   { name: "adapter-activate", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "capability-manifest-digest", required: true, valueKind: "string" }, { name: "step3", required: false, valueKind: "boolean" }, { name: "observe-events", required: false, valueKind: "json" }] },
   { name: "adapter-activation-assess", availability: "cli", mutates: false, flags: [{ name: "binding", required: true, valueKind: "json" }, { name: "approved-definition-digests", required: true, valueKind: "json" }] },
   { name: "adapter-activation-record", availability: "cli", mutates: false, authorityBearing: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: false, valueKind: "string" }, { name: "observation-file", required: false, valueKind: "string" }] },
@@ -1378,6 +1441,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   if (command === "commands") {
     parseArguments(rest, []);
     io.write(canonicalJson({ reasonCode: "CLI_CATALOG_READY", schemaVersion: "tcrn.cli-catalog.v1", commands: COMMAND_CATALOG }));
+    return;
+  }
+  if (command === "attestation-migrate") {
+    const values = parseArguments(rest, ["root", "mode", "baseline"]);
+    required(values, ["root", "mode"]);
+    await runAttestationMigration(io, values);
     return;
   }
   if (command === "aos-requirements-validate" || command === "aos-requirements-readback") {
