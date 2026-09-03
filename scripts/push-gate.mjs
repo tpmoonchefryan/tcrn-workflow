@@ -31,7 +31,8 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { performance } from "node:perf_hooks";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,6 +42,38 @@ import { requiredFailurePatternProblems } from "./preflight.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
+const timingEvidencePath = resolve(repositoryRoot, "dist/evidence/p1/push-gate-timing.json");
+const timingStartedAt = performance.now();
+const timingSourceDigest = createHash("sha256").update(await readFile(fileURLToPath(import.meta.url))).digest("hex");
+const stageTimings = [];
+
+async function timedStage(name, line, operation) {
+  const startedAt = performance.now();
+  try {
+    return await operation();
+  } finally {
+    stageTimings.push({ name, line, elapsedMs: Number((performance.now() - startedAt).toFixed(3)) });
+  }
+}
+
+async function writeTimingEvidence(ok) {
+  const gateElapsedMs = Number((performance.now() - timingStartedAt).toFixed(3));
+  const stageTotalMs = Number(stageTimings.reduce((sum, stage) => sum + stage.elapsedMs, 0).toFixed(3));
+  const evidence = {
+    schemaVersion: "tcrn.push-gate-timing.v1",
+    command: "node scripts/push-gate.mjs",
+    ok,
+    observedAt: new Date().toISOString(),
+    gateElapsedMs,
+    stageTotalMs,
+    attributionGapMs: Number((gateElapsedMs - stageTotalMs).toFixed(3)),
+    sourceDigest: timingSourceDigest,
+    stdoutContract: JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION }),
+    stages: stageTimings,
+  };
+  await mkdir(resolve(repositoryRoot, "dist/evidence/p1"), { recursive: true });
+  await writeFile(timingEvidencePath, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+}
 
 function fail(reasonCode, detail) {
   failures.push({ reasonCode, detail });
@@ -86,9 +119,11 @@ function checkCjkEmphasis(document, body) {
 // 1. A dirty tree means the bytes that pass the gate are not the bytes that get pushed.
 //    verify:p1 and verify:p8 refuse a dirty basis themselves, but they say so in the
 //    middle of a long run; saying it first is worth the duplicated git call.
-const status = run("git", ["status", "--porcelain=v1", "--untracked-files=all"]);
-if (!status.ok) fail("PUSH_GATE_GIT_UNAVAILABLE", status.output.trim().slice(0, 200));
-else if (status.output.trim() !== "") fail("PUSH_GATE_TREE_DIRTY", status.output.trim().split("\n").slice(0, 5).join(" | "));
+await timedStage("git-status-before", 122, async () => {
+  const status = run("git", ["status", "--porcelain=v1", "--untracked-files=all"]);
+  if (!status.ok) fail("PUSH_GATE_GIT_UNAVAILABLE", status.output.trim().slice(0, 200));
+  else if (status.output.trim() !== "") fail("PUSH_GATE_TREE_DIRTY", status.output.trim().split("\n").slice(0, 5).join(" | "));
+});
 
 // 2. The version as the reader sees it, and whether the reader sees prose at all.
 //
@@ -99,13 +134,15 @@ else if (status.output.trim() !== "") fail("PUSH_GATE_TREE_DIRTY", status.output
 //    files, and eighteen emphasis spans that render as literal asterisks in Chinese and
 //    Japanese.
 const badgeVersion = P8_VERSION.replaceAll("-", "--");
-for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
-  const body = await read(document);
-  const published = [...body.matchAll(/status-([0-9][^-\s)]*(?:--[^-\s)]+)*)-blue/gu)].map((match) => match[1]);
-  if (published.length === 0) fail("PUSH_GATE_STATUS_BADGE_MISSING", document);
-  else if (!published.every((value) => value === badgeVersion)) fail("PUSH_GATE_STATUS_BADGE_STALE", `${document}: ${published.join(", ")} != ${badgeVersion}`);
-  checkCjkEmphasis(document, body);
-}
+await timedStage("version-badge-and-cjk-emphasis", 137, async () => {
+  for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
+    const body = await read(document);
+    const published = [...body.matchAll(/status-([0-9][^-\s)]*(?:--[^-\s)]+)*)-blue/gu)].map((match) => match[1]);
+    if (published.length === 0) fail("PUSH_GATE_STATUS_BADGE_MISSING", document);
+    else if (!published.every((value) => value === badgeVersion)) fail("PUSH_GATE_STATUS_BADGE_STALE", `${document}: ${published.join(", ")} != ${badgeVersion}`);
+    checkCjkEmphasis(document, body);
+  }
+});
 
 // 2b. The version in prose, not just in the badge.
 //
@@ -125,15 +162,17 @@ const currentVersionDocuments = [
   "docs/versioning/versioning-policy.md",
   "docs/compatibility/supported-modes.md",
 ];
-for (const document of currentVersionDocuments) {
-  const body = await read(document);
-  body.split("\n").forEach((line, index) => {
-    for (const match of line.matchAll(/\b\d+\.\d+\.\d+-rc\.\d+\b/gu)) {
-      if (match[0] === P8_VERSION) continue;
-      fail("PUSH_GATE_STALE_VERSION_PROSE", `${document}:${index + 1}: ${match[0]} != ${P8_VERSION}`);
-    }
-  });
-}
+await timedStage("stale-version-prose", 165, async () => {
+  for (const document of currentVersionDocuments) {
+    const body = await read(document);
+    body.split("\n").forEach((line, index) => {
+      for (const match of line.matchAll(/\b\d+\.\d+\.\d+-rc\.\d+\b/gu)) {
+        if (match[0] === P8_VERSION) continue;
+        fail("PUSH_GATE_STALE_VERSION_PROSE", `${document}:${index + 1}: ${match[0]} != ${P8_VERSION}`);
+      }
+    });
+  }
+});
 
 // 2c. The failure-pattern register has to stay data. A register that drifts out of sync
 //     with itself is worse than none: it would be cited as a count when it is no longer
@@ -141,37 +180,39 @@ for (const document of currentVersionDocuments) {
 //     real, only that the file still says what it claims to say.
 const registerPath = "scripts/policy/failure-pattern-register.json";
 let register = null;
-try {
-  register = JSON.parse(await read(registerPath));
-} catch (error) {
-  fail("PUSH_GATE_REGISTER_UNPARSEABLE", `${registerPath}: ${error.message.slice(0, 120)}`);
-}
-if (register !== null) {
-  const layers = new Set(Object.keys(register.layers ?? {}));
-  const audiences = new Set(Object.keys(register.audiences ?? {}));
-  for (const pattern of register.patterns ?? []) {
-    const occurrences = Array.isArray(pattern.occurrences) ? pattern.occurrences.length : -1;
-    // The count is the whole point of the file -- promotion is decided by it -- so a count
-    // that disagrees with the list it summarises is the one corruption that matters.
-    if (pattern.occurrenceCount !== occurrences) {
-      fail("PUSH_GATE_REGISTER_COUNT_DRIFTED", `${pattern.id}: declares ${pattern.occurrenceCount}, lists ${occurrences}`);
+await timedStage("failure-pattern-register", 183, async () => {
+  try {
+    register = JSON.parse(await read(registerPath));
+  } catch (error) {
+    fail("PUSH_GATE_REGISTER_UNPARSEABLE", `${registerPath}: ${error.message.slice(0, 120)}`);
+  }
+  if (register !== null) {
+    const layers = new Set(Object.keys(register.layers ?? {}));
+    const audiences = new Set(Object.keys(register.audiences ?? {}));
+    for (const pattern of register.patterns ?? []) {
+      const occurrences = Array.isArray(pattern.occurrences) ? pattern.occurrences.length : -1;
+      // The count is the whole point of the file -- promotion is decided by it -- so a count
+      // that disagrees with the list it summarises is the one corruption that matters.
+      if (pattern.occurrenceCount !== occurrences) {
+        fail("PUSH_GATE_REGISTER_COUNT_DRIFTED", `${pattern.id}: declares ${pattern.occurrenceCount}, lists ${occurrences}`);
+      }
+      if (!layers.has(pattern.layer)) fail("PUSH_GATE_REGISTER_LAYER_UNKNOWN", `${pattern.id}: ${pattern.layer}`);
+      if (!audiences.has(pattern.audience)) fail("PUSH_GATE_REGISTER_AUDIENCE_UNKNOWN", `${pattern.id}: ${pattern.audience}`);
+      // A "gated" entry claims something is already machine-judged. If it names no gate, the
+      // register is asserting coverage it cannot point at, which is the pattern the file
+      // itself calls argument-from-unchecked-gate.
+      if (pattern.disposition === "gated" && (typeof pattern.gate !== "string" || pattern.gate === "")) {
+        fail("PUSH_GATE_REGISTER_GATE_UNNAMED", pattern.id);
+      }
+      if (pattern.disposition !== "gated" && pattern.gate !== null) {
+        fail("PUSH_GATE_REGISTER_GATE_UNEXPECTED", `${pattern.id}: ${String(pattern.gate)}`);
+      }
     }
-    if (!layers.has(pattern.layer)) fail("PUSH_GATE_REGISTER_LAYER_UNKNOWN", `${pattern.id}: ${pattern.layer}`);
-    if (!audiences.has(pattern.audience)) fail("PUSH_GATE_REGISTER_AUDIENCE_UNKNOWN", `${pattern.id}: ${pattern.audience}`);
-    // A "gated" entry claims something is already machine-judged. If it names no gate, the
-    // register is asserting coverage it cannot point at, which is the pattern the file
-    // itself calls argument-from-unchecked-gate.
-    if (pattern.disposition === "gated" && (typeof pattern.gate !== "string" || pattern.gate === "")) {
-      fail("PUSH_GATE_REGISTER_GATE_UNNAMED", pattern.id);
-    }
-    if (pattern.disposition !== "gated" && pattern.gate !== null) {
-      fail("PUSH_GATE_REGISTER_GATE_UNEXPECTED", `${pattern.id}: ${String(pattern.gate)}`);
+    for (const problem of requiredFailurePatternProblems(register)) {
+      fail("PUSH_GATE_FAILURE_PATTERN_REQUIRED", problem);
     }
   }
-  for (const problem of requiredFailurePatternProblems(register)) {
-    fail("PUSH_GATE_FAILURE_PATTERN_REQUIRED", problem);
-  }
-}
+});
 
 // 2d. The version in the "Status" prose, not only in the badge. (INIT-011 S086)
 //     Check 2 pins the badge; a reader also takes the current version from the Status
@@ -179,10 +220,12 @@ if (register !== null) {
 //     release lag in prose -- exactly the debt that left all five READMEs a version behind
 //     on capabilities -- sails through it. Require the current version to appear in prose,
 //     with the status badge stripped first so the badge alone cannot satisfy the check.
-for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
-  const prose = (await read(document)).replaceAll(/status-[0-9][^)\s]*-blue/gu, "");
-  if (!prose.includes(P8_VERSION)) fail("PUSH_GATE_STATUS_VERSION_ABSENT", `${document}: "${P8_VERSION}" appears only in the badge, not in prose`);
-}
+await timedStage("status-version-prose", 223, async () => {
+  for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
+    const prose = (await read(document)).replaceAll(/status-[0-9][^)\s]*-blue/gu, "");
+    if (!prose.includes(P8_VERSION)) fail("PUSH_GATE_STATUS_VERSION_ABSENT", `${document}: "${P8_VERSION}" appears only in the badge, not in prose`);
+  }
+});
 
 // 2e. A convenience translation of a root document must stay pinned to the English bytes it
 //     was translated from. (INIT-011 S087/S088) The five READMEs are held current by the
@@ -193,29 +236,31 @@ for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.
 //     rule runs over every mirror. LICENSE, NOTICE, CHANGELOG and SUPPORT are English-only by
 //     policy and are listed there, not mirrored.
 const coverage = JSON.parse(await read("scripts/policy/doc-coverage.json"));
-for (const [source, spec] of Object.entries(coverage.sources)) {
-  if (spec.kind !== "rootdoc") continue;
-  const dot = source.lastIndexOf(".");
-  const base = source.slice(0, dot);
-  const ext = source.slice(dot + 1);
-  const englishDigest = createHash("sha256").update(await readFile(resolve(repositoryRoot, source))).digest("hex");
-  for (const language of coverage.languages) {
-    // STORY-300: mirrors may live beside their source or in a declared directory.
-    // The code of conduct's had to move, because GitHub resolves that family by
-    // matching the name and taking the first, and `.fr` sorts before `.md`.
-    const mirror = spec.mirrorDirectory === undefined
-      ? `${base}.${language}.${ext}`
-      : `${spec.mirrorDirectory}/${base}.${language}.${ext}`;
-    let body;
-    try { body = await read(mirror); } catch { fail("PUSH_GATE_TRANSLATION_MISSING", mirror); continue; }
-    checkCjkEmphasis(mirror, body);
-    if (!spec.pinned) continue;
-    const pin = body.match(/<!--\s*tcrn-doc-synced-to:\s*(\S+)\s+([0-9a-f]{64})\s*-->/u);
-    if (!pin) fail("PUSH_GATE_TRANSLATION_PIN_MISSING", mirror);
-    else if (pin[1] !== source) fail("PUSH_GATE_TRANSLATION_PIN_SOURCE", `${mirror}: pins ${pin[1]}, expected ${source}`);
-    else if (pin[2] !== englishDigest) fail("PUSH_GATE_TRANSLATION_PIN_STALE", `${mirror}: ${pin[2].slice(0, 12)} != ${englishDigest.slice(0, 12)}`);
+await timedStage("translation-mirror-pins", 239, async () => {
+  for (const [source, spec] of Object.entries(coverage.sources)) {
+    if (spec.kind !== "rootdoc") continue;
+    const dot = source.lastIndexOf(".");
+    const base = source.slice(0, dot);
+    const ext = source.slice(dot + 1);
+    const englishDigest = createHash("sha256").update(await readFile(resolve(repositoryRoot, source))).digest("hex");
+    for (const language of coverage.languages) {
+      // STORY-300: mirrors may live beside their source or in a declared directory.
+      // The code of conduct's had to move, because GitHub resolves that family by
+      // matching the name and taking the first, and `.fr` sorts before `.md`.
+      const mirror = spec.mirrorDirectory === undefined
+        ? `${base}.${language}.${ext}`
+        : `${spec.mirrorDirectory}/${base}.${language}.${ext}`;
+      let body;
+      try { body = await read(mirror); } catch { fail("PUSH_GATE_TRANSLATION_MISSING", mirror); continue; }
+      checkCjkEmphasis(mirror, body);
+      if (!spec.pinned) continue;
+      const pin = body.match(/<!--\s*tcrn-doc-synced-to:\s*(\S+)\s+([0-9a-f]{64})\s*-->/u);
+      if (!pin) fail("PUSH_GATE_TRANSLATION_PIN_MISSING", mirror);
+      else if (pin[1] !== source) fail("PUSH_GATE_TRANSLATION_PIN_SOURCE", `${mirror}: pins ${pin[1]}, expected ${source}`);
+      else if (pin[2] !== englishDigest) fail("PUSH_GATE_TRANSLATION_PIN_STALE", `${mirror}: ${pin[2].slice(0, 12)} != ${englishDigest.slice(0, 12)}`);
+    }
   }
-}
+});
 
 // 2f. The host evidence receipt: present, and not older than the window.
 //
@@ -237,39 +282,43 @@ for (const [source, spec] of Object.entries(coverage.sources)) {
 // be evaluated is the jointly-unsatisfiable defect this platform has paid for twice.
 // So completeness is reported beside the verdict and left to the operator to close.
 const HOST_EVIDENCE_MAX_AGE_DAYS = 30;
-const hostEvidenceRaw = await read("docs/verification/host/claude-code.json").catch(() => null);
-if (hostEvidenceRaw === null) {
-  fail("PUSH_GATE_HOST_EVIDENCE_MISSING", "docs/verification/host/claude-code.json");
-} else {
-  let hostEvidence = null;
-  try {
-    hostEvidence = JSON.parse(hostEvidenceRaw);
-  } catch {
-    fail("PUSH_GATE_HOST_EVIDENCE_INVALID", "receipt is not JSON");
-  }
-  const observedAt = hostEvidence?.observedAt;
-  if (typeof observedAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(observedAt)) {
-    fail("PUSH_GATE_HOST_EVIDENCE_INVALID", `observedAt is ${String(observedAt)}`);
+await timedStage("host-evidence-freshness", 285, async () => {
+  const hostEvidenceRaw = await read("docs/verification/host/claude-code.json").catch(() => null);
+  if (hostEvidenceRaw === null) {
+    fail("PUSH_GATE_HOST_EVIDENCE_MISSING", "docs/verification/host/claude-code.json");
   } else {
-    // Measured against the newest release note rather than the wall clock: a gate
-    // whose verdict changes while nothing in the tree changed is a gate that reports
-    // the calendar, and this one is about the tree.
-    const ageDays = Math.floor((Date.now() - Date.parse(`${observedAt}T00:00:00Z`)) / 86_400_000);
-    if (!Number.isFinite(ageDays)) fail("PUSH_GATE_HOST_EVIDENCE_INVALID", `observedAt is ${observedAt}`);
-    else if (ageDays > HOST_EVIDENCE_MAX_AGE_DAYS) {
-      fail("PUSH_GATE_HOST_EVIDENCE_STALE", `observed ${observedAt}, ${ageDays} days ago, on host ${String(hostEvidence?.host?.versionSelfReport)}; re-run pnpm host-evidence`);
+    let hostEvidence = null;
+    try {
+      hostEvidence = JSON.parse(hostEvidenceRaw);
+    } catch {
+      fail("PUSH_GATE_HOST_EVIDENCE_INVALID", "receipt is not JSON");
+    }
+    const observedAt = hostEvidence?.observedAt;
+    if (typeof observedAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(observedAt)) {
+      fail("PUSH_GATE_HOST_EVIDENCE_INVALID", `observedAt is ${String(observedAt)}`);
+    } else {
+      // Measured against the newest release note rather than the wall clock: a gate
+      // whose verdict changes while nothing in the tree changed is a gate that reports
+      // the calendar, and this one is about the tree.
+      const ageDays = Math.floor((Date.now() - Date.parse(`${observedAt}T00:00:00Z`)) / 86_400_000);
+      if (!Number.isFinite(ageDays)) fail("PUSH_GATE_HOST_EVIDENCE_INVALID", `observedAt is ${observedAt}`);
+      else if (ageDays > HOST_EVIDENCE_MAX_AGE_DAYS) {
+        fail("PUSH_GATE_HOST_EVIDENCE_STALE", `observed ${observedAt}, ${ageDays} days ago, on host ${String(hostEvidence?.host?.versionSelfReport)}; re-run pnpm host-evidence`);
+      }
     }
   }
-}
+});
 
 // 3. The two prose announcements of the version.
-const changelog = await read("CHANGELOG.md");
-if (!new RegExp(`^## ${P8_VERSION.replaceAll(".", "\\.")}\\b`, "mu").test(changelog)) {
-  fail("PUSH_GATE_CHANGELOG_HEADING_MISSING", `no "## ${P8_VERSION}" heading`);
-}
-const releaseNote = await read(`docs/releases/${P8_VERSION}.md`).catch(() => null);
-if (releaseNote === null) fail("PUSH_GATE_RELEASE_NOTE_MISSING", `docs/releases/${P8_VERSION}.md`);
-else if (!releaseNote.includes(P8_VERSION)) fail("PUSH_GATE_RELEASE_NOTE_UNVERSIONED", `docs/releases/${P8_VERSION}.md`);
+await timedStage("release-prose", 313, async () => {
+  const changelog = await read("CHANGELOG.md");
+  if (!new RegExp(`^## ${P8_VERSION.replaceAll(".", "\\.")}\\b`, "mu").test(changelog)) {
+    fail("PUSH_GATE_CHANGELOG_HEADING_MISSING", `no "## ${P8_VERSION}" heading`);
+  }
+  const releaseNote = await read(`docs/releases/${P8_VERSION}.md`).catch(() => null);
+  if (releaseNote === null) fail("PUSH_GATE_RELEASE_NOTE_MISSING", `docs/releases/${P8_VERSION}.md`);
+  else if (!releaseNote.includes(P8_VERSION)) fail("PUSH_GATE_RELEASE_NOTE_UNVERSIONED", `docs/releases/${P8_VERSION}.md`);
+});
 
 // 4. A tag names bytes, permanently. If this version is already tagged, HEAD must be that
 //    commit or a descendant of it.
@@ -288,11 +337,13 @@ else if (!releaseNote.includes(P8_VERSION)) fail("PUSH_GATE_RELEASE_NOTE_UNVERSI
 //    This check never proved a tag names *judged* bytes. Running the suites below before
 //    every push is what does that; this proves only that the tag is not being contradicted.
 const tag = `v${P8_VERSION}`;
-const tagged = run("git", ["rev-list", "-n", "1", tag]);
-if (tagged.ok) {
-  const descends = run("git", ["merge-base", "--is-ancestor", tagged.output.trim(), "HEAD"]);
-  if (!descends.ok) fail("PUSH_GATE_HEAD_CONTRADICTS_TAG", `HEAD does not descend from ${tag} (${tagged.output.trim().slice(0, 12)})`);
-}
+await timedStage("tag-ancestry", 340, async () => {
+  const tagged = run("git", ["rev-list", "-n", "1", tag]);
+  if (tagged.ok) {
+    const descends = run("git", ["merge-base", "--is-ancestor", tagged.output.trim(), "HEAD"]);
+    if (!descends.ok) fail("PUSH_GATE_HEAD_CONTRADICTS_TAG", `HEAD does not descend from ${tag} (${tagged.output.trim().slice(0, 12)})`);
+  }
+});
 
 // 5-6. The gates themselves, in the order the plan fixes: p1 carries the pinned compiler
 //      and the zero-warning rule, p8 carries the release identity and the reproducible
@@ -304,7 +355,7 @@ if (tagged.ok) {
 //      the "run it on every change" discipline. Before a push is the right frequency for
 //      a check that asks whether the proofs still bite.
 for (const { reasonCode, script } of ENGINE_PUSH_GATE_CHILDREN) {
-  const result = run("pnpm", ["run", "--silent", script]);
+  const result = await timedStage(`child:${script}`, 358, async () => run("pnpm", ["run", "--silent", script]));
   if (!result.ok) fail(reasonCode, result.output.trim().split("\n").slice(-3).join(" | ").slice(0, 300));
   // G-2: a warning is an unfinished error. The reason-code vocabulary never uses the word,
   // so any occurrence is toolchain output that nothing has judged.
@@ -313,9 +364,12 @@ for (const { reasonCode, script } of ENGINE_PUSH_GATE_CHILDREN) {
 
 // A gate that rewrote tracked source has changed the bytes being pushed after they were
 // judged, which defeats the point of judging them.
-const post = run("git", ["status", "--porcelain=v1", "--untracked-files=all"]);
-if (post.ok && post.output.trim() !== "") fail("PUSH_GATE_GATES_MUTATED_SOURCE", post.output.trim().split("\n").slice(0, 5).join(" | "));
+await timedStage("git-status-after", 367, async () => {
+  const post = run("git", ["status", "--porcelain=v1", "--untracked-files=all"]);
+  if (post.ok && post.output.trim() !== "") fail("PUSH_GATE_GATES_MUTATED_SOURCE", post.output.trim().split("\n").slice(0, 5).join(" | "));
+});
 
+await writeTimingEvidence(failures.length === 0);
 if (failures.length > 0) {
   process.stdout.write(`${JSON.stringify({ ok: false, reasonCode: "PUSH_GATE_BLOCKED", failures }, null, 2)}\n`);
   process.exit(1);

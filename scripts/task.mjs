@@ -689,6 +689,15 @@ async function runInit049Story353() {
   });
 }
 
+async function runInc266() {
+  const result = await runTests({
+    focusedTestPath: "tests/inc266-push-gate-timing.test.mjs",
+    focusedTestNamePattern: "INC-266 push-gate timing accounts for every phase and keeps the success output contract",
+    focusedReasonCode: "INC266_PUSH_GATE_TIMING_VERIFIED",
+  });
+  return success("INC266_PUSH_GATE_TIMING_VERIFIED", { tests: result.tests, result: "passed" });
+}
+
 async function runInit049Story(name) {
   const spec = INIT049_STORY_TESTS[name];
   assertion(spec !== undefined, "INIT049_STORY_UNKNOWN", name);
@@ -2149,6 +2158,7 @@ const commandContracts = {
   story351: { exit: 0, reasonCode: "INIT049_STORY_351_VERIFIED" },
   story352: { exit: 0, reasonCode: "INIT049_STORY_352_VERIFIED" },
   story353: { exit: 0, reasonCode: "INIT049_STORY_353_VERIFIED" },
+  inc266: { exit: 0, reasonCode: "INC266_PUSH_GATE_TIMING_VERIFIED" },
 };
 
 for (const name of INIT049_FOCUSED_CLAIM_NAMES) {
@@ -2211,7 +2221,7 @@ async function verifyMap() {
       assertion(claim.fixtureDigest === null, "VERIFICATION_MAP_PLANNED_DIGEST", claim.id);
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
-    if (typeof claim.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))) {
+    if (typeof claim.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || claim.id.startsWith("INIT049-STORY-") || claim.id.startsWith("INIT049-INC-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))) {
       assertion(claim.positiveLeg !== null && typeof claim.positiveLeg === "object" && !Array.isArray(claim.positiveLeg), "VERIFICATION_MAP_POSITIVE_LEG", claim.id);
       assertion(typeof claim.positiveLeg.command === "string" && claim.positiveLeg.command.length > 0, "VERIFICATION_MAP_POSITIVE_COMMAND", claim.id);
       assertion(claim.positiveLeg.expectedExit === claim.expectedExit && claim.positiveLeg.expectedReasonCode === claim.expectedReasonCode, "VERIFICATION_MAP_POSITIVE_EXPECTATION", claim.id);
@@ -2999,6 +3009,7 @@ const handlers = {
   act12: verifyAct12,
   act13: verifyAct13,
   e2e: verifyE2eGovernedLoop,
+  inc266: runInc266,
 };
 
 for (const name of INIT049_FOCUSED_CLAIM_NAMES) {
