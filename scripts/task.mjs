@@ -599,13 +599,13 @@ const INIT049_STORY_TESTS = Object.freeze({
 });
 
 const INIT049_STORY351_TESTS = Object.freeze([
-  ["tests/inc260-snapshot-read-optimization.test.mjs", "INC-260 the reader validates the snapshot once and replays only the tail"],
+  ["tests/inc260-snapshot-read-optimization.test.mjs", "INC-260 the reader does not compute a second full event-prefix digest"],
   ["tests/story-333-byte-segments.test.mjs", "STORY-333 byte rolling is not replaced by event-count rolling"],
   ["tests/story-335-336-work-fields.test.mjs", "STORY-336 labels remain first-class instead of becoming an extension key"],
   ["tests/story-337-snapshot-replay.test.mjs", "STORY-337 snapshot replay source has an explicit fail-closed corruption path"],
   ["tests/story-340-attestation-migration.test.mjs", "STORY-340 attestation migration has a fail-closed full-value comparison"],
   ["tests/story-341-knowledge-body-migration.test.mjs", "STORY-341 knowledge body migration is explicit and keeps metadata outside the body segments"],
-  ["tests/story-344-storage-boundary.test.mjs", "STORY-344 workspace lifecycle remains swappable for initialize and recovery"],
+  ["tests/story-344-storage-boundary.test.mjs", "STORY-344 workspace lifecycle has no direct data-plane fs calls"],
   ["tests/story-345-backend-selection.test.mjs", "STORY-345 backend selection rejects unknown values and does not silently fall back"],
   ["tests/story-346-pg-disabled.test.mjs", "STORY-346 production backend selection has no pg branch"],
   ["tests/story-347-348-settings-policy.test.mjs", "STORY-348 protocol validity values remain hardcoded rather than becoming settings"],

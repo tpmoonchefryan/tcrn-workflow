@@ -114,7 +114,7 @@ test("INC-260 live snapshot reads have a regression slope below the 75 microseco
   assert.ok(slopeMsPerEvent * 1000 < 75, `snapshot read slope ${slopeMsPerEvent * 1000}us/event must be below the 75us baseline`);
 });
 
-test("INC-260 the reader validates the snapshot once and replays only the tail", async (context) => {
+test("INC-260 the reader does not compute a second full event-prefix digest", async (context) => {
   const fx = await fixture(context);
   const measured = await withWorkspacePerfInstrumentation(() => materializeWorkspace(fx.workspace));
   assert.equal(measured.metrics.fullMaterialize, 0);
