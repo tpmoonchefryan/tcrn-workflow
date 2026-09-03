@@ -1423,6 +1423,6 @@ test("INC-250: an unresolved declared repository is red rather than an engine-HE
   assert.equal(leg.unresolved[0].reasonCode, "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED");
 });
 
-nodeTest.describe("platform-doctor behavior matrix", { concurrency: true }, () => {
+nodeTest.describe("platform-doctor behavior matrix", { concurrency: 8 }, () => {
   for (const [name, options, body] of queuedTests) nodeTest(name, options, body);
 });
