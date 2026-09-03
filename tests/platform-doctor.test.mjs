@@ -6,7 +6,17 @@ import { chmod, lstat, mkdir, mkdtemp, realpath, rm, stat, writeFile } from "nod
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import nodeTest from "node:test";
+
+// Each test owns a private synthetic platform root. Registering those independent roots
+// under one concurrent suite removes the serial fixture/doctor startup tail without
+// changing a test name, assertion, or behavior vector.
+const queuedTests = [];
+function test(name, optionsOrBody, maybeBody) {
+  const options = typeof optionsOrBody === "function" ? {} : optionsOrBody ?? {};
+  const body = typeof optionsOrBody === "function" ? optionsOrBody : maybeBody;
+  queuedTests.push([name, { ...options, concurrency: true }, body]);
+}
 
 import { adapterIdentityObservations, inspectChainValidation, inspectPlatform } from "../scripts/platform-doctor.mjs";
 import { GUARDED_TREES, HOSTS, claudeHookSettings, hookEntriesFor } from "../scripts/host-harness.mjs";
@@ -1411,4 +1421,8 @@ test("INC-250: an unresolved declared repository is red rather than an engine-HE
   assert.equal(leg.reasonCode, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
   assert.equal(leg.unresolved.length, 9);
   assert.equal(leg.unresolved[0].reasonCode, "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED");
+});
+
+nodeTest.describe("platform-doctor behavior matrix", { concurrency: true }, () => {
+  for (const [name, options, body] of queuedTests) nodeTest(name, options, body);
 });

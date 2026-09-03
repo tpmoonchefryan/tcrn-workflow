@@ -36,6 +36,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { P8_VERSION } from "./lib/p8-workflow-rc.mjs";
+import { ENGINE_PUSH_GATE_CHILDREN } from "./lib/push-gate-children.mjs";
 import { requiredFailurePatternProblems } from "./preflight.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -302,11 +303,7 @@ if (tagged.ok) {
 //      would push the wall clock at the 180s escalation trigger which exists to protect
 //      the "run it on every change" discipline. Before a push is the right frequency for
 //      a check that asks whether the proofs still bite.
-for (const [reasonCode, script] of [
-  ["PUSH_GATE_P1_FAILED", "verify:p1"],
-  ["PUSH_GATE_P8_FAILED", "verify:p8"],
-  ["PUSH_GATE_GUARDS_UNPROVEN", "guard-check"],
-]) {
+for (const { reasonCode, script } of ENGINE_PUSH_GATE_CHILDREN) {
   const result = run("pnpm", ["run", "--silent", script]);
   if (!result.ok) fail(reasonCode, result.output.trim().split("\n").slice(-3).join(" | ").slice(0, 300));
   // G-2: a warning is an unfinished error. The reason-code vocabulary never uses the word,

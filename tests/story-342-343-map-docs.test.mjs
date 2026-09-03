@@ -7,6 +7,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { INIT049_FOCUSED_CLAIM_NAMES, INIT049_FOCUSED_CLAIMS } from "../scripts/init049-focused-claims.mjs";
+
 const engineRoot = fileURLToPath(new URL("../", import.meta.url));
 const helperRoot = resolve(engineRoot, "../tcrn-workflow-helper");
 
@@ -63,4 +65,20 @@ test("STORY-343 documentation proof names the helper archive refresh as a requir
   assert.match(helper, /settings catalog|settings-set/u);
   const skill = await readFile(resolve(helperRoot, "skill/tcrn-workflow-helper/SKILL.md"), "utf8");
   assert.match(skill, /archive|release/iu);
+});
+
+test("STORY-352 P3 and Knowledge claims have independent focused commands and expectations", async () => {
+  const map = JSON.parse(await readFile(resolve(engineRoot, "verification-map.yaml"), "utf8"));
+  const claims = map.claims.filter((claim) => INIT049_FOCUSED_CLAIM_NAMES.includes(claim.command.replace(/^pnpm verify:/u, "")));
+  assert.equal(claims.length, INIT049_FOCUSED_CLAIM_NAMES.length);
+  assert.equal(new Set(claims.map((claim) => claim.command)).size, claims.length);
+  assert.equal(new Set(claims.map((claim) => claim.expectedReasonCode)).size, claims.length);
+  assert.equal(new Set(claims.map((claim) => claim.redLeg.test)).size, claims.length);
+  for (const claim of claims) {
+    const name = claim.command.replace(/^pnpm verify:/u, "");
+    const spec = INIT049_FOCUSED_CLAIMS[name];
+    assert.equal(claim.expectedReasonCode, spec.reasonCode, name);
+    assert.equal(claim.redLeg.test, spec.pattern, name);
+    assert.ok(claim.fixturePaths.includes(spec.path), `${name} must name its focused test file`);
+  }
 });

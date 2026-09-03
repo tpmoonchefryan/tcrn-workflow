@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "tcrn.gate-containment.v1",
+  "note": "The nine acceptance groups remain the semantic roster. A top-level run invokes only the four roots; each root's declared children are already judged by its command.",
+  "topLevel": [
+    "engine-release",
+    "helper-release",
+    "platform-layout",
+    "product-gates"
+  ],
+  "executionOrder": [
+    "engine-suite",
+    "engine-p1",
+    "engine-guards",
+    "engine-release",
+    "helper-suite",
+    "helper-release",
+    "platform-layout",
+    "chain-validate",
+    "product-gates"
+  ],
+  "groups": [
+    {
+      "id": "engine-release",
+      "command": "node scripts/push-gate.mjs",
+      "contains": [
+        "engine-p1",
+        "engine-guards"
+      ]
+    },
+    {
+      "id": "engine-p1",
+      "command": "pnpm verify:p1",
+      "contains": [
+        "engine-suite"
+      ]
+    },
+    {
+      "id": "engine-guards",
+      "command": "pnpm guard-check",
+      "contains": [],
+      "cwd": ".",
+      "executable": "pnpm",
+      "argv": [
+        "run",
+        "--silent",
+        "guard-check"
+      ]
+    },
+    {
+      "id": "engine-suite",
+      "command": "pnpm test",
+      "contains": [],
+      "cwd": ".",
+      "executable": "pnpm",
+      "argv": [
+        "run",
+        "--silent",
+        "test"
+      ]
+    },
+    {
+      "id": "helper-release",
+      "command": "pnpm push-gate",
+      "contains": [
+        "helper-suite"
+      ]
+    },
+    {
+      "id": "helper-suite",
+      "command": "pnpm test",
+      "contains": [],
+      "cwd": "../tcrn-workflow-helper",
+      "executable": "npm",
+      "argv": [
+        "test",
+        "--silent"
+      ]
+    },
+    {
+      "id": "platform-layout",
+      "command": "node scripts/platform-doctor.mjs --platform-root <container>",
+      "contains": [
+        "chain-validate"
+      ]
+    },
+    {
+      "id": "chain-validate",
+      "command": "for each partition: tcrn-workflow validate --workspace <partition>/workspace",
+      "contains": []
+    },
+    {
+      "id": "product-gates",
+      "command": "pnpm verify",
+      "contains": []
+    }
+  ]
+}

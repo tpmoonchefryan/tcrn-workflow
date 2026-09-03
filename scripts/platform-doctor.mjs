@@ -661,6 +661,37 @@ async function inspectAcceptanceGateGroups(root) {
     .map((group, index) => (typeof group?.id === "string" ? group.id : `#${index}`));
   const ids = roster.groups.map((group) => group?.id);
   const duplicated = ids.filter((id, index) => ids.indexOf(id) !== index);
+  const containmentProblems = [];
+  let topLevel = null;
+  if (roster.topLevel !== undefined) {
+    topLevel = roster.topLevel;
+    if (!Array.isArray(topLevel) || topLevel.length === 0 || new Set(topLevel).size !== topLevel.length) {
+      containmentProblems.push("topLevel must be a non-empty unique array");
+    }
+    const known = new Set(ids);
+    const parents = new Map();
+    for (const group of roster.groups) {
+      if (!Array.isArray(group?.contains)) {
+        containmentProblems.push(`${String(group?.id)}.contains must be an array`);
+        continue;
+      }
+      for (const child of group.contains) {
+        if (!known.has(child)) containmentProblems.push(`${String(group?.id)} contains unknown ${String(child)}`);
+        const existing = parents.get(child);
+        if (existing !== undefined) containmentProblems.push(`${String(child)} has parents ${existing} and ${String(group?.id)}`);
+        else parents.set(child, group.id);
+      }
+    }
+    if (Array.isArray(topLevel)) {
+      for (const id of topLevel) {
+        if (!known.has(id)) containmentProblems.push(`topLevel contains unknown ${String(id)}`);
+        if (parents.has(id)) containmentProblems.push(`topLevel group ${String(id)} is also contained`);
+      }
+      for (const id of ids) {
+        if (known.has(id) && !topLevel.includes(id) && !parents.has(id)) containmentProblems.push(`non-top-level group ${String(id)} has no parent`);
+      }
+    }
+  }
   const invalidAcceptedExceptions = [];
   const acceptedExceptionKeys = new Set();
   for (const group of roster.groups) {
@@ -685,18 +716,20 @@ async function inspectAcceptanceGateGroups(root) {
   // Nine is the number the ruling names. If the roster ever holds a different count,
   // that is a change to the acceptance criterion and belongs in a ruling rather than
   // in a file edit, so it is reported rather than accommodated.
-  if (roster.groups.length !== 9 || incomplete.length > 0 || duplicated.length > 0 || invalidAcceptedExceptions.length > 0) {
+  if (roster.groups.length !== 9 || incomplete.length > 0 || duplicated.length > 0 || invalidAcceptedExceptions.length > 0 || containmentProblems.length > 0) {
     return check("acceptanceGateGroups", false, {
       reasonCode: "PLATFORM_ACCEPTANCE_ROSTER_INVALID",
       declaredGroups: roster.groups.length,
       incomplete,
       duplicated,
       invalidAcceptedExceptions,
+      containmentProblems,
     });
   }
   return check("acceptanceGateGroups", true, {
     declaredGroups: roster.groups.length,
     acceptedExceptionCount: acceptedExceptionKeys.size,
+    ...(topLevel === null ? {} : { topLevel, containedGroups: roster.groups.length - topLevel.length }),
   });
 }
 

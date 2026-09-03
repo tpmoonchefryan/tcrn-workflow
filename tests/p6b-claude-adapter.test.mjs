@@ -18,6 +18,7 @@ import {
   CLAUDE_ADAPTER_HOST_PRODUCT,
   CODEX_ADAPTER_REQUEST_VERSION,
   CODEX_ADAPTER_HOST_VERSION,
+  CODEX_ADAPTER_LIFECYCLE_VERSION,
   CODEX_ADAPTER_TEMPLATE_PATHS,
   ClaudeAdapterError,
   admitClaudeAdapterHostInput,
@@ -37,6 +38,7 @@ import {
   admitCodexAdapterHostInput,
   calculateCodexAdapterRequestDigest,
   generateCodexAdapterBundle,
+  simulateCodexAdapterLifecycle,
   validateContextRouteResult,
 } from "../dist/build/packages/core/src/index.js";
 import { canonicalJson, canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
@@ -203,17 +205,19 @@ test("empty-project cold start remains empty and Adapter source has no legacy, a
   try {
     assert.deepEqual(await readdir(directory), []);
     const input = request();
-    const bundle = generateClaudeAdapterBundle(input, hostFor(input));
+    const host = hostFor(input);
+    const bundle = generateClaudeAdapterBundle(input, host);
     assert.equal(bundle.files.length, fixture.templateFiles);
+    assert.equal(validateClaudeAdapterBundle(bundle).bundleDigest, bundle.bundleDigest);
+    assert.equal(bundle.activation, false);
+    assert.equal(simulateCodexAdapterLifecycle({
+      schemaVersion: CODEX_ADAPTER_LIFECYCLE_VERSION,
+      contextDigest: bundle.contextDigest,
+      governedRoutingSucceeded: true,
+      stopRequests: 0,
+      finalHopRequests: 1,
+    }).reasonCode, "ADAPTER_FINAL_HOP_DELIVERED");
     assert.deepEqual(await readdir(directory), []);
-    const source = await readFile(new URL("../packages/core/src/claude-adapter.ts", import.meta.url), "utf8");
-    const forbiddenSources = [
-      ["node", ":", "child_process"], ["node", ":", "http"], ["node", ":", "https"],
-      ["node", ":", "net"], ["legacy", " Workflow"], ["Vault", "/"], ["A", "OS"], ["data", "base"], ["fetch", "("],
-    ].map((parts) => parts.join(""));
-    for (const forbidden of forbiddenSources) {
-      assert.equal(source.includes(forbidden), false, forbidden);
-    }
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

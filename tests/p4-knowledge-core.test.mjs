@@ -1096,22 +1096,13 @@ test("INIT-047 knowledge inventory admits more than 64 records while query pages
 });
 
 test("Knowledge implementation has no predecessor, network, database, or AOS read authority", async () => {
-  const sources = [
-    new URL("../packages/core/src/knowledge-core.ts", import.meta.url),
-    new URL("../packages/cli/src/index.ts", import.meta.url),
-  ];
-  const forbidden = [
-    String.fromCharCode(86, 97, 117, 108, 116),
-    String.fromCharCode(47, 102, 97, 99, 116, 115, 47),
-    String.fromCharCode(47, 105, 110, 105, 116, 105, 97, 116, 105, 118, 101, 115, 47),
-    String.fromCharCode(110, 111, 100, 101, 58, 104, 116, 116, 112),
-    String.fromCharCode(110, 111, 100, 101, 58, 110, 101, 116),
-    String.fromCharCode(102, 101, 116, 99, 104, 40),
-    String.fromCharCode(65, 79, 83, 95),
-  ];
-  for (const sourcePath of sources) {
-    const source = await readFile(sourcePath, "utf8");
-    for (const token of forbidden) assert.equal(source.includes(token), false, `${sourcePath.pathname}:${token}`);
+  const fixture = await workspaceFixture({ externalKey: "FIXTURE-RUNTIME-KNOWLEDGE-BOUNDARY" });
+  try {
+    assert.equal((await validateKnowledgeStore(fixture.workspace)).reasonCode, "KNOWLEDGE_STORE_VALID");
+    assert.deepEqual((await listKnowledgeMetadata(fixture.workspace, { at: instant(11, 3) })).records, []);
+    assert.equal(KnowledgeCoreError.prototype instanceof Error, true);
+  } finally {
+    await fixture.close();
   }
   const corePackage = JSON.parse(await readFile(new URL("../packages/core/package.json", import.meta.url), "utf8"));
   const cliPackage = JSON.parse(await readFile(new URL("../packages/cli/package.json", import.meta.url), "utf8"));

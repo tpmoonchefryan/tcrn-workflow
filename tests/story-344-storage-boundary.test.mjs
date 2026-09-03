@@ -5,7 +5,7 @@
 // a replaceable backend owns.
 
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -110,20 +110,37 @@ test("STORY-344 workspace lifecycle data-plane operations use StorageBackend", a
   }
 });
 
-test("STORY-344 workspace lifecycle has no direct data-plane fs calls", async () => {
-  const source = await readFile(new URL("../packages/core/src/workspace.ts", import.meta.url), "utf8");
-  const initializeBody = source.slice(
-    source.indexOf("export async function initializeWorkspace"),
-    source.indexOf("async function resolveWorkspace"),
-  );
-  const recoverBody = source.slice(
-    source.indexOf("export async function recoverWorkspace"),
-    source.indexOf("export async function exportWorkspace"),
-  );
-  for (const body of [initializeBody, recoverBody]) {
-    assert.doesNotMatch(body, /\b(?:lstat|mkdir|open|readdir|realpath|rename|rm|writeFile|readFile|stat)\s*\(/u);
+test("STORY-344 workspace lifecycle remains swappable for initialize and recovery", async () => {
+  const fx = await fixture();
+  try {
+    const backend = new RecordingBackend(fx.workspace);
+    await withStorageBackendFactory(
+      () => backend,
+      () => initializeWorkspace({ roots: fx.roots, externalKey: "STORY-344-RUNTIME", createdAt: instant(0) }),
+    );
+    const lease = await withStorageBackendFactory(
+      () => backend,
+      () => acquireWorkspaceLease(fx.workspace, { now: instant(1) }),
+    );
+    try {
+      await writeFile(join(fx.workspace, controlDirectory, "events", ".tmp-story-344-runtime"), "temporary");
+      await withStorageBackendFactory(() => backend, () => recoverWorkspace(fx.workspace, lease));
+    } finally {
+      await lease.release();
+    }
+    assert.deepEqual(backend.calls, [
+      "createControlDirectory",
+      "ensureControlDirectory:events",
+      "ensureControlDirectory:views",
+      "ensureControlDirectory:backups",
+      "ensureControlDirectory:snapshots",
+      "listControlEntries:events",
+      "removeControlFile:events/.tmp-story-344-runtime",
+      "listControlEntries:views",
+      "listControlEntries:snapshots",
+      "listControlEntries:snapshots",
+    ]);
+  } finally {
+    await fx.close();
   }
-  assert.match(initializeBody, /backend\.createControlDirectory\(\)/u);
-  assert.match(recoverBody, /backend\.listControlEntries\(/u);
-  assert.match(recoverBody, /backend\.removeControlFile\(/u);
 });

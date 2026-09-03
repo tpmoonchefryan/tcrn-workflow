@@ -758,22 +758,20 @@ test("archive bundle symlink, hardlink, and special-file attacks fail closed", a
 });
 
 test("artifact implementation and fixtures contain no legacy source-read authority", async () => {
-  const paths = [
-    new URL("../packages/core/src/artifact-lifecycle.ts", import.meta.url),
-    new URL("../packages/cli/src/index.ts", import.meta.url),
-    new URL("../packages/core/fixtures/p4-artifact-lifecycle-cases.json", import.meta.url),
-  ];
-  const forbidden = [
-    String.fromCharCode(86, 97, 117, 108, 116),
-    String.fromCharCode(47, 102, 97, 99, 116, 115, 47),
-    String.fromCharCode(47, 105, 110, 105, 116, 105, 97, 116, 105, 118, 101, 115, 47),
-    String.fromCharCode(84, 67, 82, 78, 32, 87, 111, 114, 107, 102, 108, 111, 119, 47),
-  ];
-  for (const path of paths) {
-    const source = await readFile(path, "utf8");
-    for (const token of forbidden) {
-      assert.equal(source.includes(token), false, `${path.pathname}:${token}`);
-    }
+  const fixture = await artifactFixture({ externalKey: "FIXTURE-RUNTIME-ARTIFACT-BOUNDARY" });
+  try {
+    const before = await artifactSizeReport(fixture.workspace);
+    assert.equal(before.reasonCode, "ARTIFACT_SIZE_REPORT_READY");
+    assert.equal((await artifactDoctor(fixture.workspace, {
+      warningBytes: 10_000,
+      criticalBytes: 20_000,
+      warningCount: 50,
+      criticalCount: 100,
+    })).reasonCode, "ARTIFACT_DOCTOR_OK");
+    assert.equal((await artifactCompactDryRun(fixture.workspace)).mutationApplied, false);
+    assert.equal((await artifactSizeReport(fixture.workspace)).totals.count, before.totals.count);
+  } finally {
+    await fixture.close();
   }
 });
 

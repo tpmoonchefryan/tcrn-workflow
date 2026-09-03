@@ -3,7 +3,7 @@
 // storage.backend setting; unknown values are not silently mapped to file.
 
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -12,6 +12,7 @@ import {
   acquireWorkspaceLease,
   createProject,
   initializeWorkspace,
+  materializeWorkspace,
   setWorkspaceSetting,
   validateWorkspace,
 } from "../dist/build/packages/core/src/index.js";
@@ -84,11 +85,22 @@ test("STORY-345 backend selection rejects unknown values and does not silently f
     } finally {
       await lease.release();
     }
-    const source = await readFile(new URL("../packages/core/src/workspace.ts", import.meta.url), "utf8");
-    const selection = source.slice(source.indexOf("function backendKindForState"), source.indexOf("function committedFrom"));
-    assert.match(selection, /file-segmented/u);
-    assert.match(selection, /storage\.backend/u);
-    assert.match(selection, /configured === undefined \|\| configured === "file-segmented"\) return "file-segmented"/u);
+    const state = await materializeWorkspace(fx.workspace);
+    assert.equal(state.version, 0, "an invalid backend setting must not append an event");
+    const freshLease = await acquireWorkspaceLease(fx.workspace, { now: instant(2) });
+    try {
+      await createProject(fx.workspace, freshLease, {
+        externalKey: "STORY-345-DEFAULT-PROJECT",
+        name: "Default segmented backend",
+        expectedVersion: state.version,
+        occurredAt: instant(2),
+      });
+    } finally {
+      await freshLease.release();
+    }
+    const entries = await readdir(join(fx.workspace, controlDirectory, "events"));
+    assert.ok(entries.includes("000001.idx"), "the default backend must retain the segmented point index");
+    assert.ok(entries.includes("manifest.json"), "the default backend must retain the segmented manifest");
   } finally {
     await fx.close();
   }

@@ -118,11 +118,34 @@ test("STORY-333 byte threshold creates bounded segments and preserves legacy seg
 });
 
 test("STORY-333 byte rolling is not replaced by event-count rolling", async () => {
-  const source = await readFile(new URL("../packages/core/src/workspace.ts", import.meta.url), "utf8");
-  const start = source.indexOf("const writes =");
-  const end = source.indexOf("for (const write of writes)", start);
-  const relevant = source.slice(start, end);
-  assert.match(relevant, /Buffer\.byteLength\(canonicalJson\(event\), "utf8"\)/u);
-  assert.match(source, /entry\.key === "storage\.segmentBytes"/u);
-  assert.match(relevant, /currentName = lastExistingName \?\? `\$\{String\(nextIndex \+ 1\)\.padStart\(6, "0"\)\}\.ndjson`/u);
+  const fx = await fixture("RUNTIME");
+  try {
+    const lease = await acquireWorkspaceLease(fx.workspace, { now: instant(1) });
+    try {
+      let state = await setWorkspaceSetting(fx.workspace, lease, {
+        key: "storage.segmentBytes",
+        value: "4096",
+        expectedVersion: 0,
+        occurredAt: instant(1),
+      });
+      for (let index = 0; index < 12; index += 1) {
+        state = await createProject(fx.workspace, lease, {
+          externalKey: `STORY-333-RUNTIME-${String(index).padStart(2, "0")}`,
+          name: `Runtime project ${"x".repeat(index % 2 === 0 ? 80 : 260)}`,
+          expectedVersion: state.version,
+          occurredAt: instant(index + 2),
+        });
+      }
+      assert.equal(state.version, 13);
+    } finally {
+      await lease.release();
+    }
+    const entries = (await readdir(join(fx.workspace, controlDirectory, "events"))).filter((entry) => entry.endsWith(".ndjson"));
+    assert.ok(entries.length >= 3, `byte rolling must create multiple segments, got ${entries.length}`);
+    const sizes = await Promise.all(entries.map(async (entry) => (await stat(join(fx.workspace, controlDirectory, "events", entry))).size));
+    assert.ok(sizes.every((size) => size <= 4096), `serialized event bytes must stay within the setting: ${sizes.join(",")}`);
+    assert.equal((await materializeWorkspace(fx.workspace)).version, 13);
+  } finally {
+    await fx.close();
+  }
 });

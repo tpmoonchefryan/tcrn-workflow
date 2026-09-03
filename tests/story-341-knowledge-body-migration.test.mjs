@@ -48,9 +48,20 @@ test("STORY-341 disposable knowledge bodies migrate with byte-exact readback and
   assert.equal(manifest.count, bodies.size);
 });
 
-test("STORY-341 knowledge body migration is explicit and keeps metadata outside the body segments", async () => {
-  const source = await readFile(new URL("../packages/core/src/store-backend.ts", import.meta.url), "utf8");
-  assert.match(source, /migrateKnowledgeBodies/u);
-  assert.match(source, /knowledge-body-index\.v1/u);
-  assert.doesNotMatch(source, /writeKnowledgeMetadata.*000001/u);
+test("STORY-341 knowledge body migration is explicit and keeps metadata outside the body segments", async (context) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-s341-metadata-")));
+  context.after(() => rm(base, { recursive: true, force: true }));
+  const root = join(base, "knowledge");
+  await mkdir(join(root, "bodies"), { recursive: true });
+  await mkdir(join(root, "metadata"), { recursive: true });
+  const file = new FileStoreBackend(root, profile);
+  const segmented = new SegmentedKnowledgeStoreBackend(file);
+  const metadata = Buffer.from("{\"id\":\"knowledge:metadata\"}\n", "utf8");
+  await file.writeKnowledgeMetadata("knowledge:metadata", metadata);
+  await file.writeKnowledgeBody("knowledge:metadata", Buffer.from("body", "utf8"));
+  await segmented.migrateKnowledgeBodies(4096);
+  assert.deepEqual(await segmented.readKnowledgeMetadata("knowledge:metadata"), metadata);
+  assert.deepEqual(await segmented.readKnowledgeBody("knowledge:metadata"), Buffer.from("body", "utf8"));
+  assert.equal((await readdir(join(root, "metadata"))).includes("knowledge:metadata.json"), true);
+  assert.equal((await readdir(join(root, "bodies"))).some((name) => name.endsWith(".body")), false);
 });

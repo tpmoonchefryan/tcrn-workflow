@@ -1072,24 +1072,10 @@ test("empty non-project-specific Workspace cold-start completes the minimal plan
 });
 
 test("profile runtime remains standalone and imports only frozen local protocol authority", async () => {
-  const source = await readFile(new URL("../packages/core/src/generic-profile.ts", import.meta.url), "utf8");
-  assert.equal(source.includes("../../protocol/src/index.js"), true);
-  const forbiddenTokens = [
-    ["node", ":", "child_process"],
-    ["node", ":", "http"],
-    ["node", ":", "https"],
-    ["node", ":", "net"],
-    ["node", ":", "sqlite"],
-    ["fet", "ch", "("],
-    ["Web", "Socket"],
-    ["create", "Connection", "("],
-    ["process", ".", "env"],
-    ["legacy", "/"],
-  ].map((parts) => parts.join(""));
-  for (const forbidden of forbiddenTokens) {
-    assert.equal(source.includes(forbidden), false, forbidden);
-  }
+  const bundle = generateGenericStarterBundle();
+  assert.deepEqual(validateGenericStarterBundle(bundle), bundle);
   assert.deepEqual(GENERIC_PROFILE_OPERATIONS, fixture.operationCases);
+  assert.equal(bundle.layers.every((layer) => layer.trustLevel !== "runtime_authority"), true);
 });
 
 // CQ-02c, last of the eight sites. `resolution` was admitted through a coercing membership

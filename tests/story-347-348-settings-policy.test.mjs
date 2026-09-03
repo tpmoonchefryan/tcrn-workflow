@@ -10,6 +10,8 @@ import test from "node:test";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
+  KNOWLEDGE_LIMITS,
+  KNOWLEDGE_PROVENANCE_POLICY,
   SettingsError,
   acquireWorkspaceLease,
   createProject,
@@ -17,6 +19,7 @@ import {
   initializeWorkspace,
   setWorkspaceSetting,
 } from "../dist/build/packages/core/src/index.js";
+import { PROTOCOL_LIMITS } from "../dist/build/packages/protocol/src/index.js";
 
 const instant = (second) => `2026-09-02T06:00:${String(second).padStart(2, "0")}Z`;
 
@@ -98,11 +101,15 @@ test("STORY-348 provenance policy is an external JSON source and the aggregate s
   }
 });
 
-test("STORY-348 protocol validity values remain hardcoded rather than becoming settings", async () => {
-  const knowledge = await readFile(new URL("../packages/core/src/knowledge-core.ts", import.meta.url), "utf8");
-  const protocol = await readFile(new URL("../packages/protocol/src/index.ts", import.meta.url), "utf8");
-  assert.match(knowledge, /PROTOCOL_LIMITS\.maxCanonicalBytes/u);
-  assert.match(knowledge, /maximumBodyBytes: 8_192/u);
-  assert.match(protocol, /maxCanonicalBytes: 1_048_576/u);
-  assert.match(knowledge, /KNOWLEDGE_PROVENANCE_POLICY = readKnowledgeProvenancePolicy/u);
+test("STORY-348 protocol validity values remain hardcoded rather than becoming settings", async (context) => {
+  assert.equal(KNOWLEDGE_LIMITS.maximumBodyBytes, 8_192);
+  assert.equal(KNOWLEDGE_LIMITS.maximumAggregateBytes, PROTOCOL_LIMITS.maxCanonicalBytes);
+  assert.equal(PROTOCOL_LIMITS.maxCanonicalBytes, 1_048_576);
+  assert.deepEqual(KNOWLEDGE_PROVENANCE_POLICY, {
+    relaxedKinds: ["fact", "decision", "summary"],
+    strictKinds: ["guide", "reference"],
+  });
+  const fx = await fixture(context, "RUNTIME-POLICY");
+  const catalog = await cli(["settings-catalog", "--workspace", fx.workspace]);
+  assert.equal(catalog.settings.some((entry) => entry.key === "protocol.maxCanonicalBytes"), false);
 });

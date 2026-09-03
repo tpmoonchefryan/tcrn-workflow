@@ -15,6 +15,7 @@ import {
   materializeWorkspace,
   rebuildReplaySnapshot,
 } from "../dist/build/packages/core/src/index.js";
+import { withWorkspacePerfInstrumentation } from "../dist/build/packages/core/src/workspace-perf-instrumentation.js";
 
 const controlDirectory = ".tcrn-" + "workflow";
 const chainContainer = [".tcrn", "workspace"].join("-");
@@ -113,10 +114,10 @@ test("INC-260 live snapshot reads have a regression slope below the 75 microseco
   assert.ok(slopeMsPerEvent * 1000 < 75, `snapshot read slope ${slopeMsPerEvent * 1000}us/event must be below the 75us baseline`);
 });
 
-test("INC-260 the reader does not compute a second full event-prefix digest", async () => {
-  const source = await readFile(new URL("../packages/core/src/workspace.ts", import.meta.url), "utf8");
-  const writer = source.slice(source.indexOf("async function writeReplaySnapshot"), source.indexOf("export async function rebuildReplaySnapshot"));
-  const reader = source.slice(source.indexOf("async function readSegmentEvents"), source.indexOf("function payloadRecord"));
-  assert.doesNotMatch(writer, /eventPrefixDigest\s*:/u);
-  assert.doesNotMatch(reader, /replaySnapshotDigest\(events\.slice\(0, snapshot\.version\)\)/u);
+test("INC-260 the reader validates the snapshot once and replays only the tail", async (context) => {
+  const fx = await fixture(context);
+  const measured = await withWorkspacePerfInstrumentation(() => materializeWorkspace(fx.workspace));
+  assert.equal(measured.metrics.fullMaterialize, 0);
+  assert.equal(measured.metrics.snapshotMaterialize, 1);
+  assert.deepEqual(logicalState(measured.result), logicalState(await materializeWorkspace(fx.workspace)));
 });

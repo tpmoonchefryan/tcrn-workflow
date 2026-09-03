@@ -141,9 +141,24 @@ test("STORY-336 work summaries expose title and creation time without dropping t
   }
 });
 
-test("STORY-336 labels remain first-class instead of becoming an extension key", async () => {
-  const source = await readFile(new URL("../packages/core/src/workspace.ts", import.meta.url), "utf8");
-  assert.match(source, /labels\?: readonly string\[\]/u);
-  assert.match(source, /labels: workExtensionsDigest|labels,\n\s+revision/u);
-  assert.doesNotMatch(source, /workAdvisoryExtensions\([^)]*labels/u);
+test("STORY-336 labels remain first-class instead of becoming an extension key", async (context) => {
+  const fx = await fixture(context, "LABELS");
+  try {
+    const state = await createWork(fx.workspace, fx.lease, {
+      projectId: fx.projectId,
+      externalKey: "STORY-336-WORK-LABELS",
+      kind: "Initiative",
+      parentId: null,
+      title: "First-class labels",
+      labels: ["zeta", "alpha"],
+      expectedVersion: 1,
+      occurredAt: instant(3),
+    });
+    const record = state.work.find((entry) => entry.externalKey === "STORY-336-WORK-LABELS");
+    assert.deepEqual(record.labels, ["alpha", "zeta"]);
+    assert.equal(Object.hasOwn(record.extensions, "labels"), false);
+    assert.deepEqual(await materializeWorkspace(fx.workspace), state);
+  } finally {
+    await fx.lease.release();
+  }
 });

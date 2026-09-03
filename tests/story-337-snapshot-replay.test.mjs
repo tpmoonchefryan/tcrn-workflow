@@ -118,9 +118,23 @@ test("STORY-337 snapshot interval setting controls checkpoint versions", async (
   }
 });
 
-test("STORY-337 snapshot replay source has an explicit fail-closed corruption path", async () => {
-  const source = await readFile(new URL("../packages/core/src/workspace.ts", import.meta.url), "utf8");
-  assert.match(source, /WORKSPACE_SNAPSHOT_INVALID/u);
-  assert.match(source, /return materialize\(workspace\.metadata, events\.slice\(snapshot\.version\)/u);
-  assert.match(source, /writeControlFile\(`\$\{WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY\}\/\$\{WORKSPACE_REPLAY_SNAPSHOT_MANIFEST\}`/u);
+test("STORY-337 snapshot replay source has an explicit fail-closed corruption path", async (context) => {
+  const fx = await fixture(context, "BEHAVIOR");
+  try {
+    let state = await setWorkspaceSetting(fx.workspace, fx.lease, {
+      key: "storage.snapshotEveryEvents",
+      value: "2",
+      expectedVersion: 0,
+      occurredAt: instant(2),
+    });
+    state = await createProjects(fx, 1, state.version);
+    assert.equal(state.version, 2);
+    const manifestPath = join(fx.workspace, controlDirectory, "snapshots", "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.stateDigest = "0".repeat(64);
+    await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`, "utf8");
+    await assert.rejects(() => materializeWorkspace(fx.workspace), (error) => error?.reasonCode === "WORKSPACE_SNAPSHOT_INVALID");
+  } finally {
+    await fx.lease.release();
+  }
 });

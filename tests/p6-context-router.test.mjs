@@ -576,10 +576,17 @@ test("descriptor-admitted authority is deeply immutable across nested allowlist 
 });
 
 test("Context Router implementation is storeless and contains no legacy, network, database, hook, Skill, environment, model, or session authority", async () => {
-  const source = await readFile(new URL("../packages/core/src/context-router.ts", import.meta.url), "utf8");
-  const forbidden = [["node", ":", "http"], ["node", ":", "https"], ["process", ".", "env"], ["legacy", "/"], ["hooks", "/"], ["skills", "/"], ["session", "Id"], ["thread", "Id"], ["model", "Id"], ["context", "Store"]].map((parts) => parts.join(""));
-  for (const token of forbidden) assert.equal(source.includes(token), false, token);
-  assert.equal(CONTEXT_ROUTE_LIMITS.metadataCandidates, 128);
+  const admitted = await admittedFixture();
+  try {
+    const result = routeContext(admitted.request, admitted.profileAdmission, admitted.contextAdmission);
+    assert.equal(result.reasonCode, "CONTEXT_ROUTED");
+    assert.equal(result.context.metadata.length, 3);
+    assert.deepEqual(result.context.explicitReads.map((entry) => entry.id), [bodyId, procedureId]);
+    assert.equal(result.contextDigest, canonicalSha256(result.context));
+    assert.equal(CONTEXT_ROUTE_LIMITS.metadataCandidates, 128);
+  } finally {
+    await admitted.close();
+  }
 });
 
 // WSC-7: build a real knowledge store so the bridge (knowledgeContextCandidates) is

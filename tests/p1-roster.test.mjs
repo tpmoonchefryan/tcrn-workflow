@@ -14,6 +14,8 @@ import { fileURLToPath } from "node:url";
 
 import { P1_SEQUENCE, P1_TASKS, P1_GATE_SPECS } from "../scripts/p1-sequence.mjs";
 import { P1_GATE_SPECS as PREFLIGHT_SPECS } from "../scripts/preflight.mjs";
+import { buildRedLocatorPlan, locateContainedGates } from "../scripts/gate-red-locator.mjs";
+import { ENGINE_PUSH_GATE_CHILDREN } from "../scripts/lib/push-gate-children.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const scripts = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")).scripts;
@@ -56,4 +58,39 @@ test("the two gates this drift hid are on the roster", () => {
 
 test("the roster names each verb once", () => {
   assert.equal(new Set(P1_TASKS).size, P1_TASKS.length);
+});
+
+test("STORY-349 top-level gate containment preserves the nine-group execution order", () => {
+  const declaration = JSON.parse(readFileSync(join(REPO_ROOT, "scripts/policy/gate-containment.json"), "utf8"));
+  assert.deepEqual(declaration.topLevel, ["engine-release", "helper-release", "platform-layout", "product-gates"]);
+  assert.deepEqual(declaration.executionOrder, [
+    "engine-suite", "engine-p1", "engine-guards", "engine-release",
+    "helper-suite", "helper-release", "platform-layout", "chain-validate", "product-gates",
+  ]);
+  const groups = new Map(declaration.groups.map((group) => [group.id, group]));
+  assert.deepEqual(groups.get("engine-release").contains, ["engine-p1", "engine-guards"]);
+  assert.deepEqual(groups.get("engine-p1").contains, ["engine-suite"]);
+  assert.deepEqual(groups.get("helper-release").contains, ["helper-suite"]);
+  assert.deepEqual(groups.get("platform-layout").contains, ["chain-validate"]);
+  assert.deepEqual(ENGINE_PUSH_GATE_CHILDREN.map(({ script }) => script), ["verify:p1", "verify:p8", "guard-check"]);
+});
+
+test("STORY-350 red locator runs every contained child separately and returns each conclusion", async () => {
+  const declaration = JSON.parse(readFileSync(join(REPO_ROOT, "scripts/policy/gate-containment.json"), "utf8"));
+  const plan = buildRedLocatorPlan(declaration, "engine-release");
+  const calls = [];
+  const result = await locateContainedGates(declaration, "engine-release", {
+    runner: async (spec) => {
+      calls.push(spec.id);
+      return { ok: spec.id !== "engine-p1", reasonCode: spec.id === "engine-p1" ? "GATE_CHILD_RED" : "GATE_CHILD_GREEN" };
+    },
+  });
+  assert.deepEqual(calls, plan.map((spec) => spec.id));
+  assert.equal(result.ok, false);
+  assert.equal(result.reasonCode, "GATE_RED_LOCATED");
+  assert.deepEqual(result.children.map(({ id, ok }) => ({ id, ok })), [
+    { id: "engine-p1", ok: false },
+    { id: "engine-suite", ok: true },
+    { id: "engine-guards", ok: true },
+  ]);
 });

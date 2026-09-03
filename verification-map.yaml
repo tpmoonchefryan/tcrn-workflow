@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "531c62842901ba272c72ed12a55a5c5b6ed85ec3c73406ab4f0c365c2fa7227a",
+      "fixtureDigest": "e7958bf13d8f5a395b3650f04744393cc0166cf3a36fb9b155ba3b207548bd90",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -55,7 +55,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "65d56e7841d4569db5bfb882169017345609dfa857fcfee82ad0d08612f47a49",
+      "fixtureDigest": "23f46e3667f5ee70a43eb9e906324b8295413b4baf544e8eaf1316b419e1aa63",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -92,7 +92,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "cb8cfea6e24a37a6947540d59f3275038332ab5b2bc28f9924dc6f6fcd4d07ba",
+      "fixtureDigest": "714a879d3cbafaa366030a07ea67c0ededccf99fa91a5dfc66c412d00ea29b3c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "91ec19d4b01fee909af9675060ae8c96ec5f418c5e530d381c36b7fd6986003f",
+      "fixtureDigest": "56de6c35bf74efa6095ebcc280edbd6a88a95c4428b28249353730bfbaa7cf8e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -211,7 +211,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "5533b07c56520a4fa8b702a5dcbb684e634a01f1e0e804c6b0a21b10dcabf8f6",
+      "fixtureDigest": "fb7c57346786ebbdd56dcd348432db7731438bec0eef06d375e62b6aecf47f8b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -249,7 +249,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "b73b1043ee716f2f3e09249a843db922c6fe85159f1c2034cd07befb1899f775",
+      "fixtureDigest": "9446f9cc27375ce7e223e62fb1ccdbc9ccda37d58ea2eb74692b8d09854cf93a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -313,7 +313,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "a53536cdf314cace6728471c1331322f3b083c863f6506efa390ed1ac4bb3379",
+      "fixtureDigest": "c9f42af35f85c0bf7d918f89eaba3cd292ec8b0ce6b1c48e04343bbee5757a53",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -347,7 +347,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "ccb8f26c972dff256b3cd59de7c0e825c839707c78c40c352f0defdc02ad0883",
+      "fixtureDigest": "152020d93c32fb56de8f1fda8b425c3d0366ba56c0e0ea6adb500269176f348a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -474,7 +474,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "7e7e82e00ca074a93b44f18d8e3893be61acc99637a683a369a37ce1c35e6448",
+      "fixtureDigest": "d367f7788ed24bd6cb9374566b4c494757262ebf8d1343ffdfed1556beb307a8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -532,7 +532,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "The standalone file-native Workspace enforces closed-field parity for every canonical root entry, stable project/work identities, governed CLI CRUD, and the frozen Initiative-Epic-Story-Subtask protocol without redefining P2 semantics.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-file-native-work-graph",
       "fixturePaths": [
         "packages/core/src/index.ts",
         "packages/core/src/root-identity.ts",
@@ -551,15 +551,15 @@
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_FILE_NATIVE_WORK_GRAPH_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Workspace roots, stable IDs, project/work CRUD, hierarchy, CLI admission, or protocol imports change"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/index.ts so the P3-FILE-NATIVE-WORK-GRAPH invalidation trigger is true: Workspace roots, stable IDs, project/work CRUD, hierarchy, CLI admission, or protocol imports change",
-        "test": "INC-262 red-leg probe for P3-FILE-NATIVE-WORK-GRAPH",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "project CRUD and Initiative-Epic-Story-Subtask operations materialize deterministically",
+        "expectedReasonCode": "INIT049_P3_FILE_NATIVE_WORK_GRAPH_RED"
       }
     },
     {
@@ -568,7 +568,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "The CLI exposes the actor-attestation contract (WSE-3) as pure surface over the WSE-2 engine exports: an attestation-enable verb appends the one-way attestation.actor.enabled event under a held lease (withLease + resolveExpectedVersion headSentinel), and an optional --actor flag threads through every workspace-event mutation verb (project/work create/update/delete, conference open/append-position/close/cancel, gate create/transition/delete) into the appended event payload's actor field; --actor is catalog-optional because the ENGINE, not the CLI, makes it mandatory once attestation is enabled, so an enabled-then-mutate happy path carries the actor string into the hashed payload, a missing --actor after enable fails closed WORKSPACE_ACTOR_REQUIRED and an unlisted prefix WORKSPACE_ACTOR_INVALID (no duplicated CLI vocabulary), a duplicate attestation-enable fails WORKSPACE_INPUT_INVALID, --actor stays an unknown flag on read verbs, and a non-enabled workspace with no --actor is byte-identical to rc.4.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-cli-actor-surface",
       "fixturePaths": [
         "packages/cli/src/index.ts",
         "packages/core/src/workspace.ts",
@@ -584,15 +584,15 @@
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_CLI_ACTOR_SURFACE_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "attestation-enable verb, the --actor flag on any workspace-event mutation verb, the catalog-optional required:false declaration, the actor payload threading, or the engine reason codes (WORKSPACE_ACTOR_REQUIRED/INVALID, WORKSPACE_INPUT_INVALID) surfaced by the CLI change"
       ],
       "redLeg": {
         "mutation": "Mutate packages/cli/src/index.ts so the CLI-ACTOR-SURFACE invalidation trigger is true: attestation-enable verb, the --actor flag on any workspace-event mutation verb, the catalog-optional required:false declaration, the actor payload threading, or the engine reason codes (WORKSPACE_ACTOR_REQUIRED/INVALID, WORKSPACE_INPUT_INVALID) surfaced by the CLI change",
-        "test": "INC-262 red-leg probe for CLI-ACTOR-SURFACE",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSE-3: --actor threads through attestation-enable and the mutation verbs into the appended event payload, fail-closed after enable",
+        "expectedReasonCode": "INIT049_P3_CLI_ACTOR_SURFACE_RED"
       }
     },
     {
@@ -601,7 +601,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "The event chain proves ORDERING only, not wall-clock truth: occurredAt is caller-asserted and the engine reads no clock to stamp an event (WSE-4 rejected engine dual-stamping outright, preserving the single documented lease-grace Date.now exception). The CLI adds an opt-in, advisory time-attestation receipt via --attest-dir on every workspace-event mutation verb: with the flag absent every mutation is byte-identical to a run without it and no clock is read; with the flag set the invoking process must supply an injected clock (a missing clock fails closed CLI_ARGUMENT_MISSING with no implicit Date fallback) and the directory must resolve OUTSIDE the workspace root (an inside path fails closed CLI_ARGUMENT_MALFORMED and writes nothing), whereupon exactly one canonical-JSON receipt named <headEventHash>.json carrying {schemaVersion tcrn.time-attestation.v1, eventHash, occurredAt, observedAt} is written — byte-deterministic under a fixed injected clock, embedding no path or hostname. The receipt is unauthenticated local-clock evidence with no governance weight, is not a registered protocol extension, and lives outside the workspace trust boundary, so exportWorkspace and createWorkspaceArchive bytes are identical whether or not receipts exist and the determinism suites never observe a clock.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-time-attestation-advisory",
       "fixturePaths": [
         "packages/cli/src/index.ts",
         "specs/time-attestation-v1.md",
@@ -615,15 +615,15 @@
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_TIME_ATTESTATION_ADVISORY_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "the --attest-dir flag on any workspace-event mutation verb, the CliIo.clock member, the emitTimeAttestation containment/clock-presence fail-closed checks, the tcrn.time-attestation.v1 receipt shape, or any engine-side clock read that would break the ordering-only claim"
       ],
       "redLeg": {
         "mutation": "Mutate packages/cli/src/index.ts so the TIME-ATTESTATION-ADVISORY invalidation trigger is true: the --attest-dir flag on any workspace-event mutation verb, the CliIo.clock member, the emitTimeAttestation containment/clock-presence fail-closed checks, the tcrn.time-attestation.v1 receipt shape, or any engine-side clock read that would break the ordering-only claim",
-        "test": "INC-262 red-leg probe for TIME-ATTESTATION-ADVISORY",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSE-4: --attest-dir writes one deterministic advisory receipt outside the workspace, opt-in and clock-gated",
+        "expectedReasonCode": "INIT049_P3_TIME_ATTESTATION_ADVISORY_RED"
       }
     },
     {
@@ -632,7 +632,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "Exact event operations and lifecycle transitions are bound to Workspace-derived identities; single-writer recovery identity-quarantines both stale-owner and ownerless generations, binds delayed creators to their captured generation, and preserves lease-bound mutation CAS, atomic segments, crash recovery, and deterministic views under adversarial contention.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-event-integrity-recovery",
       "fixturePaths": [
         "packages/core/src/workspace.ts",
         "packages/core/spec/file-engine-v1.md",
@@ -646,15 +646,15 @@
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_EVENT_INTEGRITY_RECOVERY_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Operation admission, lifecycle, Workspace event identity, stale or ownerless lease generation quarantine, delayed creator identity, mutation/recovery claim, CAS, atomic write, segment, view, corruption, or filesystem boundary changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/workspace.ts so the P3-EVENT-INTEGRITY-RECOVERY invalidation trigger is true: Operation admission, lifecycle, Workspace event identity, stale or ownerless lease generation quarantine, delayed creator identity, mutation/recovery claim, CAS, atomic write, segment, view, corruption, or filesystem boundary changes",
-        "test": "INC-262 red-leg probe for P3-EVENT-INTEGRITY-RECOVERY",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "segment rotation and replay, truncation, reordering, corruption, gap, and special-entry attacks are rejected",
+        "expectedReasonCode": "INIT049_P3_EVENT_INTEGRITY_RECOVERY_RED"
       }
     },
     {
@@ -663,7 +663,7 @@
       "category": "inertness-proof",
       "status": "implemented",
       "subject": "P3 runs with Node and supported local filesystems only, admits no runtime dependency or AOS/database assumption, supports exact dry-run V1 migration planning, and keeps the P3 marker absent.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-standalone-migration-boundary",
       "fixturePaths": [
         "package.json",
         "packages/core/package.json",
@@ -677,22 +677,22 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "31cd5d23b3704ff99ccafe0c022e68335a293efa1dd533f555c6ffabaa477d75",
+      "fixtureDigest": "4dc6f7f6c2a95a26041dc7b13d2c865578869981d338d84697a8d42fcb195409",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_STANDALONE_MIGRATION_BOUNDARY_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Runtime dependencies, standalone claims, schema windows, migration contracts, or marker state change"
       ],
       "redLeg": {
         "mutation": "Mutate package.json so the P3-STANDALONE-MIGRATION-BOUNDARY invalidation trigger is true: Runtime dependencies, standalone claims, schema windows, migration contracts, or marker state change",
-        "test": "INC-262 red-leg probe for P3-STANDALONE-MIGRATION-BOUNDARY",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "Workspace metadata schema, five-root initialization, CLI readback, and standalone boundary are exact",
+        "expectedReasonCode": "INIT049_P3_STANDALONE_MIGRATION_BOUNDARY_RED"
       }
     },
     {
@@ -701,7 +701,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "Every workspace mutation verb returns the created or mutated record identity (id, revision, tombstone; work adds kind/status/projectId/parentId) additively in its canonical-JSON envelope, so an agent never reads views off-disk to learn the id it just wrote; pre-existing envelope keys stay byte-identical.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-cli-mutation-record-readback",
       "fixturePaths": [
         "packages/cli/src/index.ts",
         "packages/protocol/src/index.ts",
@@ -714,7 +714,7 @@
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_CLI_MUTATION_RECORD_READBACK_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Mutation response record projection, id derivation, or envelope key set changes",
@@ -722,8 +722,8 @@
       ],
       "redLeg": {
         "mutation": "Mutate packages/cli/src/index.ts so the P3-CLI-MUTATION-RECORD-READBACK invalidation trigger is true: Mutation response record projection, id derivation, or envelope key set changes",
-        "test": "INC-262 red-leg probe for P3-CLI-MUTATION-RECORD-READBACK",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSB-1: mutation responses carry the created/mutated record identity",
+        "expectedReasonCode": "INIT049_P3_CLI_MUTATION_RECORD_READBACK_RED"
       }
     },
     {
@@ -732,29 +732,29 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "Governed read verbs work-list, work-show, and project-list return view-verified, deterministically ordered, tombstone-free records under conjunctive project/kind/status/parent filters and bounded limit/offset budgets, failing closed with WORKSPACE_VIEW_STALE on stale views, CLI_ARGUMENT_MALFORMED on bad filters, and WORKSPACE_INPUT_INVALID on unknown ids; no off-disk view reads.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-cli-governed-read-surface",
       "fixturePaths": [
         "packages/cli/src/index.ts",
         "packages/protocol/src/index.ts",
         "tests/p3-cli-read-surface.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "6cfd67fe9b815398be5ac396639a69e82dddcfbe2a886a87c7ad3a440ce1093c",
+      "fixtureDigest": "713e0d521bb7a990c0ae85888ab834eb56ffc2193d0168bcf55e2593d1e0a567",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_CLI_GOVERNED_READ_SURFACE_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Read-verb filter/ordering/pagination semantics, view-staleness enforcement, or read-surface argument validation changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/cli/src/index.ts so the P3-CLI-GOVERNED-READ-SURFACE invalidation trigger is true: Read-verb filter/ordering/pagination semantics, view-staleness enforcement, or read-surface argument validation changes",
-        "test": "INC-262 red-leg probe for P3-CLI-GOVERNED-READ-SURFACE",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "read verbs and validate fail closed on stale views, but status reads authority",
+        "expectedReasonCode": "INIT049_P3_CLI_GOVERNED_READ_SURFACE_RED"
       }
     },
     {
@@ -763,7 +763,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "The commands verb emits a schema-valid, canonically ordered, byte-deterministic catalog of every governed CLI verb with its flags, availability, and mutation status; the catalog is in two-way name parity with the live dispatcher (every dispatched verb has exactly one entry and vice versa) and its required-flag declarations match the dispatcher's missing-argument failures. `authorityBearing` is declared, documented and schema-constrained to exclude `mutates: true`; a violating catalog refuses to load.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-cli-command-catalog",
       "fixturePaths": [
         "packages/cli/src/index.ts",
         "schemas/cli-catalog-v1.schema.json",
@@ -771,14 +771,14 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "ec00db059270db23c7d82328ecefc53a8ec4201ad716faa4a67fcf93d9cb4449",
+      "fixtureDigest": "64026dbeebec288f049b4e6bfb7d194af719d66b8573e1346b240dfa90fe4427",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_CLI_COMMAND_CATALOG_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Command catalog entries, the commands verb, catalog schema/spec, or catalog-dispatcher parity semantics change",
@@ -786,8 +786,8 @@
       ],
       "redLeg": {
         "mutation": "Mutate packages/cli/src/index.ts so the P3-CLI-COMMAND-CATALOG invalidation trigger is true: Command catalog entries, the commands verb, catalog schema/spec, or catalog-dispatcher parity semantics change",
-        "test": "INC-262 red-leg probe for P3-CLI-COMMAND-CATALOG",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "catalog and dispatcher are in two-way name parity",
+        "expectedReasonCode": "INIT049_P3_CLI_COMMAND_CATALOG_RED"
       }
     },
     {
@@ -796,7 +796,7 @@
       "category": "framework-hygiene",
       "status": "implemented",
       "subject": "The agent-integration reference documents the CLI consumption contract — surfaces, envelopes, the retry table for WORKSPACE_VIEW_STALE/WORKSPACE_LOCKED/WORKSPACE_CAS_MISMATCH (plus the lease-verb, WORKSPACE_GATE_PENDING, and SNAPSHOT_* codes), the -/null/head sentinels, and determinism guarantees — citing file-engine-v1.md as the single normative source for read-surface staleness; a drift-guard test binds the prose to the live COMMAND_CATALOG by asserting the three retry reason codes appear and the doc's programmatic-only enumeration equals the catalog's programmatic-only surface exactly.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-agent-integration-contract",
       "fixturePaths": [
         "docs/architecture/agent-integration-v1.md",
         "tests/p3-cli-read-surface.test.mjs",
@@ -809,15 +809,15 @@
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_AGENT_INTEGRATION_CONTRACT_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Agent-integration doc surfaces/envelopes/retry-table/sentinels wording changes, the programmatic-only catalog surface changes, or the drift-guard assertions change"
       ],
       "redLeg": {
         "mutation": "Mutate docs/architecture/agent-integration-v1.md so the P3-AGENT-INTEGRATION-CONTRACT invalidation trigger is true: Agent-integration doc surfaces/envelopes/retry-table/sentinels wording changes, the programmatic-only catalog surface changes, or the drift-guard assertions change",
-        "test": "INC-262 red-leg probe for P3-AGENT-INTEGRATION-CONTRACT",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSB-6: the agent-integration reference stays in drift-guarded agreement with the catalog",
+        "expectedReasonCode": "INIT049_P3_AGENT_INTEGRATION_CONTRACT_RED"
       }
     },
     {
@@ -826,7 +826,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "Every verb whose catalog entry declares headSentinel on its expected-version flag -- the catalog is the roster, and it is asserted behaviourally rather than restated in prose, because the prose said six while the catalog carried twenty-eight -- accepts the opt-in literal expected-version head, which resolves under the held workspace lease to the current materialized version with a single in-lease read and no retry loop, committing exactly version+1; numeric expected-version stays byte-identical including WORKSPACE_CAS_MISMATCH on staleness, near-miss spellings fail CLI_ARGUMENT_MALFORMED, and knowledge-marker mutations reject head with CLI_ARGUMENT_MALFORMED (numeric-only, out of scope).",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-cli-lease-scoped-version-derivation",
       "fixturePaths": [
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
@@ -838,15 +838,15 @@
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_CLI_LEASE_SCOPED_VERSION_DERIVATION_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "expected-version head derivation scope, the lease-scoped resolution path, or numeric CAS staleness semantics change"
       ],
       "redLeg": {
         "mutation": "Mutate packages/cli/src/index.ts so the P3-CLI-LEASE-SCOPED-VERSION-DERIVATION invalidation trigger is true: expected-version head derivation scope, the lease-scoped resolution path, or numeric CAS staleness semantics change",
-        "test": "INC-262 red-leg probe for P3-CLI-LEASE-SCOPED-VERSION-DERIVATION",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSB-7: --expected-version head derives the current version under the lease; numeric CAS still fails closed",
+        "expectedReasonCode": "INIT049_P3_CLI_LEASE_SCOPED_VERSION_DERIVATION_RED"
       }
     },
     {
@@ -855,7 +855,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "lease-inspect reports the current lease owner, expiry, and process-liveness read-only, and lease-break is an operator-attested escape for the pid-reuse wedge: it bypasses the processAlive check the acquire path trusts but requires the exact current owner token and an already-expired lease, so a live or valid lease is never broken (WORKSPACE_LOCKED / WORKSPACE_LEASE_INVALID), and a successful break (WORKSPACE_LEASE_BROKEN) restores acquirability.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-lease-pid-reuse-escape-hatch",
       "fixturePaths": [
         "packages/core/src/workspace.ts",
         "packages/cli/src/index.ts",
@@ -868,15 +868,15 @@
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_LEASE_PID_REUSE_ESCAPE_HATCH_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Lease inspection/break gating (token match, expiry requirement, processAlive bypass), reason codes, or acquirability-after-break semantics change"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/workspace.ts so the P3-LEASE-PID-REUSE-ESCAPE-HATCH invalidation trigger is true: Lease inspection/break gating (token match, expiry requirement, processAlive bypass), reason codes, or acquirability-after-break semantics change",
-        "test": "INC-262 red-leg probe for P3-LEASE-PID-REUSE-ESCAPE-HATCH",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSA-4: lease-inspect reports state and lease-break clears the pid-reuse wedge under token+expiry gates",
+        "expectedReasonCode": "INIT049_P3_LEASE_PID_REUSE_ESCAPE_HATCH_RED"
       }
     },
     {
@@ -885,29 +885,29 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "A committed workspace mutation performs exactly one reducer pass: it loads the newest valid replay snapshot and applies only its tail when available, or one full event-log replay when no checkpoint exists; the returned state equals a fresh materialize by construction.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-engine-single-replay-pipeline",
       "fixturePaths": [
         "packages/core/src/workspace.ts",
         "packages/core/src/workspace-perf-instrumentation.ts",
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d5eb3c4a89da38d0cdc974c5745a597052b132a2b4bcd682531a0c6a7fa1070b",
+      "fixtureDigest": "3bb5c65050f3f6a81eab0a6933a541d025a95ef8d5d62ff18f25774fd9945d19",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_ENGINE_SINGLE_REPLAY_PIPELINE_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Mutation replay pipeline, single-materialization invariant, or the operation-count instrumentation changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/workspace.ts so the P3-ENGINE-SINGLE-REPLAY-PIPELINE invalidation trigger is true: Mutation replay pipeline, single-materialization invariant, or the operation-count instrumentation changes",
-        "test": "INC-262 red-leg probe for P3-ENGINE-SINGLE-REPLAY-PIPELINE",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSA-1: a committed mutation performs exactly one full event-log replay",
+        "expectedReasonCode": "INIT049_P3_ENGINE_SINGLE_REPLAY_PIPELINE_RED"
       }
     },
     {
@@ -916,29 +916,29 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "Replaying an n-event chain after a snapshot runs exactly one terminal full-graph validateWorkGraph over the snapshotted state plus tail and one ancestor-bounded O(delta) closure validation per tail work event; without a checkpoint the same validation runs over the full chain, never once per event, proven by closed-form operation-count equality.",
-      "command": "pnpm verify:p3",
+      "command": "pnpm verify:p3-engine-incremental-replay",
       "fixturePaths": [
         "packages/core/src/workspace.ts",
         "packages/core/src/workspace-perf-instrumentation.ts",
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d5eb3c4a89da38d0cdc974c5745a597052b132a2b4bcd682531a0c6a7fa1070b",
+      "fixtureDigest": "3bb5c65050f3f6a81eab0a6933a541d025a95ef8d5d62ff18f25774fd9945d19",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P3_VERIFIED",
+      "expectedReasonCode": "INIT049_P3_ENGINE_INCREMENTAL_REPLAY_VERIFIED",
       "evidencePath": "dist/evidence/p3/p3.json",
       "invalidationTriggers": [
         "Per-event closure validation, terminal-validation-once invariant, or the complexity instrumentation changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/workspace.ts so the P3-ENGINE-INCREMENTAL-REPLAY invalidation trigger is true: Per-event closure validation, terminal-validation-once invariant, or the complexity instrumentation changes",
-        "test": "INC-262 red-leg probe for P3-ENGINE-INCREMENTAL-REPLAY",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSA-2: replaying an n-event chain runs one terminal full-graph validation and O(delta) per-event closures",
+        "expectedReasonCode": "INIT049_P3_ENGINE_INCREMENTAL_REPLAY_RED"
       }
     },
     {
@@ -959,7 +959,7 @@
         "tests/p4-artifact-lifecycle.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "b6743b5690c2d7057dfb0d54bf674eb03a7fba2be19c34f6a9a154e23f11a220",
+      "fixtureDigest": "8e9c28caed341e1455047c1054609ecec53d29ff20ec50d04183b5b3d91cbf70",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -992,7 +992,7 @@
         "packages/core/fixtures/p4-artifact-lifecycle-cases.json",
         "tests/p4-artifact-lifecycle.test.mjs"
       ],
-      "fixtureDigest": "f932cde3d6feb43954aa9f898533390ee0b249d1105ad2986befe400115fdf19",
+      "fixtureDigest": "c92d9f877f6ad40cba72480ac8149ce5822464a0fd2b617e7cc4e02b1c1252d4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1016,7 +1016,7 @@
       "category": "inertness-proof",
       "status": "implemented",
       "subject": "P4 provides a file-native Knowledge Core (a disposable derived index admitted for fixture workspaces implicitly and any other workspace only under an explicit disposability acknowledgment) whose metadata surfaces never open body files, whose promotion state is validated before identity-bound claim admission and cleaned on ordinary errors, and whose accountable provenance, default checkpoints, strict instants, UTF-8 byte budgets, and 64 real-store insertion orders are deterministic without live-store, database, AOS, or network access.",
-      "command": "pnpm verify:p4:knowledge",
+      "command": "pnpm verify:p4-knowledge-file-native-knowledge-core",
       "fixturePaths": [
         "package.json",
         "packages/core/src/index.ts",
@@ -1033,22 +1033,22 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "912be6f6e2553d89c0df5383762227a3ea226644d77f20c035d6f5b970dd7701",
+      "fixtureDigest": "12b8f27745d374f44861ca1f8ec8708b336ee78d1bb418ca550e584041067404",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "expectedReasonCode": "INIT049_P4_FILE_NATIVE_KNOWLEDGE_CORE_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Knowledge metadata/schema, P2 binding, body-open separation, promotion pre-claim admission or cleanup, accountable provenance, strict instant, selection/default/checkpoint policy, UTF-8 byte budget, real insertion corpus, locator redaction, limit, filesystem identity, fault, CLI, standalone, or live-store boundary changes"
       ],
       "redLeg": {
         "mutation": "Mutate package.json so the P4-FILE-NATIVE-KNOWLEDGE-CORE invalidation trigger is true: Knowledge metadata/schema, P2 binding, body-open separation, promotion pre-claim admission or cleanup, accountable provenance, strict instant, selection/default/checkpoint policy, UTF-8 byte budget, real insertion corpus, locator redaction, limit, filesystem identity, fault, CLI, standalone, or live-store boundary changes",
-        "test": "INC-262 red-leg probe for P4-FILE-NATIVE-KNOWLEDGE-CORE",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "empty Knowledge bootstrap is closed, schema-valid, deterministic, and body-free",
+        "expectedReasonCode": "INIT049_P4_FILE_NATIVE_KNOWLEDGE_CORE_RED"
       }
     },
     {
@@ -1057,7 +1057,7 @@
       "category": "framework-hygiene",
       "status": "implemented",
       "subject": "The rationale-linkage convention (work-log-v1 Event linkage, cross-referenced from actor-attestation-v1) is expressible today with no schema and no engine change: a work-log knowledge candidate that lists a covered chain event as an event:<eventHash> source reference and sets accountableOwnerId to the attested owner: actor (with profile:/agent: actor ids carried as extra source references) passes createKnowledgeUnit and the existing knowledge promotion validation unchanged, closing the event.payload.actor -> work-log candidate -> linkedEvidenceIds/linkedGateIds -> evidence audit walk; the evidence half stays enforced, so an event reference present but linkedEvidenceIds empty still fails closed KNOWLEDGE_PROVENANCE_INVALID at promotion.",
-      "command": "pnpm verify:p4:knowledge",
+      "command": "pnpm verify:work-log-event-linkage",
       "fixturePaths": [
         "package.json",
         "packages/core/src/knowledge-core.ts",
@@ -1067,22 +1067,22 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b8887bffa4ee2d1762e52f1e6d34e8f7d5de19aa484be8d5e65e146498f600a3",
+      "fixtureDigest": "d6c802766980212aca5f524169f62f8466bd6912a3db904d26a41bbff980080a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "expectedReasonCode": "INIT049_WORK_LOG_EVENT_LINKAGE_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "The event-reference source-reference grammar, the accountable-owner match rule, the knowledge promotion provenance enforcement, or the work-log/actor-attestation event-linkage convention text changes"
       ],
       "redLeg": {
         "mutation": "Mutate package.json so the WORK-LOG-EVENT-LINKAGE invalidation trigger is true: The event-reference source-reference grammar, the accountable-owner match rule, the knowledge promotion provenance enforcement, or the work-log/actor-attestation event-linkage convention text changes",
-        "test": "INC-262 red-leg probe for WORK-LOG-EVENT-LINKAGE",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSE-5: a work-log candidate carrying an event reference and chain-matching accountable owner promotes unchanged",
+        "expectedReasonCode": "INIT049_WORK_LOG_EVENT_LINKAGE_RED"
       }
     },
     {
@@ -1091,7 +1091,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "Real (non-fixture) workspaces initialize a Knowledge Core only under an explicit per-invocation disposability acknowledgment and fail closed with KNOWLEDGE_DISPOSABLE_ACK_REQUIRED otherwise; fixture workspaces remain admitted implicitly, and the admission mode is reported.",
-      "command": "pnpm verify:p4:knowledge",
+      "command": "pnpm verify:p4-knowledge-real-workspace-admission",
       "fixturePaths": [
         "packages/core/src/knowledge-core.ts",
         "packages/cli/src/index.ts",
@@ -1099,22 +1099,22 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d91547a53af500ffae5a106ada6c83128742a6c0ad0ceeeecb0b50d458079d22",
+      "fixtureDigest": "93871c4dfc1e085f80d506650b1003ceb5f94b1fe57286a42977338be5123e07",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "expectedReasonCode": "INIT049_P4_KNOWLEDGE_REAL_WORKSPACE_ADMISSION_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Knowledge store admission guard, disposability acknowledgment flag, admission-mode reporting, or the KNOWLEDGE_DISPOSABLE_ACK_REQUIRED reason code changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-REAL-WORKSPACE-ADMISSION invalidation trigger is true: Knowledge store admission guard, disposability acknowledgment flag, admission-mode reporting, or the KNOWLEDGE_DISPOSABLE_ACK_REQUIRED reason code changes",
-        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-REAL-WORKSPACE-ADMISSION",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSC-1: real workspace knowledge admission requires explicit disposability acknowledgment",
+        "expectedReasonCode": "INIT049_P4_KNOWLEDGE_REAL_WORKSPACE_ADMISSION_RED"
       }
     },
     {
@@ -1123,7 +1123,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "A governed rebase re-binds the Knowledge Core to an advanced workspace head after full per-record re-validation, failing closed with KNOWLEDGE_REBASE_BLOCKED on live records whose scope/project or linked-work references no longer resolve unless explicitly directed to retire them as tombstoned audit records; single version step under the mutation claim with fault points leaving the store locked.",
-      "command": "pnpm verify:p4:knowledge",
+      "command": "pnpm verify:p4-knowledge-high-water-rebase",
       "fixturePaths": [
         "packages/core/src/knowledge-core.ts",
         "packages/cli/src/index.ts",
@@ -1131,22 +1131,22 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d91547a53af500ffae5a106ada6c83128742a6c0ad0ceeeecb0b50d458079d22",
+      "fixtureDigest": "93871c4dfc1e085f80d506650b1003ceb5f94b1fe57286a42977338be5123e07",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "expectedReasonCode": "INIT049_P4_KNOWLEDGE_HIGH_WATER_REBASE_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Knowledge high-water binding, rebase re-validation, offender detection, retire-invalid semantics, retired-record link relaxation, or rebase fault/claim behavior changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-HIGH-WATER-REBASE invalidation trigger is true: Knowledge high-water binding, rebase re-validation, offender detection, retire-invalid semantics, retired-record link relaxation, or rebase fault/claim behavior changes",
-        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-HIGH-WATER-REBASE",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSC-2: knowledge-rebase re-binds the store to an advanced workspace head",
+        "expectedReasonCode": "INIT049_P4_KNOWLEDGE_HIGH_WATER_REBASE_RED"
       }
     },
     {
@@ -1155,28 +1155,28 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "Knowledge capture is cheap: array fields (roleScopes, tags, sourceReferences, linked ids) are canonically sorted server-side so an agent never pre-sorts, and full provenance (owner:-prefixed accountable owner, non-empty source and evidence links) is enforced only at promotion, not at capture — a candidate is written without it and only a promoted record must carry it, with the promote path failing closed KNOWLEDGE_PROVENANCE_INVALID.",
-      "command": "pnpm verify:p4:knowledge",
+      "command": "pnpm verify:p4-knowledge-capture-cheap",
       "fixturePaths": [
         "packages/core/src/knowledge-core.ts",
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "97ddb2a33682f8211dd08c4e389165ebeb8e6ab2abf18a1d5f402a59ed008973",
+      "fixtureDigest": "56cb37d441090342cc0950c39c9da57af686e85d46b7dc0cd3865115eb4619f8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "expectedReasonCode": "INIT049_P4_KNOWLEDGE_CAPTURE_CHEAP_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Server-side array sorting at capture, promote-time provenance enforcement, or the capture/promote provenance boundary changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-CAPTURE-CHEAP invalidation trigger is true: Server-side array sorting at capture, promote-time provenance enforcement, or the capture/promote provenance boundary changes",
-        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-CAPTURE-CHEAP",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSC-3: knowledge-create accepts unsorted arrays and sorts them server-side",
+        "expectedReasonCode": "INIT049_P4_KNOWLEDGE_CAPTURE_CHEAP_RED"
       }
     },
     {
@@ -1185,7 +1185,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "Knowledge retrieval scales past a single page: listing more matches than the query page truncates with a {total, offset, truncated} continuation window instead of failing KNOWLEDGE_LIMIT_EXCEEDED, a bounded case-insensitive substring over subject and tags narrows results without loading bodies, and the record cap is a ratified Tier-0 revision to 64; all reads stay deterministic and metadata-only.",
-      "command": "pnpm verify:p4:knowledge",
+      "command": "pnpm verify:p4-knowledge-retrieval",
       "fixturePaths": [
         "packages/core/src/knowledge-core.ts",
         "packages/cli/src/index.ts",
@@ -1193,22 +1193,22 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d91547a53af500ffae5a106ada6c83128742a6c0ad0ceeeecb0b50d458079d22",
+      "fixtureDigest": "93871c4dfc1e085f80d506650b1003ceb5f94b1fe57286a42977338be5123e07",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "expectedReasonCode": "INIT049_P4_KNOWLEDGE_RETRIEVAL_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Query truncation/continuation, substring search over subject/tags, the record-count Tier-0 limit, or list determinism changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-RETRIEVAL invalidation trigger is true: Query truncation/continuation, substring search over subject/tags, the record-count Tier-0 limit, or list determinism changes",
-        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-RETRIEVAL",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSC-4: knowledge-list supports bounded substring search over subject and tags",
+        "expectedReasonCode": "INIT049_P4_KNOWLEDGE_RETRIEVAL_RED"
       }
     },
     {
@@ -1217,7 +1217,7 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "Knowledge records have a governed lifecycle: reverify touches lastVerified and restores a fresh posture for promoted records only (KNOWLEDGE_REVERIFIED), retire makes any record a tombstoned audit entry that leaves default selection and frees a live create slot (KNOWLEDGE_RETIRED), and the physical file bound exceeds the live-record cap by a retired allowance so the store never scans over-limit after a retire-then-create; invalid lifecycle transitions fail closed KNOWLEDGE_LIFECYCLE_INVALID under CAS.",
-      "command": "pnpm verify:p4:knowledge",
+      "command": "pnpm verify:p4-knowledge-lifecycle",
       "fixturePaths": [
         "packages/core/src/knowledge-core.ts",
         "packages/cli/src/index.ts",
@@ -1225,22 +1225,22 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d91547a53af500ffae5a106ada6c83128742a6c0ad0ceeeecb0b50d458079d22",
+      "fixtureDigest": "93871c4dfc1e085f80d506650b1003ceb5f94b1fe57286a42977338be5123e07",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "expectedReasonCode": "INIT049_P4_KNOWLEDGE_LIFECYCLE_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Reverify/retire lifecycle transitions, the retired-allowance capacity rule, physical file bound, or lifecycle CAS/admission changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-LIFECYCLE invalidation trigger is true: Reverify/retire lifecycle transitions, the retired-allowance capacity rule, physical file bound, or lifecycle CAS/admission changes",
-        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-LIFECYCLE",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSC-5: retire and reverify lifecycle transitions fail closed",
+        "expectedReasonCode": "INIT049_P4_KNOWLEDGE_LIFECYCLE_RED"
       }
     },
     {
@@ -1249,29 +1249,29 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "Promotion enforces machine-checkable governance unconditionally: a record can be promoted only with at least one retrieval tag, a nonempty snippet, and (via the provenance evidence requirement) at least one backlink, failing closed KNOWLEDGE_PROMOTION_INVALID otherwise; rejecting a candidate requires none of these gates. The judgment half of the checklist stays in guiding prose.",
-      "command": "pnpm verify:p4:knowledge",
+      "command": "pnpm verify:p4-knowledge-promotion-checks",
       "fixturePaths": [
         "packages/core/src/knowledge-core.ts",
         "packages/core/spec/knowledge-core-v1.md",
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "3896c59228c77202df1623fe2eac24782e40b0c2c1b9b196c7ba02169befbb35",
+      "fixtureDigest": "4ed478f7a2835e6e18bf943e7369003a059098dcf877bf903cc39f83b5a31e02",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "expectedReasonCode": "INIT049_P4_KNOWLEDGE_PROMOTION_CHECKS_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "Promote-time machine checks (tags, snippet, backlink), the promotion gate set, or reject exemption changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/core/src/knowledge-core.ts so the P4-KNOWLEDGE-PROMOTION-CHECKS invalidation trigger is true: Promote-time machine checks (tags, snippet, backlink), the promotion gate set, or reject exemption changes",
-        "test": "INC-262 red-leg probe for P4-KNOWLEDGE-PROMOTION-CHECKS",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "WSC-6: promotion enforces machine checks for tags and snippet",
+        "expectedReasonCode": "INIT049_P4_KNOWLEDGE_PROMOTION_CHECKS_RED"
       }
     },
     {
@@ -1280,28 +1280,28 @@
       "category": "runtime-capability",
       "status": "implemented",
       "subject": "knowledge-create unifies nullable-flag spelling: the canonical \"-\" sentinel and an omitted flag both store null for project-id and last-verified, and the deprecated \"null\" alias produces a byte-identical committed record and envelope, so an agent never memorizes per-flag null conventions; the CLI \"-\" spelling round-trips to the same stored record as programmatic explicit nulls.",
-      "command": "pnpm verify:p4:knowledge",
+      "command": "pnpm verify:p4-cli-sentinel-uniformity",
       "fixturePaths": [
         "packages/cli/src/index.ts",
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "0d33effbf33615e3084528f890f4aa8e6e7399f0f6277480661a80d019c49df5",
+      "fixtureDigest": "b2795a138f49c2301b42aa3f0028564026182f4f9ae6542b3aa8267977904028",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
         "network": "process-guarded-offline"
       },
       "expectedExit": 0,
-      "expectedReasonCode": "P4_KNOWLEDGE_CORE_VERIFIED",
+      "expectedReasonCode": "INIT049_P4_CLI_SENTINEL_UNIFORMITY_VERIFIED",
       "evidencePath": "dist/evidence/p4/p4-knowledge.json",
       "invalidationTriggers": [
         "The nullable-flag sentinel unification, the \"-\" canonical spelling, or the deprecated \"null\" alias acceptance for knowledge-create project-id/last-verified changes"
       ],
       "redLeg": {
         "mutation": "Mutate packages/cli/src/index.ts so the P4-CLI-SENTINEL-UNIFORMITY invalidation trigger is true: The nullable-flag sentinel unification, the \"-\" canonical spelling, or the deprecated \"null\" alias acceptance for knowledge-create project-id/last-verified changes",
-        "test": "INC-262 red-leg probe for P4-CLI-SENTINEL-UNIFORMITY",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
+        "test": "governed Knowledge CLI exposes init, validate, create, list, snippet, body, freshness, promotion, and checkpoint",
+        "expectedReasonCode": "INIT049_P4_CLI_SENTINEL_UNIFORMITY_RED"
       }
     },
     {
@@ -1329,7 +1329,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "a0651c7c5af376d47bc03094233ceaf78f605d307b3eef145506e45c41eeb466",
+      "fixtureDigest": "47a745fa6572a029984dcf57fdeaf3b06ba93934c8330eebf30e95ee2f86a9fa",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1362,7 +1362,7 @@
         "packages/core/fixtures/p5-generic-profile-cases.json",
         "tests/p5-generic-profile.test.mjs"
       ],
-      "fixtureDigest": "5bb9ec0273e1d1a9f463fdfb919438615b77e00a9ad0af3163ca253b3d32d38b",
+      "fixtureDigest": "cedcacce7238187d799474620e3c52f269dfc12e9662ceed26eed69c1b8ea636",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1404,7 +1404,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "38cfb30cf59b42751a115be81820e034a1c78bf0a380ce8bfb6defbb2a3e5506",
+      "fixtureDigest": "014c1440fc3c9bc56108699eff06452ae7223c580a37f231cd257da5d7f4bfef",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1441,7 +1441,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "8bec7aa5aea65f8d9283ffc37f8b47b8fcf1817c6492395c94f6f183d28f9942",
+      "fixtureDigest": "a8e7de8d0480dcae9497e073d2ba4c091ff171b1c286199b0bcf18a676b96343",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1480,7 +1480,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "a3d2df317096cdf87b6191be5797bedbaedf6d12ac6fe545e653cf9b672f74c2",
+      "fixtureDigest": "0405941eb48895a0877990a42ccd8f472e95dbe5d681abc7225a0d59bcea33d6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1520,7 +1520,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "0657e5055580345bd6e8b8a3a6f72a37cb7c319fb3ddab9c142ff92aa67a3e69",
+      "fixtureDigest": "d390322538eb0c901d407f16995ccabfd7b0dbdf93c31dba4e96a07835494e95",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1557,7 +1557,7 @@
         "tests/dependency.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "bb0850e70c172b4730a14d565438d592e2db6fe9ad0bc5384e00434ca97a19cb",
+      "fixtureDigest": "5240d4f5f02452b9cc20d0b467d977feb3f9327c7a939e006e681ff15a964b62",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1597,7 +1597,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "65db935bacfaf1bc52074efbe080da2056fcc717a1729e5406dc2fbda6890339",
+      "fixtureDigest": "57279b6c3fb5130e504348ce93d3ecfcda1c0123fca58aaa2ca063ece0448ef5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1634,7 +1634,7 @@
         "tests/assignment-gate.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "407bbd9b8dd2b98373ffb65ac31acd65c6666db7c7392819dd61d327ba357809",
+      "fixtureDigest": "0813cf16c97cba29da9200d2caf215f1623c2576ff0699eb33b4385144190604",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1672,7 +1672,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "c561554a09d70eb044c456825d339b50d7acac7387540e693a239f709df02112",
+      "fixtureDigest": "3955dac147368e2aff6caa3f17ccdeffb545bb33b334e5606dcd01605323ce80",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1709,7 +1709,7 @@
         "tests/actor-attestation.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "ff589be09e5c5788e2f959fb626d7efd4e44ada51910d7511cd64eba9a066ee4",
+      "fixtureDigest": "03bd051f8404d10399726543c7839f3e24a1745c5a34452e441a4ecfceae4bd4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1748,7 +1748,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "32b1c2196b3f12442fd73a48291f8b906f90163b6c902a3549f0b0027f55a6c2",
+      "fixtureDigest": "9fce87dbb11e3be50e3e67beb9a7fcb3552883ec59034dd9b74da99c110519f0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1782,7 +1782,7 @@
         "tests/conference-execution.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "cd513dd1cde0f77106908740aa59e03689a7c514c785e3de0f211cd1827f8304",
+      "fixtureDigest": "d4c5e48a01b49aded7c56ae45c494e247692656ef14f83654e3a85eb6b3d436b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1816,7 +1816,7 @@
         "tests/act7-execution-collection.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "c957f8d93db6d5bba835b97124541520e00c4b91fa9b9b0fd01088c1a8b84633",
+      "fixtureDigest": "b1956a8bcb14134e264130f61de9b56c37f0a01f446dd6f375f18dd3a6d70c84",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1856,7 +1856,7 @@
         "tests/operator-authority.test.mjs",
         "tests/p7-compatibility-modes.test.mjs"
       ],
-      "fixtureDigest": "d756dd119471856912059dbf2100d1551103114ba7e2c89177355ab39b03f765",
+      "fixtureDigest": "8a9de2fc75a453b5fd59c4f5dd30cb00faef1f2fd8a1e8f753735cd6948cbad5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1892,7 +1892,7 @@
         "tests/act4-codex-installer.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "205af2825ad65f46352ab71e483a817480c7e1ac1310f63ef4590af52beb5f92",
+      "fixtureDigest": "7c3e843fb9b98d2f694fcd1d3df441f51672a75e51fc9ce1e9eb639d61cce510",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1925,7 +1925,7 @@
         "tests/act5-receipt-sidecar.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "6d557f0b0c02e4b3e9cefb1150d329334a6da9c2f6d66444f0d4bf9af5430809",
+      "fixtureDigest": "996983b4427b09c1b315640fd8305b4e1748d2b5a0ab6bc9a7b57394114b29db",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1959,7 +1959,7 @@
         "tests/act6-observe-hook.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "85d1798322e34b7d3f1fbd9a34bec8a793022c0ba3e1e2be9dfd75933a458879",
+      "fixtureDigest": "254b7ba645672a6894a59c6aeca69143730726a0949b75694abc44d81cf5212c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1993,7 +1993,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "3cd5f84e94408259a68a6c0094f7b757299f402644dd61256a0e6a42fbac080a",
+      "fixtureDigest": "78aabdb7809a5a6b31a6cf2fd42175ecffa88cb4c678d68f906cae2300960f91",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2031,7 +2031,7 @@
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9b3c4ff74149f499d8fab8a0ba333406e5bab148893ea2ab2c9235c739a71b06",
+      "fixtureDigest": "b702677d51a72cdb7170ad7cafc506c0bbf539916f35d7d56300e190f8cf2ea2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2069,7 +2069,7 @@
         "scripts/task.mjs",
         "tests/act13-authority-output.test.mjs"
       ],
-      "fixtureDigest": "29ec03766b2d3187121e3cc844c5b89014165260afe34692240751c5b8e8ac52",
+      "fixtureDigest": "32366e3293e9b25bd04c27d392cc0184aec3657e510b399484462dec0afcbcaa",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2111,7 +2111,7 @@
         "docs/verification/host/codex-session-start-activation.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "27f25dde57b910efff563e5bde3b1bd4e620c077370986819579af98e80f4d22",
+      "fixtureDigest": "9a3c79663c99372a63e20c9384ce292033943d5683a0cb4c4cc0720914895938",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2151,7 +2151,7 @@
         "docs/verification/host/controller-feasibility.md",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d5788c12d6ed48dfb3c001e358cfc7ea829a85e2ac9dd46117ef90f046d4d9d3",
+      "fixtureDigest": "f6a12c1222e37db321bd465283698e6be634e9e31af1b00d8f0eeed42635cfb7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2190,7 +2190,7 @@
         "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "4cf928f7d7ff18cfe39db7b7c95d683f226495d0d82f02046f262aa6a0929767",
+      "fixtureDigest": "31be3db1bd99fffac6828e46173e100304c8698a06229277e520b840a328d336",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2226,7 +2226,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "54dbc3c77e906411f399b314216a6e2fd080a168c44489c96bf774983e329849",
+      "fixtureDigest": "24c968b5be556bc16663817c691df80ef698352ed4de51631a4eb0914eaba4a4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2262,7 +2262,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "1d29ff5639afedd80fddf5b90488d3bce0a47b9b61997e63a5a4aa8fd2aef289",
+      "fixtureDigest": "e3ca75084a342e40906c56ba916581fb5b1594517fdff8c672b8fb409ceab9a8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2299,7 +2299,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "377921b271a6f6cdd28a7d537e89f42bf32a8fe37535ebe9467e52b1ad6bccc5",
+      "fixtureDigest": "8a49ba8ee93ff0e99cc7eaac3abfc3e54ae2eaa43955c370f1b877ab53d935de",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2335,7 +2335,7 @@
         "tests/p7-canonical-exchange.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d2d4a65d825c9f588087541bbc0b7289dc22faa0e4b32a98343d03707858a158",
+      "fixtureDigest": "207ef2877062143ce2e6e6e78e798c4376a1100e35a16470cbe382034e2feafc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2372,7 +2372,7 @@
         "tests/p7-compatibility-modes.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "5d7339ea8fda4d2aa4c5cb224ee9cdcc27d0d7e088989ecc0474b47a6ab7029b",
+      "fixtureDigest": "8a254287aec34ffc41393e0743aebe61834fde0698e752d1979acbf4d15f10d9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2440,7 +2440,7 @@
         "scripts/task.mjs",
         "scripts/policy/source-allowlist.json"
       ],
-      "fixtureDigest": "e30c4378fc8ecf52b33754c0031fa46e990a877c93b978f45920fd17af5df7e9",
+      "fixtureDigest": "4556d2d80ace0380b78ac4e8809b9bf2fef9943bd290f6c1113935c7ab761a5c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2489,7 +2489,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "323bcf007a8566bd3e90f4892ef153697f585d7da7fb8286037bf3c554513c9c",
+      "fixtureDigest": "73580b8cc58d1ec8b8d436317a87274d22bf60195280d473d8fb496bad89b014",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2528,7 +2528,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "1018c229d1ea2886bc1a4f0fd504dd65fb3a2344712dfbafa8c87efc85fae4bc",
+      "fixtureDigest": "74ebfe6196847258a0715cd03ba43e6b40db1544c8531954bfa7ed413e887cbe",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2634,7 +2634,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "53da02e322eb4189969134649236c628419f4bf96911afa96f80b1b179825e69",
+      "fixtureDigest": "c42fc25d5a5af95ca778e8135d84e112daf8c2cfd66ceecc9c7ed5b639fe1c6d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2668,7 +2668,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "96307f447e334ecaee0171a81aa96a382bb140525d826c908cf78a289736a016",
+      "fixtureDigest": "dc8f0ef7c88ba02f89500322a3effcc8abb8083bd17f0f063062fdd34189d8f9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2703,7 +2703,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "96307f447e334ecaee0171a81aa96a382bb140525d826c908cf78a289736a016",
+      "fixtureDigest": "dc8f0ef7c88ba02f89500322a3effcc8abb8083bd17f0f063062fdd34189d8f9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2742,7 +2742,7 @@
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "51f201d3f98ac3c9711aae51c94454045a886f62a0e868f84884c1c41ab2b5e4",
+      "fixtureDigest": "bb9912138a2ac5177221148078f69ae618b80d4b9ad97d706352ed38cd8ad1d5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2774,7 +2774,7 @@
         "packages/core/src/index.ts",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "6a5922e182d6083ac2486da97bc6b3764e16d2306f246e9906e2b70733e80d4a",
+      "fixtureDigest": "b2356a41263698ef7542515acc5522c9085dec906b2250a7a7d9730a71d7468b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2806,7 +2806,7 @@
         "tests/knowledge-inject.test.mjs",
         "tests/p4-knowledge-core.test.mjs"
       ],
-      "fixtureDigest": "48abf7cc2149d67ad8138b9b224aa8056259511f206366855d1c5438667d2b2a",
+      "fixtureDigest": "7c0bca6593bbd1e5519fc2bfb40d2c051ed1ec44089e589f2262e57a9182b183",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2981,7 +2981,7 @@
         "packages/core/src/knowledge-core.ts",
         "tests/p4-knowledge-core.test.mjs"
       ],
-      "fixtureDigest": "12b29f2dce8d7142a2d9eea6900fa50f4a13870f2e32a5e23226c95337e72ceb",
+      "fixtureDigest": "88954659c36a38bff45e8d064259a7afdc435afebc0a591e0833b20bd0239084",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3016,7 +3016,7 @@
         "packages/core/src/knowledge-core.ts",
         "tests/p4-knowledge-core.test.mjs"
       ],
-      "fixtureDigest": "3d3fa16618880612c46da6be4a846ae9a6faf372be274586219a8396ff0ed2d5",
+      "fixtureDigest": "87a85446a5d5aee4d1474976272277e3e7ddca34b6de25798be305ef27e18262",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3051,7 +3051,7 @@
         "packages/core/src/knowledge-core.ts",
         "tests/p4-knowledge-core.test.mjs"
       ],
-      "fixtureDigest": "b65118f4c8d80a86549b9bcf13b904577ccfaf1dc8d058896102c71507366dcf",
+      "fixtureDigest": "5131509e025e18e0b9b03828bebf9dc18dca50df0910069561d5fd367e54a41f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3088,7 +3088,7 @@
         "packages/core/spec/knowledge-core-v1.md",
         "tests/p4-knowledge-core.test.mjs"
       ],
-      "fixtureDigest": "e51dd6167665604f96b6d909efd6e5d4a521dc3693b1f8f0699169e2649413c6",
+      "fixtureDigest": "31fb6a48b41f7524e3128f8684f2426d269c37b2a4208e18d642688124d1ed5e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3124,7 +3124,7 @@
         "packages/core/schema/knowledge-core-v1.schema.json",
         "tests/p4-knowledge-core.test.mjs"
       ],
-      "fixtureDigest": "1583f4a6bff0abe4ea4ab89b0c9cb0a7fb441d91c6332a8d5731c9744a1ba06a",
+      "fixtureDigest": "b0ca034c4a7b688c8baec5ffa9d31230558cd0a50ee17e2ede3fb51b781c4678",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3231,7 +3231,7 @@
         "scripts/task.mjs",
         "tests/inc255-mcp-framing.test.mjs"
       ],
-      "fixtureDigest": "d0e5e2683482fa301276ceaf22e6f8b5a7324489f4b5c3a213886686b09f7a97",
+      "fixtureDigest": "7d411aae6f90d1e3125e94e914140c2ca2fdc86e74dd8f57a00d53c10bebe7da",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3270,7 +3270,7 @@
         "scripts/task.mjs",
         "tests/inc256-knowledge-policy.test.mjs"
       ],
-      "fixtureDigest": "f12c17a38effbb87f64554b98900c9af6a9ec7b37cc27e0f3349c3fcea32b61d",
+      "fixtureDigest": "ad9eb11fe4e2cdad8bd3617a4f7270f61bd83f9aa4dcf07b807c54ff75a26856",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3307,7 +3307,7 @@
         "scripts/task.mjs",
         "tests/inc258-install-manifest.test.mjs"
       ],
-      "fixtureDigest": "3014295b628d3c7a363fd87e6750b8b4c6ed042c160377a9d2a34a1f985a640d",
+      "fixtureDigest": "fb937ee978d8ee18485f82b83e5977f7f901e6a7e09584d5051ff09542f97a16",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3347,7 +3347,7 @@
         "scripts/task.mjs",
         "tests/inc259-storage-migration.test.mjs"
       ],
-      "fixtureDigest": "d754c3f69d63d971c5fbf8d08a1e9e56d2784d9cbc493e90fbf90f40e73ab7c5",
+      "fixtureDigest": "7922f16bbd44f45ce3ad37550e4f585fb32cede2550ac3af082ea4a6fd52cbf7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3383,7 +3383,7 @@
         "scripts/task.mjs",
         "tests/inc260-snapshot-read-optimization.test.mjs"
       ],
-      "fixtureDigest": "4bc4fadd13f76e2572d13016a0fb22c2f3282c802d1dc5816516ed2fcb8577a7",
+      "fixtureDigest": "c83abae227810094a6e55b6c6b06d3ba4b4ee8368a574fa7b7445ece959d7d2a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3419,7 +3419,7 @@
         "tests/stop-pact.test.mjs",
         "tools/stop-pact/response-style-hook.mjs"
       ],
-      "fixtureDigest": "437e329e116cecb2414b90a73aa621bc2df78cdb704aa67c9ab4364999f7b5d6",
+      "fixtureDigest": "5631d6458988a8f6a12883d7e756d2fa1ad9a91bc51b21797e9a4daf96b283aa",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3456,7 +3456,7 @@
         "tests/dispatch-readiness-compliance.test.mjs",
         "tests/s303-dispatch-citations.test.mjs"
       ],
-      "fixtureDigest": "d3c0cf10cf5c62e5e2871aa8fe558dd74666e3afa13a681ca2482ed24d625f7c",
+      "fixtureDigest": "a4019250efdd94f6faf0496150b232d52a8ae984651a3b8cf9fbed86b267b986",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3495,7 +3495,7 @@
         "scripts/task.mjs",
         "tests/inc263-closeout.test.mjs"
       ],
-      "fixtureDigest": "c056c2d7c5d10cf4015c2df7d655de0844c9e18e78a29f00a8f44d8dd903a72b",
+      "fixtureDigest": "82296418fa33861458ef1ba34e5548aed630becc51fda250d8e491dcd6cbe856",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3532,7 +3532,7 @@
         "scripts/verification-red-legs.mjs",
         "tests/inc262-red-leg-coverage.test.mjs"
       ],
-      "fixtureDigest": "660573b20bd30c5ccda7da9fd11c25c6f00db0d640bd9f413d35cb9458d66f72",
+      "fixtureDigest": "ed51cbde1bb397730452fea3393910b3a2885262309158536ce5947942de4155",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3571,7 +3571,7 @@
         "scripts/verification-links.mjs",
         "tests/inc261-verification-links.test.mjs"
       ],
-      "fixtureDigest": "26e460c0516d37b251791035e83a77dfe06fb548687c5ae09cd776324eadf277",
+      "fixtureDigest": "2c325ea49dac2868133b7f4d5da6b80a9b836efb106ee2cbd9eb975204ab1c10",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3616,7 +3616,7 @@
         "scripts/task.mjs",
         "tests/story-344-storage-boundary.test.mjs"
       ],
-      "fixtureDigest": "1fc51a6206b9c948c1ef378a1c58f51062659dcfaabf09610c075da4d75b01be",
+      "fixtureDigest": "ba304935cb6ba948f6544a6006fa2d1277066ce2882c09f088c9d63cf2ce4e05",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3652,7 +3652,7 @@
         "scripts/task.mjs",
         "tests/story-333-byte-segments.test.mjs"
       ],
-      "fixtureDigest": "e2c7230d60d043758d154722f9affa26c5e6e0e6efed3270858eecbda02491f8",
+      "fixtureDigest": "3e58ad0a61662dce39f16cbf52a0ed559ffc9551069e7d0e379b585e781ce1fc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3689,7 +3689,7 @@
         "scripts/task.mjs",
         "tests/story-345-backend-selection.test.mjs"
       ],
-      "fixtureDigest": "fadb2832e01c8fe1e0c2ddc49841ddb8e6b1e55dd54e45daab5f628bbf222cab",
+      "fixtureDigest": "b4e73ebcb632c5359b17ed8f225754a56069dfa33460b4ef555d92dd8e1c19d3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3725,7 +3725,7 @@
         "scripts/task.mjs",
         "tests/story-334-segment-index.test.mjs"
       ],
-      "fixtureDigest": "daebe7346db90900f3cd812807575d4a808f010b72e12a481c177b7d174cefdf",
+      "fixtureDigest": "53340ebdda8fc82f8e390150fd63c2d9e634e06735b67daae1b15eaa33c7b2a0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3761,7 +3761,7 @@
         "scripts/task.mjs",
         "tests/story-335-336-work-fields.test.mjs"
       ],
-      "fixtureDigest": "cefcde526f649bf72ce4223cb8487c2bfb29d760522fbf0f905500918795b226",
+      "fixtureDigest": "79ca7e37567359b1faede161f60bac052192835f25e947ad0c3fbd17176606de",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3798,7 +3798,7 @@
         "scripts/task.mjs",
         "tests/story-335-336-work-fields.test.mjs"
       ],
-      "fixtureDigest": "fbb1cde38e5125ace8c28216bee7f71ca2700773e8c54b504d9f245518b15134",
+      "fixtureDigest": "5e1f7aed9d276a1bb41f476d9ec5db9385e84401aae11bcb42adda76750417a6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3835,7 +3835,7 @@
         "scripts/task.mjs",
         "tests/story-337-snapshot-replay.test.mjs"
       ],
-      "fixtureDigest": "267e6916c44a330b737a77f8af8fb05d93956131581433554e1d09b9f568e173",
+      "fixtureDigest": "9d6789f48bf9921aa0c5ec508ca163fde092fa018556c366d74edf326c08e184",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3872,7 +3872,7 @@
         "scripts/task.mjs",
         "tests/story-346-pg-disabled.test.mjs"
       ],
-      "fixtureDigest": "62b416ef46bca62472efa58fe097a677a170d5e018c78c5457be4fd288f3f3b7",
+      "fixtureDigest": "d4677eb648ba2a01b909582142cfcc6c7521e19c630e01b729e45bf6709b7871",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3909,7 +3909,7 @@
         "scripts/task.mjs",
         "tests/story-347-348-settings-policy.test.mjs"
       ],
-      "fixtureDigest": "47796fac478e5aa77f629e174567aa223a51963708372f6cca6dc1c17060995d",
+      "fixtureDigest": "32d21a6536311900cbbf7e44f195e7d1b0fd991fa4a74950841e79050cdf2a1f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3947,7 +3947,7 @@
         "scripts/task.mjs",
         "tests/story-347-348-settings-policy.test.mjs"
       ],
-      "fixtureDigest": "346419c25e8e46940e7f3b9609b3f70240b7a996af79dc95db2d6cf836c111e6",
+      "fixtureDigest": "4478cbc7c24c292d28bd1372a2d4e6c4e953edfe4f5a02a69b6cb626797ef2cc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3982,7 +3982,7 @@
         "scripts/task.mjs",
         "tests/story-338-339-archive-inventory.test.mjs"
       ],
-      "fixtureDigest": "db619bade99ec20adc817e674432e60f03c26e548b495f1e360a54bc25231c04",
+      "fixtureDigest": "79848f605c99e29e49d6244a198faaa264b2f50dfbb8ee182b70a4f234167b0d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4017,7 +4017,7 @@
         "scripts/task.mjs",
         "tests/story-338-339-archive-inventory.test.mjs"
       ],
-      "fixtureDigest": "3dd94a0bddf5bdb96d776786d5f527535bef64b339cab65432499a0b2ee48249",
+      "fixtureDigest": "97cb77b055912ff405cceeff2dc209cbab4b00125084a2a146272c7282fa188e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4054,7 +4054,7 @@
         "scripts/task.mjs",
         "tests/story-340-attestation-migration.test.mjs"
       ],
-      "fixtureDigest": "328af2e2013fb36440e7abc2157b77c2066c10b63c3b5d81ec0b84abb140406b",
+      "fixtureDigest": "673f169959aad2ed2ea163641cb0592be83a954456c3b4cd52ad655a02df9c4a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4090,7 +4090,7 @@
         "scripts/task.mjs",
         "tests/story-341-knowledge-body-migration.test.mjs"
       ],
-      "fixtureDigest": "a40677e79f5382289b884af434209d90fb43b1aa0589e4251000ce19231982b9",
+      "fixtureDigest": "e2a1cf21645672860b7d1b9745c4df586612416c6fe3bc454f8385cdc82f598a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4126,7 +4126,7 @@
         "scripts/task.mjs",
         "tests/story-342-343-map-docs.test.mjs"
       ],
-      "fixtureDigest": "af38e65a78d3a09744f284ccf2c57232e87b834e68318f96cd3ecd911c03169a",
+      "fixtureDigest": "6f4faa8835fc50b74125f781248fd13feb93f5d6b54e1f101d48a2b2aa63b3c0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4165,7 +4165,7 @@
         "scripts/task.mjs",
         "tests/story-342-343-map-docs.test.mjs"
       ],
-      "fixtureDigest": "d64b53db6a64de6f9dc4e42b269f9c335c9d2a4c22d983e100d14e6e803f5a4a",
+      "fixtureDigest": "fc3311443a2a2a367da5c8118ede0f05bf0de4d5eda13b05f536223523fe72aa",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4186,6 +4186,209 @@
         "mutation": "Change a documented segmented path to a nonexistent path.",
         "test": "STORY-343 engine and helper documents describe segmented events, replay snapshots, and body migration",
         "expectedReasonCode": "INIT048_RED_LEG_REQUIRED"
+      }
+    },
+    {
+      "id": "INIT049-STORY-349",
+      "phase": "P1",
+      "category": "framework-hygiene",
+      "status": "implemented",
+      "subject": "The nine acceptance gate groups declare their containment hierarchy and a top-level run invokes the four roots while preserving the full semantic roster and order.",
+      "command": "pnpm verify:story349",
+      "fixturePaths": [
+        "package.json",
+        "scripts/lib/push-gate-children.mjs",
+        "scripts/platform-doctor.mjs",
+        "scripts/policy/gate-containment.json",
+        "scripts/push-gate.mjs",
+        "scripts/task.mjs",
+        "tests/p1-roster.test.mjs"
+      ],
+      "fixtureDigest": "5011f873d6799d9e97339ddccdf6c06e861e3772f364ec4befcb54d8b32d1e2b",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "INIT049_STORY_349_VERIFIED",
+      "evidencePath": "dist/evidence/p1/story349.json",
+      "invalidationTriggers": [
+        "Remove the machine-readable containment declaration, change the top-level roots or order, or let the executable push-gate child list drift from the declaration."
+      ],
+      "positiveLeg": {
+        "command": "pnpm verify:story349",
+        "expectedExit": 0,
+        "expectedReasonCode": "INIT049_STORY_349_VERIFIED"
+      },
+      "redLeg": {
+        "mutation": "Remove the guard-check child from scripts/lib/push-gate-children.mjs without changing the containment declaration.",
+        "test": "STORY-349 top-level gate containment preserves the nine-group execution order",
+        "expectedReasonCode": "INIT049_STORY_349_RED"
+      }
+    },
+    {
+      "id": "INIT049-STORY-350",
+      "phase": "P1",
+      "category": "framework-hygiene",
+      "status": "implemented",
+      "subject": "A failed top-level gate has an on-demand locator that runs contained children independently and reports each child conclusion without changing push-gate failure handling.",
+      "command": "pnpm verify:story350",
+      "fixturePaths": [
+        "package.json",
+        "scripts/gate-red-locator.mjs",
+        "scripts/policy/gate-containment.json",
+        "scripts/task.mjs",
+        "tests/p1-roster.test.mjs"
+      ],
+      "fixtureDigest": "d41a870c7eb7e6badbaa587c1af98d6b1c74d709d270af92eb06deacfa4d44a0",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "INIT049_STORY_350_VERIFIED",
+      "evidencePath": "dist/evidence/p1/story350.json",
+      "invalidationTriggers": [
+        "Delete the red locator path, skip a contained child, or stop returning per-child red/green conclusions."
+      ],
+      "positiveLeg": {
+        "command": "pnpm verify:story350",
+        "expectedExit": 0,
+        "expectedReasonCode": "INIT049_STORY_350_VERIFIED"
+      },
+      "redLeg": {
+        "mutation": "Delete the locator's contained-child runner while leaving the top-level gate declaration unchanged.",
+        "test": "STORY-350 red locator runs every contained child separately and returns each conclusion",
+        "expectedReasonCode": "INIT049_STORY_350_RED"
+      }
+    },
+    {
+      "id": "INIT049-STORY-351",
+      "phase": "P1",
+      "category": "framework-hygiene",
+      "status": "implemented",
+      "subject": "Sixteen implementation-source text assertions are replaced by runtime behavior assertions, while the canonical-exchange forbidden-construction scan remains as the one justified source scan.",
+      "command": "pnpm verify:story351",
+      "fixturePaths": [
+        "package.json",
+        "scripts/task.mjs",
+        "tests/act2-claude-activation.test.mjs",
+        "tests/act8-app-server-observer.test.mjs",
+        "tests/inc260-snapshot-read-optimization.test.mjs",
+        "tests/p3-cli-catalog.test.mjs",
+        "tests/p3-file-engine.test.mjs",
+        "tests/p4-artifact-lifecycle.test.mjs",
+        "tests/p4-knowledge-core.test.mjs",
+        "tests/p5-core-reference-personas.test.mjs",
+        "tests/p6-codex-adapter.test.mjs",
+        "tests/p6-context-router.test.mjs",
+        "tests/p6b-claude-adapter.test.mjs",
+        "tests/p7-canonical-exchange.test.mjs",
+        "tests/story-333-byte-segments.test.mjs",
+        "tests/story-335-336-work-fields.test.mjs",
+        "tests/story-337-snapshot-replay.test.mjs",
+        "tests/story-340-attestation-migration.test.mjs",
+        "tests/story-341-knowledge-body-migration.test.mjs",
+        "tests/story-344-storage-boundary.test.mjs",
+        "tests/story-345-backend-selection.test.mjs",
+        "tests/story-346-pg-disabled.test.mjs",
+        "tests/story-347-348-settings-policy.test.mjs"
+      ],
+      "fixtureDigest": "623eee8c2772e08edd588335cce1809254df2f4b417a13588356e5d02d31ad87",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "INIT049_STORY_351_VERIFIED",
+      "evidencePath": "dist/evidence/p1/story351.json",
+      "invalidationTriggers": [
+        "Reintroduce an implementation-source match assertion, remove a runtime behavior assertion, or remove the one canonical-exchange forbidden-construction scan."
+      ],
+      "positiveLeg": {
+        "command": "pnpm verify:story351",
+        "expectedExit": 0,
+        "expectedReasonCode": "INIT049_STORY_351_VERIFIED"
+      },
+      "redLeg": {
+        "mutation": "Break the byte-threshold behavior covered by the rewritten STORY-333 runtime assertion.",
+        "test": "STORY-333 byte threshold creates bounded segments and preserves legacy segments",
+        "expectedReasonCode": "INIT049_STORY_351_RED"
+      }
+    },
+    {
+      "id": "INIT049-STORY-352",
+      "phase": "P3",
+      "category": "framework-hygiene",
+      "status": "implemented",
+      "subject": "The thirteen P3 and nine Knowledge claims each run one named test through an independent command and success reason code, with a stable refusal when that test name is missing.",
+      "command": "pnpm verify:story352",
+      "fixturePaths": [
+        "package.json",
+        "scripts/init049-focused-claims.mjs",
+        "scripts/task.mjs",
+        "tests/story-342-343-map-docs.test.mjs"
+      ],
+      "fixtureDigest": "e4097870bb1160425bf7bfb0218e19bf9b440e315a397d23c71461f7270d9992",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "INIT049_STORY_352_VERIFIED",
+      "evidencePath": "dist/evidence/p3/story352.json",
+      "invalidationTriggers": [
+        "Merge two P3 or Knowledge commands, reuse a success reason code or red leg, or make a missing focused test name pass."
+      ],
+      "positiveLeg": {
+        "command": "pnpm verify:story352",
+        "expectedExit": 0,
+        "expectedReasonCode": "INIT049_STORY_352_VERIFIED"
+      },
+      "redLeg": {
+        "mutation": "Remove one focused P3 or Knowledge claim mapping while leaving its aggregate gate available.",
+        "test": "STORY-352 P3 and Knowledge claims have independent focused commands and expectations",
+        "expectedReasonCode": "INIT049_STORY_352_RED"
+      }
+    },
+    {
+      "id": "INIT049-STORY-353",
+      "phase": "P1",
+      "category": "framework-hygiene",
+      "status": "implemented",
+      "subject": "The platform-doctor test file is measured by internal section, its 28.5-second source is identified and reduced without changing the test or assertion set, and the other four slow-file measurements remain recorded.",
+      "command": "pnpm verify:story353",
+      "fixturePaths": [
+        "package.json",
+        "scripts/platform-doctor.mjs",
+        "scripts/task.mjs",
+        "tests/platform-doctor.test.mjs"
+      ],
+      "fixtureDigest": "a2aa2a8af14e233c05833e200de4df05523dbd7c7eeaadc6507d1c65267c80e5",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "INIT049_STORY_353_VERIFIED",
+      "evidencePath": "dist/evidence/p1/story353.json",
+      "invalidationTriggers": [
+        "Delete a platform-doctor assertion, change the measured section accounting, or report a speedup without preserving the exact behavior set."
+      ],
+      "positiveLeg": {
+        "command": "pnpm verify:story353",
+        "expectedExit": 0,
+        "expectedReasonCode": "INIT049_STORY_353_VERIFIED"
+      },
+      "redLeg": {
+        "mutation": "Delete one assertion from the platform-doctor behavior set while keeping the test file executable.",
+        "test": "STORY-353 platform-doctor timing keeps the complete behavior set while locating the slow section",
+        "expectedReasonCode": "INIT049_STORY_353_RED"
       }
     }
   ]

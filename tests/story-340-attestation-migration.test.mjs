@@ -55,9 +55,18 @@ test("STORY-340 attestation migration preserves full values, supports point look
   assert.equal(await readAttestationReceipt(directory, nextHash), receipt(nextHash, 4));
 });
 
-test("STORY-340 attestation migration has a fail-closed full-value comparison", async () => {
-  const source = await readFile(new URL("../packages/core/src/attestation-storage.ts", import.meta.url), "utf8");
-  assert.match(source, /ATTESTATION_VALUE_MISMATCH/u);
-  assert.match(source, /canonicalJson\(migrated\.map\(\(record\) => record\.value\)\)/u);
-  assert.match(source, /deleteLegacyAttestations/u);
+test("STORY-340 attestation migration has a fail-closed full-value comparison", async (context) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-s340-value-")));
+  context.after(() => rm(base, { recursive: true, force: true }));
+  const directory = join(base, "attestations");
+  await mkdir(directory);
+  const eventHash = hash("a");
+  const original = receipt(eventHash, 1);
+  await writeFile(join(directory, `${eventHash}.json`), original, "utf8");
+  const baseline = await reportAttestationDirectory(directory);
+  await migrateAttestationDirectory(directory, 4096);
+  const deleted = await deleteLegacyAttestations(directory, baseline);
+  assert.equal(deleted.legacyFiles, 0);
+  assert.equal((await readdir(directory)).includes(`${eventHash}.json`), false, "legacy data is deleted only after the full-value readback passes");
+  assert.equal(await readAttestationReceipt(directory, eventHash), original);
 });

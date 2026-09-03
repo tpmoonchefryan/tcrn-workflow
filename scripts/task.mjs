@@ -19,6 +19,7 @@ import {
 import { P1_TASKS } from "./p1-sequence.mjs";
 import { compareCanonicalText } from "./lib/canonical-order.mjs";
 import { codeOnly, controlByteOffset } from "./lib/code-only.mjs";
+import { countCoverage } from "./coverage-conservation.mjs";
 import { LocalCommandError, runLocalCommand } from "./lib/local-command.mjs";
 import {
   DependencyGraphError,
@@ -63,6 +64,7 @@ import {
 } from "./lib/safe-io.mjs";
 import { installNoNetworkGuard } from "./no-network.mjs";
 import { ScopedStripTypesError, stripTypesWithScopedExperimentalWarning } from "./lib/scoped-strip-types.mjs";
+import { INIT049_FOCUSED_CLAIM_NAMES, INIT049_FOCUSED_CLAIMS } from "./init049-focused-claims.mjs";
 
 installNoNetworkGuard();
 
@@ -426,6 +428,7 @@ async function runTests({
   authorityOutputOnly = false,
   init047Only = false,
   focusedTestPath = undefined,
+  focusedTestPaths = undefined,
   focusedTestNamePattern = undefined,
   focusedReasonCode = undefined,
   inc255Only = false,
@@ -481,7 +484,8 @@ async function runTests({
     .filter((path) => !inc258Only || path === "tests/inc258-install-manifest.test.mjs")
     .filter((path) => !inc259Only || path === "tests/inc259-storage-migration.test.mjs")
     .filter((path) => !inc260Only || path === "tests/inc260-snapshot-read-optimization.test.mjs")
-    .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs");
+    .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs")
+    .filter((path) => focusedTestPaths === undefined || focusedTestPaths.includes(path));
   await runDetachedTestController(["--test", ...(focusedTestNamePattern === undefined ? [] : [`--test-name-pattern=${focusedTestNamePattern}`]), ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
@@ -574,6 +578,121 @@ async function runTests({
               : "TESTS_VERIFIED",
     { tests, result: "passed" },
   );
+}
+
+async function runInit049FocusedClaim(name) {
+  const spec = INIT049_FOCUSED_CLAIMS[name];
+  assertion(spec !== undefined, "INIT049_FOCUSED_CLAIM_UNKNOWN", name);
+  const source = await readText(resolve(repositoryRoot, spec.path));
+  assertion(source.includes(`test("${spec.pattern}"`), "INIT049_FOCUSED_TEST_NOT_FOUND", name);
+  return runTests({
+    focusedTestPath: spec.path,
+    focusedTestNamePattern: spec.pattern,
+    focusedReasonCode: spec.reasonCode,
+  });
+}
+
+const INIT049_STORY_TESTS = Object.freeze({
+  story349: { path: "tests/p1-roster.test.mjs", pattern: "STORY-349 top-level gate containment preserves the nine-group execution order", reasonCode: "INIT049_STORY_349_VERIFIED" },
+  story350: { path: "tests/p1-roster.test.mjs", pattern: "STORY-350 red locator runs every contained child separately and returns each conclusion", reasonCode: "INIT049_STORY_350_VERIFIED" },
+  story352: { path: "tests/story-342-343-map-docs.test.mjs", pattern: "STORY-352 P3 and Knowledge claims have independent focused commands and expectations", reasonCode: "INIT049_STORY_352_VERIFIED" },
+});
+
+const INIT049_STORY351_TESTS = Object.freeze([
+  ["tests/inc260-snapshot-read-optimization.test.mjs", "INC-260 the reader validates the snapshot once and replays only the tail"],
+  ["tests/story-333-byte-segments.test.mjs", "STORY-333 byte rolling is not replaced by event-count rolling"],
+  ["tests/story-335-336-work-fields.test.mjs", "STORY-336 labels remain first-class instead of becoming an extension key"],
+  ["tests/story-337-snapshot-replay.test.mjs", "STORY-337 snapshot replay source has an explicit fail-closed corruption path"],
+  ["tests/story-340-attestation-migration.test.mjs", "STORY-340 attestation migration has a fail-closed full-value comparison"],
+  ["tests/story-341-knowledge-body-migration.test.mjs", "STORY-341 knowledge body migration is explicit and keeps metadata outside the body segments"],
+  ["tests/story-344-storage-boundary.test.mjs", "STORY-344 workspace lifecycle remains swappable for initialize and recovery"],
+  ["tests/story-345-backend-selection.test.mjs", "STORY-345 backend selection rejects unknown values and does not silently fall back"],
+  ["tests/story-346-pg-disabled.test.mjs", "STORY-346 production backend selection has no pg branch"],
+  ["tests/story-347-348-settings-policy.test.mjs", "STORY-348 protocol validity values remain hardcoded rather than becoming settings"],
+  ["tests/p4-knowledge-core.test.mjs", "Knowledge implementation has no predecessor, network, database, or AOS read authority"],
+  ["tests/p4-artifact-lifecycle.test.mjs", "artifact implementation and fixtures contain no legacy source-read authority"],
+  ["tests/p5-generic-profile.test.mjs", "profile runtime remains standalone and imports only frozen local protocol authority"],
+  ["tests/p6-codex-adapter.test.mjs", "empty-project cold start remains empty and Adapter source has no legacy, ambient store scan, network, database, or AOS reader"],
+  ["tests/p6-context-router.test.mjs", "Context Router implementation is storeless and contains no legacy, network, database, hook, Skill, environment, model, or session authority"],
+  ["tests/p6b-claude-adapter.test.mjs", "empty-project cold start remains empty and Adapter source has no legacy, ambient store scan, network, database, or requirement-ledger reader"],
+]);
+
+function escapeTestPattern(value) {
+  return value.replace(/[\\^$.*+?()[\]{}|]/gu, "\\$&");
+}
+
+async function runInit049Story351() {
+  const paths = [...new Set(INIT049_STORY351_TESTS.map(([path]) => path))];
+  for (const [path, pattern] of INIT049_STORY351_TESTS) {
+    const source = await readText(resolve(repositoryRoot, path));
+    assertion(source.includes(`test("${pattern}"`), "INIT049_STORY_351_TEST_NOT_FOUND", `${path}:${pattern}`);
+  }
+  const sourceAssertionPaths = [...paths, "tests/p7-canonical-exchange.test.mjs"];
+  const sourceAssertions = [];
+  for (const path of sourceAssertionPaths) {
+    const source = await readText(resolve(repositoryRoot, path));
+    for (const match of source.matchAll(/assert\.(?:match|doesNotMatch)\(\s*source\b/gu)) sourceAssertions.push({ path, offset: match.index });
+  }
+  assertion(sourceAssertions.length === 1 && sourceAssertions[0].path === "tests/p7-canonical-exchange.test.mjs", "INIT049_STORY_351_SOURCE_ASSERTION_COUNT", JSON.stringify(sourceAssertions));
+  const pattern = `^(?:${INIT049_STORY351_TESTS.map(([, name]) => escapeTestPattern(name)).join("|")})$`;
+  const tested = await runTests({
+    focusedTestPaths: paths,
+    focusedTestNamePattern: pattern,
+    focusedReasonCode: "INIT049_STORY_351_VERIFIED",
+  });
+  return success("INIT049_STORY_351_VERIFIED", {
+    ...tested,
+    sourceAssertions: { count: sourceAssertions.length, retained: sourceAssertions[0].path },
+  });
+}
+
+const INIT049_PLATFORM_DOCTOR_BEHAVIOR = Object.freeze({
+  testCount: 61,
+  assertionCount: 225,
+  testNamesDigest: "96240c0081a76fee47963b97b7190dac306ddd06eee803ffa4890f7708552ab3",
+  baselineSeconds: 28.5,
+  reducedTargetSeconds: 20,
+  slowFilesUnchanged: {
+    "tests/p4-knowledge-core.test.mjs": 54.6,
+    "tests/s227-relocation-manifest-ceiling.test.mjs": 35.4,
+    "tests/p3-file-engine.test.mjs": 34.4,
+    "tests/output-session-lifecycle.test.mjs": 28.8,
+  },
+});
+
+async function runInit049Story353() {
+  const path = "tests/platform-doctor.test.mjs";
+  const source = await readText(resolve(repositoryRoot, path));
+  const coverage = countCoverage(source);
+  assertion(coverage.testCount === INIT049_PLATFORM_DOCTOR_BEHAVIOR.testCount, "INIT049_STORY_353_TEST_COUNT_CHANGED", String(coverage.testCount));
+  assertion(coverage.assertionCount === INIT049_PLATFORM_DOCTOR_BEHAVIOR.assertionCount, "INIT049_STORY_353_ASSERTION_COUNT_CHANGED", String(coverage.assertionCount));
+  const testNamesDigest = createHash("sha256").update(JSON.stringify(coverage.testNames)).digest("hex");
+  assertion(testNamesDigest === INIT049_PLATFORM_DOCTOR_BEHAVIOR.testNamesDigest, "INIT049_STORY_353_TEST_SET_CHANGED", testNamesDigest);
+  const started = Date.now();
+  const result = await runTests({ focusedTestPath: path, focusedReasonCode: "INIT049_STORY_353_VERIFIED" });
+  const elapsedSeconds = (Date.now() - started) / 1_000;
+  assertion(elapsedSeconds < INIT049_PLATFORM_DOCTOR_BEHAVIOR.reducedTargetSeconds, "INIT049_STORY_353_RUNTIME_NOT_REDUCED", String(elapsedSeconds));
+  return success("INIT049_STORY_353_VERIFIED", {
+    tests: result.tests,
+    behavior: INIT049_PLATFORM_DOCTOR_BEHAVIOR,
+    elapsedSeconds,
+    composition: {
+      before: "61 serial test cases, chiefly independent synthetic fixture/doctor invocations",
+      after: "same 61 cases under one concurrent test suite",
+    },
+  });
+}
+
+async function runInit049Story(name) {
+  const spec = INIT049_STORY_TESTS[name];
+  assertion(spec !== undefined, "INIT049_STORY_UNKNOWN", name);
+  const source = await readText(resolve(repositoryRoot, spec.path));
+  assertion(source.includes(`test("${spec.pattern}"`), "INIT049_STORY_TEST_NOT_FOUND", name);
+  return runTests({
+    focusedTestPath: spec.path,
+    focusedTestNamePattern: spec.pattern,
+    focusedReasonCode: spec.reasonCode,
+  });
 }
 
 const INIT047_GOAL_TESTS = Object.freeze({
@@ -2019,7 +2138,16 @@ const commandContracts = {
   act12: { exit: 0, reasonCode: "ACT12_HOOK_ROOT_BINDING_VERIFIED" },
   act13: { exit: 0, reasonCode: "ACT13_AUTHORITY_OUTPUT_VERIFIED" },
   e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
+  story349: { exit: 0, reasonCode: "INIT049_STORY_349_VERIFIED" },
+  story350: { exit: 0, reasonCode: "INIT049_STORY_350_VERIFIED" },
+  story351: { exit: 0, reasonCode: "INIT049_STORY_351_VERIFIED" },
+  story352: { exit: 0, reasonCode: "INIT049_STORY_352_VERIFIED" },
+  story353: { exit: 0, reasonCode: "INIT049_STORY_353_VERIFIED" },
 };
+
+for (const name of INIT049_FOCUSED_CLAIM_NAMES) {
+  commandContracts[name] = { exit: 0, reasonCode: INIT049_FOCUSED_CLAIMS[name].reasonCode };
+}
 
 async function verifyMap() {
   const map = JSON.parse(await readText(resolve(repositoryRoot, "verification-map.yaml")));
@@ -2097,6 +2225,18 @@ async function verifyMap() {
     assertion(new Set(init047Goals.map((claim) => claim[field])).size === 12, "VERIFICATION_MAP_INIT047_GOAL_NOT_INDEPENDENT", field);
   }
   assertion(new Set(init047Goals.map((claim) => claim.redLeg.test)).size === 12, "VERIFICATION_MAP_INIT047_GOAL_RED_LEGS_NOT_INDEPENDENT");
+  const init049Focused = INIT049_FOCUSED_CLAIM_NAMES.map((name) => map.claims.find((claim) => claim.command === `pnpm verify:${name}`));
+  assertion(init049Focused.every((claim) => claim !== undefined), "VERIFICATION_MAP_INIT049_FOCUSED_MISSING");
+  assertion(new Set(init049Focused.map((claim) => claim.command)).size === init049Focused.length, "VERIFICATION_MAP_INIT049_FOCUSED_COMMANDS_NOT_INDEPENDENT");
+  assertion(new Set(init049Focused.map((claim) => claim.expectedReasonCode)).size === init049Focused.length, "VERIFICATION_MAP_INIT049_FOCUSED_REASONS_NOT_INDEPENDENT");
+  assertion(new Set(init049Focused.map((claim) => claim.redLeg.test)).size === init049Focused.length, "VERIFICATION_MAP_INIT049_FOCUSED_RED_LEGS_NOT_INDEPENDENT");
+  for (const [index, name] of INIT049_FOCUSED_CLAIM_NAMES.entries()) {
+    const claim = init049Focused[index];
+    const focused = INIT049_FOCUSED_CLAIMS[name];
+    assertion(claim.expectedReasonCode === focused.reasonCode, "VERIFICATION_MAP_INIT049_FOCUSED_REASON_DRIFT", name);
+    assertion(claim.redLeg.test === focused.pattern, "VERIFICATION_MAP_INIT049_FOCUSED_TEST_DRIFT", name);
+    assertion(claim.fixturePaths.includes(focused.path), "VERIFICATION_MAP_INIT049_FOCUSED_FIXTURE_MISSING", name);
+  }
   // WSF-2: BK joins the completeness loop with its first claim (BK-SNAPSHOT-WITNESS);
   // ACT stays admitted-only until WSG-2 lands the first activation claim.
   // WSG-2: ACT joins the completeness loop with its first activation-ladder claim
@@ -2786,6 +2926,11 @@ const handlers = {
   story348: () => runInit048Story("story348"),
   story344: () => runInit048Story("story344"),
   story345: () => runInit048Story("story345"),
+  story349: () => runInit049Story("story349"),
+  story350: () => runInit049Story("story350"),
+  story351: runInit049Story351,
+  story352: () => runInit049Story("story352"),
+  story353: runInit049Story353,
   inc255: () => runTests({ inc255Only: true }),
   inc256: () => runTests({ inc256Only: true }),
   inc258: () => runTests({ inc258Only: true }),
@@ -2848,6 +2993,10 @@ const handlers = {
   act13: verifyAct13,
   e2e: verifyE2eGovernedLoop,
 };
+
+for (const name of INIT049_FOCUSED_CLAIM_NAMES) {
+  handlers[name] = () => runInit049FocusedClaim(name);
+}
 
 function errorReason(error) {
   if (error instanceof TaskError || error instanceof LocalCommandError || error instanceof BoundaryError || error instanceof ProtocolProofError || error instanceof DependencyGraphError || error instanceof ScopedStripTypesError) {

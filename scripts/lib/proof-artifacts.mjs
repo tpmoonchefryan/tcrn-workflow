@@ -122,7 +122,7 @@ const claimRouteAdditions = new Map([
 ]);
 
 function fieldsForClaim(claim) {
-  const legBearing = typeof claim?.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id));
+  const legBearing = typeof claim?.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || claim.id.startsWith("INIT049-STORY-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id));
   const base = legBearing
     ? [...claimFields, ...init047LegFields]
     : Object.hasOwn(claim ?? {}, "redLeg")
