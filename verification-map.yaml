@@ -3383,7 +3383,7 @@
         "scripts/task.mjs",
         "tests/inc260-snapshot-read-optimization.test.mjs"
       ],
-      "fixtureDigest": "c83abae227810094a6e55b6c6b06d3ba4b4ee8368a574fa7b7445ece959d7d2a",
+      "fixtureDigest": "48a6fe85e0462aa9daf4ee6cf243876b56cb1da257254085e4812ad10a1a2535",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4296,7 +4296,7 @@
         "tests/story-346-pg-disabled.test.mjs",
         "tests/story-347-348-settings-policy.test.mjs"
       ],
-      "fixtureDigest": "623eee8c2772e08edd588335cce1809254df2f4b417a13588356e5d02d31ad87",
+      "fixtureDigest": "17a11e9aed95ec533224c5b89f7429b03afe8ce17039f08936df8d1688db70b0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

@@ -119,5 +119,7 @@ test("INC-260 the reader validates the snapshot once and replays only the tail",
   const measured = await withWorkspacePerfInstrumentation(() => materializeWorkspace(fx.workspace));
   assert.equal(measured.metrics.fullMaterialize, 0);
   assert.equal(measured.metrics.snapshotMaterialize, 1);
+  const manifest = JSON.parse(await readFile(join(fx.workspace, controlDirectory, "snapshots", "manifest.json"), "utf8"));
+  assert.equal(Object.hasOwn(manifest, "eventPrefixDigest"), false);
   assert.deepEqual(logicalState(measured.result), logicalState(await materializeWorkspace(fx.workspace)));
 });
