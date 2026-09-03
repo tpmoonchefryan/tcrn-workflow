@@ -710,6 +710,13 @@
         "INC-263 a closeout wiring omission and malformed cost input are red"
       ]
     },
+    "tests/inc266-push-gate-timing.test.mjs": {
+      "testCount": 1,
+      "assertionCount": 11,
+      "testNames": [
+        "INC-266 push-gate timing accounts for every phase and keeps the success output contract"
+      ]
+    },
     "tests/init033-install-surface.test.mjs": {
       "testCount": 3,
       "assertionCount": 16,
