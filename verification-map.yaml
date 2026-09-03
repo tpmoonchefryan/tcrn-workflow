@@ -4204,7 +4204,7 @@
         "scripts/task.mjs",
         "tests/p1-roster.test.mjs"
       ],
-      "fixtureDigest": "8d8b33fd8bf53c5c4c019e63b364e02e036b6703340463f609c7dc877fea84bc",
+      "fixtureDigest": "a7bb1c64dd9166de639561479b8552a4a9bb25f4946bfdb56b89aa05db7fc91f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4241,7 +4241,7 @@
         "scripts/task.mjs",
         "tests/p1-roster.test.mjs"
       ],
-      "fixtureDigest": "be64502a2f81f592aa60d08afb1aded2e4f22b19f06820d30d801b121401097a",
+      "fixtureDigest": "4d52b834300f90b601380a49c3216a9bb313ab3e7ba8a8d35c9dbe24498ede96",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4396,7 +4396,7 @@
       "phase": "P1",
       "category": "framework-hygiene",
       "status": "implemented",
-      "subject": "engine-release records every push-gate phase with silent wall-clock timing, observes the emitted stdout, and reconciles the phase sum with the gate total.",
+      "subject": "engine-release records every push-gate phase by name with silent wall-clock timing, observes the emitted stdout, and reconciles the phase sum with the gate total.",
       "command": "pnpm verify:inc266",
       "fixturePaths": [
         "package.json",
@@ -4404,7 +4404,7 @@
         "scripts/task.mjs",
         "tests/p1-roster.test.mjs"
       ],
-      "fixtureDigest": "dac1a490b515c68b334a245e1b6d62f9968730a999b79ceaeb9f6685eed2e762",
+      "fixtureDigest": "4ff2ba4f39820c3743f4d0dfc85405ba6ba63366536b284fbbf40177d2f55421",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4414,7 +4414,7 @@
       "expectedReasonCode": "INC266_PUSH_GATE_TIMING_VERIFIED",
       "evidencePath": "dist/evidence/p1/inc266.json",
       "invalidationTriggers": [
-        "Remove a timed push-gate phase, let the stage-to-total attribution gap reach five seconds, fail to refresh the source summary, or change the observed successful stdout contract."
+        "Remove a timed push-gate phase, add a retired line coordinate, let the stage-to-total attribution gap reach five seconds, fail to refresh the source summary, or change the observed successful stdout contract."
       ],
       "positiveLeg": {
         "command": "pnpm verify:inc266",

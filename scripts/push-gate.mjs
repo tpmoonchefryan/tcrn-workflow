@@ -51,12 +51,12 @@ const timingStartedAt = performance.now();
 const timingSourceDigest = createHash("sha256").update(await readFile(fileURLToPath(import.meta.url))).digest("hex");
 const stageTimings = [];
 
-async function timedStage(name, line, operation) {
+async function timedStage(name, operation) {
   const startedAt = performance.now();
   try {
     return await operation();
   } finally {
-    stageTimings.push({ name, line, elapsedMs: Number((performance.now() - startedAt).toFixed(3)) });
+    stageTimings.push({ name, elapsedMs: Number((performance.now() - startedAt).toFixed(3)) });
   }
 }
 
@@ -123,7 +123,7 @@ function checkCjkEmphasis(document, body) {
 // 1. A dirty tree means the bytes that pass the gate are not the bytes that get pushed.
 //    verify:p1 and verify:p8 refuse a dirty basis themselves, but they say so in the
 //    middle of a long run; saying it first is worth the duplicated git call.
-await timedStage("git-status-before", 122, async () => {
+await timedStage("git-status-before", async () => {
   if (timingProbe) return;
   const status = run("git", ["status", "--porcelain=v1", "--untracked-files=all"]);
   if (!status.ok) fail("PUSH_GATE_GIT_UNAVAILABLE", status.output.trim().slice(0, 200));
@@ -139,7 +139,7 @@ await timedStage("git-status-before", 122, async () => {
 //    files, and eighteen emphasis spans that render as literal asterisks in Chinese and
 //    Japanese.
 const badgeVersion = P8_VERSION.replaceAll("-", "--");
-await timedStage("version-badge-and-cjk-emphasis", 137, async () => {
+await timedStage("version-badge-and-cjk-emphasis", async () => {
   for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
     const body = await read(document);
     const published = [...body.matchAll(/status-([0-9][^-\s)]*(?:--[^-\s)]+)*)-blue/gu)].map((match) => match[1]);
@@ -167,7 +167,7 @@ const currentVersionDocuments = [
   "docs/versioning/versioning-policy.md",
   "docs/compatibility/supported-modes.md",
 ];
-await timedStage("stale-version-prose", 165, async () => {
+await timedStage("stale-version-prose", async () => {
   for (const document of currentVersionDocuments) {
     const body = await read(document);
     body.split("\n").forEach((line, index) => {
@@ -185,7 +185,7 @@ await timedStage("stale-version-prose", 165, async () => {
 //     real, only that the file still says what it claims to say.
 const registerPath = "scripts/policy/failure-pattern-register.json";
 let register = null;
-await timedStage("failure-pattern-register", 183, async () => {
+await timedStage("failure-pattern-register", async () => {
   try {
     register = JSON.parse(await read(registerPath));
   } catch (error) {
@@ -225,7 +225,7 @@ await timedStage("failure-pattern-register", 183, async () => {
 //     release lag in prose -- exactly the debt that left all five READMEs a version behind
 //     on capabilities -- sails through it. Require the current version to appear in prose,
 //     with the status badge stripped first so the badge alone cannot satisfy the check.
-await timedStage("status-version-prose", 223, async () => {
+await timedStage("status-version-prose", async () => {
   for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
     const prose = (await read(document)).replaceAll(/status-[0-9][^)\s]*-blue/gu, "");
     if (!prose.includes(P8_VERSION)) fail("PUSH_GATE_STATUS_VERSION_ABSENT", `${document}: "${P8_VERSION}" appears only in the badge, not in prose`);
@@ -241,7 +241,7 @@ await timedStage("status-version-prose", 223, async () => {
 //     rule runs over every mirror. LICENSE, NOTICE, CHANGELOG and SUPPORT are English-only by
 //     policy and are listed there, not mirrored.
 const coverage = JSON.parse(await read("scripts/policy/doc-coverage.json"));
-await timedStage("translation-mirror-pins", 239, async () => {
+await timedStage("translation-mirror-pins", async () => {
   for (const [source, spec] of Object.entries(coverage.sources)) {
     if (spec.kind !== "rootdoc") continue;
     const dot = source.lastIndexOf(".");
@@ -287,7 +287,7 @@ await timedStage("translation-mirror-pins", 239, async () => {
 // be evaluated is the jointly-unsatisfiable defect this platform has paid for twice.
 // So completeness is reported beside the verdict and left to the operator to close.
 const HOST_EVIDENCE_MAX_AGE_DAYS = 30;
-await timedStage("host-evidence-freshness", 285, async () => {
+await timedStage("host-evidence-freshness", async () => {
   const hostEvidenceRaw = await read("docs/verification/host/claude-code.json").catch(() => null);
   if (hostEvidenceRaw === null) {
     fail("PUSH_GATE_HOST_EVIDENCE_MISSING", "docs/verification/host/claude-code.json");
@@ -315,7 +315,7 @@ await timedStage("host-evidence-freshness", 285, async () => {
 });
 
 // 3. The two prose announcements of the version.
-await timedStage("release-prose", 313, async () => {
+await timedStage("release-prose", async () => {
   const changelog = await read("CHANGELOG.md");
   if (!new RegExp(`^## ${P8_VERSION.replaceAll(".", "\\.")}\\b`, "mu").test(changelog)) {
     fail("PUSH_GATE_CHANGELOG_HEADING_MISSING", `no "## ${P8_VERSION}" heading`);
@@ -342,7 +342,7 @@ await timedStage("release-prose", 313, async () => {
 //    This check never proved a tag names *judged* bytes. Running the suites below before
 //    every push is what does that; this proves only that the tag is not being contradicted.
 const tag = `v${P8_VERSION}`;
-await timedStage("tag-ancestry", 340, async () => {
+await timedStage("tag-ancestry", async () => {
   const tagged = run("git", ["rev-list", "-n", "1", tag]);
   if (tagged.ok) {
     const descends = run("git", ["merge-base", "--is-ancestor", tagged.output.trim(), "HEAD"]);
@@ -362,7 +362,6 @@ await timedStage("tag-ancestry", 340, async () => {
 for (const { reasonCode, script } of ENGINE_PUSH_GATE_CHILDREN) {
   const result = await timedStage(
     `child:${script}`,
-    358,
     async () => (timingProbe ? { ok: true, output: "" } : run("pnpm", ["run", "--silent", script])),
   );
   if (!result.ok) fail(reasonCode, result.output.trim().split("\n").slice(-3).join(" | ").slice(0, 300));
@@ -373,7 +372,7 @@ for (const { reasonCode, script } of ENGINE_PUSH_GATE_CHILDREN) {
 
 // A gate that rewrote tracked source has changed the bytes being pushed after they were
 // judged, which defeats the point of judging them.
-await timedStage("git-status-after", 367, async () => {
+await timedStage("git-status-after", async () => {
   if (timingProbe) return;
   const post = run("git", ["status", "--porcelain=v1", "--untracked-files=all"]);
   if (post.ok && post.output.trim() !== "") fail("PUSH_GATE_GATES_MUTATED_SOURCE", post.output.trim().split("\n").slice(0, 5).join(" | "));

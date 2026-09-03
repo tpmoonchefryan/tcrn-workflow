@@ -103,19 +103,19 @@ const timingPath = resolve(REPO_ROOT, "dist/evidence/p1/push-gate-timing.json");
 const probeTimingPath = resolve(REPO_ROOT, "dist/evidence/p1/push-gate-timing-probe.json");
 const pushGatePath = resolve(REPO_ROOT, "scripts/push-gate.mjs");
 const expectedTimingStages = [
-  ["git-status-before", 122],
-  ["version-badge-and-cjk-emphasis", 137],
-  ["stale-version-prose", 165],
-  ["failure-pattern-register", 183],
-  ["status-version-prose", 223],
-  ["translation-mirror-pins", 239],
-  ["host-evidence-freshness", 285],
-  ["release-prose", 313],
-  ["tag-ancestry", 340],
-  ["child:verify:p1", 358],
-  ["child:verify:p8", 358],
-  ["child:guard-check", 358],
-  ["git-status-after", 367],
+  "git-status-before",
+  "version-badge-and-cjk-emphasis",
+  "stale-version-prose",
+  "failure-pattern-register",
+  "status-version-prose",
+  "translation-mirror-pins",
+  "host-evidence-freshness",
+  "release-prose",
+  "tag-ancestry",
+  "child:verify:p1",
+  "child:verify:p8",
+  "child:guard-check",
+  "git-status-after",
 ];
 
 test("INC-266 push-gate timing accounts for every phase and keeps the success output contract", async () => {
@@ -126,7 +126,7 @@ test("INC-266 push-gate timing accounts for every phase and keeps the success ou
   assert.equal(typeof evidence.ok, "boolean");
   if (strict) assert.equal(evidence.ok, true);
   assert.match(evidence.sourceDigest, /^[a-f0-9]{64}$/u);
-  assert.deepEqual(evidence.stages.map(({ name, line }) => [name, line]), expectedTimingStages);
+  assert.deepEqual(evidence.stages.map(({ name }) => name), expectedTimingStages);
   assert.ok(evidence.stages.every(({ elapsedMs }) => Number.isFinite(elapsedMs) && elapsedMs >= 0));
   const stageTotalMs = evidence.stages.reduce((sum, stage) => sum + stage.elapsedMs, 0);
   assert.ok(Math.abs(stageTotalMs - evidence.stageTotalMs) < 0.01);
@@ -156,5 +156,6 @@ test("INC-266 push-gate timing accounts for every phase and keeps the success ou
   const probeEvidence = JSON.parse(await readFile(probeTimingPath, "utf8"));
   assert.equal(probeEvidence.stdoutObserved, observedStdout);
   assert.equal(probeEvidence.sourceDigest, createHash("sha256").update(await readFile(pushGatePath)).digest("hex"));
-  assert.deepEqual(probeEvidence.stages.map(({ name, line }) => [name, line]), expectedTimingStages);
+  assert.ok(probeEvidence.stages.every((stage) => !Object.hasOwn(stage, "line")));
+  assert.deepEqual(probeEvidence.stages.map(({ name }) => name), expectedTimingStages);
 });
