@@ -131,6 +131,7 @@ test("STORY-337 snapshot replay source has an explicit fail-closed corruption pa
     assert.equal(state.version, 2);
     const manifestPath = join(fx.workspace, controlDirectory, "snapshots", "manifest.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    assert.equal(manifest.version, 2);
     manifest.stateDigest = "0".repeat(64);
     await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`, "utf8");
     await assert.rejects(() => materializeWorkspace(fx.workspace), (error) => error?.reasonCode === "WORKSPACE_SNAPSHOT_INVALID");

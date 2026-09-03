@@ -105,12 +105,15 @@ test("STORY-344 workspace lifecycle data-plane operations use StorageBackend", a
       "listControlEntries:snapshots",
       "listControlEntries:snapshots",
     ]);
+    assert.equal(backend.calls[0], "createControlDirectory");
+    assert.equal(backend.calls.includes("removeControlFile:events/.tmp-story-344-runtime"), true);
+    assert.equal(backend.calls.filter((call) => call === "listControlEntries:snapshots").length, 2);
   } finally {
     await fx.close();
   }
 });
 
-test("STORY-344 workspace lifecycle remains swappable for initialize and recovery", async () => {
+test("STORY-344 workspace lifecycle has no direct data-plane fs calls", async () => {
   const fx = await fixture();
   try {
     const backend = new RecordingBackend(fx.workspace);
