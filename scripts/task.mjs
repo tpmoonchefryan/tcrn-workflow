@@ -694,6 +694,7 @@ async function runInc266() {
     focusedTestPath: "tests/inc266-push-gate-timing.test.mjs",
     focusedTestNamePattern: "INC-266 push-gate timing accounts for every phase and keeps the success output contract",
     focusedReasonCode: "INC266_PUSH_GATE_TIMING_VERIFIED",
+    extraEnvironment: { TCRN_INC266_STRICT: "1" },
   });
   return success("INC266_PUSH_GATE_TIMING_VERIFIED", { tests: result.tests, result: "passed" });
 }
