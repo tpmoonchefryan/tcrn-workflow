@@ -691,7 +691,7 @@ async function runInit049Story353() {
 
 async function runInc266() {
   const result = await runTests({
-    focusedTestPath: "tests/inc266-push-gate-timing.test.mjs",
+    focusedTestPath: "tests/p1-roster.test.mjs",
     focusedTestNamePattern: "INC-266 push-gate timing accounts for every phase and keeps the success output contract",
     focusedReasonCode: "INC266_PUSH_GATE_TIMING_VERIFIED",
     extraEnvironment: { TCRN_INC266_STRICT: "1" },
