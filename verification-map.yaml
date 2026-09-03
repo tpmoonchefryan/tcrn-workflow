@@ -4204,7 +4204,7 @@
         "scripts/task.mjs",
         "tests/p1-roster.test.mjs"
       ],
-      "fixtureDigest": "c576b7f51a784f3ef6bc98ef8eba45b8b117d27d7b6af545b9fb5b973e86c275",
+      "fixtureDigest": "8d8b33fd8bf53c5c4c019e63b364e02e036b6703340463f609c7dc877fea84bc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4241,7 +4241,7 @@
         "scripts/task.mjs",
         "tests/p1-roster.test.mjs"
       ],
-      "fixtureDigest": "837c9962a2ead9e821cf2e7a6bf38e9906e4fc1f3c0383d64b5250c5314fe2a1",
+      "fixtureDigest": "be64502a2f81f592aa60d08afb1aded2e4f22b19f06820d30d801b121401097a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4396,7 +4396,7 @@
       "phase": "P1",
       "category": "framework-hygiene",
       "status": "implemented",
-      "subject": "engine-release records every push-gate phase with silent wall-clock timing and reconciles the phase sum with the gate total.",
+      "subject": "engine-release records every push-gate phase with silent wall-clock timing, observes the emitted stdout, and reconciles the phase sum with the gate total.",
       "command": "pnpm verify:inc266",
       "fixturePaths": [
         "package.json",
@@ -4404,7 +4404,7 @@
         "scripts/task.mjs",
         "tests/p1-roster.test.mjs"
       ],
-      "fixtureDigest": "1f642554e32ce3caf50f3f8f2275b12da62a50613abee458945d75d6f40d01a0",
+      "fixtureDigest": "dac1a490b515c68b334a245e1b6d62f9968730a999b79ceaeb9f6685eed2e762",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4414,7 +4414,7 @@
       "expectedReasonCode": "INC266_PUSH_GATE_TIMING_VERIFIED",
       "evidencePath": "dist/evidence/p1/inc266.json",
       "invalidationTriggers": [
-        "Remove a timed push-gate phase, let the stage-to-total attribution gap reach five seconds, or change the successful stdout contract."
+        "Remove a timed push-gate phase, let the stage-to-total attribution gap reach five seconds, fail to refresh the source summary, or change the observed successful stdout contract."
       ],
       "positiveLeg": {
         "command": "pnpm verify:inc266",

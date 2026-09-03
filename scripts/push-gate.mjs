@@ -42,7 +42,11 @@ import { requiredFailurePatternProblems } from "./preflight.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
-const timingEvidencePath = resolve(repositoryRoot, "dist/evidence/p1/push-gate-timing.json");
+const timingProbe = process.env.TCRN_PUSH_GATE_TIMING_PROBE === "1";
+const timingEvidencePath = resolve(
+  repositoryRoot,
+  process.env.TCRN_PUSH_GATE_TIMING_EVIDENCE_PATH ?? "dist/evidence/p1/push-gate-timing.json",
+);
 const timingStartedAt = performance.now();
 const timingSourceDigest = createHash("sha256").update(await readFile(fileURLToPath(import.meta.url))).digest("hex");
 const stageTimings = [];
@@ -56,7 +60,7 @@ async function timedStage(name, line, operation) {
   }
 }
 
-async function writeTimingEvidence(ok) {
+async function writeTimingEvidence(ok, stdoutObserved) {
   const gateElapsedMs = Number((performance.now() - timingStartedAt).toFixed(3));
   const stageTotalMs = Number(stageTimings.reduce((sum, stage) => sum + stage.elapsedMs, 0).toFixed(3));
   const evidence = {
@@ -68,7 +72,7 @@ async function writeTimingEvidence(ok) {
     stageTotalMs,
     attributionGapMs: Number((gateElapsedMs - stageTotalMs).toFixed(3)),
     sourceDigest: timingSourceDigest,
-    stdoutContract: JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION }),
+    stdoutObserved,
     stages: stageTimings,
   };
   await mkdir(resolve(repositoryRoot, "dist/evidence/p1"), { recursive: true });
@@ -120,6 +124,7 @@ function checkCjkEmphasis(document, body) {
 //    verify:p1 and verify:p8 refuse a dirty basis themselves, but they say so in the
 //    middle of a long run; saying it first is worth the duplicated git call.
 await timedStage("git-status-before", 122, async () => {
+  if (timingProbe) return;
   const status = run("git", ["status", "--porcelain=v1", "--untracked-files=all"]);
   if (!status.ok) fail("PUSH_GATE_GIT_UNAVAILABLE", status.output.trim().slice(0, 200));
   else if (status.output.trim() !== "") fail("PUSH_GATE_TREE_DIRTY", status.output.trim().split("\n").slice(0, 5).join(" | "));
@@ -355,7 +360,11 @@ await timedStage("tag-ancestry", 340, async () => {
 //      the "run it on every change" discipline. Before a push is the right frequency for
 //      a check that asks whether the proofs still bite.
 for (const { reasonCode, script } of ENGINE_PUSH_GATE_CHILDREN) {
-  const result = await timedStage(`child:${script}`, 358, async () => run("pnpm", ["run", "--silent", script]));
+  const result = await timedStage(
+    `child:${script}`,
+    358,
+    async () => (timingProbe ? { ok: true, output: "" } : run("pnpm", ["run", "--silent", script])),
+  );
   if (!result.ok) fail(reasonCode, result.output.trim().split("\n").slice(-3).join(" | ").slice(0, 300));
   // G-2: a warning is an unfinished error. The reason-code vocabulary never uses the word,
   // so any occurrence is toolchain output that nothing has judged.
@@ -365,13 +374,23 @@ for (const { reasonCode, script } of ENGINE_PUSH_GATE_CHILDREN) {
 // A gate that rewrote tracked source has changed the bytes being pushed after they were
 // judged, which defeats the point of judging them.
 await timedStage("git-status-after", 367, async () => {
+  if (timingProbe) return;
   const post = run("git", ["status", "--porcelain=v1", "--untracked-files=all"]);
   if (post.ok && post.output.trim() !== "") fail("PUSH_GATE_GATES_MUTATED_SOURCE", post.output.trim().split("\n").slice(0, 5).join(" | "));
 });
 
-await writeTimingEvidence(failures.length === 0);
+let stdoutObserved = "";
+const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+process.stdout.write = (chunk, ...arguments_) => {
+  const encoding = typeof arguments_[0] === "string" ? arguments_[0] : "utf8";
+  stdoutObserved += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString(encoding);
+  return originalStdoutWrite(chunk, ...arguments_);
+};
+const output = failures.length > 0
+  ? JSON.stringify({ ok: false, reasonCode: "PUSH_GATE_BLOCKED", failures }, null, 2)
+  : JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION });
+process.stdout.write(`${output}\n`);
+await writeTimingEvidence(failures.length === 0, stdoutObserved.replace(/\n$/u, ""));
 if (failures.length > 0) {
-  process.stdout.write(`${JSON.stringify({ ok: false, reasonCode: "PUSH_GATE_BLOCKED", failures }, null, 2)}\n`);
   process.exit(1);
 }
-process.stdout.write(`${JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION })}\n`);

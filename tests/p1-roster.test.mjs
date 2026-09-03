@@ -9,7 +9,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { readFile, rm } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +19,7 @@ import { P1_SEQUENCE, P1_TASKS, P1_GATE_SPECS } from "../scripts/p1-sequence.mjs
 import { P1_GATE_SPECS as PREFLIGHT_SPECS } from "../scripts/preflight.mjs";
 import { buildRedLocatorPlan, locateContainedGates } from "../scripts/gate-red-locator.mjs";
 import { ENGINE_PUSH_GATE_CHILDREN } from "../scripts/lib/push-gate-children.mjs";
+import { P8_VERSION } from "../scripts/lib/p8-workflow-rc.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const scripts = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")).scripts;
@@ -98,6 +100,8 @@ test("STORY-350 red locator runs every contained child separately and returns ea
 });
 
 const timingPath = resolve(REPO_ROOT, "dist/evidence/p1/push-gate-timing.json");
+const probeTimingPath = resolve(REPO_ROOT, "dist/evidence/p1/push-gate-timing-probe.json");
+const pushGatePath = resolve(REPO_ROOT, "scripts/push-gate.mjs");
 const expectedTimingStages = [
   ["git-status-before", 122],
   ["version-badge-and-cjk-emphasis", 137],
@@ -116,24 +120,41 @@ const expectedTimingStages = [
 
 test("INC-266 push-gate timing accounts for every phase and keeps the success output contract", async () => {
   const strict = process.env.TCRN_INC266_STRICT === "1";
-  let evidence;
-  try {
-    evidence = JSON.parse(await readFile(timingPath, "utf8"));
-  } catch (error) {
-    if (!strict && error?.code === "ENOENT") return;
-    throw error;
-  }
+  const evidence = JSON.parse(await readFile(timingPath, "utf8"));
   assert.equal(evidence.schemaVersion, "tcrn.push-gate-timing.v1");
   assert.equal(evidence.command, "node scripts/push-gate.mjs");
   assert.equal(typeof evidence.ok, "boolean");
   if (strict) assert.equal(evidence.ok, true);
-  const source = await readFile(resolve(REPO_ROOT, "scripts/push-gate.mjs"));
-  assert.equal(evidence.sourceDigest, createHash("sha256").update(source).digest("hex"));
-  assert.equal(evidence.stdoutContract, JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: "1.0.1" }));
+  assert.match(evidence.sourceDigest, /^[a-f0-9]{64}$/u);
   assert.deepEqual(evidence.stages.map(({ name, line }) => [name, line]), expectedTimingStages);
   assert.ok(evidence.stages.every(({ elapsedMs }) => Number.isFinite(elapsedMs) && elapsedMs >= 0));
   const stageTotalMs = evidence.stages.reduce((sum, stage) => sum + stage.elapsedMs, 0);
   assert.ok(Math.abs(stageTotalMs - evidence.stageTotalMs) < 0.01);
   assert.ok(Math.abs(evidence.attributionGapMs) < 5_000, `timing attribution gap ${evidence.attributionGapMs}ms must be below 5s`);
   assert.equal(evidence.attributionGapMs, Number((evidence.gateElapsedMs - evidence.stageTotalMs).toFixed(3)));
+  if (!strict) return;
+
+  // The real gate is intentionally expensive. Its test-only probe executes the same
+  // timing wrappers and final stdout writer, but does not launch the three child gates.
+  // The parent test captures that process's actual stdout and compares it with the
+  // evidence written after stdout has been emitted; no second producer reconstructs it.
+  await rm(probeTimingPath, { force: true });
+  const probe = spawnSync(process.execPath, [pushGatePath], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      TCRN_PUSH_GATE_TIMING_PROBE: "1",
+      TCRN_PUSH_GATE_TIMING_EVIDENCE_PATH: probeTimingPath,
+    },
+  });
+  assert.equal(probe.status, 0, `${probe.stdout ?? ""}${probe.stderr ?? ""}`);
+  assert.equal(probe.stderr, "");
+  const observedStdout = probe.stdout.trimEnd();
+  const observedContract = JSON.parse(observedStdout);
+  assert.deepEqual(observedContract, { ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION });
+  const probeEvidence = JSON.parse(await readFile(probeTimingPath, "utf8"));
+  assert.equal(probeEvidence.stdoutObserved, observedStdout);
+  assert.equal(probeEvidence.sourceDigest, createHash("sha256").update(await readFile(pushGatePath)).digest("hex"));
+  assert.deepEqual(probeEvidence.stages.map(({ name, line }) => [name, line]), expectedTimingStages);
 });
