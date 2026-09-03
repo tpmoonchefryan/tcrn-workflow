@@ -12,7 +12,7 @@ import nodeTest from "node:test";
 // under one concurrent suite removes the serial fixture/doctor startup tail without
 // changing a test name, assertion, or behavior vector.
 const queuedTests = [];
-const platformDoctorConcurrency = Number(process.env.TCRN_PLATFORM_DOCTOR_TEST_CONCURRENCY ?? 1);
+const platformDoctorConcurrency = Number(process.env.TCRN_PLATFORM_DOCTOR_TEST_CONCURRENCY ?? 2);
 function test(name, optionsOrBody, maybeBody) {
   const options = typeof optionsOrBody === "function" ? {} : optionsOrBody ?? {};
   const body = typeof optionsOrBody === "function" ? optionsOrBody : maybeBody;
