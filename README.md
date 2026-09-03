@@ -2,17 +2,17 @@
 
 # TCRN Workflow
 
-### Your AI agents say "done." This framework makes them prove it.
+### 让代理的「我做完了」变成一份你能自己复核的证据
 
-**Governed delivery for AI agents — every capability is a machine-verified claim, not a promise.**
+**面向 AI 代理交付的治理框架。它声称的每一项能力，都是一条能被机器证伪的判据。**
 
-English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
+简体中文 · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-1.0.1-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-22%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-122-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-1.0.1-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-24%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-122-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
-[Why](#why-this-project-exists) · [Is this for you?](#is-this-for-you) · [What you get](#what-you-get) · [Quick start](#quick-start) · [Using it](#using-it-for-real-work) · [Plain answers](#plain-answers-to-fair-questions) · [Known limits](#known-limits) · [License](#license)
+[它解决什么](#它解决什么) · [给谁用](#给谁用) · [你能拿到什么](#你能拿到什么) · [三分钟上手](#三分钟上手) · [一个真实例子](#一个真实例子) · [当前状态](#当前状态) · [完整文档](#完整文档)
 
 `Verified claims: 122 (hygiene 20 · inertness 13 · runtime 89)`
 
@@ -20,305 +20,85 @@ English · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [
 
 ---
 
-> **The whole idea in one sentence:** every guarantee this framework makes is written in a machine-readable ledger, tied to a test you can run yourself on your own machine — and the moment a guarantee stops being true, **the build fails**.
+## 它解决什么
 
-## Why this project exists
+代理告诉你测试通过了。你手上只有聊天窗口里的一行字。
 
-Getting an AI agent to write code is easy now. Getting **a reason to believe what it tells you** is not.
+TCRN Workflow 把这行字换成三样能复核的东西。
 
-If you have worked with agents, you have met all three of these:
+- **一本判据账本。** 框架声称的每一项能力，都在 `verification-map.yaml` 里对应一条判据，绑定一个稳定的原因码，由一个能离线跑的测试证明。
+- **一条防篡改的事件链。** 工作区的每一次改动都是链上一条记录，逐条哈希相扣，只能追加，历史改不了。
+- **一套可复现的发布。** 每个版本都能逐字节重建，并与公开的摘要比对。
 
-1. **"Trust me, I tested it."** The agent says the tests pass. What you actually have is a line of text in a chat window. Nothing connects what the workflow *claims* to what its code *enforces* — and as the code changes, the claim quietly goes stale.
-2. **History that vanishes.** The decisions live in a scrolled-away conversation and mutable files. When something breaks at 2 a.m., there is nothing to replay, nothing to diff, nothing to hand a reviewer.
-3. **Installs on faith.** A skill or workflow arrives from a repository, and nothing proves the bytes you are about to run are the bytes somebody actually reviewed.
+判据的覆盖范围改了却没重新证明，构建会失败。这不是风格问题，是硬性的。
 
-TCRN Workflow closes all three — by treating agent-driven delivery the way a safety-critical release is treated:
-
-- **Every capability is a claim in a ledger**, and every claim is tied to a stable error name (a *reason code*) proven by a test that runs offline.
-- **Every change to your workspace is an entry in a tamper-evident journal** — each entry is cryptographically chained to the one before it, so history cannot be quietly rewritten, only appended.
-- **Every release can be rebuilt byte-for-byte** and checked against published digests.
-
-One rule holds the whole thing together, and it is the part people find hardest to believe until they try it: **overclaiming is a build failure, not a style issue.** Change what a claim covers without re-proving it, and the chain stops.
-
-## Is this for you?
+## 给谁用
 
 | | |
 | --- | --- |
-| ✅ **Yes, if** | you run agents on work that has consequences — production code, regulated or audited delivery, multi-agent handoffs where nobody remembers who decided what. You want an artifact a reviewer can *check*, not a transcript they must *trust*. You want everything to stay on your machine: no database, no daemon, no network, no telemetry. And your agents are frontier-class enough to follow a strict discipline — see "Known limits". |
-| ❌ **Probably not, if** | you want a zero-setup chat assistant, you need cloud sync or a hosted dashboard, or your work is exploratory enough that an append-only audit trail is friction rather than value. The rigor here is not free — it is a deliberate trade for evidence. |
+| **适合** | 你让代理做有后果的事：生产代码、需要留痕的交付、多个代理接力而没人记得是谁做的决定。你要的是一份复核人能核对的产物，不是一段需要相信的对话记录。你要求全部留在本机，不装数据库，不起守护进程，不联网，不发遥测。 |
+| **不适合** | 你想要零配置的聊天助手，或者需要云同步与托管看板，或者你的工作还在探索阶段，只追加的审计轨迹对你是负担而不是价值。 |
 
-## What you get
+## 你能拿到什么
 
-| Capability | What it means in practice |
+| 你拿到 | 具体是什么 |
 | --- | --- |
-| **A workspace that is just files** | Your whole work graph (Initiative → Epic → Story → Subtask) lives in plain, canonically formatted JSON files with a hash chain — no database, no daemon. You can audit it with `cat` and `sha256sum`, and exports are byte-reproducible. |
-| **One command, 20 gates** | `pnpm verify:p1` runs the entire verification chain: format, lint, typecheck, build, ~56 test files, trust matrix, archive/SBOM/license/vulnerability policy, source allowlist, offline boundary, privacy scan, CI hardening, verification map, and clean-history proof. Anything unexpected stops the chain. |
-| **A claim ledger a machine can read** | `verification-map.yaml` binds 122 claims — 20 framework-hygiene, 13 inertness-proof, 89 runtime-capability — to observable reason codes. If a claim's subject changes, its proof must re-run. |
-| **Guards that prove they still bite** | `pnpm guard-check` mutates each registered guard out of the source and requires its named test to go red — 30 guards, verified before every push. A protection that nothing would notice losing is not a protection. |
-| **Deliberation on the record** | Conferences and decision gates are appended to the same tamper-evident journal. A pending gate *blocks* its work item from reaching `done` (`WORKSPACE_GATE_PENDING`) — at the command and again on replay — and closing a conference distills each decision into a knowledge candidate that links back to it. |
-| **Every decision gets a name** | Enable actor attestation and every later mutation must declare who acted — the engine and its replay both fail closed on any event that omits an actor id. Workspaces that never enable it stay byte-identical to before. |
-| **Activation you can undo** | Claude Code and Codex have reversible three-step activation paths. Their current commands bind an admitted absolute project root and are code- and fixture-proven; earlier host receipts cover superseded bytes. Codex still requires explicit `/hooks` approval of every exact definition, and installation alone never claims host activation. |
-| **Backups that prove themselves** | A snapshot emits a deterministic per-file manifest; the runbook round-trips snapshot → wipe → restore byte-identically, and the two failure modes that matter (partial or relocated restore) fail closed. |
-| **Two hosts, one truth** | Codex and Claude Code adapters share host-neutral authority and receipt machinery. Both remain inert by default, and both now have narrow fail-open SessionStart activation; Codex additionally records its exact-definition approval boundary without pretending its opaque host trust hash is exported. |
-| **Offline by construction** | Development mode installs a process-level network guard and sends zero telemetry. The privacy gate scans every tracked byte, all reachable git history, and the release archive for personal identifiers and machine paths. |
-| **Releases you can re-derive** | A release is an immutable tag plus a reproducible artifact set, rebuilt and byte-compared by `pnpm verify:p8`. External consumers verify through the companion `tcrn-workflow-helper`, whose own digest is published where you can check it independently. |
-| **Defects are first-class** | The create path admits the `Incident` kind, so a defect gets its own record and lineage instead of masquerading as a `Story`; `Review`, `Release`, and `Knowledge` stay closed to direct creation. Retiring a knowledge record reclaims its body and search matches summaries, so the curated store stays lean and findable. |
-| **Background loads leave no residue** | A host-neutral detector records the process group a session owns and, from a process-table snapshot, reports any live owned group or init-reparented orphan matching a registered pattern — proven by a red test that the injected orphan is always caught. Automatic session-end firing stays Owner-gated on both hosts. |
-| **Ship in batches, not tangles** | A `Release` work kind is a top-level sprint container: `work-annotate --sprint` enrolls Initiatives into a named delivery train through a non-binding advisory reference — cross-partition capable, members' own status untouched — and `work-list --sprint` reads the train back. The timebox axis never entangles the work-scope tree. |
-| **A large chain stays readable** | `export` is all-or-nothing and refuses any workspace whose canonical form exceeds one MiB — a line a growing chain crosses on its own. The paginated reads answer anyway: `work-list` summaries carry the human-facing `externalKey`, `conference-position-list` and `conference-minutes-list` reach positions and minutes that used to be visible only through `export`, and `event-list` returns each event **verbatim** — `priorHash`, `payloadHash`, `eventHash` — so a consumer can re-derive the chain page by page. A page whose payloads do not fit is refused by name (`CLI_EVENT_PAGE_OVERSIZED`) with the flag to lower, never silently shortened: a short page is indistinguishable from the end of the chain. |
+| **一个只由文件组成的工作区** | Initiative → Epic → Story → Subtask 的整张工作图，是规范格式的 JSON 加一条哈希链。用 `cat` 和 `sha256sum` 就能审，导出逐字节可复现。 |
+| **一条命令跑完 24 道门** | `pnpm verify:p1` 依次跑格式、lint、类型、构建、134 个测试文件、信任矩阵、归档与 SBOM 与许可与漏洞策略、源码白名单、离线边界、隐私扫描、CI 加固、判据账本、干净历史。任何一处意外都会停下。 |
+| **122 条机器可读的判据** | `verification-map.yaml` 把 122 条判据绑到可观测的原因码上：20 条框架卫生、13 条惰性证明、89 条运行时能力。122 条全部带红腿，即每条都写明了什么改动会让它变红，而且那次变红是实测过的。 |
+| **会自证有效的守卫** | `pnpm guard-check` 把 61 个守卫逐个从源码里改坏，要求对应的测试变红。 |
+| **137 个受治理的 CLI 动词** | 全部本地执行。每次写入都要声明它基于哪个版本，别人先写了就拒绝，不会静默覆盖。 |
+| **零运行时依赖** | `package.json` 的 `dependencies` 与 `optionalDependencies` 都是空的。开发模式还会装一个进程级网络守卫，遥测为零。 |
 
-<details>
-<summary><b>Five terms, in plain words</b> (click to expand)</summary>
+## 三分钟上手
 
-- **Fail-closed** — when anything looks wrong, the system stops with a stable error name instead of guessing and carrying on. There are no warnings that scroll by: only green, or stopped.
-- **Hash chain** — every journal entry contains a fingerprint of the previous entry. Rewriting history would change the fingerprints, and the replay would refuse it.
-- **Reason code** — a stable, machine-readable error name (like `WORKSPACE_GATE_PENDING`). Tools and agents can branch on it; prose error text is never the contract.
-- **Hermetic** — a test that runs entirely from local, pinned inputs. Same inputs, same result, on any machine.
-- **CAS / expected version** — every write states which version it expects to be building on. If someone else wrote first, the write is refused instead of silently overwriting.
-
-</details>
-
-## Quick start
-
-You need the pinned toolchain: **Node 24.16.0** and **pnpm 11.3.0**. Dependency lifecycle scripts stay disabled — nothing runs code on install.
+需要固定版本的工具链：Node 24.16.0 与 pnpm 11.3.0。依赖的生命周期脚本全程关闭，安装过程不执行任何第三方代码。
 
 ```sh
-# 1. Install the pinned dev dependencies (explicit, frozen, script-free)
+# 1. 装固定版本的开发依赖，冻结锁文件，不跑脚本
 pnpm install --offline --frozen-lockfile --ignore-scripts
 
-# 2. Watch the framework prove itself (20 gates, fully offline)
+# 2. 让框架自己证明一遍：24 道门，全程离线
 pnpm verify:p1
 
-# 3. Build, then drive the governed CLI
+# 3. 构建，然后用受治理的 CLI
 pnpm build
 node scripts/tcrn-workflow.mjs commands
 ```
 
-Typical governed commands — all local, no network, no database:
+常用的受治理命令，全部本地，不联网，不需要数据库：
 
 ```sh
-# validate a workspace and materialize its deterministic views
-node scripts/tcrn-workflow.mjs validate --workspace <dir>
+# 校验工作区并生成确定性视图
+node scripts/tcrn-workflow.mjs validate --workspace <路径>
 
-# create and transition work records with version-checked writes
-node scripts/tcrn-workflow.mjs work-create ...
-node scripts/tcrn-workflow.mjs work-transition ...
+# 新建工作记录，写入带版本校验
+node scripts/tcrn-workflow.mjs work-create --workspace <路径> --expected-version <版本> ...
 
-# knowledge core: metadata-first reads, explicit body access, promotion CAS
-node scripts/tcrn-workflow.mjs knowledge-list ...
+# 按主题检索工作记录
+node scripts/tcrn-workflow.mjs work-list --workspace <路径> --search "<关键词>"
 ```
 
-Every mutation requires an explicit workspace path, a strict RFC 3339 timestamp, and an expected version — concurrency safety is enforced by the engine, not by convention.
+## 一个真实例子
 
-## Using it for real work
+`pnpm guard-check` 会把 61 个已注册守卫逐个从源码里移除或改坏，然后要求这个守卫对应的那个测试变红。61 个全部变红，这一轮才算通过。
 
-The quick start above proves the framework. Using it is a different activity — and it is deliberately not command-typing.
+这证明的是：这些保护措施现在仍然在起作用，而不是曾经写过。一个坏掉了也没人发现的检查，和没有这个检查是一回事。
 
-**To see the whole governed loop once, by hand** — workspace → initiative → epic → story → gate → conference → distilled knowledge → trace — follow [the tutorial](docs/tutorial/governed-loop.md). Every command in it is executed verbatim by `pnpm verify:e2e`, so it cannot silently rot.
+## 当前状态
 
-**For real work, your agent drives and you decide.** The intended operator is an AI agent — Claude Code or Codex — with the companion **tcrn-workflow-helper** Skill (published alongside this repository) placed in its skills folder. The Skill carries the operating discipline: a first-run wizard that sets up trust and the workspace with plain-language explanations, routing guidance that maps a working moment to the verb that records it, and a recording discipline whose one hard rule is that nothing is written without your explicit yes.
+当前受理版本是 1.0.1。每个受理版本都是一个不可变的标签加一套可复现的产物，`CHANGELOG.md` 是完整账本。
 
-A working session then looks like this:
+对外发布、推送、打标签是各自独立的关卡，不从本地测试推导。外部使用者通过配套的 `tcrn-workflow-helper` 校验发行字节，它自己的引导器摘要单独公开，可以独立核对。
 
-1. **You discuss direction with your agent as usual.** When the conversation produces something with consequences — a decision, a decomposition, a completed deliverable — the agent *offers* to record it, naming the record and the verb. Your yes writes it; your no drops it.
-2. **Contested "done" gets a gate.** A pending gate refuses the transition — at the command and again on replay — until it is satisfied by citing closed conference minutes, and an `owner_intent_required` gate additionally refuses any actor your out-of-band roster does not permit.
-3. **Deliberations are conferences, argued as named roles.** The engine ships eight inert *Core Reference personas* — a digest-bound roster of roles, each with a mission, an authority boundary, and explicit refusals: **Minerva** (workflow architecture), **Verity** (verification), **Sable** (security & privacy), **Janus** (acceptance), **Ilya** (implementation), **Mara** (product), **Mneme** (knowledge), **Arturo** (orchestration). They are reference data, not running agents. Your driving agent argues *as* them: a contested question is fanned out to the roles whose mandates genuinely conflict, and each position is carried verbatim under its role — not under a model name — so the record shows which mandate argued what, and why they had to. Minutes settle the deliberation; closed decisions can distill into curated knowledge.
-4. **Between sessions, the record is the memory.** `status` and the list verbs read it back, `work-show` carries each item's advisory scope and the minutes that decided it, and snapshots protect the chain at the cadence you chose.
+已知的边界写在 Wiki 的「已知限制」页里，包括单工作区单写者、事件规模上限、以及恢复只支持原路径。这些是设计决定，不是待办事项。
 
-You stay the decision-maker; the engine enforces what was decided; the chain is the proof. An agent below the discipline thrashes on reason codes instead of corrupting anything — "Known limits" states exactly what the discipline requires.
+## 完整文档
 
-## Architecture in 60 seconds
+架构总览、命令参考、判据与门、仓库布局、已知限制、常见问答，都在本仓库的 GitHub Wiki，从仓库页面顶部的 Wiki 标签进入。
 
-```mermaid
-flowchart LR
-    subgraph Protocols["P2 · Frozen V1 protocols"]
-        WM[work-model-v1]
-        KM[knowledge-model-v1]
-        EX[exchange-v1]
-        XT[extensions:<br/>dependency · conference<br/>assignment · gate]
-    end
-    subgraph Engine["P3 · File-native engine"]
-        EV[hash-chained<br/>event log]
-        LS[single-writer lease +<br/>recovery claims]
-        VW[deterministic views]
-    end
-    subgraph Layers["P4-P7"]
-        KC[knowledge core]
-        PF[profiles & personas]
-        CR[context router]
-        CM[compatibility modes]
-    end
-    subgraph Hosts["P6/P6B · Agent App adapters"]
-        CX[Codex adapter]
-        CL[Claude Code adapter]
-    end
-    REL[P8 · reproducible<br/>release set]
-    Protocols --> Engine --> Layers --> Hosts
-    Engine --> REL
-    Layers --> REL
-```
+[参与贡献](./CONTRIBUTING.md) · [安全策略](./SECURITY.md) · [隐私说明](./PRIVACY.md) · [行为准则](./CODE_OF_CONDUCT.md) · [支持](./SUPPORT.md)
 
-Frozen protocols at the bottom, a file-native engine above them, capability layers above that, and host adapters at the top — inert until an explicitly approved activation rung. The protocols are additive-only: `work-model-v1` is frozen, and every extension registers itself without touching accepted schemas.
+## 许可
 
-## Plain answers to fair questions
-
-### Why one writer at a time, when agents love parallelism?
-
-Because the storage layer and the reasoning layer answer different questions:
-
-1. **The storage layer is single-writer by design.** A hash chain has exactly one truthful successor per event — parallel writers would either corrupt the chain or require a consensus protocol that destroys the "audit it with `cat` and `sha256sum`" property. So the engine enforces one writer at a time through an exclusive lease with an on-disk recovery protocol: a crashed writer's lease is quarantined and reclaimed fail-closed, and every acquisition is version-checked.
-2. **Parallelism lives above the storage layer.** Run as many independent, fresh-context sub-agent threads as you like — implementation workers, review boards, adversarial verifiers. Their conclusions come back as data; one canonical thread holds decision authority and writes the record. You get the throughput of parallelism *and* a linear, auditable decision lineage.
-3. **Governance needs a serializable story.** The chain gives a linear, tamper-evident order of decisions, and — once a workspace enables actor attestation — every decision is bound to a declared, auditable actor. That is a declared identity written into the ordered record, not a claim of authenticated identity or wall-clock truth. A swarm of peers mutating shared state has neither the order nor the binding.
-
-<details>
-<summary><b>The tests behind this answer</b> (all in <code>tests/p3-file-engine.test.mjs</code>, run by <code>pnpm verify:p3</code>)</summary>
-
-- *Lease crash and recovery-claim contention are recoverable and single-writer* — a writer is crashed mid-creation, its stale lease is quarantined, contenders race and exactly one wins; the loser fails closed with a stable reason code.
-- *Delayed-creator eviction* — a paused lease creator whose directory was reclaimed must observe the active recovery claim and fail closed (`WORKSPACE_LEASE_INVALID`) instead of colonizing the fresh generation. Found and fixed on Linux ext4 through real CI, then proven with a deterministic test.
-- *SIGKILL injection at every effective lifecycle point* — the engine's fault inventory is discovered from real operations, and a real `SIGKILL` is delivered at each point; recovery must converge to a clean state with zero residue.
-- *64 real insertion-order permutations* produce byte-identical indexes, lists, and checkpoints — determinism is proven, not assumed.
-- 4 concurrency cases, 57 negative cases, and a filesystem attack matrix (symlinks, hard links, special files, replacement races) round out the proof.
-
-</details>
-
-### Why files instead of a database?
-
-Because the trust boundary must be inspectable with standard tools. Every record is canonical JSON (sorted keys, one trailing LF), every event carries its `priorHash`/`eventHash`, and the whole store can be verified by any language in a few lines. A database would add a daemon, a binary format, and an implicit trust dependency — all liabilities for a framework whose core promise is *"you can check everything yourself, offline."*
-
-### Why offline-first and fail-closed?
-
-An agent framework that silently reaches the network is an exfiltration channel waiting to happen. Development mode installs a process-level network guard; the verification chain proves project code has no implicit network path; the only network steps (dependency acquisition, CI bootstrap) are explicit and pinned. Fail-closed means every validator stops with a stable reason code on the first unexpected byte.
-
-### What did the historical Claude Code live receipt prove?
-
-It proved that the superseded relative-path definition delivered a Workflow-only authority-boundary summary to a real Claude Code session, and nothing beyond it. That historical summary limited Workflow mutations; it did not make the main thread read-only. The current absolute-root command changes the exact definition bytes, so that receipt is historical and no current Claude live activation is claimed.
-
-Everything else stays deliberately out. The framework does not adjudicate the host's tool use, does not suppress or rewrite responses, never writes under `~/.claude`, does not promote knowledge without an explicit action, and does not orchestrate sessions. A hook that fails prints nothing and the session continues as plain Claude Code — the one place this codebase fails open rather than closed, because a governance layer that can break a session is worse than one that goes quiet.
-
-Codex now has the deliberately narrow equivalent: `adapter-install` remains inert,
-then `adapter-activate` adds one project-local `SessionStart` notify hook whose
-handler and 1024-byte summary are digest-bound. Codex still decides whether it
-runs: the operator must approve the exact definition through `/hooks`, any
-definition change requires reapproval, and the installation receipt stays
-`pending_host_approval`. `adapter-deactivate` unregisters first and returns to the
-inert rung. The injected v2 summary binds no Core Reference persona, does not make
-the main thread read-only, and limits only Workflow authority rather than explicit
-user authorization for ordinary repository work. No PreToolUse/approval
-enforcement or active App Server Controller is claimed.
-
-### How is a release trusted?
-
-A release is an immutable annotated tag plus a reproducible artifact set (canonical source archive, SBOM, provenance, checksums, notes), rebuilt and byte-compared by `pnpm verify:p8`. External consumers verify through the companion **tcrn-workflow-helper**: a dependency-free bootstrap, whose own SHA-256 is published where you can check it independently of the download, refuses any release whose bytes do not match the digests compiled into it — before any Workflow code runs.
-
-## Numbers that are checked, not promised
-
-Every number below is enforced by a gate — if one drifts, a build fails somewhere.
-
-- **20 gates** in the `verify:p1` chain, each with a stable terminal reason code.
-- **122 machine-verified claims** in `verification-map.yaml` — 20 framework-hygiene, 13 inertness-proof, 89 runtime-capability. The claims badge above is parsed and compared against the ledger on every run.
-- **30 registered guards**, each proven to still bite by mutating it out and watching its test go red.
-- **~56 hermetic test files**, including real `SIGKILL` fault injection, 64-permutation determinism proofs in three independent layers, and a filesystem attack matrix.
-- **1 end-to-end flagship proof** (`pnpm verify:e2e`) — a hermetic replay of the full governed loop (initiative → epic → story → gate → conference → distill → promote → trace), every tutorial command executed verbatim.
-- **19-entry public AOS requirements ledger** (11 fixture-verified, 8 specified) — maturity is recorded per row, never inflated.
-- **Privacy gate** over all 340 allowlisted source files (an exact-match list — one file added or removed fails the gate), every reachable git object, and the release archive.
-
-<details>
-<summary><b>Full verification-target reference</b> (click to expand)</summary>
-
-| Target | Proves |
-| --- | --- |
-| `verify:p1` | The complete 20-gate chain on a clean committed tree. |
-| `verify:p2` | Frozen V1 protocol contracts, deterministic vectors, negative/property tests, requirements ledger, closed schemas. |
-| `verify:p3` | File-native workspace: leases/CAS, crash recovery, quarantine, migrations, deterministic views, filesystem attack matrix. |
-| `verify:p4` / `verify:p4:knowledge` | Artifact lifecycle budgets, redaction, disposable archive apply/restore; knowledge core metadata/body separation, promotion CAS, 64-permutation parity. |
-| `verify:p5` | Closed generic-profile trust model, effective-policy digests, cold-start graph, eight inert Core Reference personas. |
-| `verify:p6` / `verify:p6:adapter` / `verify:p6b` | Context router scope/risk/budget controls and hostile corpus; Codex adapter bridge; Claude Code adapter (four-file template bundle, reversible settings fragment, forbidden-path rejection, CLAUDE.md fallback, cross-host parity digest). |
-| `verify:act4` / `verify:act9` / `verify:act10` / `verify:act11` / `verify:act12` / `verify:act13` | Codex inert install; independently authorized persona-free SessionStart activation with exact-definition drift and pending current live approval; a read-only collector plus one exact live App Server stream/readback receipt comparison; cross-host acceptance/hostile matrix; hostile-cwd proof that Codex/Claude commands name only the admitted absolute handler path, with the interpreter's fire-time `PATH` lookup executed and disclosed as an open residual; and authority-bearing activation receipts gated by an exact output grant and pinned host observation. |
-| `verify:p7` / `verify:p7:compatibility` | Canonical exchange, compatibility manifest, anti-rollback floor, deterministic import/checkpoint/fallback plans. |
-| `verify:authority-mcp` | Out-of-band pinned operator authority, rotation/revocation refusals, and host-neutral structured MCP reads/writes. |
-| `verify:p8` | Reproducible release candidate: source archive rebuild + byte comparison, SBOM, provenance, checksums, six-file closed bundle, external trust negative matrix. |
-| `verify:privacy` | No personal identifiers or machine paths in any tracked byte, git object, or archive. |
-| `verify:isolated` | The same P1 chain from a hermetic dependency materialization (CI-gated). |
-
-Development mode is offline with a process network guard and zero telemetry. The workspace has exactly three dev dependencies (`ajv@8.17.1` for offline Draft 2020-12 schema parity, `typescript@5.9.3` as the pinned type gate, `@types/node@24.13.2`), each acquired through an explicit registry boundary with lifecycle scripts disabled. P1 retains four explicit external boundaries: cross-invocation `rootVersion` continuity requires an external floor; there is no OS-level network sandbox; no fresh external advisory scan is performed offline; the privacy regex set is a focused policy control, not general DLP.
-
-</details>
-
-## Repository layout
-
-| Path | Contents |
-| --- | --- |
-| `packages/core/` | Engine, adapters, knowledge core, profiles, router, exchange (TypeScript, checked by the pinned compiler). |
-| `schemas/` · `specs/` | Frozen V1 protocol schemas (closed, Draft 2020-12-parity-proven) and their normative specs. |
-| `tests/` | The hermetic proof suite. |
-| `scripts/` | Governed CLI, verification tasks, guard checker, proof-artifact generator, privacy/policy gates. |
-| `fixtures/` | Deterministic protocol vectors, hostile corpora, requirements ledger references. |
-| `docs/` | Architecture, release trust, versioning, release notes. |
-| `verification-map.yaml` | The claim ledger — start here to see what is actually proven. |
-
-## What this does not govern
-
-Most projects hide their edges. Ours are load-bearing — the same discipline that proves the claims above also requires stating exactly where they stop. These four boundaries are written down because a careful reader still over-read the first two:
-
-- **Your product's source tree.** The single-writer lease governs the workspace event chain. Two agents editing `src/foo.ts` at the same time are not protected by anything here — use worktree isolation or route those edits through the workspace yourself.
-- **Your product's supply chain.** The network guard covers the process running P1 project commands. Your agent's own shell, and your product's build, are outside it. Zero runtime dependencies is a property of *this* framework, not of what you build with it.
-- **Whether your code is correct.** The claim ledger guarantees that a *declared* capability keeps an executable proof, and that overclaiming fails the build. It cannot tell you the claim set is the right one. Choosing what to claim is irreducibly a human judgement, and no amount of provenance substitutes for it.
-- **Identity and time.** Actor attestation records a *declared* actor id, not an authenticated one, and the chain proves ordering, not wall-clock truth. The chain is tamper-evident against edits within it; it is not anchored outside the filesystem it lives on.
-
-## Known limits
-
-The four boundaries above are permanent design decisions. The limits below are the operational facts of this release: each one is enforced by a reason code, pinned by a measurement, or stated plainly as an untested area.
-
-**Workspace topology and scale**
-
-- **One writer per workspace.** Every mutation serializes on a lease inside the workspace's control tree; competitors fail closed and retry. Parallelism belongs above the storage layer: many workspaces, not many writers.
-- **Partition workspaces per project or initiative.** A workspace slows perceptibly in the low thousands of events, and a single command crosses one second around 6,600 (Apple M3, extrapolated; raw samples in `docs/verification/2026-07-20-event-chain-ceiling-samples.json`). Reads pay the same cost as writes, and the chain has no compaction — one organisation-wide workspace is exactly the shape this punishes.
-- **Sharing one workspace across separately-deployed projects fights the design.** It works mechanically, since every verb takes an explicit absolute path — but all writers queue on a single lease, every accessor must present identical canonical paths for all five roots (`WORKSPACE_SCHEMA_INVALID` otherwise), and the merged history reaches the scale limit sooner. Serving many projects is a job for a layer above this one; the AOS contract shipped here is a naming-and-linkage ledger only, and `supportedAosReleases` is empty.
-- **`export` stays all-or-nothing.** It refuses any workspace whose canonical form exceeds one MiB (`INPUT_OVERSIZED`), and three of the four chains on this platform are already past that line. A large chain is read through the paginated verbs instead — `work-list`, `conference-position-list`, `conference-minutes-list` and, since `0.8.0`, `event-list`. `export` itself was not made incremental, and `event-list` promises only that a page which does not fit says so.
-- **Many side-by-side workspaces are the supported shape.** Nothing registers or discovers them; each is an independent single-writer domain, and they may share one framework checkout and one release-trust root.
-
-**Backup and portability**
-
-- **Restore is same-path-only.** All five root identities are pinned at init and re-checked on every resolve (`WORKSPACE_SCHEMA_INVALID`); restoring to another path or machine is out of scope for V1 (`WORKSPACE_MIGRATION_APPLY_UNAVAILABLE`). Back up anywhere; restore in place.
-- **Restore the whole control tree or nothing.** The knowledge and artifact stores bind the event chain's high-water digest, so a store restored on its own bricks (`KNOWLEDGE_HIGH_WATER_MISMATCH`).
-- **git is an integrity witness, not a restore tool.** A repository at the workspace root with the documented ignore list gives you a second witness; actual restores go through the snapshot manifest, because git cannot recreate the empty directories the stores require.
-- **Never copy store files between workspaces.** Each store is bound to its own workspace's history. Cross-workspace movement is a planning surface today: `exchange-plan`, `exchange-dry-run` and `exchange-validate` exist, and an applying verb does not.
-
-**Tested envelope**
-
-- **One OS user, local filesystem.** That is where every test and every real-host observation ran. Cross-user sharing and network filesystems are untested and therefore unclaimed.
-
-**Driver assumptions**
-
-- **Integrity does not depend on the driving model; progress does.** Fail-closed turns a weak driver's every boundary miss into a refusal, so the chain cannot be dirtied — a below-baseline agent thrashes on reason codes instead of corrupting anything. What does scale with model capability: making progress under the discipline, heeding the injected authority summary (proven to arrive; never claimed to be obeyed), and the quality of what gets recorded — well-formed garbage is faithfully preserved, because the ledger proves who said what, not that it was right.
-- **The framework assumes a driver that can:** branch on reason codes rather than interpret prose; re-read then retry after a CAS refusal, never blind-replay; treat a red gate as stop-and-report, not retry-until-green; produce strict RFC 3339 instants, follow regeneration order, and never hand-edit generated files or digests; keep one writer per workspace. Every item is testable against your own agent.
-- **No compatible-model list is published, because none was measured.** The only measured driving configuration is a frontier Claude model on Claude Code 2.1.201 (receipt: `docs/verification/host/claude-code.json`). Below the assumptions above, expect thrash, not corruption — an endless stream of refusal codes is the signature of a driver below baseline, not of a framework defect.
-
-**Governance surface**
-
-- **The governed operator surface ships in the accepted `0.6.0` release.** The historical twelve IO-blocked verbs were reduced to seven by direct digest flags; the release supplies those seven through an absolute-path plus SHA-256 pins document and exposes the same command catalog as structured, host-neutral MCP tools. Mutations require an exact pinned grant and preserve numeric CAS, explicit time, actor and stable reason-code semantics.
-- **Destructive artifact maintenance is fixture-only.** `artifact-archive-apply` and `artifact-archive-restore` are marked fixture-only in the machine-readable catalog; real workspaces get dry-runs only, so artifact stores grow until governed compaction ships.
-- **The knowledge store must be acknowledged as disposable.** On non-fixture workspaces it initializes only under an explicit per-invocation acknowledgment (`KNOWLEDGE_DISPOSABLE_ACK_REQUIRED`): it is a derived index, never the system of record.
-- **An approved hook command pins its handler, not its interpreter.** Both activation commands embed the installer-admitted absolute handler path, so the fire-time working directory cannot redirect them (`pnpm verify:act12`). The interpreter is still the bare name `node`, resolved through the fire-time `PATH`: a directory ahead of the real interpreter substitutes it, and the handler's own byte self-check cannot see that, because a substituted interpreter never reads the handler. The same gate executes that substitution on both hosts, so it is measured, not assumed. It is disclosed rather than pinned — an absolute interpreter path would make the approved definition drift with every toolchain change, and the hook is fail-open, so that drift would degrade silently.
-
-## Status, honestly
-
-- `0.1.0` is the **first accepted release**. Semantic Versioning applies; in the 0.x range the public API may still change between minor versions.
-- The current accepted release is `1.0.1`; it makes the extension view a fixed-length verification summary, refuses an over-budget view projection before the event is written, and stops reporting a committed write as rejected when only its derived view failed. Publication remains separately governed.
-- **This is `1.0.1`.** `0.2.0` made gate identity real, `0.3.0` added advisory scope, `0.3.2` opened the `Incident` create path and knowledge-store headroom, `0.4.0` added background-resource residue governance, `0.5.0` added sprint / release trains, `0.6.0` shipped governed dual-host operator authority, MCP, activation, observe/execution receipts and conference provenance, `0.7.0` put `externalKey` into `work-list` summaries and added the paginated `conference-position-list` and `conference-minutes-list`, `0.8.0` added the paginated `event-list`, and `0.9.0` adds the governed relocation verb family that moves a workspace's binding without moving one byte of its chain. Each accepted version is an immutable tag with a reproducible artifact set;  `0.10.0` makes closing an Initiative with live non-terminal children a chain-level error (`WORK_GRAPH_ACTIVE_CHILDREN_OF_DONE_INITIATIVE`), so a "closed" INIT can no longer carry open work. Each accepted version is an immutable tag with a reproducible artifact set; `CHANGELOG.md` carries the full ledger.
-- **The `0.7.0` and `0.8.0` read surface was cut for one consumer, and nothing broader is claimed.** Both releases close gaps filed by a cross-container consistency matrix that re-derives a chain in a second container: on an oversized chain a deliberation holding fifteen arguments and one holding none rendered identically, records could be listed but not named, and the matrix's append-only and hash-chain rows had no A-side subject to judge at all — absent reading presented as emptiness. `event-list` returns records verbatim so re-derivation is possible; it does not make `export` paginated, does not stream, and keeps no consumer state between queries. Its default window of 64 is the engine's own segment size, sized against the four live chains here, where the largest single event is 7,008 bytes and the 95th percentile is 3,575.
-- **Claude Code evidence is narrow and split by definition.** The historical `2.1.201` activation receipt records nine observations for superseded relative-path SessionStart bytes; the current persona-free admitted-absolute-root SessionStart definition remains code- and fixture-proven only. Separately, the exact generated EPIC-024 fail-open handler live-fired `SessionEnd` three times on Claude Code `2.1.201`; the other five observe events remain explicit unavailable cells because the model probe returned API status 402 before inference or tool use.
-- **Codex activation, observe and execution evidence are narrow and evidence-graded.** The inert installer is reversible; activation registers only `SessionStart`, fails open, injects no Core Reference persona, and requires Codex's approval of every exact current definition. The earlier approved Verity-bound fire is historical evidence for withdrawn bytes; the corrected persona-free definition is hermetic and awaits approval/live fire. EPIC-024 separately live-fired the exact generated fail-open handler for `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart` and `SubagentStop` in a bounded Codex `0.139.0` evidence project; that version's generated hook schema omits `SessionEnd`, and `Stop` is not used as an alias. S057 used another bounded App Server harness to pass 28 raw/readback checks and project one unsigned fresh-context Workflow execution receipt. Neither harness is a shipped Controller or multi-event activation installer. The capabilities ship in `0.6.0`; the evidence limits remain exactly as stated.
-- **Codex stop-pact parity is host-adapted, not host-claimed.** `tools/stop-pact/codex-executor.mjs` consumes the current Codex Stop payload, shares Claude's pact file, decider, runtime counter, and fail-open rules, and emits the host decision response; it does not invent a second work-status source or install a live Codex hook. STORY-193 records one digest-bound generated-handler subprocess fire, while current Codex Desktop load/approval/fire remains unclaimed. The STORY-191 matrix explicitly records that `ssh-write-observer` is not connected to Codex App Server execution notifications, so Codex execution is not presumed safe by default.
-- `supportedAosReleases` is empty: no external AOS compatibility is claimed.
-- Release mode requires the companion helper to accept the bytes: its bootstrap digest is published independently, and the accepted release digests are compiled into it.
-
-## Contributing, support, security
-
-- Usage questions → GitHub Discussions. Reproducible defects → Issues (see `SUPPORT.md`).
-- Security reports → private vulnerability reporting per `SECURITY.md`.
-- Contributions must keep every gate green — see `CONTRIBUTING.md`. The bar is: *if your claim isn't in the verification map with a passing proof, it isn't claimed.*
-
-## License
-
-[Apache-2.0](./LICENSE)
+Apache-2.0。见 [LICENSE](./LICENSE) 与 [NOTICE](./NOTICE)。

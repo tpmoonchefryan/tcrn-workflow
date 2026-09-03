@@ -33,7 +33,7 @@ The English `README.md` runs top-to-bottom in a fixed order. Every section below
 
 ### The five-language link row
 
-A single line, immediately below the tagline/positioning lines, listing the five maintained locales in a fixed order: English, 简体中文, 日本語, 한국어, Français. The **current** document's language appears as plain text; the other four are relative links to their sibling files (`./README.zh-CN.md`, `./README.ja.md`, `./README.ko.md`, `./README.fr.md`). Items are joined by a space–middot–space separator (` · `). Each translated README carries the identical row with its own language de-linked (e.g. `README.zh-CN.md` shows `简体中文` as plain text and `English` as a link back).
+A single line, immediately below the tagline/positioning lines, listing the five maintained locales in a fixed order: 简体中文, English, 日本語, 한국어, Français. Simplified Chinese is the authoring source and lives in `README.md`, which is what GitHub renders on the repository page; English is a mirror in `README.en.md`. The **current** document's language appears as plain text; the other four are relative links to their sibling files (`./README.md`, `./README.en.md`, `./README.ja.md`, `./README.ko.md`). Items are joined by a space–middot–space separator (` · `). Each mirror carries the identical row with its own language de-linked (e.g. `README.en.md` shows `English` as plain text and `简体中文` as a link back to `./README.md`).
 
 ### The badge block
 
@@ -66,7 +66,7 @@ The voice is *no-overclaim*: the document never asserts a capability it cannot p
 
 ### CJK translations
 
-The translated READMEs (`README.zh-CN.md`, `README.ja.md`, `README.ko.md`) keep the same structure and wording discipline as the English source, and add three typesetting rules:
+The CJK READMEs (`README.md`, `README.ja.md`, `README.ko.md`) keep the same structure and wording discipline across the family, and add three typesetting rules:
 
 - **Full-width punctuation.** Sentence punctuation is full-width: `。`, `，`, `：`, `；`, `（）`, the em-dash pair `——`, and corner brackets `「」` for referenced section names (e.g. `「已知限制」`, `「状态，如实相告」`) where the English uses double quotes. Code, reason codes, commands, and identifiers stay ASCII inside backticks.
 - **CJK/Latin spacing.** A space separates a CJK run from an adjacent Latin word, number, or inline-code span — `让 AI 智能体`, `20 道门`, `13 条 framework-hygiene`, `` 用 `cat` 和 `sha256sum` 审计它 ``.

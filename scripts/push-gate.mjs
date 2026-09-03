@@ -140,7 +140,7 @@ await timedStage("git-status-before", async () => {
 //    Japanese.
 const badgeVersion = P8_VERSION.replaceAll("-", "--");
 await timedStage("version-badge-and-cjk-emphasis", async () => {
-  for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
+  for (const document of ["README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
     const body = await read(document);
     const published = [...body.matchAll(/status-([0-9][^-\s)]*(?:--[^-\s)]+)*)-blue/gu)].map((match) => match[1]);
     if (published.length === 0) fail("PUSH_GATE_STATUS_BADGE_MISSING", document);
@@ -163,7 +163,7 @@ await timedStage("version-badge-and-cjk-emphasis", async () => {
 //     instead to documents that speak in the present tense about *this* version, which are
 //     enumerated here. A document that joins that set must be added to this list.
 const currentVersionDocuments = [
-  "README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md",
+  "README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.fr.md",
   "docs/versioning/versioning-policy.md",
   "docs/compatibility/supported-modes.md",
 ];
@@ -226,7 +226,7 @@ await timedStage("failure-pattern-register", async () => {
 //     on capabilities -- sails through it. Require the current version to appear in prose,
 //     with the status badge stripped first so the badge alone cannot satisfy the check.
 await timedStage("status-version-prose", async () => {
-  for (const document of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
+  for (const document of ["README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
     const prose = (await read(document)).replaceAll(/status-[0-9][^)\s]*-blue/gu, "");
     if (!prose.includes(P8_VERSION)) fail("PUSH_GATE_STATUS_VERSION_ABSENT", `${document}: "${P8_VERSION}" appears only in the badge, not in prose`);
   }
