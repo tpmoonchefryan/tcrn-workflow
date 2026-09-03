@@ -4368,7 +4368,7 @@
         "scripts/task.mjs",
         "tests/platform-doctor.test.mjs"
       ],
-      "fixtureDigest": "e68a883645e036f781e1e4bfe711b9818784ab36a3f5efdf40a64496af315c4e",
+      "fixtureDigest": "071585d53d90714a07503cd6d2bf741c9d4801db47223a592bece2b369b43106",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
