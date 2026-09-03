@@ -431,6 +431,7 @@ async function runTests({
   focusedTestPaths = undefined,
   focusedTestNamePattern = undefined,
   focusedReasonCode = undefined,
+  extraEnvironment = {},
   inc255Only = false,
   inc256Only = false,
   inc258Only = false,
@@ -489,6 +490,7 @@ async function runTests({
   await runDetachedTestController(["--test", ...(focusedTestNamePattern === undefined ? [] : [`--test-name-pattern=${focusedTestNamePattern}`]), ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
+    ...extraEnvironment,
   });
   return success(
     focusedReasonCode
@@ -669,7 +671,11 @@ async function runInit049Story353() {
   const testNamesDigest = createHash("sha256").update(JSON.stringify(coverage.testNames)).digest("hex");
   assertion(testNamesDigest === INIT049_PLATFORM_DOCTOR_BEHAVIOR.testNamesDigest, "INIT049_STORY_353_TEST_SET_CHANGED", testNamesDigest);
   const started = Date.now();
-  const result = await runTests({ focusedTestPath: path, focusedReasonCode: "INIT049_STORY_353_VERIFIED" });
+  const result = await runTests({
+    focusedTestPath: path,
+    focusedReasonCode: "INIT049_STORY_353_VERIFIED",
+    extraEnvironment: { TCRN_PLATFORM_DOCTOR_TEST_CONCURRENCY: "4" },
+  });
   const elapsedSeconds = (Date.now() - started) / 1_000;
   assertion(elapsedSeconds < INIT049_PLATFORM_DOCTOR_BEHAVIOR.reducedTargetSeconds, "INIT049_STORY_353_RUNTIME_NOT_REDUCED", String(elapsedSeconds));
   return success("INIT049_STORY_353_VERIFIED", {

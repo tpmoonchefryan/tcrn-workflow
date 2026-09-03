@@ -12,6 +12,7 @@ import nodeTest from "node:test";
 // under one concurrent suite removes the serial fixture/doctor startup tail without
 // changing a test name, assertion, or behavior vector.
 const queuedTests = [];
+const platformDoctorConcurrency = Number(process.env.TCRN_PLATFORM_DOCTOR_TEST_CONCURRENCY ?? 1);
 function test(name, optionsOrBody, maybeBody) {
   const options = typeof optionsOrBody === "function" ? {} : optionsOrBody ?? {};
   const body = typeof optionsOrBody === "function" ? optionsOrBody : maybeBody;
@@ -1423,6 +1424,6 @@ test("INC-250: an unresolved declared repository is red rather than an engine-HE
   assert.equal(leg.unresolved[0].reasonCode, "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED");
 });
 
-nodeTest.describe("platform-doctor behavior matrix", { concurrency: 8 }, () => {
-  for (const [name, options, body] of queuedTests) nodeTest(name, options, body);
+nodeTest.describe("platform-doctor behavior matrix", { concurrency: platformDoctorConcurrency }, () => {
+  for (const [name, options, body] of queuedTests) nodeTest(name, { ...options, concurrency: platformDoctorConcurrency }, body);
 });
