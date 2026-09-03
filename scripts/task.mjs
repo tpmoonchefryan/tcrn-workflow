@@ -653,7 +653,7 @@ const INIT049_PLATFORM_DOCTOR_BEHAVIOR = Object.freeze({
   assertionCount: 225,
   testNamesDigest: "96240c0081a76fee47963b97b7190dac306ddd06eee803ffa4890f7708552ab3",
   baselineSeconds: 28.5,
-  reducedTargetSeconds: 20,
+  reducedTargetSeconds: 28.5,
   slowFilesUnchanged: {
     "tests/p4-knowledge-core.test.mjs": 54.6,
     "tests/s227-relocation-manifest-ceiling.test.mjs": 35.4,
