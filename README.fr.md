@@ -2,63 +2,135 @@
 
 # TCRN Workflow
 
-### Transformez le « c'est fait » de votre agent en une preuve que vous pouvez vérifier vous-même
+### Votre Agent dit « c'est fait ». Ce framework l'oblige à vous remettre une preuve que vous pouvez vérifier vous-même
 
-**Un cadre de gouvernance pour la livraison pilotée par des agents IA. Chaque capacité annoncée est une affirmation qu'une machine peut réfuter.**
+**Un framework de gouvernance pour la livraison par Agents IA. Chaque capacité qu'il revendique est liée à un critère réfutable par une machine — si le critère cesse de tenir, le build passe au rouge.**
 
 [简体中文](./README.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · Français
 
-![status](https://img.shields.io/badge/status-1.0.1-blue) ![gates](https://img.shields.io/badge/verify%3Ap1-24%20gates-brightgreen) ![claims](https://img.shields.io/badge/proven%20claims-122-brightgreen) ![deps](https://img.shields.io/badge/runtime%20deps-0-success)
+![status](https://img.shields.io/badge/status-1.0.1-blue?style=flat-square) ![gates](https://img.shields.io/badge/verify%3Ap1-24%20gates-brightgreen?style=flat-square) ![claims](https://img.shields.io/badge/proven%20claims-122-brightgreen?style=flat-square) ![deps](https://img.shields.io/badge/runtime%20deps-0-success?style=flat-square)
 
-![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey) ![node](https://img.shields.io/badge/node-24.16.0-informational) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational) ![network](https://img.shields.io/badge/network-none-important) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet)
+![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square) ![node](https://img.shields.io/badge/node-24.16.0-informational?style=flat-square) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational?style=flat-square) ![network](https://img.shields.io/badge/network-none-important?style=flat-square) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet?style=flat-square)
 
-[Ce que cela résout](#ce-que-cela-résout) · [Pour qui](#pour-qui) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrer en trois minutes](#démarrer-en-trois-minutes) · [Un exemple réel](#un-exemple-réel) · [État actuel](#état-actuel) · [Documentation complète](#documentation-complète)
+[Où vous en êtes](#où-vous-en-êtes) · [Pourquoi lui faire confiance](#pourquoi-lui-faire-confiance) · [Pour qui](#pour-qui) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrer en trois minutes](#démarrer-en-trois-minutes) · [État actuel](#état-actuel) · [Documentation complète](#documentation-complète)
 
 `Verified claims: 122 (hygiene 20 · inertness 13 · runtime 89)`
 
 </div>
 
+<table>
+<tr>
+<td align="center" width="25%">
+
+### 24
+gates P1<br><sub>Une commande. Le moindre imprévu l'arrête</sub>
+
+</td>
+<td align="center" width="25%">
+
+### 122
+critères<br><sub>Tous avec une jambe rouge, toutes mesurées</sub>
+
+</td>
+<td align="center" width="25%">
+
+### 61
+guards<br><sub>Cassés un par un, leur test doit virer au rouge</sub>
+
+</td>
+<td align="center" width="25%">
+
+### 0
+dépendance runtime<br><sub>Aucun réseau, aucune base de données</sub>
+
+</td>
+</tr>
+</table>
+
+> [!TIP]
+> **Vous n'êtes pas obligé de croire ce README**. Installez-le et lancez une commande : il vous démontre ses 122 revendications une par une, entièrement hors ligne.
+
 ---
 
-## Ce que cela résout
+## Où vous en êtes
 
-Votre agent vous dit que les tests passent. Ce que vous avez en main, c'est une ligne de texte dans une fenêtre de discussion.
+Votre Agent a modifié trente fichiers, puis vous annonce que les tests sont tous au vert.
 
-TCRN Workflow remplace cette ligne par trois choses vérifiables.
+Vous avez deux options : les relire un par un, et alors à quoi sert l'Agent ; ou le croire, et alors vous pariez. Quand quelqu'un demandera « est-ce que ça peut partir en production ? », ce que vous pouvez produire sur-le-champ décidera si c'est une conversation de dix minutes ou une journée entière.
 
-- **Un registre d'affirmations.** Chaque capacité annoncée par le cadre correspond à une affirmation dans `verification-map.yaml`, liée à un code de raison stable et prouvée par un test qui s'exécute hors ligne.
-- **Une chaîne d'événements infalsifiable.** Chaque modification d'un espace de travail est un enregistrement chaîné. Chaque entrée est hachée avec la précédente, l'ajout est la seule opération possible, et l'historique ne peut pas être réécrit.
-- **Une publication reproductible.** Chaque version peut être reconstruite octet par octet et comparée aux empreintes publiées.
+TCRN Workflow vous donne une troisième option.
 
-Modifiez ce qu'une affirmation couvre sans la prouver à nouveau et la construction échoue. C'est appliqué, pas conseillé.
+| Ce que vous voulez confirmer | ✗ Ce que vous avez aujourd'hui | ✓ Ce que vous avez ensuite |
+| :--- | :--- | :--- |
+| **Les tests ont-ils vraiment tourné** | Une ligne dans une fenêtre de chat | `pnpm verify:p1` — 24 gates dans l'ordre, le moindre imprévu l'arrête |
+| **Qui a changé quoi, et quand** | Remonter l'historique du chat | Une chaîne d'événements chaînée par hash, en ajout seul. Modifiez une entrée de l'historique et tous les hash suivants cessent de correspondre |
+| **Les protections fonctionnent-elles encore** | La supposition qu'elles fonctionnent | `pnpm guard-check` — 61 guards cassés un par un dans les sources, chacun devant faire virer son test au rouge |
+| **Ces octets sont-ils ceux publiés** | Regarder le tag | Artefacts reconstruits octet par octet et comparés aux empreintes publiées |
+
+---
+
+## Pourquoi lui faire confiance
+
+Le framework s'applique d'abord à lui-même la norme qu'il impose.
+
+`pnpm guard-check` **supprime ou casse chacun des 61 guards enregistrés dans les sources**, un à la fois, et exige que le test couvrant ce guard vire au rouge. Les 61 doivent virer au rouge pour que la passe soit validée.
+
+Ce que cela démontre n'est pas « nous avons écrit ces contrôles » mais « ces contrôles arrêtent encore quelqu'un, maintenant ». Un contrôle cassé que personne n'a remarqué équivaut à l'absence de contrôle.
+
+Cette norme couvre les **122 revendications**. Chacune est liée dans `verification-map.yaml` à un code de raison stable, à une preuve exécutable hors ligne, et à une jambe rouge — l'énoncé du changement qui la fait virer au rouge, avec cet échec réellement observé. Les 122, sans exception.
+
+<details>
+<summary><b>Répartition des 122 critères</b></summary>
+
+<br>
+
+| Catégorie | Nombre | Portée |
+| :--- | ---: | :--- |
+| `framework-hygiene` | 20 | L'hygiène du framework lui-même : historique propre, liste blanche des sources, politique de licences et de vulnérabilités, frontière hors ligne |
+| `inertness-proof` | 13 | Preuve d'inertie : un adaptateur d'hôte ne fait strictement rien après installation, jusqu'à approbation explicite de l'activation |
+| `runtime-capability` | 89 | Capacités d'exécution : chaîne d'événements, bail, vues, cœur de connaissances, routeur de contexte, jeu de publication |
+
+La liste complète est dans `verification-map.yaml`, chaque entrée portant `id`, `command`, `fixturePaths` et sa jambe rouge.
+
+</details>
+
+> [!IMPORTANT]
+> Changez la portée d'un critère sans le re-démontrer et le build échoue. Ce n'est pas une préférence de style, c'est imposé.
+
+---
 
 ## Pour qui
 
-| | |
-| --- | --- |
-| **Adapté** | Vous confiez à des agents un travail qui a des conséquences : code de production, livraison qui doit laisser une trace, passages de relais entre agents où plus personne ne sait qui a décidé quoi. Vous voulez un artefact qu'un relecteur peut vérifier, pas une transcription qu'il doit croire. Vous voulez que tout reste sur votre machine : pas de base de données, pas de démon, pas de réseau, pas de télémétrie. |
-| **Pas adapté** | Vous voulez un assistant conversationnel sans configuration, il vous faut une synchronisation cloud ou un tableau de bord hébergé, ou votre travail est assez exploratoire pour qu'une piste d'audit en ajout seul soit une gêne plutôt qu'une valeur. |
+| ✓ Adapté si | ✗ Pas adapté si |
+| :--- | :--- |
+| Vous confiez à des Agents un travail à conséquences : code de production, livraison qui doit laisser une trace, plusieurs Agents qui se relaient sans que personne ne se rappelle qui a décidé quoi. | Vous voulez un assistant conversationnel sans configuration, utilisable dès l'installation. |
+| Ce que vous remettez à un relecteur doit être un artefact qu'il peut relancer, pas une conversation qu'il doit croire. | Vous avez besoin de synchronisation cloud, d'un tableau de bord hébergé ou de vues collaboratives. |
+| Vous exigez que tout reste sur votre machine : pas de base de données, pas de démon, pas de réseau, pas de télémétrie. | Votre travail est encore exploratoire et une piste d'audit en ajout seul est aujourd'hui un coût plutôt qu'un bénéfice. |
+
+---
 
 ## Ce que vous obtenez
 
-| Vous obtenez | Concrètement |
-| --- | --- |
-| **Un espace de travail fait uniquement de fichiers** | Tout le graphe de travail — Initiative → Epic → Story → Subtask — est du JSON en forme canonique plus une chaîne de hachage. Auditez-le avec `cat` et `sha256sum` ; les exports sont reproductibles à l'octet près. |
-| **Une commande, 24 barrières** | `pnpm verify:p1` enchaîne le formatage, le lint, le typage, la construction, 134 fichiers de tests, la matrice de confiance, les politiques d'archive, SBOM, licences et vulnérabilités, la liste blanche des sources, la frontière hors ligne, l'analyse de confidentialité, le durcissement CI, le registre d'affirmations et la preuve d'historique propre. Le moindre imprévu l'arrête. |
-| **122 affirmations lisibles par une machine** | `verification-map.yaml` lie 122 affirmations à des codes de raison observables : 20 d'hygiène du cadre, 13 de preuve d'inertie, 89 de capacité d'exécution. Les 122 ont une branche rouge : chacune indique quel changement la ferait passer au rouge, et ce rouge a été mesuré. |
-| **Des garde-fous qui prouvent qu'ils mordent encore** | `pnpm guard-check` casse dans le code source chacun des 61 garde-fous enregistrés et exige que le test correspondant passe au rouge. |
-| **137 verbes CLI gouvernés** | Tous locaux. Chaque écriture déclare sur quelle version elle s'appuie ; si quelqu'un a écrit avant, l'écriture est refusée au lieu d'écraser en silence. |
-| **Zéro dépendance d'exécution** | `dependencies` et `optionalDependencies` sont vides dans `package.json`. Le mode développement installe aussi un garde réseau au niveau du processus, et la télémétrie est nulle. |
+| Vous obtenez | Ce que c'est concrètement |
+| :--- | :--- |
+| **Un workspace fait uniquement de fichiers** | Tout le graphe Initiative → Epic → Story → Subtask en JSON canonique, plus une chaîne de hash. Auditable avec `cat` et `sha256sum`, exportable de façon reproductible octet par octet. |
+| **24 gates en une commande** | `pnpm verify:p1` enchaîne format, lint, types, build, 133 fichiers de test, matrice de confiance, archive et SBOM et licences et politique de vulnérabilités, liste blanche des sources, frontière hors ligne, analyse de confidentialité, durcissement CI, registre des critères, historique propre. |
+| **122 critères lisibles par une machine** | 20 framework-hygiene, 13 inertness-proof, 89 runtime-capability. Tous avec jambe rouge, tous liés à des codes de raison observables. |
+| **Des guards qui prouvent leur efficacité** | 61 guards, cassés un par un par `pnpm guard-check`, chacun devant faire virer son test au rouge. |
+| **137 verbes CLI gouvernés** | Tous en local. Chaque écriture déclare la version sur laquelle elle se base et est refusée si quelqu'un a écrit avant. Jamais d'écrasement silencieux. |
+| **Zéro dépendance d'exécution** | `dependencies` et `optionalDependencies` sont vides dans `package.json`. Le mode développement ajoute un guard réseau au niveau du processus. La télémétrie est nulle. |
+
+---
 
 ## Démarrer en trois minutes
 
-Il vous faut la chaîne d'outils épinglée : Node 24.16.0 et pnpm 11.3.0. Les scripts de cycle de vie des dépendances restent désactivés : l'installation n'exécute aucun code tiers.
+Il faut la chaîne d'outils épinglée : **Node 24.16.0** et **pnpm 11.3.0**. Les scripts de cycle de vie des dépendances restent désactivés, donc l'installation n'exécute aucun code tiers.
 
 ```sh
-# 1. Installer les dépendances de développement épinglées : verrou figé, sans scripts
+# 1. Installer les dépendances de dev épinglées (explicite, figé, sans scripts)
 pnpm install --offline --frozen-lockfile --ignore-scripts
 
-# 2. Laisser le cadre se prouver lui-même : 24 barrières, entièrement hors ligne
+# 2. Laisser le framework se prouver lui-même (24 gates, entièrement hors ligne)
 pnpm verify:p1
 
 # 3. Construire, puis piloter la CLI gouvernée
@@ -66,36 +138,42 @@ pnpm build
 node scripts/tcrn-workflow.mjs commands
 ```
 
-Commandes gouvernées courantes, toutes locales, sans réseau ni base de données :
+<details>
+<summary><b>Les commandes gouvernées les plus utilisées</b></summary>
+
+<br>
+
+Toutes en local, sans réseau, sans base de données.
 
 ```sh
-# valider un espace de travail et matérialiser ses vues déterministes
+# valider un workspace et matérialiser ses vues déterministes
 node scripts/tcrn-workflow.mjs validate --workspace <chemin>
 
-# créer un enregistrement de travail avec une écriture vérifiée par version
+# créer un enregistrement de travail avec une écriture vérifiée en version
 node scripts/tcrn-workflow.mjs work-create --workspace <chemin> --expected-version <version> ...
 
 # rechercher des enregistrements par sujet
-node scripts/tcrn-workflow.mjs work-list --workspace <chemin> --search "<mot-clé>"
+node scripts/tcrn-workflow.mjs work-list --workspace <chemin> --search "<terme>"
 ```
 
-## Un exemple réel
+</details>
 
-`pnpm guard-check` retire ou casse dans le code source chacun des 61 garde-fous enregistrés, un par un, et exige que le test nommé de ce garde-fou passe au rouge. Les 61 doivent passer au rouge pour que la série soit validée.
+> [!NOTE]
+> La liste des capacités, c'est ce que produit `commands`, jamais ce que dit un document. La documentation peut prendre du retard sur le code. Le catalogue de commandes, non.
 
-Ce que cela prouve : ces protections fonctionnent encore aujourd'hui, et pas seulement que quelqu'un les a écrites un jour. Une vérification qui pourrait se casser sans que personne s'en aperçoive équivaut à une absence de vérification.
+---
 
 ## État actuel
 
-La version acceptée en cours est 1.0.1. Chaque version acceptée est une étiquette immuable accompagnée d'un ensemble d'artefacts reproductibles ; `CHANGELOG.md` porte le registre complet.
+La version acceptée est **1.0.1**. Chaque version acceptée est un tag immuable accompagné d'un jeu d'artefacts reproductible, et `CHANGELOG.md` en est le registre complet.
 
-La publication, la poussée et l'étiquetage sont des étapes distinctes et ne se déduisent jamais des tests locaux. Les consommateurs externes vérifient les octets de la version via le compagnon `tcrn-workflow-helper`, dont la propre empreinte d'amorçage est publiée séparément pour être vérifiée de façon indépendante.
+Publication, push et pose de tag sont des étapes distinctes, jamais déduites des tests locaux. Les utilisateurs extérieurs vérifient les octets de version via le `tcrn-workflow-helper` qui l'accompagne, dont l'empreinte d'amorceur est publiée séparément et vérifiable de façon indépendante.
 
-Les limites connues figurent sur la page « Limites connues » du wiki : un seul écrivain par espace de travail, le plafond du nombre d'événements, et la restauration uniquement au même chemin. Ce sont des décisions de conception, pas un arriéré.
+Les limites connues sont sur la page « Limites connues » du wiki : un seul écrivain par workspace, un plafond de volume d'événements, et une reprise vers le chemin d'origine uniquement. Ce sont des décisions de conception, pas une liste de tâches.
 
 ## Documentation complète
 
-Architecture, référence des commandes, affirmations et barrières, structure du dépôt, limites connues et réponses directes se trouvent dans le wiki GitHub de ce dépôt, accessible par l'onglet Wiki en haut de la page du dépôt.
+Architecture, référence des commandes, critères et gates, structure du dépôt, limites connues et questions fréquentes se trouvent tous dans le wiki GitHub de ce dépôt, accessible depuis l'onglet **Wiki** en haut de la page du dépôt.
 
 [Contribuer](./CONTRIBUTING.md) · [Sécurité](./SECURITY.md) · [Confidentialité](./PRIVACY.md) · [Code de conduite](./CODE_OF_CONDUCT.md) · [Support](./SUPPORT.md)
 
