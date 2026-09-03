@@ -3616,7 +3616,7 @@
         "scripts/task.mjs",
         "tests/story-344-storage-boundary.test.mjs"
       ],
-      "fixtureDigest": "946a29aa6005d1c56ecb775e7fe29fbcf3c78653807cf10ea3afd86022aaba4e",
+      "fixtureDigest": "c477f09e25853b7e73ca88b17cc4aa54fb2c0a5fc7c5089dc610c39cc8f8c4dd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4296,7 +4296,7 @@
         "tests/story-346-pg-disabled.test.mjs",
         "tests/story-347-348-settings-policy.test.mjs"
       ],
-      "fixtureDigest": "6392704de14b6acd341bf6582a6ce4520c0e081df4909236c3898bde2d94209d",
+      "fixtureDigest": "2de4ff6a588451d36d22ab2d47db17da50b7ed6259fec71b1b6ca4ce4dd5be37",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

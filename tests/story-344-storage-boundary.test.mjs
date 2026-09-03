@@ -106,7 +106,7 @@ test("STORY-344 workspace lifecycle data-plane operations use StorageBackend", a
       "listControlEntries:snapshots",
     ]);
     assert.equal(backend.calls[0], "createControlDirectory");
-    assert.equal(backend.calls.includes("removeControlFile:events/.tmp-story-344-runtime"), true);
+    assert.equal(backend.calls.includes("removeControlFile:events/.tmp-story-344"), true);
     assert.equal(backend.calls.filter((call) => call === "listControlEntries:snapshots").length, 2);
   } finally {
     await fx.close();
