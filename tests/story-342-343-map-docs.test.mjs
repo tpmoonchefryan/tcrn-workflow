@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { INIT049_FOCUSED_CLAIM_NAMES, INIT049_FOCUSED_CLAIMS } from "../scripts/init049-focused-claims.mjs";
+import { INIT049_FOCUSED_CLAIM_COUNT, INIT049_FOCUSED_CLAIM_NAMES, INIT049_FOCUSED_CLAIMS } from "../scripts/init049-focused-claims.mjs";
 
 const engineRoot = fileURLToPath(new URL("../", import.meta.url));
 const helperRoot = resolve(engineRoot, "../tcrn-workflow-helper");
@@ -69,6 +69,7 @@ test("STORY-343 documentation proof names the helper archive refresh as a requir
 
 test("STORY-352 P3 and Knowledge claims have independent focused commands and expectations", async () => {
   const map = JSON.parse(await readFile(resolve(engineRoot, "verification-map.yaml"), "utf8"));
+  assert.equal(INIT049_FOCUSED_CLAIM_NAMES.length, INIT049_FOCUSED_CLAIM_COUNT);
   const claims = map.claims.filter((claim) => INIT049_FOCUSED_CLAIM_NAMES.includes(claim.command.replace(/^pnpm verify:/u, "")));
   assert.equal(claims.length, INIT049_FOCUSED_CLAIM_NAMES.length);
   assert.equal(new Set(claims.map((claim) => claim.command)).size, claims.length);

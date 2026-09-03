@@ -29,3 +29,4 @@ export const INIT049_FOCUSED_CLAIMS = Object.freeze({
 });
 
 export const INIT049_FOCUSED_CLAIM_NAMES = Object.freeze(Object.keys(INIT049_FOCUSED_CLAIMS));
+export const INIT049_FOCUSED_CLAIM_COUNT = 22;

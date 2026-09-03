@@ -64,7 +64,7 @@ import {
 } from "./lib/safe-io.mjs";
 import { installNoNetworkGuard } from "./no-network.mjs";
 import { ScopedStripTypesError, stripTypesWithScopedExperimentalWarning } from "./lib/scoped-strip-types.mjs";
-import { INIT049_FOCUSED_CLAIM_NAMES, INIT049_FOCUSED_CLAIMS } from "./init049-focused-claims.mjs";
+import { INIT049_FOCUSED_CLAIM_COUNT, INIT049_FOCUSED_CLAIM_NAMES, INIT049_FOCUSED_CLAIMS } from "./init049-focused-claims.mjs";
 
 installNoNetworkGuard();
 
@@ -2225,6 +2225,7 @@ async function verifyMap() {
     assertion(new Set(init047Goals.map((claim) => claim[field])).size === 12, "VERIFICATION_MAP_INIT047_GOAL_NOT_INDEPENDENT", field);
   }
   assertion(new Set(init047Goals.map((claim) => claim.redLeg.test)).size === 12, "VERIFICATION_MAP_INIT047_GOAL_RED_LEGS_NOT_INDEPENDENT");
+  assertion(INIT049_FOCUSED_CLAIM_NAMES.length === INIT049_FOCUSED_CLAIM_COUNT, "VERIFICATION_MAP_INIT049_FOCUSED_DECLARATION_COUNT", String(INIT049_FOCUSED_CLAIM_NAMES.length));
   const init049Focused = INIT049_FOCUSED_CLAIM_NAMES.map((name) => map.claims.find((claim) => claim.command === `pnpm verify:${name}`));
   assertion(init049Focused.every((claim) => claim !== undefined), "VERIFICATION_MAP_INIT049_FOCUSED_MISSING");
   assertion(new Set(init049Focused.map((claim) => claim.command)).size === init049Focused.length, "VERIFICATION_MAP_INIT049_FOCUSED_COMMANDS_NOT_INDEPENDENT");
