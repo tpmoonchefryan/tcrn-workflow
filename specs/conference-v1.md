@@ -119,7 +119,7 @@ ceiling to 8,192, with `CONFERENCE_BUDGET_EXCEEDED` folded into
 damage**, so the upgrade is ordered rather than assumed: every copy that will
 read a chain is raised first, and only then may the first oversized position be
 written. A deployment states the floor it depends on in `engine.requiredVersion`;
-`platform-doctor`'s `engineAlignment` leg is what compares that declaration
+`platform-doctor`'s `engineFloorSatisfied` leg is what compares that declaration
 against the copies actually installed.
 
 The per-workspace `conference.positionBudgetBytes` setting (default 4,096, bounded

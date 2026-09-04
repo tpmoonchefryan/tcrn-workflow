@@ -1414,11 +1414,11 @@ async function declaredEngineRequirements(root, options) {
   return { declarations, source: "chain-declaration" };
 }
 
-async function inspectEngineAlignment(root, homeRoot, manifest, options) {
+async function inspectEngineFloorSatisfied(root, homeRoot, manifest, options) {
   const observed = await engineCopyVersions(root, homeRoot, manifest, options);
   const copies = observed.copies;
   if (Object.keys(copies).length === 0) {
-    return check("engineAlignment", false, { reasonCode: "PLATFORM_ENGINE_COPY_UNREADABLE", source: observed.source });
+    return check("engineFloorSatisfied", false, { reasonCode: "PLATFORM_ENGINE_COPY_UNREADABLE", source: observed.source });
   }
   const declared = await declaredEngineRequirements(root, options);
   if (declared.declarations === null) {
@@ -1428,7 +1428,7 @@ async function inspectEngineAlignment(root, homeRoot, manifest, options) {
     // live chain (a fixture, a partial checkout) is not a platform fault any more
     // than it is a passing one. `requirementAsserted` carries the distinction into
     // the verdict so this can never be read as "aligned".
-    return check("engineAlignment", true, {
+    return check("engineFloorSatisfied", true, {
       reasonCode: "PLATFORM_ENGINE_REQUIREMENT_UNREADABLE",
       copies,
       error: declared.error,
@@ -1452,7 +1452,7 @@ async function inspectEngineAlignment(root, homeRoot, manifest, options) {
     }
   }
   if (behind.length > 0) {
-    return check("engineAlignment", false, {
+    return check("engineFloorSatisfied", false, {
       reasonCode: "PLATFORM_ENGINE_BEHIND_CHAIN",
       behind,
       copies,
@@ -1468,7 +1468,7 @@ async function inspectEngineAlignment(root, homeRoot, manifest, options) {
     // Green, but never silently: no partition has declared a floor, so this leg is
     // enforcing nothing. The copy versions are reported as observations so the
     // reader can see what is actually installed without the leg claiming it is right.
-    return check("engineAlignment", true, {
+    return check("engineFloorSatisfied", true, {
       reasonCode: "PLATFORM_ENGINE_REQUIREMENT_UNDECLARED",
       copies,
       partitions: Object.keys(declared.declarations).sort(compareCanonicalTextLocal),
@@ -1476,11 +1476,291 @@ async function inspectEngineAlignment(root, homeRoot, manifest, options) {
       source: "chain engine.requiredVersion + install-manifest",
     });
   }
-  return check("engineAlignment", true, {
+  return check("engineFloorSatisfied", true, {
     copies,
     declaringPartitions,
     requirementAsserted: true,
     source: "chain engine.requiredVersion + install-manifest",
+  });
+}
+
+// TCRN-CROSS-INC-270: the installed and worktree engine copies diverge in capability
+// surface during development because the worktree is authoritative for what the engine
+// can do. Version strings alone cannot see this: both copies report "1.0.1" while one
+// has 132 verbs and 9 flags on work-annotate, the other 137 verbs and 11 flags.
+//
+// The verdict follows the Owner ruling (2026-09-04): worktree ahead is expected and
+// green (development in progress), installed ahead is red (deployment carries code absent
+// from the source), both diverging is red, unreadable is uncomparable. The leg is
+// structurally consistent with inspectHelperReleaseAlignment (INC-233): digest comparison,
+// not version-string comparison, and the same principle that "nothing to compare" and
+// "compared and equal" are two answers that must stay apart.
+async function inspectEngineCapabilitySurface(root, homeRoot, manifest, options) {
+  // Synthetic injection hook: for hermetic tests, pass catalogs directly.
+  if (options.engineCommandCatalogs && typeof options.engineCommandCatalogs === "object") {
+    const { installed, worktree } = options.engineCommandCatalogs;
+    return engineCapabilitySurfaceVerdict(
+      installed ?? null,
+      worktree ?? null,
+      "synthetic"
+    );
+  }
+
+  // Resolve the installed and worktree copy roots. Use the same resolution as
+  // engineCopyVersions to ensure consistent paths across legs.
+  const engineEntry = manifest.items.find((entry) => entry.id === "machine.workflow-engine");
+  const installedRoot = engineEntry ? expandTemplate(engineEntry.pathTemplate, "<PLATFORM_ROOT>", homeRoot) : null;
+  const engineProject = (manifest.projects ?? []).find((project) => project.name === "tcrn-workflow");
+  const worktreeRoot = engineProject?.pathTemplate?.startsWith("<PLATFORM_ROOT>/")
+    ? join(root, engineProject.pathTemplate.slice("<PLATFORM_ROOT>/".length))
+    : null;
+
+  const scriptPaths = {
+    installed: installedRoot === null ? null : join(installedRoot, "tcrn-workflow", "scripts", "tcrn-workflow.mjs"),
+    worktree: worktreeRoot === null ? null : join(worktreeRoot, "scripts", "tcrn-workflow.mjs"),
+  };
+
+  // TCRN-CROSS-INC-233: "nothing to compare" and "compared and equal" must stay apart.
+  // By extension, "absent" (copy does not exist) and "broken" (unreadable CLI / unparseable output)
+  // are two different answers. Surface the reason a copy is unreadable so the caller
+  // can distinguish them in logs and diagnostics.
+  const catalogs = {};
+  const unreadable = {}; // { installed?: "ABSENT"|"FAILED", worktree?: "ABSENT"|"FAILED" }
+
+  for (const [copy, scriptPath] of Object.entries(scriptPaths)) {
+    if (scriptPath === null) {
+      catalogs[copy] = null;
+      unreadable[copy] = "ABSENT"; // manifest did not resolve a path for this copy
+      continue;
+    }
+    try {
+      const stats = await existingPath(scriptPath);
+      if (!stats?.isFile()) {
+        catalogs[copy] = null;
+        unreadable[copy] = "ABSENT"; // script file does not exist
+        continue;
+      }
+      const result = await execFileAsync(process.execPath, [scriptPath, "commands"], { timeout: 30_000, maxBuffer: 8 * 1_048_576 });
+      const parsed = JSON.parse(result.stdout);
+      if (!Array.isArray(parsed.commands)) {
+        catalogs[copy] = null;
+        unreadable[copy] = "FAILED"; // output did not have parseable commands array
+        continue;
+      }
+      catalogs[copy] = parsed.commands;
+      // Successfully read this copy: remove it from unreadable.
+      delete unreadable[copy];
+    } catch (error) {
+      catalogs[copy] = null;
+      unreadable[copy] = "FAILED"; // CLI failed, timeout, or JSON parse error
+    }
+  }
+
+  return engineCapabilitySurfaceVerdict(
+    catalogs.installed,
+    catalogs.worktree,
+    "commands-cli",
+    Object.keys(unreadable).length > 0 ? unreadable : undefined
+  );
+}
+
+function normalizeCommandCatalog(commands) {
+  if (!Array.isArray(commands)) return null;
+  // Normalize to canonical form: sort verbs by name, each verb's flags by name.
+  // Return a structure suitable for hashing.
+  const normalized = commands
+    .map((cmd) => ({
+      name: cmd.name,
+      availability: cmd.availability,
+      mutates: cmd.mutates,
+      flags: (Array.isArray(cmd.flags) ? cmd.flags : [])
+        .map((flag) => ({
+          name: flag.name,
+          required: flag.required,
+          valueKind: flag.valueKind,
+        }))
+        .sort((a, b) => compareCanonicalTextLocal(a.name, b.name)),
+    }))
+    .sort((a, b) => compareCanonicalTextLocal(a.name, b.name));
+  return normalized;
+}
+
+function engineCapabilitySurfaceVerdict(installedCatalog, worktreeCatalog, source, unreadableInfo) {
+  // Normalize both catalogs if they exist.
+  const installedNormalized = normalizeCommandCatalog(installedCatalog);
+  const worktreeNormalized = normalizeCommandCatalog(worktreeCatalog);
+
+  // Determine comparability: both must be readable to compare.
+  if (installedNormalized === null && worktreeNormalized === null) {
+    const verdict = {
+      comparable: false,
+      reason: "neither engine copy is readable; capability surface is unknown",
+      source,
+    };
+    // TCRN-CROSS-INC-233, INC-270: surface why each copy is unreadable when available.
+    if (unreadableInfo) {
+      verdict.unreadable = unreadableInfo;
+    }
+    return check("engineCapabilitySurface", true, verdict);
+  }
+  if (installedNormalized === null || worktreeNormalized === null) {
+    const verdict = {
+      comparable: false,
+      reason: "one engine copy is unreadable; capability surface is unknown",
+      source,
+      readable: {
+        installed: installedNormalized !== null,
+        worktree: worktreeNormalized !== null,
+      },
+    };
+    // Surface why each copy is unreadable when available.
+    if (unreadableInfo) {
+      verdict.unreadable = unreadableInfo;
+    }
+    return check("engineCapabilitySurface", true, verdict);
+  }
+
+  // Both are readable: compare by digest.
+  const installedDigest = createHash("sha256")
+    .update(JSON.stringify(installedNormalized))
+    .digest("hex");
+  const worktreeDigest = createHash("sha256")
+    .update(JSON.stringify(worktreeNormalized))
+    .digest("hex");
+
+  if (installedDigest === worktreeDigest) {
+    // Identical: green.
+    return check("engineCapabilitySurface", true, {
+      capabilitySurface: "IDENTICAL",
+      digest: installedDigest.slice(0, 12),
+      source,
+    });
+  }
+
+  // Divergent: compute verb name sets to report what differs.
+  const installedVerbs = new Set(installedNormalized.map((cmd) => cmd.name));
+  const worktreeVerbs = new Set(worktreeNormalized.map((cmd) => cmd.name));
+
+  const worktreeOnly = Array.from(worktreeVerbs)
+    .filter((name) => !installedVerbs.has(name))
+    .sort(compareCanonicalTextLocal);
+  const installedOnly = Array.from(installedVerbs)
+    .filter((name) => !worktreeVerbs.has(name))
+    .sort(compareCanonicalTextLocal);
+
+  // Diff flags for verbs that exist in both catalogs. Regardless of whether verbs also differ,
+  // we must detect installed-only flags: if the deployment carries flags the source lacks,
+  // that is a capability not declared authoritative and must be red.
+  // TCRN-CROSS-INC-270: flag divergence must also check direction to detect when the
+  // installed copy carries flags (capabilities) the worktree lacks. The authority model
+  // says installed-ahead is a deployment safety violation, the same as for verbs.
+  let installedOnlyFlags = {}; // { verbName: [flagNames] }
+  let worktreeOnlyFlags = {}; // { verbName: [flagNames] }
+  let attributeDifferences = []; // [{verb, flag, installedValue, worktreeValue}]
+
+  // Build maps for fast lookup of verbs present in each catalog.
+  const installedMap = new Map(installedNormalized.map((cmd) => [cmd.name, cmd]));
+  const worktreeMap = new Map(worktreeNormalized.map((cmd) => [cmd.name, cmd]));
+
+  // For each verb that exists in BOTH catalogs, compare its flags.
+  const commonVerbs = Array.from(installedVerbs).filter((name) => worktreeVerbs.has(name));
+  for (const verbName of commonVerbs) {
+    const iCmd = installedMap.get(verbName);
+    const wCmd = worktreeMap.get(verbName);
+    const iFlags = new Set(iCmd.flags.map((f) => f.name));
+    const wFlags = new Set(wCmd.flags.map((f) => f.name));
+
+    // Extract flag-level differences for this verb.
+    const iOnly = Array.from(iFlags).filter((n) => !wFlags.has(n)).sort(compareCanonicalTextLocal);
+    const wOnly = Array.from(wFlags).filter((n) => !iFlags.has(n)).sort(compareCanonicalTextLocal);
+
+    if (iOnly.length > 0) installedOnlyFlags[verbName] = iOnly;
+    if (wOnly.length > 0) worktreeOnlyFlags[verbName] = wOnly;
+
+    // Check for attribute divergence on flags both sides have.
+    const commonFlags = Array.from(iFlags).filter((n) => wFlags.has(n));
+    for (const flagName of commonFlags) {
+      const iFlag = iCmd.flags.find((f) => f.name === flagName);
+      const wFlag = wCmd.flags.find((f) => f.name === flagName);
+      // Check required and valueKind attributes.
+      if (iFlag.required !== wFlag.required || iFlag.valueKind !== wFlag.valueKind) {
+        attributeDifferences.push({
+          verb: verbName,
+          flag: flagName,
+          installed: { required: iFlag.required, valueKind: iFlag.valueKind },
+          worktree: { required: wFlag.required, valueKind: wFlag.valueKind },
+        });
+      }
+    }
+  }
+
+  // Verdict based on direction of divergence.
+  const hasInstalledOnlyVerbsOrFlags = installedOnly.length > 0 || Object.keys(installedOnlyFlags).length > 0;
+  const hasWorktreeOnlyVerbsOrFlags = worktreeOnly.length > 0 || Object.keys(worktreeOnlyFlags).length > 0;
+
+  if (hasInstalledOnlyVerbsOrFlags) {
+    // Installed is ahead in verbs or flags: red. This violates the authority model.
+    // TCRN-CROSS-INC-270 Owner ruling: "installed copy has verbs/flags the worktree lacks
+    // -> RED. The deployment position is running code absent from the authoritative
+    // source. ... both directions differ -> RED (the installed-ahead component dominates)."
+    const verdict = {
+      reasonCode: "PLATFORM_ENGINE_INSTALLED_AHEAD",
+      capabilitySurface: "INSTALLED_AHEAD",
+      installedOnly: installedOnly.length > 0 ? installedOnly : undefined,
+      installedOnlyFlags: Object.keys(installedOnlyFlags).length > 0 ? installedOnlyFlags : undefined,
+      worktreeOnly: hasWorktreeOnlyVerbsOrFlags ? worktreeOnly : undefined,
+      worktreeOnlyFlags: Object.keys(worktreeOnlyFlags).length > 0 ? worktreeOnlyFlags : undefined,
+      remedy: "the installed engine copy has capabilities absent from the worktree (authoritative source); this is a deployment safety violation; reconcile or block deployment",
+      source,
+    };
+    return check("engineCapabilitySurface", false, verdict);
+  }
+
+  if (hasWorktreeOnlyVerbsOrFlags) {
+    // Worktree is a strict superset: expected during development. Green, but explicit.
+    // TCRN-CROSS-INC-270 Owner ruling: "worktree has verbs/flags the installed copy lacks
+    // -> EXPECTED during development. The leg stays `ok: true`, but it MUST state the
+    // divergence explicitly and name the differing verbs/flags."
+    const verdict = {
+      capabilitySurface: "WORKTREE_AHEAD",
+      worktreeOnly: worktreeOnly.length > 0 ? worktreeOnly : undefined,
+      worktreeOnlyFlags: Object.keys(worktreeOnlyFlags).length > 0 ? worktreeOnlyFlags : undefined,
+      remedy: "development is ahead of deployment; this is expected while the engine is being developed and is not a reason to stop; verify this explicitly in deployment procedures",
+      source,
+    };
+    return check("engineCapabilitySurface", true, verdict);
+  }
+
+  if (attributeDifferences.length > 0) {
+    // Verbs and flag names match, but some flag attributes differ. This is direction-neutral
+    // and cannot be judged by the ruling's direction rule: neither side is "ahead".
+    // TCRN-CROSS-INC-270: attribute divergence is uncomparable to the authority model.
+    // The deployed copy may have different behavior than the authoritative source, but
+    // there is no unambiguous direction of capability: one may have more lenient value
+    // validation while the other requires a specific value kind. This is tracked but not
+    // a verdict blocker because capability is not strictly adding or removing, it is changing.
+    const verdict = {
+      capabilitySurface: "ATTRIBUTES_DIVERGENT",
+      attributeDifferences: attributeDifferences.map((d) => ({
+        verb: d.verb,
+        flag: d.flag,
+        installed: d.installed,
+        worktree: d.worktree,
+      })),
+      installedDigest: installedDigest.slice(0, 12),
+      worktreeDigest: worktreeDigest.slice(0, 12),
+      reason: "verb and flag names match, but some flag attributes differ (e.g., required, valueKind); neither copy is strictly ahead and this cannot be judged by the authority model",
+      source,
+    };
+    return check("engineCapabilitySurface", true, verdict);
+  }
+
+  // No differences detected: report as IDENTICAL (though digests differ).
+  // This should not occur, but if all verbs and flags match perfectly, treat as IDENTICAL.
+  return check("engineCapabilitySurface", true, {
+    capabilitySurface: "IDENTICAL",
+    digest: installedDigest.slice(0, 12),
+    source,
   });
 }
 
@@ -1509,7 +1789,7 @@ async function inspectHelperSettingsCoverage(root, homeRoot, manifest, options) 
   const catalogKeys = await engineSettingKeys(root, options);
   if (catalogKeys === null) {
     // Unreadable is reported, not red: with no catalog there is nothing to compare,
-    // which is the same epistemic position as engineAlignment's undeclared case.
+    // which is the same epistemic position as engineFloorSatisfied's undeclared case.
     return check("helperSettingsCoverage", true, {
       reasonCode: "PLATFORM_HELPER_SETTINGS_UNREADABLE",
       coverageAsserted: false,
@@ -1965,7 +2245,8 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
       await inspectInstallWiring(root, homeRoot, manifest),
       await inspectHookExecutability(root, manifest),
       await inspectDeploymentFreshness(homeRoot, manifest),
-      await inspectEngineAlignment(root, homeRoot, manifest, options),
+      await inspectEngineFloorSatisfied(root, homeRoot, manifest, options),
+      await inspectEngineCapabilitySurface(root, homeRoot, manifest, options),
       await inspectHelperSettingsCoverage(root, homeRoot, manifest, options),
       await inspectTrustArchiveFreshness(root, homeRoot, manifest, options),
       await inspectLaunchdDuty({ ...options, platformRoot: root, homeRoot }, manifest),

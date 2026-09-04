@@ -917,7 +917,7 @@ test("a matching identity produces no observation at all", async () => {
 // run can never report "aligned" when no floor exists to be aligned against.
 test("MIN-102 engine alignment names a copy that is behind a chain declaration", async (context) => {
   const fixture = await completeInstallFixture(context);
-  const alignment = (result) => result.checks.find((entry) => entry.name === "engineAlignment");
+  const alignment = (result) => result.checks.find((entry) => entry.name === "engineFloorSatisfied");
   const copies = { installed: "0.11.15", worktree: "0.11.15" };
 
   // Undeclared is green, but never a silent green: the reason code says the leg is

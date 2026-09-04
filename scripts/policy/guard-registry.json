@@ -611,6 +611,16 @@
       "expectedMatches": 1,
       "test": "tests/inc269-annotation-advisory-guard.test.mjs",
       "testName": "INC-269 an annotation that moves no advisory field is refused before it is written"
+    },
+    {
+      "id": "INC-270-engine-capability-surface-direction-guard",
+      "rationale": "engineCapabilitySurface judges direction because Owner ruled the worktree copy is authoritative. Installed-ahead is red because deployment runs capability absent from source. Without this flag term in the predicate, flag-level divergence is invisible to the direction check and passes green. The two real copies measured on 2026-09-04 differ by five verbs and by flags on verbs they share: work-annotate carries 9 flags in the installed copy against 11 in the worktree. Because the verb-name sets already differ today, the verb term alone classifies the current state. The flag term matters for the case where the verb-name sets are equal and only flags differ: without it, an installed copy carrying a flag the worktree lacks classifies green, and that is the direction the Owner ruling calls red.",
+      "file": "scripts/platform-doctor.mjs",
+      "find": "  const hasInstalledOnlyVerbsOrFlags = installedOnly.length > 0 || Object.keys(installedOnlyFlags).length > 0;\n",
+      "replace": "  const hasInstalledOnlyVerbsOrFlags = installedOnly.length > 0;\n",
+      "expectedMatches": 1,
+      "test": "tests/inc270-engine-capability-surface.test.mjs",
+      "testName": "INC-270 case 5b: installed has extra flag on a verb -> RED PLATFORM_ENGINE_INSTALLED_AHEAD"
     }
   ]
 }

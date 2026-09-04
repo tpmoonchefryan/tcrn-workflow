@@ -14,7 +14,7 @@
 
 [Où vous en êtes](#où-vous-en-êtes) · [Pourquoi lui faire confiance](#pourquoi-lui-faire-confiance) · [Pour qui](#pour-qui) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrer en trois minutes](#démarrer-en-trois-minutes) · [État actuel](#état-actuel) · [Documentation complète](#documentation-complète)
 
-`Verified claims: 123 (hygiene 20 · inertness 13 · runtime 90)`
+`Verified claims: 124 (hygiene 20 · inertness 13 · runtime 91)`
 
 </div>
 

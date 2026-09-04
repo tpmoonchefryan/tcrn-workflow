@@ -121,6 +121,7 @@
     "verify:inc264": "node scripts/task.mjs inc264",
     "verify:inc265": "node scripts/task.mjs inc265",
     "verify:inc269": "node scripts/task.mjs inc269",
+    "verify:inc270": "node scripts/task.mjs inc270",
     "verify:closeout": "node scripts/task.mjs closeout",
     "report:ceremony-cost": "node scripts/ceremony-cost.mjs --manifest scripts/policy/ceremony-cost-init048.json",
     "verify:red-legs": "node scripts/task.mjs red-legs",
