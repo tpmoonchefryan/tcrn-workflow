@@ -51,6 +51,72 @@
       "testName": "coverage conservation requires waiver reason and replacement",
       "reason": "TCRN-CROSS-INC-274 — renamed when the disowned disposition was added; the test now covers both dispositions and its assertion surface grew rather than shrank.",
       "replacement": "tests/coverage-conservation.test.mjs:coverage conservation requires waiver reason and either replacement or disowned"
+    },
+    {
+      "path": "tests/story-346-pg-disabled.test.mjs",
+      "testName": "STORY-346 local backend catalog excludes PostgreSQL and ADR states the MVP revision",
+      "reason": "TCRN-CROSS-INC-275 — renamed when its subject changed. PostgreSQL was removed from this repository under the Owner ruling of 2026-09-04, so the test no longer proves that a retained backend is unselectable; it proves the backend is gone. The assertion surface grew rather than shrank.",
+      "replacement": "tests/story-346-pg-disabled.test.mjs:STORY-346 storage.backend catalog contains only file backends, PostgreSQL absent"
+    },
+    {
+      "path": "tests/story-346-pg-disabled.test.mjs",
+      "testName": "STORY-346 the pg implementation remains present while the verification map has no pg fixture",
+      "reason": "TCRN-CROSS-INC-275 — renamed when its subject changed. PostgreSQL was removed from this repository under the Owner ruling of 2026-09-04, so the test no longer proves that a retained backend is unselectable; it proves the backend is gone. The assertion surface grew rather than shrank.",
+      "replacement": "tests/story-346-pg-disabled.test.mjs:STORY-346 PostgreSQL implementation and migration scripts are absent"
+    },
+    {
+      "path": "tests/story-346-pg-disabled.test.mjs",
+      "testName": "STORY-346 production backend selection has no pg branch",
+      "reason": "TCRN-CROSS-INC-275 — renamed when its subject changed. PostgreSQL was removed from this repository under the Owner ruling of 2026-09-04, so the test no longer proves that a retained backend is unselectable; it proves the backend is gone. The assertion surface grew rather than shrank.",
+      "replacement": "tests/story-346-pg-disabled.test.mjs:STORY-346 production backend selection rejects PostgreSQL"
+    },
+    {
+      "path": "tests/story-346-pg-disabled.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-INC-275 — the two assertions were the ADR-wording matches that were dropped because a later dispatch changes that ADR's text, and its replacement naming the same file's surviving absence test.",
+      "replacement": "tests/story-346-pg-disabled.test.mjs:STORY-346 storage.backend catalog contains only file backends, PostgreSQL absent"
+    },
+    {
+      "path": "tests/p3-cli-read-surface.test.mjs",
+      "testName": "INIT-047 MCP read face performs the real handshake and stays read-only",
+      "reason": "TCRN-CROSS-INC-275 — the MCP stdio surface this exercised was retired in v0.11.18 and removed from the repository under the Owner ruling of 2026-09-04. What is worth proving changed from \"the surface handshakes correctly and stays read-only\" to \"the surface is absent\", and the replacement asserts exactly that and fails if it is reintroduced.",
+      "replacement": "tests/inc275-mcp-absent.test.mjs:MCP package and implementation are absent"
+    },
+    {
+      "path": "tests/p3-cli-read-surface.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-INC-275 — the five assertions belonged to the removed test.",
+      "replacement": "tests/inc275-mcp-absent.test.mjs:MCP package and implementation are absent"
+    },
+    {
+      "path": "tests/inc074-storage-home.test.mjs",
+      "testName": "INC-074: a sentinel declares storage=pg; a mutating verb via the file backend refuses WORKSPACE_STORAGE_RELOCATED",
+      "reason": "TCRN-CROSS-INC-275 — the PostgreSQL backend was removed under the Owner ruling of 2026-09-04. The test was renamed to reflect the new behavior: a workspace declaring the retired pg backend is refused at parse time with STORAGE_HOME_BACKEND_RETIRED rather than being accepted and later refused with WORKSPACE_STORAGE_RELOCATED. The assertion surface changed to verify both that reading the pg declaration is refused and that removing the sentinel restores usability.",
+      "replacement": "tests/inc074-storage-home.test.mjs:INC-074: a workspace declaring the retired PostgreSQL backend is refused (STORAGE_HOME_BACKEND_RETIRED)"
+    },
+    {
+      "path": "tests/inc074-storage-home.test.mjs",
+      "testName": "INC-097 red leg: a file-kind backend override cannot bypass the PG storage-home sentinel",
+      "reason": "TCRN-CROSS-INC-275 — renamed to reflect that the refusal now happens at parseDeclaration (STORAGE_HOME_BACKEND_RETIRED) before the backend selection logic runs, rather than in the backend logic (WORKSPACE_STORAGE_RELOCATED). The test verifies the earlier refusal point.",
+      "replacement": "tests/inc074-storage-home.test.mjs:INC-074: a workspace with retired PG backend fails to read (STORAGE_HOME_BACKEND_RETIRED), even within file-backend context"
+    },
+    {
+      "path": "tests/inc074-storage-home.test.mjs",
+      "testName": "INC-074: CLI refuses a PG path whose schema does not match the sentinel (CLI_SCHEMA_MISMATCH)",
+      "reason": "TCRN-CROSS-INC-275 — renamed because the retirement refusal (STORAGE_HOME_BACKEND_RETIRED) now fires before the schema mismatch check. The test verifies that pg declarations are refused outright by the CLI when loading the workspace.",
+      "replacement": "tests/inc074-storage-home.test.mjs:INC-074: CLI refuses a workspace declaring the retired PostgreSQL backend (STORAGE_HOME_BACKEND_RETIRED)"
+    },
+    {
+      "path": "tests/inc074-storage-home.test.mjs",
+      "testName": "INC-074/INC-081: sealing a retained archive is idempotent and never overwrites a different binding",
+      "reason": "TCRN-CROSS-INC-275 — simplified because sealStorageHomeDeclaration can no longer successfully write a pg archive (the read-back fails with STORAGE_HOME_BACKEND_RETIRED). The test was reduced to just verify the failure case. The three assertions for idempotency and binding conflicts were removed because those code paths are now unreachable.",
+      "replacement": "tests/inc074-storage-home.test.mjs:INC-074: sealing a PG archive fails because the backend is retired (STORAGE_HOME_BACKEND_RETIRED)"
+    },
+    {
+      "path": "tests/inc074-storage-home.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-INC-275 — five assertions were removed from the sealing test when it was simplified to just check the retirement refusal. The idempotency assertions (three) and binding-conflict assertions (two) tested code paths that became unreachable because pg declarations are now refused at parse time.",
+      "replacement": "tests/inc074-storage-home.test.mjs:INC-074: sealing a PG archive fails because the backend is retired (STORAGE_HOME_BACKEND_RETIRED)"
     }
   ]
 }

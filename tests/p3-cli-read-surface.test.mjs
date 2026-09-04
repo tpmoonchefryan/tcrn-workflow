@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { COMMAND_CATALOG, runCli } from "../dist/build/packages/cli/src/index.js";
-import { dispatchMessage } from "../dist/build/packages/mcp/src/index.js";
 import {
   acquireWorkspaceLease,
   annotateWork,
@@ -79,21 +78,6 @@ async function run(args) {
 function reasonOf(args) {
   return runCli(args, { write() {} }).then(() => null, (error) => error?.reasonCode);
 }
-
-test("INIT-047 MCP read face performs the real handshake and stays read-only", async (context) => {
-  const fx = await fixture(context);
-  const initialized = JSON.parse(await dispatchMessage({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05" } }));
-  assert.equal(initialized.result.serverInfo.name, "tcrn-workflow");
-  const listed = JSON.parse(await dispatchMessage({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }));
-  assert.deepEqual(listed.result.tools.map((tool) => tool.name), ["work_search", "work_show", "knowledge_search", "work_draft", "status"]);
-  const before = JSON.parse(await dispatchMessage({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "status", arguments: { workspace: fx.workspace } } }));
-  const search = JSON.parse(await dispatchMessage({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "work_search", arguments: { workspace: fx.workspace, query: "INIT-A" } } }));
-  assert.equal(search.result.structuredContent.records.length, 1);
-  assert.equal(search.result.structuredContent.records[0].scope, "");
-  const after = JSON.parse(await dispatchMessage({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "status", arguments: { workspace: fx.workspace } } }));
-  assert.equal(after.result.structuredContent.version, before.result.structuredContent.version);
-  await rm(fx.base, { recursive: true, force: true });
-});
 
 test("INIT-047 work-list search returns bounded scope and work-draft uses canonical headings", async (context) => {
   const fx = await fixture(context);

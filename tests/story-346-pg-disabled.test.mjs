@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// STORY-346: PostgreSQL remains retained code but is not a selectable MVP backend.
+// STORY-346: PostgreSQL is removed; product contains no code for or selection of it.
+// Owner ruling 2026-09-04: PostgreSQL does not exist in this product. Tests assert
+// its absence and would fail if it were reintroduced accidentally.
+// Reference: TCRN-CROSS-INC-275 removed backend, scripts, CLI paths, and CI job.
 
 import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
@@ -15,23 +18,42 @@ import {
   setWorkspaceSetting,
 } from "../dist/build/packages/core/src/index.js";
 
-test("STORY-346 local backend catalog excludes PostgreSQL and ADR states the MVP revision", async () => {
+test("STORY-346 storage.backend catalog contains only file backends, PostgreSQL absent", async () => {
+  // TCRN-CROSS-INC-275: Product constraint — only local file backends are selectable.
+  // This test would fail if PostgreSQL were re-added to allowedValues.
   const backend = SETTINGS_CATALOG.find((entry) => entry.key === "storage.backend");
   assert.deepEqual(backend?.allowedValues, ["file", "file-segmented"]);
-  const adr = await readFile(new URL("../docs/adr/0004-postgres-storage-backend.md", import.meta.url), "utf8");
-  assert.match(adr, /INIT-048 MVP revision/u);
-  assert.match(adr, /only\s+selectable backends/u);
-  assert.match(adr, /not connected/u);
 });
 
-test("STORY-346 the pg implementation remains present while the verification map has no pg fixture", async () => {
-  await access(new URL("../packages/pg-backend/src/index.ts", import.meta.url), constants.F_OK);
+test("STORY-346 PostgreSQL implementation and migration scripts are absent", async () => {
+  // TCRN-CROSS-INC-275: All PostgreSQL code paths removed from product.
+  // These assertions catch accidental reintroduction of pg-backend or its build artifacts.
+  const fileNotFound = async (url) => {
+    try {
+      await access(url, constants.F_OK);
+      throw new Error(`Expected ${url} to not exist, but it does`);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  };
+
+  // Core pg backend implementation must not exist
+  await fileNotFound(new URL("../packages/pg-backend/src/index.ts", import.meta.url));
+
+  // Migration scripts that targeted PostgreSQL must not exist
+  await fileNotFound(new URL("../scripts/apply-pg-schema.mjs", import.meta.url));
+  await fileNotFound(new URL("../scripts/apply-pg-test-schema.mjs", import.meta.url));
+  await fileNotFound(new URL("../scripts/pg-test-runner.mjs", import.meta.url));
+
+  // Verification map must not claim any pg fixtures
   const map = JSON.parse(await readFile(new URL("../verification-map.yaml", import.meta.url), "utf8"));
   const pgFixtures = map.claims.flatMap((claim) => claim.fixturePaths).filter((path) => /pg/i.test(path) && !path.endsWith("story-346-pg-disabled.test.mjs"));
   assert.deepEqual(pgFixtures, []);
 });
 
-test("STORY-346 production backend selection has no pg branch", async () => {
+test("STORY-346 production backend selection rejects PostgreSQL", async () => {
+  // TCRN-CROSS-INC-275: Verify the absence is enforced at runtime, not just in catalog.
+  // This test would fail if pg were added back to allowedValues without removing this test.
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-s346-backend-")));
   try {
     const roots = [];

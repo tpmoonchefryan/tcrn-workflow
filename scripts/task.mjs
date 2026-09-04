@@ -432,7 +432,6 @@ async function runTests({
   focusedTestNamePattern = undefined,
   focusedReasonCode = undefined,
   extraEnvironment = {},
-  inc255Only = false,
   inc256Only = false,
   inc258Only = false,
   inc259Only = false,
@@ -480,7 +479,6 @@ async function runTests({
     .filter((path) => !authorityOutputOnly || path === "tests/act13-authority-output.test.mjs")
     .filter((path) => !init047Only || ["tests/knowledge-inject.test.mjs", "tests/p3-cli-read-surface.test.mjs", "tests/p4-knowledge-core.test.mjs", "tests/stop-pact.test.mjs"].includes(path))
     .filter((path) => focusedTestPath === undefined || path === focusedTestPath)
-    .filter((path) => !inc255Only || path === "tests/inc255-mcp-framing.test.mjs")
     .filter((path) => !inc256Only || path === "tests/inc256-knowledge-policy.test.mjs")
     .filter((path) => !inc258Only || path === "tests/inc258-install-manifest.test.mjs")
     .filter((path) => !inc259Only || path === "tests/inc259-storage-migration.test.mjs")
@@ -495,8 +493,6 @@ async function runTests({
   return success(
     focusedReasonCode
       ? focusedReasonCode
-      : inc255Only
-      ? "INC255_MCP_FRAMING_VERIFIED"
       : inc256Only
       ? "INC256_KNOWLEDGE_MIGRATION_VERIFIED"
       : inc258Only
@@ -609,7 +605,7 @@ const INIT049_STORY351_TESTS = Object.freeze([
   ["tests/story-341-knowledge-body-migration.test.mjs", "STORY-341 knowledge body migration is explicit and keeps metadata outside the body segments"],
   ["tests/story-344-storage-boundary.test.mjs", "STORY-344 workspace lifecycle has no direct data-plane fs calls"],
   ["tests/story-345-backend-selection.test.mjs", "STORY-345 backend selection rejects unknown values and does not silently fall back"],
-  ["tests/story-346-pg-disabled.test.mjs", "STORY-346 production backend selection has no pg branch"],
+  ["tests/story-346-pg-disabled.test.mjs", "STORY-346 production backend selection rejects PostgreSQL"],
   ["tests/story-347-348-settings-policy.test.mjs", "STORY-348 protocol validity values remain hardcoded rather than becoming settings"],
   ["tests/p4-knowledge-core.test.mjs", "Knowledge implementation has no predecessor, network, database, or AOS read authority"],
   ["tests/p4-artifact-lifecycle.test.mjs", "artifact implementation and fixtures contain no legacy source-read authority"],
@@ -716,7 +712,6 @@ const INIT047_GOAL_TESTS = Object.freeze({
   goal02: { path: "tests/knowledge-inject.test.mjs", pattern: "INIT-047 injection budget=10 reports exceeded without truncation", reasonCode: "INIT047_GOAL_02_VERIFIED" },
   goal03: { path: "tests/p3-cli-read-surface.test.mjs", pattern: "INIT-047 work-list search has an independent bounded scope projection", reasonCode: "INIT047_GOAL_03_VERIFIED" },
   goal04: { path: "tests/p3-cli-read-surface.test.mjs", pattern: "INIT-047 work-draft has an independent canonical heading and example projection", reasonCode: "INIT047_GOAL_04_VERIFIED" },
-  goal05: { path: "tests/p3-cli-read-surface.test.mjs", pattern: "INIT-047 MCP read face performs the real handshake and stays read-only", reasonCode: "INIT047_GOAL_05_VERIFIED" },
   goal06: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 supersedes rejects an unavailable target before writing", reasonCode: "INIT047_GOAL_06_VERIFIED" },
   goal07: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047: relevance ordering changes with the query and source-free fragments are selectable", reasonCode: "INIT047_GOAL_07_VERIFIED" },
   goal08: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 source digest check reports changes without hiding metadata", reasonCode: "INIT047_GOAL_08_VERIFIED" },
@@ -2088,7 +2083,6 @@ const commandContracts = {
   goal02: { exit: 0, reasonCode: "INIT047_GOAL_02_VERIFIED" },
   goal03: { exit: 0, reasonCode: "INIT047_GOAL_03_VERIFIED" },
   goal04: { exit: 0, reasonCode: "INIT047_GOAL_04_VERIFIED" },
-  goal05: { exit: 0, reasonCode: "INIT047_GOAL_05_VERIFIED" },
   goal06: { exit: 0, reasonCode: "INIT047_GOAL_06_VERIFIED" },
   goal07: { exit: 0, reasonCode: "INIT047_GOAL_07_VERIFIED" },
   goal08: { exit: 0, reasonCode: "INIT047_GOAL_08_VERIFIED" },
@@ -2112,7 +2106,6 @@ const commandContracts = {
   story348: { exit: 0, reasonCode: "INIT048_STORY_348_VERIFIED" },
   story344: { exit: 0, reasonCode: "INIT048_STORY_344_VERIFIED" },
   story345: { exit: 0, reasonCode: "INIT048_STORY_345_VERIFIED" },
-  inc255: { exit: 0, reasonCode: "INC255_MCP_FRAMING_VERIFIED" },
   inc256: { exit: 0, reasonCode: "INC256_KNOWLEDGE_MIGRATION_VERIFIED" },
   inc258: { exit: 0, reasonCode: "INC258_INSTALL_MANIFEST_VERIFIED" },
   inc259: { exit: 0, reasonCode: "INC259_STORAGE_MIGRATION_VERIFIED" },
@@ -2241,11 +2234,11 @@ async function verifyMap() {
   const verificationLinks = validateVerificationMapLinks(map);
   assertion(verificationLinks.ok, "VERIFICATION_MAP_LINKS_INVALID", verificationLinks.problems.join("; "));
   const init047Goals = map.claims.filter((claim) => typeof claim.id === "string" && /^INIT047-GOAL-\d{2}$/u.test(claim.id));
-  assertion(init047Goals.length === 12, "VERIFICATION_MAP_INIT047_GOAL_COUNT", String(init047Goals.length));
+  assertion(init047Goals.length === 11, "VERIFICATION_MAP_INIT047_GOAL_COUNT", String(init047Goals.length));
   for (const field of ["command", "expectedReasonCode"]) {
-    assertion(new Set(init047Goals.map((claim) => claim[field])).size === 12, "VERIFICATION_MAP_INIT047_GOAL_NOT_INDEPENDENT", field);
+    assertion(new Set(init047Goals.map((claim) => claim[field])).size === 11, "VERIFICATION_MAP_INIT047_GOAL_NOT_INDEPENDENT", field);
   }
-  assertion(new Set(init047Goals.map((claim) => claim.redLeg.test)).size === 12, "VERIFICATION_MAP_INIT047_GOAL_RED_LEGS_NOT_INDEPENDENT");
+  assertion(new Set(init047Goals.map((claim) => claim.redLeg.test)).size === 11, "VERIFICATION_MAP_INIT047_GOAL_RED_LEGS_NOT_INDEPENDENT");
   assertion(INIT049_FOCUSED_CLAIM_NAMES.length === INIT049_FOCUSED_CLAIM_COUNT, "VERIFICATION_MAP_INIT049_FOCUSED_DECLARATION_COUNT", String(INIT049_FOCUSED_CLAIM_NAMES.length));
   const init049Focused = INIT049_FOCUSED_CLAIM_NAMES.map((name) => map.claims.find((claim) => claim.command === `pnpm verify:${name}`));
   assertion(init049Focused.every((claim) => claim !== undefined), "VERIFICATION_MAP_INIT049_FOCUSED_MISSING");
@@ -2327,7 +2320,10 @@ async function verifyMap() {
         assertion(typeof heading === "string", "VERIFICATION_MAP_ADR_CRITERION_NOT_IN_SOURCE", criterion.id);
         assertion(heading.toLocaleLowerCase() === String(criterion.title ?? "").toLocaleLowerCase(), "VERIFICATION_MAP_ADR_CRITERION_TITLE_DRIFT", criterion.id);
         assertion(typeof criterion.gate === "string" && criterion.gate.length > 0, "VERIFICATION_MAP_ADR_CRITERION_UNNAMED", criterion.id);
-        assertion(["implemented", "candidate", "planned"].includes(criterion.status), "VERIFICATION_MAP_ADR_CRITERION_STATUS", criterion.id);
+        assertion(["implemented", "candidate", "planned", "retired"].includes(criterion.status), "VERIFICATION_MAP_ADR_CRITERION_STATUS", criterion.id);
+        if (criterion.status === "retired") {
+          assertion(typeof criterion.ruling === "string" && criterion.ruling.trim().length > 0, "VERIFICATION_MAP_ADR_CRITERION_RULING", criterion.id);
+        }
         if (criterion.status === "implemented") {
           // The named gate must be real AND pipeline-wired. A gate that no pipeline
           // executes is not a gate (INC-079's rule applied to ADR criteria).
@@ -2924,7 +2920,6 @@ const handlers = {
   goal02: () => runInit047Goal("goal02"),
   goal03: () => runInit047Goal("goal03"),
   goal04: () => runInit047Goal("goal04"),
-  goal05: () => runInit047Goal("goal05"),
   goal06: () => runInit047Goal("goal06"),
   goal07: () => runInit047Goal("goal07"),
   goal08: () => runInit047Goal("goal08"),
@@ -2953,7 +2948,6 @@ const handlers = {
   story351: runInit049Story351,
   story352: () => runInit049Story("story352"),
   story353: runInit049Story353,
-  inc255: () => runTests({ inc255Only: true }),
   inc256: () => runTests({ inc256Only: true }),
   inc258: () => runTests({ inc258Only: true }),
   inc259: () => runTests({ inc259Only: true }),
@@ -3046,7 +3040,7 @@ function evidencePhase(name) {
   if (name === "p4-knowledge") {
     return "p4";
   }
-  if (name === "inc255" || name === "inc256") {
+  if (name === "inc256") {
     return "p4";
   }
   if (name === "inc269") {

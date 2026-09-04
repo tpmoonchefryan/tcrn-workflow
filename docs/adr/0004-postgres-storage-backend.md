@@ -1,13 +1,17 @@
 # ADR 0004: PostgreSQL storage backend for governed workspaces
 
-Status: accepted — historical D1–D5′ decision retained; INIT-048 MVP revision (2026-09-02) keeps PostgreSQL code and test tooling in the repository but does not wire it into the product path.
+Status: superseded by TCRN-CROSS-INC-275 (2026-09-04) — the historical D1–D5′ decision below is retained as a record of what was decided and why. The PostgreSQL backend, its migration family and its test tooling have been removed from the repository. The §9 equivalence criteria are retired with them and carry that status in `scripts/policy/adr-criteria.json`.
 
-Current MVP disposition: local file and local segmented storage are the only
-selectable backends. `storage.backend` admits `file` and `file-segmented`; the
-PostgreSQL backend, migration scripts, and `pg` development dependency remain
-retained for future re-admission but are not connected by this release. No AOS
-or external database integration is part of this MVP. This ADR does not touch `MIN-060 D4`
-("only local mode writes local files") — see section 8.
+Current disposition: local file and local segmented storage are the only
+selectable backends. `storage.backend` admits `file` and `file-segmented`.
+INIT-048 (2026-09-02) unwired PostgreSQL from the product path while keeping
+its code; TCRN-CROSS-INC-275 (2026-09-04) removed the backend, its migration
+scripts and the `pg` dependency, under the Owner ruling that a test's value
+comes from the thing it tests existing. A workspace whose storage-home
+declaration names `pg` is now refused with `STORAGE_HOME_BACKEND_RETIRED`
+rather than served from local files. No AOS or external database integration
+is part of this MVP. This ADR does not touch `MIN-060 D4` ("only local mode
+writes local files") — see section 8.
 
 The earlier accepted ruling below that described PostgreSQL as the production
 track remains historical context for the retained code. It is superseded for

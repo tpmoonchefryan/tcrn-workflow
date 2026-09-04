@@ -468,27 +468,6 @@ export type {
   StoryVerificationLinkValidation,
   VerificationClaimLink,
 } from "./story-scope-compliance.js";
-// STORY-178: file↔pg bidirectional migration of the workspace data plane
-// (event segments, workspace metadata, and the two derived stores).
-export {
-  WORK_RECORD_FIELDS_MIGRATION_VERSION,
-  WORKSPACE_MIGRATION_REASON_CODES,
-  WORKSPACE_MIGRATION_VERIFIED,
-  WorkspaceMigrationError,
-  executeMigration,
-  migrateWorkRecordFields,
-  planMigration,
-  rollbackMigration,
-  verifyMigration,
-} from "./workspace-migration.js";
-export type {
-  MigrationDirection,
-  MigrationOptions,
-  MigrationPlan,
-  MigrationVerification,
-  WorkRecordFieldsMigrationReport,
-  WorkspaceMigrationReasonCode,
-} from "./workspace-migration.js";
 export {
   PUBLIC_AOS_REQUIREMENTS_REASON_CODES,
   PUBLIC_AOS_REQUIREMENTS_READBACK_VERSION,
@@ -588,8 +567,6 @@ export {
   OPERATOR_AUTHORITY_PINS_VERSION,
   OPERATOR_AUTHORITY_REASON_CODES,
   OperatorAuthorityError,
-  assertOperatorMcpAuthorityOutputGranted,
-  assertOperatorMcpWriteGranted,
   readOperatorAuthority,
   validateOperatorAuthorityBundle,
   validateOperatorAuthorityPins,
@@ -599,7 +576,6 @@ export type {
   OperatorAuthorityContext,
   OperatorAuthorityFileGrants,
   OperatorAuthorityHostInputs,
-  OperatorAuthorityMcpGrant,
   OperatorAuthorityPins,
   OperatorAuthorityReasonCode,
 } from "./operator-authority.js";

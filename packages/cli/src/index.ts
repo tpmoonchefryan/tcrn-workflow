@@ -53,13 +53,7 @@ import {
   workBatchReceipt,
   workspaceBudgets,
   planWorkspaceMigration,
-  hasWorkspaceStorageMigration,
   migrateWorkspaceStorage,
-  rollbackWorkspaceStorageMigration,
-  verifyWorkspaceStorageMigration,
-  executeMigration,
-  verifyMigration,
-  rollbackMigration,
   readGenericProfileAdmissionReceipt,
   readContextRouteAuthorityReceipt,
   readKnowledgeBody,
@@ -151,7 +145,6 @@ import {
   readRelocationAuthority,
   vacateWorkspace,
   readStorageHomeDeclaration,
-  sealStorageHomeDeclaration,
   readSettingsCatalog,
   readInstallManifest,
   readMachineSettingsCatalog,
@@ -176,8 +169,6 @@ import {
   readTemplateDocumentFile,
   templateBindingFromWorkRecord,
   validateTemplateDocument,
-  withStoreBackendFactory,
-  withStorageBackendFactory,
 } from "../../core/src/index.js";
 import type {
   ConferenceRequest,
@@ -211,7 +202,7 @@ import { join, relative, resolve, sep } from "node:path";
 
 import { assertStrictInstant, canonicalExternalKey, canonicalJson, canonicalSha256, deriveStableId } from "../../protocol/src/index.js";
 import { isWorkStatus } from "../../protocol/src/index.js";
-import type { JsonValue, PlannedDeliveryKind, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
+import type { PlannedDeliveryKind, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
 // ProjectRecord is a core type, not a protocol one. The protocol package never exported
 // it, so this import resolved to nothing; import elision hid the mistake from every
 // runtime check the repo had.
@@ -416,68 +407,6 @@ function integerValue(values: Readonly<Record<string, string>>, name: string, mi
 // STORY-178: the file↔pg migration target. Only `file` and `pg` are legal; the
 // migration verbs refuse anything else by derivation rather than a hard-coded
 // list of typo'd backends.
-function migrationTarget(value: string): "file" | "pg" {
-  if (value === "file" || value === "pg") {
-    return value;
-  }
-  fail("CLI_ARGUMENT_MALFORMED", `to: ${value}`);
-}
-
-// STORY-178/INC-072: build the migration backend options. The file side needs
-// none (the migration defaults to FileBackend); the PG side lazily imports the
-// pg-backend package (a separate workspace package) and constructs a
-// PgBackend/PgStoreBackend from $TCRN_PG_CONNECTION and the target schema.
-async function migrationOptions(to: string, schemaFlag?: string): Promise<Parameters<typeof executeMigration>[2]> {
-  if (to !== "pg") {
-    return {};
-  }
-  const schema = schemaFlag ?? process.env.TCRN_PG_SCHEMA;
-  if (typeof schema !== "string" || schema.length === 0) {
-    fail("CLI_ARGUMENT_MALFORMED", "schema: --schema or $TCRN_PG_SCHEMA is required for a pg migration");
-  }
-  const connection = process.env.TCRN_PG_CONNECTION;
-  if (typeof connection !== "string" || connection.length === 0) {
-    fail("CLI_ARGUMENT_MALFORMED", "connection: $TCRN_PG_CONNECTION is required for a pg migration");
-  }
-  const { PgBackend, PgStoreBackend } = await import("../../pg-backend/src/index.js");
-  const backend = new PgBackend({ schema, connection });
-  const storeBackend = new PgStoreBackend({ schema, connection });
-  await backend.connect();
-  await storeBackend.connect();
-  // INC-074: carry the schema + a caller-stamped migratedAt so executeMigration can
-  // write the storage-home sentinel into the source file tree after a file→pg move.
-  return {
-    backend: () => backend,
-    storeBackend: () => storeBackend,
-    schema,
-    migratedAt: new Date().toISOString().replace(/\.\d{3}Z$/u, "Z"),
-  };
-}
-
-// Close the PG backends the migration opened, so the CLI process exits (a live
-// pg client keeps the event loop running and the process would otherwise hang).
-// close() is called as a method (this bound) — reading `candidate.close` into a
-// variable and invoking it detaches this, which would throw on the pg client's
-// `this.client.end()`. Close failures are swallowed: a close must not mask the
-// migration result the caller is returning, and it must not leave the sibling
-// backend unclosed (which would keep the process alive).
-async function closeMigrationBackends(options: Parameters<typeof executeMigration>[2] | undefined): Promise<void> {
-  const backend = options?.backend?.("");
-  const storeBackend = options?.storeBackend?.("");
-  const closeIfPresent = async (candidate: unknown): Promise<void> => {
-    const maybe = candidate as { close?: unknown } | undefined;
-    if (maybe && typeof maybe.close === "function") {
-      try {
-        await (maybe.close as () => Promise<void>).call(maybe);
-      } catch {
-        // best-effort close; never mask the migration outcome or the sibling close
-      }
-    }
-  };
-  await closeIfPresent(backend);
-  await closeIfPresent(storeBackend);
-}
-
 // WSB-7: opt-in lease-scoped expected-version derivation. The literal "head"
 // resolves, under the already-held workspace lease, to the current materialized
 // version. Lease acquisition plus the mutation claim serialize writers, so this
@@ -1179,10 +1108,6 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "lease-break", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "owner-token", required: true, valueKind: "string" }] },
   { name: "lease-inspect", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "lease-recovery-break", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "claim-token", required: true, valueKind: "string" }] },
-  // STORY-178/INC-072: the file↔pg migration verb family, in canonical name
-  // order (execute/plan/rollback/verify). `to` names the target backend; `schema`
-  // (optional) names the PG chain schema (e.g. `chain_cross`); it defaults to
-  // $TCRN_PG_SCHEMA, and the PG connection defaults to $TCRN_PG_CONNECTION.
   // STORY-281: machine-level portal preferences. No workspace and no expected-version:
   // this layer is not chain-backed, so there is no head to compare against — see
   // packages/core/src/machine-settings.ts for why a laptop's default theme is not
@@ -1191,10 +1116,11 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "machine-settings-catalog", availability: "cli", mutates: false, flags: [{ name: "home", required: false, valueKind: "string" }] },
   { name: "machine-settings-remove", availability: "cli", mutates: true, flags: [{ name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "home", required: false, valueKind: "string" }] },
   { name: "machine-settings-set", availability: "cli", mutates: true, flags: [{ name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "value", required: true, valueKind: "string" }, { name: "home", required: false, valueKind: "string" }] },
-  { name: "migration-execute", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "to", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
+  // TCRN-CROSS-INC-275: PostgreSQL support removed. migration-verify and
+  // migration-rollback removed (pg family verbs). migration-execute retains only
+  // the storage-version migration (v1→v2) via migrateWorkspaceStorage.
+  { name: "migration-execute", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "migration-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "target-version", required: true, valueKind: "integer" }, { name: "dry-run", required: true, valueKind: "boolean" }] },
-  { name: "migration-rollback", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
-  { name: "migration-verify", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "to", required: true, valueKind: "string" }, { name: "schema", required: false, valueKind: "string" }] },
   { name: "model-plan-assign", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "plan", required: true, valueKind: "string" }, { name: "persona", required: true, valueKind: "string" }, { name: "model", required: true, valueKind: "string" }, { name: "effort", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "model-plan-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "host", required: false, valueKind: "string" }] },
   { name: "model-plan-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -1230,11 +1156,8 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "snapshot-verify", availability: "cli", mutates: false, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "manifest", required: true, valueKind: "string" }] },
   { name: "status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   // INC-074/INC-081: seal a retained file archive to an already authoritative
-  // PG chain. This is deliberately separate from migration-execute: a divergent
-  // archive must not be overwritten or treated as a resumable prefix. The PG
-  // wrapper proves the live chain first; this verb writes only the engine-owned
-  // storage-home declaration and is idempotent for the same declaration.
-  { name: "storage-home-seal", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "schema", required: true, valueKind: "string" }] },
+  // TCRN-CROSS-INC-275: PostgreSQL support removed. storage-home-seal was
+  // PG-specific; it is removed.
   { name: "storage-home-status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "template-admit", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "template", required: true, valueKind: "string" }, { name: "owner", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "template-validate", availability: "cli", mutates: false, flags: [{ name: "template", required: true, valueKind: "string" }] },
@@ -1392,67 +1315,8 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
       },
     });
   };
-  // STORY-189 switch window: a facade serving a PG-backed chain sets TCRN_PG_CONNECTION +
-  // TCRN_PG_SCHEMA, and every verb that touches a workspace then reads that chain from
-  // Postgres instead of the file tree. The migration verbs are excluded — they carry their
-  // own explicit backends (resolveBackend prefers options over the factory), so a wrap here
-  // would only add a wasted connection. `commands` is excluded too: it answers from the
-  // catalogue, not a workspace, and the facade re-derives the tool table from it every TTL.
-  const connection = process.env.TCRN_PG_CONNECTION;
-  const schema = process.env.TCRN_PG_SCHEMA;
-  const migrationVerbs = new Set(["migration-plan", "migration-execute", "migration-verify", "migration-rollback"]);
-  const wrapsWorkspace = (verb: string): boolean => {
-    if (verb === "commands" || migrationVerbs.has(verb)) return false;
-    const entry = COMMAND_CATALOG.find((candidate) => candidate.name === verb);
-    return entry?.flags.some((flag) => flag.name === "workspace") ?? false;
-  };
-  if (typeof connection === "string" && connection.length > 0 &&
-      typeof schema === "string" && schema.length > 0 &&
-      wrapsWorkspace(command)) {
-    // INC-074: a PG-facing path must name the schema the workspace's storage-home
-    // sentinel declares. A config pointing at the wrong schema — or one that would
-    // silently serve a different chain — refuses named instead of answering wrong.
-    const workspaceValue = arguments_.find((entry, index) => index > 0 && (entry === "--workspace" || entry.startsWith("--workspace=")));
-    const workspaceRoot = workspaceValue === undefined
-      ? null
-      : workspaceValue === "--workspace"
-        ? arguments_[arguments_.indexOf("--workspace") + 1] ?? null
-        : workspaceValue.slice("--workspace=".length);
-    if (typeof workspaceRoot === "string" && workspaceRoot.length > 0) {
-      let home;
-      try {
-        home = await readStorageHomeDeclaration(workspaceRoot);
-      } catch (error) {
-        // INC-074: malformed or unsafe is not the same as absent. Swallowing
-        // this error would reopen the fork path the sentinel closes.
-        fail(
-          typeof (error as { reasonCode?: unknown }).reasonCode === "string"
-            ? String((error as { reasonCode: string }).reasonCode)
-            : "STORAGE_HOME_INVALID",
-          String((error as { message?: unknown }).message ?? error),
-        );
-      }
-      if (home !== null && home.storage === "pg" && home.schema !== undefined && home.schema !== schema) {
-        fail(
-          "CLI_SCHEMA_MISMATCH",
-          `workspace ${workspaceRoot} declares storage-home pg:${home.schema} but this path is configured for ${schema}; ` +
-          "the sentinel schema is the only valid target",
-        );
-      }
-    }
-    const { PgBackend, PgStoreBackend } = await import("../../pg-backend/src/index.js");
-    const backend = new PgBackend({ schema, connection });
-    const storeBackend = new PgStoreBackend({ schema, connection });
-    await backend.connect();
-    await storeBackend.connect();
-    try {
-      await withStorageBackendFactory(() => backend, () =>
-        withStoreBackendFactory(() => storeBackend, dispatch));
-    } finally {
-      await closeMigrationBackends({ backend: () => backend, storeBackend: () => storeBackend });
-    }
-    return;
-  }
+  // TCRN-CROSS-INC-275: PostgreSQL support removed. The STORY-189 PG-serving
+  // facade is removed entirely.
   await dispatch();
 }
 
@@ -2130,95 +1994,11 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "migration-execute") {
-    const values = parseArguments(rest, ["workspace", "to", "schema"]);
-    required(values, ["workspace", "to"]);
-    if (values.to === "2") {
-      io.write(canonicalJson(await migrateWorkspaceStorage(values.workspace ?? "")));
-      return;
-    }
-    const options = await migrationOptions(values["to"] ?? "", values["schema"]);
-    try {
-      io.write(canonicalJson(await executeMigration(values.workspace ?? "", migrationTarget(values["to"] ?? ""), options)));
-    } finally {
-      await closeMigrationBackends(options);
-    }
-    return;
-  }
-  if (command === "migration-verify") {
-    const values = parseArguments(rest, ["workspace", "to", "schema"]);
-    required(values, ["workspace", "to"]);
-    if (values.to === "2") {
-      io.write(canonicalJson(await verifyWorkspaceStorageMigration(values.workspace ?? "") as unknown as JsonValue));
-      return;
-    }
-    const options = await migrationOptions(values["to"] ?? "", values["schema"]);
-    try {
-      io.write(canonicalJson(await verifyMigration(values.workspace ?? "", migrationTarget(values["to"] ?? ""), options)));
-    } finally {
-      await closeMigrationBackends(options);
-    }
-    return;
-  }
-  if (command === "migration-rollback") {
-    const values = parseArguments(rest, ["workspace", "schema"]);
+    // TCRN-CROSS-INC-275: PostgreSQL support removed. Only the storage-version
+    // migration (v1→v2) remains.
+    const values = parseArguments(rest, ["workspace"]);
     required(values, ["workspace"]);
-    if (await hasWorkspaceStorageMigration(values.workspace ?? "")) {
-      io.write(canonicalJson(await rollbackWorkspaceStorageMigration(values.workspace ?? "")));
-      return;
-    }
-    const options = await migrationOptions("pg", values["schema"]);
-    try {
-      io.write(canonicalJson(await rollbackMigration(values.workspace ?? "", options)));
-    } finally {
-      await closeMigrationBackends(options);
-    }
-    return;
-  }
-  if (command === "storage-home-seal") {
-    const values = parseArguments(rest, ["workspace", "expected-version", "at", "schema"]);
-    required(values, ["workspace", "expected-version", "at", "schema"]);
-    const schema = values.schema ?? "";
-    if (!/^chain_[a-z0-9_]+$/u.test(schema)) {
-      fail("CLI_ARGUMENT_MALFORMED", "schema");
-    }
-    if (process.env.TCRN_PG_SCHEMA !== schema || typeof process.env.TCRN_PG_CONNECTION !== "string" || process.env.TCRN_PG_CONNECTION.length === 0) {
-      fail("STORAGE_HOME_PG_REQUIRED", "storage-home-seal requires the named PG schema and connection in the engine environment");
-    }
-    const workspace = values.workspace ?? "";
-    const at = values.at ?? "";
-    const expected = expectedVersion(values);
-    const lease = await acquireWorkspaceLease(workspace, {
-      now: at,
-      storageHomeAdmission: "migration",
-    });
-    try {
-      // The PG wrapper has already admitted the named schema and injected the
-      // PgBackend. Validate the live chain before sealing so the archive binding
-      // cannot be written from a stale or unreadable authority.
-      const state = await validateWorkspace(workspace);
-      if (state.version !== expected) {
-        fail("WORKSPACE_CAS_MISMATCH", `expected PG version ${String(expected)}, observed ${String(state.version)}`);
-      }
-      const declaration = await sealStorageHomeDeclaration(workspace, {
-        schemaVersion: "tcrn.storage-home.v1",
-        storage: "pg",
-        schema,
-        workspaceId: state.metadata.workspaceId,
-        migratedAt: at,
-      });
-      io.write(canonicalJson({
-        reasonCode: declaration.migratedAt === at ? "STORAGE_HOME_SEALED" : "STORAGE_HOME_ALREADY_SEALED",
-        schemaVersion: declaration.schemaVersion,
-        storage: declaration.storage,
-        schema: declaration.schema,
-        workspaceId: declaration.workspaceId,
-        migratedAt: declaration.migratedAt,
-        version: state.version,
-        headEventHash: state.headEventHash,
-      }));
-    } finally {
-      await lease.release();
-    }
+    io.write(canonicalJson(await migrateWorkspaceStorage(values.workspace ?? "")));
     return;
   }
   if (command === "storage-home-status") {

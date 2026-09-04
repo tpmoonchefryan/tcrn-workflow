@@ -13,7 +13,7 @@ The shipped binary runs every `availability: "cli"` verb. Verbs that need an
 out-of-band authority use one host-neutral operator channel: before the command,
 pass `--authority-pins <absolute-canonical-path>` and
 `--authority-pins-digest <sha256>`. The pins document binds the actual authority
-bundle; see `packages/core/spec/operator-authority-mcp-v1.md`. Omitting either
+bundle; see `packages/core/spec/operator-authority-v1.md`. Omitting either
 value fails closed, and the binary never consults prompt text, environment
 variables or ambient configuration. A programmatic embedder may still construct
 `CliIo` directly, but mixing that authority with operator pins is ambiguous and
@@ -31,13 +31,10 @@ status. An agent enumerates capability from that catalog rather than from prose;
 this document stays in drift-guarded agreement with it (see the read-surface
 test). Never hardcode a verb list an agent could instead read from `commands`.
 
-The optional `packages/mcp` entrypoint exposes five read-only structured MCP tools
-over stdio: `work_search`, `work_show`, `knowledge_search`, `work_draft`, and
-`status`. It accepts newline-delimited JSON, the MCP stdio framing, and retains
-JSON-RPC Content-Length framing for existing clients. It calls the core read
-surface in-process; it is not a second mutation or authority channel. The host registers
-it explicitly when needed, so the default CLI surface and its numeric CAS,
-explicit-time, actor, and reason-code semantics remain unchanged.
+The `packages/mcp` stdio entrypoint that once exposed five read-only structured
+tools was retired in `v0.11.18` and removed from the repository by
+TCRN-CROSS-INC-275 (2026-09-04). The CLI is the only transport; an agent
+enumerates capability from the `commands` catalog described above.
 
 ## 2. Envelopes
 

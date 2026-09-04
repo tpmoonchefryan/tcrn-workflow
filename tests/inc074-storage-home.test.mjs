@@ -23,6 +23,7 @@ import test from "node:test";
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
   WorkspaceError,
+  StorageHomeError,
   acquireWorkspaceLease,
   FileBackend,
   initializeWorkspace,
@@ -60,21 +61,25 @@ async function expectReasonAsync(reasonCode, operation) {
   try {
     await operation();
   } catch (error) {
-    assert.ok(error instanceof WorkspaceError, `expected WorkspaceError, got ${String(error)}`);
+    assert.ok(
+      error instanceof WorkspaceError || error instanceof StorageHomeError,
+      `expected WorkspaceError or StorageHomeError, got ${String(error)}`
+    );
     assert.equal(error.reasonCode, reasonCode);
     return error;
   }
   assert.fail(`expected ${reasonCode} to be raised`);
 }
 
-test("INC-074: a sentinel declares storage=pg; a mutating verb via the file backend refuses WORKSPACE_STORAGE_RELOCATED", async () => {
+test("INC-074: a workspace declaring the retired PostgreSQL backend is refused (STORAGE_HOME_BACKEND_RETIRED)", async () => {
   const fixture = await workspaceFixture();
   try {
     // A normal workspace has no sentinel: the file backend writes freely.
     const sentinel = await readStorageHomeDeclaration(fixture.workspace);
     assert.equal(sentinel, null, "fresh workspace carries no storage-home sentinel");
 
-    // Lay the sentinel the way migration-execute would after a file→pg move.
+    // Lay the sentinel the way migration-execute would have after a file→pg move.
+    // The write succeeds (we just write bytes), but reading it back fails.
     await writeStorageHomeDeclaration(fixture.workspace, {
       schemaVersion: STORAGE_HOME_VERSION,
       storage: "pg",
@@ -82,19 +87,17 @@ test("INC-074: a sentinel declares storage=pg; a mutating verb via the file back
       workspaceId: "workspace:inc074",
       migratedAt: "2026-08-07T00:00:00.000Z",
     });
-    const declared = await readStorageHomeDeclaration(fixture.workspace);
-    assert.equal(declared?.storage, "pg");
-    assert.equal(declared?.schema, "chain_inc074");
 
-    // RED LEG: a mutating verb (lease acquisition) through the file backend refuses.
-    await expectReasonAsync("WORKSPACE_STORAGE_RELOCATED", () =>
+    // The PostgreSQL backend is retired (TCRN-CROSS-INC-275), so reading the
+    // pg declaration fails outright, not with a schema or relocation error.
+    await expectReasonAsync("STORAGE_HOME_BACKEND_RETIRED", () =>
+      readStorageHomeDeclaration(fixture.workspace));
+
+    // Any operation that tries to read the workspace also fails at the same point.
+    await expectReasonAsync("STORAGE_HOME_BACKEND_RETIRED", () =>
       acquireWorkspaceLease(fixture.workspace, { now: instant(5) }));
 
-    // POSITIVE LEG: read-only verbs still work — the archive stays forensible.
-    const state = await materializeWorkspace(fixture.workspace);
-    assert.equal(state.version, 0);
-
-    // Removing the sentinel (governed pg→file rollback) reopens the write door.
+    // Removing the sentinel (rollback) restores the workspace to usable state.
     await removeStorageHomeDeclaration(fixture.workspace);
     assert.equal(await readStorageHomeDeclaration(fixture.workspace), null);
     const lease = await acquireWorkspaceLease(fixture.workspace, { now: instant(6) });
@@ -104,7 +107,7 @@ test("INC-074: a sentinel declares storage=pg; a mutating verb via the file back
   }
 });
 
-test("INC-097 red leg: a file-kind backend override cannot bypass the PG storage-home sentinel", async () => {
+test("INC-074: a workspace with retired PG backend fails to read (STORAGE_HOME_BACKEND_RETIRED), even within file-backend context", async () => {
   const fixture = await workspaceFixture();
   try {
     await writeStorageHomeDeclaration(fixture.workspace, {
@@ -114,9 +117,10 @@ test("INC-097 red leg: a file-kind backend override cannot bypass the PG storage
       workspaceId: "workspace:inc097",
       migratedAt: "2026-08-07T00:00:00.000Z",
     });
+    // The refusal happens at the parseDeclaration step, before backend selection.
     await assert.rejects(
       () => withStorageBackendFactory(() => new FileBackend(fixture.workspace), () => acquireWorkspaceLease(fixture.workspace, { now: instant(5) })),
-      (error) => error?.reasonCode === "WORKSPACE_STORAGE_RELOCATED",
+      (error) => error?.reasonCode === "STORAGE_HOME_BACKEND_RETIRED",
     );
   } finally {
     await fixture.close();
@@ -138,7 +142,7 @@ test("INC-074: a malformed sentinel fails closed rather than being treated as ab
   }
 });
 
-test("INC-074: CLI refuses a PG path whose schema does not match the sentinel (CLI_SCHEMA_MISMATCH)", async () => {
+test("INC-074: CLI refuses a workspace declaring the retired PostgreSQL backend (STORAGE_HOME_BACKEND_RETIRED)", async () => {
   const fixture = await workspaceFixture();
   try {
     await writeStorageHomeDeclaration(fixture.workspace, {
@@ -154,8 +158,8 @@ test("INC-074: CLI refuses a PG path whose schema does not match the sentinel (C
       write: (value) => { output += value; },
       onError: (error) => { output += String(error); },
     };
-    // Simulate the CLI wrap: status is a read verb but the PG-wrap schema gate runs
-    // before dispatch, so a mismatched schema refuses named.
+    // The PostgreSQL backend is retired (TCRN-CROSS-INC-275). When the CLI tries to
+    // load the workspace, parseDeclaration refuses the pg storage outright.
     const previous = { connection: process.env.TCRN_PG_CONNECTION, schema: process.env.TCRN_PG_SCHEMA };
     process.env.TCRN_PG_CONNECTION = "postgresql://x";
     process.env.TCRN_PG_SCHEMA = "chain_wrong";
@@ -172,14 +176,14 @@ test("INC-074: CLI refuses a PG path whose schema does not match the sentinel (C
       if (previous.schema === undefined) delete process.env.TCRN_PG_SCHEMA;
       else process.env.TCRN_PG_SCHEMA = previous.schema;
     }
-    assert.ok(output.includes("CLI_SCHEMA_MISMATCH"), `expected CLI_SCHEMA_MISMATCH in ${output}`);
+    assert.ok(output.includes("STORAGE_HOME_BACKEND_RETIRED"), `expected STORAGE_HOME_BACKEND_RETIRED in ${output}`);
     assert.notEqual(exitCode, 0);
   } finally {
     await fixture.close();
   }
 });
 
-test("INC-074/INC-081: sealing a retained archive is idempotent and never overwrites a different binding", async () => {
+test("INC-074: sealing a PG archive fails because the backend is retired (STORAGE_HOME_BACKEND_RETIRED)", async () => {
   const fixture = await workspaceFixture();
   try {
     const declaration = {
@@ -189,20 +193,11 @@ test("INC-074/INC-081: sealing a retained archive is idempotent and never overwr
       workspaceId: "workspace:inc074",
       migratedAt: "2026-08-07T00:00:00.000Z",
     };
-    const first = await sealStorageHomeDeclaration(fixture.workspace, declaration);
-    assert.deepEqual(first, declaration);
-
-    // A retry at a different instant keeps the original immutable binding and
-    // cannot rewrite its migration evidence.
-    const retry = await sealStorageHomeDeclaration(fixture.workspace, {
-      ...declaration,
-      migratedAt: "2026-08-07T00:01:00.000Z",
-    });
-    assert.deepEqual(retry, declaration);
-
+    // sealStorageHomeDeclaration writes the declaration, then tries to read it back
+    // for verification. The read-back fails with STORAGE_HOME_BACKEND_RETIRED.
     await assert.rejects(
-      () => sealStorageHomeDeclaration(fixture.workspace, { ...declaration, schema: "chain_other" }),
-      (error) => error?.reasonCode === "STORAGE_HOME_ALREADY_BOUND",
+      () => sealStorageHomeDeclaration(fixture.workspace, declaration),
+      (error) => error?.reasonCode === "STORAGE_HOME_BACKEND_RETIRED",
     );
   } finally {
     await fixture.close();

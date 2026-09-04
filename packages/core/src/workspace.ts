@@ -3389,11 +3389,12 @@ export async function acquireWorkspaceLease(workspaceRootInput: string, options:
   if (overrideBackendKind !== "pg" && options.storageHomeAdmission !== "migration") {
     const home = await readStorageHomeDeclaration(workspaceRoot);
     if (home !== null && home.storage === "pg") {
+      // TCRN-CROSS-INC-275: PostgreSQL support removed. A workspace previously
+      // migrated to PG cannot be operated on.
       fail(
         "WORKSPACE_STORAGE_RELOCATED",
         `${workspaceRoot} was migrated to Postgres (storage-home: pg:${home.schema ?? "?"}); ` +
-        "the file backend refuses mutating verbs here. Drive it through a PG-facing path " +
-        "(facade / TCRN_PG_CONNECTION+TCRN_PG_SCHEMA), or remove the sentinel only via a governed pg→file rollback.",
+        "PostgreSQL storage is no longer supported. This workspace cannot be operated on.",
       );
     }
   }

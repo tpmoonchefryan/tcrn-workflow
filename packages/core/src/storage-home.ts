@@ -89,6 +89,11 @@ function parseDeclaration(bytes: Buffer, path: string): StorageHomeDeclaration {
   if (typeof record.migratedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/u.test(String(record.migratedAt))) {
     throw new StorageHomeError("STORAGE_HOME_INVALID", `${path} migratedAt must be a strict instant`);
   }
+  // TCRN-CROSS-INC-275: PostgreSQL backend is retired. Refuse pg declarations after
+  // shape validation so they are recognised as well-formed but uservable.
+  if (record.storage === "pg") {
+    throw new StorageHomeError("STORAGE_HOME_BACKEND_RETIRED", `${path} declares storage=pg; the PostgreSQL backend was removed under TCRN-CROSS-INC-275 and cannot serve this workspace`);
+  }
   return record as unknown as StorageHomeDeclaration;
 }
 

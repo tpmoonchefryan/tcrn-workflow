@@ -80,7 +80,6 @@
     "verify:goal02": "node scripts/task.mjs goal02",
     "verify:goal03": "node scripts/task.mjs goal03",
     "verify:goal04": "node scripts/task.mjs goal04",
-    "verify:goal05": "node scripts/task.mjs goal05",
     "verify:goal06": "node scripts/task.mjs goal06",
     "verify:goal07": "node scripts/task.mjs goal07",
     "verify:goal08": "node scripts/task.mjs goal08",
@@ -109,7 +108,6 @@
     "verify:story351": "node scripts/task.mjs story351",
     "verify:story352": "node scripts/task.mjs story352",
     "verify:story353": "node scripts/task.mjs story353",
-    "verify:inc255": "node scripts/task.mjs inc255",
     "verify:inc256": "node scripts/task.mjs inc256",
     "verify:inc258": "node scripts/task.mjs inc258",
     "verify:inc259": "node scripts/task.mjs inc259",
@@ -185,7 +183,6 @@
     "@types/node": "24.13.2",
     "ajv": "8.20.0",
     "linkedom": "0.18.12",
-    "pg": "8.22.0",
     "typescript": "5.9.3"
   }
 }

@@ -19,8 +19,8 @@ the reader never silently falls back to a full replay. The checkpoint is a
 performance cache, not an authority or a backup receipt.
 
 `storage.backend` is a closed MVP enum containing only `file` and
-`file-segmented`. The PostgreSQL implementation remains in the repository for
-future re-admission but is not wired into the current product path. The local
+`file-segmented`. The PostgreSQL implementation was removed from the repository by
+TCRN-CROSS-INC-275 (2026-09-04); see ADR 0004. The local
 backend is dependency-free at runtime.
 
 ## Selection criteria

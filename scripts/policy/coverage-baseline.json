@@ -642,13 +642,6 @@
         "INC-244: a CLI workspace event automatically rebinds the knowledge high-water"
       ]
     },
-    "tests/inc255-mcp-framing.test.mjs": {
-      "testCount": 1,
-      "assertionCount": 12,
-      "testNames": [
-        "INC-255 stdio accepts newline JSON and retains Content-Length compatibility"
-      ]
-    },
     "tests/inc256-knowledge-policy.test.mjs": {
       "testCount": 3,
       "assertionCount": 19,
@@ -2050,6 +2043,24 @@
         "snapshotReadPerformance: with measurements reports comparable true and measured count",
         "snapshotReadPerformance: without measurements reports comparable false and measured count zero"
       ]
+    },
+    "tests/inc275-mcp-absent.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 2,
+      "testNames": [
+        "MCP package and implementation are absent",
+        "CLI catalog contains no MCP surface verb",
+        "package.json bin field declares no MCP entry"
+      ]
     }
+  },
+  "tests/story-346-pg-disabled.test.mjs": {
+    "testCount": 3,
+    "assertionCount": 4,
+    "testNames": [
+      "STORY-346 storage.backend catalog contains only file backends, PostgreSQL absent",
+      "STORY-346 PostgreSQL implementation and migration scripts are absent",
+      "STORY-346 production backend selection rejects PostgreSQL"
+    ]
   }
 }
