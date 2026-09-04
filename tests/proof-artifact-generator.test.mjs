@@ -182,6 +182,7 @@ async function fixture(context) {
     "tests/e2e-governed-loop-commands.mjs": "// route fixture\n",
     "tests/e2e-governed-loop.test.mjs": "// route fixture\n",
     "packages/core/src/authority-file-reader.ts": "// route fixture\n",
+    "tests/inc269-annotation-advisory-guard.test.mjs": "// route fixture\n",
   };
   for (const [path, bytes] of Object.entries(files)) {
     await mkdir(resolve(root, path, ".."), { recursive: true });

@@ -156,7 +156,7 @@
       "id": "SPRINT-03-create-advisory-shape",
       "rationale": "The work.created reducer branch re-validates advisory value-shape so a forged/tail-appended create cannot smuggle a malformed advisory:* value past the envelope-only graph validator (the annotate path already validates; this closes the create door). Load-bearing for tamper-log integrity of every advisory key.",
       "file": "packages/core/src/workspace.ts",
-      "find": "assertAdvisoryEntryShape(key, (record.extensions as Readonly<Record<string, unknown>>)[key], record.id);",
+      "find": "assertAdvisoryEntryShape(key, (record.extensions as Readonly<Record<string, unknown>>)[key], record.id, \"WORKSPACE_EVENT_CORRUPT\");",
       "replace": "void key;",
       "expectedMatches": 1,
       "test": "tests/workspace-extension-records.test.mjs",
@@ -601,6 +601,16 @@
       "expectedMatches": 1,
       "test": "tests/workspace-extension-records.test.mjs",
       "testName": "STORY-299: an over-budget projection is refused with the chain untouched"
+    },
+    {
+      "id": "INC-269-annotation-advisory-write-guard",
+      "rationale": "work.annotated is advisory-only, and until INC-269 only the reducer said so. Without this call the verb admits a --title/--labels-only annotation, appends it, returns a complete receipt, and every later read of that workspace is WORKSPACE_EVENT_CORRUPT with recover no help.",
+      "file": "packages/core/src/workspace.ts",
+      "find": "    assertWorkAnnotationExtensions(current.extensions, extensions, input.id, \"WORKSPACE_INPUT_INVALID\");\n",
+      "replace": "",
+      "expectedMatches": 1,
+      "test": "tests/inc269-annotation-advisory-guard.test.mjs",
+      "testName": "INC-269 an annotation that moves no advisory field is refused before it is written"
     }
   ]
 }

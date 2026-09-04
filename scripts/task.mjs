@@ -739,6 +739,7 @@ async function runInit047Goal(name) {
 }
 
 const INCIDENT_TESTS = Object.freeze({
+  inc269: { path: "tests/inc269-annotation-advisory-guard.test.mjs", pattern: "INC-269 an annotation that moves no advisory field is refused before it is written", reasonCode: "INC269_ANNOTATION_WRITE_GUARD_VERIFIED" },
   inc265: { path: "tests/stop-pact.test.mjs", pattern: "INC-265 removes the unsupported prose length rule without weakening rules 3 and 5", reasonCode: "INC265_STOP_RULES_VERIFIED" },
   inc264: { path: "tests/dispatch-readiness-compliance.test.mjs", pattern: "INC-264 dispatch briefs require the exact autonomous-operation and scope-restraint declarations", reasonCode: "INC264_DISPATCH_DECLARATIONS_VERIFIED" },
   inc263: { path: "tests/inc263-closeout.test.mjs", pattern: "INC-263 closeout verification is wired and ceremony cost measurement is deterministic", reasonCode: "INC263_CLOSEOUT_AND_COST_TESTS_VERIFIED" },
@@ -2121,6 +2122,7 @@ const commandContracts = {
   inc263: { exit: 0, reasonCode: "INC263_CLOSEOUT_AND_COST_VERIFIED" },
   "red-legs": { exit: 0, reasonCode: "RED_LEG_COVERAGE_VERIFIED" },
   inc262: { exit: 0, reasonCode: "INC262_RED_LEG_COVERAGE_VERIFIED" },
+  inc269: { exit: 0, reasonCode: "INC269_ANNOTATION_WRITE_GUARD_VERIFIED" },
   inc261: { exit: 0, reasonCode: "INC261_VERIFICATION_LINKS_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
@@ -2954,6 +2956,7 @@ const handlers = {
   inc258: () => runTests({ inc258Only: true }),
   inc259: () => runTests({ inc259Only: true }),
   inc260: () => runTests({ inc260Only: true }),
+  inc269: () => runIncidentTest("inc269"),
   inc265: () => runIncidentTest("inc265"),
   inc264: () => runIncidentTest("inc264"),
   closeout: verifyCloseoutGate,
@@ -3042,6 +3045,9 @@ function evidencePhase(name) {
   }
   if (name === "inc255" || name === "inc256") {
     return "p4";
+  }
+  if (name === "inc269") {
+    return "p3";
   }
   if (name === "inc265") {
     return "act2";

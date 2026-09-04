@@ -2993,8 +2993,11 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "work-annotate") {
-    // E05 + INIT-008: attach non-binding advisory fields to a work record. At least one of
-    // --scope, --decided-by, or --sprint must be present; the core rejects an empty or no-op annotation.
+    // E05 + INIT-008: attach non-binding advisory fields to a work record. --title and
+    // --labels ride along on the same event, but the operation itself is advisory-only, so
+    // the core refuses an annotation that moves no advisory field: --title/--labels alone
+    // is WORKSPACE_INPUT_INVALID here rather than an appended event no later read can
+    // replay (TCRN-CROSS-INC-269).
     const values = parseArguments(rest, [...shared, "id", "scope", "decided-by", "sprint", "title", "labels", "actor"]);
     required(values, [...requiredShared, "id"]);
     if (values.scope === undefined && values["decided-by"] === undefined && values.sprint === undefined && values.title === undefined && values.labels === undefined) fail("CLI_ARGUMENT_MALFORMED", "annotation-field");

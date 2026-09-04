@@ -14,7 +14,7 @@
 
 [Where you are now](#where-you-are-now) · [Why trust it](#why-trust-it) · [Who it is for](#who-it-is-for) · [What you get](#what-you-get) · [Three-minute start](#three-minute-start) · [Current status](#current-status) · [Full documentation](#full-documentation)
 
-`Verified claims: 122 (hygiene 20 · inertness 13 · runtime 89)`
+`Verified claims: 123 (hygiene 20 · inertness 13 · runtime 90)`
 
 </div>
 

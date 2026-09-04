@@ -1890,36 +1890,45 @@ function assertStoryCompletionAdmission(record: WorkRecord, targetStatus: WorkSt
 // {required, value} pair under a valid protocol-id key (a required:true key would fail
 // UNKNOWN_REQUIRED_EXTENSION because advisory keys carry no registry row); this adds the
 // value semantics the extension map is deliberately agnostic about.
-function assertAdvisoryEntryShape(key: string, entry: unknown, id: string): void {
+function assertAdvisoryEntryShape(key: string, entry: unknown, id: string, reasonCode: WorkspaceReasonCode): void {
   if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
-    fail("WORKSPACE_EVENT_CORRUPT", `work ${id} advisory ${key} is malformed`);
+    fail(reasonCode, `work ${id} advisory ${key} is malformed`);
   }
   const value = (entry as Readonly<Record<string, unknown>>).value;
   if (key === ADVISORY_SCOPE_KEY) {
     if (typeof value !== "string" || value.length === 0) {
-      fail("WORKSPACE_EVENT_CORRUPT", `work ${id} advisory scope must be a non-empty string`);
+      fail(reasonCode, `work ${id} advisory scope must be a non-empty string`);
     }
     return;
   }
   if (key === ADVISORY_SPRINT_KEY) {
     if (!isSprintReference(value)) {
-      fail("WORKSPACE_EVENT_CORRUPT", `work ${id} advisory sprint must be a {workspaceId, workId} qualified reference`);
+      fail(reasonCode, `work ${id} advisory sprint must be a {workspaceId, workId} qualified reference`);
     }
     return;
   }
   if (!Array.isArray(value) || value.length === 0 || !value.every((item) => isMinutesId(item))) {
-    fail("WORKSPACE_EVENT_CORRUPT", `work ${id} advisory decided-by must be a non-empty list of minutes ids`);
+    fail(reasonCode, `work ${id} advisory decided-by must be a non-empty list of minutes ids`);
   }
 }
 
-// Replay guard for work.annotated: only the advisory keys may differ from the prior
-// revision, and at least one must. Every other extension entry stays byte-identical, so
-// an annotation can neither introduce a foreign extension, drop one, nor alter it -- the
+// The work.annotated guard: only the advisory keys may differ from the prior revision,
+// and at least one must. Every other extension entry stays byte-identical, so an
+// annotation can neither introduce a foreign extension, drop one, nor alter it -- the
 // same anti-smuggling shape the gate evidence path enforces with an exact comparison.
+//
+// TCRN-CROSS-INC-269: this was a replay-only guard, and the verb had no counterpart to
+// it. The verb's own no-op check compared title and labels as well, so an annotation
+// that moved only those -- neither is an extension -- passed the verb, appended, and
+// then failed every later read of that workspace as WORKSPACE_EVENT_CORRUPT. Like
+// assertGateClearance, the predicate now takes its reason code from the caller and runs
+// on both paths: WORKSPACE_INPUT_INVALID on the verb, WORKSPACE_EVENT_CORRUPT in replay.
+// One predicate, so the two cannot drift apart again.
 function assertWorkAnnotationExtensions(
   current: Readonly<Record<string, unknown>>,
   next: Readonly<Record<string, unknown>>,
   id: string,
+  reasonCode: WorkspaceReasonCode,
 ): void {
   const advisory = new Set(ADVISORY_KEYS);
   const keys = new Set([...Object.keys(current), ...Object.keys(next)]);
@@ -1929,7 +1938,7 @@ function assertWorkAnnotationExtensions(
     const after = canonicalJson((next[key] ?? null) as JsonValue);
     if (!advisory.has(key)) {
       if (before !== after) {
-        fail("WORKSPACE_EVENT_CORRUPT", `work ${id} annotation changed non-advisory extension ${key}`);
+        fail(reasonCode, `work ${id} annotation changed non-advisory extension ${key}`);
       }
       continue;
     }
@@ -1937,11 +1946,11 @@ function assertWorkAnnotationExtensions(
       changed = true;
     }
     if (Object.hasOwn(next, key)) {
-      assertAdvisoryEntryShape(key, next[key], id);
+      assertAdvisoryEntryShape(key, next[key], id, reasonCode);
     }
   }
   if (!changed) {
-    fail("WORKSPACE_EVENT_CORRUPT", `work ${id} annotation changed no advisory field`);
+    fail(reasonCode, `work ${id} annotation changed no advisory field`);
   }
 }
 
@@ -2084,7 +2093,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         // bad advisory value in through the one door that used to skip it.
         for (const key of ADVISORY_KEYS) {
           if (Object.hasOwn(record.extensions, key)) {
-            assertAdvisoryEntryShape(key, (record.extensions as Readonly<Record<string, unknown>>)[key], record.id);
+            assertAdvisoryEntryShape(key, (record.extensions as Readonly<Record<string, unknown>>)[key], record.id, "WORKSPACE_EVENT_CORRUPT");
           }
         }
       } else if (!current || current.tombstone || record.revision !== current.revision + 1 || record.externalKey !== current.externalKey ||
@@ -2115,7 +2124,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         if (record.status !== current.status) {
           fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} annotation changed status`);
         }
-        assertWorkAnnotationExtensions(current.extensions, record.extensions, record.id);
+        assertWorkAnnotationExtensions(current.extensions, record.extensions, record.id, "WORKSPACE_EVENT_CORRUPT");
       }
       extensionRecordOrCorrupt(() => validateBoundTemplateWork(record, [...templates.values()]));
       work.set(record.id, record);
@@ -4418,6 +4427,15 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
       title === (current.title ?? null) && canonicalJson(labels as JsonValue) === canonicalJson((current.labels ?? []) as JsonValue)) {
       fail("WORKSPACE_INPUT_INVALID", "annotation does not change any work field");
     }
+    // TCRN-CROSS-INC-269: the reducer's own predicate, run before the event exists.
+    // title and labels are top-level work fields rather than extensions, so an
+    // annotation that moved only them satisfied the no-op check above and failed the
+    // reducer -- the write returned a complete receipt and every later read of the
+    // workspace came back WORKSPACE_EVENT_CORRUPT, with recover no help because the log
+    // was intact and the appended record was the damage. work.annotated is advisory-only
+    // (E05 above, and the reducer arm that replays it), so an annotation moving no
+    // advisory field is refused here as input and never reaches the log.
+    assertWorkAnnotationExtensions(current.extensions, extensions, input.id, "WORKSPACE_INPUT_INVALID");
     const record: WorkRecord = {
       ...workFieldsForWrite(current),
       extensions: extensions as WorkRecord["extensions"],

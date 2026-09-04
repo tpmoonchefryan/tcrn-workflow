@@ -2015,6 +2015,14 @@
         "STORY-299: a view write failure after commit keeps the command successful and the fact durable",
         "STORY-299: the budget report covers every view and the record cap"
       ]
+    },
+    "tests/inc269-annotation-advisory-guard.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 14,
+      "testNames": [
+        "INC-269 an annotation that moves no advisory field is refused before it is written",
+        "INC-269 title and labels still land when the same annotation moves an advisory field"
+      ]
     }
   }
 }
