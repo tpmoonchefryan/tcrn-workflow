@@ -53,9 +53,38 @@ export function validateWaivers(waivers) {
   return waivers.flatMap((entry, index) => {
     if (entry === null || typeof entry !== "object") return [`waivers[${index}] must be an object`];
     const problems = [];
-    for (const field of ["path", "testName", "reason", "replacement"]) {
-      if (typeof entry[field] !== "string" || entry[field].trim().length === 0) problems.push(`waivers[${index}].${field} must be non-empty`);
+
+    // These fields are always required.
+    for (const field of ["path", "testName", "reason"]) {
+      if (typeof entry[field] !== "string" || entry[field].trim().length === 0) {
+        problems.push(`waivers[${index}].${field} must be non-empty`);
+      }
     }
+
+    // Exactly one of replacement or disowned must be present.
+    const hasReplacement = typeof entry.replacement === "string" && entry.replacement.trim().length > 0;
+    const hasDisowned = entry.disowned !== null && typeof entry.disowned === "object" && !Array.isArray(entry.disowned);
+
+    if (!hasReplacement && !hasDisowned) {
+      problems.push(`waivers[${index}] must have either replacement or disowned field`);
+    } else if (hasReplacement && hasDisowned) {
+      problems.push(`waivers[${index}] cannot have both replacement and disowned fields`);
+    }
+
+    // If disowned is present, both its fields must be non-empty strings.
+    // The ruling field is mandatory to gate against casual disposal of inconvenient tests.
+    // Without an explicit Owner ruling, this would become the universal exit for deleting
+    // any test: a disposal-by-default that would retire coverage conservation itself.
+    // See TCRN-CROSS-INC-274.
+    if (hasDisowned) {
+      if (typeof entry.disowned.owningRepository !== "string" || entry.disowned.owningRepository.trim().length === 0) {
+        problems.push(`waivers[${index}].disowned.owningRepository must be non-empty`);
+      }
+      if (typeof entry.disowned.ruling !== "string" || entry.disowned.ruling.trim().length === 0) {
+        problems.push(`waivers[${index}].disowned.ruling must be non-empty`);
+      }
+    }
+
     return problems;
   });
 }

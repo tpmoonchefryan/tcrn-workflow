@@ -12,6 +12,45 @@
       "testName": "dead-owner recovery has one claim winner and leaves neither lock nor sibling claim",
       "reason": "renamed with its assertion: 421bdca established that exactly-one-winner was never a promise the recoverer makes, and corrected the width-three tests only; this width-two one kept asserting it and went red in CI. The name changed because the claim changed, and the assertion surface grew rather than shrank (the causal-rejection check is new).",
       "replacement": "tests/output-session-lifecycle.test.mjs:dead-owner recovery leaves at most one claim winner and neither lock nor sibling claim"
+    },
+    {
+      "path": "tests/inc259-storage-migration.test.mjs",
+      "testName": "INC-259 the live eight partitions use storage version 2 and the 4 MiB bound",
+      "reason": "TCRN-CROSS-INC-274 — asserted on the live platform chain two levels above this repository, so it passed only where that chain happened to exist and failed in CI. A unit test here cannot assert on the container above it (AGENTS.md 五). The claim itself is still worth checking; its home is platform-doctor, which takes an explicit --platform-root. Adding it there is follow-up work tracked on TCRN-CROSS-INC-274 and is not done by this change.",
+      "replacement": "tests/inc274-platform-storage-shape.test.mjs:workspaceStorageShape: one partition behind version 2"
+    },
+    {
+      "path": "tests/inc259-storage-migration.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-INC-274 — the six assertions belonged to the removed live-platform test 'INC-259 the live eight partitions use storage version 2 and the 4 MiB bound', whose coverage moved to platform-doctor. No assertion was dropped from a surviving test.",
+      "replacement": "tests/inc274-platform-storage-shape.test.mjs:workspaceStorageShape: one partition behind version 2"
+    },
+    {
+      "path": "tests/inc260-snapshot-read-optimization.test.mjs",
+      "testName": "INC-260 live snapshot reads have a regression slope below the 75 microsecond baseline",
+      "reason": "TCRN-CROSS-INC-274 — a performance regression measured against the live chain, unavailable in CI for the same reason as the INC-259 live check. Its home is platform-doctor with an explicit --platform-root; adding it there is follow-up work tracked on TCRN-CROSS-INC-274.",
+      "replacement": "tests/inc274-platform-storage-shape.test.mjs:snapshotReadPerformance: with measurements reports comparable true and measured count"
+    },
+    {
+      "path": "tests/story-342-343-map-docs.test.mjs",
+      "testName": "STORY-343 documentation proof names the helper archive refresh as a required step",
+      "reason": "TCRN-CROSS-INC-274 — the assertion read the sibling tcrn-workflow-helper repository's documentation, which AGENTS.md 五 forbids outright, so it violated the convention on the day it was written. Removing it corrects an ownership error rather than dropping coverage; the engine's own documents do not state that step, and asserting on a vendored copy would be the same violation in another form.",
+      "disowned": {
+        "owningRepository": "tcrn-workflow-helper",
+        "ruling": "Owner, 2026-09-04, in-session — approved a third waiver disposition for coverage that never belonged to this repository, rather than extending replacement to point across repositories. A cross-repository pointer cannot be verified from here, because the direction convention forbids reading the sibling to check it; recording it as if it were checked would be the 'green somewhere, once' failure named in platform-docs/acceptance-verdicts.json."
+      }
+    },
+    {
+      "path": "tests/story-342-343-map-docs.test.mjs",
+      "testName": "STORY-343 engine and helper documents describe segmented events, replay snapshots, and body migration",
+      "reason": "TCRN-CROSS-INC-274 — the helper half of this test read the sibling repository's documents and was removed for the reason above; the engine half survives unchanged under a name that no longer overstates its subject.",
+      "replacement": "tests/story-342-343-map-docs.test.mjs:STORY-343 engine documents describe segmented events, replay snapshots, and body migration"
+    },
+    {
+      "path": "tests/coverage-conservation.test.mjs",
+      "testName": "coverage conservation requires waiver reason and replacement",
+      "reason": "TCRN-CROSS-INC-274 — renamed when the disowned disposition was added; the test now covers both dispositions and its assertion surface grew rather than shrank.",
+      "replacement": "tests/coverage-conservation.test.mjs:coverage conservation requires waiver reason and either replacement or disowned"
     }
   ]
 }

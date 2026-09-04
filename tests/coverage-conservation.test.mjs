@@ -28,11 +28,11 @@ test("coverage conservation rejects an assertion-only loss while test names rema
   assert.equal(red.problems[0].assertionLoss, 2);
 });
 
-test("coverage conservation requires waiver reason and replacement", () => {
+test("coverage conservation requires waiver reason and either replacement or disowned", () => {
   assert.deepEqual(validateWaivers([{ path: "tests/example.test.mjs", testName: "retired", reason: "superseded", replacement: "tests/new.test.mjs" }]), []);
-  assert.deepEqual(validateWaivers([{ path: "tests/example.test.mjs", testName: "retired", reason: "", replacement: "" }]), [
+  assert.deepEqual(validateWaivers([{ path: "tests/example.test.mjs", testName: "retired", reason: "" }]), [
     "waivers[0].reason must be non-empty",
-    "waivers[0].replacement must be non-empty",
+    "waivers[0] must have either replacement or disowned field",
   ]);
 });
 
@@ -58,4 +58,78 @@ test("named test waivers remain executable when baseline carries testNames", () 
     { path: "tests/example.test.mjs", testName: "__assertions__", reason: "replaced with the named test", replacement: "tests/new.test.mjs" },
   ] });
   assert.equal(green.ok, true);
+});
+
+test("validates replacement waiver (regression)", () => {
+  const result = validateWaivers([{ path: "tests/example.test.mjs", testName: "retired", reason: "superseded", replacement: "tests/new.test.mjs" }]);
+  assert.deepEqual(result, []);
+});
+
+test("validates disowned waiver", () => {
+  const result = validateWaivers([{
+    path: "tests/example.test.mjs",
+    testName: "removed",
+    reason: "not owned by this repo",
+    disowned: {
+      owningRepository: "dsh-tcrn-workflow-plugin",
+      ruling: "Owner ruling, 2026-09-04: cross-repository assertions are forbidden (AGENTS.md section 五)"
+    }
+  }]);
+  assert.deepEqual(result, []);
+});
+
+test("rejects waiver with neither replacement nor disowned", () => {
+  const result = validateWaivers([{ path: "tests/example.test.mjs", testName: "removed", reason: "test removed" }]);
+  assert(result.some(msg => msg.includes("must have either replacement or disowned")));
+});
+
+test("rejects waiver with both replacement and disowned", () => {
+  const result = validateWaivers([{
+    path: "tests/example.test.mjs",
+    testName: "removed",
+    reason: "conflicting",
+    replacement: "tests/new.test.mjs",
+    disowned: {
+      owningRepository: "other-repo",
+      ruling: "some ruling"
+    }
+  }]);
+  assert(result.some(msg => msg.includes("cannot have both replacement and disowned")));
+});
+
+test("rejects disowned without ruling", () => {
+  const result = validateWaivers([{
+    path: "tests/example.test.mjs",
+    testName: "removed",
+    reason: "not owned",
+    disowned: {
+      owningRepository: "other-repo"
+    }
+  }]);
+  assert(result.some(msg => msg.includes("disowned.ruling must be non-empty")));
+});
+
+test("rejects disowned without owningRepository", () => {
+  const result = validateWaivers([{
+    path: "tests/example.test.mjs",
+    testName: "removed",
+    reason: "not owned",
+    disowned: {
+      ruling: "some ruling"
+    }
+  }]);
+  assert(result.some(msg => msg.includes("disowned.owningRepository must be non-empty")));
+});
+
+test("rejects disowned with empty-string ruling", () => {
+  const result = validateWaivers([{
+    path: "tests/example.test.mjs",
+    testName: "removed",
+    reason: "not owned",
+    disowned: {
+      owningRepository: "other-repo",
+      ruling: ""
+    }
+  }]);
+  assert(result.some(msg => msg.includes("disowned.ruling must be non-empty")));
 });

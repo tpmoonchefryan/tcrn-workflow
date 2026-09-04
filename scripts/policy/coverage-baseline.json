@@ -2040,6 +2040,16 @@
         "INC-270 case 5b: installed has extra flag on a verb -> RED PLATFORM_ENGINE_INSTALLED_AHEAD",
         "INC-270 case 6: same verbs and flags, but valueKind differs -> green ATTRIBUTES_DIVERGENT"
       ]
+    },
+    "tests/inc274-platform-storage-shape.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 24,
+      "testNames": [
+        "workspaceStorageShape: all partitions at version 2 with correct segment bound",
+        "workspaceStorageShape: one partition behind version 2",
+        "snapshotReadPerformance: with measurements reports comparable true and measured count",
+        "snapshotReadPerformance: without measurements reports comparable false and measured count zero"
+      ]
     }
   }
 }

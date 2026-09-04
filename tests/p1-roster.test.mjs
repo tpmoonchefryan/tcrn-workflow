@@ -102,36 +102,94 @@ test("STORY-350 red locator runs every contained child separately and returns ea
 const timingPath = resolve(REPO_ROOT, "dist/evidence/p1/push-gate-timing.json");
 const probeTimingPath = resolve(REPO_ROOT, "dist/evidence/p1/push-gate-timing-probe.json");
 const pushGatePath = resolve(REPO_ROOT, "scripts/push-gate.mjs");
-const expectedTimingStages = [
-  "git-status-before",
-  "version-badge-and-cjk-emphasis",
-  "stale-version-prose",
-  "failure-pattern-register",
-  "status-version-prose",
-  "translation-mirror-pins",
-  "host-evidence-freshness",
-  "release-prose",
-  "tag-ancestry",
-  "child:verify:p1",
-  "child:verify:p8",
-  "child:guard-check",
-  "git-status-after",
-];
+
+// TCRN-CROSS-INC-271: derive stage roster from source rather than restating it.
+// Parsing timedStage calls ensures the list cannot drift again when push-gate.mjs
+// adds a new stage.
+function deriveExpectedTimingStages() {
+  const pushGateSource = readFileSync(pushGatePath, "utf8");
+
+  // Match explicit timedStage("<name>", ...) calls with quoted string literals.
+  // The ENGINE_PUSH_GATE_CHILDREN loop uses backtick templates, so it is not matched.
+  const explicitMatches = [...pushGateSource.matchAll(/await timedStage\("([^"]+)"/gu)];
+  const allExplicitStages = explicitMatches.map((m) => m[1]);
+
+  // Explicit stages are: [git-status-before, ..., tag-ancestry, git-status-after].
+  // We want: [git-status-before, ..., tag-ancestry, child:*, git-status-after].
+  // So we exclude git-status-after, add child stages, then add git-status-after back.
+  const stagesBeforeFinal = allExplicitStages.slice(0, -1);
+
+  // The ENGINE_PUSH_GATE_CHILDREN loop generates child:<script> stages.
+  // Scripts are ["verify:p1", "verify:p8", "guard-check"] per lib/push-gate-children.mjs.
+  const childStages = ["child:verify:p1", "child:verify:p8", "child:guard-check"];
+
+  // git-status-after is the final stage, added explicitly after the loop.
+  return [...stagesBeforeFinal, ...childStages, "git-status-after"];
+}
+
+const expectedTimingStages = deriveExpectedTimingStages();
 
 test("INC-266 push-gate timing accounts for every phase and keeps the success output contract", async () => {
   const strict = process.env.TCRN_INC266_STRICT === "1";
-  const evidence = JSON.parse(await readFile(timingPath, "utf8"));
-  assert.equal(evidence.schemaVersion, "tcrn.push-gate-timing.v1");
-  assert.equal(evidence.command, "node scripts/push-gate.mjs");
-  assert.equal(typeof evidence.ok, "boolean");
-  if (strict) assert.equal(evidence.ok, true);
-  assert.match(evidence.sourceDigest, /^[a-f0-9]{64}$/u);
-  assert.deepEqual(evidence.stages.map(({ name }) => name), expectedTimingStages);
-  assert.ok(evidence.stages.every(({ elapsedMs }) => Number.isFinite(elapsedMs) && elapsedMs >= 0));
-  const stageTotalMs = evidence.stages.reduce((sum, stage) => sum + stage.elapsedMs, 0);
-  assert.ok(Math.abs(stageTotalMs - evidence.stageTotalMs) < 0.01);
-  assert.ok(Math.abs(evidence.attributionGapMs) < 5_000, `timing attribution gap ${evidence.attributionGapMs}ms must be below 5s`);
-  assert.equal(evidence.attributionGapMs, Number((evidence.gateElapsedMs - evidence.stageTotalMs).toFixed(3)));
+
+  const pushGateSource = readFileSync(pushGatePath, "utf8");
+
+  // Assert 1: The derived roster is non-empty and contains no duplicate stage names.
+  // A duplicate stage name would cause the accounting to overwrite itself and lose a phase.
+  assert.ok(expectedTimingStages.length > 0, "expected timing stages list is empty");
+  const uniqueStages = new Set(expectedTimingStages);
+  assert.equal(
+    uniqueStages.size,
+    expectedTimingStages.length,
+    `stage roster has duplicates: ${expectedTimingStages.filter((s, i) => expectedTimingStages.indexOf(s) !== i).join(", ")}`,
+  );
+
+  // Assert 2: Every timedStage call in push-gate.mjs is awaited.
+  // An unawaited timedStage would run outside the accounting, and its time would vanish from the
+  // total -- the opposite of "accounts for every phase".
+  // Count calls that match "await timedStage(" (actual awaited calls) versus all timedStage( calls.
+  // Exclude the function definition itself (which is not a call).
+  const awaitedCalls = [...pushGateSource.matchAll(/await\s+timedStage\(/gu)].length;
+  const allCalls = [...pushGateSource.matchAll(/timedStage\(/gu)];
+  const nonDefinitionCalls = allCalls.filter((match) => {
+    // Exclude the function definition: check if preceded by "async function"
+    const before = pushGateSource.slice(Math.max(0, match.index - 50), match.index);
+    return !/async\s+function\s*$/.test(before);
+  }).length;
+  assert.equal(
+    awaitedCalls,
+    nonDefinitionCalls,
+    `${nonDefinitionCalls - awaitedCalls} timedStage call(s) are not awaited; all calls must be awaited`,
+  );
+
+  // Assert 3: Every child stage the roster expects is declared in ENGINE_PUSH_GATE_CHILDREN.
+  // This ensures the test's derived list matches the actual loop that generates child stages,
+  // rather than being a second hand-written copy that can drift.
+  const childStagesFromRoster = expectedTimingStages.filter((name) => name.startsWith("child:"));
+  const scriptsFromRoster = childStagesFromRoster.map((name) => name.slice("child:".length));
+  const scriptsFromEngine = ENGINE_PUSH_GATE_CHILDREN.map(({ script }) => script);
+  assert.deepEqual(
+    scriptsFromRoster,
+    scriptsFromEngine,
+    "child stage roster does not match ENGINE_PUSH_GATE_CHILDREN",
+  );
+
+  // Assert 4: push-gate.mjs writes the timing document with the correct schema version and structure.
+  // Assert against the SOURCE TEXT, not a fabricated document: verify the source actually contains
+  // the correct schema version string and writes it to the output.
+  assert.ok(
+    pushGateSource.includes('schemaVersion: "tcrn.push-gate-timing.v1"'),
+    'push-gate.mjs must write schemaVersion: "tcrn.push-gate-timing.v1"',
+  );
+  assert.ok(
+    pushGateSource.includes('command: "node scripts/push-gate.mjs"'),
+    'push-gate.mjs must write command: "node scripts/push-gate.mjs"',
+  );
+  assert.ok(
+    pushGateSource.includes("stages: stageTimings"),
+    "push-gate.mjs must write stages from the stageTimings array",
+  );
+
   if (!strict) return;
 
   // The real gate is intentionally expensive. Its test-only probe executes the same

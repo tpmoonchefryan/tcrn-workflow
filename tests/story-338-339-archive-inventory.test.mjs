@@ -4,32 +4,52 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import test from "node:test";
 
 import { APPROVED_ARCHIVE_DELETIONS, LATEST_CHAIN_SNAPSHOT, applyArchiveCleanup, archiveBaseline } from "../scripts/archive-cleanup.mjs";
-import { inspectArchiveInventory, parseArchiveInventory } from "../scripts/archive-inventory.mjs";
-
-const containerRoot = fileURLToPath(new URL("../../../", import.meta.url));
-const archiveRoot = resolve(containerRoot, ".tcrn-artifacts");
-const agentsPath = resolve(containerRoot, "AGENTS.md");
+import { inspectArchiveInventory, parseArchiveInventory, ARCHIVE_INVENTORY_BEGIN, ARCHIVE_INVENTORY_END } from "../scripts/archive-inventory.mjs";
 
 test("STORY-338 cleanup leaves only the approved archive inventory and the newest chain snapshot", async () => {
-  const document = await (await import("node:fs/promises")).readFile(agentsPath, "utf8");
-  const entries = parseArchiveInventory(document);
-  const result = await inspectArchiveInventory(archiveRoot, entries);
-  assert.equal(result.ok, true, JSON.stringify(result));
-  assert.deepEqual(await readdir(resolve(archiveRoot, "chain-snapshots")), [LATEST_CHAIN_SNAPSHOT]);
+  // TCRN-CROSS-INC-274: this test proves the cleanup LOGIC against a synthetic
+  // archive and inventory document. Assertions about the live platform belong in
+  // platform-doctor, which is invoked with an explicit --platform-root and is the
+  // tool that legitimately inspects the container.
 
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-s338-")));
   try {
+    // Create a synthetic inventory document with the approved deletions and chain-snapshots.
+    // The baseline checker requires ALL approved deletions to be present.
+    const inventoryLines = ["- `chain-snapshots` — test chain snapshots"];
+    for (const name of APPROVED_ARCHIVE_DELETIONS) {
+      inventoryLines.push(`- \`${name}\` — approved deletion target`);
+    }
+    const inventoryDocument = `
+${ARCHIVE_INVENTORY_BEGIN}
+${inventoryLines.join("\n")}
+${ARCHIVE_INVENTORY_END}
+`;
+
+    const entries = parseArchiveInventory(inventoryDocument);
+
+    // Create the synthetic archive structure
     await mkdir(join(base, "chain-snapshots"));
     await writeFile(join(base, "chain-snapshots", LATEST_CHAIN_SNAPSHOT), "latest", "utf8");
     await writeFile(join(base, "chain-snapshots", "older.tar.gz"), "older", "utf8");
-    for (const name of APPROVED_ARCHIVE_DELETIONS) await mkdir(join(base, name));
+
+    for (const name of APPROVED_ARCHIVE_DELETIONS) {
+      await mkdir(join(base, name));
+    }
+
+    // Verify the inventory inspection before cleanup
+    const resultBefore = await inspectArchiveInventory(base, entries);
+    assert.equal(resultBefore.ok, true, JSON.stringify(resultBefore));
+
+    // Apply the cleanup
     const baseline = await archiveBaseline(base);
     await applyArchiveCleanup(base, baseline);
+
+    // Verify the results after cleanup
     assert.deepEqual(await readdir(join(base, "chain-snapshots")), [LATEST_CHAIN_SNAPSHOT]);
   } finally {
     await rm(base, { recursive: true, force: true });

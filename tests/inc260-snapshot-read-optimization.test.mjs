@@ -18,8 +18,6 @@ import {
 import { withWorkspacePerfInstrumentation } from "../dist/build/packages/core/src/workspace-perf-instrumentation.js";
 
 const controlDirectory = ".tcrn-" + "workflow";
-const chainContainer = [".tcrn", "workspace"].join("-");
-const livePartitions = ["ADBlock", "TCRN-TMS", "TCRN-AOS", "Joi-Button", "cross-project"];
 
 function logicalState(state) {
   return {
@@ -91,28 +89,16 @@ test("INC-260 snapshot-backed state equals a full replay and rejects snapshot or
   await assert.rejects(() => materializeWorkspace(fx.workspace), (error) => error?.reasonCode === "WORKSPACE_SNAPSHOT_INVALID");
 });
 
-test("INC-260 live snapshot reads have a regression slope below the 75 microsecond baseline", async () => {
-  const platformRoot = resolve(process.cwd(), "../..");
-  const rows = [];
-  for (const partition of livePartitions) {
-    const workspace = join(platformRoot, chainContainer, partition, "workspace");
-    const baseline = await materializeWorkspace(workspace);
-    const samples = [];
-    for (let index = 0; index < 5; index += 1) {
-      const started = performance.now();
-      const current = await materializeWorkspace(workspace);
-      samples.push(performance.now() - started);
-      assert.equal(current.version, baseline.version, partition);
-    }
-    samples.sort((left, right) => left - right);
-    rows.push({ partition, events: baseline.events.length, medianMs: samples[2] });
-  }
-  const meanX = rows.reduce((sum, row) => sum + row.events, 0) / rows.length;
-  const meanY = rows.reduce((sum, row) => sum + row.medianMs, 0) / rows.length;
-  const slopeMsPerEvent = rows.reduce((sum, row) => sum + (row.events - meanX) * (row.medianMs - meanY), 0) /
-    rows.reduce((sum, row) => sum + (row.events - meanX) ** 2, 0);
-  assert.ok(slopeMsPerEvent * 1000 < 75, `snapshot read slope ${slopeMsPerEvent * 1000}us/event must be below the 75us baseline`);
-});
+// REMOVED: INC-260 live-platform test "live snapshot reads have a regression slope below the 75 microsecond baseline".
+// This test reached the real `.tcrn-workspace` above the repository via a hardcoded path
+// (platformRoot + chainContainer + five live partitions), measured snapshot read latency across
+// them, and asserted that the per-event slope stayed below 75 microseconds.
+// It failed silently in CI because no platform container exists there, leaving this repository
+// green while the platform was red — a violation of section 五, which defines a repository's
+// test as "whether this repository behaves differently when the other one is absent".
+// This coverage has NOT been abandoned: it is a live-platform check and its home is platform-doctor,
+// which takes an explicit --platform-root flag and can assert on the real chain.
+// Adding these checks to platform-doctor is tracked on TCRN-CROSS-INC-274 and is NOT this change.
 
 test("INC-260 the reader does not compute a second full event-prefix digest", async (context) => {
   const fx = await fixture(context);

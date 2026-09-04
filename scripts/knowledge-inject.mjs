@@ -56,9 +56,9 @@ export const ENGINE_CLI = resolve(SCRIPT_DIRECTORY, "tcrn-workflow.mjs");
  * sitting on this disk. The envelope is unchanged ({ ok, reasonCode, result }); callers
  * already tolerated both `result.records` and `result.result.records`.
  */
-export function callChainRead(verb, { partition, ...flags }, { timeoutMs = 120_000 } = {}) {
+export function callChainRead(verb, { partition, ...flags }, { timeoutMs = 120_000, containerRoot = PLATFORM_ROOT } = {}) {
   return new Promise((resolvePromise) => {
-    const argv = [ENGINE_CLI, verb, "--workspace", workspaceForPartition(partition)];
+    const argv = [ENGINE_CLI, verb, "--workspace", workspaceForPartition(partition, containerRoot)];
     for (const [name, value] of Object.entries(flags)) {
       if (value === undefined || value === null) continue;
       argv.push(`--${name}`, String(value));
@@ -145,8 +145,8 @@ export function matchedTriggerKeywords(prompt, triggerKeywords) {
   return list.filter((kw) => text.includes(kw) || text.toLowerCase().includes(kw.toLowerCase()));
 }
 
-async function configuredInjectionBudget(partition) {
-  const call = await callChainRead("settings-catalog", { partition });
+async function configuredInjectionBudget(partition, containerRoot = PLATFORM_ROOT) {
+  const call = await callChainRead("settings-catalog", { partition }, { containerRoot });
   if (!call.ok) return DEFAULT_BUDGET;
   const payload = call.result?.result ?? call.result;
   const setting = payload?.settings?.find((entry) => entry.key === "injection.budgetBytes");
@@ -162,9 +162,9 @@ export function truncateToBudget(text, budget) {
 }
 
 /** The injection chain: query -> candidates -> budget report -> metadata-level output. */
-export async function runInjection({ prompt, partition, roleScope, budget, triggerKeywords }) {
+export async function runInjection({ prompt, partition, roleScope, budget, triggerKeywords, containerRoot = PLATFORM_ROOT }) {
   void triggerKeywords;
-  const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : await configuredInjectionBudget(partition);
+  const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : await configuredInjectionBudget(partition, containerRoot);
   // Query each meaningful term separately and union the candidates. The engine owns
   // relevance ordering; this wrapper never gates a prompt on a hand-maintained list.
   const tokens = extractQueryTokens(prompt);
@@ -181,7 +181,7 @@ export async function runInjection({ prompt, partition, roleScope, budget, trigg
       limit: INJECTION_RESULT_LIMIT,
       "allow-trailing": true,
       at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
-    });
+    }, { containerRoot });
     if (!call.ok) {
       return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
     }

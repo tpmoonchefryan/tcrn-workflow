@@ -20,17 +20,6 @@ import {
 } from "../dist/build/packages/core/src/index.js";
 
 const controlDirectory = ".tcrn-" + "workflow";
-const chainContainer = [".tcrn", "workspace"].join("-");
-const partitions = [
-  "ADBlock",
-  "Joi-Button",
-  "TCRN-AOS",
-  "TCRN-Design-System",
-  "TCRN-TMS",
-  "cross-project",
-  "dsh-joi-channel-theme",
-  "dsh-tcrn-workflow-plugin",
-];
 
 function logicalState(state) {
   return {
@@ -101,22 +90,16 @@ test("INC-259 migration preserves materialized values and emits bounded segmente
   assert.equal((await verifyWorkspaceStorageMigration(fx.workspace)).ok, true);
 });
 
-test("INC-259 the live eight partitions use storage version 2 and the 4 MiB bound", async () => {
-  const platformRoot = resolve(process.cwd(), "../..");
-  for (const partition of partitions) {
-    const workspace = join(platformRoot, chainContainer, partition, "workspace");
-    const metadata = JSON.parse(await readFile(join(workspace, controlDirectory, "workspace.json"), "utf8"));
-    assert.equal(metadata.storageVersion, 2, partition);
-    assert.equal(metadata.segmentEventLimit, WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES, partition);
-    const verification = await verifyWorkspaceStorageMigration(workspace);
-    assert.equal(verification.ok, true, partition);
-    assert.equal((await validateWorkspace(workspace)).metadata.storageVersion, 2, partition);
-    const eventEntries = await readdir(join(workspace, controlDirectory, "events"));
-    assert.equal(eventEntries.some((entry) => /^\d{6}\.json$/u.test(entry)), false, partition);
-    const manifest = JSON.parse(await readFile(join(workspace, controlDirectory, "events", "manifest.json"), "utf8"));
-    assert.ok(manifest.segments.every((entry) => entry.bytes <= WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES), partition);
-  }
-});
+// REMOVED: INC-259 live-platform test "the live eight partitions use storage version 2 and the 4 MiB bound".
+// This test reached the real `.tcrn-workspace` above the repository via a hardcoded path
+// (platformRoot + chainContainer = the eight partition names), asserting that each carries
+// storage version 2 and respects the 4 MiB segment bound (WORKSPACE_STORAGE_MIGRATION_SEGMENT_BYTES).
+// It failed silently in CI because no platform container exists there, leaving this repository
+// green while the platform was red — a violation of section 五, which defines a repository's
+// test as "whether this repository behaves differently when the other one is absent".
+// This coverage has NOT been abandoned: it is a live-platform check and its home is platform-doctor,
+// which takes an explicit --platform-root flag and can assert on the real chain.
+// Adding these checks to platform-doctor is tracked on TCRN-CROSS-INC-274 and is NOT this change.
 
 test("INC-259 an over-large segment limit is a red migration verification", async (context) => {
   const fx = await legacyFixture(context);

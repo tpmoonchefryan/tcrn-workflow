@@ -143,7 +143,7 @@ test("a complete synthetic platform container is green", async (context) => {
   const result = await inspectPlatform(root, { includeInstallSurface: false });
   assert.equal(result.ok, true);
   assert.equal(result.reasonCode, "PLATFORM_LAYOUT_HEALTHY");
-  assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true, true, true]);
+  assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true, true, true, true]);
 });
 
 test("INC-247: the container-root platform docs location is canonical", async (context) => {
@@ -713,7 +713,8 @@ test("S273 trust archive freshness compares the archive to all installed consume
   const skill = await readFile(skillPath);
   const entry = { path: "SKILL.md", contentBase64: skill.toString("base64"), sha256: createHash("sha256").update(skill).digest("hex") };
   await writeFile(join(fixture.home, ".tcrn-workflow", "skill-archive.json"), JSON.stringify({ schemaVersion: "tcrn.workflow.helper.archive.v1", entries: [entry] }));
-  for (const host of ["claude", "codex"]) await writeFile(join(fixture.home, ".tcrn-workflow", `installed-copy-${host}.json`), JSON.stringify({ version: "v0.11.14" }));
+  // TCRN-CROSS-INC-272: write markers for all three known hosts (agents, claude, codex). Previously only claude and codex were checked.
+  for (const host of ["agents", "claude", "codex"]) await writeFile(join(fixture.home, ".tcrn-workflow", `installed-copy-${host}.json`), JSON.stringify({ version: "v0.11.14" }));
   await writeFile(join(fixture.home, ".agents", "skills", "tcrn-workflow-helper", "extra.md"), "drift\n");
   const red = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT, enforceTrustArchive: true });
   const redCheck = red.checks.find((item) => item.name === "trustArchive");

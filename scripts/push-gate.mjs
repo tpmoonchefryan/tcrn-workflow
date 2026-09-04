@@ -39,6 +39,7 @@ import { fileURLToPath } from "node:url";
 import { P8_VERSION } from "./lib/p8-workflow-rc.mjs";
 import { ENGINE_PUSH_GATE_CHILDREN } from "./lib/push-gate-children.mjs";
 import { requiredFailurePatternProblems } from "./preflight.mjs";
+import { P1_TASKS } from "./p1-sequence.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -146,6 +147,64 @@ await timedStage("version-badge-and-cjk-emphasis", async () => {
     if (published.length === 0) fail("PUSH_GATE_STATUS_BADGE_MISSING", document);
     else if (!published.every((value) => value === badgeVersion)) fail("PUSH_GATE_STATUS_BADGE_STALE", `${document}: ${published.join(", ")} != ${badgeVersion}`);
     checkCjkEmphasis(document, body);
+  }
+});
+
+// 2a. All four derived README badges must match their sources. Three badges beyond the status
+//     version were declared in all five READMEs but never checked, and three of them drifted:
+//     the proven claims count rose from 122 to 124 (INC-269, INC-270) and nothing noticed;
+//     verify%3Ap1 gates and runtime%20deps are checked here for the first time. (TCRN-CROSS-INC-271)
+//
+//     Badge text is percent-encoded in the shields.io URL (`%3A` for colon, `%20` for space),
+//     so the matcher must handle that. The sources of truth:
+//
+//     - status-<version>-blue: already checked above (keep existing version-badge-and-cjk-emphasis)
+//     - verify%3Ap1-<N>%20gates: count of commands in the P1 gate train (P1_TASKS)
+//     - proven%20claims-<N>: count of claims in verification-map.yaml
+//     - runtime%20deps-<N>: count of keys in package.json's dependencies object
+await timedStage("derived-badges-verification", async () => {
+  // Derive the source-of-truth values.
+  const p1GateCount = P1_TASKS.length;
+  const verificationMapRaw = JSON.parse(await read("verification-map.yaml"));
+  const claimsCount = (verificationMapRaw.claims ?? []).length;
+  const packageJson = JSON.parse(await read("package.json"));
+  const depsCount = Object.keys(packageJson.dependencies ?? {}).length;
+
+  // Expected badge values (with URL encoding).
+  const expectedBadges = {
+    "verify%3Ap1-<N>%20gates": `verify%3Ap1-${p1GateCount}%20gates`,
+    "proven%20claims-<N>": `proven%20claims-${claimsCount}`,
+    "runtime%20deps-<N>": `runtime%20deps-${depsCount}`,
+  };
+
+  // Fixed reason codes for each badge type.
+  const reasonCodes = {
+    "verify%3Ap1-<N>%20gates": { missing: "PUSH_GATE_P1_GATES_BADGE_MISSING", stale: "PUSH_GATE_P1_GATES_BADGE_STALE" },
+    "proven%20claims-<N>": { missing: "PUSH_GATE_CLAIMS_BADGE_MISSING", stale: "PUSH_GATE_CLAIMS_BADGE_STALE" },
+    "runtime%20deps-<N>": { missing: "PUSH_GATE_RUNTIME_DEPS_BADGE_MISSING", stale: "PUSH_GATE_RUNTIME_DEPS_BADGE_STALE" },
+  };
+
+  // Check each README.
+  for (const document of ["README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
+    const body = await read(document);
+
+    // Extract all badge patterns from the shields.io badge line.
+    // Badges appear in URLs like: /badge/verify%3Ap1-24%20gates-brightgreen
+    const badgeMatches = [...body.matchAll(/\/badge\/([a-zA-Z0-9%]+(?:-[a-zA-Z0-9%]+)*)-(?:blue|brightgreen|success|informational|important|blueviolet|lightgrey)\?/gu)];
+
+    for (const [badgeType, expectedValue] of Object.entries(expectedBadges)) {
+      const badgePattern = badgeType.split("-<N>")[0]; // e.g., "verify%3Ap1-"
+      const found = badgeMatches.find((match) => match[1].startsWith(badgePattern));
+
+      if (!found) {
+        fail(reasonCodes[badgeType].missing, `${document}: ${badgeType}`);
+      } else {
+        const actual = found[1];
+        if (actual !== expectedValue) {
+          fail(reasonCodes[badgeType].stale, `${document}: ${actual} != ${expectedValue}`);
+        }
+      }
+    }
   }
 });
 

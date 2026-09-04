@@ -10,7 +10,6 @@ import test from "node:test";
 import { INIT049_FOCUSED_CLAIM_COUNT, INIT049_FOCUSED_CLAIM_NAMES, INIT049_FOCUSED_CLAIMS } from "../scripts/init049-focused-claims.mjs";
 
 const engineRoot = fileURLToPath(new URL("../", import.meta.url));
-const helperRoot = resolve(engineRoot, "../tcrn-workflow-helper");
 
 test("STORY-342 every INIT-048 story claim has an independent command, reason code, and red leg", async () => {
   const map = JSON.parse(await readFile(resolve(engineRoot, "verification-map.yaml"), "utf8"));
@@ -25,28 +24,23 @@ test("STORY-342 every INIT-048 story claim has an independent command, reason co
   assert.match(incremental.subject, /snapshot.*tail/u);
 });
 
-test("STORY-343 engine and helper documents describe segmented events, replay snapshots, and body migration", async () => {
-  const helperFiles = [
-    "skill/tcrn-workflow-helper/SKILL.md",
-    "skill/tcrn-workflow-helper/references/platform-layout.md",
-    "skill/tcrn-workflow-helper/references/workflow-operations.md",
-    "skill/tcrn-workflow-helper/references/first-run-wizard.md",
-    "skill/tcrn-workflow-helper/references/backup-elicitation.md",
-    "skill/tcrn-workflow-helper/references/reason-codes.md",
-  ];
-  const requiredHelperLayout = {
-    "skill/tcrn-workflow-helper/SKILL.md": ["New event", "history is canonical", "replay snapshot", "file-segmented", "Knowledge bodies", "time-attestation"],
-    "skill/tcrn-workflow-helper/references/platform-layout.md": ["events/000001.ndjson", "000001.idx", "labels.idx", "time.idx", "snapshots/manifest.json", "metadata/<id>.json", "bodies/*.ndjson", "<eventHash>.json"],
-    "skill/tcrn-workflow-helper/references/workflow-operations.md": ["events/*.ndjson", "snapshots/manifest.json", "same segmented form", "time-attestation"],
-    "skill/tcrn-workflow-helper/references/first-run-wizard.md": ["events/*.ndjson", "snapshots/", "metadata/", "knowledge bodies"],
-    "skill/tcrn-workflow-helper/references/backup-elicitation.md": ["snapshots/", "snapshot-manifest"],
-    "skill/tcrn-workflow-helper/references/reason-codes.md": ["snapshot", "WORKSPACE_SNAPSHOT_INVALID"],
-  };
-  for (const relative of helperFiles) {
-    const text = await readFile(resolve(helperRoot, relative), "utf8");
-    assert.match(text, /(?:ndjson|segmented|snapshot|sidecar)/iu, relative);
-    for (const token of requiredHelperLayout[relative]) assert.ok(text.includes(token), `${relative} is missing documented layout token ${token}`);
-  }
+test("STORY-343 engine documents describe segmented events, replay snapshots, and body migration", async () => {
+  // TCRN-CROSS-INC-274: Cross-repository assertions on tcrn-workflow-helper documentation
+  // have been removed. This test originally verified both engine and helper repository
+  // documentation as a unit. The helper assertions violated AGENTS.md section 五
+  // (cross-repository dependency prohibition): "A repository never reaches into a sibling's
+  // tree... The test is whether this repository behaves differently when the other one is
+  // absent." These tests failed in GitHub Actions (where the sibling is not checked out)
+  // and kept CI red for twelve days.
+  //
+  // What was removed:
+  // - Assertions on 6 tcrn-workflow-helper documentation files (SKILL.md and 5 references)
+  // - A table defining required layout tokens in each helper file
+  // - The helperRoot path binding and corresponding file-read loop
+  //
+  // Coverage is not lost: the same assertions belong in the tcrn-workflow-helper repository,
+  // which owns those documents. Moving this verification into the helper repository as
+  // follow-up work (not in scope for this change) is tracked on TCRN-CROSS-INC-274.
   const engineFiles = [
     "packages/core/spec/knowledge-core-v1.md",
     "docs/architecture/backup-git-tier.md",
@@ -58,13 +52,6 @@ test("STORY-343 engine and helper documents describe segmented events, replay sn
     const text = await readFile(resolve(engineRoot, relative), "utf8");
     assert.match(text, /(?:segment|snapshot|body)/iu, relative);
   }
-});
-
-test("STORY-343 documentation proof names the helper archive refresh as a required step", async () => {
-  const helper = await readFile(resolve(helperRoot, "skill/tcrn-workflow-helper/references/settings-elicitation.md"), "utf8");
-  assert.match(helper, /settings catalog|settings-set/u);
-  const skill = await readFile(resolve(helperRoot, "skill/tcrn-workflow-helper/SKILL.md"), "utf8");
-  assert.match(skill, /archive|release/iu);
 });
 
 test("STORY-352 P3 and Knowledge claims have independent focused commands and expectations", async () => {
