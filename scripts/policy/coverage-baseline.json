@@ -2023,6 +2023,23 @@
         "INC-269 an annotation that moves no advisory field is refused before it is written",
         "INC-269 title and labels still land when the same annotation moves an advisory field"
       ]
+    },
+    "tests/inc270-engine-capability-surface.test.mjs": {
+      "testCount": 11,
+      "assertionCount": 48,
+      "testNames": [
+        "INC-270 case 1: identical catalogs -> green with IDENTICAL",
+        "INC-270 case 2: worktree has extra verb -> green with WORKTREE_AHEAD",
+        "INC-270 case 3: installed has extra verb -> RED PLATFORM_ENGINE_INSTALLED_AHEAD",
+        "INC-270 case 3b: both differ -> RED, both listed",
+        "INC-270 case 4a: unreadable installed -> uncomparable",
+        "INC-270 case 4b: both unreadable -> uncomparable",
+        "engineFloorSatisfied renamed from engineAlignment",
+        "both engineFloorSatisfied and engineCapabilitySurface in checks",
+        "INC-270 case 5a: worktree has extra flag on a verb -> green WORKTREE_AHEAD",
+        "INC-270 case 5b: installed has extra flag on a verb -> RED PLATFORM_ENGINE_INSTALLED_AHEAD",
+        "INC-270 case 6: same verbs and flags, but valueKind differs -> green ATTRIBUTES_DIVERGENT"
+      ]
     }
   }
 }
