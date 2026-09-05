@@ -129,33 +129,18 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
   // scope-on-record appender). Head resolves under the held lease for all of
   // them and is still rejected on knowledge-marker verbs by construction.
   //
-  // WSR-1 adds relocation-vacate and its read-only preparation relocation-plan,
-  // and they are the two exceptions to this test's own title. Neither appends an
-  // event: --expected-version is a compare-and-set against the chain the vacate is
-  // about to seal, not a slot for an event it is about to write. The sentinel is
-  // admitted because "seal this workspace at whatever its head is right now" is
-  // the same question head answers everywhere else — but note that resolving
-  // `head` materializes the chain in the CLI before the verb runs, so on an
-  // unsettled tree the operator sees WORKSPACE_EVENT_CORRUPT rather than the
-  // verb's own WORKSPACE_RELOCATION_UNSETTLED (see WSR-1 T10).
-  //
   // STORY-300 slice 3 adds work-batch, which is the ordinary case rather than an
   // exception: it appends a whole ordered sequence under one lease and one CAS decision,
   // so head means exactly what it means for a single appender -- resolve against whatever
   // the chain's head is right now and refuse if it moved. That it writes several events
   // instead of one changes nothing about the question the sentinel answers.
-  //
-  // relocation-plan carries it for one reason: it must resolve the version exactly
-  // as the vacate will, or the relocationId it emits — the id the operator mints an
-  // authority against — would be a prediction of a hop the engine is not about to
-  // take. It is `mutates: false` and appends nothing.
   assert.deepEqual([...sentinelVerbs].sort(), [
     "attestation-enable",
     "conference-append-position", "conference-cancel", "conference-close", "conference-open",
     "gate-create", "gate-delete", "gate-transition",
     "model-plan-assign", "model-plan-remove", "model-plan-set", "model-plan-unassign",
     "persona-preset-override", "persona-preset-restore", "persona-remove", "persona-set",
-    "project-create", "project-delete", "project-update", "relocation-plan", "relocation-vacate",
+    "project-create", "project-delete", "project-update",
     "settings-remove", "settings-set", "template-admit", "work-annotate", "work-batch", "work-create", "work-delete", "work-transition",
   ]);
 });
@@ -189,18 +174,11 @@ test("INIT-009: operator pins make every non-fixture verb binary-invocable", () 
   // EPIC-022 adds the host-neutral global operator-pins channel. Compatibility
   // planning therefore no longer needs a bespoke programmatic embedder.
   assert.deepEqual(bySurface["programmatic-only"] ?? [], []);
-  // OD-18: assertDisposable (artifact-lifecycle.ts) admits a store only when the marker
-  // carries disposable and the Workspace external key starts with FIXTURE-, and
-  // initializeArtifactStore refuses to set disposable on anything else. So these two
-  // verbs can never succeed against a live Workspace -- which the spec states outright
-  // ("The live local graph is therefore ineligible"). The catalog now says so too:
-  // a caller planning work from it would otherwise budget for a verb that is designed
-  // to fail for them.
-  assert.deepEqual(bySurface["fixture-only"], ["artifact-archive-apply", "artifact-archive-restore"]);
+  assert.deepEqual(bySurface["fixture-only"] ?? [], []);
   assert.equal(
     (bySurface["cli"]?.length ?? 0) +
       (bySurface["programmatic-only"]?.length ?? 0) +
-      bySurface["fixture-only"].length,
+      (bySurface["fixture-only"]?.length ?? 0),
     COMMAND_CATALOG.length,
     "every catalog entry is partitioned into exactly one known surface",
   );

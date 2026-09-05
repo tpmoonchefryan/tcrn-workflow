@@ -148,15 +148,21 @@
       "recordedAt": "2026-09-04",
       "ratio": 1.7431,
       "rationale": "The ratio rose because product code was retired, not because proof was added. TCRN-CROSS-INC-275 removed two subsystems that were declared stripped but still present: the PostgreSQL backend, which docs/adr/0004 records as not wired into the product path, and the tcrn-workflow-mcp stdio surface, which docs/compatibility/supported-modes.md records as retired in v0.11.18. Neither had a consumer outside the tests that tested it; the operator-authority MCP grants had no consumer at all, not even the surface they were written for. Owner ruling 2026-09-04: a test's value comes from the thing it tests existing.\n\nAbout two thousand lines of product left — the pg backend and its store, the file-to-pg migration family, the CLI paths that served both, and the retired stdio surface — against roughly fourteen hundred lines of proof. Retiring dead product raises this ratio by arithmetic, and the alternative the gate offers, retiring equivalent proof mass, would mean deleting tests for code that still exists in order to record the removal of code that does not.\n\nWhat replaced the deleted tests is smaller and different in kind: two sets of absence assertions, one for PostgreSQL and one for MCP, each measured to fail when its subject is recreated. They guard against a reintroduction that the old tests could not have caught, because the old tests required the subject to be present."
+    },
+    {
+      "id": "TCRN-CROSS-STORY-358-retire-artifact-lifecycle-and-workspace-relocation",
+      "recordedAt": "2026-09-06",
+      "ratio": 1.8345,
+      "rationale": "The ratio rose because product code was retired, not because proof was added. TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3, retired packages/core/src/artifact-lifecycle.ts and packages/core/src/workspace-relocation.ts in full (2,696 lines) as the smallest of six module families the same Story isolates: neither file had a live consumer outside its own barrel re-export, its own CLI verbs and its own tests -- the artifact store was never initialized in any of the eight live partitions, and the five relocation verbs are unused by all eight today. The one genuinely live call, knowledge-core.ts's redaction of source references, moved in with its sole caller rather than surviving as a public export with nothing left to call it.\n\n61,383 lines of proof now stand against 33,461 lines of product across packages/*/src (reportBudget's wider metric). Retiring equivalent proof mass instead would mean deleting coverage for product that still exists, in order to record the deletion of product that does not -- the same inversion INC-275 already declined.\n\nWhat did NOT go with the verbs is the relocation LEDGER READER inside packages/core/src/workspace.ts (activeBinding, relocationStateAt, admitRelocationState), which every read of a ledger-carrying workspace still runs and which five of the eight live partitions depend on to open at all. Its coverage was rewritten rather than waived: tests/backup-snapshot.test.mjs's WSR-1 L1-L6 write the ledger by hand, and each of the seven WSR-1-prefixed guard-registry entries whose file is workspace.ts was observed RED under its own declared mutation against them. That is why proof mass did not fall as far as product mass did.\n\nGit tag attic-2026-09 (commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains both retired files and their tests for historical reference; nothing here narrows what a workspace that was actually relocated can still read."
     }
   ],
   "surfaceCaps": {
     "schemaVersion": "tcrn.proof-budget.surface-caps.v1",
     "note": "Three raw proof-surface counts, recorded beside the ratio this file has pinned since STORY-301. The ratio bounds the relationship between proof and product; it says nothing about the absolute size of either side, so both can grow together, forever, without the ratio ever moving. TCRN-CROSS-STORY-356 pins three counts instead: how many verify:* scripts package.json declares, how many claims verification-map.yaml carries, and how many lines packages/core/src holds. CONTRIBUTING.md documents the rule these caps enforce; this is the recorded line, the same division of labor frozenRatio and its rationale above already use.",
     "recordedAt": "2026-09-05",
-    "verifyScriptCap": 135,
-    "claimCap": 122,
-    "coreSourceLineCap": 32086,
+    "verifyScriptCap": 134,
+    "claimCap": 119,
+    "coreSourceLineCap": 29386,
     "coreSourceLineMetric": {
       "glob": "packages/core/src/**/*.ts",
       "method": "raw 0x0a byte count across the matched files, recursive, blank lines and comments included -- the same deliberately crude counting method scripts/task.mjs's reportBudget (WSG-7) uses for productLines.",

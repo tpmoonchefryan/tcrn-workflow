@@ -21,11 +21,6 @@ import {
   readGateIdentityAuthority,
   deleteGateInWorkspace,
   listGatesByWorkItem,
-  applyArtifactArchive,
-  artifactArchiveDryRun,
-  artifactCompactDryRun,
-  artifactDoctor,
-  artifactSizeReport,
   createKnowledgeUnit,
   checkKnowledgeSources,
   createProject,
@@ -67,7 +62,6 @@ import {
   readSnapshotManifestFile,
   rebuildReplaySnapshot,
   verifySnapshotManifest,
-  restoreArtifactArchive,
   resolveGenericProfile,
   routeContext,
   transitionKnowledgePromotion,
@@ -137,13 +131,6 @@ import {
   publicAosRequirementsReadback,
   publicAosRequirementsValidReason,
   readOperatorAuthority,
-  abortWorkspaceRelocation,
-  adoptWorkspace,
-  inspectWorkspaceRelocation,
-  planWorkspaceRelocation,
-  readGovernedDocumentFile,
-  readRelocationAuthority,
-  vacateWorkspace,
   readStorageHomeDeclaration,
   readSettingsCatalog,
   readInstallManifest,
@@ -192,12 +179,10 @@ import type {
   KnowledgeKind,
   KnowledgePromotionState,
   CompatibilityAdmissionAuthority,
-  RelocationAuthorityFileIdentity,
-  RelocationDestination,
   VerificationClaimLink,
 } from "../../core/src/index.js";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
 import { assertStrictInstant, canonicalExternalKey, canonicalJson, canonicalSha256, deriveStableId } from "../../protocol/src/index.js";
@@ -505,65 +490,6 @@ function compatibilityJson(value: string | undefined, name: string): unknown {
 function aosRequirementsJson(value: string | undefined, name: string): string {
   if (typeof value !== "string") fail("CLI_ARGUMENT_MALFORMED", name);
   return value;
-}
-
-// WSR-1: the relocation authority is a pins-track authority like every other, so the
-// caller states the digest it already holds and the reader checks it against the
-// bytes on disk. Read BEFORE any lease is taken — a filesystem refusal should not
-// have held a workspace lock while it happened (T16).
-async function relocationAuthorityFor(values: Readonly<Record<string, string>>): Promise<Awaited<ReturnType<typeof readRelocationAuthority>>> {
-  const identity = suppliedAuthority<RelocationAuthorityFileIdentity>(
-    undefined, values["relocation-authority"], values["relocation-authority-digest"],
-  );
-  if (identity === undefined) {
-    fail("CLI_ARGUMENT_MISSING", "relocation-authority-digest");
-  }
-  return readRelocationAuthority(values["relocation-authority"] ?? "", identity);
-}
-
-function relocationDestination(values: Readonly<Record<string, string>>, prefix: "to-" | ""): RelocationDestination {
-  return {
-    framework: values[`${prefix}framework`] ?? "",
-    workspace: prefix === "to-" ? values["to-workspace-root"] ?? "" : values.workspace ?? "",
-    transient: values[`${prefix}transient`] ?? "",
-    "evidence-locator": values[`${prefix}evidence-locator`] ?? "",
-    "release-trust": values[`${prefix}release-trust`] ?? "",
-  };
-}
-
-// WSR-1: the advisory sidecar is keyed by relocationId, NOT by headEventHash.
-// Relocation does not advance the head, so the existing --attest-dir key would
-// collide across hops — every hop of a workspace would overwrite the last one's
-// receipt. Same fail-closed rules as emitTimeAttestation: no implicit clock, and
-// never inside the workspace root.
-async function emitRelocationAttestation(
-  io: CliIo,
-  values: Readonly<Record<string, string>>,
-  receipt: Readonly<Record<string, unknown>>,
-): Promise<void> {
-  const attestDir = values["attest-dir"];
-  if (attestDir === undefined) return;
-  if (io.clock === undefined) fail("CLI_ARGUMENT_MISSING", "--attest-dir requires an injected clock; refusing an implicit local Date");
-  const workspaceRoot = resolve(values.workspace ?? "");
-  const directory = resolve(attestDir);
-  if (insideWorkspace(workspaceRoot, directory)) fail("CLI_ARGUMENT_MALFORMED", "--attest-dir must resolve outside the workspace root");
-  const relocationId = typeof receipt.relocationId === "string" ? receipt.relocationId : "";
-  const stage = typeof receipt.stage === "string" ? receipt.stage : "";
-  if (!/^relocation:[a-f0-9]{24}$/u.test(relocationId) || stage.length === 0) {
-    fail("CLI_ARGUMENT_MALFORMED", "relocation attestation key");
-  }
-  assertStrictInstant(values.at ?? "");
-  const observedAt = io.clock();
-  assertStrictInstant(observedAt);
-  const body = canonicalJson({
-    schemaVersion: "tcrn.relocation-attestation.v1",
-    observedAt,
-    occurredAt: values.at ?? "",
-    relocationId,
-    stage,
-  });
-  await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, `${relocationId.slice("relocation:".length)}-${stage}.json`), body);
 }
 
 function workspaceHeadOf(value: unknown): string | null {
@@ -1040,12 +966,6 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "baseline", required: false, valueKind: "json" }, { name: "settings", required: false, valueKind: "string" }] },
   { name: "aos-requirements-readback", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
   { name: "aos-requirements-validate", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
-  { name: "artifact-archive-apply", availability: "fixture-only", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-plan-digest", required: true, valueKind: "string" }] },
-  { name: "artifact-archive-dry-run", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
-  { name: "artifact-archive-restore", availability: "fixture-only", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "archive-id", required: true, valueKind: "string" }, { name: "expected-plan-digest", required: true, valueKind: "string" }] },
-  { name: "artifact-compact-dry-run", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
-  { name: "artifact-doctor", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "warning-bytes", required: false, valueKind: "integer" }, { name: "critical-bytes", required: false, valueKind: "integer" }, { name: "warning-count", required: false, valueKind: "integer" }, { name: "critical-count", required: false, valueKind: "integer" }] },
-  { name: "artifact-size", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "attestation-migrate", availability: "cli", mutates: true, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "mode", required: true, valueKind: "string" }, { name: "baseline", required: false, valueKind: "string" }, { name: "baseline-out", required: false, valueKind: "string" }] },
   { name: "claude-adapter-activation-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }] },
@@ -1143,11 +1063,6 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "project-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "project-update", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "recover", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
-  { name: "relocation-abort", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "relocation-id", required: true, valueKind: "string" }, { name: "acknowledge-fork-risk", required: true, valueKind: "boolean" }, { name: "relocation-authority", required: true, valueKind: "string" }, { name: "relocation-authority-digest", required: true, valueKind: "string" }, { name: "target-inspection", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "relocation-adopt", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "relocation-id", required: true, valueKind: "string" }, { name: "control-manifest", required: true, valueKind: "string" }, { name: "relocation-authority", required: true, valueKind: "string" }, { name: "relocation-authority-digest", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "relocation-inspect", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
-  { name: "relocation-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "to-framework", required: true, valueKind: "string" }, { name: "to-workspace-root", required: true, valueKind: "string" }, { name: "to-transient", required: true, valueKind: "string" }, { name: "to-evidence-locator", required: true, valueKind: "string" }, { name: "to-release-trust", required: true, valueKind: "string" }, { name: "control-manifest-out", required: false, valueKind: "string" }] },
-  { name: "relocation-vacate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "to-framework", required: true, valueKind: "string" }, { name: "to-workspace-root", required: true, valueKind: "string" }, { name: "to-transient", required: true, valueKind: "string" }, { name: "to-evidence-locator", required: true, valueKind: "string" }, { name: "to-release-trust", required: true, valueKind: "string" }, { name: "relocation-authority", required: true, valueKind: "string" }, { name: "relocation-authority-digest", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "control-manifest-out", required: false, valueKind: "string" }] },
   { name: "settings-catalog", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "settings-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "settings-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "value", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -2046,103 +1961,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     writeState(io, state);
     return;
   }
-  if (command === "relocation-plan") {
-    // WSR-1 (post-review). Read-only, and MANDATORY in practice rather than by a
-    // flag: a relocation permit now names the exact relocationId, and this is the
-    // only route to it that is guaranteed to agree with the vacate — plan and vacate
-    // share one preparation function precisely so they cannot drift. It also emits
-    // the control manifest, which after the vacate commits is unobtainable at either
-    // address while `relocation-adopt` requires its exact text.
-    const values = parseArguments(rest, ["workspace", "at", "expected-version", "to-framework", "to-workspace-root", "to-transient", "to-evidence-locator", "to-release-trust", "control-manifest-out"]);
-    required(values, ["workspace", "at", "expected-version", "to-framework", "to-workspace-root", "to-transient", "to-evidence-locator", "to-release-trust"]);
-    const workspace = values.workspace ?? "";
-    io.write(canonicalJson(await planWorkspaceRelocation(workspace, {
-      at: values.at ?? "",
-      destination: relocationDestination(values, "to-"),
-      expectedVersion: await resolveExpectedVersion(values, workspace),
-      controlManifestOut: values["control-manifest-out"],
-    })));
-    return;
-  }
-  if (command === "relocation-vacate") {
-    // WSR-1. Its ONLY effect is to kill the source: it does not copy, does not reach
-    // the target, and does not advance the chain. All five destination roots are
-    // required — see RelocationDestination for why the terminal verb states the
-    // whole destination binding rather than the workspace root alone.
-    const values = parseArguments(rest, ["workspace", "at", "actor", "expected-version", "to-framework", "to-workspace-root", "to-transient", "to-evidence-locator", "to-release-trust", "relocation-authority", "relocation-authority-digest", "attest-dir", "control-manifest-out"]);
-    required(values, ["workspace", "at", "actor", "expected-version", "to-framework", "to-workspace-root", "to-transient", "to-evidence-locator", "to-release-trust", "relocation-authority", "relocation-authority-digest"]);
-    const workspace = values.workspace ?? "";
-    const authority = await relocationAuthorityFor(values);
-    const receipt = await vacateWorkspace(workspace, {
-      at: values.at ?? "",
-      actorId: values.actor ?? "",
-      destination: relocationDestination(values, "to-"),
-      authority,
-      expectedVersion: await resolveExpectedVersion(values, workspace),
-      controlManifestOut: values["control-manifest-out"],
-    });
-    await emitRelocationAttestation(io, values, receipt);
-    io.write(canonicalJson(receipt));
-    return;
-  }
-  if (command === "relocation-adopt") {
-    const values = parseArguments(rest, ["workspace", "framework", "transient", "evidence-locator", "release-trust", "at", "actor", "relocation-id", "control-manifest", "relocation-authority", "relocation-authority-digest", "attest-dir"]);
-    required(values, ["workspace", "framework", "transient", "evidence-locator", "release-trust", "at", "actor", "relocation-id", "control-manifest", "relocation-authority", "relocation-authority-digest"]);
-    const authority = await relocationAuthorityFor(values);
-    // The manifest travels with the operator, but it is not the trust carrier: the
-    // ledger inside the copied tree holds its sha256, so a wrong or replayed
-    // manifest is refused by the tree itself.
-    const controlManifest = await readSnapshotManifestFile(values["control-manifest"] ?? "");
-    const receipt = await adoptWorkspace(values.workspace ?? "", {
-      at: values.at ?? "",
-      actorId: values.actor ?? "",
-      relocationId: values["relocation-id"] ?? "",
-      roots: relocationDestination(values, ""),
-      authority,
-      controlManifest,
-    });
-    await emitRelocationAttestation(io, values, receipt);
-    io.write(canonicalJson(receipt));
-    return;
-  }
-  if (command === "relocation-abort") {
-    const values = parseArguments(rest, ["workspace", "at", "actor", "relocation-id", "acknowledge-fork-risk", "relocation-authority", "relocation-authority-digest", "target-inspection", "attest-dir"]);
-    required(values, ["workspace", "at", "actor", "relocation-id", "acknowledge-fork-risk", "relocation-authority", "relocation-authority-digest"]);
-    const authority = await relocationAuthorityFor(values);
-    // Optional by design and recorded either way: the legitimate abort (the copy was
-    // never made, the destination host is unreachable) has no destination to inspect,
-    // and a requirement that cannot be met in the case it exists for gets routed
-    // around rather than obeyed. When it IS supplied the engine checks it and refuses
-    // the abort outright if the destination already adopted.
-    const targetInspection = values["target-inspection"] === undefined
-      ? undefined
-      : await readGovernedDocumentFile(values["target-inspection"], "target-inspection");
-    const receipt = await abortWorkspaceRelocation(values.workspace ?? "", {
-      at: values.at ?? "",
-      actorId: values.actor ?? "",
-      relocationId: values["relocation-id"] ?? "",
-      acknowledgeForkRisk: booleanValue(values["acknowledge-fork-risk"], "acknowledge-fork-risk"),
-      authority,
-      ...(targetInspection === undefined ? {} : { targetInspection }),
-    });
-    await emitRelocationAttestation(io, values, receipt);
-    io.write(canonicalJson(receipt));
-    return;
-  }
-  if (command === "relocation-inspect") {
-    // The ONLY instrument that can detect a fork — and only when run at BOTH
-    // addresses and compared. Read-only, and admitted at every address including a
-    // vacated or foreign one, because that is precisely where it must still answer.
-    //
-    // `--at` is required and is the caller's declaration of when the observation was
-    // taken. It is stamped into the document as `observedAt`, which is what
-    // `relocation-abort --target-inspection` bounds against its own `--at`: without it
-    // two inspections taken either side of an adopt are byte-identical.
-    const values = parseArguments(rest, ["workspace", "at"]);
-    required(values, ["workspace", "at"]);
-    io.write(canonicalJson(await inspectWorkspaceRelocation(values.workspace ?? "", { at: values.at ?? "" })));
-    return;
-  }
   if (command === "machine-settings-catalog") {
     const values = parseArguments(rest, ["home"]);
     io.write(canonicalJson({ reasonCode: "MACHINE_SETTINGS_CATALOG_READY", ...await readMachineSettingsCatalog(machineSettingsPath(values.home ?? homedir())) }));
@@ -2589,58 +2407,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const values = parseArguments(rest, ["workspace", "at"]);
     required(values, ["workspace", "at"]);
     io.write(await exportKnowledgeCheckpoint(values.workspace ?? "", values.at ?? ""));
-    return;
-  }
-  if (command === "artifact-size") {
-    const values = parseArguments(rest, ["workspace"]);
-    required(values, ["workspace"]);
-    io.write(canonicalJson(await artifactSizeReport(values.workspace ?? "")));
-    return;
-  }
-  if (command === "artifact-doctor") {
-    const names = ["workspace", "warning-bytes", "critical-bytes", "warning-count", "critical-count"];
-    const values = parseArguments(rest, names);
-    required(values, ["workspace"]);
-    const warningBytes = boundedInteger(values, "warning-bytes");
-    const criticalBytes = boundedInteger(values, "critical-bytes");
-    const warningCount = boundedInteger(values, "warning-count");
-    const criticalCount = boundedInteger(values, "critical-count");
-    io.write(canonicalJson(await artifactDoctor(values.workspace ?? "", {
-      ...(warningBytes === undefined ? {} : { warningBytes }),
-      ...(criticalBytes === undefined ? {} : { criticalBytes }),
-      ...(warningCount === undefined ? {} : { warningCount }),
-      ...(criticalCount === undefined ? {} : { criticalCount }),
-    })));
-    return;
-  }
-  if (command === "artifact-compact-dry-run") {
-    const values = parseArguments(rest, ["workspace"]);
-    required(values, ["workspace"]);
-    io.write(canonicalJson(await artifactCompactDryRun(values.workspace ?? "")));
-    return;
-  }
-  if (command === "artifact-archive-dry-run") {
-    const values = parseArguments(rest, ["workspace"]);
-    required(values, ["workspace"]);
-    io.write(canonicalJson(await artifactArchiveDryRun(values.workspace ?? "")));
-    return;
-  }
-  if (command === "artifact-archive-apply") {
-    const values = parseArguments(rest, ["workspace", "expected-plan-digest"]);
-    required(values, ["workspace", "expected-plan-digest"]);
-    io.write(canonicalJson(await applyArtifactArchive(values.workspace ?? "", {
-      expectedPlanDigest: values["expected-plan-digest"] ?? "",
-    })));
-    return;
-  }
-  if (command === "artifact-archive-restore") {
-    const values = parseArguments(rest, ["workspace", "archive-id", "expected-plan-digest"]);
-    required(values, ["workspace", "archive-id", "expected-plan-digest"]);
-    io.write(canonicalJson(await restoreArtifactArchive(
-      values.workspace ?? "",
-      values["archive-id"] ?? "",
-      { expectedPlanDigest: values["expected-plan-digest"] ?? "" },
-    )));
     return;
   }
   // WSE-3: attestation-enable appends the one-way attestation.actor.enabled chain

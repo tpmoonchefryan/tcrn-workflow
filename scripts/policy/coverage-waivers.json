@@ -117,6 +117,429 @@
       "testName": "__assertions__",
       "reason": "TCRN-CROSS-INC-275 — five assertions were removed from the sealing test when it was simplified to just check the retirement refusal. The idempotency assertions (three) and binding-conflict assertions (two) tested code paths that became unreachable because pg declarations are now refused at parse time.",
       "replacement": "tests/inc074-storage-home.test.mjs:INC-074: sealing a PG archive fails because the backend is retired (STORAGE_HOME_BACKEND_RETIRED)"
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T1: vacate kills the source across every read and write surface",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T2: refusal coverage is enumerated from the catalog, never from a hand-written list",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T3: the readMetadata-only paths are covered and resolveWorkspace would have missed them",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T4: the readMetadata admission default is strict",
+      "reason": "TCRN-CROSS-STORY-358 retires the relocation-* CLI surface this case drove, but its assertions landed on packages/core/src/workspace.ts, which survives: activeBinding, relocationStateAt and admitRelocationState still run on every read of a workspace whose workspace.json carries a relocations ledger, and five of the eight live partitions carry one. The replacement writes the ledger by hand rather than through a retired verb, and was observed RED under the mutation guard-registry entry WSR-1-strict-admission-default declares.",
+      "replacement": "WSR-1 L1: the readMetadata admission default is strict"
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T5: adopt changes exactly one file in the control tree",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T6: the event chain survives the move untouched",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T7: the artifact store stays in lockstep with no rebase",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T7b: a populated knowledge store validates at the adopted address with no rebase",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T8: the empty-directory gap is closed by the ADDED check, not by the manifest",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T9: the transport-residue gap is closed by the ADDED check, not by the manifest",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T10: vacate refuses an unsettled tree and names recover as the fix",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T11: ordering is mechanized — copy-then-adopt without a vacate fails closed",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T12: adopt is idempotent",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T13: abort restores the source from the tree alone",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T14: the relocation authority is load-bearing, not decorative",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T14c: a roster scoped to a different workspaceId does not permit this workspace",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T15: the authority basis is a real content-addressed check, not decoration",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T16: the authority is read before the lease is taken",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T17: the same authority bytes at two host paths carry the same digest",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T18: ledger chaining cannot be spliced, and a correct chain still reads clean",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T19: no torn ledger is reachable at either commit point",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T20: one flipped byte anywhere in the copy is caught before adopt",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T21: the target MEASURES the chain rather than quoting the ledger",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T22: segmentEventLimit is untouchable and a hand-changed limit corrupts the very next read",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T23: inspect reports the roots this hop does not move",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T25: a workspace that never relocates has byte-identical metadata",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T-FORK: two truths are not prevented, they are made legible on both sides",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T14e: a permit scoped to a different destination does not admit this hop",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T14f: a permit for a different hop does not admit this one",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T14g: a permit for another stage of the same hop does not admit this verb",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T26: one authority cannot drive a second hop — the basis CAS is no longer inert",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T27: abort demands its own stage permit, an explicit acknowledgement, and refuses on an adopted target",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T42: an abort permit names the vacate commitment, so it cannot be the document that authorized the vacate",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T43: a target inspection carries a declared observation instant and abort bounds it",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T28: relocation-plan is the vacate",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T29: a hop that does not move the workspace root is refused while the source is still alive",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T30: a stale copy is not ",
+      "reason": "TCRN-CROSS-STORY-358 retires the relocation-* CLI surface this case drove, but its assertions landed on packages/core/src/workspace.ts, which survives: activeBinding, relocationStateAt and admitRelocationState still run on every read of a workspace whose workspace.json carries a relocations ledger, and five of the eight live partitions carry one. The replacement writes the ledger by hand rather than through a retired verb, and was observed RED under the mutation guard-registry entry WSR-1-no-ledger-address-compare declares.",
+      "replacement": "WSR-1 L5: a stale copy is not live just because it carries no ledger"
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T31: adopt binds the destination it was declared for, at the address it was declared for",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T32: adopt restates the relocationId of the hop it is completing",
+      "reason": "TCRN-CROSS-STORY-358 retires the relocation-* CLI surface this case drove, but its assertions landed on packages/core/src/workspace.ts, which survives: activeBinding, relocationStateAt and admitRelocationState still run on every read of a workspace whose workspace.json carries a relocations ledger, and five of the eight live partitions carry one. The replacement writes the ledger by hand rather than through a retired verb, and was observed RED under the mutation guard-registry entry WSR-1-adoption-admission-state declares.",
+      "replacement": "WSR-1 L3: the adoption admission is narrowed to an address awaiting adoption"
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T33: abort runs at the source address and nowhere else",
+      "reason": "TCRN-CROSS-STORY-358 retires the relocation-* CLI surface this case drove, but its assertions landed on packages/core/src/workspace.ts, which survives: activeBinding, relocationStateAt and admitRelocationState still run on every read of a workspace whose workspace.json carries a relocations ledger, and five of the eight live partitions carry one. The replacement writes the ledger by hand rather than through a retired verb, and was observed RED under the mutation guard-registry entry WSR-1-abort-admission-state declares.",
+      "replacement": "WSR-1 L2: the abort admission is narrowed to a vacated address"
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T34: a copy of an ADOPTED tree at a third address is a foreign address everywhere",
+      "reason": "TCRN-CROSS-STORY-358 retires the relocation-* CLI surface this case drove, but its assertions landed on packages/core/src/workspace.ts, which survives: activeBinding, relocationStateAt and admitRelocationState still run on every read of a workspace whose workspace.json carries a relocations ledger, and five of the eight live partitions carry one. The replacement writes the ledger by hand rather than through a retired verb, and was observed RED under the mutation guard-registry entry WSR-1-foreign-address-fallback declares.",
+      "replacement": "WSR-1 L4: a copy of an adopted tree at a third address is a foreign address everywhere"
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T35: a ledger entry must name itself, and a completion must restate its hop",
+      "reason": "TCRN-CROSS-STORY-358 retires the relocation-* CLI surface this case drove, but its assertions landed on packages/core/src/workspace.ts, which survives: activeBinding, relocationStateAt and admitRelocationState still run on every read of a workspace whose workspace.json carries a relocations ledger, and five of the eight live partitions carry one. The replacement writes the ledger by hand rather than through a retired verb, and was observed RED under the mutation guard-registry entry WSR-1-ledger-self-derivation and WSR-1-ledger-completion-restatement declares.",
+      "replacement": "WSR-1 L6: a ledger entry must name itself, and a completion must restate its hop"
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T36: adopt binds the supplied manifest to the one the vacate recorded",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T38: the relocation authority parser has a negative matrix like every other consumer of the shared reader",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T39: vacate",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T40: the ledger cap refuses a vacate while the source is still alive",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "WSR-1 T41: a destination stated in the wrong spelling is reported as a near miss, not just a foreign address",
+      "reason": "TCRN-CROSS-STORY-358 retires governed workspace relocation (WSR-1) in full; this case's assertions land on the retired relocation-* CLI verbs and on packages/core/src/workspace-relocation.ts, neither of which has a successor.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/backup-snapshot.test.mjs",
+      "testName": "__assertions__",
+      "reason": "The assertion-count drop is the 47 WSR-1 T-cases above being removed as a block, not a reduction inside a surviving case. Six of them are replaced in this same change by WSR-1 L1-L6, which carry 45 assertions of their own against the surviving workspace.ts ledger reader; the remainder belonged to the retired verbs.",
+      "disowned": {
+        "owningRepository": "none -- workspace-relocation.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/workspace-relocation.ts and its five relocation-* CLI verbs retire from the mainline tree as a whole-file, zero-live-consumer module, with no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and this WSR-1 suite for historical reference; recovering the coverage of the verbs themselves means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/p8-workflow-rc.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-358: the surviving 'P8 dogfood...' case's two assert.deepEqual calls on artifactCompactDryRun/artifactArchiveDryRun idempotency were removed along with initializeArtifactStore, artifactCompactDryRun and artifactArchiveDryRun. No test name in this file changed; only its tail shrank.",
+      "disowned": {
+        "owningRepository": "none -- artifact-lifecycle.ts has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3: packages/core/src/artifact-lifecycle.ts retires from the mainline tree as a whole-file, zero-live-consumer module -- the artifact store was never initialized in any of the eight live partitions. Its one live symbol, redactArtifactReference, moved into its sole caller packages/core/src/knowledge-core.ts and keeps its own coverage there. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and tests/p4-artifact-lifecycle.test.mjs for historical reference."
+      }
     }
   ]
 }

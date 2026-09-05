@@ -395,7 +395,6 @@ async function runTests({
   rootOnly = false,
   protocolOnly = false,
   p3Only = false,
-  p4Only = false,
   knowledgeOnly = false,
   p5Only = false,
   p6Only = false,
@@ -446,7 +445,6 @@ async function runTests({
     .filter((path) => !rootOnly || path === "tests/root-boundaries.test.mjs")
     .filter((path) => !protocolOnly || path === "tests/protocol-v1.test.mjs")
     .filter((path) => !p3Only || ["tests/p3-file-engine.test.mjs", "tests/p3-cli-read-surface.test.mjs", "tests/p3-cli-catalog.test.mjs", "tests/p3-engine-complexity.test.mjs"].includes(path))
-    .filter((path) => !p4Only || ["tests/p4-artifact-lifecycle.test.mjs", "tests/p4-knowledge-core.test.mjs"].includes(path))
     .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs")
     .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path))
     .filter((path) => !p6Only || ["tests/p6-context-router.test.mjs", "tests/p6-codex-adapter.test.mjs"].includes(path))
@@ -571,8 +569,6 @@ async function runTests({
                     ? "P7_CANONICAL_EXCHANGE_TESTS_VERIFIED"
                   : p8Only
                     ? "P8_WORKFLOW_RC_TESTS_VERIFIED"
-                  : p4Only
-              ? "P4_ARTIFACT_LIFECYCLE_TESTS_VERIFIED"
               : "TESTS_VERIFIED",
     { tests, result: "passed" },
   );
@@ -608,7 +604,6 @@ const INIT049_STORY351_TESTS = Object.freeze([
   ["tests/story-346-pg-disabled.test.mjs", "STORY-346 production backend selection rejects PostgreSQL"],
   ["tests/story-347-348-settings-policy.test.mjs", "STORY-348 protocol validity values remain hardcoded rather than becoming settings"],
   ["tests/p4-knowledge-core.test.mjs", "Knowledge implementation has no predecessor, network, database, or AOS read authority"],
-  ["tests/p4-artifact-lifecycle.test.mjs", "artifact implementation and fixtures contain no legacy source-read authority"],
   ["tests/p5-generic-profile.test.mjs", "profile runtime remains standalone and imports only frozen local protocol authority"],
   ["tests/p6-codex-adapter.test.mjs", "empty-project cold start remains empty and Adapter source has no legacy, ambient store scan, network, database, or AOS reader"],
   ["tests/p6-context-router.test.mjs", "Context Router implementation is storeless and contains no legacy, network, database, hook, Skill, environment, model, or session authority"],
@@ -652,7 +647,6 @@ const INIT049_PLATFORM_DOCTOR_BEHAVIOR = Object.freeze({
   reducedTargetSeconds: 28.5,
   slowFilesUnchanged: {
     "tests/p4-knowledge-core.test.mjs": 54.6,
-    "tests/s227-relocation-manifest-ceiling.test.mjs": 35.4,
     "tests/p3-file-engine.test.mjs": 34.4,
     "tests/output-session-lifecycle.test.mjs": 28.8,
   },
@@ -975,75 +969,6 @@ async function verifyP3() {
     schemaDigest: (await fileRecord(schemaPath)).sha256,
     standalone: "node-filesystem-only-no-database-no-aos",
     p3Marker: "absent",
-    acceptance: "not-claimed",
-  });
-}
-
-async function verifyP4() {
-  const tests = await runTests({ p4Only: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p4-artifact-lifecycle-cases.json");
-  const schemaPath = resolve(repositoryRoot, "packages/core/schema/artifact-lifecycle-v1.schema.json");
-  const fixture = await readJson(fixturePath);
-  const knowledgeFixturePath = resolve(repositoryRoot, "packages/core/fixtures/p4-knowledge-core-cases.json");
-  const knowledgeSchemaPath = resolve(repositoryRoot, "packages/core/schema/knowledge-core-v1.schema.json");
-  const knowledgeFixture = await readJson(knowledgeFixturePath);
-  assertion(fixture.schemaVersion === "tcrn.p4-artifact-lifecycle-cases.v1", "P4_FIXTURE_SCHEMA");
-  assertion(Array.isArray(fixture.classificationCases) && fixture.classificationCases.length === 8, "P4_CLASSIFICATION_CASES");
-  assertion(Array.isArray(fixture.doctorBudgetCases) && fixture.doctorBudgetCases.length === 3, "P4_DOCTOR_CASES");
-  assertion(Array.isArray(fixture.archiveCases) && fixture.archiveCases.length === 3, "P4_ARCHIVE_CASES");
-  assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 5, "P4_FAULT_CASES");
-  assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 28, "P4_NEGATIVE_CASES");
-  assertion(fixture.propertyPermutations >= 64, "P4_PROPERTY_PERMUTATIONS");
-  assertion(fixture.maximumEntries === 1_024 && fixture.maximumSourceBytes === 1_048_576 &&
-    fixture.maximumStoredBytes === 16_777_216 && fixture.maximumArchiveBytes === 33_554_432 &&
-    fixture.maximumArchiveGenerations === 16 && fixture.maximumArchiveFilesPerGeneration === 1 &&
-    fixture.maximumArchiveStoredBytes === 33_554_432, "P4_LIMIT_CONTRACT");
-  assertion(knowledgeFixture.schemaVersion === "tcrn.p4-knowledge-core-cases.v1", "P4_KNOWLEDGE_FIXTURE_SCHEMA");
-  assertion(Array.isArray(knowledgeFixture.operationCases) && knowledgeFixture.operationCases.length === 9, "P4_KNOWLEDGE_OPERATION_CASES");
-  assertion(Array.isArray(knowledgeFixture.freshnessCases) && knowledgeFixture.freshnessCases.length === 3, "P4_KNOWLEDGE_FRESHNESS_CASES");
-  assertion(Array.isArray(knowledgeFixture.promotionCases) && knowledgeFixture.promotionCases.length === 3, "P4_KNOWLEDGE_PROMOTION_CASES");
-  assertion(Array.isArray(knowledgeFixture.faultCases) && knowledgeFixture.faultCases.length === 3, "P4_KNOWLEDGE_FAULT_CASES");
-  assertion(Array.isArray(knowledgeFixture.negativeCases) && knowledgeFixture.negativeCases.length >= 36, "P4_KNOWLEDGE_NEGATIVE_CASES");
-  assertion(knowledgeFixture.propertyPermutations >= 64, "P4_KNOWLEDGE_PROPERTY_PERMUTATIONS");
-  assertion(knowledgeFixture.propertyPermutations === 64 && knowledgeFixture.permutationLogicalRecords === 5 &&
-    /^[a-f0-9]{64}$/u.test(knowledgeFixture.permutationCorpusDigest), "P4_KNOWLEDGE_REAL_PERMUTATION_CORPUS");
-  assertion(knowledgeFixture.maximumBodyBytes === 8_192 && knowledgeFixture.maximumSummaryBytes === 2_048 &&
-    knowledgeFixture.maximumSnippetBytes === 512 && knowledgeFixture.maximumMetadataBytes === 32_768 &&
-    !Object.hasOwn(knowledgeFixture, "maximumRecords") && knowledgeFixture.maximumQueryResults === 8 &&
-    knowledgeFixture.maximumAggregateBytes === 1_048_576, "P4_KNOWLEDGE_LIMIT_CONTRACT");
-  const packages = await Promise.all([
-    readJson(resolve(repositoryRoot, "packages/core/package.json")),
-    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
-  ]);
-  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P4_STANDALONE_DEPENDENCY");
-  return success("P4_ARTIFACT_LIFECYCLE_VERIFIED", {
-    lifecycleTests: tests.reasonCode,
-    classificationCases: fixture.classificationCases.length,
-    doctorBudgetCases: fixture.doctorBudgetCases.length,
-    archiveCases: fixture.archiveCases.length,
-    faultCases: fixture.faultCases.length,
-    negativeCases: fixture.negativeCases.length,
-    propertyPermutations: fixture.propertyPermutations,
-    maximumArchiveGenerations: fixture.maximumArchiveGenerations,
-    maximumArchiveFilesPerGeneration: fixture.maximumArchiveFilesPerGeneration,
-    maximumArchiveStoredBytes: fixture.maximumArchiveStoredBytes,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    archiveApplyScope: "disposable-synthetic-workspaces-only",
-    liveWorkspaceApply: "not-run",
-    compactMode: "dry-run-projection-only",
-    legacyReadBoundary: "static-negative-proven",
-    knowledgeCore: "file-native-metadata-first-verified",
-    knowledgeOperationCases: knowledgeFixture.operationCases.length,
-    knowledgeFreshnessCases: knowledgeFixture.freshnessCases.length,
-    knowledgePromotionCases: knowledgeFixture.promotionCases.length,
-    knowledgeFaultCases: knowledgeFixture.faultCases.length,
-    knowledgeNegativeCases: knowledgeFixture.negativeCases.length,
-    knowledgePropertyPermutations: knowledgeFixture.propertyPermutations,
-    knowledgePermutationLogicalRecords: knowledgeFixture.permutationLogicalRecords,
-    knowledgePermutationCorpusDigest: knowledgeFixture.permutationCorpusDigest,
-    knowledgeFixtureDigest: (await fileRecord(knowledgeFixturePath)).sha256,
-    knowledgeSchemaDigest: (await fileRecord(knowledgeSchemaPath)).sha256,
     acceptance: "not-claimed",
   });
 }
@@ -2076,7 +2001,6 @@ const commandContracts = {
   isolated: { exit: 0, reasonCode: "ISOLATED_P1_VERIFIED" },
   p2: { exit: 0, reasonCode: "P2_VERIFIED" },
   p3: { exit: 0, reasonCode: "P3_VERIFIED" },
-  p4: { exit: 0, reasonCode: "P4_ARTIFACT_LIFECYCLE_VERIFIED" },
   "p4-knowledge": { exit: 0, reasonCode: "P4_KNOWLEDGE_CORE_VERIFIED" },
   init047: { exit: 0, reasonCode: "INIT047_MODEL_CENTERED_TESTS_VERIFIED" },
   goal01: { exit: 0, reasonCode: "INIT047_GOAL_01_VERIFIED" },
@@ -2913,7 +2837,6 @@ const handlers = {
   offline: verifyOfflineBoundary,
   p2: verifyP2,
   p3: verifyP3,
-  p4: verifyP4,
   "p4-knowledge": verifyP4Knowledge,
   init047: () => runTests({ init047Only: true }),
   goal01: () => runInit047Goal("goal01"),
@@ -3034,7 +2957,7 @@ function evidencePhase(name) {
   if (["aos", "p2", "protocol-schemas", "protocol-test"].includes(name)) {
     return "p2";
   }
-  if (name === "p3" || name === "p4") {
+  if (name === "p3") {
     return name;
   }
   if (name === "p4-knowledge") {

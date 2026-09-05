@@ -142,7 +142,6 @@
     "verify:p3-lease-pid-reuse-escape-hatch": "node scripts/task.mjs p3-lease-pid-reuse-escape-hatch",
     "verify:p3-engine-single-replay-pipeline": "node scripts/task.mjs p3-engine-single-replay-pipeline",
     "verify:p3-engine-incremental-replay": "node scripts/task.mjs p3-engine-incremental-replay",
-    "verify:p4": "node scripts/task.mjs p4",
     "verify:p4:knowledge": "node scripts/task.mjs p4-knowledge",
     "verify:p4-knowledge-file-native-knowledge-core": "node scripts/task.mjs p4-knowledge-file-native-knowledge-core",
     "verify:work-log-event-linkage": "node scripts/task.mjs work-log-event-linkage",

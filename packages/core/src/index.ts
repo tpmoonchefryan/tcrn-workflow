@@ -118,42 +118,6 @@ export {
   verifySnapshotManifest,
 } from "./workspace-snapshot.js";
 export type { SnapshotReasonCode } from "./workspace-snapshot.js";
-// WSR-1: governed workspace relocation.
-export {
-  RELOCATION_ABORT_FORK_RISK,
-  RELOCATION_LIMITS,
-  RELOCATION_PERMIT_STAGES,
-  RELOCATION_REASON_CODES,
-  RELOCATION_TARGET_INSPECTION_WINDOW_MS,
-  RelocationError,
-  WORKSPACE_RELOCATION_AUTHORITY_VERSION,
-  WORKSPACE_RELOCATION_INSPECTION_VERSION,
-  WORKSPACE_RELOCATION_PLAN_VERSION,
-  WORKSPACE_RELOCATION_RECEIPT_VERSION,
-  abortWorkspaceRelocation,
-  adoptWorkspace,
-  canonicalRelocationAuthority,
-  inspectWorkspaceRelocation,
-  planWorkspaceRelocation,
-  readRelocationAuthority,
-  relocationVacateCommitment,
-  vacateWorkspace,
-  validateRelocationAuthorityDocument,
-} from "./workspace-relocation.js";
-export type {
-  AbortOptions,
-  AdoptOptions,
-  PlanOptions,
-  RelocationPermitStage,
-  RelocationAuthorityContext,
-  RelocationAuthorityDocument,
-  RelocationAuthorityFileIdentity,
-  RelocationDestination,
-  RelocationPermit,
-  RelocationReasonCode,
-  RelocationReceipt,
-  VacateOptions,
-} from "./workspace-relocation.js";
 export {
   BACKGROUND_RESOURCE_LIMITS,
   BACKGROUND_RESOURCE_REASON_CODES,
@@ -485,35 +449,6 @@ export type {
   PublicAosRequirementsReasonCode,
   PublicAosRequirementStatus,
 } from "./public-aos-requirements.js";
-export {
-  ARTIFACT_ARCHIVE_SCHEMA_VERSION,
-  ARTIFACT_LIFECYCLE_VERSION,
-  ARTIFACT_LIMITS,
-  ARTIFACT_REASON_CODES,
-  ARTIFACT_RECORD_SCHEMA_VERSION,
-  ARTIFACT_STORE_SCHEMA_VERSION,
-  ArtifactLifecycleError,
-  applyArtifactArchive,
-  artifactArchiveDryRun,
-  artifactCompactDryRun,
-  artifactDoctor,
-  artifactSizeReport,
-  assertArtifactRelativePath,
-  classifyArtifact,
-  initializeArtifactStore,
-  redactArtifactReference,
-  restoreArtifactArchive,
-} from "./artifact-lifecycle.js";
-export type {
-  ArtifactArchiveOptions,
-  ArtifactClassification,
-  ArtifactDoctorBudgets,
-  ArtifactFaultPoint,
-  ArtifactKind,
-  ArtifactReasonCode,
-  ArtifactRecord,
-  ArtifactScanOptions,
-} from "./artifact-lifecycle.js";
 export {
   KNOWLEDGE_CORE_VERSION,
   KNOWLEDGE_LIMITS,

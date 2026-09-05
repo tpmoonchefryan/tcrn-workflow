@@ -1098,25 +1098,6 @@
         "WSA-3: closing an Initiative to done with live non-terminal descendants is refused; terminalising first lets it close"
       ]
     },
-    "tests/p4-artifact-lifecycle.test.mjs": {
-      "testCount": 13,
-      "assertionCount": 74,
-      "testNames": [
-        "artifact lifecycle classification and reference redaction are closed and deterministic",
-        "closed schema, size report, doctor budgets, and compact projection preserve durable records without mutation",
-        "governed CLI doctor, size, compact, and archive dry-run surfaces are deterministic and read-only",
-        "archive apply and exact restore preserve high-water authority on a disposable fixture only",
-        "hierarchical URL credentials are redacted before archive apply and exact restore",
-        "redaction, closed records, high-water, links, special files, and replacement attacks fail closed",
-        "size/count limits and non-disposable archive admission fail closed",
-        "transient and archive storage exhaustion fail before unbounded admission",
-        "archive and restore crash/partial states remain observable and fail closed",
-        "malformed archive fields, base64, records, paths, and URL userinfo fail closed",
-        "archive bundle symlink, hardlink, and special-file attacks fail closed",
-        "artifact implementation and fixtures contain no legacy source-read authority",
-        "same disposable archive generation admits exactly one apply"
-      ]
-    },
     "tests/p4-knowledge-core.test.mjs": {
       "testCount": 39,
       "assertionCount": 200,
@@ -1561,15 +1542,6 @@
       "testNames": [
         "S223: settings-catalog exposes the engine-owned enum values",
         "S223: an enum refusal carries its allowed values and appends no event"
-      ]
-    },
-    "tests/s227-relocation-manifest-ceiling.test.mjs": {
-      "testCount": 3,
-      "assertionCount": 18,
-      "testNames": [
-        "S227: an oversized manifest refuses the plan and names the flag that fixes it",
-        "S227: an oversized vacate refuses BEFORE the commit — the source is still live",
-        "S227: with a manifest destination the whole hop completes"
       ]
     },
     "tests/s232-execution-config.test.mjs": {

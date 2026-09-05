@@ -59,31 +59,33 @@ actually invoking, and `commands` must be asked of *that* one. Which partition i
 with a runnable recheck command per partition, is stated in the platform root's `AGENTS.md`
 section 三 — do not infer it from this repository's working tree.
 
-### 3b. The relocation verb family, and what it cannot do
+### 3b. There are no relocation verbs — but the ledger reader is still live
 
-`v0.9.0` carries five relocation verbs — `relocation-plan` and `relocation-inspect` (read),
-`relocation-vacate`, `relocation-adopt` and `relocation-abort` (mutating). They are the
-**only** legitimate way a governed workspace changes machines: the engine binds five
-absolute roots, so a byte-identical copy at any other path is refused by all three read
-verbs, and moving bytes without moving the binding produces an unreadable tree rather than
-a second live authority.
+`relocation-plan`, `relocation-inspect`, `relocation-vacate`, `relocation-adopt` and
+`relocation-abort` were retired by `TCRN-CROSS-STORY-358` along with
+`packages/core/src/workspace-relocation.ts` and `docs/adr/0003-workspace-relocation.md`.
+Do not look for them in the catalog and do not describe a governed way to move a workspace
+between machines: there is none in this engine today. `git tag attic-2026-09` holds the
+retired code and its 47-case test block.
 
-**Read `docs/adr/0003-workspace-relocation.md` before reasoning about this family, and read
-its "four ceilings" section rather than a summary of it.** The general statement all four
-are instances of: *this mechanism cannot prevent a fork, only make one legible.* Three
-consequences that repeatedly get overstated in prose and must not be:
+What did **not** go with them is the ledger reader inside `packages/core/src/workspace.ts`,
+and it is load-bearing right now. A workspace whose `workspace.json` carries a `relocations`
+array is read through `activeBinding` (the binding in force is the `to` of the last
+`adopted` hop, **not** the `roots` field, which is never rewritten), `relocationStateAt`
+(live / vacated / adoption-required / foreign-address, computed from the file plus the
+address the caller is standing at) and `admitRelocationState`, which `readMetadata` calls on
+every such read. Five of the eight partitions on the platform container are in exactly that
+state: their `roots` still name the address the chain was admitted from, and they open only
+because `activeBinding` rewrites the binding. Break that loop and those five stop opening,
+with `pnpm test` still green unless the cases named below stay green with it.
 
-- it is **authorization, not authentication** — nothing proves who ran the command;
-- the ledger is **deletable**, and no single-sided test can go red on that; detection is
-  the *counterparty's* capability, not the engine's;
-- `relocation-abort` **after** the destination has adopted is not a rollback — it is a fork,
-  produced with legal verbs and no damaged bytes.
+Two consequences worth keeping when you touch that code:
 
-Operationally: the ledger has a **16-entry cap, consumed per attempt, with no compaction
-verb**, and an adopt entry is written only into the destination copy and never sent back. So
-the two sides' ledger lengths are *expected* to differ — **never write a closing predicate
-that compares ledger lengths** — and "move it back" costs a fresh hop rather than an undo.
-Sequencing for a multi-partition platform is in the same ADR (section OD-D).
+- the mechanism never prevented a fork, only made one legible — a single-sided test cannot
+  go red on a deleted ledger, and detection was always the counterparty's capability;
+- `tests/backup-snapshot.test.mjs`'s `WSR-1 L1`–`L6` are the only proof this reader has.
+  They write the ledger by hand, because no verb can write one any more, and the seven
+  `WSR-1-` prefixed `guard-registry.json` entries whose `file` is `workspace.ts` name them.
 
 ### 4. Verify "did it reach elsewhere" against the authority, and compare full values
 

@@ -9,8 +9,6 @@ import test from "node:test";
 
 import {
   acquireWorkspaceLease,
-  artifactArchiveDryRun,
-  artifactCompactDryRun,
   authorizeGenericProfileOperation,
   calculateContextRouteRequestDigest,
   calculateGenericProfileAdmissionClaims,
@@ -23,7 +21,6 @@ import {
   GENERIC_PROFILE_OPERATIONS,
   generateGenericStarterBundle,
   generateCorePersonaBundle,
-  initializeArtifactStore,
   initializeKnowledgeStore,
   initializeWorkspace,
   listKnowledgeMetadata,
@@ -306,11 +303,4 @@ test("P8 dogfood completes one disposable local_primary initiative with Knowledg
   assert.equal(routed.receipt.contextAuthorityDigest, contextAuthority.authorityDigest);
   assert.equal(canonicalJson(routed).includes("Disposable P8 body"), false);
   assert.throws(() => routeContext({ ...routeRequest, query: "tampered" }, admittedProfile, admittedContextAuthority), (error) => error.reasonCode === "CONTEXT_AUTHORITY_MISMATCH");
-  await initializeArtifactStore(workspace, { disposable: true });
-  const compactOne = await artifactCompactDryRun(workspace);
-  const compactTwo = await artifactCompactDryRun(workspace);
-  const archiveOne = await artifactArchiveDryRun(workspace);
-  const archiveTwo = await artifactArchiveDryRun(workspace);
-  assert.deepEqual(compactOne, compactTwo);
-  assert.deepEqual(archiveOne, archiveTwo);
 });

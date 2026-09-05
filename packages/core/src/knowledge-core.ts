@@ -31,7 +31,6 @@ import {
   validateKnowledgeRecord,
 } from "../../protocol/src/index.js";
 import type { JsonValue, KnowledgeRecord, WorkRecord } from "../../protocol/src/index.js";
-import { redactArtifactReference } from "./artifact-lifecycle.js";
 import { activeWorkspaceRoot, materializeWorkspace } from "./workspace.js";
 import type { ProjectRecord, WorkspaceState } from "./workspace.js";
 
@@ -670,6 +669,62 @@ function normalizeMetadataRecord(value: Readonly<Record<string, JsonValue>>): Re
   return Object.hasOwn(value, "supersedes") ? value : { ...value, supersedes: null };
 }
 
+// TCRN-CROSS-STORY-358: relocated from the retired packages/core/src/artifact-lifecycle.ts
+// (git tag attic-2026-09 keeps the original module). This was the module's only
+// live consumer outside its own barrel re-export and its own now-deleted test, so
+// the behavior moves in with its one caller instead of surviving as a public
+// export with nothing left to call it. Transformation logic is unchanged from the
+// original; only the failure path now speaks this file's own reason code, since
+// every caller already normalizes any thrown error into KNOWLEDGE_REDACTION_REQUIRED
+// (see the sourceReferences loop in validateMetadataShape below) and never needed
+// to distinguish the two.
+function redactArtifactReference(input: unknown): string {
+  if (typeof input !== "string" || input.length === 0 || input.length > 8_192 || /[\u0000-\u001f\u007f]/u.test(input)) {
+    fail("KNOWLEDGE_REDACTION_REQUIRED", "artifact reference must be a bounded printable string");
+  }
+  let value = input.replace(/^ +| +$/gu, "");
+  if (/^(?:[A-Za-z]:[\\/]|\/(?:Users|home|private|var\/folders)\/)/u.test(value)) {
+    return "[redacted-private-path]";
+  }
+  try {
+    const schemeRelative = value.startsWith("//");
+    const url = new URL(schemeRelative ? `https:${value}` : value);
+    if (url.host !== "") {
+      url.username = "";
+      url.password = "";
+      url.search = "";
+      url.hash = "";
+      value = schemeRelative ? `//${url.host}${url.pathname}` : url.toString();
+    } else {
+      if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#]*@/u.test(value)) {
+        fail("KNOWLEDGE_REDACTION_REQUIRED", "unsupported hierarchical URL userinfo");
+      }
+      value = value.split(/[?#]/u, 1)[0] ?? "";
+    }
+  } catch (error) {
+    if (error instanceof KnowledgeCoreError) {
+      throw error;
+    }
+    if (/^(?:[A-Za-z][A-Za-z0-9+.-]*:)?\/\/[^/?#]*@/u.test(value)) {
+      fail("KNOWLEDGE_REDACTION_REQUIRED", "malformed hierarchical URL userinfo");
+    }
+    value = value.split(/[?#]/u, 1)[0] ?? "";
+  }
+  value = value
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, "[redacted-private-identifier]")
+    .replace(/(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|(?:AKIA|ASIA)[A-Z0-9]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/gu, "[redacted-credential]")
+    .replace(/\/(?:Users|home|private|var\/folders)\/[^\s]*/gu, "/[redacted-private-path]");
+  if (value.length === 0 || value.length > 512) {
+    fail("KNOWLEDGE_REDACTION_REQUIRED", "redacted artifact reference is empty or oversized");
+  }
+  try {
+    canonicalJson(value);
+  } catch (error) {
+    fail("KNOWLEDGE_REDACTION_REQUIRED", String(error));
+  }
+  return value;
+}
+
 function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, workspace: WorkspaceState, deferLinks = false): KnowledgeUnitMetadata {
   const normalizedValue = normalizeMetadataRecord(value);
   exactFields(normalizedValue, metadataFields, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID");
@@ -740,13 +795,19 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
     assertPromotableProvenance(metadata);
   }
   for (const reference of metadata.sourceReferences) {
+    // TCRN-CROSS-STORY-358: redactArtifactReference now raises KnowledgeCoreError
+    // rather than ArtifactLifecycleError, so a `try` wrapped around the comparison
+    // would hit the instanceof re-throw and drop metadata.id from the message. The
+    // value is taken first and compared outside the try, which keeps the refusal
+    // naming the record it came from on both paths.
+    let redacted: string;
     try {
-      if (redactArtifactReference(reference) !== reference) {
-        fail("KNOWLEDGE_REDACTION_REQUIRED", metadata.id);
-      }
+      redacted = redactArtifactReference(reference);
     } catch (error) {
-      if (error instanceof KnowledgeCoreError) throw error;
       fail("KNOWLEDGE_REDACTION_REQUIRED", `${metadata.id}:${String(error)}`);
+    }
+    if (redacted !== reference) {
+      fail("KNOWLEDGE_REDACTION_REQUIRED", metadata.id);
     }
   }
   // WSC-2: link liveness is validated separately so a rebase can tolerate it, and
