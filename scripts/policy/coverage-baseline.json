@@ -1279,18 +1279,6 @@
         "CQ-08b: the conflicts list is empty for every operation and conflicts_planned stays reachable"
       ]
     },
-    "tests/p7-public-aos-requirements.test.mjs": {
-      "testCount": 6,
-      "assertionCount": 15,
-      "testNames": [
-        "public AOS requirements ledger is closed, generic, deterministic and read-only",
-        "schema and runtime share the exact frozen public source boundary",
-        "schema and runtime reject UTF-8, malformed-Unicode and safe-integer boundary substitutions",
-        "raw parser and governed CLI preserve frozen protocol and Unicode reason codes",
-        "all deterministic requirement-order permutations preserve validation and digest",
-        "read-only CLI validates and returns a deterministic no-overclaim readback"
-      ]
-    },
     "tests/p8-workflow-rc.test.mjs": {
       "testCount": 4,
       "assertionCount": 38,

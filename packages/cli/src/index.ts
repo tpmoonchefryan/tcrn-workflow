@@ -127,9 +127,6 @@ import {
   validateCompatibilityRequest,
   unavailableCompatibilityCapability,
   readCompatibilityAdmissionReceipt,
-  parsePublicAosRequirementsLedger,
-  publicAosRequirementsReadback,
-  publicAosRequirementsValidReason,
   readOperatorAuthority,
   readStorageHomeDeclaration,
   readSettingsCatalog,
@@ -485,11 +482,6 @@ function compatibilityJson(value: string | undefined, name: string): unknown {
   } catch {
     fail("COMPATIBILITY_INPUT_INVALID", name);
   }
-}
-
-function aosRequirementsJson(value: string | undefined, name: string): string {
-  if (typeof value !== "string") fail("CLI_ARGUMENT_MALFORMED", name);
-  return value;
 }
 
 function workspaceHeadOf(value: unknown): string | null {
@@ -964,8 +956,6 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
   { name: "adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "baseline", required: false, valueKind: "json" }, { name: "settings", required: false, valueKind: "string" }] },
-  { name: "aos-requirements-readback", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
-  { name: "aos-requirements-validate", availability: "cli", mutates: false, flags: [{ name: "ledger", required: true, valueKind: "string" }] },
   { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "attestation-migrate", availability: "cli", mutates: true, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "mode", required: true, valueKind: "string" }, { name: "baseline", required: false, valueKind: "string" }, { name: "baseline-out", required: false, valueKind: "string" }] },
   { name: "claude-adapter-activation-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }] },
@@ -1271,17 +1261,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const values = parseArguments(rest, ["root", "mode", "baseline", "baseline-out"]);
     required(values, ["root", "mode"]);
     await runAttestationMigration(io, values);
-    return;
-  }
-  if (command === "aos-requirements-validate" || command === "aos-requirements-readback") {
-    const values = parseArguments(rest, ["ledger"]);
-    required(values, ["ledger"]);
-    const ledger = parsePublicAosRequirementsLedger(aosRequirementsJson(values.ledger, "ledger"));
-    if (command === "aos-requirements-validate") {
-      io.write(canonicalJson({ reasonCode: publicAosRequirementsValidReason, ledgerDigest: ledger.ledgerDigest, requirements: ledger.requirements.length }));
-    } else {
-      io.write(canonicalJson(publicAosRequirementsReadback(ledger)));
-    }
     return;
   }
   if (command === "compatibility-validate") {

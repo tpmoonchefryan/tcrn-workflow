@@ -433,23 +433,6 @@ export type {
   VerificationClaimLink,
 } from "./story-scope-compliance.js";
 export {
-  PUBLIC_AOS_REQUIREMENTS_REASON_CODES,
-  PUBLIC_AOS_REQUIREMENTS_READBACK_VERSION,
-  PUBLIC_AOS_REQUIREMENTS_VERSION,
-  publicAosRequirementsValidReason,
-  PublicAosRequirementsError,
-  parsePublicAosRequirementsLedger,
-  publicAosRequirementsReadback,
-  validatePublicAosRequirementsLedger,
-} from "./public-aos-requirements.js";
-export type {
-  PublicAosRequirement,
-  PublicAosRequirementMaturity,
-  PublicAosRequirementsLedger,
-  PublicAosRequirementsReasonCode,
-  PublicAosRequirementStatus,
-} from "./public-aos-requirements.js";
-export {
   KNOWLEDGE_CORE_VERSION,
   KNOWLEDGE_LIMITS,
   KNOWLEDGE_METADATA_SCHEMA_VERSION,
