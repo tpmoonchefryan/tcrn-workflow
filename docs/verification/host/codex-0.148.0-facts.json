@@ -1,0 +1,142 @@
+{
+  "schema": "tcrn.host-facts.v1",
+  "status": "SURFACE PARTIALLY OBSERVED FOR TCRN-CROSS-STORY-357; CLI hook-trust surface and the existing config.toml trust state read directly; the two new hook groups this Story added to .codex/hooks.json were NOT live-fired because Codex's hook-trust approval is interactive-only in 0.148.0 and this run was unattended",
+  "observedAt": "2026-09-05",
+  "host": {
+    "product": "Codex CLI",
+    "versionSelfReport": "0.148.0",
+    "versionSource": "codex --version"
+  },
+  "method": {
+    "kind": "read-only binary discovery (--version, --help, exec --help, doctor) plus one read of the pre-existing ~/.codex/config.toml hook-trust state, plus one --ephemeral -s read-only codex exec probe run after .codex/hooks.json was rewritten",
+    "reproducibility": "every value below is regenerable on Codex 0.148.0 with the stated command; a different version is expected to differ, so this receipt is version-pinned evidence, not a version-independent claim",
+    "boundary": "this receipt does not repeat or re-verify the 0.139.0 survey (docs/verification/host/codex-0.139.0-facts.json), and none of that file's lists are copied forward here as if re-confirmed. Where a fact would require an interactive `codex` session or a `codex app-server generate-json-schema` run and neither was performed, it is marked unverified below rather than assumed."
+  },
+  "observed": {
+    "cliSurface": {
+      "command": "codex --help",
+      "hooksSubcommandExists": false,
+      "note": "0.148.0 has no `codex hooks` verb family in the top-level command list. The only hook-trust-adjacent surface on the command line is the `--dangerously-bypass-hook-trust` flag, documented as DANGEROUS, and not used by this Story."
+    },
+    "execSurface": {
+      "command": "codex exec --help",
+      "hooksSubcommandExists": false,
+      "relevantFlags": [
+        "--dangerously-bypass-hook-trust",
+        "--dangerously-bypass-approvals-and-sandbox"
+      ],
+      "note": "same absence of a scriptable hook-trust-approval verb as the root command; both flags are bypasses, not approvals, and neither was used"
+    },
+    "doctor": {
+      "command": "codex doctor",
+      "versionReported": "0.148.0",
+      "installMethod": "brew (package /opt/homebrew/Caskroom/codex/0.148.0)",
+      "featureFlagSummary": "40 enabled, 0 overridden (doctor's compact summary; `codex doctor --all` was not run, so the individual flag names — e.g. whether 'hooks' is among them, as the 0.139.0 survey recorded via a different command — are not re-confirmed here)",
+      "sandboxSummary": "filesystem unrestricted, network enabled, approval policy Never",
+      "note": "doctor's output carries no dedicated hooks-trust section on 0.148.0; it neither confirms nor denies anything about the Stop/UserPromptSubmit event set beyond what the config.toml trust keys already show"
+    },
+    "hookTrustSurface": {
+      "source": "~/.codex/config.toml, read directly with grep; never written by this Story",
+      "observedExistingTrustedKeys": [
+        "hooks.state.\"<home>/Code/.codex/hooks.json:pre_tool_use:0:0\"",
+        "hooks.state.\"<home>/Code/.codex/hooks.json:pre_tool_use:1:0\"",
+        "hooks.state.\"<home>/Code/.codex/hooks.json:session_start:0:0\"",
+        "hooks.state.\"<home>/Code/.codex/hooks.json:user_prompt_submit:0:0\"",
+        "hooks.state.\"<home>/Code/.codex/hooks.json:stop:0:0\""
+      ],
+      "newGroupsWrittenByStory357": [
+        "user_prompt_submit:1:0 (scripts/agents-zero-hook.mjs)",
+        "stop:1:0 (tools/stop-pact/codex-response-style-hook.mjs)"
+      ],
+      "newGroupsTrusted": false,
+      "note": "STORY-357 wrote both new hook groups into .codex/hooks.json via scripts/host-harness-apply.mjs. Neither is trusted: 0.148.0 persists hook trust per exact hash in ~/.codex/config.toml, granted only through a one-time interactive approval inside a live `codex` session, and this Story ran unattended end to end. No trusted_hash was added for user_prompt_submit:1:0 or stop:1:0 by this run, and config.toml was not written by this run at all."
+    },
+    "unattendedProbe": {
+      "command": "codex exec -C \"<home>/Code\" -s read-only --json --ephemeral \"回复 OK，不要做任何别的事。\"",
+      "ranAfterHooksJsonRewrite": true,
+      "purpose": "record what actually happens under the current (untrusted-new-hooks) state, independent of whether the two new hooks fire",
+      "result": "the turn did not complete: it failed at the model layer with an unrelated error (\"The 'gpt-6-astra' model requires a newer version of Codex\", HTTP 400) before producing any assistant response. Run exactly once, not retried, per this Story's instruction not to retry or route around a prompt. This failure is orthogonal to hook trust — it is the account's configured default model outrunning the installed 0.148.0 binary (doctor also reports 0.153.4 available) — but it does mean this probe run answers only the hookStartedEventCounts question below, and answers it independent of whether the new hooks are trusted."
+    },
+    "storyEvidence": {
+      "probeOutcome": "turn.failed on a model-version error unrelated to hooks; see unattendedProbe.result",
+      "agentsZeroReinjectionMarkerCount": 0,
+      "hookStartedEventCounts": {
+        "matches": 0,
+        "note": "grep -o '\"method\":\"hook/[a-z]*\"' found no lines at all in this probe's output, not merely zero after subtracting a nonzero count. The full set of distinct \"type\" values seen in the run was thread.started, item.completed, turn.started, error, turn.failed — no hook-shaped event type appears anywhere in `codex exec --json`'s event stream. The 0.139.0 survey's own hook/started counts (docs/verification/host/observe-hook-live-acceptance-2026-07-25.json) were measured over a direct App Server JSON-RPC connection, a different transport than `codex exec --json` prints to stdout. So this run cannot distinguish 'the new hooks did not fire because they are untrusted' from 'hook lifecycle events are simply not surfaced on this transport regardless of trust' — both produce the same zero count, and this Story did not have a way to tell them apart without either interactive hook-trust approval or a direct App Server connection, neither of which was available unattended."
+      },
+      "evidenceFiles": [
+        ".tcrn-artifacts/dispatch-runs/2026-09-05-epic-125/evidence/codex-trust-before.txt",
+        ".tcrn-artifacts/dispatch-runs/2026-09-05-epic-125/evidence/story357-codex-probe.jsonl"
+      ]
+    }
+  },
+  "liveFiredByStory357": {
+    "userPromptSubmitAgentsZeroGroupFired": "unverified: awaiting Owner hook-trust approval",
+    "stopResponseStyleGroupFired": "unverified: awaiting Owner hook-trust approval",
+    "bothStopGroupsFireOnSingleStopEvent": "unverified: awaiting Owner hook-trust approval — and, per storyEvidence.hookStartedEventCounts above, resolving it will additionally need a transport that surfaces hook lifecycle events (a direct App Server connection, as the 0.139.0 EPIC-024 probe used), because `codex exec --json`'s own stdout stream showed no hook-shaped event of any kind in this run",
+    "supersededBy": "afterOwnerApproval below. Owner granted hook trust on 2026-09-07, so \"awaiting Owner hook-trust approval\" is no longer why these three are unverified; the re-probe recorded there is."
+  },
+  "ownerActionToClose": {
+    "steps": [
+      "codex -C \"<home>/Code\"  # interactive session; approve the two newly-listed hook groups when prompted, then exit",
+      "grep -A1 'user_prompt_submit:1:0\\|stop:1:0' ~/.codex/config.toml  # each should now show a trusted_hash line"
+    ],
+    "afterApproval": "re-run the unattendedProbe command above and re-check hookStartedEventCounts; a Stop count of 2 confirms the primary STORY-357 design (two independent Stop hook groups both fire on one event); a count of 1 means the fallback design is required instead (fold the style check into codex-executor.mjs and update tests/host-harness.test.mjs and tests/codex-stop-pact.test.mjs accordingly)."
+  },
+  "notVerified": [
+    "whether user_prompt_submit:1:0 and stop:1:0 become trusted without an interactive `codex` session — 0.148.0 has no CLI verb for this, per cliSurface/execSurface above",
+    "whether a single Codex Stop event invokes both registered Stop hook groups or only the first — the exact question this Story's primary-vs-fallback design turns on",
+    "event-name parity between Codex 0.148.0 and the 0.139.0 survey's versionPinnedHookSurface.hookEvents list — this Story did not run `codex app-server generate-json-schema` against 0.148.0, so that list is not reconfirmed and is not repeated here",
+    "SessionEnd availability on 0.148.0 (0.139.0 recorded it schemaUnavailable under versionPinnedHookSurface.schemaUnavailable; not re-measured here)",
+    "whether the pre-existing stop:0:0 hook (tools/stop-pact/codex-executor.mjs) has itself ever been live-fired by a real Codex Stop event — the 0.139.0 survey's liveFiredByEpic024 list does not include Stop, and this Story did not add that evidence either",
+    "Codex trusted_hash normalization or digest-domain semantics (same boundary the 0.139.0 survey recorded and did not resolve)"
+  ],
+  "afterOwnerApproval": {
+    "status": "RE-PROBED AFTER OWNER HOOK-TRUST APPROVAL; THE STOP-COUNT QUESTION IS STILL UNRESOLVED. The turn failed at the model layer again, on a different error than the STORY-357 run.",
+    "observedAt": "2026-09-07",
+    "workItem": "TCRN-CROSS-INC-281",
+    "ruling": "TCRN-CROSS-MIN-152 D3",
+    "hostVersionAtReprobe": {
+      "versionSelfReport": "0.153.4",
+      "versionSource": "codex --version",
+      "installMethod": "brew (package /opt/homebrew/Caskroom/codex/0.153.4)",
+      "note": "0.148.0 is no longer installed on this host: /opt/homebrew/Caskroom/codex holds 0.153.4 alone, and /opt/homebrew/bin/codex links into it. This re-probe is therefore not a 0.148.0 observation, and nothing measured here is written back into the `observed` block above, which stays what 0.148.0 showed on 2026-09-05. The file keeps its 0.148.0 name and pin for that reason."
+    },
+    "hookTrustSurfaceNow": {
+      "source": "~/.codex/config.toml, read directly with grep; never written by this work item",
+      "newGroupsTrusted": true,
+      "trustedKeysNowPresent": [
+        "hooks.state.\"<home>/Code/.codex/hooks.json:user_prompt_submit:1:0\"",
+        "hooks.state.\"<home>/Code/.codex/hooks.json:stop:1:0\"",
+        "hooks.state.\"<home>/Code/.codex/hooks.json:stop:2:0\""
+      ],
+      "supersedes": "observed.hookTrustSurface.newGroupsTrusted, which recorded false as of 2026-09-05",
+      "registrationDrift": "the group indices STORY-357 recorded no longer name the same scripts. .codex/hooks.json now carries three Stop groups: stop:0:0 tools/stop-pact/codex-executor.mjs, stop:1:0 scripts/knowledge-capture-hook.mjs (inserted by TCRN-CROSS-STORY-365), stop:2:0 tools/stop-pact/codex-response-style-hook.mjs. The response-style group STORY-357 recorded as stop:1:0 is now stop:2:0, so a full Stop fan-out on this host would be three groups rather than the two the primary-vs-fallback question was framed around."
+    },
+    "unattendedProbe": {
+      "command": "codex exec -C \"<home>/Code\" -m gpt-5.5-mini -s read-only --json --ephemeral \"回复 OK，不要做任何别的事。\" </dev/null",
+      "modelPin": "Owner ruling TCRN-CROSS-MIN-141 D1 authorises gpt-5.5-mini alone for test purposes. The STORY-357 command carried no -m at all, which is why the account default outran the binary; the pin is explicit here for both reasons.",
+      "stdinNote": "0.153.4's `codex exec` waits on stdin even when the prompt is an argument. The first attempt sat on \"Reading additional input from stdin...\" and had to be killed; redirecting stdin from /dev/null is what makes the command unattended.",
+      "exitCode": 1,
+      "result": "the turn did not complete: HTTP 400, invalid_request_error, \"The 'gpt-5.5-mini' model is not supported when using Codex with a ChatGPT account.\" No other model was tried, because MIN-141 D1 authorises no other model for tests. This failure is again at the model layer and again orthogonal to hook trust, but it is a different failure than STORY-357's: that one was the account's default model outrunning the installed binary, this one is the authorised test model being unavailable to a ChatGPT-account-backed Codex."
+    },
+    "storyEvidence": {
+      "probeOutcome": "turn.failed on a model-availability error unrelated to hooks; see unattendedProbe.result",
+      "hookStartedEventCounts": {
+        "matches": 0,
+        "note": "grep -c '\"method\":\"hook/' over the run's stdout returned 0. The distinct \"type\" values seen were thread.started, turn.started, error and turn.failed — one fewer than the STORY-357 run, which also saw item.completed. Hook trust is granted now and the count is still zero, which is consistent with the reading observed.storyEvidence.hookStartedEventCounts already recorded — that `codex exec --json`'s stdout surfaces no hook lifecycle event of any kind, trusted or not — but it does not prove that reading, because this turn never reached an assistant response either."
+      }
+    },
+    "verdictOnTheStopCountCriterion": {
+      "criterion": "ownerActionToClose.afterApproval: a Stop count of 2 confirms the primary STORY-357 design; a count of 1 means the fallback design is required",
+      "measured": 0,
+      "verdict": "UNRESOLVED: neither 2 nor 1. Zero is this transport's floor rather than a count of how many Stop groups fired, so it selects neither design. Settling it needs both the transport the 0.139.0 survey used (a direct App Server JSON-RPC connection, which surfaces hook lifecycle events) and a model this account may actually run; neither was available to this work item.",
+      "consequence": "the fallback rewrite of tools/stop-pact/codex-executor.mjs, tests/host-harness.test.mjs and tests/codex-stop-pact.test.mjs is not triggered by this run, and the primary design is not confirmed by it either. STORY-357's live-fire question stays open."
+    },
+    "evidenceFiles": [
+      ".tcrn-artifacts/dispatch-runs/init-051/INC-281/evidence/TCRN-CROSS-INC-281.TCRN-CROSS-INC-281.redact.codex-probe.jsonl",
+      ".tcrn-artifacts/dispatch-runs/init-051/INC-281/evidence/TCRN-CROSS-INC-281.TCRN-CROSS-INC-281.redact.codex-probe.stderr.txt"
+    ]
+  },
+  "identifierRedaction": "home directory replaced with <home>, the same substitution docs/verification/host/codex-mcp-l25.json and codex-mcp-l25-call.json already use for it. Owner ruling TCRN-CROSS-MIN-152 D6: a file under docs/verification/host/ must not carry a local absolute path, because the P1 privacy leg scans every blob reachable from HEAD and a path written into history can only be removed by rewriting it. The redaction is applied to this file's whole text, so every trust key, command line and step in this file reads <home> where the host reads its own home directory."
+}

@@ -106,13 +106,27 @@ effort:
   first-class state, and every re-pin of the detector re-triggers approval because
   the handler is digest-bound. A future Codex ladder must be designed natively
   around this — it must not port the Claude three-step.
-- **A blocking prerequisite.** The in-repo record and prior host survey establish
-  only a Codex **SessionStart**-equivalent hook. Whether Codex exposes a
-  **session-end / stop** hook event at all is unconfirmed. Until a fresh survey of
-  the current Codex hook events confirms one, a Codex *session-end* detector is
-  infeasible regardless of the trust gate, and the honest position is
-  **Claude-only for the session-end surface**, with Codex offered the direct
-  `spawn-guard.mjs` invocation (which needs no hook) in the meantime.
+- **The Stop event exists; SessionEnd is the part that stays unconfirmed.** This
+  bullet used to say that whether Codex exposes any session-end-shaped hook event
+  at all was unconfirmed. That claim was already stale when written: the 0.139.0
+  survey's own `versionPinnedHookSurface.hookEvents`
+  (`docs/verification/host/codex-0.139.0-facts.json`), read from a real
+  `codex app-server generate-json-schema`, lists `Stop`. TCRN-CROSS-STORY-357 then
+  put that event into production use by two independent capabilities —
+  `tools/stop-pact/codex-executor.mjs` (STORY-194) and
+  `tools/stop-pact/codex-response-style-hook.mjs` (STORY-357), both registered as
+  `stop-pact` and `stop-response-style-check` in `scripts/host-harness.mjs`'s
+  `HARNESS_CAPABILITIES` roster and each exercised by its own test suite — which
+  closes "does Codex expose a Stop hook event at all" for good. What is still true:
+  Codex's distinct **SessionEnd** event stayed `schemaUnavailable` in that same
+  0.139.0 survey, STORY-357 did not re-run the schema generator against the
+  0.148.0 binary now installed (see `docs/verification/host/codex-0.148.0-facts.json`),
+  so SessionEnd's status on the current binary is unverified rather than confirmed
+  absent. And Stop gaining two occupants does not give this Initiative's own
+  detector a third: nothing shipped here wires `spawn-guard.mjs` to Codex's Stop
+  event. The honest position narrows to **Claude-only for this Initiative's
+  session-end surface**, with Codex offered the direct `spawn-guard.mjs`
+  invocation (which needs no hook) in the meantime.
 
 ## What ships in this Initiative, stated without overclaim
 

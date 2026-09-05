@@ -95,6 +95,25 @@ export const HARNESS_CAPABILITIES = Object.freeze([
       note: "A different handler, not a different decider: codex-executor normalises the Codex Stop payload and calls the shared decider (TCRN-CROSS-STORY-194).",
     },
   },
+  {
+    id: "per-prompt-agents-zero-injection",
+    purpose: "each prompt carries the platform output-contract rules re-injected fresh, not just at session start",
+    claude: { mechanism: "hook", event: "UserPromptSubmit", matcher: null, handler: "scripts/agents-zero-hook.mjs", timeout: 10 },
+    codex: { mechanism: "hook", event: "UserPromptSubmit", matcher: null, handler: "scripts/agents-zero-hook.mjs", timeout: 10 },
+  },
+  {
+    id: "stop-response-style-check",
+    purpose: "a response that violates the platform output-contract rules is caught and fed back before the turn stops",
+    claude: { mechanism: "hook", event: "Stop", matcher: null, handler: "tools/stop-pact/response-style-hook.mjs", timeout: 10 },
+    codex: {
+      mechanism: "hook",
+      event: "Stop",
+      matcher: null,
+      handler: "tools/stop-pact/codex-response-style-hook.mjs",
+      timeout: 10,
+      note: "A different handler, not a different rule set: codex-response-style-hook adapts Codex's inline last_assistant_message Stop field to the shared checkResponseText/responseStyleReason rules (TCRN-CROSS-STORY-357), the same relationship codex-executor.mjs has to decide.mjs.",
+    },
+  },
 ]);
 
 /** Hook entries a host must carry, in event order. */

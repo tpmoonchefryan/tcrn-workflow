@@ -417,6 +417,16 @@
         "a raw control byte is reported by offset, while TAB and LF are not"
       ]
     },
+    "tests/codex-response-style-hook.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 15,
+      "testNames": [
+        "STORY-357 a violating last_assistant_message is reported, not silently passed",
+        "STORY-357 stop_hook_active is a loop guard and is skipped without inspecting the text",
+        "STORY-357 a missing or empty last_assistant_message is skipped, not an error",
+        "STORY-357 the CLI bridge emits the host block envelope only on a violation"
+      ]
+    },
     "tests/codex-stop-pact.test.mjs": {
       "testCount": 9,
       "assertionCount": 56,
@@ -701,6 +711,50 @@
       "testNames": [
         "INC-263 closeout verification is wired and ceremony cost measurement is deterministic",
         "INC-263 a closeout wiring omission and malformed cost input are red"
+      ]
+    },
+    "tests/inc269-annotation-advisory-guard.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 14,
+      "testNames": [
+        "INC-269 an annotation that moves no advisory field is refused before it is written",
+        "INC-269 title and labels still land when the same annotation moves an advisory field"
+      ]
+    },
+    "tests/inc270-engine-capability-surface.test.mjs": {
+      "testCount": 11,
+      "assertionCount": 48,
+      "testNames": [
+        "INC-270 case 1: identical catalogs -> green with IDENTICAL",
+        "INC-270 case 2: worktree has extra verb -> green with WORKTREE_AHEAD",
+        "INC-270 case 3: installed has extra verb -> RED PLATFORM_ENGINE_INSTALLED_AHEAD",
+        "INC-270 case 3b: both differ -> RED, both listed",
+        "INC-270 case 4a: unreadable installed -> uncomparable",
+        "INC-270 case 4b: both unreadable -> uncomparable",
+        "engineFloorSatisfied renamed from engineAlignment",
+        "both engineFloorSatisfied and engineCapabilitySurface in checks",
+        "INC-270 case 5a: worktree has extra flag on a verb -> green WORKTREE_AHEAD",
+        "INC-270 case 5b: installed has extra flag on a verb -> RED PLATFORM_ENGINE_INSTALLED_AHEAD",
+        "INC-270 case 6: same verbs and flags, but valueKind differs -> green ATTRIBUTES_DIVERGENT"
+      ]
+    },
+    "tests/inc274-platform-storage-shape.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 24,
+      "testNames": [
+        "workspaceStorageShape: all partitions at version 2 with correct segment bound",
+        "workspaceStorageShape: one partition behind version 2",
+        "snapshotReadPerformance: with measurements reports comparable true and measured count",
+        "snapshotReadPerformance: without measurements reports comparable false and measured count zero"
+      ]
+    },
+    "tests/inc275-mcp-absent.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 2,
+      "testNames": [
+        "MCP package and implementation are absent",
+        "CLI catalog contains no MCP surface verb",
+        "package.json bin field declares no MCP entry"
       ]
     },
     "tests/init033-install-surface.test.mjs": {
@@ -1880,6 +1934,14 @@
         "STORY-343 documentation proof names the helper archive refresh as a required step"
       ]
     },
+    "tests/story-344-storage-boundary.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 6,
+      "testNames": [
+        "STORY-344 workspace lifecycle data-plane operations use StorageBackend",
+        "STORY-344 workspace lifecycle has no direct data-plane fs calls"
+      ]
+    },
     "tests/story-345-backend-selection.test.mjs": {
       "testCount": 2,
       "assertionCount": 9,
@@ -1907,12 +1969,19 @@
         "STORY-348 protocol validity values remain hardcoded rather than becoming settings"
       ]
     },
-    "tests/story-344-storage-boundary.test.mjs": {
-      "testCount": 2,
-      "assertionCount": 6,
+    "tests/story-354-snapshot-event-segment-limit.test.mjs": {
+      "testCount": 1,
+      "assertionCount": 8,
       "testNames": [
-        "STORY-344 workspace lifecycle data-plane operations use StorageBackend",
-        "STORY-344 workspace lifecycle has no direct data-plane fs calls"
+        "STORY-354 snapshot-manifest reads an event segment past the generic 1 MiB control-file limit"
+      ]
+    },
+    "tests/story-354-snapshot-manifest-segmented.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 11,
+      "testNames": [
+        "STORY-354 snapshot-manifest succeeds on a file-segmented workspace and covers its .idx sidecars",
+        "STORY-354 a workspace with no explicit storage.backend setting (default segmented) also snapshots cleanly"
       ]
     },
     "tests/story-rule-conservation.test.mjs": {
@@ -2007,50 +2076,6 @@
         "STORY-299: an over-budget projection is refused with the chain untouched",
         "STORY-299: a view write failure after commit keeps the command successful and the fact durable",
         "STORY-299: the budget report covers every view and the record cap"
-      ]
-    },
-    "tests/inc269-annotation-advisory-guard.test.mjs": {
-      "testCount": 2,
-      "assertionCount": 14,
-      "testNames": [
-        "INC-269 an annotation that moves no advisory field is refused before it is written",
-        "INC-269 title and labels still land when the same annotation moves an advisory field"
-      ]
-    },
-    "tests/inc270-engine-capability-surface.test.mjs": {
-      "testCount": 11,
-      "assertionCount": 48,
-      "testNames": [
-        "INC-270 case 1: identical catalogs -> green with IDENTICAL",
-        "INC-270 case 2: worktree has extra verb -> green with WORKTREE_AHEAD",
-        "INC-270 case 3: installed has extra verb -> RED PLATFORM_ENGINE_INSTALLED_AHEAD",
-        "INC-270 case 3b: both differ -> RED, both listed",
-        "INC-270 case 4a: unreadable installed -> uncomparable",
-        "INC-270 case 4b: both unreadable -> uncomparable",
-        "engineFloorSatisfied renamed from engineAlignment",
-        "both engineFloorSatisfied and engineCapabilitySurface in checks",
-        "INC-270 case 5a: worktree has extra flag on a verb -> green WORKTREE_AHEAD",
-        "INC-270 case 5b: installed has extra flag on a verb -> RED PLATFORM_ENGINE_INSTALLED_AHEAD",
-        "INC-270 case 6: same verbs and flags, but valueKind differs -> green ATTRIBUTES_DIVERGENT"
-      ]
-    },
-    "tests/inc274-platform-storage-shape.test.mjs": {
-      "testCount": 4,
-      "assertionCount": 24,
-      "testNames": [
-        "workspaceStorageShape: all partitions at version 2 with correct segment bound",
-        "workspaceStorageShape: one partition behind version 2",
-        "snapshotReadPerformance: with measurements reports comparable true and measured count",
-        "snapshotReadPerformance: without measurements reports comparable false and measured count zero"
-      ]
-    },
-    "tests/inc275-mcp-absent.test.mjs": {
-      "testCount": 3,
-      "assertionCount": 2,
-      "testNames": [
-        "MCP package and implementation are absent",
-        "CLI catalog contains no MCP surface verb",
-        "package.json bin field declares no MCP entry"
       ]
     }
   },
