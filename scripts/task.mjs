@@ -417,9 +417,7 @@ async function runTests({
   receiptSidecarOnly = false,
   observeHookOnly = false,
   executionCollectionOnly = false,
-  appServerObserverOnly = false,
   codexActivationOnly = false,
-  codexExecutionCollectionOnly = false,
   adapterAcceptanceOnly = false,
   hookRootBindingOnly = false,
   authorityOutputOnly = false,
@@ -465,9 +463,7 @@ async function runTests({
     .filter((path) => !receiptSidecarOnly || path === "tests/act5-receipt-sidecar.test.mjs")
     .filter((path) => !observeHookOnly || path === "tests/act6-observe-hook.test.mjs")
     .filter((path) => !executionCollectionOnly || path === "tests/act7-execution-collection.test.mjs")
-    .filter((path) => !appServerObserverOnly || path === "tests/act8-app-server-observer.test.mjs")
     .filter((path) => !codexActivationOnly || path === "tests/act9-codex-activation.test.mjs")
-    .filter((path) => !codexExecutionCollectionOnly || path === "tests/act10-codex-execution-collection.test.mjs")
     .filter((path) => !adapterAcceptanceOnly || path === "tests/act11-adapter-acceptance.test.mjs")
     .filter((path) => !hookRootBindingOnly || path === "tests/act12-hook-root-binding.test.mjs")
     .filter((path) => !authorityOutputOnly || path === "tests/act13-authority-output.test.mjs")
@@ -513,12 +509,8 @@ async function runTests({
       ? "ACT6_OBSERVE_HOOK_TESTS_VERIFIED"
       : executionCollectionOnly
       ? "ACT7_EXECUTION_COLLECTION_TESTS_VERIFIED"
-      : appServerObserverOnly
-      ? "ACT8_APP_SERVER_OBSERVER_TESTS_VERIFIED"
       : codexActivationOnly
       ? "ACT9_CODEX_ACTIVATION_TESTS_VERIFIED"
-      : codexExecutionCollectionOnly
-      ? "ACT10_CODEX_EXECUTION_COLLECTION_TESTS_VERIFIED"
       : adapterAcceptanceOnly
       ? "ACT11_ADAPTER_ACCEPTANCE_TESTS_VERIFIED"
       : hookRootBindingOnly
@@ -1990,9 +1982,7 @@ const commandContracts = {
   act5: { exit: 0, reasonCode: "ACT5_RECEIPT_SIDECAR_VERIFIED" },
   act6: { exit: 0, reasonCode: "ACT6_OBSERVE_HOOK_VERIFIED" },
   act7: { exit: 0, reasonCode: "ACT7_EXECUTION_COLLECTION_VERIFIED" },
-  act8: { exit: 0, reasonCode: "ACT8_APP_SERVER_OBSERVER_VERIFIED" },
   act9: { exit: 0, reasonCode: "ACT9_CODEX_ACTIVATION_VERIFIED" },
-  act10: { exit: 0, reasonCode: "ACT10_CODEX_EXECUTION_COLLECTION_VERIFIED" },
   act11: { exit: 0, reasonCode: "ACT11_ADAPTER_ACCEPTANCE_VERIFIED" },
   act12: { exit: 0, reasonCode: "ACT12_HOOK_ROOT_BINDING_VERIFIED" },
   act13: { exit: 0, reasonCode: "ACT13_AUTHORITY_OUTPUT_VERIFIED" },
@@ -2320,28 +2310,6 @@ async function verifyAct3() {
   return success("ACT3_PERSONA_RENDER_VERIFIED", { tests: result.tests });
 }
 
-// EPIC-023 Step 1: the Codex project-local inert installer, proven against a real
-// filesystem. The fixture's declared boundary is asserted here so the gate itself
-// refuses to report success while claiming a live host was involved.
-// EPIC-026 S077: the read-only App Server Observer. The gate asserts the read-only
-// boundary and that no live attach is claimed.
-async function verifyAct8() {
-  const result = await runTests({ appServerObserverOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act8-app-server-observer-cases.json");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.act8-app-server-observer-cases.v1", "ACT8_FIXTURE_SCHEMA");
-  assertion(fixture.readOnly === true && fixture.drivesHost === false, "ACT8_READ_ONLY");
-  assertion(fixture.paramsRetained === false && fixture.unknownMethodsCounted === true, "ACT8_BOUNDED");
-  assertion(fixture.liveAttachProof === "not-claimed-stream-is-supplied-not-opened", "ACT8_NO_OVERCLAIM");
-  return success("ACT8_APP_SERVER_OBSERVER_VERIFIED", {
-    tests: result.tests,
-    protocolDigest: fixture.protocolDigest,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    liveAttachProof: fixture.liveAttachProof,
-    standalone: fixture.standalone,
-  });
-}
-
 // EPIC-023 S066/S067: the single Codex SessionStart activation rung. The gate
 // distinguishes local installation from host approval and fire. The historical
 // persona-bound receipt is retained but cannot approve the corrected persona-free
@@ -2365,38 +2333,6 @@ async function verifyAct9() {
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
     liveHostProof: fixture.liveHostProof,
     installationClaimsHostActivation: fixture.installationClaimsHostActivation,
-    standalone: fixture.standalone,
-  });
-}
-
-// EPIC-020 S054/S057: correlate current Codex App Server spawn/readback/turn/item
-// shapes into host-neutral execution receipts without embedding host-driving code
-// in the collector. A separate bounded live harness supplies the exact same-
-// connection stream/readback comparison and receipt evidence.
-async function verifyAct10() {
-  const result = await runTests({ codexExecutionCollectionOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act10-codex-execution-collection-cases.json");
-  const evidencePath = resolve(repositoryRoot, "docs/verification/host/codex-app-server-execution-collection.json");
-  const fixture = await readJson(fixturePath);
-  const evidence = await readJson(evidencePath);
-  assertion(fixture.schemaVersion === "tcrn.act10-codex-execution-collection-cases.v1", "ACT10_FIXTURE_SCHEMA");
-  assertion(fixture.readOnly === true && fixture.drivesHost === false, "ACT10_READ_ONLY");
-  assertion(fixture.unavailableCases === 7 && fixture.refusalCases === 5, "ACT10_CORPUS");
-  assertion(fixture.transcriptsSigned === false && fixture.attributionNotIdentity === true, "ACT10_NO_OVERCLAIM");
-  assertion(fixture.bindings.includes("sessionId") && fixture.bindings.includes("threadId") && fixture.bindings.includes("turnId"), "ACT10_BINDINGS");
-  assertion(
-    fixture.liveHostProof === "live-app-server-readback-receipt-compared" &&
-      evidence.boundary.liveAttachClaimed === true &&
-      evidence.boundary.liveSubagentReceiptClaimed === true &&
-      evidence.boundary.syntheticThreadStartedAdded === false,
-    "ACT10_LIVE_BOUNDARY",
-  );
-  assertion(evidence.relatedLiveObservation.acceptedByThisCollector === false, "ACT10_LIVE_ROLLOUT_BOUNDARY");
-  return success("ACT10_CODEX_EXECUTION_COLLECTION_VERIFIED", {
-    tests: result.tests,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaEvidenceDigest: (await fileRecord(evidencePath)).sha256,
-    liveHostProof: fixture.liveHostProof,
     standalone: fixture.standalone,
   });
 }
@@ -2846,9 +2782,7 @@ const handlers = {
   act5: verifyAct5,
   act6: verifyAct6,
   act7: verifyAct7,
-  act8: verifyAct8,
   act9: verifyAct9,
-  act10: verifyAct10,
   act11: verifyAct11,
   act12: verifyAct12,
   act13: verifyAct13,
@@ -2952,7 +2886,7 @@ function evidencePhase(name) {
   if (name === "act1") {
     return "act";
   }
-  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act8" || name === "act9" || name === "act10" || name === "act11" || name === "act12" || name === "act13") {
+  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act9" || name === "act11" || name === "act12" || name === "act13") {
     return "act2";
   }
   if (name === "e2e") {

@@ -116,7 +116,6 @@ import {
   generateCodexSessionSummary,
   createAdapterBaseline,
   validateAdapterSurface,
-  collectCodexAppServerExecutions,
   generateClaudeAdapterActivationRollbackPlan,
   readClaudeAdapterActivationReceipt,
   simulateCodexAdapterLifecycle,
@@ -962,7 +961,6 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "claude-adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
   { name: "claude-adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
   { name: "claude-adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
-  { name: "codex-execution-observe", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "json" }] },
   { name: "commands", availability: "cli", mutates: false, flags: [] },
   { name: "compatibility-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "compatibility-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
@@ -1571,16 +1569,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const plan = planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), installation);
     const result = await executeCodexAdapterRollback(plan, values["installation-receipt"] ?? "");
     io.write(canonicalJson({ reasonCode: result.reasonCode, planDigest: result.planDigest }));
-    return;
-  }
-  if (command === "codex-execution-observe") {
-    const values = parseArguments(rest, ["input"]);
-    required(values, ["input"]);
-    io.write(
-      canonicalJson(
-        collectCodexAppServerExecutions(jsonValue(values.input, "input")),
-      ),
-    );
     return;
   }
   if (command === "claude-adapter-generate") {

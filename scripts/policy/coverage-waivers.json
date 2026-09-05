@@ -549,6 +549,12 @@
         "owningRepository": "none -- BUILTIN_TEMPLATES has no successor in the live tree; see ruling",
         "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3: packages/core/src/template-admission.ts is a per-symbol member of the isolation family, and BUILTIN_TEMPLATES with its commonTemplate and COMMON_DELIVERY_HEADINGS helpers is the part of it nothing consumes -- no engine path, no CLI verb and no script admits a built-in template, and this test fixture was its only reader in the tree. The admission machinery it fed (validateTemplateDefinition, admitTemplate, createTemplateAdmissionRecord, templateBindingFromReceipt and the template-validate/template-admit verbs) is live and untouched. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed catalogue for historical reference."
       }
+    },
+    {
+      "path": "tests/act11-adapter-acceptance.test.mjs",
+      "testName": "unapproved definitions and missing or drifted execution streams remain unavailable",
+      "reason": "TCRN-CROSS-STORY-358 family 2 ('observe'): this shared cross-family test bound both the still-live assessCodexActivationTrust (adapter family, untouched) and codex-execution-collection.ts's collectCodexAppServerExecutions, which retires whole-file in this change together with app-server-observer.ts (so OBSERVED_PROTOCOL_DIGEST also leaves the import list). The unavailable/protocol-drift execution-stream assertions retired with the module; the still-live hook-definition-trust assertions (hookDefinitionInSuppliedApprovedSet, evidenceClass) were kept verbatim and the test was renamed to describe only what it still tests, since its old name no longer matched its body.",
+      "replacement": "tests/act11-adapter-acceptance.test.mjs:unapproved hook definitions remain unavailable"
     }
   ]
 }

@@ -11,10 +11,8 @@ import {
   COLLECTION_ATTRIBUTION_NOTE,
   EXECUTION_MODE_EXTENSION_KEY,
   EXECUTION_RECEIPT_EXTENSION_KEY,
-  OBSERVED_PROTOCOL_DIGEST,
   assessCodexActivationTrust,
   classifyConferenceExecution,
-  collectCodexAppServerExecutions,
   collectExecutionReceipt,
   verifyCollectedTranscript,
 } from "../dist/build/packages/core/src/index.js";
@@ -262,7 +260,7 @@ test("the hostile matrix names every required bypass, drift, replay, attribution
   }
 });
 
-test("unapproved definitions and missing or drifted execution streams remain unavailable", () => {
+test("unapproved hook definitions remain unavailable", () => {
   const binding = {
     handlerDigest: digest("handler"),
     summaryFileDigest: digest("summary"),
@@ -271,28 +269,6 @@ test("unapproved definitions and missing or drifted execution streams remain una
   const comparison = assessCodexActivationTrust(binding, []);
   assert.equal(comparison.hookDefinitionInSuppliedApprovedSet, false);
   assert.equal(comparison.evidenceClass, "caller_supplied_input_only");
-
-  const common = {
-    hostProduct: "Codex CLI",
-    hostVersion: "0.139.0",
-    sessionId: "session:acceptance",
-    observedFrom: "2026-07-25T00:00:00Z",
-    observedTo: "2026-07-25T00:01:00Z",
-    notifications: [],
-    threadReadbacks: [],
-  };
-  const noInvocation = collectCodexAppServerExecutions({
-    ...common,
-    protocolDigest: OBSERVED_PROTOCOL_DIGEST,
-  });
-  assert.equal(noInvocation.availability, "unavailable");
-  assert.equal(noInvocation.reasonCode, "CODEX_EXECUTION_UNAVAILABLE");
-  const drifted = collectCodexAppServerExecutions({
-    ...common,
-    protocolDigest: `sha256:${"0".repeat(64)}`,
-  });
-  assert.equal(drifted.protocolBinding, "unpinned");
-  assert.equal(drifted.reasonCode, "CODEX_EXECUTION_PROTOCOL_UNPINNED");
 });
 
 test("collected receipts bind bytes and invocations but deliberately do not prove actor identity", () => {

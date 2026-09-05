@@ -56,25 +56,9 @@
         "CLI claude-adapter-install then claude-adapter-uninstall drive the governed round-trip"
       ]
     },
-    "tests/act10-codex-execution-collection.test.mjs": {
-      "testCount": 10,
-      "assertionCount": 57,
-      "testNames": [
-        "a real-shape stream works without a synthetic subagent thread/started frame",
-        "an observed subagent thread/started frame is optional but must agree with readback",
-        "the projected receipt retains actual session/thread/turn and readback-bound bytes",
-        "missing readback, prompt, turn lifecycle, and final bytes stay unavailable",
-        "fresh context is bound to spawn start/completion, receiver, parent, and non-forked readback",
-        "receiver/readback mismatch, cross-session contamination, and replay fail closed",
-        "final output uses final_answer timing and must byte-match the readback",
-        "no candidates and an unpinned protocol remain honestly unavailable",
-        "the collector consumes supplied readbacks but contains no host-driving implementation",
-        "fixture and schema evidence pin the corrected live/readback boundary"
-      ]
-    },
     "tests/act11-adapter-acceptance.test.mjs": {
       "testCount": 7,
-      "assertionCount": 99,
+      "assertionCount": 95,
       "testNames": [
         "the acceptance matrix is closed, cross-host, and synchronized with the capability manifest",
         "EPIC-024 accepts exact live observe evidence with explicit version and account unavailable cells",
@@ -195,20 +179,6 @@
         "a transcript edited after observation reports drift, and is never reported as signed",
         "an observation with a non-fresh context cannot substantiate a multi-agent claim",
         "the fixture pins the honesty boundary this proof claims"
-      ]
-    },
-    "tests/act8-app-server-observer.test.mjs": {
-      "testCount": 8,
-      "assertionCount": 28,
-      "testNames": [
-        "a real notification stream folds into a bounded receipt that retains no params",
-        "the observed vocabulary is the real protocol",
-        "an unknown method is counted rather than dropped, and a drifted protocol is marked unpinned",
-        "malformed frames are counted, never silently swallowed",
-        "the receipt carries the coverage caveat and the read-only boundary immutably",
-        "hostile and oversized inputs fail closed",
-        "the module drives nothing: no request, socket, or host write exists in it",
-        "the fixture pins the read-only and version-bound boundary this proof claims"
       ]
     },
     "tests/act9-codex-activation.test.mjs": {
