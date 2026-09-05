@@ -149,5 +149,24 @@
       "ratio": 1.7431,
       "rationale": "The ratio rose because product code was retired, not because proof was added. TCRN-CROSS-INC-275 removed two subsystems that were declared stripped but still present: the PostgreSQL backend, which docs/adr/0004 records as not wired into the product path, and the tcrn-workflow-mcp stdio surface, which docs/compatibility/supported-modes.md records as retired in v0.11.18. Neither had a consumer outside the tests that tested it; the operator-authority MCP grants had no consumer at all, not even the surface they were written for. Owner ruling 2026-09-04: a test's value comes from the thing it tests existing.\n\nAbout two thousand lines of product left — the pg backend and its store, the file-to-pg migration family, the CLI paths that served both, and the retired stdio surface — against roughly fourteen hundred lines of proof. Retiring dead product raises this ratio by arithmetic, and the alternative the gate offers, retiring equivalent proof mass, would mean deleting tests for code that still exists in order to record the removal of code that does not.\n\nWhat replaced the deleted tests is smaller and different in kind: two sets of absence assertions, one for PostgreSQL and one for MCP, each measured to fail when its subject is recreated. They guard against a reintroduction that the old tests could not have caught, because the old tests required the subject to be present."
     }
-  ]
+  ],
+  "surfaceCaps": {
+    "schemaVersion": "tcrn.proof-budget.surface-caps.v1",
+    "note": "Three raw proof-surface counts, recorded beside the ratio this file has pinned since STORY-301. The ratio bounds the relationship between proof and product; it says nothing about the absolute size of either side, so both can grow together, forever, without the ratio ever moving. TCRN-CROSS-STORY-356 pins three counts instead: how many verify:* scripts package.json declares, how many claims verification-map.yaml carries, and how many lines packages/core/src holds. CONTRIBUTING.md documents the rule these caps enforce; this is the recorded line, the same division of labor frozenRatio and its rationale above already use.",
+    "recordedAt": "2026-09-05",
+    "verifyScriptCap": 135,
+    "claimCap": 122,
+    "coreSourceLineCap": 32086,
+    "coreSourceLineMetric": {
+      "glob": "packages/core/src/**/*.ts",
+      "method": "raw 0x0a byte count across the matched files, recursive, blank lines and comments included -- the same deliberately crude counting method scripts/task.mjs's reportBudget (WSG-7) uses for productLines.",
+      "distinctFrom": "reportBudget's productLines, which spans every packages/*/src directory rather than core alone. Same method, a different file set by design; the two numbers are not expected to agree."
+    },
+    "permissions": {
+      "raisingRequiresOwnerRuling": true,
+      "enforcement": "review-convention-only",
+      "limit": "this doctor leg can only compare a measured count against the cap recorded here; it cannot decide who is authorised to raise a cap, and does not try to. The frozenRatio exception mechanism above this field has carried the same limit since installation: recording who approved an exception has always been a human act performed in review, never a verdict any machine in this repository renders."
+    },
+    "rationale": "Zero margin, matching the posture frozenRatio itself and its exceptions above have held since 2026-08-19: each cap is recorded at the value measured the day this field was written, not at a value with headroom already spent. Headroom not measured is a decision nobody wrote down.\n\nThe cost of zero margin is not the same across the three counts it pins. verifyScriptCount and claimCount move only when this repository deliberately adds a verify:* script or a verification-map claim, so a red result on either one names a specific, intentional act. coreSourceLines moves on any change to packages/core/src, including an ordinary defect fix with no proof-surface intent at all -- STORY-354 alone added lines to that directory in the same round this cap was written. A red result on coreSourceLines is therefore not necessarily a proof-surface expansion; it may just be a fix that grew the file it touched. The remedy is the same either way: retire an equivalent number of lines in the same change, or record an Owner-authorised increase in this file. Whether that friction is worth keeping at zero margin once it starts landing on ordinary engine fixes is for Owner to weigh with the actual friction in view; it is recorded here rather than loosened in advance, because an unmeasured buffer is the same unrecorded decision this file was created to stop making."
+  }
 }

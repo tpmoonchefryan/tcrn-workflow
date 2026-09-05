@@ -176,7 +176,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "4adfa8bd73fb7a0964a0ccc11e6c091f4e599040b69fd631b29f32f83af73c62",
+      "fixtureDigest": "d5af49c104112d0c9cbdba491e1036bf3d21dca1908adf64735ceaffad450cab",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3232,7 +3232,7 @@
         "scripts/task.mjs",
         "tests/inc258-install-manifest.test.mjs"
       ],
-      "fixtureDigest": "da582a6d610d9070bdabd3232e7a284f0d6c773d9bf11cd5b1aa3b9040119ed2",
+      "fixtureDigest": "80a38851392242f0980d8815389b5b2b08ffa939f91f857427c45e2a88ff88d1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4128,7 +4128,7 @@
         "scripts/task.mjs",
         "tests/p1-roster.test.mjs"
       ],
-      "fixtureDigest": "16b208d92d5bae713004a46dfdcbf2ef1027fc934216ee215b55bf7f581adcb9",
+      "fixtureDigest": "3b72f7bd1a0857bf12513af3cd2538bf2b31fd33b491bcf2fd065106e83e0e25",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4292,7 +4292,7 @@
         "scripts/task.mjs",
         "tests/platform-doctor.test.mjs"
       ],
-      "fixtureDigest": "706ba36f047c58ddcb89ed847f262e212934ef06363f05bbb46fd030eb6b89bf",
+      "fixtureDigest": "887f90dea5c3a549568f883f8c6fae1855fa997c5033b410eeb9bd28690e91bf",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4394,7 +4394,7 @@
         "scripts/policy/guard-registry.json",
         "tests/inc270-engine-capability-surface.test.mjs"
       ],
-      "fixtureDigest": "d59c4c90c1eafc45613852a393113952b0108f786e1eb612bc553e864bf0bd52",
+      "fixtureDigest": "52dc49b98789b1e891ba0bcc9cbbc30f8102cac6edad2e00b6a1195beb3f6816",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

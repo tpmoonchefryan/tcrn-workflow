@@ -117,6 +117,42 @@ a leak; the test is whether anything owns the record of it.
   fails closed on a tracked file that is not listed *and* on a listed file that does not
   exist. Adding a root document means adding its entry in the same change.
 
+## The proof-surface caps, and what they cannot decide
+
+`platform-doctor.mjs`'s `proofBudget` leg (TCRN-CROSS-STORY-356) reads three raw counts
+from a live `TCRN Platform/tcrn-workflow` checkout — how many `verify:*` scripts
+`package.json` declares, how many claims `verification-map.yaml` carries, and how many
+lines `packages/core/src/**/*.ts` holds, counted the same deliberately crude way
+`scripts/task.mjs`'s `reportBudget` (WSG-7) counts `productLines`: a raw `0x0a` byte
+count, blank lines and comments included, over a different file set — `core` alone here,
+not every `packages/*/src` directory reportBudget spans, so the two counts are not
+expected to agree. Each count is compared to the cap recorded in
+`scripts/policy/proof-budget.json`'s `surfaceCaps` field: `verifyScriptCap: 135`,
+`claimCap: 122`, `coreSourceLineCap: 32086`, all three pinned at zero margin — the value
+measured the day the field was written (2026-09-05), not a value with headroom already
+spent. A container that only consumes this engine, without a checkout, has nothing to
+count; that state is reported `comparable: false`, never a quiet pass.
+
+**What this leg cannot do: decide who may raise a cap.** It answers exactly one question
+— does the currently measured count exceed the recorded cap — and nothing more. Raising a
+cap is authorised the same way a `frozenRatio` exception is authorised in the same policy
+file: by Owner, in review, recorded as a policy edit with the reasoning written down. No
+verb in this engine checks who wrote that edit or whether they had standing to make it. A
+green `proofBudget` leg is not evidence that a cap increase was authorised; it can only
+say the measured count and the recorded cap currently agree.
+
+The three current caps are a snapshot, not a destination. A later, separate piece of
+work — `TCRN-CROSS-STORY-359` in Initiative `TCRN-CROSS-INIT-051`, specified in this
+round's dispatch planning document (`docs/dispatch/2026-09-05-self-evolving-frontier/chain-spec.mjs`,
+its `TCRN-CROSS-STORY-359` entry, as of 2026-09-05) — describes shrinking `verify:*` to
+eleven named categories and their aggregates: `format`, `lint`, `typecheck`, `build`,
+`test`, `offline`, `privacy`, `chain-validate`, `hooks-live`, `retrieval-eval`, `release`.
+**That Story has not run.** `verify:*` still numbers 135 as this section is written. All
+eleven names are written down here so the intention exists somewhere other than memory,
+but nothing above should be read as claiming that list is already the enforced roster —
+`verifyScriptCap` moves only when that work actually lands and records a new measured
+value.
+
 ## Platform conventions
 
 This repository sits inside the TCRN Platform working tree. Cross-repo conventions —

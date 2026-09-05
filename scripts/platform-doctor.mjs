@@ -27,6 +27,7 @@ import {
   codexHookDocument,
   hookEntriesFor,
 } from "./host-harness.mjs";
+import { toPosixPath, walkFiles } from "./lib/files.mjs";
 
 const execFileAsync = promisify(execFile);
 const TOPOLOGY_SECTION_MARKER = "## 三、分区拓扑";
@@ -430,6 +431,106 @@ function helperReleaseVerdict(published, trusted, source) {
     });
   }
   return check("helperReleaseAlignment", true, { comparable: true, digest: trusted.slice(0, 12), source });
+}
+
+// TCRN-CROSS-STORY-356: the proof-to-product ratio STORY-301 pinned bounds a relationship,
+// not a size -- proof mass and product mass can grow together forever, in step, without
+// the ratio ever moving. This leg pins three raw counts beside it instead: how many
+// verify:* scripts package.json declares, how many claims verification-map.yaml carries,
+// and how many lines packages/core/src holds. All three are recorded in
+// scripts/policy/proof-budget.json's surfaceCaps field at zero margin, the same posture
+// frozenRatio itself was frozen at.
+//
+// A container that only consumes this engine, rather than checking it out, has no
+// verify:* roster, no claims, and no packages/core/src to count -- so an absent policy or
+// an absent surfaceCaps field is reported uncomparable rather than passed quietly, the
+// same distinction inspectHelperReleaseAlignment draws above.
+//
+// What this leg cannot do, and is not written to look like it can: decide who is
+// authorised to raise a cap. It answers only whether the currently measured value exceeds
+// the recorded one. That authorization is Owner's, recorded as a policy edit the same way
+// a frozenRatio exception is recorded above -- a human act performed in review, not a
+// verdict this doctor renders.
+async function inspectProofBudget(platformRoot, homeRoot, options) {
+  if (options.proofBudget && typeof options.proofBudget === "object") {
+    return proofBudgetVerdict(options.proofBudget, "synthetic");
+  }
+  const checkoutRoot = join(platformRoot, "TCRN Platform", "tcrn-workflow");
+  const policyPath = join(checkoutRoot, "scripts", "policy", "proof-budget.json");
+  let policy = null;
+  try {
+    policy = JSON.parse(await readFile(policyPath, "utf8"));
+  } catch (error) {
+    if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+  }
+  const caps = policy?.surfaceCaps;
+  if (caps === null || caps === undefined || typeof caps !== "object") {
+    return check("proofBudget", true, {
+      comparable: false,
+      reason: "no surface-cap policy in this container, so the proof surface has nothing to compare against",
+      source: "live-engine-checkout",
+    });
+  }
+  const packageValue = JSON.parse(await readFile(join(checkoutRoot, "package.json"), "utf8"));
+  const verifyScriptCount = Object.keys(packageValue.scripts ?? {}).filter((name) => name.startsWith("verify:")).length;
+  const verificationMap = JSON.parse(await readFile(join(checkoutRoot, "verification-map.yaml"), "utf8"));
+  const claimCount = (verificationMap.claims ?? []).length;
+  // Same deliberately crude counting method as scripts/task.mjs's reportBudget (WSG-7):
+  // a raw 0x0a byte count, blank lines and comments included, over a fixed file set --
+  // packages/core/src alone here, rather than every packages/*/src reportBudget spans.
+  let coreSourceLines = 0;
+  for (const absolute of await walkFiles(join(checkoutRoot, "packages", "core", "src"))) {
+    if (!toPosixPath(relative(checkoutRoot, absolute)).endsWith(".ts")) continue;
+    const content = await readFile(absolute);
+    for (const byte of content) {
+      if (byte === 0x0a) coreSourceLines += 1;
+    }
+  }
+  return proofBudgetVerdict({
+    verifyScriptCount,
+    verifyScriptCap: caps.verifyScriptCap,
+    claimCount,
+    claimCap: caps.claimCap,
+    coreSourceLines,
+    coreSourceLineCap: caps.coreSourceLineCap,
+  }, "live-engine-checkout");
+}
+
+function proofBudgetVerdict(values, source) {
+  const { verifyScriptCount, verifyScriptCap, claimCount, claimCap, coreSourceLines, coreSourceLineCap } = values;
+  const exceeded = [];
+  if (verifyScriptCount > verifyScriptCap) {
+    exceeded.push({ metric: "verifyScriptCount", observed: verifyScriptCount, cap: verifyScriptCap, over: verifyScriptCount - verifyScriptCap });
+  }
+  if (claimCount > claimCap) {
+    exceeded.push({ metric: "claimCount", observed: claimCount, cap: claimCap, over: claimCount - claimCap });
+  }
+  if (coreSourceLines > coreSourceLineCap) {
+    exceeded.push({ metric: "coreSourceLines", observed: coreSourceLines, cap: coreSourceLineCap, over: coreSourceLines - coreSourceLineCap });
+  }
+  if (exceeded.length > 0) {
+    return check("proofBudget", false, {
+      reasonCode: "PLATFORM_PROOF_BUDGET_EXCEEDED",
+      exceeded,
+      verifyScriptCount,
+      verifyScriptCap,
+      claimCount,
+      claimCap,
+      coreSourceLines,
+      coreSourceLineCap,
+      remedy: "retire an equivalent amount of the same kind of proof surface in this change, or record an Owner-authorised cap increase in scripts/policy/proof-budget.json",
+      source,
+    });
+  }
+  return check("proofBudget", true, {
+    verifyScriptCount,
+    verifyScriptCap,
+    claimCount,
+    claimCap,
+    coreSourceLines,
+    coreSourceLineCap,
+    source,
+  });
 }
 
 // TCRN-CROSS-INC-224: headroom on the chain's lifetime event bound, reported before the
@@ -2461,6 +2562,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
     checks.push(
       await inspectHelperCopies(root, homeRoot, manifest, options),
       await inspectHelperReleaseAlignment(root, homeRoot, options),
+      await inspectProofBudget(root, homeRoot, options),
       await inspectChainHeadroom(root, options),
       await inspectChainValidation(root, options),
       await inspectAcceptanceVerdicts(root, options),

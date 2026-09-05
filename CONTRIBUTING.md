@@ -125,6 +125,45 @@ intentionally absent from the verification map and from continuous integration,
 precisely so the budget rule does not itself add the kind of gate it governs.
 The rule binds reviewers and the Owner gate, not CI.
 
+## Surface caps — three raw counts, not a ratio (2026-09-05, TCRN-CROSS-STORY-356)
+
+**Definition.** The ratio above bounds proof mass against product mass; it says
+nothing about the absolute size of either one, so both can grow together,
+forever, in step, without the ratio ever moving. Three raw counts are pinned
+instead, each against its own recorded cap rather than against each other: how
+many `verify:*` scripts `package.json` declares (`verifyScriptCount`), how many
+claims `verification-map.yaml` carries (`claimCount`), and how many lines
+`packages/core/src/**/*.ts` holds (`coreSourceLines`) — counted the same
+deliberately crude way as the ratio's own product mass, a raw `0x0a` byte count
+with blank lines and comments included, but over a narrower file set: `core`
+alone, not every `packages/*/src` directory `scripts/task.mjs`'s `reportBudget`
+(WSG-7) spans. The two line counts are not expected to agree.
+
+**Where it runs.** Unlike the ratio above, this is not a `verify:*` script or a
+verification-map claim — adding either would be the self-referential move this
+Story exists to close off. It is a `platform-doctor.mjs` leg (`proofBudget`),
+read from `scripts/policy/proof-budget.json`'s `surfaceCaps` field against a live
+`TCRN Platform/tcrn-workflow` checkout. A container that only consumes this
+engine, without a checkout, has nothing to measure; the leg reports
+`comparable: false` rather than a quiet pass.
+
+**Caps, recorded 2026-09-05, zero margin.** `verifyScriptCap: 135`,
+`claimCap: 122`, `coreSourceLineCap: 32086` — the values measured the day this
+field was written, not values with headroom already spent. `verifyScriptCount`
+and `claimCount` move only on a deliberate act (a new script, a new claim);
+`coreSourceLines` moves on any change to `packages/core/src`, including an
+ordinary defect fix, so a red result there does not by itself mean new proof
+surface was added — the remedy is the same either way: retire an equivalent
+count in the same change, or record an Owner-authorised increase below.
+
+**Raising a cap is Owner's decision, not this leg's.** The leg answers exactly
+one question — does the measured count exceed the recorded cap — and cannot
+decide who is authorised to raise one. That authorization is recorded the same
+way a ratio exception is recorded above: a policy-file edit made in review, with
+the reasoning written into `scripts/policy/proof-budget.json`. No verb in this
+engine checks who made that edit, the same limit the ratio's own exceptions have
+carried since 2026-08-19.
+
 ## Evidence is not a gate — `pnpm host-evidence` (OD-C3, 2026-07-20)
 
 `scripts/host-evidence.mjs` drives the real Claude Code binary against a real
