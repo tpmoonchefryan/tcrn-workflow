@@ -4,7 +4,7 @@ A local, zero-dependency portal for the parts of TCRN Workflow a person
 configures most: workspace settings, the canonical `AGENTS.md` prose, and a
 reconciliation check between the two.
 
-The portal is installed at `~/.tcrn-workflow/portal` for machine-level use.
+The portal is installed at `~/.tcrn-workflow/tcrn-workflow/portal` for machine-level use.
 There is no package dependency to install and nothing to build.
 
 ```bash
@@ -98,7 +98,7 @@ The initialization step writes ordinary, reviewable files to the platform
 root. Paths are absolute and the files are never symlinks:
 
 ```bash
-node ~/.tcrn-workflow/portal/scripts/generate-launchers.mjs \
+node ~/.tcrn-workflow/tcrn-workflow/portal/scripts/generate-launchers.mjs \
   --container "/path/to/platform/.tcrn-workspace" \
   --output-dir "/path/to/platform" \
   --prose-root "/path/to/platform" \

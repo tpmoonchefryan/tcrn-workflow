@@ -3,8 +3,9 @@
 
 import { execFile, spawn } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import assert from "node:assert/strict";
@@ -66,6 +67,29 @@ async function readBoot(url) {
 
 function request(url, path, options) { return fetch(new URL(path, url), options).then(async (response) => ({ response, body: await response.json() })); }
 function writeOptions(token, method, body) { return { method, headers: { "content-type": "application/json", "x-portal-token": token }, body: JSON.stringify(body) }; }
+function readOptions(token) { return { headers: { "x-portal-token": token } }; }
+
+// STORY-355 GWT1: `fetch` (undici) never forwards a caller-supplied Host header — it
+// always sends the header that matches the real socket target, which defeats the one
+// thing this needs to prove. `node:http`'s request() has no such guard, so it is the
+// only way to simulate the DNS-rebinding shape: a real loopback TCP connection carrying
+// a forged Host header, exactly what an attacker-controlled page can make a browser send.
+function rawRequest(url, path, { host, headers = {} } = {}) {
+  return new Promise((resolvePromise, reject) => {
+    const target = new URL(path, url);
+    const req = httpRequest(target, { headers: { ...headers, ...(host === undefined ? {} : { host }) } }, (response) => {
+      let data = "";
+      response.on("data", (chunk) => { data += chunk; });
+      response.on("end", () => {
+        let body;
+        try { body = JSON.parse(data); } catch { body = data; }
+        resolvePromise({ status: response.statusCode, body });
+      });
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
 
 test("portal boots from the live engine and exposes the new read surfaces", async (t) => {
   const fixture = await scratch("tcrn-portal-read-", "TCRN-PORTAL-READ");
@@ -76,14 +100,14 @@ test("portal boots from the live engine and exposes the new read surfaces", asyn
   assert.match(page, /data-page="dashboard"/u);
   assert.match(page, /data-page="vocabulary"/u);
 
-  const settings = await request(url, "/api/settings");
+  const settings = await request(url, "/api/settings", readOptions(boot.token));
   assert.equal(settings.body.reasonCode, "SETTINGS_CATALOG_READY");
   assert.deepEqual(settings.body.settings.filter((entry) => entry.key.includes("SubagentPlan")).map((entry) => entry.key), ["execution.claudeCodeSubagentPlan", "execution.codexSubagentPlan"]);
-  const execution = await request(url, "/api/execution");
+  const execution = await request(url, "/api/execution", readOptions(boot.token));
   assert.equal(execution.body.reasonCode, "PORTAL_EXECUTION_READY");
   assert.ok(Array.isArray(execution.body.plans));
   assert.ok(execution.body.personas.some((persona) => persona.name === "Verity"));
-  const dictionary = await request(url, "/api/vocabulary");
+  const dictionary = await request(url, "/api/vocabulary", readOptions(boot.token));
   assert.equal(dictionary.body.reasonCode, "VOCABULARY_READY");
   assert.ok(dictionary.body.roles.some((role) => role.value === "reviewer"));
   assert.ok(dictionary.body.hosts.includes("codex"));
@@ -114,7 +138,7 @@ test("portal writes use actor plus live CAS, then return readback and session au
   assert.equal(override.body.reasonCode, "PERSONA_WRITE_COMMITTED");
   assert.equal(override.body.readback.personas.find((persona) => persona.name === "Verity").mission, "Review governed evidence");
 
-  const audit = await request(url, "/api/session-audit");
+  const audit = await request(url, "/api/session-audit", readOptions(boot.token));
   assert.equal(audit.body.reasonCode, "PORTAL_SESSION_AUDIT_READY");
   assert.equal(audit.body.writes.length, 5);
   assert.ok(audit.body.writes.every((entry) => entry.action && entry.occurredAt));
@@ -137,14 +161,16 @@ if (process.argv[2] === "status" && actual.status === 0) {
 `, "utf8");
   const { child, url } = await startPortal({ ...fixture, env: { TCRN_WORKFLOW_CLI: wrapper } });
   t.after(async () => { child.kill(); await rm(fixture.base, { recursive: true, force: true }); });
-  const status = await request(url, "/api/status");
+  const { boot } = await readBoot(url);
+  const status = await request(url, "/api/status", readOptions(boot.token));
   assert.equal(status.body.engineVersion, "0.11.99");
   assert.equal(status.body.ok, true);
 
   child.kill();
   const actorPortal = await startPortal({ ...fixture, env: { TCRN_PORTAL_ACTOR: "   " } });
   t.after(() => actorPortal.child.kill());
-  const actorStatus = await request(actorPortal.url, "/api/status");
+  const { boot: actorBoot } = await readBoot(actorPortal.url);
+  const actorStatus = await request(actorPortal.url, "/api/status", readOptions(actorBoot.token));
   assert.equal(actorStatus.body.ok, false);
   assert.deepEqual(actorStatus.body.checks.find((check) => check.key === "actor"), { key: "actor", ok: false, reasonCode: "PORTAL_ACTOR_MISSING" });
 });
@@ -159,17 +185,17 @@ test("AGENTS.md read/write is allow-listed and reconciliation reports line-level
   assert.equal(written.body.reasonCode, "PORTAL_AGENTS_MD_WRITTEN");
   assert.equal(written.body.matches, true);
   assert.equal(await readFile(join(fixture.proseRoot, "AGENTS.md"), "utf8"), text);
-  const green = await request(url, "/api/agents-md/reconcile");
+  const green = await request(url, "/api/agents-md/reconcile", readOptions(boot.token));
   assert.equal(green.body.ok, true);
   assert.equal(green.body.findings.length, 0);
 
   await writeFile(join(fixture.proseRoot, "AGENTS.md"), `${text}\nAlso set backup.retiredKey.\n`, "utf8");
-  const red = await request(url, "/api/agents-md/reconcile");
+  const red = await request(url, "/api/agents-md/reconcile", readOptions(boot.token));
   assert.equal(red.body.ok, false);
   assert.equal(red.body.findings[0].kind, "unregistered");
   assert.equal(red.body.findings[0].line, 5);
 
-  const escapedRead = await request(url, "/api/agents-md?file=" + encodeURIComponent("../AGENTS.md"));
+  const escapedRead = await request(url, "/api/agents-md?file=" + encodeURIComponent("../AGENTS.md"), readOptions(boot.token));
   assert.equal(escapedRead.response.status, 404);
   assert.equal(escapedRead.body.reasonCode, "PORTAL_PATH_ESCAPE");
   const escapedWrite = await request(url, "/api/agents-md", writeOptions(boot.token, "PUT", { file: "../AGENTS.md", text: "no" }));
@@ -192,9 +218,9 @@ test("container mode lists partitions and changes the selected live target", asy
   }
   const { child, url } = await startPortal({ container });
   t.after(async () => { child.kill(); await rm(base, { recursive: true, force: true }); });
-  const partitionRead = await request(url, "/api/partitions");
-  assert.deepEqual(partitionRead.body.partitions.map((entry) => entry.id), ["alpha", "beta"]);
   const { boot } = await readBoot(url);
+  const partitionRead = await request(url, "/api/partitions", readOptions(boot.token));
+  assert.deepEqual(partitionRead.body.partitions.map((entry) => entry.id), ["alpha", "beta"]);
   const selected = await request(url, "/api/partition", writeOptions(boot.token, "POST", { partition: "beta" }));
   assert.equal(selected.body.reasonCode, "PORTAL_PARTITION_SELECTED");
   assert.equal(selected.body.selectedPartition, "beta");
@@ -207,7 +233,7 @@ test("portal serves live catalog, commits a governed write, and refuses an untok
   const { page, boot } = await readBoot(url);
   assert.ok(!page.includes("__PORTAL_BOOT__"));
   assert.ok(boot.token.length >= 32);
-  const catalog = await request(url, "/api/settings");
+  const catalog = await request(url, "/api/settings", readOptions(boot.token));
   const engineCatalog = await cli(["settings-catalog", "--workspace", fixture.workspace]);
   assert.deepEqual(catalog.body.settings, engineCatalog.settings);
   assert.ok(!page.includes("gate-close"));
@@ -224,10 +250,10 @@ test("portal serves live catalog, commits a governed write, and refuses an untok
   const refused = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "bogus.key", value: "x" }));
   assert.equal(refused.response.status, 409);
   assert.equal(refused.body.reasonCode, "SETTINGS_KEY_UNREGISTERED");
-  const status = await request(url, "/api/status");
+  const status = await request(url, "/api/status", readOptions(boot.token));
   assert.equal(status.body.checks.length, 3);
   assert.ok(status.body.checks.every((check) => check.ok));
-  const commands = await request(url, "/api/commands");
+  const commands = await request(url, "/api/commands", readOptions(boot.token));
   assert.ok(commands.body.commands.some((entry) => entry.name === "settings-set" && entry.mutates));
 });
 
@@ -235,19 +261,20 @@ test("reconciliation goes red when prose names an unregistered key, and green on
   const fixture = await scratch("tcrn-portal-conservation-reconcile-", "TCRN-PORTAL-CONSERVATION-RECONCILE");
   const { child, url } = await startPortal(fixture);
   t.after(async () => { child.kill(); await rm(fixture.base, { recursive: true, force: true }); });
+  const { boot } = await readBoot(url);
   const greenText = "# AGENTS.md\n\nSet backup.cadence before close.\n";
   await writeFile(join(fixture.proseRoot, "AGENTS.md"), greenText, "utf8");
-  const green = await request(url, "/api/agents-md/reconcile");
+  const green = await request(url, "/api/agents-md/reconcile", readOptions(boot.token));
   assert.equal(green.body.ok, true);
   assert.equal(green.body.findings.length, 0);
   assert.ok(green.body.rows.some((row) => row.key === "backup.cadence" && row.registered));
   await writeFile(join(fixture.proseRoot, "AGENTS.md"), `${greenText}\nAlso set backup.retiredKey.\n`, "utf8");
-  const red = await request(url, "/api/agents-md/reconcile");
+  const red = await request(url, "/api/agents-md/reconcile", readOptions(boot.token));
   assert.equal(red.body.ok, false);
   assert.equal(red.body.findings[0].kind, "unregistered");
   assert.equal(red.body.findings[0].line, 5);
   await writeFile(join(fixture.proseRoot, "AGENTS.md"), greenText, "utf8");
-  assert.equal((await request(url, "/api/agents-md/reconcile")).body.ok, true);
+  assert.equal((await request(url, "/api/agents-md/reconcile", readOptions(boot.token))).body.ok, true);
 });
 
 test("prose surface writes the file and reads it back", async (t) => {
@@ -260,10 +287,10 @@ test("prose surface writes the file and reads it back", async (t) => {
   assert.equal(written.body.reasonCode, "PORTAL_AGENTS_MD_WRITTEN");
   assert.equal(written.body.matches, true);
   assert.equal(await readFile(join(fixture.proseRoot, "AGENTS.md"), "utf8"), text);
-  const readback = await request(url, "/api/agents-md");
+  const readback = await request(url, "/api/agents-md", readOptions(boot.token));
   assert.equal(readback.body.text, text);
   assert.equal(readback.body.path, join(fixture.proseRoot, "AGENTS.md"));
-  const escapedRead = await request(url, "/api/agents-md?file=" + encodeURIComponent("../AGENTS.md"));
+  const escapedRead = await request(url, "/api/agents-md?file=" + encodeURIComponent("../AGENTS.md"), readOptions(boot.token));
   assert.equal(escapedRead.response.status, 404);
   assert.equal(escapedRead.body.reasonCode, "PORTAL_PATH_ESCAPE");
   const escapedWrite = await request(url, "/api/agents-md", writeOptions(boot.token, "PUT", { file: "../AGENTS.md", text: "no" }));
@@ -308,14 +335,17 @@ test("container mode lists every partition and switches the live target", async 
   const { boot } = await readBoot(url);
   assert.equal(boot.partitionMode, true);
   assert.deepEqual(boot.partitions.map((entry) => entry.id), ["alpha", "beta"]);
-  const listed = await request(url, "/api/partitions");
+  const listed = await request(url, "/api/partitions", readOptions(boot.token));
   assert.deepEqual(listed.body.partitions.map((entry) => entry.id), ["alpha", "beta"]);
   const selected = await request(url, "/api/partition", writeOptions(boot.token, "POST", { partition: "beta" }));
   assert.equal(selected.body.reasonCode, "PORTAL_PARTITION_SELECTED");
   assert.equal(selected.body.selectedPartition, "beta");
   assert.equal(selected.body.workspace, partitions[1].workspace);
-  assert.equal(selected.body.proseRoot, join(container, "beta"));
-  const catalog = await request(url, "/api/settings");
+  // STORY-355: prose is not partitioned, so switching the selected partition must not
+  // move where the Rules page reads from -- the default stays pinned above the chain
+  // container regardless of which partition is currently selected.
+  assert.equal(selected.body.proseRoot, dirname(container));
+  const catalog = await request(url, "/api/settings", readOptions(boot.token));
   assert.deepEqual(catalog.body.settings, (await cli(["settings-catalog", "--workspace", partitions[1].workspace])).settings);
 });
 
@@ -346,7 +376,8 @@ test("launcher generation emits regular files, starts macOS launcher, and names 
   const launcher = spawn(command, [], { env: { ...process.env, TCRN_WORKFLOW_CLI: CLI }, stdio: ["ignore", "pipe", "pipe"] });
   t.after(() => launcher.kill());
   const url = await new Promise((resolve, reject) => { let buffer = ""; const timer = setTimeout(() => reject(new Error(`launcher timeout: ${buffer}`)), 15000); launcher.stdout.on("data", (chunk) => { buffer += chunk; const line = buffer.split("\n").find((entry) => entry.includes("PORTAL_LISTENING")); if (line) { clearTimeout(timer); resolve(JSON.parse(line).url); } }); launcher.on("exit", (code) => { clearTimeout(timer); reject(new Error(`launcher exited ${code}: ${buffer}`)); }); });
-  assert.equal((await request(url, "/api/partitions")).body.partitions.length, 2);
+  const { boot: launcherBoot } = await readBoot(url);
+  assert.equal((await request(url, "/api/partitions", readOptions(launcherBoot.token))).body.partitions.length, 2);
   const vanished = join(base, "vanished-container");
   const badOutput = join(base, "bad-launchers");
   await mkdir(badOutput);
@@ -407,7 +438,7 @@ test("execution surface: the owner scenario end to end with the engine", async (
   const refused = await post({ action: "model-plan-remove", host: "claude-code", name: "owner-scenario" });
   assert.equal(refused.response.status, 409);
   assert.equal(refused.body.reasonCode, "MODEL_PLAN_IN_USE");
-  const readback = await request(url, "/api/execution");
+  const readback = await request(url, "/api/execution", readOptions(boot.token));
   assert.equal(readback.body.plans.find((plan) => plan.name === "owner-scenario").assignments.Verity, "sonnet-5");
   assert.match(page, /data-ui="assignment-addline"/u);
   assert.match(page, /data-ui="receipt-drawer"/u);
@@ -419,7 +450,7 @@ test("INIT-027 execution cards keep persona data, policy linkage, and engine ref
   t.after(async () => { child.kill(); await rm(fixture.base, { recursive: true, force: true }); });
   const { page, boot } = await readBoot(url);
   const post = async (payload) => request(url, "/api/execution", writeOptions(boot.token, "POST", payload));
-  const initial = await request(url, "/api/execution");
+  const initial = await request(url, "/api/execution", readOptions(boot.token));
   assert.equal(initial.body.personas.filter((persona) => persona.readOnly).length, 8);
   assert.equal(initial.body.personas.find((persona) => persona.name === "Verity").mission.length > 0, true);
   assert.match(page, /data-ui="persona-model-readonly"/u);
@@ -445,5 +476,85 @@ test("INIT-027 execution cards keep persona data, policy linkage, and engine ref
   assert.equal(refused.body.reasonCode, "EXECUTION_PERSONA_IN_USE");
   const policy = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.subagentPolicy", value: "forbidden" }));
   assert.equal(policy.body.setting.value, "forbidden");
-  assert.equal((await request(url, "/api/execution")).body.personas.some((persona) => persona.name === "Portal auditor"), true);
+  assert.equal((await request(url, "/api/execution", readOptions(boot.token))).body.personas.some((persona) => persona.name === "Portal auditor"), true);
+});
+
+test("STORY-355 GWT1+GWT2: a forged Host header is refused on every route, and the token now guards every GET under /api/", async (t) => {
+  const fixture = await scratch("tcrn-portal-security-", "TCRN-PORTAL-SECURITY");
+  const { child, url } = await startPortal(fixture);
+  t.after(async () => { child.kill(); await rm(fixture.base, { recursive: true, force: true }); });
+  const { boot } = await readBoot(url);
+
+  // GWT1: a DNS-rebinding-style Host header is rejected before any route runs at all,
+  // including "/" -- the real TCP connection still lands on loopback (rawRequest talks
+  // to the portal's actual address), only the Host header is forged.
+  const rootForged = await rawRequest(url, "/", { host: "attacker.example" });
+  assert.equal(rootForged.status, 403);
+  assert.equal(rootForged.body.reasonCode, "PORTAL_HOST_REJECTED");
+  const prefixForged = await rawRequest(url, "/api/settings", { host: "127.0.0.1.attacker.example" });
+  assert.equal(prefixForged.status, 403);
+  assert.equal(prefixForged.body.reasonCode, "PORTAL_HOST_REJECTED");
+  const badPort = await rawRequest(url, "/api/settings", { host: "127.0.0.1:notaport" });
+  assert.equal(badPort.status, 403);
+  assert.equal(badPort.body.reasonCode, "PORTAL_HOST_REJECTED");
+  const upperLocalhost = await rawRequest(url, "/api/settings", { host: "LOCALHOST", headers: { "x-portal-token": boot.token } });
+  assert.equal(upperLocalhost.status, 200);
+
+  // GWT2: token coverage now spans GET, not just the mutating verbs it used to guard alone.
+  const untokenedGet = await request(url, "/api/settings");
+  assert.equal(untokenedGet.response.status, 403);
+  assert.equal(untokenedGet.body.reasonCode, "PORTAL_TOKEN_REQUIRED");
+  const tokenedGet = await request(url, "/api/settings", readOptions(boot.token));
+  assert.equal(tokenedGet.response.status, 200);
+});
+
+test("STORY-355 GWT4: container mode's default prose root sits above the chain container regardless of partition", async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-portal-prose-default-")));
+  const container = join(base, ".tcrn-workspace");
+  const root = join(container, "alpha");
+  await mkdir(root, { recursive: true });
+  const roots = {};
+  for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) { const path = join(root, kind); await mkdir(path); roots[kind] = path; }
+  await cli(["init", "--workspace", roots.workspace, "--framework", roots.framework, "--transient", roots.transient, "--evidence-locator", roots["evidence-locator"], "--release-trust", roots["release-trust"], "--external-key", "TCRN-PORTAL-PROSE-DEFAULT", "--at", "2026-08-11T15:00:00Z"]);
+  const { child, url } = await startPortal({ container });
+  t.after(async () => { child.kill(); await rm(base, { recursive: true, force: true }); });
+  const { boot } = await readBoot(url);
+  assert.equal(boot.proseRoot, dirname(container));
+});
+
+test("STORY-355: an explicit --prose-root resolving inside a chain container fails at boot", async (t) => {
+  const fixture = await scratch("tcrn-portal-prose-unsafe-", "TCRN-PORTAL-PROSE-UNSAFE");
+  t.after(() => rm(fixture.base, { recursive: true, force: true }));
+  const unsafeProseRoot = join(fixture.base, ".tcrn-workspace", "nested");
+  const args = [join(portalRoot, "portal.mjs"), "--workspace", fixture.workspace, "--prose-root", unsafeProseRoot, "--port", "0"];
+  const { status, stderr } = await new Promise((resolveSpawn) => {
+    const child = spawn(process.execPath, args, { env: { ...process.env, TCRN_WORKFLOW_CLI: CLI }, stdio: ["ignore", "pipe", "pipe"] });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("exit", (code) => resolveSpawn({ status: code, stderr }));
+  });
+  assert.equal(status, 2);
+  const report = JSON.parse(stderr);
+  assert.equal(report.ok, false);
+  assert.equal(report.reasonCode, "PORTAL_PROSE_ROOT_UNSAFE");
+});
+
+// STORY-355 dispatch correction (plan section 5): the agent's original design made this
+// refusal fire on the DERIVED default too, which would make --workspace mode unbootable
+// against every governed partition, since a partition's workspace always lives inside
+// the chain container. This test is the red-line evidence that the corrected default --
+// which walks up past the .tcrn-workspace segment before comparing -- keeps that mode
+// bootable, with the prose root landing above the container exactly as in container mode.
+test("STORY-355: --workspace mode's default prose root also lands above the chain container", async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-portal-workspace-default-")));
+  const container = join(base, ".tcrn-workspace");
+  const partitionRoot = join(container, "alpha");
+  await mkdir(partitionRoot, { recursive: true });
+  const roots = {};
+  for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) { const path = join(partitionRoot, kind); await mkdir(path); roots[kind] = path; }
+  await cli(["init", "--workspace", roots.workspace, "--framework", roots.framework, "--transient", roots.transient, "--evidence-locator", roots["evidence-locator"], "--release-trust", roots["release-trust"], "--external-key", "TCRN-PORTAL-WORKSPACE-DEFAULT", "--at", "2026-08-11T15:00:00Z"]);
+  const { child, url } = await startPortal({ workspace: roots.workspace });
+  t.after(async () => { child.kill(); await rm(base, { recursive: true, force: true }); });
+  const { boot } = await readBoot(url);
+  assert.equal(boot.proseRoot, base);
 });

@@ -785,4 +785,55 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.match(assignment, /Effort: high/u);
     } finally { await page.cleanup(); }
   });
+
+  // STORY-355 GWT3. Evidence boundary, stated plainly rather than overclaimed: this
+  // proves the toggle exists, that clicking it flips the two state attributes the CSS
+  // keys off (.tcrn-shell-mobile-nav-toggle and the data-mobile-nav-expanded rule
+  // inside the 760px block), and that all five nav destinations still reach their
+  // section through it. It does NOT prove the CSS actually shows or hides anything at
+  // that breakpoint -- linkedom parses and executes script but never runs layout or
+  // media queries (INC-148's "against a parsed, executed DOM", not a rendered one).
+  // The closest this harness gets to that half of the contract is the static text
+  // check of the two rules at the end, which is not a rendering assertion either.
+  test("STORY-355 GWT3: the mobile nav toggle flips its state attributes, every destination stays reachable through it, and the 760px rules that gate it are present", async () => {
+    const page = await preparePage();
+    try {
+      const shell = page.document.querySelector(".tcrn-product-shell");
+      const toggle = page.document.querySelector("#mobile-nav-toggle");
+      const nav = page.document.querySelector("#primary-side-nav");
+      assert.ok(shell && toggle && nav, "the shell must expose the mobile nav toggle and the nav it controls");
+      assert.equal(toggle.getAttribute("aria-controls"), "primary-side-nav");
+      assert.equal(toggle.getAttribute("aria-expanded"), "false");
+      assert.equal(shell.getAttribute("data-mobile-nav-expanded"), null, "closed is the unset default -- a server render needs no script to start correct");
+
+      toggle.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      assert.equal(shell.getAttribute("data-mobile-nav-expanded"), "true");
+      assert.equal(toggle.getAttribute("aria-expanded"), "true");
+
+      // The five destinations the CSS puts behind this toggle at narrow widths still
+      // drive the same section router the always-visible desktop nav always used.
+      const destinations = ["dashboard", "settings", "prose", "entities", "vocabulary"];
+      for (const target of destinations) {
+        const navItem = nav.querySelector(`[data-page-target="${target}"]`);
+        assert.ok(navItem, `the expanded nav must still carry the ${target} destination`);
+        navItem.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        for (const section of [...page.document.querySelectorAll("[data-page]")]) {
+          assert.equal(section.hidden, section.dataset.page !== target, `[data-page="${section.dataset.page}"] hidden must follow the ${target} navigation`);
+        }
+      }
+
+      toggle.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      assert.equal(shell.getAttribute("data-mobile-nav-expanded"), "false");
+      assert.equal(toggle.getAttribute("aria-expanded"), "false");
+
+      const css = page.document.querySelector('style#tcrn-ds-component-css[data-source="snapshot"]')?.textContent ?? "";
+      assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.tcrn-shell-mobile-nav-toggle\s*\{[\s\S]*?display:\s*inline-flex/u,
+        "the mobile toggle must become visible inside the 760px breakpoint");
+      assert.match(css, /@media \(max-width: 760px\)[\s\S]*?data-mobile-nav-expanded="true"[\s\S]*?\.tcrn-side-nav\s*\{[\s\S]*?display:\s*grid/u,
+        "the expanded attribute must be what reveals the side nav inside the 760px breakpoint");
+    } finally { await page.cleanup(); }
+  });
 }

@@ -116,11 +116,35 @@ async function refreshPartitionCatalog() {
   } catch { /* keep the last good catalog */ }
   return partitionCatalog;
 }
-// Proposal for the unresolved container prose decision: resolve the document in
-// the selected partition root.  An explicit --prose-root remains authoritative
-// for callers that have already chosen a target.  This keeps a container read
-// local to its partition and never silently targets the platform root.
-const currentProseRoot = () => resolve(proseRootArgument || dirname(currentPartition().workspace));
+// STORY-355: the old default resolved into the selected partition's own directory
+// inside the chain container, so every partition's Rules page silently read an
+// empty file instead of the real AGENTS.md. Prose is not partitioned: it is one
+// document living above the chain container. The default is therefore derived to
+// land outside the container by construction -- walking up past the
+// .tcrn-workspace segment when the target sits inside one -- and the refusal below
+// only ever fires on a --prose-root someone chose explicitly. Refusing the derived
+// default instead would make --workspace mode unbootable against every governed
+// partition, which is worse than the bug being fixed.
+const CHAIN_CONTAINER_DIRECTORY = [".tcrn", "workspace"].join("-");
+
+function defaultProseRoot() {
+  const base = containerRoot ? containerRoot : currentPartition().workspace;
+  const segments = resolve(base).split(sep);
+  const index = segments.indexOf(CHAIN_CONTAINER_DIRECTORY);
+  // Above the container when the target is inside one; the target's parent otherwise.
+  return index === -1 ? dirname(resolve(base)) : segments.slice(0, index).join(sep) || sep;
+}
+
+const currentProseRoot = () => {
+  if (!proseRootArgument) return defaultProseRoot();
+  const root = resolve(proseRootArgument);
+  if (root.split(sep).includes(CHAIN_CONTAINER_DIRECTORY)) {
+    throw startupError("PORTAL_PROSE_ROOT_UNSAFE", { proseRoot: root }, "prose root must not resolve inside a chain container");
+  }
+  return root;
+};
+// Fail at boot rather than on the first Rules read.
+try { currentProseRoot(); } catch (error) { failStartup(error); }
 async function currentWorkspaceName() {
   try {
     const metadata = JSON.parse(await readFile(join(currentPartition().workspace, ".tcrn-workflow", "workspace.json"), "utf8"));
@@ -353,7 +377,27 @@ async function agentsWrite(body) {
 
 const apiAlias = (pathname) => pathname === "/api/prose" ? "/api/agents-md" : pathname === "/api/reconcile" ? "/api/agents-md/reconcile" : pathname;
 
+// STORY-355: the portal binds loopback only, but a browser sends whatever Host header
+// the request carries, and DNS rebinding lets an attacker-controlled page point that
+// header at a name that still resolves to 127.0.0.1. Comparing the hostname portion for
+// exact equality (never substring or prefix) closes that: `127.0.0.1.attacker.example`
+// is not `127.0.0.1`. Split on the LAST colon so a port, if present, is validated as
+// digits-only rather than folded into the hostname comparison.
+function isLoopbackHost(hostHeader) {
+  const host = String(hostHeader ?? "");
+  const lastColon = host.lastIndexOf(":");
+  const hostname = (lastColon === -1 ? host : host.slice(0, lastColon)).toLowerCase();
+  const port = lastColon === -1 ? "" : host.slice(lastColon + 1);
+  if (hostname !== "127.0.0.1" && hostname !== "localhost") return false;
+  if (port !== "" && !/^[0-9]+$/u.test(port)) return false;
+  return true;
+}
+
 const server = createServer(async (request, response) => {
+  if (!isLoopbackHost(request.headers.host)) {
+    send(response, 403, { ok: false, reasonCode: "PORTAL_HOST_REJECTED" });
+    return;
+  }
   const url = new URL(request.url, "http://127.0.0.1");
   const pathname = apiAlias(url.pathname);
   try {
@@ -402,7 +446,7 @@ const server = createServer(async (request, response) => {
       response.end("not found\n");
       return;
     }
-    if (request.method !== "GET" && request.headers["x-portal-token"] !== TOKEN) {
+    if (request.headers["x-portal-token"] !== TOKEN) {
       send(response, 403, { ok: false, reasonCode: "PORTAL_TOKEN_REQUIRED" });
       return;
     }
