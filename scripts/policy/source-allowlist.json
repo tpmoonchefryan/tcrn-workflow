@@ -612,6 +612,8 @@
     "tests/story-345-backend-selection.test.mjs",
     "tests/story-346-pg-disabled.test.mjs",
     "tests/story-347-348-settings-policy.test.mjs",
+    "tests/story-354-snapshot-event-segment-limit.test.mjs",
+    "tests/story-354-snapshot-manifest-segmented.test.mjs",
     "tests/story-rule-conservation.test.mjs",
     "tests/story-scope-compliance.test.mjs",
     "tests/token-attribution.test.mjs",

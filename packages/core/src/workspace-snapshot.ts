@@ -13,8 +13,7 @@ import {
   compareCanonicalText,
 } from "../../protocol/src/index.js";
 import type { JsonValue } from "../../protocol/src/index.js";
-import { WORKSPACE_CONTROL_DIRECTORY, withStorageBackendFactory, validateWorkspace } from "./workspace.js";
-import { FileBackend } from "./storage-backend.js";
+import { WORKSPACE_CONTROL_DIRECTORY, WORKSPACE_SEGMENT_BYTES_MAX, validateWorkspace } from "./workspace.js";
 import type { WorkspaceLease } from "./workspace.js";
 import { validateKnowledgeStore } from "./knowledge-core.js";
 
@@ -113,6 +112,14 @@ const RESIDUE_PREFIX = /^(?:stale-lease-|released-|attempt-owned-)/u;
 // Atomic-write temporaries. atomicWrite stages under .tmp-<pid>-<seq> and renames
 // into place, so a live snapshot can momentarily observe one; it is never content.
 const TEMPORARY_PREFIX = ".tmp-";
+
+// TCRN-CROSS-STORY-354 (round 2): matches SegmentedBackend.readSegment's own name
+// filter (segmented-backend.ts) so the two places that read events/NNNNNN.ndjson
+// agree on which files are event segments. A segment legitimately grows up to its
+// configured segmentEventLimit (16 MiB by default) before rotating, so it is read
+// under WORKSPACE_SEGMENT_BYTES_MAX below rather than the generic per-control-file
+// ceiling every other file in the tree still uses.
+const EVENT_SEGMENT_NAME_PATTERN = /^\d{6}\.ndjson$/u;
 
 // Minimal bound-read helpers, re-implemented locally per the duplicate-machinery
 // discipline (ADR-precedent: adapters duplicate rather than export workspace
@@ -224,7 +231,8 @@ async function walkControlTree(controlRoot: string): Promise<readonly SnapshotFi
       if (!metadata.isFile() || metadata.nlink !== 1) {
         fail("SNAPSHOT_PATH_INVALID", `${relativePath} must be a single-link regular file`);
       }
-      const content = await boundReadFileBytes(full);
+      const isEventSegment = relativeBase === "events" && EVENT_SEGMENT_NAME_PATTERN.test(name);
+      const content = await boundReadFileBytes(full, isEventSegment ? WORKSPACE_SEGMENT_BYTES_MAX : undefined);
       collected.push({
         path: relativePath,
         sha256: createHash("sha256").update(content).digest("hex"),
@@ -279,12 +287,19 @@ export async function createSnapshotManifest(workspaceRootInput: string, lease: 
   }
   const root = await boundReadDirectory(workspaceRootInput);
   await assertHeldLease(root, lease);
-  // INC-086: the manifest walks the DISK file tree (walkControlTree below), so the
-  // validate half must be bound to the FILE backend too — not to whatever backend
-  // the ambient factory serves (PG after STORY-189). Mixing a PG head with a
-  // file-tree name roster let snapshot-verify answer VERIFIED against a stale
-  // archive; both halves now see the same file tree.
-  const state = await withStorageBackendFactory(() => new FileBackend(root), () => validateWorkspace(root));
+  // INC-086 (superseded, TCRN-CROSS-STORY-354): the manifest walks the DISK
+  // file tree (walkControlTree below), so validate here was pinned to the FILE
+  // backend rather than the ambient factory, which served PG before STORY-189
+  // retired it (50db3e2, TCRN-CROSS-INC-275). The backends left afterward both
+  // read the same on-disk control tree, so the pin stopped guarding against a
+  // stale mirror and instead broke every file-segmented workspace:
+  // FileBackend.listSegmentNames does not filter the segmented backend's
+  // per-segment .idx sidecars the way SegmentedBackend.listSegmentNames does,
+  // so validateWorkspace's readSegmentEvents rejected them with
+  // WORKSPACE_EVENT_CORRUPT: "unexpected event entry 000001.idx". Let
+  // validateWorkspace pick its own backend via backendForStorage, keyed by
+  // the workspace's actual storageVersion, instead of pinning one here.
+  const state = await validateWorkspace(root);
   const controlRoot = resolve(root, WORKSPACE_CONTROL_DIRECTORY);
   let knowledgeStatus: "valid" | "absent" = "absent";
   if (await directoryExists(resolve(controlRoot, "knowledge"))) {
