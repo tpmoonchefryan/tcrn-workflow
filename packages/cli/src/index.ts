@@ -97,10 +97,8 @@ import {
   removeClaudeAdapterSettingsFragment,
   simulateClaudeAdapterLifecycle,
   validateClaudeAdapterBundle,
-  dryRunCanonicalExchange,
   dryRunCompatibilityMode,
   generateCodexAdapterBundle,
-  planCanonicalExchange,
   planCompatibilityMode,
   planCodexAdapterRollback,
   readCodexAdapterInstallationReceipt,
@@ -123,7 +121,6 @@ import {
   readClaudeAdapterActivationReceipt,
   simulateCodexAdapterLifecycle,
   validateCodexAdapterBundle,
-  validateCanonicalExchangeBundle,
   validateCompatibilityRequest,
   unavailableCompatibilityCapability,
   readCompatibilityAdmissionReceipt,
@@ -465,14 +462,6 @@ function jsonValue(value: string | undefined, name: string): unknown {
     return JSON.parse(value ?? "");
   } catch {
     fail("PROFILE_INPUT_INVALID", name);
-  }
-}
-
-function exchangeJson(value: string | undefined, name: string): unknown {
-  try {
-    return JSON.parse(value ?? "");
-  } catch {
-    fail("EXCHANGE_INPUT_INVALID", name);
   }
 }
 
@@ -989,9 +978,6 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "context-route", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "profile-receipt", required: true, valueKind: "string" }, { name: "authority", required: true, valueKind: "string" }, { name: "profile-receipt-digest", required: false, valueKind: "string" }, { name: "authority-digest", required: false, valueKind: "string" }] },
   { name: "context-validate", availability: "cli", mutates: false, flags: [{ name: "result", required: true, valueKind: "string" }] },
   { name: "event-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
-  { name: "exchange-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "output", required: true, valueKind: "string" }] },
-  { name: "exchange-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "exchange-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "string" }] },
   { name: "export", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "gate-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "title", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "gate-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -1285,24 +1271,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const values = parseArguments(rest, ["surface"]);
     required(values, ["surface"]);
     io.write(canonicalJson(unavailableCompatibilityCapability(values.surface)));
-    return;
-  }
-  if (command === "exchange-plan") {
-    const values = parseArguments(rest, ["request"]);
-    required(values, ["request"]);
-    io.write(canonicalJson(planCanonicalExchange(exchangeJson(values.request, "request"))));
-    return;
-  }
-  if (command === "exchange-validate") {
-    const values = parseArguments(rest, ["bundle"]);
-    required(values, ["bundle"]);
-    io.write(canonicalJson(await validateCanonicalExchangeBundle(values.bundle ?? "")));
-    return;
-  }
-  if (command === "exchange-dry-run") {
-    const values = parseArguments(rest, ["request", "output"]);
-    required(values, ["request", "output"]);
-    io.write(canonicalJson(dryRunCanonicalExchange(exchangeJson(values.request, "request"), values.output ?? "")));
     return;
   }
   if (command === "profile-generate") {

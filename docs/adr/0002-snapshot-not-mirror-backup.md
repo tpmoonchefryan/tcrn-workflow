@@ -55,6 +55,15 @@ guard pattern exists and is proven, so the manifest writer reuses it rather than
 inventing a new one, and the witness never mutates the workspace it inspects
 (`atomicWrite`, `workspace.ts:299-347`, remains the only inward primitive).
 
+> **TCRN-CROSS-STORY-358 note (2026-09-06).** `canonical-exchange.ts` retired
+> whole in this Story's family 3 (no consumer beyond its own three CLI verbs);
+> the file:line citation above no longer resolves, and `outputBoundary` has no
+> other live example in this tree. The historical point stands regardless — "no
+> engine path writes outside the workspace root" was already false at the time
+> this ADR was written, which is what the paragraph argues — so the
+> read-only-witness verdict below is not reopened. Git tag `attic-2026-09`
+> retains the retired file for reference.
+
 **Manifest scope**: the `.tcrn-workflow` control tree only (not the whole
 workspace root). **Manifest classification**: an engine output schema (the
 `migration-plan` precedent), not an extension-registration subject.

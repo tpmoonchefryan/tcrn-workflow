@@ -156,7 +156,6 @@
     "verify:p6": "node scripts/task.mjs p6",
     "verify:p6:adapter": "node scripts/task.mjs p6-adapter",
     "verify:p6b": "node scripts/task.mjs p6b",
-    "verify:p7": "node scripts/task.mjs p7",
     "verify:p7:compatibility": "node scripts/task.mjs p7-compatibility",
     "verify:p8": "node scripts/task.mjs p8",
     "verify:portal": "node scripts/verify-portal.mjs",

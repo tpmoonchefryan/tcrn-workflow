@@ -1243,23 +1243,6 @@
         "E01/STORY-005: the installation authority reaches the CLI as a stated pin"
       ]
     },
-    "tests/p7-canonical-exchange.test.mjs": {
-      "testCount": 11,
-      "assertionCount": 52,
-      "testNames": [
-        "P7 canonical exchange plan, write, read, validate, dry-run and CLI surfaces are deterministic",
-        "64 distinct real chunk insertion orders produce identical plans and corpus digest",
-        "request/schema parity and hostile in-memory admission fail closed",
-        "fully resealed stored identity, envelope membership and deterministic plan forgeries fail closed",
-        "stored manifest transaction and resume schemas have bidirectional runtime parity",
-        "reader rejects missing, extra, link, replacement and tampered bundle states",
-        "writer crash points, partial state and overwrite boundaries fail closed",
-        "writer preserves unowned staging paths and removes only its identity-bound generation",
-        "reader enforces directory and declared aggregate budgets before chunk opens",
-        "reader bounds every descriptor to maximum plus one bytes across stable and growing inode states",
-        "source and runtime boundary contain no network or candidate-code execution surface"
-      ]
-    },
     "tests/p7-compatibility-modes.test.mjs": {
       "testCount": 13,
       "assertionCount": 70,

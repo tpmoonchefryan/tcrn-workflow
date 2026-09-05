@@ -407,7 +407,6 @@ async function runTests({
   assignmentGateOnly = false,
   actorOnly = false,
   extensionStoreOnly = false,
-  p7Only = false,
   p7CompatibilityOnly = false,
   p8Only = false,
   backupOnly = false,
@@ -456,7 +455,6 @@ async function runTests({
     .filter((path) => !assignmentGateOnly || path === "tests/assignment-gate.test.mjs")
     .filter((path) => !actorOnly || path === "tests/actor-attestation.test.mjs")
     .filter((path) => !extensionStoreOnly || path === "tests/workspace-extension-records.test.mjs")
-    .filter((path) => !p7Only || path === "tests/p7-canonical-exchange.test.mjs")
     .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path))
     .filter((path) => !backupOnly || path === "tests/backup-snapshot.test.mjs")
@@ -561,8 +559,6 @@ async function runTests({
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
                   : p7CompatibilityOnly
                     ? "P7_COMPATIBILITY_MODES_TESTS_VERIFIED"
-                  : p7Only
-                    ? "P7_CANONICAL_EXCHANGE_TESTS_VERIFIED"
                   : p8Only
                     ? "P8_WORKFLOW_RC_TESTS_VERIFIED"
               : "TESTS_VERIFIED",
@@ -616,13 +612,18 @@ async function runInit049Story351() {
     const source = await readText(resolve(repositoryRoot, path));
     assertion(source.includes(`test("${pattern}"`), "INIT049_STORY_351_TEST_NOT_FOUND", `${path}:${pattern}`);
   }
-  const sourceAssertionPaths = [...paths, "tests/p7-canonical-exchange.test.mjs"];
+  // TCRN-CROSS-STORY-358 family 3 ('router'): the one justified exception, a source-text
+  // scan of canonical-exchange.ts's own bytes for forbidden network/eval constructions,
+  // retired together with the module and test file it read. Nothing replaces it: there is
+  // no longer a subject for it to scan. The invariant this loop enforces is therefore that
+  // STORY-351's replacement of source-text assertions with runtime-behavior assertions is
+  // now complete with no exception outstanding, not that exactly one exception remains.
   const sourceAssertions = [];
-  for (const path of sourceAssertionPaths) {
+  for (const path of paths) {
     const source = await readText(resolve(repositoryRoot, path));
     for (const match of source.matchAll(/assert\.(?:match|doesNotMatch)\(\s*source\b/gu)) sourceAssertions.push({ path, offset: match.index });
   }
-  assertion(sourceAssertions.length === 1 && sourceAssertions[0].path === "tests/p7-canonical-exchange.test.mjs", "INIT049_STORY_351_SOURCE_ASSERTION_COUNT", JSON.stringify(sourceAssertions));
+  assertion(sourceAssertions.length === 0, "INIT049_STORY_351_SOURCE_ASSERTION_COUNT", JSON.stringify(sourceAssertions));
   const pattern = `^(?:${INIT049_STORY351_TESTS.map(([, name]) => escapeTestPattern(name)).join("|")})$`;
   const tested = await runTests({
     focusedTestPaths: paths,
@@ -631,7 +632,7 @@ async function runInit049Story351() {
   });
   return success("INIT049_STORY_351_VERIFIED", {
     ...tested,
-    sourceAssertions: { count: sourceAssertions.length, retained: sourceAssertions[0].path },
+    sourceAssertions: { count: sourceAssertions.length, retained: null },
   });
 }
 
@@ -1420,54 +1421,6 @@ async function verifyActorAttestation() {
   });
 }
 
-async function verifyP7() {
-  const tests = await runTests({ p7Only: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p7-canonical-exchange-cases.json");
-  const schemaPath = resolve(repositoryRoot, "packages/core/schema/canonical-exchange-v1.schema.json");
-  const specPath = resolve(repositoryRoot, "packages/core/spec/canonical-exchange-v1.md");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.p7-canonical-exchange-cases.v1", "P7_EXCHANGE_FIXTURE_SCHEMA");
-  assertion(fixture.positiveCases === 8 && fixture.schemaParityCases === 8, "P7_EXCHANGE_POSITIVE_PARITY_CORPUS");
-  assertion(fixture.storedSchemaParityCases === 21 && fixture.derivedIdentityCases === 8, "P7_EXCHANGE_STORED_IDENTITY_CORPUS");
-  assertion(fixture.stagingOwnershipCases === 5 && fixture.resourceBudgetCases === 5, "P7_EXCHANGE_FILESYSTEM_BUDGET_CORPUS");
-  assertion(Array.isArray(fixture.hostileCases) && fixture.hostileCases.length === 32, "P7_EXCHANGE_HOSTILE_CORPUS");
-  assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 8, "P7_EXCHANGE_FAULT_CORPUS");
-  assertion(fixture.propertyPermutations === 64 && fixture.logicalChunks === 5 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P7_EXCHANGE_PROPERTY_CORPUS");
-  assertion(fixture.maximumChunks === 128 && fixture.maximumChunkBytes === 1_048_576 && fixture.maximumTotalBytes === 8_388_608, "P7_EXCHANGE_LIMITS");
-  assertion(fixture.networkAccess === false && fixture.codeExecution === false && fixture.liveAosMutation === false, "P7_EXCHANGE_OFFLINE_BOUNDARY");
-  const packages = await Promise.all([
-    readJson(resolve(repositoryRoot, "packages/core/package.json")),
-    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
-  ]);
-  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P7_EXCHANGE_STANDALONE_DEPENDENCY");
-  return success("P7_CANONICAL_EXCHANGE_VERIFIED", {
-    tests: tests.reasonCode,
-    positiveCases: fixture.positiveCases,
-    schemaParityCases: fixture.schemaParityCases,
-    storedSchemaParityCases: fixture.storedSchemaParityCases,
-    derivedIdentityCases: fixture.derivedIdentityCases,
-    stagingOwnershipCases: fixture.stagingOwnershipCases,
-    resourceBudgetCases: fixture.resourceBudgetCases,
-    hostileCases: fixture.hostileCases.length,
-    faultCases: fixture.faultCases.length,
-    propertyPermutations: fixture.propertyPermutations,
-    logicalChunks: fixture.logicalChunks,
-    permutationCorpusDigest: fixture.permutationCorpusDigest,
-    maximumChunks: fixture.maximumChunks,
-    maximumChunkBytes: fixture.maximumChunkBytes,
-    maximumTotalBytes: fixture.maximumTotalBytes,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    networkAccess: fixture.networkAccess,
-    codeExecution: fixture.codeExecution,
-    liveAosMutation: fixture.liveAosMutation,
-    compatibilityModes: "out-of-scope",
-    aosRequirements: "out-of-scope",
-    rc4: "unaccepted",
-  });
-}
-
 async function verifyP7Compatibility() {
   const tests = await runTests({ p7CompatibilityOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p7-compatibility-modes-cases.json");
@@ -2025,7 +1978,6 @@ const commandContracts = {
   "ext-ag": { exit: 0, reasonCode: "ASSIGNMENT_GATE_VERIFIED" },
   "ext-actor": { exit: 0, reasonCode: "ACTOR_ATTESTATION_VERIFIED" },
   "ext-store": { exit: 0, reasonCode: "EXT_STORE_VERIFIED" },
-  p7: { exit: 0, reasonCode: "P7_CANONICAL_EXCHANGE_VERIFIED" },
   "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
   p8: { exit: 0, reasonCode: "P8_WORKFLOW_RC_VERIFIED" },
   "release-preflight": { exit: 0, reasonCode: "RELEASE_TAG_PREFLIGHT_VERIFIED" },
@@ -2864,7 +2816,6 @@ const handlers = {
   "ext-ag": verifyAssignmentGate,
   "ext-actor": verifyActorAttestation,
   "ext-store": verifyExtStore,
-  p7: verifyP7,
   "p7-compatibility": verifyP7Compatibility,
   p8: verifyP8,
   portal: verifyPortal,
@@ -2989,7 +2940,7 @@ function evidencePhase(name) {
   if (name === "ext-store") {
     return "p2";
   }
-  if (name === "p7" || name === "p7-compatibility") {
+  if (name === "p7-compatibility") {
     return "p7";
   }
   if (name === "rc1") {
