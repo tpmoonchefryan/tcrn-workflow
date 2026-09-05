@@ -540,6 +540,15 @@
         "owningRepository": "none -- artifact-lifecycle.ts has no successor in the live tree; see ruling",
         "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3: packages/core/src/artifact-lifecycle.ts retires from the mainline tree as a whole-file, zero-live-consumer module -- the artifact store was never initialized in any of the eight live partitions. Its one live symbol, redactArtifactReference, moved into its sole caller packages/core/src/knowledge-core.ts and keeps its own coverage there. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed module and tests/p4-artifact-lifecycle.test.mjs for historical reference."
       }
+    },
+    {
+      "path": "tests/s212-template-admission.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-358 family 6 ('symbols'): the S212 admission case used to pull its fixture out of BUILTIN_TEMPLATES with a .find() and then assert.ok that the find hit. BUILTIN_TEMPLATES is retired, so the inc.defect.v1 template is written out as a literal in the test and the assert.ok on the lookup has nothing left to check. Neither test name in this file changed and no behavioural assertion was dropped: the same literal is still fed to the live template-validate and template-admit verbs and every assertion on their output survives, so the file's assertion count falls 23 -> 22 and nothing else moves.",
+      "disowned": {
+        "owningRepository": "none -- BUILTIN_TEMPLATES has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3: packages/core/src/template-admission.ts is a per-symbol member of the isolation family, and BUILTIN_TEMPLATES with its commonTemplate and COMMON_DELIVERY_HEADINGS helpers is the part of it nothing consumes -- no engine path, no CLI verb and no script admits a built-in template, and this test fixture was its only reader in the tree. The admission machinery it fed (validateTemplateDefinition, admitTemplate, createTemplateAdmissionRecord, templateBindingFromReceipt and the template-validate/template-admit verbs) is live and untouched. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed catalogue for historical reference."
+      }
     }
   ]
 }

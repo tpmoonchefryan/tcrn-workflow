@@ -7,7 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
-import { BUILTIN_TEMPLATES, initializeWorkspace } from "../dist/build/packages/core/src/index.js";
+import { initializeWorkspace } from "../dist/build/packages/core/src/index.js";
 import { canonicalJson } from "../dist/build/packages/protocol/src/index.js";
 
 const instant = (second) => `2026-08-11T00:00:${String(second).padStart(2, "0")}Z`;
@@ -66,8 +66,16 @@ test("S212: admitted template binds work, red legs stay fail-closed, and pre-era
       "--external-key", "S212-PROJECT", "--name", "S212 scratch",
     ]);
     assert.equal(project.ok, true, JSON.stringify(project));
-    const template = BUILTIN_TEMPLATES.find((entry) => entry.id === "inc.defect.v1");
-    assert.ok(template);
+    const template = {
+      schemaVersion: "tcrn.template.v1",
+      id: "inc.defect.v1",
+      version: 1,
+      appliesTo: ["Incident"],
+      headings: ["URI", "Preconditions", "Steps to Reproduce", "Actual", "Expected", "Credentials 引用", "Attachments 引用"],
+      acceptanceHeadings: ["Expected"],
+      referenceHeadings: ["Attachments 引用", "Credentials 引用"],
+      couplings: [],
+    };
     const templatePath = join(fx.base, "inc-defect.template.json");
     await writeFile(templatePath, canonicalJson(template), "utf8");
 

@@ -119,7 +119,6 @@ export const INSTALL_MANIFEST_ITEMS: readonly InstallManifestItem[] = Object.fre
   ...projectItems,
 ].sort((left, right) => compareCanonicalText(left.id, right.id)));
 
-export const INSTALL_MANIFEST_PROJECTS = projects;
 // This catalog is intentionally independent from INSTALL_MANIFEST_ITEMS.  A
 // completeness test must fail when a required entry is deleted from the
 // materialized item list; deriving this array from that list would make the

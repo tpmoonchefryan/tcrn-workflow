@@ -55,16 +55,13 @@ export type { StorageBackend, StorageBackendKind, StorageDirectoryEntry, Workspa
 export { SegmentedBackend, SEGMENTED_BACKEND_PROFILE } from "./segmented-backend.js";
 export type { SegmentIndexDocument, SegmentIndexEntry, SegmentManifest, SegmentManifestEntry, SegmentedBackendProfile } from "./segmented-backend.js";
 export {
-  ATTESTATION_INDEX_VERSION,
   ATTESTATION_MANIFEST_VERSION,
-  ATTESTATION_SEGMENT_BYTES,
   deleteLegacyAttestations,
   migrateAttestationDirectory,
   readAttestationReceipt,
   reportAttestationDirectory,
   writeAttestationReceipt,
 } from "./attestation-storage.js";
-export type { AttestationDirectoryReport, AttestationFileRecord } from "./attestation-storage.js";
 // INC-074: the storage-home sentinel declares where a workspace's chain lives
 // after a file→pg migration. The file backend refuses mutating verbs on a
 // sentinel workspace (WORKSPACE_STORAGE_RELOCATED), and a PG-facing path must
@@ -232,14 +229,6 @@ export type {
   WorkspaceState,
 } from "./workspace.js";
 export {
-  BUILTIN_TEMPLATES,
-  TEMPLATE_ADMISSION_REASON_CODES,
-  TEMPLATE_ADMISSION_RECEIPT_VERSION,
-  TEMPLATE_ADMISSION_RECORD_VERSION,
-  TEMPLATE_BINDING_VERSION,
-  TEMPLATE_COUPLING_ROSTER,
-  TEMPLATE_DEFINITION_VERSION,
-  TEMPLATE_REGISTRATION_PREFIX,
   TemplateAdmissionError,
   admitTemplate,
   createTemplateAdmissionRecord,
@@ -247,27 +236,15 @@ export {
   templateBindingFromReceipt,
   templateBindingFromWorkRecord,
   templateDigest,
-  templateKey,
   templateRecordForBinding,
   templateRecordMatchesBinding,
-  templateRegistration,
-  templateRegistrationId,
   templateRegistry,
   validateBoundTemplateWork,
   validateTemplateAdmissionReceipt,
   validateTemplateAdmissionRecord,
-  validateTemplateBinding,
-  validateTemplateDefinition,
   validateTemplateDocument,
 } from "./template-admission.js";
-export type {
-  TemplateAdmissionReasonCode,
-  TemplateAdmissionReceipt,
-  TemplateAdmissionRecord,
-  TemplateBinding,
-  TemplateCoupling,
-  TemplateDefinition,
-} from "./template-admission.js";
+export type { TemplateAdmissionRecord } from "./template-admission.js";
 export {
   SETTINGS_CATALOG,
   SETTINGS_CATALOG_VERSION,
@@ -293,23 +270,10 @@ export type {
 } from "./settings.js";
 export {
   INSTALL_MANIFEST,
-  INSTALL_MANIFEST_ITEMS,
-  INSTALL_MANIFEST_PROJECTS,
-  INSTALL_MANIFEST_REASON_CODES,
   INSTALL_MANIFEST_REQUIRED_ITEM_IDS,
   INSTALL_MANIFEST_VERSION,
-  InstallManifestError,
   assertInstallManifestComplete,
   readInstallManifest,
-} from "./install-manifest.js";
-export type {
-  InstallManifestHost,
-  InstallManifestItem,
-  InstallManifestLayer,
-  InstallManifestProject,
-  InstallManifestReadback,
-  InstallManifestWriter,
-  InstallManifestReasonCode,
 } from "./install-manifest.js";
 export {
   EMPTY_EXECUTION_CONFIG,
@@ -874,7 +838,6 @@ export {
   ACTOR_ATTESTATION_ENABLE_OPERATION,
   ACTOR_ATTESTATION_REGISTRATION_ID,
   ACTOR_PREFIXES,
-  ACTOR_ATTESTATION_REASON_CODES,
   ActorAttestationError,
   EVENT_PAYLOAD_OPERATION_EXTRAS,
   assertActorId,

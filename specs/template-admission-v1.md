@@ -36,14 +36,19 @@ kind-independent: the four purpose anchors, legacy evidence/fix/decision
 elements, non-empty acceptance content, and reference-only credential and
 attachment sections are still checked.
 
-The built-in definitions are `story.feature.v1` (the legacy ten headings plus
-`Non-goals`), `initiative.v1`, `release.v1`, `epic.v1`, `inc.defect.v1`, and
-`inc.governance.v1`. The defect reference sections accept only `ref:`, `vault:`,
-`credential:`, `secret:`, `attachment:`, or HTTPS references; inline credentials
-are rejected. The `owner-decider-minutes` coupling is frozen by the engine and
-is declared by the delivery templates. Work without a template binding remains
-the pre-template path, so historical records do not become invalid merely for
-lacking a binding.
+The engine ships no built-in definitions. Every template is an external document
+that `template-admit` admits, so a bound record's heading order comes from the
+admitted file and from nowhere else. TCRN-CROSS-STORY-358 retired the
+`BUILTIN_TEMPLATES` catalogue -- `story.feature.v1` (the legacy ten headings plus
+`Non-goals`), `initiative.v1`, `release.v1`, `epic.v1`, `inc.defect.v1` and
+`inc.governance.v1` -- because no engine path, CLI verb or script ever admitted
+one; the kind-independent scope floor described above is unaffected. A template's
+reference sections accept only `ref:`, `vault:`, `credential:`, `secret:`,
+`attachment:`, or HTTPS references; inline credentials are rejected. The
+`owner-decider-minutes` coupling is frozen by the engine in
+`TEMPLATE_COUPLING_ROSTER` and an admitted template may declare it. Work without
+a template binding remains the pre-template path, so historical records do not
+become invalid merely for lacking a binding.
 
 ## Refusal surface
 

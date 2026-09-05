@@ -173,60 +173,6 @@ export interface TemplateBinding {
 const ALL_WORK_KINDS: readonly WorkKind[] = Object.freeze([
   "Epic", "Incident", "Initiative", "Knowledge", "Release", "Review", "Story", "Subtask",
 ]);
-const COMMON_DELIVERY_HEADINGS = Object.freeze([
-  "Goal",
-  "Requirements",
-  "Acceptance Criteria",
-  "Business Background",
-  "Preconditions",
-  "Assumptions",
-  "Use Cases & Examples",
-  "Feature Toggle & Setting",
-  "Permissions",
-  "Implementation Notes",
-  "Non-goals",
-] as const);
-
-function commonTemplate(id: string, appliesTo: readonly WorkKind[]): TemplateDefinition {
-  return {
-    schemaVersion: TEMPLATE_DEFINITION_VERSION,
-    id,
-    version: 1,
-    appliesTo,
-    headings: COMMON_DELIVERY_HEADINGS,
-    acceptanceHeadings: ["Acceptance Criteria"],
-    referenceHeadings: [],
-    couplings: ["owner-decider-minutes"],
-  };
-}
-
-export const BUILTIN_TEMPLATES: readonly TemplateDefinition[] = Object.freeze([
-  commonTemplate("epic.v1", ["Epic"]),
-  commonTemplate("initiative.v1", ["Initiative"]),
-  {
-    schemaVersion: TEMPLATE_DEFINITION_VERSION,
-    id: "inc.defect.v1",
-    version: 1,
-    appliesTo: ["Incident"],
-    headings: ["URI", "Preconditions", "Steps to Reproduce", "Actual", "Expected", "Credentials 引用", "Attachments 引用"],
-    acceptanceHeadings: ["Expected"],
-    referenceHeadings: ["Attachments 引用", "Credentials 引用"],
-    couplings: [],
-  },
-  {
-    schemaVersion: TEMPLATE_DEFINITION_VERSION,
-    id: "inc.governance.v1",
-    version: 1,
-    appliesTo: ["Incident"],
-    headings: ["现象与证据", "根因", "影响面", "处置", "预防"],
-    acceptanceHeadings: ["处置", "预防"],
-    referenceHeadings: [],
-    couplings: [],
-  },
-  commonTemplate("release.v1", ["Release"]),
-  commonTemplate("story.feature.v1", ["Story"]),
-]);
-
 function templateBasis(template: TemplateDefinition): Readonly<Record<string, JsonValue>> {
   return {
     schemaVersion: TEMPLATE_DEFINITION_VERSION,
@@ -244,10 +190,6 @@ export function templateRegistrationId(templateIdValue: unknown, templateVersion
   const id = templateId(templateIdValue);
   const templateVersion = version(templateVersionValue, "template.version");
   return `${TEMPLATE_REGISTRATION_PREFIX}:${id}-${templateVersion}`;
-}
-
-export function templateKey(templateIdValue: unknown, templateVersionValue: unknown): string {
-  return `${templateId(templateIdValue)}@${version(templateVersionValue, "template.version")}`;
 }
 
 export function validateTemplateDefinition(value: unknown): TemplateDefinition {
