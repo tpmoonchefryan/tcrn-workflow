@@ -125,12 +125,16 @@ async function createSyntheticWorkspace() {
       lastVerified: instant(knowledgeVersion + 1),
       stalenessPolicy: { maximumAgeDays: 30, unknownDisposition: "fail-closed" },
       exportDisposition: "metadata-only",
-      body: `This is knowledge content about ${unit.subject}. It contains sufficient detail to exceed small byte budgets.`
+      body: `This is knowledge content about ${unit.subject}. It contains sufficient detail to exceed small byte budgets.`,
+      // TCRN-CROSS-STORY-365: three "Hook ..." cards written on purpose, each scoring as
+      // a possible duplicate of the last.
+      coexist: true,
     });
     knowledgeVersion = created.version;
 
-    // Promote the knowledge unit so it shows up in search results
-    const promoted = await transitionKnowledgePromotion(workspace, {
+    // Promote the knowledge unit so it shows up in search results. STORY-365 writes a
+    // sourced-and-evidenced card promoted already, so this is now a no-op for these three.
+    const promoted = created.promotionState === "promoted" ? created : await transitionKnowledgePromotion(workspace, {
       expectedVersion: created.version,
       expectedRevision: created.revision,
       occurredAt: instant(knowledgeVersion + 1),

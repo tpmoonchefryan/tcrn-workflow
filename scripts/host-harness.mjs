@@ -96,6 +96,12 @@ export const HARNESS_CAPABILITIES = Object.freeze([
     },
   },
   {
+    id: "stop-knowledge-capture",
+    purpose: "a turn that declared a lesson leaves it in the knowledge base rather than in the transcript",
+    claude: { mechanism: "hook", event: "Stop", matcher: null, handler: "scripts/knowledge-capture-hook.mjs", timeout: 30 },
+    codex: { mechanism: "hook", event: "Stop", matcher: null, handler: "scripts/knowledge-capture-hook.mjs", timeout: 30 },
+  },
+  {
     id: "per-prompt-agents-zero-injection",
     purpose: "each prompt carries the platform output-contract rules re-injected fresh, not just at session start",
     claude: { mechanism: "hook", event: "UserPromptSubmit", matcher: null, handler: "scripts/agents-zero-hook.mjs", timeout: 10 },

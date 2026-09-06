@@ -397,6 +397,7 @@ export type {
   VerificationClaimLink,
 } from "./story-scope-compliance.js";
 export {
+  KNOWLEDGE_CONFLICT_SCORE_THRESHOLD,
   KNOWLEDGE_CORE_VERSION,
   KNOWLEDGE_LIMITS,
   KNOWLEDGE_METADATA_SCHEMA_VERSION,
@@ -404,6 +405,7 @@ export {
   KNOWLEDGE_REASON_CODES,
   KNOWLEDGE_STORE_SCHEMA_VERSION,
   KnowledgeCoreError,
+  captureKnowledgeUnit,
   createKnowledgeUnit,
   calculateKnowledgeSourceDigest,
   checkKnowledgeSources,
@@ -411,6 +413,7 @@ export {
   exportKnowledgeCheckpoint,
   initializeKnowledgeStore,
   migrateKnowledgeBodies,
+  knowledgeConflictHits,
   knowledgeContextCandidates,
   knowledgeLinkIndexCountsForTest,
   knowledgeRelevanceScore,
@@ -426,6 +429,7 @@ export {
   validateKnowledgeStore,
 } from "./knowledge-core.js";
 export type {
+  CaptureKnowledgeUnitInput,
   CreateKnowledgeUnitInput,
   KnowledgeBodyReadOptions,
   KnowledgeCategory,
@@ -442,6 +446,7 @@ export type {
   KnowledgeRetrievalDisposition,
   KnowledgeScope,
   KnowledgeStalenessPolicy,
+  KnowledgeUnitExtensions,
   KnowledgeUnitMetadata,
 } from "./knowledge-core.js";
 export {

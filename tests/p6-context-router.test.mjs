@@ -643,6 +643,10 @@ async function knowledgeBridgeFixture() {
     stalenessPolicy: { maximumAgeDays: 30, unknownDisposition: "fail-closed" },
     exportDisposition: "metadata-only",
     body: `Body ${key}`,
+    // TCRN-CROSS-STORY-365: "Fresh bridge subject" and "Stale bridge subject" differ by
+    // one token, which the write-time scorer reads as a possible duplicate. Deliberate
+    // here, so the fixture answers coexist rather than being refused.
+    coexist: true,
   });
   const fresh = await createKnowledgeUnit(workspace, unit("WSC7-P6-FRESH", { expectedVersion: 0, occurredAt: knowledgeInstant(11, 3), subject: "Fresh bridge subject", summary: "Fresh bridge summary." }));
   const stale = await createKnowledgeUnit(workspace, unit("WSC7-P6-STALE", { expectedVersion: 1, occurredAt: knowledgeInstant(11, 4), subject: "Stale bridge subject", summary: "Stale bridge summary.", freshnessState: "stale" }));

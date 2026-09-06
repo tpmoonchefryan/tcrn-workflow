@@ -81,6 +81,8 @@ function card(fx, key, kind, expectedVersion) {
     stalenessPolicy: { maximumAgeDays: 180, unknownDisposition: "fail-closed" },
     exportDisposition: "metadata-only",
     body: `Body for ${key}.`,
+    // TCRN-CROSS-STORY-365: four cards whose subjects differ by kind name only.
+    coexist: true,
   };
 }
 
@@ -94,7 +96,9 @@ test("INC-256 knowledge-batch migrates all existing cards to no expiry and prese
     for (const kind of ["fact", "guide", "decision", "reference"]) {
       const result = await createKnowledgeUnit(fx.workspace, card(fx, `CARD-${kind}`, kind, version));
       version = result.version;
-      const promoted = await transitionKnowledgePromotion(fx.workspace, {
+      // TCRN-CROSS-STORY-365: a relaxed-kind card with source and evidence is written
+      // promoted; the strict kinds (guide, reference) still reach promotion this way.
+      const promoted = result.promotionState === "promoted" ? result : await transitionKnowledgePromotion(fx.workspace, {
         expectedVersion: version, expectedRevision: result.revision, occurredAt: instant(6), id: result.id, promotionState: "promoted",
       });
       version = promoted.version;

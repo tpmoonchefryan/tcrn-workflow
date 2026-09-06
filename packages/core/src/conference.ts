@@ -429,5 +429,9 @@ export function distillConferenceKnowledge(minutesValue: unknown, requestValue: 
     stalenessPolicy: { maximumAgeDays: options.stalenessDays, unknownDisposition: "fail-closed" },
     exportDisposition: "metadata-only",
     body: decision,
+    // TCRN-CROSS-STORY-365: the decisions of one conference are authored together and
+    // scored against each other on the way in. They are not surprises to one another, so
+    // the writer's answer is stated here once rather than refused per decision.
+    coexist: true,
   }));
 }

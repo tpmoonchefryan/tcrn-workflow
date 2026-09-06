@@ -653,6 +653,21 @@
         "knowledge-batch: a batch that is not a batch is refused whole"
       ]
     },
+    "tests/knowledge-capture.test.mjs": {
+      "testCount": 9,
+      "assertionCount": 40,
+      "testNames": [
+        "STORY-365 lessons are the declared paragraphs, bounded and in order",
+        "STORY-365 a bounded field never splits a UTF-8 sequence",
+        "STORY-365 GWT1: a declared lesson becomes a promoted card default recall finds",
+        "STORY-365 correction 1: the Codex Stop payload carries no transcript_path, only last_assistant_message inline",
+        "STORY-365 GWT2/GWT3: the same subject twice is scored, refused, and released by supersedes",
+        "STORY-365 coexist admits the write and records what it stands beside",
+        "STORY-365 the threshold is two subject-token hits, not one shared word",
+        "STORY-365 GWT4/GWT5: create needs no backlink lists, and nothing new lands as a candidate",
+        "STORY-365 the extension slot stays a closed roster of two knowledge-id keys"
+      ]
+    },
     "tests/knowledge-inject.test.mjs": {
       "testCount": 8,
       "assertionCount": 21,

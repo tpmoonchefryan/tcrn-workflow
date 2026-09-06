@@ -137,6 +137,11 @@ function unitInput(fixture, key, options = {}) {
     stalenessPolicy: options.stalenessPolicy ?? { maximumAgeDays: 30, unknownDisposition: "fail-closed" },
     exportDisposition: options.exportDisposition ?? "metadata-only",
     body: options.body ?? `Body ${key}`,
+    // TCRN-CROSS-STORY-365: this fixture writes a family of cards that differ only by
+    // key, so the write-time conflict scorer sees each one as a possible duplicate of
+    // the last. That is the scorer being right about a deliberate fixture, so the
+    // fixture states the writer's answer once instead of per case.
+    coexist: options.coexist ?? true,
   };
 }
 
@@ -677,8 +682,11 @@ test("WSE-5: a work-log candidate carrying an event reference and chain-matching
       assert.equal(created.reasonCode, "KNOWLEDGE_UNIT_CREATED");
       // creation itself proves the event reference survives storage: a reference the
       // source-reference grammar rejected or redaction rewrote would fail closed here.
-      assert.equal(created.promotionState, "candidate");
-      const promoted = await transitionKnowledgePromotion(fixture.workspace, {
+      // TCRN-CROSS-STORY-365: source and evidence supplied together are written
+      // official, so this candidate is promoted at creation rather than one step later.
+      // The promotion path stays exercised for the records that still reach it.
+      assert.equal(created.promotionState, "promoted");
+      const promoted = created.promotionState === "promoted" ? created : await transitionKnowledgePromotion(fixture.workspace, {
         expectedVersion: 1, expectedRevision: 1, occurredAt: instant(12), id: created.id, promotionState: "promoted",
       });
       assert.equal(promoted.promotionState, "promoted");
@@ -1520,7 +1528,9 @@ test("INIT-047: supersedes is validated, source digests are computed and source 
     const replacement = await createKnowledgeUnit(fx.workspace, fragment("INIT047-NEW", 1, { supersedes: old.id }));
     const listed = await listKnowledgeMetadata(fx.workspace, { at: instant(12), selection: "all" });
     assert.equal(listed.records.find((record) => record.id === replacement.id).supersedes, old.id);
-    await retireKnowledgeUnit(fx.workspace, { expectedVersion: 2, expectedRevision: 1, occurredAt: instant(11, 4), id: old.id });
+    // TCRN-CROSS-STORY-365: the supersede marked `old` with extensions.supersededBy, so
+    // it is at revision 2 by the time this retire compares.
+    await retireKnowledgeUnit(fx.workspace, { expectedVersion: 2, expectedRevision: 2, occurredAt: instant(11, 4), id: old.id });
     await expectReason("KNOWLEDGE_LINK_INVALID", () => createKnowledgeUnit(fx.workspace, fragment("INIT047-AFTER-RETIRE", 3, { supersedes: old.id })));
 
     await writeFile(join(fx.workspace, "source.md"), "source-v1");

@@ -90,6 +90,7 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_PARTIAL_STATE",
   "KNOWLEDGE_PATH_INVALID",
   "KNOWLEDGE_POLICY_UPDATED",
+  "KNOWLEDGE_POSSIBLE_CONFLICT",
   "KNOWLEDGE_PROMOTION_INVALID",
   "KNOWLEDGE_PROMOTION_UPDATED",
   "KNOWLEDGE_PROVENANCE_INVALID",
@@ -123,17 +124,33 @@ export type KnowledgeFaultPoint = "after-body-write" | "after-metadata-write" | 
 
 export class KnowledgeCoreError extends Error {
   readonly reasonCode: KnowledgeReasonCode;
+  // TCRN-CROSS-STORY-365: a refusal that names a set of records has to hand that set
+  // over as data, not only inside the message. KNOWLEDGE_POSSIBLE_CONFLICT is the first
+  // such refusal; the field stays optional so every other throw site is unchanged.
+  readonly details?: Readonly<Record<string, JsonValue>>;
 
-  constructor(reasonCode: KnowledgeReasonCode, message: string) {
+  constructor(reasonCode: KnowledgeReasonCode, message: string, details?: Readonly<Record<string, JsonValue>>) {
     super(message);
     this.name = "KnowledgeCoreError";
     this.reasonCode = reasonCode;
+    if (details !== undefined) this.details = details;
   }
 }
 
 export interface KnowledgeStalenessPolicy {
   readonly maximumAgeDays: number | null;
   readonly unknownDisposition: "fail-closed" | "fail-open";
+}
+
+// TCRN-CROSS-STORY-365: the metadata extension slot, which was declared open and
+// validated shut (Record<string, never>). Two bounded keys now live in it, both written
+// by the create path and by nothing else: `coexistsWith` records which existing cards a
+// --coexist write scored as possible conflicts, and `supersededBy` marks the card a
+// --supersedes write replaced. Both are knowledge ids, so the slot stays a closed roster
+// of two keys rather than an open bag.
+export interface KnowledgeUnitExtensions {
+  readonly coexistsWith?: readonly string[];
+  readonly supersededBy?: string;
 }
 
 export interface KnowledgeUnitMetadata {
@@ -171,7 +188,7 @@ export interface KnowledgeUnitMetadata {
   readonly bodyBytes: number;
   readonly revision: number;
   readonly updatedAt: string;
-  readonly extensions: Readonly<Record<string, never>>;
+  readonly extensions: KnowledgeUnitExtensions;
 }
 
 export interface CreateKnowledgeUnitInput {
@@ -202,6 +219,9 @@ export interface CreateKnowledgeUnitInput {
   readonly stalenessPolicy: KnowledgeStalenessPolicy;
   readonly exportDisposition: KnowledgeExportDisposition;
   readonly body: string;
+  // TCRN-CROSS-STORY-365: the writer's answer to a possible conflict. `supersedes` is the
+  // other answer; with neither, a scored conflict refuses the write.
+  readonly coexist?: boolean;
 }
 
 export interface KnowledgeReadOptions {
@@ -291,6 +311,23 @@ const metadataFields = [
   "bodyBytes", "revision", "updatedAt", "extensions",
 ];
 const stalenessFields = ["maximumAgeDays", "unknownDisposition"];
+const extensionFields = ["coexistsWith", "supersededBy"];
+const knowledgeIdPattern = /^knowledge:[a-f0-9]{24}$/u;
+
+// TCRN-CROSS-STORY-365: extensions were validated as exactly empty. They are now a closed
+// roster of two keys whose values are knowledge ids, so the slot admits what the create
+// path writes and nothing else. An existing record carrying `{}` passes unchanged, which
+// is why no stored store needs rewriting for this.
+function extensionsAreBounded(value: unknown): boolean {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.entries(value as Readonly<Record<string, unknown>>).every(([key, item]) => {
+    if (!extensionFields.includes(key)) return false;
+    if (key === "supersededBy") return typeof item === "string" && knowledgeIdPattern.test(item);
+    if (!Array.isArray(item) || item.length === 0 || item.length > KNOWLEDGE_LIMITS.maximumQueryResults) return false;
+    return item.every((entry, index) => typeof entry === "string" && knowledgeIdPattern.test(entry) &&
+      (index === 0 || compareCanonicalText(String(item[index - 1]), entry) < 0));
+  });
+}
 
 // STORY-327/348: provenance is data, not code. The policy file is loaded from
 // the repository's own policy directory so adding a kind changes behavior without
@@ -324,8 +361,8 @@ function isRelaxedProvenanceKind(kind: KnowledgeKind): boolean {
   return (KNOWLEDGE_PROVENANCE_POLICY.relaxedKinds as readonly string[]).includes(kind);
 }
 
-function fail(reasonCode: KnowledgeReasonCode, message: string): never {
-  throw new KnowledgeCoreError(reasonCode, message);
+function fail(reasonCode: KnowledgeReasonCode, message: string, details?: Readonly<Record<string, JsonValue>>): never {
+  throw new KnowledgeCoreError(reasonCode, message, details);
 }
 
 function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
@@ -750,7 +787,7 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
     typeof normalizedValue.bodySha256 !== "string" || !/^[a-f0-9]{64}$/u.test(normalizedValue.bodySha256) ||
     !Number.isSafeInteger(normalizedValue.bodyBytes) || Number(normalizedValue.bodyBytes) < 0 ||
     !Number.isSafeInteger(normalizedValue.revision) || Number(normalizedValue.revision) < 1 || typeof normalizedValue.updatedAt !== "string" ||
-    normalizedValue.extensions === null || typeof normalizedValue.extensions !== "object" || Array.isArray(normalizedValue.extensions) || Object.keys(normalizedValue.extensions).length !== 0) {
+    !extensionsAreBounded(normalizedValue.extensions)) {
     fail("KNOWLEDGE_RECORD_INVALID", String(normalizedValue.id ?? "unknown"));
   }
   if ((normalizedValue.stalenessPolicy.maximumAgeDays !== null &&
@@ -1214,8 +1251,12 @@ function assertSelection(selection: unknown): asserts selection is "default" | "
   }
 }
 
+// TCRN-CROSS-STORY-365: a card the writer replaced stops being a default answer. It is
+// still readable explicitly and still exports; it just no longer competes with the card
+// that supersedes it, which is the whole point of having chosen --supersedes.
 function isDefaultSelectable(metadata: KnowledgeUnitMetadata, at: string): boolean {
-  return metadata.promotionState === "promoted" && metadata.lifecycle === "active" &&
+  return metadata.extensions.supersededBy === undefined &&
+    metadata.promotionState === "promoted" && metadata.lifecycle === "active" &&
     metadata.retrievalDisposition === "default" && metadata.exportDisposition === "metadata-only" &&
     computeFreshness(metadata, at) === "fresh";
 }
@@ -1236,7 +1277,17 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
   if (input.kind === "reference" && (input.sourceReferences.length === 0 || input.linkedEvidenceIds.length === 0)) {
     fail("KNOWLEDGE_PROVENANCE_INVALID", `${input.kind} knowledge requires source and evidence links`);
   }
-  const directCapture = isRelaxedProvenanceKind(input.kind) && input.sourceReferences.length === 0 && input.linkedEvidenceIds.length === 0;
+  // TCRN-CROSS-STORY-365 (Owner ruling TCRN-CROSS-MIN-146): a card is retrievable the
+  // moment it is written. The criterion is no longer "source-free"; it is "provenance is
+  // not half-supplied" -- either no source at all, or source and evidence together. A
+  // sourced card used to be the one that took an extra step, which was backwards.
+  // `lifecycle` is the other half of the question: a record its own author wrote as
+  // lifecycle "candidate" is not claiming to be a live answer, and calling it promoted
+  // would be a promotionState no reader can act on -- default selection requires
+  // lifecycle "active" either way. conference-close --distill is the one writer that
+  // does this, and it keeps the shape it has always had.
+  const directCapture = isRelaxedProvenanceKind(input.kind) && input.lifecycle === "active" &&
+    (input.sourceReferences.length === 0) === (input.linkedEvidenceIds.length === 0);
   const metadata: KnowledgeUnitMetadata = {
     schemaVersion: KNOWLEDGE_METADATA_SCHEMA_VERSION,
     id: deriveStableId("knowledge", externalKey),
@@ -1263,9 +1314,9 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
     linkedEvidenceIds: [...input.linkedEvidenceIds].sort(compareCanonicalText),
     lifecycle: input.lifecycle,
     retrievalDisposition: input.retrievalDisposition,
-    // STORY-327: a source-free fragment is ready for retrieval at capture time;
-    // sourced records retain the legacy candidate state for compatibility with
-    // the explicit provenance promotion path.
+    // STORY-365: written is retrievable. The candidate state survives only for records
+    // written before this ruling and for the half-supplied provenance shape above, which
+    // cannot be promoted by anyone anyway.
     promotionState: directCapture ? "promoted" : "candidate",
     freshnessState: input.freshnessState,
     lastVerified: input.lastVerified,
@@ -1394,21 +1445,51 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
     if (scan.marker.version !== input.expectedVersion) {
       fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
     }
+    let superseded: ScannedKnowledgeUnit | undefined;
     if (metadata.supersedes !== null) {
-      const target = scan.units.find((unit) => unit.metadata.id === metadata.supersedes);
-      if (target === undefined || target.metadata.lifecycle === "retired") {
+      superseded = scan.units.find((unit) => unit.metadata.id === metadata.supersedes);
+      if (superseded === undefined || superseded.metadata.lifecycle === "retired") {
         fail("KNOWLEDGE_LINK_INVALID", `${metadata.id}:supersedes:${metadata.supersedes}`);
       }
     }
-    const metadataBytes = Buffer.from(canonicalJson(metadata), "utf8");
+    // TCRN-CROSS-STORY-365: score before writing. Above the threshold the writer must have
+    // said which it is -- this card replaces those (--supersedes) or stands beside them
+    // (--coexist) -- and the refusal hands back the hit list rather than only naming it.
+    const conflicts = knowledgeConflictHits(
+      scan.units.map((unit) => unit.metadata),
+      metadata.subject,
+      metadata.supersedes === null ? [metadata.id] : [metadata.id, metadata.supersedes],
+    );
+    if (conflicts.length > 0 && metadata.supersedes === null && input.coexist !== true) {
+      fail("KNOWLEDGE_POSSIBLE_CONFLICT", conflicts.join(","), { conflicts: [...conflicts] });
+    }
+    const written: KnowledgeUnitMetadata = conflicts.length === 0 || metadata.supersedes !== null
+      ? metadata
+      : { ...metadata, extensions: { coexistsWith: conflicts.slice(0, KNOWLEDGE_LIMITS.maximumQueryResults) } };
+    // The replaced card carries the mark, so "which one did this replace" is answerable
+    // from either end and default retrieval drops the loser without deleting it.
+    const supersededMetadata: KnowledgeUnitMetadata | null = superseded === undefined ? null : {
+      ...superseded.metadata,
+      extensions: { ...superseded.metadata.extensions, supersededBy: written.id },
+      revision: superseded.metadata.revision + 1,
+      updatedAt: input.occurredAt,
+    };
+    if (written !== metadata) validateMetadataBody(validateMetadataShape(written as unknown as Readonly<Record<string, JsonValue>>, scan.workspace), body, scan.workspace);
+    if (supersededMetadata !== null && superseded !== undefined) {
+      validateMetadataBody(validateMetadataShape(supersededMetadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace), requireBody(superseded), scan.workspace);
+    }
+    const metadataBytes = Buffer.from(canonicalJson(written), "utf8");
     const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
-    const projectedMetadata = [...scan.units.map((unit) => unit.metadata), metadata];
+    const projectedMetadata = [...scan.units.map((unit) =>
+      supersededMetadata !== null && unit.metadata.id === supersededMetadata.id ? supersededMetadata : unit.metadata), written];
     // TCRN-CROSS-STORY-023: the create projection mirrors the scan's cap — only
     // marker + Σ metadata + Σ body are charged; the derived index is not, so it no
     // longer double-taxes every record (see scanKnowledgeStore).
     const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
       scan.units.reduce((total, unit) => total + Buffer.byteLength(canonicalJson(unit.metadata), "utf8") + (unit.body?.length ?? 0), 0) +
-      metadataBytes.length + body.length;
+      metadataBytes.length + body.length +
+      (supersededMetadata === null || superseded === undefined ? 0
+        : Buffer.byteLength(canonicalJson(supersededMetadata), "utf8") - Buffer.byteLength(canonicalJson(superseded.metadata), "utf8"));
     // STORY-330: no record-count admission branch remains. The aggregate source
     // bytes and the canonical metadata/body limits are the capacity checks.
     if (metadataBytes.length > KNOWLEDGE_LIMITS.maximumMetadataBytes || projectedAggregate > knowledgeAggregateLimit(scan.workspace)) {
@@ -1418,9 +1499,10 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
       fail("KNOWLEDGE_DUPLICATE", metadata.id);
     }
     const backend = storeBackendFor(scan.storeRoot, options);
-    await backend.writeKnowledgeBody(metadata.id, body);
+    await backend.writeKnowledgeBody(written.id, body);
     crash("after-body-write", options.faultAt);
-    await backend.writeKnowledgeMetadata(metadata.id, metadataBytes);
+    await backend.writeKnowledgeMetadata(written.id, metadataBytes);
+    if (supersededMetadata !== null) await backend.writeKnowledgeMetadata(supersededMetadata.id, canonicalJson(supersededMetadata));
     crash("after-metadata-write", options.faultAt);
     await backend.writeKnowledgeMarker(canonicalJson(marker));
     crash("after-marker-write", options.faultAt);
@@ -1431,11 +1513,13 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
     return {
       schemaVersion: "tcrn.knowledge-create-result.v1",
       reasonCode: "KNOWLEDGE_UNIT_CREATED",
-      id: metadata.id,
-      externalKey: metadata.externalKey,
-      revision: metadata.revision,
+      id: written.id,
+      externalKey: written.externalKey,
+      revision: written.revision,
       version: final.marker.version,
-      promotionState: metadata.promotionState,
+      promotionState: written.promotionState,
+      ...(conflicts.length > 0 ? { conflicts: [...conflicts] } : {}),
+      ...(supersededMetadata === null ? {} : { superseded: supersededMetadata.id }),
     };
   } catch (error) {
     if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_FAULT_INJECTED") released = true;
@@ -1443,6 +1527,81 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
   } finally {
     if (!released) await releaseMutationClaim(initial.storeRoot, claim);
   }
+}
+
+export interface CaptureKnowledgeUnitInput {
+  readonly occurredAt: string;
+  readonly subject: string;
+  readonly summary: string;
+  readonly snippet: string;
+  readonly tags: readonly string[];
+  readonly accountableOwnerId: string;
+  readonly body: string;
+  readonly expectedVersion?: number;
+  readonly externalKey?: string;
+  readonly roleScopes?: readonly string[];
+  readonly category?: KnowledgeCategory;
+  readonly kind?: KnowledgeKind;
+  readonly sourceReferences?: readonly string[];
+  readonly linkedEvidenceIds?: readonly string[];
+  readonly supersedes?: string | null;
+  readonly coexist?: boolean;
+}
+
+/**
+ * TCRN-CROSS-STORY-365: the thin capture path, under Owner ruling TCRN-CROSS-MIN-146.
+ *
+ * Everything a lesson card does not need to state is defaulted here rather than demanded
+ * of the caller: a role-scoped, workspace-anchored card with no project, no work, decision
+ * or gate backlinks, no clock-driven staleness and no promotion step. What is left is the
+ * card itself -- what it is about, what it says, how to find it, and who is accountable
+ * for it -- plus the instant and the store this write lands in.
+ *
+ * The store version is optional because the caller of this verb is a Stop hook with no
+ * reason to have read the marker first. Supplied, it is the ordinary compare-and-set;
+ * omitted, it is read here and the mutation claim inside createKnowledgeUnit is what
+ * serialises writers.
+ */
+export async function captureKnowledgeUnit(
+  workspaceRoot: string,
+  input: CaptureKnowledgeUnitInput,
+  options: KnowledgeMutationOptions = {},
+): Promise<Readonly<Record<string, JsonValue>>> {
+  const expectedVersion = input.expectedVersion ?? Number((await readKnowledgeStoreMarker(workspaceRoot, options)).version);
+  // A derived key so the hook never has to invent one, and so the same lesson written
+  // twice at the same instant is a duplicate rather than a second card.
+  const externalKey = input.externalKey ??
+    `CAPTURE-${createHash("sha256").update(`${input.subject}\u0000${input.body}\u0000${input.occurredAt}`, "utf8").digest("hex").slice(0, 24).toUpperCase()}`;
+  return createKnowledgeUnit(workspaceRoot, {
+    expectedVersion,
+    occurredAt: input.occurredAt,
+    externalKey,
+    scope: "role",
+    projectId: null,
+    roleScopes: input.roleScopes ?? ["implementation"],
+    category: input.category ?? "workflow",
+    kind: input.kind ?? "fact",
+    tags: input.tags,
+    subject: input.subject,
+    summary: input.summary,
+    snippet: input.snippet,
+    accountableOwnerId: input.accountableOwnerId,
+    sourceReferences: input.sourceReferences ?? [],
+    sourceDigest: null,
+    supersedes: input.supersedes ?? null,
+    linkedWorkIds: [],
+    linkedDecisionIds: [],
+    linkedGateIds: [],
+    linkedEvidenceIds: input.linkedEvidenceIds ?? [],
+    lifecycle: "active",
+    retrievalDisposition: "default",
+    freshnessState: "fresh",
+    lastVerified: null,
+    stalenessPolicy: { maximumAgeDays: null, unknownDisposition: "fail-closed" },
+    exportDisposition: "metadata-only",
+    body: input.body,
+    ...(input.coexist === undefined ? {} : { coexist: input.coexist }),
+  }, options);
 }
 
 // WSC-2: re-bind the store to the advanced workspace head after full per-record
@@ -1585,6 +1744,27 @@ export function knowledgeRelevanceScore(metadata: KnowledgeUnitMetadata, search:
     + occurrenceCount(summary, token) * 4
     + occurrenceCount(snippet, token) * 2
     + metadata.tags.reduce((tagScore, tag) => tagScore + (tag.toLowerCase() === token ? 12 : occurrenceCount(tag.toLowerCase(), token) * 3), 0), 0);
+}
+
+// TCRN-CROSS-STORY-365: the write-time conflict threshold, in the units the scorer above
+// already produces. A subject-field token hit is worth 8, so 16 is two of them: the point
+// at which an existing card is about the same thing rather than merely sharing one word.
+// A one-token subject therefore cannot by itself raise a conflict -- with a single token
+// the scorer has nothing to discriminate on, and a verdict drawn from it would fire on
+// every card that happens to contain the word.
+export const KNOWLEDGE_CONFLICT_SCORE_THRESHOLD = 16 as const;
+
+/** Live cards that score at or above the threshold against a subject, in canonical id order. */
+export function knowledgeConflictHits(
+  existing: readonly KnowledgeUnitMetadata[],
+  subject: string,
+  excluded: readonly string[] = [],
+): readonly string[] {
+  return existing
+    .filter((metadata) => metadata.lifecycle !== "retired" && !excluded.includes(metadata.id) &&
+      knowledgeRelevanceScore(metadata, subject) >= KNOWLEDGE_CONFLICT_SCORE_THRESHOLD)
+    .map((metadata) => metadata.id)
+    .sort(compareCanonicalText);
 }
 
 function explicitlySelectable(metadata: KnowledgeUnitMetadata, at: string): boolean {

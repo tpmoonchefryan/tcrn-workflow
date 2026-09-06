@@ -39,6 +39,7 @@ import {
   generateGenericStarterBundle,
   initializeKnowledgeStore,
   initializeWorkspace,
+  captureKnowledgeUnit,
   knowledgeContextCandidates,
   listKnowledgeMetadata,
   consumeViewWriteFailure,
@@ -869,8 +870,9 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "knowledge-bodies-migrate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "segment-bytes", required: false, valueKind: "integer" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
+  { name: "knowledge-capture", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "subject", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "snippet", required: true, valueKind: "string" }, { name: "tags", required: true, valueKind: "list" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "body", required: true, valueKind: "string" }, { name: "expected-version", required: false, valueKind: "integer" }, { name: "external-key", required: false, valueKind: "string" }, { name: "role-scopes", required: false, valueKind: "list" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "source-references", required: false, valueKind: "list" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "supersedes", required: false, valueKind: "string" }, { name: "coexist", required: false, valueKind: "boolean" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-checkpoint", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
-  { name: "knowledge-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "scope", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "role-scopes", required: true, valueKind: "list" }, { name: "category", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "tags", required: true, valueKind: "list" }, { name: "subject", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "snippet", required: true, valueKind: "string" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "source-references", required: true, valueKind: "list" }, { name: "source-digest", required: false, valueKind: "string" }, { name: "supersedes", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "work-ids", required: true, valueKind: "list" }, { name: "decision-ids", required: true, valueKind: "list" }, { name: "gate-ids", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "lifecycle", required: true, valueKind: "string" }, { name: "retrieval", required: true, valueKind: "string" }, { name: "freshness", required: true, valueKind: "string" }, { name: "last-verified", required: true, valueKind: "instant", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "stale-days", required: true, valueKind: "integer", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "export", required: true, valueKind: "string" }, { name: "body", required: true, valueKind: "string" }] },
+  { name: "knowledge-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "scope", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "role-scopes", required: true, valueKind: "list" }, { name: "category", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "tags", required: true, valueKind: "list" }, { name: "subject", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "snippet", required: true, valueKind: "string" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "source-references", required: true, valueKind: "list" }, { name: "source-digest", required: false, valueKind: "string" }, { name: "supersedes", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "work-ids", required: false, valueKind: "list" }, { name: "decision-ids", required: false, valueKind: "list" }, { name: "gate-ids", required: false, valueKind: "list" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "coexist", required: false, valueKind: "boolean" }, { name: "lifecycle", required: true, valueKind: "string" }, { name: "retrieval", required: true, valueKind: "string" }, { name: "freshness", required: true, valueKind: "string" }, { name: "last-verified", required: true, valueKind: "instant", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "stale-days", required: true, valueKind: "integer", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "export", required: true, valueKind: "string" }, { name: "body", required: true, valueKind: "string" }] },
   { name: "knowledge-freshness", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "acknowledge-disposable", required: false, valueKind: "boolean" }] },
   { name: "knowledge-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
@@ -1627,10 +1629,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const names = [
       "workspace", "expected-version", "at", "external-key", "scope", "project-id", "role-scopes", "category", "kind", "tags",
       "subject", "summary", "snippet", "accountable-owner-id", "source-references", "source-digest", "supersedes", "work-ids", "decision-ids", "gate-ids", "evidence-ids",
-      "lifecycle", "retrieval", "freshness", "last-verified", "stale-days", "export", "body",
+      "coexist", "lifecycle", "retrieval", "freshness", "last-verified", "stale-days", "export", "body",
     ];
+    // TCRN-CROSS-STORY-365: the four backlink lists are optional. They were required with
+    // a "-" spelling for "none", which made every card pay four flags to say nothing, and
+    // 26 of 28 flags required is what made this verb unusable from a hook.
+    const optional = ["source-digest", "supersedes", "work-ids", "decision-ids", "gate-ids", "evidence-ids", "coexist"];
     const values = parseArguments(rest, names);
-    required(values, names.filter((name) => name !== "source-digest" && name !== "supersedes"));
+    required(values, names.filter((name) => !optional.includes(name)));
     // Pre-validate enum-valued flags against their literal unions so an invalid
     // value fails closed here naming the flag, rather than casting uncast into core.
     const enumFlags: readonly (readonly [string, readonly string[]])[] = [
@@ -1674,7 +1680,46 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       stalenessPolicy: { maximumAgeDays: nullableIntegerValue(values, "stale-days"), unknownDisposition: "fail-closed" },
       exportDisposition: values.export as "metadata-only" | "excluded",
       body: values.body ?? "",
+      coexist: booleanValue(values.coexist, "coexist"),
     })));
+    return;
+  }
+  if (command === "knowledge-capture") {
+    // TCRN-CROSS-STORY-365: the thin write. Eight required flags -- the store, the
+    // instant, the four card fields, the accountable owner, and the body -- and every
+    // other shape defaulted in core. Written is retrievable; there is no promotion step.
+    const names = [
+      "workspace", "at", "subject", "summary", "snippet", "tags", "accountable-owner-id", "body",
+      "expected-version", "external-key", "role-scopes", "category", "kind", "source-references", "evidence-ids",
+      "supersedes", "coexist", "allow-trailing",
+    ];
+    const values = parseArguments(rest, names);
+    required(values, ["workspace", "at", "subject", "summary", "snippet", "tags", "accountable-owner-id", "body"]);
+    for (const [flag, admitted] of [
+      ["category", ["architecture", "domain", "implementation", "standards", "testing", "workflow", "decision", "evidence"]],
+      ["kind", ["fact", "guide", "decision", "reference", "summary"]],
+    ] as readonly (readonly [string, readonly string[]])[]) {
+      const provided = values[flag];
+      if (provided !== undefined && !admitted.includes(provided)) fail("CLI_ARGUMENT_MALFORMED", `${flag}=${provided}`);
+    }
+    io.write(canonicalJson(await captureKnowledgeUnit(values.workspace ?? "", {
+      occurredAt: values.at ?? "",
+      subject: values.subject ?? "",
+      summary: values.summary ?? "",
+      snippet: values.snippet ?? "",
+      tags: listValue(values.tags),
+      accountableOwnerId: values["accountable-owner-id"] ?? "",
+      body: values.body ?? "",
+      coexist: booleanValue(values.coexist, "coexist"),
+      ...(values["expected-version"] !== undefined ? { expectedVersion: expectedVersion(values) } : {}),
+      ...(values["external-key"] ? { externalKey: values["external-key"] } : {}),
+      ...(values["role-scopes"] ? { roleScopes: listValue(values["role-scopes"]) } : {}),
+      ...(values.category ? { category: values.category as KnowledgeCategory } : {}),
+      ...(values.kind ? { kind: values.kind as KnowledgeKind } : {}),
+      ...(values["source-references"] ? { sourceReferences: listValue(values["source-references"]) } : {}),
+      ...(values["evidence-ids"] ? { linkedEvidenceIds: listValue(values["evidence-ids"]) } : {}),
+      ...(values.supersedes ? { supersedes: values.supersedes } : {}),
+    }, { allowTrailing: booleanValue(values["allow-trailing"], "allow-trailing") })));
     return;
   }
   if (command === "knowledge-list") {

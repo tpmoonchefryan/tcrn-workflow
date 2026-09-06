@@ -57,7 +57,11 @@ const card = (fixture, n) => ({
   verb: "knowledge-create",
   externalKey: `KB-CARD-${n}`,
   scope: "project", projectId: fixture.projectId, roleScopes: [],
-  category: "workflow", kind: "fact", tags: ["batch"],
+  // TCRN-CROSS-STORY-365: a strict kind, so these cards are still written as candidates
+  // and the batch's knowledge-promote member is still a real transition. A relaxed kind
+  // carrying both source and evidence is now written promoted, which would leave the
+  // promote member with nothing to do.
+  category: "workflow", kind: "guide", tags: ["batch"],
   subject: `Card ${n} subject`, summary: `Card ${n} summary.`, snippet: `Card ${n} snippet.`,
   accountableOwnerId: deriveStableId("owner", "KB-OWNER"),
   sourceReferences: [`evidence://kb/${n}`], sourceDigest: canonicalSha256({ n }),
@@ -66,6 +70,9 @@ const card = (fixture, n) => ({
   lifecycle: "active", retrievalDisposition: "default", freshnessState: "fresh",
   lastVerified: at(1), stalenessPolicy: { maximumAgeDays: 180, unknownDisposition: "fail-closed" },
   exportDisposition: "metadata-only", body: `Card ${n} body.`,
+  // TCRN-CROSS-STORY-365: the batch's four cards differ only by number, so each scores
+  // as a possible duplicate of the last. A batch is one authored set; it says so here.
+  coexist: true,
 });
 
 const batch = (members) => ({ schemaVersion: "tcrn.knowledge-batch.v1", members });
