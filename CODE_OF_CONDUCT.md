@@ -1,7 +1,5 @@
 # Code of Conduct
 
-English · [简体中文](./docs/i18n/CODE_OF_CONDUCT.zh-CN.md) · [日本語](./docs/i18n/CODE_OF_CONDUCT.ja.md) · [한국어](./docs/i18n/CODE_OF_CONDUCT.ko.md) · [Français](./docs/i18n/CODE_OF_CONDUCT.fr.md)
-
 ## Our pledge
 
 We pledge to make participation respectful and harassment-free for everyone,

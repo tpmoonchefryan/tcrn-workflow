@@ -56,8 +56,9 @@ node tools/stop-pact/verify-channel.mjs --verify-channel --project-dir <root>
 It reads the actual project Stop registration, executes that exact registered
 command against a scratch pact, and checks the host decision response. It also
 reds on an active pact whose expiry has passed. The gate never installs or
-edits a hook. `pnpm verify:stop-pact` checks both the Workflow and platform
-roots; a red result is evidence that registration or the current pact state
+edits a hook. The `verify:stop-pact` wrapper that ran it over both the Workflow
+and the platform root retired in TCRN-CROSS-STORY-359; run the command above once
+per root. A red result is evidence that registration or the current pact state
 still needs an owner action.
 
 The three ticket classes are the only legitimate reasons a run may stop early — verbatim

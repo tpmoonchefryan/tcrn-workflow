@@ -7,7 +7,7 @@
 The reader arrives not knowing whether this is worth their afternoon. The document's job is to make that decision fast and honestly, in that order.
 
 - **Lead with the reader's situation, not the framework's architecture.** The opening states the problem the reader already has — an Agent reported green and there is nothing to check it against — before naming a single component.
-- **Sell on the proof, not on the promise.** The strongest thing this project has is that it applies its own standard to itself. `guard-check` breaking 61 guards and requiring 61 red tests is the argument; put it near the top, state what it proves, and state what it does not.
+- **Sell on the proof, not on the promise.** The strongest thing this project has is that it applies its own standard to itself. `guard-check` breaking every registered guard and requiring the same number of red tests is the argument; put it near the top, state what it proves, and state what it does not.
 - **No-overclaim still governs.** Never assert a capability without pointing at the command that demonstrates it. The bar is stated outright: overclaiming is a build failure, not a style issue.
 - **Numbers are measured, never remembered.** Every figure in these documents is re-measured against the tree before it ships. The measurements and their sources are listed under [Numbers](#numbers).
 - **No metaphor, analogy, or aphorism.** Say the thing itself. Not "the door did not lie" but "the check compared attribute values and never compared whether the element existed."
@@ -22,14 +22,13 @@ The reader arrives not knowing whether this is worth their afternoon. The docume
    - `#` title
    - `###` one-line tagline naming the reader's situation
    - a bold positioning line
-   - the five-language link row
-   - the two-line badge block
+   - the environment badge row
    - a section navigation row
    - the inline `Verified claims: …` count line
 2. **The statistics strip** — an HTML `<table>` of four centered cells, each an `###` figure over a one-line label and a `<sub>` gloss. The four are the P1 gate count, the criterion count, the guard count, and the runtime dependency count.
 3. **A `> [!TIP]` alert** stating that the reader does not have to trust the document, because the framework proves itself offline.
 4. `##` the reader's situation — prose, then the four-row comparison table (`what you want to confirm` / `what you have now` / `what you have after`).
-5. `##` why trust it — the `guard-check` proof, the 122-criterion standard, a `<details>` block breaking the criteria into their three categories, and a `> [!IMPORTANT]` alert on re-proof being enforced.
+5. `##` why trust it — the `guard-check` proof, the criterion standard measured from `verification-map.yaml`, a `<details>` block breaking the criteria into their three categories, and a `> [!IMPORTANT]` alert on re-proof being enforced.
 6. `##` who it is for — a two-column table with real headers.
 7. `##` what you get — a two-column table.
 8. `##` the three-minute start — the pinned toolchain, a `sh` block of three steps, a `<details>` block of the governed commands most used, and a `> [!NOTE]` alert that `commands` is the authority over any document.
@@ -37,20 +36,19 @@ The reader arrives not knowing whether this is worth their afternoon. The docume
 10. `##` full documentation — points at the GitHub wiki, then the root-document row
 11. `##` license
 
-Major sections are separated by `---` rules. Every mirror carries the identical structure.
+Major sections are separated by `---` rules.
 
-### The five-language link row
+### Single language
 
-A single line below the positioning line, listing the five maintained locales in a fixed order: 简体中文, English, 日本語, 한국어, Français. **Simplified Chinese is the authoring source** and lives in `README.md`, which is what GitHub renders on the repository page; English is a mirror in `README.en.md`. The current document's language appears as plain text; the other four are relative links. Items are joined by a space–middot–space separator (` · `).
+`README.md` is Simplified Chinese and is the authoritative front page, which is what GitHub renders on the repository page. There is no language link row and no mirror: the four README mirrors and the sixteen root-document mirrors retired in TCRN-CROSS-STORY-360. Every other root document is English.
 
-### The badge block
+### The badge row
 
-Two lines of `shields.io` badges, all carrying `?style=flat-square` so the row reads as one object:
+One line of `shields.io` badges carrying `?style=flat-square` so the row reads as one object, stating the environment only: `license`, `node`, `pnpm`, `network`, `hosts`.
 
-- Line 1 — subject: `status` (release version), `gates` (`verify:p1` gate count), `claims` (proven-criterion count), `deps` (runtime dependency count).
-- Line 2 — environment: `license`, `node`, `pnpm`, `network`, `hosts`.
+The subject line that stood above it — `status` (release version), `gates` (`verify:p1` gate count), `claims` (proven-criterion count), `deps` (runtime dependency count) — retired in TCRN-CROSS-STORY-360. A shields.io URL is a literal: it restates a measured number without being able to read it, so each of the four had to be dragged by hand and each needed its own check in `scripts/push-gate.mjs` to catch the drag being forgotten. Three of the four had drifted anyway before those checks existed.
 
-Numbers baked into these badges are the same values that appear in prose and in the `Verified claims:` line, so they move together. That line restates the criterion total and its three-way split as inline code and is machine-parsed against `verification-map.yaml` by `scripts/task.mjs`; its exact text is part of the contract.
+What survives is the `Verified claims:` line, which restates the criterion total and its three-way split as inline code and is machine-parsed against `verification-map.yaml` by `scripts/task.mjs`. Its exact text is part of the contract. It is the one restated number in the document that a gate reads back.
 
 ## Terminology
 
@@ -109,15 +107,15 @@ A figure that cannot be produced by one of these does not go in the document.
 
 ## The wiki
 
-The wiki carries what the front page deliberately does not: architecture, command reference, criteria and gates, repository layout, known limits, FAQ, trust chain and release. It follows the same voice, terminology and typography rules as the READMEs, in the same five locales, and its pages carry the same language link row. Wiki pages are not gated — nothing in this repository fails when they change — so their accuracy is a reviewer's responsibility, and any figure on them is measured from the table above.
+The wiki carries what the front page deliberately does not: architecture, command reference, criteria and gates, repository layout, known limits, FAQ, trust chain and release. It follows the same voice, terminology and typography rules, and it remains a five-locale surface carrying its own language link row; `README.md` does not. Wiki pages are not gated — nothing in this repository fails when they change — so their accuracy is a reviewer's responsibility, and any figure on them is measured from the table above.
 
 Internal operating notes never ship to the wiki. It is a public documentation surface, not a work log.
 
 ## Changing these documents
 
-- **Re-sync every mirror in the same change.** The five READMEs are held current by the badge and version-in-prose checks; the smaller root docs each pin the SHA-256 of their English source (`tcrn-doc-synced-to`), and a stale pin blocks the push. Coverage is declared in `scripts/policy/doc-coverage.json`.
-- **Hold the version in prose,** not only in the status badge (push-gate check 2d).
+- **There is nothing to mirror.** Each root document exists once. The `tcrn-doc-synced-to` pin mechanism and `scripts/policy/doc-coverage.json` retired with the mirrors in TCRN-CROSS-STORY-360.
+- **Hold the version in prose** in `README.md` (push-gate check 2d). It is the only statement of the current version a release still has to move.
 - **Re-measure every number,** using the table above, rather than carrying a figure forward.
-- **Reviewer checklist, not machine-checkable:** the voice holds — reader's situation first, no claim without a runnable proof, no metaphor, comparisons as tables; the terminology table is respected in every locale; CJK mirrors keep full-width punctuation, CJK/Latin spacing, and the ideographic comma.
+- **Reviewer checklist, not machine-checkable:** the voice holds — reader's situation first, no claim without a runnable proof, no metaphor, comparisons as tables; the terminology table is respected in every locale the wiki carries; `README.md` keeps full-width punctuation, CJK/Latin spacing, and the ideographic comma.
 
-`LICENSE`, `NOTICE`, `CHANGELOG.md` and `SUPPORT.md` are English-only by policy and are not mirrored.
+`LICENSE` and `NOTICE` are the authoritative legal texts. Every root document other than `README.md` is English.

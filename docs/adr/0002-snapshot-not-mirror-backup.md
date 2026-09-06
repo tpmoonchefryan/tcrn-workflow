@@ -79,10 +79,11 @@ WSF-3 runbook restores to the original path, then validates.
 > manifest-scope decision (see the sign-off section below, which says so), while
 > the apply-path deferral is OD-7 and concerns storage-version-2 chain rewriting.
 > Root rebinding transforms no events and changes no `storageVersion`, so it never
-> needed the apply path. The governed route is the relocation verb family — see
-> `docs/adr/0003-workspace-relocation.md`. The `WORKSPACE_SCHEMA_INVALID` refusal
-> above is unchanged; ADR 0003 supplies a route *through* it, it does not remove
-> it.
+> needed the apply path. The governed route was the relocation verb family, which
+> ADR 0003 described; that verb family, its module and its ADR retired in
+> TCRN-CROSS-STORY-358, so there is no governed route through the refusal today.
+> The `WORKSPACE_SCHEMA_INVALID` refusal above is unchanged and is now the whole
+> story: restore in place.
 
 ## Consequences
 

@@ -83,6 +83,7 @@ This is the protocol and validation only. Collecting receipts from a live host
 excluded here. There is no orchestration, no store, and no network. Records persist,
 when used, through the existing governed workspace event log.
 
-Proof: `pnpm verify:ext-execution`
+Proof: `pnpm test`. The narrower `verify:ext-execution` name retired in
+TCRN-CROSS-STORY-359; the test file it filtered still runs unfiltered.
 (`tests/conference-execution.test.mjs`,
 `packages/core/fixtures/conference-execution-cases.json`).

@@ -11,11 +11,13 @@ Two fail-closed gates re-derive digests over tracked files on every run:
 
 - `verify:map` recomputes an aggregate digest over each claim's `fixturePaths`
   and stops with `VERIFICATION_MAP_DIGEST_MISMATCH` on drift.
-- `verify:rc1` / `verify:p2` re-derive the RC1 basis over the normative input set
-  (`schemas/`, `specs/`, `fixtures/` outside `fixtures/rc1/`,
-  `extensions/aos-requirements-v1.json`, `verification-map.yaml`) and stop with
-  `RC1_MANIFEST_BASIS_DIGEST` (a byte changed) or `RC1_INPUT_SET_MISMATCH` (a file
-  was added or removed) on drift.
+- `tests/regen-rc1-inputs.test.mjs`, which `pnpm test` runs, re-derives the RC1
+  basis over the normative input set (`schemas/`, `specs/`, `fixtures/` outside
+  `fixtures/rc1/`, `extensions/aos-requirements-v1.json`, `verification-map.yaml`)
+  and stops with `RC1_MANIFEST_BASIS_DIGEST` (a byte changed) or
+  `RC1_INPUT_SET_MISMATCH` (a file was added or removed) on drift. The
+  `verify:rc1` and `verify:p2` names that used to select it retired in
+  TCRN-CROSS-STORY-359.
 
 Many hardening changes edit files pinned by 10-20 existing claims, so "regenerate
 after editing" is not optional polish — it is the difference between a green and a
@@ -38,9 +40,9 @@ red tree.
    `pnpm regen:map-digests`, then `pnpm verify:p1`.
 2. **Edited a normative file's bytes** (a `schemas/`, `specs/`, `fixtures/` file,
    or `verification-map.yaml`): `pnpm regen:map-digests` (this refreshes the RC1
-   basis too), then `pnpm verify:rc1 && pnpm verify:p2`.
+   basis too), then `pnpm test`.
 3. **Added or removed a normative file**: `pnpm regen:rc1-inputs` **then**
-   `pnpm regen:map-digests`, then `pnpm verify:rc1 && pnpm verify:p2`.
+   `pnpm regen:map-digests`, then `pnpm test`.
 4. **Added any new source, test, or doc file**: first admit it to the bounded
    source set (below), then run step 1.
 

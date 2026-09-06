@@ -7,13 +7,23 @@ remain out of scope for this initiative by the ruling recorded in MIN-042.
 
 ## What is built (S077), and what that fixes about the boundary
 
-`packages/core/src/app-server-observer.ts` folds a supplied App Server notification
+> Retirement note (TCRN-CROSS-STORY-360). The two modules this section describes,
+> `packages/core/src/app-server-observer.ts` and
+> `packages/core/src/codex-execution-collection.ts`, retired in
+> TCRN-CROSS-STORY-358, and the two proofs named below, `verify:act8` and
+> `verify:act10`, retired with the ticket-numbered `verify:*` roster in
+> TCRN-CROSS-STORY-359. Neither command exists in `package.json`. What the section
+> records is what was observed and proved at the time, which is why it is kept;
+> it is not a description of the tree as it stands, and `git tag attic-2026-09`
+> holds the retired code.
+
+`packages/core/src/app-server-observer.ts` folded a supplied App Server notification
 stream into a bounded receipt: per-group and per-method counts, unknown-method and
 malformed-frame counts, and a protocol binding. It retains no `params`, so command
 output, file paths and message text stay in the host. It is read-only by
 construction — the module names none of the protocol's driving verbs, opens no
-socket, and issues no request; `pnpm verify:act8` asserts all of that against the
-source.
+socket, and issued no request; `verify:act8` asserted all of that against the
+source while both existed.
 
 The shipped Observer does not attach to a live App Server; the stream is
 *supplied* to it. S057 later used a separate bounded evidence harness for one live
@@ -35,7 +45,7 @@ lifecycle return `unavailable`; replay and cross-session contamination fail clos
 The transcript projection remains unsigned attribution evidence, not identity
 proof.
 
-`pnpm verify:act10` proves the collector against hostile 0.139.0-shaped fixtures.
+`verify:act10` proved the collector against hostile 0.139.0-shaped fixtures.
 S057 additionally attached a bounded harness once to the real pinned App Server,
 passed 28 raw/readback comparisons, produced one unsigned fresh-context Workflow
 execution receipt, and cleanly tore down its launched process tree. That exact

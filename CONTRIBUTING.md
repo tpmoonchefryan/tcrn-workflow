@@ -1,7 +1,5 @@
 # Contributing
 
-English · [简体中文](./CONTRIBUTING.zh-CN.md) · [日本語](./CONTRIBUTING.ja.md) · [한국어](./CONTRIBUTING.ko.md) · [Français](./CONTRIBUTING.fr.md)
-
 Use the pinned Node and pnpm versions. Do not enable package lifecycle scripts,
 add an unpinned executable, introduce telemetry, or make a project command
 implicitly access the network.
@@ -19,8 +17,10 @@ variables, and runs the P1 and lessons gates without fail-fast so all red legs a
 visible in the same receipt. The preflight probe contract is executable: do not use
 zsh command modifiers, shell conjunctions, `PIPESTATUS`, `ref:path` probes, `tail`,
 `head`, or `grep` as a verdict. `pnpm verify:privacy` judges the checked-out
-HEAD-reachable public surface; `pnpm verify:privacy:history` is a separate local
-diagnostic and may remain red when retained historical tags contain retired bytes.
+HEAD-reachable public surface. The separate history diagnostic it used to name,
+`verify:privacy:history`, retired with the rest of the ticket-numbered `verify:*`
+roster in TCRN-CROSS-STORY-359; retained historical tags may still contain retired
+bytes, and no gate in this repository judges them.
 
 Dependencies must be exact versions, compatible with Apache-2.0 distribution,
 and added to the offline dependency and vulnerability policies. Source files
@@ -221,13 +221,16 @@ costs a human a session; regenerating group A must never be able to silently
 spend that. Stale provenance stated is recoverable — a blank where an observation
 used to be is not.
 
-## Documentation and translations
+## Documentation
 
-The human-facing root documents are mirrored into the languages declared in
-`scripts/policy/doc-coverage.json` and follow the house style in
-`docs/style/house-style.md`. English is authoritative; each translation pins the
-SHA-256 of its English source. When you change one of these documents, re-sync and
-re-pin every translation in the same change — `pnpm push-gate` fails closed on a
-stale pin, a missing translation, a version left behind in prose, or the CJK
-emphasis rule. `LICENSE`, `NOTICE`, `CHANGELOG.md` and `SUPPORT.md` are
-English-only by policy.
+The human-facing root documents are single-language and follow the house style in
+`docs/style/house-style.md`. `README.md` is written in Simplified Chinese and is
+authoritative; every other root document is English. The twenty locale mirrors and
+the `tcrn-doc-synced-to` pins that held them to their English sources retired in
+TCRN-CROSS-STORY-360, together with `scripts/policy/doc-coverage.json` — every edit
+to an English source had to re-translate and re-pin four files, and the pins were
+stale in the tree at the moment they were removed. `pnpm push-gate` still fails
+closed on a version left behind in `README.md` prose and on the CJK emphasis rule.
+
+When to cut a release, and what the version number is allowed to track, are in
+`docs/versioning/release-policy.md`.

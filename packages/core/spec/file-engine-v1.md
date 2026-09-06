@@ -36,9 +36,11 @@ never moved a byte carries the same one-way cost. The tenth field fails the
 closed-field check with `WORKSPACE_SCHEMA_INVALID` on any `v0.8.0`-or-earlier
 binary. The aborted case is named because the ledger is append-only and abort is the
 documented recovery verb, so it is the case an operator is most likely to reach and
-least likely to expect. Rationale, the refused alternatives,
-and the two ceilings of the mechanism are in
-`docs/adr/0003-workspace-relocation.md`.
+least likely to expect. The rationale, the refused alternatives and the two
+ceilings of the mechanism were in `docs/adr/0003-workspace-relocation.md`, which
+retired with the relocation verb family in TCRN-CROSS-STORY-358; `git tag
+attic-2026-09` holds both. The ledger reader described here did not retire and is
+still live, which is why this field is still specified.
 
 `roots` is never rewritten. It records the binding the workspace was created with;
 after a relocation the ACTIVE binding is the `to` of the newest adopted hop, and

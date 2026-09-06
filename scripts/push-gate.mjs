@@ -9,8 +9,10 @@
 // itself, which is precisely the class this program kept shipping:
 //
 //   * The rc.6 cut advanced package.json and FRAMEWORK_VERSION, which verify:p8 checks,
-//     and left the status badge in all five READMEs reading rc.5, which nothing checked.
-//     A reader takes the version from the badge. Check 2.
+//     and left the status badge reading rc.5, which nothing checked. TCRN-CROSS-STORY-360
+//     removed the badges themselves rather than the check: a shields.io URL is a literal
+//     that cannot read the value it states, so every release had to drag four of them by
+//     hand across five files. The version now lives in prose, where check 2d holds it.
 //
 //   * A release note and a CHANGELOG heading are the two places a version is announced
 //     in prose, so they are the two places nothing derives it from the source. Check 3.
@@ -21,11 +23,11 @@
 //     Check 4 refuses to approve a push whose version already has a tag pointing
 //     somewhere else.
 //
-//   * All five READMEs fell a full minor version behind on capabilities while the badge
-//     stayed current, and four human-facing root docs had no translation at all. Check 2d
-//     holds the current version in prose (not only the badge); check 2e requires every
-//     declared translation to exist and pins each translated root doc to the SHA-256 of its
-//     English source, so English cannot move ahead of a stale mirror unnoticed.
+//   * The READMEs fell a full minor version behind on capabilities while the badge stayed
+//     current. Check 2d holds the current version in prose. The translation mirrors that
+//     check 2e used to pin retired in TCRN-CROSS-STORY-360 -- twenty files, four locales,
+//     re-pinned by hand on every change to an English source -- so this gate no longer
+//     reads a translated document; README.md is the only mirror left, and it is the source.
 //
 // Warnings are failures here. There is no --force.
 
@@ -39,7 +41,6 @@ import { fileURLToPath } from "node:url";
 import { P8_VERSION } from "./lib/p8-workflow-rc.mjs";
 import { ENGINE_PUSH_GATE_CHILDREN } from "./lib/push-gate-children.mjs";
 import { requiredFailurePatternProblems } from "./preflight.mjs";
-import { P1_TASKS } from "./p1-sequence.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -131,81 +132,13 @@ await timedStage("git-status-before", async () => {
   else if (status.output.trim() !== "") fail("PUSH_GATE_TREE_DIRTY", status.output.trim().split("\n").slice(0, 5).join(" | "));
 });
 
-// 2. The version as the reader sees it, and whether the reader sees prose at all.
-//
-//    Nothing else in this repository reads the translations. verifyMap parses the claim
-//    badge out of README.md and stops there, so a translated document could say anything,
-//    in any state of repair, and every gate would stay green. Two defects shipped through
-//    that hole in one release: a status badge left at the previous version in all five
-//    files, and eighteen emphasis spans that render as literal asterisks in Chinese and
-//    Japanese.
-const badgeVersion = P8_VERSION.replaceAll("-", "--");
-await timedStage("version-badge-and-cjk-emphasis", async () => {
-  for (const document of ["README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
-    const body = await read(document);
-    const published = [...body.matchAll(/status-([0-9][^-\s)]*(?:--[^-\s)]+)*)-blue/gu)].map((match) => match[1]);
-    if (published.length === 0) fail("PUSH_GATE_STATUS_BADGE_MISSING", document);
-    else if (!published.every((value) => value === badgeVersion)) fail("PUSH_GATE_STATUS_BADGE_STALE", `${document}: ${published.join(", ")} != ${badgeVersion}`);
-    checkCjkEmphasis(document, body);
-  }
-});
-
-// 2a. All four derived README badges must match their sources. Three badges beyond the status
-//     version were declared in all five READMEs but never checked, and three of them drifted:
-//     the proven claims count rose from 122 to 124 (INC-269, INC-270) and nothing noticed;
-//     verify%3Ap1 gates and runtime%20deps are checked here for the first time. (TCRN-CROSS-INC-271)
-//
-//     Badge text is percent-encoded in the shields.io URL (`%3A` for colon, `%20` for space),
-//     so the matcher must handle that. The sources of truth:
-//
-//     - status-<version>-blue: already checked above (keep existing version-badge-and-cjk-emphasis)
-//     - verify%3Ap1-<N>%20gates: count of commands in the P1 gate train (P1_TASKS)
-//     - proven%20claims-<N>: count of claims in verification-map.yaml
-//     - runtime%20deps-<N>: count of keys in package.json's dependencies object
-await timedStage("derived-badges-verification", async () => {
-  // Derive the source-of-truth values.
-  const p1GateCount = P1_TASKS.length;
-  const verificationMapRaw = JSON.parse(await read("verification-map.yaml"));
-  const claimsCount = (verificationMapRaw.claims ?? []).length;
-  const packageJson = JSON.parse(await read("package.json"));
-  const depsCount = Object.keys(packageJson.dependencies ?? {}).length;
-
-  // Expected badge values (with URL encoding).
-  const expectedBadges = {
-    "verify%3Ap1-<N>%20gates": `verify%3Ap1-${p1GateCount}%20gates`,
-    "proven%20claims-<N>": `proven%20claims-${claimsCount}`,
-    "runtime%20deps-<N>": `runtime%20deps-${depsCount}`,
-  };
-
-  // Fixed reason codes for each badge type.
-  const reasonCodes = {
-    "verify%3Ap1-<N>%20gates": { missing: "PUSH_GATE_P1_GATES_BADGE_MISSING", stale: "PUSH_GATE_P1_GATES_BADGE_STALE" },
-    "proven%20claims-<N>": { missing: "PUSH_GATE_CLAIMS_BADGE_MISSING", stale: "PUSH_GATE_CLAIMS_BADGE_STALE" },
-    "runtime%20deps-<N>": { missing: "PUSH_GATE_RUNTIME_DEPS_BADGE_MISSING", stale: "PUSH_GATE_RUNTIME_DEPS_BADGE_STALE" },
-  };
-
-  // Check each README.
-  for (const document of ["README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
-    const body = await read(document);
-
-    // Extract all badge patterns from the shields.io badge line.
-    // Badges appear in URLs like: /badge/verify%3Ap1-24%20gates-brightgreen
-    const badgeMatches = [...body.matchAll(/\/badge\/([a-zA-Z0-9%]+(?:-[a-zA-Z0-9%]+)*)-(?:blue|brightgreen|success|informational|important|blueviolet|lightgrey)\?/gu)];
-
-    for (const [badgeType, expectedValue] of Object.entries(expectedBadges)) {
-      const badgePattern = badgeType.split("-<N>")[0]; // e.g., "verify%3Ap1-"
-      const found = badgeMatches.find((match) => match[1].startsWith(badgePattern));
-
-      if (!found) {
-        fail(reasonCodes[badgeType].missing, `${document}: ${badgeType}`);
-      } else {
-        const actual = found[1];
-        if (actual !== expectedValue) {
-          fail(reasonCodes[badgeType].stale, `${document}: ${actual} != ${expectedValue}`);
-        }
-      }
-    }
-  }
+// 2. Whether the reader sees prose at all. README.md is written in Simplified Chinese, so
+//    the emphasis rule above is the defect class that actually reaches it: eighteen spans
+//    shipped once rendering as literal asterisks. The status badge that used to be checked
+//    here went with the rest of the badge block in TCRN-CROSS-STORY-360.
+await timedStage("cjk-emphasis", async () => {
+  const document = "README.md";
+  checkCjkEmphasis(document, await read(document));
 });
 
 // 2b. The version in prose, not just in the badge.
@@ -222,8 +155,9 @@ await timedStage("derived-badges-verification", async () => {
 //     instead to documents that speak in the present tense about *this* version, which are
 //     enumerated here. A document that joins that set must be added to this list.
 const currentVersionDocuments = [
-  "README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.fr.md",
+  "README.md",
   "docs/versioning/versioning-policy.md",
+  "docs/versioning/release-policy.md",
   "docs/compatibility/supported-modes.md",
 ];
 await timedStage("stale-version-prose", async () => {
@@ -278,52 +212,15 @@ await timedStage("failure-pattern-register", async () => {
   }
 });
 
-// 2d. The version in the "Status" prose, not only in the badge. (INIT-011 S086)
-//     Check 2 pins the badge; a reader also takes the current version from the Status
-//     section. The stale-version scan (2b) only matches `-rc.` strings, so a release-to-
-//     release lag in prose -- exactly the debt that left all five READMEs a version behind
-//     on capabilities -- sails through it. Require the current version to appear in prose,
-//     with the status badge stripped first so the badge alone cannot satisfy the check.
+// 2d. The version in the "Status" prose. (INIT-011 S086) This was the weaker of a pair --
+//     check 2 pinned the badge and this one caught the release-to-release lag the badge
+//     hid. With the badge block retired in TCRN-CROSS-STORY-360 it is the only check on
+//     the version a reader sees, which is the right place for it: prose is what a reader
+//     reads, and it is the one statement of the version a release still has to move.
 await timedStage("status-version-prose", async () => {
-  for (const document of ["README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.fr.md"]) {
-    const prose = (await read(document)).replaceAll(/status-[0-9][^)\s]*-blue/gu, "");
-    if (!prose.includes(P8_VERSION)) fail("PUSH_GATE_STATUS_VERSION_ABSENT", `${document}: "${P8_VERSION}" appears only in the badge, not in prose`);
-  }
-});
-
-// 2e. A convenience translation of a root document must stay pinned to the English bytes it
-//     was translated from. (INIT-011 S087/S088) The five READMEs are held current by the
-//     badge and prose-version checks above; the smaller root docs each carry a synced-to pin
-//     equal to the SHA-256 of their English source, so English can never move ahead of a
-//     stale mirror without this failing closed. Coverage is declared in doc-coverage.json,
-//     so a missing language is a failure rather than a silent gap, and the same CJK emphasis
-//     rule runs over every mirror. LICENSE, NOTICE, CHANGELOG and SUPPORT are English-only by
-//     policy and are listed there, not mirrored.
-const coverage = JSON.parse(await read("scripts/policy/doc-coverage.json"));
-await timedStage("translation-mirror-pins", async () => {
-  for (const [source, spec] of Object.entries(coverage.sources)) {
-    if (spec.kind !== "rootdoc") continue;
-    const dot = source.lastIndexOf(".");
-    const base = source.slice(0, dot);
-    const ext = source.slice(dot + 1);
-    const englishDigest = createHash("sha256").update(await readFile(resolve(repositoryRoot, source))).digest("hex");
-    for (const language of coverage.languages) {
-      // STORY-300: mirrors may live beside their source or in a declared directory.
-      // The code of conduct's had to move, because GitHub resolves that family by
-      // matching the name and taking the first, and `.fr` sorts before `.md`.
-      const mirror = spec.mirrorDirectory === undefined
-        ? `${base}.${language}.${ext}`
-        : `${spec.mirrorDirectory}/${base}.${language}.${ext}`;
-      let body;
-      try { body = await read(mirror); } catch { fail("PUSH_GATE_TRANSLATION_MISSING", mirror); continue; }
-      checkCjkEmphasis(mirror, body);
-      if (!spec.pinned) continue;
-      const pin = body.match(/<!--\s*tcrn-doc-synced-to:\s*(\S+)\s+([0-9a-f]{64})\s*-->/u);
-      if (!pin) fail("PUSH_GATE_TRANSLATION_PIN_MISSING", mirror);
-      else if (pin[1] !== source) fail("PUSH_GATE_TRANSLATION_PIN_SOURCE", `${mirror}: pins ${pin[1]}, expected ${source}`);
-      else if (pin[2] !== englishDigest) fail("PUSH_GATE_TRANSLATION_PIN_STALE", `${mirror}: ${pin[2].slice(0, 12)} != ${englishDigest.slice(0, 12)}`);
-    }
-  }
+  const document = "README.md";
+  const prose = await read(document);
+  if (!prose.includes(P8_VERSION)) fail("PUSH_GATE_STATUS_VERSION_ABSENT", `${document}: "${P8_VERSION}" does not appear in prose`);
 });
 
 // 2f. The host evidence receipt: present, and not older than the window.

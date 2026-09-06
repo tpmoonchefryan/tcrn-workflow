@@ -1,11 +1,12 @@
 # Security Policy
 
-English · [简体中文](./SECURITY.zh-CN.md) · [日本語](./SECURITY.ja.md) · [한국어](./SECURITY.ko.md) · [Français](./SECURITY.fr.md)
-
 ## Supported versions
 
-Security fixes target the current default branch and the latest tagged release
-(`0.6.0`). In the `0.x` range there is no back-port lane: upgrade to the latest
+Security fixes target the current default branch and the latest tagged release,
+whichever version that is; the number is not restated here, because a version
+written into a policy document is dragged by hand on every release and gated by
+nothing -- this sentence named `0.6.0` for the length of a major-version train. In
+the `0.x` range there is no back-port lane: upgrade to the latest
 minor to receive fixes. Earlier minor releases and any pre-release candidate are
 not separately maintained. A release is supported only once its bundle is
 verified against an external trust root and separately accepted.

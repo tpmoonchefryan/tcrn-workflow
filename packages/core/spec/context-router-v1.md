@@ -87,7 +87,9 @@ real-time or production service guarantees.
 
 ## Status
 
-Context Router is implemented only after `pnpm verify:p6` returns
-`P6_CONTEXT_ROUTER_VERIFIED`. The Codex Adapter is implemented only as separately
+Context Router is not implemented. The admission condition this section stated was
+`pnpm verify:p6` returning `P6_CONTEXT_ROUTER_VERIFIED`; that script retired in
+TCRN-CROSS-STORY-359 and no replacement was written, so the condition names nothing
+that can be run and admitting the Router now requires a new one. The Codex Adapter is implemented only as separately
 verified inert templates, RC3 remains unaccepted, and no owner-visible activation
 is claimed.

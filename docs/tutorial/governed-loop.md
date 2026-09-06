@@ -4,9 +4,10 @@ This tutorial walks the whole product in one sitting: from an empty workspace to
 completed story whose closing decision is ratified in a conference, distilled into
 the knowledge store, promoted, and then traced back through an unbroken chain of
 digests. Every command below is a real governed CLI verb, and every one of them is
-replayed verbatim by the hermetic proof `tests/e2e-governed-loop.test.mjs` under
-`pnpm verify:e2e` — the tutorial and the proof are diffed against each other, so a
-command that drifts here fails the build.
+replayed verbatim by the hermetic proof `tests/e2e-governed-loop.test.mjs`, which
+`pnpm test` runs — the tutorial and the proof are diffed against each other, so a
+command that drifts here fails the build. The `verify:e2e` name that used to select
+that one file retired in TCRN-CROSS-STORY-359; the proof did not.
 
 The loop is:
 
