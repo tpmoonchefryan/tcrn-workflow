@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { promisify } from "node:util";
-import { dirname, join, parse, relative, resolve, sep } from "node:path";
+import { dirname, extname, join, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // The install manifest is the only path/residence authority. The doctor consumes
@@ -531,6 +531,172 @@ function proofBudgetVerdict(values, source) {
     coreSourceLineCap,
     source,
   });
+}
+
+// TCRN-CROSS-STORY-361: the charter rule "no consumer, isolate it", with a leg that can
+// see whether it is being followed. `packages/core/src/index.ts` is this engine's public
+// surface, and until this leg existed nothing measured how much of that surface anything
+// outside core actually calls. STORY-358 retired six families of it by hand, one module
+// at a time, because looking was the only way to find them.
+//
+// What counts as a consumer is data rather than code: the roots live in
+// scripts/policy/core-export-consumers.json, so widening them is an act somebody has to
+// write down, the same posture surfaceCaps above takes toward raising a cap. Tests are
+// excluded on purpose. A symbol whose only caller is its own test is exactly the shape
+// STORY-358 spent an Epic removing, and admitting tests here would have reported every
+// one of those modules as consumed on the day before it was deleted.
+//
+// The matching is deliberately crude, the same posture scripts/task.mjs's reportBudget
+// takes toward counting lines: the consumer files are tokenised once into the set of
+// JavaScript identifiers they contain, and a symbol is consumed if its name is in that
+// set. It can call a symbol consumed because its name appears in a comment. It cannot
+// call one consumed that appears nowhere.
+//
+// Two things turn it red, and the second is what keeps the data file from rotting into
+// the permanent amnesty the first would otherwise buy:
+//   - an exported symbol with no consumer that the file does not already record;
+//   - a recorded entry that has since gained a consumer, or whose symbol no longer
+//     exists, because the file is a register of debt and debt that was paid must leave it.
+const CORE_EXPORT_CONSUMER_EXTENSIONS = new Set([".ts", ".mjs", ".js"]);
+
+/**
+ * Every name `packages/core/src/index.ts` exposes: the declarations it makes itself and
+ * the value and `export type` blocks it re-exports from its modules.
+ *
+ * Both block forms are read, and that is not decoration -- a barrel re-exports types in
+ * their own blocks, so a reader that only walked the value blocks would call the whole
+ * type surface unexported and never report a single one of it.
+ */
+export function coreExportedSymbols(source) {
+  const names = new Set();
+  for (const match of source.matchAll(/^export\s+(?:declare\s+)?(?:async\s+)?(?:const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/gmu)) {
+    names.add(match[1]);
+  }
+  for (const match of source.matchAll(/^export\s+(?:type\s+)?\{([^}]*)\}/gmu)) {
+    for (const raw of match[1].split(",")) {
+      const token = raw.trim().replace(/^type\s+/u, "");
+      if (token.length === 0) continue;
+      // `A as B` exposes B; the local name is core's business, not a consumer's.
+      const exposed = token.split(/\s+as\s+/u).at(-1).trim();
+      if (/^[A-Za-z_$][\w$]*$/u.test(exposed)) names.add(exposed);
+    }
+  }
+  return [...names].sort();
+}
+
+async function coreExportConsumerFiles(checkoutRoot, roots) {
+  const paths = [];
+  for (const entry of roots) {
+    if (typeof entry !== "string" || entry.length === 0) continue;
+    const absolute = join(checkoutRoot, entry);
+    const stats = await existingPath(absolute);
+    if (!stats) continue;
+    if (stats.isDirectory()) paths.push(...await walkFiles(absolute));
+    else if (stats.isFile()) paths.push(absolute);
+  }
+  const consumers = [];
+  for (const absolute of paths) {
+    const path = toPosixPath(relative(checkoutRoot, absolute));
+    if (!CORE_EXPORT_CONSUMER_EXTENSIONS.has(extname(path))) continue;
+    if (path.endsWith(".test.mjs") || path.split("/").includes("tests")) continue;
+    consumers.push(path);
+  }
+  return [...new Set(consumers)].sort();
+}
+
+async function inspectUnusedExports(platformRoot, options) {
+  if (options.unusedExports && typeof options.unusedExports === "object") {
+    return unusedExportsVerdict(options.unusedExports, "synthetic");
+  }
+  const checkoutRoot = join(platformRoot, "TCRN Platform", "tcrn-workflow");
+  let policy = null;
+  try {
+    policy = JSON.parse(await readFile(join(checkoutRoot, "scripts", "policy", "core-export-consumers.json"), "utf8"));
+  } catch (error) {
+    if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+  }
+  if (policy === null || typeof policy !== "object") {
+    // The same distinction proofBudget draws above: a container that only consumes this
+    // engine has no core to walk, and "nothing to compare" must not read as "compared
+    // and passed".
+    return check("unusedExports", true, {
+      comparable: false,
+      reason: "no core-export consumer policy in this container, so the public core surface has nothing to compare against",
+      source: "live-engine-checkout",
+    });
+  }
+  let barrel = null;
+  try {
+    barrel = await readFile(join(checkoutRoot, "packages", "core", "src", "index.ts"), "utf8");
+  } catch (error) {
+    if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+  }
+  if (barrel === null) {
+    return check("unusedExports", true, {
+      comparable: false,
+      reason: "no packages/core/src/index.ts in this container, so there is no public core surface to read",
+      source: "live-engine-checkout",
+    });
+  }
+  const consumerRoots = Array.isArray(policy.consumerRoots) ? policy.consumerRoots : [];
+  const consumerFiles = await coreExportConsumerFiles(checkoutRoot, consumerRoots);
+  let identifiers = new Set();
+  for (const path of consumerFiles) {
+    for (const token of (await readFile(join(checkoutRoot, path), "utf8")).match(/[A-Za-z_$][\w$]*/gu) ?? []) {
+      identifiers.add(token);
+    }
+  }
+  const exported = coreExportedSymbols(barrel);
+  return unusedExportsVerdict({
+    exported,
+    unconsumed: exported.filter((name) => !identifiers.has(name)),
+    allowed: Array.isArray(policy.allowedUnconsumed) ? policy.allowedUnconsumed : [],
+    consumerRoots,
+    consumerFiles: consumerFiles.length,
+  }, "live-engine-checkout");
+}
+
+function unusedExportsVerdict(values, source) {
+  const exported = [...(values.exported ?? [])];
+  const unconsumed = [...(values.unconsumed ?? [])];
+  const allowed = [...(values.allowed ?? [])];
+  const exportedSet = new Set(exported);
+  const unconsumedSet = new Set(unconsumed);
+  const unconsumedWithoutAllowance = unconsumed.filter((name) => !allowed.includes(name)).sort();
+  // Split by cause rather than merged into one "stale" list: an allowance whose symbol
+  // is gone was paid off by a removal, and one that is now called was paid off by a
+  // consumer arriving. Both must leave the file; a reader still needs to know which
+  // happened, because only one of them is a retirement.
+  const absentAllowances = allowed.filter((name) => !exportedSet.has(name)).sort();
+  const consumedAllowances = allowed.filter((name) => exportedSet.has(name) && !unconsumedSet.has(name)).sort();
+  const measured = {
+    exportedCount: exported.length,
+    unconsumedCount: unconsumed.length,
+    allowedCount: allowed.length,
+    consumerRoots: values.consumerRoots ?? null,
+    consumerFiles: values.consumerFiles ?? null,
+    source,
+  };
+  if (unconsumedWithoutAllowance.length > 0) {
+    return check("unusedExports", false, {
+      reasonCode: "PLATFORM_CORE_EXPORT_UNCONSUMED",
+      unconsumedWithoutAllowance,
+      absentAllowances,
+      consumedAllowances,
+      remedy: "give the symbol a consumer in one of the recorded roots, retire it from packages/core/src/index.ts, or add it to allowedUnconsumed in scripts/policy/core-export-consumers.json and say why it is kept in that file's allowedUnconsumedRationale",
+      ...measured,
+    });
+  }
+  if (absentAllowances.length > 0 || consumedAllowances.length > 0) {
+    return check("unusedExports", false, {
+      reasonCode: "PLATFORM_CORE_EXPORT_ALLOWANCE_STALE",
+      absentAllowances,
+      consumedAllowances,
+      remedy: "drop these entries from allowedUnconsumed in scripts/policy/core-export-consumers.json in the same change that retired or connected them",
+      ...measured,
+    });
+  }
+  return check("unusedExports", true, measured);
 }
 
 // TCRN-CROSS-INC-224: headroom on the chain's lifetime event bound, reported before the
@@ -2563,6 +2729,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
       await inspectHelperCopies(root, homeRoot, manifest, options),
       await inspectHelperReleaseAlignment(root, homeRoot, options),
       await inspectProofBudget(root, homeRoot, options),
+      await inspectUnusedExports(root, options),
       await inspectChainHeadroom(root, options),
       await inspectChainValidation(root, options),
       await inspectAcceptanceVerdicts(root, options),

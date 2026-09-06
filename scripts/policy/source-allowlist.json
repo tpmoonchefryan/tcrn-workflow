@@ -340,6 +340,7 @@
     "scripts/policy/adr-criteria.json",
     "scripts/policy/ceremony-cost-init048.json",
     "scripts/policy/closeout-inc263-baseline.json",
+    "scripts/policy/core-export-consumers.json",
     "scripts/policy/coverage-baseline.json",
     "scripts/policy/coverage-waivers.json",
     "scripts/policy/dependency-policy.json",

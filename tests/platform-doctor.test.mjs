@@ -22,7 +22,7 @@ function test(name, optionsOrBody, maybeBody) {
   queuedTests.push([name, { ...options, concurrency: true }, body]);
 }
 
-import { adapterIdentityObservations, inspectChainValidation, inspectPlatform } from "../scripts/platform-doctor.mjs";
+import { adapterIdentityObservations, coreExportedSymbols, inspectChainValidation, inspectPlatform } from "../scripts/platform-doctor.mjs";
 import { GUARDED_TREES, HOSTS, claudeHookSettings, hookEntriesFor } from "../scripts/host-harness.mjs";
 import { applyHostHarness } from "../scripts/host-harness-apply.mjs";
 import { INSTALL_MANIFEST } from "../dist/build/packages/core/src/index.js";
@@ -1551,6 +1551,146 @@ test("retiring surface and lowering its cap together turns a red case green", as
     coreSourceLines: 32086, coreSourceLineCap: 32086,
   }));
   assert.equal(raised.ok, true);
+});
+
+// TCRN-CROSS-STORY-361. The same neutrality proofBudget draws above: a container that
+// only consumes this engine has no packages/core to walk. Red leg: judge on the
+// directory existing rather than on the policy file being readable, and the leg starts
+// reading whatever core-export-consumers.json happens to sit on the machine running
+// the suite.
+test("unusedExports is neutral when the platform root carries no core-export consumer policy", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const result = await inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    acceptanceHeadCommit: FIXTURE_COMMIT,
+  });
+  const leg = result.checks.find((entry) => entry.name === "unusedExports");
+  assert.equal(leg.ok, true, "a container with no core-export policy is not broken");
+  assert.equal(leg.comparable, false);
+  assert.equal(leg.source, "live-engine-checkout");
+});
+
+// GWT2, in the form the leg has to survive: the recorded isolation debt is 484 symbols
+// wide, so a leg that reported every unconsumed export would be red forever and would be
+// deleted within a week. It reports the ones the file does not already record, which is
+// the only version of this check anybody would keep. Red leg: compare counts instead of
+// names, and swapping a retired symbol for a new one stays green.
+test("unusedExports names the export that is not already recorded as isolated", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const leg = (result) => result.checks.find((entry) => entry.name === "unusedExports");
+  const run = (unusedExports) => inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    acceptanceHeadCommit: FIXTURE_COMMIT,
+    unusedExports,
+  });
+
+  const recorded = leg(await run({
+    exported: ["alpha", "beta", "gamma"],
+    unconsumed: ["beta", "gamma"],
+    allowed: ["beta", "gamma"],
+    consumerFiles: 23,
+  }));
+  assert.equal(recorded.ok, true, "debt already written down is not a new finding");
+  assert.equal(recorded.unconsumedCount, 2);
+  assert.equal(recorded.allowedCount, 2);
+
+  const added = leg(await run({
+    exported: ["alpha", "beta", "gamma"],
+    unconsumed: ["beta", "gamma"],
+    allowed: ["beta"],
+    consumerFiles: 23,
+  }));
+  assert.equal(added.ok, false);
+  assert.equal(added.reasonCode, "PLATFORM_CORE_EXPORT_UNCONSUMED");
+  assert.deepEqual(added.unconsumedWithoutAllowance, ["gamma"], "only the unrecorded symbol is named");
+  // The measured counts stay at the top level whichever half tripped, so a reader is
+  // never left reconstructing them from the lists.
+  assert.equal(added.exportedCount, 3);
+  assert.equal(added.unconsumedCount, 2);
+});
+
+// The half that keeps the file a register rather than an amnesty. An entry may only
+// leave allowedUnconsumed, and it must leave the moment the debt is paid -- otherwise
+// the list outlives the symbols it names and the next reader inherits 484 lines of
+// which some unknown number are fiction. Red leg: report only unconsumed exports, and
+// the file rots exactly the way scripts/policy/coverage-baseline.json was found to.
+test("a recorded allowance that gained a consumer or lost its symbol is its own red", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const leg = (result) => result.checks.find((entry) => entry.name === "unusedExports");
+  const run = (unusedExports) => inspectPlatform(fixture.root, {
+    homeRoot: fixture.home,
+    launchdLabels: [launchdLabel],
+    acceptanceHeadCommit: FIXTURE_COMMIT,
+    unusedExports,
+  });
+
+  // Paid by a consumer arriving, and paid by a retirement: two different acts, reported
+  // apart, because only one of them shrank the public surface.
+  const stale = leg(await run({
+    exported: ["alpha", "beta"],
+    unconsumed: ["beta"],
+    allowed: ["alpha", "beta", "zeta"],
+    consumerFiles: 23,
+  }));
+  assert.equal(stale.ok, false);
+  assert.equal(stale.reasonCode, "PLATFORM_CORE_EXPORT_ALLOWANCE_STALE");
+  assert.deepEqual(stale.consumedAllowances, ["alpha"], "still exported, now called");
+  assert.deepEqual(stale.absentAllowances, ["zeta"], "no longer exported at all");
+  assert.deepEqual(stale.unconsumedWithoutAllowance, undefined);
+
+  // An unrecorded export and a stale allowance at once reports the unrecorded one,
+  // because that is the finding a reader has to act on before the file can be trimmed.
+  const both = leg(await run({
+    exported: ["alpha", "beta"],
+    unconsumed: ["alpha", "beta"],
+    allowed: ["alpha", "zeta"],
+    consumerFiles: 23,
+  }));
+  assert.equal(both.reasonCode, "PLATFORM_CORE_EXPORT_UNCONSUMED");
+  assert.deepEqual(both.unconsumedWithoutAllowance, ["beta"]);
+  assert.deepEqual(both.absentAllowances, ["zeta"], "the stale entry is still reported beside it");
+});
+
+// The barrel re-exports its type surface in its own `export type { ... }` blocks. A
+// reader that walked only the value blocks would call every one of those types
+// unexported and never report a single one of them -- the same shape that makes a
+// missed type re-export a TS2305 when a symbol is retired. Red leg: drop `type` from
+// the block pattern and the measured export count silently loses the types.
+test("coreExportedSymbols reads declarations, value blocks and type blocks alike", () => {
+  const symbols = coreExportedSymbols([
+    'export const FRAMEWORK_VERSION = "1.0.1" as const;',
+    "export type WorkflowMode = \"development\" | \"release\";",
+    "export interface ExplicitRoot { readonly path: string; }",
+    "export function admitDevelopment(): void {}",
+    'export { assertDistinctRoots, RootIdentityError } from "./root-identity.js";',
+    'export type { CanonicalRoot } from "./root-identity.js";',
+    "export {",
+    "  readVocabulary,",
+    "  VOCABULARY_VERSION,",
+    '} from "./vocabulary.js";',
+    "export type {",
+    "  SegmentIndexDocument,",
+    '} from "./segmented-backend.js";',
+    'export { internalName as publicName } from "./rename.js";',
+    "const notExported = 1;",
+  ].join("\n"));
+  assert.deepEqual(symbols, [
+    "CanonicalRoot",
+    "ExplicitRoot",
+    "FRAMEWORK_VERSION",
+    "RootIdentityError",
+    "SegmentIndexDocument",
+    "VOCABULARY_VERSION",
+    "WorkflowMode",
+    "admitDevelopment",
+    "assertDistinctRoots",
+    "publicName",
+    "readVocabulary",
+  ]);
+  assert.equal(symbols.includes("notExported"), false);
+  assert.equal(symbols.includes("internalName"), false, "a rename exposes the public name, not the local one");
 });
 
 nodeTest.describe("platform-doctor behavior matrix", { concurrency: platformDoctorConcurrency }, () => {
