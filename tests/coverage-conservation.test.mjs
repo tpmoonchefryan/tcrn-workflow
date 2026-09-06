@@ -2,9 +2,20 @@
 // INC-138 self-mutation: the conservation gate must actually turn red.
 
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { compareCoverageSurface, evaluateCoverage, validateWaivers } from "../scripts/coverage-conservation.mjs";
+import {
+  compareCoverageSurface,
+  evaluateCoverage,
+  evaluateSurvivingModuleCoverage,
+  measureExecutedBlocks,
+  resolveImportedModule,
+  retiredTestPaths,
+  validateWaivers,
+} from "../scripts/coverage-conservation.mjs";
 
 test("coverage conservation rejects a removed test without a replacement waiver", () => {
   const baseline = { "tests/example.test.mjs": `test("kept", () => { assert.equal(1, 1); });\ntest("removed", () => { assert.equal(1, 1); });` };
@@ -132,4 +143,71 @@ test("rejects disowned with empty-string ruling", () => {
     }
   }]);
   assert(result.some(msg => msg.includes("disowned.ruling must be non-empty")));
+});
+
+// TCRN-CROSS-STORY-359, Owner ruling TCRN-CROSS-MIN-144. The surviving-module leg exists
+// because coverage conservation was green four times while a module lost its only test,
+// so it needs its own red legs rather than only a green run on the real tree.
+
+test("STORY-359 retired test paths are the waived paths the tree no longer has", () => {
+  const waivers = [
+    { path: "tests/gone.test.mjs", testName: "a" },
+    { path: "tests/gone.test.mjs", testName: "b" },
+    { path: "tests/here.test.mjs", testName: "c" },
+  ];
+  assert.deepEqual(retiredTestPaths(waivers, ["tests/here.test.mjs"]), ["tests/gone.test.mjs"]);
+  assert.deepEqual(retiredTestPaths(waivers, ["tests/here.test.mjs", "tests/gone.test.mjs"]), []);
+});
+
+test("STORY-359 an imported build artifact resolves back to the TypeScript source that survives", () => {
+  const from = "tests/p7-compatibility-modes.test.mjs";
+  assert.equal(resolveImportedModule("../dist/build/packages/core/src/authority-file-reader.js", from), "packages/core/src/authority-file-reader.ts");
+  assert.equal(resolveImportedModule("../scripts/lib/safe-io.mjs", from), "scripts/lib/safe-io.mjs");
+  // Not judged: node builtins, packages, and a sibling test helper are not modules whose
+  // coverage this leg is about.
+  assert.equal(resolveImportedModule("node:test", from), null);
+  assert.equal(resolveImportedModule("ajv/dist/2020.js", from), null);
+  assert.equal(resolveImportedModule("./helpers.test.mjs", from), null);
+});
+
+test("STORY-359 a module that is only imported, never executed, reads as zero blocks", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "tcrn-coverage-probe-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  // The distinction the whole leg turns on: V8 records the module wrapper (an unnamed
+  // function) for anything merely loaded, and records named functions only when they run.
+  await writeFile(join(directory, "probe.json"), `${JSON.stringify({
+    result: [
+      { url: "file:///repo/dist/build/packages/core/src/imported-only.js", functions: [{ functionName: "", ranges: [{ startOffset: 0, endOffset: 99, count: 1 }] }] },
+      { url: "file:///repo/dist/build/packages/core/src/executed.js", functions: [{ functionName: "readAuthorityFile", ranges: [{ startOffset: 0, endOffset: 50, count: 3 }] }] },
+    ],
+  })}\n`);
+  const { totals } = await measureExecutedBlocks(directory, [
+    "dist/build/packages/core/src/imported-only.js",
+    "dist/build/packages/core/src/executed.js",
+    "dist/build/packages/core/src/absent.js",
+  ]);
+  assert.deepEqual(totals.get("dist/build/packages/core/src/imported-only.js"), { loaded: true, executedBlocks: 0 });
+  assert.deepEqual(totals.get("dist/build/packages/core/src/executed.js"), { loaded: true, executedBlocks: 1 });
+  assert.deepEqual(totals.get("dist/build/packages/core/src/absent.js"), { loaded: false, executedBlocks: 0 });
+});
+
+test("STORY-359 the gate reds when a surviving module the retired test imported executed nothing", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "tcrn-coverage-probe-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, "probe.json"), `${JSON.stringify({ result: [] })}\n`);
+  const waivers = [{ path: "tests/p7-compatibility-modes.test.mjs", testName: "any", reason: "r", replacement: "tests/other.test.mjs:any" }];
+  const red = await evaluateSurvivingModuleCoverage({ coverageDirectory: directory, waivers, currentTestPaths: [] });
+  assert.equal(red.ok, false);
+  assert.equal(red.reasonCode, "SURVIVING_MODULE_COVERAGE_ZERO");
+  assert.deepEqual(red.retiredTestFiles, ["tests/p7-compatibility-modes.test.mjs"]);
+  assert.ok(red.problems.some((problem) => problem.startsWith("packages/core/src/authority-file-reader.ts:")));
+});
+
+test("STORY-359 the gate reds when the retired test source cannot be recovered from Git", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "tcrn-coverage-probe-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const waivers = [{ path: "tests/never-existed.test.mjs", testName: "any", reason: "r", replacement: "tests/other.test.mjs:any" }];
+  const red = await evaluateSurvivingModuleCoverage({ coverageDirectory: directory, waivers, currentTestPaths: [] });
+  assert.equal(red.ok, false);
+  assert.ok(red.problems.some((problem) => problem.includes("unrecoverable from Git")));
 });

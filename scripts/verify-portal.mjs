@@ -11,7 +11,7 @@ import { spawnSync } from "node:child_process";
 const commands = [
   ["pnpm", ["run", "--silent", "portal:test"]],
   ["pnpm", ["run", "--silent", "portal:proof"]],
-  ["pnpm", ["run", "--silent", "verify:cross-repo-privacy"]],
+  [process.execPath, ["--test", "tests/cross-repo-privacy.test.mjs"]],
   [process.execPath, ["scripts/ds-component-css-reconcile.mjs"]],
   [process.execPath, ["scripts/ds-component-css-proof.mjs"]],
   [process.execPath, ["scripts/coverage-conservation.mjs"]],

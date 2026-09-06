@@ -79,8 +79,8 @@
       ]
     },
     "tests/act7-execution-collection.test.mjs": {
-      "testCount": 7,
-      "assertionCount": 27,
+      "testCount": 8,
+      "assertionCount": 30,
       "testNames": [
         "a collected receipt binds the observed invocation and never claims a signature",
         "collected receipts satisfy the EPIC-019 classifier end to end",
@@ -88,7 +88,8 @@
         "collection refuses to manufacture independence or accept malformed observations",
         "a transcript edited after observation reports drift, and is never reported as signed",
         "an observation with a non-fresh context cannot substantiate a multi-agent claim",
-        "the fixture pins the honesty boundary this proof claims"
+        "the fixture pins the honesty boundary this proof claims",
+        "STORY-359 the act7 fixture declares the corpus and binding values verifyAct7 used to pin"
       ]
     },
     "tests/actor-attestation.test.mjs": {
@@ -108,15 +109,16 @@
       ]
     },
     "tests/assignment-gate.test.mjs": {
-      "testCount": 6,
-      "assertionCount": 19,
+      "testCount": 7,
+      "assertionCount": 22,
       "testNames": [
         "valid assignment and gate records validate",
         "hostile assignment records fail closed",
         "hostile gate records fail closed",
         "list-by-work-item filters tombstones and other work items",
         "Draft 2020-12 schemas and runtime agree",
-        "extension registration records bind appliesTo work for assignment and gate"
+        "extension registration records bind appliesTo work for assignment and gate",
+        "STORY-359 the assignment-gate fixture declares the ledger and store values verifyAssignmentGate used to pin"
       ]
     },
     "tests/background-resource.test.mjs": {
@@ -214,14 +216,15 @@
       ]
     },
     "tests/ci-bootstrap.test.mjs": {
-      "testCount": 4,
-      "assertionCount": 12,
+      "testCount": 5,
       "testNames": [
         "CI acquires pinned pnpm online only after pinned Node and verifies it before dependencies",
         "CI retains explicit safe dependency acquisition and offline P1 execution",
+        "CI keeps minimal permissions, refuses pull_request_target, and runs the portal remediation train",
         "pull-request CI scans the contributor head, not GitHub",
         "every CI action is pinned to a commit SHA, never to a movable tag"
-      ]
+      ],
+      "assertionCount": 15
     },
     "tests/closeout-verify-dispositions.test.mjs": {
       "testCount": 18,
@@ -295,8 +298,8 @@
       ]
     },
     "tests/conference.test.mjs": {
-      "testCount": 8,
-      "assertionCount": 51,
+      "testCount": 10,
+      "assertionCount": 54,
       "testNames": [
         "valid conference request, position, and minutes validate",
         "operations bind positions and minutes to an open conference",
@@ -305,12 +308,13 @@
         "WSD-3: knowledge fields truncate on a code-point boundary without splitting a multi-byte code point",
         "hostile records fail closed",
         "Draft 2020-12 schema and runtime agree",
-        "extension registration binds appliesTo work and the conference schema digest"
+        "extension registration binds appliesTo work and the conference schema digest",
+        "MIN-102 the distilled summary is bounded by the knowledge store",
+        "STORY-359 the conference fixture declares the registration and store values verifyConference used to pin"
       ]
     },
     "tests/coverage-conservation.test.mjs": {
-      "testCount": 10,
-      "assertionCount": 21,
+      "testCount": 22,
       "testNames": [
         "coverage conservation rejects a removed test without a replacement waiver",
         "kept",
@@ -318,11 +322,24 @@
         "coverage conservation rejects an assertion-only loss while test names remain",
         "kept",
         "kept",
-        "coverage conservation requires waiver reason and replacement",
+        "coverage conservation requires waiver reason and either replacement or disowned",
         "coverage baseline completeness names an unregistered test file",
         "named test waivers remain executable when baseline carries testNames",
-        "kept"
-      ]
+        "kept",
+        "validates replacement waiver (regression)",
+        "validates disowned waiver",
+        "rejects waiver with neither replacement nor disowned",
+        "rejects waiver with both replacement and disowned",
+        "rejects disowned without ruling",
+        "rejects disowned without owningRepository",
+        "rejects disowned with empty-string ruling",
+        "STORY-359 retired test paths are the waived paths the tree no longer has",
+        "STORY-359 an imported build artifact resolves back to the TypeScript source that survives",
+        "STORY-359 a module that is only imported, never executed, reads as zero blocks",
+        "STORY-359 the gate reds when a surviving module the retired test imported executed nothing",
+        "STORY-359 the gate reds when the retired test source cannot be recovered from Git"
+      ],
+      "assertionCount": 44
     },
     "tests/cross-repo-privacy.test.mjs": {
       "testCount": 3,
@@ -352,8 +369,8 @@
       ]
     },
     "tests/dependency.test.mjs": {
-      "testCount": 9,
-      "assertionCount": 31,
+      "testCount": 10,
+      "assertionCount": 34,
       "testNames": [
         "valid dependencies validate across kinds and statuses",
         "canonical digest is stable across key order and covers unknown optional extensions",
@@ -363,7 +380,8 @@
         "list-blockers and list-by-work-item return canonical-ordered edges",
         "deterministic ordering over projectId then id across all permutations",
         "Draft 2020-12 schema and runtime agree",
-        "extension registration record binds appliesTo work and the dependency schema digest"
+        "extension registration record binds appliesTo work and the dependency schema digest",
+        "STORY-359 the dependency fixture declares the no-overclaim values verifyDependency used to pin"
       ]
     },
     "tests/dispatch-readiness-compliance.test.mjs": {
@@ -728,7 +746,6 @@
     },
     "tests/output-session-lifecycle.test.mjs": {
       "testCount": 106,
-      "assertionCount": 421,
       "testNames": [
         "bounded recovery-claim reads accept exactly 65,536 bytes and reject dense or sparse max-plus-one files",
         "bounded recovery-claim reads reject same-inode continuous and sparse growth after open",
@@ -768,7 +785,7 @@
         "PID reuse is treated as live for both owner and published claimant",
         "failed local publication tracking is inode-bound and cannot misclassify a replaced current-PID claim",
         "EEXIST publication cleans only the losing stage and preserves the competing fixed claim",
-        "dead-owner recovery has one claim winner and leaves neither lock nor sibling claim",
+        "dead-owner recovery leaves at most one claim winner and neither lock nor sibling claim",
         "two and three concurrent dead-owner recoverers permit one winner and leave CLEAN",
         "repeated two-and-three recoverer stress records only causal losers and always reaches CLEAN",
         "recovery resumes each dead crash state to the exact clean terminal state",
@@ -836,7 +853,8 @@
         "a nonzero detached controller propagates COMMAND_FAILED and releases the real task entrypoint cleanly",
         "the detached controller fails",
         "SIGKILL injection at each staged publication and release boundary resumes deterministically"
-      ]
+      ],
+      "assertionCount": 422
     },
     "tests/p1-roster.test.mjs": {
       "testCount": 5,
@@ -902,8 +920,8 @@
       ]
     },
     "tests/p3-file-engine.test.mjs": {
-      "testCount": 33,
-      "assertionCount": 160,
+      "testCount": 34,
+      "assertionCount": 168,
       "testNames": [
         "Workspace metadata schema, five-root initialization, CLI readback, and standalone boundary are exact",
         "Workspace root entries have exact Ajv/runtime field and type parity",
@@ -937,12 +955,12 @@
         "WSE-3: --actor threads through attestation-enable and the mutation verbs into the appended event payload, fail-closed after enable",
         "WSE-3: legacy mutations without --actor on a non-enabled workspace never write an actor key (byte-identical to rc.4)",
         "WSA-3 (create side): a done Initiative may not acquire a new live child, while a live Initiative may",
-        "WSA-3: closing an Initiative to done with live non-terminal descendants is refused; terminalising first lets it close"
+        "WSA-3: closing an Initiative to done with live non-terminal descendants is refused; terminalising first lets it close",
+        "STORY-359 the p3 fixture declares the corpus sizes verifyP3 used to pin"
       ]
     },
     "tests/p4-knowledge-core.test.mjs": {
-      "testCount": 39,
-      "assertionCount": 200,
+      "testCount": 41,
       "testNames": [
         "WSC-1: real workspace knowledge admission requires explicit disposability acknowledgment",
         "WSC-1: fixture workspace admits with no flag and reports fixture admission",
@@ -964,6 +982,7 @@
         "WSC-5: retire and reverify lifecycle transitions fail closed",
         "WSC-4: knowledge-list supports bounded substring search over subject and tags",
         "WSC-3: knowledge-create accepts unsorted arrays and sorts them server-side",
+        "STORY-359: the knowledge fixture declares exactly the limits the code enforces",
         "64 real insertion orders produce exact index, list, and checkpoint parity",
         "input, link, redaction, Unicode, body, summary, and snippet boundaries fail closed",
         "custom schema proof enforces the normative UTF-8 byte budgets",
@@ -982,8 +1001,10 @@
         "INIT-047 supersedes rejects an unavailable target before writing",
         "INIT-047 source digest check reports changes without hiding metadata",
         "INIT-047 article index cards stay explicit-only for default context",
-        "INIT-047: supersedes is validated, source digests are computed and source changes are reported"
-      ]
+        "INIT-047: supersedes is validated, source digests are computed and source changes are reported",
+        "STORY-359 the p4 knowledge fixture declares the corpus sizes verifyP4Knowledge used to pin"
+      ],
+      "assertionCount": 208
     },
     "tests/p5-core-reference-personas.test.mjs": {
       "testCount": 7,
@@ -999,8 +1020,8 @@
       ]
     },
     "tests/p5-generic-profile.test.mjs": {
-      "testCount": 14,
-      "assertionCount": 70,
+      "testCount": 15,
+      "assertionCount": 74,
       "testNames": [
         "starter bundle is closed, schema-valid, deterministic, inert, and base-anchored",
         "independently admitted trust, precedence, binding, and merge matrix are exact",
@@ -1015,12 +1036,13 @@
         "empty non-project-specific Workspace cold-start completes the minimal planned-delivery flow",
         "profile runtime remains standalone and imports only frozen local protocol authority",
         "CQ-02c: effective profile resolution refuses values that only coerce to a member",
-        "E01/STORY-004: flag-supplied authority binds by digest and refuses a second source"
+        "E01/STORY-004: flag-supplied authority binds by digest and refuses a second source",
+        "STORY-359 the p5 generic-profile fixture declares the corpus sizes verifyP5 used to pin"
       ]
     },
     "tests/p6-context-router.test.mjs": {
-      "testCount": 20,
-      "assertionCount": 80,
+      "testCount": 22,
+      "assertionCount": 96,
       "testNames": [
         "eight admitted Core Reference profile layers route golden and hostile prompt prose without authority expansion",
         "metadata-first routing, explicit reads, exclusions, receipt privacy, and schema validation are closed",
@@ -1041,7 +1063,9 @@
         "WSC-7: knowledge-candidates bridge routes end-to-end through the P6 router with freshness exclusion",
         "CQ-02c: context candidate and receipt enums refuse values that only coerce to a member",
         "CQ-02c: context receipt exclusion reason codes refuse values that only coerce to a member",
-        "E01/STORY-005: context-route accepts both stated pins and refuses a half-supplied pair"
+        "E01/STORY-005: context-route accepts both stated pins and refuses a half-supplied pair",
+        "shared authority reader propagates caller errors and normalizes foreign errors to the changed code",
+        "STORY-359 the p6 context-router fixture declares the corpus sizes verifyP6 used to pin"
       ]
     },
     "tests/p8-workflow-rc.test.mjs": {

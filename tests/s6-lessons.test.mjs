@@ -15,7 +15,7 @@
 // time, its own credential) — and this test guards that gate's corpus stays in
 // step with this one.
 //
-//   node --test tests/s6-lessons.test.mjs        (also: pnpm verify:s6)
+//   node --test tests/s6-lessons.test.mjs
 
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";

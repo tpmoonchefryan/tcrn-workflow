@@ -121,7 +121,8 @@ for (const argument of ["--chck", "check", "-check", "--write"]) {
 
 test("committed rc1-inputs policy is canonical and complete", async () => {
   // Guards against drift: the checked-in normative-input set must equal a fresh
-  // canonical discovery, so verify:rc1 / verify:p2 never fail on a stale set.
+  // canonical discovery. TCRN-CROSS-STORY-359 retired verify:rc1 and verify:p2, so this
+  // case is now the only thing in the tree that fails on a stale set.
   const rendered = renderRc1InputsPolicy(await discoverNormativeInputs(repositoryRoot));
   const committed = await readFile(resolve(repositoryRoot, rc1InputsPolicyPath), "utf8");
   assert.equal(committed, rendered);

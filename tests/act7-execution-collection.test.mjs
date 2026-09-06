@@ -183,3 +183,12 @@ test("the fixture pins the honesty boundary this proof claims", () => {
   assert.equal(fixture.collectorSharesAgentAuthority, true);
   assert.equal(fixture.liveHostProof, "not-claimed-per-min-046");
 });
+
+// TCRN-CROSS-STORY-359: verifyAct7 retired with the rest of the phase verbs and it was the
+// only reader of these three fixture fields. Re-hung here, in the file that drives the
+// corpus, so the fixture cannot silently drift away from the values it declares.
+test("STORY-359 the act7 fixture declares the corpus and binding values verifyAct7 used to pin", () => {
+  assert.equal(fixture.duplicateInvocationRefused, true);
+  assert.equal(fixture.editedPositionFailsBinding, true);
+  assert.equal(fixture.editedTranscriptReportsDrift, true);
+});

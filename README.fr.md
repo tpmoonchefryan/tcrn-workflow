@@ -8,13 +8,13 @@
 
 [简体中文](./README.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · Français
 
-![status](https://img.shields.io/badge/status-1.0.1-blue?style=flat-square) ![gates](https://img.shields.io/badge/verify%3Ap1-24%20gates-brightgreen?style=flat-square) ![claims](https://img.shields.io/badge/proven%20claims-122-brightgreen?style=flat-square) ![deps](https://img.shields.io/badge/runtime%20deps-0-success?style=flat-square)
+![status](https://img.shields.io/badge/status-1.0.1-blue?style=flat-square) ![gates](https://img.shields.io/badge/verify%3Ap1-15%20gates-brightgreen?style=flat-square) ![claims](https://img.shields.io/badge/proven%20claims-7-brightgreen?style=flat-square) ![deps](https://img.shields.io/badge/runtime%20deps-0-success?style=flat-square)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square) ![node](https://img.shields.io/badge/node-24.16.0-informational?style=flat-square) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational?style=flat-square) ![network](https://img.shields.io/badge/network-none-important?style=flat-square) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet?style=flat-square)
 
 [Où vous en êtes](#où-vous-en-êtes) · [Pourquoi lui faire confiance](#pourquoi-lui-faire-confiance) · [Pour qui](#pour-qui) · [Ce que vous obtenez](#ce-que-vous-obtenez) · [Démarrer en trois minutes](#démarrer-en-trois-minutes) · [État actuel](#état-actuel) · [Documentation complète](#documentation-complète)
 
-`Verified claims: 122 (hygiene 20 · inertness 13 · runtime 89)`
+`Verified claims: 7 (hygiene 7 · inertness 0 · runtime 0)`
 
 </div>
 
@@ -22,13 +22,13 @@
 <tr>
 <td align="center" width="25%">
 
-### 24
+### 15
 gates P1<br><sub>Une commande. Le moindre imprévu l'arrête</sub>
 
 </td>
 <td align="center" width="25%">
 
-### 122
+### 7
 critères<br><sub>Tous avec une jambe rouge, toutes mesurées</sub>
 
 </td>
@@ -48,7 +48,7 @@ dépendance runtime<br><sub>Aucun réseau, aucune base de données</sub>
 </table>
 
 > [!TIP]
-> **Vous n'êtes pas obligé de croire ce README**. Installez-le et lancez une commande : il vous démontre ses 122 revendications une par une, entièrement hors ligne.
+> **Vous n'êtes pas obligé de croire ce README**. Installez-le et lancez une commande : il vous démontre ses 7 revendications une par une, entièrement hors ligne.
 
 ---
 
@@ -62,7 +62,7 @@ TCRN Workflow vous donne une troisième option.
 
 | Ce que vous voulez confirmer | ✗ Ce que vous avez aujourd'hui | ✓ Ce que vous avez ensuite |
 | :--- | :--- | :--- |
-| **Les tests ont-ils vraiment tourné** | Une ligne dans une fenêtre de chat | `pnpm verify:p1` — 24 gates dans l'ordre, le moindre imprévu l'arrête |
+| **Les tests ont-ils vraiment tourné** | Une ligne dans une fenêtre de chat | `pnpm verify:p1` — 15 gates dans l'ordre, le moindre imprévu l'arrête |
 | **Qui a changé quoi, et quand** | Remonter l'historique du chat | Une chaîne d'événements chaînée par hash, en ajout seul. Modifiez une entrée de l'historique et tous les hash suivants cessent de correspondre |
 | **Les protections fonctionnent-elles encore** | La supposition qu'elles fonctionnent | `pnpm guard-check` — 61 guards cassés un par un dans les sources, chacun devant faire virer son test au rouge |
 | **Ces octets sont-ils ceux publiés** | Regarder le tag | Artefacts reconstruits octet par octet et comparés aux empreintes publiées |
@@ -77,18 +77,18 @@ Le framework s'applique d'abord à lui-même la norme qu'il impose.
 
 Ce que cela démontre n'est pas « nous avons écrit ces contrôles » mais « ces contrôles arrêtent encore quelqu'un, maintenant ». Un contrôle cassé que personne n'a remarqué équivaut à l'absence de contrôle.
 
-Cette norme couvre les **122 revendications**. Chacune est liée dans `verification-map.yaml` à un code de raison stable, à une preuve exécutable hors ligne, et à une jambe rouge — l'énoncé du changement qui la fait virer au rouge, avec cet échec réellement observé. Les 122, sans exception.
+Cette norme couvre les **7 revendications**. Chacune est liée dans `verification-map.yaml` à un code de raison stable, à une preuve exécutable hors ligne, et à une jambe rouge — l'énoncé du changement qui la fait virer au rouge, avec cet échec réellement observé. Les 7, sans exception.
 
 <details>
-<summary><b>Répartition des 122 critères</b></summary>
+<summary><b>Répartition des 7 critères</b></summary>
 
 <br>
 
 | Catégorie | Nombre | Portée |
 | :--- | ---: | :--- |
-| `framework-hygiene` | 20 | L'hygiène du framework lui-même : historique propre, liste blanche des sources, politique de licences et de vulnérabilités, frontière hors ligne |
-| `inertness-proof` | 13 | Preuve d'inertie : un adaptateur d'hôte ne fait strictement rien après installation, jusqu'à approbation explicite de l'activation |
-| `runtime-capability` | 89 | Capacités d'exécution : chaîne d'événements, bail, vues, cœur de connaissances, routeur de contexte, jeu de publication |
+| `framework-hygiene` | 7 | L'hygiène du framework lui-même : historique propre, liste blanche des sources, politique de licences et de vulnérabilités, frontière hors ligne |
+| `inertness-proof` | 0 | Preuve d'inertie : un adaptateur d'hôte ne fait strictement rien après installation, jusqu'à approbation explicite de l'activation |
+| `runtime-capability` | 0 | Capacités d'exécution : chaîne d'événements, bail, vues, cœur de connaissances, routeur de contexte, jeu de publication |
 
 La liste complète est dans `verification-map.yaml`, chaque entrée portant `id`, `command`, `fixturePaths` et sa jambe rouge.
 
@@ -114,8 +114,8 @@ La liste complète est dans `verification-map.yaml`, chaque entrée portant `id`
 | Vous obtenez | Ce que c'est concrètement |
 | :--- | :--- |
 | **Un workspace fait uniquement de fichiers** | Tout le graphe Initiative → Epic → Story → Subtask en JSON canonique, plus une chaîne de hash. Auditable avec `cat` et `sha256sum`, exportable de façon reproductible octet par octet. |
-| **24 gates en une commande** | `pnpm verify:p1` enchaîne format, lint, types, build, 133 fichiers de test, matrice de confiance, archive et SBOM et licences et politique de vulnérabilités, liste blanche des sources, frontière hors ligne, analyse de confidentialité, durcissement CI, registre des critères, historique propre. |
-| **122 critères lisibles par une machine** | 20 framework-hygiene, 13 inertness-proof, 89 runtime-capability. Tous avec jambe rouge, tous liés à des codes de raison observables. |
+| **15 gates en une commande** | `pnpm verify:p1` enchaîne format, lint, types, build, 119 fichiers de test, matrice de confiance, archive et SBOM et licences et politique de vulnérabilités, liste blanche des sources, frontière hors ligne, analyse de confidentialité, durcissement CI, registre des critères, historique propre. |
+| **7 critères lisibles par une machine** | 7 framework-hygiene, 0 inertness-proof, 0 runtime-capability. Tous avec jambe rouge, tous liés à des codes de raison observables. |
 | **Des guards qui prouvent leur efficacité** | 61 guards, cassés un par un par `pnpm guard-check`, chacun devant faire virer son test au rouge. |
 | **137 verbes CLI gouvernés** | Tous en local. Chaque écriture déclare la version sur laquelle elle se base et est refusée si quelqu'un a écrit avant. Jamais d'écrasement silencieux. |
 | **Zéro dépendance d'exécution** | `dependencies` et `optionalDependencies` sont vides dans `package.json`. Le mode développement ajoute un guard réseau au niveau du processus. La télémétrie est nulle. |
@@ -130,7 +130,7 @@ Il faut la chaîne d'outils épinglée : **Node 24.16.0** et **pnpm 11.3.0**. Le
 # 1. Installer les dépendances de dev épinglées (explicite, figé, sans scripts)
 pnpm install --offline --frozen-lockfile --ignore-scripts
 
-# 2. Laisser le framework se prouver lui-même (24 gates, entièrement hors ligne)
+# 2. Laisser le framework se prouver lui-même (15 gates, entièrement hors ligne)
 pnpm verify:p1
 
 # 3. Construire, puis piloter la CLI gouvernée

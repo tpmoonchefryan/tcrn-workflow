@@ -924,3 +924,15 @@ test("shared authority reader propagates caller errors and normalizes foreign er
     await reasonAsync("SENTINEL_LIMIT", () => readAuthorityFile(path, authority, parameters({ maximumBytes: bytes.length - 1 })));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+// TCRN-CROSS-STORY-359: verifyP6 retired with the rest of the phase verbs and it was the
+// only reader of these six fixture fields. Re-hung here, in the file that drives the
+// corpus, so the fixture cannot silently drift away from the values it declares.
+test("STORY-359 the p6 context-router fixture declares the corpus sizes verifyP6 used to pin", () => {
+  assert.equal(fixture.authorityAllowlistCountCases, 2);
+  assert.equal(fixture.authorityImmutabilityCases, 2);
+  assert.equal(fixture.logicalMetadataCandidates, 6);
+  assert.equal(fixture.ownerVisibleActivation, "not-claimed");
+  assert.equal(fixture.liveContextStore, "not-created");
+  assert.equal(fixture.rc3, "unaccepted");
+});

@@ -30,27 +30,29 @@ export const P1_SEQUENCE = Object.freeze([
   { task: "lint", script: "lint" },
   { task: "typecheck", script: "typecheck" },
   { task: "build", script: "build" },
+  // TCRN-CROSS-STORY-359: `test` is the widest leg and now the only one that runs the
+  // suite. Every subset verb this roster used to carry -- test-trust, roots, and the
+  // ticket-numbered focus verbs -- filtered the same `tests/**/*.test.mjs` set this one
+  // runs unfiltered, so removing them retired convenience, not coverage.
   { task: "test", script: "test" },
   // `portal` is the one entry whose script does not dispatch through task.mjs: both the
   // verb and `verify:portal` run scripts/verify-portal.mjs directly. Declared here rather
   // than special-cased in the test, so the exception is visible where the roster is read.
   { task: "portal", script: "verify:portal", dispatchesThroughTask: false },
-  { task: "test-trust", script: "verify:trust" },
-  { task: "archive", script: "archive" },
-  { task: "sbom", script: "sbom" },
-  { task: "licenses", script: "verify:licenses" },
-  { task: "vulnerabilities", script: "verify:vulnerabilities" },
   { task: "source", script: "verify:source" },
+  // `archive` stays on the roster because `privacy` below scans the source archive when
+  // one is present and silently scans less when it is not. Dropping the producer would
+  // have narrowed the privacy surface without any gate saying so.
+  { task: "archive", script: "archive" },
   { task: "no-sibling-dependency", script: "verify:no-sibling-dependency" },
-  { task: "lifecycle", script: "verify:lifecycle" },
   { task: "offline", script: "verify:offline" },
+  // TCRN-CROSS-STORY-359: the toolchain aggregate. It ran runtime, licenses and
+  // lifecycle before; it now also runs the dependency-graph and Git-history checks that
+  // had their own roster entries. The checks are the same code on the same inputs -- what
+  // was retired is three more `verify:*` names for them, not the assertions.
   { task: "governance", script: "verify:governance" },
-  { task: "workspace", script: "verify:workspace" },
   { task: "privacy", script: "verify:privacy" },
-  { task: "roots", script: "verify:roots" },
-  { task: "ci", script: "verify:ci" },
   { task: "verification-map", script: "verify:map" },
-  { task: "history", script: "verify:history" },
   // STORY-301: last, because it measures the tree the gates above just proved, and
   // because a budget that runs first would judge a build nobody had checked yet.
   { task: "budget", script: "verify:budget" },

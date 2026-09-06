@@ -324,7 +324,6 @@
     "scripts/host-harness.mjs",
     "scripts/init033-residence-probe.mjs",
     "scripts/init034-manifest-mutation-proof.mjs",
-    "scripts/init049-focused-claims.mjs",
     "scripts/isolated-proof.mjs",
     "scripts/knowledge-inject-hook.mjs",
     "scripts/knowledge-inject.mjs",

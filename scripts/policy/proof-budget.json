@@ -188,10 +188,10 @@
   ],
   "surfaceCaps": {
     "schemaVersion": "tcrn.proof-budget.surface-caps.v1",
-    "note": "Three raw proof-surface counts, recorded beside the ratio this file has pinned since STORY-301. The ratio bounds the relationship between proof and product; it says nothing about the absolute size of either side, so both can grow together, forever, without the ratio ever moving. TCRN-CROSS-STORY-356 pins three counts instead: how many verify:* scripts package.json declares, how many claims verification-map.yaml carries, and how many lines packages/core/src holds. CONTRIBUTING.md documents the rule these caps enforce; this is the recorded line, the same division of labor frozenRatio and its rationale above already use.",
+    "note": "Three raw proof-surface counts, recorded beside the ratio this file has pinned since STORY-301. The ratio bounds the relationship between proof and product; it says nothing about the absolute size of either side, so both can grow together, forever, without the ratio ever moving. TCRN-CROSS-STORY-356 pins three counts instead: how many verify:* scripts package.json declares, how many claims verification-map.yaml carries, and how many lines packages/core/src holds. CONTRIBUTING.md documents the rule these caps enforce; this is the recorded line, the same division of labor frozenRatio and its rationale above already use. TCRN-CROSS-STORY-359 lowered all three to the values measured after the verify:* roster shrank to the eleven gate categories Owner named and the claim ledger re-hung onto the gates that survived: 118 -> 13 scripts, 102 -> 7 claims, packages/core/src unchanged at 19965. Owner ruling TCRN-CROSS-MIN-141 D5 permits only lowering during EPIC-126, and none of these three moved upward.",
     "recordedAt": "2026-09-06",
-    "verifyScriptCap": 118,
-    "claimCap": 102,
+    "verifyScriptCap": 13,
+    "claimCap": 7,
     "coreSourceLineCap": 19965,
     "coreSourceLineMetric": {
       "glob": "packages/core/src/**/*.ts",

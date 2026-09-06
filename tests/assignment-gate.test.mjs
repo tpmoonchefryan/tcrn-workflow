@@ -131,3 +131,12 @@ test("extension registration records bind appliesTo work for assignment and gate
     assert.equal(validate(registration), true);
   }
 });
+
+// TCRN-CROSS-STORY-359: verifyAssignmentGate retired with the rest of the phase verbs and
+// it was the only reader of these three fixture fields. Re-hung here, in the file that
+// drives the corpus, so the fixture cannot silently drift away from the values it declares.
+test("STORY-359 the assignment-gate fixture declares the ledger and store values verifyAssignmentGate used to pin", () => {
+  assert.equal(fixture.assignmentLedgerRequirement, "AOS-REQ-017");
+  assert.equal(fixture.gateLedgerRequirement, "AOS-REQ-018");
+  assert.equal(fixture.liveStore, "workspace-event-log");
+});

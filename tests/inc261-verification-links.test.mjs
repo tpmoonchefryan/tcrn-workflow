@@ -100,5 +100,11 @@ test("INC-261 the stored map link uses a protocol work id and named GWTs", () =>
   const map = JSON.parse(readFileSync(new URL("../verification-map.yaml", import.meta.url), "utf8"));
   const result = validateVerificationMapLinks(map);
   assert.equal(result.ok, true, JSON.stringify(result.problems));
-  assert.equal(result.linkedClaimCount, 1);
+  // TCRN-CROSS-STORY-359: the one linked claim in the stored map was INIT048-INC-261,
+  // which measured `verify:inc261` and retired with that script. The link SHAPE is what
+  // this file guards and it is unchanged -- every case above drives
+  // validateVerificationMapLinks over a constructed map. What this case adds is that the
+  // stored map is judged by the same validator, and a stored map with no linked claim is
+  // a valid input to it, not an unchecked one: `ok` above is the assertion that matters.
+  assert.equal(result.linkedClaimCount, 0);
 });

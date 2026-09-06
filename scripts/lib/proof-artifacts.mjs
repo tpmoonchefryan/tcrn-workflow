@@ -104,7 +104,6 @@ const routeAdditions = new Set([
 const claimFields = [
   "id", "phase", "category", "status", "subject", "command", "fixturePaths", "fixtureDigest", "environment", "expectedExit", "expectedReasonCode", "evidencePath", "invalidationTriggers",
 ];
-const init047LegFields = ["positiveLeg", "redLeg"];
 const claimCategories = ["framework-hygiene", "inertness-proof", "runtime-capability"];
 const manifestFields = ["schemaVersion", "status", "accepted", "basisDigest", "inputs", "roleVerdictSlots"];
 const roleNames = ["platform-workflow-architect", "workflow-verification-engineer", "security-risk-reviewer", "reality-checker"];
@@ -114,15 +113,23 @@ const claimRouteAdditions = new Map([
   ["P8-WORKFLOW-RC", ["scripts/lib/local-command.mjs", "scripts/lib/privacy.mjs", "tests/local-command-byte-fidelity.test.mjs"]],
 ]);
 
+// TCRN-CROSS-STORY-359 adds the anchor field the ledger lacked: `requirement` (one of
+// the eleven gate categories the repository keeps) or `incident` (the chain id that put
+// the claim here). Admitted here as an alternative pair rather than a fixed field so a
+// claim carrying both, or neither, still fails the exact-keys check that guards this
+// document -- scripts/task.mjs's verify:map decides which of the two a claim may carry.
+//
+// The INIT047/048/049 leg-bearing branch left with those claims: the ticket-numbered
+// claims all measured a verify:* script this Story retired.
 function fieldsForClaim(claim) {
-  const legBearing = typeof claim?.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || claim.id.startsWith("INIT049-STORY-") || claim.id.startsWith("INIT049-INC-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id));
-  const base = legBearing
-    ? [...claimFields, ...init047LegFields]
-    : Object.hasOwn(claim ?? {}, "redLeg")
-      ? [...claimFields, "redLeg"]
-      : Object.hasOwn(claim ?? {}, "redLegExemption")
-        ? [...claimFields, "redLegExemption"]
-        : [...claimFields];
+  const base = Object.hasOwn(claim ?? {}, "redLeg")
+    ? [...claimFields, "redLeg"]
+    : Object.hasOwn(claim ?? {}, "redLegExemption")
+      ? [...claimFields, "redLegExemption"]
+      : [...claimFields];
+  if (Object.hasOwn(claim ?? {}, "requirement")) base.push("requirement");
+  if (Object.hasOwn(claim ?? {}, "incident")) base.push("incident");
+  if (Object.hasOwn(claim ?? {}, "positiveLeg")) base.push("positiveLeg");
   if (Object.hasOwn(claim ?? {}, "workId")) base.push("workId");
   if (Object.hasOwn(claim ?? {}, "gwt")) base.push("gwt");
   return base;
@@ -205,9 +212,9 @@ async function listedFiles(root) {
   try {
     const files = await walkFiles(root);
     // Claude's project-local settings.local.json carries host-only observer
-    // targets.  It is intentionally ignored by git and independently checked
-    // by verify:observe-channel; admitting it here would make the public source
-    // allowlist depend on whichever operator happens to run the proof.
+    // targets.  It is intentionally ignored by git; admitting it here would make the
+    // public source allowlist depend on whichever operator happens to run the proof.
+    // verify:observe-channel, which checked it independently, retired in STORY-359.
     return files.filter((path) => root !== repositoryRoot ||
       toPosixPath(relative(root, path)) !== ".claude/settings.local.json");
   } catch (error) {

@@ -29,6 +29,18 @@ test("CI retains explicit safe dependency acquisition and offline P1 execution",
   assert.match(workflow, /- name: Verify P1 offline\n        run: pnpm verify:p1/u);
 });
 
+// TCRN-CROSS-STORY-359. The `ci` verb and its `verify:ci` name retired with the rest of
+// the ticket-numbered and subset gates, but three of its assertions had no second home:
+// minimal workflow permissions, the pull_request_target ban, and the portal remediation
+// step. They are relocated verbatim rather than dropped -- `pnpm test` runs this file and
+// is on the P1 roster, so the checks kept their position in the train.
+test("CI keeps minimal permissions, refuses pull_request_target, and runs the portal remediation train", async () => {
+  const workflow = await readWorkflow();
+  assert.match(workflow, /^permissions:\n  contents: read$/mu);
+  assert.equal(workflow.includes("pull_request_target"), false);
+  assert.ok(workflow.includes("- name: Verify portal remediation train\n        run: pnpm verify:portal"));
+});
+
 test("pull-request CI scans the contributor head, not GitHub's synthetic merge commit", async () => {
   const workflow = await readWorkflow();
   assert.ok(

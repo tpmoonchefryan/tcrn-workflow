@@ -7,22 +7,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { INIT049_FOCUSED_CLAIM_COUNT, INIT049_FOCUSED_CLAIM_NAMES, INIT049_FOCUSED_CLAIMS } from "../scripts/init049-focused-claims.mjs";
-
 const engineRoot = fileURLToPath(new URL("../", import.meta.url));
-
-test("STORY-342 every INIT-048 story claim has an independent command, reason code, and red leg", async () => {
-  const map = JSON.parse(await readFile(resolve(engineRoot, "verification-map.yaml"), "utf8"));
-  const stories = map.claims.filter((claim) => /^INIT048-STORY-\d+$/u.test(claim.id));
-  assert.equal(stories.length, 16);
-  assert.equal(new Set(stories.map((claim) => claim.command)).size, 16);
-  assert.equal(new Set(stories.map((claim) => claim.expectedReasonCode)).size, 16);
-  assert.equal(new Set(stories.map((claim) => claim.redLeg.test)).size, 16);
-  const single = map.claims.find((claim) => claim.id === "P3-ENGINE-SINGLE-REPLAY-PIPELINE");
-  const incremental = map.claims.find((claim) => claim.id === "P3-ENGINE-INCREMENTAL-REPLAY");
-  assert.match(single.subject, /snapshot.*tail/u);
-  assert.match(incremental.subject, /snapshot.*tail/u);
-});
 
 test("STORY-343 engine documents describe segmented events, replay snapshots, and body migration", async () => {
   // TCRN-CROSS-INC-274: Cross-repository assertions on tcrn-workflow-helper documentation
@@ -51,22 +36,5 @@ test("STORY-343 engine documents describe segmented events, replay snapshots, an
   for (const relative of engineFiles) {
     const text = await readFile(resolve(engineRoot, relative), "utf8");
     assert.match(text, /(?:segment|snapshot|body)/iu, relative);
-  }
-});
-
-test("STORY-352 P3 and Knowledge claims have independent focused commands and expectations", async () => {
-  const map = JSON.parse(await readFile(resolve(engineRoot, "verification-map.yaml"), "utf8"));
-  assert.equal(INIT049_FOCUSED_CLAIM_NAMES.length, INIT049_FOCUSED_CLAIM_COUNT);
-  const claims = map.claims.filter((claim) => INIT049_FOCUSED_CLAIM_NAMES.includes(claim.command.replace(/^pnpm verify:/u, "")));
-  assert.equal(claims.length, INIT049_FOCUSED_CLAIM_NAMES.length);
-  assert.equal(new Set(claims.map((claim) => claim.command)).size, claims.length);
-  assert.equal(new Set(claims.map((claim) => claim.expectedReasonCode)).size, claims.length);
-  assert.equal(new Set(claims.map((claim) => claim.redLeg.test)).size, claims.length);
-  for (const claim of claims) {
-    const name = claim.command.replace(/^pnpm verify:/u, "");
-    const spec = INIT049_FOCUSED_CLAIMS[name];
-    assert.equal(claim.expectedReasonCode, spec.reasonCode, name);
-    assert.equal(claim.redLeg.test, spec.pattern, name);
-    assert.ok(claim.fixturePaths.includes(spec.path), `${name} must name its focused test file`);
   }
 });

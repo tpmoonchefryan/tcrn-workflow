@@ -768,6 +768,39 @@ test("WSC-3: knowledge-create accepts unsorted arrays and sorts them server-side
   }
 });
 
+// TCRN-CROSS-STORY-359 (Epic disposition F2). The retired `verifyP4` verb carried
+// P4_KNOWLEDGE_LIMIT_CONTRACT, the only thing pinning the six maximum* fields of
+// packages/core/fixtures/p4-knowledge-core-cases.json. `verifyP4Knowledge` was the Epic's
+// proposed new home; that verb retired in this same Story, so the home is re-derived here.
+// This file is where it belongs: it already reads that fixture and already drives every
+// one of those limits through KNOWLEDGE_LIMITS, and `pnpm test` is on the P1 roster while
+// the focus verbs are not.
+//
+// Re-derived in one further respect. The retired assertion compared the fixture against
+// seven literals, and by the time it was retired three of them were wrong: `maximumRecords`
+// no longer exists and `maximumAggregateBytes` had moved from 131,072 to the protocol
+// canonical-view ceiling. A contract stated as literals goes stale silently on the side
+// nobody looks at. This one compares the fixture to the running constant, so the fixture
+// cannot drift from the limits the code enforces without a red.
+test("STORY-359: the knowledge fixture declares exactly the limits the code enforces", async () => {
+  const fixtureContract = JSON.parse(await readFile(
+    new URL("../packages/core/fixtures/p4-knowledge-core-cases.json", import.meta.url),
+    "utf8",
+  ));
+  const declared = Object.fromEntries(Object.entries(fixtureContract).filter(([field]) => field.startsWith("maximum")));
+  assert.equal(Object.keys(declared).length, 6);
+  for (const [field, value] of Object.entries(declared)) {
+    assert.equal(value, KNOWLEDGE_LIMITS[field], `fixture ${field} must equal KNOWLEDGE_LIMITS.${field}`);
+  }
+  // And the reverse direction, so a limit the fixture never named cannot be added to one
+  // side only: every field the fixture declares is a real limit, and the ones it does not
+  // declare are the per-record shape bounds the fixture's cases exercise directly.
+  assert.deepEqual(Object.keys(declared).sort(), [
+    "maximumAggregateBytes", "maximumBodyBytes", "maximumMetadataBytes",
+    "maximumQueryResults", "maximumSnippetBytes", "maximumSummaryBytes",
+  ]);
+});
+
 test("64 real insertion orders produce exact index, list, and checkpoint parity", async () => {
   const fixtureContract = JSON.parse(await readFile(
     new URL("../packages/core/fixtures/p4-knowledge-core-cases.json", import.meta.url),
@@ -1509,4 +1542,14 @@ test("INIT-047: supersedes is validated, source digests are computed and source 
     assert.equal((await listKnowledgeMetadata(fx.workspace, { at: instant(12), search: "INIT047-SOURCE" })).records.length, 1);
     assert.equal((await knowledgeContextCandidates(fx.workspace, { at: instant(12), search: "INIT047-SOURCE" })).candidates.length, 0);
   } finally { await fx.close(); }
+});
+
+// TCRN-CROSS-STORY-359: verifyP4Knowledge retired with the rest of the phase verbs and it
+// was the only reader of these three fixture fields. Re-hung here, in the file that drives
+// the corpus, so the fixture cannot silently drift away from the values it declares.
+test("STORY-359 the p4 knowledge fixture declares the corpus sizes verifyP4Knowledge used to pin", async () => {
+  const fixture = JSON.parse(await readFile(new URL("../packages/core/fixtures/p4-knowledge-core-cases.json", import.meta.url), "utf8"));
+  assert.equal(fixture.freshnessCases.length, 3);
+  assert.equal(fixture.promotionCases.length, 3);
+  assert.equal(fixture.permutationLogicalRecords, 5);
 });

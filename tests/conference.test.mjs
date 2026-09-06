@@ -243,3 +243,11 @@ test("extension registration binds appliesTo work and the conference schema dige
 test("MIN-102 the distilled summary is bounded by the knowledge store's limit, not the conference budget", () => {
   assert.equal(CONFERENCE_DISTILL_SUMMARY_BYTES, KNOWLEDGE_LIMITS.maximumSummaryBytes);
 });
+
+// TCRN-CROSS-STORY-359: verifyConference retired with the rest of the phase verbs and it
+// was the only reader of these two fixture fields. Re-hung here, in the file that drives
+// the corpus, so the fixture cannot silently drift away from the values it declares.
+test("STORY-359 the conference fixture declares the registration and store values verifyConference used to pin", () => {
+  assert.equal(fixture.ledgerRequirement, "AOS-REQ-015");
+  assert.equal(fixture.liveStore, "workspace-event-log");
+});

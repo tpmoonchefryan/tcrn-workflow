@@ -990,7 +990,7 @@ function admitRelocationState(state: WorkspaceRelocationState, admit: WorkspaceA
     fail("WORKSPACE_RELOCATION_VACATED", `${address} was vacated by a governed relocation and is no longer a live workspace`);
   }
   if (state === "adoption-required") {
-    fail("WORKSPACE_RELOCATION_ADOPTION_REQUIRED", `${address} is a relocated copy awaiting relocation-adopt`);
+    fail("WORKSPACE_RELOCATION_ADOPTION_REQUIRED", `${address} is a relocated copy whose relocation ledger has not been adopted at this address`);
   }
   fail("WORKSPACE_RELOCATION_FOREIGN_ADDRESS", `${address} is not an address this relocation ledger names`);
 }

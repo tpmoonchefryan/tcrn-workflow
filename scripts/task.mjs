@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createHash } from "node:crypto";
-import { lstat, writeFile } from "node:fs/promises";
-import { extname, relative, resolve } from "node:path";
+import { lstat, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { extname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 
@@ -19,7 +20,6 @@ import {
 import { P1_TASKS } from "./p1-sequence.mjs";
 import { compareCanonicalText } from "./lib/canonical-order.mjs";
 import { codeOnly, controlByteOffset } from "./lib/code-only.mjs";
-import { countCoverage } from "./coverage-conservation.mjs";
 import { LocalCommandError, runLocalCommand } from "./lib/local-command.mjs";
 import {
   DependencyGraphError,
@@ -46,12 +46,7 @@ import {
   rebuildP8SourceArchiveInIndependentRoots,
 } from "./lib/p8-workflow-rc.mjs";
 import { assertP8TagPreconditions, assertReleaseCommitShape } from "./lib/release-tag-gate.mjs";
-import {
-  ProtocolProofError,
-  validateAosLedger,
-  validateP2SchemasAndFixtures,
-  validateRc1Candidate,
-} from "./lib/protocol-proof.mjs";
+import { ProtocolProofError } from "./lib/protocol-proof.mjs";
 import {
   BoundaryError,
   bindOutputSessionProcessGroup,
@@ -64,7 +59,6 @@ import {
 } from "./lib/safe-io.mjs";
 import { installNoNetworkGuard } from "./no-network.mjs";
 import { ScopedStripTypesError, stripTypesWithScopedExperimentalWarning } from "./lib/scoped-strip-types.mjs";
-import { INIT049_FOCUSED_CLAIM_COUNT, INIT049_FOCUSED_CLAIM_NAMES, INIT049_FOCUSED_CLAIMS } from "./init049-focused-claims.mjs";
 
 installNoNetworkGuard();
 
@@ -203,9 +197,10 @@ function allowedByPolicy(path, policy) {
 }
 
 async function sourceRecords() {
-  // Host-local observer settings carry runtime-only target values. They are
-  // independently checked by verify:observe-channel and must not become part
-  // of the public source allowlist or release source inventory.
+  // Host-local observer settings carry runtime-only target values. They must not
+  // become part of the public source allowlist or release source inventory.
+  // TCRN-CROSS-STORY-359 retired verify:observe-channel, which used to fingerprint
+  // this file independently; the exclusion now stands on the ignore rule alone.
   const files = (await walkFiles()).filter(
     (path) => toPosixPath(relative(repositoryRoot, path)) !== ".claude/settings.local.json",
   );
@@ -390,384 +385,79 @@ async function build() {
   });
 }
 
-async function runTests({
-  trustOnly = false,
-  rootOnly = false,
-  protocolOnly = false,
-  p3Only = false,
-  knowledgeOnly = false,
-  p5Only = false,
-  p6Only = false,
-  authorityOnly = false,
-  dependencyOnly = false,
-  conferenceOnly = false,
-  executionOnly = false,
-  assignmentGateOnly = false,
-  actorOnly = false,
-  extensionStoreOnly = false,
-  p8Only = false,
-  backupOnly = false,
-  personaRenderOnly = false,
-  executionCollectionOnly = false,
-  adapterAcceptanceOnly = false,
-  init047Only = false,
-  focusedTestPath = undefined,
-  focusedTestPaths = undefined,
-  focusedTestNamePattern = undefined,
-  focusedReasonCode = undefined,
-  extraEnvironment = {},
-  inc256Only = false,
-  inc258Only = false,
-  inc259Only = false,
-  inc260Only = false,
-  e2eOnly = false,
-} = {}) {
+// TCRN-CROSS-STORY-359: this took twenty-nine filter options, one per retired verb, and
+// each one selected a subset of the same `tests/**/*.test.mjs` set. Two survive, and both
+// have a caller that is not a `verify:*` name: `p8Only` is the release train's dogfood
+// leg, `trustOnly` its external-trust leg.
+async function runTests({ trustOnly = false, p8Only = false, extraEnvironment = {} } = {}) {
   await build();
   const tests = (await walkFiles())
     .map((path) => toPosixPath(relative(repositoryRoot, path)))
     .filter((path) => path.startsWith("tests/") && path.endsWith(".test.mjs"))
     .filter((path) => !trustOnly || path === "tests/release-trust.test.mjs")
-    .filter((path) => !rootOnly || path === "tests/root-boundaries.test.mjs")
-    .filter((path) => !protocolOnly || path === "tests/protocol-v1.test.mjs")
-    .filter((path) => !p3Only || ["tests/p3-file-engine.test.mjs", "tests/p3-cli-read-surface.test.mjs", "tests/p3-cli-catalog.test.mjs", "tests/p3-engine-complexity.test.mjs"].includes(path))
-    .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs")
-    .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path))
-    .filter((path) => !p6Only || path === "tests/p6-context-router.test.mjs")
-    .filter((path) => !dependencyOnly || path === "tests/dependency.test.mjs")
-    .filter((path) => !conferenceOnly || path === "tests/conference.test.mjs")
-    .filter((path) => !executionOnly || path === "tests/conference-execution.test.mjs")
-    .filter((path) => !authorityOnly || path === "tests/operator-authority.test.mjs")
-    .filter((path) => !assignmentGateOnly || path === "tests/assignment-gate.test.mjs")
-    .filter((path) => !actorOnly || path === "tests/actor-attestation.test.mjs")
-    .filter((path) => !extensionStoreOnly || path === "tests/workspace-extension-records.test.mjs")
-    .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path))
-    .filter((path) => !backupOnly || path === "tests/backup-snapshot.test.mjs")
-    .filter((path) => !personaRenderOnly || path === "tests/act3-persona-render.test.mjs")
-    .filter((path) => !executionCollectionOnly || path === "tests/act7-execution-collection.test.mjs")
-    .filter((path) => !adapterAcceptanceOnly || path === "tests/act11-adapter-acceptance.test.mjs")
-    .filter((path) => !init047Only || ["tests/knowledge-inject.test.mjs", "tests/p3-cli-read-surface.test.mjs", "tests/p4-knowledge-core.test.mjs", "tests/stop-pact.test.mjs"].includes(path))
-    .filter((path) => focusedTestPath === undefined || path === focusedTestPath)
-    .filter((path) => !inc256Only || path === "tests/inc256-knowledge-policy.test.mjs")
-    .filter((path) => !inc258Only || path === "tests/inc258-install-manifest.test.mjs")
-    .filter((path) => !inc259Only || path === "tests/inc259-storage-migration.test.mjs")
-    .filter((path) => !inc260Only || path === "tests/inc260-snapshot-read-optimization.test.mjs")
-    .filter((path) => !e2eOnly || path === "tests/e2e-governed-loop.test.mjs")
-    .filter((path) => focusedTestPaths === undefined || focusedTestPaths.includes(path));
-  await runDetachedTestController(["--test", ...(focusedTestNamePattern === undefined ? [] : [`--test-name-pattern=${focusedTestNamePattern}`]), ...tests], {
+    .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path));
+  await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
     ...extraEnvironment,
   });
   return success(
-    focusedReasonCode
-      ? focusedReasonCode
-      : inc256Only
-      ? "INC256_KNOWLEDGE_MIGRATION_VERIFIED"
-      : inc258Only
-      ? "INC258_INSTALL_MANIFEST_VERIFIED"
-      : inc259Only
-      ? "INC259_STORAGE_MIGRATION_VERIFIED"
-      : inc260Only
-      ? "INC260_SNAPSHOT_READ_OPTIMIZED"
-      : init047Only
-      ? "INIT047_MODEL_CENTERED_TESTS_VERIFIED"
-      : e2eOnly
-      ? "E2E_GOVERNED_LOOP_TESTS_VERIFIED"
-      : trustOnly
+    trustOnly
       ? "TRUST_NEGATIVE_MATRIX_VERIFIED"
-      : personaRenderOnly
-      ? "ACT3_PERSONA_RENDER_TESTS_VERIFIED"
-      : executionCollectionOnly
-      ? "ACT7_EXECUTION_COLLECTION_TESTS_VERIFIED"
-      : adapterAcceptanceOnly
-      ? "ACT11_ADAPTER_ACCEPTANCE_TESTS_VERIFIED"
-      : backupOnly
-      ? "BACKUP_SNAPSHOT_TESTS_VERIFIED"
-      : rootOnly
-        ? "ROOT_BOUNDARIES_VERIFIED"
-        : protocolOnly
-          ? "P2_CONFORMANCE_VERIFIED"
-          : p3Only
-            ? "P3_ENGINE_TESTS_VERIFIED"
-            : knowledgeOnly
-              ? "P4_KNOWLEDGE_CORE_TESTS_VERIFIED"
-              : p5Only
-                ? "P5_GENERIC_PROFILE_TESTS_VERIFIED"
-                : dependencyOnly
-                  ? "DEPENDENCY_TESTS_VERIFIED"
-                : conferenceOnly
-                  ? "CONFERENCE_TESTS_VERIFIED"
-                : authorityOnly
-                  ? "OPERATOR_AUTHORITY_TESTS_VERIFIED"
-                : assignmentGateOnly
-                  ? "ASSIGNMENT_GATE_TESTS_VERIFIED"
-                : actorOnly
-                  ? "ACTOR_ATTESTATION_TESTS_VERIFIED"
-                : extensionStoreOnly
-                  ? "EXT_STORE_TESTS_VERIFIED"
-                : p6Only
-                  ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
-                  : p8Only
-                    ? "P8_WORKFLOW_RC_TESTS_VERIFIED"
-              : "TESTS_VERIFIED",
+      : p8Only
+        ? "P8_WORKFLOW_RC_TESTS_VERIFIED"
+        : "TESTS_VERIFIED",
     { tests, result: "passed" },
   );
 }
 
-async function runInit049FocusedClaim(name) {
-  const spec = INIT049_FOCUSED_CLAIMS[name];
-  assertion(spec !== undefined, "INIT049_FOCUSED_CLAIM_UNKNOWN", name);
-  const source = await readText(resolve(repositoryRoot, spec.path));
-  assertion(source.includes(`test("${spec.pattern}"`), "INIT049_FOCUSED_TEST_NOT_FOUND", name);
-  return runTests({
-    focusedTestPath: spec.path,
-    focusedTestNamePattern: spec.pattern,
-    focusedReasonCode: spec.reasonCode,
-  });
-}
-
-const INIT049_STORY_TESTS = Object.freeze({
-  story349: { path: "tests/p1-roster.test.mjs", pattern: "STORY-349 top-level gate containment preserves the nine-group execution order", reasonCode: "INIT049_STORY_349_VERIFIED" },
-  story350: { path: "tests/p1-roster.test.mjs", pattern: "STORY-350 red locator runs every contained child separately and returns each conclusion", reasonCode: "INIT049_STORY_350_VERIFIED" },
-  story352: { path: "tests/story-342-343-map-docs.test.mjs", pattern: "STORY-352 P3 and Knowledge claims have independent focused commands and expectations", reasonCode: "INIT049_STORY_352_VERIFIED" },
-});
-
-const INIT049_STORY351_TESTS = Object.freeze([
-  ["tests/inc260-snapshot-read-optimization.test.mjs", "INC-260 the reader does not compute a second full event-prefix digest"],
-  ["tests/story-333-byte-segments.test.mjs", "STORY-333 byte rolling is not replaced by event-count rolling"],
-  ["tests/story-335-336-work-fields.test.mjs", "STORY-336 labels remain first-class instead of becoming an extension key"],
-  ["tests/story-337-snapshot-replay.test.mjs", "STORY-337 snapshot replay source has an explicit fail-closed corruption path"],
-  ["tests/story-340-attestation-migration.test.mjs", "STORY-340 attestation migration has a fail-closed full-value comparison"],
-  ["tests/story-341-knowledge-body-migration.test.mjs", "STORY-341 knowledge body migration is explicit and keeps metadata outside the body segments"],
-  ["tests/story-344-storage-boundary.test.mjs", "STORY-344 workspace lifecycle has no direct data-plane fs calls"],
-  ["tests/story-345-backend-selection.test.mjs", "STORY-345 backend selection rejects unknown values and does not silently fall back"],
-  ["tests/story-346-pg-disabled.test.mjs", "STORY-346 production backend selection rejects PostgreSQL"],
-  ["tests/story-347-348-settings-policy.test.mjs", "STORY-348 protocol validity values remain hardcoded rather than becoming settings"],
-  ["tests/p4-knowledge-core.test.mjs", "Knowledge implementation has no predecessor, network, database, or AOS read authority"],
-  ["tests/p5-generic-profile.test.mjs", "profile runtime remains standalone and imports only frozen local protocol authority"],
-  ["tests/p6-context-router.test.mjs", "Context Router implementation is storeless and contains no legacy, network, database, hook, Skill, environment, model, or session authority"],
-]);
-
-function escapeTestPattern(value) {
-  return value.replace(/[\\^$.*+?()[\]{}|]/gu, "\\$&");
-}
-
-async function runInit049Story351() {
-  const paths = [...new Set(INIT049_STORY351_TESTS.map(([path]) => path))];
-  for (const [path, pattern] of INIT049_STORY351_TESTS) {
-    const source = await readText(resolve(repositoryRoot, path));
-    assertion(source.includes(`test("${pattern}"`), "INIT049_STORY_351_TEST_NOT_FOUND", `${path}:${pattern}`);
+// TCRN-CROSS-STORY-359 and Owner ruling TCRN-CROSS-MIN-144.
+//
+// `scripts/policy/coverage-baseline.json` gated nothing. It was a registry every unit was
+// told to keep current and no gate ever read, which is the state that lets a registry rot
+// while still looking like coverage -- the same shape as the hand-kept P1 roster this
+// repository already paid for once. Owner's direction for this Story was to fold it into
+// the test gate or retire it; folding costs one command and keeps a check the repository
+// already relies on in review.
+//
+// The suite runs under NODE_V8_COVERAGE so the second leg can read what actually
+// executed rather than what was merely imported. The directory lives outside the
+// repository: it is scratch for one run, not an output artifact, and the output session
+// owns everything under dist/.
+async function verifyTestSuite() {
+  const {
+    evaluateCoverageRegistry,
+    evaluateSurvivingModuleCoverage,
+  } = await import("./coverage-conservation.mjs");
+  const coverageDirectory = await mkdtemp(join(tmpdir(), "tcrn-suite-coverage-"));
+  let tests;
+  try {
+    tests = await runTests({ extraEnvironment: { NODE_V8_COVERAGE: coverageDirectory } });
+    const registry = await evaluateCoverageRegistry();
+    assertion(registry.ok, registry.reasonCode, JSON.stringify({
+      problems: (registry.problems ?? []).map((entry) => entry.path ?? entry),
+      waiverProblems: registry.waiverProblems,
+      baselineCompleteness: registry.baselineCompleteness,
+    }));
+    const survivingModules = await evaluateSurvivingModuleCoverage({
+      coverageDirectory,
+      waivers: registry.waivers,
+      currentTestPaths: registry.currentTestPaths,
+    });
+    assertion(survivingModules.ok, survivingModules.reasonCode, survivingModules.problems.join("; "));
+    return success("TESTS_VERIFIED", {
+      tests: tests.tests,
+      result: "passed",
+      coverageConservation: registry.reasonCode,
+      survivingModuleCoverage: {
+        reasonCode: survivingModules.reasonCode,
+        retiredTestFiles: survivingModules.retiredTestFiles,
+        modules: survivingModules.modules.map(({ module, executedBlocks }) => ({ module, executedBlocks })),
+      },
+    });
+  } finally {
+    await rm(coverageDirectory, { recursive: true, force: true });
   }
-  // TCRN-CROSS-STORY-358 family 3 ('router'): the one justified exception, a source-text
-  // scan of canonical-exchange.ts's own bytes for forbidden network/eval constructions,
-  // retired together with the module and test file it read. Nothing replaces it: there is
-  // no longer a subject for it to scan. The invariant this loop enforces is therefore that
-  // STORY-351's replacement of source-text assertions with runtime-behavior assertions is
-  // now complete with no exception outstanding, not that exactly one exception remains.
-  const sourceAssertions = [];
-  for (const path of paths) {
-    const source = await readText(resolve(repositoryRoot, path));
-    for (const match of source.matchAll(/assert\.(?:match|doesNotMatch)\(\s*source\b/gu)) sourceAssertions.push({ path, offset: match.index });
-  }
-  assertion(sourceAssertions.length === 0, "INIT049_STORY_351_SOURCE_ASSERTION_COUNT", JSON.stringify(sourceAssertions));
-  const pattern = `^(?:${INIT049_STORY351_TESTS.map(([, name]) => escapeTestPattern(name)).join("|")})$`;
-  const tested = await runTests({
-    focusedTestPaths: paths,
-    focusedTestNamePattern: pattern,
-    focusedReasonCode: "INIT049_STORY_351_VERIFIED",
-  });
-  return success("INIT049_STORY_351_VERIFIED", {
-    ...tested,
-    sourceAssertions: { count: sourceAssertions.length, retained: null },
-  });
-}
-
-const INIT049_PLATFORM_DOCTOR_BEHAVIOR = Object.freeze({
-  testCount: 61,
-  assertionCount: 225,
-  testNamesDigest: "96240c0081a76fee47963b97b7190dac306ddd06eee803ffa4890f7708552ab3",
-  baselineSeconds: 28.5,
-  reducedTargetSeconds: 28.5,
-  slowFilesUnchanged: {
-    "tests/p4-knowledge-core.test.mjs": 54.6,
-    "tests/p3-file-engine.test.mjs": 34.4,
-    "tests/output-session-lifecycle.test.mjs": 28.8,
-  },
-});
-
-async function runInit049Story353() {
-  const path = "tests/platform-doctor.test.mjs";
-  const source = await readText(resolve(repositoryRoot, path));
-  const coverage = countCoverage(source);
-  assertion(coverage.testCount === INIT049_PLATFORM_DOCTOR_BEHAVIOR.testCount, "INIT049_STORY_353_TEST_COUNT_CHANGED", String(coverage.testCount));
-  assertion(coverage.assertionCount === INIT049_PLATFORM_DOCTOR_BEHAVIOR.assertionCount, "INIT049_STORY_353_ASSERTION_COUNT_CHANGED", String(coverage.assertionCount));
-  const testNamesDigest = createHash("sha256").update(JSON.stringify(coverage.testNames)).digest("hex");
-  assertion(testNamesDigest === INIT049_PLATFORM_DOCTOR_BEHAVIOR.testNamesDigest, "INIT049_STORY_353_TEST_SET_CHANGED", testNamesDigest);
-  const started = Date.now();
-  const result = await runTests({
-    focusedTestPath: path,
-    focusedReasonCode: "INIT049_STORY_353_VERIFIED",
-    extraEnvironment: { TCRN_PLATFORM_DOCTOR_TEST_CONCURRENCY: "4" },
-  });
-  const elapsedSeconds = (Date.now() - started) / 1_000;
-  assertion(elapsedSeconds < INIT049_PLATFORM_DOCTOR_BEHAVIOR.reducedTargetSeconds, "INIT049_STORY_353_RUNTIME_NOT_REDUCED", String(elapsedSeconds));
-  return success("INIT049_STORY_353_VERIFIED", {
-    tests: result.tests,
-    behavior: INIT049_PLATFORM_DOCTOR_BEHAVIOR,
-    elapsedSeconds,
-    composition: {
-      before: "61 serial test cases, chiefly independent synthetic fixture/doctor invocations",
-      after: "same 61 cases under one concurrent test suite",
-    },
-  });
-}
-
-async function runInc266() {
-  const result = await runTests({
-    focusedTestPath: "tests/p1-roster.test.mjs",
-    focusedTestNamePattern: "INC-266 push-gate timing accounts for every phase and keeps the success output contract",
-    focusedReasonCode: "INC266_PUSH_GATE_TIMING_VERIFIED",
-    extraEnvironment: { TCRN_INC266_STRICT: "1" },
-  });
-  return success("INC266_PUSH_GATE_TIMING_VERIFIED", { tests: result.tests, result: "passed" });
-}
-
-async function runInit049Story(name) {
-  const spec = INIT049_STORY_TESTS[name];
-  assertion(spec !== undefined, "INIT049_STORY_UNKNOWN", name);
-  const source = await readText(resolve(repositoryRoot, spec.path));
-  assertion(source.includes(`test("${spec.pattern}"`), "INIT049_STORY_TEST_NOT_FOUND", name);
-  return runTests({
-    focusedTestPath: spec.path,
-    focusedTestNamePattern: spec.pattern,
-    focusedReasonCode: spec.reasonCode,
-  });
-}
-
-const INIT047_GOAL_TESTS = Object.freeze({
-  goal01: { path: "tests/knowledge-inject.test.mjs", pattern: "CJK query extraction does not split phrases into bigrams", reasonCode: "INIT047_GOAL_01_VERIFIED" },
-  goal02: { path: "tests/knowledge-inject.test.mjs", pattern: "INIT-047 injection budget=10 reports exceeded without truncation", reasonCode: "INIT047_GOAL_02_VERIFIED" },
-  goal03: { path: "tests/p3-cli-read-surface.test.mjs", pattern: "INIT-047 work-list search has an independent bounded scope projection", reasonCode: "INIT047_GOAL_03_VERIFIED" },
-  goal04: { path: "tests/p3-cli-read-surface.test.mjs", pattern: "INIT-047 work-draft has an independent canonical heading and example projection", reasonCode: "INIT047_GOAL_04_VERIFIED" },
-  goal06: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 supersedes rejects an unavailable target before writing", reasonCode: "INIT047_GOAL_06_VERIFIED" },
-  goal07: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047: relevance ordering changes with the query and source-free fragments are selectable", reasonCode: "INIT047_GOAL_07_VERIFIED" },
-  goal08: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 source digest check reports changes without hiding metadata", reasonCode: "INIT047_GOAL_08_VERIFIED" },
-  goal09: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 article index cards stay explicit-only for default context", reasonCode: "INIT047_GOAL_09_VERIFIED" },
-  goal10: { path: "tests/p4-knowledge-core.test.mjs", pattern: "INIT-047 knowledge inventory admits more than 64 records while query pages remain bounded", reasonCode: "INIT047_GOAL_10_VERIFIED" },
-  goal11: { path: "tests/stop-pact.test.mjs", pattern: "STORY-331 re-reads the platform AGENTS section on every prompt", reasonCode: "INIT047_GOAL_11_VERIFIED" },
-  goal12: { path: "tests/stop-pact.test.mjs", pattern: "STORY-332 response checks keep rules 3 and 5 while ignoring quoted/table content", reasonCode: "INIT047_GOAL_12_VERIFIED" },
-});
-
-async function runInit047Goal(name) {
-  const spec = INIT047_GOAL_TESTS[name];
-  assertion(spec !== undefined, "INIT047_GOAL_TEST_UNKNOWN", name);
-  const source = await readText(resolve(repositoryRoot, spec.path));
-  assertion(source.includes(`test("${spec.pattern}"`), "INIT047_GOAL_TEST_NOT_FOUND", name);
-  return runTests({
-    focusedTestPath: spec.path,
-    focusedTestNamePattern: spec.pattern,
-    focusedReasonCode: spec.reasonCode,
-  });
-}
-
-const INCIDENT_TESTS = Object.freeze({
-  inc269: { path: "tests/inc269-annotation-advisory-guard.test.mjs", pattern: "INC-269 an annotation that moves no advisory field is refused before it is written", reasonCode: "INC269_ANNOTATION_WRITE_GUARD_VERIFIED" },
-  inc270: { path: "tests/inc270-engine-capability-surface.test.mjs", pattern: "INC-270 case 5b: installed has extra flag on a verb -> RED PLATFORM_ENGINE_INSTALLED_AHEAD", reasonCode: "INC270_ENGINE_CAPABILITY_SURFACE_VERIFIED" },
-  inc265: { path: "tests/stop-pact.test.mjs", pattern: "INC-265 removes the unsupported prose length rule without weakening rules 3 and 5", reasonCode: "INC265_STOP_RULES_VERIFIED" },
-  inc264: { path: "tests/dispatch-readiness-compliance.test.mjs", pattern: "INC-264 dispatch briefs require the exact autonomous-operation and scope-restraint declarations", reasonCode: "INC264_DISPATCH_DECLARATIONS_VERIFIED" },
-  inc263: { path: "tests/inc263-closeout.test.mjs", pattern: "INC-263 closeout verification is wired and ceremony cost measurement is deterministic", reasonCode: "INC263_CLOSEOUT_AND_COST_TESTS_VERIFIED" },
-  inc262: { path: "tests/inc262-red-leg-coverage.test.mjs", pattern: "INC-262 red-leg coverage requires every claim to be independently falsifiable", reasonCode: "INC262_RED_LEG_COVERAGE_TESTS_VERIFIED" },
-  inc261: { path: "tests/inc261-verification-links.test.mjs", pattern: "INC-261 a scoped Story cannot reach done without a verification claim", reasonCode: "INC261_VERIFICATION_LINKS_TESTS_VERIFIED" },
-});
-
-async function runIncidentTest(name) {
-  const spec = INCIDENT_TESTS[name];
-  assertion(spec !== undefined, "INCIDENT_TEST_UNKNOWN", name);
-  const source = await readText(resolve(repositoryRoot, spec.path));
-  assertion(source.includes(`test("${spec.pattern}"`), "INCIDENT_TEST_NOT_FOUND", name);
-  return runTests({
-    focusedTestPath: spec.path,
-    focusedTestNamePattern: spec.pattern,
-    focusedReasonCode: spec.reasonCode,
-  });
-}
-
-async function verifyCloseoutGate() {
-  const { verifyCloseout } = await import("./closeout-verify.mjs");
-  const manifest = await readJson(resolve(repositoryRoot, "scripts/policy/closeout-inc263-baseline.json"));
-  const result = verifyCloseout(manifest);
-  assertion(result.ok, "CLOSEOUT_VERIFY_RED", result.problems.join("; "));
-  return success("CLOSEOUT_VERIFY_GATE_VERIFIED", {
-    itemCount: result.itemCount,
-    dispositionCount: result.dispositionCount,
-  });
-}
-
-async function measureCeremonyCostGate() {
-  const { measureCeremonyCost } = await import("./ceremony-cost.mjs");
-  const manifest = await readJson(resolve(repositoryRoot, "scripts/policy/ceremony-cost-init048.json"));
-  return measureCeremonyCost(manifest);
-}
-
-async function verifyInc263() {
-  const closeout = await verifyCloseoutGate();
-  const ceremonyCost = await measureCeremonyCostGate();
-  const tests = await runIncidentTest("inc263");
-  return success("INC263_CLOSEOUT_AND_COST_VERIFIED", { closeout, ceremonyCost, tests });
-}
-
-async function verifyRedLegGate() {
-  const { verifyRedLegCoverage } = await import("./verification-red-legs.mjs");
-  const map = JSON.parse(await readText(resolve(repositoryRoot, "verification-map.yaml")));
-  const result = verifyRedLegCoverage(map);
-  assertion(result.ok, "RED_LEG_COVERAGE_INCOMPLETE", result.problems.join("; "));
-  return success("RED_LEG_COVERAGE_VERIFIED", {
-    total: result.total,
-    redLegCount: result.redLegCount,
-    exemptionCount: result.exemptionCount,
-  });
-}
-
-async function verifyInc262() {
-  const tests = await runIncidentTest("inc262");
-  const coverage = await verifyRedLegGate();
-  return success("INC262_RED_LEG_COVERAGE_VERIFIED", { coverage, tests });
-}
-
-async function verifyInc261() {
-  const tests = await runIncidentTest("inc261");
-  return success("INC261_VERIFICATION_LINKS_VERIFIED", { tests });
-}
-
-const INIT048_STORY_TESTS = Object.freeze({
-  story333: { path: "tests/story-333-byte-segments.test.mjs", pattern: "STORY-333", reasonCode: "INIT048_STORY_333_VERIFIED" },
-  story334: { path: "tests/story-334-segment-index.test.mjs", pattern: "STORY-334", reasonCode: "INIT048_STORY_334_VERIFIED" },
-  story335: { path: "tests/story-335-336-work-fields.test.mjs", pattern: "STORY-335", reasonCode: "INIT048_STORY_335_VERIFIED" },
-  story336: { path: "tests/story-335-336-work-fields.test.mjs", pattern: "STORY-336", reasonCode: "INIT048_STORY_336_VERIFIED" },
-  story337: { path: "tests/story-337-snapshot-replay.test.mjs", pattern: "STORY-337", reasonCode: "INIT048_STORY_337_VERIFIED" },
-  story338: { path: "tests/story-338-339-archive-inventory.test.mjs", pattern: "STORY-338", reasonCode: "INIT048_STORY_338_VERIFIED" },
-  story339: { path: "tests/story-338-339-archive-inventory.test.mjs", pattern: "STORY-339", reasonCode: "INIT048_STORY_339_VERIFIED" },
-  story340: { path: "tests/story-340-attestation-migration.test.mjs", pattern: "STORY-340", reasonCode: "INIT048_STORY_340_VERIFIED" },
-  story341: { path: "tests/story-341-knowledge-body-migration.test.mjs", pattern: "STORY-341", reasonCode: "INIT048_STORY_341_VERIFIED" },
-  story342: { path: "tests/story-342-343-map-docs.test.mjs", pattern: "STORY-342", reasonCode: "INIT048_STORY_342_VERIFIED" },
-  story343: { path: "tests/story-342-343-map-docs.test.mjs", pattern: "STORY-343", reasonCode: "INIT048_STORY_343_VERIFIED" },
-  story346: { path: "tests/story-346-pg-disabled.test.mjs", pattern: "STORY-346", reasonCode: "INIT048_STORY_346_VERIFIED" },
-  story347: { path: "tests/story-347-348-settings-policy.test.mjs", pattern: "STORY-347", reasonCode: "INIT048_STORY_347_VERIFIED" },
-  story348: { path: "tests/story-347-348-settings-policy.test.mjs", pattern: "STORY-348", reasonCode: "INIT048_STORY_348_VERIFIED" },
-  story344: { path: "tests/story-344-storage-boundary.test.mjs", pattern: "STORY-344", reasonCode: "INIT048_STORY_344_VERIFIED" },
-  story345: { path: "tests/story-345-backend-selection.test.mjs", pattern: "STORY-345", reasonCode: "INIT048_STORY_345_VERIFIED" },
-});
-
-async function runInit048Story(name) {
-  const spec = INIT048_STORY_TESTS[name];
-  assertion(spec !== undefined, "INIT048_STORY_TEST_UNKNOWN", name);
-  const source = await readText(resolve(repositoryRoot, spec.path));
-  assertion(source.includes(`test("${spec.pattern}`), "INIT048_STORY_TEST_NOT_FOUND", name);
-  return runTests({
-    focusedTestPath: spec.path,
-    focusedTestNamePattern: spec.pattern,
-    focusedReasonCode: spec.reasonCode,
-  });
 }
 
 async function verifyP8() {
@@ -851,412 +541,6 @@ async function verifyReleaseTagPreflight() {
   });
 }
 
-async function verifyP2Schemas() {
-  const result = await validateP2SchemasAndFixtures();
-  return success("P2_SCHEMAS_VERIFIED", result);
-}
-
-async function verifyAosRequirements() {
-  const result = await validateAosLedger();
-  return success("AOS_REQUIREMENTS_VERIFIED", result);
-}
-
-async function verifyProtocolConformance() {
-  return runTests({ protocolOnly: true });
-}
-
-async function verifyRc1CandidateReadiness() {
-  const result = await validateRc1Candidate();
-  return success("RC1_CANDIDATE_READY", result);
-}
-
-async function verifyP3() {
-  const tests = await runTests({ p3Only: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p3-cases.json");
-  const schemaPath = resolve(repositoryRoot, "packages/core/schema/workspace-v1.schema.json");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.p3-file-engine-cases.v1", "P3_FIXTURE_SCHEMA");
-  assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 4, "P3_FAULT_CASES");
-  assertion(Array.isArray(fixture.leaseFaultCases) && fixture.leaseFaultCases.length === 1, "P3_LEASE_FAULT_CASES");
-  assertion(Array.isArray(fixture.schemaParityCases) && fixture.schemaParityCases.length === 4, "P3_SCHEMA_PARITY_CASES");
-  assertion(Array.isArray(fixture.concurrencyCases) && fixture.concurrencyCases.length === 4, "P3_CONCURRENCY_CASES");
-  assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 53, "P3_NEGATIVE_CASES");
-  assertion(Array.isArray(fixture.migrationCases) && fixture.migrationCases.length === 3, "P3_MIGRATION_CASES");
-  assertion(fixture.propertyPermutations >= 64, "P3_PROPERTY_PERMUTATIONS");
-  const packages = await Promise.all([
-    readJson(resolve(repositoryRoot, "packages/core/package.json")),
-    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
-  ]);
-  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P3_STANDALONE_DEPENDENCY");
-  const marker = resolve(repositoryRoot, ".context/platform/workflow-v3-capabilities/p3-local-work-graph.accepted.json");
-  try {
-    await lstat(marker);
-    fail("P3_MARKER_PREMATURE", marker);
-  } catch (error) {
-    if (error instanceof TaskError || error.code !== "ENOENT") {
-      throw error;
-    }
-  }
-  return success("P3_VERIFIED", {
-    engineTests: tests.reasonCode,
-    faultCases: fixture.faultCases.length,
-    leaseFaultCases: fixture.leaseFaultCases.length,
-    schemaParityCases: fixture.schemaParityCases.length,
-    concurrencyCases: fixture.concurrencyCases.length,
-    negativeCases: fixture.negativeCases.length,
-    migrationCases: fixture.migrationCases.length,
-    propertyPermutations: fixture.propertyPermutations,
-    segmentRotationEvents: fixture.segmentRotationEvents,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    standalone: "node-filesystem-only-no-database-no-aos",
-    p3Marker: "absent",
-    acceptance: "not-claimed",
-  });
-}
-
-async function verifyP4Knowledge() {
-  const tests = await runTests({ knowledgeOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p4-knowledge-core-cases.json");
-  const schemaPath = resolve(repositoryRoot, "packages/core/schema/knowledge-core-v1.schema.json");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.p4-knowledge-core-cases.v1", "P4_KNOWLEDGE_FIXTURE_SCHEMA");
-  assertion(Array.isArray(fixture.operationCases) && fixture.operationCases.length === 9, "P4_KNOWLEDGE_OPERATION_CASES");
-  assertion(Array.isArray(fixture.freshnessCases) && fixture.freshnessCases.length === 3, "P4_KNOWLEDGE_FRESHNESS_CASES");
-  assertion(Array.isArray(fixture.promotionCases) && fixture.promotionCases.length === 3, "P4_KNOWLEDGE_PROMOTION_CASES");
-  assertion(Array.isArray(fixture.faultCases) && fixture.faultCases.length === 3, "P4_KNOWLEDGE_FAULT_CASES");
-  assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 36, "P4_KNOWLEDGE_NEGATIVE_CASES");
-  assertion(fixture.propertyPermutations >= 64, "P4_KNOWLEDGE_PROPERTY_PERMUTATIONS");
-  assertion(fixture.propertyPermutations === 64 && fixture.permutationLogicalRecords === 5 &&
-    /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P4_KNOWLEDGE_REAL_PERMUTATION_CORPUS");
-  const packages = await Promise.all([
-    readJson(resolve(repositoryRoot, "packages/core/package.json")),
-    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
-  ]);
-  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P4_KNOWLEDGE_STANDALONE_DEPENDENCY");
-  return success("P4_KNOWLEDGE_CORE_VERIFIED", {
-    tests: tests.reasonCode,
-    operationCases: fixture.operationCases.length,
-    freshnessCases: fixture.freshnessCases.length,
-    promotionCases: fixture.promotionCases.length,
-    faultCases: fixture.faultCases.length,
-    negativeCases: fixture.negativeCases.length,
-    propertyPermutations: fixture.propertyPermutations,
-    permutationLogicalRecords: fixture.permutationLogicalRecords,
-    permutationCorpusDigest: fixture.permutationCorpusDigest,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    bodyStorage: "metadata-surfaces-never-open-bodies-explicit-or-full-validation-only",
-    defaultSelection: "promoted-fresh-active-default-retrieval-only",
-    provenance: "explicit-source-evidence-owner-required",
-    utf8ByteBudgetProof: "custom-keyword-max-and-max-plus-one",
-    liveWorkspaceStore: "not-created",
-    standalone: "node-filesystem-only-no-database-no-aos-no-network",
-    acceptance: "not-claimed",
-  });
-}
-
-async function verifyP5() {
-  const tests = await runTests({ p5Only: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p5-generic-profile-cases.json");
-  const schemaPath = resolve(repositoryRoot, "packages/core/schema/generic-profile-v1.schema.json");
-  const specPath = resolve(repositoryRoot, "packages/core/spec/generic-profile-v1.md");
-  const personaSchemaPath = resolve(repositoryRoot, "packages/core/schema/core-reference-persona-v1.schema.json");
-  const personaSpecPath = resolve(repositoryRoot, "packages/core/spec/core-reference-persona-v1.md");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.p5-generic-profile-cases.v1", "P5_FIXTURE_SCHEMA");
-  assertion(Array.isArray(fixture.operationCases) && fixture.operationCases.length === 8, "P5_OPERATION_CASES");
-  assertion(Array.isArray(fixture.negativeCases) && fixture.negativeCases.length >= 36, "P5_NEGATIVE_CASES");
-  assertion(Array.isArray(fixture.trustAdmissionNegativeCases) && fixture.trustAdmissionNegativeCases.length === 5,
-    "P5_TRUST_ADMISSION_NEGATIVES");
-  assertion(Array.isArray(fixture.admissionFilesystemNegativeCases) && fixture.admissionFilesystemNegativeCases.length === 6,
-    "P5_ADMISSION_FILESYSTEM_NEGATIVES");
-  assertion(Array.isArray(fixture.authorityAnchorNegativeCases) && fixture.authorityAnchorNegativeCases.length === 7,
-    "P5_AUTHORITY_ANCHOR_NEGATIVES");
-  assertion(fixture.admissionCanonicalByteCases === 4, "P5_ADMISSION_CANONICAL_BYTES");
-  assertion(Array.isArray(fixture.cliCases) && fixture.cliCases.length === 6, "P5_CLI_CASES");
-  assertion(fixture.propertyPermutations === 64 && fixture.permutationLayerCount === 6 &&
-    /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P5_PROPERTY_PERMUTATIONS");
-  assertion(fixture.corePersonaDistinctPermutations === 64 && /^[a-f0-9]{64}$/u.test(fixture.corePersonaPermutationCorpusDigest), "P5_PERSONA_PROPERTY_PERMUTATIONS");
-  assertion(fixture.corePersonaAstralParityCases === 20, "P5_PERSONA_ASTRAL_PARITY");
-  for (const digestName of ["starterBundleDigest", "baseProfileDigest", "unboundEffectiveDigest", "boundEffectiveDigest",
-    "boundOverlayDigest", "boundEffectivePolicyDigest"]) {
-    assertion(/^[a-f0-9]{64}$/u.test(fixture[digestName]), "P5_CANONICAL_DIGEST_VECTOR", digestName);
-  }
-  assertion(fixture.coldStartRecords === 4 && fixture.coldStartEvents === 17, "P5_COLD_START_PROOF");
-  assertion(fixture.liveProfileStore === "not-created", "P5_LIVE_STORE_BOUNDARY");
-  const packages = await Promise.all([
-    readJson(resolve(repositoryRoot, "packages/core/package.json")),
-    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
-  ]);
-  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P5_STANDALONE_DEPENDENCY");
-  return success("P5_GENERIC_PROFILES_VERIFIED", {
-    tests: tests.reasonCode,
-    trustLevels: 3,
-    bindingModes: 5,
-    mergeClasses: 4,
-    operationCases: fixture.operationCases.length,
-    negativeCases: fixture.negativeCases.length,
-    trustAdmissionNegativeCases: fixture.trustAdmissionNegativeCases.length,
-    admissionFilesystemNegativeCases: fixture.admissionFilesystemNegativeCases.length,
-    authorityAnchorNegativeCases: fixture.authorityAnchorNegativeCases.length,
-    admissionCanonicalByteCases: fixture.admissionCanonicalByteCases,
-    coreReferenceProfiles: 8,
-    coreReferenceAstralParityCases: fixture.corePersonaAstralParityCases,
-    coreReferenceDistinctPermutations: fixture.corePersonaDistinctPermutations,
-    coreReferencePermutationCorpusDigest: fixture.corePersonaPermutationCorpusDigest,
-    coreReferenceSourceManifestSha256: "9fa68e8f06e73e1d1b4bffb59a059814e683619b1d80234aef82e44f76de7c13",
-    coreReferenceSchemaDigest: (await fileRecord(personaSchemaPath)).sha256,
-    coreReferenceSpecDigest: (await fileRecord(personaSpecPath)).sha256,
-    cliCases: fixture.cliCases.length,
-    propertyPermutations: fixture.propertyPermutations,
-    permutationLayerCount: fixture.permutationLayerCount,
-    permutationCorpusDigest: fixture.permutationCorpusDigest,
-    starterBundleDigest: fixture.starterBundleDigest,
-    baseProfileDigest: fixture.baseProfileDigest,
-    unboundEffectiveDigest: fixture.unboundEffectiveDigest,
-    boundEffectiveDigest: fixture.boundEffectiveDigest,
-    boundOverlayDigest: fixture.boundOverlayDigest,
-    boundEffectivePolicyDigest: fixture.boundEffectivePolicyDigest,
-    coldStartRecords: fixture.coldStartRecords,
-    coldStartEvents: fixture.coldStartEvents,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    generatedMaterial: "inert-generic-data-only",
-    liveProfileStore: "not-created",
-    ownerGate: "standing-owner-authority-admitted",
-    namedPersonaContent: "eight-core-reference-records-only",
-    standalone: "node-filesystem-only-no-database-no-aos-no-network",
-    acceptance: "not-claimed",
-  });
-}
-
-async function verifyP6() {
-  const tests = await runTests({ p6Only: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p6-context-router-cases.json");
-  const schemaPath = resolve(repositoryRoot, "packages/core/schema/context-router-v1.schema.json");
-  const specPath = resolve(repositoryRoot, "packages/core/spec/context-router-v1.md");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.p6-context-router-cases.v1", "P6_CONTEXT_FIXTURE_SCHEMA");
-  assertion(fixture.goldenProfileCases === 8, "P6_CONTEXT_GOLDEN_PROFILES");
-  assertion(fixture.hostileCases === 24 && fixture.schemaParityCases === 8, "P6_CONTEXT_HOSTILE_CORPUS");
-  assertion(fixture.bindingParityCases === 6 && fixture.authorityAllowlistCountCases === 2 &&
-    fixture.unicodeParityCases === 12 && fixture.receiptBudgetTamperCases === 2 &&
-    fixture.authorityImmutabilityCases === 2 && fixture.authorityCanonicalByteCases === 4, "P6_CONTEXT_REPAIR_VECTORS");
-  assertion(fixture.propertyPermutations === 64 && fixture.logicalMetadataCandidates === 6 &&
-    /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6_CONTEXT_PROPERTY_CORPUS");
-  assertion(Array.isArray(fixture.latencyStages) && fixture.latencyStages.length === 6 &&
-    Object.values(fixture.latencyBudgetMilliseconds).every((value) => Number.isSafeInteger(value) && value > 0),
-  "P6_CONTEXT_LATENCY_BUDGETS");
-  assertion(fixture.codexAdapter === "implemented_inert_templates_only" && fixture.rc3 === "unaccepted" &&
-    fixture.ownerVisibleActivation === "not-claimed" && fixture.liveContextStore === "not-created",
-  "P6_CONTEXT_NO_OVERCLAIM");
-  const packages = await Promise.all([
-    readJson(resolve(repositoryRoot, "packages/core/package.json")),
-    readJson(resolve(repositoryRoot, "packages/cli/package.json")),
-  ]);
-  assertion(packages.every((manifest) => Object.keys(manifest.dependencies ?? {}).length === 0), "P6_STANDALONE_DEPENDENCY");
-  return success("P6_CONTEXT_ROUTER_VERIFIED", {
-    tests: tests.reasonCode,
-    goldenProfileCases: fixture.goldenProfileCases,
-    hostileCases: fixture.hostileCases,
-    admittedHostileCases: 7,
-    schemaParityCases: fixture.schemaParityCases,
-    bindingParityCases: fixture.bindingParityCases,
-    authorityAllowlistCountCases: fixture.authorityAllowlistCountCases,
-    unicodeParityCases: fixture.unicodeParityCases,
-    receiptBudgetTamperCases: fixture.receiptBudgetTamperCases,
-    authorityImmutabilityCases: fixture.authorityImmutabilityCases,
-    authorityCanonicalByteCases: fixture.authorityCanonicalByteCases,
-    propertyPermutations: fixture.propertyPermutations,
-    logicalMetadataCandidates: fixture.logicalMetadataCandidates,
-    explicitReadCandidates: fixture.explicitReadCandidates,
-    permutationCorpusDigest: fixture.permutationCorpusDigest,
-    latencyStages: fixture.latencyStages,
-    latencyBudgetMilliseconds: fixture.latencyBudgetMilliseconds,
-    latencyResidual: fixture.latencyResidual,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    contextRouter: "implemented",
-    codexAdapter: fixture.codexAdapter,
-    rc3: fixture.rc3,
-    ownerVisibleActivation: fixture.ownerVisibleActivation,
-    liveContextStore: fixture.liveContextStore,
-    standalone: "node-filesystem-only-no-database-no-aos-no-network",
-  });
-}
-
-async function verifyDependency() {
-  const tests = await runTests({ dependencyOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/dependency-cases.json");
-  const schemaPath = resolve(repositoryRoot, "schemas/dependency-v1.schema.json");
-  const specPath = resolve(repositoryRoot, "specs/dependency-v1.md");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.dependency-cases.v1", "DEPENDENCY_FIXTURE_SCHEMA");
-  assertion(fixture.positiveCases === 6 && fixture.hostileCases === 16 && fixture.schemaParityCases === 8, "DEPENDENCY_CORE_CORPUS");
-  assertion(fixture.cycleCases === 5 && fixture.endpointCases === 6 && fixture.blockerReadCases === 3 && fixture.hashStabilityCases === 3, "DEPENDENCY_RULE_CORPUS");
-  assertion(fixture.orderingPermutations === 24 && /^[a-f0-9]{64}$/u.test(fixture.orderingCorpusDigest), "DEPENDENCY_ORDER_CORPUS");
-  assertion(fixture.registrationAppliesTo === "work" && fixture.requiredByDefault === false && fixture.ledgerRequirement === "AOS-REQ-016", "DEPENDENCY_REGISTRATION");
-  assertion(fixture.crossProjectEdges === "rejected" && fixture.liveStore === "not-created", "DEPENDENCY_NO_OVERCLAIM");
-  return success("DEPENDENCY_VERIFIED", {
-    tests: tests.reasonCode,
-    positiveCases: fixture.positiveCases,
-    hostileCases: fixture.hostileCases,
-    schemaParityCases: fixture.schemaParityCases,
-    cycleCases: fixture.cycleCases,
-    endpointCases: fixture.endpointCases,
-    blockerReadCases: fixture.blockerReadCases,
-    hashStabilityCases: fixture.hashStabilityCases,
-    orderingPermutations: fixture.orderingPermutations,
-    orderingCorpusDigest: fixture.orderingCorpusDigest,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    registrationAppliesTo: fixture.registrationAppliesTo,
-    ledgerRequirement: fixture.ledgerRequirement,
-    crossProjectEdges: fixture.crossProjectEdges,
-    liveStore: fixture.liveStore,
-    standalone: "inert-extension-record-data-only-no-store-no-network",
-  });
-}
-
-async function verifyConference() {
-  const tests = await runTests({ conferenceOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/conference-cases.json");
-  const schemaPath = resolve(repositoryRoot, "schemas/conference-request-v1.schema.json");
-  const specPath = resolve(repositoryRoot, "specs/conference-v1.md");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.conference-cases.v1", "CONFERENCE_FIXTURE_SCHEMA");
-  assertion(fixture.positiveCases === 3 && fixture.hostileCases === 12 && fixture.schemaParityCases === 8, "CONFERENCE_CORE_CORPUS");
-  assertion(fixture.positionParityCases === 4 && fixture.minutesParityCases === 4, "CONFERENCE_SCHEMA_PARITY_CORPUS");
-  assertion(fixture.operationCases === 6 && fixture.distillCases === 3, "CONFERENCE_OPERATION_CORPUS");
-  assertion(fixture.registrationAppliesTo === "work" && fixture.requiredByDefault === false && fixture.ledgerRequirement === "AOS-REQ-015", "CONFERENCE_REGISTRATION");
-  // WSD-1: conference records now persist through the governed workspace
-  // event-log store (proved by verify:ext-store); orchestration and search stay excluded.
-  assertion(fixture.orchestration === "excluded" && fixture.search === "excluded" && fixture.liveStore === "workspace-event-log", "CONFERENCE_NO_OVERCLAIM");
-  return success("CONFERENCE_VERIFIED", {
-    tests: tests.reasonCode,
-    positiveCases: fixture.positiveCases,
-    hostileCases: fixture.hostileCases,
-    schemaParityCases: fixture.schemaParityCases,
-    operationCases: fixture.operationCases,
-    distillCases: fixture.distillCases,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    registrationAppliesTo: fixture.registrationAppliesTo,
-    ledgerRequirement: fixture.ledgerRequirement,
-    liveStore: fixture.liveStore,
-    standalone: "inert-extension-record-validation-no-orchestration-no-search-store-in-workspace-event-log",
-  });
-}
-
-async function verifyExecution() {
-  const tests = await runTests({ executionOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/conference-execution-cases.json");
-  const specPath = resolve(repositoryRoot, "specs/conference-execution-v1.md");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.conference-execution-cases.v1", "EXECUTION_FIXTURE_SCHEMA");
-  assertion(fixture.receiptPositiveCases === 5 && fixture.receiptHostileCases === 16, "EXECUTION_RECEIPT_CORPUS");
-  assertion(fixture.modePositiveCases === 4 && fixture.modeHostileCases === 4, "EXECUTION_MODE_CORPUS");
-  assertion(fixture.classifyPositiveCases === 6 && fixture.classifyHostileCases === 9, "EXECUTION_CLASSIFY_CORPUS");
-  assertion(fixture.hostExecutionReceiptVersion === "tcrn.host-execution-receipt.v1", "EXECUTION_RECEIPT_SCHEMA");
-  assertion(fixture.attribution === "content-digest-binding-not-identity-proof", "EXECUTION_NO_OVERCLAIM");
-  assertion(fixture.collection === "excluded-epic-020" && fixture.orchestration === "excluded", "EXECUTION_SCOPE");
-  return success("EXECUTION_VERIFIED", {
-    tests: tests.reasonCode,
-    receiptCases: fixture.receiptPositiveCases + fixture.receiptHostileCases,
-    modeCases: fixture.modePositiveCases + fixture.modeHostileCases,
-    classifyCases: fixture.classifyPositiveCases + fixture.classifyHostileCases,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    standalone: fixture.standalone,
-  });
-}
-
-
-async function verifyAssignmentGate() {
-  const tests = await runTests({ assignmentGateOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/assignment-gate-cases.json");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.assignment-gate-cases.v1", "ASSIGNMENT_GATE_FIXTURE_SCHEMA");
-  assertion(fixture.assignmentPositiveCases === 3 && fixture.assignmentHostileCases === 6, "ASSIGNMENT_CORPUS");
-  assertion(fixture.gatePositiveCases === 4 && fixture.gateHostileCases === 7, "GATE_CORPUS");
-  assertion(fixture.schemaParityCases === 8 && fixture.listCases === 4, "ASSIGNMENT_GATE_PARITY_CORPUS");
-  assertion(fixture.registrationAppliesTo === "work" && fixture.requiredByDefault === false, "ASSIGNMENT_GATE_REGISTRATION");
-  // WSD-1: gate records now persist through the governed workspace event-log
-  // store (proved by verify:ext-store); assignments remain store-less.
-  assertion(fixture.assignmentLedgerRequirement === "AOS-REQ-017" && fixture.gateLedgerRequirement === "AOS-REQ-018" && fixture.liveStore === "workspace-event-log", "ASSIGNMENT_GATE_NO_OVERCLAIM");
-  return success("ASSIGNMENT_GATE_VERIFIED", {
-    tests: tests.reasonCode,
-    assignmentPositiveCases: fixture.assignmentPositiveCases,
-    assignmentHostileCases: fixture.assignmentHostileCases,
-    gatePositiveCases: fixture.gatePositiveCases,
-    gateHostileCases: fixture.gateHostileCases,
-    schemaParityCases: fixture.schemaParityCases,
-    listCases: fixture.listCases,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    assignmentSchemaDigest: (await fileRecord(resolve(repositoryRoot, "schemas/assignment-v1.schema.json"))).sha256,
-    gateSchemaDigest: (await fileRecord(resolve(repositoryRoot, "schemas/gate-v1.schema.json"))).sha256,
-    assignmentLedgerRequirement: fixture.assignmentLedgerRequirement,
-    gateLedgerRequirement: fixture.gateLedgerRequirement,
-    liveStore: fixture.liveStore,
-    standalone: "inert-extension-record-validation-no-lifecycle-assignment-store-less-gate-store-in-workspace-event-log",
-  });
-}
-
-// WSD-1: the conference/gate workspace-event-log store proof. The record-shape
-// corpora stay under verify:conference / verify:ext-ag; this task proves the
-// persistence semantics (operations, binding rules, openness/tombstone rules,
-// legacy byte-stability, replay determinism) end to end and offline.
-async function verifyExtStore() {
-  const tests = await runTests({ extensionStoreOnly: true });
-  const specDigests = await Promise.all([
-    fileRecord(resolve(repositoryRoot, "specs/conference-v1.md")),
-    fileRecord(resolve(repositoryRoot, "specs/gate-v1.md")),
-  ]);
-  return success("EXT_STORE_VERIFIED", {
-    tests: tests.reasonCode,
-    operations: [
-      "conference.created",
-      "conference.updated",
-      "conference.position.appended",
-      "conference.closed",
-      "gate.created",
-      "gate.updated",
-      "gate.deleted",
-    ],
-    store: "workspace-event-log",
-    storageVersion: 1,
-    atomicClose: "single-event-payload-minutes-operation-record",
-    legacyViews: "byte-stable-when-no-extension-records",
-    forwardCompatibility: "old-binaries-fail-closed-unknown-operation",
-    conferenceSpecDigest: specDigests[0].sha256,
-    gateSpecDigest: specDigests[1].sha256,
-  });
-}
-
-async function verifyActorAttestation() {
-  const tests = await runTests({ actorOnly: true });
-  const schemaPath = resolve(repositoryRoot, "schemas/actor-attestation-v1.schema.json");
-  const specPath = resolve(repositoryRoot, "specs/actor-attestation-v1.md");
-  return success("ACTOR_ATTESTATION_VERIFIED", {
-    tests: tests.reasonCode,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    registrationAppliesTo: "event",
-    requiredByDefault: false,
-    actorPrefixes: ["agent", "owner", "profile"],
-    ledgerRequirements: ["AOS-REQ-007", "AOS-REQ-017"],
-    enforcement: "enabled-boundary-mandatory-actor-live-and-replay",
-    enableBoundary: "sequence>=enabledAtSequence-enabling-event-included",
-    reasonCodes: ["WORKSPACE_ACTOR_INVALID", "WORKSPACE_ACTOR_REQUIRED", "WORKSPACE_EVENT_CORRUPT"],
-    defaultBehaviour: "no-enable-event-byte-identical-to-rc4",
-    standalone: "extension-contract-plus-engine-enforcement-no-store-no-network",
-  });
-}
 
 function octal(value, length) {
   return `${value.toString(8).padStart(length - 1, "0")}\0`;
@@ -1420,8 +704,9 @@ async function filesForPrivacySurface(root, labelPrefix = "") {
   const files = (await walkFiles(root)).filter((path) => {
     const relativePath = toPosixPath(relative(root, path));
     // This ignored file is host-local observer runtime configuration. It is
-    // deliberately excluded from public/history release surfaces and is
-    // independently fingerprint-checked by verify:observe-channel.
+    // deliberately excluded from public/history release surfaces. The independent
+    // fingerprint check that used to cover it, verify:observe-channel, retired in
+    // TCRN-CROSS-STORY-359.
     return !(root === repositoryRoot && relativePath === ".claude/settings.local.json");
   });
   return Promise.all(files.map(async (path) => ({
@@ -1589,24 +874,6 @@ async function verifySource() {
   return success("SOURCE_ALLOWLIST_VERIFIED", { files: records.length, exactEntries: policy.allowedFiles.length });
 }
 
-async function verifyOperatorAuthority() {
-  // STORY-287: the MCP transport is retired, so the fixture's mcp case counts went with
-  // the surface they described. TCRN-CROSS-STORY-358 family 1 retired the adapter verbs
-  // the IO-blocked rosters enumerated, and the host-admission cases with them. What stays
-  // is the authority module itself, which the whole engine CLI runs through.
-  const tests = await runTests({ authorityOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/operator-authority-cases.json");
-  const specPath = resolve(repositoryRoot, "packages/core/spec/operator-authority-v1.md");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.operator-authority-cases.v1", "OPERATOR_AUTHORITY_FIXTURE_SCHEMA");
-  assertion(fixture.authorityOutputCommands.length === 0 && fixture.ambientAuthoritySources.length === 0,
-    "OPERATOR_AUTHORITY_RETEST_CORPUS");
-  assertion(fixture.authorityPositiveCases === 2 && fixture.authorityHostileCases === 8,
-    "OPERATOR_AUTHORITY_CASE_CORPUS");
-  assertion((await readText(specPath)).length > 0, "OPERATOR_AUTHORITY_SPEC_MISSING");
-  return success("OPERATOR_AUTHORITY_VERIFIED", { tests: tests.reasonCode });
-}
-
 async function verifyNoSiblingDependency() {
   // TCRN-CROSS-INC-215. The dependency-direction rule was prose and a hand-run grep;
   // INC-214 cleared five reaching sites that way and nothing stopped a sixth.
@@ -1707,89 +974,12 @@ async function aggregateDigest(paths) {
 }
 
 const commandContracts = {
-  history: { exit: 0, reasonCode: "HISTORY_CLEAN" },
   privacy: { exit: 0, reasonCode: "PRIVACY_SOURCE_CLEAN" },
-  "privacy-history": { exit: 0, reasonCode: "PRIVACY_SOURCE_CLEAN" },
   "verify-p1": { exit: 0, reasonCode: "P1_VERIFIED" },
-  "test-trust": { exit: 0, reasonCode: "TRUST_NEGATIVE_MATRIX_VERIFIED" },
   governance: { exit: 0, reasonCode: "GOVERNANCE_TOOLCHAIN_VERIFIED" },
-  vulnerabilities: { exit: 0, reasonCode: "VULNERABILITY_POLICY_VERIFIED" },
-  workspace: { exit: 0, reasonCode: "WORKSPACE_VERIFIED" },
-  roots: { exit: 0, reasonCode: "ROOT_BOUNDARIES_VERIFIED" },
-  ci: { exit: 0, reasonCode: "CI_HARDENING_VERIFIED" },
   isolated: { exit: 0, reasonCode: "ISOLATED_P1_VERIFIED" },
-  p2: { exit: 0, reasonCode: "P2_VERIFIED" },
-  p3: { exit: 0, reasonCode: "P3_VERIFIED" },
-  "p4-knowledge": { exit: 0, reasonCode: "P4_KNOWLEDGE_CORE_VERIFIED" },
-  init047: { exit: 0, reasonCode: "INIT047_MODEL_CENTERED_TESTS_VERIFIED" },
-  goal01: { exit: 0, reasonCode: "INIT047_GOAL_01_VERIFIED" },
-  goal02: { exit: 0, reasonCode: "INIT047_GOAL_02_VERIFIED" },
-  goal03: { exit: 0, reasonCode: "INIT047_GOAL_03_VERIFIED" },
-  goal04: { exit: 0, reasonCode: "INIT047_GOAL_04_VERIFIED" },
-  goal06: { exit: 0, reasonCode: "INIT047_GOAL_06_VERIFIED" },
-  goal07: { exit: 0, reasonCode: "INIT047_GOAL_07_VERIFIED" },
-  goal08: { exit: 0, reasonCode: "INIT047_GOAL_08_VERIFIED" },
-  goal09: { exit: 0, reasonCode: "INIT047_GOAL_09_VERIFIED" },
-  goal10: { exit: 0, reasonCode: "INIT047_GOAL_10_VERIFIED" },
-  goal11: { exit: 0, reasonCode: "INIT047_GOAL_11_VERIFIED" },
-  goal12: { exit: 0, reasonCode: "INIT047_GOAL_12_VERIFIED" },
-  story333: { exit: 0, reasonCode: "INIT048_STORY_333_VERIFIED" },
-  story334: { exit: 0, reasonCode: "INIT048_STORY_334_VERIFIED" },
-  story335: { exit: 0, reasonCode: "INIT048_STORY_335_VERIFIED" },
-  story336: { exit: 0, reasonCode: "INIT048_STORY_336_VERIFIED" },
-  story337: { exit: 0, reasonCode: "INIT048_STORY_337_VERIFIED" },
-  story338: { exit: 0, reasonCode: "INIT048_STORY_338_VERIFIED" },
-  story339: { exit: 0, reasonCode: "INIT048_STORY_339_VERIFIED" },
-  story340: { exit: 0, reasonCode: "INIT048_STORY_340_VERIFIED" },
-  story341: { exit: 0, reasonCode: "INIT048_STORY_341_VERIFIED" },
-  story342: { exit: 0, reasonCode: "INIT048_STORY_342_VERIFIED" },
-  story343: { exit: 0, reasonCode: "INIT048_STORY_343_VERIFIED" },
-  story346: { exit: 0, reasonCode: "INIT048_STORY_346_VERIFIED" },
-  story347: { exit: 0, reasonCode: "INIT048_STORY_347_VERIFIED" },
-  story348: { exit: 0, reasonCode: "INIT048_STORY_348_VERIFIED" },
-  story344: { exit: 0, reasonCode: "INIT048_STORY_344_VERIFIED" },
-  story345: { exit: 0, reasonCode: "INIT048_STORY_345_VERIFIED" },
-  inc256: { exit: 0, reasonCode: "INC256_KNOWLEDGE_MIGRATION_VERIFIED" },
-  inc258: { exit: 0, reasonCode: "INC258_INSTALL_MANIFEST_VERIFIED" },
-  inc259: { exit: 0, reasonCode: "INC259_STORAGE_MIGRATION_VERIFIED" },
-  inc260: { exit: 0, reasonCode: "INC260_SNAPSHOT_READ_OPTIMIZED" },
-  inc265: { exit: 0, reasonCode: "INC265_STOP_RULES_VERIFIED" },
-  inc264: { exit: 0, reasonCode: "INC264_DISPATCH_DECLARATIONS_VERIFIED" },
-  closeout: { exit: 0, reasonCode: "CLOSEOUT_VERIFY_GATE_VERIFIED" },
-  inc263: { exit: 0, reasonCode: "INC263_CLOSEOUT_AND_COST_VERIFIED" },
-  "red-legs": { exit: 0, reasonCode: "RED_LEG_COVERAGE_VERIFIED" },
-  inc262: { exit: 0, reasonCode: "INC262_RED_LEG_COVERAGE_VERIFIED" },
-  inc269: { exit: 0, reasonCode: "INC269_ANNOTATION_WRITE_GUARD_VERIFIED" },
-  inc270: { exit: 0, reasonCode: "INC270_ENGINE_CAPABILITY_SURFACE_VERIFIED" },
-  inc261: { exit: 0, reasonCode: "INC261_VERIFICATION_LINKS_VERIFIED" },
-  p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
-  p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
-  dep: { exit: 0, reasonCode: "DEPENDENCY_VERIFIED" },
-  conference: { exit: 0, reasonCode: "CONFERENCE_VERIFIED" },
-  "ext-execution": { exit: 0, reasonCode: "EXECUTION_VERIFIED" },
-  authority: { exit: 0, reasonCode: "OPERATOR_AUTHORITY_VERIFIED" },
-  "ext-ag": { exit: 0, reasonCode: "ASSIGNMENT_GATE_VERIFIED" },
-  "ext-actor": { exit: 0, reasonCode: "ACTOR_ATTESTATION_VERIFIED" },
-  "ext-store": { exit: 0, reasonCode: "EXT_STORE_VERIFIED" },
   p8: { exit: 0, reasonCode: "P8_WORKFLOW_RC_VERIFIED" },
-  "release-preflight": { exit: 0, reasonCode: "RELEASE_TAG_PREFLIGHT_VERIFIED" },
-  rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
-  backup: { exit: 0, reasonCode: "BACKUP_VERIFIED" },
-  act3: { exit: 0, reasonCode: "ACT3_PERSONA_RENDER_VERIFIED" },
-  act7: { exit: 0, reasonCode: "ACT7_EXECUTION_COLLECTION_VERIFIED" },
-  act11: { exit: 0, reasonCode: "ACT11_ADAPTER_ACCEPTANCE_VERIFIED" },
-  e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
-  story349: { exit: 0, reasonCode: "INIT049_STORY_349_VERIFIED" },
-  story350: { exit: 0, reasonCode: "INIT049_STORY_350_VERIFIED" },
-  story351: { exit: 0, reasonCode: "INIT049_STORY_351_VERIFIED" },
-  story352: { exit: 0, reasonCode: "INIT049_STORY_352_VERIFIED" },
-  story353: { exit: 0, reasonCode: "INIT049_STORY_353_VERIFIED" },
-  inc266: { exit: 0, reasonCode: "INC266_PUSH_GATE_TIMING_VERIFIED" },
 };
-
-for (const name of INIT049_FOCUSED_CLAIM_NAMES) {
-  commandContracts[name] = { exit: 0, reasonCode: INIT049_FOCUSED_CLAIMS[name].reasonCode };
-}
 
 async function verifyMap() {
   const map = JSON.parse(await readText(resolve(repositoryRoot, "verification-map.yaml")));
@@ -1819,15 +1009,32 @@ async function verifyMap() {
     assertion(required.every((field) => Object.hasOwn(claim, field)), "VERIFICATION_MAP_FIELDS", claim.id ?? "unknown");
     assertion(!ids.has(claim.id), "VERIFICATION_MAP_DUPLICATE", claim.id);
     ids.add(claim.id);
-    // PRG-0: ACT (activation ladder) and BK (backup) are admitted here so hardening
-    // claims validate. Their completeness-loop entries below and the evidencePhase
-    // mapping are added atomically with each phase's first claim (a phase cannot be
-    // required-present before any claim exists) — see docs/hardening/rc1-map-regeneration.md.
-    assertion(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "ACT", "ACT2", "BK", "E2E"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
+    // TCRN-CROSS-STORY-359. The allowlist used to admit thirteen phases and the loop
+    // below required eleven of them to be non-empty. Both lists now name the two phases
+    // that still have a gate to hang on: every other phase's claims measured a verify:*
+    // script this Story retired, and a phase kept in an allowlist with no claim under it
+    // is the same unread roster this repository keeps paying for.
+    assertion(["P1", "P8"].includes(claim.phase), "VERIFICATION_MAP_PHASE", claim.id);
     assertion(claimCategories.includes(claim.category), "VERIFICATION_MAP_CATEGORY", claim.id);
     assertion(["implemented", "candidate", "planned"].includes(claim.status), "VERIFICATION_MAP_STATUS", claim.id);
     assertion(Array.isArray(claim.fixturePaths), "VERIFICATION_MAP_FIXTURES", claim.id);
     assertion(Array.isArray(claim.invalidationTriggers) && claim.invalidationTriggers.length > 0, "VERIFICATION_MAP_INVALIDATION", claim.id);
+    // TCRN-CROSS-STORY-359. Every claim now says what it is here for, and says it in a
+    // form that can be checked: `requirement` is the ordinal of one of the eleven gate
+    // categories this repository keeps (1 format, 2 lint, 3 typecheck, 4 build, 5 test,
+    // 6 offline, 7 privacy, 8 chain-validate, 9 hooks-live, 10 retrieval-eval,
+    // 11 release), `incident` is the chain id of the incident that put the claim here.
+    // Exactly one, never both: a claim that can name neither has no reason to exist and
+    // retires instead. This is the field the ledger lacked while it grew to 122 entries
+    // named after whichever ticket was open the week each was written.
+    const hasRequirement = Object.hasOwn(claim, "requirement");
+    const hasIncident = Object.hasOwn(claim, "incident");
+    assertion(hasRequirement !== hasIncident, "VERIFICATION_MAP_ANCHOR_MISSING", claim.id);
+    if (hasRequirement) {
+      assertion(Number.isSafeInteger(claim.requirement) && claim.requirement >= 1 && claim.requirement <= 11, "VERIFICATION_MAP_REQUIREMENT_RANGE", claim.id);
+    } else {
+      assertion(/^TCRN-[A-Z]+-INC-\d+$/u.test(String(claim.incident)), "VERIFICATION_MAP_INCIDENT_SHAPE", claim.id);
+    }
     const commandMatch = claim.command.match(/^pnpm ([a-z0-9:.-]+)$/u);
     assertion(commandMatch, "VERIFICATION_MAP_COMMAND_SURFACE", claim.id);
     const scriptName = commandMatch[1];
@@ -1847,54 +1054,15 @@ async function verifyMap() {
       assertion(claim.fixtureDigest === null, "VERIFICATION_MAP_PLANNED_DIGEST", claim.id);
       assertion(claim.expectedReasonCode.endsWith("_OUT_OF_SCOPE"), "VERIFICATION_MAP_PLANNED_REASON", claim.id);
     }
-    if (typeof claim.id === "string" && (claim.id.startsWith("INIT047-GOAL-") || claim.id.startsWith("INIT048-STORY-") || claim.id.startsWith("INIT048-INC-") || claim.id.startsWith("INIT049-STORY-") || claim.id.startsWith("INIT049-INC-") || ["INIT047-INC-255", "INIT047-INC-256"].includes(claim.id))) {
-      assertion(claim.positiveLeg !== null && typeof claim.positiveLeg === "object" && !Array.isArray(claim.positiveLeg), "VERIFICATION_MAP_POSITIVE_LEG", claim.id);
-      assertion(typeof claim.positiveLeg.command === "string" && claim.positiveLeg.command.length > 0, "VERIFICATION_MAP_POSITIVE_COMMAND", claim.id);
-      assertion(claim.positiveLeg.expectedExit === claim.expectedExit && claim.positiveLeg.expectedReasonCode === claim.expectedReasonCode, "VERIFICATION_MAP_POSITIVE_EXPECTATION", claim.id);
-      assertion(claim.redLeg !== null && typeof claim.redLeg === "object" && !Array.isArray(claim.redLeg), "VERIFICATION_MAP_RED_LEG", claim.id);
-      assertion(typeof claim.redLeg.mutation === "string" && claim.redLeg.mutation.length > 0, "VERIFICATION_MAP_RED_MUTATION", claim.id);
-      assertion(typeof claim.redLeg.test === "string" && claim.redLeg.test.length > 0, "VERIFICATION_MAP_RED_TEST", claim.id);
-      assertion(typeof claim.redLeg.expectedReasonCode === "string" && claim.redLeg.expectedReasonCode.length > 0, "VERIFICATION_MAP_RED_EXPECTATION", claim.id);
-    }
   }
   const redLegCoverage = verifyRedLegCoverage(map);
   assertion(redLegCoverage.ok, "VERIFICATION_MAP_RED_LEG_COVERAGE", redLegCoverage.problems.join("; "));
   const verificationLinks = validateVerificationMapLinks(map);
   assertion(verificationLinks.ok, "VERIFICATION_MAP_LINKS_INVALID", verificationLinks.problems.join("; "));
-  const init047Goals = map.claims.filter((claim) => typeof claim.id === "string" && /^INIT047-GOAL-\d{2}$/u.test(claim.id));
-  assertion(init047Goals.length === 11, "VERIFICATION_MAP_INIT047_GOAL_COUNT", String(init047Goals.length));
-  for (const field of ["command", "expectedReasonCode"]) {
-    assertion(new Set(init047Goals.map((claim) => claim[field])).size === 11, "VERIFICATION_MAP_INIT047_GOAL_NOT_INDEPENDENT", field);
-  }
-  assertion(new Set(init047Goals.map((claim) => claim.redLeg.test)).size === 11, "VERIFICATION_MAP_INIT047_GOAL_RED_LEGS_NOT_INDEPENDENT");
-  assertion(INIT049_FOCUSED_CLAIM_NAMES.length === INIT049_FOCUSED_CLAIM_COUNT, "VERIFICATION_MAP_INIT049_FOCUSED_DECLARATION_COUNT", String(INIT049_FOCUSED_CLAIM_NAMES.length));
-  const init049Focused = INIT049_FOCUSED_CLAIM_NAMES.map((name) => map.claims.find((claim) => claim.command === `pnpm verify:${name}`));
-  assertion(init049Focused.every((claim) => claim !== undefined), "VERIFICATION_MAP_INIT049_FOCUSED_MISSING");
-  assertion(new Set(init049Focused.map((claim) => claim.command)).size === init049Focused.length, "VERIFICATION_MAP_INIT049_FOCUSED_COMMANDS_NOT_INDEPENDENT");
-  assertion(new Set(init049Focused.map((claim) => claim.expectedReasonCode)).size === init049Focused.length, "VERIFICATION_MAP_INIT049_FOCUSED_REASONS_NOT_INDEPENDENT");
-  assertion(new Set(init049Focused.map((claim) => claim.redLeg.test)).size === init049Focused.length, "VERIFICATION_MAP_INIT049_FOCUSED_RED_LEGS_NOT_INDEPENDENT");
-  for (const [index, name] of INIT049_FOCUSED_CLAIM_NAMES.entries()) {
-    const claim = init049Focused[index];
-    const focused = INIT049_FOCUSED_CLAIMS[name];
-    assertion(claim.expectedReasonCode === focused.reasonCode, "VERIFICATION_MAP_INIT049_FOCUSED_REASON_DRIFT", name);
-    assertion(claim.redLeg.test === focused.pattern, "VERIFICATION_MAP_INIT049_FOCUSED_TEST_DRIFT", name);
-    assertion(claim.fixturePaths.includes(focused.path), "VERIFICATION_MAP_INIT049_FOCUSED_FIXTURE_MISSING", name);
-  }
-  // WSF-2: BK joins the completeness loop with its first claim (BK-SNAPSHOT-WITNESS);
-  // ACT stays admitted-only until WSG-2 lands the first activation claim.
-  // TCRN-CROSS-STORY-358 family 1 ('adapters'): P7 and ACT leave this loop with their
-  // last claims. ACT held only ACT1-CLAUDE-INSTALLER and P7 only the two compatibility
-  // claims; all three named modules retired here. Both phases stay in the per-claim
-  // allowlist above, unused, exactly as ACT was before its first claim existed.
-  // WSG-3: ACT2 (the first non-inert activation surface — Step-2 SessionStart) is a
-  // NEW phase wired in this commit, exactly as BK/ACT were: admitted to the per-claim
-  // allowlist above and joined to this completeness loop with its first claims
-  // (ACT2-CLAUDE-SESSIONSTART, ACT2-FAIL-OPEN).
-  // WSG-6: E2E (the flagship end-to-end governed loop) is a NEW phase wired in this
-  // commit the same way — admitted to the per-claim allowlist above and joined to
-  // this completeness loop atomically with its first and only claim
-  // (E2E-GOVERNED-LOOP), plus the evidencePhase mapping below.
-  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P8", "RC1", "BK", "ACT2", "E2E"]) {
+  // The completeness loop: a phase named in the allowlist above must actually carry a
+  // claim. It read eleven phases before TCRN-CROSS-STORY-359; the nine that carried only
+  // ticket-numbered claims left with the scripts those claims measured.
+  for (const phase of ["P1", "P8"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   // TCRN-CROSS-INIT-020 INC-078 — ADR acceptance criteria ↔ machine gate
@@ -2058,155 +1226,20 @@ async function verifyHistory() {
   });
 }
 
+// TCRN-CROSS-STORY-359. This verb aggregated runtime, licenses and lifecycle. The
+// dependency-graph gate and the Git-history gate each carried their own `verify:*` name
+// and their own P1 roster entry, and both answer the same question this one does: is the
+// toolchain this repository builds on the one it declares. Their names retired here; the
+// checks did not move an inch -- they run from this verb, in the same P1 position, over
+// the same inputs, and their claims re-hang on this command rather than on a script that
+// no longer exists.
 async function verifyGovernance() {
   const runtime = await verifyRuntime();
   const licenses = await verifyLicenses();
   const lifecycle = await verifyLifecycle();
-  return success("GOVERNANCE_TOOLCHAIN_VERIFIED", { runtime, licenses, lifecycle });
-}
-
-async function verifyWorkspace() {
-  const runtime = await verifyRuntime();
-  const checked = await typecheck();
-  const built = await build();
-  return success("WORKSPACE_VERIFIED", { runtime, checked, built });
-}
-
-async function verifyRoots() {
-  const result = await runTests({ rootOnly: true });
-  return success("ROOT_BOUNDARIES_VERIFIED", { tests: result.tests });
-}
-
-// WSF-2: the snapshot-witness gate (BK phase). The suite proves manifest
-// determinism, quiesce enforcement, residue fail-close, exclusion correctness,
-// schema validity, out-of-root read-only behavior, and tamper detection.
-async function verifyBackup() {
-  const result = await runTests({ backupOnly: true });
-  return success("BACKUP_VERIFIED", { tests: result.tests });
-}
-
-async function verifyAct3() {
-  const result = await runTests({ personaRenderOnly: true });
-  return success("ACT3_PERSONA_RENDER_VERIFIED", { tests: result.tests });
-}
-
-// INIT-009 S076/S080 and INIT-010 S057: a closed cross-host acceptance
-// matrix. Current SessionStart definitions remain hermetic; bounded exact
-// observe-hook evidence, the registered/directly exercised MCP server and the
-// exact App Server stream/readback receipt comparison are admitted narrowly.
-async function verifyAct11() {
-  const result = await runTests({ adapterAcceptanceOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act11-adapter-acceptance-cases.json");
-  const matrixPath = resolve(repositoryRoot, "docs/verification/host/adapter-acceptance-matrix.json");
-  const observeEvidencePath = resolve(repositoryRoot, "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json");
-  const fixture = await readJson(fixturePath);
-  const matrix = await readJson(matrixPath);
-  const observeEvidence = await readJson(observeEvidencePath);
-  assertion(fixture.schemaVersion === "tcrn.act11-adapter-acceptance-cases.v1", "ACT11_FIXTURE_SCHEMA");
-  assertion(matrix.schemaVersion === "tcrn.adapter-acceptance-matrix.v1", "ACT11_MATRIX_SCHEMA");
-  assertion(fixture.hosts === 2 && fixture.surfaces === 8 && fixture.negativeCases === 14, "ACT11_CLOSED_SURFACE");
-  assertion(
-    fixture.enforceHostSurfacesAuthorized === 0 &&
-      fixture.codexExactGeneratedSessionStartLiveFires === 0 &&
-      fixture.observeEvents === 6 &&
-      fixture.codexExactGeneratedObserveEventLiveFires === 5 &&
-      fixture.claudeExactGeneratedObserveEventLiveFires === 1 &&
-      fixture.liveObserveEventHostCells === 6 &&
-      fixture.explicitUnavailableObserveEventHostCells === 6 &&
-      fixture.liveWorkflowMcpRegistrations === 1 &&
-      fixture.liveWorkflowMcpDirectHandshakes === 1 &&
-      fixture.liveDesktopMultiAgentRuns === 1 &&
-      fixture.liveAppServerAttaches === 1 &&
-      fixture.liveMultiAgentReceiptComparisons === 1,
-    "ACT11_NO_OVERCLAIM",
-  );
-  assertion(
-    observeEvidence.schemaVersion === "tcrn.observe-hook-live-acceptance.v1" &&
-      observeEvidence.acceptance.disposition === "accepted_with_explicit_unavailable_cells" &&
-      observeEvidence.acceptance.crossHostEventSetCovered === true &&
-      observeEvidence.acceptance.perHostComplete === false &&
-      observeEvidence.codex.versionPinnedUnavailable.event === "SessionEnd" &&
-      observeEvidence.codex.versionPinnedUnavailable.mustNotAliasTo === "Stop" &&
-      observeEvidence.scope.enforceHostSurfacesAuthorized === 0,
-    "ACT11_OBSERVE_LIVE_BOUNDARY",
-  );
-  assertion(
-      matrix.epicAcceptance["EPIC-024"] === "accepted_with_explicit_unavailable_cells" &&
-      matrix.storyAcceptance.S076 === "verified" &&
-      matrix.storyAcceptance.S080 === "accepted_with_explicit_unavailable_cells" &&
-      matrix.storyAcceptance.S057 === "verified_live_app_server_readback_receipt_compared",
-    "ACT11_STORY_DISPOSITIONS",
-  );
-  return success("ACT11_ADAPTER_ACCEPTANCE_VERIFIED", {
-    tests: result.tests,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    matrixDigest: (await fileRecord(matrixPath)).sha256,
-    observeEvidenceDigest: (await fileRecord(observeEvidencePath)).sha256,
-    hosts: fixture.hosts,
-    surfaces: fixture.surfaces,
-    negativeCases: fixture.negativeCases,
-    observeEvents: fixture.observeEvents,
-    epic024: matrix.epicAcceptance["EPIC-024"],
-    s057: matrix.storyAcceptance.S057,
-    standalone: fixture.standalone,
-  });
-}
-
-// EPIC-020 S055: collecting host-execution receipts from observed invocations and
-// feeding them to the EPIC-019 classifier. The gate asserts the honesty boundary:
-// transcripts are never signed and attribution is never identity.
-async function verifyAct7() {
-  const result = await runTests({ executionCollectionOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act7-execution-collection-cases.json");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.act7-execution-collection-cases.v1", "ACT7_FIXTURE_SCHEMA");
-  assertion(fixture.refusalCases === 7 && fixture.duplicateInvocationRefused === true, "ACT7_CORPUS");
-  assertion(fixture.transcriptsSigned === false && fixture.attributionNotIdentity === true && fixture.collectorSharesAgentAuthority === true, "ACT7_NO_OVERCLAIM");
-  assertion(fixture.editedPositionFailsBinding === true && fixture.editedTranscriptReportsDrift === true, "ACT7_BINDING");
-  assertion(fixture.liveHostProof === "not-claimed-per-min-046", "ACT7_LIVE_BOUNDARY");
-  return success("ACT7_EXECUTION_COLLECTION_VERIFIED", {
-    tests: result.tests,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    transcriptsSigned: fixture.transcriptsSigned,
-    liveHostProof: fixture.liveHostProof,
-    standalone: fixture.standalone,
-  });
-}
-
-// WSG-6: the flagship end-to-end governed-loop gate (E2E phase). Two obligations
-// bind here in one command: (1) run the hermetic proof, which replays the whole
-// loop — initiative through trace — through the CLI surface on a real workspace
-// and asserts the unbroken trace digest chain; and (2) enforce doc/proof lockstep
-// by diffing the tutorial's fenced commands against the single storyline source of
-// truth, canonicalized on both sides, so the narrated tutorial cannot drift from
-// the proof (acceptance criterion 2).
-async function verifyE2eGovernedLoop() {
-  const result = await runTests({ e2eOnly: true });
-  const storyline = await import(pathToFileURL(resolve(repositoryRoot, "tests/e2e-governed-loop-commands.mjs")).href);
-  const tutorial = await readText(resolve(repositoryRoot, "docs/tutorial/governed-loop.md"));
-  const documented = storyline.extractTutorialCommands(tutorial).map(storyline.canonicalizeCommand);
-  const authored = storyline.expectedTutorialCommands().map(storyline.canonicalizeCommand);
-  assertion(documented.length === authored.length, "E2E_TUTORIAL_COMMAND_COUNT", `${documented.length}/${authored.length}`);
-  for (let index = 0; index < authored.length; index += 1) {
-    assertion(documented[index] === authored[index], "E2E_TUTORIAL_COMMAND_DRIFT", String(index));
-  }
-  return success("E2E_GOVERNED_LOOP_VERIFIED", { tests: result.tests, storylineCommands: authored.length });
-}
-
-async function verifyCi() {
-  const linted = await lint();
-  const workflow = await readText(resolve(repositoryRoot, ".github/workflows/ci.yml"));
-  assertion(/^permissions:\n  contents: read$/mu.test(workflow), "CI_PERMISSIONS_NOT_MINIMAL");
-  assertion(!workflow.includes("pull_request_target"), "CI_PULL_REQUEST_TARGET_FORBIDDEN");
-  assertion(!workflow.includes("pnpm/action-setup"), "CI_PNPM_ACTION_SETUP_FORBIDDEN");
-  assertion(workflow.indexOf("uses: actions/setup-node") < workflow.indexOf("Acquire exact pnpm under explicit online bootstrap policy"), "CI_NODE_BOOTSTRAP_ORDER_INVALID");
-  assertion(workflow.includes('npm_config_offline: "false"') && workflow.includes('npm_config_prefer_offline: "false"'), "CI_BOOTSTRAP_ONLINE_OVERRIDE_MISSING");
-  assertion(workflow.includes("npm install --global pnpm@11.3.0 --ignore-scripts --no-audit --no-fund --no-update-notifier --prefer-online"), "CI_PNPM_BOOTSTRAP_NOT_PINNED");
-  assertion(workflow.includes('test "$(pnpm --version)" = "11.3.0"'), "CI_PNPM_VERSION_CHECK_MISSING");
-  assertion(workflow.includes("--frozen-lockfile --ignore-scripts --config.offline=false"), "CI_INSTALL_NOT_EXPLICIT");
-  assertion(workflow.includes("- name: Verify P1 offline\n        run: pnpm verify:p1"), "CI_OFFLINE_P1_MISSING");
-  assertion(workflow.includes("- name: Verify portal remediation train\n        run: pnpm verify:portal"), "CI_PORTAL_REMEDIATION_MISSING");
-  return success("CI_HARDENING_VERIFIED", { linted });
+  const vulnerabilities = await verifyVulnerabilities();
+  const history = await verifyHistory();
+  return success("GOVERNANCE_TOOLCHAIN_VERIFIED", { runtime, licenses, lifecycle, vulnerabilities, history });
 }
 
 async function verifyP1() {
@@ -2233,19 +1266,6 @@ async function verifyP1() {
 
 async function verifyPortal() {
   return JSON.parse(run(process.execPath, [resolve(repositoryRoot, "scripts/verify-portal.mjs")]));
-}
-
-async function verifyP2() {
-  assertCleanExclusiveSourceBasis(run("git", ["status", "--porcelain=v1", "--untracked-files=all"]));
-  const sequence = ["protocol-schemas", "protocol-test", "aos", "rc1"];
-  const results = [];
-  for (const name of sequence) {
-    results.push(await invoke(name));
-  }
-  return success("P2_VERIFIED", {
-    commands: sequence,
-    observedReasonCodes: results.map((result) => result.reasonCode),
-  });
 }
 
 async function clean() {
@@ -2344,110 +1364,28 @@ async function verifyLinks() {
 }
 
 const handlers = {
-  aos: verifyAosRequirements,
   archive,
   budget: reportBudget,
   build,
-  ci: verifyCi,
   clean,
   "format-check": () => formatCheck(),
   "format-write": () => formatCheck({ write: true }),
   governance: verifyGovernance,
-  history: verifyHistory,
-  licenses: verifyLicenses,
   links: verifyLinks,
-  lifecycle: verifyLifecycle,
   lint,
   offline: verifyOfflineBoundary,
-  p2: verifyP2,
-  p3: verifyP3,
-  "p4-knowledge": verifyP4Knowledge,
-  init047: () => runTests({ init047Only: true }),
-  goal01: () => runInit047Goal("goal01"),
-  goal02: () => runInit047Goal("goal02"),
-  goal03: () => runInit047Goal("goal03"),
-  goal04: () => runInit047Goal("goal04"),
-  goal06: () => runInit047Goal("goal06"),
-  goal07: () => runInit047Goal("goal07"),
-  goal08: () => runInit047Goal("goal08"),
-  goal09: () => runInit047Goal("goal09"),
-  goal10: () => runInit047Goal("goal10"),
-  goal11: () => runInit047Goal("goal11"),
-  goal12: () => runInit047Goal("goal12"),
-  story333: () => runInit048Story("story333"),
-  story334: () => runInit048Story("story334"),
-  story335: () => runInit048Story("story335"),
-  story336: () => runInit048Story("story336"),
-  story337: () => runInit048Story("story337"),
-  story338: () => runInit048Story("story338"),
-  story339: () => runInit048Story("story339"),
-  story340: () => runInit048Story("story340"),
-  story341: () => runInit048Story("story341"),
-  story342: () => runInit048Story("story342"),
-  story343: () => runInit048Story("story343"),
-  story346: () => runInit048Story("story346"),
-  story347: () => runInit048Story("story347"),
-  story348: () => runInit048Story("story348"),
-  story344: () => runInit048Story("story344"),
-  story345: () => runInit048Story("story345"),
-  story349: () => runInit049Story("story349"),
-  story350: () => runInit049Story("story350"),
-  story351: runInit049Story351,
-  story352: () => runInit049Story("story352"),
-  story353: runInit049Story353,
-  inc256: () => runTests({ inc256Only: true }),
-  inc258: () => runTests({ inc258Only: true }),
-  inc259: () => runTests({ inc259Only: true }),
-  inc260: () => runTests({ inc260Only: true }),
-  inc269: () => runIncidentTest("inc269"),
-  inc270: () => runIncidentTest("inc270"),
-  inc265: () => runIncidentTest("inc265"),
-  inc264: () => runIncidentTest("inc264"),
-  closeout: verifyCloseoutGate,
-  inc263: verifyInc263,
-  "red-legs": verifyRedLegGate,
-  inc262: verifyInc262,
-  inc261: verifyInc261,
-  p5: verifyP5,
-  p6: verifyP6,
-  dep: verifyDependency,
-  conference: verifyConference,
-  "ext-execution": verifyExecution,
-  "ext-ag": verifyAssignmentGate,
-  "ext-actor": verifyActorAttestation,
-  "ext-store": verifyExtStore,
   p8: verifyP8,
   portal: verifyPortal,
   "release-preflight": verifyReleaseTagPreflight,
   privacy: verifyPrivacy,
-  "privacy-history": () => verifyPrivacy({ historyScope: "all" }),
-  rc1: verifyRc1CandidateReadiness,
-  roots: verifyRoots,
-  "protocol-schemas": verifyP2Schemas,
-  "protocol-test": verifyProtocolConformance,
-  runtime: verifyRuntime,
   sbom,
   source: verifySource,
-  authority: verifyOperatorAuthority,
   "no-sibling-dependency": verifyNoSiblingDependency,
-  test: () => runTests(),
-  "test-trust": () => runTests({ trustOnly: true }),
+  test: verifyTestSuite,
   typecheck,
   "verification-map": verifyMap,
   "verify-p1": verifyP1,
-  vulnerabilities: verifyVulnerabilities,
-  workspace: verifyWorkspace,
-  backup: verifyBackup,
-  act3: verifyAct3,
-  act7: verifyAct7,
-  act11: verifyAct11,
-  e2e: verifyE2eGovernedLoop,
-  inc266: runInc266,
 };
-
-for (const name of INIT049_FOCUSED_CLAIM_NAMES) {
-  handlers[name] = () => runInit049FocusedClaim(name);
-}
 
 function errorReason(error) {
   if (error instanceof TaskError || error instanceof LocalCommandError || error instanceof BoundaryError || error instanceof ProtocolProofError || error instanceof DependencyGraphError || error instanceof ScopedStripTypesError) {
@@ -2456,89 +1394,11 @@ function errorReason(error) {
   return "TASK_INTERNAL_ERROR";
 }
 
+// TCRN-CROSS-STORY-359: this mapped thirty verb names onto eight evidence phases, one
+// branch per retired ticket-numbered verb. Two phases still have a verb: `p8` is the
+// release-candidate train, and everything else on the P1 roster writes under p1.
 function evidencePhase(name) {
-  if (/^goal(?:0[1-9]|1[0-2])$/u.test(name)) {
-    return "p4";
-  }
-  if (/^story(?:333|334|344|345)$/u.test(name)) {
-    return "p4";
-  }
-  if (["aos", "p2", "protocol-schemas", "protocol-test"].includes(name)) {
-    return "p2";
-  }
-  if (name === "p3") {
-    return name;
-  }
-  if (name === "p4-knowledge") {
-    return "p4";
-  }
-  if (name === "inc256") {
-    return "p4";
-  }
-  if (name === "inc269") {
-    return "p3";
-  }
-  if (name === "inc270") {
-    return "p3";
-  }
-  if (name === "inc265") {
-    return "act2";
-  }
-  if (name === "inc264") {
-    return "p2";
-  }
-  if (name === "closeout" || name === "inc263") {
-    return "p2";
-  }
-  if (name === "red-legs" || name === "inc262") {
-    return "p2";
-  }
-  if (name === "inc261") {
-    return "p2";
-  }
-  if (name === "p5") {
-    return "p5";
-  }
-  if (name === "p6") {
-    return "p6";
-  }
-  if (name === "dep") {
-    return "p2";
-  }
-  if (name === "conference") {
-    return "p2";
-  }
-  if (name === "ext-execution") {
-    return "p2";
-  }
-  if (name === "authority") {
-    return "p2";
-  }
-  if (name === "ext-ag") {
-    return "p2";
-  }
-  if (name === "ext-actor") {
-    return "p2";
-  }
-  if (name === "ext-store") {
-    return "p2";
-  }
-  if (name === "rc1") {
-    return "rc1";
-  }
-  if (name === "backup") {
-    return "bk";
-  }
-  if (name === "act3" || name === "act7" || name === "act11") {
-    return "act2";
-  }
-  if (name === "e2e") {
-    return "e2e";
-  }
-  if (name === "p8") {
-    return "p8";
-  }
-  return "p1";
+  return name === "p8" ? "p8" : "p1";
 }
 
 async function recordEvidence(name, ok, reasonCode, resultOrMessage) {

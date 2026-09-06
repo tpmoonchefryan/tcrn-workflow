@@ -1172,3 +1172,13 @@ test("E01/STORY-004: flag-supplied authority binds by digest and refuses a secon
     await admitted.close();
   }
 });
+
+// TCRN-CROSS-STORY-359: verifyP5 retired with the rest of the phase verbs and it was the
+// only reader of these four fixture fields. Re-hung here, in the file that drives the
+// corpus, so the fixture cannot silently drift away from the values it declares.
+test("STORY-359 the p5 generic-profile fixture declares the corpus sizes verifyP5 used to pin", () => {
+  assert.equal(fixture.admissionFilesystemNegativeCases.length, 6);
+  assert.equal(fixture.cliCases.length, 6);
+  assert.equal(fixture.liveProfileStore, "not-created");
+  assert.equal(fixture.permutationLayerCount, 6);
+});

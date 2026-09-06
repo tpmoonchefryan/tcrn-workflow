@@ -8,13 +8,13 @@
 
 简体中文 · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-1.0.1-blue?style=flat-square) ![gates](https://img.shields.io/badge/verify%3Ap1-24%20gates-brightgreen?style=flat-square) ![claims](https://img.shields.io/badge/proven%20claims-122-brightgreen?style=flat-square) ![deps](https://img.shields.io/badge/runtime%20deps-0-success?style=flat-square)
+![status](https://img.shields.io/badge/status-1.0.1-blue?style=flat-square) ![gates](https://img.shields.io/badge/verify%3Ap1-15%20gates-brightgreen?style=flat-square) ![claims](https://img.shields.io/badge/proven%20claims-7-brightgreen?style=flat-square) ![deps](https://img.shields.io/badge/runtime%20deps-0-success?style=flat-square)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square) ![node](https://img.shields.io/badge/node-24.16.0-informational?style=flat-square) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational?style=flat-square) ![network](https://img.shields.io/badge/network-none-important?style=flat-square) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet?style=flat-square)
 
 [你现在的处境](#你现在的处境) · [它凭什么值得信](#它凭什么值得信) · [给谁用](#给谁用) · [你能拿到什么](#你能拿到什么) · [三分钟上手](#三分钟上手) · [当前状态](#当前状态) · [完整文档](#完整文档)
 
-`Verified claims: 102 (hygiene 20 · inertness 9 · runtime 73)`
+`Verified claims: 7 (hygiene 7 · inertness 0 · runtime 0)`
 
 </div>
 
@@ -22,14 +22,14 @@
 <tr>
 <td align="center" width="25%">
 
-### 24
+### 15
 道 P1 门<br><sub>一条命令跑完，任何一处意外就停</sub>
 
 </td>
 <td align="center" width="25%">
 
-### 122
-条判据<br><sub>全部带红腿，全部实测过</sub>
+### 7
+条判据<br><sub>每条挂在一道仍在跑的门上</sub>
 
 </td>
 <td align="center" width="25%">
@@ -48,7 +48,7 @@
 </table>
 
 > [!TIP]
-> **不必相信这份 README**。装上之后跑一条命令，它会把自己的 122 条声称逐条证明给你看，全程离线。
+> **不必相信这份 README**。装上之后跑一条命令，它会把自己的 7 条声称逐条证明给你看，全程离线。
 
 ---
 
@@ -62,7 +62,7 @@ TCRN Workflow 给你第三个选择。
 
 | 你想确认的 | ✗ 你现在有的 | ✓ 装上之后你有的 |
 | :--- | :--- | :--- |
-| **测试真的跑过吗** | 聊天窗口里的一行字 | `pnpm verify:p1`——24 道门按序跑完，任何一处意外就停下 |
+| **测试真的跑过吗** | 聊天窗口里的一行字 | `pnpm verify:p1`——15 道门按序跑完，任何一处意外就停下 |
 | **谁在什么时候改了什么** | 翻聊天记录 | 哈希相扣的事件链，只能追加。改掉历史里任何一条，后面全部对不上 |
 | **保护措施还在起作用吗** | 假设还在 | `pnpm guard-check`——61 个守卫逐个从源码里改坏，要求各自的测试变红 |
 | **拿到的字节是不是发布的字节** | 看标签 | 产物逐字节重建，与公开摘要比对 |
@@ -77,20 +77,22 @@ TCRN Workflow 给你第三个选择。
 
 它证明的不是「我们写过这些检查」，而是「这些检查此刻仍然在拦人」。一个坏掉了却没人发现的检查，和没有这个检查是同一件事。
 
-这个标准覆盖全部 **122 条声称**。每一条都在 `verification-map.yaml` 里绑定一个稳定的原因码、一条能离线跑的证明，以及一条红腿——写明什么改动会让它变红，而且那次变红是实测过的。122 条，无一例外。
+这个标准覆盖全部 **7 条声称**。每一条都在 `verification-map.yaml` 里绑定一个稳定的原因码、一条能离线跑的证明、一条红腿——写明什么改动会让它变红——以及它挂在哪一类门上（`requirement`）或哪一次事故（`incident`）。7 条，无一例外。
+
+这个数字在 TCRN-CROSS-STORY-359 之前是 102。判据本身没有被降级：退役的 95 条每一条都测量一个当时被撤掉的 `verify:*` 名字，而它们点名的测试文件一个没删，仍在 `pnpm test` 里逐个跑。撤掉的是同一件事的第二份账本。
 
 <details>
-<summary><b>122 条判据是怎么分布的</b></summary>
+<summary><b>7 条判据是怎么分布的</b></summary>
 
 <br>
 
 | 类别 | 条数 | 管什么 |
 | :--- | ---: | :--- |
-| `framework-hygiene` | 20 | 框架自身的卫生：干净历史、源码白名单、许可与漏洞策略、离线边界 |
-| `inertness-proof` | 13 | 惰性证明：宿主适配器装完不做任何事，直到有人明确批准激活 |
-| `runtime-capability` | 89 | 运行时能力：事件链、租约、视图、知识核心、上下文路由、发行集 |
+| `framework-hygiene` | 7 | 框架自身的卫生：干净历史、许可与漏洞策略、离线边界、隐私扫描、隔离检出、发行候选 |
+| `inertness-proof` | 0 | 空：这一类的判据都挂在 STORY-359 撤掉的 `verify:*` 名字上；它们点名的测试仍在 `pnpm test` 里跑 |
+| `runtime-capability` | 0 | 同上 |
 
-完整清单在 `verification-map.yaml`，每条带 `id`、`command`、`fixturePaths` 与红腿。
+完整清单在 `verification-map.yaml`，每条带 `id`、`command`、`fixturePaths`、红腿，以及 `requirement` 或 `incident` 之一。
 
 </details>
 
@@ -114,8 +116,8 @@ TCRN Workflow 给你第三个选择。
 | 你拿到 | 具体是什么 |
 | :--- | :--- |
 | **一个只由文件组成的工作区** | Initiative → Epic → Story → Subtask 的整张工作图，是规范格式的 JSON 加一条哈希链。用 `cat` 和 `sha256sum` 就能审，导出逐字节可复现。 |
-| **一条命令跑完 24 道门** | `pnpm verify:p1` 依次跑格式、lint、类型、构建、133 个测试文件、信任矩阵、归档与 SBOM 与许可与漏洞策略、源码白名单、离线边界、隐私扫描、CI 加固、判据账本、干净历史。 |
-| **122 条机器可读的判据** | 20 条框架卫生、13 条惰性证明、89 条运行时能力。全部带红腿，全部绑定可观测的原因码。 |
+| **一条命令跑完 15 道门** | `pnpm verify:p1` 依次跑格式、lint、类型、构建、119 个测试文件（含覆盖注册表与存活模块覆盖检查）、门户校验、源码白名单、源码归档、兄弟仓依赖、离线边界、工具链治理（许可、生命周期、漏洞策略、干净历史）、隐私扫描、判据账本、证明预算、文档链接。 |
+| **7 条机器可读的判据** | 全部框架卫生，全部带红腿，全部绑定可观测的原因码，并各自挂在十一类门中的一类上。 |
 | **会自证有效的守卫** | 61 个守卫，`pnpm guard-check` 逐个改坏并要求对应测试变红。 |
 | **137 个受治理的 CLI 动词** | 全部本地执行。每次写入都要声明它基于哪个版本，别人先写了就拒绝，不会静默覆盖。 |
 | **零运行时依赖** | `package.json` 的 `dependencies` 与 `optionalDependencies` 都是空的。开发模式额外装一个进程级网络守卫，遥测为零。 |
@@ -130,7 +132,7 @@ TCRN Workflow 给你第三个选择。
 # 1. 装固定版本的开发依赖，冻结锁文件，不跑脚本
 pnpm install --offline --frozen-lockfile --ignore-scripts
 
-# 2. 让框架自己证明一遍：24 道门，全程离线
+# 2. 让框架自己证明一遍：15 道门，全程离线
 pnpm verify:p1
 
 # 3. 构建，然后用受治理的 CLI

@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // PRG-0 normative-input-set synchronizer (library). The RC1 proof basis pins the
-// exact set of normative inputs (scripts/policy/rc1-inputs.json), enforced by
-// verify:rc1 (RC1_INPUT_SET_MISMATCH) and verify:p2. `generate:proof-artifacts`
+// exact set of normative inputs (scripts/policy/rc1-inputs.json). TCRN-CROSS-STORY-359
+// retired verify:rc1 and verify:p2, and RC1_INPUT_SET_MISMATCH went uncalled with
+// validateRc1Candidate; what enforces the set now is the "committed rc1-inputs policy is
+// canonical and complete" case in tests/regen-rc1-inputs.test.mjs, which pnpm test runs
+// unfiltered. `generate:proof-artifacts`
 // recomputes every fixtureDigest and the RC1 basis digest but does NOT rewrite
 // the normative-input SET, so adding or removing any schema/spec/fixture file
 // leaves this policy stale until this synchronizer runs. Discovery mirrors

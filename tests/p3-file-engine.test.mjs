@@ -1902,3 +1902,18 @@ test("WSA-3: closing an Initiative to done with live non-terminal descendants is
     await fixture.close();
   }
 });
+
+// TCRN-CROSS-STORY-359: verifyP3 retired with the rest of the phase verbs and it was the
+// only reader of these six fixture counts. Re-hung here, in the file that drives the
+// corpus, so the fixture cannot silently shrink away from the cases it claims to carry.
+test("STORY-359 the p3 fixture declares the corpus sizes verifyP3 used to pin", async () => {
+  const fixture = JSON.parse(await readFile(new URL("../packages/core/fixtures/p3-cases.json", import.meta.url), "utf8"));
+  assert.equal(fixture.schemaVersion, "tcrn.p3-file-engine-cases.v1");
+  assert.equal(fixture.faultCases.length, 4);
+  assert.equal(fixture.leaseFaultCases.length, 1);
+  assert.equal(fixture.schemaParityCases.length, 4);
+  assert.equal(fixture.concurrencyCases.length, 4);
+  assert.ok(fixture.negativeCases.length >= 53, String(fixture.negativeCases.length));
+  assert.equal(fixture.migrationCases.length, 3);
+  assert.ok(fixture.propertyPermutations >= 64, String(fixture.propertyPermutations));
+});

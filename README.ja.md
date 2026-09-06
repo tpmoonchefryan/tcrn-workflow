@@ -8,13 +8,13 @@
 
 [简体中文](./README.md) · [English](./README.en.md) · 日本語 · [한국어](./README.ko.md) · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-1.0.1-blue?style=flat-square) ![gates](https://img.shields.io/badge/verify%3Ap1-24%20gates-brightgreen?style=flat-square) ![claims](https://img.shields.io/badge/proven%20claims-122-brightgreen?style=flat-square) ![deps](https://img.shields.io/badge/runtime%20deps-0-success?style=flat-square)
+![status](https://img.shields.io/badge/status-1.0.1-blue?style=flat-square) ![gates](https://img.shields.io/badge/verify%3Ap1-15%20gates-brightgreen?style=flat-square) ![claims](https://img.shields.io/badge/proven%20claims-7-brightgreen?style=flat-square) ![deps](https://img.shields.io/badge/runtime%20deps-0-success?style=flat-square)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square) ![node](https://img.shields.io/badge/node-24.16.0-informational?style=flat-square) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational?style=flat-square) ![network](https://img.shields.io/badge/network-none-important?style=flat-square) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet?style=flat-square)
 
 [いまの状況](#いまの状況) · [なぜ信頼できるのか](#なぜ信頼できるのか) · [誰のためのものか](#誰のためのものか) · [何が手に入るか](#何が手に入るか) · [3 分で始める](#3-分で始める) · [現在のステータス](#現在のステータス) · [ドキュメント](#ドキュメント)
 
-`Verified claims: 122 (hygiene 20 · inertness 13 · runtime 89)`
+`Verified claims: 7 (hygiene 7 · inertness 0 · runtime 0)`
 
 </div>
 
@@ -22,13 +22,13 @@
 <tr>
 <td align="center" width="25%">
 
-### 24
+### 15
 の P1 ゲート<br><sub>コマンド 1 つ。想定外があれば止まる</sub>
 
 </td>
 <td align="center" width="25%">
 
-### 122
+### 7
 の判定基準<br><sub>すべてにレッドレッグ、すべて実測済み</sub>
 
 </td>
@@ -48,7 +48,7 @@
 </table>
 
 > [!TIP]
-> **この README を信じる必要はありません**。インストールしてコマンドを 1 つ実行すれば、122 件の主張をすべて、完全にオフラインで証明してみせます。
+> **この README を信じる必要はありません**。インストールしてコマンドを 1 つ実行すれば、7 件の主張をすべて、完全にオフラインで証明してみせます。
 
 ---
 
@@ -62,7 +62,7 @@ TCRN Workflow は 3 つ目の選択肢を用意します。
 
 | 確認したいこと | ✗ いま持っているもの | ✓ 導入後に持てるもの |
 | :--- | :--- | :--- |
-| **テストは本当に実行されたか** | チャット画面の 1 行 | `pnpm verify:p1` — 24 のゲートを順に実行し、想定外があればそこで止まる |
+| **テストは本当に実行されたか** | チャット画面の 1 行 | `pnpm verify:p1` — 15 のゲートを順に実行し、想定外があればそこで止まる |
 | **誰がいつ何を変えたか** | チャット履歴をさかのぼる | ハッシュで連結された追記専用のイベントチェーン。履歴のどれか 1 件でも書き換えれば、それ以降のハッシュがすべて合わなくなる |
 | **保護はいまも機能しているか** | 機能しているという想定 | `pnpm guard-check` — 61 のガードをソース上で 1 つずつ壊し、それぞれのテストがレッドになることを要求する |
 | **手元のバイト列はリリースされたものか** | タグを見る | 成果物をバイト単位で再構築し、公開されたダイジェストと突き合わせる |
@@ -77,18 +77,18 @@ TCRN Workflow は 3 つ目の選択肢を用意します。
 
 これが証明するのは「これらのチェックを書いた」ことではなく、「これらのチェックがいまも実際に止めている」ことです。壊れたまま誰にも気付かれていないチェックは、チェックが無いのと同じです。
 
-この基準は **122 件の主張すべて** を覆います。各主張は `verification-map.yaml` で、安定したリーズンコード、オフラインで実行できる証明、そしてレッドレッグ — どの変更でレッドになるかの明示と、その失敗の実測 — に結び付いています。122 件、例外はありません。
+この基準は **7 件の主張すべて** を覆います。各主張は `verification-map.yaml` で、安定したリーズンコード、オフラインで実行できる証明、そしてレッドレッグ — どの変更でレッドになるかの明示と、その失敗の実測 — に結び付いています。7 件、例外はありません。
 
 <details>
-<summary><b>122 件の判定基準の内訳</b></summary>
+<summary><b>7 件の判定基準の内訳</b></summary>
 
 <br>
 
 | カテゴリ | 件数 | 対象 |
 | :--- | ---: | :--- |
-| `framework-hygiene` | 20 | フレームワーク自身の衛生：クリーンな履歴、ソースの許可リスト、ライセンスと脆弱性のポリシー、オフライン境界 |
-| `inertness-proof` | 13 | 不活性の証明：ホストアダプターはインストール後、明示的にアクティベーションが承認されるまで何もしない |
-| `runtime-capability` | 89 | ランタイム能力：イベントチェーン、リース、ビュー、ナレッジコア、コンテキストルーター、リリースセット |
+| `framework-hygiene` | 7 | フレームワーク自身の衛生：クリーンな履歴、ソースの許可リスト、ライセンスと脆弱性のポリシー、オフライン境界 |
+| `inertness-proof` | 0 | 不活性の証明：ホストアダプターはインストール後、明示的にアクティベーションが承認されるまで何もしない |
+| `runtime-capability` | 0 | ランタイム能力：イベントチェーン、リース、ビュー、ナレッジコア、コンテキストルーター、リリースセット |
 
 完全な一覧は `verification-map.yaml` にあり、各項目が `id`、`command`、`fixturePaths` とレッドレッグを持ちます。
 
@@ -114,8 +114,8 @@ TCRN Workflow は 3 つ目の選択肢を用意します。
 | 手に入るもの | その中身 |
 | :--- | :--- |
 | **ファイルだけでできたワークスペース** | Initiative → Epic → Story → Subtask のグラフ全体が、正規形式の JSON とハッシュチェーンです。`cat` と `sha256sum` で監査でき、エクスポートはバイト単位で再現可能です。 |
-| **コマンド 1 つで 24 のゲート** | `pnpm verify:p1` がフォーマット、lint、型、ビルド、133 のテストファイル、トラストマトリクス、アーカイブと SBOM とライセンスと脆弱性ポリシー、ソース許可リスト、オフライン境界、プライバシースキャン、CI ハードニング、判定基準の台帳、クリーンな履歴を順に実行します。 |
-| **122 件の機械可読な判定基準** | framework-hygiene 20 件、inertness-proof 13 件、runtime-capability 89 件。すべてレッドレッグ付きで、観測可能なリーズンコードに結び付いています。 |
+| **コマンド 1 つで 15 のゲート** | `pnpm verify:p1` がフォーマット、lint、型、ビルド、119 のテストファイル、トラストマトリクス、アーカイブと SBOM とライセンスと脆弱性ポリシー、ソース許可リスト、オフライン境界、プライバシースキャン、CI ハードニング、判定基準の台帳、クリーンな履歴を順に実行します。 |
+| **7 件の機械可読な判定基準** | framework-hygiene 7 件、inertness-proof 0 件、runtime-capability 0 件。すべてレッドレッグ付きで、観測可能なリーズンコードに結び付いています。 |
 | **自分で有効性を示すガード** | 61 のガード。`pnpm guard-check` が 1 つずつ壊し、対応するテストのレッドを要求します。 |
 | **137 のガバナンス下 CLI 動詞** | すべてローカル実行。書き込みは必ず基準バージョンを宣言し、先に書かれていれば拒否されます。サイレントな上書きはありません。 |
 | **ランタイム依存ゼロ** | `package.json` の `dependencies` と `optionalDependencies` はどちらも空です。開発モードではプロセスレベルのネットワークガードが追加されます。テレメトリはゼロです。 |
@@ -130,7 +130,7 @@ TCRN Workflow は 3 つ目の選択肢を用意します。
 # 1. 固定版の開発依存をインストール（明示・凍結・スクリプトなし）
 pnpm install --offline --frozen-lockfile --ignore-scripts
 
-# 2. フレームワークに自己証明させる（24 ゲート、完全オフライン）
+# 2. フレームワークに自己証明させる（15 ゲート、完全オフライン）
 pnpm verify:p1
 
 # 3. ビルドし、ガバナンス下の CLI を使う

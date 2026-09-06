@@ -227,3 +227,12 @@ test("extension registration record binds appliesTo work and the dependency sche
   assert.equal(validate(registration), true);
   assert.equal(canonicalJson(registration).includes(schemaDigest), true);
 });
+
+// TCRN-CROSS-STORY-359: verifyDependency retired with the rest of the phase verbs and it
+// was the only reader of these three fixture fields. Re-hung here, in the file that drives
+// the corpus, so the fixture cannot silently drift away from the values it declares.
+test("STORY-359 the dependency fixture declares the no-overclaim values verifyDependency used to pin", () => {
+  assert.equal(fixture.crossProjectEdges, "rejected");
+  assert.equal(fixture.liveStore, "not-created");
+  assert.equal(fixture.ledgerRequirement, "AOS-REQ-016");
+});

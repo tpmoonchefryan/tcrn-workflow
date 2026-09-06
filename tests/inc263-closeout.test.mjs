@@ -29,14 +29,20 @@ test("INC-263 closeout verification is wired and ceremony cost measurement is de
     totalBytes: 82809,
   });
 
+  // TCRN-CROSS-STORY-359: `verify:closeout` and `verify:inc263` retired with the rest of
+  // the ticket-numbered roster, and the two task.mjs verbs behind them went with the
+  // names. The manifest is still reconciled -- by the assertions above, in this file,
+  // which `pnpm test` runs from the P1 roster. So what is pinned here is that the wiring
+  // MOVED: the old names must be gone, the report command must remain, and task.mjs must
+  // no longer be the thing that runs either measurement.
   const packageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
-  assert.equal(packageJson.scripts["verify:closeout"], "node scripts/task.mjs closeout");
-  assert.equal(packageJson.scripts["verify:inc263"], "node scripts/task.mjs inc263");
+  assert.equal(packageJson.scripts["verify:closeout"], undefined);
+  assert.equal(packageJson.scripts["verify:inc263"], undefined);
   assert.equal(packageJson.scripts["report:ceremony-cost"], "node scripts/ceremony-cost.mjs --manifest scripts/policy/ceremony-cost-init048.json");
   const taskSource = readFileSync(resolve(root, "scripts/task.mjs"), "utf8");
-  assert.match(taskSource, /closeout:\s*verifyCloseoutGate/u);
-  assert.match(taskSource, /const closeout = await verifyCloseoutGate\(\)/u);
-  assert.match(taskSource, /measureCeremonyCost/u);
+  assert.equal(/verifyCloseoutGate/u.test(taskSource), false);
+  assert.equal(/measureCeremonyCost/u.test(taskSource), false);
+  assert.equal(packageJson.scripts.test, "node scripts/task.mjs test");
 });
 
 test("INC-263 a closeout wiring omission and malformed cost input are red", () => {

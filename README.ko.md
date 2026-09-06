@@ -8,13 +8,13 @@
 
 [简体中文](./README.md) · [English](./README.en.md) · [日本語](./README.ja.md) · 한국어 · [Français](./README.fr.md)
 
-![status](https://img.shields.io/badge/status-1.0.1-blue?style=flat-square) ![gates](https://img.shields.io/badge/verify%3Ap1-24%20gates-brightgreen?style=flat-square) ![claims](https://img.shields.io/badge/proven%20claims-122-brightgreen?style=flat-square) ![deps](https://img.shields.io/badge/runtime%20deps-0-success?style=flat-square)
+![status](https://img.shields.io/badge/status-1.0.1-blue?style=flat-square) ![gates](https://img.shields.io/badge/verify%3Ap1-15%20gates-brightgreen?style=flat-square) ![claims](https://img.shields.io/badge/proven%20claims-7-brightgreen?style=flat-square) ![deps](https://img.shields.io/badge/runtime%20deps-0-success?style=flat-square)
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square) ![node](https://img.shields.io/badge/node-24.16.0-informational?style=flat-square) ![pnpm](https://img.shields.io/badge/pnpm-11.3.0-informational?style=flat-square) ![network](https://img.shields.io/badge/network-none-important?style=flat-square) ![hosts](https://img.shields.io/badge/hosts-Claude%20Code%20%C2%B7%20Codex-blueviolet?style=flat-square)
 
 [지금 당신의 상황](#지금-당신의-상황) · [왜 믿을 수 있는가](#왜-믿을-수-있는가) · [누구를 위한 것인가](#누구를-위한-것인가) · [무엇을 얻는가](#무엇을-얻는가) · [3분 만에 시작하기](#3분-만에-시작하기) · [현재 상태](#현재-상태) · [전체 문서](#전체-문서)
 
-`Verified claims: 122 (hygiene 20 · inertness 13 · runtime 89)`
+`Verified claims: 7 (hygiene 7 · inertness 0 · runtime 0)`
 
 </div>
 
@@ -22,13 +22,13 @@
 <tr>
 <td align="center" width="25%">
 
-### 24
+### 15
 개 P1 게이트<br><sub>명령 하나. 예상 밖의 일이 있으면 멈춤</sub>
 
 </td>
 <td align="center" width="25%">
 
-### 122
+### 7
 개 판정 기준<br><sub>모두 레드 레그 보유, 모두 실측 완료</sub>
 
 </td>
@@ -48,7 +48,7 @@
 </table>
 
 > [!TIP]
-> **이 README를 믿을 필요는 없습니다**. 설치하고 명령 하나를 실행하면, 자신의 122개 주장을 전부 오프라인으로 증명해 보입니다.
+> **이 README를 믿을 필요는 없습니다**. 설치하고 명령 하나를 실행하면, 자신의 7개 주장을 전부 오프라인으로 증명해 보입니다.
 
 ---
 
@@ -62,7 +62,7 @@ TCRN Workflow는 세 번째 선택지를 제공합니다.
 
 | 확인하고 싶은 것 | ✗ 지금 가진 것 | ✓ 도입 후 가지는 것 |
 | :--- | :--- | :--- |
-| **테스트가 정말 돌았는가** | 채팅 창의 한 줄 | `pnpm verify:p1` — 24개 게이트를 순서대로 실행, 예상 밖의 일이 있으면 그 자리에서 정지 |
+| **테스트가 정말 돌았는가** | 채팅 창의 한 줄 | `pnpm verify:p1` — 15개 게이트를 순서대로 실행, 예상 밖의 일이 있으면 그 자리에서 정지 |
 | **누가 언제 무엇을 바꿨는가** | 채팅 기록을 되짚기 | 해시로 연결된 추가 전용 이벤트 체인. 이력의 어느 한 건이라도 바꾸면 이후 해시가 전부 어긋남 |
 | **보호 장치가 아직 작동하는가** | 작동하리라는 가정 | `pnpm guard-check` — 61개 가드를 소스에서 하나씩 망가뜨리고 각각의 테스트가 레드가 되기를 요구 |
 | **손에 든 바이트가 배포된 바이트인가** | 태그를 확인 | 산출물을 바이트 단위로 재구축해 공개된 다이제스트와 대조 |
@@ -77,18 +77,18 @@ TCRN Workflow는 세 번째 선택지를 제공합니다.
 
 이것이 증명하는 것은 "이런 검사를 작성했다"가 아니라 "이 검사들이 지금도 실제로 막고 있다"입니다. 망가진 채 아무도 알아채지 못한 검사는 검사가 없는 것과 같습니다.
 
-이 기준은 **122개 주장 전부**를 덮습니다. 각 주장은 `verification-map.yaml`에서 안정적인 리즌 코드, 오프라인으로 실행되는 증명, 그리고 레드 레그 — 어떤 변경이 레드를 만드는지 명시하고 그 실패를 실제로 관측한 것 — 에 묶여 있습니다. 122개 전부, 예외 없습니다.
+이 기준은 **7개 주장 전부**를 덮습니다. 각 주장은 `verification-map.yaml`에서 안정적인 리즌 코드, 오프라인으로 실행되는 증명, 그리고 레드 레그 — 어떤 변경이 레드를 만드는지 명시하고 그 실패를 실제로 관측한 것 — 에 묶여 있습니다. 7개 전부, 예외 없습니다.
 
 <details>
-<summary><b>122개 판정 기준의 구성</b></summary>
+<summary><b>7개 판정 기준의 구성</b></summary>
 
 <br>
 
 | 분류 | 개수 | 담당 범위 |
 | :--- | ---: | :--- |
-| `framework-hygiene` | 20 | 프레임워크 자체의 위생: 깨끗한 이력, 소스 허용 목록, 라이선스와 취약점 정책, 오프라인 경계 |
-| `inertness-proof` | 13 | 비활성 증명: 호스트 어댑터는 설치 후 명시적으로 활성화가 승인될 때까지 아무 일도 하지 않음 |
-| `runtime-capability` | 89 | 런타임 능력: 이벤트 체인, 리스, 뷰, 널리지 코어, 컨텍스트 라우터, 릴리스 세트 |
+| `framework-hygiene` | 7 | 프레임워크 자체의 위생: 깨끗한 이력, 소스 허용 목록, 라이선스와 취약점 정책, 오프라인 경계 |
+| `inertness-proof` | 0 | 비활성 증명: 호스트 어댑터는 설치 후 명시적으로 활성화가 승인될 때까지 아무 일도 하지 않음 |
+| `runtime-capability` | 0 | 런타임 능력: 이벤트 체인, 리스, 뷰, 널리지 코어, 컨텍스트 라우터, 릴리스 세트 |
 
 전체 목록은 `verification-map.yaml`에 있으며, 각 항목이 `id`, `command`, `fixturePaths`와 레드 레그를 가집니다.
 
@@ -114,8 +114,8 @@ TCRN Workflow는 세 번째 선택지를 제공합니다.
 | 얻는 것 | 실제 내용 |
 | :--- | :--- |
 | **파일만으로 이루어진 워크스페이스** | Initiative → Epic → Story → Subtask 그래프 전체가 정규 형식 JSON과 해시 체인입니다. `cat`과 `sha256sum`으로 감사할 수 있고, 내보내기는 바이트 단위로 재현 가능합니다. |
-| **명령 하나로 24개 게이트** | `pnpm verify:p1`이 포맷, lint, 타입, 빌드, 133개 테스트 파일, 트러스트 매트릭스, 아카이브와 SBOM과 라이선스와 취약점 정책, 소스 허용 목록, 오프라인 경계, 프라이버시 스캔, CI 하드닝, 판정 기준 원장, 깨끗한 이력을 차례로 실행합니다. |
-| **122개 기계 판독 가능한 판정 기준** | framework-hygiene 20개, inertness-proof 13개, runtime-capability 89개. 전부 레드 레그를 가지고 관측 가능한 리즌 코드에 묶여 있습니다. |
+| **명령 하나로 15개 게이트** | `pnpm verify:p1`이 포맷, lint, 타입, 빌드, 119개 테스트 파일, 트러스트 매트릭스, 아카이브와 SBOM과 라이선스와 취약점 정책, 소스 허용 목록, 오프라인 경계, 프라이버시 스캔, CI 하드닝, 판정 기준 원장, 깨끗한 이력을 차례로 실행합니다. |
+| **7개 기계 판독 가능한 판정 기준** | framework-hygiene 7개, inertness-proof 0개, runtime-capability 0개. 전부 레드 레그를 가지고 관측 가능한 리즌 코드에 묶여 있습니다. |
 | **스스로 유효함을 증명하는 가드** | 61개 가드. `pnpm guard-check`가 하나씩 망가뜨리고 해당 테스트의 레드를 요구합니다. |
 | **137개 거버넌스 CLI 동사** | 전부 로컬 실행. 모든 쓰기는 기준 버전을 선언하며, 누가 먼저 썼다면 거부됩니다. 조용한 덮어쓰기는 없습니다. |
 | **런타임 의존성 제로** | `package.json`의 `dependencies`와 `optionalDependencies`가 모두 비어 있습니다. 개발 모드에서는 프로세스 수준 네트워크 가드가 추가됩니다. 텔레메트리는 제로입니다. |
@@ -130,7 +130,7 @@ TCRN Workflow는 세 번째 선택지를 제공합니다.
 # 1. 고정 버전 개발 의존성 설치 (명시적, 잠금, 스크립트 없음)
 pnpm install --offline --frozen-lockfile --ignore-scripts
 
-# 2. 프레임워크가 스스로 증명하게 하기 (24개 게이트, 완전 오프라인)
+# 2. 프레임워크가 스스로 증명하게 하기 (15개 게이트, 완전 오프라인)
 pnpm verify:p1
 
 # 3. 빌드한 뒤 거버넌스 CLI 사용
