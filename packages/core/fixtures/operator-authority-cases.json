@@ -1,57 +1,15 @@
 {
   "schemaVersion": "tcrn.operator-authority-cases.v1",
-  "historicalIoBlockedVerbs": [
-    "adapter-generate",
-    "adapter-rollback-plan",
-    "claude-adapter-activation-fragment",
-    "claude-adapter-generate",
-    "claude-adapter-install",
-    "claude-adapter-rollback-plan",
-    "claude-adapter-settings-fragment",
-    "compatibility-dry-run",
-    "compatibility-plan",
-    "context-route",
-    "profile-authorize",
-    "profile-resolve"
-  ],
-  "digestFlagResolvedBeforeEpic022": [
-    "adapter-rollback-plan",
-    "claude-adapter-rollback-plan",
-    "context-route",
-    "profile-authorize",
-    "profile-resolve"
-  ],
-  "currentIoBlockedVerbsBeforeEpic022": [
-    "adapter-generate",
-    "claude-adapter-activation-fragment",
-    "claude-adapter-generate",
-    "claude-adapter-install",
-    "claude-adapter-settings-fragment",
-    "compatibility-dry-run",
-    "compatibility-plan"
-  ],
-  "laterPinnedVerbNotInHistoricalTwelve": "claude-adapter-uninstall",
-  "operatorAuthorityResolvedVerbs": [
-    "adapter-generate",
-    "claude-adapter-activation-fragment",
-    "claude-adapter-generate",
-    "claude-adapter-install",
-    "claude-adapter-settings-fragment",
-    "compatibility-dry-run",
-    "compatibility-plan"
-  ],
-  "authorityPositiveCases": 4,
-  "authorityHostileCases": 10,
+  "authorityPositiveCases": 2,
+  "authorityHostileCases": 8,
   "authoritySource": "explicit-absolute-pins-path-plus-out-of-band-sha256",
   "ambientAuthoritySources": [],
   "antiRollbackBoundary": "caller-must-retain-newest-pins-digest",
-  "authorityOutputCommands": [
-    "adapter-activation-record"
-  ],
+  "authorityOutputCommands": [],
   "network": false,
   "retiredSurface": {
-    "surface": "mcp",
-    "reason": "the MCP transport was retired (TCRN-CROSS-STORY-287); its case counts described a surface that no longer exists",
-    "recordedOn": "2026-08-17"
+    "surface": "mcp; codex/claude adapter host admission",
+    "reason": "the MCP transport was retired (TCRN-CROSS-STORY-287) and the Codex/Claude adapter host-admission surface was retired with the adapter modules (TCRN-CROSS-STORY-358 family 1); each described a surface that no longer exists",
+    "recordedOn": "2026-09-06"
   }
 }

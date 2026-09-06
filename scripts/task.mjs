@@ -398,8 +398,6 @@ async function runTests({
   knowledgeOnly = false,
   p5Only = false,
   p6Only = false,
-  p6AdapterOnly = false,
-  p6bAdapterOnly = false,
   authorityOnly = false,
   dependencyOnly = false,
   conferenceOnly = false,
@@ -407,20 +405,11 @@ async function runTests({
   assignmentGateOnly = false,
   actorOnly = false,
   extensionStoreOnly = false,
-  p7CompatibilityOnly = false,
   p8Only = false,
   backupOnly = false,
-  installerOnly = false,
-  activationOnly = false,
   personaRenderOnly = false,
-  codexInstallerOnly = false,
-  receiptSidecarOnly = false,
-  observeHookOnly = false,
   executionCollectionOnly = false,
-  codexActivationOnly = false,
   adapterAcceptanceOnly = false,
-  hookRootBindingOnly = false,
-  authorityOutputOnly = false,
   init047Only = false,
   focusedTestPath = undefined,
   focusedTestPaths = undefined,
@@ -443,9 +432,7 @@ async function runTests({
     .filter((path) => !p3Only || ["tests/p3-file-engine.test.mjs", "tests/p3-cli-read-surface.test.mjs", "tests/p3-cli-catalog.test.mjs", "tests/p3-engine-complexity.test.mjs"].includes(path))
     .filter((path) => !knowledgeOnly || path === "tests/p4-knowledge-core.test.mjs")
     .filter((path) => !p5Only || ["tests/p5-generic-profile.test.mjs", "tests/p5-core-reference-personas.test.mjs"].includes(path))
-    .filter((path) => !p6Only || ["tests/p6-context-router.test.mjs", "tests/p6-codex-adapter.test.mjs"].includes(path))
-    .filter((path) => !p6AdapterOnly || path === "tests/p6-codex-adapter.test.mjs")
-    .filter((path) => !p6bAdapterOnly || path === "tests/p6b-claude-adapter.test.mjs")
+    .filter((path) => !p6Only || path === "tests/p6-context-router.test.mjs")
     .filter((path) => !dependencyOnly || path === "tests/dependency.test.mjs")
     .filter((path) => !conferenceOnly || path === "tests/conference.test.mjs")
     .filter((path) => !executionOnly || path === "tests/conference-execution.test.mjs")
@@ -453,20 +440,11 @@ async function runTests({
     .filter((path) => !assignmentGateOnly || path === "tests/assignment-gate.test.mjs")
     .filter((path) => !actorOnly || path === "tests/actor-attestation.test.mjs")
     .filter((path) => !extensionStoreOnly || path === "tests/workspace-extension-records.test.mjs")
-    .filter((path) => !p7CompatibilityOnly || path === "tests/p7-compatibility-modes.test.mjs")
     .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path))
     .filter((path) => !backupOnly || path === "tests/backup-snapshot.test.mjs")
-    .filter((path) => !installerOnly || path === "tests/act1-claude-installer.test.mjs")
-    .filter((path) => !activationOnly || path === "tests/act2-claude-activation.test.mjs")
     .filter((path) => !personaRenderOnly || path === "tests/act3-persona-render.test.mjs")
-    .filter((path) => !codexInstallerOnly || path === "tests/act4-codex-installer.test.mjs")
-    .filter((path) => !receiptSidecarOnly || path === "tests/act5-receipt-sidecar.test.mjs")
-    .filter((path) => !observeHookOnly || path === "tests/act6-observe-hook.test.mjs")
     .filter((path) => !executionCollectionOnly || path === "tests/act7-execution-collection.test.mjs")
-    .filter((path) => !codexActivationOnly || path === "tests/act9-codex-activation.test.mjs")
     .filter((path) => !adapterAcceptanceOnly || path === "tests/act11-adapter-acceptance.test.mjs")
-    .filter((path) => !hookRootBindingOnly || path === "tests/act12-hook-root-binding.test.mjs")
-    .filter((path) => !authorityOutputOnly || path === "tests/act13-authority-output.test.mjs")
     .filter((path) => !init047Only || ["tests/knowledge-inject.test.mjs", "tests/p3-cli-read-surface.test.mjs", "tests/p4-knowledge-core.test.mjs", "tests/stop-pact.test.mjs"].includes(path))
     .filter((path) => focusedTestPath === undefined || path === focusedTestPath)
     .filter((path) => !inc256Only || path === "tests/inc256-knowledge-policy.test.mjs")
@@ -497,28 +475,12 @@ async function runTests({
       ? "E2E_GOVERNED_LOOP_TESTS_VERIFIED"
       : trustOnly
       ? "TRUST_NEGATIVE_MATRIX_VERIFIED"
-      : activationOnly
-      ? "ACT2_CLAUDE_SESSIONSTART_TESTS_VERIFIED"
       : personaRenderOnly
       ? "ACT3_PERSONA_RENDER_TESTS_VERIFIED"
-      : codexInstallerOnly
-      ? "ACT4_CODEX_INSTALLER_TESTS_VERIFIED"
-      : receiptSidecarOnly
-      ? "ACT5_RECEIPT_SIDECAR_TESTS_VERIFIED"
-      : observeHookOnly
-      ? "ACT6_OBSERVE_HOOK_TESTS_VERIFIED"
       : executionCollectionOnly
       ? "ACT7_EXECUTION_COLLECTION_TESTS_VERIFIED"
-      : codexActivationOnly
-      ? "ACT9_CODEX_ACTIVATION_TESTS_VERIFIED"
       : adapterAcceptanceOnly
       ? "ACT11_ADAPTER_ACCEPTANCE_TESTS_VERIFIED"
-      : hookRootBindingOnly
-      ? "ACT12_HOOK_ROOT_BINDING_TESTS_VERIFIED"
-      : authorityOutputOnly
-      ? "ACT13_AUTHORITY_OUTPUT_TESTS_VERIFIED"
-      : installerOnly
-      ? "ACT1_CLAUDE_INSTALLER_TESTS_VERIFIED"
       : backupOnly
       ? "BACKUP_SNAPSHOT_TESTS_VERIFIED"
       : rootOnly
@@ -531,10 +493,6 @@ async function runTests({
               ? "P4_KNOWLEDGE_CORE_TESTS_VERIFIED"
               : p5Only
                 ? "P5_GENERIC_PROFILE_TESTS_VERIFIED"
-                : p6AdapterOnly
-                  ? "P6_CODEX_ADAPTER_TESTS_VERIFIED"
-                : p6bAdapterOnly
-                  ? "P6B_CLAUDE_ADAPTER_TESTS_VERIFIED"
                 : dependencyOnly
                   ? "DEPENDENCY_TESTS_VERIFIED"
                 : conferenceOnly
@@ -549,8 +507,6 @@ async function runTests({
                   ? "EXT_STORE_TESTS_VERIFIED"
                 : p6Only
                   ? "P6_CONTEXT_ROUTER_TESTS_VERIFIED"
-                  : p7CompatibilityOnly
-                    ? "P7_COMPATIBILITY_MODES_TESTS_VERIFIED"
                   : p8Only
                     ? "P8_WORKFLOW_RC_TESTS_VERIFIED"
               : "TESTS_VERIFIED",
@@ -589,9 +545,7 @@ const INIT049_STORY351_TESTS = Object.freeze([
   ["tests/story-347-348-settings-policy.test.mjs", "STORY-348 protocol validity values remain hardcoded rather than becoming settings"],
   ["tests/p4-knowledge-core.test.mjs", "Knowledge implementation has no predecessor, network, database, or AOS read authority"],
   ["tests/p5-generic-profile.test.mjs", "profile runtime remains standalone and imports only frozen local protocol authority"],
-  ["tests/p6-codex-adapter.test.mjs", "empty-project cold start remains empty and Adapter source has no legacy, ambient store scan, network, database, or AOS reader"],
   ["tests/p6-context-router.test.mjs", "Context Router implementation is storeless and contains no legacy, network, database, hook, Skill, environment, model, or session authority"],
-  ["tests/p6b-claude-adapter.test.mjs", "empty-project cold start remains empty and Adapter source has no legacy, ambient store scan, network, database, or requirement-ledger reader"],
 ]);
 
 function escapeTestPattern(value) {
@@ -823,8 +777,7 @@ async function verifyP8() {
   assertion(packages.every((manifest) => manifest.version === P8_VERSION && manifest.private === true), "P8_PACKAGE_VERSION_MISMATCH");
   const frameworkSource = await readText(resolve(repositoryRoot, "packages/core/src/index.ts"));
   assertion(frameworkSource.includes(`FRAMEWORK_VERSION = \"${P8_VERSION}\"`), "P8_FRAMEWORK_VERSION_MISMATCH");
-  const compatibility = await readJson(resolve(repositoryRoot, "packages/core/fixtures/p7-compatibility-modes-cases.json"));
-  assertion(compatibility.supportedAosReleases === 0 && P8_SUPPORTED_AOS_RELEASES.length === 0, "P8_SUPPORTED_AOS_RELEASES_MISMATCH");
+  assertion(P8_SUPPORTED_AOS_RELEASES.length === 0, "P8_SUPPORTED_AOS_RELEASES_MISMATCH");
   const dogfood = await runTests({ p8Only: true });
   const trust = await runTests({ trustOnly: true });
   const sourceArchive = await archive();
@@ -1135,114 +1088,6 @@ async function verifyP6() {
   });
 }
 
-async function verifyP6Adapter() {
-  const tests = await runTests({ p6AdapterOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p6-codex-adapter-cases.json");
-  const schemaPath = resolve(repositoryRoot, "packages/core/schema/codex-adapter-v1.schema.json");
-  const specPath = resolve(repositoryRoot, "packages/core/spec/codex-adapter-v1.md");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.p6-codex-adapter-cases.v1", "P6_ADAPTER_FIXTURE_SCHEMA");
-  assertion(fixture.goldenCases === 8 && fixture.hostileCases === 31 && fixture.schemaParityCases === 8, "P6_ADAPTER_HOSTILE_CORPUS");
-  assertion(fixture.pathFaultCases === 8 && fixture.rollbackCases === 14 && fixture.finalHopCases === 4 &&
-    fixture.canonicalTemplateCases === 3 && fixture.bundleOrderParityCases === 4 && fixture.bundleUnicodeParityCases === 8 &&
-    fixture.hostParityCases === 4 && fixture.lifecycleParityCases === 4 && fixture.installationAuthorityCases === 12 &&
-    fixture.installationCanonicalByteCases === 4,
-  "P6_ADAPTER_SECURITY_CORPUS");
-  assertion(fixture.propertyPermutations === 64 && fixture.templateFiles === 4 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6_ADAPTER_PROPERTY_CORPUS");
-  assertion(fixture.coldStartCases === 1 && fixture.staticBoundaryCases === 1, "P6_ADAPTER_STANDALONE_BOUNDARY");
-  assertion(fixture.adapter === "implemented_inert_templates_only" && fixture.liveActivation === false && fixture.og04 === "unsatisfied" && fixture.rc3 === "unaccepted" && fixture.liveStore === "not-created", "P6_ADAPTER_NO_OVERCLAIM");
-  return success("P6_CODEX_ADAPTER_VERIFIED", {
-    tests: tests.reasonCode,
-    goldenCases: fixture.goldenCases,
-    hostileCases: fixture.hostileCases,
-    schemaParityCases: fixture.schemaParityCases,
-    pathFaultCases: fixture.pathFaultCases,
-    rollbackCases: fixture.rollbackCases,
-    canonicalTemplateCases: fixture.canonicalTemplateCases,
-    bundleOrderParityCases: fixture.bundleOrderParityCases,
-    bundleUnicodeParityCases: fixture.bundleUnicodeParityCases,
-    hostParityCases: fixture.hostParityCases,
-    lifecycleParityCases: fixture.lifecycleParityCases,
-    installationAuthorityCases: fixture.installationAuthorityCases,
-    installationCanonicalByteCases: fixture.installationCanonicalByteCases,
-    finalHopCases: fixture.finalHopCases,
-    propertyPermutations: fixture.propertyPermutations,
-    templateFiles: fixture.templateFiles,
-    coldStartCases: fixture.coldStartCases,
-    staticBoundaryCases: fixture.staticBoundaryCases,
-    permutationCorpusDigest: fixture.permutationCorpusDigest,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    adapter: fixture.adapter,
-    liveActivation: fixture.liveActivation,
-    og04: fixture.og04,
-    rc3: fixture.rc3,
-    liveStore: fixture.liveStore,
-    standalone: "inert-product-data-only-no-database-no-aos-no-network",
-  });
-}
-
-async function verifyP6b() {
-  const tests = await runTests({ p6bAdapterOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p6b-claude-adapter-cases.json");
-  const schemaPath = resolve(repositoryRoot, "packages/core/schema/claude-adapter-v1.schema.json");
-  const specPath = resolve(repositoryRoot, "packages/core/spec/claude-adapter-v1.md");
-  const codexAdapterPath = resolve(repositoryRoot, "packages/core/src/codex-adapter.ts");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.p6b-claude-adapter-cases.v1", "P6B_ADAPTER_FIXTURE_SCHEMA");
-  assertion(fixture.goldenCases === 8 && fixture.hostileCases === 31 && fixture.schemaParityCases === 8, "P6B_ADAPTER_HOSTILE_CORPUS");
-  assertion(fixture.pathFaultCases === 8 && fixture.rollbackCases === 14 && fixture.finalHopCases === 4 &&
-    fixture.canonicalTemplateCases === 3 && fixture.bundleOrderParityCases === 4 && fixture.bundleUnicodeParityCases === 8 &&
-    fixture.hostParityCases === 4 && fixture.lifecycleParityCases === 4 && fixture.installationAuthorityCases === 12 &&
-    fixture.installationCanonicalByteCases === 4,
-  "P6B_ADAPTER_SECURITY_CORPUS");
-  assertion(fixture.claudeFallbackCases === 8 && fixture.hostProductCases === 2 && fixture.fragmentReversibilityCases === 3 &&
-    fixture.fragmentHostileCases === 5 && fixture.forbiddenPathCases === 5, "P6B_ADAPTER_CLAUDE_SURFACE_CORPUS");
-  assertion(fixture.propertyPermutations === 64 && fixture.templateFiles === 4 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P6B_ADAPTER_PROPERTY_CORPUS");
-  assertion(/^[a-f0-9]{64}$/u.test(fixture.parityNeutralProjectionDigest) && fixture.settingsFragmentReversible === true, "P6B_ADAPTER_PARITY_CORPUS");
-  assertion(fixture.coldStartCases === 1 && fixture.staticBoundaryCases === 1, "P6B_ADAPTER_STANDALONE_BOUNDARY");
-  assertion(fixture.adapter === "implemented_inert_templates_only" && fixture.hostProduct === "claude-code" && fixture.liveActivation === false && fixture.og04 === "unsatisfied" && fixture.rc3 === "unaccepted" && fixture.liveStore === "not-created", "P6B_ADAPTER_NO_OVERCLAIM");
-  return success("P6B_CLAUDE_ADAPTER_VERIFIED", {
-    tests: tests.reasonCode,
-    goldenCases: fixture.goldenCases,
-    hostileCases: fixture.hostileCases,
-    schemaParityCases: fixture.schemaParityCases,
-    pathFaultCases: fixture.pathFaultCases,
-    rollbackCases: fixture.rollbackCases,
-    canonicalTemplateCases: fixture.canonicalTemplateCases,
-    bundleOrderParityCases: fixture.bundleOrderParityCases,
-    bundleUnicodeParityCases: fixture.bundleUnicodeParityCases,
-    hostParityCases: fixture.hostParityCases,
-    lifecycleParityCases: fixture.lifecycleParityCases,
-    installationAuthorityCases: fixture.installationAuthorityCases,
-    installationCanonicalByteCases: fixture.installationCanonicalByteCases,
-    finalHopCases: fixture.finalHopCases,
-    claudeFallbackCases: fixture.claudeFallbackCases,
-    hostProductCases: fixture.hostProductCases,
-    fragmentReversibilityCases: fixture.fragmentReversibilityCases,
-    fragmentHostileCases: fixture.fragmentHostileCases,
-    forbiddenPathCases: fixture.forbiddenPathCases,
-    propertyPermutations: fixture.propertyPermutations,
-    templateFiles: fixture.templateFiles,
-    coldStartCases: fixture.coldStartCases,
-    staticBoundaryCases: fixture.staticBoundaryCases,
-    permutationCorpusDigest: fixture.permutationCorpusDigest,
-    parityNeutralProjectionDigest: fixture.parityNeutralProjectionDigest,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    codexAdapterParityDigest: (await fileRecord(codexAdapterPath)).sha256,
-    adapter: fixture.adapter,
-    hostProduct: fixture.hostProduct,
-    liveActivation: fixture.liveActivation,
-    og04: fixture.og04,
-    rc3: fixture.rc3,
-    liveStore: fixture.liveStore,
-    standalone: "inert-product-data-only-no-database-no-requirement-ledger-no-network",
-  });
-}
-
 async function verifyDependency() {
   const tests = await runTests({ dependencyOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/dependency-cases.json");
@@ -1410,44 +1255,6 @@ async function verifyActorAttestation() {
     reasonCodes: ["WORKSPACE_ACTOR_INVALID", "WORKSPACE_ACTOR_REQUIRED", "WORKSPACE_EVENT_CORRUPT"],
     defaultBehaviour: "no-enable-event-byte-identical-to-rc4",
     standalone: "extension-contract-plus-engine-enforcement-no-store-no-network",
-  });
-}
-
-async function verifyP7Compatibility() {
-  const tests = await runTests({ p7CompatibilityOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/p7-compatibility-modes-cases.json");
-  const schemaPath = resolve(repositoryRoot, "packages/core/schema/compatibility-modes-v1.schema.json");
-  const specPath = resolve(repositoryRoot, "packages/core/spec/compatibility-modes-v1.md");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.p7-compatibility-modes-cases.v1", "P7_COMPATIBILITY_FIXTURE_SCHEMA");
-  assertion(fixture.positiveOperations === 6 && fixture.schemaParityCases === 15 && fixture.documentBudgetCases === 2, "P7_COMPATIBILITY_POSITIVE_PARITY_CORPUS");
-  assertion(fixture.authorityFilesystemCases === 9 && fixture.authorityBoundedReadCases === 5 && fixture.authorityBindingCases === 14 && fixture.cliAuthorityCases === 12 && fixture.unavailableSurfaces === 4, "P7_COMPATIBILITY_AUTHORITY_UNAVAILABLE_CORPUS");
-  assertion(fixture.propertyPermutations === 64 && /^[a-f0-9]{64}$/u.test(fixture.permutationCorpusDigest), "P7_COMPATIBILITY_PROPERTY_CORPUS");
-  assertion(fixture.supportedAosReleases === 0 && fixture.networkAccess === false && fixture.mutation === false && fixture.liveAosMutation === false, "P7_COMPATIBILITY_OFFLINE_BOUNDARY");
-  assertion(fixture.capabilityDisposition === "capability_unavailable_until_mutual_release", "P7_COMPATIBILITY_UNAVAILABLE_DISPOSITION");
-  return success("P7_COMPATIBILITY_MODES_VERIFIED", {
-    tests: tests.reasonCode,
-    positiveOperations: fixture.positiveOperations,
-    schemaParityCases: fixture.schemaParityCases,
-    documentBudgetCases: fixture.documentBudgetCases,
-    authorityFilesystemCases: fixture.authorityFilesystemCases,
-    authorityBoundedReadCases: fixture.authorityBoundedReadCases,
-    authorityBindingCases: fixture.authorityBindingCases,
-    cliAuthorityCases: fixture.cliAuthorityCases,
-    unavailableSurfaces: fixture.unavailableSurfaces,
-    propertyPermutations: fixture.propertyPermutations,
-    permutationCorpusDigest: fixture.permutationCorpusDigest,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    schemaDigest: (await fileRecord(schemaPath)).sha256,
-    specDigest: (await fileRecord(specPath)).sha256,
-    supportedAosReleases: fixture.supportedAosReleases,
-    networkAccess: fixture.networkAccess,
-    mutation: fixture.mutation,
-    liveAosMutation: fixture.liveAosMutation,
-    capabilityDisposition: fixture.capabilityDisposition,
-    compatibilityModes: "implemented-offline-planning-only",
-    aosRequirements: "out-of-scope",
-    rc4: "unaccepted",
   });
 }
 
@@ -1784,21 +1591,17 @@ async function verifySource() {
 
 async function verifyOperatorAuthority() {
   // STORY-287: the MCP transport is retired, so the fixture's mcp case counts went with
-  // the surface they described. What stays is the authority module itself, which the CLI
-  // and the codex activation path both depend on.
+  // the surface they described. TCRN-CROSS-STORY-358 family 1 retired the adapter verbs
+  // the IO-blocked rosters enumerated, and the host-admission cases with them. What stays
+  // is the authority module itself, which the whole engine CLI runs through.
   const tests = await runTests({ authorityOnly: true });
   const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/operator-authority-cases.json");
   const specPath = resolve(repositoryRoot, "packages/core/spec/operator-authority-v1.md");
   const fixture = await readJson(fixturePath);
   assertion(fixture.schemaVersion === "tcrn.operator-authority-cases.v1", "OPERATOR_AUTHORITY_FIXTURE_SCHEMA");
-  assertion(fixture.historicalIoBlockedVerbs.length === 12 &&
-    fixture.digestFlagResolvedBeforeEpic022.length === 5 &&
-    fixture.currentIoBlockedVerbsBeforeEpic022.length === 7,
-  "OPERATOR_AUTHORITY_RETEST_CORPUS");
-  assertion(JSON.stringify(fixture.operatorAuthorityResolvedVerbs) ===
-    JSON.stringify(fixture.currentIoBlockedVerbsBeforeEpic022),
-  "OPERATOR_AUTHORITY_REACHABILITY");
-  assertion(fixture.authorityPositiveCases === 4 && fixture.authorityHostileCases === 10,
+  assertion(fixture.authorityOutputCommands.length === 0 && fixture.ambientAuthoritySources.length === 0,
+    "OPERATOR_AUTHORITY_RETEST_CORPUS");
+  assertion(fixture.authorityPositiveCases === 2 && fixture.authorityHostileCases === 8,
     "OPERATOR_AUTHORITY_CASE_CORPUS");
   assertion((await readText(specPath)).length > 0, "OPERATOR_AUTHORITY_SPEC_MISSING");
   return success("OPERATOR_AUTHORITY_VERIFIED", { tests: tests.reasonCode });
@@ -1961,8 +1764,6 @@ const commandContracts = {
   inc261: { exit: 0, reasonCode: "INC261_VERIFICATION_LINKS_VERIFIED" },
   p5: { exit: 0, reasonCode: "P5_GENERIC_PROFILES_VERIFIED" },
   p6: { exit: 0, reasonCode: "P6_CONTEXT_ROUTER_VERIFIED" },
-  "p6-adapter": { exit: 0, reasonCode: "P6_CODEX_ADAPTER_VERIFIED" },
-  p6b: { exit: 0, reasonCode: "P6B_CLAUDE_ADAPTER_VERIFIED" },
   dep: { exit: 0, reasonCode: "DEPENDENCY_VERIFIED" },
   conference: { exit: 0, reasonCode: "CONFERENCE_VERIFIED" },
   "ext-execution": { exit: 0, reasonCode: "EXECUTION_VERIFIED" },
@@ -1970,22 +1771,13 @@ const commandContracts = {
   "ext-ag": { exit: 0, reasonCode: "ASSIGNMENT_GATE_VERIFIED" },
   "ext-actor": { exit: 0, reasonCode: "ACTOR_ATTESTATION_VERIFIED" },
   "ext-store": { exit: 0, reasonCode: "EXT_STORE_VERIFIED" },
-  "p7-compatibility": { exit: 0, reasonCode: "P7_COMPATIBILITY_MODES_VERIFIED" },
   p8: { exit: 0, reasonCode: "P8_WORKFLOW_RC_VERIFIED" },
   "release-preflight": { exit: 0, reasonCode: "RELEASE_TAG_PREFLIGHT_VERIFIED" },
   rc1: { exit: 0, reasonCode: "RC1_CANDIDATE_READY" },
   backup: { exit: 0, reasonCode: "BACKUP_VERIFIED" },
-  act1: { exit: 0, reasonCode: "ACT1_CLAUDE_INSTALLER_VERIFIED" },
-  act2: { exit: 0, reasonCode: "ACT2_CLAUDE_SESSIONSTART_VERIFIED" },
   act3: { exit: 0, reasonCode: "ACT3_PERSONA_RENDER_VERIFIED" },
-  act4: { exit: 0, reasonCode: "ACT4_CODEX_INSTALLER_VERIFIED" },
-  act5: { exit: 0, reasonCode: "ACT5_RECEIPT_SIDECAR_VERIFIED" },
-  act6: { exit: 0, reasonCode: "ACT6_OBSERVE_HOOK_VERIFIED" },
   act7: { exit: 0, reasonCode: "ACT7_EXECUTION_COLLECTION_VERIFIED" },
-  act9: { exit: 0, reasonCode: "ACT9_CODEX_ACTIVATION_VERIFIED" },
   act11: { exit: 0, reasonCode: "ACT11_ADAPTER_ACCEPTANCE_VERIFIED" },
-  act12: { exit: 0, reasonCode: "ACT12_HOOK_ROOT_BINDING_VERIFIED" },
-  act13: { exit: 0, reasonCode: "ACT13_AUTHORITY_OUTPUT_VERIFIED" },
   e2e: { exit: 0, reasonCode: "E2E_GOVERNED_LOOP_VERIFIED" },
   story349: { exit: 0, reasonCode: "INIT049_STORY_349_VERIFIED" },
   story350: { exit: 0, reasonCode: "INIT049_STORY_350_VERIFIED" },
@@ -2090,8 +1882,10 @@ async function verifyMap() {
   }
   // WSF-2: BK joins the completeness loop with its first claim (BK-SNAPSHOT-WITNESS);
   // ACT stays admitted-only until WSG-2 lands the first activation claim.
-  // WSG-2: ACT joins the completeness loop with its first activation-ladder claim
-  // (ACT1-CLAUDE-INSTALLER); PRG-0 pre-admitted ACT to the per-claim allowlist only.
+  // TCRN-CROSS-STORY-358 family 1 ('adapters'): P7 and ACT leave this loop with their
+  // last claims. ACT held only ACT1-CLAUDE-INSTALLER and P7 only the two compatibility
+  // claims; all three named modules retired here. Both phases stay in the per-claim
+  // allowlist above, unused, exactly as ACT was before its first claim existed.
   // WSG-3: ACT2 (the first non-inert activation surface — Step-2 SessionStart) is a
   // NEW phase wired in this commit, exactly as BK/ACT were: admitted to the per-claim
   // allowlist above and joined to this completeness loop with its first claims
@@ -2100,7 +1894,7 @@ async function verifyMap() {
   // commit the same way — admitted to the per-claim allowlist above and joined to
   // this completeness loop atomically with its first and only claim
   // (E2E-GOVERNED-LOOP), plus the evidencePhase mapping below.
-  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "RC1", "BK", "ACT", "ACT2", "E2E"]) {
+  for (const phase of ["P1", "P2", "P3", "P4", "P5", "P6", "P8", "RC1", "BK", "ACT2", "E2E"]) {
     assertion(map.claims.some((claim) => claim.phase === phase), "VERIFICATION_MAP_PHASE_MISSING", phase);
   }
   // TCRN-CROSS-INIT-020 INC-078 — ADR acceptance criteria ↔ machine gate
@@ -2291,50 +2085,9 @@ async function verifyBackup() {
   return success("BACKUP_VERIFIED", { tests: result.tests });
 }
 
-// WSG-2: the Step-1 governed installer gate (ACT phase, first activation-ladder
-// claim). The suite proves the governed on-disk install, receipt round-trip
-// through the unmodified TOCTOU reader, identity-digest-gated rollback execution,
-// and the fail-closed target/root/tamper negatives.
-async function verifyAct1() {
-  const result = await runTests({ installerOnly: true });
-  return success("ACT1_CLAUDE_INSTALLER_VERIFIED", { tests: result.tests });
-}
-
-async function verifyAct2() {
-  const result = await runTests({ activationOnly: true });
-  return success("ACT2_CLAUDE_SESSIONSTART_VERIFIED", { tests: result.tests });
-}
-
 async function verifyAct3() {
   const result = await runTests({ personaRenderOnly: true });
   return success("ACT3_PERSONA_RENDER_VERIFIED", { tests: result.tests });
-}
-
-// EPIC-023 S066/S067: the single Codex SessionStart activation rung. The gate
-// distinguishes local installation from host approval and fire. The historical
-// persona-bound receipt is retained but cannot approve the corrected persona-free
-// main-session bytes; the installation receipt itself proves no host activation.
-async function verifyAct9() {
-  const result = await runTests({ codexActivationOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act9-codex-activation-cases.json");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.act9-codex-activation-cases.v1", "ACT9_FIXTURE_SCHEMA");
-  assertion(fixture.activationFiles === 3 && fixture.hookEvents.length === 1 && fixture.hookEvents[0] === "SessionStart", "ACT9_CLOSED_SURFACE");
-  assertion(fixture.driftCases === 3 && fixture.refusalCases === 6, "ACT9_CORPUS");
-  assertion(fixture.failOpen === true && fixture.installationClaimsHostActivation === false && fixture.approvedSetInitiallyEmpty === true, "ACT9_TRUST_DISCIPLINE");
-  assertion(fixture.hostTrustHashRepresentation === "opaque_not_exported", "ACT9_OPAQUE_HOST_HASH");
-  assertion(
-    fixture.liveHostProof === "not-claimed-corrected-main-session-definition-awaits-owner-approval" &&
-      typeof fixture.historicalHostEvidence === "string",
-    "ACT9_CURRENT_LIVE_BOUNDARY",
-  );
-  return success("ACT9_CODEX_ACTIVATION_VERIFIED", {
-    tests: result.tests,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    liveHostProof: fixture.liveHostProof,
-    installationClaimsHostActivation: fixture.installationClaimsHostActivation,
-    standalone: fixture.standalone,
-  });
 }
 
 // INIT-009 S076/S080 and INIT-010 S057: a closed cross-host acceptance
@@ -2399,38 +2152,6 @@ async function verifyAct11() {
   });
 }
 
-// INC-002 closed the cwd vector for the handler argument; INC-011 is what it did not
-// close. The two halves are reported separately on purpose: a single field would read
-// as a whole-command guarantee. The claim-ledger read is the drift trap -- delete the
-// disclosure from the subject and this gate goes red, so the prose cannot quietly
-// outlive the code while the test below keeps proving the residual is real.
-async function verifyAct12() {
-  const result = await runTests({ hookRootBindingOnly: true });
-  const map = JSON.parse(await readText(resolve(repositoryRoot, "verification-map.yaml")));
-  const claim = map.claims.find((candidate) => candidate.id === "HOOK-ABSOLUTE-ROOT-BINDING");
-  assertion(
-    typeof claim?.subject === "string" &&
-      claim.subject.includes("interpreter is resolved through the fire-time PATH"),
-    "ACT12_INTERPRETER_RESIDUAL_UNDISCLOSED",
-  );
-  return success("ACT12_HOOK_ROOT_BINDING_VERIFIED", {
-    tests: result.tests,
-    liveHostProof: "not-claimed-hermetic-fire-time-cwd-probe",
-    definitionDigestScope: "machine-specific-admitted-installation-root",
-    handlerArgumentScope: "admitted-absolute-not-cwd-redirectable",
-    interpreterScope: "bare-name-resolved-through-fire-time-path-INC-011-disclosed-not-closed",
-  });
-}
-
-async function verifyAct13() {
-  const result = await runTests({ authorityOutputOnly: true });
-  return success("ACT13_AUTHORITY_OUTPUT_VERIFIED", {
-    tests: result.tests,
-    authorityOutputCommands: ["adapter-activation-record"],
-    observationSource: "activation-host-context-or-operator-pinned-file",
-  });
-}
-
 // EPIC-020 S055: collecting host-execution receipts from observed invocations and
 // feeding them to the EPIC-019 classifier. The gate asserts the honesty boundary:
 // transcripts are never signed and attribution is never identity.
@@ -2448,61 +2169,6 @@ async function verifyAct7() {
     fixtureDigest: (await fileRecord(fixturePath)).sha256,
     transcriptsSigned: fixture.transcriptsSigned,
     liveHostProof: fixture.liveHostProof,
-    standalone: fixture.standalone,
-  });
-}
-
-// EPIC-024 S069-S071: the observe hook handler, executed as a real child process.
-// The gate asserts the fail-open discipline and that no live-host claim rides here.
-async function verifyAct6() {
-  const result = await runTests({ observeHookOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act6-observe-hook-cases.json");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.act6-observe-hook-cases.v1", "ACT6_FIXTURE_SCHEMA");
-  assertion(fixture.observeEvents.length === 6 && fixture.refusedEventCases === 5, "ACT6_CLOSED_SURFACE");
-  assertion(fixture.alwaysExitsZero === true && fixture.neverWritesStdout === true && fixture.neverBlocks === true, "ACT6_FAIL_OPEN");
-  assertion(fixture.driftSelfCheckFallsSilent === true && fixture.noAmbientEnvironmentTrust === true, "ACT6_DRIFT_DEFENCE");
-  assertion(fixture.liveHostProof === "not-claimed-per-min-046", "ACT6_NO_OVERCLAIM");
-  return success("ACT6_OBSERVE_HOOK_VERIFIED", {
-    tests: result.tests,
-    observeEvents: fixture.observeEvents.length,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    liveHostProof: fixture.liveHostProof,
-    standalone: fixture.standalone,
-  });
-}
-
-// EPIC-024 S068: the observe-receipt sidecar. The gate asserts the coverage
-// discipline MIN-046 bound into the design -- an unsealed batch can never claim
-// complete coverage, and no live-host claim rides on this proof.
-async function verifyAct5() {
-  const result = await runTests({ receiptSidecarOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act5-receipt-sidecar-cases.json");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.act5-receipt-sidecar-cases.v1", "ACT5_FIXTURE_SCHEMA");
-  assertion(fixture.observeEvents.length === 6 && fixture.enforceEventsRefused === true, "ACT5_CLOSED_SURFACE");
-  assertion(fixture.completeRequiresSeal === true && fixture.missingReceiptIsNotMissingEvent === true, "ACT5_COVERAGE_DISCIPLINE");
-  assertion(fixture.liveHostProof === "not-claimed-per-min-046", "ACT5_NO_OVERCLAIM");
-  return success("ACT5_RECEIPT_SIDECAR_VERIFIED", {
-    tests: result.tests,
-    observeEvents: fixture.observeEvents.length,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    liveHostProof: fixture.liveHostProof,
-    standalone: fixture.standalone,
-  });
-}
-
-async function verifyAct4() {
-  const result = await runTests({ codexInstallerOnly: true });
-  const fixturePath = resolve(repositoryRoot, "packages/core/fixtures/act4-codex-installer-cases.json");
-  const fixture = await readJson(fixturePath);
-  assertion(fixture.schemaVersion === "tcrn.act4-codex-installer-cases.v1", "ACT4_FIXTURE_SCHEMA");
-  assertion(fixture.templateFiles === 4 && fixture.hostileRootCases === 9, "ACT4_CORPUS");
-  assertion(fixture.hostConfigTouched === false && fixture.hookRegistered === false && fixture.trustCeremonyExercised === false, "ACT4_NO_OVERCLAIM");
-  return success("ACT4_CODEX_INSTALLER_VERIFIED", {
-    tests: result.tests,
-    fixtureDigest: (await fileRecord(fixturePath)).sha256,
-    activation: fixture.activation,
     standalone: fixture.standalone,
   });
 }
@@ -2744,15 +2410,12 @@ const handlers = {
   inc261: verifyInc261,
   p5: verifyP5,
   p6: verifyP6,
-  "p6-adapter": verifyP6Adapter,
-  p6b: verifyP6b,
   dep: verifyDependency,
   conference: verifyConference,
   "ext-execution": verifyExecution,
   "ext-ag": verifyAssignmentGate,
   "ext-actor": verifyActorAttestation,
   "ext-store": verifyExtStore,
-  "p7-compatibility": verifyP7Compatibility,
   p8: verifyP8,
   portal: verifyPortal,
   "release-preflight": verifyReleaseTagPreflight,
@@ -2775,17 +2438,9 @@ const handlers = {
   vulnerabilities: verifyVulnerabilities,
   workspace: verifyWorkspace,
   backup: verifyBackup,
-  act1: verifyAct1,
-  act2: verifyAct2,
   act3: verifyAct3,
-  act4: verifyAct4,
-  act5: verifyAct5,
-  act6: verifyAct6,
   act7: verifyAct7,
-  act9: verifyAct9,
   act11: verifyAct11,
-  act12: verifyAct12,
-  act13: verifyAct13,
   e2e: verifyE2eGovernedLoop,
   inc266: runInc266,
 };
@@ -2847,12 +2502,6 @@ function evidencePhase(name) {
   if (name === "p6") {
     return "p6";
   }
-  if (name === "p6-adapter") {
-    return "p6";
-  }
-  if (name === "p6b") {
-    return "p6";
-  }
   if (name === "dep") {
     return "p2";
   }
@@ -2874,19 +2523,13 @@ function evidencePhase(name) {
   if (name === "ext-store") {
     return "p2";
   }
-  if (name === "p7-compatibility") {
-    return "p7";
-  }
   if (name === "rc1") {
     return "rc1";
   }
   if (name === "backup") {
     return "bk";
   }
-  if (name === "act1") {
-    return "act";
-  }
-  if (name === "act2" || name === "act3" || name === "act4" || name === "act5" || name === "act6" || name === "act7" || name === "act9" || name === "act11" || name === "act12" || name === "act13") {
+  if (name === "act3" || name === "act7" || name === "act11") {
     return "act2";
   }
   if (name === "e2e") {

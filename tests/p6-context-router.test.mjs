@@ -34,6 +34,7 @@ import {
   validateContextRouteRequest,
   validateContextRouteResult,
 } from "../dist/build/packages/core/src/index.js";
+import { readAuthorityFile } from "../dist/build/packages/core/src/authority-file-reader.js";
 import { canonicalJson, canonicalSha256, compareCanonicalText, deriveStableId } from "../dist/build/packages/protocol/src/index.js";
 
 const fixture = JSON.parse(await readFile(new URL("../packages/core/fixtures/p6-context-router-cases.json", import.meta.url), "utf8"));
@@ -843,4 +844,83 @@ test("E01/STORY-005: context-route accepts both stated pins and refuses a half-s
       "--authority-digest", "b".repeat(64),
     ], { write: () => {} }));
   } finally { await admitted.close(); }
+});
+
+// Rework (TCRN-CROSS-STORY-358 family 1, MIN-143 D4): the case below is relocated
+// here from tests/p7-compatibility-modes.test.mjs, which retires whole-file in this
+// same change. It is the only direct test anywhere in the surviving suite of
+// packages/core/src/authority-file-reader.ts's foreign-error-normalization branch --
+// this file's own context-authority cases exercise the reader's other TOCTOU hooks,
+// but none of them ever throws a foreign error from inside the read block, so losing
+// this case with the p7 file would have left that branch with no coverage anywhere.
+// The setup is rewritten self-contained: p7's authorityFile() helper called the
+// retired readCompatibilityAdmissionReceipt, so a canonical JSON document is written
+// directly to a temp file here instead, using this file's own fileAuthority() helper.
+// See scripts/policy/coverage-waivers.json for the pointer from its old path.
+test("shared authority reader propagates caller errors and normalizes foreign errors to the changed code", async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "p6-authority-reader-")));
+  const path = join(directory, "document.json");
+  const bytes = canonicalJson({ alpha: 1, beta: "two" });
+  await writeFile(path, bytes, { flag: "wx", mode: 0o600 });
+  const authority = fileAuthority(path, bytes);
+
+  class SentinelError extends Error {
+    constructor(reasonCode) { super(reasonCode); this.name = "SentinelError"; this.reasonCode = reasonCode; }
+  }
+  const codes = {
+    required: "SENTINEL_REQUIRED", path: "SENTINEL_PATH", digest: "SENTINEL_DIGEST",
+    changed: "SENTINEL_CHANGED", link: "SENTINEL_LINK", specialFile: "SENTINEL_SPECIAL_FILE",
+    limitExceeded: "SENTINEL_LIMIT", notUtf8: "SENTINEL_UTF8", notJson: "SENTINEL_JSON",
+    notCanonical: "SENTINEL_CANONICAL",
+  };
+  const parameters = (overrides = {}) => ({
+    maximumBytes: 65_536,
+    codes,
+    details: { required: "authority required", expectedDigest: "expectedFileSha256" },
+    fail: (reasonCode, detail) => { throw new SentinelError(reasonCode, detail); },
+    isOwnError: (error) => error instanceof SentinelError,
+    ...overrides,
+  });
+
+  try {
+    // The caller's own typed failure, raised from inside the read block, must
+    // reach the caller unwrapped rather than being relabelled as changed.
+    const ownError = new SentinelError("SENTINEL_CALLER_SPECIFIC");
+    await assert.rejects(
+      readAuthorityFile(path, authority, parameters({
+        hooks: { afterOpenForTest: async () => { throw ownError; } },
+      })),
+      (error) => error === ownError,
+      "caller error must propagate unwrapped",
+    );
+
+    // A foreign error from the same position is normalized into the caller's
+    // changed code, so unexpected filesystem faults never escape untyped.
+    await assert.rejects(
+      readAuthorityFile(path, authority, parameters({
+        hooks: { afterOpenForTest: async () => { throw new TypeError("foreign failure"); } },
+      })),
+      (error) => error instanceof SentinelError && error.reasonCode === "SENTINEL_CHANGED",
+      "foreign error must normalize to the changed code",
+    );
+
+    // The reader stops at verified canonical bytes and hands the caller the
+    // parsed value plus the unified source identity digest.
+    const result = await readAuthorityFile(path, authority, parameters());
+    assert.equal(result.fileSha256, authority.expectedFileSha256);
+    assert.equal(result.canonicalPath, path);
+    assert.equal(result.sourceText, bytes);
+    assert.match(result.sourceIdentityDigest, /^[a-f0-9]{64}$/u);
+    assert.equal(typeof result.parsed, "object");
+
+    // Every reason-code slot is caller-supplied, not baked into the reader.
+    await reasonAsync("SENTINEL_REQUIRED", () => readAuthorityFile(path, undefined, parameters()));
+    const directoryPath = join(directory, "reader-special");
+    await mkdir(directoryPath);
+    await reasonAsync("SENTINEL_SPECIAL_FILE", () => readAuthorityFile(directoryPath, { expectedCanonicalPath: directoryPath, expectedFileSha256: authority.expectedFileSha256 }, parameters()));
+    const tinyPath = join(directory, "tiny.json");
+    await writeFile(tinyPath, "1", { flag: "wx", mode: 0o600 });
+    await reasonAsync("SENTINEL_LIMIT", () => readAuthorityFile(tinyPath, { expectedCanonicalPath: tinyPath, expectedFileSha256: authority.expectedFileSha256 }, parameters()));
+    await reasonAsync("SENTINEL_LIMIT", () => readAuthorityFile(path, authority, parameters({ maximumBytes: bytes.length - 1 })));
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

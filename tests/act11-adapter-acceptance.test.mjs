@@ -11,7 +11,6 @@ import {
   COLLECTION_ATTRIBUTION_NOTE,
   EXECUTION_MODE_EXTENSION_KEY,
   EXECUTION_RECEIPT_EXTENSION_KEY,
-  assessCodexActivationTrust,
   classifyConferenceExecution,
   collectExecutionReceipt,
   verifyCollectedTranscript,
@@ -258,17 +257,6 @@ test("the hostile matrix names every required bypass, drift, replay, attribution
     assert.ok(entry.expectedDisposition.length > 0);
     assert.ok(entry.proof.length > 0);
   }
-});
-
-test("unapproved hook definitions remain unavailable", () => {
-  const binding = {
-    handlerDigest: digest("handler"),
-    summaryFileDigest: digest("summary"),
-    hookDefinitionDigest: digest("definition"),
-  };
-  const comparison = assessCodexActivationTrust(binding, []);
-  assert.equal(comparison.hookDefinitionInSuppliedApprovedSet, false);
-  assert.equal(comparison.evidenceClass, "caller_supplied_input_only");
 });
 
 test("collected receipts bind bytes and invocations but deliberately do not prove actor identity", () => {

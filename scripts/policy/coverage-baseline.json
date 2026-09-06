@@ -43,19 +43,6 @@
         "S280 portal filters effort options from vocabulary and keeps the receipt chip on the chain"
       ]
     },
-    "tests/act1-claude-installer.test.mjs": {
-      "testCount": 7,
-      "assertionCount": 20,
-      "testNames": [
-        "installer reason codes are a frozen, alphabetically sorted set",
-        "install writes the four inert templates byte-exact at mode 0o600 and round-trips the unmodified reader",
-        "a pre-existing target fails INSTALLER_TARGET_EXISTS and leaves zero new files",
-        "an installation root carrying a .claude segment fails INSTALLER_ROOT_INVALID",
-        "a symlinked installation root fails INSTALLER_ROOT_INVALID",
-        "a tampered installed file fails INSTALLER_ROLLBACK_MISMATCH and removes nothing",
-        "CLI claude-adapter-install then claude-adapter-uninstall drive the governed round-trip"
-      ]
-    },
     "tests/act11-adapter-acceptance.test.mjs": {
       "testCount": 7,
       "assertionCount": 95,
@@ -69,17 +56,6 @@
         "story dispositions retain explicit unavailable cells while S057 is live-verified"
       ]
     },
-    "tests/act12-hook-root-binding.test.mjs": {
-      "testCount": 5,
-      "assertionCount": 18,
-      "testNames": [
-        "INC-002: Codex hook command executes the admitted root from an attacker cwd",
-        "INC-002: Claude hook command executes the admitted root from an attacker cwd",
-        "INC-002: Claude root admission refuses user-level host configuration",
-        "INC-002: the Claude fragment CLI requires and admits installation-root",
-        "INC-011: both approved commands resolve their interpreter through the fire-time PATH"
-      ]
-    },
     "tests/act13-authority-output.test.mjs": {
       "testCount": 3,
       "assertionCount": 12,
@@ -87,31 +63,6 @@
         "INC-012: authority-shaped output from a verb that does not declare it fails closed",
         "INC-012: every dispatched write passes the guarded output boundary",
         "INC-012: the guarded vocabulary covers every host-state field core declares"
-      ]
-    },
-    "tests/act2-claude-activation.test.mjs": {
-      "testCount": 19,
-      "assertionCount": 107,
-      "testNames": [
-        "v2 activation fragment generation is single-SessionStart, digest-bound, and project-root bound",
-        "closed-set negatives fail with stable reason codes (acceptance 1)",
-        "test (d): assertNoForbiddenClaudePaths rejects any ~/.claude reference",
-        "byte-inverse merge/remove over three settings shapes (acceptance 2)",
-        "fail-open proof: the handler exits 0 with empty stdout under every induced failure, and prints <=1024 bytes on the happy path (acceptance 3)",
-        "INC-014: a control character in a project field suppresses the whole summary instead of forging a context line",
-        "INC-015: the handler refuses to run on bytes the approved command line did not pin",
-        "INC-015: the merged settings command line fires the installed handler from a hostile cwd",
-        "the emitted handler names its own generator version and stays machine-independent",
-        "[BLOCKER] step-2 install writes session-start.mjs + merges settings, and rollback empties .claude/tcrn-workflow byte-inverse",
-        "INC-002: activation rejects a fragment bound to another admitted root before writing",
-        "WSG-9: a settings.json edit landing before the commit is refused, not silently overwritten",
-        "CQ-06: rename is the sole commit point — no await stands between it and the return",
-        "CQ-06: a same-length, different-byte settings edit in the commit window is refused, not overwritten",
-        "CQ-06: a symlinked .claude/settings.json is refused with a terminal reason code, never followed and replaced",
-        "CQ-06: settings.json swapped between the lstat and the open is refused",
-        "CQ-06: a settings.json deleted in the commit window is refused, not recreated",
-        "CQ-02b: admitClaudeAdapterActivationHostInput refuses governedAction values that only coerce to a member",
-        "INC-022: activation installs into a root that has no .claude/settings.json yet"
       ]
     },
     "tests/act3-persona-render.test.mjs": {
@@ -127,47 +78,6 @@
         "Codex Step 2 and compatibility Step 3 summaries bind no conference persona"
       ]
     },
-    "tests/act4-codex-installer.test.mjs": {
-      "testCount": 7,
-      "assertionCount": 30,
-      "testNames": [
-        "step 1 installs the inert bundle under .codex and emits a receipt that pins every file",
-        "uninstall removes exactly what was installed and leaves no residue",
-        "a tampered installed file makes uninstall refuse with nothing removed",
-        "the installer refuses hostile roots, refuses to overwrite, and leaves zero bytes when it fails",
-        "a symlinked root and a pre-existing target are both refused",
-        "the installer is deterministic: the same bundle yields the same receipt digest basis",
-        "the fixture pins the shape this proof claims"
-      ]
-    },
-    "tests/act5-receipt-sidecar.test.mjs": {
-      "testCount": 8,
-      "assertionCount": 44,
-      "testNames": [
-        "a batch records hook events in a verifiable hash chain",
-        "only sealing can claim complete coverage, and an unsealed batch never can",
-        "the chain detects removal, reordering and mutation of any entry",
-        "the enumerated observe surface is closed and budgets are enforced",
-        "a batch seals rather than growing past its entry budget",
-        "the anchor is a bounded summary that binds its batch and states the coverage caveat",
-        "pruning drops whole sealed batches, keeps the live one, and returns their anchors",
-        "the fixture pins the surface and the coverage discipline this proof claims"
-      ]
-    },
-    "tests/act6-observe-hook.test.mjs": {
-      "testCount": 8,
-      "assertionCount": 42,
-      "testNames": [
-        "the handler records an enumerated event, writes nothing to stdout, and exits 0",
-        "every enumerated observe event is recorded, and appends accumulate",
-        "the handler exits 0 and records nothing on every failure path",
-        "drift in the bound manifest makes the handler fall silent, still exiting 0",
-        "generation refuses an unenumerated surface, so unamended coverage cannot be produced",
-        "the handler source is deterministic, host-neutral and free of ambient trust",
-        "a torn final line is dropped without discarding the receipts before it",
-        "the fixture pins the surface and the fail-open discipline this proof claims"
-      ]
-    },
     "tests/act7-execution-collection.test.mjs": {
       "testCount": 7,
       "assertionCount": 27,
@@ -179,28 +89,6 @@
         "a transcript edited after observation reports drift, and is never reported as signed",
         "an observation with a non-fresh context cannot substantiate a multi-agent claim",
         "the fixture pins the honesty boundary this proof claims"
-      ]
-    },
-    "tests/act9-codex-activation.test.mjs": {
-      "testCount": 16,
-      "assertionCount": 89,
-      "testNames": [
-        "INC-001: an activation receipt may only name files inside its own installation root",
-        "compatibility Step 3 installs one persona-free SessionStart hook but claims no host activation",
-        "adapter installs the bounded observe surface and never widens into Stop or PreToolUse",
-        "activation requires a separately admitted authority bound to the inert receipt, manifest, and rung",
-        "activation authority rejects stale, wrong-product, and self-resealed widening",
-        "the generated handler preserves main-thread scope, injects no conference persona, and every failure stays silent/zero",
-        "definition, handler, summary, and approved-set drift all require current-definition approval",
-        "INC-012: the local definition comparison is not shaped as evidence of host state",
-        "a self-resealed summary cannot replace the Workflow authority boundary",
-        "only an explicit approval-and-fire observation creates a host activation receipt",
-        "deactivation removes registration first and returns to the inert Step-1 rung",
-        "pre-existing config and tampered activation bytes fail closed without partial removal",
-        "deactivation removes only the managed hook fragment and preserves a user hook",
-        "fixture does not reuse the withdrawn persona-bound live fire for the corrected definition",
-        "the approved definition binds the admitted absolute handler path and performs no shell substitution",
-        "the generated handler self-terminates instead of waiting on stdin forever"
       ]
     },
     "tests/actor-attestation.test.mjs": {
@@ -217,22 +105,6 @@
         "WSE-2 live: enabling attestation makes a valid actor mandatory on every later write",
         "WSE-2 replay: a hand-crafted post-enable event with no valid actor fails closed",
         "WSE-2 replay: a duplicate enable event and a pre-enable actor both corrupt the chain"
-      ]
-    },
-    "tests/adapter-identity-rebind.test.mjs": {
-      "testCount": 10,
-      "assertionCount": 25,
-      "testNames": [
-        "INC-219 a benign touch wedges the strict reader — this is the state being recovered from",
-        "INC-219 rebind restores a drifted installation and names every file that moved",
-        "INC-219 a rebound installation is usable again — rollback can be planned from it",
-        "INC-219 rebind REFUSES when a byte changed, because content is the guarantee",
-        "INC-219 rebind REFUSES a missing installed file",
-        "INC-219 rebind REFUSES a symlink standing in for an installed file",
-        "INC-219 rebind REFUSES a receipt that does not match its out-of-band authority",
-        "INC-219 rebind writes nothing when no identity moved",
-        "INC-219 a drift-tolerating read is NOT branded, so nothing downstream can act on it",
-        "INC-219 chmod alone is enough to drift an identity — the case this exists for"
       ]
     },
     "tests/assignment-gate.test.mjs": {
@@ -1146,24 +1018,6 @@
         "E01/STORY-004: flag-supplied authority binds by digest and refuses a second source"
       ]
     },
-    "tests/p6-codex-adapter.test.mjs": {
-      "testCount": 12,
-      "assertionCount": 66,
-      "testNames": [
-        "golden inert bundle is closed, canonical, unactivated, and CLI read-only",
-        "fully resealed noncanonical template bytes fail for whitespace, key order, and escape spelling",
-        "empty-project cold start remains empty and Adapter source has no legacy, ambient store scan, network, database, or AOS reader",
-        "authority-empty fallback hashes but never infers authority from raw inputs",
-        "hostile request, host, Context, Unicode, budget, and closed-field vectors fail closed",
-        "rollback requires descriptor-bound installation generation and rejects forged, copied, replaced, linked, special, changed, or mismatched evidence",
-        "installation receipt accepts exactly one terminal LF and rejects fully rehashed whitespace variants",
-        "Stop and final-hop model preserves exactly one owner-visible response",
-        "64 distinct request/template orders produce identical canonical bundle bytes and digest",
-        "Draft 2020-12 and runtime agree for request, complete bundle, host, lifecycle, ordering, and recursive Unicode surfaces",
-        "CQ-02b: admitCodexAdapterHostInput refuses governedAction values that only coerce to a member",
-        "E01/STORY-005: the codex installation authority reaches the CLI as a stated pin"
-      ]
-    },
     "tests/p6-context-router.test.mjs": {
       "testCount": 20,
       "assertionCount": 80,
@@ -1188,48 +1042,6 @@
         "CQ-02c: context candidate and receipt enums refuse values that only coerce to a member",
         "CQ-02c: context receipt exclusion reason codes refuse values that only coerce to a member",
         "E01/STORY-005: context-route accepts both stated pins and refuses a half-supplied pair"
-      ]
-    },
-    "tests/p6b-claude-adapter.test.mjs": {
-      "testCount": 17,
-      "assertionCount": 95,
-      "testNames": [
-        "golden inert bundle is closed, canonical, unactivated, and CLI read-only",
-        "fully resealed noncanonical template bytes fail for whitespace, key order, and escape spelling",
-        "empty-project cold start remains empty and Adapter source has no legacy, ambient store scan, network, database, or requirement-ledger reader",
-        "authority-empty fallback selects CLAUDE.md-only mode and never infers authority from raw inputs",
-        "hostile request, host, Context, Unicode, budget, and closed-field vectors fail closed",
-        "host product and version readback bind Claude Code identity and fail closed on mismatch",
-        "settings hook fragment merges and removes with exact byte reversibility and no user-content clobber",
-        "settings fragment merge and remove fail closed on clobber, noncanonical, and absent-fragment inputs",
-        "forbidden user-level Claude locations are rejected and generated bundles never contain them",
-        "rollback requires descriptor-bound installation generation and rejects forged, copied, replaced, linked, special, changed, or mismatched evidence",
-        "installation receipt accepts exactly one terminal LF and rejects fully rehashed whitespace variants",
-        "Stop and final-hop model preserves exactly one owner-visible response",
-        "64 distinct request/template orders produce identical canonical bundle bytes and digest",
-        "cross-host parity: Codex and Claude adapters share host-neutral machinery and differ only at enumerated host positions",
-        "Draft 2020-12 and runtime agree for request, complete bundle, host, lifecycle, ordering, and recursive Unicode surfaces",
-        "CQ-02b: admitClaudeAdapterHostInput refuses governedAction values that only coerce to a member",
-        "E01/STORY-005: the installation authority reaches the CLI as a stated pin"
-      ]
-    },
-    "tests/p7-compatibility-modes.test.mjs": {
-      "testCount": 13,
-      "assertionCount": 70,
-      "testNames": [
-        "six offline modes require independently read opaque authority and stay deterministic",
-        "governed CLI obtains authority only from host injection and exact canonical source",
-        "authority file admission rejects forged, copied, path, digest, link, special and changed sources",
-        "authority reads stay bounded under sparse and continuous same-inode growth with exact size boundaries",
-        "shared authority reader propagates caller errors and normalizes foreign errors to the changed code",
-        "anchored receipt binds request, plan, release pair, lock, policy, replay and revocation",
-        "governed CLI fails closed on authority path, file, source, lock, policy, replay and revocation attacks",
-        "semantic ownership and effect sets normalize across 64 real cross-surface permutations",
-        "recursive Draft 2020-12 and runtime parity covers exact max and max-plus-one boundaries",
-        "all live surfaces remain exactly unavailable without network or mutation",
-        "INIT-009: the shipped binary fails without pins and plans through a pinned operator bundle",
-        "WSB-5: the shipped binary completes the status read verb with exit 0 and WORKSPACE_COMMAND_COMPLETED",
-        "CQ-08b: the conflicts list is empty for every operation and conflicts_planned stays reachable"
       ]
     },
     "tests/p8-workflow-rc.test.mjs": {
@@ -1376,13 +1188,6 @@
         "stable ID and extension-name boundaries match the frozen 161-character contract"
       ]
     },
-    "tests/qa4-codex-hook-equivalence.test.mjs": {
-      "testCount": 1,
-      "assertionCount": 16,
-      "testNames": [
-        "STORY-193: engine adapter verbs generate/install/validate/simulate/assess/record and one fired handler"
-      ]
-    },
     "tests/regen-rc1-inputs.test.mjs": {
       "testCount": 6,
       "assertionCount": 25,
@@ -1456,15 +1261,6 @@
       "testNames": [
         "INIT-022 S213: catalog exposes every engine-consumed workspace setting",
         "INIT-022 S213: unknown keys fail closed and registered writes receipt plus replay readback"
-      ]
-    },
-    "tests/s214-adapter-baseline.test.mjs": {
-      "testCount": 3,
-      "assertionCount": 9,
-      "testNames": [
-        "S214 baseline is complete, digest-bound, and records the stop-pact exemption",
-        "missing baseline entry is a red leg",
-        "user hooks are an opaque zone and do not affect adapter validation"
       ]
     },
     "tests/s222-engine-version.test.mjs": {
@@ -1765,15 +1561,6 @@
       "testNames": [
         "STORY-174 red leg: a one-byte segment deviation at the abstraction layer changes the read bytes",
         "STORY-174 red leg: the deviated segment is refused by chain validation"
-      ]
-    },
-    "tests/story-191-adapter-equivalence.test.mjs": {
-      "testCount": 3,
-      "assertionCount": 20,
-      "testNames": [
-        "STORY-191 matrix is closed and reason-code families are symmetric",
-        "the same host-neutral negative inputs return the same reason code on both adapters",
-        "positive generation and final-hop outcomes stay equivalent while template roots remain host-specific"
       ]
     },
     "tests/story-333-byte-segments.test.mjs": {

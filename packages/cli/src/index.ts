@@ -77,52 +77,6 @@ import {
   verificationClaimsForWork,
   reportAttestationDirectory,
   writeAttestationReceipt,
-  codexAdapterAuthorityEmptyFallback,
-  claudeAdapterAuthorityEmptyFallback,
-  executeClaudeAdapterRollback,
-  generateClaudeAdapterActivationFragment,
-  generateClaudeAdapterBundle,
-  generateClaudeAdapterSettingsFragment,
-  generateSessionStartScript,
-  installClaudeAdapterActivation,
-  admitClaudeAdapterInstallationRoot,
-  installClaudeAdapterBundle,
-  mergeClaudeAdapterActivationFragment,
-  mergeClaudeAdapterSettingsFragment,
-  removeClaudeAdapterActivationFragment,
-  sessionStartScriptDigest,
-  planClaudeAdapterRollback,
-  readClaudeAdapterInstallationReceipt,
-  rebindClaudeAdapterInstallation,
-  removeClaudeAdapterSettingsFragment,
-  simulateClaudeAdapterLifecycle,
-  validateClaudeAdapterBundle,
-  dryRunCompatibilityMode,
-  generateCodexAdapterBundle,
-  planCompatibilityMode,
-  planCodexAdapterRollback,
-  readCodexAdapterInstallationReceipt,
-  rebindCodexAdapterInstallation,
-  readCodexActivationInstallationReceipt,
-  readCodexHostActivationObservation,
-  installCodexAdapterBundle,
-  installCodexAdapterActivation,
-  admitCodexAdapterInstallationRoot,
-  executeCodexAdapterRollback,
-  uninstallCodexAdapterActivation,
-  assessCodexActivationTrust,
-  createCodexHostActivationReceipt,
-  generateCodexActivationArtifacts,
-  generateCodexSessionSummary,
-  createAdapterBaseline,
-  validateAdapterSurface,
-  generateClaudeAdapterActivationRollbackPlan,
-  readClaudeAdapterActivationReceipt,
-  simulateCodexAdapterLifecycle,
-  validateCodexAdapterBundle,
-  validateCompatibilityRequest,
-  unavailableCompatibilityCapability,
-  readCompatibilityAdmissionReceipt,
   readOperatorAuthority,
   readStorageHomeDeclaration,
   readSettingsCatalog,
@@ -155,15 +109,6 @@ import type {
   ConferenceMinutes,
   GateRecord,
   GateIdentityAuthorityFileIdentity,
-  CodexAdapterActivationHostContext,
-  CodexAdapterHostContext,
-  CodexAdapterInstallationFileIdentity,
-  CodexHostActivationObservationContext,
-  CodexHostActivationObservationFileIdentity,
-  CodexHostActivationObservationFreshness,
-  ClaudeAdapterHostContext,
-  ClaudeAdapterActivationHostContext,
-  ClaudeAdapterInstallationFileIdentity,
   ExplicitRoot,
   ContextRouteAuthorityFileIdentity,
   GenericProfileAdmissionAuthority,
@@ -171,7 +116,6 @@ import type {
   KnowledgeFreshnessState,
   KnowledgeKind,
   KnowledgePromotionState,
-  CompatibilityAdmissionAuthority,
   VerificationClaimLink,
 } from "../../core/src/index.js";
 import { existsSync, readFileSync } from "node:fs";
@@ -226,34 +170,11 @@ export interface CliIo {
   readonly clock?: () => string;
   readonly profileAdmissionAuthority?: GenericProfileAdmissionAuthority;
   readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
-  readonly codexAdapterHost?: CodexAdapterHostContext;
-  readonly codexAdapterActivationHost?: CodexAdapterActivationHostContext;
-  readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
-  readonly codexHostActivationObservation?: CodexHostActivationObservationContext;
-  readonly codexHostActivationObservationAuthority?: CodexHostActivationObservationFileIdentity;
-  // INC-017: the freshness bound travels with the pinned observation identity. It is
-  // authority supply, not a convenience, so it joins AUTHORITY_IO_FIELDS below and a
-  // caller mixing it with operator pins is ambiguous like every other authority.
-  readonly codexHostActivationObservationFreshness?: CodexHostActivationObservationFreshness;
-  readonly claudeAdapterHost?: ClaudeAdapterHostContext;
-  readonly claudeAdapterActivationHost?: ClaudeAdapterActivationHostContext;
-  readonly claudeAdapterInstallationAuthority?: ClaudeAdapterInstallationFileIdentity;
-  readonly compatibilityAdmissionAuthority?: CompatibilityAdmissionAuthority;
 }
 
 const AUTHORITY_IO_FIELDS = Object.freeze([
   "profileAdmissionAuthority",
   "contextRouteAuthority",
-  "codexAdapterHost",
-  "codexAdapterActivationHost",
-  "codexAdapterInstallationAuthority",
-  "codexHostActivationObservation",
-  "codexHostActivationObservationAuthority",
-  "codexHostActivationObservationFreshness",
-  "claudeAdapterHost",
-  "claudeAdapterActivationHost",
-  "claudeAdapterInstallationAuthority",
-  "compatibilityAdmissionAuthority",
 ] as const);
 
 function fail(reasonCode: string, message: string): never {
@@ -461,14 +382,6 @@ function jsonValue(value: string | undefined, name: string): unknown {
     return JSON.parse(value ?? "");
   } catch {
     fail("PROFILE_INPUT_INVALID", name);
-  }
-}
-
-function compatibilityJson(value: string | undefined, name: string): unknown {
-  try {
-    return JSON.parse(value ?? "");
-  } catch {
-    fail("COMPATIBILITY_INPUT_INVALID", name);
   }
 }
 
@@ -932,40 +845,9 @@ function writeTemplateAdmissionState(
 // verb. New verbs MUST ship a catalog entry (SDC-1); the p3-cli-catalog parity
 // test enforces two-way name equality with the dispatcher.
 export const COMMAND_CATALOG = Object.freeze([
-  { name: "adapter-activate", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "capability-manifest-digest", required: true, valueKind: "string" }, { name: "step3", required: false, valueKind: "boolean" }, { name: "observe-events", required: false, valueKind: "json" }] },
-  { name: "adapter-activation-assess", availability: "cli", mutates: false, flags: [{ name: "binding", required: true, valueKind: "json" }, { name: "approved-definition-digests", required: true, valueKind: "json" }] },
-  { name: "adapter-activation-record", availability: "cli", mutates: false, authorityBearing: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: false, valueKind: "string" }, { name: "observation-file", required: false, valueKind: "string" }] },
-  { name: "adapter-deactivate", availability: "cli", mutates: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }] },
-  { name: "adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
-  { name: "adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }] },
-  { name: "adapter-rebind", availability: "cli", mutates: true, flags: [{ name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
-  { name: "adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
-  { name: "adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
-  { name: "adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
-  { name: "adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "baseline", required: false, valueKind: "json" }, { name: "settings", required: false, valueKind: "string" }] },
   { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "attestation-migrate", availability: "cli", mutates: true, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "mode", required: true, valueKind: "string" }, { name: "baseline", required: false, valueKind: "string" }, { name: "baseline-out", required: false, valueKind: "string" }] },
-  { name: "claude-adapter-activation-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }] },
-  { name: "claude-adapter-activation-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
-  { name: "claude-adapter-activation-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
-  { name: "claude-adapter-activation-uninstall", availability: "cli", mutates: true, flags: [{ name: "activation-receipt", required: true, valueKind: "string" }, { name: "activation-receipt-digest", required: true, valueKind: "string" }] },
-  { name: "claude-adapter-fallback", availability: "cli", mutates: false, flags: [{ name: "input", required: true, valueKind: "string" }] },
-  { name: "claude-adapter-generate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "claude-adapter-install", availability: "cli", mutates: true, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "installation-root", required: true, valueKind: "string" }, { name: "generation-id", required: true, valueKind: "string" }, { name: "receipt-out", required: true, valueKind: "string" }, { name: "step2", required: false, valueKind: "boolean" }, { name: "step3", required: false, valueKind: "boolean" }] },
-  { name: "claude-adapter-rebind", availability: "cli", mutates: true, flags: [{ name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
-  { name: "claude-adapter-rollback-plan", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
-  { name: "claude-adapter-settings-fragment", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "claude-adapter-settings-merge", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
-  { name: "claude-adapter-settings-remove", availability: "cli", mutates: true, flags: [{ name: "settings", required: true, valueKind: "string" }, { name: "fragment", required: true, valueKind: "string" }] },
-  { name: "claude-adapter-simulate", availability: "cli", mutates: false, flags: [{ name: "lifecycle", required: true, valueKind: "json" }] },
-  { name: "claude-adapter-uninstall", availability: "cli", mutates: true, flags: [{ name: "bundle", required: true, valueKind: "json" }, { name: "installation-receipt", required: true, valueKind: "string" }, { name: "installation-receipt-digest", required: false, valueKind: "string" }] },
-  { name: "claude-adapter-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "commands", availability: "cli", mutates: false, flags: [] },
-  { name: "compatibility-dry-run", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "compatibility-plan", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
-  { name: "compatibility-unavailable", availability: "cli", mutates: false, flags: [{ name: "surface", required: true, valueKind: "string" }] },
-  { name: "compatibility-validate", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }] },
   { name: "conference-append-position", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "actor-id", required: true, valueKind: "string" }, { name: "position", required: true, valueKind: "string" }, { name: "risks", required: true, valueKind: "list" }, { name: "recommendations", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "conference-cancel", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "distill", required: false, valueKind: "boolean" }, { name: "accountable-owner-id", required: false, valueKind: "string" }, { name: "stale-days", required: false, valueKind: "integer" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "execution-form", required: false, valueKind: "string" }] },
@@ -1097,11 +979,15 @@ export function assertCatalogCategoriesExclusive(
 assertCatalogCategoriesExclusive(COMMAND_CATALOG);
 
 // INC-012: authority-bearing is a property of what a verb EMITS, not a flag its author
-// remembered to set. tests/act13:355 enumerated the flag, so a future verb minting
-// host-state output without it reddened nothing. These are the field names and the state
-// tokens that make a document readable as observed host trust state; the act13 vocabulary
-// test binds this list two-way to the authority documents core actually declares, so a new
-// host-state field cannot land without either entering this list or failing that test.
+// remembered to set. A verb minting host-state output without declaring mutates or
+// authorityBearing now reddens at the write boundary below, present or future verb alike.
+// These are the field names and the state tokens that make a document readable as
+// observed host trust state. TCRN-CROSS-STORY-358 retired the only core modules that ever
+// hand-declared them (codex-adapter-activation.ts, codex-adapter-installer.ts) along with
+// the test that bound this list two-way against that live declaration
+// (tests/act13-authority-output.test.mjs's former vocabulary case; see
+// scripts/policy/coverage-waivers.json for its disposition). The list below is now a fixed
+// historical allowlist, still enforced by the fail-closed tests that remain in that file.
 export const AUTHORITY_OUTPUT_FIELDS = Object.freeze([
   "activationState",
   "currentDefinitionApproved",
@@ -1247,30 +1133,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     await runAttestationMigration(io, values);
     return;
   }
-  if (command === "compatibility-validate") {
-    const values = parseArguments(rest, ["request"]);
-    required(values, ["request"]);
-    const request = validateCompatibilityRequest(compatibilityJson(values.request, "request"));
-    io.write(canonicalJson({ reasonCode: "COMPATIBILITY_MANIFEST_VALID", requestDigest: request.requestDigest, manifestDigest: request.manifest.manifestDigest }));
-    return;
-  }
-  if (command === "compatibility-plan" || command === "compatibility-dry-run") {
-    const values = parseArguments(rest, ["request"]);
-    required(values, ["request"]);
-    if (!io.compatibilityAdmissionAuthority) fail("COMPATIBILITY_AUTHORITY_REQUIRED", "governed compatibility admission authority is required; compatibility-plan and compatibility-dry-run are programmatic-only from the shipped binary (see docs/architecture/agent-integration-v1.md)");
-    const request = compatibilityJson(values.request, "request");
-    const admission = await readCompatibilityAdmissionReceipt(io.compatibilityAdmissionAuthority.expectedCanonicalPath, io.compatibilityAdmissionAuthority);
-    io.write(canonicalJson(command === "compatibility-plan"
-      ? planCompatibilityMode(request, admission)
-      : dryRunCompatibilityMode(request, admission)));
-    return;
-  }
-  if (command === "compatibility-unavailable") {
-    const values = parseArguments(rest, ["surface"]);
-    required(values, ["surface"]);
-    io.write(canonicalJson(unavailableCompatibilityCapability(values.surface)));
-    return;
-  }
   if (command === "profile-generate") {
     const values = parseArguments(rest, ["mode"]);
     required(values, ["mode"]);
@@ -1349,397 +1211,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, ["result"]);
     const result = validateContextRouteResult(jsonValue(values.result, "result"));
     io.write(canonicalJson({ reasonCode: "CONTEXT_VALIDATED", contextDigest: result.contextDigest }));
-    return;
-  }
-  if (command === "adapter-activate") {
-    const values = parseArguments(rest, [
-      "request",
-      "installation-root",
-      "generation-id",
-      "installation-receipt",
-      "installation-receipt-digest",
-      "receipt-out",
-      "capability-manifest-digest",
-      "step3",
-      "observe-events",
-    ]);
-    required(values, [
-      "request",
-      "installation-root",
-      "generation-id",
-      "installation-receipt",
-      "receipt-out",
-      "capability-manifest-digest",
-    ]);
-    const request = jsonValue(values.request, "request");
-    const bundle = generateCodexAdapterBundle(request, io.codexAdapterHost);
-    const installationPath = values["installation-receipt"] ?? "";
-    const inertInstallation = await readCodexAdapterInstallationReceipt(
-      installationPath,
-      suppliedAuthority(
-        io.codexAdapterInstallationAuthority,
-        installationPath,
-        values["installation-receipt-digest"],
-      ),
-    );
-    const stage = booleanValue(values.step3, "step3") ? "step3" : "step2";
-    const summary = generateCodexSessionSummary(
-      bundle,
-      values["capability-manifest-digest"],
-      stage,
-    );
-    const installationRoot = await admitCodexAdapterInstallationRoot(
-      values["installation-root"] ?? "",
-    );
-    const observeEvents = values["observe-events"] === undefined
-      ? []
-      : jsonValue(values["observe-events"], "observe-events");
-    const projectManifest = bundle.files.find(
-      (file) => file.path === ".codex/tcrn-workflow/project.json",
-    );
-    const artifacts = generateCodexActivationArtifacts(
-      summary,
-      installationRoot,
-      observeEvents,
-      projectManifest?.contentDigest,
-    );
-    const installed = await installCodexAdapterActivation(
-      bundle,
-      inertInstallation,
-      artifacts,
-      io.codexAdapterActivationHost,
-      {
-        installationRoot,
-        generationId: values["generation-id"] ?? "",
-        receiptPath: values["receipt-out"] ?? "",
-      },
-    );
-    io.write(canonicalJson(installed.receipt));
-    return;
-  }
-  if (command === "adapter-activation-assess") {
-    const values = parseArguments(rest, [
-      "binding",
-      "approved-definition-digests",
-    ]);
-    required(values, ["binding", "approved-definition-digests"]);
-    io.write(
-      canonicalJson(
-        assessCodexActivationTrust(
-          jsonValue(values.binding, "binding"),
-          jsonValue(
-            values["approved-definition-digests"],
-            "approved-definition-digests",
-          ),
-        ),
-      ),
-    );
-    return;
-  }
-  if (command === "adapter-activation-record") {
-    const values = parseArguments(rest, [
-      "activation-receipt",
-      "activation-receipt-digest",
-      "observation-file",
-    ]);
-    required(values, ["activation-receipt"]);
-    const receiptPath = values["activation-receipt"] ?? "";
-    const installationContext = await readCodexActivationInstallationReceipt(
-      receiptPath,
-      suppliedAuthority(
-        io.codexAdapterInstallationAuthority,
-        receiptPath,
-        values["activation-receipt-digest"],
-      ),
-    );
-    const observationPath = values["observation-file"];
-    if (
-      io.codexHostActivationObservation !== undefined &&
-      observationPath !== undefined
-    ) {
-      fail(
-        "CLI_AUTHORITY_AMBIGUOUS",
-        "activation observation supplied by both host context and file",
-      );
-    }
-    const observationContext = io.codexHostActivationObservation ??
-      await readCodexHostActivationObservation(
-        observationPath ?? "",
-        io.codexHostActivationObservationAuthority,
-        io.codexHostActivationObservationFreshness,
-      );
-    io.write(
-      canonicalJson(
-        createCodexHostActivationReceipt(
-          installationContext,
-          observationContext,
-        ),
-      ),
-    );
-    return;
-  }
-  if (command === "adapter-deactivate") {
-    const values = parseArguments(rest, [
-      "activation-receipt",
-      "activation-receipt-digest",
-    ]);
-    required(values, [
-      "activation-receipt",
-      "activation-receipt-digest",
-    ]);
-    const receiptPath = values["activation-receipt"] ?? "";
-    const context = await readCodexActivationInstallationReceipt(receiptPath, {
-      expectedCanonicalPath: receiptPath,
-      expectedFileSha256: values["activation-receipt-digest"] ?? "",
-    });
-    io.write(canonicalJson(await uninstallCodexAdapterActivation(context)));
-    return;
-  }
-  if (command === "adapter-generate") {
-    const values = parseArguments(rest, ["request"]);
-    required(values, ["request"]);
-    io.write(canonicalJson(generateCodexAdapterBundle(jsonValue(values.request, "request"), io.codexAdapterHost)));
-    return;
-  }
-  if (command === "adapter-validate") {
-    const values = parseArguments(rest, ["bundle", "baseline", "settings"]);
-    required(values, ["bundle"]);
-    const bundle = validateCodexAdapterBundle(jsonValue(values.bundle, "bundle"));
-    const baseline = values.baseline === undefined ? createAdapterBaseline() : jsonValue(values.baseline, "baseline");
-    io.write(canonicalJson(validateAdapterSurface(bundle.bundleDigest, baseline, values.settings)));
-    return;
-  }
-  if (command === "adapter-simulate") {
-    const values = parseArguments(rest, ["lifecycle"]);
-    required(values, ["lifecycle"]);
-    io.write(canonicalJson(simulateCodexAdapterLifecycle(jsonValue(values.lifecycle, "lifecycle"))));
-    return;
-  }
-  if (command === "adapter-fallback") {
-    const values = parseArguments(rest, ["input"]);
-    required(values, ["input"]);
-    io.write(canonicalJson(codexAdapterAuthorityEmptyFallback(jsonValue(values.input, "input"))));
-    return;
-  }
-  if (command === "adapter-install") {
-    // EPIC-023 Step 1: generate the inert bundle under the independently governed
-    // host, write it beneath <root>/.codex/tcrn-workflow/, and emit the canonical
-    // installation receipt. No Codex host configuration is read or written and no
-    // hook is registered -- activation is a separate step that needs a real host and
-    // the operator's per-hash trust approval.
-    const values = parseArguments(rest, ["request", "installation-root", "generation-id", "receipt-out"]);
-    required(values, ["request", "installation-root", "generation-id", "receipt-out"]);
-    const bundle = generateCodexAdapterBundle(jsonValue(values.request, "request"), io.codexAdapterHost);
-    const result = await installCodexAdapterBundle(bundle, {
-      installationRoot: values["installation-root"] ?? "",
-      generationId: values["generation-id"] ?? "",
-      receiptPath: values["receipt-out"] ?? "",
-    });
-    io.write(canonicalJson(result.receipt));
-    return;
-  }
-  if (command === "adapter-rollback-plan") {
-    const values = parseArguments(rest, ["bundle", "installation-receipt", "installation-receipt-digest"]);
-    required(values, ["bundle", "installation-receipt"]);
-    const installation = await readCodexAdapterInstallationReceipt(values["installation-receipt"] ?? "",
-      suppliedAuthority(io.codexAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]));
-    io.write(canonicalJson(planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), installation)));
-    return;
-  }
-  if (command === "adapter-rebind") {
-    // TCRN-CROSS-INC-219. The recovery adapter-uninstall could not offer: an installation
-    // whose bytes are provably the ones installed but whose file identities were touched.
-    // Nothing here is relaxed except the identity comparison itself, and the superseding
-    // receipt is read back strictly before this returns.
-    const values = parseArguments(rest, ["installation-receipt", "installation-receipt-digest"]);
-    required(values, ["installation-receipt"]);
-    io.write(canonicalJson(await rebindCodexAdapterInstallation(values["installation-receipt"] ?? "",
-      suppliedAuthority(io.codexAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]))));
-    return;
-  }
-  if (command === "adapter-uninstall") {
-    // Reverse of adapter-install. The TOCTOU-hardened reader admits the receipt under
-    // the out-of-band authority, the planner derives the identity-gated removal set,
-    // and the executor unlinks only files whose bytes still match -- a tampered file
-    // fails INSTALLER_ROLLBACK_MISMATCH with nothing removed.
-    const values = parseArguments(rest, ["bundle", "installation-receipt", "installation-receipt-digest"]);
-    required(values, ["bundle", "installation-receipt"]);
-    const installation = await readCodexAdapterInstallationReceipt(values["installation-receipt"] ?? "",
-      suppliedAuthority(io.codexAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]));
-    const plan = planCodexAdapterRollback(jsonValue(values.bundle, "bundle"), installation);
-    const result = await executeCodexAdapterRollback(plan, values["installation-receipt"] ?? "");
-    io.write(canonicalJson({ reasonCode: result.reasonCode, planDigest: result.planDigest }));
-    return;
-  }
-  if (command === "claude-adapter-generate") {
-    const values = parseArguments(rest, ["request"]);
-    required(values, ["request"]);
-    io.write(canonicalJson(generateClaudeAdapterBundle(jsonValue(values.request, "request"), io.claudeAdapterHost)));
-    return;
-  }
-  if (command === "claude-adapter-install") {
-    // WSG-2 / activation ladder Step 1: generate the inert bundle under the
-    // independently governed host, then write it to disk and emit the canonical
-    // installation-generation receipt. .claude/settings.json is untouched.
-    // WSG-3 --step2: additionally write the SessionStart handler, merge the v2
-    // activation fragment into .claude/settings.json (temp O_EXCL then rename), and
-    // emit the additive tcrn.claude-adapter-installation-generation.v2 receipt.
-    const values = parseArguments(rest, ["request", "installation-root", "generation-id", "receipt-out", "step2", "step3"]);
-    required(values, ["request", "installation-root", "generation-id", "receipt-out"]);
-    const request = jsonValue(values.request, "request");
-    const bundle = generateClaudeAdapterBundle(request, io.claudeAdapterHost);
-    // --step3 remains a compatibility alias for the activation rung, but it no
-    // longer installs or binds a Core Reference persona. Personas are conference-
-    // only position attributions; the main-session handler is identical for Step 2
-    // and Step 3 and explicitly preserves ordinary user-authorized repository work.
-    const wantStep3 = booleanValue(values.step3, "step3");
-    if (wantStep3 || booleanValue(values.step2, "step2")) {
-      const scriptSource = generateSessionStartScript();
-      const scriptDigest = sessionStartScriptDigest(scriptSource);
-      const installationRoot = await admitClaudeAdapterInstallationRoot(
-        values["installation-root"] ?? "",
-      );
-      const fragment = generateClaudeAdapterActivationFragment(
-        request,
-        io.claudeAdapterActivationHost,
-        { scriptDigest, installationRoot },
-      );
-      const activation = await installClaudeAdapterActivation({
-        installationRoot,
-        generationId: values["generation-id"] ?? "",
-        receiptPath: values["receipt-out"] ?? "",
-        bundleDigest: bundle.bundleDigest,
-        fragment,
-        scriptSource,
-      });
-      io.write(canonicalJson(activation.receipt));
-      return;
-    }
-    const result = await installClaudeAdapterBundle(bundle, {
-      installationRoot: values["installation-root"] ?? "",
-      generationId: values["generation-id"] ?? "",
-      receiptPath: values["receipt-out"] ?? "",
-    });
-    io.write(canonicalJson(result.receipt));
-    return;
-  }
-  if (command === "claude-adapter-activation-fragment") {
-    // WSG-3 Step-2: emit the v2 activation fragment digest-bound to the governed
-    // SessionStart handler under the independently governed activation host.
-    const values = parseArguments(rest, ["request", "installation-root"]);
-    required(values, ["request", "installation-root"]);
-    const scriptDigest = sessionStartScriptDigest(generateSessionStartScript());
-    const installationRoot = await admitClaudeAdapterInstallationRoot(
-      values["installation-root"] ?? "",
-    );
-    io.write(canonicalJson(generateClaudeAdapterActivationFragment(jsonValue(values.request, "request"), io.claudeAdapterActivationHost, { scriptDigest, installationRoot })));
-    return;
-  }
-  if (command === "claude-adapter-activation-merge") {
-    // Prints the merged canonical settings text only; writing .claude/settings.json
-    // stays the installer's action (constraint 7).
-    const values = parseArguments(rest, ["settings", "fragment"]);
-    required(values, ["settings", "fragment"]);
-    io.write(mergeClaudeAdapterActivationFragment(values.settings ?? "", jsonValue(values.fragment, "fragment")));
-    return;
-  }
-  if (command === "claude-adapter-activation-remove") {
-    const values = parseArguments(rest, ["settings", "fragment"]);
-    required(values, ["settings", "fragment"]);
-    io.write(removeClaudeAdapterActivationFragment(values.settings ?? "", jsonValue(values.fragment, "fragment")));
-    return;
-  }
-  if (command === "claude-adapter-activation-uninstall") {
-    // S082: the operator entry point the v2 activation ladder was missing. Activated
-    // installs emit a tcrn.claude-adapter-installation-generation.v2 receipt covering
-    // the four templates plus session-start.mjs,
-    // which the v1 uninstall path cannot read -- so an activated project had no way to
-    // be uninstalled from a shell. The receipt is read under its out-of-band digest,
-    // the plan is bound to the receipt's own on-disk identity, and the shared executor
-    // removes only byte-and-identity matching files.
-    //
-    // Settings are NOT touched here: .claude/settings.json is restored byte-for-byte by
-    // claude-adapter-activation-remove, which owns the merge it reverses. Removing the
-    // files first would leave the hook pointing at a missing script, so the documented
-    // order is activation-remove, then this verb.
-    const values = parseArguments(rest, ["activation-receipt", "activation-receipt-digest"]);
-    required(values, ["activation-receipt", "activation-receipt-digest"]);
-    const receiptPath = values["activation-receipt"] ?? "";
-    const context = await readClaudeAdapterActivationReceipt(receiptPath, {
-      expectedCanonicalPath: receiptPath,
-      expectedFileSha256: values["activation-receipt-digest"] ?? "",
-    });
-    const plan = generateClaudeAdapterActivationRollbackPlan(context.receipt, context.sourceIdentityDigest);
-    const result = await executeClaudeAdapterRollback(plan, receiptPath);
-    io.write(canonicalJson({ reasonCode: result.reasonCode, planDigest: result.planDigest, removedCount: result.removedCount }));
-    return;
-  }
-  if (command === "claude-adapter-validate") {
-    const values = parseArguments(rest, ["bundle"]);
-    required(values, ["bundle"]);
-    const bundle = validateClaudeAdapterBundle(jsonValue(values.bundle, "bundle"));
-    io.write(canonicalJson({ reasonCode: "ADAPTER_VALIDATED", bundleDigest: bundle.bundleDigest, activation: false }));
-    return;
-  }
-  if (command === "claude-adapter-simulate") {
-    const values = parseArguments(rest, ["lifecycle"]);
-    required(values, ["lifecycle"]);
-    io.write(canonicalJson(simulateClaudeAdapterLifecycle(jsonValue(values.lifecycle, "lifecycle"))));
-    return;
-  }
-  if (command === "claude-adapter-rebind") {
-    // The Claude twin of adapter-rebind (TCRN-CROSS-INC-219). Both readers ended on the
-    // same pair of comparisons, so the gap was symmetric and so is the recovery.
-    const values = parseArguments(rest, ["installation-receipt", "installation-receipt-digest"]);
-    required(values, ["installation-receipt"]);
-    io.write(canonicalJson(await rebindClaudeAdapterInstallation(values["installation-receipt"] ?? "",
-      suppliedAuthority(io.claudeAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]))));
-    return;
-  }
-  if (command === "claude-adapter-uninstall") {
-    // WSG-2: reverse of claude-adapter-install. The TOCTOU-hardened reader admits
-    // the receipt under the out-of-band authority, the planner derives the
-    // identity-gated removal set, and the executor unlinks only files whose bytes
-    // still match — a tampered file fails INSTALLER_ROLLBACK_MISMATCH untouched.
-    const values = parseArguments(rest, ["bundle", "installation-receipt", "installation-receipt-digest"]);
-    required(values, ["bundle", "installation-receipt"]);
-    const installation = await readClaudeAdapterInstallationReceipt(values["installation-receipt"] ?? "",
-      suppliedAuthority(io.claudeAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]));
-    const plan = planClaudeAdapterRollback(jsonValue(values.bundle, "bundle"), installation);
-    const result = await executeClaudeAdapterRollback(plan, values["installation-receipt"] ?? "");
-    io.write(canonicalJson({ reasonCode: result.reasonCode, planDigest: result.planDigest }));
-    return;
-  }
-  if (command === "claude-adapter-fallback") {
-    const values = parseArguments(rest, ["input"]);
-    required(values, ["input"]);
-    io.write(canonicalJson(claudeAdapterAuthorityEmptyFallback(jsonValue(values.input, "input"))));
-    return;
-  }
-  if (command === "claude-adapter-rollback-plan") {
-    const values = parseArguments(rest, ["bundle", "installation-receipt", "installation-receipt-digest"]);
-    required(values, ["bundle", "installation-receipt"]);
-    const installation = await readClaudeAdapterInstallationReceipt(values["installation-receipt"] ?? "",
-      suppliedAuthority(io.claudeAdapterInstallationAuthority, values["installation-receipt"], values["installation-receipt-digest"]));
-    io.write(canonicalJson(planClaudeAdapterRollback(jsonValue(values.bundle, "bundle"), installation)));
-    return;
-  }
-  if (command === "claude-adapter-settings-fragment") {
-    const values = parseArguments(rest, ["request"]);
-    required(values, ["request"]);
-    io.write(canonicalJson(generateClaudeAdapterSettingsFragment(jsonValue(values.request, "request"), io.claudeAdapterHost)));
-    return;
-  }
-  if (command === "claude-adapter-settings-merge") {
-    const values = parseArguments(rest, ["settings", "fragment"]);
-    required(values, ["settings", "fragment"]);
-    io.write(mergeClaudeAdapterSettingsFragment(values.settings ?? "", jsonValue(values.fragment, "fragment")));
-    return;
-  }
-  if (command === "claude-adapter-settings-remove") {
-    const values = parseArguments(rest, ["settings", "fragment"]);
-    required(values, ["settings", "fragment"]);
-    io.write(removeClaudeAdapterSettingsFragment(values.settings ?? "", jsonValue(values.fragment, "fragment")));
     return;
   }
   if (command === "init") {
@@ -2970,57 +2441,5 @@ export async function runOperatorCli(
     ...(context.contextRouteAuthority === undefined
       ? {}
       : { contextRouteAuthority: context.contextRouteAuthority }),
-    ...(context.codexAdapterHost === undefined
-      ? {}
-      : { codexAdapterHost: context.codexAdapterHost }),
-    ...(context.codexAdapterActivationHost === undefined
-      ? {}
-      : {
-        codexAdapterActivationHost:
-          context.codexAdapterActivationHost,
-      }),
-    ...(context.codexAdapterInstallationAuthority === undefined
-      ? {}
-      : {
-        codexAdapterInstallationAuthority:
-          context.codexAdapterInstallationAuthority,
-      }),
-    ...(context.codexHostActivationObservationAuthority === undefined
-      ? {}
-      : {
-        codexHostActivationObservationAuthority:
-          context.codexHostActivationObservationAuthority,
-      }),
-    // INC-017: notBefore/notAfter are the operator's OWN declared bundle window,
-    // already verified above to contain verificationTime. The operator, not a constant
-    // in this file, therefore decides how long one captured observation may be
-    // presented; rotating the bundle past a fire retires it unless a fresh observation
-    // is captured.
-    codexHostActivationObservationFreshness: {
-      notBefore: context.bundle.issuedAt,
-      notAfter: context.bundle.expiresAt,
-      verifiedAt: verificationTime,
-    },
-    ...(context.claudeAdapterHost === undefined
-      ? {}
-      : { claudeAdapterHost: context.claudeAdapterHost }),
-    ...(context.claudeAdapterActivationHost === undefined
-      ? {}
-      : {
-        claudeAdapterActivationHost:
-          context.claudeAdapterActivationHost,
-      }),
-    ...(context.claudeAdapterInstallationAuthority === undefined
-      ? {}
-      : {
-        claudeAdapterInstallationAuthority:
-          context.claudeAdapterInstallationAuthority,
-      }),
-    ...(context.compatibilityAdmissionAuthority === undefined
-      ? {}
-      : {
-        compatibilityAdmissionAuthority:
-          context.compatibilityAdmissionAuthority,
-      }),
   });
 }

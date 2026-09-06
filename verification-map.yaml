@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "a1041ddafb00f8276c4b338152d2b381e28395b18ffbc42275b2b6d9ce22a07d",
+      "fixtureDigest": "3eaeb6772889beee74762ea3b5b874a7dbf8a6a616919c028f9a7de3f1a528d3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -55,7 +55,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "b5469efd1ec6e21f9283be939f63239bba5d974f64192d65d8e605e6c32cb9c8",
+      "fixtureDigest": "29aba3665f6f0e9a682f4d22beb0197404724ea2343b6e1c9738100dea22570e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -92,7 +92,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "59408f361a393216558634b683a73ece154e63f63b44136d24055f23581e1fda",
+      "fixtureDigest": "410abe504bc0a39bd006e48b49c7dab1d99a707bd7806d59639b2a0db6466fe2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "41b516acfca629d629cbeaa96c067bd122c5093c31e54536e63033f8a972043d",
+      "fixtureDigest": "78e59335a6d09141098d0b65b0e41a1f80bb990160f2417bb3005f0fae064c2a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -211,7 +211,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "6e7bde10572a92dcba734d024d6d6cbf3866cb526fc7d08db209e408c552a37d",
+      "fixtureDigest": "8e71ded663aa086b397068c47ee0bbe4adc33e541dd16730387dfc9541a7fdcc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -249,7 +249,7 @@
         "scripts/policy/dependency-policy.json",
         "scripts/lib/safe-io.mjs"
       ],
-      "fixtureDigest": "ca66f6f480b4e7d7e8ec1646f028d070dc5f37d9a454f6f13975b4e1b88dafc5",
+      "fixtureDigest": "1def7b938832d40d710fa34833229e6f465a7c0279143f8b7a670ce5b2fb084b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -280,7 +280,7 @@
         "packages/core/src/root-identity.ts",
         "tests/root-boundaries.test.mjs"
       ],
-      "fixtureDigest": "bcde061c65bb5e29a4519aff3a380c8e7e82d33b29e223a049ec74b97a271014",
+      "fixtureDigest": "c0606ce76023c1cead21784de0067c8bb755e79b8aeee71ad673fc35b836c8ec",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -313,7 +313,7 @@
         "pnpm-lock.yaml",
         "scripts/policy/dependency-policy.json"
       ],
-      "fixtureDigest": "f71f526e1fdb862ed9693a7e72590243f2cd9d06b7a8f683966d10701ca07630",
+      "fixtureDigest": "50f8612003f3e04b1fa816be11c5d23779d6cde776f272ca6488dd431196b56f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -347,7 +347,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "7cd83c1f34a7bae735a629d0812d42d37572130feed9b13d1a71ca001aeaaebc",
+      "fixtureDigest": "f91be50167b0c0eed4e098d85d23543de5ee6c6e84c1e6f1781cb83a6b9dfb11",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -474,7 +474,7 @@
         "pnpm-lock.yaml",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "e41c443f073c61d6f54940f9dd405480ade4b689d17d693f439b19af8ae34d8c",
+      "fixtureDigest": "b619b952d8afb11f11167b534638229f74cb9d8e86882898781924f902d0fd28",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -544,7 +544,7 @@
         "packages/core/fixtures/p3-cases.json",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "3c7f4f66c8f10196387def9701819e7153286ec12bc0d90a678ea75d3a2ca6c7",
+      "fixtureDigest": "50d8aafe327233caa47dbfee9182aea2a3fd102e1b9ebe1edeee7a7421a2c37b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -577,7 +577,7 @@
         "tests/p3-file-engine.test.mjs",
         "tests/p3-cli-catalog.test.mjs"
       ],
-      "fixtureDigest": "4553122d6d78f092335358af84a5294734e7ab94d20f630062847af2a55824a9",
+      "fixtureDigest": "41b71ea96848a103433ddf9c63a178b1660c58319aa754f558ecbf83714eabc5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -608,7 +608,7 @@
         "tests/p3-file-engine.test.mjs",
         "tests/p3-cli-catalog.test.mjs"
       ],
-      "fixtureDigest": "81092f62eff3e44bcaa3001638b16e056ac3e6f6f0ad2d17e673266b21417295",
+      "fixtureDigest": "110eb8f65b1e5555c1a64aed9e98b74a5134d11ecf20af13ad143b02e010ab79",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -677,7 +677,7 @@
         "scripts/tcrn-workflow.mjs",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "132506a3efeda3377d3b0a42a2e8312a35dcd93b7aaf2dfef479525ebad21f81",
+      "fixtureDigest": "bd9d06eedf538918c6636f5444f3cdde42d12cf04479650f9f6618d49bfbd3a4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -707,7 +707,7 @@
         "packages/protocol/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "393d692a18294bfc85c2b47dbc95a3a93109ef1e0a8c2b53ca92beba95e50dc8",
+      "fixtureDigest": "4cfd7da095809c3c43fb12cc658669503dbf4ddf105d0284f2ca8e7bbf761276",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -739,7 +739,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "330eadba879dce4fc217b2b50bf6329d9d8dc35ed25a154d596b2688bc11259d",
+      "fixtureDigest": "b132519f3ca9f8a06b8eb05be61ee5f2e46f39a4975b55dada242ee27d7af3d3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -771,7 +771,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "96d90065cdd114031b51b479858338a9585be357e9171f90a98cc5db358afcfa",
+      "fixtureDigest": "4985c4a3ea919ac6ad6708929f15e559d87756da0aa3d42b02972acac534423c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -802,7 +802,7 @@
         "tests/p3-cli-read-surface.test.mjs",
         "packages/cli/src/index.ts"
       ],
-      "fixtureDigest": "9b595f4536175b784a331b671223cd73e38190ed04be5a1af865a682dd31b1cd",
+      "fixtureDigest": "0bf780e3aca01f2ca718ebe06a9ff89dd57bd1191937a4d52dc3950b6d07a1c6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -831,7 +831,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "2c9174bb82d85c5101d21f6de6dd7ad40091eb757d82e2d0a9d0303efaa7ef07",
+      "fixtureDigest": "1b79f50b954e568d8f57b590926cda619ccf61c284ae68649b8793b1ede045a0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -861,7 +861,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-file-engine.test.mjs"
       ],
-      "fixtureDigest": "09d599b81eceb91677d24491dec05bc80f4978605ce658a37577bab6968415b9",
+      "fixtureDigest": "6f819a391a16488be3b642cce92c49dc652c0a021f8258d7cb9bfb5764d25b78",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -892,7 +892,7 @@
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b3936ae6a495886717adfb1b1eeac600472584abcb1b634ce93946af12571635",
+      "fixtureDigest": "6e6be94e7f7f93dc832ddc85e48aa7a5ede9caec45285fd35f33d43b7385922e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -923,7 +923,7 @@
         "tests/p3-engine-complexity.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "b3936ae6a495886717adfb1b1eeac600472584abcb1b634ce93946af12571635",
+      "fixtureDigest": "6e6be94e7f7f93dc832ddc85e48aa7a5ede9caec45285fd35f33d43b7385922e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -963,7 +963,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "da01168655fab55a195991bbb8e27a976bdb34a4df00c78677c17f43f9d479bb",
+      "fixtureDigest": "195dbb6a96ed56afc439320d69e63adbd9b7741aac8aade1b457ab5caad4e6a9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -996,7 +996,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "428fa93f706151c2858e84e1463c6787f821068752e087fc48268470b0db62df",
+      "fixtureDigest": "a1d2f7a76f8a00ab242bdec7389729cb1024d0a09f515e98d870539cfd3c8f19",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1028,7 +1028,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9aadeb08488c5e5429601a4d8eb702894f04ecc5108e7318e0af7bc9d6859b33",
+      "fixtureDigest": "029fd198d5f84c88874bad01eff6673eed451bf1ff4919b8077fd69dc6bfd18e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1060,7 +1060,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9aadeb08488c5e5429601a4d8eb702894f04ecc5108e7318e0af7bc9d6859b33",
+      "fixtureDigest": "029fd198d5f84c88874bad01eff6673eed451bf1ff4919b8077fd69dc6bfd18e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1090,7 +1090,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "8ab943387bcfc27d28e566eca1ad76e2c18fd2c5a418dadd809d1667fd1a1e44",
+      "fixtureDigest": "cdbda1c36e38a7277ae5f77ced5167b80a7020168f00efac162626e6a5df85b0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1122,7 +1122,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9aadeb08488c5e5429601a4d8eb702894f04ecc5108e7318e0af7bc9d6859b33",
+      "fixtureDigest": "029fd198d5f84c88874bad01eff6673eed451bf1ff4919b8077fd69dc6bfd18e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1154,7 +1154,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "9aadeb08488c5e5429601a4d8eb702894f04ecc5108e7318e0af7bc9d6859b33",
+      "fixtureDigest": "029fd198d5f84c88874bad01eff6673eed451bf1ff4919b8077fd69dc6bfd18e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1185,7 +1185,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "3028d29509ec859736ff083bca34e81e53f00cde4c624f15dd736e61eac4ca0b",
+      "fixtureDigest": "a18ef2b095a0fd56970d1bfacee6edcdb6173de4c3470317c4fc63efb0ece0b4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1215,7 +1215,7 @@
         "tests/p4-knowledge-core.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "e18c4c0b954c8d59156fa77db326200c5c0117aa3d55a29647353a812fa178b2",
+      "fixtureDigest": "313581f28038fdf070b57fb8af3fdb81355c63e3b0874f1b8ed46793c113812a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1258,7 +1258,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "b56940cec6b8b02ffd4b2a0e790b62e747e400fee662bcce386e8d9bf6c8f24a",
+      "fixtureDigest": "3bc42386c29c909bc4760f7504833f3b94a7eb4d9223461cd0a38ffff8f255a0",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1333,7 +1333,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "df7007732b1bc1e654a54a821ff451ad0c9df8c8c36ba74a4b374dcf1aa6efaf",
+      "fixtureDigest": "154394ef7c29ab162821d0152cc55371edaa2f62bb48a1009f9a88b52800ec6b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1370,7 +1370,7 @@
         "scripts/task.mjs",
         "README.md"
       ],
-      "fixtureDigest": "bfb5471067f387c822957c50e3bb1fb4b28b6edf287e3dfcb91250e9374adf16",
+      "fixtureDigest": "4b57c4e8778c31b4e19f43515eee448560c3a624d15fdc56a3a765b4f3f6fad3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1385,85 +1385,6 @@
       "redLeg": {
         "mutation": "Mutate package.json so the P6-KNOWLEDGE-CONTEXT-CANDIDATE-BRIDGE invalidation trigger is true: Knowledge metadata-to-context-candidate mapping, candidateDigest basis field set, scope/freshness carry-through, role-scope projectId nulling, knowledge-candidates CLI surface, or context-router metadataCandidate() basis changes",
         "test": "INC-262 red-leg probe for P6-KNOWLEDGE-CONTEXT-CANDIDATE-BRIDGE",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "P6-CODEX-ADAPTER",
-      "phase": "P6",
-      "category": "inertness-proof",
-      "status": "implemented",
-      "subject": "P6 implements an uninstalled and unactivated Codex Adapter as closed inert template data only, with separately injected host admission, authority-empty fallback, exact canonical template bytes, positional complete-bundle parity, descriptor-bound installation-generation rollback admission, final-hop visibility, hostile proof and 64 real input/template permutations; OG-04 and RC3 remain unsatisfied.",
-      "command": "pnpm verify:p6:adapter",
-      "fixturePaths": [
-        "package.json",
-        "packages/core/src/index.ts",
-        "packages/core/src/codex-adapter.ts",
-        "packages/core/src/context-router.ts",
-        "packages/cli/src/index.ts",
-        "packages/core/schema/codex-adapter-v1.schema.json",
-        "packages/core/schema/context-router-v1.schema.json",
-        "packages/core/spec/codex-adapter-v1.md",
-        "packages/core/fixtures/p6-codex-adapter-cases.json",
-        "tests/p6-codex-adapter.test.mjs",
-        "scripts/task.mjs",
-        "README.md"
-      ],
-      "fixtureDigest": "8b31fd618b1ff4bb34a4cd18a9cba6954d2ec3874f9ba1668ca479ac8486d2ae",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "P6_CODEX_ADAPTER_VERIFIED",
-      "evidencePath": "dist/evidence/p6/p6-adapter.json",
-      "invalidationTriggers": [
-        "Adapter request, trusted host injection, Context binding, template closed set, path/content/manifest digest, fallback, final-hop, rollback identity, CLI, property corpus, activation, OG-04, RC3, storeless, or privacy boundary changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate package.json so the P6-CODEX-ADAPTER invalidation trigger is true: Adapter request, trusted host injection, Context binding, template closed set, path/content/manifest digest, fallback, final-hop, rollback identity, CLI, property corpus, activation, OG-04, RC3, storeless, or privacy boundary changes",
-        "test": "INC-262 red-leg probe for P6-CODEX-ADAPTER",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "P6B-CLAUDE-ADAPTER",
-      "phase": "P6",
-      "category": "inertness-proof",
-      "status": "implemented",
-      "subject": "P6B implements an uninstalled and unactivated Claude Code Adapter as closed inert template data only under .claude/tcrn-workflow/, with a claude-code host identity and data-only version readback, separately injected host admission, authority-empty CLAUDE.md-only fallback, exact canonical template bytes, positional complete-bundle parity, descriptor-bound installation-generation rollback admission, final-hop visibility, a byte-reversible settings hook fragment that never clobbers user content, forbidden user-level path rejection, hostile proof, 64 real input/template permutations, and a cross-host parity check byte-binding the Codex adapter; OG-04 and RC3 remain unsatisfied.",
-      "command": "pnpm verify:p6b",
-      "fixturePaths": [
-        "package.json",
-        "packages/core/src/index.ts",
-        "packages/core/src/claude-adapter.ts",
-        "packages/core/src/codex-adapter.ts",
-        "packages/core/src/context-router.ts",
-        "packages/cli/src/index.ts",
-        "packages/core/schema/claude-adapter-v1.schema.json",
-        "packages/core/schema/context-router-v1.schema.json",
-        "packages/core/spec/claude-adapter-v1.md",
-        "packages/core/fixtures/p6b-claude-adapter-cases.json",
-        "tests/p6b-claude-adapter.test.mjs",
-        "scripts/task.mjs",
-        "README.md"
-      ],
-      "fixtureDigest": "9e77477d2a852c1563ac59b26e31db60d617be5ba9fd17f9036a946bf9e5e132",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "P6B_CLAUDE_ADAPTER_VERIFIED",
-      "evidencePath": "dist/evidence/p6/p6b.json",
-      "invalidationTriggers": [
-        "Claude adapter request, trusted host injection, host identity/version readback, Context binding, template closed set, path/content/manifest digest, settings fragment reversibility, forbidden-path guard, fallback, final-hop, rollback identity, CLI, property corpus, cross-host parity, Codex adapter coupling, activation, OG-04, RC3, storeless, or privacy boundary changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate package.json so the P6B-CLAUDE-ADAPTER invalidation trigger is true: Claude adapter request, trusted host injection, host identity/version readback, Context binding, template closed set, path/content/manifest digest, settings fragment reversibility, forbidden-path guard, fallback, final-hop, rollback identity, CLI, property corpus, cross-host parity, Codex adapter coupling, activation, OG-04, RC3, storeless, or privacy boundary changes",
-        "test": "INC-262 red-leg probe for P6B-CLAUDE-ADAPTER",
         "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
       }
     },
@@ -1486,7 +1407,7 @@
         "tests/dependency.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "2bca345077185120add783cf67f2dd699f458168af544597d2f02b8bf5baf049",
+      "fixtureDigest": "7f768929b8f879d47e4c3a578485013f8d3dcfb27b79b68a3fb91822588705fd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1526,7 +1447,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "860afe910ec3dcb03186f3fc8c2097ad3754cab2ba8fcd43d322402b9612be05",
+      "fixtureDigest": "7848a0d0c3060b7094fc2348e66e36b86884ae04ee25a2560a1d57cdaeb4367b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1563,7 +1484,7 @@
         "tests/assignment-gate.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "3d0219af2bb685d0845dccccee8f1b40cb76868fb046b7e8651afc35f0f02034",
+      "fixtureDigest": "b30c43ec7ada5f14a145d590874d5d1dc07d9d599ad3b99ef43d77304a02255c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1601,7 +1522,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "e2a0cb9dfc99bb2d4f941a848dfe96623a599da9acaabf3c988f5eff58aee73e",
+      "fixtureDigest": "3b29aa5f0fd138fa7a00624a0d20f8e27f8ecdb251dbb9620bcee9e67199d84c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1638,7 +1559,7 @@
         "tests/actor-attestation.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "5afcc05a0488ac63933dcf3f2679ff7933188cdfc3f908a98c61941d855739f1",
+      "fixtureDigest": "36a191ba9ed3dd1d95eac22489df75aa57f5a8a10e2a041fb51404d3eab06ca8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1677,7 +1598,7 @@
         "tests/workspace-extension-records.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "880867f3b39f69d899067a58a574c1262823933adadf7aa1c69f76f4546b2962",
+      "fixtureDigest": "6a88c667d69796cf3751f030e1077e1a91a274c41d376dab1c31320f8cd90ae1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1711,7 +1632,7 @@
         "tests/conference-execution.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "14ea38511aff2a2670e673c6c347148263f874d0a4b92d0ae0c570459131a69f",
+      "fixtureDigest": "e1187239e315f9b7cefd376ad4f3d2efc60252076361103c4afc2f25429131ef",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1745,7 +1666,7 @@
         "tests/act7-execution-collection.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "a6f4aa5f88fa4112d99e6679b44852baeebeb5f040191b21a2c52e4f840b306a",
+      "fixtureDigest": "5bb192f07aed8a2c6f8471d3893525d948c784c159404fff740894f398555028",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1775,17 +1696,15 @@
         "packages/cli/src/index.ts",
         "packages/core/fixtures/operator-authority-cases.json",
         "packages/core/spec/operator-authority-v1.md",
-        "packages/core/src/codex-adapter-activation.ts",
         "packages/core/src/index.ts",
         "packages/core/src/operator-authority.ts",
         "scripts/policy/guard-registry.json",
         "scripts/task.mjs",
         "scripts/tcrn-workflow.mjs",
         "tests/act13-authority-output.test.mjs",
-        "tests/operator-authority.test.mjs",
-        "tests/p7-compatibility-modes.test.mjs"
+        "tests/operator-authority.test.mjs"
       ],
-      "fixtureDigest": "e5992b7b5ad9535d08710ed188cc5d8bd5924e7972db43c718611865b9c005da",
+      "fixtureDigest": "1ef7203a8de19547109fd224ede70e19cf81d3d28543d983b964dbd5267145cd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -1805,226 +1724,6 @@
       }
     },
     {
-      "id": "LADDER-CODEX-INSTALL",
-      "phase": "P6",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "LADDER-CODEX-INSTALL implements INIT-009 EPIC-023 step 1: the Codex adapter installs its validated inert four-file bundle beneath a governed project root as .codex/tcrn-workflow data written O_EXCL 0o600, emits a canonical installation-generation receipt pinning every file by content digest and stat identity, and uninstalls byte-inverse through the existing descriptor-bound rollback planner and an identity-gated executor that removes nothing when any file was tampered with; the installation root must be absolute, already canonical, a real non-symlinked directory carrying no host segment, the receipt must live outside .codex, the generation id must be a protocol id so the producer and the receipt reader hold the same bar, a pre-existing target refuses rather than overwrites, and every refusal leaves zero new bytes. No Codex host configuration is read or written, no hook is registered, no plugin is installed and no Codex process runs: activation and its per-hash trust ceremony require a live host and are not claimed here.",
-      "command": "pnpm verify:act4",
-      "fixturePaths": [
-        "package.json",
-        "packages/cli/src/index.ts",
-        "packages/core/src/index.ts",
-        "packages/core/src/codex-adapter.ts",
-        "packages/core/src/codex-adapter-installer.ts",
-        "packages/core/fixtures/act4-codex-installer-cases.json",
-        "tests/act4-codex-installer.test.mjs",
-        "scripts/task.mjs"
-      ],
-      "fixtureDigest": "b45dd82cc08b5a37026a309485e4b3f5e804209fac756eeadaa0591b67e436b7",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "ACT4_CODEX_INSTALLER_VERIFIED",
-      "evidencePath": "dist/evidence/act2/act4.json",
-      "invalidationTriggers": [
-        "Codex installer root/receipt-path admission, exclusive-write behaviour, receipt entry pinning, generation-id validation, rollback identity gating, or the no-host-configuration boundary changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate package.json so the LADDER-CODEX-INSTALL invalidation trigger is true: Codex installer root/receipt-path admission, exclusive-write behaviour, receipt entry pinning, generation-id validation, rollback identity gating, or the no-host-configuration boundary changes",
-        "test": "INC-262 red-leg probe for LADDER-CODEX-INSTALL",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "OBSERVE-RECEIPT-SIDECAR",
-      "phase": "P6",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "OBSERVE-RECEIPT-SIDECAR implements INIT-009 EPIC-024 S068 under the MIN-046 amendment to N-2: observe receipts accumulate in bounded hash-linked batches whose per-entry links detect removal, reordering and mutation, only the enumerated observe events are admitted so an enforce event such as PreToolUse or Stop is refused, a batch seals rather than growing past its entry-count or byte budget, a detail payload is retained only as a digest so a receipt is never a transcript, and pruning drops whole sealed batches while returning each dropped batch anchor and never touching the live batch. The coverage discipline is structural: a batch is complete only when the generation that opened it also sealed it, an unsealed batch that claims complete coverage is refused, and every anchor carries a fixed note stating that a missing receipt is not evidence that the event did not occur. Each batch and anchor names its host product and version so one host measurement is never counted as another host coverage. The module performs no IO, registers no hook and reads no host: no live-host claim rides on this proof.",
-      "command": "pnpm verify:act5",
-      "fixturePaths": [
-        "package.json",
-        "packages/core/src/index.ts",
-        "packages/core/src/receipt-sidecar.ts",
-        "packages/core/fixtures/act5-receipt-sidecar-cases.json",
-        "tests/act5-receipt-sidecar.test.mjs",
-        "scripts/task.mjs"
-      ],
-      "fixtureDigest": "a7eb66da4d85ba158779a43b37aa2900f6cf4221e9a0ace4d20f8dee415039bc",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "ACT5_RECEIPT_SIDECAR_VERIFIED",
-      "evidencePath": "dist/evidence/act2/act5.json",
-      "invalidationTriggers": [
-        "Observe event enumeration, receipt chain linking, coverage classification, batch budgets, anchor summary or its coverage note, prune semantics, or the no-IO boundary changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate package.json so the OBSERVE-RECEIPT-SIDECAR invalidation trigger is true: Observe event enumeration, receipt chain linking, coverage classification, batch budgets, anchor summary or its coverage note, prune semantics, or the no-IO boundary changes",
-        "test": "INC-262 red-leg probe for OBSERVE-RECEIPT-SIDECAR",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "OBSERVE-HOOK-HANDLER",
-      "phase": "P6",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "OBSERVE-HOOK-HANDLER implements INIT-009 EPIC-024 S069 through S071 under the MIN-046 amendment to N-2: a deterministic host-neutral observe hook handler is generated for a declared subset of the enumerated observe events and proven by executing it as a real child process. It exits zero on every path including an unknown event, an absent event argument, a drifted manifest and a missing manifest; it never writes to stdout so an observe hook cannot inject context; it refuses at generation time to cover an event outside the amended surface, so unenumerated coverage cannot be produced at all; it retains a host payload only as a digest and a bounded summary rather than a transcript; it binds the manifest digest it was generated against, re-derives it at entry and falls silent on mismatch as the drift defence available on a host with no per-hook hash gate, which is expressly not claimed equivalent to a per-hash re-approval; it reads no environment variable for anything that decides behaviour and bakes in no host-absolute path; and its source is byte-identical for the same surface in any order so an approved digest is stable. A torn final log line is dropped without discarding the receipts before it, and the resulting batch stays unknown until sealed. No hook is registered on any host and no live-host claim rides on this proof.",
-      "command": "pnpm verify:act6",
-      "fixturePaths": [
-        "package.json",
-        "packages/core/src/index.ts",
-        "packages/core/src/observe-hook-handler.ts",
-        "packages/core/src/receipt-sidecar.ts",
-        "packages/core/fixtures/act6-observe-hook-cases.json",
-        "tests/act6-observe-hook.test.mjs",
-        "scripts/task.mjs"
-      ],
-      "fixtureDigest": "99bd074dd7087610bd640d93c36ec25d26d57153f64876f780d2521967a3bd13",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "ACT6_OBSERVE_HOOK_VERIFIED",
-      "evidencePath": "dist/evidence/act2/act6.json",
-      "invalidationTriggers": [
-        "Observe handler event admission, fail-open exit behaviour, stdout silence, manifest drift self-check, payload digest retention, determinism of the generated source, or log parsing tolerance changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate package.json so the OBSERVE-HOOK-HANDLER invalidation trigger is true: Observe handler event admission, fail-open exit behaviour, stdout silence, manifest drift self-check, payload digest retention, determinism of the generated source, or log parsing tolerance changes",
-        "test": "INC-262 red-leg probe for OBSERVE-HOOK-HANDLER",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "HOOK-ABSOLUTE-ROOT-BINDING",
-      "phase": "P6",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "INC-002 is closed at the code and hermetic-proof layer: Codex and Claude hook commands are derived only after the project installation root passes the filesystem-backed installer admission, and each definition embeds the shell-quoted absolute handler path under that exact root. The root is carried in the generated artifact or fragment and its digest, then compared with the independently re-admitted installer root before any activation write. A real child-process mutation probe runs each approved command from an attacker-controlled cwd containing a decoy handler; only the admitted handler path is executed, including when the admitted path contains spaces and an apostrophe. Changing the installation root changes the Codex definition digest by design, so the digest is machine specific and requires a new host review. The Claude command additionally pins the generated handler's byte digest, so changing either the root or the handler bytes is a new approval. Claude root admission also refuses the home directory and filesystem root. INC-011 records the half this does not close: the command's first token is the bare name node, so the interpreter is resolved through the fire-time PATH, and a directory ahead of the real interpreter substitutes it while the approved handler argument stays correct; the handler's own byte self-check cannot detect that, because a substituted interpreter never reads the handler. The same probe executes that substitution on both hosts, so the residual is measured rather than assumed, and it is disclosed rather than closed. This gate is hermetic: it proves removal of fire-time cwd inheritance for the handler path only, and makes no live-host, approval, activation, or interpreter-integrity claim.",
-      "command": "pnpm verify:act12",
-      "fixturePaths": [
-        "package.json",
-        "packages/cli/src/index.ts",
-        "packages/core/src/index.ts",
-        "packages/core/src/codex-adapter-activation.ts",
-        "packages/core/src/codex-adapter-installer.ts",
-        "packages/core/src/claude-adapter-activation.ts",
-        "packages/core/src/claude-adapter-installer.ts",
-        "tests/act12-hook-root-binding.test.mjs",
-        "docs/activation/activation-ladder-v1.md",
-        "scripts/policy/guard-registry.json",
-        "scripts/task.mjs"
-      ],
-      "fixtureDigest": "67c09b07058ba8eee5ab2834b2e25cd9b55d771cdd44bd70ea3ff75ae2ea025b",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "ACT12_HOOK_ROOT_BINDING_VERIFIED",
-      "evidencePath": "dist/evidence/act2/act12.json",
-      "invalidationTriggers": [
-        "Installation-root admission, absolute handler path derivation, shell quoting, artifact/fragment root binding, installer root comparison, fire-time cwd behavior, machine-specific definition digest semantics, or interpreter resolution (bare-name PATH lookup versus a pinned absolute interpreter) change",
-        "Claude hook-command handler-digest argument changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate package.json so the HOOK-ABSOLUTE-ROOT-BINDING invalidation trigger is true: Installation-root admission, absolute handler path derivation, shell quoting, artifact/fragment root binding, installer root comparison, fire-time cwd behavior, machine-specific definition digest semantics, or interpreter resolution (bare-name PATH lookup versus a pinned absolute interpreter) change",
-        "test": "INC-262 red-leg probe for HOOK-ABSOLUTE-ROOT-BINDING",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "AUTHORITY-BEARING-ACTIVATION-RECORD",
-      "phase": "P2",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "INC-006 treats authority-bearing output as a separate authorization category. The sole catalog command in that category, adapter-activation-record, is non-mutating but cannot run through MCP until a pinned bundle grants it in authorityOutputCommands; a write grant never substitutes. MCP checks that grant before parsing tool arguments and advertises the command as neither read-only nor destructive. The canonical CLI accepts a descriptor-bound activation receipt with an optional direct digest plus an observation-file path, rejects the former inline approved-definition-digests and observation JSON flags, and can derive host_observed_active only from a real branded activation-host observation context or a separately operator-pinned canonical observation file. The observation and v2 receipt bind the active receipt, activation authority, activation-host digest, exact hook definition, approved set, host/session/event/fire facts, evidence digest, observation digest, evidence source and file SHA-256/source identity where applicable. Raw objects, forged values, structured clones, missing pins, write-only grants, empty grants, absent observation pins, tampered files and definition mismatch refuse; this is hermetic code and filesystem proof, not a live Codex approval or activation claim. A both-category catalog entry is impossible by construction: `mutates` and `authorityBearing` are mutually exclusive at the catalog declaration and in the published schema, so a write grant can never carry authority-bearing output. An admitted observation must also be fresh for the authority presenting it — inside the branded activation-host context window, or inside the operator bundle window and not after the operator verification time — so re-pinning one observation under a rotated bundle cannot mint a second `host_observed_active` receipt. INC-012 moves the category from the flag to the emitted bytes: every dispatched CLI write passes an output-category boundary that refuses CLI_AUTHORITY_OUTPUT_UNDECLARED when a verb declaring neither mutates nor authorityBearing emits a guarded host-state field name or state token, the guarded vocabulary is bound two-way to the host-state fields core actually declares, and the caller-supplied definition comparison emitted by adapter-activation-assess is reshaped as a non-evidential document — schema-tagged tcrn.codex-activation-definition-comparison.v1, evidenceClass caller_supplied_input_only, carrying no activation-state field and refused by the activation validators on its key set — while the authority path derives its approved set directly from the shared normalizer so receipt bytes are unchanged.",
-      "command": "pnpm verify:act13",
-      "fixturePaths": [
-        "docs/activation/activation-ladder-v1.md",
-        "package.json",
-        "packages/cli/src/index.ts",
-        "packages/core/spec/operator-authority-v1.md",
-        "packages/core/src/codex-adapter-activation.ts",
-        "packages/core/src/index.ts",
-        "packages/core/src/operator-authority.ts",
-        "scripts/policy/guard-registry.json",
-        "scripts/task.mjs",
-        "tests/act13-authority-output.test.mjs"
-      ],
-      "fixtureDigest": "84a10b3801985d65c58e003a4b940636febee4f5ec58fc1929c54c6959c2b093",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "ACT13_AUTHORITY_OUTPUT_VERIFIED",
-      "evidencePath": "dist/evidence/act2/act13.json",
-      "invalidationTriggers": [
-        "Authority-output catalog category, grant inventory, MCP pre-argument pin check or annotations, observation file identity, activation-host observation brand, receipt binding fields, inline JSON removal, refusal matrix, or live-boundary wording changes",
-        "Catalog authorization-category exclusion, or observation freshness bound (branded host-context window, operator bundle window, verification-time ceiling) changes",
-        "Output-category boundary vocabulary or the definition-comparison document shape changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate docs/activation/activation-ladder-v1.md so the AUTHORITY-BEARING-ACTIVATION-RECORD invalidation trigger is true: Authority-output catalog category, grant inventory, MCP pre-argument pin check or annotations, observation file identity, activation-host observation brand, receipt binding fields, inline JSON removal, refusal matrix, or live-boundary wording changes",
-        "test": "INC-262 red-leg probe for AUTHORITY-BEARING-ACTIVATION-RECORD",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "CODEX-SESSIONSTART-ACTIVATION",
-      "phase": "P6",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "CODEX-SESSIONSTART-ACTIVATION implements INIT-009 EPIC-023 S066/S067 as a peer evidence ladder rather than an installation overclaim. A descriptor-bound Step-1 receipt is rechecked before activation, and a distinct branded activation host input independently binds the exact request, Context, Workspace/project/work target, validity window, inert receipt, capability manifest and Step-2/Step-3 compatibility rung before any write; the inert generation authority remains unusable because activationAllowed=false. Exactly three activation files are added with exclusive single-link writes: a deterministic fail-open SessionStart handler, a canonical summary of at most 1024 UTF-8 bytes, and one project .codex/hooks.json definition matching startup|resume. The root and exact handler/summary digests are command-bound and machine specific. The v2 summary explicitly does not make the main thread read-only, does not revoke explicit user authority for ordinary repository work, grants no Workflow mutation/approval authority, and binds no Core Reference persona because those roles are conference-only position attributions. All eight Core persona ids are rejected as main-session adapter profiles. Installation records pending_host_approval, an empty approved-definition set and installationDoesNotProveActivation=true; exact definition drift requires a fresh /hooks approval. The earlier a340f94 Verity-bound live fire and v2 receipt are retained only as historical evidence for withdrawn bytes and cannot prove the corrected definition live. The corrected persona-free definition has not been installed, approved or fired. Codex's host-owned trusted_hash remains opaque and is never inferred. Deactivation verifies every receipt/file before removal, unregisters hooks.json first, removes only activation files, and returns to the inert Step-1 rung. INC-012: the local definition comparison is non-evidential and carries no activation state — it is computed entirely from a caller-supplied binding and a caller-supplied approved set, reads no host, hook, receipt or file, is schema-tagged tcrn.codex-activation-definition-comparison.v1 with evidenceClass caller_supplied_input_only, reports only membership of the supplied definition digest in the supplied approved set, and is refused on its key set by the activation validators; the token approved_current_definition is withdrawn from the product.",
-      "command": "pnpm verify:act9",
-      "fixturePaths": [
-        "package.json",
-        "packages/cli/src/index.ts",
-        "packages/core/src/index.ts",
-        "packages/core/src/codex-adapter.ts",
-        "packages/core/src/codex-adapter-activation.ts",
-        "packages/core/src/codex-adapter-installer.ts",
-        "packages/core/src/persona-render.ts",
-        "packages/core/spec/codex-adapter-v1.md",
-        "packages/core/fixtures/act9-codex-activation-cases.json",
-        "tests/act9-codex-activation.test.mjs",
-        "docs/activation/activation-ladder-v1.md",
-        "docs/verification/host/codex-session-start-activation.json",
-        "scripts/task.mjs"
-      ],
-      "fixtureDigest": "164e98a80dd48623881e778b0178744bba1cafeebbed1d0d9507960f489b6e09",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "ACT9_CODEX_ACTIVATION_VERIFIED",
-      "evidencePath": "dist/evidence/act2/act9.json",
-      "invalidationTriggers": [
-        "Codex independent activation-host authority, admitted-root binding, SessionStart hook surface, matcher, handler/summary byte binding, 1024-byte budget, persona-free main-session scope, ordinary repository authority wording, capability-manifest binding, local approved-definition set semantics, installation-versus-host-activation distinction, current-live boundary, opaque host trust hash boundary, or activation-only rollback changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate package.json so the CODEX-SESSIONSTART-ACTIVATION invalidation trigger is true: Codex independent activation-host authority, admitted-root binding, SessionStart hook surface, matcher, handler/summary byte binding, 1024-byte budget, persona-free main-session scope, ordinary repository authority wording, capability-manifest binding, local approved-definition set semantics, installation-versus-host-activation distinction, current-live boundary, opaque host trust hash boundary, or activation-only rollback changes",
-        "test": "INC-262 red-leg probe for CODEX-SESSIONSTART-ACTIVATION",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
       "id": "ADAPTER-ACCEPTANCE-MATRIX",
       "phase": "P6",
       "category": "runtime-capability",
@@ -2033,7 +1732,6 @@
       "command": "pnpm verify:act11",
       "fixturePaths": [
         "package.json",
-        "packages/core/src/codex-adapter-activation.ts",
         "packages/core/src/execution-collection.ts",
         "packages/core/src/conference-execution.ts",
         "packages/core/fixtures/act11-adapter-acceptance-cases.json",
@@ -2044,7 +1742,7 @@
         "docs/verification/host/observe-hook-live-acceptance-2026-07-25.json",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "e615e958d4811824ed8f9863a9c116400969bca690fbb6301672912b4db6f4ae",
+      "fixtureDigest": "447403caa07b7eca3a82a4cd854384a8e802e666cbdcc81cb7d9d4e048251883",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2080,7 +1778,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "c1b325b5aec61cdcfde954ee05c68784b9a512324b28086d4fa84e24cb31f222",
+      "fixtureDigest": "c1b18271911f8718ec0fc444fdf2459fcaf328588c7ece19048bdef4d83e37e5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2116,7 +1814,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "501dba39411fcabc28bc0ef0837014967051fbef6dc9506be858916e13a26aaf",
+      "fixtureDigest": "f80ee55c287c80b1df78f29daaede556c4036114feb8f5a38d393f240b3e8d40",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2153,7 +1851,7 @@
         "tests/p3-cli-catalog.test.mjs",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "6ddaa5e0dcf7a5b03c8a090e005d294bbff87987f39e891b3f8991d0143c7712",
+      "fixtureDigest": "2b87d99e05c9bb8552f39e6bc644afc1d535855622434608ac2981f79701ad34",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2168,74 +1866,6 @@
       "redLeg": {
         "mutation": "Mutate package.json so the P9-CONFERENCE-DISTILL-GOVERNED invalidation trigger is true: distillConferenceKnowledge field mapping, external-key/tag/snippet/digest/evidence rules, code-point truncation, the opt-in --distill close-then-rebind-then-capture ordering, the pre-close store read, the knowledge-wiring flag allowlist or catalog entry, or the byte-identical non-distill close posture",
         "test": "INC-262 red-leg probe for P9-CONFERENCE-DISTILL-GOVERNED",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "P7-COMPATIBILITY-MODES",
-      "phase": "P7",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "P7-B implements closed offline Workflow compatibility manifests, descriptor-bound host-anchored opaque authority admission with a 65,537-byte hard read cap, exact request/effective-plan and lock/policy/replay binding, canonical semantic sets, recursive schema/runtime/document parity, deterministic initial-import/checkpoint/fallback/conflict/reconciliation planning, AOS operational-field ownership preservation, and exact unavailable state-changing surfaces with zero network and zero mutation; supported AOS releases remain empty, AOS Requirements and RC4 remain out of scope.",
-      "command": "pnpm verify:p7:compatibility",
-      "fixturePaths": [
-        "package.json",
-        "packages/core/src/index.ts",
-        "packages/core/src/authority-file-reader.ts",
-        "packages/core/src/compatibility-modes.ts",
-        "packages/cli/src/index.ts",
-        "packages/core/schema/compatibility-modes-v1.schema.json",
-        "packages/core/spec/compatibility-modes-v1.md",
-        "packages/core/fixtures/p7-compatibility-modes-cases.json",
-        "tests/p7-compatibility-modes.test.mjs",
-        "scripts/task.mjs"
-      ],
-      "fixtureDigest": "56de65e469c54b8cfe66a3e2e48c7e1c69d18c2c69c4f137d412e4fa64963008",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "P7_COMPATIBILITY_MODES_VERIFIED",
-      "evidencePath": "dist/evidence/p7/p7-compatibility.json",
-      "invalidationTriggers": [
-        "Compatibility manifest, pair receipt, governed authority path/digest/file identity/bounded-read cap, opaque context, exact request/effective-plan binding, Workspace lock, signer/issuer/audience/nonce, expiry/revocation/replay, policy floor, instance/data epoch, canonical semantic set, recursive JSON/document limit, field ownership, checkpoint, external-effect, planner, unavailable-surface, CLI, supported-release, AOS, network, mutation, or RC4 boundary changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate package.json so the P7-COMPATIBILITY-MODES invalidation trigger is true: Compatibility manifest, pair receipt, governed authority path/digest/file identity/bounded-read cap, opaque context, exact request/effective-plan binding, Workspace lock, signer/issuer/audience/nonce, expiry/revocation/replay, policy floor, instance/data epoch, canonical semantic set, recursive JSON/document limit, field ownership, checkpoint, external-effect, planner, unavailable-surface, CLI, supported-release, AOS, network, mutation, or RC4 boundary changes",
-        "test": "INC-262 red-leg probe for P7-COMPATIBILITY-MODES",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "P7-COMPATIBILITY-CLI-BOUNDARY",
-      "phase": "P7",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "The shipped binary tcrn-workflow constructs the CLI IO channel with an output writer only, so the authority-gated compatibility-plan and compatibility-dry-run verbs cannot obtain a host-supplied Compatibility Admission Authority and fail closed with COMPATIBILITY_AUTHORITY_REQUIRED at a non-zero exit, while a read verb (status) completes at exit zero; the command catalog records both gated verbs as programmatic-only and argv-supplied authority is rejected as an unknown argument, keeping authority identity material off the process command line.",
-      "command": "pnpm verify:p7:compatibility",
-      "fixturePaths": [
-        "scripts/tcrn-workflow.mjs",
-        "packages/cli/src/index.ts",
-        "tests/p7-compatibility-modes.test.mjs",
-        "docs/compatibility/supported-modes.md"
-      ],
-      "fixtureDigest": "6727be923841d0f842f8ed2c820688b11acecf904ee567d292f7c767b10816af",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "P7_COMPATIBILITY_MODES_VERIFIED",
-      "evidencePath": "dist/evidence/p7/p7-compatibility.json",
-      "invalidationTriggers": [
-        "Shipped-binary CLI IO construction, compatibility-plan/compatibility-dry-run programmatic-only availability, COMPATIBILITY_AUTHORITY_REQUIRED fail-closed gate, argv authority rejection, status read-verb exit contract, or catalog availability partition changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate scripts/tcrn-workflow.mjs so the P7-COMPATIBILITY-CLI-BOUNDARY invalidation trigger is true: Shipped-binary CLI IO construction, compatibility-plan/compatibility-dry-run programmatic-only availability, COMPATIBILITY_AUTHORITY_REQUIRED fail-closed gate, argv authority rejection, status read-verb exit contract, or catalog availability partition changes",
-        "test": "INC-262 red-leg probe for P7-COMPATIBILITY-CLI-BOUNDARY",
         "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
       }
     },
@@ -2270,7 +1900,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "e78eb9890e4f04626984d7285f9dedf295ec9cb2b1147bb8d78912171eab4e02",
+      "fixtureDigest": "b04f10f406d06c5636ca7926bed34245b70b28da68ae4594db79fb416b2f6df9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2309,7 +1939,7 @@
         "fixtures/protocol/v1/schema-cases.json",
         "tests/protocol-proof.test.mjs"
       ],
-      "fixtureDigest": "3ce513933cd5f63761c6636c5fdad1300cd81a84f52c11e402738de56c1a0fe0",
+      "fixtureDigest": "f0a6f607dac23d61214bdada75703c58f853c571942d804ece219a7e6b842008",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2362,109 +1992,6 @@
       }
     },
     {
-      "id": "ACT1-CLAUDE-INSTALLER",
-      "phase": "ACT",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "claude-adapter-install writes exactly the four inert bundle templates under <projectRoot>/.claude/tcrn-workflow/ with O_EXCL O_NOFOLLOW at mode 0o600 (never overwriting, failing INSTALLER_TARGET_EXISTS with zero new files) and emits the tcrn.claude-adapter-installation-generation.v1 receipt that the unmodified TOCTOU-hardened readClaudeAdapterInstallationReceipt accepts; the installation root must be an absolute, canonical, real directory with no .claude or .codex segment (INSTALLER_ROOT_INVALID otherwise); claude-adapter-uninstall plans the rollback and executeClaudeAdapterRollback removes only files whose bytes and stat identity still exactly match the receipt (identity_digest_match_only), failing INSTALLER_ROLLBACK_MISMATCH and removing nothing on any tamper. .claude/settings.json is never touched (Step 1 of the activation ladder stays inert data on disk).",
-      "command": "pnpm verify:act1",
-      "fixturePaths": [
-        "packages/core/src/claude-adapter-installer.ts",
-        "packages/core/src/claude-adapter.ts",
-        "packages/cli/src/index.ts",
-        "tests/act1-claude-installer.test.mjs",
-        "scripts/task.mjs",
-        "package.json"
-      ],
-      "fixtureDigest": "d37beb9df0652712c1908852a1b0a6304404f0072a24ce3e8195f7bb6e9a5157",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "ACT1_CLAUDE_INSTALLER_VERIFIED",
-      "evidencePath": "dist/evidence/act/act1.json",
-      "invalidationTriggers": [
-        "Installer write policy, receipt shape, rollback execution, forbidden-path guard, or activation boundary changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate packages/core/src/claude-adapter-installer.ts so the ACT1-CLAUDE-INSTALLER invalidation trigger is true: Installer write policy, receipt shape, rollback execution, forbidden-path guard, or activation boundary changes",
-        "test": "INC-262 red-leg probe for ACT1-CLAUDE-INSTALLER",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "ACT2-CLAUDE-SESSIONSTART",
-      "phase": "ACT2",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "The tcrn.claude-adapter-settings-fragment.v2 activation fragment (merge key tcrnWorkflow, distinct from v1's inert tcrnWorkflowInert) generates exactly ONE real hooks.SessionStart entry running the governed handler through the shell-quoted canonical absolute path under the installer-admitted project root AND the handler's exact byte digest as --handler-digest. The root is included in the fragment digest and must equal the independently re-admitted installer root before any activation write; home, filesystem-root, ancestor-of-home, host-tree and symlink roots are refused. More than one hook event, a second SessionStart entry, a changed command, or a root mismatch fails closed, a command line pinning bytes other than the fragment's own scriptDigest fails ACTIVATION_FRAGMENT_INVALID, while fire-time cwd cannot redirect the approved command's handler argument. Its interpreter is the bare name node and stays PATH-resolved at fire time; Claude Code has no exact-definition approval step, so nothing re-prompts (INC-011, disclosed not closed). mergeClaudeAdapterActivationFragment records exact merge topology so removal is byte-inverse while preserving unrelated user hooks. The v2 handler emits a bounded Workflow summary that binds no Core Reference persona, states that the main thread is not read-only, and does not revoke explicit user authority for ordinary repository work. The additive tcrn.claude-adapter-installation-generation.v2 receipt covers exactly the four inert templates plus session-start.mjs; no persona-render.json is generated, installed or reserved. This is code and fixture proof only; no current Claude live activation is claimed.",
-      "command": "pnpm verify:act2",
-      "fixturePaths": [
-        "packages/core/src/claude-adapter-activation.ts",
-        "packages/core/src/claude-adapter-session-start.ts",
-        "packages/core/src/claude-adapter-installer.ts",
-        "packages/cli/src/index.ts",
-        "tests/act2-claude-activation.test.mjs",
-        "scripts/task.mjs",
-        "package.json"
-      ],
-      "fixtureDigest": "f2bb8af0aad99af2fbceea541966a7d8388a662e31c97d1a91efbf45d8a849a0",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "ACT2_CLAUDE_SESSIONSTART_VERIFIED",
-      "evidencePath": "dist/evidence/act2/act2.json",
-      "invalidationTriggers": [
-        "v2 fragment shape, admitted absolute-root binding, merge/remove byte-inverse, hook-surface bound, injection budget, installer root admission, or v2 receipt/rollback coverage changes",
-        "Hook command argument set or handler-digest binding changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate packages/core/src/claude-adapter-activation.ts so the ACT2-CLAUDE-SESSIONSTART invalidation trigger is true: v2 fragment shape, admitted absolute-root binding, merge/remove byte-inverse, hook-surface bound, injection budget, installer root admission, or v2 receipt/rollback coverage changes",
-        "test": "INC-262 red-leg probe for ACT2-CLAUDE-SESSIONSTART",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
-      "id": "ACT2-FAIL-OPEN",
-      "phase": "ACT2",
-      "category": "runtime-capability",
-      "status": "implemented",
-      "subject": "The installed SessionStart handler emitted by generateSessionStartScript is the SOLE authorized fail-open surface in the program (N-2 / OD-32): its whole body is wrapped try/catch{}finally{process.exit(0)}, so under every induced failure — missing project.json, malformed JSON, a control character in an interpolated project field, a missing or mismatched --handler-digest, an over-budget (>1024-byte) summary, or an unreadable project file — the spawned handler exits 0 with empty stdout and the session proceeds as plain Claude Code, while the happy path exits 0 printing a persona-free Workflow summary within the 1024-byte budget. That summary explicitly preserves main-thread ordinary repository scope and keeps Core Reference roles conference-only. The script carries zero dependencies beyond node:crypto/node:fs/node:path/node:url and no host-absolute path or digest literal, so its scriptDigest is stable across hosts and the v3 fragment binds its hook command to it. Every interpolated project value is screened for control characters at the composition point (INC-014), and the handler digests its own bytes at fire time against the digest carried in the approved command line (INC-015); it does not and cannot detect a wholly substituted handler, which simply does not run the check.",
-      "command": "pnpm verify:act2",
-      "fixturePaths": [
-        "packages/core/src/claude-adapter-activation.ts",
-        "packages/core/src/claude-adapter-session-start.ts",
-        "packages/core/src/claude-adapter-installer.ts",
-        "packages/cli/src/index.ts",
-        "tests/act2-claude-activation.test.mjs",
-        "scripts/task.mjs",
-        "package.json"
-      ],
-      "fixtureDigest": "f2bb8af0aad99af2fbceea541966a7d8388a662e31c97d1a91efbf45d8a849a0",
-      "environment": {
-        "node": "24.16.0",
-        "pnpm": "11.3.0",
-        "network": "process-guarded-offline"
-      },
-      "expectedExit": 0,
-      "expectedReasonCode": "ACT2_CLAUDE_SESSIONSTART_VERIFIED",
-      "evidencePath": "dist/evidence/act2/act2.json",
-      "invalidationTriggers": [
-        "SessionStart handler fail-open wrapper, injection budget, dependency surface, or scriptDigest binding changes",
-        "Handler self-digest argv contract, control-character screen, or emitted generator-version interpolation changes"
-      ],
-      "redLeg": {
-        "mutation": "Mutate packages/core/src/claude-adapter-activation.ts so the ACT2-FAIL-OPEN invalidation trigger is true: SessionStart handler fail-open wrapper, injection budget, dependency surface, or scriptDigest binding changes",
-        "test": "INC-262 red-leg probe for ACT2-FAIL-OPEN",
-        "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
-      }
-    },
-    {
       "id": "ACT3-PERSONA-RENDER",
       "phase": "ACT2",
       "category": "runtime-capability",
@@ -2474,17 +2001,12 @@
       "fixturePaths": [
         "packages/core/src/core-reference-personas.ts",
         "packages/core/src/persona-render.ts",
-        "packages/core/src/codex-adapter.ts",
-        "packages/core/src/claude-adapter.ts",
-        "packages/core/src/claude-adapter-session-start.ts",
-        "packages/core/src/claude-adapter-activation.ts",
-        "packages/core/src/claude-adapter-installer.ts",
         "packages/cli/src/index.ts",
         "tests/act3-persona-render.test.mjs",
         "scripts/task.mjs",
         "package.json"
       ],
-      "fixtureDigest": "daeef6f1f68a312097e6d947aff3f4fdcb3d154da652b52608568d4928b2260e",
+      "fixtureDigest": "7f779354cf61e26f0530417fb52d6a6cd3255e8f97f36ad51dc6deceee26018f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2516,7 +2038,7 @@
         "packages/core/src/index.ts",
         "scripts/task.mjs"
       ],
-      "fixtureDigest": "d5070fc8eda9a42411e82ac2d1118390477485851d0bd38fefc65e19f1b6339f",
+      "fixtureDigest": "a3b50bdab4e612fb1faf408a3cd6743b62a35f81e64f4de6f2d8921fd11b2650",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2616,7 +2138,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-cli-read-surface.test.mjs"
       ],
-      "fixtureDigest": "146b87aa97356afd1b16d01c62138e999a3949c74ce51462a5998555370ec097",
+      "fixtureDigest": "922f9d826d03149923bd60b63a6de3298e9b0be0e08b357adc290d18026e801a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2650,7 +2172,7 @@
         "packages/cli/src/index.ts",
         "tests/p3-cli-read-surface.test.mjs"
       ],
-      "fixtureDigest": "146b87aa97356afd1b16d01c62138e999a3949c74ce51462a5998555370ec097",
+      "fixtureDigest": "922f9d826d03149923bd60b63a6de3298e9b0be0e08b357adc290d18026e801a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2686,7 +2208,7 @@
         "packages/core/src/knowledge-core.ts",
         "tests/p4-knowledge-core.test.mjs"
       ],
-      "fixtureDigest": "05f38e73731b2b1dc4ac5cd2043a5b4060185e2266cb5a3a5ef3ece5274bf95d",
+      "fixtureDigest": "a12962a3642a17c749b6b82c00bc78f6e529f6d3bd3702067662879443465b24",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2756,7 +2278,7 @@
         "packages/core/src/knowledge-core.ts",
         "tests/p4-knowledge-core.test.mjs"
       ],
-      "fixtureDigest": "5fff44016ab8033668d61d45f0239e5e5542d37771b2ae61176413cb91d36889",
+      "fixtureDigest": "13281841f9e64a41937579b803bbb4f003756ee13dd40757230f488db992db4c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2793,7 +2315,7 @@
         "packages/core/spec/knowledge-core-v1.md",
         "tests/p4-knowledge-core.test.mjs"
       ],
-      "fixtureDigest": "bee89fe573119c5e621b474100c0596a8d1d9a8756403f112ad595361bbe2f8d",
+      "fixtureDigest": "b732bd812d215f05df9fe78f6fbc7b06139793a671258386383e1f4187f8151c",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2937,7 +2459,7 @@
         "scripts/task.mjs",
         "tests/inc256-knowledge-policy.test.mjs"
       ],
-      "fixtureDigest": "6c8f00b9f603e104a65c4ae46055a92b424ca74be4625f9aa52a525537d2bb02",
+      "fixtureDigest": "78d6cf21f41c6f6a9b9119fdb2690a55c6319f9c7c5f37b66851c69abcf421a2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -2974,7 +2496,7 @@
         "scripts/task.mjs",
         "tests/inc258-install-manifest.test.mjs"
       ],
-      "fixtureDigest": "fe9f48db45f9836bcfb808f61d46f05796c3baafa81611231119132f2b400e69",
+      "fixtureDigest": "7cb11e27b68b4d505def40d9a158a21b3d925a800bbc402c0317c1a940edf7ef",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3014,7 +2536,7 @@
         "scripts/task.mjs",
         "tests/inc259-storage-migration.test.mjs"
       ],
-      "fixtureDigest": "df786116972351a3ccb79ad6aa533e3659afeba667b181a678c940d54af14e13",
+      "fixtureDigest": "3a531d3d83078c3d023d004c26e52bb0e8bb5d666e551ce4e756210b80f659c3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3050,7 +2572,7 @@
         "scripts/task.mjs",
         "tests/inc260-snapshot-read-optimization.test.mjs"
       ],
-      "fixtureDigest": "8dc52ec4a06a51e3628029ae69bb0ea05c613c5170290a5f4ce34361eb95a129",
+      "fixtureDigest": "5aeb27b642871a478d098080a3f70d25ebf39f156f595651be986d1936116c9e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3086,7 +2608,7 @@
         "tests/stop-pact.test.mjs",
         "tools/stop-pact/response-style-hook.mjs"
       ],
-      "fixtureDigest": "d833d7497323341dc7c7b0ce7e94eeba6df46dbc26a41542547a1f8c966a91a9",
+      "fixtureDigest": "2223ae4e90720b1712dbf831a684dc2569ad2c99bde70996e1c221d573e70400",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3123,7 +2645,7 @@
         "tests/dispatch-readiness-compliance.test.mjs",
         "tests/s303-dispatch-citations.test.mjs"
       ],
-      "fixtureDigest": "256616abd351a0f1eee28c6638e491fde0bfc668e5d9efba8fcdc5150006ff73",
+      "fixtureDigest": "78140979286095cf617a66c7db7c5fd9cd23be005c0baa730f3b6ebf4a206ad9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3162,7 +2684,7 @@
         "scripts/task.mjs",
         "tests/inc263-closeout.test.mjs"
       ],
-      "fixtureDigest": "390fefd63e51adc9a072ee0f326b66cdcf72cadd3eb7f2a2f6de201c0eb759e3",
+      "fixtureDigest": "34a0f6fe00cdd11f5161d3a1a4468e372739f3fad154541f1f5063a77f6eb29f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3199,7 +2721,7 @@
         "scripts/verification-red-legs.mjs",
         "tests/inc262-red-leg-coverage.test.mjs"
       ],
-      "fixtureDigest": "fefe2eafa9145129f6ea0f72bfef671d3f4b6b8c97fcdc2f09b88b0ab5a92777",
+      "fixtureDigest": "061d25d67a12cda7e55a1db973ea77b5e36917f150134f257b6ca4d5cb4f68d9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3238,7 +2760,7 @@
         "scripts/verification-links.mjs",
         "tests/inc261-verification-links.test.mjs"
       ],
-      "fixtureDigest": "646826e4aed34d0b70f11e2ea6d89c89528e37a8afd5a53f344cccdc35d45e33",
+      "fixtureDigest": "1b64c1f99c4bab60ac651918adc3390097596478f6dfb7010a402d5605400df8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3283,7 +2805,7 @@
         "scripts/task.mjs",
         "tests/story-344-storage-boundary.test.mjs"
       ],
-      "fixtureDigest": "06ea1b08500611769200f821c89ca3dc3891d07ed024a7684237c77a1f2ef681",
+      "fixtureDigest": "d5343c8058bc645106b08a49834db31497f5d13b52b1401b334660d68f941161",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3319,7 +2841,7 @@
         "scripts/task.mjs",
         "tests/story-333-byte-segments.test.mjs"
       ],
-      "fixtureDigest": "3ecc4f73067604178f96dfe68f7cbfabead23c34b0226be3941e90c377cf838e",
+      "fixtureDigest": "45452d271c16b6e0b0fee9bc202abc0e63125ddb9cfb7bf83a1dba012e7d148d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3356,7 +2878,7 @@
         "scripts/task.mjs",
         "tests/story-345-backend-selection.test.mjs"
       ],
-      "fixtureDigest": "14d4bc9d6f661242e2db8ea1a080fd08f81c3b08edc73baafc4d8a48e4f738f9",
+      "fixtureDigest": "68d408ad71d6529b5a9db85f34b4aa04919985c31e4b328c969a0a6e555b9d73",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3392,7 +2914,7 @@
         "scripts/task.mjs",
         "tests/story-334-segment-index.test.mjs"
       ],
-      "fixtureDigest": "0445052b127ef0313cf7924b80104f2a9ef1e7379e777a079d055136762ea210",
+      "fixtureDigest": "a103d94f5f77bfcc75ba388ff8de32b3c1b2969c9990c6d66d0676028f6bff14",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3428,7 +2950,7 @@
         "scripts/task.mjs",
         "tests/story-335-336-work-fields.test.mjs"
       ],
-      "fixtureDigest": "9e6f391b279c5657357773376bf72e29e917864a4f72ae690f61dbf3737f8b0c",
+      "fixtureDigest": "7d5a61f77b11d8b81edb521137c75a26a8dc0523093a27792bce6b56454abaa4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3464,7 +2986,7 @@
         "scripts/task.mjs",
         "tests/story-335-336-work-fields.test.mjs"
       ],
-      "fixtureDigest": "1b1e8723c4fb3b756ca8e97407017db2902558487b99c41e5871a89b3ec194d7",
+      "fixtureDigest": "18feaec6b3bba25dc59fd12035b0aeada26bbb33f39de66a06af49aac64df7f5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3501,7 +3023,7 @@
         "scripts/task.mjs",
         "tests/story-337-snapshot-replay.test.mjs"
       ],
-      "fixtureDigest": "065b82b3d18e06f186c69d3e6b68d21aa074fe4f930aefb66a89e99cb20d0d24",
+      "fixtureDigest": "4eb947d1cc32dc15df6b8445eee28995a3a202fd983386b41dc2ec115c7516d5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3538,7 +3060,7 @@
         "scripts/task.mjs",
         "tests/story-346-pg-disabled.test.mjs"
       ],
-      "fixtureDigest": "6fdd19fb4e9196cace1105f0617fe164cccbb9579766ce0e3270dbc367273a54",
+      "fixtureDigest": "7994891113dfb8a181a027b8964112f2501e92a8174f60981803ba7dc7b0dfbc",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3575,7 +3097,7 @@
         "scripts/task.mjs",
         "tests/story-347-348-settings-policy.test.mjs"
       ],
-      "fixtureDigest": "c3bfa4dbb8ae98e238f452c98878e576b1f6249e1dba264cc05cf3f2962c8d8d",
+      "fixtureDigest": "3aeca8d842f6e31980a3aaff622f3784359cbbf216b8286e17fa0b1454ca4ed2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3613,7 +3135,7 @@
         "scripts/task.mjs",
         "tests/story-347-348-settings-policy.test.mjs"
       ],
-      "fixtureDigest": "68b51b0acc9fedf691c8e19c9b5d406799b262295d68197a830245f83608d0e0",
+      "fixtureDigest": "490ff7987e714481a7b4e4e13a49af2ed625a1e08e6d4d5dbbe53b3cfe77dd7e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3648,7 +3170,7 @@
         "scripts/task.mjs",
         "tests/story-338-339-archive-inventory.test.mjs"
       ],
-      "fixtureDigest": "688f0943d17b953e8609bd1553bb30746c093ac95ea320a4f47c6aebdafff6c2",
+      "fixtureDigest": "c51949c6ea451031a3afa847211a8f6c6486970254f7ea20474f4643e26779e7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3683,7 +3205,7 @@
         "scripts/task.mjs",
         "tests/story-338-339-archive-inventory.test.mjs"
       ],
-      "fixtureDigest": "32726c1f350c200b7846daf30e72cefbbd513b7119aa37aa0d8d19e3815062eb",
+      "fixtureDigest": "ba66ae455009fa27d101ea6379d8add05cfef5b481a7e35475d4bb28da3f4ff5",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3720,7 +3242,7 @@
         "scripts/task.mjs",
         "tests/story-340-attestation-migration.test.mjs"
       ],
-      "fixtureDigest": "c06d2bf4fdec2d01751222b6d1d32d6dd73fd06f92d86d9b62c5645d24809de1",
+      "fixtureDigest": "586352cd4834afbe67882db5d5ba6a29c0042d364dbc805e4828e8da9148b7c2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3756,7 +3278,7 @@
         "scripts/task.mjs",
         "tests/story-341-knowledge-body-migration.test.mjs"
       ],
-      "fixtureDigest": "37baa9bc3e99476e985cf02c16ba34d903953ae63358308191c7c2adb54b129f",
+      "fixtureDigest": "125bc0bace379be1faebca21ec073402a7d57e2b41d1d499db846104d6b09850",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3792,7 +3314,7 @@
         "scripts/task.mjs",
         "tests/story-342-343-map-docs.test.mjs"
       ],
-      "fixtureDigest": "a2b1b48121c6846e7c808b58fc39d7db5b1cd230186be13f58913b2b2953510c",
+      "fixtureDigest": "0961ce860da88701affcb90fed05aedd130c6f40ea86755067594679eaf0bf09",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3831,7 +3353,7 @@
         "scripts/task.mjs",
         "tests/story-342-343-map-docs.test.mjs"
       ],
-      "fixtureDigest": "ada276901d2ebfc884b76961b97692273c582e5f111d37d84ad4bd4198ae4227",
+      "fixtureDigest": "1f6c75a90ef1b0441a0507314467b7da6b8a612649325aa3169e8880e8343d61",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3870,7 +3392,7 @@
         "scripts/task.mjs",
         "tests/p1-roster.test.mjs"
       ],
-      "fixtureDigest": "2fe260098dff659224db3b9729a31ad41876c79d56cb6fe89050078e06c67062",
+      "fixtureDigest": "ee2d8b8bf201f22331780c40ef1e9758f689d54748e01491dee729b7c04f6917",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3907,7 +3429,7 @@
         "scripts/task.mjs",
         "tests/p1-roster.test.mjs"
       ],
-      "fixtureDigest": "55e9f03b2a4c837aae381c35417847e69879b8c341b7e290225cbff72c7099bb",
+      "fixtureDigest": "b23c7c8349f22ca99c0469c7f098366424010f4448abc2d91ae2213e9dd69d4a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3940,15 +3462,12 @@
       "fixturePaths": [
         "package.json",
         "scripts/task.mjs",
-        "tests/act2-claude-activation.test.mjs",
         "tests/inc260-snapshot-read-optimization.test.mjs",
         "tests/p3-cli-catalog.test.mjs",
         "tests/p3-file-engine.test.mjs",
         "tests/p4-knowledge-core.test.mjs",
         "tests/p5-core-reference-personas.test.mjs",
-        "tests/p6-codex-adapter.test.mjs",
         "tests/p6-context-router.test.mjs",
-        "tests/p6b-claude-adapter.test.mjs",
         "tests/story-333-byte-segments.test.mjs",
         "tests/story-335-336-work-fields.test.mjs",
         "tests/story-337-snapshot-replay.test.mjs",
@@ -3959,7 +3478,7 @@
         "tests/story-346-pg-disabled.test.mjs",
         "tests/story-347-348-settings-policy.test.mjs"
       ],
-      "fixtureDigest": "212d905b2f68f9b19d4af6f23e06739d378e2d9807bacb9c62b337c23a3f25a6",
+      "fixtureDigest": "4fb5079fba547d40cc7410c3d73417408d4ac77a4db10b65e82104df8aa117bd",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -3995,7 +3514,7 @@
         "scripts/task.mjs",
         "tests/story-342-343-map-docs.test.mjs"
       ],
-      "fixtureDigest": "1ac919b8bf3f2dfad474a41b2271fe36aa137795a15df3da7b598c8235596e9b",
+      "fixtureDigest": "22613720bb2b5aac40cd9692001e6b46670118752bac6be195c15da02cfe2465",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4031,7 +3550,7 @@
         "scripts/task.mjs",
         "tests/platform-doctor.test.mjs"
       ],
-      "fixtureDigest": "ae483b2af78ce4a4416d98c90719fd207e5de8cc78bba42d4a473fde56003c0f",
+      "fixtureDigest": "986cfd0d7b0fe8ed89b68e6f1c5bf27cdb935c6823309defac63ba2b5d8d4685",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4067,7 +3586,7 @@
         "scripts/task.mjs",
         "tests/p1-roster.test.mjs"
       ],
-      "fixtureDigest": "bab592abf127a24cfd7c742d4fb1ddade9a29a5f4a77c128f8f57e294a7c462c",
+      "fixtureDigest": "5cbd21163e0392de3c05a51813e334d81699f8f93100706eda0ad773cade3ee4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4103,7 +3622,7 @@
         "scripts/policy/guard-registry.json",
         "tests/inc269-annotation-advisory-guard.test.mjs"
       ],
-      "fixtureDigest": "cc7f918bf9ff25e8ab64b9a89d7a1e390e11268af66bf9491665d2be963ab4da",
+      "fixtureDigest": "9682e7f46442cbcd2e3de21c93eb004e26ca38be6cf2553cf9a50dcac9421fb1",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -4133,7 +3652,7 @@
         "scripts/policy/guard-registry.json",
         "tests/inc270-engine-capability-surface.test.mjs"
       ],
-      "fixtureDigest": "ea115e9a9ed6f16d61bfc15ffa46f1ae5a5ef9007499915e2327ddfeb97156e3",
+      "fixtureDigest": "991bcdba17639c3a43ce5722dcb33883ea7dd31ba52ed82bfb1c820cb0de126e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

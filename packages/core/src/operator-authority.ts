@@ -31,36 +31,6 @@ import type {
   AuthorityFileReasonCodes,
   AuthorityFileResult,
 } from "./authority-file-reader.js";
-import {
-  admitClaudeAdapterActivationHostInput,
-} from "./claude-adapter-activation.js";
-import type {
-  ClaudeAdapterActivationHostContext,
-} from "./claude-adapter-activation.js";
-import {
-  admitClaudeAdapterHostInput,
-} from "./claude-adapter.js";
-import type {
-  ClaudeAdapterHostContext,
-  ClaudeAdapterInstallationFileIdentity,
-} from "./claude-adapter.js";
-import {
-  admitCodexAdapterActivationHostInput,
-} from "./codex-adapter-activation.js";
-import type {
-  CodexAdapterActivationHostContext,
-  CodexHostActivationObservationFileIdentity,
-} from "./codex-adapter-activation.js";
-import {
-  admitCodexAdapterHostInput,
-} from "./codex-adapter.js";
-import type {
-  CodexAdapterHostContext,
-  CodexAdapterInstallationFileIdentity,
-} from "./codex-adapter.js";
-import type {
-  CompatibilityAdmissionAuthority,
-} from "./compatibility-modes.js";
 import type {
   ContextRouteAuthorityFileIdentity,
 } from "./context-router.js";
@@ -114,18 +84,6 @@ export interface OperatorAuthorityPins {
 export interface OperatorAuthorityFileGrants {
   readonly profileAdmission: GenericProfileAdmissionAuthority | null;
   readonly contextRoute: ContextRouteAuthorityFileIdentity | null;
-  readonly codexAdapterInstallation: CodexAdapterInstallationFileIdentity | null;
-  readonly codexHostActivationObservation:
-    CodexHostActivationObservationFileIdentity | null;
-  readonly claudeAdapterInstallation: ClaudeAdapterInstallationFileIdentity | null;
-  readonly compatibilityAdmission: CompatibilityAdmissionAuthority | null;
-}
-
-export interface OperatorAuthorityHostInputs {
-  readonly codexAdapter: Readonly<Record<string, unknown>> | null;
-  readonly codexAdapterActivation: Readonly<Record<string, unknown>> | null;
-  readonly claudeAdapter: Readonly<Record<string, unknown>> | null;
-  readonly claudeAdapterActivation: Readonly<Record<string, unknown>> | null;
 }
 
 export interface OperatorAuthorityMcpGrant {
@@ -141,7 +99,6 @@ export interface OperatorAuthorityBundle {
   readonly expiresAt: string;
   readonly status: "active" | "revoked";
   readonly fileAuthorities: OperatorAuthorityFileGrants;
-  readonly hostInputs: OperatorAuthorityHostInputs;
   readonly mcp: OperatorAuthorityMcpGrant;
   readonly authorityDigest: string;
 }
@@ -157,15 +114,6 @@ export interface OperatorAuthorityContext {
   readonly authoritySourceIdentityDigest: string;
   readonly profileAdmissionAuthority?: GenericProfileAdmissionAuthority;
   readonly contextRouteAuthority?: ContextRouteAuthorityFileIdentity;
-  readonly codexAdapterHost?: CodexAdapterHostContext;
-  readonly codexAdapterActivationHost?: CodexAdapterActivationHostContext;
-  readonly codexAdapterInstallationAuthority?: CodexAdapterInstallationFileIdentity;
-  readonly codexHostActivationObservationAuthority?:
-    CodexHostActivationObservationFileIdentity;
-  readonly claudeAdapterHost?: ClaudeAdapterHostContext;
-  readonly claudeAdapterActivationHost?: ClaudeAdapterActivationHostContext;
-  readonly claudeAdapterInstallationAuthority?: ClaudeAdapterInstallationFileIdentity;
-  readonly compatibilityAdmissionAuthority?: CompatibilityAdmissionAuthority;
 }
 
 const maximumAuthorityBytes = 262_144;
@@ -284,13 +232,6 @@ function fileExpectation(
   });
 }
 
-function nullableHostInput(
-  value: unknown,
-  label: string,
-): Readonly<Record<string, unknown>> | null {
-  return value === null ? null : record(value, label);
-}
-
 function deepFreeze<T>(value: T): T {
   if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
     for (const child of Object.values(
@@ -360,7 +301,6 @@ export function validateOperatorAuthorityBundle(
     "expiresAt",
     "status",
     "fileAuthorities",
-    "hostInputs",
     "mcp",
     "authorityDigest",
   ], "operator authority bundle");
@@ -372,18 +312,7 @@ export function validateOperatorAuthorityBundle(
   exact(files, [
     "profileAdmission",
     "contextRoute",
-    "codexAdapterInstallation",
-    "codexHostActivationObservation",
-    "claudeAdapterInstallation",
-    "compatibilityAdmission",
   ], "fileAuthorities");
-  const hosts = record(document.hostInputs, "hostInputs");
-  exact(hosts, [
-    "codexAdapter",
-    "codexAdapterActivation",
-    "claudeAdapter",
-    "claudeAdapterActivation",
-  ], "hostInputs");
   const mcp = record(document.mcp, "mcp");
   exact(mcp, ["writeCommands", "authorityOutputCommands"], "mcp");
 
@@ -408,40 +337,6 @@ export function validateOperatorAuthorityBundle(
         files.contextRoute,
         "fileAuthorities.contextRoute",
       ) as ContextRouteAuthorityFileIdentity | null,
-      codexAdapterInstallation: fileExpectation(
-        files.codexAdapterInstallation,
-        "fileAuthorities.codexAdapterInstallation",
-      ) as CodexAdapterInstallationFileIdentity | null,
-      codexHostActivationObservation: fileExpectation(
-        files.codexHostActivationObservation,
-        "fileAuthorities.codexHostActivationObservation",
-      ) as CodexHostActivationObservationFileIdentity | null,
-      claudeAdapterInstallation: fileExpectation(
-        files.claudeAdapterInstallation,
-        "fileAuthorities.claudeAdapterInstallation",
-      ) as ClaudeAdapterInstallationFileIdentity | null,
-      compatibilityAdmission: fileExpectation(
-        files.compatibilityAdmission,
-        "fileAuthorities.compatibilityAdmission",
-      ) as CompatibilityAdmissionAuthority | null,
-    },
-    hostInputs: {
-      codexAdapter: nullableHostInput(
-        hosts.codexAdapter,
-        "hostInputs.codexAdapter",
-      ),
-      codexAdapterActivation: nullableHostInput(
-        hosts.codexAdapterActivation,
-        "hostInputs.codexAdapterActivation",
-      ),
-      claudeAdapter: nullableHostInput(
-        hosts.claudeAdapter,
-        "hostInputs.claudeAdapter",
-      ),
-      claudeAdapterActivation: nullableHostInput(
-        hosts.claudeAdapterActivation,
-        "hostInputs.claudeAdapterActivation",
-      ),
     },
     mcp: {
       writeCommands: sortedUniqueStrings(
@@ -538,52 +433,6 @@ export async function readOperatorAuthority(
     fail("OPERATOR_AUTHORITY_EXPIRED", bundle.authorityId);
   }
 
-  let codexAdapterHost: CodexAdapterHostContext | undefined;
-  let codexAdapterActivationHost:
-    CodexAdapterActivationHostContext | undefined;
-  let claudeAdapterHost: ClaudeAdapterHostContext | undefined;
-  let claudeAdapterActivationHost:
-    ClaudeAdapterActivationHostContext | undefined;
-  try {
-    codexAdapterHost = bundle.hostInputs.codexAdapter === null
-      ? undefined
-      : admitCodexAdapterHostInput(bundle.hostInputs.codexAdapter);
-    codexAdapterActivationHost =
-      bundle.hostInputs.codexAdapterActivation === null
-        ? undefined
-        : admitCodexAdapterActivationHostInput(
-          bundle.hostInputs.codexAdapterActivation,
-        );
-    claudeAdapterHost = bundle.hostInputs.claudeAdapter === null
-      ? undefined
-      : admitClaudeAdapterHostInput(bundle.hostInputs.claudeAdapter);
-    claudeAdapterActivationHost =
-      bundle.hostInputs.claudeAdapterActivation === null
-        ? undefined
-        : admitClaudeAdapterActivationHostInput(
-          bundle.hostInputs.claudeAdapterActivation,
-        );
-    for (const host of [
-      codexAdapterHost,
-      codexAdapterActivationHost,
-      claudeAdapterHost,
-      claudeAdapterActivationHost,
-    ]) {
-      if (host !== undefined &&
-        (now < parseStrictInstant(host.input.contextIssuedAt) ||
-          now >= parseStrictInstant(host.input.contextExpiresAt))) {
-        fail("OPERATOR_AUTHORITY_HOST_INVALID", "host context stale at operator verification time");
-      }
-    }
-  } catch (error) {
-    if (error instanceof OperatorAuthorityError) throw error;
-    const reasonCode = typeof (error as { reasonCode?: unknown }).reasonCode ===
-      "string"
-      ? (error as { reasonCode: string }).reasonCode
-      : "unknown";
-    fail("OPERATOR_AUTHORITY_HOST_INVALID", reasonCode);
-  }
-
   return deepFreeze({
     pins,
     bundle,
@@ -602,38 +451,6 @@ export async function readOperatorAuthority(
     ...(bundle.fileAuthorities.contextRoute === null
       ? {}
       : { contextRouteAuthority: bundle.fileAuthorities.contextRoute }),
-    ...(codexAdapterHost === undefined ? {} : { codexAdapterHost }),
-    ...(codexAdapterActivationHost === undefined
-      ? {}
-      : { codexAdapterActivationHost }),
-    ...(bundle.fileAuthorities.codexAdapterInstallation === null
-      ? {}
-      : {
-        codexAdapterInstallationAuthority:
-          bundle.fileAuthorities.codexAdapterInstallation,
-      }),
-    ...(bundle.fileAuthorities.codexHostActivationObservation === null
-      ? {}
-      : {
-        codexHostActivationObservationAuthority:
-          bundle.fileAuthorities.codexHostActivationObservation,
-      }),
-    ...(claudeAdapterHost === undefined ? {} : { claudeAdapterHost }),
-    ...(claudeAdapterActivationHost === undefined
-      ? {}
-      : { claudeAdapterActivationHost }),
-    ...(bundle.fileAuthorities.claudeAdapterInstallation === null
-      ? {}
-      : {
-        claudeAdapterInstallationAuthority:
-          bundle.fileAuthorities.claudeAdapterInstallation,
-      }),
-    ...(bundle.fileAuthorities.compatibilityAdmission === null
-      ? {}
-      : {
-        compatibilityAdmissionAuthority:
-          bundle.fileAuthorities.compatibilityAdmission,
-      }),
   });
 }
 

@@ -555,6 +555,150 @@
       "testName": "unapproved definitions and missing or drifted execution streams remain unavailable",
       "reason": "TCRN-CROSS-STORY-358 family 2 ('observe'): this shared cross-family test bound both the still-live assessCodexActivationTrust (adapter family, untouched) and codex-execution-collection.ts's collectCodexAppServerExecutions, which retires whole-file in this change together with app-server-observer.ts (so OBSERVED_PROTOCOL_DIGEST also leaves the import list). The unavailable/protocol-drift execution-stream assertions retired with the module; the still-live hook-definition-trust assertions (hookDefinitionInSuppliedApprovedSet, evidenceClass) were kept verbatim and the test was renamed to describe only what it still tests, since its old name no longer matched its body.",
       "replacement": "tests/act11-adapter-acceptance.test.mjs:unapproved hook definitions remain unavailable"
+    },
+    {
+      "path": "tests/act11-adapter-acceptance.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the two remaining assertions of the hook-definition-trust case (hookDefinitionInSuppliedApprovedSet, evidenceClass) were the last calls into assessCodexActivationTrust, which retires with packages/core/src/codex-adapter-activation.ts. Family 2 had already waived this case's baseline name and renamed the surviving body to 'unapproved hook definitions remain unavailable'; that replacement now retires too, so the baseline name stays waived by the family-2 entry above and the assertion loss is recorded here. act11's six surviving cases -- the acceptance matrix, the live observe evidence, the hermetic SessionStart definitions, the hostile matrix, the collected-receipt attribution boundary and the story dispositions -- read documents and modules that all survive, and none of them lost an assertion.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/act3-persona-render.test.mjs",
+      "testName": "Codex and Claude reject every Core Reference role as a main-session profile",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): every assertion in this case calls generateCodexAdapterBundle or generateClaudeAdapterBundle, both of which retire whole-file in this change. The persona half of the boundary it guarded -- that every Core Reference role renders for conference attribution and nothing else -- is still proven by the four surviving cases in this file.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/act3-persona-render.test.mjs",
+      "testName": "Claude SessionStart preserves main-thread write scope and injects no persona",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the case spawns generateSessionStartScript's output, which retires with packages/core/src/claude-adapter-session-start.ts. There is no SessionStart script left to spawn.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/act3-persona-render.test.mjs",
+      "testName": "Codex Step 2 and compatibility Step 3 summaries bind no conference persona",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the case drives generateCodexSessionSummary over a generateCodexAdapterBundle bundle; both retire whole-file with packages/core/src/codex-adapter.ts.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/act3-persona-render.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the fifteen assertions belonged to the three adapter cases waived above, plus the adapter request/host fixture helpers they were the only callers of. No assertion was dropped from a surviving case: the four persona-render cases keep their bodies verbatim.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/operator-authority.test.mjs",
+      "testName": "operator authority rejects missing pins, changed digest, rollback, revocation, expiry, binding, unknown fields and host forgery",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the two host-forgery legs (a forged codexAdapter host input and a stale codexAdapter context window) called admitCodexAdapterHostInput through readOperatorAuthority, and that host-admission branch retires with the adapter modules. The other eight hostile legs -- missing pins, changed digest, rollback, two revocation shapes, expiry, authorityId binding mismatch and an unknown bundle field -- are kept verbatim, and the case was renamed to describe only what it still tests.",
+      "replacement": "tests/operator-authority.test.mjs:operator authority rejects missing pins, changed digest, rollback, revocation, expiry, binding and unknown fields"
+    },
+    {
+      "path": "tests/operator-authority.test.mjs",
+      "testName": "historical twelve are reconciled to the seven remaining IO-only gaps",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): every verb this case enumerated -- adapter-generate, the five claude-adapter-* verbs, compatibility-dry-run and compatibility-plan, plus the twelve-verb history behind them -- is removed from COMMAND_CATALOG in this change, and the fixture rosters it read (historicalIoBlockedVerbs, digestFlagResolvedBeforeEpic022, currentIoBlockedVerbsBeforeEpic022, operatorAuthorityResolvedVerbs, laterPinnedVerbNotInHistoricalTwelve) are removed with them. The subject of the reconciliation no longer exists.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/operator-authority.test.mjs",
+      "testName": "shipped operator wrapper supplies a request-bound Codex host and rejects prompt, environment and ambiguous authority",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the case drives runOperatorCli into the retired adapter-generate verb with a Codex host input; both the verb and the hostInputs field of the operator authority bundle retire in this change. runOperatorCli itself is untouched and still carries the profileAdmission and contextRoute grants, which the surviving cases exercise.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/operator-authority.test.mjs",
+      "testName": "pinned operator authority activates Codex without a duplicate receipt-digest authority source",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the case activates the Codex adapter through the retired adapter-activate verb and the codexHostActivationObservation authority grant, all of which retire with packages/core/src/codex-adapter-activation.ts.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/operator-authority.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the ten assertions belonged to the three cases waived above and to the two host-forgery legs of the renamed hostile case. No assertion was dropped from a surviving leg -- the pins/rotation positive case and the eight remaining hostile legs keep their bodies verbatim.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/s7-behavior-surface.test.mjs",
+      "testName": "adapter-generate: fixed input reproduces the golden bundle, full value",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the golden it compared is generateCodexAdapterBundle's output, which retires with packages/core/src/codex-adapter.ts, and tests/fixtures/s7-golden/adapter-generate.golden.mjs and inputs.mjs retire with it. The persona-render golden -- the other half of the S7 behavior surface -- is kept verbatim.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/s7-behavior-surface.test.mjs",
+      "testName": "the goldens are self-consistent with the shared fixed inputs",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the case re-derived the adapter-generate golden from tests/fixtures/s7-golden/inputs.mjs, and both retire in this change. Its only non-adapter assertion pinned the persona profile id constant, which now lives in tests/s7-behavior-surface.test.mjs itself and is asserted by the surviving persona-render case that spawns the CLI with it.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/s7-behavior-surface.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the three assertions belonged to the two adapter-golden cases waived above. The surviving persona-render case keeps both of its assertions.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358 family 1 ('adapters'), acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/claude-adapter.ts, claude-adapter-activation.ts, claude-adapter-installer.ts, claude-adapter-session-start.ts, codex-adapter.ts, codex-adapter-activation.ts, codex-adapter-installer.ts, adapter-baseline.ts, compatibility-modes.ts and the two modules they were the last holders of -- observe-hook-handler.ts and receipt-sidecar.ts -- retire from the mainline tree as whole-file, zero-live-consumer modules, together with their thirty-one CLI verbs. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these suites for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/act13-authority-output.test.mjs",
+      "testName": "INC-012: the guarded vocabulary covers every host-state field core declares",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): this case scanned every packages/core/src/*.ts file for hand-authored readonly host-shaped field declarations and bound the result two-way to AUTHORITY_OUTPUT_FIELDS and AUTHORITY_STATE_TOKENS. Every such declaration it ever found -- activationState, currentDefinitionApproved, hookFired and trustApprovalObserved -- lived in packages/core/src/codex-adapter-activation.ts and packages/core/src/codex-adapter-installer.ts, both of which retire whole-file in this change. There is no surviving core file for a two-way scan to bind against; the fixed AUTHORITY_OUTPUT_FIELDS/AUTHORITY_STATE_TOKENS allowlist and the fail-closed write boundary that reads it (the other case in this file) are untouched and still enforced on every dispatched write.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/codex-adapter-activation.ts and packages/core/src/codex-adapter-installer.ts retire from the mainline tree as whole-file, zero-live-consumer modules. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and this case for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/act13-authority-output.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): the baseline's assertionCount was recorded before this file grew its ACT13 and INC-017 cases and was never updated for them, so it already overstated this file's real coverage at HEAD; those two cases -- \"ACT13: self-described, tampered, forged, cloned, and mismatched observations cannot mint activation\" and \"INC-017: a pinned observation cannot be replayed past the window that admitted it\" -- drove the retired Codex adapter-activation machinery end to end and are removed whole in this change together with the vocabulary case waived above. No assertion was dropped from either surviving case: both keep their bodies verbatim except for two fixture verb names in the first (adapter-activation-record, adapter-activate -> work-create), which are plain calls carrying no assert.* wrapper and so were never counted either before or after.",
+      "disowned": {
+        "owningRepository": "none -- the adapter family has no successor in the live tree; see ruling",
+        "ruling": "TCRN-CROSS-STORY-358, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D1 and D3 (the direction document's disposition table 'isolation' row): packages/core/src/codex-adapter-activation.ts, packages/core/src/codex-adapter-installer.ts and the rest of the adapter family retire from the mainline tree as whole-file, zero-live-consumer modules. There is no successor anywhere in the live tree. Git tag attic-2026-09 (local, commit 7ff2020c2045c78c97d447facbdad81edda8a463) retains the removed modules and these cases for historical reference; recovering this coverage means reverting the retirement, not writing a replacement test."
+      }
+    },
+    {
+      "path": "tests/p7-compatibility-modes.test.mjs",
+      "testName": "WSB-5: the shipped binary completes the status read verb with exit 0 and WORKSPACE_COMMAND_COMPLETED",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'): this file retires whole-file with packages/core/src/compatibility-modes.ts, but this one case had no compatibility-mode or adapter dependency -- it is a plain smoke test of scripts/tcrn-workflow.mjs's \"status\" read verb over the real shipped binary. Relocated verbatim (same assertions, same test name) rather than lost.",
+      "replacement": "tests/s7-behavior-surface.test.mjs:WSB-5: the shipped binary completes the status read verb with exit 0 and WORKSPACE_COMMAND_COMPLETED"
+    },
+    {
+      "path": "tests/p7-compatibility-modes.test.mjs",
+      "testName": "shared authority reader propagates caller errors and normalizes foreign errors to the changed code",
+      "reason": "TCRN-CROSS-STORY-358 family 1 ('adapters'), round 3 (MIN-143 D4 execution review 2): this file retires whole-file with packages/core/src/compatibility-modes.ts, but this one case had no compatibility-mode or adapter dependency -- it is the only direct test of the shared packages/core/src/authority-file-reader.ts, imported by context-router.ts, generic-profile.ts, gate-identity.ts and operator-authority.ts. Its loss silently dropped V8 coverage of the foreign-error-normalization branch at authority-file-reader.ts:173-174 to zero across the whole surviving 119-file suite. Relocated with a self-contained setup (same assertions, same test name): p7's authorityFile() helper called the retired readCompatibilityAdmissionReceipt, so the new host writes a canonical JSON document to a temp file directly and builds the file authority with its own fileAuthority() helper instead.",
+      "replacement": "tests/p6-context-router.test.mjs:shared authority reader propagates caller errors and normalizes foreign errors to the changed code"
     }
   ]
 }

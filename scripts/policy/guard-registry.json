@@ -48,15 +48,6 @@
       "test": "tests/p3-cli-read-surface.test.mjs"
     },
     {
-      "id": "CQ-02-codex-governed-action-typeof",
-      "rationale": "includes(String(x)) admits a single-element array, a toString object, and a boxed String onto a legal enum member. This is the site that required an Owner exemption to Constraint 1. The mutation restores the exact pre-fix text from 6cf5c70 rather than simply deleting the typeof check: deleting it leaves governedAction as unknown and the pinned compiler rejects the file, which would prove the compiler bites and say nothing about whether the test does.",
-      "file": "packages/core/src/codex-adapter.ts",
-      "find": "typeof document.governedAction !== \"string\" ||\n    ![\"generate\", \"validate\", \"simulate\"].includes(document.governedAction) ||",
-      "replace": "![\"generate\", \"validate\", \"simulate\"].includes(String(document.governedAction)) ||",
-      "expectedMatches": 1,
-      "test": "tests/p6-codex-adapter.test.mjs"
-    },
-    {
       "id": "CQ-02-extension-applies-to-typeof",
       "rationale": "extension-registration appliesTo admitted [[\"work\"],[\"work\"]] through both the membership test and the duplicate test, because Set dedupe is identity-based.",
       "file": "packages/protocol/src/index.ts",
@@ -163,96 +154,6 @@
       "testName": "sprint: a forged work.created carrying a malformed advisory value fails replay closed"
     },
     {
-      "id": "INC-001-activation-receipt-containment",
-      "rationale": "The v2 activation receipt validator requires every entry realpath to be its declared path resolved under the admitted installation root. Without it the uninstaller -- which unlinks entry.realpath verbatim -- deletes whatever three readable files a self-authored receipt names, reachable from adapter-deactivate with no operator authority; the content/identity digests only prove the caller could READ the target. Found by adversarial review with an executed proof of concept.",
-      "file": "packages/core/src/codex-adapter-activation.ts",
-      "find": "entryRealpath === expectedRealpath && entryRealpath.startsWith(`${admittedRoot}${sep}`)",
-      "replace": "entryRealpath === entryRealpath && expectedRealpath === expectedRealpath && admittedRoot.length >= 0 && sep.length >= 0",
-      "expectedMatches": 1,
-      "test": "tests/act9-codex-activation.test.mjs",
-      "testName": "INC-001: an activation receipt may only name files inside its own installation root"
-    },
-    {
-      "id": "INC-002-codex-hook-command-admitted-absolute-root",
-      "rationale": "The Codex hook definition must shell-quote the handler path derived from the installer-admitted absolute project root. A relative command inherits the host fire-time cwd and can execute another project's same-named handler after the operator approved different bytes.",
-      "file": "packages/core/src/codex-adapter-activation.ts",
-      "find": "shellQuote(resolve(installationRoot, CODEX_SESSION_START_PATH))",
-      "replace": "shellQuote(CODEX_SESSION_START_PATH + installationRoot.slice(0, 0))",
-      "expectedMatches": 1,
-      "test": "tests/act12-hook-root-binding.test.mjs",
-      "testName": "INC-002: Codex hook command executes the admitted root from an attacker cwd"
-    },
-    {
-      "id": "INC-002-claude-hook-command-admitted-absolute-root",
-      "rationale": "The Claude activation fragment carries the same admitted-root invariant. A relative handler path can be redirected by the host fire-time cwd even though the fragment digest itself was approved.",
-      "file": "packages/core/src/claude-adapter-activation.ts",
-      "find": "shellQuote(resolve(installationRoot, CLAUDE_ADAPTER_SESSION_START_PATH))",
-      "replace": "shellQuote(CLAUDE_ADAPTER_SESSION_START_PATH + installationRoot.slice(0, 0))",
-      "expectedMatches": 1,
-      "test": "tests/act12-hook-root-binding.test.mjs",
-      "testName": "INC-002: Claude hook command executes the admitted root from an attacker cwd"
-    },
-    {
-      "id": "INC-006-observation-context-brand",
-      "rationale": "A host_observed_active receipt can only be constructed from a WeakSet-branded activation-host observation context or a pinned observation file. Removing the brand check would let a caller forge a plain object or structured clone into the authority-bearing output path.",
-      "file": "packages/core/src/codex-adapter-activation.ts",
-      "find": "!hostActivationObservationContexts.has(value)",
-      "replace": "false",
-      "expectedMatches": 1,
-      "test": "tests/act13-authority-output.test.mjs",
-      "testName": "ACT13: self-described, tampered, forged, cloned, and mismatched observations cannot mint activation"
-    },
-    {
-      "id": "INC-014-session-start-control-character-screen",
-      "rationale": "The emitted SessionStart summary is a line-oriented document. Removing the control-character screen lets a tampered project.json forge extra context lines -- including a role assignment -- inside the 1024-byte budget, which no upstream validation can catch because the tampering happens after installation.",
-      "file": "packages/core/src/claude-adapter-session-start.ts",
-      "find": "if (CONTROL.test(project[field]))",
-      "replace": "if (false && CONTROL.test(project[field]))",
-      "expectedMatches": 1,
-      "test": "tests/act2-claude-activation.test.mjs",
-      "testName": "INC-014: a control character in a project field suppresses the whole summary instead of forging a context line"
-    },
-    {
-      "id": "INC-015-session-start-handler-self-digest",
-      "rationale": "The operator approves one command line naming session-start.mjs. Removing the fire-time self-digest check lets every later same-user write to that file run under the original approval, and makes the digest in the approved command line decorative.",
-      "file": "packages/core/src/claude-adapter-session-start.ts",
-      "find": "if (ownDigest !== argument(",
-      "replace": "if (false && ownDigest !== argument(",
-      "expectedMatches": 1,
-      "test": "tests/act2-claude-activation.test.mjs",
-      "testName": "INC-015: the handler refuses to run on bytes the approved command line did not pin"
-    },
-    {
-      "id": "INC-016-catalog-write-and-authority-output-exclusive",
-      "rationale": "mutates and authorityBearing are two different authorization categories and the operator bundle keeps their grant lists disjoint. A dispatcher that tested mutates first would satisfy an entry declaring both with a writeCommands grant alone -- a write grant carrying authority-bearing output, which operator-authority-v1 forbids. The MCP surface that did so is retired (STORY-287); the disjointness it depended on is asserted here so the rule outlives it. Nothing else refuses the flag pair: the schema declared authorityBearing with no dependency on mutates.",
-      "file": "packages/cli/src/index.ts",
-      "find": "if (entry.mutates && entry.authorityBearing === true) {",
-      "replace": "if (entry.mutates && entry.authorityBearing === undefined) {",
-      "expectedMatches": 1,
-      "test": "tests/p3-cli-catalog.test.mjs",
-      "testName": "INC-016: no catalog entry is both a governed write and authority-bearing output"
-    },
-    {
-      "id": "INC-017-observation-window-bound",
-      "rationale": "An operator-pinned observation document has no self-limiting lifetime. Without the window comparison the same bytes, re-pinned under a rotated bundle generation, mint another host_observed_active receipt indefinitely. This comparison is the only thing tying a recorded fire to the authority that was current when it happened.",
-      "file": "packages/core/src/codex-adapter-activation.ts",
-      "find": "if (!withinWindow) {",
-      "replace": "if (!withinWindow && withinWindow) {",
-      "expectedMatches": 1,
-      "test": "tests/act13-authority-output.test.mjs",
-      "testName": "INC-017: a pinned observation cannot be replayed past the window that admitted it"
-    },
-    {
-      "id": "INC-017-observation-not-after-verification-time",
-      "rationale": "The window bound alone admits an observedAt that is inside the bundle window but still in the future relative to the clock that reads it. A far-future observedAt would then survive every future window. Nothing can be observed after the moment of verification.",
-      "file": "packages/core/src/codex-adapter-activation.ts",
-      "find": "if (!notInFuture) {",
-      "replace": "if (!notInFuture && notInFuture) {",
-      "expectedMatches": 1,
-      "test": "tests/act13-authority-output.test.mjs",
-      "testName": "INC-017: a pinned observation cannot be replayed past the window that admitted it"
-    },
-    {
       "id": "INC-012-authority-shaped-output-declared",
       "rationale": "The catalog's authorityBearing flag was enumerated by a test, not enforced against what a verb emits, so a future command minting activationState/hookFired/trustApprovalObserved without the flag reddened nothing and shipped over MCP as a read-only tool. The CLI write boundary now refuses undeclared host-state output for every verb, present or future. Removing it restores a surface where caller-supplied input can be dressed as host evidence.",
       "file": "packages/cli/src/index.ts",
@@ -263,14 +164,14 @@
       "testName": "INC-012: authority-shaped output from a verb that does not declare it fails closed"
     },
     {
-      "id": "INC-022-activation-absent-settings-canonical-standin",
-      "rationale": "The activation merge admits only canonical settings bytes. A non-canonical absent-file stand-in fails ACTIVATION_FRAGMENT_INVALID for every root that has no .claude/settings.json yet -- the ordinary first install -- before anything is written.",
-      "file": "packages/core/src/claude-adapter-installer.ts",
-      "find": "settingsBefore?.content ?? canonicalJson({})",
-      "replace": "settingsBefore?.content ?? \"{}\"",
+      "id": "INC-016-catalog-write-and-authority-output-exclusive",
+      "rationale": "mutates and authorityBearing are two different authorization categories and the operator bundle keeps their grant lists disjoint. A dispatcher that tested mutates first would satisfy an entry declaring both with a writeCommands grant alone -- a write grant carrying authority-bearing output, which operator-authority-v1 forbids. The MCP surface that did so is retired (STORY-287); the disjointness it depended on is asserted here so the rule outlives it. Nothing else refuses the flag pair: the schema declared authorityBearing with no dependency on mutates.",
+      "file": "packages/cli/src/index.ts",
+      "find": "if (entry.mutates && entry.authorityBearing === true) {",
+      "replace": "if (entry.mutates && entry.authorityBearing === undefined) {",
       "expectedMatches": 1,
-      "test": "tests/act2-claude-activation.test.mjs",
-      "testName": "INC-022: activation installs into a root that has no .claude/settings.json yet"
+      "test": "tests/p3-cli-catalog.test.mjs",
+      "testName": "INC-016: no catalog entry is both a governed write and authority-bearing output"
     },
     {
       "id": "INC-027-event-page-ceiling-refused",
@@ -351,26 +252,6 @@
       "expectedMatches": 1,
       "test": "tests/backup-snapshot.test.mjs",
       "testName": "WSR-1 L6: a ledger entry must name itself, and a completion must restate its hop"
-    },
-    {
-      "id": "INC-219-codex-drift-context-not-branded",
-      "rationale": "A read taken with identityDrift:\"collect\" must never be branded as an installation. Branding it would hand uninstall, rollback and activation the very installation the strict reader refuses, turning the rebind path's read option into a force flag by the back door.",
-      "file": "packages/core/src/codex-adapter.ts",
-      "find": "if (identityDrift.length === 0) installationContexts.add(context);",
-      "replace": "installationContexts.add(context);",
-      "expectedMatches": 1,
-      "test": "tests/adapter-identity-rebind.test.mjs",
-      "testName": "INC-219 a drift-tolerating read is NOT branded, so nothing downstream can act on it"
-    },
-    {
-      "id": "INC-219-codex-rebind-content-required",
-      "rationale": "Rebind relaxes identity and nothing else. Without the content comparison it would re-bind a receipt to files whose bytes had changed, which is precisely the substitution the installation receipt exists to detect.",
-      "file": "packages/core/src/codex-adapter.ts",
-      "find": "if (createHash(\"sha256\").update(entryContent).digest(\"hex\") !== entry.contentDigest) fail(\"ADAPTER_INSTALLATION_MISMATCH\", entry.path);",
-      "replace": "",
-      "expectedMatches": 1,
-      "test": "tests/adapter-identity-rebind.test.mjs",
-      "testName": "INC-219 rebind REFUSES when a byte changed, because content is the guarantee"
     },
     {
       "id": "S299-1-extension-view-fixed-length",
