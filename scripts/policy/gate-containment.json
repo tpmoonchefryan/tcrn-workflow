@@ -1,9 +1,8 @@
 {
   "schemaVersion": "tcrn.gate-containment.v1",
-  "note": "The nine acceptance groups remain the semantic roster. A top-level run invokes only the four roots; each root's declared children are already judged by its command.",
+  "note": "The groups this roster lists remain the semantic roster. A top-level run invokes only the roots; each root's declared children are already judged by its command. TCRN-CROSS-MIN-149 removed helper-release and helper-suite when TCRN-CROSS-STORY-382 shrank the helper repository to its Skill payload and deleted the two scripts those groups ran.",
   "topLevel": [
     "engine-release",
-    "helper-release",
     "platform-layout",
     "product-gates"
   ],
@@ -12,8 +11,6 @@
     "engine-p1",
     "engine-guards",
     "engine-release",
-    "helper-suite",
-    "helper-release",
     "platform-layout",
     "chain-validate",
     "product-gates"
@@ -56,24 +53,6 @@
         "run",
         "--silent",
         "test"
-      ]
-    },
-    {
-      "id": "helper-release",
-      "command": "pnpm push-gate",
-      "contains": [
-        "helper-suite"
-      ]
-    },
-    {
-      "id": "helper-suite",
-      "command": "pnpm test",
-      "contains": [],
-      "cwd": "../tcrn-workflow-helper",
-      "executable": "npm",
-      "argv": [
-        "test",
-        "--silent"
       ]
     },
     {

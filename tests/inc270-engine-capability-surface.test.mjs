@@ -23,7 +23,7 @@ const FIXTURE_COMMIT = "f".repeat(40);
 const launchdLabel = "com.tcrn.platform.local-snapshot";
 const topology = "## 三、分区拓扑\n";
 
-function syntheticRoster(count = 9) {
+function syntheticRoster(count = 7) {
   return {
     schemaVersion: "tcrn.acceptance-gate-groups.v1",
     groups: Array.from({ length: count }, (_, index) => ({
@@ -45,7 +45,7 @@ async function minimalFixture(context) {
   await writeFile(join(root, "AGENTS.md"), `${topology}fixture\n`);
   await writeFile(join(root, "CLAUDE.md"), "@AGENTS.md\n");
   await mkdir(join(root, ".tcrn-workspace", "cross-project", "workspace"), { recursive: true });
-  const roster = syntheticRoster(9);
+  const roster = syntheticRoster(7);
   await mkdir(join(root, "platform-docs"), { recursive: true });
   await writeFile(join(root, "platform-docs", "acceptance-gate-groups.json"), `${JSON.stringify(roster, null, 2)}\n`);
   const recordedAt = new Date((await stat(join(root, "platform-docs", "acceptance-gate-groups.json"))).mtimeMs).toISOString();

@@ -36,7 +36,7 @@ const launchdLabel = "com.tcrn.platform.local-snapshot";
 // synthetic one does too. `roster: false` builds a container without it, which is
 // what the roster leg's red case looks like -- and what every container looked like
 // until 2026-08-19, while forty-four records were landing done against it.
-function syntheticRoster(count = 9) {
+function syntheticRoster(count = 7) {
   return {
     schemaVersion: "tcrn.acceptance-gate-groups.v1",
     groups: Array.from({ length: count }, (_, index) => ({
@@ -55,8 +55,6 @@ function inc250Roster() {
     ["engine-p1", "TCRN Platform/tcrn-workflow"],
     ["engine-guards", "TCRN Platform/tcrn-workflow"],
     ["engine-release", "TCRN Platform/tcrn-workflow"],
-    ["helper-suite", "TCRN Platform/tcrn-workflow-helper"],
-    ["helper-release", "TCRN Platform/tcrn-workflow-helper"],
     ["platform-layout", "TCRN Platform/tcrn-workflow"],
     ["chain-validate", "chain container"],
     ["product-gates", "TCRN Platform/TCRN-Design-System"],
@@ -82,11 +80,10 @@ function chainAcceptanceBinding(marker) {
   };
 }
 
-function inc250Bindings(roster, { engine = "a", helper = "b", chain = "c", designSystem = "d" } = {}) {
+function inc250Bindings(roster, { engine = "a", chain = "c", designSystem = "d" } = {}) {
   const bindings = {};
   for (const group of roster.groups) {
     if (group.repository === "TCRN Platform/tcrn-workflow") bindings[group.id] = gitAcceptanceBinding(group.repository, engine.repeat(40));
-    else if (group.repository === "TCRN Platform/tcrn-workflow-helper") bindings[group.id] = gitAcceptanceBinding(group.repository, helper.repeat(40));
     else if (group.repository === "TCRN Platform/TCRN-Design-System") bindings[group.id] = gitAcceptanceBinding(group.repository, designSystem.repeat(40));
     else bindings[group.id] = chainAcceptanceBinding(chain);
   }
@@ -162,9 +159,9 @@ test("INC-247: the former classification-folder docs location is rejected", asyn
 
 // Red legs for the roster, both observed before this landed: an absent roster is
 // named as absent rather than tolerated, and a roster that has quietly lost a group
-// is refused with the count reported. Nine is the number the acceptance ruling
-// names, so a different count is a change to the criterion and belongs in a ruling
-// rather than in a file edit.
+// is refused with the count reported. The count the acceptance ruling names is seven
+// since MIN-149, so a different count is a change to the criterion and belongs in a
+// ruling rather than in a file edit.
 test("STORY-300: an absent acceptance roster is a red leg, not a tolerated gap", async (context) => {
   const root = await fixture(context, { roster: null });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
@@ -173,12 +170,12 @@ test("STORY-300: an absent acceptance roster is a red leg, not a tolerated gap",
 });
 
 test("STORY-300: an acceptance roster that lost a group is refused with the count", async (context) => {
-  const root = await fixture(context, { roster: syntheticRoster(8) });
+  const root = await fixture(context, { roster: syntheticRoster(6) });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
   assert.equal(result.ok, false);
   const leg = result.checks.find((item) => item.name === "acceptanceGateGroups");
   assert.equal(leg.reasonCode, "PLATFORM_ACCEPTANCE_ROSTER_INVALID");
-  assert.equal(leg.declaredGroups, 8);
+  assert.equal(leg.declaredGroups, 6);
 });
 
 // Red legs for the identity file's history, both observed before this landed. Two
@@ -1133,7 +1130,7 @@ test("INC-234: missing, stale and red verdicts are each refused, and named", asy
   const none = leg(await run({ verdicts: {} }));
   assert.equal(none.ok, false);
   assert.equal(none.reasonCode, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
-  assert.equal(none.missing.length, 9, "every roster group is named as unrecorded");
+  assert.equal(none.missing.length, 7, "every roster group is named as unrecorded");
 
   // A red verdict stays visible rather than being absorbed. Red leg: treat any recorded
   // entry as satisfaction and a group that ran and failed reads the same as one that passed.
@@ -1159,11 +1156,11 @@ test("INC-234: missing, stale and red verdicts are each refused, and named", asy
   assert.equal(stale.ok, false);
   assert.deepEqual(stale.stale.map((entry) => entry.group), [firstGroup]);
 
-  // All nine fresh and green is the only pass. Red leg: return ok unconditionally and the
+  // Every rostered group fresh and green is the only pass. Red leg: return ok unconditionally and the
   // leg stops distinguishing anything at all.
   const green = leg(await run({ verdicts: Object.fromEntries(none.missing.map((id) => [id, { verdict: "green", recordedAt: fresh, commit: FIXTURE_COMMIT }])) }));
   assert.equal(green.ok, true);
-  assert.equal(green.groups, 9);
+  assert.equal(green.groups, 7);
 });
 
 test("INC-246: an accepted red names its exact reason and does not exempt the group", async (context) => {
@@ -1230,7 +1227,7 @@ test("INC-250: each verdict binds to the repository named by its roster entry", 
   const green = await run(bindings);
   const greenLeg = green.checks.find((item) => item.name === "acceptanceVerdicts");
   assert.equal(green.ok, true, JSON.stringify(greenLeg));
-  assert.equal(greenLeg.bindings.length, 8);
+  assert.equal(greenLeg.bindings.length, 6);
   assert.deepEqual(greenLeg.liveGroups, ["chain-validate"]);
   const withLiveRecord = {
     ...verdictDocumentForBindings(roster, bindings),
@@ -1243,15 +1240,6 @@ test("INC-250: each verdict binds to the repository named by its roster entry", 
   const liveRecordLeg = liveRecordRed.checks.find((item) => item.name === "acceptanceVerdicts");
   assert.equal(liveRecordLeg.ok, false);
   assert.equal(liveRecordLeg.liveGroupRecorded, "chain-validate");
-
-  const helperMoved = { ...bindings };
-  helperMoved["helper-suite"] = gitAcceptanceBinding("TCRN Platform/tcrn-workflow-helper", "e".repeat(40));
-  helperMoved["helper-release"] = gitAcceptanceBinding("TCRN Platform/tcrn-workflow-helper", "e".repeat(40));
-  const helperRed = await run(helperMoved);
-  const helperLeg = helperRed.checks.find((item) => item.name === "acceptanceVerdicts");
-  assert.deepEqual(helperLeg.stale.map((entry) => entry.group), ["helper-suite", "helper-release"]);
-  assert.match(helperLeg.stale[0].recordedAgainst, /tcrn-workflow-helper/u);
-  assert.match(helperLeg.stale[0].current, /e{12}/u);
 
   const engineMoved = { ...bindings };
   for (const id of ["engine-suite", "engine-p1", "engine-guards", "engine-release", "platform-layout"]) {
@@ -1267,6 +1255,12 @@ test("INC-250: each verdict binds to the repository named by its roster entry", 
   const designSystemLeg = designSystemRed.checks.find((item) => item.name === "acceptanceVerdicts");
   assert.deepEqual(designSystemLeg.stale.map((entry) => entry.group), ["product-gates"]);
   assert.equal(designSystemLeg.stale.some((entry) => entry.group === "engine-suite"), false, "product movement must not stale the engine tree");
+  // MIN-149 removed the helper groups whose stale entries used to be the only
+  // assertion on bindingIdentity's rendering. Re-hung here so the leg still proves
+  // a stale entry names which tree it was recorded against, and against which HEAD.
+  assert.match(designSystemLeg.stale[0].recordedAgainst, /TCRN-Design-System/u);
+  assert.match(designSystemLeg.stale[0].recordedAgainst, /d{12}/u);
+  assert.match(designSystemLeg.stale[0].current, /e{12}/u);
 });
 
 test("INC-251: live chain validation enumerates current partitions and reports elapsed time", async (context) => {
@@ -1373,7 +1367,7 @@ test("STORY-304: a verdict recorded against another commit is stale, and names b
   const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
   assert.equal(leg.ok, false);
   assert.equal(leg.reasonCode, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
-  assert.equal(leg.stale.length, 9, "every verdict recorded against another tree is stale");
+  assert.equal(leg.stale.length, 7, "every verdict recorded against another tree is stale");
   assert.equal(leg.stale[0].recordedAgainst, "b".repeat(12));
   assert.equal(leg.stale[0].head, "a".repeat(12), "and the commit it should have named is reported");
 });
@@ -1424,7 +1418,7 @@ test("INC-250: an unresolved declared repository is red rather than an engine-HE
   const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
   assert.equal(leg.ok, false);
   assert.equal(leg.reasonCode, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
-  assert.equal(leg.unresolved.length, 9);
+  assert.equal(leg.unresolved.length, 7);
   assert.equal(leg.unresolved[0].reasonCode, "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED");
 });
 

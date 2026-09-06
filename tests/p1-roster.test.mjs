@@ -64,17 +64,21 @@ test("the roster names each verb once", () => {
   assert.equal(new Set(P1_TASKS).size, P1_TASKS.length);
 });
 
-test("STORY-349 top-level gate containment preserves the nine-group execution order", () => {
+test("STORY-349 top-level gate containment preserves the roster's execution order", () => {
+  // MIN-149 removed helper-release and helper-suite with STORY-382: the helper repository
+  // no longer carries the two scripts those groups ran. The order is asserted literally
+  // rather than by count so that removing a group is a visible edit here, not a number.
   const declaration = JSON.parse(readFileSync(join(REPO_ROOT, "scripts/policy/gate-containment.json"), "utf8"));
-  assert.deepEqual(declaration.topLevel, ["engine-release", "helper-release", "platform-layout", "product-gates"]);
+  assert.deepEqual(declaration.topLevel, ["engine-release", "platform-layout", "product-gates"]);
   assert.deepEqual(declaration.executionOrder, [
     "engine-suite", "engine-p1", "engine-guards", "engine-release",
-    "helper-suite", "helper-release", "platform-layout", "chain-validate", "product-gates",
+    "platform-layout", "chain-validate", "product-gates",
   ]);
   const groups = new Map(declaration.groups.map((group) => [group.id, group]));
   assert.deepEqual(groups.get("engine-release").contains, ["engine-p1", "engine-guards"]);
   assert.deepEqual(groups.get("engine-p1").contains, ["engine-suite"]);
-  assert.deepEqual(groups.get("helper-release").contains, ["helper-suite"]);
+  assert.equal(groups.has("helper-release"), false);
+  assert.equal(groups.has("helper-suite"), false);
   assert.deepEqual(groups.get("platform-layout").contains, ["chain-validate"]);
   assert.deepEqual(ENGINE_PUSH_GATE_CHILDREN.map(({ script }) => script), ["verify:p1", "verify:p8", "guard-check"]);
 });

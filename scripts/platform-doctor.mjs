@@ -316,8 +316,8 @@ function compareAcceptanceBindings(recorded, current) {
 }
 
 // STORY-300 / TCRN-CROSS-MIN-ACCEPTANCE-LANES. The machine-checked acceptance lane
-// releases a work item to done on "the named nine gate groups all green", and until
-// 2026-08-19 the roster of those nine existed nowhere -- not in a repository, not in
+// releases a work item to done on the groups this roster lists all being green, and
+// until 2026-08-19 that roster existed nowhere -- not in a repository, not in
 // the platform documents, not on the chain -- while forty-four records had already
 // landed against it. A criterion whose members are remembered rather than written is
 // the executor choosing which tests count, which is the thing that criterion exists
@@ -416,7 +416,7 @@ async function inspectHelperReleaseAlignment(platformRoot, homeRoot, options) {
 
 function helperReleaseVerdict(published, trusted, source) {
   if (published === null) {
-    return check("helperReleaseAlignment", true, { comparable: false, reason: "no helper repository in this container, so the released payload is unknown here", source });
+    return check("helperReleaseAlignment", true, { comparable: false, reason: "no bootstrap in the helper repository, so the released payload is unknown here: TCRN-CROSS-STORY-382 shrank that repository to its Skill payload and this leg has had nothing to compare since", source });
   }
   if (trusted === null) {
     return check("helperReleaseAlignment", false, { reasonCode: "PLATFORM_HELPER_TRUST_ROOT_MISSING", published: published.slice(0, 12), source });
@@ -764,8 +764,8 @@ async function chainEventCounts(root, options) {
 
 // TCRN-CROSS-INC-234: the acceptance lane could not tell "green" from "nobody looked".
 //
-// TCRN-CROSS-MIN-ACCEPTANCE-LANES makes "the named nine gate groups all green" the
-// criterion that releases machine-checkable work to done, and INC-232 wrote the roster
+// TCRN-CROSS-MIN-ACCEPTANCE-LANES makes the groups this roster lists all being green
+// the criterion that releases machine-checkable work to done, and INC-232 wrote the roster
 // down because until then it existed nowhere. Both left the same hole: nothing consults
 // the roster at the moment it is supposed to bind. On 2026-08-19 the product-gates group
 // had been failing since the 17th -- AOS importing an engine module retired in v0.11.18 --
@@ -808,7 +808,7 @@ async function inspectAcceptanceVerdicts(root, options) {
       return check("acceptanceVerdicts", false, {
         reasonCode: "PLATFORM_ACCEPTANCE_VERDICTS_MISSING",
         groups: groups.length,
-        remedy: "run the nine groups and record each verdict in platform-docs/acceptance-verdicts.json; an unrecorded run cannot be told from an unrun one",
+        remedy: "run the groups this roster lists and record each verdict in platform-docs/acceptance-verdicts.json; an unrecorded run cannot be told from an unrun one",
       });
     }
   }
@@ -981,10 +981,13 @@ async function inspectAcceptanceGateGroups(root) {
       acceptedExceptionKeys.add(key);
     }
   }
-  // Nine is the number the ruling names. If the roster ever holds a different count,
-  // that is a change to the acceptance criterion and belongs in a ruling rather than
-  // in a file edit, so it is reported rather than accommodated.
-  if (roster.groups.length !== 9 || incomplete.length > 0 || duplicated.length > 0 || invalidAcceptedExceptions.length > 0 || containmentProblems.length > 0) {
+  // The count is pinned so a roster that quietly loses a group is refused rather than
+  // accommodated: a change to the acceptance criterion belongs in a ruling, not in a
+  // file edit. The number the ruling names is nine no longer -- TCRN-CROSS-MIN-149
+  // (2026-09-06) removed helper-release and helper-suite when TCRN-CROSS-STORY-382
+  // shrank the helper repository to its Skill payload and deleted the two scripts
+  // those groups ran. Seven is what that ruling leaves. Move this only with another.
+  if (roster.groups.length !== 7 || incomplete.length > 0 || duplicated.length > 0 || invalidAcceptedExceptions.length > 0 || containmentProblems.length > 0) {
     return check("acceptanceGateGroups", false, {
       reasonCode: "PLATFORM_ACCEPTANCE_ROSTER_INVALID",
       declaredGroups: roster.groups.length,
