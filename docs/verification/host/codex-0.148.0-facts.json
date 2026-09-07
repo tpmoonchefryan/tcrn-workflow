@@ -138,5 +138,47 @@
       ".tcrn-artifacts/dispatch-runs/init-051/INC-281/evidence/TCRN-CROSS-INC-281.TCRN-CROSS-INC-281.redact.codex-probe.stderr.txt"
     ]
   },
+  "afterModelChange": {
+    "status": "RESOLVED. One Stop event runs all three Stop groups; the STORY-357 primary design holds and the fallback design is not needed.",
+    "observedAt": "2026-09-07",
+    "workItem": "TCRN-CROSS-INC-281",
+    "ruling": "TCRN-CROSS-MIN-154 D1 and D4",
+    "model": "gpt-5.6-luna",
+    "hostVersion": "0.153.4",
+    "method": "codex exec -C \"<home>/Code\" -m gpt-5.6-luna -s read-only --json [--ephemeral] \"回复 OK，不要做任何别的事。\" </dev/null ; hook counts read from the RUST_LOG=trace stderr spans (hook.event_name / hook.display_order) and the app-server \"hook/started\" lines, not from the --json stdout stream, which carries no hook events.",
+    "runs": [
+      {
+        "name": "probe-ephemeral",
+        "flags": "--ephemeral",
+        "exit": 0,
+        "seconds": 21,
+        "note": "five event kinds on the --json stream, no hook events"
+      },
+      {
+        "name": "probe-persisted",
+        "flags": "none",
+        "exit": 0,
+        "seconds": 18,
+        "note": "rollout carries three hooks.additional_context entries (SessionStart knowledge injection 37; UserPromptSubmit knowledge injection 1 plus agents-zero section 0)"
+      },
+      {
+        "name": "probe-debug",
+        "flags": "--ephemeral, RUST_LOG=debug",
+        "exit": 0,
+        "seconds": 20,
+        "note": "only the codex.hooks.run metric registration is visible"
+      },
+      {
+        "name": "probe-trace",
+        "flags": "--ephemeral, RUST_LOG=trace",
+        "exit": 0,
+        "seconds": 20,
+        "note": "hook spans: SessionStart order 2; UserPromptSubmit orders 3 and 4; Stop orders 5, 6 and 7; hook/started = hook/completed = 6"
+      }
+    ],
+    "stopGroupCount": 3,
+    "evidence": ".tcrn-artifacts/dispatch-runs/init-051/INC-281/evidence/fable-probe-luna-2026-09-07/ (README.md plus eleven probe files; stderr stripped of authorization and cookie lines)",
+    "supersedes": "The gpt-5.5-mini re-probe recorded in afterOwnerApproval above failed at the model layer (HTTP 400: that model is unavailable to Codex on a ChatGPT account). Owner ruling TCRN-CROSS-MIN-154 D1 retired it; TCRN-CROSS-MIN-153 D1 withdrew the Stop-count-0 reading taken from that failed run."
+  },
   "identifierRedaction": "home directory replaced with <home>, the same substitution docs/verification/host/codex-mcp-l25.json and codex-mcp-l25-call.json already use for it. Owner ruling TCRN-CROSS-MIN-152 D6: a file under docs/verification/host/ must not carry a local absolute path, because the P1 privacy leg scans every blob reachable from HEAD and a path written into history can only be removed by rewriting it. The redaction is applied to this file's whole text, so every trust key, command line and step in this file reads <home> where the host reads its own home directory."
 }
