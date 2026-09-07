@@ -43,6 +43,13 @@ export const PROTOCOL_LIMITS = Object.freeze({
   maxExtensions: 64,
 });
 
+// TCRN-CROSS-STORY-363. The summary is a retrieval line, not a description: it
+// rides in every work-list row and in the injected "[Story KEY status] summary"
+// line, so its cost is paid once per record per read. 160 UTF-8 bytes is the
+// budget that keeps a fifty-record listing under one screen; it is a byte bound
+// rather than a character bound because that is what the transport pays for.
+export const WORK_SUMMARY_MAX_BYTES = 160;
+
 export const PROTOCOL_REASON_CODES = Object.freeze([
   "CANONICAL_VALUE_INVALID",
   "CANONICALIZATION_MISMATCH",
@@ -122,6 +129,13 @@ export interface WorkRecord {
   readonly title?: string | null;
   readonly createdAt?: string | null;
   readonly labels?: readonly string[];
+  // TCRN-CROSS-STORY-363: a derived one-line summary. Optional in the same sense
+  // the four fields above are, and for a stronger reason: it is ABSENT, not null,
+  // on every record the chain already carries. A record projects to the bytes its
+  // event stored, and every derived view digests those bytes, so filling this in
+  // during replay would restate all eight partitions' views as stale without any
+  // event having changed. Records written after this field exists carry it.
+  readonly summary?: string | null;
 }
 
 export interface EventRecord {
@@ -437,6 +451,17 @@ export function assertVersionWindow(version: number, minimum: number, maximum: n
   }
 }
 
+// TCRN-CROSS-STORY-363. Null means "this record has no summary"; a string must
+// carry something and must fit the byte budget. Exported so the write path bounds
+// its input with the same predicate replay bounds its output with, rather than
+// with a second copy of the rule that can drift from this one.
+export function isWorkSummary(value: unknown): boolean {
+  if (value === null) {
+    return true;
+  }
+  return typeof value === "string" && value.length > 0 && Buffer.byteLength(value, "utf8") <= WORK_SUMMARY_MAX_BYTES;
+}
+
 function assertWorkRecordShape(record: WorkRecord): void {
   const legacyFields = [
     "schemaVersion", "id", "externalKey", "projectId", "kind", "parentId",
@@ -446,10 +471,16 @@ function assertWorkRecordShape(record: WorkRecord): void {
     fail("RECORD_MALFORMED", "unknown");
   }
   const currentFields = [...legacyFields, "createdAt", "labels", "scopeDigest", "title"];
+  // TCRN-CROSS-STORY-363 adds a third accepted shape rather than widening the
+  // second: the 11-field pre-migration record, the 15-field STORY-336 record and
+  // the 16-field record that also carries a summary all replay, and a record is
+  // one of the three exactly -- a partial upgrade is still malformed.
+  const summarisedFields = [...currentFields, "summary"];
   const actualFields = Object.keys(record).sort(compareCanonicalText);
   const legacy = JSON.stringify(actualFields) === JSON.stringify([...legacyFields].sort(compareCanonicalText));
   const current = JSON.stringify(actualFields) === JSON.stringify([...currentFields].sort(compareCanonicalText));
-  if (!legacy && !current) {
+  const summarised = JSON.stringify(actualFields) === JSON.stringify([...summarisedFields].sort(compareCanonicalText));
+  if (!legacy && !current && !summarised) {
     fail("RECORD_MALFORMED", String(record.id ?? "unknown"));
   }
   if (record.schemaVersion !== "tcrn.work.v1" || !Number.isSafeInteger(record.revision) || record.revision < 1 ||
@@ -471,7 +502,10 @@ function assertWorkRecordShape(record: WorkRecord): void {
   if (!isWorkStatus(record.status)) {
     fail("RECORD_MALFORMED", String(record.id));
   }
-  if (current) {
+  if (summarised && !isWorkSummary(record.summary)) {
+    fail("RECORD_MALFORMED", String(record.id));
+  }
+  if (current || summarised) {
     if (record.scopeDigest !== null && (typeof record.scopeDigest !== "string" || !/^[a-f0-9]{64}$/u.test(record.scopeDigest)) ||
       (record.title !== null && typeof record.title !== "string") ||
       (record.createdAt !== null && (typeof record.createdAt !== "string" || (() => { try { assertStrictInstant(record.createdAt); return false; } catch { return true; } })())) ||

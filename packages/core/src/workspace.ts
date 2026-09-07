@@ -20,6 +20,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import {
   PROTOCOL_LIMITS,
   ProtocolError,
+  WORK_SUMMARY_MAX_BYTES,
   assertCanonicalJson,
   assertProtocolId,
   assertStrictInstant,
@@ -31,6 +32,7 @@ import {
   compareCanonicalText,
   createEvent,
   deriveStableId,
+  isWorkSummary,
   parseStrictInstant,
   validateEventChain,
   validateWorkGraph,
@@ -103,7 +105,7 @@ import type { GateIdentityAuthorityContext, GateIdentityDecision } from "./gate-
 import type { CanonicalRoot } from "./root-identity.js";
 import { FRAMEWORK_VERSION } from "./index.js";
 import type { ExplicitRoot } from "./index.js";
-import { describeStoryScopeProblems, storyScopeFromRecord, storyScopeNamesOwnerDecider, validateStoryRecord, validateStoryVerificationLinks } from "./story-scope-compliance.js";
+import { describeStoryScopeProblems, deriveWorkSummary, storyScopeFromRecord, storyScopeNamesOwnerDecider, validateStoryRecord, validateStoryVerificationLinks } from "./story-scope-compliance.js";
 import type { VerificationClaimLink } from "./story-scope-compliance.js";
 import {
   TemplateAdmissionError,
@@ -1791,6 +1793,14 @@ function normalizeWorkRecord(record: WorkRecord, reasonCode: WorkspaceReasonCode
     !Array.isArray(record.labels) || record.labels.some((label) => typeof label !== "string") || new Set(record.labels).size !== record.labels.length) {
     fail(reasonCode, `work ${String(record.id)} field upgrade is invalid`);
   }
+  // TCRN-CROSS-STORY-363. The summary is checked only where it is present. It is
+  // deliberately NOT filled in for the records that predate it: this function runs
+  // on every replayed event, and adding a field here would change the bytes every
+  // derived view digests without any event having changed -- eight partitions'
+  // views stale at once, for a field nobody wrote.
+  if (Object.hasOwn(record, "summary") && !isWorkSummary(record.summary)) {
+    fail(reasonCode, `work ${String(record.id)} summary is invalid`);
+  }
   return record;
 }
 
@@ -1813,6 +1823,20 @@ function normalizeWorkTitle(value: unknown, reasonCode: WorkspaceReasonCode = "W
     throw error;
   }
   return value;
+}
+
+// TCRN-CROSS-STORY-363. The write-path bound on a caller-supplied summary. It
+// shares isWorkSummary with replay so the rule has one statement, and it reports
+// the byte budget in the message because "too long" is unactionable when the
+// budget is bytes and the author counted characters.
+function normalizeWorkSummary(value: unknown, reasonCode: WorkspaceReasonCode = "WORKSPACE_INPUT_INVALID"): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (!isWorkSummary(value)) {
+    fail(reasonCode, `work summary must be a non-empty string of at most ${String(WORK_SUMMARY_MAX_BYTES)} UTF-8 bytes`);
+  }
+  return value as string;
 }
 
 function workFieldsForWrite(record: WorkRecord): WorkRecord {
@@ -1912,9 +1936,9 @@ function assertAdvisoryEntryShape(key: string, entry: unknown, id: string, reaso
   }
 }
 
-// The work.annotated guard: only the advisory keys may differ from the prior revision,
-// and at least one must. Every other extension entry stays byte-identical, so an
-// annotation can neither introduce a foreign extension, drop one, nor alter it -- the
+// The work.annotated guard: only the annotatable fields may differ from the prior
+// revision, and at least one must. Every other extension entry stays byte-identical, so
+// an annotation can neither introduce a foreign extension, drop one, nor alter it -- the
 // same anti-smuggling shape the gate evidence path enforces with an exact comparison.
 //
 // TCRN-CROSS-INC-269: this was a replay-only guard, and the verb had no counterpart to
@@ -1924,18 +1948,46 @@ function assertAdvisoryEntryShape(key: string, entry: unknown, id: string, reaso
 // assertGateClearance, the predicate now takes its reason code from the caller and runs
 // on both paths: WORKSPACE_INPUT_INVALID on the verb, WORKSPACE_EVENT_CORRUPT in replay.
 // One predicate, so the two cannot drift apart again.
-function assertWorkAnnotationExtensions(
-  current: Readonly<Record<string, unknown>>,
-  next: Readonly<Record<string, unknown>>,
+//
+// TCRN-CROSS-STORY-363 finishes that repair from the other end. INC-269 closed the hole
+// by refusing a title-only annotation on both paths, which left title, labels and now
+// summary writable only in the company of an advisory change -- and a summary backfill
+// has no advisory change to make: it is not allowed to touch the scope it reads. So the
+// "at least one moved" test now counts the three top-level annotatable fields alongside
+// the advisory keys. This is a widening in the safe direction only: every event that
+// replayed before still replays, an empty delta is still refused because nothing moved,
+// and the non-advisory extension comparison below is untouched, so nothing new can be
+// smuggled through. What becomes legal is exactly the write the verb was already the
+// only producer of.
+interface WorkAnnotationFields {
+  readonly extensions: Readonly<Record<string, unknown>>;
+  readonly title: string | null;
+  readonly summary: string | null;
+  readonly labels: readonly string[];
+}
+
+function workAnnotationFields(record: WorkRecord): WorkAnnotationFields {
+  return {
+    extensions: record.extensions,
+    title: record.title ?? null,
+    summary: record.summary ?? null,
+    labels: record.labels ?? [],
+  };
+}
+
+function assertWorkAnnotation(
+  current: WorkAnnotationFields,
+  next: WorkAnnotationFields,
   id: string,
   reasonCode: WorkspaceReasonCode,
 ): void {
   const advisory = new Set(ADVISORY_KEYS);
-  const keys = new Set([...Object.keys(current), ...Object.keys(next)]);
-  let changed = false;
+  const keys = new Set([...Object.keys(current.extensions), ...Object.keys(next.extensions)]);
+  let changed = current.title !== next.title || current.summary !== next.summary ||
+    canonicalJson(current.labels as JsonValue) !== canonicalJson(next.labels as JsonValue);
   for (const key of keys) {
-    const before = canonicalJson((current[key] ?? null) as JsonValue);
-    const after = canonicalJson((next[key] ?? null) as JsonValue);
+    const before = canonicalJson((current.extensions[key] ?? null) as JsonValue);
+    const after = canonicalJson((next.extensions[key] ?? null) as JsonValue);
     if (!advisory.has(key)) {
       if (before !== after) {
         fail(reasonCode, `work ${id} annotation changed non-advisory extension ${key}`);
@@ -1945,12 +1997,12 @@ function assertWorkAnnotationExtensions(
     if (before !== after) {
       changed = true;
     }
-    if (Object.hasOwn(next, key)) {
-      assertAdvisoryEntryShape(key, next[key], id, reasonCode);
+    if (Object.hasOwn(next.extensions, key)) {
+      assertAdvisoryEntryShape(key, next.extensions[key], id, reasonCode);
     }
   }
   if (!changed) {
-    fail(reasonCode, `work ${id} annotation changed no advisory field`);
+    fail(reasonCode, `work ${id} annotation changed no annotatable field`);
   }
 }
 
@@ -2124,7 +2176,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         if (record.status !== current.status) {
           fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} annotation changed status`);
         }
-        assertWorkAnnotationExtensions(current.extensions, record.extensions, record.id, "WORKSPACE_EVENT_CORRUPT");
+        assertWorkAnnotation(workAnnotationFields(current), workAnnotationFields(record), record.id, "WORKSPACE_EVENT_CORRUPT");
       }
       extensionRecordOrCorrupt(() => validateBoundTemplateWork(record, [...templates.values()]));
       work.set(record.id, record);
@@ -4130,6 +4182,7 @@ export function createWorkDelta(input: {
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly title?: string | null;
+  readonly summary?: string | null;
   readonly labels?: readonly string[];
   readonly templateAdmission?: unknown;
   readonly occurredAt: string;
@@ -4147,6 +4200,7 @@ export async function createWork(workspaceRoot: string, lease: WorkspaceLease, i
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly title?: string | null;
+  readonly summary?: string | null;
   readonly labels?: readonly string[];
   readonly templateAdmission?: unknown;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
@@ -4162,6 +4216,7 @@ function createWorkReducerDelta(state: WorkspaceState, input: {
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly title?: string | null;
+  readonly summary?: string | null;
   readonly labels?: readonly string[];
   readonly templateAdmission?: unknown;
   readonly occurredAt: string;
@@ -4203,6 +4258,13 @@ function createWorkReducerDelta(state: WorkspaceState, input: {
     }
     const title = normalizeWorkTitle(input.title);
     const labels = normalizeWorkLabels(input.labels ?? []);
+    // TCRN-CROSS-STORY-363. An explicit --summary wins; otherwise the first
+    // sentence of the Goal block, which is where the author already wrote the
+    // one-line answer. A record with neither carries summary: null rather than
+    // no field, so every record born after this change has one shape.
+    const summary = input.summary === undefined
+      ? deriveWorkSummary(input.scope, WORK_SUMMARY_MAX_BYTES)
+      : normalizeWorkSummary(input.summary);
     const templateReceipt = input.templateAdmission === undefined
       ? undefined
       : validateTemplateAdmissionReceipt(input.templateAdmission);
@@ -4238,6 +4300,7 @@ function createWorkReducerDelta(state: WorkspaceState, input: {
       title,
       createdAt: input.occurredAt,
       labels,
+      summary,
     };
     // A bound Story is governed by the admitted heading data, not by the
     // pre-template ten-heading parser.  Unbound records retain the legacy
@@ -4326,7 +4389,7 @@ function assertTransitionAdmission(state: WorkspaceState, input: { readonly id: 
   }
 }
 
-export function transitionWorkDelta(input: { readonly id: string; readonly status: WorkStatus; readonly occurredAt: string; readonly verificationClaims?: readonly VerificationClaimLink[] }): (state: WorkspaceState) => MutationDelta {
+export function transitionWorkDelta(input: { readonly id: string; readonly status: WorkStatus; readonly summary?: string | null; readonly occurredAt: string; readonly verificationClaims?: readonly VerificationClaimLink[] }): (state: WorkspaceState) => MutationDelta {
   return (state) => {
     assertTransitionAdmission(state, input);
     return transitionWorkReducerDelta(state, input);
@@ -4336,6 +4399,7 @@ export function transitionWorkDelta(input: { readonly id: string; readonly statu
 export async function transitionWork(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly id: string;
   readonly status: WorkStatus;
+  readonly summary?: string | null;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
     assertTransitionAdmission(state, input);
@@ -4343,7 +4407,7 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
   }, input);
 }
 
-function transitionWorkReducerDelta(state: WorkspaceState, input: { readonly id: string; readonly status: WorkStatus; readonly occurredAt: string }): MutationDelta {
+function transitionWorkReducerDelta(state: WorkspaceState, input: { readonly id: string; readonly status: WorkStatus; readonly summary?: string | null; readonly occurredAt: string }): MutationDelta {
   {
     const current = workById(state, input.id);
     assertWorkTransition(current.status, input.status);
@@ -4351,7 +4415,15 @@ function transitionWorkReducerDelta(state: WorkspaceState, input: { readonly id:
     // transition whose target is done (the designated set); the reducer replays
     // the identical predicate as WORKSPACE_EVENT_CORRUPT.
     assertGateClearance(state.gates, current.id, input.status, "WORKSPACE_GATE_PENDING");
-    const record: WorkRecord = { ...workFieldsForWrite(current), status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
+    // TCRN-CROSS-STORY-363. The closing sentence is written at the transition
+    // that closes the record, which is the only moment it can be true. Omitting
+    // --summary keeps whatever the record already carries -- including carrying
+    // no summary field at all, which is how a pre-363 record stays byte-identical
+    // through a transition instead of acquiring a null nobody wrote.
+    const summarised: WorkRecord = input.summary === undefined
+      ? workFieldsForWrite(current)
+      : { ...workFieldsForWrite(current), summary: normalizeWorkSummary(input.summary) };
+    const record: WorkRecord = { ...summarised, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
     validateBoundTemplateWork(record, state.templates);
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
     const storedRecord: WorkRecord = { ...record, extensions: workEventExtensions(record, true) };
@@ -4374,6 +4446,7 @@ export function annotateWorkDelta(input: {
   readonly decidedBy?: readonly string[];
   readonly sprint?: SprintReference;
   readonly title?: string | null;
+  readonly summary?: string | null;
   readonly labels?: readonly string[];
   readonly occurredAt: string;
 }): (state: WorkspaceState) => MutationDelta {
@@ -4386,6 +4459,7 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
   readonly decidedBy?: readonly string[];
   readonly sprint?: SprintReference;
   readonly title?: string | null;
+  readonly summary?: string | null;
   readonly labels?: readonly string[];
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => annotateWorkReducerDelta(state, input), input);
@@ -4397,6 +4471,7 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
   readonly decidedBy?: readonly string[];
   readonly sprint?: SprintReference;
   readonly title?: string | null;
+  readonly summary?: string | null;
   readonly labels?: readonly string[];
   readonly occurredAt: string;
 }): MutationDelta {
@@ -4405,8 +4480,8 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     if (current.tombstone) {
       fail("WORKSPACE_INPUT_INVALID", `work ${input.id} is deleted`);
     }
-    if (input.scope === undefined && input.decidedBy === undefined && input.sprint === undefined && input.title === undefined && input.labels === undefined) {
-      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, sprint, title, or labels");
+    if (input.scope === undefined && input.decidedBy === undefined && input.sprint === undefined && input.title === undefined && input.summary === undefined && input.labels === undefined) {
+      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, sprint, title, summary, or labels");
     }
     if (input.scope !== undefined && input.scope.length === 0) {
       fail("WORKSPACE_INPUT_INVALID", "advisory scope must be a non-empty string");
@@ -4419,30 +4494,38 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     }
     const title = input.title === undefined ? current.title ?? null : normalizeWorkTitle(input.title);
     const labels = input.labels === undefined ? current.labels ?? [] : normalizeWorkLabels(input.labels);
+    // TCRN-CROSS-STORY-363. This is the door the historical backfill goes through:
+    // an annotation may set the summary of a record that has no summary field, and
+    // that is the only way a pre-363 record acquires one -- by an event that says
+    // who wrote it and when, not by a replay-time default.
+    const summary = input.summary === undefined ? current.summary : normalizeWorkSummary(input.summary);
     const extensions = workAdvisoryExtensions(current.extensions, {
       ...(input.scope !== undefined ? { scope: input.scope } : {}),
       ...(input.decidedBy !== undefined ? { decidedBy: input.decidedBy } : {}),
       ...(input.sprint !== undefined ? { sprint: input.sprint } : {}),
     });
-    if (canonicalJson(extensions as JsonValue) === canonicalJson(current.extensions as unknown as JsonValue) &&
-      title === (current.title ?? null) && canonicalJson(labels as JsonValue) === canonicalJson((current.labels ?? []) as JsonValue)) {
-      fail("WORKSPACE_INPUT_INVALID", "annotation does not change any work field");
-    }
     // TCRN-CROSS-INC-269: the reducer's own predicate, run before the event exists.
-    // title and labels are top-level work fields rather than extensions, so an
-    // annotation that moved only them satisfied the no-op check above and failed the
-    // reducer -- the write returned a complete receipt and every later read of the
-    // workspace came back WORKSPACE_EVENT_CORRUPT, with recover no help because the log
-    // was intact and the appended record was the damage. work.annotated is advisory-only
-    // (E05 above, and the reducer arm that replays it), so an annotation moving no
-    // advisory field is refused here as input and never reaches the log.
-    assertWorkAnnotationExtensions(current.extensions, extensions, input.id, "WORKSPACE_INPUT_INVALID");
+    // title, labels and summary are top-level work fields rather than extensions, so an
+    // annotation that moved only them once satisfied a separate no-op check here and
+    // failed the reducer -- the write returned a complete receipt and every later read of
+    // the workspace came back WORKSPACE_EVENT_CORRUPT, with recover no help because the
+    // log was intact and the appended record was the damage. There is now one predicate
+    // and no second no-op comparison beside it: a duplicate that agreed with the reducer
+    // would mask this call's removal, and a duplicate that disagreed would recreate
+    // INC-269 exactly. TCRN-CROSS-STORY-363.
+    assertWorkAnnotation(
+      workAnnotationFields(current),
+      { extensions, title, summary: summary ?? null, labels },
+      input.id,
+      "WORKSPACE_INPUT_INVALID",
+    );
     const record: WorkRecord = {
       ...workFieldsForWrite(current),
       extensions: extensions as WorkRecord["extensions"],
       scopeDigest: workExtensionsDigest(extensions),
       title,
       labels,
+      ...(summary === undefined ? {} : { summary }),
       revision: current.revision + 1,
       updatedAt: input.occurredAt,
     };

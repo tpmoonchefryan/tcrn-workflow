@@ -1723,6 +1723,19 @@
         "STORY-354 a workspace with no explicit storage.backend setting (default segmented) also snapshots cleanly"
       ]
     },
+    "tests/story-363-work-summary.test.mjs": {
+      "testCount": 7,
+      "assertionCount": 51,
+      "testNames": [
+        "GWT1: work-create without --title is refused at the CLI boundary and appends nothing",
+        "GWT2: a Story created with a Goal block carries a derived summary inside the byte bound",
+        "STORY-363: a record written before the field existed replays unchanged, and its bytes do not move",
+        "STORY-363: transition and annotate both write the summary, and annotate is how a pre-363 record gets one",
+        "GWT3: work-list --search matches a keyword that appears only in the title, the labels, or the summary",
+        "STORY-363: the backfill tool plans before it writes, and writes through work-annotate",
+        "STORY-363: the backfill tool refuses to write without a workspace, an instant and an actor"
+      ]
+    },
     "tests/story-rule-conservation.test.mjs": {
       "testCount": 4,
       "assertionCount": 7,

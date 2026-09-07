@@ -188,7 +188,7 @@ describe("STORY-209 Story scope contract", () => {
         await lease.release();
       }
       await assert.rejects(
-        () => runCli(["work-create", "--workspace", workspace, "--expected-version", "3", "--at", "2026-08-09T00:00:05Z", "--project-id", projectId, "--external-key", "STORY-NO-SCOPE", "--kind", "Story", "--parent-id", epicId], { write() {} }),
+        () => runCli(["work-create", "--title", "record-title", "--workspace", workspace, "--expected-version", "3", "--at", "2026-08-09T00:00:05Z", "--project-id", projectId, "--external-key", "STORY-NO-SCOPE", "--kind", "Story", "--parent-id", epicId], { write() {} }),
         (error) => error?.reasonCode === "WORKSPACE_STORY_SCOPE_REQUIRED",
       );
 

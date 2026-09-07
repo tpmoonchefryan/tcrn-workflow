@@ -91,9 +91,9 @@ test("STORY-300: heterogeneous members act on what earlier members created, by e
   const fixture = await workspace("BATCH-OK");
   try {
     const state = await apply(fixture, [
-      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-INIT-1", kind: "Initiative", parentId: null, status: "active" },
-      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-EPIC-1", kind: "Epic", parentExternalKey: "B-INIT-1", status: "active" },
-      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-STORY-1", kind: "Story", parentExternalKey: "B-EPIC-1", status: "planned", scope: STORY_SCOPE },
+      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-INIT-1", kind: "Initiative", parentId: null, status: "active", title: "B-INIT-1" },
+      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-EPIC-1", kind: "Epic", parentExternalKey: "B-INIT-1", status: "active", title: "B-EPIC-1" },
+      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-STORY-1", kind: "Story", parentExternalKey: "B-EPIC-1", status: "planned", scope: STORY_SCOPE, title: "B-STORY-1" },
       { verb: "work-transition", externalKey: "B-STORY-1", status: "ready" },
       { verb: "work-annotate", externalKey: "B-STORY-1", scope: `${STORY_SCOPE}\n\n附注:batched.` },
     ]);
@@ -114,7 +114,7 @@ test("STORY-300: a member failing mid-batch leaves the chain exactly where it wa
   try {
     const before = await materializeWorkspace(fixture.root);
     const result = await refusal(fixture, [
-      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-INC-9", kind: "Incident", parentId: null, status: "planned" },
+      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-INC-9", kind: "Incident", parentId: null, status: "planned", title: "B-INC-9" },
       { verb: "work-transition", externalKey: "B-INC-9", status: "done" },
       { verb: "work-annotate", externalKey: "B-INC-9", scope: "never reached" },
     ]);
@@ -135,7 +135,7 @@ test("STORY-300: the member that failed is named with its rule; the rest are une
   const fixture = await workspace("BATCH-BLAME");
   try {
     const result = await refusal(fixture, [
-      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-INC-8", kind: "Incident", parentId: null, status: "planned" },
+      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-INC-8", kind: "Incident", parentId: null, status: "planned", title: "B-INC-8" },
       { verb: "work-transition", externalKey: "B-INC-8", status: "done" },
       { verb: "work-annotate", externalKey: "B-INC-8", scope: "never reached" },
       { verb: "work-annotate", externalKey: "B-INC-8", scope: "also never reached" },
@@ -162,10 +162,10 @@ test("STORY-300: every shape problem is reported together, before any state is c
   try {
     const result = await refusal(fixture, [
       { verb: "work-invent", id: "work:x" },
-      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-S-1", kind: "Nonsense" },
+      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-S-1", kind: "Nonsense", title: "B-S-1" },
       { verb: "work-transition", externalKey: "B-S-1", status: "sideways" },
       { verb: "work-annotate", externalKey: "B-S-1" },
-      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-S-2", kind: "Story" },
+      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-S-2", kind: "Story", title: "B-S-2" },
     ]);
     assert.equal(result.reasonCode, "WORK_BATCH_REFUSED");
     assert.equal(result.payload.stage, "shape", "no state was consulted");
@@ -187,7 +187,7 @@ test("STORY-300: an explicit id wins over a derivable one", async () => {
   const fixture = await workspace("BATCH-REF");
   try {
     const state = await apply(fixture, [
-      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-INC-7", kind: "Incident", parentId: null, status: "planned" },
+      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-INC-7", kind: "Incident", parentId: null, status: "planned", title: "B-INC-7" },
       // id names B-INC-7; externalKey names something that does not exist. If the key won,
       // this would fail -- so passing proves the id was used.
       { verb: "work-transition", id: deriveStableId("work", "B-INC-7"), externalKey: "B-ABSENT", status: "ready" },
@@ -261,7 +261,7 @@ test("STORY-300: a batch spanning segments writes ascending, and every crash win
     }
     const members = Array.from({ length: 14 }, (_, index) => ({
       verb: "work-create", projectId: seeded.projects[0].id, externalKey: `SEG-${index}`,
-      kind: "Incident", parentId: null, status: "planned",
+      kind: "Incident", parentId: null, status: "planned", title: `SEG-${index}`,
     }));
     const held = await acquireWorkspaceLease(root, { now: at(2) });
     let full;
@@ -300,7 +300,7 @@ test("STORY-300: the last member can fail, and it is attributed like any other",
   const fixture = await workspace("BATCH-LAST");
   try {
     const result = await refusal(fixture, [
-      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-INC-6", kind: "Incident", parentId: null, status: "planned" },
+      { verb: "work-create", projectId: fixture.projectId, externalKey: "B-INC-6", kind: "Incident", parentId: null, status: "planned", title: "B-INC-6" },
       { verb: "work-transition", externalKey: "B-INC-6", status: "ready" },
       { verb: "work-transition", externalKey: "B-INC-6", status: "planned" },
     ]);
@@ -324,7 +324,7 @@ test("STORY-300: a failure before any member ran blames no member", async () => 
       await assert.rejects(
         () => applyWorkBatch(fixture.root, lease, {
           schemaVersion: "tcrn.work-batch.v1",
-          members: [{ verb: "work-create", projectId: fixture.projectId, externalKey: "B-INC-5", kind: "Incident", parentId: null, status: "planned" }],
+          members: [{ verb: "work-create", projectId: fixture.projectId, externalKey: "B-INC-5", kind: "Incident", parentId: null, status: "planned", title: "B-INC-5" }],
         }, { expectedVersion: fixture.version + 99, occurredAt: at(2) }),
         (error) => error?.reasonCode === "WORKSPACE_CAS_MISMATCH" && error.memberIndex === undefined,
         "a CAS mismatch is the batch's failure, not a member's",

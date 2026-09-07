@@ -319,7 +319,7 @@ test("read verbs and validate fail closed on stale views, but status reads autho
 test("CQ-05(c2): the null sentinel round-trips through work-create and work-list for every accepted spelling", async (context) => {
   const fx = await fixture(context);
   const ws = ["--workspace", fx.workspace];
-  const created = await run(["work-create", ...ws, "--expected-version", "7", "--at", instant(30),
+  const created = await run(["work-create", "--title", "record-title", ...ws, "--expected-version", "7", "--at", instant(30),
     "--project-id", fx.ids.projectA, "--external-key", "ROOT-VIA-NULL", "--kind", "Initiative", "--parent-id", "null"]);
   assert.equal(created.record.parentId, null, "the deprecated alias must be stored as null, not as a literal id");
   const rootId = created.record.id;

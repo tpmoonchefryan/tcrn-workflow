@@ -42,12 +42,14 @@ below advances the version by exactly one.
 
 First a project, then the frozen planned-delivery hierarchy under it. `work-create`
 echoes the new record's id in `record.id`; capture each one for the next parent.
+`--title` is required: a record that carries only an external key is findable by that
+key and by nothing a reader would think to type.
 
 ```console
 $ tcrn-workflow project-create --workspace ./flagship/workspace --expected-version 0 --at 2026-07-11T00:00:01Z --external-key FLAGSHIP-PROJECT --name Flagship
-$ tcrn-workflow work-create --workspace ./flagship/workspace --expected-version 1 --at 2026-07-11T00:00:02Z --project-id <project-id> --external-key FLAGSHIP-INITIATIVE --kind Initiative
-$ tcrn-workflow work-create --workspace ./flagship/workspace --expected-version 2 --at 2026-07-11T00:00:03Z --project-id <project-id> --external-key FLAGSHIP-EPIC --kind Epic --parent-id <initiative-id>
-$ tcrn-workflow work-create --workspace ./flagship/workspace --expected-version 3 --at 2026-07-11T00:00:04Z --project-id <project-id> --external-key FLAGSHIP-STORY --kind Story --parent-id <epic-id> --scope <story-scope>
+$ tcrn-workflow work-create --workspace ./flagship/workspace --expected-version 1 --at 2026-07-11T00:00:02Z --project-id <project-id> --external-key FLAGSHIP-INITIATIVE --kind Initiative --title Flagship-initiative
+$ tcrn-workflow work-create --workspace ./flagship/workspace --expected-version 2 --at 2026-07-11T00:00:03Z --project-id <project-id> --external-key FLAGSHIP-EPIC --kind Epic --parent-id <initiative-id> --title Flagship-epic
+$ tcrn-workflow work-create --workspace ./flagship/workspace --expected-version 3 --at 2026-07-11T00:00:04Z --project-id <project-id> --external-key FLAGSHIP-STORY --kind Story --parent-id <epic-id> --scope <story-scope> --title Flagship-story
 ```
 
 Each verb returns `WORKSPACE_COMMAND_COMPLETED` with the created `record`. The Epic

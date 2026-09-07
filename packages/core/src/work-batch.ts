@@ -89,7 +89,11 @@ function shapeProblems(members: readonly unknown[]): readonly WorkBatchProblem[]
       return;
     }
     if (verb === "work-create") {
-      for (const field of ["projectId", "externalKey", "kind"]) {
+      // TCRN-CROSS-STORY-363: title joins the required three. The batch is a creation
+      // path like the single verb, and leaving it optional here would have made a batch
+      // the one remaining way to mint a record nothing but its external key names --
+      // which is the condition the requirement exists to end, not a shape it exempts.
+      for (const field of ["projectId", "externalKey", "kind", "title"]) {
         if (!isNonEmptyString(member[field])) problems.push({ index, verb, rule: "field-required", detail: field });
       }
       if (member.kind !== undefined && !WORK_KINDS.includes(member.kind as string)) {
@@ -114,8 +118,8 @@ function shapeProblems(members: readonly unknown[]): readonly WorkBatchProblem[]
       }
       return;
     }
-    if (member.scope === undefined && member.decidedBy === undefined && member.sprint === undefined) {
-      problems.push({ index, verb, rule: "advisory-required", detail: "an annotation carries at least one of scope, decidedBy, sprint" });
+    if (member.scope === undefined && member.decidedBy === undefined && member.sprint === undefined && member.summary === undefined) {
+      problems.push({ index, verb, rule: "advisory-required", detail: "an annotation carries at least one of scope, decidedBy, sprint, summary" });
     }
   });
   return problems;
@@ -135,18 +139,26 @@ function deltaFor(member: Readonly<Record<string, unknown>>, occurredAt: string)
       ...(member.status === undefined ? {} : { status: member.status as never }),
       ...(member.scope === undefined ? {} : { scope: member.scope as string }),
       ...(member.decidedBy === undefined ? {} : { decidedBy: member.decidedBy as readonly string[] }),
+      title: member.title as string,
+      ...(member.summary === undefined ? {} : { summary: member.summary as string }),
       occurredAt,
     });
   }
   const id = referencedId(member) as string;
   if (member.verb === "work-transition") {
-    return transitionWorkDelta({ id, status: member.status as never, occurredAt });
+    return transitionWorkDelta({
+      id,
+      status: member.status as never,
+      ...(member.summary === undefined ? {} : { summary: member.summary as string }),
+      occurredAt,
+    });
   }
   return annotateWorkDelta({
     id,
     ...(member.scope === undefined ? {} : { scope: member.scope as string }),
     ...(member.decidedBy === undefined ? {} : { decidedBy: member.decidedBy as readonly string[] }),
     ...(member.sprint === undefined ? {} : { sprint: member.sprint as never }),
+    ...(member.summary === undefined ? {} : { summary: member.summary as string }),
     occurredAt,
   });
 }

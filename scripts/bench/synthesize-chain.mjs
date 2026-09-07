@@ -86,14 +86,14 @@ const project = run(["project-create", "--workspace", workspace, "--expected-ver
 version = project.version;
 const projectId = project.record.id;
 
-const initiative = run(["work-create", "--workspace", workspace, "--expected-version", String(version),
+const initiative = run(["work-create", "--title", "record-title", "--workspace", workspace, "--expected-version", String(version),
   "--at", at(), "--project-id", projectId, "--external-key", `S12-INITIATIVE-${eventsTarget}`, "--kind", "Initiative"]);
 version = initiative.version;
 const initiativeId = initiative.record.id;
 
 const epics = [];
 for (let e = 0; e < epicCount; e += 1) {
-  const epic = run(["work-create", "--workspace", workspace, "--expected-version", String(version),
+  const epic = run(["work-create", "--title", "record-title", "--workspace", workspace, "--expected-version", String(version),
     "--at", at(), "--project-id", projectId, "--parent-id", initiativeId,
     "--external-key", `S12-EPIC-${eventsTarget}-${e}`, "--kind", "Epic"]);
   version = epic.version;
@@ -115,7 +115,7 @@ const syntheticStoryScope = [
 ].join("\n\n");
 for (let s = 0; s < eventsTarget; s += 1) {
   const epicId = epics[s % epics.length];
-  const story = run(["work-create", "--workspace", workspace, "--expected-version", String(version),
+  const story = run(["work-create", "--title", "record-title", "--workspace", workspace, "--expected-version", String(version),
     "--at", at(), "--project-id", projectId, "--parent-id", epicId,
     "--external-key", `S12-STORY-${eventsTarget}-${s}`, "--kind", "Story", "--scope", syntheticStoryScope]);
   version = story.version;
@@ -128,7 +128,7 @@ const subtaskTarget = Math.max(1, Math.floor(eventsTarget * 0.05));
 const subtasks = [];
 for (let t = 0; t < subtaskTarget; t += 1) {
   const storyId = stories[t % stories.length];
-  const sub = run(["work-create", "--workspace", workspace, "--expected-version", String(version),
+  const sub = run(["work-create", "--title", "record-title", "--workspace", workspace, "--expected-version", String(version),
     "--at", at(), "--project-id", projectId, "--parent-id", storyId,
     "--external-key", `S12-SUB-${eventsTarget}-${t}`, "--kind", "Subtask"]);
   version = sub.version;

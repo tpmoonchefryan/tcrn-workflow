@@ -219,7 +219,7 @@ async function cliSeededFixture(context) {
   const fx = await workspaceFixture(context);
   const ws = fx.workspace;
   const project = JSON.parse((await invokeCli(["project-create", "--workspace", ws, "--expected-version", "0", "--at", instant(1), "--external-key", "PROJECT-CLI", "--name", "CLI"])).output);
-  const work = JSON.parse((await invokeCli(["work-create", "--workspace", ws, "--expected-version", "1", "--at", instant(2), "--project-id", project.record.id, "--external-key", "INITIATIVE-CLI", "--kind", "Initiative"])).output);
+  const work = JSON.parse((await invokeCli(["work-create", "--title", "record-title", "--workspace", ws, "--expected-version", "1", "--at", instant(2), "--project-id", project.record.id, "--external-key", "INITIATIVE-CLI", "--kind", "Initiative"])).output);
   return { ...fx, ws, projectId: project.record.id, workId: work.record.id };
 }
 
@@ -599,7 +599,16 @@ test("a workspace with zero conference/gate events keeps pre-change golden view 
   const viewsRoot = join(fixture.workspace, ".tcrn-workflow", "views");
   assert.deepEqual((await readdir(viewsRoot)).sort(), ["STATUS.md", "index.json", "readback.json"], "extensions.json is absent");
   // Golden bytes. These were the pre-WSD-1 bytes until INC-198 re-derived both the
-  // graph digest and the index payload; the values below are that build's.
+  // graph digest and the index payload, and TCRN-CROSS-STORY-363 re-derived them
+  // again when WorkRecord gained `summary`.
+  //
+  // That re-derivation is the point of this fixture, not damage to it. The record
+  // below is CREATED here, by the current writer, so it carries the new field and
+  // every byte downstream of it moves: index payload, graph digest, head event hash
+  // and export digest, all four. A record already on a chain does not: replay adds
+  // no field to it, its bytes are the bytes its event stored, and the eight
+  // partitions on this platform stay view-fresh across the upgrade -- which is the
+  // property that made `summary` absent-by-default rather than null-by-default.
   //
   // Residual-applicability analysis for replacing rather than coexisting, per the
   // platform's constraint-evolution convention: the previous form canonicalised the
@@ -623,24 +632,24 @@ test("a workspace with zero conference/gate events keeps pre-change golden view 
     "- Version: 3",
     "- Projects: 1",
     "- Work records: 1",
-    "- Graph digest: `77e1c3115d36c515376cbdb6529d0f2d4556f523d21389352269f6f8f0a821fa`",
+    "- Graph digest: `29725f3ff695a77cea76f68bfc7244a0a56d1c7d07312d58633d56822c268ba7`",
     "- Authority: derived and rebuildable from the event chain",
     "",
   ].join("\n"));
   assert.equal(
     await readFile(join(viewsRoot, "index.json"), "utf8"),
-    "{\"projects\":[{\"externalKey\":\"PROJECT-GOLDEN\",\"id\":\"project:0bf1a7f60bdb47a6be9f4586\",\"name\":\"Golden\",\"revision\":1,\"schemaVersion\":\"tcrn.project.v1\",\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:01Z\"}],\"schemaVersion\":\"tcrn.workspace-index.v2\",\"work\":[{\"createdAt\":\"2026-07-11T00:00:02Z\",\"extensions\":{},\"externalKey\":\"INITIATIVE-GOLDEN\",\"id\":\"work:7370232bfce90e21835d2977\",\"kind\":\"Initiative\",\"labels\":[],\"parentId\":null,\"projectId\":\"project:0bf1a7f60bdb47a6be9f4586\",\"revision\":2,\"schemaVersion\":\"tcrn.work.v1\",\"scopeDigest\":\"ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356\",\"status\":\"ready\",\"title\":null,\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:03Z\"}]}\n",
+    "{\"projects\":[{\"externalKey\":\"PROJECT-GOLDEN\",\"id\":\"project:0bf1a7f60bdb47a6be9f4586\",\"name\":\"Golden\",\"revision\":1,\"schemaVersion\":\"tcrn.project.v1\",\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:01Z\"}],\"schemaVersion\":\"tcrn.workspace-index.v2\",\"work\":[{\"createdAt\":\"2026-07-11T00:00:02Z\",\"extensions\":{},\"externalKey\":\"INITIATIVE-GOLDEN\",\"id\":\"work:7370232bfce90e21835d2977\",\"kind\":\"Initiative\",\"labels\":[],\"parentId\":null,\"projectId\":\"project:0bf1a7f60bdb47a6be9f4586\",\"revision\":2,\"schemaVersion\":\"tcrn.work.v1\",\"scopeDigest\":\"ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356\",\"status\":\"ready\",\"summary\":null,\"title\":null,\"tombstone\":false,\"updatedAt\":\"2026-07-11T00:00:03Z\"}]}\n",
   );
   assert.equal(
     await readFile(join(viewsRoot, "readback.json"), "utf8"),
-    "{\"authority\":\"derived-rebuildable\",\"graphDigest\":\"77e1c3115d36c515376cbdb6529d0f2d4556f523d21389352269f6f8f0a821fa\",\"headEventHash\":\"29efbf05b00282b3397af716de32db409fe41c2ea516884b42d7b4640638537b\",\"projectCount\":1,\"schemaVersion\":\"tcrn.workspace-readback.v1\",\"version\":3,\"workCount\":1,\"workspaceId\":\"workspace:fefacf6fbd4eba98d40fdf99\"}\n",
+    "{\"authority\":\"derived-rebuildable\",\"graphDigest\":\"29725f3ff695a77cea76f68bfc7244a0a56d1c7d07312d58633d56822c268ba7\",\"headEventHash\":\"f04b802ce70ed30e1a56025a349719efb4465cfe9e3a5f70f0c7b8a1ff508fcd\",\"projectCount\":1,\"schemaVersion\":\"tcrn.workspace-readback.v1\",\"version\":3,\"workCount\":1,\"workspaceId\":\"workspace:fefacf6fbd4eba98d40fdf99\"}\n",
   );
   const exported = await exportWorkspace(fixture.workspace);
   assert.equal(canonicalSha256(assertCanonicalJson(exported)).length, 64);
   assert.equal(
     (await import("node:crypto")).createHash("sha256").update(exported, "utf8").digest("hex"),
-    "8e66e6849bddcf4b062bdcfa47c8c43420d1831f4bfdc818c4ac1c24b50446e0",
-    "export bytes match the pre-WSD-1 build",
+    "e193db00f15fcb4032551358e0147e02b89cdc9f8a8bd5225f87e761437a5f86",
+    "export bytes match the recorded build",
   );
   assert.equal(exported.includes("conferences"), false, "no extension keys leak into legacy exports");
   await validateWorkspace(fixture.workspace);
@@ -1627,15 +1636,15 @@ test("INIT-004: the CLI opens Incident for creation and it materializes outside 
     "【Permissions】the test owner may create work.",
     "【Implementation Notes】fixture-only scope.",
   ].join("\n\n");
-  const story = JSON.parse((await invokeCli(["work-create", "--workspace", ws, "--expected-version", "2",
+  const story = JSON.parse((await invokeCli(["work-create", "--title", "record-title", "--workspace", ws, "--expected-version", "2",
     "--at", instant(3), "--project-id", fx.projectId, "--external-key", "EPIC-X", "--kind", "Epic",
     "--parent-id", fx.workId])).output);
-  const st = JSON.parse((await invokeCli(["work-create", "--workspace", ws, "--expected-version", "3",
+  const st = JSON.parse((await invokeCli(["work-create", "--title", "record-title", "--workspace", ws, "--expected-version", "3",
     "--at", instant(4), "--project-id", fx.projectId, "--external-key", "STORY-X", "--kind", "Story",
     "--parent-id", story.record.id, "--scope", storyScope])).output);
 
   // Incident, found in that Story, via the CLI.
-  const incident = await invokeCli(["work-create", "--workspace", ws, "--expected-version", "4",
+  const incident = await invokeCli(["work-create", "--title", "record-title", "--workspace", ws, "--expected-version", "4",
     "--at", instant(5), "--project-id", fx.projectId, "--external-key", "BUG-1", "--kind", "Incident",
     "--parent-id", st.record.id]);
   assert.equal(incident.ok, true, `incident create failed: ${incident.reasonCode}`);
@@ -1650,7 +1659,7 @@ test("INIT-004: the CLI opens Incident for creation and it materializes outside 
   assert.equal((await validateWorkspace(fx.workspace, false)).version, 5);
 
   // A parentless Incident is equally valid (found nowhere in particular).
-  const orphan = await invokeCli(["work-create", "--workspace", ws, "--expected-version", "5",
+  const orphan = await invokeCli(["work-create", "--title", "record-title", "--workspace", ws, "--expected-version", "5",
     "--at", instant(6), "--project-id", fx.projectId, "--external-key", "BUG-2", "--kind", "Incident",
     "--parent-id", "-"]);
   assert.equal(orphan.ok, true, `parentless incident failed: ${orphan.reasonCode}`);
@@ -1658,7 +1667,7 @@ test("INIT-004: the CLI opens Incident for creation and it materializes outside 
   // The two kinds still closed at the CLI stay closed. (Release was opened in 0.5.0 for
   // sprints / release trains — see the sprint tests below.)
   for (const closed of ["Review", "Knowledge"]) {
-    const r = await invokeCli(["work-create", "--workspace", ws, "--expected-version", "6",
+    const r = await invokeCli(["work-create", "--title", "record-title", "--workspace", ws, "--expected-version", "6",
       "--at", instant(7), "--project-id", fx.projectId, "--external-key", `X-${closed}`, "--kind", closed]);
     assert.equal(r.ok, false);
     assert.equal(r.reasonCode, "CLI_ARGUMENT_MALFORMED", `${closed} should stay closed at the CLI`);
@@ -1791,7 +1800,7 @@ test("sprint: the CLI opens Release create and work-list --sprint filters member
   const ws = fx.ws;
   const workspaceId = (await validateWorkspace(ws)).metadata.workspaceId;
   // Release is now creatable at the CLI (parentless).
-  const sprint = await invokeCli(["work-create", "--workspace", ws, "--expected-version", "2",
+  const sprint = await invokeCli(["work-create", "--title", "record-title", "--workspace", ws, "--expected-version", "2",
     "--at", instant(3), "--project-id", fx.projectId, "--external-key", "SPRINT-W31", "--kind", "Release", "--parent-id", "-"]);
   assert.equal(sprint.ok, true, `release create failed: ${sprint.reasonCode}`);
   const sprintId = JSON.parse(sprint.output).record.id;

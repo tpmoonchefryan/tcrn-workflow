@@ -434,7 +434,7 @@ test("WSB-1: mutation responses carry the created/mutated record identity", asyn
     assert.equal(projectCreate.version, 1);
     assert.equal(typeof projectCreate.headEventHash, "string");
     const projectId = projectCreate.record.id;
-    const workCreate = await run(["work-create", ...ws, "--expected-version", "1", "--at", instant(2), "--project-id", projectId, "--external-key", "INIT-B1", "--kind", "Initiative"]);
+    const workCreate = await run(["work-create", "--title", "record-title", ...ws, "--expected-version", "1", "--at", instant(2), "--project-id", projectId, "--external-key", "INIT-B1", "--kind", "Initiative"]);
     assert.equal(workCreate.record.id, deriveStableId("work", "INIT-B1"));
     assert.deepEqual({ kind: workCreate.record.kind, status: workCreate.record.status, projectId: workCreate.record.projectId, parentId: workCreate.record.parentId, revision: workCreate.record.revision, tombstone: workCreate.record.tombstone },
       { kind: "Initiative", status: "planned", projectId, parentId: null, revision: 1, tombstone: false });
@@ -537,7 +537,7 @@ test("WSE-4: export and archive bytes are identical with and without attestation
       const io = attest ? { write: () => {}, clock: () => "2026-07-11T09:15:30Z" } : { write: () => {} };
       await runCli(["project-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", instant(1),
         "--external-key", "PROJECT-EXP", "--name", "EXP", ...attestFlag], io);
-      await runCli(["work-create", "--workspace", fixture.workspace, "--expected-version", "1", "--at", instant(2),
+      await runCli(["work-create", "--title", "record-title", "--workspace", fixture.workspace, "--expected-version", "1", "--at", instant(2),
         "--project-id", deriveStableId("project", "PROJECT-EXP"), "--external-key", "INIT-EXP", "--kind", "Initiative", ...attestFlag], io);
     };
     await mutate(withAttest, true);
@@ -568,7 +568,7 @@ test("WSB-4: work-create --parent-id '-' yields a null parent byte-identical to 
     const projectId = JSON.parse(projectOut).record.id;
     let workOut = "";
     await runCli([
-      "work-create", "--workspace", fixture.workspace, "--expected-version", "1", "--at", instant(2),
+      "work-create", "--title", "record-title", "--workspace", fixture.workspace, "--expected-version", "1", "--at", instant(2),
       "--project-id", projectId, "--external-key", "INIT-B4", "--kind", "Initiative", ...parentFlag,
     ], { write: (value) => { workOut += value; } });
     return JSON.parse(workOut);
@@ -603,7 +603,7 @@ test("WSB-7: --expected-version head derives the current version under the lease
     assert.equal(projectCreate.record.id, deriveStableId("project", "PROJECT-B7"));
     const projectId = projectCreate.record.id;
     // (b) two further sequential head mutations commit versions 2 then 3 with no manual version tracking.
-    const workCreate = await run(["work-create", ...ws, "--expected-version", "head", "--at", instant(2), "--project-id", projectId, "--external-key", "INIT-B7", "--kind", "Initiative"]);
+    const workCreate = await run(["work-create", "--title", "record-title", ...ws, "--expected-version", "head", "--at", instant(2), "--project-id", projectId, "--external-key", "INIT-B7", "--kind", "Initiative"]);
     assert.equal(workCreate.version, 2);
     assert.equal(workCreate.record.id, deriveStableId("work", "INIT-B7"));
     const workId = workCreate.record.id;
@@ -661,7 +661,7 @@ test("WSB-8: --flag=value representability round-trips literal values and invali
     // (CLI_ARGUMENT_MALFORMED), never as an opaque core RECORD_MALFORMED on the id.
     await assert.rejects(
       () => runCli(
-        ["work-create", ...ws, "--expected-version", "1", "--at", instant(3), "--project-id", created.record.id, "--external-key", "INIT-B8", "--kind", "Task"],
+        ["work-create", "--title", "record-title", ...ws, "--expected-version", "1", "--at", instant(3), "--project-id", created.record.id, "--external-key", "INIT-B8", "--kind", "Task"],
         { write() {} },
       ),
       (error) => error?.reasonCode === "CLI_ARGUMENT_MALFORMED" && error?.message === "kind=Task",
@@ -1778,7 +1778,7 @@ test("WSE-3: --actor threads through attestation-enable and the mutation verbs i
     const projectCreate = await run(["project-create", ...ws, "--expected-version", "1", "--at", instant(2), "--external-key", "PROJECT-WSE3", "--name", "WSE3", "--actor", "agent:builder-7"]);
     assert.equal(projectCreate.reasonCode, "WORKSPACE_COMMAND_COMPLETED");
     const projectId = projectCreate.record.id;
-    await run(["work-create", ...ws, "--expected-version", "2", "--at", instant(3), "--project-id", projectId, "--external-key", "INIT-WSE3", "--kind", "Initiative", "--actor", "owner:release-gate"]);
+    await run(["work-create", "--title", "record-title", ...ws, "--expected-version", "2", "--at", instant(3), "--project-id", projectId, "--external-key", "INIT-WSE3", "--kind", "Initiative", "--actor", "owner:release-gate"]);
     const payloads = await readEventPayloads(fixture.workspace);
     assert.deepEqual(payloads.map((payload) => payload.operation), [
       "attestation.actor.enabled", "project.created", "work.created",
@@ -1822,7 +1822,7 @@ test("WSE-3: legacy mutations without --actor on a non-enabled workspace never w
     await runCli(["project-create", ...ws, "--expected-version", "0", "--at", instant(1), "--external-key", "PROJECT-LEGACY", "--name", "Legacy"], { write: (value) => { output += value; } });
     assert.equal(JSON.parse(output).reasonCode, "WORKSPACE_COMMAND_COMPLETED");
     // A supplied --actor before enablement is a no-op: no actor field enters the payload.
-    await runCli(["work-create", ...ws, "--expected-version", "1", "--at", instant(2), "--project-id", JSON.parse(output).record.id, "--external-key", "INIT-LEGACY", "--kind", "Initiative", "--actor", "owner:release-gate"], { write: () => {} });
+    await runCli(["work-create", "--title", "record-title", ...ws, "--expected-version", "1", "--at", instant(2), "--project-id", JSON.parse(output).record.id, "--external-key", "INIT-LEGACY", "--kind", "Initiative", "--actor", "owner:release-gate"], { write: () => {} });
     const payloads = await readEventPayloads(fixture.workspace);
     assert.deepEqual(payloads.map((payload) => payload.operation), ["project.created", "work.created"]);
     for (const payload of payloads) {

@@ -717,6 +717,20 @@
         "owningRepository": "none -- see ruling",
         "ruling": "TCRN-CROSS-STORY-359, acting on Owner decisions minutes:8bac4584d5bbffa7a96b82b1 D2 (the direction document section 3 disposition table, rows 削减 and 重挂): verify:* shrinks to the eleven named gate categories and their aggregates, and every verification-map claim that measured one of the 105 retired scripts retires with it. These two cases assert the SHAPE of claim families that no longer exist -- the sixteen INIT-048 story claims and the twenty-two INIT-049 focused claims -- so there is nothing left for them to be right or wrong about. Their subject was the ledger entry, never the behaviour: every test file those claims named still runs, unfiltered, in pnpm test. Git tag attic-2026-09 retains the claims and these cases."
       }
+    },
+    {
+      "path": "tests/inc269-annotation-advisory-guard.test.mjs",
+      "testName": "INC-269 an annotation that moves no advisory field is refused before it is written",
+      "reason": "Renamed, not removed. The guard still proves that the verb never appends an annotation the reducer would call corrupt; what counts as a move widened, so the probe is now an annotation restating the record's own values, and the name says so.",
+      "replacement": "INC-269 an annotation that moves no annotatable field is refused before it is written",
+      "ruling": "TCRN-CROSS-STORY-363: the work.annotated \"at least one field moved\" test now counts title, labels and summary alongside the advisory extension keys, because a summary backfill has no advisory field it is entitled to move -- it may not touch the scope it reads. Both cases keep their bodies and their subject, the boundary they probe moved by three fields, and the names follow the boundary. Nothing is dropped: the file rises from 14 assertions to 17."
+    },
+    {
+      "path": "tests/inc269-annotation-advisory-guard.test.mjs",
+      "testName": "INC-269 title and labels still land when the same annotation moves an advisory field",
+      "reason": "Renamed, not removed. The original assertions are unchanged and a third case is added below them: a title-only annotation now lands and the workspace still replays, which is the half INC-269's disposition had to refuse.",
+      "replacement": "INC-269 title and labels land, with or without an advisory field beside them",
+      "ruling": "TCRN-CROSS-STORY-363: the work.annotated \"at least one field moved\" test now counts title, labels and summary alongside the advisory extension keys, because a summary backfill has no advisory field it is entitled to move -- it may not touch the scope it reads. Both cases keep their bodies and their subject, the boundary they probe moved by three fields, and the names follow the boundary. Nothing is dropped: the file rises from 14 assertions to 17."
     }
   ]
 }

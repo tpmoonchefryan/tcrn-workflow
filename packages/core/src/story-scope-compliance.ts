@@ -180,6 +180,56 @@ const PURPOSE_ANCHORS: readonly RegExp[] = Object.freeze([
 const OWNER_DECIDER = /(?:判定人|\bdecider\b)\s*[=:：]\s*[^\n。；;]*(?:\bOwner\b|所有者)/iu;
 
 /**
+ * TCRN-CROSS-STORY-363. The one line a reader gets before deciding whether to
+ * open the record: the first sentence of the Goal block, cut to a byte budget.
+ *
+ * It reads the Goal block through the same parser the compliance gate uses, so a
+ * scope this returns a summary for is a scope that heading validation already
+ * accepts, and a heading spelling the validator learns tomorrow is a spelling
+ * this learns with it. The sentence boundary is the union of the two working
+ * languages' terminators; whitespace is collapsed to single spaces first, so the
+ * \n the class also carries can never match and a labelled run of clauses cuts.
+ *
+ * Returns null rather than a truncated heading when there is no Goal block or it
+ * holds no prose: an absent summary is a truthful state, and inventing one from
+ * the external key would put the same string on every record.
+ */
+export function deriveWorkSummary(scope: unknown, maximumBytes: number): string | null {
+  if (typeof scope !== "string" || scope.length === 0) {
+    return null;
+  }
+  const goal = validateStoryScope(scope).sections.find((section) => section.heading === "Goal");
+  if (goal === undefined) {
+    return null;
+  }
+  const prose = goal.content.replace(/\s+/gu, " ").trim();
+  if (prose.length === 0) {
+    return null;
+  }
+  const boundary = prose.search(/[。．.!?！？；;\n]/u);
+  const sentence = (boundary < 0 ? prose : prose.slice(0, boundary)).trim();
+  const candidate = sentence.length === 0 ? prose : sentence;
+  return truncateUtf8(candidate, maximumBytes);
+}
+
+/**
+ * Cut on a UTF-8 code-point boundary, never mid-sequence: the budget is measured
+ * in bytes because that is what the transport pays for, but half a character is
+ * not a shorter string, it is an invalid one.
+ */
+function truncateUtf8(value: string, maximumBytes: number): string {
+  const bytes = Buffer.from(value, "utf8");
+  if (bytes.length <= maximumBytes) {
+    return value;
+  }
+  let end = maximumBytes;
+  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) {
+    end -= 1;
+  }
+  return bytes.subarray(0, end).toString("utf8");
+}
+
+/**
  * Parse and validate a Story scope.  `无——原因` is valid section content; an
  * absent section is not.  The four historic dispatch elements are checked by
  * explicit semantic anchors so the ten headings cannot become a hollow wrapper.

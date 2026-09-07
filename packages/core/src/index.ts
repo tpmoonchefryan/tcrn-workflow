@@ -376,6 +376,7 @@ export type {
 } from "./persona-store.js";
 export {
   STORY_SCOPE_HEADINGS,
+  deriveWorkSummary,
   storyScopeFromRecord,
   storyScopeNamesOwnerDecider,
   validateStoryVerificationLinks,

@@ -145,7 +145,7 @@ async function conferenceFixture(context, suffix, floor) {
   const { workspace, version } = await fixture(context, suffix);
   if (floor !== null) await json(write("settings-set", workspace, await version(), 1, ["--key", "execution.independenceFloor", "--value", floor]));
   const project = (await json(write("project-create", workspace, await version(), 2, ["--external-key", `S234-REMED-${suffix}`, "--name", "s234-remediation"]))).record.id;
-  const anchor = (await json(write("work-create", workspace, await version(), 3, ["--project-id", project, "--external-key", `S234-REMED-INIT-${suffix}`, "--kind", "Initiative"]))).record.id;
+  const anchor = (await json(write("work-create", workspace, await version(), 3, ["--project-id", project, "--external-key", `S234-REMED-INIT-${suffix}`, "--kind", "Initiative", "--title", "s234-remediation-anchor"]))).record.id;
   const opened = await json(write("conference-open", workspace, await version(), 4, ["--external-key", `S234-REMED-CONF-${suffix}`, "--project-id", project, "--type", "verification", "--title", "acceptance", "--work-ids", anchor, "--desired-outcome", "recommendation", "--participant-ids", "agent:test"]));
   return { workspace, version, conferenceId: opened.recordId ?? opened.record.id };
 }

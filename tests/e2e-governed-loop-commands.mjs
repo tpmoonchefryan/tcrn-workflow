@@ -78,17 +78,17 @@ export const governedLoopStoryline = [
   {
     key: "work-create-initiative",
     reasonCode: "WORKSPACE_COMMAND_COMPLETED",
-    command: ["work-create", "--workspace", WORKSPACE_PATH, "--expected-version", "1", "--at", "2026-07-11T00:00:02Z", "--project-id", "<project-id>", "--external-key", "FLAGSHIP-INITIATIVE", "--kind", "Initiative"],
+    command: ["work-create", "--workspace", WORKSPACE_PATH, "--expected-version", "1", "--at", "2026-07-11T00:00:02Z", "--project-id", "<project-id>", "--external-key", "FLAGSHIP-INITIATIVE", "--kind", "Initiative", "--title", "Flagship-initiative"],
   },
   {
     key: "work-create-epic",
     reasonCode: "WORKSPACE_COMMAND_COMPLETED",
-    command: ["work-create", "--workspace", WORKSPACE_PATH, "--expected-version", "2", "--at", "2026-07-11T00:00:03Z", "--project-id", "<project-id>", "--external-key", "FLAGSHIP-EPIC", "--kind", "Epic", "--parent-id", "<initiative-id>"],
+    command: ["work-create", "--workspace", WORKSPACE_PATH, "--expected-version", "2", "--at", "2026-07-11T00:00:03Z", "--project-id", "<project-id>", "--external-key", "FLAGSHIP-EPIC", "--kind", "Epic", "--parent-id", "<initiative-id>", "--title", "Flagship-epic"],
   },
   {
     key: "work-create-story",
     reasonCode: "WORKSPACE_COMMAND_COMPLETED",
-    command: ["work-create", "--workspace", WORKSPACE_PATH, "--expected-version", "3", "--at", "2026-07-11T00:00:04Z", "--project-id", "<project-id>", "--external-key", "FLAGSHIP-STORY", "--kind", "Story", "--parent-id", "<epic-id>", "--scope", "<story-scope>"],
+    command: ["work-create", "--workspace", WORKSPACE_PATH, "--expected-version", "3", "--at", "2026-07-11T00:00:04Z", "--project-id", "<project-id>", "--external-key", "FLAGSHIP-STORY", "--kind", "Story", "--parent-id", "<epic-id>", "--scope", "<story-scope>", "--title", "Flagship-story"],
   },
   {
     key: "work-transition-story-ready",

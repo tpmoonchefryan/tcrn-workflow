@@ -455,6 +455,11 @@ function workSummary(record: WorkRecord): Readonly<Record<string, unknown>> {
     tombstone: record.tombstone,
     scopeDigest: record.scopeDigest ?? null,
     title: record.title ?? null,
+    // TCRN-CROSS-STORY-363. Projected as null when the record carries no summary
+    // field, so a listing has one column shape whether or not the record predates
+    // the field. The absent-vs-null distinction matters on the chain, where it
+    // decides whether a view goes stale; it does not matter to a reader.
+    summary: record.summary ?? null,
     createdAt: record.createdAt ?? null,
     labels: record.labels ?? [],
     ...(templateBinding === null ? {} : { templateBinding }),
@@ -473,6 +478,19 @@ function truncateUtf8(value: string, maximumBytes: number): string {
   let end = maximumBytes;
   while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end -= 1;
   return bytes.subarray(0, end).toString("utf8");
+}
+
+// TCRN-CROSS-STORY-363. One lowercased haystack per record, built from the four
+// fields a reader would search by. Labels join on a space so a two-label record
+// cannot produce a match that spans two labels.
+function workSearchText(record: WorkRecord): string {
+  return [
+    record.externalKey,
+    record.title ?? "",
+    record.summary ?? "",
+    (record.labels ?? []).join(" "),
+    workScope(record),
+  ].join("\n").toLowerCase();
 }
 
 function workSearchSummary(record: WorkRecord, scopeBytes: number): Readonly<Record<string, unknown>> {
@@ -936,14 +954,14 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "template-validate", availability: "cli", mutates: false, flags: [{ name: "template", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "vocabulary", availability: "cli", mutates: false, flags: [] },
-  { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "sprint", required: false, valueKind: "string" }, { name: "title", required: false, valueKind: "string" }, { name: "labels", required: false, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "sprint", required: false, valueKind: "string" }, { name: "title", required: false, valueKind: "string" }, { name: "summary", required: false, valueKind: "string" }, { name: "labels", required: false, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-batch", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "from-file", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "title", required: false, valueKind: "string" }, { name: "labels", required: false, valueKind: "list" }, { name: "template-receipt", required: false, valueKind: "json" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "title", required: true, valueKind: "string" }, { name: "summary", required: false, valueKind: "string" }, { name: "labels", required: false, valueKind: "list" }, { name: "template-receipt", required: false, valueKind: "json" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-draft", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }] },
   { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "sprint", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "scope-bytes", required: false, valueKind: "integer" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "work-show", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }] },
-  { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "summary", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
 ] as const);
 
 // INC-016: `mutates` and `authorityBearing` name two DIFFERENT authorization
@@ -1920,8 +1938,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "work-create") {
-    const values = parseArguments(rest, [...shared, "project-id", "external-key", "kind", "parent-id", "status", "scope", "decided-by", "title", "labels", "template-receipt", "actor"]);
-    required(values, [...requiredShared, "project-id", "external-key", "kind"]);
+    const values = parseArguments(rest, [...shared, "project-id", "external-key", "kind", "parent-id", "status", "scope", "decided-by", "title", "summary", "labels", "template-receipt", "actor"]);
+    // TCRN-CROSS-STORY-363: --title is required on the create path. Measured on the
+    // cross-project chain on 2026-09-07, 50 of its 843 live work records carried a
+    // title; the other 793 were addressable only by external key, so a listing could
+    // show a whole tree and name nothing in it. The protocol keeps title optional --
+    // every one of those records still replays -- and the refusal lives here, at the
+    // one place a new record is born.
+    required(values, [...requiredShared, "project-id", "external-key", "kind", "title"]);
     // Fail closed at the CLI boundary naming the offending flag/value, before the
     // uncast enum reaches core and surfaces as an opaque RECORD_MALFORMED on the id.
     if (values.kind !== undefined && !["Initiative", "Epic", "Story", "Subtask", "Incident", "Release"].includes(values.kind)) fail("CLI_ARGUMENT_MALFORMED", `kind=${values.kind}`);
@@ -1939,6 +1963,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ...(values.scope !== undefined ? { scope: values.scope } : {}),
       ...(values["decided-by"] !== undefined ? { decidedBy: listValue(values["decided-by"]) } : {}),
       ...(values.title !== undefined ? { title: values.title } : {}),
+      ...(values.summary !== undefined ? { summary: values.summary } : {}),
       ...(values.labels !== undefined ? { labels: listValue(values.labels) } : {}),
       ...(values["template-receipt"] !== undefined ? { templateAdmission: jsonValue(values["template-receipt"], "template-receipt") } : {}),
       ...(values.actor ? { actorId: values.actor } : {}),
@@ -1975,13 +2000,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "work-transition") {
-    const values = parseArguments(rest, [...shared, "id", "status", "actor"]);
+    const values = parseArguments(rest, [...shared, "id", "status", "summary", "actor"]);
     required(values, [...requiredShared, "id", "status"]);
     if (values.status !== undefined && !isWorkStatus(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => transitionWork(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "", status: values.status as WorkStatus,
+      ...(values.summary !== undefined ? { summary: values.summary } : {}),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
@@ -1990,14 +2016,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "work-annotate") {
-    // E05 + INIT-008: attach non-binding advisory fields to a work record. --title and
-    // --labels ride along on the same event, but the operation itself is advisory-only, so
-    // the core refuses an annotation that moves no advisory field: --title/--labels alone
-    // is WORKSPACE_INPUT_INVALID here rather than an appended event no later read can
-    // replay (TCRN-CROSS-INC-269).
-    const values = parseArguments(rest, [...shared, "id", "scope", "decided-by", "sprint", "title", "labels", "actor"]);
+    // E05 + INIT-008: attach non-binding advisory fields to a work record. --title,
+    // --summary and --labels ride along on the same event and count as moves in their own
+    // right since TCRN-CROSS-STORY-363, so what the core still refuses is an annotation
+    // that moves nothing at all: it is WORKSPACE_INPUT_INVALID here rather than an
+    // appended event no later read can replay (TCRN-CROSS-INC-269).
+    const values = parseArguments(rest, [...shared, "id", "scope", "decided-by", "sprint", "title", "summary", "labels", "actor"]);
     required(values, [...requiredShared, "id"]);
-    if (values.scope === undefined && values["decided-by"] === undefined && values.sprint === undefined && values.title === undefined && values.labels === undefined) fail("CLI_ARGUMENT_MALFORMED", "annotation-field");
+    if (values.scope === undefined && values["decided-by"] === undefined && values.sprint === undefined && values.title === undefined && values.summary === undefined && values.labels === undefined) fail("CLI_ARGUMENT_MALFORMED", "annotation-field");
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => annotateWork(workspace, lease, {
@@ -2006,6 +2032,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ...(values["decided-by"] !== undefined ? { decidedBy: listValue(values["decided-by"]) } : {}),
       ...(values.sprint !== undefined ? { sprint: sprintReference(values.sprint) } : {}),
       ...(values.title !== undefined ? { title: values.title } : {}),
+      ...(values.summary !== undefined ? { summary: values.summary } : {}),
       ...(values.labels !== undefined ? { labels: listValue(values.labels) } : {}),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
@@ -2055,7 +2082,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       (values["project-id"] === undefined || entry.projectId === values["project-id"]) &&
       (values.kind === undefined || entry.kind === values.kind) &&
       (values.status === undefined || entry.status === values.status) &&
-      (search === undefined || entry.externalKey.toLowerCase().includes(search) || workScope(entry).toLowerCase().includes(search)) &&
+      // TCRN-CROSS-STORY-363: search reaches the four fields a record can be named
+      // by. It matched externalKey and scope alone, which meant a keyword present
+      // only in the title -- the field a human actually reads -- returned nothing,
+      // and the 40 live cross-project records carrying no scope at all (2026-09-07)
+      // were reachable by external key and by nothing else.
+      (search === undefined || workSearchText(entry).includes(search)) &&
       (sprintFilter === undefined || canonicalJson((entry.extensions["advisory:sprint"] as { readonly value: unknown } | undefined)?.value ?? null) === sprintFilter) &&
       // CQ-05(c2): the null sentinel must be spelled the same on the way in and on the way
       // out. work-create routes --parent-id through nullableValue, which accepts BOTH "-"
