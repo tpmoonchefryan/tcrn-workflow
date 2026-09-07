@@ -276,3 +276,28 @@ test("STORY-365 the extension slot stays a closed roster of two knowledge-id key
     await fixture.close();
   }
 });
+
+// TCRN-CROSS-INC-282 (Owner ruling TCRN-CROSS-MIN-158 D1) — the machine criterion the
+// Incident asked for, stated as the writer states it: a card written with a source
+// reference and no evidence id is in the default selection at once. STORY-365 reached both
+// verbs (they share buildMetadata) but left the half-supplied provenance branch standing,
+// and the branch it left was the one the Stop hook and every hand-written card take.
+test("INC-282: a captured card naming a source is promoted and in default recall at once", async () => {
+  const fixture = await containerFixture("FIXTURE-CAPTURE-SOURCED");
+  try {
+    const sourced = await captureKnowledgeUnit(fixture.workspace, lessonCard("带来源的经验卡", {
+      sourceReferences: ["docs/tutorial/governed-loop.md"],
+    }), { allowTrailing: true });
+    assert.equal(sourced.reasonCode, "KNOWLEDGE_UNIT_CREATED");
+    assert.equal(sourced.promotionState, "promoted", "a source reference is not a reason to withhold a card");
+    const listed = await listKnowledgeMetadata(fixture.workspace, { at: instant(3), allowTrailing: true });
+    assert.equal(listed.records.some((record) => record.id === sourced.id), true,
+      `default recall must return the sourced card: ${JSON.stringify(listed.records.map((record) => record.subject))}`);
+    // The contrast that made the defect invisible: the same card without a source was
+    // always returned, so the writer had no way to tell the two apart from the receipt.
+    const bare = await captureKnowledgeUnit(fixture.workspace, lessonCard("无来源的经验卡"), { allowTrailing: true });
+    assert.equal(bare.promotionState, sourced.promotionState, "both shapes land in the same state");
+  } finally {
+    await fixture.close();
+  }
+});

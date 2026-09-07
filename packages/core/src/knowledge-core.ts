@@ -681,13 +681,16 @@ function assertPromotableProvenance(metadata: KnowledgeUnitMetadata): void {
   if (!metadata.accountableOwnerId.startsWith("owner:")) {
     fail("KNOWLEDGE_PROVENANCE_INVALID", `${metadata.id}:accountable owner is required`);
   }
-  const relaxed = isRelaxedProvenanceKind(metadata.kind);
-  if (!relaxed && (metadata.sourceReferences.length === 0 || metadata.linkedEvidenceIds.length === 0)) {
+  if (!isRelaxedProvenanceKind(metadata.kind) &&
+    (metadata.sourceReferences.length === 0 || metadata.linkedEvidenceIds.length === 0)) {
     fail("KNOWLEDGE_PROVENANCE_INVALID", `${metadata.id}:source and evidence are required for ${metadata.kind} knowledge`);
   }
-  if (relaxed && ((metadata.sourceReferences.length === 0) !== (metadata.linkedEvidenceIds.length === 0))) {
-    fail("KNOWLEDGE_PROVENANCE_INVALID", `${metadata.id}:source and evidence must be supplied together when present`);
-  }
+  // TCRN-CROSS-INC-282: a relaxed-kind card that names a source but no evidence id used to
+  // be refused here. Nothing refused the write, so the card landed as a candidate the
+  // default selection did not return, and this refusal then made that candidate
+  // unpromotable by anyone -- written, unretrievable, and unrepairable in one step. The
+  // rule is gone rather than moved: for a relaxed kind, provenance is what the writer
+  // chose to attach, and half of it is more than none.
   // WSC-6 / OD-18: unconditional promote-time machine checks — a promoted record
   // must carry at least one retrieval tag, a non-empty snippet, and at least one
   // backlink (the evidence requirement above already guarantees a backlink). These
@@ -825,9 +828,9 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
   assertLinkIds(metadata.linkedGateIds, "gate", "linked gate IDs");
   assertLinkIds(metadata.linkedEvidenceIds, "evidence", "linked evidence IDs");
   // WSC-3 / SDC-6: provenance (owner:-prefixed accountable owner, non-empty source
-  // and evidence links) is enforced at promotion, not capture — a candidate is
-  // cheap to write and only a promoted record must carry full provenance. The
-  // promote path re-validates via assertPromotableProvenance.
+  // and evidence links) is enforced wherever a record is promoted. TCRN-CROSS-INC-282
+  // made that write time for every card written lifecycle "active", and promotion
+  // time for the lifecycle-"candidate" records conference-close --distill writes.
   if (metadata.promotionState === "promoted") {
     assertPromotableProvenance(metadata);
   }
@@ -1254,9 +1257,17 @@ function assertSelection(selection: unknown): asserts selection is "default" | "
 // TCRN-CROSS-STORY-365: a card the writer replaced stops being a default answer. It is
 // still readable explicitly and still exports; it just no longer competes with the card
 // that supersedes it, which is the whole point of having chosen --supersedes.
+//
+// TCRN-CROSS-INC-282 (Owner rulings TCRN-CROSS-MIN-146 D1, TCRN-CROSS-MIN-158 D1): the
+// default selection is every active card. It used to require promotionState "promoted",
+// the promotion gate TCRN-CROSS-MIN-146 abolished, which stranded every card written
+// before that ruling plus every shape STORY-365's predicate did not reach. "rejected" is
+// the one state still read: rejection is a writer's explicit "do not answer with this",
+// not a gate a card has to pass. The other conjuncts are the writer's own declarations --
+// superseded, retired, excluded, export-restricted, stale -- and stay as they were.
 function isDefaultSelectable(metadata: KnowledgeUnitMetadata, at: string): boolean {
   return metadata.extensions.supersededBy === undefined &&
-    metadata.promotionState === "promoted" && metadata.lifecycle === "active" &&
+    metadata.promotionState !== "rejected" && metadata.lifecycle === "active" &&
     metadata.retrievalDisposition === "default" && metadata.exportDisposition === "metadata-only" &&
     computeFreshness(metadata, at) === "fresh";
 }
@@ -1271,23 +1282,32 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
     fail(error instanceof ProtocolError && error.reasonCode === "CANONICAL_VALUE_INVALID" ? "KNOWLEDGE_CANONICAL_INVALID" : "KNOWLEDGE_INPUT_INVALID", String(error));
   }
   // Reference cards are rejected at capture when their source/evidence contract
-  // is absent (the explicit write-time boundary in STORY-327). Guide cards keep
-  // the historical cheap-capture path but remain unable to promote without the
-  // strict provenance assertion above.
+  // is absent (the explicit write-time boundary in STORY-327). TCRN-CROSS-INC-282
+  // extends that boundary to `guide` through the promoted write below; this check
+  // stays because it names the kind rather than a stored record id, and because it
+  // still reaches a reference written as lifecycle "candidate".
   if (input.kind === "reference" && (input.sourceReferences.length === 0 || input.linkedEvidenceIds.length === 0)) {
     fail("KNOWLEDGE_PROVENANCE_INVALID", `${input.kind} knowledge requires source and evidence links`);
   }
   // TCRN-CROSS-STORY-365 (Owner ruling TCRN-CROSS-MIN-146): a card is retrievable the
-  // moment it is written. The criterion is no longer "source-free"; it is "provenance is
-  // not half-supplied" -- either no source at all, or source and evidence together. A
-  // sourced card used to be the one that took an extra step, which was backwards.
-  // `lifecycle` is the other half of the question: a record its own author wrote as
-  // lifecycle "candidate" is not claiming to be a live answer, and calling it promoted
-  // would be a promotionState no reader can act on -- default selection requires
-  // lifecycle "active" either way. conference-close --distill is the one writer that
-  // does this, and it keeps the shape it has always had.
-  const directCapture = isRelaxedProvenanceKind(input.kind) && input.lifecycle === "active" &&
-    (input.sourceReferences.length === 0) === (input.linkedEvidenceIds.length === 0);
+  // moment it is written.
+  //
+  // TCRN-CROSS-INC-282 (Owner rulings TCRN-CROSS-MIN-146 D1, TCRN-CROSS-MIN-158 D1):
+  // create and capture write "promoted", full stop. STORY-365 reached both verbs -- they
+  // share this function -- but left two conjuncts standing, and each one still landed a
+  // candidate the default selection did not return: a relaxed card with a source and no
+  // evidence id, and every strict-kind card. Both are gone. For a strict kind that moves
+  // the provenance contract from promotion time to write time: validateMetadataShape runs
+  // assertPromotableProvenance on a promoted record, so a `guide` with no source or no
+  // evidence is refused where its writer can see it, instead of being stored as a card
+  // nothing could retrieve and nothing could repair.
+  //
+  // `lifecycle` is the one question left: a record its own author wrote as lifecycle
+  // "candidate" is not claiming to be a live answer, and calling it promoted would be a
+  // promotionState no reader can act on -- default selection requires lifecycle "active"
+  // either way. conference-close --distill is the one writer that does this, and it keeps
+  // the shape it has always had.
+  const directCapture = input.lifecycle === "active";
   const metadata: KnowledgeUnitMetadata = {
     schemaVersion: KNOWLEDGE_METADATA_SCHEMA_VERSION,
     id: deriveStableId("knowledge", externalKey),
@@ -1314,9 +1334,9 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
     linkedEvidenceIds: [...input.linkedEvidenceIds].sort(compareCanonicalText),
     lifecycle: input.lifecycle,
     retrievalDisposition: input.retrievalDisposition,
-    // STORY-365: written is retrievable. The candidate state survives only for records
-    // written before this ruling and for the half-supplied provenance shape above, which
-    // cannot be promoted by anyone anyway.
+    // STORY-365: written is retrievable. INC-282: the candidate state now survives only
+    // for a record whose own author declared lifecycle "candidate", and for records
+    // written before these rulings.
     promotionState: directCapture ? "promoted" : "candidate",
     freshnessState: input.freshnessState,
     lastVerified: input.lastVerified,
@@ -1767,8 +1787,11 @@ export function knowledgeConflictHits(
     .sort(compareCanonicalText);
 }
 
+// TCRN-CROSS-INC-282: the searched selection reads promotionState the same way the default
+// one does. Two selections disagreeing about which cards exist is how a card gets listed
+// and then cannot be found by the words it stores.
 function explicitlySelectable(metadata: KnowledgeUnitMetadata, at: string): boolean {
-  return metadata.promotionState === "promoted" && metadata.lifecycle === "active" &&
+  return metadata.promotionState !== "rejected" && metadata.lifecycle === "active" &&
     metadata.retrievalDisposition !== "excluded" && metadata.exportDisposition === "metadata-only" &&
     computeFreshness(metadata, at) !== "stale";
 }
@@ -1924,7 +1947,11 @@ export async function readKnowledgeBody(workspaceRoot: string, id: string, optio
   const unit = scan.units.find((entry) => entry.metadata.id === id);
   if (!unit) fail("KNOWLEDGE_NOT_FOUND", id);
   const freshness = computeFreshness(unit.metadata, options.at);
-  if ((!options.allowUnpromoted && unit.metadata.promotionState !== "promoted") ||
+  // TCRN-CROSS-INC-282: body access answers the same question the selection does. While
+  // this leg still demanded "promoted", a card the default list now returns had a body the
+  // CLI refused to read without --allow-unpromoted, which is the reported defect one layer
+  // down. "rejected" is what --allow-unpromoted still opens.
+  if ((!options.allowUnpromoted && unit.metadata.promotionState === "rejected") ||
     (!options.allowStale && freshness !== "fresh") || unit.metadata.retrievalDisposition === "excluded" || unit.metadata.lifecycle === "retired") {
     fail("KNOWLEDGE_BODY_ACCESS_DENIED", id);
   }
@@ -2060,8 +2087,8 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
       revision: unit.metadata.revision + 1,
       updatedAt: input.occurredAt,
     };
-    // WSC-3 / SDC-6: full provenance is required only to promote; rejecting a
-    // candidate never requires it.
+    // WSC-3 / SDC-6: INC-282 moved this floor to write time for an active card;
+    // here it guards a candidate's promote, and rejecting one never requires it.
     if (input.promotionState === "promoted") {
       assertPromotableProvenance(metadata);
     }

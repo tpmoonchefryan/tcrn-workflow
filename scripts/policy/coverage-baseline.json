@@ -643,7 +643,7 @@
     },
     "tests/knowledge-batch.test.mjs": {
       "testCount": 6,
-      "assertionCount": 22,
+      "assertionCount": 24,
       "testNames": [
         "knowledge-batch: align, four cards and a promote in one act",
         "knowledge-batch: the caller reads the store version once, however many members follow",
@@ -654,8 +654,8 @@
       ]
     },
     "tests/knowledge-capture.test.mjs": {
-      "testCount": 9,
-      "assertionCount": 40,
+      "testCount": 10,
+      "assertionCount": 44,
       "testNames": [
         "STORY-365 lessons are the declared paragraphs, bounded and in order",
         "STORY-365 a bounded field never splits a UTF-8 sequence",
@@ -665,7 +665,8 @@
         "STORY-365 coexist admits the write and records what it stands beside",
         "STORY-365 the threshold is two subject-token hits, not one shared word",
         "STORY-365 GWT4/GWT5: create needs no backlink lists, and nothing new lands as a candidate",
-        "STORY-365 the extension slot stays a closed roster of two knowledge-id keys"
+        "STORY-365 the extension slot stays a closed roster of two knowledge-id keys",
+        "INC-282: a captured card naming a source is promoted and in default recall at once"
       ]
     },
     "tests/knowledge-inject.test.mjs": {
@@ -1019,7 +1020,7 @@
         "INIT-047: supersedes is validated, source digests are computed and source changes are reported",
         "STORY-359 the p4 knowledge fixture declares the corpus sizes verifyP4Knowledge used to pin"
       ],
-      "assertionCount": 208
+      "assertionCount": 212
     },
     "tests/p5-core-reference-personas.test.mjs": {
       "testCount": 7,

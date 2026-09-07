@@ -56,16 +56,25 @@ Freshness is evaluated at an explicit strict instant. A null
 cards with no verification instant are still selectable. A finite policy marks
 an expired age window `stale`, but a missing verification instant is not made
 unselectable by an `unknown` result. Default selection and checkpoints exclude
-stale records, candidates, rejected or retired records, non-default retrieval,
-and excluded export disposition.
+stale records, rejected or retired records, non-default retrieval, and excluded
+export disposition. Candidates are not excluded: TCRN-CROSS-INC-282 (Owner rulings
+TCRN-CROSS-MIN-146 D1 and TCRN-CROSS-MIN-158 D1) made the default selection every
+active card, because a promotion gate on retrieval is what left a written card
+unfindable with nothing in its receipt to say so.
 
-Fragment kinds (`fact`, `decision`, and `summary`) may be written without source
-or evidence links and are directly selectable when their other fields admit it.
-`guide` and `reference` retain their source/evidence provenance floor; a
-`reference` without those links is rejected at capture. Sourced records may still
-use the compatibility promotion transition, while a source-free fragment is
-ready at capture. The owner reference remains provenance accountability only; it
-does not claim P5 profile admission or identity resolution.
+Every card written with lifecycle `active` is written `promoted`, whatever its
+kind and whatever provenance it carries. That moves the provenance floor to write
+time: `validateMetadataShape` runs the promotion assertions on a promoted record,
+so a `guide` or `reference` without a source reference and an evidence link is
+refused at capture rather than stored as a card no reader returns, and a fragment
+kind (`fact`, `decision`, `summary`) is admitted with half-supplied provenance
+rather than parked in a state no verb could repair. The one shape that is still a
+candidate is a record its own author wrote as lifecycle `candidate`, which
+`conference-close --distill` does; promotion remains available to it, and only a
+rejection changes what a reader sees — a candidate's body already opens, and its
+lifecycle, not its promotion state, is what keeps it out of recall. The owner
+reference remains provenance accountability only; it does
+not claim P5 profile admission or identity resolution.
 
 `knowledge-batch` accepts `knowledge-policy` members for a bounded metadata
 migration. Each member supplies an id (or external key), an expected revision,

@@ -731,6 +731,12 @@
       "reason": "Renamed, not removed. The original assertions are unchanged and a third case is added below them: a title-only annotation now lands and the workspace still replays, which is the half INC-269's disposition had to refuse.",
       "replacement": "INC-269 title and labels land, with or without an advisory field beside them",
       "ruling": "TCRN-CROSS-STORY-363: the work.annotated \"at least one field moved\" test now counts title, labels and summary alongside the advisory extension keys, because a summary backfill has no advisory field it is entitled to move -- it may not touch the scope it reads. Both cases keep their bodies and their subject, the boundary they probe moved by three fields, and the names follow the boundary. Nothing is dropped: the file rises from 14 assertions to 17."
+    },
+    {
+      "path": "tests/p4-knowledge-core.test.mjs",
+      "testName": "WSC-3: provenance is enforced at promotion, not capture",
+      "reason": "TCRN-CROSS-INC-282 moved the rule the name states: a card written lifecycle \"active\" is now written promoted, so validateMetadataShape runs the promotion assertions at capture and a guide or reference missing its owner, source or evidence is refused where the writer sees it. The case kept its four provenance shapes and gained a third loop -- the same four shapes refused at write -- so it covers more than it did; the file's counted assertion total rises from 208 to 212 and scripts/policy/coverage-baseline.json records the new value in this same change; the added refusals are expectReason calls, which this counter does not count. The name changed because the boundary it probes changed, not because the probe was dropped.",
+      "replacement": "tests/p4-knowledge-core.test.mjs:WSC-3: provenance is enforced at capture for an active card and at promotion for a candidate"
     }
   ]
 }

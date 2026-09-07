@@ -27,7 +27,6 @@ import {
   readContextRouteAuthorityReceipt,
   readGenericProfileAdmissionReceipt,
   routeContext,
-  transitionKnowledgePromotion,
   transitionWork,
 } from "../dist/build/packages/core/src/index.js";
 import { canonicalJson, canonicalSha256, compareCanonicalText, deriveStableId } from "../dist/build/packages/protocol/src/index.js";
@@ -247,13 +246,8 @@ test("P8 dogfood completes one disposable local_primary initiative with Knowledg
     exportDisposition: "metadata-only",
     body: "Disposable P8 body is explicitly separated from metadata.",
   });
-  await transitionKnowledgePromotion(workspace, {
-    expectedVersion: 1,
-    expectedRevision: 1,
-    occurredAt: "2026-07-14T00:00:06Z",
-    id: knowledge.id,
-    promotionState: "promoted",
-  });
+  // TCRN-CROSS-INC-282: the card is written promoted, so the dogfood loop has no separate
+  // promotion act to perform.
   const selected = await listKnowledgeMetadata(workspace, { at: "2026-07-14T00:00:07Z", projectId: state.projects[0].id, selection: "all" });
   assert.equal(selected.records.length, 1);
   assert.equal(selected.records[0].id, knowledge.id);

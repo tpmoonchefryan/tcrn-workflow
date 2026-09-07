@@ -21,13 +21,18 @@ knowledge-core-v1 promotion pipeline with:
   against a gate (grounded by gate-v1);
 - a body size cap of 4096 bytes (a convention number that fits under the
   knowledge body budget);
-- `promotionState` `candidate` — the work-log candidate is never auto-promoted;
-- lifecycle coupling: the candidate tombstones with its work item.
+- `promotionState` `promoted` — a work-log record is written official.
+  TCRN-CROSS-STORY-365 (Owner ruling TCRN-CROSS-MIN-146) removed the promotion
+  gate for the fragment kinds and TCRN-CROSS-INC-282 removed the last two
+  branches that still parked a write, so every card written lifecycle `active`
+  is written promoted whatever its kind; the earlier wording here, "never
+  auto-promoted", named a behaviour the engine had already stopped having;
+- lifecycle coupling: the record tombstones with its work item.
 
 No second knowledge store is created; the single knowledge store holds work-log
-candidates alongside other knowledge. High-frequency small records are bounded by
-the size cap and by candidate-not-promoted status so the knowledge budget is not
-flooded.
+records alongside other knowledge. High-frequency small records are bounded by
+the size cap alone; the promotion state no longer bounds anything, which is why
+the size cap is stated as the budget's only floor.
 
 ## Event linkage
 

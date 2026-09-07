@@ -153,17 +153,16 @@ test("INC-256 malformed policy red leg refuses the batch before any migration", 
 test("INC-256 policy migration also updates retired metadata without requiring a body", async () => {
   const fx = await fixture();
   try {
+    // TCRN-CROSS-INC-282: no promote step -- the card is written promoted, so retire acts
+    // on the write's own version and revision.
     const created = await createKnowledgeUnit(fx.workspace, card(fx, "CARD-RETIRED", "guide", 0));
-    const promoted = await transitionKnowledgePromotion(fx.workspace, {
-      expectedVersion: 1, expectedRevision: created.revision, occurredAt: instant(6), id: created.id, promotionState: "promoted",
-    });
     await retireKnowledgeUnit(fx.workspace, {
-      expectedVersion: promoted.version, expectedRevision: promoted.revision, occurredAt: instant(7), id: created.id,
+      expectedVersion: created.version, expectedRevision: created.revision, occurredAt: instant(7), id: created.id,
     });
     const result = await applyKnowledgeBatch(fx.workspace, policyBatch([{
-      verb: "knowledge-policy", id: created.id, expectedRevision: 3,
+      verb: "knowledge-policy", id: created.id, expectedRevision: 2,
       stalenessPolicy: { maximumAgeDays: null, unknownDisposition: "fail-closed" },
-    }]), { expectedVersion: 3, occurredAt: instant(8) });
+    }]), { expectedVersion: 2, occurredAt: instant(8) });
     assert.equal(result.reasonCode, "KNOWLEDGE_BATCH_APPLIED");
     const retired = (await listKnowledgeMetadata(fx.workspace, { at: instant(9), selection: "all" })).records.find((record) => record.id === created.id);
     assert.equal(retired.lifecycle, "retired");

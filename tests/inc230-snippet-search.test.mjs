@@ -66,7 +66,10 @@ async function storeWithOneCard() {
     accountableOwnerId: deriveStableId("owner", "INC230-OWNER"),
     sourceReferences: ["evidence://fixture/inc230"],
     sourceDigest: canonicalSha256({ key: "INC230-CARD" }),
-    linkedWorkIds: [], linkedDecisionIds: [], linkedGateIds: [], linkedEvidenceIds: [],
+    // TCRN-CROSS-INC-282: an active write is a promoted write, and a `guide` is a strict
+    // kind, so the evidence link is now part of what the write itself requires.
+    linkedWorkIds: [], linkedDecisionIds: [], linkedGateIds: [],
+    linkedEvidenceIds: [deriveStableId("evidence", "INC230-CARD")],
     lifecycle: "active", retrievalDisposition: "default", freshnessState: "fresh",
     lastVerified: instant(1),
     stalenessPolicy: { maximumAgeDays: 30, unknownDisposition: "fail-closed" },
