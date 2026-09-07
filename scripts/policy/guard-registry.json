@@ -291,7 +291,7 @@
       "replace": "",
       "expectedMatches": 1,
       "test": "tests/inc269-annotation-advisory-guard.test.mjs",
-      "testName": "INC-269 an annotation that moves no advisory field is refused before it is written"
+      "testName": "INC-269 an annotation that moves no annotatable field is refused before it is written"
     },
     {
       "id": "INC-270-engine-capability-surface-direction-guard",
