@@ -136,7 +136,8 @@
     "evidenceFiles": [
       ".tcrn-artifacts/dispatch-runs/init-051/INC-281/evidence/TCRN-CROSS-INC-281.TCRN-CROSS-INC-281.redact.codex-probe.jsonl",
       ".tcrn-artifacts/dispatch-runs/init-051/INC-281/evidence/TCRN-CROSS-INC-281.TCRN-CROSS-INC-281.redact.codex-probe.stderr.txt"
-    ]
+    ],
+    "supersededBy": "afterModelChange below. Per Owner ruling TCRN-CROSS-MIN-154 D3, the Stop-count reading above (status; verdictOnTheStopCountCriterion.verdict) is superseded: gpt-5.5-mini was unavailable on this account's Codex (unattendedProbe.result above), so this run produced no assistant response and no hook-shaped event of any kind on the --json stream (storyEvidence.hookStartedEventCounts.note above); the measured 0 was that transport's floor, not a count of Stop groups. afterModelChange re-ran on a model this account can use and measured the Stop count from a different signal, reaching a definite answer."
   },
   "afterModelChange": {
     "status": "RESOLVED. One Stop event runs all three Stop groups; the STORY-357 primary design holds and the fallback design is not needed.",
