@@ -79,6 +79,11 @@ import {
   reportAttestationDirectory,
   writeAttestationReceipt,
   readOperatorAuthority,
+  assertGeneratedArtifactsRoot,
+  validateSettingValue,
+  listArtifacts,
+  putArtifact,
+  verifyArtifacts,
   readStorageHomeDeclaration,
   readSettingsCatalog,
   readInstallManifest,
@@ -864,6 +869,12 @@ function writeTemplateAdmissionState(
 // verb. New verbs MUST ship a catalog entry (SDC-1); the p3-cli-catalog parity
 // test enforces two-way name equality with the dispatcher.
 export const COMMAND_CATALOG = Object.freeze([
+  // TCRN-CROSS-STORY-380: the three verbs that make workspace.generatedArtifactsPath a
+  // real address. artifact-put mutates the workspace (a blob and a manifest line); the
+  // other two only read, which is why neither takes --at.
+  { name: "artifact-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "artifact-put", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "file", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
+  { name: "artifact-verify", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "attestation-migrate", availability: "cli", mutates: true, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "mode", required: true, valueKind: "string" }, { name: "baseline", required: false, valueKind: "string" }, { name: "baseline-out", required: false, valueKind: "string" }] },
   { name: "commands", availability: "cli", mutates: false, flags: [] },
@@ -1566,6 +1577,20 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "key", "value"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    // TCRN-CROSS-STORY-380: the half of the artifact-root rule a live filesystem has to
+    // answer. It cannot live in validateSettingValue, which also runs on the replay path
+    // (settings.ts says why), so it runs here, at the moment an operator declares the
+    // address — the moment they can still fix a typo. artifact-put asks again before it
+    // writes, because a directory that was real when it was declared is not necessarily
+    // real when it is used.
+    if (values.key === "workspace.generatedArtifactsPath") {
+      // Shape first, filesystem second, and in that order deliberately: the shape rule is
+      // the one that also runs on replay, so it is the one whose refusal an operator will
+      // meet again later. validateSettingValue is the same pure function setWorkspaceSetting
+      // is about to call, so calling it here costs a second pass over one string and buys a
+      // stable reason code rather than whichever check happened to be reached first.
+      await assertGeneratedArtifactsRoot(workspace, validateSettingValue(values.key, values.value ?? "", workspace));
+    }
     const state = await withLease(workspace, at, async (lease) => setWorkspaceSetting(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
@@ -1575,6 +1600,31 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
     writeSettingsState(io, state, values.key ?? "");
+    return;
+  }
+  if (command === "artifact-put") {
+    // TCRN-CROSS-STORY-380. The lease is the quiesce proof, the same one snapshot-manifest
+    // takes below: two puts appending to one manifest without it each write a manifest
+    // missing the other's entry, and the loser's blob sits on disk with nothing pointing
+    // at it. No chain event is appended — the manifest is the record, and keeping the put
+    // off the chain is what lets the blob root be a directory the engine does not own.
+    const values = parseArguments(rest, ["workspace", "file", "at"]);
+    required(values, ["workspace", "file", "at"]);
+    const workspace = values.workspace ?? "";
+    const at = values.at ?? "";
+    io.write(canonicalJson(await withLease(workspace, at, (lease) => putArtifact(workspace, lease, { file: values.file ?? "", at }))));
+    return;
+  }
+  if (command === "artifact-list") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await listArtifacts(values.workspace ?? "")));
+    return;
+  }
+  if (command === "artifact-verify") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await verifyArtifacts(values.workspace ?? "")));
     return;
   }
   if (command === "snapshot-manifest") {

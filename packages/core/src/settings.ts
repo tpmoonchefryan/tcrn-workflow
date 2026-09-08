@@ -129,6 +129,42 @@ function assertWorkspaceRelativeSettingPath(value: string, label: string): void 
   }
 }
 
+// TCRN-CROSS-STORY-380. The half of an absolute artifact root's admission rule that this
+// function is allowed to decide.
+//
+// What it may decide is bounded by WHERE IT RUNS. validateWorkspaceSettingRecord is on the
+// replay path (packages/core/src/workspace.ts, the settings reducer), so every predicate
+// here is answered again on every machine that ever replays this chain. A predicate that
+// asked the filesystem whether the directory exists, or compared the path against this
+// machine's home, would make a chain recorded on one machine unreplayable on the next —
+// the exact opposite of what a portable content-addressed store is for. Shape, and
+// containment relative to the workspace being replayed, are the two things that mean the
+// same thing everywhere, so they are the two things decided here.
+//
+// "Outside the machine control home, a real directory, not a symbolic link" is decided at
+// the two moments the path is actually used, by assertGeneratedArtifactsRoot in
+// artifact-store.ts: `settings-set` calls it before recording the value, and
+// `artifact-put` calls it again before writing a byte, because a directory that was real
+// when it was declared is not necessarily real when it is used.
+function assertAbsoluteArtifactsSettingPath(value: string, label: string, workspaceRoot?: string): void {
+  if (value.includes("\\")) {
+    fail("SETTINGS_VALUE_INVALID", `${label} must not contain a backslash`);
+  }
+  // Containment below is decided on the RESOLVED path, so an unnormalized value would be
+  // judged as something other than what was written. Refusing it is cheaper than
+  // normalizing it: silently storing a different string than the operator typed is the
+  // same act the url branch below refuses to commit when it declines to upgrade http.
+  if (resolve(value) !== value) {
+    fail("SETTINGS_VALUE_INVALID", `${label} must be a normalized absolute path`);
+  }
+  if (workspaceRoot === undefined) return;
+  const workspace = resolve(workspaceRoot);
+  const destination = resolve(value);
+  if (isInside(workspace, destination) || isInside(resolve(workspace, ".tcrn-workflow"), destination)) {
+    fail("SETTINGS_VALUE_INVALID", `${label} must be outside the workspace and its control tree`);
+  }
+}
+
 const catalogEntries: readonly SettingsCatalogEntry[] = [
   {
     key: "backup.cadence",
@@ -404,7 +440,15 @@ export function validateSettingValue(key: unknown, value: unknown, workspaceRoot
     if (/[\u0000-\u001f\u007f]/u.test(value)) fail("SETTINGS_VALUE_INVALID", `${entry.key} must not contain control characters`);
   }
   if (entry.key === "workspace.generatedArtifactsPath") {
-    assertWorkspaceRelativeSettingPath(value, entry.key);
+    // TCRN-CROSS-STORY-380: an absolute root is admitted so generated blobs can be written
+    // to a directory the operator manages — a cloud-synced folder is the case Owner asked
+    // for — while the chain, the lease and this manifest stay inside the workspace. The
+    // relative form is unchanged and remains the default.
+    if (isAbsolute(value)) {
+      assertAbsoluteArtifactsSettingPath(value, entry.key, workspaceRoot);
+    } else {
+      assertWorkspaceRelativeSettingPath(value, entry.key);
+    }
   }
   if (entry.key === "backup.destination") {
     if (!isAbsolute(value)) {

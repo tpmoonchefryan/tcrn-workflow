@@ -115,6 +115,18 @@ export {
   verifySnapshotManifest,
 } from "./workspace-snapshot.js";
 export type { SnapshotReasonCode } from "./workspace-snapshot.js";
+// TCRN-CROSS-STORY-380. Exactly the four names packages/cli/src/index.ts calls, and no
+// more: scripts/policy/core-export-consumers.json reports every barrel symbol the
+// consumer roots do not name, and a constant or type re-exported here "for completeness"
+// is a symbol whose only consumer is its own test — the shape TCRN-CROSS-STORY-358 spent
+// an Epic removing. artifact-store.ts still exports its schema versions and reason codes
+// for readers of that module; the barrel is not that reader.
+export {
+  assertGeneratedArtifactsRoot,
+  listArtifacts,
+  putArtifact,
+  verifyArtifacts,
+} from "./artifact-store.js";
 export {
   BACKGROUND_RESOURCE_LIMITS,
   BACKGROUND_RESOURCE_REASON_CODES,

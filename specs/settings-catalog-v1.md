@@ -121,16 +121,34 @@ boundary visible to helper authors.
 ## Engine-consumed keys — workspace and driver
 
 - **Key:** `workspace.generatedArtifactsPath`
-  - **Type:** workspace-relative path.
+  - **Type:** workspace-relative path, or an absolute path.
   - **Layer:** `workspace_configuration`.
   - **Default:** `.tcrn-workflow/artifacts`.
-  - **Bounds:** non-empty relative path with no `.`, `..`, empty, absolute,
+  - **Bounds, relative form:** non-empty relative path with no `.`, `..`, empty,
     backslash, or NUL path segment.
+  - **Bounds, absolute form:** normalized (`resolve(value) === value`), no
+    backslash, and outside both the workspace and its `.tcrn-workflow` control
+    tree. Those are the predicates `validateSettingValue` decides, and it decides
+    only those: it also runs on the replay path, so a predicate that consulted the
+    filesystem or this machine's home directory would make a chain recorded on one
+    machine unreplayable on the next. The remaining conditions — outside
+    `<HOME>/.tcrn-workflow`, an existing directory, not a symbolic link — are
+    asserted by `assertGeneratedArtifactsRoot`
+    (`packages/core/src/artifact-store.ts`) at the two moments the path is used:
+    when `settings-set` records it, and again when `artifact-put` writes to it.
   - **Mechanism:** `settings-catalog` reads the effective value and
     `settings-set` records a governed update. Artifact-producing consumers must
-    use this key rather than inventing a second workspace path setting.
+    use this key rather than inventing a second workspace path setting; the
+    consumer is `artifact-put` / `artifact-list` / `artifact-verify`, which store
+    files under the resolved root named `<sha256>.bin`, holding the deflate stream
+    of the plaintext that digest names. The index of those blobs stays in the
+    workspace control tree (`.tcrn-workflow/artifact-manifest.json`) and records
+    no absolute path, so the root may be a directory the engine does not own —
+    a cloud-synced folder, for instance — without any governed state following the
+    blobs there.
   - **Decision record:** TCRN-CROSS-MIN-065 ruling 2/8, implemented by
-    TCRN-CROSS-STORY-213.
+    TCRN-CROSS-STORY-213; the absolute form and its consumer are
+    minutes:8bac4584d5bbffa7a96b82b1 D11, implemented by TCRN-CROSS-STORY-380.
 
 - **Key:** `driver.capabilityProfile`
   - **Type:** bounded string.

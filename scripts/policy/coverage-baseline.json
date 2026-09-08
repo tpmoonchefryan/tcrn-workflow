@@ -1737,6 +1737,24 @@
         "STORY-363: the backfill tool refuses to write without a workspace, an instant and an actor"
       ]
     },
+    "tests/story-380-artifact-blob-store.test.mjs": {
+      "testCount": 12,
+      "assertionCount": 60,
+      "testNames": [
+        "GWT1: an absolute generatedArtifactsPath under a cloud mount is accepted and read back",
+        "GWT1: the path conditions are enforced, and each refusal names its own rule",
+        "GWT1: the machine control home is out of bounds even when it is a real directory",
+        "GWT2: artifact-put stores a 2 MB file as <sha256>.bin and records size and hash",
+        "GWT3: a single flipped byte in a stored blob is reported by artifact-verify",
+        "the archive is deflate, not base64: the stored bytes are compressed and inflate exactly",
+        "a repeat put is deduplicated by content and leaves one manifest entry",
+        "a repeat put refuses rather than overwriting when the blob already on disk is corrupt",
+        "a blob in the root that no manifest entry names is reported as unindexed, not adopted",
+        "the default relative root still works and lands inside the control tree",
+        "neither the chain nor the lease follows the blob: artifact-put appends no event",
+        "a chain carrying an absolute artifact root replays even where that directory does not exist"
+      ]
+    },
     "tests/story-rule-conservation.test.mjs": {
       "testCount": 4,
       "assertionCount": 7,

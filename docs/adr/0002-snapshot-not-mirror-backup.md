@@ -85,6 +85,42 @@ WSF-3 runbook restores to the original path, then validates.
 > The `WORKSPACE_SCHEMA_INVALID` refusal above is unchanged and is now the whole
 > story: restore in place.
 
+## Amendment, TCRN-CROSS-STORY-380 (2026-09-08): a cloud directory may hold blobs
+
+The decision above is about a LIVE WORKSPACE, and that half is unchanged: the chain,
+the lease, the views and the control tree are still never mirrored, and every reason
+code listed above still fires if anybody tries. What this amendment narrows is the
+sentence's reach. "Cloud-mirror is contraindicated" was written about the only bytes
+this engine stored at the time, and it was read afterwards as a rule about cloud
+storage in general, which is why `workspace.generatedArtifactsPath` shipped in
+TCRN-CROSS-STORY-213 accepting relative paths only.
+
+A generated artifact is not a live workspace. It is immutable, it is addressed by the
+sha256 of its own content, and nothing reads it by name expecting a particular inode.
+None of the failure modes above apply to it: there is no lease to double-hold, no
+control-directory entry a conflict copy can shadow, no `nlink` invariant, and a
+`store (1).json`-shaped duplicate is simply a file whose name is not a digest, which
+`artifact-list` reports as unindexed rather than adopting.
+
+The one failure a sync client can still cause is the one that matters — it rewrites
+bytes — and that failure is now DETECTED rather than prevented by prohibition:
+
+  * `artifact-put` re-reads every blob from disk and re-hashes it before it emits a
+    receipt, so a rewrite between write and read is refused at the moment it happens,
+    by the writer, with `ARTIFACT_MISMATCH` and the blob removed;
+  * `artifact-verify` recomputes every blob the manifest records, so a rewrite that
+    happens later is found by a command an operator can run on either machine;
+  * the manifest that says which blobs should exist, and what they should hash to,
+    lives in the workspace control tree and records no absolute path. It is the local
+    half, and it never goes to the cloud directory at all.
+
+`workspace.generatedArtifactsPath` therefore accepts an absolute root, subject to the
+conditions in `specs/settings-catalog-v1.md`: outside the workspace, outside its
+control tree, outside `<HOME>/.tcrn-workflow`, an existing directory, and not a
+symbolic link. Using a cloud-synced folder for it is a supported configuration, not a
+tolerated one. Putting a workspace there remains contraindicated, for every reason
+this ADR gave in the first place.
+
 ## Consequences
 
 WSF-2's `BK-SNAPSHOT-WITNESS` claim lists this ADR in its `fixturePaths`, so
