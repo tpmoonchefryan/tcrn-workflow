@@ -147,19 +147,11 @@ same commit, and append an entry to `exceptions` naming the work item that raise
 citing the authorising decision (the convention MIN-144 D8 records). Lowering a cap needs
 no exception.
 
-The three current caps are a snapshot, not a destination. A later, separate piece of
-work — `TCRN-CROSS-STORY-359` in Initiative `TCRN-CROSS-INIT-051`, specified in this
-round's dispatch planning document (`docs/dispatch/2026-09-05-self-evolving-frontier/chain-spec.mjs`,
-its `TCRN-CROSS-STORY-359` entry, as of 2026-09-05) — describes shrinking `verify:*` to
-eleven named categories and their aggregates: `format`, `lint`, `typecheck`, `build`,
-`test`, `offline`, `privacy`, `chain-validate`, `hooks-live`, `retrieval-eval`, `release`.
-Whether that Story has landed by the time you read this is not something to infer
-from a number frozen in this section — check `verifyScriptCap` in
-`scripts/policy/proof-budget.json` and the `verify:*` roster in `package.json` directly. All
-eleven names are written down here so the intention exists somewhere other than memory,
-but nothing above should be read as claiming that list is already the enforced roster —
-`verifyScriptCap` moves only when that work actually lands and records a new measured
-value.
+The three current caps are a snapshot, not a destination. The `verify:*` roster they
+measure changes over time through separate work items. Do not infer the current
+roster, its size, or whether any such change has landed from anything frozen in this
+section — check `verifyScriptCap` in `scripts/policy/proof-budget.json` and the
+`verify:*` roster in `package.json` directly.
 
 ## Platform conventions
 
