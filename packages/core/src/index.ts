@@ -729,5 +729,31 @@ export type { KnowledgeBatchOptions, KnowledgeBatchProblem } from "./knowledge-b
 // TCRN-CROSS-STORY-362: the recall core's public face is the verb's face. The index,
 // the selector and the tokenizers stay internal to ./recall.js, where the evaluation
 // harness and the tests import them directly; only what the CLI dispatches is barrelled.
+// TCRN-CROSS-STORY-364: the artefact-language policy is re-exported because the CLI reads
+// it on the recall path (the prompt-language fallback) and the migration executor reads it
+// on the write path. Both go through the barrel like every other core consumer.
+export {
+  applyWriteLanguagePolicy,
+  ARTIFACT_LANGUAGE_TAGS,
+  detectLanguage,
+  expansionsAreBounded,
+  expansionsText,
+  KNOWLEDGE_EXPANSION_LIMITS,
+  KNOWLEDGE_LANGUAGE_BUNDLE_FALLBACK_KEY,
+  KnowledgeLanguageError,
+  languageProviderFromBundle,
+  parseLanguageBundle,
+  parsePromptLanguages,
+  readKnowledgeLanguagePolicy,
+  resolveQueryLanguage,
+} from "./knowledge-language.js";
+export type {
+  ArtifactLanguageTag,
+  KnowledgeExpansions,
+  KnowledgeLanguageBundle,
+  KnowledgeLanguagePolicy,
+  KnowledgeLanguageProvider,
+  KnowledgeQueryLanguageAnswer,
+} from "./knowledge-language.js";
 export { RECALL_CANDIDATE_LIMIT, RECALL_DEFAULT_TAU, recall, recallDocuments } from "./recall.js";
 export type { RecallKnowledgeInput, RecallMinutesInput, RecallWorkInput } from "./recall.js";

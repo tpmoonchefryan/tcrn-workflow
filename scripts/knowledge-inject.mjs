@@ -172,8 +172,39 @@ export function truncateToBudget(text, budget) {
   return { text: Buffer.from(text, "utf8").subarray(0, budget).toString("utf8"), truncated: true };
 }
 
+/**
+ * TCRN-CROSS-STORY-364 requirement 4: the read-side counterpart of the write-path hook.
+ *
+ * The engine decides THAT a translation is owed and WHICH model owes it -- the recall verb
+ * answers with `queryTranslation` and a `telemetry.queryTranslations` count. It cannot
+ * perform the translation: packages/* reach no network and verify:p1's offline leg measures
+ * that. So the same division the write path uses applies here. The Agent asks the model
+ * recorded in model.economyTier and hands the answer over as data; this file translates
+ * once, asks again, and reports the two counts added together.
+ */
+export function bundleTranslator(bundlePath) {
+  if (typeof bundlePath !== "string" || bundlePath.length === 0) return null;
+  let bundle = null;
+  try { bundle = JSON.parse(readFileSync(bundlePath, "utf8")); } catch { return null; }
+  const translations = bundle?.translations ?? {};
+  const model = typeof bundle?.model === "string" ? bundle.model : null;
+  return (text) => {
+    const answer = translations[text];
+    return typeof answer === "string" && answer.length > 0 ? { text: answer, model } : null;
+  };
+}
+
+/** The recall verb's payload, whichever of the two envelopes the chain read returned. */
+function recallPayload(call) {
+  return call.result?.result ?? call.result ?? {};
+}
+
+function recallTranslationCount(payload) {
+  const counted = payload?.telemetry?.queryTranslations;
+  return Number.isSafeInteger(counted) ? counted : 0;
+}
 /** The injection chain: prompt -> recall -> budget report -> metadata-level output. */
-export async function runInjection({ prompt, partition, budget, triggerKeywords, limit, containerRoot = PLATFORM_ROOT }) {
+export async function runInjection({ prompt, partition, budget, triggerKeywords, limit, containerRoot = PLATFORM_ROOT, translate = null }) {
   void triggerKeywords;
   const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : await configuredInjectionBudget(partition, containerRoot);
   // The emptiness gate, not the query: a prompt with no meaningful token buys nothing
@@ -182,17 +213,38 @@ export async function runInjection({ prompt, partition, budget, triggerKeywords,
   if (tokens.length === 0) {
     return { ok: true, injected: false, reason: "NO_QUERY_TOKENS", candidates: [], injectedBytes: 0 };
   }
-  const call = await callChainRead("recall", {
+  const recallLimit = Number.isSafeInteger(limit) && limit > 0 ? limit : DEFAULT_RECALL_LIMIT;
+  const askRecall = (query) => callChainRead("recall", {
     partition,
-    query: String(prompt ?? ""),
-    limit: Number.isSafeInteger(limit) && limit > 0 ? limit : DEFAULT_RECALL_LIMIT,
+    query,
+    limit: recallLimit,
     "allow-trailing": true,
     at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
   }, { containerRoot, withPartitionFlag: true });
+  const call = await askRecall(String(prompt ?? ""));
   if (!call.ok) {
     return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
   }
-  const candidates = call.result?.result?.records ?? call.result?.records ?? [];
+  let payload = recallPayload(call);
+  let queryTranslations = recallTranslationCount(payload);
+  const owed = payload.queryTranslation ?? null;
+  let translatedQuery = null;
+  // Fail-open, and deliberately asymmetric with the write path: a session with no answer
+  // is worse than an answer ranked in the wrong language. No translator, a bundle without
+  // this prompt, or a second recall that errors -- each keeps the first answer and says so.
+  if (owed !== null && typeof translate === "function") {
+    const answer = await translate(String(prompt ?? ""), owed);
+    const text = typeof answer === "string" ? answer : answer?.text;
+    if (typeof text === "string" && text.length > 0) {
+      const second = await askRecall(text);
+      if (second.ok) {
+        translatedQuery = text;
+        payload = recallPayload(second);
+        queryTranslations += recallTranslationCount(payload);
+      }
+    }
+  }
+  const candidates = payload.records ?? [];
   const lines = [];
   for (const candidate of candidates) {
     // The kind and the key are spoken because the answer now spans three record
@@ -215,6 +267,10 @@ export async function runInjection({ prompt, partition, budget, triggerKeywords,
     truncated: false,
     budgetExceeded,
     budget: effectiveBudget,
+    queryLanguage: payload.queryLanguage ?? null,
+    queryTranslation: owed,
+    translatedQuery,
+    telemetry: { queryTranslations },
     injection: joined.length === 0 ? null : joined
   };
 }
@@ -245,6 +301,7 @@ function parseArgv(argv) {
     limit: typeof flags.limit === "string" ? Number(flags.limit) : DEFAULT_RECALL_LIMIT,
     budget: typeof flags.budget === "string" ? Number(flags.budget) : (Number(process.env.TCRN_KNOWLEDGE_INJECTION_BUDGET) || undefined),
     triggerKeywords: typeof flags["trigger-keywords"] === "string" ? flags["trigger-keywords"] : "",
+    translate: bundleTranslator(typeof flags["translation-bundle"] === "string" ? flags["translation-bundle"] : ""),
     selfTest: flags["self-test"] === true,
     verifyChannel: flags["verify-channel"] === true
   };

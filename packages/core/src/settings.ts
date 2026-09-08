@@ -3,6 +3,7 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import { assertStrictInstant, canonicalJson, compareCanonicalText } from "../../protocol/src/index.js";
+import { ARTIFACT_LANGUAGE_TAGS, parsePromptLanguages } from "./knowledge-language.js";
 
 /**
  * Settings are a deliberately small engine-owned overlay surface. The generic
@@ -24,6 +25,7 @@ export type SettingValueType = "enum" | "path" | "string" | "url";
 export type SettingControlType = "enum" | "boolean" | "number" | "text";
 
 export type SettingKey =
+  | "artifact.language"
   | "backup.cadence"
   | "backup.destination"
   | "conference.positionBudgetBytes"
@@ -39,6 +41,8 @@ export type SettingKey =
   | "execution.subagentPolicy"
   | "injection.budgetBytes"
   | "knowledge.aggregateBytes"
+  | "model.economyTier"
+  | "retrieval.promptLanguages"
   | "retrieval.scopeExcerptBytes"
   | "retrieval.tau"
   | "storage.backend"
@@ -167,6 +171,17 @@ function assertAbsoluteArtifactsSettingPath(value: string, label: string, worksp
 }
 
 const catalogEntries: readonly SettingsCatalogEntry[] = [
+  {
+    // TCRN-CROSS-STORY-364: the language this workspace writes its knowledge cards in.
+    // Its value set is the roster knowledge-language.ts can actually judge, so the two
+    // cannot drift. A new installation defaults to English; this platform records zh-CN.
+    key: "artifact.language",
+    type: "enum",
+    controlType: "enum",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "en",
+    allowedValues: [...ARTIFACT_LANGUAGE_TAGS],
+  },
   {
     key: "backup.cadence",
     type: "enum",
@@ -313,6 +328,32 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     max: 1_048_576,
   },
   {
+    // TCRN-CROSS-STORY-364 (Owner ruling TCRN-CROSS-MIN-152 D3): the economy-tier model the
+    // write-path hook and the query-side fallback call, recorded as a value so that no model
+    // name appears in engine code. Unset means no model is available, which is what makes a
+    // write on a language-configured workspace refuse rather than degrade.
+    //
+    // Reversible on purpose. TCRN-CROSS-STORY-369 lands a tier table naming a model per tier;
+    // when it does, this key is either that table's economy row read through the same name or
+    // is retired with its one reader, and nothing stored under it constrains that choice -- a
+    // settings record is withdrawn by the ordinary settings path.
+    key: "model.economyTier",
+    type: "string",
+    controlType: "text",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: null,
+  },
+  {
+    // TCRN-CROSS-STORY-364: which prompt languages this workspace expects questions in. A
+    // list in the one value shape this catalog has: comma-separated roster tags. Unset reads
+    // as the artefact language alone, which is the default requirement 1 states.
+    key: "retrieval.promptLanguages",
+    type: "string",
+    controlType: "text",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: null,
+  },
+  {
     key: "retrieval.scopeExcerptBytes",
     type: "string",
     controlType: "number",
@@ -432,6 +473,13 @@ export function validateSettingValue(key: unknown, value: unknown, workspaceRoot
       "SETTINGS_VALUE_INVALID",
       `${entry.key} is outside its closed enum; allowed values: ${entry.allowedValues?.join(", ") ?? "none"}`,
       { allowedValues: entry.allowedValues ?? [] },
+    );
+  }
+  if (entry.key === "retrieval.promptLanguages" && parsePromptLanguages(value).length === 0) {
+    fail(
+      "SETTINGS_VALUE_INVALID",
+      entry.key + " must be a comma-separated list of known language tags; allowed values: " + ARTIFACT_LANGUAGE_TAGS.join(", "),
+      { allowedValues: [...ARTIFACT_LANGUAGE_TAGS] },
     );
   }
   if (entry.key === "engine.requiredVersion") {

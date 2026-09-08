@@ -108,12 +108,19 @@ import {
   admitTemplateInWorkspace,
   readTemplateDocumentFile,
   RECALL_CANDIDATE_LIMIT,
+  expansionsText,
+  KNOWLEDGE_LANGUAGE_BUNDLE_FALLBACK_KEY,
+  languageProviderFromBundle,
+  parseLanguageBundle,
   RECALL_DEFAULT_TAU,
   recall,
+  readKnowledgeLanguagePolicy,
   recallDocuments,
+  resolveQueryLanguage,
   templateBindingFromWorkRecord,
   validateTemplateDocument,
 } from "../../core/src/index.js";
+import type { KnowledgeLanguageBundle, KnowledgeLanguageProvider } from "../../core/src/index.js";
 import type {
   ConferenceRequest,
   ConferenceMinutes,
@@ -388,6 +395,55 @@ function booleanValue(value: string | undefined, name: string): boolean {
   if (value === undefined || value === "false") return false;
   if (value === "true") return true;
   fail("CLI_ARGUMENT_MALFORMED", name);
+}
+
+
+// TCRN-CROSS-STORY-364 requirement 3: the four card write paths -- knowledge-capture,
+// knowledge-create, conference-close --distill and knowledge-batch's create members --
+// all reach buildMetadata, which refuses fail-closed on a language-configured workspace
+// unless it is handed the economy-tier model's answers. The CLI is where those answers
+// enter: --language-bundle names a file the Agent wrote after asking the model recorded
+// in model.economyTier. The CLI reads a file and hands over data; it calls no model, and
+// the offline leg of verify:p1 still measures that nothing here can.
+function readLanguageBundle(path: string): KnowledgeLanguageBundle {
+  let document: unknown;
+  try {
+    document = JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    fail("KNOWLEDGE_LANGUAGE_MODEL_UNAVAILABLE", `${path}: ${(error as { message?: string }).message ?? "unreadable"}`);
+  }
+  try {
+    return parseLanguageBundle(document);
+  } catch (error) {
+    fail(String((error as { reasonCode?: unknown }).reasonCode ?? "KNOWLEDGE_LANGUAGE_MODEL_UNAVAILABLE"), String((error as { message?: string }).message ?? path));
+  }
+}
+
+/** The provider for one card, or none when the caller named no bundle. */
+function languageProviderFor(path: string | undefined, cardKey?: string): KnowledgeLanguageProvider | undefined {
+  if (path === undefined || path.length === 0) return undefined;
+  const bundle = readLanguageBundle(path);
+  return cardKey === undefined || cardKey.length === 0
+    ? languageProviderFromBundle(bundle)
+    : languageProviderFromBundle(bundle, cardKey);
+}
+
+/** The mutation options one card write carries: the provider, or nothing at all. */
+function languageOptions(path: string | undefined, cardKey?: string): { readonly languageProvider?: KnowledgeLanguageProvider } {
+  const provider = languageProviderFor(path, cardKey);
+  return provider === undefined ? {} : { languageProvider: provider };
+}
+
+/** One provider per card key the bundle carries, for the members of a batch. */
+function languageProvidersFor(path: string | undefined): ReadonlyMap<string, KnowledgeLanguageProvider> | undefined {
+  if (path === undefined || path.length === 0) return undefined;
+  const bundle = readLanguageBundle(path);
+  const providers = new Map<string, KnowledgeLanguageProvider>();
+  for (const cardKey of Object.keys(bundle.expansions)) providers.set(cardKey, languageProviderFromBundle(bundle, cardKey));
+  if (!providers.has(KNOWLEDGE_LANGUAGE_BUNDLE_FALLBACK_KEY)) {
+    providers.set(KNOWLEDGE_LANGUAGE_BUNDLE_FALLBACK_KEY, languageProviderFromBundle(bundle));
+  }
+  return providers;
 }
 
 function jsonValue(value: string | undefined, name: string): unknown {
@@ -887,7 +943,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "commands", availability: "cli", mutates: false, flags: [] },
   { name: "conference-append-position", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "actor-id", required: true, valueKind: "string" }, { name: "position", required: true, valueKind: "string" }, { name: "risks", required: true, valueKind: "list" }, { name: "recommendations", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "conference-cancel", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "distill", required: false, valueKind: "boolean" }, { name: "accountable-owner-id", required: false, valueKind: "string" }, { name: "stale-days", required: false, valueKind: "integer" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "execution-form", required: false, valueKind: "string" }] },
+  { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "distill", required: false, valueKind: "boolean" }, { name: "accountable-owner-id", required: false, valueKind: "string" }, { name: "stale-days", required: false, valueKind: "integer" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "execution-form", required: false, valueKind: "string" }, { name: "language-bundle", required: false, valueKind: "string" }] },
   { name: "conference-list-by-work", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
   { name: "conference-minutes-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "conference-id", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "conference-open", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "type", required: true, valueKind: "string" }, { name: "title", required: true, valueKind: "string" }, { name: "work-ids", required: true, valueKind: "list" }, { name: "desired-outcome", required: true, valueKind: "string" }, { name: "participant-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -902,13 +958,13 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "minutes-locator", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "identity-authority", required: false, valueKind: "string" }, { name: "identity-authority-digest", required: false, valueKind: "string" }] },
   { name: "init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "segment-events", required: false, valueKind: "integer" }] },
   { name: "install-manifest", availability: "cli", mutates: false, flags: [] },
-  { name: "knowledge-batch", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "from-file", required: true, valueKind: "string" }, { name: "align-first", required: false, valueKind: "boolean" }] },
+  { name: "knowledge-batch", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "from-file", required: true, valueKind: "string" }, { name: "align-first", required: false, valueKind: "boolean" }, { name: "language-bundle", required: false, valueKind: "string" }] },
   { name: "knowledge-bodies-migrate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "segment-bytes", required: false, valueKind: "integer" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-candidates", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
-  { name: "knowledge-capture", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "subject", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "snippet", required: true, valueKind: "string" }, { name: "tags", required: true, valueKind: "list" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "body", required: true, valueKind: "string" }, { name: "expected-version", required: false, valueKind: "integer" }, { name: "external-key", required: false, valueKind: "string" }, { name: "role-scopes", required: false, valueKind: "list" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "source-references", required: false, valueKind: "list" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "supersedes", required: false, valueKind: "string" }, { name: "coexist", required: false, valueKind: "boolean" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
+  { name: "knowledge-capture", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "subject", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "snippet", required: true, valueKind: "string" }, { name: "tags", required: true, valueKind: "list" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "body", required: true, valueKind: "string" }, { name: "expected-version", required: false, valueKind: "integer" }, { name: "external-key", required: false, valueKind: "string" }, { name: "role-scopes", required: false, valueKind: "list" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "source-references", required: false, valueKind: "list" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "supersedes", required: false, valueKind: "string" }, { name: "coexist", required: false, valueKind: "boolean" }, { name: "allow-trailing", required: false, valueKind: "boolean" }, { name: "language-bundle", required: false, valueKind: "string" }] },
   { name: "knowledge-checkpoint", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
-  { name: "knowledge-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "scope", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "role-scopes", required: true, valueKind: "list" }, { name: "category", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "tags", required: true, valueKind: "list" }, { name: "subject", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "snippet", required: true, valueKind: "string" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "source-references", required: true, valueKind: "list" }, { name: "source-digest", required: false, valueKind: "string" }, { name: "supersedes", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "work-ids", required: false, valueKind: "list" }, { name: "decision-ids", required: false, valueKind: "list" }, { name: "gate-ids", required: false, valueKind: "list" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "coexist", required: false, valueKind: "boolean" }, { name: "lifecycle", required: true, valueKind: "string" }, { name: "retrieval", required: true, valueKind: "string" }, { name: "freshness", required: true, valueKind: "string" }, { name: "last-verified", required: true, valueKind: "instant", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "stale-days", required: true, valueKind: "integer", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "export", required: true, valueKind: "string" }, { name: "body", required: true, valueKind: "string" }] },
+  { name: "knowledge-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "scope", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "role-scopes", required: true, valueKind: "list" }, { name: "category", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "tags", required: true, valueKind: "list" }, { name: "subject", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "snippet", required: true, valueKind: "string" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "source-references", required: true, valueKind: "list" }, { name: "source-digest", required: false, valueKind: "string" }, { name: "supersedes", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "work-ids", required: false, valueKind: "list" }, { name: "decision-ids", required: false, valueKind: "list" }, { name: "gate-ids", required: false, valueKind: "list" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "coexist", required: false, valueKind: "boolean" }, { name: "lifecycle", required: true, valueKind: "string" }, { name: "retrieval", required: true, valueKind: "string" }, { name: "freshness", required: true, valueKind: "string" }, { name: "last-verified", required: true, valueKind: "instant", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "stale-days", required: true, valueKind: "integer", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "export", required: true, valueKind: "string" }, { name: "body", required: true, valueKind: "string" }, { name: "language-bundle", required: false, valueKind: "string" }] },
   { name: "knowledge-freshness", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "acknowledge-disposable", required: false, valueKind: "boolean" }] },
   { name: "knowledge-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
@@ -1705,12 +1761,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const names = [
       "workspace", "expected-version", "at", "external-key", "scope", "project-id", "role-scopes", "category", "kind", "tags",
       "subject", "summary", "snippet", "accountable-owner-id", "source-references", "source-digest", "supersedes", "work-ids", "decision-ids", "gate-ids", "evidence-ids",
-      "coexist", "lifecycle", "retrieval", "freshness", "last-verified", "stale-days", "export", "body",
+      "coexist", "lifecycle", "retrieval", "freshness", "last-verified", "stale-days", "export", "body", "language-bundle",
     ];
     // TCRN-CROSS-STORY-365: the four backlink lists are optional. They were required with
     // a "-" spelling for "none", which made every card pay four flags to say nothing, and
     // 26 of 28 flags required is what made this verb unusable from a hook.
-    const optional = ["source-digest", "supersedes", "work-ids", "decision-ids", "gate-ids", "evidence-ids", "coexist"];
+    const optional = ["source-digest", "supersedes", "work-ids", "decision-ids", "gate-ids", "evidence-ids", "coexist", "language-bundle"];
     const values = parseArguments(rest, names);
     required(values, names.filter((name) => !optional.includes(name)));
     // Pre-validate enum-valued flags against their literal unions so an invalid
@@ -1757,7 +1813,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       exportDisposition: values.export as "metadata-only" | "excluded",
       body: values.body ?? "",
       coexist: booleanValue(values.coexist, "coexist"),
-    })));
+    }, languageOptions(values["language-bundle"], values["external-key"]))));
     return;
   }
   if (command === "knowledge-capture") {
@@ -1767,7 +1823,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const names = [
       "workspace", "at", "subject", "summary", "snippet", "tags", "accountable-owner-id", "body",
       "expected-version", "external-key", "role-scopes", "category", "kind", "source-references", "evidence-ids",
-      "supersedes", "coexist", "allow-trailing",
+      "supersedes", "coexist", "allow-trailing", "language-bundle",
     ];
     const values = parseArguments(rest, names);
     required(values, ["workspace", "at", "subject", "summary", "snippet", "tags", "accountable-owner-id", "body"]);
@@ -1795,7 +1851,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ...(values["source-references"] ? { sourceReferences: listValue(values["source-references"]) } : {}),
       ...(values["evidence-ids"] ? { linkedEvidenceIds: listValue(values["evidence-ids"]) } : {}),
       ...(values.supersedes ? { supersedes: values.supersedes } : {}),
-    }, { allowTrailing: booleanValue(values["allow-trailing"], "allow-trailing") })));
+    }, { allowTrailing: booleanValue(values["allow-trailing"], "allow-trailing"), ...languageOptions(values["language-bundle"], values["external-key"]) })));
     return;
   }
   if (command === "knowledge-list") {
@@ -1914,7 +1970,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // --expected-version is the STORE's version (the meaning every knowledge verb gives
     // that flag), and --align-first folds the rebase a chain-written workspace always
     // needs into the same invocation -- N cards, one round trip.
-    const values = parseArguments(rest, ["workspace", "expected-version", "at", "from-file", "align-first"]);
+    const values = parseArguments(rest, ["workspace", "expected-version", "at", "from-file", "align-first", "language-bundle"]);
     required(values, ["workspace", "expected-version", "at", "from-file"]);
     const { readFileSync } = await import("node:fs");
     let document: unknown;
@@ -1923,10 +1979,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     } catch (error) {
       fail("WORK_BATCH_MALFORMED", `${values["from-file"] ?? ""}: ${(error as { message?: string }).message ?? "unreadable"}`);
     }
+    const batchProviders = languageProvidersFor(values["language-bundle"]);
     io.write(canonicalJson(await applyKnowledgeBatch(values.workspace ?? "", document, {
       expectedVersion: integerValue(values, "expected-version"),
       occurredAt: values.at ?? "",
       alignFirst: booleanValue(values["align-first"], "align-first"),
+      ...(batchProviders === undefined ? {} : { languageProviders: batchProviders }),
     })));
     return;
   }
@@ -1957,6 +2015,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ? (Number.isFinite(configuredTau) && configuredTau >= 0 ? configuredTau : RECALL_DEFAULT_TAU)
       : Number(values.tau);
     if (!Number.isFinite(tau) || tau < 0) fail("CLI_ARGUMENT_MALFORMED", "tau");
+    // TCRN-CROSS-STORY-364 requirement 4: a prompt whose language is outside the recorded
+    // prompt languages is answered, and the answer says the translation is owed and which
+    // model owes it. The engine calls no model; the hook holding it translates and asks
+    // again. Read-side is fail-open, unlike the write path, because a session with no
+    // answer is worse than an answer ranked in the wrong language.
+    const languageAnswer = resolveQueryLanguage(query, readKnowledgeLanguagePolicy(state.settings));
     const scopeBytes = Number(settingValue("retrieval.scopeExcerptBytes") ?? "512");
     const scopeExcerptBytes = Number.isSafeInteger(scopeBytes) && scopeBytes > 0 ? scopeBytes : 512;
     // A workspace with no knowledge store, or one trailing the chain while the caller did
@@ -1981,10 +2045,11 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
         summary: String(record["summary"] ?? ""),
         snippet: String(record["snippet"] ?? ""),
         tags: ((record["tags"] ?? []) as readonly unknown[]).map((tag) => String(tag)),
-        // The weight-6 column is fed by an author's own restatements of the question a
-        // card answers. Nothing writes them yet; the column is here because the 2026-09-04
-        // evaluation measured them lifting cards-only recall from 21 of 36 to 36 of 36.
-        expansions: typeof record["expansions"] === "string" ? record["expansions"] : "",
+        // The weight-6 column is fed by an author's own restatements of the question a card
+        // answers. TCRN-CROSS-STORY-364 writes them: the metadata field is a map from prompt
+        // language to phrasings, flattened here by the one helper both sides share. The
+        // 2026-09-04 evaluation measured them lifting cards-only recall from 21 of 36 to 36.
+        expansions: expansionsText(record["expansions"]),
       }));
     } catch (error) {
       const reasonCode = (error as { readonly reasonCode?: unknown }).reasonCode;
@@ -2044,6 +2109,9 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       relativeFloor: result.relativeFloor.toFixed(4),
       limit: result.limit,
       scopeExcerptBytes,
+      queryLanguage: languageAnswer.queryLanguage,
+      queryTranslation: languageAnswer.queryTranslation,
+      telemetry: languageAnswer.telemetry,
       indexed: result.indexed,
       rebuilt: result.rebuilt,
       total: result.total,
@@ -2406,7 +2474,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // knowledge candidate. Provenance stays optional at capture (WSC-3 capture-cheap);
     // the whole flow runs under the held workspace lease so no concurrent append can
     // desync the rebind before capture.
-    const values = parseArguments(rest, [...shared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues", "execution-form", "actor", "distill", "accountable-owner-id", "stale-days", "evidence-ids"]);
+    const values = parseArguments(rest, [...shared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues", "execution-form", "actor", "distill", "accountable-owner-id", "stale-days", "evidence-ids", "language-bundle"]);
     required(values, [...requiredShared, "conference-id", "minutes-external-key", "summary", "outcome-class", "decisions", "unresolved-issues"]);
     assertMintableOutcomeClass("conference-close", values["outcome-class"]);
     const workspace = values.workspace ?? "";
@@ -2414,6 +2482,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const conferenceId = values["conference-id"] ?? "";
     const minutesId = deriveStableId("minutes", canonicalExternalKey(values["minutes-external-key"] ?? ""));
     const distill = booleanValue(values.distill, "distill");
+    const distillProviders = languageProvidersFor(values["language-bundle"]);
     const outcome = await withLease(workspace, at, async (lease) => {
       // Read the knowledge marker version BEFORE the close, while the store's
       // high-water still equals the workspace head — a missing/invalid store then
@@ -2450,7 +2519,16 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       );
       const knowledgeUnitIds: string[] = [];
       for (const candidate of candidates) {
-        knowledgeUnitIds.push(String((await createKnowledgeUnit(workspace, candidate)).id));
+        // TCRN-CROSS-STORY-364 requirement 3: a distilled decision is a card write, so it
+        // carries the same answers every other card write carries. The bundle is keyed by
+        // the candidate's external key -- the Agent knows those before the close, because
+        // distillConferenceKnowledge derives them from the minutes it is about to write.
+        const candidateProvider = distillProviders?.get(candidate.externalKey) ?? distillProviders?.get(KNOWLEDGE_LANGUAGE_BUNDLE_FALLBACK_KEY);
+        knowledgeUnitIds.push(String((await createKnowledgeUnit(
+          workspace,
+          candidate,
+          candidateProvider === undefined ? {} : { languageProvider: candidateProvider },
+        )).id));
       }
       return { state, knowledgeUnitIds };
     });

@@ -1752,6 +1752,26 @@
         "STORY-363: the backfill tool refuses to write without a workspace, an instant and an actor"
       ]
     },
+    "tests/story-364-knowledge-language.test.mjs": {
+      "testCount": 14,
+      "assertionCount": 71,
+      "testNames": [
+        "STORY-364: character ratio, not a language identifier, decides which language prose is in",
+        "STORY-364: an unconfigured workspace stores exactly the prose it was handed",
+        "STORY-364: a card captured in English is stored in the artefact language, with phrasings",
+        "STORY-364: a language-configured workspace refuses a write it cannot translate",
+        "STORY-364: the answers are checked against the model the workspace actually records",
+        "STORY-364: phrasings outside the normative bounds are refused",
+        "STORY-364: the settings catalog admits the language keys and refuses a tag it cannot judge",
+        "STORY-364: a prompt outside the recorded prompt languages is counted once, and still answered",
+        "STORY-364: the recall verb reports the query language and its telemetry",
+        "STORY-364: phrasings feed the weight-6 recall column, so a question worded differently lands",
+        "STORY-364 R3: knowledge-create reaches the write-path hook, and is refused without answers",
+        "STORY-364 R3: a batch",
+        "STORY-364 R3: conference-close --distill reaches the write-path hook",
+        "STORY-364 R4: the injection hook translates once and asks again, and adds the two counts"
+      ]
+    },
     "tests/story-380-artifact-blob-store.test.mjs": {
       "testCount": 12,
       "assertionCount": 60,

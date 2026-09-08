@@ -42,6 +42,7 @@ import type {
   KnowledgeMutationOptions,
   KnowledgeStalenessPolicy,
 } from "./knowledge-core.js";
+import type { KnowledgeLanguageProvider } from "./knowledge-language.js";
 import { WorkspaceError } from "./workspace.js";
 
 export const KNOWLEDGE_BATCH_SCHEMA_VERSION = "tcrn.knowledge-batch.v1" as const;
@@ -70,6 +71,13 @@ export interface KnowledgeBatchOptions {
   // for writes; carrying it inside the batch is what keeps N cards at one invocation.
   readonly alignFirst?: boolean;
   readonly mutation?: KnowledgeMutationOptions;
+  // TCRN-CROSS-STORY-364 requirement 3: knowledge-create is a card write path, and a
+  // batch of them is N of those. One `mutation` cannot carry N sets of answers, so the
+  // providers arrive keyed by the member's external key -- the one identifier a member
+  // is required to carry. A batch member with no entry falls back to the map's NEW key,
+  // which is what a single-card bundle records; a member with neither reaches the write
+  // path with no provider and is refused there, fail-closed, like every other path.
+  readonly languageProviders?: ReadonlyMap<string, KnowledgeLanguageProvider>;
 }
 
 function isObject(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -160,11 +168,13 @@ export async function applyKnowledgeBatch(
     const member = raw as Readonly<Record<string, unknown>>;
     try {
       if (member.verb === "knowledge-create") {
+        const memberProvider = options.languageProviders?.get(String(member.externalKey ?? ""))
+          ?? options.languageProviders?.get("NEW");
         const result = await createKnowledgeUnit(workspaceRoot, {
           ...(member as unknown as Omit<CreateKnowledgeUnitInput, "expectedVersion" | "occurredAt">),
           expectedVersion: version,
           occurredAt: options.occurredAt,
-        }, mutation);
+        }, memberProvider === undefined ? mutation : { ...mutation, languageProvider: memberProvider });
         version = result.version as number;
         revisions.set(result.id as string, result.revision as number);
         applied.push({ index, verb: "knowledge-create", id: result.id as string, revision: result.revision as number, version });

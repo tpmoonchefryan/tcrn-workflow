@@ -374,6 +374,34 @@
         "extensions": {
           "type": "object",
           "maxProperties": 0
+        },
+        "expansions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "en": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "x-tcrn-maxUtf8Bytes": 256
+              }
+            },
+            "zh-CN": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "x-tcrn-maxUtf8Bytes": 256
+              }
+            }
+          }
         }
       }
     }

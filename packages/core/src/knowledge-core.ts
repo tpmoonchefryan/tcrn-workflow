@@ -31,6 +31,13 @@ import {
   validateKnowledgeRecord,
 } from "../../protocol/src/index.js";
 import type { JsonValue, KnowledgeRecord, WorkRecord } from "../../protocol/src/index.js";
+import {
+  applyWriteLanguagePolicy,
+  expansionsAreBounded,
+  KnowledgeLanguageError,
+  readKnowledgeLanguagePolicy,
+} from "./knowledge-language.js";
+import type { KnowledgeExpansions, KnowledgeLanguageProvider } from "./knowledge-language.js";
 import { activeWorkspaceRoot, materializeWorkspace } from "./workspace.js";
 import type { ProjectRecord, WorkspaceState } from "./workspace.js";
 
@@ -80,6 +87,8 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_FRESHNESS_EVALUATED",
   "KNOWLEDGE_HIGH_WATER_MISMATCH",
   "KNOWLEDGE_INPUT_INVALID",
+  "KNOWLEDGE_LANGUAGE_INVALID",
+  "KNOWLEDGE_LANGUAGE_MODEL_UNAVAILABLE",
   "KNOWLEDGE_LIFECYCLE_INVALID",
   "KNOWLEDGE_LIMIT_EXCEEDED",
   "KNOWLEDGE_LINK_INVALID",
@@ -189,6 +198,10 @@ export interface KnowledgeUnitMetadata {
   readonly revision: number;
   readonly updatedAt: string;
   readonly extensions: KnowledgeUnitExtensions;
+  // TCRN-CROSS-STORY-364: the question phrasings this card is retrievable by, keyed by
+  // prompt language. Empty on a workspace that has recorded no artefact language, and on
+  // every card written before this field existed.
+  readonly expansions: KnowledgeExpansions;
 }
 
 export interface CreateKnowledgeUnitInput {
@@ -235,6 +248,11 @@ export interface KnowledgeReadOptions {
 
 export interface KnowledgeMutationOptions extends KnowledgeReadOptions {
   readonly faultAt?: KnowledgeFaultPoint;
+  // TCRN-CROSS-STORY-364: the answers the recorded economy-tier model produced for this
+  // write. The engine never calls a model; the write-path hook that does supplies them
+  // here, and a workspace that has recorded an artefact language refuses the write when
+  // they are absent.
+  readonly languageProvider?: KnowledgeLanguageProvider;
 }
 
 export interface KnowledgeListQuery extends KnowledgeReadOptions {
@@ -308,7 +326,7 @@ const metadataFields = [
   "summary", "snippet", "accountableOwnerId", "sourceReferences", "sourceDigest", "supersedes", "linkedWorkIds", "linkedDecisionIds", "linkedGateIds",
   "linkedEvidenceIds", "lifecycle", "retrievalDisposition", "promotionState", "freshnessState", "lastVerified",
   "stalenessPolicy", "redactionDisposition", "exportDisposition", "authority", "sourceProvenance", "bodySha256",
-  "bodyBytes", "revision", "updatedAt", "extensions",
+  "bodyBytes", "revision", "updatedAt", "extensions", "expansions",
 ];
 const stalenessFields = ["maximumAgeDays", "unknownDisposition"];
 const extensionFields = ["coexistsWith", "supersededBy"];
@@ -705,8 +723,12 @@ function assertPromotableProvenance(metadata: KnowledgeUnitMetadata): void {
 // explicit null value. The derived index keeps null fields omitted for those
 // legacy records, so an existing store remains byte-valid until its next normal
 // mutation rewrites the derived view.
+// TCRN-CROSS-STORY-364 extends the same admission to `expansions`: a record written
+// before phrasings existed reads as one carrying none, and the derived view below keeps
+// omitting the empty value so an existing store stays byte-valid until its next write.
 function normalizeMetadataRecord(value: Readonly<Record<string, JsonValue>>): Readonly<Record<string, JsonValue>> {
-  return Object.hasOwn(value, "supersedes") ? value : { ...value, supersedes: null };
+  const withSupersedes = Object.hasOwn(value, "supersedes") ? value : { ...value, supersedes: null };
+  return Object.hasOwn(withSupersedes, "expansions") ? withSupersedes : { ...withSupersedes, expansions: {} };
 }
 
 // TCRN-CROSS-STORY-358: relocated from the retired packages/core/src/artifact-lifecycle.ts
@@ -790,7 +812,7 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
     typeof normalizedValue.bodySha256 !== "string" || !/^[a-f0-9]{64}$/u.test(normalizedValue.bodySha256) ||
     !Number.isSafeInteger(normalizedValue.bodyBytes) || Number(normalizedValue.bodyBytes) < 0 ||
     !Number.isSafeInteger(normalizedValue.revision) || Number(normalizedValue.revision) < 1 || typeof normalizedValue.updatedAt !== "string" ||
-    !extensionsAreBounded(normalizedValue.extensions)) {
+    !extensionsAreBounded(normalizedValue.extensions) || !expansionsAreBounded(normalizedValue.expansions)) {
     fail("KNOWLEDGE_RECORD_INVALID", String(normalizedValue.id ?? "unknown"));
   }
   if ((normalizedValue.stalenessPolicy.maximumAgeDays !== null &&
@@ -988,9 +1010,9 @@ function knowledgeIndex(marker: KnowledgeStoreMarker, metadata: readonly Knowled
     .sort((left, right) => compareCanonicalText(left.id, right.id))
     // Existing stores predate STORY-326. Keep the derived view byte-compatible
     // for the default null value while metadata-first reads expose supersedes:null.
-    .map((record) => record.supersedes === null
-      ? Object.fromEntries(Object.entries(record).filter(([key]) => key !== "supersedes"))
-      : record);
+    .map((record) => Object.fromEntries(Object.entries(record).filter(([key]) =>
+      !(key === "supersedes" && record.supersedes === null) &&
+      !(key === "expansions" && Object.keys(record.expansions ?? {}).length === 0))));
   return {
     schemaVersion: "tcrn.knowledge-index.v1",
     authority: "derived-rebuildable",
@@ -1272,7 +1294,12 @@ function isDefaultSelectable(metadata: KnowledgeUnitMetadata, at: string): boole
     computeFreshness(metadata, at) === "fresh";
 }
 
-function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace: WorkspaceState): KnowledgeUnitMetadata {
+function buildMetadata(
+  input: CreateKnowledgeUnitInput,
+  body: Buffer,
+  workspace: WorkspaceState,
+  languageProvider?: KnowledgeLanguageProvider,
+): KnowledgeUnitMetadata {
   let externalKey: string;
   try {
     externalKey = canonicalExternalKey(input.externalKey);
@@ -1308,6 +1335,26 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
   // either way. conference-close --distill is the one writer that does this, and it keeps
   // the shape it has always had.
   const directCapture = input.lifecycle === "active";
+  // TCRN-CROSS-STORY-364 (Owner ruling TCRN-CROSS-MIN-160 D3): the write-path hook, on the
+  // one function every write path reaches. knowledge-create calls it directly,
+  // knowledge-capture calls it through captureKnowledgeUnit, and conference-close --distill
+  // calls it once per distilled decision. knowledge-promote is not a card write path and
+  // is deliberately not reached: it moves a promotion state and touches no prose.
+  //
+  // Fail-closed: a workspace that records artifact.language and cannot produce the
+  // translation refuses here, with the reason code the caller can act on, rather than
+  // storing prose in a language its own retrieval set does not cover.
+  let language;
+  try {
+    language = applyWriteLanguagePolicy(
+      { subject: input.subject, summary: input.summary, snippet: input.snippet },
+      readKnowledgeLanguagePolicy(workspace.settings),
+      languageProvider,
+    );
+  } catch (error) {
+    if (error instanceof KnowledgeLanguageError) fail(error.reasonCode, error.message, error.details as Readonly<Record<string, JsonValue>>);
+    throw error;
+  }
   const metadata: KnowledgeUnitMetadata = {
     schemaVersion: KNOWLEDGE_METADATA_SCHEMA_VERSION,
     id: deriveStableId("knowledge", externalKey),
@@ -1321,9 +1368,9 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
     category: input.category,
     kind: input.kind,
     tags: [...input.tags].sort(compareCanonicalText),
-    subject: input.subject,
-    summary: input.summary,
-    snippet: input.snippet,
+    subject: language.subject,
+    summary: language.summary,
+    snippet: language.snippet,
     accountableOwnerId: input.accountableOwnerId,
     sourceReferences: [...input.sourceReferences].sort(compareCanonicalText),
     sourceDigest: input.sourceDigest ?? "",
@@ -1350,6 +1397,7 @@ function buildMetadata(input: CreateKnowledgeUnitInput, body: Buffer, workspace:
     revision: 1,
     updatedAt: input.occurredAt,
     extensions: {},
+    expansions: language.expansions,
   };
   const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, workspace);
   validateMetadataBody(validated, body, workspace);
@@ -1444,7 +1492,7 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
   const sourceDigest = input.sourceDigest && input.sourceDigest.length > 0
     ? input.sourceDigest
     : await calculateKnowledgeSourceDigest(workspaceRoot, workspace, input.sourceReferences, input.body);
-  const metadata = buildMetadata({ ...input, sourceDigest }, body, workspace);
+  const metadata = buildMetadata({ ...input, sourceDigest }, body, workspace, options.languageProvider);
   const initial = await mutationAdmissionScan(workspaceRoot, options);
   const claim = await acquireMutationClaim(initial);
   // WSC-6: every escape from the claim-held region that leaves this process alive must
