@@ -737,6 +737,24 @@
       "testName": "WSC-3: provenance is enforced at promotion, not capture",
       "reason": "TCRN-CROSS-INC-282 moved the rule the name states: a card written lifecycle \"active\" is now written promoted, so validateMetadataShape runs the promotion assertions at capture and a guide or reference missing its owner, source or evidence is refused where the writer sees it. The case kept its four provenance shapes and gained a third loop -- the same four shapes refused at write -- so it covers more than it did; the file's counted assertion total rises from 208 to 212 and scripts/policy/coverage-baseline.json records the new value in this same change; the added refusals are expectReason calls, which this counter does not count. The name changed because the boundary it probes changed, not because the probe was dropped.",
       "replacement": "tests/p4-knowledge-core.test.mjs:WSC-3: provenance is enforced at capture for an active card and at promotion for a candidate"
+    },
+    {
+      "path": "tests/inc261-verification-links.test.mjs",
+      "testName": "INC-261 Story verification links support forward query, reverse lookup, and GWT validation",
+      "reason": "TCRN-CROSS-INC-288 retires the core completion-link validator and its forward and reverse queries. The surviving verification-map shape validator remains tested in this file.",
+      "disowned": {
+        "owningRepository": "none; the retired core completion-link mechanism has no live successor implementation",
+        "ruling": "TCRN-CROSS-MIN-172 D1 explicitly retires the completion-link branch, work-id filtering, rule comment, and exports left without consumers. D2 records superseded-by-stricter under the platform acceptance lane."
+      }
+    },
+    {
+      "path": "tests/inc261-verification-links.test.mjs",
+      "testName": "INC-261 a scoped Story cannot reach done without a verification claim",
+      "reason": "TCRN-CROSS-INC-288 removes the opt-in claim refusal under Owner ruling. The independent Owner-decided completion refusal remains asserted in tests/story-scope-compliance.test.mjs.",
+      "disowned": {
+        "owningRepository": "none; the retired claim-admission branch has no live successor implementation",
+        "ruling": "TCRN-CROSS-MIN-172 D1 retires the claim-admission refusal and D3 requires scoped Story completion without its warning. The adjacent Owner acceptance requirement is not retired."
+      }
     }
   ]
 }

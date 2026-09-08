@@ -222,9 +222,19 @@ describe("STORY-209 Story scope contract", () => {
         id: storyId,
         decidedBy: ["minutes:" + "a".repeat(24)],
       });
-      state = await transitionWork(workspace, lease, { expectedVersion: 7, occurredAt: "2026-08-09T00:00:15Z", id: storyId, status: "done" });
-      assert.equal(state.work.find((record) => record.id === storyId).status, "done");
       await lease.release();
+      let output = "";
+      await runCli([
+        "work-transition",
+        "--workspace", workspace,
+        "--expected-version", "7",
+        "--at", "2026-08-09T00:00:15Z",
+        "--id", storyId,
+        "--status", "done",
+      ], { write(chunk) { output += chunk; } });
+      const completed = JSON.parse(output);
+      assert.equal(completed.record.status, "done");
+      assert.equal(Object.hasOwn(completed, "warning"), false);
     } finally {
       await rm(base, { recursive: true, force: true });
     }

@@ -73,9 +73,7 @@ import {
   validateCorePersonaBundle,
   validateContextRouteResult,
   validateGenericStarterBundle,
-  validateStoryVerificationLinks,
   validateWorkspace,
-  verificationClaimsForWork,
   reportAttestationDirectory,
   writeAttestationReceipt,
   readOperatorAuthority,
@@ -136,7 +134,6 @@ import type {
   RecallKnowledgeInput,
   RecallMinutesInput,
   RecallWorkInput,
-  VerificationClaimLink,
 } from "../../core/src/index.js";
 import { existsSync, readFileSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
@@ -593,43 +590,15 @@ function workDraft(
   };
 }
 
-// E05 read surface: project the non-binding advisory fields off a work record for
-// work-show. Returns null when the record carries neither, so an un-annotated record's
-// work-show output stays byte-identical to before this verb existed.
-function verificationMapClaims(): readonly VerificationClaimLink[] {
-  const path = resolve(process.cwd(), "verification-map.yaml");
-  if (!existsSync(path)) return [];
-  try {
-    const map = JSON.parse(readFileSync(path, "utf8"));
-    return Array.isArray(map?.claims) ? map.claims as VerificationClaimLink[] : [];
-  } catch {
-    return [];
-  }
-}
-
-function workVerificationClaims(record: WorkRecord): readonly VerificationClaimLink[] {
-  return verificationClaimsForWork(verificationMapClaims(), record);
-}
-
-function workVerificationWarning(record: WorkRecord): Readonly<Record<string, string>> | null {
-  const result = validateStoryVerificationLinks(record, verificationMapClaims());
-  return result.ok ? null : {
-    reasonCode: "WORKSPACE_STORY_VERIFICATION_MISSING",
-    message: result.problems.map((problem) => problem.message).join("; "),
-  };
-}
-
 function workAdvisory(record: WorkRecord): Readonly<Record<string, unknown>> | null {
   const scope = record.extensions["advisory:scope"] as { readonly value: unknown } | undefined;
   const decidedBy = record.extensions["advisory:decided-by"] as { readonly value: unknown } | undefined;
   const sprint = record.extensions["advisory:sprint"] as { readonly value: unknown } | undefined;
-  const claims = workVerificationClaims(record);
-  if (scope === undefined && decidedBy === undefined && sprint === undefined && claims.length === 0) return null;
+  if (scope === undefined && decidedBy === undefined && sprint === undefined) return null;
   return {
     ...(scope !== undefined ? { scope: scope.value } : {}),
     ...(decidedBy !== undefined ? { decidedBy: decidedBy.value } : {}),
     ...(sprint !== undefined ? { sprint: sprint.value } : {}),
-    ...(claims.length === 0 ? {} : { verificationClaims: claims.map((claim) => ({ id: claim.id, gwt: claim.gwt ?? [] })) }),
   };
 }
 
@@ -2262,7 +2231,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
     const transitioned = state.work.find((entry) => entry.id === (values.id ?? ""))!;
-    writeState(io, state, workSummary(transitioned), workVerificationWarning(transitioned));
+    writeState(io, state, workSummary(transitioned));
     return;
   }
   if (command === "work-annotate") {

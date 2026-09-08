@@ -34,4 +34,30 @@ describe("STORY-209 source to new-rule conservation", () => {
     assert.equal(result.ok, false);
     assert.ok(result.problems.some((problem) => problem.includes("STORY-TEMPLATE-001 superseded-by-stricter rule needs strictnessProof")));
   });
+
+  test("completion-link retirement remains registered with its deciding authorities", () => {
+    const registry = readStoryRuleRegistry();
+    const rule = registry.rules.find((entry) => entry.id === "STORY-COMPLETION-LINKS");
+    assert.ok(rule);
+    assert.equal(rule.disposition, "superseded-by-stricter");
+    assert.deepEqual(rule.supersededBy, [
+      "TCRN-CROSS-MIN-ACCEPTANCE-LANES",
+      "TCRN-CROSS-MIN-172",
+    ]);
+    assert.ok(registry.sourceInventory.some((entry) =>
+      entry.source === "chain:cross-project:TCRN-CROSS-MIN-172"
+      && entry.rules.includes("STORY-COMPLETION-LINKS")));
+    assert.equal(verifyStoryRuleConservation(registry).reasonCode, "STORY_RULE_CONSERVATION_VERIFIED");
+  });
+
+  test("deleting the completion-link retirement mapping is a named red leg", () => {
+    const registry = readStoryRuleRegistry();
+    registry.rules = registry.rules.filter((rule) => rule.id !== "STORY-COMPLETION-LINKS");
+    const result = verifyStoryRuleConservation(registry);
+    assert.equal(result.ok, false);
+    assert.equal(result.reasonCode, "STORY_RULE_CONSERVATION_BROKEN");
+    assert.ok(result.problems.includes(
+      "chain:cross-project:TCRN-CROSS-MIN-172 maps unknown rule STORY-COMPLETION-LINKS",
+    ));
+  });
 });

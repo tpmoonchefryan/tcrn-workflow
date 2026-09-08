@@ -134,6 +134,12 @@
         "HANDOVER-002",
         "CLOSEOUT-005"
       ]
+    },
+    {
+      "source": "chain:cross-project:TCRN-CROSS-MIN-172",
+      "rules": [
+        "STORY-COMPLETION-LINKS"
+      ]
     }
   ],
   "rules": [
@@ -558,6 +564,21 @@
       "positiveLeg": "matching live head",
       "redLeg": "manifest-only or stale head",
       "disposition": "retained"
+    },
+    {
+      "id": "STORY-COMPLETION-LINKS",
+      "source": "chain:cross-project:TCRN-CROSS-MIN-172#D1-D3",
+      "semantics": "The scoped Story completion claim-link check is retired under the machine acceptance lane.",
+      "landing": "scripts/platform-doctor.mjs acceptanceVerdicts; platform-docs/acceptance-gate-groups.json and acceptance-verdicts.json",
+      "enforcementHost": "platform acceptance lane",
+      "positiveLeg": "tests/story-rule-conservation.test.mjs validates the registered completion-link retirement",
+      "redLeg": "delete STORY-COMPLETION-LINKS from rules while retaining its sourceInventory reference and expect STORY_RULE_CONSERVATION_BROKEN",
+      "disposition": "superseded-by-stricter",
+      "supersededBy": [
+        "TCRN-CROSS-MIN-ACCEPTANCE-LANES",
+        "TCRN-CROSS-MIN-172"
+      ],
+      "strictnessProof": "done 的判据是名册门组全绿加 acceptance-verdicts.json 记录、对每张 Story 一律机器判定，而被退役的检查从未执行且 8 条 claim 不可能覆盖 29 张 Story"
     }
   ]
 }

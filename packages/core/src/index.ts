@@ -391,9 +391,6 @@ export {
   deriveWorkSummary,
   storyScopeFromRecord,
   storyScopeNamesOwnerDecider,
-  validateStoryVerificationLinks,
-  verificationClaimsForWork,
-  verificationWorksForClaim,
   validateStoryRecord,
   validateStoryScope,
   validateTemplateScope,
@@ -405,9 +402,6 @@ export type {
   StoryScopeProblemCode,
   StoryScopeSection,
   StoryScopeValidation,
-  StoryVerificationLinkProblem,
-  StoryVerificationLinkValidation,
-  VerificationClaimLink,
 } from "./story-scope-compliance.js";
 export {
   KNOWLEDGE_CONFLICT_SCORE_THRESHOLD,

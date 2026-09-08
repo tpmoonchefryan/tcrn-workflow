@@ -105,8 +105,7 @@ import type { GateIdentityAuthorityContext, GateIdentityDecision } from "./gate-
 import type { CanonicalRoot } from "./root-identity.js";
 import { FRAMEWORK_VERSION } from "./index.js";
 import type { ExplicitRoot } from "./index.js";
-import { describeStoryScopeProblems, deriveWorkSummary, storyScopeFromRecord, storyScopeNamesOwnerDecider, validateStoryRecord, validateStoryVerificationLinks } from "./story-scope-compliance.js";
-import type { VerificationClaimLink } from "./story-scope-compliance.js";
+import { describeStoryScopeProblems, deriveWorkSummary, storyScopeFromRecord, storyScopeNamesOwnerDecider, validateStoryRecord } from "./story-scope-compliance.js";
 import {
   TemplateAdmissionError,
   admitTemplate,
@@ -215,7 +214,6 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_STORY_SCOPE_REQUIRED",
   "WORKSPACE_STORY_SCOPE_INVALID",
   "WORKSPACE_OWNER_ACCEPTANCE_REQUIRED",
-  "WORKSPACE_STORY_VERIFICATION_MISSING",
   "WORKSPACE_VIEW_STALE",
   // STORY-299. Two codes, two different moments, deliberately not one code.
   // BUDGET_EXCEEDED is raised while nothing has been written: the projection was
@@ -422,8 +420,6 @@ export interface WorkspaceMutationOptions {
   // attestation is enabled it is mandatory (WORKSPACE_ACTOR_REQUIRED) and
   // validated (WORKSPACE_ACTOR_INVALID); the enabling event carries it too.
   readonly actorId?: string;
-  /** Optional verification-map read used by callers that enforce Story completion links. */
-  readonly verificationClaims?: readonly VerificationClaimLink[];
   readonly crashAt?: WorkspaceCrashPoint;
   readonly afterMutationClaimForTest?: () => Promise<void>;
   // STORY-299: a test-facing knob for the pre-commit view budget, the same shape
@@ -1897,12 +1893,8 @@ function advisoryHasMinutes(record: Pick<WorkRecord, "extensions">): boolean {
   return Array.isArray(entry?.value) && entry.value.length > 0 && entry.value.every((item) => isMinutesId(item));
 }
 
-function assertStoryCompletionAdmission(record: WorkRecord, targetStatus: WorkStatus, verificationClaims?: readonly VerificationClaimLink[]): void {
+function assertStoryCompletionAdmission(record: WorkRecord, targetStatus: WorkStatus): void {
   if (record.kind !== "Story" || targetStatus !== "done") return;
-  if (verificationClaims !== undefined) {
-    const links = validateStoryVerificationLinks({ ...record, status: targetStatus }, verificationClaims);
-    if (!links.ok) fail("WORKSPACE_STORY_VERIFICATION_MISSING", links.problems.map((problem) => problem.message).join("; "));
-  }
   const scope = storyScopeFromRecord(record);
   if (storyScopeNamesOwnerDecider(scope) && !advisoryHasMinutes(record)) {
     fail("WORKSPACE_OWNER_ACCEPTANCE_REQUIRED", "Owner-decided Story requires a decided-by minutes backlink before done");
@@ -4186,7 +4178,6 @@ export function createWorkDelta(input: {
   readonly labels?: readonly string[];
   readonly templateAdmission?: unknown;
   readonly occurredAt: string;
-  readonly verificationClaims?: readonly VerificationClaimLink[];
 }): (state: WorkspaceState) => MutationDelta {
   return (state) => createWorkReducerDelta(state, input);
 }
@@ -4220,7 +4211,6 @@ function createWorkReducerDelta(state: WorkspaceState, input: {
   readonly labels?: readonly string[];
   readonly templateAdmission?: unknown;
   readonly occurredAt: string;
-  readonly verificationClaims?: readonly VerificationClaimLink[];
 }): MutationDelta {
   const externalKey = canonicalExternalKey(input.externalKey);
   const id = deriveStableId("work", externalKey);
@@ -4312,7 +4302,7 @@ function createWorkReducerDelta(state: WorkspaceState, input: {
       }
     }
     validateBoundTemplateWork(record, state.templates);
-    assertStoryCompletionAdmission(record, record.status, input.verificationClaims);
+    assertStoryCompletionAdmission(record, record.status);
     const work = validateWorkGraph([...state.work, record], templateRegistry(state.templates));
     return { payload: { operation: "work.created", record: workJsonFields(record) }, projects: state.projects, work };
   }
@@ -4354,7 +4344,7 @@ function hasLiveNonTerminalDescendant(work: readonly WorkRecord[], recordId: str
 // exactly what the WSA-3 comment below was warning about. A rule placed there would refuse
 // a chain that legitimately closed an Initiative before 0.10.0 while descendants were open.
 // A rule placed here fires on live mutations only, which is what it always did.
-function assertTransitionAdmission(state: WorkspaceState, input: { readonly id: string; readonly status: WorkStatus; readonly verificationClaims?: readonly VerificationClaimLink[] }): void {
+function assertTransitionAdmission(state: WorkspaceState, input: { readonly id: string; readonly status: WorkStatus }): void {
   // Scope is a live write-path admission rule. Historical chains remain replayable;
   // unbound Stories use the legacy ten-block contract, while a bound Story is checked
   // against its admitted template and the same engine floor before it enters an execution
@@ -4371,7 +4361,7 @@ function assertTransitionAdmission(state: WorkspaceState, input: { readonly id: 
           describeStoryScopeProblems(compliance.problems));
       }
     }
-    assertStoryCompletionAdmission(current, input.status, input.verificationClaims);
+    assertStoryCompletionAdmission(current, input.status);
   }
   // WSA-3 (write-path admission): closing an Initiative to `done` is an act of
   // completion — its whole subtree must already be terminal, or the close is
@@ -4389,7 +4379,7 @@ function assertTransitionAdmission(state: WorkspaceState, input: { readonly id: 
   }
 }
 
-export function transitionWorkDelta(input: { readonly id: string; readonly status: WorkStatus; readonly summary?: string | null; readonly occurredAt: string; readonly verificationClaims?: readonly VerificationClaimLink[] }): (state: WorkspaceState) => MutationDelta {
+export function transitionWorkDelta(input: { readonly id: string; readonly status: WorkStatus; readonly summary?: string | null; readonly occurredAt: string }): (state: WorkspaceState) => MutationDelta {
   return (state) => {
     assertTransitionAdmission(state, input);
     return transitionWorkReducerDelta(state, input);
