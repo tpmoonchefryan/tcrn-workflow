@@ -29,20 +29,26 @@ import {
   applyWriteLanguagePolicy,
   createProject,
   createWork,
-  ARTIFACT_LANGUAGE_TAGS,
   captureKnowledgeUnit,
   detectLanguage,
   expansionsText,
   initializeKnowledgeStore,
   initializeWorkspace,
-  KNOWLEDGE_EXPANSION_LIMITS,
   listKnowledgeMetadata,
-  parsePromptLanguages,
   readKnowledgeLanguagePolicy,
   resolveQueryLanguage,
   setWorkspaceSetting,
   validateSettingValue,
 } from "../dist/build/packages/core/src/index.js";
+// The roster, the expansion limits and the prompt-language parser are read here directly
+// from ./knowledge-language.js, the way this file already reads ./recall.js below: they
+// are core-internal, nothing outside packages/core calls them, and TCRN-CROSS-STORY-364
+// retired their barrel re-exports rather than record nine more isolated public symbols.
+import {
+  ARTIFACT_LANGUAGE_TAGS,
+  KNOWLEDGE_EXPANSION_LIMITS,
+  parsePromptLanguages,
+} from "../dist/build/packages/core/src/knowledge-language.js";
 import { resetRecallCache } from "../dist/build/packages/core/src/recall.js";
 import { deriveStableId } from "../dist/build/packages/protocol/src/index.js";
 import { runCli } from "../dist/build/packages/cli/src/index.js";

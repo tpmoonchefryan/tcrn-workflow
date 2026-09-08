@@ -734,26 +734,14 @@ export type { KnowledgeBatchOptions, KnowledgeBatchProblem } from "./knowledge-b
 // on the write path. Both go through the barrel like every other core consumer.
 export {
   applyWriteLanguagePolicy,
-  ARTIFACT_LANGUAGE_TAGS,
   detectLanguage,
-  expansionsAreBounded,
   expansionsText,
-  KNOWLEDGE_EXPANSION_LIMITS,
   KNOWLEDGE_LANGUAGE_BUNDLE_FALLBACK_KEY,
-  KnowledgeLanguageError,
   languageProviderFromBundle,
   parseLanguageBundle,
-  parsePromptLanguages,
   readKnowledgeLanguagePolicy,
   resolveQueryLanguage,
 } from "./knowledge-language.js";
-export type {
-  ArtifactLanguageTag,
-  KnowledgeExpansions,
-  KnowledgeLanguageBundle,
-  KnowledgeLanguagePolicy,
-  KnowledgeLanguageProvider,
-  KnowledgeQueryLanguageAnswer,
-} from "./knowledge-language.js";
+export type { KnowledgeLanguageBundle, KnowledgeLanguageProvider } from "./knowledge-language.js";
 export { RECALL_CANDIDATE_LIMIT, RECALL_DEFAULT_TAU, recall, recallDocuments } from "./recall.js";
 export type { RecallKnowledgeInput, RecallMinutesInput, RecallWorkInput } from "./recall.js";
