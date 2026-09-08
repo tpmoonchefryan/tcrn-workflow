@@ -51,8 +51,10 @@ export function buildHookResponse(input) {
 
   if (event === "SessionStart") {
     // Baseline, once per session: query with a single broad term (the "lesson" tag is on
-    // every curated card), no trigger gate, budget-capped. A multi-term query would be
-    // AND-token FTS and pull to zero (measured in STORY-161.5).
+    // every curated card), no trigger gate, budget-capped. TCRN-CROSS-STORY-362 replaced
+    // the AND-token substring scan behind this with bm25 recall, so a multi-term query no
+    // longer pulls to zero; the single broad term stays because a session with no prompt
+    // yet has nothing more specific to ask, and recall's own floor decides what it returns.
     inject("lesson", "");
   } else if (event === "UserPromptSubmit") {
     const result = inject(prompt);

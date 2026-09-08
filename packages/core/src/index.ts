@@ -726,3 +726,8 @@ export { WORK_BATCH_SCHEMA_VERSION, WORK_BATCH_VERBS, applyWorkBatch, workBatchR
 export type { WorkBatchOptions, WorkBatchProblem } from "./work-batch.js";
 export { KNOWLEDGE_BATCH_SCHEMA_VERSION, KNOWLEDGE_BATCH_VERBS, applyKnowledgeBatch } from "./knowledge-batch.js";
 export type { KnowledgeBatchOptions, KnowledgeBatchProblem } from "./knowledge-batch.js";
+// TCRN-CROSS-STORY-362: the recall core's public face is the verb's face. The index,
+// the selector and the tokenizers stay internal to ./recall.js, where the evaluation
+// harness and the tests import them directly; only what the CLI dispatches is barrelled.
+export { RECALL_CANDIDATE_LIMIT, RECALL_DEFAULT_TAU, recall, recallDocuments } from "./recall.js";
+export type { RecallKnowledgeInput, RecallMinutesInput, RecallWorkInput } from "./recall.js";

@@ -77,24 +77,42 @@ async function createSyntheticWorkspace() {
   // Initialize the knowledge store before creating knowledge units
   await initializeKnowledgeStore(workspace, { disposableAcknowledged: true });
 
-  // Create knowledge units with "hook" keyword and enough content to exceed 10 bytes
+  // Create knowledge units with "hook" keyword and enough content to exceed 10 bytes.
+  //
+  // TCRN-CROSS-STORY-362: the six cards that say nothing about hooks are not padding.
+  // Retrieval is bm25 now, and a term every document in the corpus carries discriminates
+  // nothing -- FTS5 clamps its inverse document frequency and the score lands at zero,
+  // which is the same mechanism that stops the query `lesson` from returning the whole
+  // library. A three-card corpus in which all three are about hooks would therefore
+  // return no answer for "hook" and this file would be measuring the clamp rather than
+  // the budget. The corpus is nine cards so that "hook" selects the three that are about
+  // hooks, which is what the budget tests below need to be discriminating about.
   const projectId = state.projects[0].id;
   const knowledgeUnits = [
     {
       externalKey: "HOOK-GUIDE-001",
       subject: "Hook setup guide",
-      summary: "A comprehensive guide about hook configuration"
+      summary: "A comprehensive guide about hook configuration",
+      tags: ["hook", "setup"]
     },
     {
       externalKey: "HOOK-GUIDE-002",
       subject: "Hook lifecycle management",
-      summary: "Managing the lifecycle of hooks in production systems"
+      summary: "Managing the lifecycle of hooks in production systems",
+      tags: ["hook", "setup"]
     },
     {
       externalKey: "HOOK-GUIDE-003",
       subject: "Hook debugging and troubleshooting",
-      summary: "Common hook issues and how to resolve them"
-    }
+      summary: "Common hook issues and how to resolve them",
+      tags: ["hook", "setup"]
+    },
+    { externalKey: "OTHER-001", subject: "Release trust root layout", summary: "Where the trust archive lives and what it holds", tags: ["release"] },
+    { externalKey: "OTHER-002", subject: "Storage segment rotation", summary: "How segmented storage rolls a segment and when", tags: ["storage"] },
+    { externalKey: "OTHER-003", subject: "Lease acquisition order", summary: "Which writer serialises against which claim", tags: ["workspace"] },
+    { externalKey: "OTHER-004", subject: "Snapshot replay rebuild", summary: "Rebuilding a derived view from the event chain", tags: ["snapshot"] },
+    { externalKey: "OTHER-005", subject: "Conference minutes distillation", summary: "Turning positions into recorded decisions", tags: ["conference"] },
+    { externalKey: "OTHER-006", subject: "Persona preset override", summary: "Overriding one governed field of a shipped persona", tags: ["persona"] }
   ];
 
   let knowledgeVersion = 0;
@@ -108,7 +126,7 @@ async function createSyntheticWorkspace() {
       roleScopes: [],
       category: "workflow",
       kind: "fact",
-      tags: ["hook", "setup"],
+      tags: unit.tags,
       subject: unit.subject,
       summary: unit.summary,
       snippet: `Details about ${unit.subject}`,

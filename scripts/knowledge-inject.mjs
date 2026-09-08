@@ -3,17 +3,17 @@
 // TCRN-CROSS-INIT-019 STORY-162 — the knowledge injection chain.
 //
 //   node tcrn-workflow/scripts/knowledge-inject.mjs --prompt "<p>" [--partition X]
-//       [--role-scope Y] [--budget N] [--trigger-keywords "a,b,c"] [--self-test] [--verify-channel]
+//       [--limit N] [--budget N] [--trigger-keywords "a,b,c"] [--self-test] [--verify-channel]
 //
 // WHAT THIS IS. D2's "webhook/hook 提醒 agent 按 prompt 检索并注入" on Claude Code is a
 // hook. This script is the retrieval half: given a prompt it runs the platform's OWN
-// relevance machine (knowledge-candidates via the MCP read face — never a second
-// relevance routine written here), applies a HARD byte budget, and emits a
-// metadata-level injection (never full bodies). The hook side registers it on
-// SessionStart (baseline, once) and UserPromptSubmit (every prompt).
+// relevance machine (the `recall` verb — never a second relevance routine written
+// here), applies a HARD byte budget, and emits a metadata-level injection (never full
+// bodies). The hook side registers it on SessionStart (baseline, once) and
+// UserPromptSubmit (every prompt).
 //
 // THE DIVISION OF LABOUR IS THE ENGINE'S, NOT MINE. Relevance selection = the
-// knowledge-candidates verb. Budget / freshness / authority = context-route, which in
+// recall verb. Budget / freshness / authority = context-route, which in
 // the pinned release stops at CONTEXT_AUTHORITY_REQUIRED (out-of-band authority); until
 // that supply program lands, this script enforces the byte budget itself and says so in
 // the output — the same stated fallback the platform's on-demand-context doc already
@@ -24,10 +24,15 @@
 // trigger-keywords flag remains accepted for old callers, but the production hook does
 // not supply it and runInjection never gates a prompt on it.
 //
-// RETRIEVAL QUALITY (STORY-161.5, measured): knowledge-candidates search is AND-token
-// FTS over the card text. A natural-language prompt's connective words pull the query to
-// zero. So the script extracts MEANINGFUL tokens (ASCII alnum words and contiguous CJK
-// phrases) minus stopwords, and queries with those — never the raw sentence.
+// RETRIEVAL QUALITY (TCRN-CROSS-STORY-362, measured). This used to issue one
+// knowledge-candidates call per extracted token and union the substring hits: no
+// ranking, no threshold, cards only, and a contiguous Chinese run treated as a single
+// token that matched nothing. Two real prompts measured on 2026-09-04 returned zero
+// cards that way. The whole prompt now goes to `recall` in one call, which segments
+// CJK into bigrams on both sides, ranks by bm25 over cards, minutes and work records,
+// and applies its own absolute and relative thresholds. extractQueryTokens survives as
+// the cheap emptiness gate — a prompt with no meaningful token is not worth a chain
+// read — and is no longer the query.
 
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -56,9 +61,13 @@ export const ENGINE_CLI = resolve(SCRIPT_DIRECTORY, "tcrn-workflow.mjs");
  * sitting on this disk. The envelope is unchanged ({ ok, reasonCode, result }); callers
  * already tolerated both `result.records` and `result.result.records`.
  */
-export function callChainRead(verb, { partition, ...flags }, { timeoutMs = 120_000, containerRoot = PLATFORM_ROOT } = {}) {
+export function callChainRead(verb, { partition, ...flags }, { timeoutMs = 120_000, containerRoot = PLATFORM_ROOT, withPartitionFlag = false } = {}) {
   return new Promise((resolvePromise) => {
     const argv = [ENGINE_CLI, verb, "--workspace", workspaceForPartition(partition, containerRoot)];
+    // TCRN-CROSS-STORY-362: a verb that accepts --partition is told which partition this
+    // path was resolved from, so a drifted resolution is refused rather than answered
+    // from the wrong chain. Verbs that do not accept the flag are not given it.
+    if (withPartitionFlag) argv.push("--partition", String(partition));
     for (const [name, value] of Object.entries(flags)) {
       if (value === undefined || value === null) continue;
       argv.push(`--${name}`, String(value));
@@ -91,10 +100,12 @@ export function callChainRead(verb, { partition, ...flags }, { timeoutMs = 120_0
 }
 export const SETTINGS_PATH = resolve(PLATFORM_ROOT, ".claude/settings.json");
 export const DEFAULT_PARTITION = "cross-project";
-export const DEFAULT_ROLE_SCOPE = "implementation";
 export const DEFAULT_BUDGET = 32768;
+// TCRN-CROSS-STORY-362: how many recalled records one prompt may carry. The recall verb
+// caps its own answer; this is the hook's ceiling, and the byte budget below is what
+// actually decides how much of it is spoken.
+export const DEFAULT_RECALL_LIMIT = 8;
 export const MAX_TOKENS_IN_QUERY = 6;
-export const INJECTION_RESULT_LIMIT = 1_048_576;
 
 const STOPWORDS = new Set([
   "怎么", "应该", "没有", "为什么", "如果", "可以", "一个", "这个", "那个",
@@ -161,38 +172,33 @@ export function truncateToBudget(text, budget) {
   return { text: Buffer.from(text, "utf8").subarray(0, budget).toString("utf8"), truncated: true };
 }
 
-/** The injection chain: query -> candidates -> budget report -> metadata-level output. */
-export async function runInjection({ prompt, partition, roleScope, budget, triggerKeywords, containerRoot = PLATFORM_ROOT }) {
+/** The injection chain: prompt -> recall -> budget report -> metadata-level output. */
+export async function runInjection({ prompt, partition, budget, triggerKeywords, limit, containerRoot = PLATFORM_ROOT }) {
   void triggerKeywords;
   const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : await configuredInjectionBudget(partition, containerRoot);
-  // Query each meaningful term separately and union the candidates. The engine owns
-  // relevance ordering; this wrapper never gates a prompt on a hand-maintained list.
+  // The emptiness gate, not the query: a prompt with no meaningful token buys nothing
+  // from a chain read, and the whole prompt is what recall ranks against.
   const tokens = extractQueryTokens(prompt);
   if (tokens.length === 0) {
     return { ok: true, injected: false, reason: "NO_QUERY_TOKENS", candidates: [], injectedBytes: 0 };
   }
-  const seen = new Set();
-  const candidates = [];
-  for (const token of tokens) {
-    const call = await callChainRead("knowledge-candidates", {
-      partition,
-      "role-scope": roleScope,
-      search: token,
-      limit: INJECTION_RESULT_LIMIT,
-      "allow-trailing": true,
-      at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
-    }, { containerRoot });
-    if (!call.ok) {
-      return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
-    }
-    const batch = call.result?.result?.candidates ?? call.result?.candidates ?? [];
-    for (const candidate of batch) {
-      if (!seen.has(candidate.id)) { seen.add(candidate.id); candidates.push(candidate); }
-    }
+  const call = await callChainRead("recall", {
+    partition,
+    query: String(prompt ?? ""),
+    limit: Number.isSafeInteger(limit) && limit > 0 ? limit : DEFAULT_RECALL_LIMIT,
+    "allow-trailing": true,
+    at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
+  }, { containerRoot, withPartitionFlag: true });
+  if (!call.ok) {
+    return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
   }
+  const candidates = call.result?.result?.records ?? call.result?.records ?? [];
   const lines = [];
   for (const candidate of candidates) {
-    const line = `· [${candidate.id}] ${candidate.title ?? candidate.subject ?? ""} — ${candidate.summary ?? ""}`;
+    // The kind and the key are spoken because the answer now spans three record
+    // families: a reader has to be able to tell a card from a ruling from a work item.
+    const label = `${candidate.kind ?? "card"} ${candidate.key ?? candidate.id ?? ""}`.trim();
+    const line = `· [${label}] ${candidate.title ?? candidate.subject ?? ""} — ${candidate.summary ?? ""}`;
     lines.push(line);
   }
   const joined = lines.join("\n");
@@ -236,7 +242,7 @@ function parseArgv(argv) {
   return {
     prompt: typeof flags.prompt === "string" ? flags.prompt : "",
     partition: typeof flags.partition === "string" ? flags.partition : DEFAULT_PARTITION,
-    roleScope: typeof flags["role-scope"] === "string" ? flags["role-scope"] : DEFAULT_ROLE_SCOPE,
+    limit: typeof flags.limit === "string" ? Number(flags.limit) : DEFAULT_RECALL_LIMIT,
     budget: typeof flags.budget === "string" ? Number(flags.budget) : (Number(process.env.TCRN_KNOWLEDGE_INJECTION_BUDGET) || undefined),
     triggerKeywords: typeof flags["trigger-keywords"] === "string" ? flags["trigger-keywords"] : "",
     selfTest: flags["self-test"] === true,
@@ -252,7 +258,7 @@ if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
     const registered = registeredHookCommands();
     if (registered.length === 0) { out({ ok: false, reasonCode: "REGISTRATION_MISSING", detail: "no knowledge-inject hook is registered in the platform .claude/settings.json" }); process.exitCode = 1; }
     else {
-      const start = await runInjection({ prompt: "hook", partition: options.partition, roleScope: options.roleScope, budget: options.budget, triggerKeywords: "" });
+      const start = await runInjection({ prompt: "hook", partition: options.partition, budget: options.budget, triggerKeywords: "" });
       if (start.ok !== true) { out(start); process.exitCode = 1; }
       else if (start.injected !== true || start.candidateCount === 0) { out({ ok: false, reasonCode: "RETRIEVAL_CHAIN_NO_RETURN", detail: "the chain produced no candidates for a known keyword", observed: start }); process.exitCode = 1; }
       else out({ ok: true, reasonCode: "INJECTION_CHANNEL_LIVE", registered: registered.length, ...start });
@@ -262,7 +268,7 @@ if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
     // self-test must NOT be green on zero retrieval (恒绿门, INC-044): a retrieval
     // chain that produces no candidates for a known curated term is a broken chain.
     // Predicate aligned with verify-channel.
-    const result = await runInjection({ prompt: "hook 没有生效", partition: options.partition, roleScope: options.roleScope, budget: options.budget, triggerKeywords: "" });
+    const result = await runInjection({ prompt: "hook 没有生效", partition: options.partition, budget: options.budget, triggerKeywords: "" });
     out(result);
     if (result.ok !== true || result.injected !== true || result.candidateCount === 0) process.exitCode = 1;
   } else {

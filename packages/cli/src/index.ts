@@ -107,6 +107,10 @@ import {
   setWorkspaceSetting,
   admitTemplateInWorkspace,
   readTemplateDocumentFile,
+  RECALL_CANDIDATE_LIMIT,
+  RECALL_DEFAULT_TAU,
+  recall,
+  recallDocuments,
   templateBindingFromWorkRecord,
   validateTemplateDocument,
 } from "../../core/src/index.js";
@@ -122,11 +126,14 @@ import type {
   KnowledgeFreshnessState,
   KnowledgeKind,
   KnowledgePromotionState,
+  RecallKnowledgeInput,
+  RecallMinutesInput,
+  RecallWorkInput,
   VerificationClaimLink,
 } from "../../core/src/index.js";
 import { existsSync, readFileSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
 import { assertStrictInstant, canonicalExternalKey, canonicalJson, canonicalSha256, deriveStableId } from "../../protocol/src/index.js";
 import { isWorkStatus } from "../../protocol/src/index.js";
@@ -949,6 +956,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "project-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "project-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "project-update", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "recall", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "query", required: true, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "tau", required: false, valueKind: "string" }, { name: "partition", required: false, valueKind: "string" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "recover", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "settings-catalog", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "settings-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -1920,6 +1928,130 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       occurredAt: values.at ?? "",
       alignFirst: booleanValue(values["align-first"], "align-first"),
     })));
+    return;
+  }
+  // TCRN-CROSS-STORY-362: one bm25 answer over the three record families a session can
+  // be reminded of, in place of the substring scan that returned everything a tag named
+  // or nothing at all. The verb is workspace-addressed like every other verb; --partition
+  // is accepted because the injection hook speaks in partitions, and is checked against
+  // the path the caller resolved rather than used to resolve one -- a hook whose path
+  // resolution drifts gets a refusal instead of an answer from the wrong chain.
+  if (command === "recall") {
+    const values = parseArguments(rest, ["workspace", "at", "query", "limit", "tau", "partition", "allow-trailing"]);
+    required(values, ["workspace", "at", "query"]);
+    const workspace = values.workspace ?? "";
+    const query = values.query ?? "";
+    if (query.length === 0 || query.length > 4096 || !query.isWellFormed()) fail("CLI_ARGUMENT_MALFORMED", "query");
+    const limit = values.limit === undefined ? undefined : integerValue(values, "limit");
+    if (limit !== undefined && (limit < 1 || limit > RECALL_CANDIDATE_LIMIT)) fail("CLI_ARGUMENT_MALFORMED", "limit");
+    const partition = basename(dirname(resolve(workspace)));
+    if (values.partition !== undefined && values.partition !== partition) {
+      fail("CLI_ARGUMENT_MALFORMED", `partition=${values.partition}`);
+    }
+    const state = await validateWorkspace(workspace);
+    const settingValue = (key: string): string | undefined => state.settings.find((entry) => entry.key === key)?.value;
+    // The flag wins over the setting, the setting over the recorded default: the same
+    // order work-list's scope-bytes already uses.
+    const configuredTau = Number(settingValue("retrieval.tau") ?? String(RECALL_DEFAULT_TAU));
+    const tau = values.tau === undefined
+      ? (Number.isFinite(configuredTau) && configuredTau >= 0 ? configuredTau : RECALL_DEFAULT_TAU)
+      : Number(values.tau);
+    if (!Number.isFinite(tau) || tau < 0) fail("CLI_ARGUMENT_MALFORMED", "tau");
+    const scopeBytes = Number(settingValue("retrieval.scopeExcerptBytes") ?? "512");
+    const scopeExcerptBytes = Number.isSafeInteger(scopeBytes) && scopeBytes > 0 ? scopeBytes : 512;
+    // A workspace with no knowledge store, or one trailing the chain while the caller did
+    // not admit a trailing read, still has work records and minutes to recall. The reason
+    // code the read produced is reported rather than swallowed, so "no cards" is never
+    // indistinguishable from "no card matched".
+    let knowledge: readonly RecallKnowledgeInput[] = [];
+    let knowledgeReasonCode = "KNOWLEDGE_STORE_UNREAD";
+    let knowledgeDigest = "absent";
+    try {
+      const answer = await listKnowledgeMetadata(workspace, {
+        at: values.at ?? "",
+        allowTrailing: booleanValue(values["allow-trailing"], "allow-trailing"),
+        limit: 1_048_576,
+      });
+      knowledgeReasonCode = String(answer["reasonCode"] ?? "");
+      knowledgeDigest = String(answer["resultDigest"] ?? "");
+      knowledge = ((answer["records"] ?? []) as readonly Readonly<Record<string, unknown>>[]).map((record) => ({
+        id: String(record["id"] ?? ""),
+        externalKey: String(record["externalKey"] ?? ""),
+        subject: String(record["subject"] ?? ""),
+        summary: String(record["summary"] ?? ""),
+        snippet: String(record["snippet"] ?? ""),
+        tags: ((record["tags"] ?? []) as readonly unknown[]).map((tag) => String(tag)),
+        // The weight-6 column is fed by an author's own restatements of the question a
+        // card answers. Nothing writes them yet; the column is here because the 2026-09-04
+        // evaluation measured them lifting cards-only recall from 21 of 36 to 36 of 36.
+        expansions: typeof record["expansions"] === "string" ? record["expansions"] : "",
+      }));
+    } catch (error) {
+      const reasonCode = (error as { readonly reasonCode?: unknown }).reasonCode;
+      if (typeof reasonCode !== "string") throw error;
+      knowledgeReasonCode = reasonCode;
+    }
+    const conferenceTitles = new Map(state.conferences.map((entry) => [entry.id, entry]));
+    const minutes: readonly RecallMinutesInput[] = state.conferenceMinutes
+      .filter((entry) => !entry.tombstone)
+      .map((entry) => ({
+        id: entry.id,
+        conferenceTitle: conferenceTitles.get(entry.conferenceId)?.title ?? "",
+        conferenceType: conferenceTitles.get(entry.conferenceId)?.type ?? "",
+        summary: entry.summary,
+        decisions: entry.decisions,
+        outcomeClass: entry.outcomeClass,
+      }));
+    const work: readonly RecallWorkInput[] = state.work
+      .filter((entry) => !entry.tombstone)
+      .map((entry) => ({
+        id: entry.id,
+        externalKey: entry.externalKey,
+        kind: entry.kind,
+        status: entry.status,
+        title: entry.title ?? null,
+        summary: entry.summary ?? null,
+        scope: workScope(entry),
+        labels: entry.labels ?? [],
+      }));
+    const result = recall({
+      cacheKey: resolve(workspace),
+      // The storage checkpoint: the chain head the records were replayed from, and the
+      // digest of the knowledge answer they were read with. Either one moving is a
+      // different corpus, and the index is rebuilt from the rows that actually changed.
+      checkpoint: `${state.headEventHash}:${knowledgeDigest}`,
+      documents: () => recallDocuments({ knowledge, minutes, work, scopeExcerptBytes }),
+      query,
+      tau,
+      ...(limit === undefined ? {} : { limit }),
+    });
+    io.write(canonicalJson({
+      schemaVersion: "tcrn.recall.v1",
+      reasonCode: result.reasonCode,
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      partition,
+      at: values.at ?? "",
+      knowledgeReasonCode,
+      query,
+      queryTokens: [...result.tokens],
+      // The canonical protocol carries only safe integers, and a bm25 score is not one.
+      // These three are spoken the way every numeric setting in this engine is spoken --
+      // as a decimal string -- rather than scaled into an integer whose unit a reader
+      // would have to be told.
+      tau: result.tau.toFixed(4),
+      relativeFloor: result.relativeFloor.toFixed(4),
+      limit: result.limit,
+      scopeExcerptBytes,
+      indexed: result.indexed,
+      rebuilt: result.rebuilt,
+      total: result.total,
+      records: result.records.map((hit) => ({
+        kind: hit.kind, key: hit.key, id: hit.id, status: hit.status,
+        title: hit.title, summary: hit.summary, score: hit.score.toFixed(4),
+      })),
+    }));
     return;
   }
   if (command === "knowledge-checkpoint") {

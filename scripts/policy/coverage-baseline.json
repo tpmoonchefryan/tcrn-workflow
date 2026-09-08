@@ -1724,6 +1724,21 @@
         "STORY-354 a workspace with no explicit storage.backend setting (default segmented) also snapshots cleanly"
       ]
     },
+    "tests/story-362-recall.test.mjs": {
+      "testCount": 9,
+      "assertionCount": 47,
+      "testNames": [
+        "STORY-362: CJK is segmented into bigrams on both sides, so a differently worded question still lands",
+        "STORY-362: a term most of the corpus carries scores below the absolute floor and selects nothing",
+        "STORY-362: an external key spelled in the prompt puts that record first, above every ranked hit",
+        "STORY-362: a work record with neither a title nor summary text is not indexed at all",
+        "STORY-362: field weights rank a title match above a body match of the same term",
+        "STORY-362: the index is cached against the storage checkpoint and rewritten incrementally when it moves",
+        "STORY-362: the recall verb answers with kind, key, status, title, summary and score",
+        "STORY-362: the verb refuses a partition that is not the one the given path belongs to",
+        "STORY-362: --tau overrides the setting, and a flooded term returns nothing at the recorded default"
+      ]
+    },
     "tests/story-363-work-summary.test.mjs": {
       "testCount": 7,
       "assertionCount": 51,

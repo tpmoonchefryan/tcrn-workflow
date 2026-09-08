@@ -40,6 +40,7 @@ export type SettingKey =
   | "injection.budgetBytes"
   | "knowledge.aggregateBytes"
   | "retrieval.scopeExcerptBytes"
+  | "retrieval.tau"
   | "storage.backend"
   | "storage.segmentBytes"
   | "storage.snapshotEveryEvents"
@@ -319,6 +320,18 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     defaultValue: "512",
     min: 1,
     max: 65_536,
+  },
+  {
+    // TCRN-CROSS-STORY-362: the recall verb's absolute score floor, in bm25 units.
+    // A string-typed number like every other numeric setting here, so the catalog
+    // keeps one value shape; the verb parses it and refuses a value it cannot use.
+    key: "retrieval.tau",
+    type: "string",
+    controlType: "number",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "1",
+    min: 0,
+    max: 100,
   },
   {
     key: "storage.backend",

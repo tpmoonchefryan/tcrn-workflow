@@ -110,10 +110,18 @@ test("INC-230: subject, summary and tag matching are unchanged", async () => {
 // Red leg: reach into the body and the metadata-first discipline is gone -- searching
 // bodies is the thing this surface exists not to do, and a widening that quietly took
 // it would be a far larger change than the one being made.
+//
+// TCRN-CROSS-STORY-362 changed the probe phrase, not the criterion. The filter reads the
+// scorer's tokenizer now instead of demanding the whole search string inside one field,
+// and the old probe "must not be what matched" contains the two-letter token "be", which
+// is a substring of "can be narrower" in this card's subject. That match was a metadata
+// match, not a body read -- but a probe that can pass for the wrong reason is not a red
+// leg. "body also says" is a phrase unique to the body whose every token is absent from
+// all four metadata fields, so this assertion still fails the moment bodies are searched.
 test("INC-230: the body is still not searched", async () => {
   const { base, workspace } = await storeWithOneCard();
   try {
-    const found = await search(workspace, "must not be what matched");
+    const found = await search(workspace, "body also says");
     assert.equal(found.total, 0, "a phrase unique to the body matches nothing");
   } finally {
     await rm(base, { recursive: true, force: true });

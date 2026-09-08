@@ -1796,6 +1796,23 @@ function explicitlySelectable(metadata: KnowledgeUnitMetadata, at: string): bool
     computeFreshness(metadata, at) !== "stale";
 }
 
+// TCRN-CROSS-STORY-362 requirement 4. This filter used to demand that the whole search
+// string appear inside one field, while the scorer directly above it already worked in
+// tokens. The two therefore disagreed: a two-word search returned nothing unless those
+// two words sat adjacent in one field, so the filter refused exactly what the scorer
+// was built to rank, and a Chinese search -- one contiguous run, one token to the
+// scorer, one long literal to the filter -- matched only a card quoting it verbatim.
+// Both now read relevanceTokens, and a card is admitted when one of its tokens lands.
+// The tag comparison lowercases the tag as well; the old one did not, so a card filed
+// under a capitalised tag was unreachable by the tag it carried.
+function knowledgeSearchMatches(metadata: KnowledgeUnitMetadata, search: string): boolean {
+  const subject = metadata.subject.toLowerCase();
+  const summary = metadata.summary.toLowerCase();
+  const snippet = metadata.snippet.toLowerCase();
+  return relevanceTokens(search).some((token) => subject.includes(token) || summary.includes(token)
+    || snippet.includes(token) || metadata.tags.some((tag) => tag.toLowerCase().includes(token)));
+}
+
 function selectKnowledgeMetadata(
   scan: KnowledgeStoreScan,
   query: KnowledgeListQuery,
@@ -1818,9 +1835,7 @@ function selectKnowledgeMetadata(
       // snippet said "flake", then searching for it and getting nothing. Bodies stay
       // unsearched on purpose: that is the metadata-first budget discipline, and it is a
       // different rule from overlooking a field already loaded.
-      (search === undefined || metadata.subject.toLowerCase().includes(search) ||
-        metadata.summary.toLowerCase().includes(search) || metadata.snippet.toLowerCase().includes(search) ||
-        metadata.tags.some((tag) => tag.includes(search)));
+      (search === undefined || knowledgeSearchMatches(metadata, search));
   });
   return selected.sort((left, right) => {
     const scoreDifference = knowledgeRelevanceScore(right, search) - knowledgeRelevanceScore(left, search);
