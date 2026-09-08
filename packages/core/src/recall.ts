@@ -66,7 +66,7 @@ export interface RecallSelectionOptions {
  * next, and the prose body least because it is the longest and the least deliberate.
  * The numbers are the ones the 2026-09-04 retrieval evaluation settled on.
  */
-export const RECALL_FIELD_WEIGHTS = { title: 8, body: 3, tags: 5, expansions: 6 } as const;
+export const RECALL_FIELD_WEIGHTS = { title: 8, body: 3, tags: 5, expansions: 6, externalKey: 1 } as const;
 
 /**
  * The absolute floor, in bm25 units, and the default of the `retrieval.tau` setting.
@@ -169,9 +169,26 @@ export function externalKeyCandidates(text: string): readonly string[] {
   return [...new Set([...String(text ?? "").matchAll(EXTERNAL_KEY_CANDIDATE)].map((match) => match[0].toUpperCase()))];
 }
 
+function externalKeyTokens(text: string): readonly string[] {
+  return [...new Set(text
+    .replace(/([a-z])([A-Z])/gu, "$1 $2")
+    .replace(/([A-Z])([A-Z][a-z])/gu, "$1 $2")
+    .toLowerCase()
+    .match(/[a-z0-9]+/gu) ?? [])];
+}
+
+function externalKeyExpression(query: string): string {
+  return (query.match(/[A-Za-z0-9][A-Za-z0-9-]*/gu) ?? [])
+    .slice(0, MAXIMUM_QUERY_TOKENS)
+    .map((part) => externalKeyTokens(part).map((token) => `"${token}"*`).join(" AND "))
+    .filter((part) => part.length > 0)
+    .map((part) => `(${part})`)
+    .join(" OR ");
+}
+
 function documentDigest(document: RecallDocument): string {
   return createHash("sha256")
-    .update(`${document.title}\u0000${document.body}\u0000${document.tags}\u0000${document.expansions}`, "utf8")
+    .update(`${document.key}\u0000${document.title}\u0000${document.body}\u0000${document.tags}\u0000${document.expansions}`, "utf8")
     .digest("hex");
 }
 
@@ -211,8 +228,11 @@ export class RecallIndex {
 
   constructor(documents: readonly RecallDocument[], checkpoint: string) {
     this.#database = new DatabaseSync(":memory:");
+    // The fifth column serves key queries. The four-column projection preserves
+    // prose BM25 statistics: a zero weight would still count key tokens in length.
     this.#database.exec(
-      "CREATE VIRTUAL TABLE recall_index USING fts5(title, body, tags, expansions, tokenize='unicode61')",
+      "CREATE VIRTUAL TABLE recall_index USING fts5(title, body, tags, expansions, externalKey, tokenize='unicode61');"
+        + "CREATE VIRTUAL TABLE recall_prose USING fts5(title, body, tags, expansions, tokenize='unicode61')",
     );
     this.#checkpoint = checkpoint;
     this.#apply(documents);
@@ -238,9 +258,13 @@ export class RecallIndex {
 
   #apply(documents: readonly RecallDocument[]): { readonly inserted: number; readonly removed: number } {
     const insert = this.#database.prepare(
-      "INSERT INTO recall_index(rowid, title, body, tags, expansions) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO recall_index(rowid, title, body, tags, expansions, externalKey) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    const insertProse = this.#database.prepare(
+      "INSERT INTO recall_prose(rowid, title, body, tags, expansions) VALUES (?, ?, ?, ?, ?)",
     );
     const remove = this.#database.prepare("DELETE FROM recall_index WHERE rowid = ?");
+    const removeProse = this.#database.prepare("DELETE FROM recall_prose WHERE rowid = ?");
     const incoming = new Map<string, RecallDocument>();
     for (const document of documents) incoming.set(document.id, document);
     let removed = 0;
@@ -248,6 +272,7 @@ export class RecallIndex {
       const next = incoming.get(id);
       if (next !== undefined && documentDigest(next) === row.digest) continue;
       remove.run(row.rowId);
+      removeProse.run(row.rowId);
       this.#rows.delete(id);
       removed += 1;
     }
@@ -256,13 +281,14 @@ export class RecallIndex {
       if (this.#rows.has(id)) continue;
       const rowId = this.#nextRowId;
       this.#nextRowId += 1;
-      insert.run(
-        rowId,
+      const fields = [
         segmentForIndex(document.title),
         segmentForIndex(document.body),
         segmentForIndex(document.tags),
         segmentForIndex(document.expansions),
-      );
+      ];
+      insert.run(rowId, ...fields, externalKeyTokens(document.key).join(" "));
+      insertProse.run(rowId, ...fields);
       this.#rows.set(id, { rowId, digest: documentDigest(document), document });
       inserted += 1;
     }
@@ -284,29 +310,46 @@ export class RecallIndex {
       hits.push(hitOf(document, RECALL_EXTERNAL_KEY_SCORE));
     }
     const tokens = recallQueryTokens(query);
-    if (tokens.length === 0) return hits;
+    const keyExpression = externalKeyExpression(query);
+    if (tokens.length === 0 && keyExpression.length === 0) return hits;
     const byRowId = new Map<number, RecallDocument>();
     for (const row of this.#rows.values()) byRowId.set(row.rowId, row.document);
     const weights = RECALL_FIELD_WEIGHTS;
-    const statement = this.#database.prepare(
-      `SELECT rowid AS rowId, bm25(recall_index, ${weights.title}, ${weights.body}, ${weights.tags}, ${weights.expansions}) AS score`
-        + " FROM recall_index WHERE recall_index MATCH ? ORDER BY score LIMIT ?",
-    );
-    let rows: readonly Record<string, unknown>[] = [];
-    try {
-      rows = statement.all(matchExpression(tokens), limit) as readonly Record<string, unknown>[];
-    } catch {
-      // A query the FTS5 parser refuses is a query with no answer, not a fault: these
-      // tokens come from a prompt this engine does not control.
-      rows = [];
+    const rows: Record<string, unknown>[] = [];
+    const searches = [
+      {
+        table: "recall_prose",
+        weights: [weights.title, weights.body, weights.tags, weights.expansions],
+        expression: matchExpression(tokens),
+      },
+      {
+        table: "recall_index",
+        weights: [weights.title, weights.body, weights.tags, weights.expansions, weights.externalKey],
+        expression: keyExpression.length === 0 ? "" : `externalKey : (${keyExpression})`,
+      },
+    ];
+    for (const search of searches) {
+      if (search.expression.length === 0) continue;
+      const statement = this.#database.prepare(
+        `SELECT rowid AS rowId, bm25(${search.table}, ${search.weights.join(", ")}) AS score`
+          + ` FROM ${search.table} WHERE ${search.table} MATCH ? ORDER BY score LIMIT ?`,
+      );
+      try {
+        rows.push(...statement.all(search.expression, limit) as Record<string, unknown>[]);
+      } catch {
+        // An invalid prompt expression contributes no hits from this table.
+      }
     }
+    // Keep the strongest score for a record found by both routes, never sum them.
+    // The prose route retains its original length and document-frequency statistics.
+    rows.sort((left, right) => Number(left["score"]) - Number(right["score"]));
+    const maximumHits = limit < 0 ? Number.POSITIVE_INFINITY : hits.length + limit;
     for (const row of rows) {
       const document = byRowId.get(Number(row["rowId"]));
       if (document === undefined || seen.has(document.id)) continue;
       seen.add(document.id);
-      // bm25 returns a negative number that sorts ascending; the sign is flipped so a
-      // reader sees "more is better" and the thresholds below read literally.
       hits.push(hitOf(document, -Number(row["score"])));
+      if (hits.length >= maximumHits) break;
     }
     return hits;
   }

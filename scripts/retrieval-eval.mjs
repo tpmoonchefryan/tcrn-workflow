@@ -148,11 +148,8 @@ function evaluate(corpusDigest, policy) {
   const translated = readJson(fixture("translations-sonnet.json")).queries;
   const language = scoreOf(translated.map((query) => rankCards(String(query.en), query.id)));
 
-  // TCRN-CROSS-MIN-162 D2. externalKey is not an FTS column -- RecallIndex keeps a
-  // separate exact-match map -- so a whole key leads the ranking and a fragment of one
-  // reaches nothing. Both are measured rather than asserted: the exact lookup is held to
-  // rank 1, and the fragment's outcome is the evidence for whether the key needs to
-  // become an indexed, prefix-matched column.
+  // Exact keys retain the map's rank-1 path; key fragments use the low-weight
+  // prefix column. Measure both indexes in this run and enforce both contracts.
   const fragmentQuery = queries.find((query) => query.query === "INIT019-C12");
   const exactKey = externalKeyById.get(fragmentQuery.id);
   const externalKey = {
@@ -180,6 +177,13 @@ function evaluate(corpusDigest, policy) {
   }
   if (externalKey.exactMixedRank === null || externalKey.exactMixedRank > policy.externalKey.exactRankAtMost) {
     failures.push(`externalKey.exactMixedRank ${String(externalKey.exactMixedRank)} > ${String(policy.externalKey.exactRankAtMost)}`);
+  }
+  // MIN-171 D1 adds this previously unmeasured floor; the frozen policy is unchanged.
+  for (const field of ["fragmentCardsRank", "fragmentMixedRank"]) {
+    const rank = externalKey[field];
+    if (!Number.isInteger(rank) || rank < 1 || rank > 3) {
+      failures.push(`externalKey.${field} ${String(rank)} outside [1, 3]`);
+    }
   }
 
   const result = {

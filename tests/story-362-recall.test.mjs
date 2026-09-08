@@ -241,3 +241,69 @@ test("STORY-362: --tau overrides the setting, and a flooded term returns nothing
   );
   resetRecallCache();
 });
+
+test("external key fragments split hyphens and case boundaries and match token prefixes", () => {
+  const target = {
+    ...recallDocuments({ knowledge: CARDS })[0],
+    key: "TCRN-HTTPGateway-ownerReview-INIT019-C12",
+  };
+  const documents = [
+    target,
+    ...Array.from({ length: 24 }, (_, n) => ({
+      ...target, id: `noise-${n}`, key: `NOISE-PAD${n}`, title: "unrelated", body: "",
+    })),
+  ];
+  const index = new RecallIndex(documents, "keys");
+  try {
+    for (const query of ["INIT019-C12", "INIT019-C1", "Gateway-owner", "owner-Rev", "HTTP-Gat"]) {
+      assert.equal(index.search(query)[0]?.id, target.id, query);
+      assert.equal(selectRecallHits(index.search(query))[0]?.id, target.id, query);
+    }
+    assert.equal(index.search("019-C12").some((hit) => hit.id === target.id), false,
+      "letter-digit boundaries do not split INIT019");
+    assert.equal(index.search(target.key)[0]?.score, 99);
+    assert.equal(index.search("INIT019-C12").filter((hit) => hit.id === target.id).length, 1);
+  } finally {
+    index.close();
+  }
+});
+
+test("key length does not change prose BM25 scores or selection", () => {
+  const documents = recallDocuments({ knowledge: CARDS });
+  const withoutKeys = new RecallIndex(documents.map((document) => ({ ...document, key: "" })), "plain");
+  const withKeys = new RecallIndex(documents.map((document, n) => ({
+    ...document, key: `TCRN-${"VeryLongKey-".repeat(n * 20 + 1)}END${n}`,
+  })), "keyed");
+  const scores = (hits) => hits.map(({ id, score }) => ({ id, score }));
+  try {
+    const query = "链头变了知识索引要不要重建";
+    assert.deepEqual(scores(withKeys.search(query)), scores(withoutKeys.search(query)));
+    assert.deepEqual(scores(selectRecallHits(withKeys.search(query))),
+      scores(selectRecallHits(withoutKeys.search(query))));
+  } finally {
+    withoutKeys.close();
+    withKeys.close();
+  }
+});
+
+test("key-only updates invalidate both projections and retire the previous exact key", () => {
+  const target = {
+    ...recallDocuments({ knowledge: CARDS })[0], key: "TCRN-INIT019-C12",
+  };
+  const index = new RecallIndex([target], "before");
+  try {
+    assert.equal(index.search("INIT019-C12")[0]?.id, target.id);
+    const renamed = { ...target, key: "TCRN-RENAMED-Z99" };
+    assert.deepEqual(index.update([renamed], "after"), { inserted: 1, removed: 1 });
+    assert.equal(index.search(target.key).length, 0);
+    assert.equal(index.search("INIT019-C12").length, 0);
+    assert.equal(index.search(renamed.key)[0]?.score, 99);
+    assert.equal(index.search("RENAMED-Z9")[0]?.key, renamed.key);
+    assert.equal(index.search("链头")[0]?.key, renamed.key);
+    assert.deepEqual(index.update([], "empty"), { inserted: 0, removed: 1 });
+    assert.equal(index.search("RENAMED-Z9").length, 0);
+    assert.equal(index.search("链头").length, 0);
+  } finally {
+    index.close();
+  }
+});

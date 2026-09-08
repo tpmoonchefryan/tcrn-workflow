@@ -94,7 +94,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "63cac2066825a83e23ced0841123e58b90cb546a8781a4e926297d77461d3e8f",
+      "fixtureDigest": "1d0ba7303b6271bbf57ae5089b73b6aab28cb67fb9ce1605eaf087f3d1adee8f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -140,7 +140,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "9b1fbb45bdb387a019bb52d4aee8aea459b235414866f4839b68ce21555fe8bd",
+      "fixtureDigest": "9939751d3083ba66fe1736c13d45aaab869acea8bd7443afbd325fb8d5d7a21b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "b95abc874205db2b8fb852c161bd6990f96db3e924773840e644c085bdcd750d",
+      "fixtureDigest": "cdbf2f80d9937e1e6a27878a1f6ed67d9c8000913a99bc90858bf339e6ecb094",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -261,7 +261,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "7b05869527f5cd314dfdd4b5bf43d87090f096a22ea308a193d90738cc7d7ff4",
+      "fixtureDigest": "9f843957008efc45470c6c59ad317b2576a61af50778155901c504907f424d91",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -300,7 +300,7 @@
         "tests/fixtures/retrieval-eval/translations-sonnet.json",
         "tests/fixtures/retrieval-eval/work-compact.json"
       ],
-      "fixtureDigest": "a8eb51122b727ea3850938ab786e950d3428aefd35a6d4c6eb6a07837a7380af",
+      "fixtureDigest": "7796e0355e045ef9a892d9e6b2791e6b7bb304d01ec362b4454d0fa4a676b76a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -318,6 +318,47 @@
         "expectedReasonCode": "RETRIEVAL_EVAL_THRESHOLD_FAILED"
       },
       "requirement": 2
+    },
+    {
+      "id": "P1-EXTERNAL-KEY-FRAGMENT",
+      "phase": "P1",
+      "category": "runtime-capability",
+      "status": "implemented",
+      "subject": "External-key fragments reach the target card at rank at most three in both recall indexes, while the full key remains rank one in the same evaluation.",
+      "command": "pnpm verify:retrieval-eval",
+      "fixturePaths": [
+        "packages/core/src/recall.ts",
+        "scripts/retrieval-eval.mjs",
+        "tests/story-362-recall.test.mjs",
+        "scripts/policy/retrieval-eval-thresholds.json",
+        "tests/fixtures/retrieval-eval/card-expansions.json",
+        "tests/fixtures/retrieval-eval/cards-compact.json",
+        "tests/fixtures/retrieval-eval/corpus-snapshot.json",
+        "tests/fixtures/retrieval-eval/gold-labels.json",
+        "tests/fixtures/retrieval-eval/judge-sheet.json",
+        "tests/fixtures/retrieval-eval/minutes-compact.json",
+        "tests/fixtures/retrieval-eval/synthetic-queries.json",
+        "tests/fixtures/retrieval-eval/translations-sonnet.json",
+        "tests/fixtures/retrieval-eval/work-compact.json"
+      ],
+      "fixtureDigest": "821bd54aeb182ab381e2aef3eb6da49bd6a4de824e10a2fb9f3c724fa8c5e187",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "RETRIEVAL_EVAL_VERIFIED",
+      "evidencePath": "dist/evidence/p1/retrieval-eval.json",
+      "invalidationTriggers": [
+        "External-key segmentation, prefix matching, index synchronization, ranking, or fragment-bound enforcement changes"
+      ],
+      "redLeg": {
+        "mutation": "Insert an empty externalKey column while retaining the exact-key map and prose projection",
+        "test": "external-key fragment floor red-leg",
+        "expectedReasonCode": "RETRIEVAL_EVAL_THRESHOLD_FAILED"
+      },
+      "requirement": 10
     }
   ]
 }
