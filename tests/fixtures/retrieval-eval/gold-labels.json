@@ -1,0 +1,170 @@
+{
+  "note": "Gold relevance labels by the main thread (Fable) on the 30 sampled real prompts, V1 top-3 positions judged relevant to the prompt; shouldInject=false marks prompts that are conversational approvals/directives where nothing from the knowledge base should be injected.",
+  "labels": {
+    "1": {
+      "relevant": [
+        1,
+        2
+      ],
+      "shouldInject": true
+    },
+    "2": {
+      "relevant": [
+        1
+      ],
+      "shouldInject": true
+    },
+    "3": {
+      "relevant": [],
+      "shouldInject": true
+    },
+    "4": {
+      "relevant": [
+        1,
+        2
+      ],
+      "shouldInject": true
+    },
+    "5": {
+      "relevant": [
+        1,
+        2
+      ],
+      "shouldInject": true
+    },
+    "6": {
+      "relevant": [
+        1
+      ],
+      "shouldInject": true
+    },
+    "7": {
+      "relevant": [
+        1,
+        2
+      ],
+      "shouldInject": true
+    },
+    "8": {
+      "relevant": [],
+      "shouldInject": false
+    },
+    "9": {
+      "relevant": [],
+      "shouldInject": false
+    },
+    "10": {
+      "relevant": [
+        1
+      ],
+      "shouldInject": true
+    },
+    "11": {
+      "relevant": [],
+      "shouldInject": false
+    },
+    "12": {
+      "relevant": [],
+      "shouldInject": true
+    },
+    "13": {
+      "relevant": [
+        2
+      ],
+      "shouldInject": true
+    },
+    "14": {
+      "relevant": [
+        2
+      ],
+      "shouldInject": true
+    },
+    "15": {
+      "relevant": [
+        3
+      ],
+      "shouldInject": true
+    },
+    "16": {
+      "relevant": [
+        1
+      ],
+      "shouldInject": true
+    },
+    "17": {
+      "relevant": [],
+      "shouldInject": true
+    },
+    "18": {
+      "relevant": [
+        1
+      ],
+      "shouldInject": true
+    },
+    "19": {
+      "relevant": [
+        2
+      ],
+      "shouldInject": true
+    },
+    "20": {
+      "relevant": [],
+      "shouldInject": false
+    },
+    "21": {
+      "relevant": [],
+      "shouldInject": false
+    },
+    "22": {
+      "relevant": [],
+      "shouldInject": false
+    },
+    "23": {
+      "relevant": [],
+      "shouldInject": false
+    },
+    "24": {
+      "relevant": [
+        2,
+        3
+      ],
+      "shouldInject": true
+    },
+    "25": {
+      "relevant": [
+        1
+      ],
+      "shouldInject": true
+    },
+    "26": {
+      "relevant": [
+        1,
+        2
+      ],
+      "shouldInject": true
+    },
+    "27": {
+      "relevant": [
+        1,
+        2
+      ],
+      "shouldInject": true
+    },
+    "28": {
+      "relevant": [
+        3
+      ],
+      "shouldInject": true
+    },
+    "29": {
+      "relevant": [
+        1
+      ],
+      "shouldInject": true
+    },
+    "30": {
+      "relevant": [],
+      "shouldInject": true
+    }
+  }
+}

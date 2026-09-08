@@ -1,0 +1,2218 @@
+{
+  "at": "2026-09-04T15:08:34Z",
+  "offset": 0,
+  "reasonCode": "KNOWLEDGE_LIST_READY",
+  "records": [
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 199,
+      "bodySha256": "07e723b6a17de363760d1a97c89a551e61eacd60b81b05d392a7aa6a5cc5a210",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C12",
+      "freshnessState": "fresh",
+      "id": "knowledge:155621a1841c8f3e26996dd7",
+      "kind": "fact",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init019-s160"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 4,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "knowledge-marker-cas:knowledge 写动词 CAS 用 marker。",
+      "sourceDigest": "3fdcacd581af57fbb89d364548c61548c28aa743ed2df3fbe7f82f7daf31e6b6",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-019/S160/notes.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "knowledge 写动词的 CAS 用 store marker 版本,不是链版本",
+      "summary": "引擎 knowledge-create/promote/retire/rebase/reverify 全部以 store.json 的 version 做 CAS;仪式按链版本供给会 KNOWLEDGE_CAS_MISMATCH。",
+      "supersedes": null,
+      "tags": [
+        "knowledge",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 214,
+      "bodySha256": "e40a9217e50c481bccf1ed202afc24965325ca5aa52f24075a2de0c3867401f3",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C11",
+      "freshnessState": "fresh",
+      "id": "knowledge:27a5c4820ff26be9ad5885b9",
+      "kind": "decision",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "retired",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init019-d1"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 5,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "recheck-via-mcp:复核走 MCP 读面,SSH 仅 break-glass。",
+      "sourceDigest": "4415ec53d990319628f69fd05f04ae545cabece01e5938ea3d9d28b0edfca556",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "CLAUDE.md",
+        "docs/reports/init-019/BRIEFING.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "复核命令走 MCP 读面,不 SSH 直驱引擎",
+      "summary": "D1/D9:接入 AOS 后 AOS 是唯一数据平面,读走 MCP 只读面,写走仪式;SSH 直驱是 break-glass。文档复核命令列已全面 MCP 化(INIT-019 157/158)。",
+      "supersedes": null,
+      "tags": [
+        "lesson",
+        "mcp",
+        "ssh"
+      ],
+      "updatedAt": "2026-09-02T05:07:23Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 294,
+      "bodySha256": "9d6be387e51310cd9b5ef6d3e89c256f09abaa18228e9835d7fa2705cea408ce",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C13",
+      "freshnessState": "fresh",
+      "id": "knowledge:29695027d5dd0d3d894c1827",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init018-inc040"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 4,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "hook-cwd-trap:注册用 ${CLAUDE_PROJECT_DIR},活性门执行注册字符串。",
+      "sourceDigest": "b21bcaee5f14f64d54e5e860fa6e2a8fafd1e02b0208c2d5f6d5879a9c7cb4a6",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-018/INC-040/notes.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "hook 注册必须用 ${CLAUDE_PROJECT_DIR} 形态,禁止裸相对路径",
+      "summary": "INC-040 死因:注册用裸相对路径致 hook 从未启动;活性门须执行注册字符串本身,不起进程冒充。",
+      "supersedes": null,
+      "tags": [
+        "hook",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 184,
+      "bodySha256": "1cc9861940bbd03ad315ffa7ea750dbad17d82279166832918ad134c1e432dfb",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C18",
+      "freshnessState": "fresh",
+      "id": "knowledge:2c9f238fa7b0b4eb3788b875",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init019-s156"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 4,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "ssh-shellquote:远程参数一律引号包裹。",
+      "sourceDigest": "cf9f34dbe7c36f067a22bdb6291290be71b236d1ca3389523cd6d68ac2e5dfa5",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-019/S156/notes.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "远程 argv 经 ssh 重新拼接,必须 shellQuote",
+      "summary": "ssh 把远程 argv 以空格重拼并交给登录 shell,含空格/括号的值会成为远程语法错误;一律 shellQuote。",
+      "supersedes": null,
+      "tags": [
+        "lesson",
+        "ssh"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 1301,
+      "bodySha256": "14351a4782983c2c50e327bfb5070842ed280c7d5ff5403a0489184f421a18d2",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-CARD-GATE-VERDICT-HOST-INDEPENDENT",
+      "freshnessState": "fresh",
+      "id": "knowledge:2fbe966469720f7348f77a34",
+      "kind": "guide",
+      "lastVerified": null,
+      "lifecycle": "retired",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:e65a2b6814d963be71b0b5a5"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "candidate",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "判定按宿主而异即选错参照物;拆问题,不列豁免名册",
+      "sourceDigest": "14351a4782983c2c50e327bfb5070842ed280c7d5ff5403a0489184f421a18d2",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain-note:ds-reconcile-host-dependent-verdict",
+        "conference-minutes:5b4aa782de6119ca6815827c"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "门的判定必须宿主无关",
+      "summary": "一个输入若不在所有会运行该门的宿主上在场,就不能进判决;跨仓那半降 observation 或上移到看得见两仓的层",
+      "supersedes": null,
+      "tags": [
+        "ci",
+        "gate-reference",
+        "host-independence"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 605,
+      "bodySha256": "77fe6d956c586af40445595873023a7739046a2554f15e0486e4c365a848e8f8",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "KB-GUARD-CHECK-MUTATES-TREE",
+      "freshnessState": "fresh",
+      "id": "knowledge:3535955b556c2bc729a9d6fc",
+      "kind": "fact",
+      "lastVerified": "2026-08-19T00:00:00.000Z",
+      "lifecycle": "retired",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:36fadf536cc2ded074d9b6f8"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "candidate",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Running verify-portal alongside guard-check produced six false red portal cases on 2026-08-19. Treat it as exclusive, wait on the pid, and confirm the mutation is restored before continuing.",
+      "sourceDigest": "3cc84c599ff9ba7c5a2a0a437226adb06099d0a172c51ab7aedab73a40d34780",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain://cross-project/TCRN-CROSS-STORY-303"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "guard-check writes its injected mutations into the live working tree while it runs",
+      "summary": "Any concurrent gate run or file edit during guard-check reads a deliberately broken tree, and edits made during the run invalidate its verdict.",
+      "supersedes": null,
+      "tags": [
+        "concurrency",
+        "gates",
+        "trap"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 202,
+      "bodySha256": "7e535b3fa91bd2d2a5d2b9d2f7c9b9707b0ca90d63ef2dbc084a3f48af29ea78",
+      "category": "decision",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C19",
+      "freshnessState": "fresh",
+      "id": "knowledge:3b1352d143fd545a9e540c96",
+      "kind": "reference",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init019-s158"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "ssh-breakglass-two-classes:只两类白名单。",
+      "sourceDigest": "b671aeac694c0eed056c98f1e724307b3279b68614e1d12ee769a6808164ddb4",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-019/S158/notes.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "SSH 直驱只两类 break-glass:主机 MCP 不可达 fallback 与按设计绕开服务层的逐字节比对",
+      "summary": "D1/D9 白名单:两类残余适用场景,每条带日期理由;白名单被 doc-topology 与 ssh-write-observer 共同消费。",
+      "supersedes": null,
+      "tags": [
+        "breakglass",
+        "lesson",
+        "ssh"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 130,
+      "bodySha256": "58e22cc8cadacab762bb571f2de2e9aef0612e28d92ad10b2afea11cfffb475b",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT047-CONVENTION-08",
+      "freshnessState": "fresh",
+      "id": "knowledge:3b271125c5571bff5f1185fd",
+      "kind": "reference",
+      "lastVerified": "2026-09-01T01:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init047-convention-08"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "explicit-only",
+      "revision": 2,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Read platform-docs/harness-constraint-convention.md on demand.",
+      "sourceDigest": "85c43b0700110011ddb92e1ae13dff47fa75236240cdd2c657489d361191725e",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "platform-docs/harness-constraint-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Harness constraints convention index",
+      "summary": "Explicit-only index card for platform-docs/harness-constraint-convention.md; retrieve the source document when this topic is needed.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "knowledge",
+        "reference"
+      ],
+      "updatedAt": "2026-09-01T01:00:01Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 150,
+      "bodySha256": "0f5082d72ab06c8e4fc5ea4ad69d835901c2fbc59ac7916d7348317aa0411451",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C17",
+      "freshnessState": "fresh",
+      "id": "knowledge:3e5c4618c41ee9da181a2cf3",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init018-probe"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "probe-identity:先问自己用什么身份在问。",
+      "sourceDigest": "b34221e0d81681338a31dc6265c4d63c81f48af937404361130aea065b59a21c",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-018/SUMMARY.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "探针身份也是量具:匿名 404≠不存在",
+      "summary": "对存在性/可见性下结论前先问「我用什么身份在问」;有登录态先问认证面。",
+      "supersedes": null,
+      "tags": [
+        "lesson",
+        "probe"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 676,
+      "bodySha256": "359225b36ec2235a70866aca0046e6f7c55278622c0d8b2d96bb30953a058bd2",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "KB-COMMIT-CITATION-AMBIGUITY",
+      "freshnessState": "fresh",
+      "id": "knowledge:454ad6bdab4034a83610c87c",
+      "kind": "fact",
+      "lastVerified": "2026-08-19T00:00:00.000Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:inc227-609-record-citation-census"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:3165fa381d16e66d01cd6107"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Measured 2026-08-19 over 609 completed cross-project records: 11.2 percent cite the full key, 43.5 percent the short form, 56.5 percent nothing. 242 of 609 short forms collide across partitions.",
+      "sourceDigest": "4ad188b5ce4e84f84c416108443511b12600eeb95390c9edf00b6dd80af269f6",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain://cross-project/TCRN-CROSS-INC-227"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "The short commit-citation form is ambiguous for two record keys in five",
+      "summary": "Partitions number independently, so INIT-009 names a different record in each. The convention requires the full external key; the short form is four times more common and cannot identify a chain.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "measurement",
+        "traceability"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 169,
+      "bodySha256": "2ea4e2c90f91a6c35d329964666e573de4a1a7b27e4fc7442d90b5cc7b759ea7",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C07",
+      "freshnessState": "fresh",
+      "id": "knowledge:4b037630b2ef7dc9774472be",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:stop-budget"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "context-limit-is-not-a-reason-to-stop:停只因实质阻塞。",
+      "sourceDigest": "20e163827260ee6623dd6ac9b221ae3e2274da5d4c1f8b6c7ec2f13d299e9c5f",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/delivery-cadence-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "上下文将满不是收尾的理由",
+      "summary": "压缩自动发生;停下的正当理由只有实质阻塞(owner_intent_required/对外发布/硬阻断),不是资源余量。",
+      "supersedes": null,
+      "tags": [
+        "lesson",
+        "run"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 710,
+      "bodySha256": "624ed76c852827f70b7a9e69685e1a143ee65bf20d5c18b74a5126286620e212",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "KB-GUARD-CHECK-EXCLUSIVE-TREE",
+      "freshnessState": "fresh",
+      "id": "knowledge:552715b36d8a797405918762",
+      "kind": "fact",
+      "lastVerified": "2026-08-19T00:00:00.000Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:story303-guard-check-concurrency"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:36fadf536cc2ded074d9b6f8"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Running verify-portal alongside guard-check produced six false red portal cases on 2026-08-19. Treat it as exclusive, wait on the pid, and confirm the mutation is restored before continuing.",
+      "sourceDigest": "3cc84c599ff9ba7c5a2a0a437226adb06099d0a172c51ab7aedab73a40d34780",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain://cross-project/TCRN-CROSS-STORY-303"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "guard-check writes its injected mutations into the live working tree while it runs",
+      "summary": "Any concurrent gate run or file edit during guard-check reads a deliberately broken tree, and edits made during the run invalidate its verdict.",
+      "supersedes": null,
+      "tags": [
+        "concurrency",
+        "gates",
+        "trap"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 1301,
+      "bodySha256": "14351a4782983c2c50e327bfb5070842ed280c7d5ff5403a0489184f421a18d2",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-CARD-HOST-INDEPENDENT-VERDICT",
+      "freshnessState": "fresh",
+      "id": "knowledge:55f3f9876d5b1a73626e9b72",
+      "kind": "guide",
+      "lastVerified": "2026-08-18T11:44:43Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:helper-ci-sibling-read-2026-08-18",
+        "evidence:inc223-host-dependent-verdict"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:e65a2b6814d963be71b0b5a5"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "判定按宿主而异即选错参照物;拆问题,不列豁免名册",
+      "sourceDigest": "14351a4782983c2c50e327bfb5070842ed280c7d5ff5403a0489184f421a18d2",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "conference-minutes:5b4aa782de6119ca6815827c"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "门的判定必须宿主无关",
+      "summary": "一个输入若不在所有会运行该门的宿主上在场,就不能进判决;跨仓那半降 observation 或上移到看得见两仓的层",
+      "supersedes": null,
+      "tags": [
+        "ci",
+        "gate-reference",
+        "host-independence"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 1302,
+      "bodySha256": "83624d18202485f4ea97188bf534fe2c725c7b34ac92f30b247b7621c2483951",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "KB-NARROWER-QUESTION-FAILURE-MODE",
+      "freshnessState": "fresh",
+      "id": "knowledge:57638fb69914a452120e6299",
+      "kind": "guide",
+      "lastVerified": "2026-08-19T00:00:00.000Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:inc229-four-narrow-probes"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:3c8e19612b7523e7146e91e1"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Empty knowledge store read off a search with no matching card; a dropped scope field read off the wrong receipt path; 11.2 percent traceability measured on one of two citation spellings; a load-sensitive test declared a flake from two isolated runs.",
+      "sourceDigest": "2e6c273a9b2fb5ec4316e4d189abc19485b30e5e4cabb0a785867bd02d68cb28",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain://cross-project/TCRN-CROSS-INC-229"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Four wrong readings in two days all came from asking a narrower question than the one being answered",
+      "summary": "Each measurement used an instrument that could only return the answer already expected. The tell is that the probe's scope is narrower than the claim it is used to support.",
+      "supersedes": null,
+      "tags": [
+        "measurement",
+        "method",
+        "trap"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 132,
+      "bodySha256": "5215fc5abe44f022aea81fdeb241328af6be25b554659b5f1e3ec2656f2807f0",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT047-CONVENTION-09",
+      "freshnessState": "fresh",
+      "id": "knowledge:577d39cec3453bb5087bb83d",
+      "kind": "reference",
+      "lastVerified": "2026-09-01T01:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init047-convention-09"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "explicit-only",
+      "revision": 2,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Read platform-docs/projection-freshness-convention.md on demand.",
+      "sourceDigest": "02a30dbcd4193bea5f065e5a7afcb70f46313f23c040af95de985b909b488b15",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "platform-docs/projection-freshness-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Projection freshness convention index",
+      "summary": "Explicit-only index card for platform-docs/projection-freshness-convention.md; retrieve the source document when this topic is needed.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "knowledge",
+        "reference"
+      ],
+      "updatedAt": "2026-09-01T01:00:01Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 849,
+      "bodySha256": "3466f65a2732311d054a2f00c58e425c7274005aa26a86080f73c0313cc165fa",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "KB-KNOWLEDGE-READ-TRAILING",
+      "freshnessState": "fresh",
+      "id": "knowledge:5dc35c2c5d8d359ed0fe1040",
+      "kind": "fact",
+      "lastVerified": "2026-08-19T00:00:00.000Z",
+      "lifecycle": "retired",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:d3606c19cd061a4ffb238ab8"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "candidate",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "One work-create took all six partitions' knowledge reads dark until a hand-run rebase. Reads accept --allow-trailing true since TCRN-CROSS-INC-226; writes, validate and rebase are not exempt.",
+      "sourceDigest": "34050bcdd5088d4b22478987cdffd2d50417b2b12a8f7decb40e165c41e03f8c",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain://cross-project/TCRN-CROSS-INC-226"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "A knowledge read refuses after any chain write unless it is asked to tolerate a trailing store",
+      "summary": "The store's marker must equal the chain head, and every chain event breaks that. Pass --allow-trailing true on the five metadata-first read verbs; the answer then carries both heads.",
+      "supersedes": null,
+      "tags": [
+        "knowledge",
+        "retrieval",
+        "trap"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 835,
+      "bodySha256": "c137e2233051686a5d4cf2fb872900312ff6a8605885d48250b9fcc30b5ffa45",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-CARD-ADVISORY-READ-FROM-CHAIN",
+      "freshnessState": "fresh",
+      "id": "knowledge:606a75330d85c424a4a8f074",
+      "kind": "guide",
+      "lastVerified": "2026-08-18T11:43:15Z",
+      "lifecycle": "retired",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:story-scope-census-2026-08-18"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:e65a2b6814d963be71b0b5a5"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 5,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "投影不带 advisory:scope;判合规读链,不读 work-list",
+      "sourceDigest": "c137e2233051686a5d4cf2fb872900312ff6a8605885d48250b9fcc30b5ffa45",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "conference-minutes:5b4aa782de6119ca6815827c"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "work-list 与 work-show 的投影不带 advisory",
+      "summary": "判 Story scope 合规必须读链上事件的 advisory:scope;投影不带 extensions,拿它当权威会把合规单判成红",
+      "supersedes": null,
+      "tags": [
+        "advisory-scope",
+        "projection",
+        "story-compliance"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 282,
+      "bodySha256": "1484c098101d32a21724ed5b8803d06b87b1423414b3968715f807e4d3ce4f78",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C05",
+      "freshnessState": "fresh",
+      "id": "knowledge:65d088d532ec08c9bd848351",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:delivery-cadence"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "example-in-convention-is-an-assertion:举例用类别,点名实例带日期与复核命令。",
+      "sourceDigest": "20e163827260ee6623dd6ac9b221ae3e2274da5d4c1f8b6c7ec2f13d299e9c5f",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/delivery-cadence-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "文档里的举例就是断言",
+      "summary": "公约点名一个实例等于对它的当下状态下了无人维护的判断;举例用类别,点名实例须写「截至某日实测」并给复核命令。",
+      "supersedes": null,
+      "tags": [
+        "documentation",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 133,
+      "bodySha256": "8ac9d628be8acde41903f2c9788266b17cda1175cd941684b469c8d70ad67915",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT047-CONVENTION-04",
+      "freshnessState": "fresh",
+      "id": "knowledge:65df78943c31f83f86316b51",
+      "kind": "reference",
+      "lastVerified": "2026-09-01T01:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init047-convention-04"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "explicit-only",
+      "revision": 2,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Read platform-docs/deliberation-adoption-convention.md on demand.",
+      "sourceDigest": "73bde4d7a2013403ffd846b61cba43700f73ea75382a0110168057d7905c29ec",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "platform-docs/deliberation-adoption-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Deliberation adoption convention index",
+      "summary": "Explicit-only index card for platform-docs/deliberation-adoption-convention.md; retrieve the source document when this topic is needed.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "knowledge",
+        "reference"
+      ],
+      "updatedAt": "2026-09-01T01:00:01Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 201,
+      "bodySha256": "7cae60e6214943a108ce04267309793a1395a8739a1e239ea8932d81be3742fd",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C16",
+      "freshnessState": "fresh",
+      "id": "knowledge:6d696a70159180ae8551773e",
+      "kind": "fact",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init018-inc039"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "committed-claims:声明块须已提交,不只在工作树。",
+      "sourceDigest": "b34221e0d81681338a31dc6265c4d63c81f48af937404361130aea065b59a21c",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-018/SUMMARY.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "树里对不代表记录对(INC-039)",
+      "summary": "声明块在工作树对、未提交,HEAD 仍错;committed-claims 判据要求已提交声明块与工作树一致。",
+      "supersedes": null,
+      "tags": [
+        "gate",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 949,
+      "bodySha256": "964ee3f6406bfe1e75588b8eb3df35b53b51ff8599788115e874d55eb736ed2a",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "KB-KNOWLEDGE-TRAILING-READ",
+      "freshnessState": "fresh",
+      "id": "knowledge:74dc3fe4e1e112100b2acc8b",
+      "kind": "fact",
+      "lastVerified": "2026-08-19T00:00:00.000Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:inc226-trailing-read-test"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:d3606c19cd061a4ffb238ab8"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "One work-create took all six partitions' knowledge reads dark until a hand-run rebase. Reads accept --allow-trailing true since TCRN-CROSS-INC-226; writes, validate and rebase are not exempt.",
+      "sourceDigest": "34050bcdd5088d4b22478987cdffd2d50417b2b12a8f7decb40e165c41e03f8c",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain://cross-project/TCRN-CROSS-INC-226"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "A knowledge read refuses after any chain write unless asked to tolerate a trailing store",
+      "summary": "The store's marker must equal the chain head, and every chain event breaks that. Pass allow-trailing true on the five metadata-first read verbs; the answer then carries both heads.",
+      "supersedes": null,
+      "tags": [
+        "knowledge",
+        "retrieval",
+        "trap"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 210,
+      "bodySha256": "55a4d19991d01b3b0fe9a149207c3dda428c0c697b0cdb24c4167e4f78da8efc",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C20",
+      "freshnessState": "fresh",
+      "id": "knowledge:7c22045778b85f5124f5fdc3",
+      "kind": "fact",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init019-s160"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "marker-rebase-discipline:每写必 rebase。",
+      "sourceDigest": "3fdcacd581af57fbb89d364548c61548c28aa743ed2df3fbe7f82f7daf31e6b6",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-019/S160/notes.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "每次链写都拉开知识 store 标记差距,写路径必须自动 rebase",
+      "summary": "知识 store 是 disposable 物化索引,每次链写使 eventHighWaterDigest 落后;仪式真写后自动 rebase 保持读面可用。",
+      "supersedes": null,
+      "tags": [
+        "knowledge",
+        "lesson",
+        "marker"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 185,
+      "bodySha256": "78e804ce393e1f8925cff36bae4c150a7332d7939d970965217ac5f6cca5e2a0",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C06",
+      "freshnessState": "fresh",
+      "id": "knowledge:7dba2d2b2ba17eee44f25eb5",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init018-summary"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "credentials-not-implementation-blocker:凭据单列,其余本地可完成。",
+      "sourceDigest": "b34221e0d81681338a31dc6265c4d63c81f48af937404361130aea065b59a21c",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-018/SUMMARY.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "凭据不是实现的前置",
+      "summary": "凭据是运行期配置;需凭据的步骤单列,其余本地可完成可测,不让凭据阻塞实现。",
+      "supersedes": null,
+      "tags": [
+        "delivery",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 365,
+      "bodySha256": "3f169f79980296009237a0accbe08cdb4fe8959a6c54ed0b7a0cf52ce9a9288a",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C01",
+      "freshnessState": "fresh",
+      "id": "knowledge:7e06efd0a5c5cf92b6c7840b",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init018-qa"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "probe-before-defect:先校准探针,再报缺陷。",
+      "sourceDigest": "b34221e0d81681338a31dc6265c4d63c81f48af937404361130aea065b59a21c",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-018/SUMMARY.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "报缺陷前先怀疑自己的探针",
+      "summary": "平台累计十二次误报的共同根因是探针只看一侧或探针本身有误;报缺陷前先用已知好的输入校准探针。",
+      "supersedes": null,
+      "tags": [
+        "lesson",
+        "probe"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 169,
+      "bodySha256": "4fb3519d85efbe6532190ae83a5604fe3cea392f805bc58a8b2ff437a82c5925",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C15",
+      "freshnessState": "fresh",
+      "id": "knowledge:7ecc5fd6c5af3f1ee8e0c5b4",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init018-inc037"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "evidence-hygiene:证据 scrub 宿主路径,门扫 tracked+evidence。",
+      "sourceDigest": "f2035822216e8727b5ee44c7f456258f82fa8e2d6f08216a73ee837a2c013e1b",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-018/INC-037/notes.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "证据不得携带宿主路径(INC-037/042)",
+      "summary": "仓内证据含本机 home 路径会让公开仓付出 93 提交改写代价;证据落盘必须 scrub,门扫 tracked+evidence 树。",
+      "supersedes": null,
+      "tags": [
+        "hygiene",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 211,
+      "bodySha256": "4c7ef618d5355c2b5ac09f7b83138e84b79892023e2871caea8046abf2e4bf0f",
+      "category": "testing",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C09",
+      "freshnessState": "fresh",
+      "id": "knowledge:9869aed6d9ebd4d1f1f0d473",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init018-multiagent"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "agents-right-in-sequence-file-wrong:并发验证须重跑全部前提。",
+      "sourceDigest": "b34221e0d81681338a31dc6265c4d63c81f48af937404361130aea065b59a21c",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-018/SUMMARY.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "多代理并发时每个都对,文件最后是错的",
+      "summary": "并发代理各自局部正确,顺序写文件会互相覆盖;验证须重跑注释里的 MEASURED 连前提。",
+      "supersedes": null,
+      "tags": [
+        "lesson",
+        "multi-agent"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 128,
+      "bodySha256": "6a0a6a3d4b6aecaf47260472fa8a1985d16c3071c2e89fbe21d0011306b773e9",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT047-CONVENTION-05",
+      "freshnessState": "fresh",
+      "id": "knowledge:9ae8fa0707beb969c5b71f9b",
+      "kind": "reference",
+      "lastVerified": "2026-09-01T01:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init047-convention-05"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "explicit-only",
+      "revision": 2,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Read platform-docs/delivery-cadence-convention.md on demand.",
+      "sourceDigest": "909269d8ccbcfd0ef7c77ec76a459ac188b28e65c1a3dbe70092208b67e0c6be",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "platform-docs/delivery-cadence-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Delivery cadence convention index",
+      "summary": "Explicit-only index card for platform-docs/delivery-cadence-convention.md; retrieve the source document when this topic is needed.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "knowledge",
+        "reference"
+      ],
+      "updatedAt": "2026-09-01T01:00:01Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 268,
+      "bodySha256": "3c15bb411dcc7e0b3d5a02e9e2fe48ceb808ae61cb8eb24be999308f4779a818",
+      "category": "testing",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C04",
+      "freshnessState": "fresh",
+      "id": "knowledge:9fd99bab02557a7bedaf6639",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init018-r1"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "local-green-not-ci-green:push 后看 CI,不只信本地。",
+      "sourceDigest": "c524d4bd4ba84c2656820313ca9b5906b83e81b7b0999311d229c57aa42026a0",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-018/R1/"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "本地全绿不等于 CI 绿",
+      "summary": "本地 455/0 全绿后 CI 仍连红两次(计数式覆盖门与探针名册未同步);push 后须 gh run watch,评审 prompt 点名 CI 脚本。",
+      "supersedes": null,
+      "tags": [
+        "ci",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 136,
+      "bodySha256": "eafebdbc1b47b023ba6c7458babf1b7b9e97cdcfa7a9bbeae9baf77f9e849231",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT047-CONVENTION-07",
+      "freshnessState": "fresh",
+      "id": "knowledge:a9f4d10d7d8b6305bd88ec9e",
+      "kind": "reference",
+      "lastVerified": "2026-09-01T01:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init047-convention-07"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "explicit-only",
+      "revision": 2,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Read platform-docs/gate-reference-stability-convention.md on demand.",
+      "sourceDigest": "1a2879cb0a843175d70ee4bce7f1aaa9f1d20c6389a9a21978ee500a91c35621",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "platform-docs/gate-reference-stability-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Gate reference stability convention index",
+      "summary": "Explicit-only index card for platform-docs/gate-reference-stability-convention.md; retrieve the source document when this topic is needed.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "knowledge",
+        "reference"
+      ],
+      "updatedAt": "2026-09-01T01:00:01Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 130,
+      "bodySha256": "0490ce007027d2a22f29661bd715cf9331d5f839e5dc5b186c6781c256b7885e",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT047-CONVENTION-03",
+      "freshnessState": "fresh",
+      "id": "knowledge:acee405aaffa9bba408c4e8e",
+      "kind": "reference",
+      "lastVerified": "2026-09-01T01:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init047-convention-03"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "explicit-only",
+      "revision": 2,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Read platform-docs/adversarial-review-convention.md on demand.",
+      "sourceDigest": "dab2d3f042b15e28963f3345d2e7b684c274811e8a504302fba2a06da05a9bf2",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "platform-docs/adversarial-review-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Adversarial review convention index",
+      "summary": "Explicit-only index card for platform-docs/adversarial-review-convention.md; retrieve the source document when this topic is needed.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "knowledge",
+        "reference"
+      ],
+      "updatedAt": "2026-09-01T01:00:01Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 610,
+      "bodySha256": "e69fd8c6ddac102312744f83e66504a8e8c0c2d4a1ce21ae9e4562fde30483bd",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "KB-KNOWLEDGE-CAS-IS-STORE-VERSION",
+      "freshnessState": "fresh",
+      "id": "knowledge:ad9a349a830af2d64e235e03",
+      "kind": "fact",
+      "lastVerified": "2026-08-19T00:00:00.000Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:inc226-cas-mismatch-4295-160"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:d3606c19cd061a4ffb238ab8"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Passing chain version 4295 returned KNOWLEDGE_CAS_MISMATCH 4295:160 -- supplied first, expected second. Read the refusal rather than guessing a second time.",
+      "sourceDigest": "34050bcdd5088d4b22478987cdffd2d50417b2b12a8f7decb40e165c41e03f8c",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain://cross-project/TCRN-CROSS-INC-226"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "On the knowledge verbs, expected-version is the store's own version rather than the chain's",
+      "summary": "Every other verb reads that flag as the chain version. The knowledge verbs read it as the knowledge store's version, and nothing in the catalog distinguishes the two meanings.",
+      "supersedes": null,
+      "tags": [
+        "cas",
+        "knowledge",
+        "trap"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 248,
+      "bodySha256": "887f9efec6748611b19bf1271ff84d55c15c149189ac81a31c7222d5696aca01",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C03",
+      "freshnessState": "fresh",
+      "id": "knowledge:b303e52d7a90316055033f41",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init018-inc040"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "gate-must-be-satisfiable-everywhere:判据在每个评估世界都须可满足。",
+      "sourceDigest": "0bf6a22595fd557d2fad7f2506d4a997892ab99007f7604d082299920a9b0d5e",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-018/INC-040/"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "门的判据须在每个会被评估的世界可满足",
+      "summary": "联合不可满足的门永不绿;合并后那次 verify 不冗余。",
+      "supersedes": null,
+      "tags": [
+        "gate",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 540,
+      "bodySha256": "fcf68916c28b763e851d4f96213b145989cde717fd7e68387460edcd97d17457",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "KB-EXPECTED-VERSION-MEANS-STORE",
+      "freshnessState": "fresh",
+      "id": "knowledge:b7d51965e6c6cf55722844cd",
+      "kind": "fact",
+      "lastVerified": "2026-08-19T00:00:00.000Z",
+      "lifecycle": "retired",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:d3606c19cd061a4ffb238ab8"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "candidate",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Passing chain version 4295 returned KNOWLEDGE_CAS_MISMATCH 4295:160 -- supplied first, expected second. Read the refusal rather than guessing a second time.",
+      "sourceDigest": "34050bcdd5088d4b22478987cdffd2d50417b2b12a8f7decb40e165c41e03f8c",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain://cross-project/TCRN-CROSS-INC-226"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "On the knowledge verbs, expected-version is the store's own version rather than the chain's",
+      "summary": "Every other verb reads that flag as the chain version. The knowledge verbs read it as the knowledge store's version, and nothing in the catalog distinguishes the two meanings.",
+      "supersedes": null,
+      "tags": [
+        "cas",
+        "knowledge",
+        "trap"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 170,
+      "bodySha256": "b03822240266f608fb6c2b8cfdd62982889c5c6f028fc9c3045200512d04c62c",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C14",
+      "freshnessState": "fresh",
+      "id": "knowledge:bf8cb0b8eedd64205e2dc894",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init019-s156"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "ceremony-readback:写必带回读,按全值比较。",
+      "sourceDigest": "cf9f34dbe7c36f067a22bdb6291290be71b236d1ca3389523cd6d68ac2e5dfa5",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-019/S156/notes.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "没人读回来的写不算已证",
+      "summary": "仪式载荷必须至少一条回读,且回读按全值比较,不是「读成功」。",
+      "supersedes": null,
+      "tags": [
+        "ceremony",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 179,
+      "bodySha256": "ba456ee387bbf549a1bc48891460eb4e0a86febac3f093f44669a2946ffa4d12",
+      "category": "decision",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C08",
+      "freshnessState": "fresh",
+      "id": "knowledge:c496d068b76a3781e71273b3",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:stop-budget"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "stop-budget-three-classes:只三类必停。",
+      "sourceDigest": "20e163827260ee6623dd6ac9b221ae3e2274da5d4c1f8b6c7ec2f13d299e9c5f",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/delivery-cadence-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "停顿预算只三类:owner_intent_required/对外发布/无裁定不可逆",
+      "summary": "执行期必停只有三类;其余继续。",
+      "supersedes": null,
+      "tags": [
+        "lesson",
+        "stop-budget"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 132,
+      "bodySha256": "3068ea566f4126efbe71eefe10aaa7a3a444755624bef41e1b0849617a1ee6f4",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT047-CONVENTION-10",
+      "freshnessState": "fresh",
+      "id": "knowledge:c595469a571c39189d1d0b14",
+      "kind": "reference",
+      "lastVerified": "2026-09-01T01:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init047-convention-10"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "explicit-only",
+      "revision": 2,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Read platform-docs/sourcing-and-vetting-convention.md on demand.",
+      "sourceDigest": "fe41ede6272078121be88c761f19d6d1d37d9151dea5c022e7b1a7228a75662c",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "platform-docs/sourcing-and-vetting-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Sourcing and vetting convention index",
+      "summary": "Explicit-only index card for platform-docs/sourcing-and-vetting-convention.md; retrieve the source document when this topic is needed.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "knowledge",
+        "reference"
+      ],
+      "updatedAt": "2026-09-01T01:00:01Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 1301,
+      "bodySha256": "14351a4782983c2c50e327bfb5070842ed280c7d5ff5403a0489184f421a18d2",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-CARD-GATE-HOST-INDEPENDENT",
+      "freshnessState": "fresh",
+      "id": "knowledge:cdba09da559da1dadc9b8a1e",
+      "kind": "guide",
+      "lastVerified": "2026-08-18T11:43:16Z",
+      "lifecycle": "retired",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:helper-ci-sibling-read-2026-08-18",
+        "evidence:inc223-host-dependent-verdict"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:e65a2b6814d963be71b0b5a5"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 5,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "判定按宿主而异即选错参照物;拆问题,不列豁免名册",
+      "sourceDigest": "14351a4782983c2c50e327bfb5070842ed280c7d5ff5403a0489184f421a18d2",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "conference-minutes:5b4aa782de6119ca6815827c"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "门的判定必须宿主无关",
+      "summary": "一个输入若不在所有会运行该门的宿主上在场,就不能进判决;跨仓那半降 observation 或上移到看得见两仓的层",
+      "supersedes": null,
+      "tags": [
+        "ci",
+        "gate-reference",
+        "host-independence"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 200,
+      "bodySha256": "b15d95a731c6b7a792b5c8a575597c5be5c132d2ff49bdcb7d2461a2659326a4",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C10",
+      "freshnessState": "fresh",
+      "id": "knowledge:ce1d48584bf43d477a258bb4",
+      "kind": "guide",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:instrument-discipline"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "index-freshness:用索引前先验新鲜度。",
+      "sourceDigest": "6ebdb617a8104a7756d0cf36578ab01103dc9f07e4dc6feb751296b9c402faf7",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "CLAUDE.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "陈旧索引比 grep 更害:索引必带新鲜度前置",
+      "summary": "索引类工具用前先跑 status 确认晚于末次提交;陈旧索引快且自信地撒谎。",
+      "supersedes": null,
+      "tags": [
+        "index",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 132,
+      "bodySha256": "573d9f8667a21467b8189b65253381fc28ba15d133064f0f854f5f4293b86aa4",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT047-CONVENTION-06",
+      "freshnessState": "fresh",
+      "id": "knowledge:d62793d03ff311dcb59e173b",
+      "kind": "reference",
+      "lastVerified": "2026-09-01T01:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init047-convention-06"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "explicit-only",
+      "revision": 2,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Read platform-docs/direction-and-tracks-convention.md on demand.",
+      "sourceDigest": "3852b42e91946602d863fd2be9384eb2188a2063daf48f5b58f8a090595eabd7",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "platform-docs/direction-and-tracks-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Direction and tracks convention index",
+      "summary": "Explicit-only index card for platform-docs/direction-and-tracks-convention.md; retrieve the source document when this topic is needed.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "knowledge",
+        "reference"
+      ],
+      "updatedAt": "2026-09-01T01:00:01Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 835,
+      "bodySha256": "c137e2233051686a5d4cf2fb872900312ff6a8605885d48250b9fcc30b5ffa45",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-CARD-READ-ADVISORY-FROM-CHAIN",
+      "freshnessState": "fresh",
+      "id": "knowledge:d98df0d05a7eaacbeb0d4964",
+      "kind": "guide",
+      "lastVerified": "2026-08-18T11:44:21Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:story-scope-census-2026-08-18"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:e65a2b6814d963be71b0b5a5"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "投影不带 advisory:scope;判合规读链,不读 work-list",
+      "sourceDigest": "c137e2233051686a5d4cf2fb872900312ff6a8605885d48250b9fcc30b5ffa45",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "conference-minutes:5b4aa782de6119ca6815827c"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "work-list 与 work-show 的投影不带 advisory",
+      "summary": "判 Story scope 合规必须读链上事件的 advisory:scope;投影不带 extensions,拿它当权威会把合规单判成红",
+      "supersedes": null,
+      "tags": [
+        "advisory-scope",
+        "projection",
+        "story-compliance"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 148,
+      "bodySha256": "4956704b4c6f032991e4e1ed51094377508110d37fcf1a08549a8bf68f073507",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT047-CONVENTION-01",
+      "freshnessState": "fresh",
+      "id": "knowledge:e59f6b3157fe659a36bbeab9",
+      "kind": "reference",
+      "lastVerified": "2026-09-01T01:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init047-convention-01"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "explicit-only",
+      "revision": 2,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Read platform-docs/dependency-direction-and-integration-convention.md on demand.",
+      "sourceDigest": "2235188048e13e727bd31f29a34f704655e5ff15dc84e26b8ba5e521514b81cf",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "platform-docs/dependency-direction-and-integration-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Dependency direction and integration convention index",
+      "summary": "Explicit-only index card for platform-docs/dependency-direction-and-integration-convention.md; retrieve the source document when this topic is needed.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "knowledge",
+        "reference"
+      ],
+      "updatedAt": "2026-09-01T01:00:01Z"
+    },
+    {
+      "accountableOwnerId": "owner:init019",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 308,
+      "bodySha256": "545d708879167738badd2d9bc94562ae73904d98e9e55eb45f6b24317ee68d09",
+      "category": "decision",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT019-C02",
+      "freshnessState": "fresh",
+      "id": "knowledge:ed4e6fbb70956a32de04042c",
+      "kind": "decision",
+      "lastVerified": "2026-08-05T00:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init018-r2"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [
+        "implementation"
+      ],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "role",
+      "snippet": "predicate-both-sides:写完门先问什么会让它红,并真做一次。",
+      "sourceDigest": "6f10aca2222a903cde65f13a35ab6ce2085e1ff56017283e5cd9551b1d86d610",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "docs/reports/init-018/R2/"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "判据两侧必须能够不同",
+      "summary": "恒真门是平台三度付学费的缺陷形态;写完门先真做一次「什么会让它变红」。",
+      "supersedes": null,
+      "tags": [
+        "gate",
+        "lesson"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 612,
+      "bodySha256": "e75eff8fb2c41909b68b45ab1a20cfefff9c994111c3461b8dd297ae1eea7a24",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "KB-COMMIT-CITATION-SHORT-FORM-AMBIGUOUS",
+      "freshnessState": "fresh",
+      "id": "knowledge:ee2e4fe6fc5908e003805689",
+      "kind": "fact",
+      "lastVerified": "2026-08-19T00:00:00.000Z",
+      "lifecycle": "retired",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:3165fa381d16e66d01cd6107"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "candidate",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Measured 2026-08-19 over 609 completed cross-project records: 11.2 percent cite the full key, 43.5 percent the short form, 56.5 percent nothing. 242 of 609 short forms collide across partitions.",
+      "sourceDigest": "4ad188b5ce4e84f84c416108443511b12600eeb95390c9edf00b6dd80af269f6",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain://cross-project/TCRN-CROSS-INC-227"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "The short commit-citation form is ambiguous for two record keys in five",
+      "summary": "Partitions number independently, so INIT-009 names a different record in each. The convention requires the full external key; the short form is four times more common and cannot identify a chain.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "measurement",
+        "traceability"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 130,
+      "bodySha256": "35a2ce50ae498f2f3ad2d53ec1b2bcf0ef0e514985d08f2f5d477b01176a4776",
+      "category": "standards",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-INIT047-CONVENTION-02",
+      "freshnessState": "fresh",
+      "id": "knowledge:f1c0ad36c244d04299af8c37",
+      "kind": "reference",
+      "lastVerified": "2026-09-01T01:00:00Z",
+      "lifecycle": "active",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [
+        "evidence:init047-convention-02"
+      ],
+      "linkedGateIds": [],
+      "linkedWorkIds": [],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "promoted",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "explicit-only",
+      "revision": 2,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "Read platform-docs/dispatch-readiness-convention.md on demand.",
+      "sourceDigest": "79f8059292b076999709c5ca0ecc5c24e485adea1ac42d9aefec0374cb17d9c7",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "platform-docs/dispatch-readiness-convention.md"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "Dispatch readiness convention index",
+      "summary": "Explicit-only index card for platform-docs/dispatch-readiness-convention.md; retrieve the source document when this topic is needed.",
+      "supersedes": null,
+      "tags": [
+        "convention",
+        "knowledge",
+        "reference"
+      ],
+      "updatedAt": "2026-09-01T01:00:01Z"
+    },
+    {
+      "accountableOwnerId": "owner:governance",
+      "authority": "workspace-knowledge-metadata",
+      "bodyBytes": 835,
+      "bodySha256": "c137e2233051686a5d4cf2fb872900312ff6a8605885d48250b9fcc30b5ffa45",
+      "category": "workflow",
+      "exportDisposition": "metadata-only",
+      "extensions": {},
+      "externalKey": "TCRN-CARD-ADVISORY-NOT-IN-PROJECTION",
+      "freshnessState": "fresh",
+      "id": "knowledge:f6f95178e4fe93982e80525d",
+      "kind": "guide",
+      "lastVerified": null,
+      "lifecycle": "retired",
+      "linkedDecisionIds": [],
+      "linkedEvidenceIds": [],
+      "linkedGateIds": [],
+      "linkedWorkIds": [
+        "work:e65a2b6814d963be71b0b5a5"
+      ],
+      "projectId": "project:e7da35c5aade8dd42c91cb0f",
+      "promotionState": "candidate",
+      "redactionDisposition": "focused-reference-redaction-v1",
+      "retrievalDisposition": "default",
+      "revision": 3,
+      "roleScopes": [],
+      "schemaVersion": "tcrn.knowledge-unit-metadata.v1",
+      "scope": "project",
+      "snippet": "投影不带 advisory:scope;判合规读链,不读 work-list",
+      "sourceDigest": "c137e2233051686a5d4cf2fb872900312ff6a8605885d48250b9fcc30b5ffa45",
+      "sourceProvenance": "explicit-current-source-reference",
+      "sourceReferences": [
+        "chain-note:story-scope-census-2026-08-18",
+        "conference-minutes:5b4aa782de6119ca6815827c"
+      ],
+      "stalenessPolicy": {
+        "maximumAgeDays": null,
+        "unknownDisposition": "fail-closed"
+      },
+      "subject": "work-list 与 work-show 的投影不带 advisory",
+      "summary": "判 Story scope 合规必须读链上事件的 advisory:scope;投影不带 extensions,拿它当权威会把合规单判成红",
+      "supersedes": null,
+      "tags": [
+        "advisory-scope",
+        "projection",
+        "story-compliance"
+      ],
+      "updatedAt": "2026-09-02T01:01:00Z"
+    }
+  ],
+  "resultDigest": "8766afaeb2993be0ecefbefd8ece387fa12d9d02e96cc22a0da148a9de09a3c0",
+  "schemaVersion": "tcrn.knowledge-list.v1",
+  "selection": "all",
+  "total": 45,
+  "truncated": false
+}

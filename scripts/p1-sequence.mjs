@@ -62,6 +62,7 @@ export const P1_SEQUENCE = Object.freeze([
   // the authoritative text was at a path that did not exist, and every gate above was
   // green throughout -- nothing here had ever checked a documentation link.
   { task: "links", script: "verify:links" },
+  { task: "retrieval-eval", script: "verify:retrieval-eval" },
 ].map((entry) => Object.freeze({ dispatchesThroughTask: true, ...entry })));
 
 /** The verb names, in order — what `verify:p1` walks. */

@@ -1,0 +1,152 @@
+{
+  "queries": [
+    {
+      "id": "knowledge:155621a1841c8f3e26996dd7",
+      "query": "knowledge-create 传的版本号明明是链上最新的,怎么还报版本冲突?"
+    },
+    {
+      "id": "knowledge:29695027d5dd0d3d894c1827",
+      "query": "settings.json 里配的 hook 一直不触发,单独跑那条命令又是好的,这是为啥?"
+    },
+    {
+      "id": "knowledge:2c9f238fa7b0b4eb3788b875",
+      "query": "SSH 远程跑命令,参数里带空格和括号,到那边就报语法错误"
+    },
+    {
+      "id": "knowledge:3b1352d143fd545a9e540c96",
+      "query": "这次想直接 SSH 上服务器手动操作,不走平时那套流程,这样算是被允许的例外吗?"
+    },
+    {
+      "id": "knowledge:3b271125c5571bff5f1185fd",
+      "query": "有些操作会被当前工具的权限或沙盒挡住,做不了,这种限制该怎么处理才对?"
+    },
+    {
+      "id": "knowledge:3e5c4618c41ee9da181a2cf3",
+      "query": "没登录状态下调这个接口,返回的是 404,是不是就能说明这功能压根没有?"
+    },
+    {
+      "id": "knowledge:454ad6bdab4034a83610c87c",
+      "query": "提交记录里嫌麻烦只写 INIT-012 这种短编号,不写项目前缀,会不会以后指错记录?"
+    },
+    {
+      "id": "knowledge:4b037630b2ef7dc9774472be",
+      "query": "当前会话上下文感觉快到上限了,是不是该先停一下,等下一轮再接着做?"
+    },
+    {
+      "id": "knowledge:552715b36d8a797405918762",
+      "query": "guard-check 还在跑的时候我顺手改了个文件,另一个门突然报红,是撞车了吗?"
+    },
+    {
+      "id": "knowledge:55f3f9876d5b1a73626e9b72",
+      "query": "同一个门本地跑是绿的,CI 上跑却红,是不是判据依赖了两边不一样的东西?"
+    },
+    {
+      "id": "knowledge:57638fb69914a452120e6299",
+      "query": "查出来一个数据是空的,后来才发现是查询条件本身写窄了,这种情况以后怎么先自查?"
+    },
+    {
+      "id": "knowledge:577d39cec3453bb5087bb83d",
+      "query": "work-list 里看到的数据感觉不是最新的,这种缓存视图多久该刷新一次?"
+    },
+    {
+      "id": "knowledge:65d088d532ec08c9bd848351",
+      "query": "公约文档里想点名一个具体仓库的现状当依据,这样写会不会有问题?"
+    },
+    {
+      "id": "knowledge:65df78943c31f83f86316b51",
+      "query": "大家在讨论里口头都点头同意了,这个决定要走什么流程才算正式定下来?"
+    },
+    {
+      "id": "knowledge:6d696a70159180ae8551773e",
+      "query": "声明的内容我本地已经改对了,还没提交上去,这样算是满足条件了吗?"
+    },
+    {
+      "id": "knowledge:74dc3fe4e1e112100b2acc8b",
+      "query": "刚做完一次链上写入,knowledge 搜索突然就查不到东西了,是坏了吗?"
+    },
+    {
+      "id": "knowledge:7c22045778b85f5124f5fdc3",
+      "query": "写新的链上动词时,要不要在写完后顺手把 knowledge 索引也重新对齐一下?"
+    },
+    {
+      "id": "knowledge:7dba2d2b2ba17eee44f25eb5",
+      "query": "这功能要用的密钥还没申请下来,是不是整个开发都得先卡在这等着?"
+    },
+    {
+      "id": "knowledge:7e06efd0a5c5cf92b6c7840b",
+      "query": "我这边测出来一个东西像是坏的,要不要先怀疑是自己测试方法有问题?"
+    },
+    {
+      "id": "knowledge:7ecc5fd6c5af3f1ee8e0c5b4",
+      "query": "这次任务留的记录文件里带了我本机用户目录的路径,能直接提交进公开仓库吗?"
+    },
+    {
+      "id": "knowledge:9869aed6d9ebd4d1f1f0d473",
+      "query": "开了好几个代理同时改同一份计划文档,最后合并出来的版本内容对不上,这是咋回事?"
+    },
+    {
+      "id": "knowledge:9ae8fa0707beb969c5b71f9b",
+      "query": "这批改动是攒到下个大版本一起发,还是应该现在就拆小批量交付?"
+    },
+    {
+      "id": "knowledge:9fd99bab02557a7bedaf6639",
+      "query": "本地测试都跑过了,push 上去之后 CI 那边结果不对,这种情况该信哪头?"
+    },
+    {
+      "id": "knowledge:a9f4d10d7d8b6305bd88ec9e",
+      "query": "门里引用的那个路径过一阵就变了,判据也跟着漂移,这个该怎么锚定?"
+    },
+    {
+      "id": "knowledge:acee405aaffa9bba408c4e8e",
+      "query": "这个方案要不要找人专门唱反调审一遍,这个流程具体怎么走?"
+    },
+    {
+      "id": "knowledge:ad9a349a830af2d64e235e03",
+      "query": "跑 knowledge 相关命令时报版本冲突,提示里两个版本号我完全看不懂哪个对,这咋查?"
+    },
+    {
+      "id": "knowledge:b303e52d7a90316055033f41",
+      "query": "两个仓的验收标准合并成一条以后,好像不管改什么都过不了,是不是哪里设计错了?"
+    },
+    {
+      "id": "knowledge:bf8cb0b8eedd64205e2dc894",
+      "query": "写入命令返回成功了,不重新读一遍确认,这样算是已经落地了吗?"
+    },
+    {
+      "id": "knowledge:c496d068b76a3781e71273b3",
+      "query": "任务跑到一半犹豫要不要停下来问一句,到底什么情况才算真的必须停?"
+    },
+    {
+      "id": "knowledge:c595469a571c39189d1d0b14",
+      "query": "文档里想引用一个外部结论当依据,这种引用要核实到什么程度才能用?"
+    },
+    {
+      "id": "knowledge:ce1d48584bf43d477a258bb4",
+      "query": "用索引工具查出来的结果,后来发现早就过时了,以后用之前该先看什么?"
+    },
+    {
+      "id": "knowledge:d62793d03ff311dcb59e173b",
+      "query": "这个新计划该归到哪条线去做,方向到底该由谁来拍板?"
+    },
+    {
+      "id": "knowledge:d98df0d05a7eaacbeb0d4964",
+      "query": "用 work-show 看这个 Story 的 scope 好像没问题,这样就能判合规吗?"
+    },
+    {
+      "id": "knowledge:e59f6b3157fe659a36bbeab9",
+      "query": "引擎那边的脚本想直接读产品仓的文件,这样算不算方向接反了?"
+    },
+    {
+      "id": "knowledge:ed4e6fbb70956a32de04042c",
+      "query": "新写的这个门,不管代码改成什么样好像都一直是绿的,这正常吗?"
+    },
+    {
+      "id": "knowledge:f1c0ad36c244d04299af8c37",
+      "query": "这个 Story 现在这个状态能直接派给代理去做了吗,怎么判断?"
+    },
+    {
+      "id": "knowledge:155621a1841c8f3e26996dd7",
+      "query": "INIT019-C12"
+    }
+  ]
+}

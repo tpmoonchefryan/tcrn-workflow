@@ -54,7 +54,8 @@
     "verify:privacy": "node scripts/task.mjs privacy",
     "verify:source": "node scripts/task.mjs source",
     "verify:budget": "node scripts/task.mjs budget",
-    "verify:links": "node scripts/task.mjs links"
+    "verify:links": "node scripts/task.mjs links",
+    "verify:retrieval-eval": "node scripts/task.mjs retrieval-eval"
   },
   "devDependencies": {
     "@types/node": "24.13.2",

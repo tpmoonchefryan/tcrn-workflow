@@ -979,6 +979,7 @@ const commandContracts = {
   governance: { exit: 0, reasonCode: "GOVERNANCE_TOOLCHAIN_VERIFIED" },
   isolated: { exit: 0, reasonCode: "ISOLATED_P1_VERIFIED" },
   p8: { exit: 0, reasonCode: "P8_WORKFLOW_RC_VERIFIED" },
+  "retrieval-eval": { exit: 0, reasonCode: "RETRIEVAL_EVAL_VERIFIED" },
 };
 
 async function verifyMap() {
@@ -1384,6 +1385,11 @@ const handlers = {
   test: verifyTestSuite,
   typecheck,
   "verification-map": verifyMap,
+  "retrieval-eval": async () => {
+    const result = JSON.parse(run(process.execPath, [resolve(repositoryRoot, "scripts/retrieval-eval.mjs")]));
+    if (!result.ok) fail(result.reasonCode, result.message);
+    return result;
+  },
   "verify-p1": verifyP1,
 };
 

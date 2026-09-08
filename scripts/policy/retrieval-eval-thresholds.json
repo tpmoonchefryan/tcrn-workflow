@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "tcrn.retrieval-eval-thresholds.v1",
+  "note": "Measured on the corpus this digest names, with no margin, per Owner ruling TCRN-CROSS-MIN-164 D4. Every floor here is the value scripts/retrieval-eval.mjs produced on this corpus at TCRN-CROSS-STORY-368; none was rounded, and none carries headroom. A number that moves in either direction is a fact about the scorer or the corpus, which is what this gate exists to surface.",
+  "corpusDigest": "1df0a8a6746d1b66bd5ddb2c16c3a1ced6200f124857016afed5026d0fa3e7ee",
+  "cardsOnly": {
+    "hitAt1": 29,
+    "hitAt3": 32,
+    "hitAt8": 36
+  },
+  "mixed": {
+    "hitAt1": 27,
+    "hitAt3": 29,
+    "hitAt8": 30
+  },
+  "language": {
+    "hitAt8": 25
+  },
+  "real": {
+    "precisionAt3": 0.1889
+  },
+  "externalKey": {
+    "exactRankAtMost": 1
+  }
+}

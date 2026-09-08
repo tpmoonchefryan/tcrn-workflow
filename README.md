@@ -10,7 +10,7 @@
 
 [你现在的处境](#你现在的处境) · [它凭什么值得信](#它凭什么值得信) · [给谁用](#给谁用) · [你能拿到什么](#你能拿到什么) · [三分钟上手](#三分钟上手) · [当前状态](#当前状态) · [完整文档](#完整文档)
 
-`Verified claims: 7 (hygiene 7 · inertness 0 · runtime 0)`
+`Verified claims: 8 (hygiene 8 · inertness 0 · runtime 0)`
 
 </div>
 

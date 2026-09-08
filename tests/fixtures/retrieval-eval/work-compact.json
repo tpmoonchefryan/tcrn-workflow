@@ -1,0 +1,601 @@
+{
+  "schemaVersion": "tcrn.retrieval-eval-corpus.v1",
+  "kind": "work",
+  "at": "2026-09-04T15:08:34Z",
+  "sourceTotal": 802,
+  "indexable": 55,
+  "note": "Only the work records recallDocuments turns into documents are kept. A record with neither a title nor summary text is dropped by recallDocuments itself, so keeping the other 747 would change nothing it indexes; whether those 747 should be backfilled is TCRN-CROSS-STORY-381 and is not decided here.",
+  "records": [
+    {
+      "id": "work:243a9e7daa9ac402e44c2c51",
+      "externalKey": "TCRN-CROSS-INIT-049",
+      "kind": "Initiative",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "门与验证程序精简。九门顺序全跑实测 1,859 秒，其中 852 秒（45.8%）是重复执行：engine 测试一轮跑三次、guard-check 两次、helper 测试两次，成因是 push-gate 内部就包含 verify:p1、verify:p8 与 guard-check，helper push-gate 内部包含 npm test。另有三处验证质量问题：17 处断言测的是源码长什么样而非行为、83 个唯一命令承载 116 条判据使 verify:p3 的 13 条同绿同红、platform-doctor 的测试文件比被测的门本",
+      "labels": []
+    },
+    {
+      "id": "work:adc84dcf6403c8032622504c",
+      "externalKey": "TCRN-CROSS-INIT-050",
+      "kind": "Initiative",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "两仓对外描述面重构：README 主版本改简体中文，Workflow 启用 GitHub Wiki，Helper 链接过去。\n\n【为谁改变什么】为第一次打开这两个仓库的人：首页用中文说清它是什么、给谁用、能拿到什么，三到五 KB 读完；深度内容移到 Wiki。\n【目的锚】Owner 2026-09-03 裁定：描述文件主版本使用简体中文，按产品视角组织、销售视角下笔，禁比喻类比格言，举例只用真实实例并说明证明了什么，对比一",
+      "labels": []
+    },
+    {
+      "id": "work:f6d42b19d3634e2416f22b0c",
+      "externalKey": "TCRN-CROSS-INIT-048",
+      "kind": "Initiative",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "链存储重构。把 .tcrn-workspace 的存储从「一记录一文件」改为尺寸触发分段加边车索引，写入去重，读取走快照加尾部重放；清理归档区并补齐清单；迁移既有文件；更新引擎与 helper 的数据来源；把本地分段做成可插拔后端；把能走变量的值收进设置。八个 Epic、16 个 Story。方案与全部实测数值见 https://claude.ai/code/artifact/6a2b7ec3-aed3-4800-8ba8-268ea8c7e347 。Owner 2026-09-02 裁定：归档清理范围",
+      "labels": []
+    },
+    {
+      "id": "work:0c1f6021a4bf8be58d84561f",
+      "externalKey": "TCRN-CROSS-EPIC-119",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "可插拔本地后端与 pg 停用（方案部分 G）\n【INIT-048 Epic 收口】disposition=fixed; children=TCRN-CROSS-STORY-344,TCRN-CROSS-STORY-345,TCRN-CROSS-STORY-346; all child Stories status=done；生效证据=对应 STORY-333..348 独立正腿与最终九门复核；pg 代码按 Owner 裁定保留但未接线；外部发布未执行。",
+      "labels": []
+    },
+    {
+      "id": "work:1249fa95dad3e5da8595a472",
+      "externalKey": "TCRN-CROSS-EPIC-116",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "归档区清理与 AGENTS.md 第六节清单补齐（方案部分 D）\n【INIT-048 Epic 收口】disposition=fixed; children=TCRN-CROSS-STORY-338,TCRN-CROSS-STORY-339; all child Stories status=done；生效证据=对应 STORY-333..348 独立正腿与最终九门复核；pg 代码按 Owner 裁定保留但未接线；外部发布未执行。",
+      "labels": []
+    },
+    {
+      "id": "work:1ae488eb713be8ffd7a90b5f",
+      "externalKey": "TCRN-CROSS-EPIC-114",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "写入格式：extensions 去重与四个新字段（方案部分 B）\n【INIT-048 Epic 收口】disposition=fixed; children=TCRN-CROSS-STORY-335,TCRN-CROSS-STORY-336; all child Stories status=done；生效证据=对应 STORY-333..348 独立正腿与最终九门复核；pg 代码按 Owner 裁定保留但未接线；外部发布未执行。",
+      "labels": []
+    },
+    {
+      "id": "work:2e148d0666c38fe6a2dcd886",
+      "externalKey": "TCRN-CROSS-EPIC-118",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "引擎面与 helper 的数据来源更新（方案部分 F）\n【INIT-048 Epic 收口】disposition=fixed; children=TCRN-CROSS-STORY-342,TCRN-CROSS-STORY-343; all child Stories status=done；生效证据=对应 STORY-333..348 独立正腿与最终九门复核；pg 代码按 Owner 裁定保留但未接线；外部发布未执行。",
+      "labels": []
+    },
+    {
+      "id": "work:351e8d7b13504210162d1d46",
+      "externalKey": "TCRN-CROSS-EPIC-123",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "判据可归因：拆分共用命令的两组\n\n【收口核销】STORY-352=fixed（work:3c1906de09196ad982b09e6f，done）。retained=none；deferred=none；Epic children all terminal.",
+      "labels": []
+    },
+    {
+      "id": "work:59daea25a7a36d592cc40e8c",
+      "externalKey": "TCRN-CROSS-EPIC-113",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "存储布局：尺寸触发分段与边车索引（方案部分 A）\n【INIT-048 Epic 收口】disposition=fixed; children=TCRN-CROSS-STORY-333,TCRN-CROSS-STORY-334; all child Stories status=done；生效证据=对应 STORY-333..348 独立正腿与最终九门复核；pg 代码按 Owner 裁定保留但未接线；外部发布未执行。",
+      "labels": []
+    },
+    {
+      "id": "work:7706f86e64dd6a2fe8edf9be",
+      "externalKey": "TCRN-CROSS-EPIC-121",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "门名册去重：识别包含关系，只跑顶层四条\n\n【收口核销】STORY-349=fixed（work:dc934ddde549c3c9d3310c59，done）；STORY-350=fixed（work:96709c1c8297546df0a26b1f，done）。retained=none；deferred=none；Epic children all terminal.",
+      "labels": []
+    },
+    {
+      "id": "work:856c667dc5762d1fcd26f1e1",
+      "externalKey": "TCRN-CROSS-EPIC-115",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "读取：快照与尾部重放（方案部分 C）\n【INIT-048 Epic 收口】disposition=fixed; children=TCRN-CROSS-STORY-337; all child Stories status=done；生效证据=对应 STORY-333..348 独立正腿与最终九门复核；pg 代码按 Owner 裁定保留但未接线；外部发布未执行。",
+      "labels": []
+    },
+    {
+      "id": "work:99d1aa3d81c30af925f76525",
+      "externalKey": "TCRN-CROSS-EPIC-120",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "可变量收口：新增设置与放开现存写死（方案部分 H）\n【INIT-048 Epic 收口】disposition=fixed; children=TCRN-CROSS-STORY-347,TCRN-CROSS-STORY-348; all child Stories status=done；生效证据=对应 STORY-333..348 独立正腿与最终九门复核；pg 代码按 Owner 裁定保留但未接线；外部发布未执行。",
+      "labels": []
+    },
+    {
+      "id": "work:cfe2716923cf59dc64014510",
+      "externalKey": "TCRN-CROSS-EPIC-122",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "源码文本断言改为行为断言\n\n【收口核销】STORY-351=fixed（work:64f5aee2493f41540b06cafb，done）。retained=none；deferred=none；Epic children all terminal.",
+      "labels": []
+    },
+    {
+      "id": "work:d2dd1d20ed7d5a40f2605dd1",
+      "externalKey": "TCRN-CROSS-EPIC-117",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "旧文件迁移（方案部分 E）\n【INIT-048 Epic 收口】disposition=fixed; children=TCRN-CROSS-STORY-340,TCRN-CROSS-STORY-341; all child Stories status=done；生效证据=对应 STORY-333..348 独立正腿与最终九门复核；pg 代码按 Owner 裁定保留但未接线；外部发布未执行。",
+      "labels": []
+    },
+    {
+      "id": "work:f23620e6a90dbe0f756e3e8a",
+      "externalKey": "TCRN-CROSS-EPIC-124",
+      "kind": "Epic",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "platform-doctor 测试耗时定位\n\n【收口核销】STORY-353=fixed（work:c5d0407f08c788a6d9525baa，done）。retained=none；deferred=none；Epic children all terminal.",
+      "labels": []
+    },
+    {
+      "id": "work:100ee76ded89e7143666c8e4",
+      "externalKey": "TCRN-CROSS-STORY-336",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=检索工单的人与模型：列表可读、可按时间排序、可按主题过滤。目的锚=INIT-048 方案部分 B；Owner 2026-09-02 裁定四个字段一次性升版。符合性判据=四个字段可写可读可校验，只走一条迁移，且 AC 全绿。判定人=九门全绿。\n【Requirements】①`tcrn.work.v1` 一次性新增四个字段：`scopeDigest`、`title`、`createdAt`、`labels`。②`labels` 做成一级字段，不做成 `extensions` 项——`advisory:sprint` 走 ",
+      "labels": []
+    },
+    {
+      "id": "work:18ebf8d259271cef4d14488c",
+      "externalKey": "TCRN-CROSS-STORY-340",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=磁盘与未来的读取方：存证从一操作一文件迁为分段加索引。目的锚=INIT-048 方案部分 E；实测存证放大 20.4 倍。符合性判据=迁移后逐条全值回读通过，原文件删除后九门仍绿，AC 全绿。判定人=九门全绿。\n【Requirements】①把 8 个分区共 3,719 个存证文件迁入分段 NDJSON 加边车索引。②按六步安全序列执行：取基线、写新布局且原文件不动、逐条全值回读、跑九门、删除原文件",
+      "labels": []
+    },
+    {
+      "id": "work:3c1906de09196ad982b09e6f",
+      "externalKey": "TCRN-CROSS-STORY-352",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=读 verification-map 判断某项能力是否成立的人：判据能各自独立变红。目的锚=INIT-049 实测：83 个唯一命令承载 116 条判据，`verify:p3` 一条带 13 条。符合性判据=两组共用命令的判据各自独立，形态与 TCRN-CROSS-INC-257 一致，AC 全绿。判定人=九门全绿。\n【Requirements】①`pnpm verify:p3` 承载的 13 条判据拆为各自独立的正腿：每条有自己的 command 与自己的 expectedReasonCode。②`pnpm verify:p4:k",
+      "labels": []
+    },
+    {
+      "id": "work:3df677fb0e17208536e71ae9",
+      "externalKey": "TCRN-CROSS-STORY-334",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=按 key 点查记录的调用方：一次定位，不扫段。目的锚=INIT-048 方案部分 A；Kafka 的 `[offset].log` 配 `.index`／`.timeindex` 是同一形态。符合性判据=点查为 O(1)，主题过滤不复制正文，且 AC 全绿。判定人=九门全绿。\n【Requirements】①实现分段 NDJSON 存储：`<段号>.ndjson` 一行一记录按到达顺序追加。②每段配 `<段号>.idx`，内容为 key 到段号、偏移、长度的映射。③全局 `labels.idx` 为标",
+      "labels": []
+    },
+    {
+      "id": "work:44a11d22d0cfed222dfe3803",
+      "externalKey": "TCRN-CROSS-STORY-339",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=读 AGENTS.md 找归档区正本的人：清单与盘上一致。目的锚=INIT-048 方案部分 D；实测第六节漏了 18 个条目共 55MB。符合性判据=清单与盘上逐条一致，且有判据看住，AC 全绿。判定人=九门全绿。\n【Requirements】①补齐 `AGENTS.md` 第六节的归档区清单，使其与清理后的盘上实况逐条一致。②新增一条判据：归档区出现未在清单中声明的目录即红。③判据须能双向检出——清单多写一",
+      "labels": []
+    },
+    {
+      "id": "work:4593b3fd825c2d6d67f8d80b",
+      "externalKey": "TCRN-CROSS-STORY-346",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=读 ADR 判断生产轨是什么的人：文档与本轮裁定一致。目的锚=INIT-048 方案部分 G；Owner 2026-09-02 裁定 pg 本轮停用、MVP 仅本地实现。符合性判据=pg 不接线且 ADR 0004 状态与裁定一致，AC 全绿。判定人=九门全绿。\n【Requirements】①pg 后端本轮停用：`packages/pg-backend` 的 550 行代码、`pg:schema` 与 `pg:test` 两个脚本、devDependency `pg 8.22.0` 保留在仓内但不接线。②`docs/adr/0004-postgres-storage-ba",
+      "labels": []
+    },
+    {
+      "id": "work:59c84dc5d707bef94b107ef8",
+      "externalKey": "TCRN-CROSS-STORY-343",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=读 helper 与引擎文档的人：描述的布局与盘上一致。目的锚=INIT-048 方案部分 F；实测 helper 有 13 处点名具体布局。符合性判据=文档与实况一致且有判据看住，helper 发布物重新对齐，AC 全绿。判定人=九门全绿。\n【Requirements】①helper 的 13 处点名布局的句子改为新布局，分布在 `SKILL.md`、`workflow-operations.md`、`platform-layout.md`、`first-run-wizard.md`、`backup-elicitation.md`、`reason-codes.md`",
+      "labels": []
+    },
+    {
+      "id": "work:64f5aee2493f41540b06cafb",
+      "externalKey": "TCRN-CROSS-STORY-351",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=读测试判断某行为是否被验证的人：断言测的是行为，不是代码长什么样。目的锚=INIT-049 实测：测试里有 17 处对源码正文做 match 断言。符合性判据=16 处源码文本断言改为行为断言，1 处禁止构造扫描保留，AC 全绿。判定人=九门全绿。\n【Requirements】①把 16 处断言代码正文含有某字符串的测试改为断言该行为本身。②保留 `tests/p7-canonical-exchange.test.mjs` 第 565 行的禁止构造扫",
+      "labels": []
+    },
+    {
+      "id": "work:70e764d8890c5c508c2bb1ec",
+      "externalKey": "TCRN-CROSS-STORY-333",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=维护事件段的人：段尺寸均匀，不因单条记录大小波动而倾斜。目的锚=INIT-048 方案部分 A；Owner 2026-09-02 裁定段上限 16 MiB。符合性判据=段尺寸最大对最小收敛到 1.0 附近，且 AC 全绿。判定人=九门全绿。\n【Requirements】①事件段的滚动判据由条数改为已写字节数。②`workspace.json` 的 `segmentEventLimit` 保留字段名与位置，值改为字节；旧值按条数解释由 `storageVersion` 区分。③段上",
+      "labels": []
+    },
+    {
+      "id": "work:8001fb603410b8cb09d18e06",
+      "externalKey": "TCRN-CROSS-STORY-341",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=知识库磁盘：正文从一卡一文件迁为分段。目的锚=INIT-048 方案部分 E；实测 bodies 放大 12.5 倍。符合性判据=迁移后 `knowledge-validate` 通过且记录数不变，AC 全绿。判定人=九门全绿。\n【Requirements】①把 `knowledge/bodies` 的 37 个文件合并入分段布局。②store 声明 `disposable: true`，可整体重建；迁移后重算 `indexDigest`。③`knowledge/metadata` 保持按 id 单文件不动——它的访问形态是全目",
+      "labels": []
+    },
+    {
+      "id": "work:96709c1c8297546df0a26b1f",
+      "externalKey": "TCRN-CROSS-STORY-350",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=门红时定位问题的人：知道哪一条子门失败，不因失败即止而丢掉信息。目的锚=INIT-049；`push-gate` 失败即止，`verify:p1` 红时不会再跑 `guard-check`。符合性判据=红时能拿到与顺序全跑等价的定位信息，且不为此在绿时付重复代价，AC 全绿。判定人=九门全绿。\n【Requirements】①`push-gate` 保持失败即止，不改。②新增一条定位路径：顶层门红之后，可单独跑被包含的那几条来定位",
+      "labels": []
+    },
+    {
+      "id": "work:984922ef1dc17065322c7443",
+      "externalKey": "TCRN-CROSS-STORY-342",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=读 verification-map 判断某项能力是否成立的人：判据文本与实况一致。目的锚=INIT-048 方案部分 F；实测 32 条判据的 fixturePaths 命中要改的文件。符合性判据=受影响判据全部处理，两条语义改写显式记录，AC 全绿。判定人=九门全绿。\n【Requirements】①`fixturePaths` 指向 `workspace.ts`／`knowledge-core.ts`／`storage-backend`／`store-backend`／`artifact-lifecycle` 的 32 条判据，`fixtureDigest` 全部重算。",
+      "labels": []
+    },
+    {
+      "id": "work:98f0c3b5febe4baeef3c2dae",
+      "externalKey": "TCRN-CROSS-STORY-345",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=未来要换存储实现的人：本地分段是一个可选后端，不是唯一写死的实现。目的锚=INIT-048 方案部分 G；ADR 0004 已把文件后端定为本地模式轨。符合性判据=两种后端行为等价、可选择、未知取值须拒绝，AC 全绿。判定人=九门全绿。\n【Requirements】①`backendKind` 增加 `file-segmented` 取值，本轮只有 `file` 与 `file-segmented` 两个。②后端选择走新设置 `storage.backend`，`allowedValues` 为这两",
+      "labels": []
+    },
+    {
+      "id": "work:9c72660553f61faa1fc9c6f3",
+      "externalKey": "TCRN-CROSS-STORY-337",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=每一次读链的人：耗时进入常数量级，不随事件数线性增长。目的锚=INIT-048 方案部分 C；Owner 2026-09-02 裁定快照间隔 512 事件。符合性判据=读路径经快照加尾部重放，且快照损坏时红而非静默回退，AC 全绿。判定人=九门全绿。\n【Requirements】①每 N 个事件落一个状态快照，N 走新设置 `storage.snapshotEveryEvents`，默认 512。②读路径改为载入最新快照后只重放尾部。③快照写入用",
+      "labels": []
+    },
+    {
+      "id": "work:a07ca92d2dee421373f7590d",
+      "externalKey": "TCRN-CROSS-STORY-347",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=调参数的人：能走设置的不写死在代码里。目的锚=INIT-048 方案部分 H；Owner 2026-09-02 要求尽量解耦、能走变量不写死。符合性判据=六个新设置可读可改可校验且有默认值，AC 全绿。判定人=九门全绿。\n【Requirements】①新增六个设置：`storage.segmentBytes`（默认 16 MiB）、`storage.snapshotEveryEvents`（默认 512）、`storage.backend`（默认 `file-segmented`）、`injection.budgetBytes`（默认 32768）、`retr",
+      "labels": []
+    },
+    {
+      "id": "work:b5588392aea8b116072ae749",
+      "externalKey": "TCRN-CROSS-STORY-338",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=容器磁盘：归档区只留有理由留的东西。目的锚=INIT-048 方案部分 D；Owner 2026-09-02 批准清理范围。符合性判据=标为待裁的条目已清理，保留项逐条有理由，且 AC 全绿。判定人=九门全绿。\n【Requirements】①按方案部分 D 两张表清理标为待裁的条目，合计约 498MB。②`chain-snapshots` 保留最新一份 `chain-snapshot-20260816T132815656Z`，其余清理。③每次删除前先记录条目名、字节数与最后",
+      "labels": []
+    },
+    {
+      "id": "work:c5d0407f08c788a6d9525baa",
+      "externalKey": "TCRN-CROSS-STORY-353",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=跑测试的人：单个测试文件的耗时与它验证的对象相称。目的锚=INIT-049 实测：`platform-doctor` 门本身 4 秒，测它的文件 28.5 秒。符合性判据=查明 7 倍差距的成因并给出处置，AC 全绿。判定人=九门全绿。\n【Requirements】①测量 `tests/platform-doctor.test.mjs` 内部各段耗时，定位那 28.5 秒花在哪里。②若成因是重复起进程、重复建装置或不必要的真实分区扫描，按测得的结果削减。③",
+      "labels": []
+    },
+    {
+      "id": "work:d669087d3a0d3f4a9ef32a68",
+      "externalKey": "TCRN-CROSS-STORY-348",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=调整知识分档与容量的人：改名册不必改代码。目的锚=INIT-048 方案部分 H；实测出处门分档表是 `Object.freeze` 的代码常量。符合性判据=分档表外置且容量上限设置化，必须写死的项保持写死，AC 全绿。判定人=九门全绿。\n【Requirements】①`KNOWLEDGE_PROVENANCE_POLICY` 外置为 `scripts/policy/knowledge-provenance.json`，现值 `relaxedKinds: [fact, decision, summary]`、`strictKinds: [guide, reference]`。②`KNOWLEDG",
+      "labels": []
+    },
+    {
+      "id": "work:d871200b7c4f06492631d6ed",
+      "externalKey": "TCRN-CROSS-STORY-335",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=读链的人与磁盘：状态迁移不再整体重写未变化的正文。目的锚=INIT-048 方案部分 B；实测 1,212 次 `work.updated` 携带与上一版逐字节相同的 scope。符合性判据=`work.updated` 不再整体重写未变化的 extensions，且 AC 全绿。判定人=九门全绿。\n【Requirements】①新增 `scopeDigest` 字段，值为 `extensions` 的内容摘要。②`work.updated` 写入时比对摘要，未变化则只写引用，不重写正文。③事件重",
+      "labels": []
+    },
+    {
+      "id": "work:dc934ddde549c3c9d3310c59",
+      "externalKey": "TCRN-CROSS-STORY-349",
+      "kind": "Story",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "【Goal】为谁=每一次跑九门的人：不重复执行已被包含的门。目的锚=INIT-049 实测：九门顺序全跑 1,859 秒，其中 852 秒是重复执行。符合性判据=全绿一轮的墙钟时间由 1,859 秒降到 1,007 秒量级，且覆盖不减，AC 全绿。判定人=九门全绿。\n【Requirements】①识别门与门之间的包含关系：`scripts/push-gate.mjs` 第 305 至 309 行的循环内容是 `verify:p1`、`verify:p8`、`guard-check` 三条；helper 的 `scripts/push-gate.m",
+      "labels": []
+    },
+    {
+      "id": "work:0e68c50f4df69bbbe4de0d41",
+      "externalKey": "TCRN-CROSS-INC-262",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "111 条判据里 78 条没有红腿，且没有一道门要求判据必须带红腿。\n\n【为谁改变什么】为依赖判据判断能力是否成立的人：每条判据都能被证伪，而不是只有新写的那些。\n【目的锚】平台既有纪律「判据两侧必须能够不同」，恒真门是本平台三度付学费的缺陷形态。Owner 2026-09-02 裁定开单。\n【符合性判据】存在一道门要求每条判据带红腿；存量 78 条按批补齐或显式豁免并写明理由。判",
+      "labels": []
+    },
+    {
+      "id": "work:1a39ca96dc51ff762d79abda",
+      "externalKey": "TCRN-CROSS-INC-259",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "八个活分区全部停留在 storageVersion 1，字节滚动在活分区上从未生效；段上限 16 MiB 大于任一分区的事件总量。\n\n【为谁改变什么】为维护事件段的人：活分区真正按字节滚动，段尺寸倾斜收敛。\n【目的锚】TCRN-CROSS-INIT-048 的 STORY-333 只让新工作区用 storageVersion 2；活分区按设计保留计数滚动。Owner 2026-09-02 裁定迁移活分区并把段上限降到 4 MiB。\n【符合性判据】cross-project 的 storageVersion 为 ",
+      "labels": []
+    },
+    {
+      "id": "work:271d60f37f2045d7656e7b7a",
+      "externalKey": "TCRN-CROSS-INC-274",
+      "kind": "Incident",
+      "status": "active",
+      "title": "CI has been red for twelve days because nine tests reach outside the checkout, and the acceptance roster does not include CI",
+      "summary": null,
+      "scope": "【现象与证据】GitHub Actions 的 `P1 verification` 工作流在 main 上已连续红 12 天。最后一次绿是 `43b995d`（2026-08-23）；其后三次推送 `a548a94`(09-03)、`bf8583a`(09-04)、`fbefbd5`(09-04) 全红，三次失败签名一致。三个作业中 `verify` 与 `verify-pg` 红，`lessons` 绿。\n\n`verify` 作业红在 `pnpm verify:p1` 的 test 命令：pass 1356 / fail 9。九个失败全是同一根因——**测试伸到仓库检出之外**。检出位于 `CI 检出根",
+      "labels": [
+        "acceptance-roster",
+        "ci",
+        "sibling-dependency",
+        "test-hermeticity"
+      ]
+    },
+    {
+      "id": "work:34ed7cdcd4d767639dff49d8",
+      "externalKey": "TCRN-CROSS-INC-263",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "closeout-verify.mjs 存在但未接进任何门；仪式成本没有任何度量。\n\n【为谁改变什么】为收口的人：收口校验由门执行而不是靠记得跑；为判断仪式是否过重的人：有一个可比的数字。\n【目的锚】Owner 2026-09-02 裁定开单。收口校验与仪式成本度量是外部对规格驱动开发工具的两条批评所指。\n【符合性判据】closeout-verify 由门调起；仪式成本有一条可复算的度量。判定人=九门全绿。\n\n【现象",
+      "labels": []
+    },
+    {
+      "id": "work:4ce7f8ee9834ee88b22a8a60",
+      "externalKey": "TCRN-CROSS-INC-272",
+      "kind": "Incident",
+      "status": "planned",
+      "title": "trustArchive checks two of three consumer hosts and never reports an orphan install marker",
+      "summary": null,
+      "scope": "【现象与证据】platform-doctor 的 trustArchive 腿判绿，输出 `consumerRoots: 3`。同一时刻实测 `~/.tcrn-workflow/` 下有四份安装标记，其中两份从不被版本核对：\n\n| 标记 | version | archiveSha256 | verifiedAt | 是否被核对 |\n| installed-copy-claude.json | v1.0.1 | 2c7de5728281 | 2026-09-02 | 是 |\n| installed-copy-codex.json | v1.0.1 | 2c7de5728281 | 2026-09-02 | 是 |\n| installed-copy-agents.json | v1.0.1 | 2c7de5728281 | 2026-09-02 | 否 |\n| installed-copy-claude-h",
+      "labels": [
+        "drift",
+        "install-marker",
+        "platform-doctor",
+        "trust-archive"
+      ]
+    },
+    {
+      "id": "work:4e25273fbda020377837d50e",
+      "externalKey": "TCRN-CROSS-INC-277",
+      "kind": "Incident",
+      "status": "planned",
+      "title": "two pg-only branches became unreachable when the PostgreSQL backend was removed and were deliberately left in place",
+      "summary": null,
+      "scope": "【现象】TCRN-CROSS-INC-275 移除 PostgreSQL 后端后，两处只在 storage=\"pg\" 时才进入的分支变为不可达，仍留在源码中：\n\n一、packages/core/src/storage-home.ts:189-201 的 sealStorageHomeDeclaration。其守卫是 declaration.storage !== \"pg\" 即返回，故整个函数只服务 pg。:197-201 的回读验证是双重不可达——readStorageHomeDeclaration 现在会先抛 STORAGE_HOME_BACKEND_RETIRED。\n\n二、packages/core/src/workspace.ts:3391-3395 的 WORKSPACE_STORAGE_RELOC",
+      "labels": [
+        "dead-code",
+        "pg-retirement",
+        "residue"
+      ]
+    },
+    {
+      "id": "work:50ddcb9915243796e7ec369a",
+      "externalKey": "TCRN-CROSS-INC-269",
+      "kind": "Incident",
+      "status": "done",
+      "title": "work-annotate writes corrupt event when only top-level fields change",
+      "summary": null,
+      "scope": "【现象与证据】work-annotate 只改 --title 或 --labels 而不改任何 advisory 字段时，写入返回完整收据 WORKSPACE_COMMAND_COMPLETED，此后该工作区的每一次读取都是 WORKSPACE_EVENT_CORRUPT «annotation changed no advisory field»。status、work-list、export 全部失败，recover 同样失败——指定的修复路径对这个损坏无效。\n\n可复跑复核（一次性工作区，不碰活链）：\ninit --workspace <S>/ws --framework <引擎仓> --transient <S>/transient",
+      "labels": [
+        "annotation",
+        "chain-recovery",
+        "engine-bug"
+      ]
+    },
+    {
+      "id": "work:63e2d326cc8510b6fba84152",
+      "externalKey": "TCRN-CROSS-INC-265",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "AGENTS.md 第零节规则 7 的 400 字上限没有推导依据，与规则 3 职能重叠。\n\n【为谁改变什么】为 Owner：行文密度由定义反模式的规则 3 管，去掉一个无依据的数字上限。\n【目的锚】Owner 2026-09-02 裁定删除规则 7，保留规则 3。Anthropic 的 Prompting Claude Fable 5.1 指南在 Writing density 一节把治密度的手段定为定义反模式，规则 3 已经是这个手段。\n【符合性判据】第零节不再含规则 7；Stop hook 不再检",
+      "labels": []
+    },
+    {
+      "id": "work:6522ee874e2bb4e1dbd12b94",
+      "externalKey": "TCRN-CROSS-INC-267",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "INIT049-INC-266 判据在九门里恒绿，GWT3 的 stdout 断言恒真，红腿证明的不是它声称的行为；同时 INIT-049 的收益百分比取自两个相差 29% 的样本中较慢的一个。\n\n【为谁改变什么】为看判据结论的人：INIT049-INC-266 变绿意味着 push-gate 的阶段计时真的成立，而不是证据文件恰好不在；为读 INIT-049 收益的人：那个百分比有已知精度，不是一次抽样。\n【目的锚】平台既有纪律「判据两侧必须能够",
+      "labels": []
+    },
+    {
+      "id": "work:8676450d8ff95e5de16301bc",
+      "externalKey": "TCRN-CROSS-INC-258",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "install-manifest 仍要求两份已停用备份机制的收据，归档清理删除它们后 platform-doctor 退出码变为 1。\n\n【为谁改变什么】为跑 platform-doctor 的人：九门里的 platform-layout 恢复只剩已接受例外，退出码可判。\n【目的锚】Owner 2026-08-15 裁定两层备份皆停；Owner 2026-09-02 裁定从 install-manifest 移除这两项而非加例外。TCRN-CROSS-INIT-048 的 STORY-338 执行归档清理后暴露此项。\n【符合性判据】platform-doctor 的",
+      "labels": []
+    },
+    {
+      "id": "work:880989c4a87338c8294b7697",
+      "externalKey": "TCRN-CROSS-INC-275",
+      "kind": "Incident",
+      "status": "active",
+      "title": "the PG backend job has been red since the same commit that broke verify, and its tests run nowhere else",
+      "summary": null,
+      "scope": "【本单前提已被 Owner 推翻并重写，2026-09-04】原稿把问题写成「PG 后端等价性测试坏了，要修」，并据 ADR 0004「保留代码与测试工具」主张不能删。Owner 指出该推理的前提错误：**测试的价值来自它测的东西存在**。PG 在本产品中不存在，测它因此不具任何价值——ADR 保留的是一份不测任何东西的工具。原稿保留在下方以留痕，修复项已整体替换。\n\n【现象与证据】两个已声明剥离的子",
+      "labels": [
+        "ci",
+        "orphaned-tests",
+        "pg-backend",
+        "workspace-materialization"
+      ]
+    },
+    {
+      "id": "work:9b44ede90160b6212d0f2e46",
+      "externalKey": "TCRN-CROSS-INC-261",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "Story 的验收判据与 verification-map 之间没有机器链接：一条 Story 可以写五条 GWT，然后在九门全绿时落 done，而九门里没有任何一条测试过这五条 GWT。\n\n【为谁改变什么】为读单据判断某项能力是否被验证的人：从 Story 能查到验证它的判据，反向亦可。\n【目的锚】外部对规格驱动开发工具的核心批评是「没有验证回路证明产物符合规格」。TCRN 今天把这个问题从代码层挪到了判据层，并未",
+      "labels": []
+    },
+    {
+      "id": "work:a206cf80b233d3c310e07ec7",
+      "externalKey": "TCRN-CROSS-INC-270",
+      "kind": "Incident",
+      "status": "done",
+      "title": "engineAlignment passes on version strings while the two engine copies differ by five verbs",
+      "summary": null,
+      "scope": "【现象与证据】platform-doctor 的 engineAlignment 腿判绿，输出 copies={installed:\"1.0.1\", worktree:\"1.0.1\"}。同一时刻两份副本的命令目录实测不同：\n\n| 副本 | 动词数 | work-annotate 标志数 |\n| 已安装 ~/.tcrn-workflow/tcrn-workflow | 132 | 9 |\n| 工作树 TCRN Platform/tcrn-workflow | 137 | 11 |\n\n工作树独有 5 个动词：attestation-migrate、knowledge-bodies-migrate、knowledge-source-check、snapshot-replay-rebuild、work-draft。已安装是严格子集。2026-",
+      "labels": [
+        "engine-copies",
+        "gate-weakness",
+        "platform-doctor"
+      ]
+    },
+    {
+      "id": "work:aec30664675080bad256c51c",
+      "externalKey": "TCRN-CROSS-INC-273",
+      "kind": "Incident",
+      "status": "planned",
+      "title": "the vulnerabilities gate is an offline denylist and reads as full coverage while four high advisories stand",
+      "summary": null,
+      "scope": "【现象与证据】2026-09-04 推送 tcrn-workflow 时 GitHub 回报 `4 vulnerabilities (4 high)`。同一时刻本地 `vulnerabilities` 门判绿，reasonCode=VULNERABILITY_POLICY_VERIFIED。\n\n实测四条告警：全部是 `npm/fast-uri`，四条 high，统一 `first_patched_version=3.1.6`。依赖路径 `fast-uri@3.1.5 ← ajv@8.20.0 ← tcrn-workflow(devDependencies)`。本仓 `dependencies: {}`，零运行时依赖，因此该包不随发布产物分发，暴露面限于开发与 CI。\n\n复核命令",
+      "labels": [
+        "dependency",
+        "offline-boundary",
+        "readability",
+        "vulnerabilities"
+      ]
+    },
+    {
+      "id": "work:c7990fb95ffca94ae6696542",
+      "externalKey": "TCRN-CROSS-INC-268",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "push-gate 阶段计时的 13 个行号全部失准，代码与测试各存一份同样错的手写副本，所以互相对得上、与真实源码对不上。\n\n【为谁改变什么】为看逐段耗时去定位慢阶段的人：行号要么指向真实位置，要么不存在，不给一组指向注释和空行的坐标。\n【目的锚】TCRN-CROSS-INC-266 加这个字段就是为了定位慢在哪一段（其 GWT2 原文要求「该阶段的名字与 push-gate.mjs 的行号对得上」）。这是同一",
+      "labels": []
+    },
+    {
+      "id": "work:e1abb89d1e4f80202409d884",
+      "externalKey": "TCRN-CROSS-INC-264",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "派工书模板缺两条 Anthropic Fable 5.1 提示指南点名有效的指令：自主运行声明与范围克制。\n\n【为谁改变什么】为接派工的执行方：不因等不到回答而停摆，也不把任务范围之外的东西一并做掉。\n【目的锚】Anthropic 的 Prompting Claude Fable 5.1 指南两节：Finish the whole task 与 Keep changes and tests to what the task asks for。Owner 2026-09-02 裁定加入。\n【符合性判据】dispatch-readiness-convention 的执行简报模板含",
+      "labels": []
+    },
+    {
+      "id": "work:e5576585d38dc293304157ee",
+      "externalKey": "TCRN-CROSS-INC-276",
+      "kind": "Incident",
+      "status": "planned",
+      "title": "the red-leg gate accepts any unique non-empty string, so 58 claims name tests that do not exist",
+      "summary": null,
+      "scope": "【现象】verification-map.yaml 的 124 条判据中，61 条的 redLeg.test 命名了树里不存在的测试。其中 56 条是同一模式的占位串 \"INC-262 red-leg probe for <判据ID>\"；这些字符串在 tests/ 下无对应 test(\"...\"), 在 scripts/policy/guard-registry.json 中也无对应条目——守卫名册 63 条，ID 体系为 BR-01-… / CI-… / CQ-…，与判据 ID 交集为零。实测：56 条占位判据命中守卫名册 0 条。\n\n【根因】scripts/verification-red-legs.mjs ",
+      "labels": [
+        "gate-semantics",
+        "red-leg",
+        "verification-map"
+      ]
+    },
+    {
+      "id": "work:ebd74a8aa93b1af3f8701bb9",
+      "externalKey": "TCRN-CROSS-INC-260",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "快照落地后读取耗时仍与事件数线性相关，斜率只减半，未进入常数量级。\n\n【为谁改变什么】为每一次读链的人：耗时与事件数脱钩，而不是斜率减半。\n【目的锚】TCRN-CROSS-INIT-048 的 STORY-337 GWT1 要求耗时进入常数量级；实测未达成。Owner 2026-09-02 同意优化。\n【符合性判据】读取耗时对事件数的斜率显著低于当前 75 微秒每事件，且 AC 全绿。判定人=九门全绿。\n\n【现象】2026-09-02 实测五",
+      "labels": []
+    },
+    {
+      "id": "work:f20dc6a0f865221c94eb1c0b",
+      "externalKey": "TCRN-CROSS-INC-271",
+      "kind": "Incident",
+      "status": "planned",
+      "title": "README badges other than the version badge are derived from nothing and checked by nothing",
+      "summary": null,
+      "scope": "【现象与证据】五份 README 第 11 行的徽章 `proven claims-122` 与同文件正文行 `Verified claims: 124` 不一致。122 是三次判据变更之前的数字：INC-269 把判据从 122 抬到 123，INC-270 抬到 124，两次都没动徽章，两次 push-gate 都绿。2026-09-04 实测五份徽章一致为 122、五份正文一致为 124。\n\n复核命令（只读）：`grep -o \"proven%20claims-[0-9]*\" README*.md` 与 `grep -o \"Verified claims: [0-9]*\" README*.md`，比对二者；再对 `node",
+      "labels": [
+        "badge",
+        "drift",
+        "push-gate",
+        "readme"
+      ]
+    },
+    {
+      "id": "work:f3e5eff0dda8a695a0c4d6f9",
+      "externalKey": "TCRN-CROSS-INC-266",
+      "kind": "Incident",
+      "status": "done",
+      "title": null,
+      "summary": null,
+      "scope": "engine-release 门在 INIT-049 后由 463 秒涨到 569 秒，其中 101 秒不落在任何一个子门上。\n\n【为谁改变什么】为等门跑完的人：engine-release 的耗时能逐段归因，涨了 106 秒时知道涨在哪一段。\n【目的锚】INIT-049 的目的是缩短门的运行时长。实测总节省 744 秒（40.0%），方案投影 852 秒（45.8%），差额全部来自 engine-release 这 106 秒。成因不明的性能变化会再次发生，且下一次同样无法定位。Owner 202",
+      "labels": []
+    }
+  ]
+}

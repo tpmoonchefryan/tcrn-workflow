@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "7ab221f891cbe43e4a9d6ccec960c9ba7c61ec228d19876e521c7430d2a42baf",
+      "fixtureDigest": "54ec6b63d167f2b54cc833a8f127881cddf7eecb8f86b4f4ca5bcdbece11bd55",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -56,7 +56,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "1918247c48ba42074fdeacfbeafe9dbaadb0fabffacff6a06142edc1183b031b",
+      "fixtureDigest": "1680ee2d2b163f22fbcc847082a81f49ce35dec651123c62ec08efaccd514918",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -94,7 +94,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "3f1e62de0aa3324935808c7c614c8461a7c676a5cb7fcbb2f407bf02e05f8079",
+      "fixtureDigest": "63cac2066825a83e23ced0841123e58b90cb546a8781a4e926297d77461d3e8f",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -140,7 +140,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "fea73a04df20d3faefbbe3f8a3ab8825a70e0e91d3f4d711a87307f058086be1",
+      "fixtureDigest": "a7102c0c8be5c969d04e05ffbaba1c371ff907961f89e6f69e5ad8cffa984837",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "bc5e36f4a2a7ebf8ae2c39300a239831b2752e9fe912529f06dbf364fef4b1f0",
+      "fixtureDigest": "b95abc874205db2b8fb852c161bd6990f96db3e924773840e644c085bdcd750d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -211,7 +211,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "975e1f3bc44132ad8e25ccf5e8f6de54b0a9a2a71d9ba32e93f49d68829cd799",
+      "fixtureDigest": "94a7c99a654c534455ceb6e8e9bdeed7fe53ac0f540efbcb1041fc8de838de01",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -261,7 +261,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "b6208f525e2dab77b9822a8c7ba568a7b36c17895cec4cdb66ca35dbd40a868d",
+      "fixtureDigest": "9fb7690ee69b9a687fe5d5a31107d08eca69cd8663e2699fcc1cdae5598e3e2e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -279,6 +279,45 @@
         "expectedReasonCode": "INC262_RED_LEG_REQUIRED"
       },
       "requirement": 11
+    },
+    {
+      "id": "P1-RETRIEVAL-EVAL",
+      "phase": "P1",
+      "category": "framework-hygiene",
+      "status": "implemented",
+      "subject": "The shipped recall core, run over a content-addressed corpus, meets the measured hit-rate, cross-language and real-prompt precision floors on both the cards-only and the mixed index.",
+      "command": "pnpm verify:retrieval-eval",
+      "fixturePaths": [
+        "scripts/policy/retrieval-eval-thresholds.json",
+        "scripts/retrieval-eval.mjs",
+        "tests/fixtures/retrieval-eval/card-expansions.json",
+        "tests/fixtures/retrieval-eval/cards-compact.json",
+        "tests/fixtures/retrieval-eval/corpus-snapshot.json",
+        "tests/fixtures/retrieval-eval/gold-labels.json",
+        "tests/fixtures/retrieval-eval/judge-sheet.json",
+        "tests/fixtures/retrieval-eval/minutes-compact.json",
+        "tests/fixtures/retrieval-eval/synthetic-queries.json",
+        "tests/fixtures/retrieval-eval/translations-sonnet.json",
+        "tests/fixtures/retrieval-eval/work-compact.json"
+      ],
+      "fixtureDigest": "a8eb51122b727ea3850938ab786e950d3428aefd35a6d4c6eb6a07837a7380af",
+      "environment": {
+        "node": "24.16.0",
+        "pnpm": "11.3.0",
+        "network": "process-guarded-offline"
+      },
+      "expectedExit": 0,
+      "expectedReasonCode": "RETRIEVAL_EVAL_VERIFIED",
+      "evidencePath": "dist/evidence/p1/retrieval-eval.json",
+      "invalidationTriggers": [
+        "Corpus bytes, recall scoring, tokenizer, selector threshold, or evaluation threshold changes"
+      ],
+      "redLeg": {
+        "mutation": "Disable CJK bigram segmentation in packages/core/src/recall.ts so the scorer stops reaching the corpus",
+        "test": "retrieval-eval threshold red-leg",
+        "expectedReasonCode": "RETRIEVAL_EVAL_THRESHOLD_FAILED"
+      },
+      "requirement": 2
     }
   ]
 }

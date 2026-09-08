@@ -1,0 +1,2132 @@
+{
+  "schemaVersion": "tcrn.retrieval-eval-corpus.v1",
+  "kind": "minutes",
+  "at": "2026-09-04T15:08:34Z",
+  "total": 136,
+  "records": [
+    {
+      "id": "minutes:031546d33cac5b4541d1cd0f",
+      "conferenceTitle": "E05 实现产出：work-annotate 落地验证绿，dogfood 延后至发布后",
+      "conferenceType": "verification",
+      "summary": "work-annotate（Scope-on-record）实现完成并验证绿：核心加式操作 work.annotated（非 work.updated，因迁移表无自环）+ 回放守卫防夹带 + CLI 动词 + work-show advisory 读面；6 新 core 测+catalog 金样+全套 584 pass（6 offline 仅裸跑环境）+ 五门绿 + scratch CLI 端到端自证。安全裁定：work.annotated 是新操作，据 WSD-1 会使活链对更旧二进制不可读，故活链 EPIC-005 dogfood 与 skill 成文延后至发布+升级后；scratch e2e 代证。发布属对外发布留 Owner。",
+      "decisions": [
+        "implemented-work.annotated-as-additive-op-storageversion-stays-1-transition-hotpath-untouched",
+        "replay-guard-enforces-advisory-only-delta-status-unchanged-anti-smuggling-proven-by-3-forge-tests",
+        "cli-work-annotate-and-work-show-advisory-readsurface-shipped-and-e2e-proven",
+        "verification-green-584-pass-6-offline-env-only-plus-format-source-privacy-map-proof-gates",
+        "dogfood-on-live-chain-deferred-post-release-because-new-op-would-brick-installed-v0.2.0-per-WSD-1"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:03fc6ce5eb584b528a6a2b6d",
+      "conferenceTitle": "INIT-006 立项+分解:交付节奏公约(单次收官发布)",
+      "conferenceType": "strategy",
+      "summary": "Owner裁定交付节奏公约(单次收官发布,反-D6默认)并立TCRN-CROSS-INIT-006;分解2 Epic/4 Story全planned;执行不启动,启动权在Owner;INIT挂Owner验收门",
+      "decisions": [
+        "D1:交付节奏公约八条(整合分支/逐Epic本地验收后推分支/收官单次合并main即唯一对外发布与唯一必停/例外须handoff显式裁定/敏感INIT纯本地/OneDrive与worktree保真仪式)经Owner逐字裁可",
+        "立为常规默认",
+        "取代D6式逐Epic上生产默认",
+        "D2:立TCRN-CROSS-INIT-006并按Mara树分解:EPIC-011公约固化(STORY-034公约正文/STORY-035模板段)",
+        "EPIC-012公约传导(STORY-036知识卡/STORY-037helper队列)",
+        "全planned",
+        "D3:Owner明令分解后暂停",
+        "执行启动权保留于Owner",
+        "任何子项不得转active",
+        "D4:INIT-006本体挂owner_intent_required门:公约文本经Owner验收后方可done"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:041e949a543e965ebbf447ef",
+      "conferenceTitle": "Chain restart under key convention v3",
+      "conferenceType": "architecture",
+      "summary": "Day-one chains restarted under key convention v3; old chains archived whole",
+      "decisions": [
+        "restart-adopted;old-cross-063a89bd33cd3e68f3ad5724-superseded-by-7732a51de4c38afb83bb77cf;old-ds-ab1f12eda0c52209510fe336-superseded-by-e7386bdcff8b3407e43ece51;all-new-keys-platform-partition-prefixed"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:04f08f6d1e45c38fc96e49b2",
+      "conferenceTitle": "S026 引擎岔路裁定:选 B 全做",
+      "conferenceType": "strategy",
+      "summary": "Owner 裁定选 B:内容激活+引擎余量+发 v0.3.2。EPIC-007 全做,v0.3.2 捆 INIT-004 Incident CLI+引擎,candidate.24 重钉。S026 岔路结清。",
+      "decisions": [
+        "选 B 全树:EPIC-007 引擎余量 S023-025 一并做;v0.3.2 捆 INIT-004 Incident CLI+引擎改动;helper candidate.24 重钉;接受安全上限红证与发布周期成本"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:058c7b5de0156fae79720430",
+      "conferenceTitle": "EPIC-002 开工：gate-v1 身份强制点裁定与 Story 职责表",
+      "conferenceType": "architecture",
+      "summary": "扇出后读源立到新事实：事件哈希无密钥，尾部追加伪造对所有事件类型今天已然成立。据此证伪标记门控回放的首要收益（伪造者同样能补上回放所查条目，其反驳隐含隐晦即安全），而致砖代价属实。裁定采 verb-only，并将授权决策记入 gate extensions 供审计、回放只校验形状不重读文件。成文边界写三句。E02 六 Story 职责表随附。",
+      "decisions": [
+        "新事实 canonicalSha256 是无密钥纯 sha256（全链路无 HMAC）：任何有事件日志写权限者可读 head、构造 payload、自算自洽 hash 在尾部追加回放全绿的事件——对今天所有事件类型已然成立，非 gate-v1 引入",
+        "据此证伪 opus 所举手工伪造 gate.updated 在标记门控回放下同样不被挡住：伪造者既能追加事件亦能追加回放所查的身份条目（回放所查每项皆由同机公开数据可导出）；其立场隐含前提是伪造者不知格式，属隐晦即安全",
+        "裁定 采 (a) verb-only：强制点在 gate-transition 现场",
+        "修正 授权决策记入 gate 事件 extensions（执行 actor＋当时在册 authority 文件 digest）；回放只校验该条目形状精确（与既有 locator extensions 同一纪律），绝不重读外部文件、绝不把文件在场当作重放前提",
+        "驳回理由 (b) 首要收益是幻觉而致砖代价是实的：正常运维会让外部文件合法缺席，(b) 下整链不可读且与身份无关的历史一并陪葬",
+        "成文边界三句 交付 authorization 非 authentication／回放不防尾部追加伪造／任何非密码学的回放检查都不可能防它——闭合它属外部锚点程序不属 gate-v1",
+        "职责表 STORY-001 身份权威文件 schema 与 pins 轨读取器（复用 readAuthorityFile；含 actor→outcome-class 许可表）",
+        "职责表 STORY-002 gate-transition 消费该权威：现场核验执行 actor 是否被许可关此 outcome-class 的门",
+        "职责表 STORY-003 授权决策入 extensions 并令回放校验其形状精确（不重读文件）",
+        "职责表 STORY-004 负例证明：未被许可身份现场被拒且零链写入；无文件或 digest 不符现场被拒",
+        "职责表 STORY-005 兼容性证明：三条生产链原字节回放全绿；含身份门的链在完全无 authority 文件的机器上回放成功",
+        "职责表 STORY-006 边界证明与文档：以测试证明绕过 verb 的拼接事件回放予以接受（边界不靠口头承认）；成文三句并审查对外措辞不得写防篡改或审计轨迹",
+        "执行序 001→002→003→004／005 并行→006 收口；Subtask 各 Story 开工时按需裁"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:0969632d647cc49608813bc8",
+      "conferenceTitle": "INIT-028 二轮整改验收:功能与量具皆真,残留三条 P1",
+      "conferenceType": "verification",
+      "summary": "INIT-028 二轮整改(EPIC-081)验收:建议通过。主线一手取证(隔离副本跑元判据五条)与两路独立对抗复核(各自独立副本,含真 clean checkout 无 DS 仓环境)结论一致;复核报告=docs/reports/init-028-design/VERIFICATION-2026-08-13-round3-fable.md。Owner 2026-08-13 接受判定并指示三条 P1 作收尾小批派工。",
+      "decisions": [
+        "二轮整改验收=建议通过。功能与量具皆真;EPIC-081 七张维持 pending-owner-acceptance 待 Owner 最终收口",
+        "元判据五条经主线在隔离副本亲手复现全部通过;门另将元判据做成常驻自变异(四型)",
+        "超出 scope 要求",
+        "三门在真 CI 条件下有牙:i18n 八腿真评估、覆盖守恒签入式基线、断言损失死分支真修、CI 步骤对健康树绿 21/21",
+        "i18n 净好于 HEAD 基线:整表等于英文计数 ja/ko/fr 各 1、zh-CN 2(HEAD 为 3/3/13/4);13 个丢失键四语言全部找回",
+        "状态面真实性四条 CONFIRMED 且有反向对照;engineVersion 经变异编译常量证明真读引擎;引擎守卫 285 与 288 独立可触发",
+        "残留三条 P1 列为收尾小批:INC-155 基线覆盖完整性(本批新建六个测试文件对门不可见",
+        "门保持绿可删 33 tests 与 163 assertions);INC-156 证据回读真实性(INC-140 腿名错四分之三而 INC-153 称已修正;INC-153 自身回读不可复现)",
+        "证据字面精确度连续三轮同类问题且本轮出现在纠错单自身;INC-156 须给出机械校验方案而非仅改文字",
+        "主线自认:INC-154 单据中关于 DESIGN.md 含家目录路径与内网标识的前提不实(实测均为零命中)",
+        "已于 v3186 补更正注记;执行方扫描结论正确",
+        "0.11.15 发版、helper c40、push/tag/deploy 继续停放"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:0a8df40ebda0b7dfc966937c",
+      "conferenceTitle": "CONF-045 INIT-012 治理约束校准:问题清单收集与分解形状",
+      "conferenceType": "strategy",
+      "summary": "INIT-012 分解裁定:P1-P10 按交付面分五 Epic(EPIC-029..033)十五 Story(STORY-091..105);OWNER-NOW 四项批量前置;INIT 保持 planned 不推进",
+      "decisions": [
+        "分解轴=交付面五层(公约/载荷批次/仪器/MCP 可测性/引擎候选);被拒=逐 P 一 Epic(过碎且 P 项共享交付物)",
+        "EPIC-029 公约固化 P3/P4/P5/P7/P9 五 Story(STORY-091..095)",
+        "EPIC-030 helper candidate.27 单批次 P2/P6+载荷落点四 Story(STORY-096..099);dogfood P2",
+        "EPIC-031 仪器速赢 P8 两 Story(STORY-100..101)",
+        "EPIC-032 MCP 采用+P10 三 Story(STORY-102..104);接线序 Claude 先行",
+        "EPIC-033 引擎候选 P1 单 Story(STORY-105);实施 CONDITIONAL 不预建",
+        "决策清单=OWNER-NOW 四项(S095 逐字立场/S103 L2.5 授权额度帽/S100+S102 配置 diff 批准/S099 发布停点形态)+CONDITIONAL 三项(P1 实施待裁/S102 依赖 S099/L2.5 运行待授权)+其余 AGENT 直跑"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:0ae418738c56b78d03a25e43",
+      "conferenceTitle": "MIN-054 执行形态修订:执行层受限链写权",
+      "conferenceType": "strategy",
+      "summary": "执行形态:synthesis-only(Owner 2026-08-05 对话明示裁定之落链)。修订 MIN-054:执行层获受限链写权(仅 ceremony 通道、仅 work-transition/work-annotate、仅 STORY-137..143、仅 cross 分区);done 仍由审查层核验后置;理由=拆单首要功能是进度实时落链与压缩后恢复,核验非垄断书写;边界(authority/gate/knowledge/其它分区/用户级配置/VM 其它写面)不变。STORY-137..143 已同批预建为执行层进度落链对象。",
+      "decisions": [
+        "修订 TCRN-CROSS-MIN-054「Fable 5 终审并唯一执链写」条:执行层(agent:deepseek-v4-flash)获受限链写权",
+        "通道唯一 deploy/aos-local-client/ceremony.mjs 且 dry-run 先行;动词仅 work-transition 与 work-annotate;对象仅 TCRN-CROSS-STORY-137..143;分区仅 cross-project",
+        "语义:开工置 active;进度与上下文压缩前 annotate scope(全量重写式、保留四要素摘要);自检完成记「待核验」;done 仅由审查层在核验层复核通过后置",
+        "理由:拆单首要功能=执行进度实时落链与压缩后恢复(Owner 2026-08-05);核验层复核证据而非垄断书写;MIN-054「actor 按层署名」本已预设执行层署名记录",
+        "边界不变:authority 动词族、gate、knowledge、其它分区、用户级配置与 VM 其它写面对执行层仍禁;违规写入按事件只增以更正记录处置"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:0df5d94a5312d1287a6f25e4",
+      "conferenceTitle": "INIT-022 钉死前批验收会(重开,锚定承门 Epic):GATE-004/005 关闭、GATE-006 保持 pending",
+      "conferenceType": "verification",
+      "summary": "INIT-022 验收会(单上下文,立场为主线程转录非分头独立)。本会取代 TCRN-CROSS-MIN-066:前会仅锚 INIT-022,不含承门的 EPIC-064/065,故 gate-transition 判 WORKSPACE_GATE_EVIDENCE_UNRESOLVED(判据 workspace.ts resolveGateEvidence 要求会议 linkedWorkIds 含 gate.workId);前会记录按只增不改保留,内容与本会一致。独立复量 Codex 五条主张全部属实(链读面/git ls-remote 全 sha/tag 日期/自跑测试 78 绿/复量时序);关 GATE-004(口径A)与 GATE-005,GATE-006 因门户配置面未连引擎保持 pending 并另立补单;park 推送清单继续 park。",
+      "decisions": [
+        "GATE-005 纸面批关闭:S216/S217 判据全绿",
+        "CC @import 装载腿由本验收会话当场作证",
+        "GATE-004 引擎批关闭采口径A:接受源仓已证+部署位生效改列重钉列车验收项",
+        "GATE-006 门户轨不关:S218 配置面UI未连引擎属部分达标",
+        "另立补接线单",
+        "七单推 done:S216/S217/S212/S213/S214/S215/S219;S218 维持 pending-owner-acceptance",
+        "park 推送清单本次不解禁",
+        "三仓与门户继续未推送",
+        "交接模板缺陷登记:park清单与生效证据判据的交集须在派工前显式处置"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:0e898bc3a3f572807c3d915d",
+      "conferenceTitle": "MIN-055 语义修订:整单归执行层与事后审计制",
+      "conferenceType": "strategy",
+      "summary": "执行形态:synthesis-only(Owner 2026-08-05 裁定落链)。修订 MIN-055 语义条:派发单整单归执行层(transition 白名单扩为 ready→active→done,自检+证据包齐即关);核验层转事后审计,缺陷另立 INC 追加不回滚 done;S1.3/S1.4/S12.3 判定草案/R2 实跑随单移交;通道、动词、对象白名单与各项禁区不变。",
+      "decisions": [
+        "修订 TCRN-CROSS-MIN-055 语义条:派发单据整单归执行层——自检与证据包齐备后由执行层自行置 done;transition 白名单扩为 ready→active→done",
+        "核验层(Opus 5)转为事后审计:独立重跑证据包;发现缺陷不回滚 done 而另立 INC 或更正记录追加(事件只增不改)",
+        "原保留细项随单归执行层:S1.3 红测(宿主允许时)、S1.4 chflags、S12.3 基准判定草案、R2 ship-web 实跑(仅经脚本自身双向账本验证)",
+        "不变:通道唯一 ceremony 且 dry-run 先行;动词仅 work-transition 与 work-annotate;对象仅派发单;authority 动词族、gate、knowledge、其它分区、用户级配置与 VM 其它写面仍禁;S4 与 D6 类 Owner 门不移交"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:12dd252eb5dc825fde9b037f",
+      "conferenceTitle": "INIT-018 散文到门 kickoff:方向裁定·执行形态·仪器名册",
+      "conferenceType": "strategy",
+      "summary": "执行形态:synthesis-only(单上下文;Owner 已于 2026-08-04 对话逐项裁定,本纪要为其落链)。INIT-018 kickoff:立 INIT+六 EPIC(041-046);三层流水线获批(DeepSeek v4 Flash 执行/Opus 5 独立重跑核验/Fable 5 终审唯一执链写);D1-D7 全裁;DeepSeek Harness 内测不申请;拆单遵 MIN-053 两层制、子任务入派工简报不建链记录;仪器名册登记含两缺口(promptfoo 待 S5 入册、执行宿主待定)。草案 v2 sha256=31427aa1bab0d5f7a9d8cf4f98508d6797cc9ed6924033ab9fcfa669ddb6a304。",
+      "decisions": [
+        "D1 parity 门白名单绿起步、新漂移红;S4 完成后白名单须收缩",
+        "D2 控制树写保护=本机 deny 硬门+SSH 启发式两阶段(observe→enforce)、缺失信息 fail toward 不拦",
+        "D3 回放优化仅在 S12 基准超阈值(常用只读动词>2s)时启动;热路径信 snapshot+后台全链复验+不一致 fail-closed;须 ADR",
+        "D4 观测选型预授权执行层 spike 依运营成本裁;VM 部署沿 CONF-007 姿势",
+        "D5 行为回归确定性子集每 push;含模型调用全量挂 release+手动触发",
+        "D6 用户级配置编辑原则批准;执行时逐项列 diff 各设 owner_intent_required 门",
+        "D7 隔离审议试点做;绑 S16.3 或 S13 审议",
+        "DeepSeek Harness 内测不申请",
+        "执行形态=三层流水线:DeepSeek v4 Flash 执行、Opus 5 独立重跑证据核验、Fable 5 终审并唯一执链写;actor 按层署名",
+        "拆单遵 MIN-053 两层制:链上记录级(INIT+EPIC 今批、Story 随 sprint 批)、46 子任务以派工执行简报承载、缺四要素不派工",
+        "仪器名册登记:引擎 commands 名录与测试套件、VM 引擎 v0.10.2、verify-installed-copy、stop-pact、codegraph 三仓、GitHub API;缺口如实登记:promptfoo 待 S5 入册、执行宿主待定"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:14d808ae0b0a5826c3850c25",
+      "conferenceTitle": "INIT-019 三轮 QA 后的待裁事项统一审议",
+      "conferenceType": "strategy",
+      "summary": "执行形态 multi-agent-deliberative:三席(Verity 对抗席、Mara 交付席、Minerva 治理席)由彼此看不见的独立上下文产出、各自另行核实链与仓;绑定收据 7b97f4a00a0d09 已单独校验 BINDING_VERIFIED(探针少一换行时确报 DIVERGENT 故非恒真)、天花板照记为一致性已证独立性未证。六题裁定:Q1 追认 store marker 候选并把 auto-rebase 剥离另裁、Q2 归 EPIC-025 阻断面管辖但单面裁失败政策不等整体解封、Q3 前向修复、Q4 最小前置五单(061 062 063 064 066)、Q5 分批推整合分支且 WF 先于 AOS 以取 INC-055 首次红腿、Q6 不采纳留 159 派工时决。三席交集为 Q3 与 Q4 四单与 Q5 分批;分歧为 Q4 是否含 061(二比一采纳)与 Q6(一比一未采纳)。主审补一条三席未见的反证:tracked 的 remediation-batch-2-summary 仍写四前置全达成而实为假、故 INC-065 降级不砍。",
+      "decisions": [
+        "Q1 追认候选一(仪式按 store marker 供给 knowledge 族 CAS 已在 ceremony.mjs:140)并据此收口 INC-031",
+        "Q1 附 auto-rebase 属载荷外无回读之写、与没人读回来的写不算已证冲突、另立单裁定不随本次追认",
+        "Q2 STORY-165 的 enforce 受 EPIC-025 每个阻断面管辖(治理归属不等于树形归属、165 父级为 EPIC-049)但不必等 EPIC-025 整体解封",
+        "Q2 按 enforce-failure-policy-agenda-v1.md 的 S073 节单面裁失败政策、须明示 classify 已硬编码 fail-open 属既成预选",
+        "Q3 前向修复不改写已推送历史、并把卫生门量不到 origin-main 列为真缺陷补进 INC-071 条目集",
+        "Q4 最小必要前置集为 INC-061 与 062 与 063 与 064 与 066 五单、065 与 067 与 068 非前置",
+        "Q4 附 INC-065 降级不砍:只保留摘要须带命令与运行时刻且禁止无出处的总结式断言这一条最小判据",
+        "Q5 发布序列 WF 整合分支先推以取 INC-055 跨仓一致性门的首次红腿、AOS 整合分支紧随、干净检出对将推的那个 commit 重跑全门",
+        "Q5 落在 main 上的七条(helper 一 DS 三 TMS 三)推即发布动作须 Owner 批准、推整合分支不等于发布",
+        "Q6 传输形态不在本次采纳、留 STORY-159 派工时决、两席理由原样留档",
+        "收口注记口径为每单且在 done 之前(规则三系于该单、规则一与二才是批级)",
+        "收口规格须由链上 scope 派生而非收口者申报、派生失败读作红"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:14e48918969e9ea7ef96abf6",
+      "conferenceTitle": "MIN-014 职责表编号更正：E02 的 Story 实键为 008–013",
+      "conferenceType": "retrospective",
+      "summary": "追加更正 MIN-014 职责表的相对编号：实键为 TCRN-CROSS-STORY-008…013，逐条映射在案。教训：纪要里的 STORY-00N 即引用具体记录，Epic 内相对序号须落笔即换实键。",
+      "decisions": [
+        "更正 MIN-014 职责表所用 STORY-001…006 是 E02 内部相对编号；本分区外部键平铺且 TCRN-CROSS-STORY-001…007 已由 EPIC-001 占用",
+        "实键映射 001→STORY-008 身份权威文件 schema 与 pins 轨读取器",
+        "实键映射 002→STORY-009 gate-transition 现场消费该权威",
+        "实键映射 003→STORY-010 授权决策入 extensions 且回放只校验形状不重读文件",
+        "实键映射 004→STORY-011 负例证明（未许可身份现场被拒且零链写入）",
+        "实键映射 005→STORY-012 兼容性证明（三链原字节回放绿；无 authority 文件的机器回放成功）",
+        "实键映射 006→STORY-013 边界证明与文档（拼接事件被回放接受须以测试证明；成文三句）",
+        "执行序不变 008→009→010→011／012 并行→013 收口",
+        "教训 键是身份不是标签：纪要里写 STORY-00N 即引用一条具体记录，Epic 内相对序号须落笔即换实键——v3 约定的「键即身份」此前只在创建记录时守，未及于叙述文本"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:1725d22be398cc8503805379",
+      "conferenceTitle": "STORY-002 产出：pins／attestations 两轨的既存缝与分离规则",
+      "conferenceType": "architecture",
+      "summary": "pins／attestations 的缝在代码中已存在：pins＝readAuthorityFile 的带外摘要硬比对（第三方可核）；attestations＝admit*HostInput 的自算校验和＋进程内品牌（不可核）。立规「hostDigest 不是 pin」，并据此定 STORY-003 身份权威必落 pins 轨——落 attestations 轨则接线进程可自称 owner，gate-v1 将无拒绝能力。边界：pins 身份文件给的是 authorization 非 authentication。",
+      "decisions": [
+        "判据一 pins 轨＝readAuthorityFile（6 面）：调用方须事先持带外摘要；落盘 TOCTOU 加固读取＋sha256 硬比对＋realpath 相等＋canonical 往返；第三方可独立复核",
+        "判据二 attestations 轨＝admit*HostInput 品牌铸造（3 面）：校验字段全集／枚举／有效期窗口，及 hostDigest===canonicalSha256(basis)——系调用方对自身数据的校验和；WeakSet 品牌仅在进程内不可伪造；第三方不可复核",
+        "分离规则 hostDigest 不是 pin：它证明断言的完整性、不证明断言者的真实性；文档与推理一律不得把品牌上下文当作已钉",
+        "推论 凡安全性取决于「谁在动作」的能力必须落 pins 轨；仅需自洽宿主描述者方可落 attestations 轨",
+        "先例 scripts/host-evidence.mjs 已在生产侧向 runCli 注入两个 attestations 轨面，是受治供给的现存原型，且其自陈 hostVersionReadback 由接线者断言、宿主不回读",
+        "定轨 STORY-003 身份权威落 pins 轨（带外权威文件列明何种 actor 可关何种 outcome-class 的门，其摘要如 bootstrap 锚点般带外公布），不得落 attestations 轨",
+        "证伪 若身份权威落 attestations 轨，接线进程可自称 owner:governance，gate-v1 将毫无拒绝能力——CONF-003 中 opus 所警「可伪造的假修复」风险点由此精确定位：不在于选哪个面，而在于选哪条轨",
+        "边界留档 pins 轨身份文件交付的是 authorization（何种身份被许可）而非 authentication（究竟谁在运行）；闭合该差需真密码学或外部锚点，而本程序已裁「外部锚点而非自建签名」——gate-v1 须成文声明此边界不得越声",
+        "引擎实况 gate 证据解析只校验锚定（纪要所属会议须 link 门的 workId），并不校验 outcome-class——「纪要载 Owner 意图」是惯例而非引擎强制，此为 gate-v1 的范围输入"
+      ],
+      "outcomeClass": "recommendation"
+    },
+    {
+      "id": "minutes:19dcee70c40e4d819d13b38a",
+      "conferenceTitle": "零 Owner 等待:一次性做完的运行制",
+      "conferenceType": "strategy",
+      "summary": "执行形态:synthesis-only(Owner 2026-08-05 裁定落链)。零 Owner 等待运行制:四门 Owner 等待全部解除由审查层代办(S4.2 配置应用/S16.3 终审即采/S13 审议后即采/S2 enforce 切换);Owner 转事后监督(读链+INC/更正否决);stop-pact 运行契约建立;定时巡检会话承接核验与门代办;唯一 Owner 动作=把简报投给 DS。",
+      "decisions": [
+        "解除 INIT-018 执行期一切 Owner 等待:S4.2/D6 类配置 diff 应用由审查层代办;本纪要即 D6 批文;diff 与应用结果全量落证据包",
+        "S16.3 公约修订由审查层终审即采;程序仍遵 harness-constraint 公约含残余适用性分析;条件化优先于删除",
+        "S13 ADR 若触发经 S18 隔离审议后由审查层即采;S2 observe→enforce 切换由审查层依无误报报告代办",
+        "Owner 转全程事后监督:读链+以 INC/更正记录追加行使否决;MIN-056 事后审计哲学对 Owner 门同构适用",
+        "审查层建立 stop-pact 运行契约(scope=INIT-018 三层流水线运行至完成);执行期仅硬阻断可停",
+        "审查层以定时巡检会话承接 DS 收单后的核验层审计与门代办;Owner 无须居间传话;唯一 Owner 动作=把简报 v4 投给 DS"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:1a5c6f7ec7d7fd9e562aa367",
+      "conferenceTitle": "CONF-042 INIT-011 扩展：根目录文档五语基线与风格规则",
+      "conferenceType": "strategy",
+      "summary": "INIT-011 扩展裁定：四份根目录文档进五语基线（LICENSE/NOTICE/CHANGELOG 明示不进），译本以 synced-to 摘要钉扎并入发布门；风格规则从既有风格提炼成文、可检子集入门；立 EPIC-028/S087-090，规则沉淀知识卡、分阶段采纳。",
+      "decisions": [
+        "五语基线范围:SECURITY/CONTRIBUTING/CODE_OF_CONDUCT/PRIVACY 进;LICENSE 与 NOTICE(法律权威文本为英文)及 CHANGELOG(逐版记录面)明示不进;不做与做同录规则",
+        "译本首行声明英文版为准并钉扎 synced-to 英文源 sha256;发布门于列车收官停点校验钉扎新鲜度且失配 fail-closed;门只证同步过不证译文质量",
+        "英文文档变更须同列车携带四译文刷新为已知成本;Owner 明知采纳",
+        "风格规则从既有五版 README 风格提炼成文(结构骨架/措辞范式/排版规范三章);可检子集接入 verify 门;措辞与美感写入 CONTRIBUTING 及发布 runbook 的 review checklist",
+        "立 EPIC-028 挂 INIT-011:S087 四文档五语翻译、S088 语言覆盖 manifest 与 synced-to 门、S089 风格规则成文、S090 风格分层接线;随 SPRINT-002 在列",
+        "基础规则沉淀为知识卡 CARD-DOCS-LANGUAGE-BASELINE 与 CARD-DOC-STYLE;promote 以 minutes 与已上线门为 evidence;工作区级宣称、分阶段采纳:W 本 INIT、helper 随下次 candidate 重钉、DS 随其下一班列车",
+        "MIN-042 与 MIN-043 与 MIN-044 既有边界不变"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:1d8832f2f701f33bcc38ac5b",
+      "conferenceTitle": "INIT-022 钉死前批验收会:GATE-004/005 关闭、GATE-006 保持 pending",
+      "conferenceType": "verification",
+      "summary": "INIT-022 验收会(单上下文,立场为主线程转录非分头独立)。独立复量 Codex 五条主张全部属实(链读面/git ls-remote 全 sha/tag 日期/自跑测试 78 绿/复量时序);关 GATE-004(口径A)与 GATE-005,GATE-006 因门户配置面未连引擎保持 pending 并另立补单;park 推送清单继续 park。",
+      "decisions": [
+        "GATE-005 纸面批关闭:S216/S217 判据全绿",
+        "CC @import 装载腿由本验收会话当场作证",
+        "GATE-004 引擎批关闭采口径A:接受源仓已证+部署位生效改列重钉列车验收项",
+        "GATE-006 门户轨不关:S218 配置面UI未连引擎属部分达标",
+        "另立补接线单",
+        "七单推 done:S216/S217/S212/S213/S214/S215/S219;S218 维持 pending-owner-acceptance",
+        "park 推送清单本次不解禁",
+        "三仓与门户继续未推送",
+        "交接模板缺陷登记:park清单与生效证据判据的交集须在派工前显式处置"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:1f9eb4cd8da2c029e4994d77",
+      "conferenceTitle": "Verity persona 注入事件 remediation:把已落链的三条裁定固化为可引用纪要",
+      "conferenceType": "retrospective",
+      "summary": "Verity persona 注入事件 remediation:三条裁定由 2026-07-25 注解 prose 转写为可引用纪要;根因为 Step-3 设计缺陷;按 P5 残余适用性分析结论为删除而非条件化",
+      "decisions": [
+        "主线程不是只读线程;可接受用户对普通仓库操作的显式授权",
+        "Core Reference persona 仅用于 conference 立场署名(position attribution)",
+        "SessionStart 不注入 persona 也不绑定主线程",
+        "三条裁定的权威文本以本纪要为准;此前仅存于 TCRN-CROSS-INIT-009 注解(链 seq 1022)的 prose 表述自此可被引证替代",
+        "根因认定=激活阶梯 Step-3 设计推理未覆盖「读者会把 persona 当成自己的角色」;属设计缺陷而非执行方幻觉",
+        "按 P5 残余适用性分析该注入无任何受支持档位仍需要;处置为删除并留证而非条件化保留",
+        "能力档位机制(STORY-097)不得以弱档位为由把 persona 注入带回 standard 档"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:22e52e7ccdad6f0992df15dd",
+      "conferenceTitle": "INIT-027 两道 owner_intent_required 验收门的关闭裁定",
+      "conferenceType": "risk",
+      "summary": "INIT-027 两道 owner_intent_required 验收门的关闭裁定:Owner 2026-08-13 验收通过。判据「Owner 验收后关」已满足。",
+      "decisions": [
+        "Owner 验收 INIT-027 通过",
+        "授权关闭两道 owner_intent_required 验收门",
+        "gate:c477f66ede818c9e8896980b(引擎面:persona 内容面与编排键)转 satisfied",
+        "gate:460a7c99c6313f5d9b4a1161(门户与门:三卡重构、persona 编辑器、design-proof 加固)转 satisfied",
+        "验收事实:六张 Story 交付物逐项实测在位并经 INIT-028 三轮独立对抗复核覆盖;design-proof 两腿经注入违规验红;persona 同名守卫经 INC-152 补红腿并变异实证",
+        "交付已随 v0.11.14 发版并随 v0.11.15 重新发布",
+        "经发布后校验(helper 钉的四值与远端逐一对上、六文档锚一致、push-gate 通过)"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:2382be1862c8c774187e1b9b",
+      "conferenceTitle": "S16.3 终审:代际复审公约修订(S18 隔离多代理试点)",
+      "conferenceType": "strategy",
+      "summary": "执行形态:**真隔离多代理,收据绑定,且绑定首次有门**(与以往的 synthesis-only 与「披露式多代理」都不同)。三席(minerva/verity/sable)在互不可见的独立上下文分头成文,原文存盘计 sha256 入收据;新判据 verify-deliberation-binding.mjs 从链上重建三席立场并逐字节比对,判 DELIBERATION_BINDING_VERIFIED(1772/1796/1853B 全中),篡改任一席摘要即 DELIBERATION_BINDING_BROKEN 并点名——两侧都动过。天花板不变:只证内容一致,不证认证;freshContext 编排者自记,可信采集方 EPIC-020 未建成;门绿不代表某席真的独立产出。三席对 Q1(是否增设第四档)意见相左,裁定取其中可执行的一支;Q2、Q3 三席收敛。S16 三档提案(仍在 30/已消失 1/条件化 4)照准。两份公约修订已按 MIN-058 终审即采落地。",
+      "decisions": [
+        "S16 三档提案照准:仍在 30 / 已消失 1(workflow-MCP「两侧未接」句",
+        "成立条件已消失且 S3 已修正) / 条件化 4(verify-s6、verify-otel-privacy、parity 白名单、SSH observer)",
+        "和=编目总数 35",
+        " Q1 裁定:**不设第四档",
+        "改设入册字段**——编目每条增加「生效证据 ∈ {已证",
+        "未证}」且**默认未证**(举证责任在保有方);它不进三分类表",
+        "因三分类问时间轴而生效证据问采纳时刻",
+        "两轴正交。「已证」三坐标全可机器判定:①作用域交集非空(装在零控制树的仓里即红);②红证与绿证同一入口同一二进制同一动词(跑判据副本不算);③在自动化列车里且末次退出码已记录(127 不是绿)",
+        " Q2 裁定:**代际不是原因",
+        "降为 observe 级提示**。主触发器改为载体变更事件(拓扑、名册、路径与 PATH、provider 接线)自动重验依赖它的约束;常设字段 last_verified_red 超期自动降为未证、由列车算出不靠人记得;代际触发仅适用于判据里点名模型行为的少数条目(stop-pact 分档、Fable observe)",
+        " Q3 裁定:**处置不对称**。成立条件消失=退役题",
+        "提案+裁定不变;从未生效=**缺陷题**",
+        "立即开 INC 并对签发它的原单据追更正记录",
+        "摘掉它的绿不须任何人批准(它什么也没保护过)",
+        "裁定的对象是修还是废而非要不要承认;残余适用性分析对「从未生效」**豁免**(无残余可分析);并附连带义务:判为从未生效须复检同手法的兄弟(假绿出自验收方法而非那一条约束)",
+        " 采纳对抗席对本次修订自身的约束:本轮任何一条若不能被 verify 列车执行就不写进公约、或按能力补偿型如实登记「现无机器门」——那批缺陷没有一条源于公约缺字",
+        " 落点:docs/harness-constraint-convention.md 新增「二之二、生效证据与复审触发」(公约 8-11);docs/deliberation-adoption-convention.md 新增「绑定现在有门了」一节(含 conference-position-list 作 readback 会判 NOTHING_COMPARED 的实测提醒)"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:26d0b27a4ea134840c607926",
+      "conferenceTitle": "Platform workspace topology and placement",
+      "conferenceType": "architecture",
+      "summary": "Centralized partitions under the platform root; the live workspace stays local and OneDrive becomes the backup destination",
+      "decisions": [
+        "centralized-partition-container-adopted;cross-project-partition-first;live-workspace-local;onedrive-as-backup-destination-only"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:26e4f59b10fb2b5716260a00",
+      "conferenceTitle": "INIT-036 视觉整改批与派工颗粒度教训裁定",
+      "conferenceType": "strategy",
+      "summary": "Owner 2026-08-14 裁定 INIT-036 视觉整改批：R1 四单照转交 prompt 落链（INC-162 Logo 正本逐字节 sha256 钉死/INC-163 焦点语义移容器/INC-164 顶栏四宽度单行/INC-165 设计语言逐值对齐+基准腿扩风格级不变量）。R2 派工颗粒度教训入册：设计规格钉死为常备条款，未钉死处执行方停下记 notes 不得补画，补画=不通过。R3 Workflow 后缀色=Owner 授权 fable 择定：mark 底部墨蓝象限，亮 #3b5272/暗 #9db5d4，token --tcrn-brand-accent-workflow 门户自持；不撞色核验过（AOS teal/TMS blue/DS iris+blue+aqua+green 全异族）。R4 INIT-036 其余已交付面不重开。落链后通知 Owner 转交 Codex。",
+      "decisions": [
+        "R1 四单=INC-162/163/164/165;R2 反即兴条款常备;R3 后缀色 #3b5272/#9db5d4 已择定;R4 其余面不重开"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:27c15e4c560371a29e6d5022",
+      "conferenceTitle": "INIT-005 决策清单批准与执行授权",
+      "conferenceType": "strategy",
+      "summary": "Owner 全批决策清单并授权执行。结算 kickoff 两条 OWNER-NOW:①v0.3.2+candidate.24 发布预授权已给(门绿即发)②策展公约三缺省批准。此二条自此为已裁,不再是待决。执行开跑。",
+      "decisions": [
+        "W v0.3.2+helper candidate.24 发布预授权已给(门证全绿即发",
+        "S028/S029 呈回执);策展公约三缺省(晋升 agent 促 Owner 可驳/reverify 挂 initiative-close/平台规范双库复制)批准",
+        "S027 落链细化"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:2912d9acebf81915ae923e02",
+      "conferenceTitle": "INIT-028 门户 UX 全量重构设计定稿",
+      "conferenceType": "strategy",
+      "summary": "Owner 2026-08-12 逐轮批注后批「通过,落单,完成后发出codex派工」。验收基准=docs/reports/init-028-design/DESIGN.md + preview.html(v4.1)。本会议为单上下文对话裁定记录(execution.independenceFloor 未设置,strategy 不在覆盖内)。",
+      "decisions": [
+        "R1 四分法 IA:工作区详情/设置/规则文本(AGENTS.md 独立 tab)/设置实体管理/系统词典",
+        "R2 两种页型一套构件:仪表盘页=Tab 行+全宽 1040 居中(详情);管理页=左导航 208+内容 860 居中(其余四页)",
+        "R3 命名:设置分组「子代理模型」;键 execution.claudeCodeSubagentPlan 与 execution.codexSubagentPlan;实体「子代理模型方案」;CLI model-plan-set/assign/unassign/remove",
+        "R4 方案=按宿主分类多套 persona→模型分配表(name 不可改+defaultModel 必填);生效选择归设置域引用型键;宿主派发前读;未分配 persona 落方案默认;生效键未设置=宿主自身默认",
+        "R5 persona:弃 prompt 字段改散文字段族(mission/refusals 等);预设可删可改仅限非 name;修改=链上覆盖(生成物数据);编译数据恒定且为恢复源;同名撞车一律拒绝",
+        "R6 方案不是实体(为生效键服务的复杂设置值;归设置域);persona 是实体(独立身份、被引用)",
+        "R7 系统词典只读;逐项来自引擎名册(vocabulary 动词);门户不自拟",
+        "落链 INIT-028+EPIC-078/079+STORY-244..251;0.11.15+helper c40 发版停放待 Owner 授权;派工 Codex goal 模式一次性分批完成"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:29603053f5bcf6cb55f83492",
+      "conferenceTitle": "EPIC-005 开工：链上 advisory 定形——耦合裁定与悬空证据修复",
+      "conferenceType": "architecture",
+      "summary": "E05『链上 advisory』定形。忠告正文已落地并全译（README×5 第243行，遵 AC-N6按轮报/AC-N7带缓解/AC-N8不设门＋§5诚实边界）。耦合裁定＝不并入 chain-migration：OD-C2 已裁选项(1)只忠告不阻断不重构，增量 materialize 属独立后续纲领、非 E05 范围、既有裁定支撑无需 Owner 停。读源发现真缺口＝被引原始样本 docs/verification/2026-07-20-event-chain-ceiling-samples.json 在 W 悬空（7处引用：README×5＋CHANGELOG＋0.1.0发版记；文件仅存平台端，62KB/2000样本/拟合34.66+0.14598n/阈6613 与忠告自洽）。E05 交付物＝落地该证据入 W docs/verification 使引用自洽；发布传播属对外发布留待 Owner。",
+      "decisions": [
+        "advisory-only-confirmed-reject-chain-migration-coupling-per-OD-C2-option-1",
+        "incremental-materialize-replay-is-a-separate-future-program-outside-E05-scope",
+        "concrete-gap-cited-raw-samples-file-dangling-in-W-across-7-shipped-artifacts",
+        "deliverable-land-samples-json-into-W-docs-verification-so-citation-resolves",
+        "publish-propagation-to-W-remote-and-a-release-is-owner-gated-and-held"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:2e943cb9453da3604c698d4a",
+      "conferenceTitle": "dsh-tcrn-workflow-plugin 方向审议:宿主扩容定性与原生优先五规则",
+      "conferenceType": "strategy",
+      "summary": "本场审议记录 dsh-tcrn-workflow-plugin 方向:原生优先五规则获 Owner 认可(原话逐字在案),桥复用退出平台路径,机制C退出M1-M4列入出圈项;三名评审人格(Sable/Minerva/Verity)经独立子代理上下文扇出产出对抗性发现共34条,编排者逐条吸收进实施方案 v2(修订映射见方案附录A),三方对架构无否决。M0 五问——定性择一(宿主扩容挂INIT-039轨 vs 相位三集成)、开轨授权、Agent映射、分区收编(INC-210 A案)+sourcing、集成状态载体——全部保持 owner_intent_required,待 Owner 明示;未裁前不执行任何 Story、不动第一行代码。",
+      "decisions": [
+        "设计形态采纳原生优先五规则(一能力一归属/按能力阶级分通道/桥是用户面/谁管谁矩阵/过渡诚实态);桥复用退出平台路径;机制C退出M1-M4列入出圈项",
+        "方案经三名评审人格对抗性验证;34条发现逐条修订吸收;修订映射载入方案v2附录A;v2为最终版",
+        "立项INIT-045;EPIC-107下分解STORY-306至309(M1惰性壳+接缝探针/M2只读引擎桥+状态卡/M3能力证明双件套/M4治理化收尾);均planned;decided-by指向本场minutes",
+        "M0五问(定性择一/开轨授权/Agent映射/分区收编+sourcing/集成状态载体)保持owner_intent_required;未裁前不执行任何Story、不动第一行代码"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:30f5c1a7f6417f6bb6e02aa6",
+      "conferenceTitle": "INIT-021 Owner acceptance: STORY-209 and final tree",
+      "conferenceType": "verification",
+      "summary": "Owner acceptance of STORY-209 and INIT-021 final implementation evidence; closeout is authorized",
+      "decisions": [
+        "accept STORY-209 rule conservation and ten-block enforcement",
+        "accept INIT-021 final code CI and remote-main evidence",
+        "authorize child and parent CAS closeout",
+        "retain the explicit one-high-Dependabot-warning residual"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:31bc6b98b9d01b9d63140abe",
+      "conferenceTitle": "Owner 离席授权批次:AOS 服务化/供权边界/存储/部署/发布六道方向题",
+      "conferenceType": "architecture",
+      "summary": "Owner 离席全权批次的九道方向题全部裁定。核心:AOS 写面本机服务化、VM 只读镜像、operator pins 不出本机、SQLite 双库物理分离、复用既有 k3s 集群部署、每目标一次收官发布但验证门不免、执行序锁定目标一→二→三、AOS 完整可用以五条判据钉死、S003 本批显式裁剪为四类字段加关系型只读。Verity 的三条追加约束(镜像版构建期剔除写控件、domain.db 备份与 S003 同批、措辞更正)与可用性判据全部采纳。",
+      "decisions": [
+        "D3 服务化时点：AOS 写面在本机服务化（apps/api 由只读门面升为读写服务），VM 维持只读镜像；静态生成模式作为预览轨道 P5 保留",
+        "D4 供权边界：operator pins 只存本机，链写只发生在本机服务；浏览器与 VM 永不持 pins；看板拖拽走本机服务代理；镜像版构建期即剔除写控件并明示写面在本机",
+        "D4b 镜像受众：绑内网不暴露公网，暂不建认证层；绞线为一旦需给 Owner 设备之外的任何人则 S019 重开并按对外发布级处理",
+        "D5 存储：SQLite 双库物理分离 domain.db 与 projection.db；qualified ref 唯一挂链形态；走 packages/db 既有迁移；domain.db 导出备份必须与 S003 同批落地，否则不得写入真实域数据",
+        "D6 部署形态：复用 VM 既有 k3s 集群（非新建集群也非零新增运维轨），namespace tcrn-aos + traefik ingress + 静态站",
+        "D7 发布节奏：每目标一次收官发布共三次；免除的是 Owner 停点而非验证门，三次各自 verify 全绿且推送后向服务器复核比全 sha",
+        "D8 分支：各仓 feat 分支推送后合 main；DS 与 W 打 tag 发布；AOS 推送前先验本地与远端 main 共同祖先",
+        "D9 可用性判据五条：VM URL 可达且返 SSR 内容、十一模块渲染真链数据、本机写面可改 AOS 域字段并回读、链写经本机服务成功且非法流转被拒、镜像与本机数据版本一致或差异如实标注；缺一不得宣称完成",
+        "D10 执行序：目标一（DS 发包）→目标二（AOS 消费与部署）→目标三（W/helper 集成），不得抢跑",
+        "D11 S003 本批范围显式裁剪：只做负责人、标签、优先级、评论四类写面 + 12 关系型只读呈现；关系型写入与其余字段谱留待后续并写入 S003 注解"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:31c06e3871d6948fbde20176",
+      "conferenceTitle": "P1 立场字节预算(2048)重裁:实测动机强度与提升选项",
+      "conferenceType": "architecture",
+      "summary": "P1 重裁:活链实测显示被迫分片仅占逻辑立场的 4.6%、最大缺口 1.27 倍,而提升方案的耦合至少四条且含一条跨包无门项;推荐维持 2048 并保留分片公约,实施待 Owner 裁定",
+      "decisions": [
+        "推荐选项 A 维持 2048 字节上限并保留分片公约;理由是实测动机强度低于预期而提升的耦合面高于预期",
+        "该常量由 8 个 conference 字段共用;单条 position 的文本理论上界为 65 倍常量",
+        "它不进规范字节故不改既有链;但参与回放准入(一条超限记录使整个工作区对该引擎不可读)并必改证明字节",
+        "活链实测 232 条立场:p50 932 字节、单条最大 2034;完整两片对 15 对中合并后真超限的仅 10 对",
+        "以 217 条逻辑立场为分母被迫分片占 4.6%;最大逻辑立场合并 2609 字节即上限的 1.27 倍",
+        "提升方案的耦合至少四条:8 个共用字段、段信封(64 事件/段且段整体 1 MiB)、跨包的知识层 summary 上限 2048、以及 assignment-gate 的同值独立常量",
+        "跨包耦合无任何机器检查;只抬 conference 侧会让 summary 超限的 conference-close --distill 失败",
+        "实施属 CONDITIONAL 不预建;若日后提升则只接受版本门控的 enable 事件形态并须先给跨包耦合补门"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:329a452b0397aa08f7cf2548",
+      "conferenceTitle": "INIT-005 激活验收:五判据+dogfood",
+      "conferenceType": "verification",
+      "summary": "知识层激活五判据全达:①聚合 cross16%/DS12%②各≥8 promoted+fresh③默认查询首次非空④dogfood 收口时刻查取 stop-budget⑤candidate.24 载知识环教学+placed 验证。清库重种从 0 重种真知识,S023/024/025 实证生效。活化门可关。",
+      "decisions": [
+        "知识层完全激活五判据全达",
+        "活化门 satisfied;两库各≥8 promoted+fresh",
+        "默认检索首次非空",
+        "dogfood 真实时刻检索引用",
+        "教学入 candidate.24"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:32b3b62ad7cafe921aa2f4c7",
+      "conferenceTitle": "EPIC-001 开工：七 Story 职责表与 Subtask 裁定",
+      "conferenceType": "strategy",
+      "summary": "补录 E01 七 Story 职责表（INIT-003 分解时只存在于对话预览的欠账）并裁定 Subtask 切分：STORY-001 为一次坐定之工不切 Subtask，其余留各自开工时按需裁。执行序 001→002/003→004→005，006/007 骑附并行。",
+      "decisions": [
+        "STORY-001：读源盘点——8 个带外权威面 × 被锁 verb 的权威需求矩阵（只读源码、零仓写、决策输入）",
+        "STORY-002：信任故事设计——pins 轨与 attestations 轨分离方案；产出证据卡呈 Owner 裁定（GATE-001 的证据来源）",
+        "STORY-003：身份/actor 权威切片实现——刚性排最前；落地即 E02 gate-v1 的开工信号",
+        "STORY-004：其余权威面按 STORY-001 矩阵分批实现",
+        "STORY-005：12 个被锁 verb 解锁的端到端证明——含负例（坏权威须被拒）",
+        "STORY-006：骑附——W 仓 push-gate 提速",
+        "STORY-007：骑附——输出会话压测 flake；须先呈 Owner 裁「改不变量还是改实现」再动手",
+        "执行序：001→（002 与 003 并行）→004→005；006 与 007 骑附可并行",
+        "STORY-001 不切 Subtask（一次坐定之工）；其余 Story 的 Subtask 留各自开工时按需裁"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:336e32a0cd87d51a45af56cc",
+      "conferenceTitle": "INIT-008 定形:sprint 交付批次(release train)机制与公约+MIN-036 节奏修订",
+      "conferenceType": "architecture",
+      "summary": "INIT-008 定形(B 轻引擎:Release kind+advisory:sprint+读面过滤)+MIN-036 修订裁可(入列批量停点、未入列保持原公约);3 Epic/6 Story 全 planned;执行点火在 Owner。",
+      "decisions": [
+        "定形 B 轻引擎:开 Release kind 创建+成员侧 advisory:sprint 注解(required:false、值为限定引用 workspaceId+work id、支持跨分区)+work-show/work-list 读面过滤;sprint 状态复用 planned/active/done、close=批次发布时刻;sprint 记录落 cross 分区",
+        "MIN-036 修订(Owner 裁可逐字):入列 sprint 的 INIT 其对外发布停点批量至 sprint close;未入列的 INIT/Incident 保持原公约按-INIT 单次收官;链上 done 的 INIT 粒度收官不变",
+        "三拒案:A 零引擎纯公约(排期视野需读面、prose 不可验)、C 新 Sprint kind/新操作(协议形变全读端强制升级)、parent-id 装载(验证器钉死 Initiative 父为 null)",
+        "树定形 3 Epic/6 Story:E016 机制层(S044 开 Release kind+S045 sprint 注解与读面)、E017 公约教学层(S046 公约卡+S047 helper 教学随 candidate.26)、E018 发布 dogfood 层(S048 W 0.5.0 发布+S049 首列车 dogfood)",
+        "决策台账:Owner-now=无(执行点火另行);Conditional=固定周期公约待有客户时重裁(预计零代码)、work-list 过滤机制按现读面架构执行期定、ride-along 队列有挂项则随 candidate.26 折入;Agent=其余(键号/扩展值 schema/测试形态)"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:3613d74bebbbe471461c2e06",
+      "conferenceTitle": "STORY-001 产出：8 权威面 × 被锁 verb 矩阵与三处前提修正",
+      "conferenceType": "architecture",
+      "summary": "STORY-001 完成：生产 bin 实测只供 write+clock，8 权威面全缺，12 触面 verb 矩阵与拒绝码逐条确立（读源+只读实测双证）。三处修正 MIN-003 前提：无静默降级（品牌不可伪造）／「12 被锁」混了两种锁／身份权威不在八面内故 STORY-003 须重定范围。pins-attestations 的缝在代码中已存在，STORY-002 应 formalise 而非另造。",
+      "decisions": [
+        "矩阵01 profileAdmissionAuthority → profile-resolve／profile-authorize／context-route：缺则 PROFILE_ADMISSION_AUTHORITY_REQUIRED（今日 CLI 实测 + p5-generic-profile:618/620）",
+        "矩阵02 contextRouteAuthority → context-route 第二层：经 readAuthorityFile 具名 required 拒绝（读源；今日不可达——第一面先拒）",
+        "矩阵03 codexAdapterHost → adapter-generate：缺则 ADAPTER_HOST_REQUIRED（p6-codex:219/220/258 今日执行绿）",
+        "矩阵04 codexAdapterInstallationAuthority → adapter-rollback-plan：缺则 ADAPTER_INSTALLATION_REQUIRED（今日 CLI 实测 + p6-codex:266/267）",
+        "矩阵05 claudeAdapterHost → claude-adapter-generate／claude-adapter-install［变更］／claude-adapter-settings-fragment：缺则 ADAPTER_HOST_REQUIRED（p6b:237/238/276 今日执行绿）",
+        "矩阵06 claudeAdapterActivationHost → claude-adapter-activation-fragment／claude-adapter-install［变更］：经激活片段生成器拒（读源）",
+        "矩阵07 claudeAdapterInstallationAuthority → claude-adapter-uninstall［变更］／claude-adapter-rollback-plan：缺则 ADAPTER_INSTALLATION_REQUIRED（源码显式守卫 + 今日 CLI 实测）",
+        "矩阵08 compatibilityAdmissionAuthority → compatibility-plan：CLI 层显式守卫 COMPATIBILITY_AUTHORITY_REQUIRED（今日实测）",
+        "发现甲 无静默降级：八面缺失一律具名 fail-closed；assertHost 用构造品牌而非结构校验——真 host.input 手工包一层仍被拒（p6b:238 执行级实证）",
+        "发现乙 「12 被锁 verb」混两种锁：11 个缺面而阻（补面即解）；compatibility-plan 是 programmatic-only 不在 CLI 面（补面无效，须改可用性）",
+        "发现丙 身份权威不在八面内：八面无一承载「谁在动作」——STORY-003 由「切既有面」改为「循品牌模式新增一面」；E02 依赖形状变更须 Owner 复核",
+        "发现丁 pins／attestations 的缝在代码里已存在：6 面走 readAuthorityFile 的文件身份（绝对规范路径+64位 sha256 且调用路径须等于期望路径）＝pins 形；2 个 host 面是品牌构造上下文＝attestations 形。STORY-002 应 formalise 既存缝而非另造",
+        "发现戊 context-route 需两面叠加：供第一面后将暴露当前不可达的第二层失败——排期须预留",
+        "纪律留档 10 个只读 verb 实测探针；2 个变更动词（claude-adapter-install／uninstall）严格只读源码不探测"
+      ],
+      "outcomeClass": "recommendation"
+    },
+    {
+      "id": "minutes:38297e18040e1a5737a99f46",
+      "conferenceTitle": "S026 spike 结论:disposable 再init 语义、SessionStart 去留、引擎非阻断",
+      "conferenceType": "verification",
+      "summary": "S026 三结论:①S030=清库重种(disposable 设计许可,先删目录再 --acknowledge-disposable)②SessionStart 携知识行排除(预算满+知识是拉取非推送,走 S029 按需 query 教学)③【前提翻转】实测真实卡片 8/12/16 张=27/40/54% 全在 60% 线内→引擎修复(EPIC-007)非激活阻断,降级为可选余量优化,S028/S029 与激活解耦。呈 Owner 一个引擎岔路。",
+      "decisions": [
+        "S030 采清库重种(设计许可);SessionStart 知识行排除延期;EPIC-007 引擎修复实测非激活阻断→降级可选余量;激活核心=EPIC-008 公约+EPIC-010 内容+按需查询教学",
+        "无需 W 发布"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:387956083bfe6beb42bb4619",
+      "conferenceTitle": "INIT-028 首轮验收:四路独立对抗复核",
+      "conferenceType": "verification",
+      "summary": "INIT-028 首轮验收不通过。四路独立对抗复核(各自 scratch 工作区、各自变异实证)与主线一手取证独立得出一致结论,复核报告=docs/reports/init-028-design/VERIFICATION-2026-08-12-fable.md。Owner 2026-08-12 接受判定并指示开整改单派工 Codex。",
+      "decisions": [
+        "验收裁定=不通过。八张 Story 维持 pending-owner-acceptance",
+        "不转 done",
+        "定性分层:S244-247 引擎面记「基本通过——机构成立、守护缺失、整改移交」;S248-251 门户面记「不通过」",
+        "根因裁定:API 层测试与静态门被当作 UI 判据的证据(同一根因第三次出现);整改前须先立能证伪 UI 的量具",
+        "整改批 EPIC-080 挂 INIT-028:强化五单先行(INC-136 UI 在位判据门/137 i18n 真实性与死键腿/138 覆盖守恒门/139 恢复被删覆盖/140 门接入 CI 与 verify 列车)",
+        "修复七单在后并以强化单为可检查前置(INC-141 坏件与恒真判据/142 子代理模型面缺件/143 详情与实体缺件/144 全局构件缺件/145 引擎补齐与四条零守护校验红腿/146 三语真翻译/147 证据更正与指名测试文件)",
+        "引擎面实现予以保留:方案域、生效键、persona 覆盖层、vocabulary 派生均为真实现",
+        "仅需补守护与三项声明元素",
+        "强化单的门必须在修复前对现状先红一次并留证;修复单不得修改门的判据",
+        "只能让它变绿",
+        "0.11.15 发版、helper c40 重钉、任何 push/tag/deploy 继续停放",
+        "待 Owner 另行授权"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:3a53c35ddfad429faed7839a",
+      "conferenceTitle": "五缺陷诊断与整改裁定",
+      "conferenceType": "verification",
+      "summary": "Owner 三次视觉验收五缺陷，五维诊断（11 代理 388 取证）根因全坐实，三条系 fable 失误：顶栏把 v4 的 48px 当常数搬用而未查 DS 出厂 68px token（Owner「不查Token规则的吗」成立）；effort 取证锚在模型 API 文档而非宿主产品文档故缺 ultracode/ultra；词典 settingsEnums 是 catalog 严格投影而非术语域。双点已修（DS badge 自带点+门户自造 dot 叠加）。拉伸为门户 grid 未写 align-items 加 DS field 层 align-content 缺失两级链，触发物是内容变高而非选择选项。四单落链执行，三处待裁按最小整改推进。零推送零发版。",
+      "decisions": [
+        "INC-179 顶栏回 DS 68px（四处含 mq980）;INC-180 拉伸两层修复;INC-181 effort 扩至 9 值（含类型前置与测试同步）;INC-182 词典最小整改（补释义列+统一 📖 判据）"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:3a5510fa8fa7f185df47d9fe",
+      "conferenceTitle": "S215 kind enumeration correction conference",
+      "conferenceType": "verification",
+      "summary": "Corrected S215 minutes: the complete candidate list is Requirement Decision Subtask Review and Incident. For each candidate the hierarchy transition and conservation behavior are unchanged by a new work kind. The recommendation is to keep the current enum and use template or relationship surfaces where only text shape differs. AOS requirements remains the non-kind precedent. This is a recommendation for Owner acceptance not a role decision.",
+      "decisions": [
+        "Requirement:不新增kind because parentId与Story/EPIC已覆盖层级 and all work transitions and conservation checks stay unchanged; use a template variant;Decision:不新增work kind because conference minutes与knowledge decision不参加work hierarchy or work transitions; keep it on the record surface;Subtask:不新增kind because parentId already expresses decomposition and a new node changes no hierarchy transition or conservation behavior;Review:不新增kind because review is a conference and evidence relation not a distinct work lifecycle; use a template variant;Incident:不拆分kind because defect and governance share hierarchy transitions Owner closeout and conservation behavior; use defect and governance templates;AOS requirements precedent:keep the non-kind extension and template approach;Enum disposition:maintain current enum and implement no additions or removals in this story;Owner acceptance remains required"
+      ],
+      "outcomeClass": "recommendation"
+    },
+    {
+      "id": "minutes:3c3028454af80f9e459c705a",
+      "conferenceTitle": "平台容器拓扑更正:根在 Code/、分类透明、链不迁",
+      "conferenceType": "architecture",
+      "summary": "平台容器拓扑更正:Owner 2026-08-13 裁定根在 Code/、分类文件夹透明、链不迁。决定性实证=Joi-Button 分区服务分类夹外的 Code/joi-button。修复三步(布局成文+医生门/平台 AGENTS.md 重建/归位声明)落链 INIT-031 并派工 Codex。",
+      "decisions": [
+        "平台容器=用户代码根(本机为 Code/)",
+        "覆盖全部被治理项目;容器不得位于 git 仓内(承 MIN 71bdb2b9 第六条)",
+        "容器内可含任意 git 仓与非治理项目",
+        "分类文件夹(如 TCRN Platform/)为透明组织层",
+        "不承载治理语义;分区↔项目位置的映射记录于平台 AGENTS.md 分区拓扑节(大小写精确",
+        "如分区 Joi-Button↔目录 joi-button)",
+        "不依赖目录同层推断",
+        "链位置正确不迁移;本批为纯文件作业",
+        "禁用 relocation 动词族",
+        "平台工作区级实物=链容器 .tcrn-workspace + 平台档案 .tcrn-artifacts + 平台 AGENTS.md 与 CLAUDE.md 转接 + 门户启动器;宿主接线(.claude/.mcp.json/.codex)为会话启动目录级或用户级",
+        "非平台容器级;机器级(引擎+信任根+skills)不变",
+        "修复三步:S256 标准容器布局成文(公开仓通用正本",
+        "不含本机路径)+platform-doctor 本机门(收 --platform-root",
+        "CI 以合成夹具测试",
+        "对现状 0 字节 AGENTS.md 先红)/S257 平台 AGENTS.md 重建于容器根(含第三节分区拓扑与逐分区复查命令",
+        "Code/CLAUDE.md 经 @AGENTS.md 转接使任意子目录会话拾取)/S258 归位声明(启动器对照生成器默认位核验、.tcrn-artifacts 定名、接线可达性事实表)",
+        "主线 A/B 两案均误(把平台误解为 TCRN 五仓)",
+        "Owner 更正",
+        "过程记录在案以防同类误读复发",
+        "编号:本批取 INIT-031",
+        "INIT-030 尊 MIN-080 预留(adapter 生成宿主 agent 定义与派工许可矩阵)",
+        "INIT-029 四单维持 pending-owner-acceptance",
+        "收口顺延至本批之后;MIN-077 档案归属未决项不并入本批"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:3d3e6873098dda1cf46d0865",
+      "conferenceTitle": "集成边界与相位次序:两系统皆服务端，Agent 唯一客户端",
+      "conferenceType": "architecture",
+      "summary": "Owner 裁定集成边界与相位次序。全文见六条立场，此处只记骨架。\n通则:workflow 与第三方之间不存在 workflow 直接交换数据的步骤。两系统皆服务端，Agent 唯一客户端，workflow 零网络代码。但 workflow 并非一无所知——它以声明式规则持有集成状态(启用与否、目的地址、哪个 endpoint 做什么动作调什么接口)，接触由 Agent 执行。\n数据流:引擎落链(本地)→ Agent 检测集成已启用 → 读 mcp 配置 → 注入第三方的集成专用 MCP(认证 + API 入其库)。链日志为权威，第三方库为派生投影。\n可靠性由 hooks 确定性触发保证，非散文记忆:SessionStart 注入集成态，PreToolUse 在集成态下拦本地生成路径，fail-closed。agent:fable 曾把「Agent 漏注入」记为已知风险，当场收回——该问题在设计里被退役而非被接受。\n相位:一 workflow 完整开发、二 AOS 开发、三 集成。相位一须有可测的完成判据，否则重演 INIT-020 收完又开。AOS 在相位一只做门诚实性维护，零特性开发。\nMCP 门面退役:Owner 指出留死代码是定时炸弹;agent:fable 直答冻结后不会用到它并收回冻结建议——该门面由命令目录派生、删除零知识损失、需要时可再生;唯一价值所服务的受限代理面今天不存在。热删会让已发布字节撒谎，故随 v0.11.18 与 STORY-286 helper 重钉同车退役。\n产出方式:Owner 立场为原话逐字;agent:fable 立场含三处自我更正。声明 independent。",
+      "decisions": [
+        "workflow 永不直接与第三方系统交换数据;两系统皆服务端，Agent 唯一客户端，workflow 零网络代码",
+        "workflow 以声明式规则持有集成状态(启用、目的地址、endpoint 与动作映射)，接触由 Agent 执行",
+        "集成可靠性由 hooks 确定性触发保证:SessionStart 注入集成态、PreToolUse 拦本地生成路径，fail-closed",
+        "相位次序:workflow 完整开发 → AOS 开发 → 集成;相位一须有可测的完成判据",
+        "AOS 在相位一只做门诚实性维护，零特性开发",
+        "MCP 门面按发版退役，随 v0.11.18 与 STORY-286 helper 重钉同车;CLI 为正典",
+        "集成期把第三方 MCP 写进平台配置属集成配置而非依赖，须经集成开关而非默认布线"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:3eab8abde2d995b74538aca2",
+      "conferenceTitle": "dsh-tcrn-workflow-plugin 统一派工授权:零硬停点、阶段门、goal 模式一次性跑完",
+      "conferenceType": "architecture",
+      "summary": "Owner 授权统一派工会议:Owner 指令(原话逐字在案)要求把剩余全部工作(M5 收口+C13、M6 全收口、M7 投产)统一派工给 Codex,不得有硬停点、允许阶段门、goal 模式一次性跑完。据此:P-PROD 随本派工授权(届时事实条件转为机器可判阶段门);web 进程重启不在派工内——激活推迟到 Owner 下一次自然启动 web 时生效,不中断任何会话;⑩ verdict 写盘改由 Codex 按契约执行(此前受治会话条款 supersede,授权依据=Owner 本指令);② 复审材料由 Codex 在 M6 产出、呈报与转 A 属编排者后续;链上 transition 由编排者执行、Codex 零链写;STORY-316/317 转 ready。",
+      "decisions": [
+        "P-PROD 由本派工授权:M7 可机器执行动作全部入派工;届时事实条件转为机器可判阶段门;web 进程重启不在派工内",
+        "激活推迟到 Owner 下一次自然启动 web 时生效",
+        "不中断任何运行中的会话",
+        "⑩ verdict 写盘改由 Codex 在 M6 按 acceptance-verdicts.json 契约执行(verdict=green、recordedAt、commit=被检时引擎 HEAD);此前「受治会话执行」条款随本授权 supersede",
+        "授权依据=Owner 本指令逐字在案",
+        "M7 阶段门=M6 全绿且 verdicts 写盘成功且 web 语义组成快照(含 12:53 theme=link: 漂移作独立变更源)与 link 失效判定通过",
+        "② 复审材料由 Codex 在 M6 产出(三件输入事实:doc-topology:proof 已删而 AGENTS.md 仍宣称、弱路 B 前缀实测、chain-validate+1 爆炸半径);呈报与转 A 属编排者后续",
+        "链上 transition 一律由编排者在 Codex 交付后执行;Codex 零链写;署名纪律不变",
+        "STORY-316/317 随本派工转 ready;派工正本=docs/DISPATCH-FULL.md 零硬停点版"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:3f245794b1da9d965d7803aa",
+      "conferenceTitle": "验收车道:done 由谁落、依据什么",
+      "conferenceType": "verification",
+      "summary": "Owner 裁定 done 的落地权按验收方式分车道，不再一律停在 pending-owner-acceptance。机检可决者(后端与逻辑)由具名九组门全绿放行；直观验收者(前端)仍归 Owner 亲验；文档与公约类按 Owner 逻辑外推，默认走机检车道，Owner 可随时点名拨回。done 是终态这一点不构成保留理由——门过了、QA 过了就落 done，此后出问题立新 INC，与 append-only 链「事实只增不改」同构。agent:fable 原以不可逆为由主张「带未决残留者不得自动放行」，当场撤回：残留已写在单子的 scope 里，标 done 不抹掉它。保留的唯一约束是对「门过了」的定义:须指具名九组全绿，而非执行者自选的相关测试——本轮 DS 仓 verify 因跨仓改动红了一整天而无人察觉，即为此约束的活例。分类实测:待验收 74 张 = 机检 44 + 目视 30，零重叠；目视 30 张中 25 张无父不卡容器，真正卡容器的只有 5 张(STORY-255/274/275/277/280)。产出方式(供复核本次 independent 自陈):owner:governance 的立场形成于 Owner 自身上下文，由 agent:fable 逐字转录；agent:fable 的两条形成于其自身上下文。两方发生了真实分歧并以一方撤回收场，故声明为 independent；执行写入者均为 agent:fable，这是转录而非代拟。",
+      "decisions": [
+        "done 按验收方式分三车道:机检可决由九组门放行;直观验收归 Owner;文档类默认机检",
+        "「QA 通过」定义为具名九组全绿，非执行者自选的相关测试",
+        "done 落地后发现的问题一律立新 INC，不重开旧单",
+        "容器根 AGENTS.md 纪律摘要改写:done 属满足其车道判据者，车道划分与判据属 Owner",
+        "收尾记录须列出全部机检车道单号供一眼复扫"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:40b51d5e4d2b71cfeef60d44",
+      "conferenceTitle": "S215 kind enumeration conference",
+      "conferenceType": "verification",
+      "summary": "S215 kind enumeration recommendation: every candidate was tested against hierarchy transition and conservation behavior and no candidate requires a new work kind. Requirement Subtask Review and Incident retain current enum handling through template or relationship surfaces. Decision remains on conference minutes and knowledge records. AOS requirements is the non-kind precedent. Owner acceptance remains the disposition boundary.",
+      "decisions": [
+        "Requirement维持现有kind仅增加模板变体;Decision维持会议minutes与knowledge decision记录不进入work enum;Subtask维持现有kind并用parentId表达分解;Review维持现有kind并用会议证据关系表达审查;Incident维持单kind并用缺陷与治理模板区分;本批不实施enum增删且将recommendation留Owner验收"
+      ],
+      "outcomeClass": "recommendation"
+    },
+    {
+      "id": "minutes:41f48bf0fce9057cfbce79bc",
+      "conferenceTitle": "INIT-019 实施形态确认:D5-D9 全部采纳",
+      "conferenceType": "architecture",
+      "summary": "Owner 确认 MIN-060 的 D5-D9 全部采纳,由建议升格为裁定;MIN-060 的未决事项「D5 至 D9 待 Owner 确认」就此消除。STORY-159 的 D6 前提已满足,但仍保持 planned——本批仅落裁定不开工,INIT-019 全部十五张 Story 的派工时点由 Owner 另行指令。执行形态:Owner 指令逐字入档,余文由单一上下文合成,非多代理。",
+      "decisions": [
+        "D5 确认:MCP 写面为单一 ceremony 工具而非逐动词转发",
+        "D6 确认:分两阶段实施(先本机 MCP 包裹现有仪式再座舱原生供 MCP 并把投影渲染上移)",
+        "D7 确认:知识内容三源策展且首批不少于二十卡每卡 evidence 不少于一条",
+        "D8 确认:拆单模板加第五要素生效证据命令并对 INC-041 四代办逐件补票",
+        "D9 确认:SSH 按残余适用性条件化保留两类场景其余退役",
+        "附带裁定:本批仅落裁定不开工且派工时点由 Owner 另行指令"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:489e5f863c3306a2f35d1707",
+      "conferenceTitle": "CONF-040 双宿主基线对齐修订：INIT-009/010 的 Claude Code 强化与补全",
+      "conferenceType": "architecture",
+      "summary": "Owner 指令双宿主基线对齐：INIT-009 六 Epic 注为双宿主并新增三个 Claude Story；INIT-010 获追认、依赖拆分、Claude 子代理收据机制定形；Claude hook 扩面以 N-2 修宪为硬前置，凭据声称止步归因增强。",
+      "decisions": [
+        "双宿主基线对齐：EPIC-023/024/025/026 与 S060/S069/S070/S071/S072/S078 注为覆盖 Codex 与 Claude Code 且治理语义一致",
+        "新增 S081 Claude 宿主事实刷新探针、S082 Claude v2 激活卸载 CLI 接线、S083 Claude 控制面只读 Observer 等价评估",
+        "Claude 扩任何 hook 含 observe 以 S072 会议修 N-2 为硬前置；逐 hook 白名单载失败语义且未列举默认禁",
+        "无逐哈希门宿主的漂移防线＝薄垫片入口 digest 自检对钉锚定 manifest＋安装收据＋S081 探针；不得声称与 Codex 逐哈希门等价；兜底为会话首 verify-installed-copy",
+        "INIT-010 获 Owner 追认并回链其 scope；EPIC-020 依赖拆分：Codex 采集依赖 INIT-009 而 Claude 采集可先行",
+        "S055 定形为子代理纯观测收据机制：宿主侧即时记转写文件 digest 与会话标识；立场正文与调用输出字节相等；无收据即 synthesis-only 失败关闭",
+        "执行凭据声称上限为归因增强而非身份证明；转写入链须标注未经宿主签名；外发收集器列为 enforce 级前置研究",
+        "本会议以两个独立 fresh-context 子代理立场实证 multi-agent-deliberative 形态；MIN-042 既有边界不变"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:49ae55f57d602be7502ffe76",
+      "conferenceTitle": "INIT-004 执行期实证发现：STORY-021 前提被证伪，两单重塑",
+      "conferenceType": "verification",
+      "summary": "执行期实证证伪 STORY-021 前提（悬空父早被 else-if+回放拒，非 fail-open）：021 缩为回归测试；022 删已钉死的排序项只留 CLI 白名单+测试；父语义荐从恒 parentless 改 parent-optional（安全论据已证伪，found-in 原生，零引擎改动，Owner 可驳）。教训⑫：给 persona 的事实必须完整读源。",
+      "decisions": [
+        "证伪 分解纪要事实②（悬空父 Incident 静默过回放）经完整读源+scratch 三例对照证伪：else-if(protocol:693)对未映射 kind 已校验父解析，回放期 workspace:724 终局调用；悬空父实测回放拒 WORKSPACE_EVENT_CORRUPT",
+        "行为图谱实测 ①Incident 无父接受 ②Incident 合法父接受 ③Incident 悬空父回放拒",
+        "STORY-021 重塑 通用图加固前提消失（无 fail-open）；缩为加悬空父回归测试含未映射 kind Incident（全仓 REFERENTIAL_INTEGRITY 测试端 0 命中，红证防未来重构删 else-if）",
+        "STORY-022 重塑 排序全序已金样钉死（protocol 测 line 84）删此项；真活＝CLI 白名单加 Incident＋测试",
+        "父语义再裁 荐 parent-optional-must-resolve（Incident 可挂已解析规划记录，found-in 原生，零引擎改动，②已支持）——恒 parentless 的安全论据已证伪，仅剩架构纯度顾虑而分泳道排序已缓解",
+        "停顿标注 父语义反转 Owner 已批分解的一部分，Owner 可驳回；021/022 缩小后无门，发行随 W 列车",
+        "教训⑫ 分解给 persona 的事实必须完整读源——截断读源（685 止，漏 693 else-if）连累两立场；与「涉信任机制前提须读源证实」同族，执行期实测是最后防线"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:50407cf705804c0523b1d7bc",
+      "conferenceTitle": "Workflow 与 Helper 优化:审查、对抗检验与 Owner 七点裁定",
+      "conferenceType": "architecture",
+      "summary": "Workflow 与 Helper 过度设计审查的收束。产出方式(供复核 independent 自陈):六条立场中 4 条源于独立 fresh-context 子代理扇出(27 名对抗审查员按 9 提案 × 3 镜头 + 1 名完备性批评 + 4 路实现勘察),2 条为主线程综合与转写;Owner 立场形成于 Owner 自身上下文由 agent:fable 逐字转写,非代拟——每条立场首行如实标注其来源,读者据此可自行分辨。审查测得三类冗余:outcomeClass 五类中 discussion_only 与 blocked 全平台零使用且唯一有行为的类是 owner_intent_required;Story 十区块把形状卡到中文字面 token 而语义检查为判定冗余;引擎外围 adapter 家族 27 动词自认 inert。对抗检验推翻了九项提案的全部原始形态并纠正了主线程自身的三处数字,更挖出两处 fail-open:gate status blocked 是两条命令的合法绕门旁路,storyScopeNamesOwnerDecider 的中文-only 正则会让英文锚 Story 静默跳过 Owner 验收门。Owner 就此作七点裁定并追加一条,落地形态经四路勘察确定,执行分五批次。最要紧的一条更正是:先前呈报的「存量 653 张 Story 全部合规」不实,588 张带 scope 者今天仅 181 张为绿——裁定二正是在该错误前提上作出的,故其形态改为判定层双语并接,存量零风险。",
+      "decisions": [
+        "gate status blocked 的解除武装旁路属缺陷 取 workspace.ts:1440 一处 filter 收紧为 status !== satisfied 使 replay 与 verb 两面同收",
+        "Story 四锚语言做成门户可配 Workflow 级设置 判定层中英双语并接 设置只管生成与展示 出厂默认英文而本平台设中文",
+        "会议侧保留 discussion_only 只收窄 blocked;门侧 gate-create 收窄至 role_decision 与 owner_intent_required",
+        "立场预算做成门户可配设置 默认 4096 写路径强制 引擎硬天花板 8192 只作用于 position 单字段 replay 只认天花板",
+        "Story-Lite 先试 Helper 罐装骨架 不开模板线;ready 维持现状并文档化 work-create --status 出生态直达;Helper 减重放弃 150 行硬指标改逐段处置账",
+        "新发现的 Owner 验收门 fail-open 并入批1 与四锚双语化同批修",
+        "执行分五批次 批0 零代码与双宿主版本对齐腿先行 批4 预算设置化独立 minor 末位发车",
+        "主线程先前呈报的三处数字更正入链:存量合规度 181/588 而非全绿;预算逼出的分片为 5.7% 而非 16.5%;CLI 动词 130/126 而非 135"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:51bfdfdbdc67922b4a52e29b",
+      "conferenceTitle": "缺陷收件与 candidate.21 勘误执行记录",
+      "conferenceType": "incident",
+      "summary": "DS 线程复查三发现处置完毕：Incident kind 操作面缺口登记为 INIT-004（planned，advisory 公约首用）；candidate.21 notes 勘误已发（锚行完好）；DS 快照补至 v254。教学两条入 candidate.23。根类教训：发布声明必须对应载荷字节。",
+      "decisions": [
+        "登记 TCRN-CROSS-INIT-004（planned 未开工）＝Incident kind 操作面缺口：CLI 白名单放开＋三前置缺口（depth 未映射排序／无父约束语义／graph 对未映射 kind 跳过 referential check）——启动与否待 Owner 排期",
+        "公约首用 缺陷单今天的诚实路径＝规划 kind 记录＋work-annotate advisory（advisory:scope 载缺陷描述、advisory:decided-by 回链本纪要）；Incident kind 可建性即 INIT-004 的交付物",
+        "勘误已发 candidate.21 notes 追加 Erratum（Owner 授权对外动作）：distill 纪律实未载入、只载分发纪律；锚行完好复核不变；教学移 candidate.23",
+        "教学登记 candidate.23 队列новых两条：缺陷触发（发现缺陷而延后处理时提议建链上记录；当场修掉的一次坐定之工不必开单）＋kind 真相（协议 8 种/CLI 4 种/catalog 不列枚举值）",
+        "DS 快照已补 v254 SNAPSHOT_VERIFIED 滞后 139 事件清零；DS 链在 v0.3.1 引擎回放绿（向后兼容再实证）",
+        "根类教训 发布声明必须对应载荷字节——H 门只验身份与锚不验语义，此类脱钩仅靠人查；与「机器回执必须来自真实输出」同族"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:522a5c77c8ca6053d0e3b295",
+      "conferenceTitle": "备份转手动与门的判据来源",
+      "conferenceType": "architecture",
+      "summary": "执行形态：independent——agent:fable 的立场由本轮实测在 Owner 裁定之前形成且其 waiver 提案被 Owner 否决，两条立场确由不同上下文得出，故据实声明。裁定：备份两层皆关（五链 backup.cadence=manual 且 destination 空；launchd 快照列车已 bootout 并持久 disable，plist 保留可逆），停车前的收尾快照已完成并双腿验证；选择 manual 即合法将自动备份转手动，doctor 不得因此判红；且不得以本地名册豁免放通，门的期望须由链上 backup.cadence 推导。副产物：查出已装引擎 0.11.16 读不了 cross-project，备份列车自 design.authority 写入起已静默失效。",
+      "decisions": [
+        "备份两层皆关：五条链 backup.cadence 全部为 manual 且 backup.destination 未设",
+        "launchd com.tcrn.platform.local-snapshot 已 bootout 并 disable 持久禁用；plist 保留在原处故可逆",
+        "停车前收尾快照已完成并验证：本地 sha256=418522b4… 异地 readbackVerified=true 且含 cross-project v3817",
+        "裁定一：选择 manual 本身就是合法将自动备份转手动，属合法 skip，doctor 不得据此判红",
+        "裁定二：不得依据本地记忆或名册式豁免放通该红，门的期望须由链上 backup.cadence 声明推导",
+        "认定：由此 backup.cadence 从纯声明变为承重件，须在单据与公约中显式承认",
+        "发现：已装引擎 0.11.16 读不了 cross-project，reasonCode=WORKSPACE_EVENT_CORRUPT error=SETTINGS_KEY_UNREGISTERED:design.authority，已在已装 CLI 与 MCP 面双实测",
+        "发现：备份列车自该写入起已静默失效，最后成功快照记录 v3771 而链已到 v3817，46 个事件从未进入任何备份"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:55cf686f888b70e5e9420b7a",
+      "conferenceTitle": "CONF-043 S072 失败政策会议：N-2 修宪（observe hook 面）",
+      "conferenceType": "risk",
+      "summary": "N-2 由唯一 fail-open 面改为逐宿主闭合枚举：observe 六事件获批，fail-open 不阻断且收据缺失非事件缺失；逐 hook 逐宿主实测上线，fixture 不构成 live 声称；enforce 另裁并记录其前置；反对意见如实在录。",
+      "decisions": [
+        "N-2 修宪只覆盖 observe 面；enforce(PreToolUse/PermissionRequest/Stop)另开会议另裁，不得由本裁定推导",
+        "N-2 唯一条款改为逐宿主闭合枚举：具名 hook 事件为已获批面，各自声明失败语义并产账本收据；未列举一律禁止；扩表须新裁定而非实现决定",
+        "observe 首批枚举 PostToolUse、SessionEnd、PreCompact、PostCompact、SubagentStart、SubagentStop，双宿主各自计数",
+        "observe 恒为 fail-open 不阻断有界只读，绝不作交付门；收据缺失不是事件缺失的证据，不得作免责或合规证明；超时杀 hook 不杀会话",
+        "逐 hook 逐宿主上线：一次一个，各带本宿主实测收据与既有 hook 回归证明；家族不继承成员证据",
+        "fixture 证明不构成 live 声称：本裁定解锁开发与 fixture 证明，不解锁任何 live 声称，live 须真实宿主收据",
+        "漂移防线为处理器 digest 钉扎加入口自检加失配静默；不得声称与 Codex 逐哈希门等价；兜底为会话首 verify-installed-copy",
+        "禁用措辞 hooks are supported、observe hooks are safe、coverage is full、hosts are equivalent、non-blocking by construction；许可恒为逐 hook 逐宿主收据支撑",
+        "enforce 前置记录待办：独立裁定、爆炸半径、不依赖该 hook 可触达的 Owner 已测 kill switch、真实宿主 fail-closed 红证",
+        "如实记录反对意见：N-2 的力量在于计数为一，每开一例都让下一例更廉价"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:58287860fa64cb461ff74e5c",
+      "conferenceTitle": "记录与现实对齐：INIT-001／002 补转终态",
+      "conferenceType": "retrospective",
+      "summary": "补转 INIT-001／002 至 done 并留因：二者现实早已完成却因不挂在任何被例行推进的结构上而无人回头看。时间戳用补录当刻不回填。",
+      "decisions": [
+        "失真 INIT-001（接入受治工作流）与 INIT-002（0.1.0 里程碑）自重起当日建立后一直停在 planned，而现实早已完成——接入在跑、0.1.0 已发版并有 GitHub Release",
+        "成因 二者无产出会议、无门、不在任何 Story 树下，故无任何流程会路过它们；凡不挂在被例行推进的结构上的记录就没有机制会回头看它",
+        "同源教训 与「口头登记等于没登记」同源，只是层级不同：登记须落在会被例行走到的结构上",
+        "处置 按真实完成补转 planned→ready→active→done，时间戳用补录当刻而非回填——回填时间戳等于伪造历史；链只保证落账后不可篡改，不保证署名与时刻必真，故不可再掺假"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:5b26238fd23a2cba4430f429",
+      "conferenceTitle": "CONF-044 CONF-039 后继 remediation：执行来源如实补记，不追认既往分类",
+      "conferenceType": "verification",
+      "summary": "CONF-039 的执行形态如实补记为 legacy-unverified 并保留原状；CONF-040/043 虽确由独立子代理产出但早于采集机制，同样不予升格。自 S055 起以观测收据为多代理审议的唯一判据，诚实上限（归因非身份、采集器同权、转写未签名）已结构化在代码而非叙述中。",
+      "decisions": [
+        "CONF-039 保留原状不追加不改写；本会议为其后继 remediation 并交叉引用，不声称重开原会议",
+        "CONF-039 五立场均由单一主线程上下文撰写，按 EPIC-019 读法分类为 legacy-unverified，不是 multi-agent-deliberative",
+        "CONF-040 与 CONF-043 的立场确由独立 fresh-context 子代理产出并逐字转录，但早于 S055 采集机制故未绑宿主执行收据",
+        "本会议明确不为 CONF-040 与 CONF-043 追认更高分类，以免以叙述替代证据；其执行来源同为 legacy-unverified",
+        "自 S055 起新会议可由观测到的子代理调用产出收据，立场正文与调用收尾输出字节相等方可标 multi-agent-deliberative，无收据即 synthesis-only 失败关闭",
+        "诚实上限不变：收据是归因增强而非身份证明，采集器与被观测代理同权，转写未经宿主签名；三句已钉进模块常量、返回类型与门",
+        "缺席即未知不得读作已覆盖：无收据不证明调用未发生，亦不证明其发生"
+      ],
+      "outcomeClass": "recommendation"
+    },
+    {
+      "id": "minutes:5b4aa782de6119ca6815827c",
+      "conferenceTitle": "MIN-102 五条未决项与 INC-223 的收束",
+      "conferenceType": "verification",
+      "summary": "MIN-102 五条未决项与 INC-223 的收束。产出方式:6 条立场中 3 条源于独立 fresh-context 子代理勘察(门户对账降级面/reason-codes 缺口/references 陈旧断言),3 条为主线程实测与综合;Owner 立场为逐字转写。各条首行如实标注来源。五条未决项处置:#1 已由 STORY-291 收束记 settled;#2 待补清单实测为空——活 Story 657 张中终态 656(其中 471 按今日校验器会红,属祖父豁免不迁)、非终态仅 1 张且合规;#3 knowledge-rebase 141→142 完成,--distill 通道已通;#4 放弃为「七命令」辩护,改以「Skill 自称译尽而一码未收」为下限补 13 码,文件 45→72;#5 有界审校查出 8 处不符,其中 4 处是会让 agent 做错事的真勘误。INC-223 三步全部落地并使引擎仓首次 P1_VERIFIED(22 道全绿)。本轮另立两条防复发红腿并各自实证能红:散文身份绑 bootstrap IDENTITY、DS 对账四条单元测试。一处自我更正:首次用 work-list 枚举得到的「STORY-289 不合规」是测量假象,该投影不带 advisory。",
+      "decisions": [
+        "MIN-102 #1 记 settled:双宿主版本对齐腿已由 STORY-291 实现 doctor 现 requirementAsserted true",
+        "MIN-102 #2 收束:终态单一律不迁 非终态实测仅 1 张且合规 待补清单为空",
+        "MIN-102 #3 完成:knowledge store marker 141→142 高水位与链头一致",
+        "MIN-102 #4 降级缓办:不做全量状态码治理 只补可达码覆盖 reason-codes 45→72 码",
+        "MIN-102 #5 完成:8 处不符已改 其中 CLI_UNKNOWN 与 WORKSPACE_GATE_PENDING 两处属会误导操作的真勘误",
+        "INC-223 收束:快照重取 + 源码对账降 observation + 刷新触发方归 DS 侧写入 design-authority 公约",
+        "按宿主而异的门列为判据参照物第七类判准候选 已记入 gate-reference-inventory 第三轮补记",
+        "新增两条防复发红腿:trust-contract 散文身份由 bootstrap IDENTITY 派生校验;DS 对账四条单元测试"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:5dbdf24ebec77a37b66f3db2",
+      "conferenceTitle": "STORY-015 spike 产出：分发信号设计裁定，E04 减重",
+      "conferenceType": "architecture",
+      "summary": "spike 裁定分发信号：不碰 SessionStart 注入（固定/digest 钉定/fail-open），用适配器现有存在作通知＋verify-installed-copy 现成时效检查＋治理放置 runbook。E04 从 live-install 大程序减为运营纪律＋治理放置 runbook（不放宽 LIVE_LOCATION_FORBIDDEN，工作流永不写 .claude/，agent 经批准放置）。声明 STORY-016。",
+      "decisions": [
+        "读源一 SessionStart 注入（通道甲）固定格式、scriptDigest 钉定、1024 字节预算、fail-open——改它＝激活阶梯 churn＋抢预算＋setup 信号继承 fail-open 不可靠",
+        "读源二 首次放置由 First-Run 向导+独立可信 bootstrap 冷启动引导，适配器不做首次分发",
+        "读源三 verify-installed-copy 已是现成时效检查：放置副本对不上钉定摘要即 IDENTITY_MISMATCH",
+        "裁定 分发不需新适配器机器、不碰激活脚本、不放宽 LIVE_LOCATION_FORBIDDEN；正解＝适配器现有 SessionStart 存在即通知＋skill 运营纪律（每会话 verify-installed-copy 不符则提议放置）＋治理放置 runbook（agent 驱动、用户批准、带回执，复用现成 verify，工作流永不写 .claude/）",
+        "重塑 E04 从 live-install 大程序减为运营纪律＋治理放置 runbook，近 E03 消费者无关小交付",
+        "下一条 声明 TCRN-CROSS-STORY-016：治理放置 runbook＋skill 运营纪律＋成文信任故事（工作流永不写 .claude/边界；agent 经批准放置；verify 校验；回执）"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:5e315d13c3aa1034f0e2e3ff",
+      "conferenceTitle": "适用设计系统的声明与黄态",
+      "conferenceType": "architecture",
+      "summary": "适用设计系统的声明形态定案。取证：该事无行业标准——token 内容层最接近的 W3C DTCG 仍是社区组草案且只规范 token 文件怎么写，身份版本层事实做法是 semver，组件文档层 Storybook 是无规范的事实标准。裁定：①链级新增 design.authority 单键，选填、值为 DS Storybook 的 https URL、纯声明；引擎只做形态校验（https、长度界、规范文本），不验可达性（离线边界），不含平台专名（引擎为公开通用产品）；按纯净性原则不进系统词典。②不做 digest 锚定（Owner：DS 大幅改版时下游本就预定大更新，省掉维护）；后果如实记录——链级对漂移零强制，静默漂移由各仓自己的字节门兜着（门户 token-fidelity/brand-asset/DS 快照一致性钉各自 vendored 副本，不受本设置影响）。③版本不上链，由权威在自己 origin 下提供 /tcrn-design-authority.json 自报（schemaVersion/name/version 必填，tokensDigest/releasedAt 选填，须带 CORS）；该 JSON 只由读者浏览器抓取一次，引擎与门户服务端均不抓取。④引入黄态，封闭定义为「本地不可验」：绿=本地验证为真、红=本地验证为假、黄=本地不可验（外部事实/自报值）、豁免=本地验假但 Owner 显式接受（既有 waiver）；防腐三条：种类为封闭名册、每条须写明什么会转绿、永不改 exit code；**本批只窄引入于设计权威面**，全局三态另议，且明确不给本地验得出假的东西开黄。DS 侧红腿由 DS 仓 verify 承担（manifest 存在、version 与发版一致、tokensDigest 与构建产物一致）。立 INC-193 与 STORY-283。",
+      "decisions": [
+        "design.authority 单键纯声明=INC-193;黄态窄引入于设计权威面=INC-193;DS 侧 well-known manifest 与红腿=STORY-283;不做 digest 锚定;版本由权威自报"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:5f2317613645846a3f896236",
+      "conferenceTitle": "三处待裁的 Owner 裁定",
+      "conferenceType": "strategy",
+      "summary": "Owner 裁定 MIN-092 遗留三处：R1 词典 settingsEnums 行单位=枚举值（每条枚举值单列一项词条），推翻 MIN-092 R2 的临时补列安排；R2 effort 会话级档位子代理不能用（经查证 model-plan efforts 是 per-persona 派工配置，ultracode/ultra 官方标 session-only，现 validate 接受它们系 fable 在 INC-181 引入的缺陷），修法照 roles 域 reviewOnlyDispatchable 先例加可派发性字段并在派工面拒绝；R3 顶栏紧凑度问题关闭无需裁定（实现本就用 DS 出厂 68px，63px 仅为诊断的理论下限，从非候选）。两单落链 INC-183/184，执行 agent:fable，零推送零发版。",
+      "decisions": [
+        "R1 行单位=枚举值=INC-183;R2 可派发性字段+派工面拒绝=INC-184;R3 顶栏紧凑度关闭"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:5fd796e8a242799b071f7ace",
+      "conferenceTitle": "CONF-041 README 版本同步债确认、INIT-011 立项与 SPRINT-002 快车列车",
+      "conferenceType": "strategy",
+      "summary": "确认 README 内容面滞后 0.1.0 的版本同步债并立 INIT-011 清偿与防再犯；建 SPRINT-002 快车列车，入列 INIT-009/010/011，发布合并至列车收官单一停点。",
+      "decisions": [
+        "问题确认:五语 README 版本徽章已随 0.5.0 bump 但正文能力面停留 0.1.0;gate identity、work-annotate、Incident、后台资源治理、sprint 列车在五语正文均零提及",
+        "立 TCRN-CROSS-INIT-011:EPIC-027 之下 S084 英文正文补齐、S085 四语逐节对照同步、S086 README 内容纳入发布版本面门",
+        "防再犯门方向:五 README Status 节须含 CHANGELOG 最新版本号与其 headline 关键词;门只证在场不证质量",
+        "建 TCRN-CROSS-SPRINT-002 快车列车并入列 INIT-009、INIT-010、INIT-011;适用 MIN-036 修订批量停点公约",
+        "sprint advisory 非绑定;三 Initiative 状态独立推进;对外发布合并至列车收官单一停点",
+        "MIN-042 与 MIN-043 既有边界不变"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:603cb8a3ef9e7497bb3f161b",
+      "conferenceTitle": "S197 再开发触发器撤销:何时开发由 Owner 主观决定",
+      "conferenceType": "strategy",
+      "summary": "Owner 撤销 S197 的再开发数据触发器:何时重启开发由 Owner 主观决定，不以任何阈值或代理量形式存在，且不得构成完成 workflow 开发的前置条件。\n背景与实测:S197 于 2026-08-09 随 INIT-020 收口验收生效(rev11 逐字「验收通过，投产」)，其触发器为「任一分区累计 100 新工作项 / 五分区合计 300 / 满 12 周 / failure-pattern 达阈」。目的锚是 Owner 裁示一「处理足够多任务后才反过来分析是否需要进一步开发」，即以新工作项数代理运行经验的累积量。实测该代理与被代理者方向相反:投产至今 TCRN-AOS 新建 0、TCRN-Design-System 0、TCRN-TMS 0，三条老产品链八天零新增;而 cross-project 新建 235、Joi-Button 69、dsh-joi-channel-theme 55。触发器早已响过，响的却是平台改自己的次数——恰是冻结本该停掉的活动。故撤销优于调参。\n另一实测须一并记明:S197 的平台级正文已于 2026-08-13 22:59 随 TCRN Platform/CLAUDE.md 被削为 14 字节桥接文件而删除，档案区无备份，Code/AGENTS.md 从未接收，全容器仅存 AOS 交接文档一份。该删除历时四日无人察觉，因为唯一会红的那道门(s197-protocol-proof)当时尚未提交入仓——一道不在仓里的门，其红没有观众。\n处置:退役 s197-protocol-proof 门与其测试及 pnpm 入口;不建「运行复盘 Initiative」(该机制随触发器一并撤销);S197 其余条款(破冻三类、SSH 纪律、运行期通路)不再由该门承载，其纪律归属另议，本次不追加机器门。\n产出方式:owner:governance 的立场为其原话逐字转录;agent:fable 的立场含其独立实测。声明 independent。",
+      "decisions": [
+        "S197 再开发数据触发器撤销，不以任何阈值或代理量形式保留",
+        "何时重启开发由 Owner 主观决定，不设链上判据",
+        "冻结不得构成完成 workflow 开发的前置条件",
+        "退役 s197-protocol-proof 门、其测试与 pnpm 入口",
+        "不建运行复盘 Initiative"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:632f74b508074e4e54d3c721",
+      "conferenceTitle": "发版列车执行记录：W v0.2.0 → H candidate.19 → 安装克隆升级",
+      "conferenceType": "release",
+      "summary": "Owner 授权的发版列车三段完成：W v0.2.0（tag+Release+P8 五件）、H candidate.19（IDENTITY 重钉+教学更新+三方锚验证）、安装克隆升级（ROOT_RESOLVED+两链回放绿）。GATE-002 自此真正可关。三次被门抓住三次都对。",
+      "decisions": [
+        "W v0.2.0 已发：16 版本位一次落＋release notes＋CHANGELOG；PUSH_GATE_VERIFIED version 0.2.0；推送 b4846c8；注记标签 v0.2.0；GitHub Release 携五件 P8 产物",
+        "W 途中三次被门抓住三次都对：dist/release 陈旧 0.1.0 产物（P8_PRIVACY_RELEASE_ARTIFACT_SET）／CHANGELOG 标题缺失／证明产物未重生成——同类教训第三次：任何 tracked 编辑后先 regen",
+        "发版说明如实：minor 因行为变更（owner 门关闭从任何 actor 到须名册）；0.1.0 链回放不变",
+        "H candidate.19 已发：IDENTITY 四值换 v0.2.0、provenance 字节拷贝 W 生成件、锚 19513f48… 六文档、manifest 重绑含 workflow 身份、78/78、三方锚验证全等",
+        "H 教学更新：SKILL「pending gate-v1」段落改为诚实拆分（关门已机检／审议时机仍不是）；折入名册关门教学与队列三课",
+        "安装克隆升级 v0.2.0：对新 bootstrap ROOT_RESOLVED；目录含 identity 旗标；两生产链回放全绿 cross v156／DS v215——五个旧 owner 门无一被砖",
+        "放置副本与信任根从 Release 资产传播：INSTALLED_COPY_VALIDATED @ v0.2.0（归档 d53bbe61…）",
+        "执行者纪律 未以变更动词在活链上试探拒绝路径：负例已在套件证明，活链不做探针",
+        "GATE-002 自此真正可关且只能以其自身机制关"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:6b3a226012700f4322fd28ee",
+      "conferenceTitle": "INIT-020 方向确认:Postgres、单轨完整迁移、取消顺序门",
+      "conferenceType": "architecture",
+      "summary": "执行形态:单上下文合成(synthesis-only),非多代理,理由在开场立场首行。INIT-020 方向确认定案:D1/D2 维持 MIN-063 原裁;D3 改裁 Postgres(为未来协作功能写入打地基,SQLite 转被拒);D4 改裁单轨完整迁移(五链一窗全切、回滚=反向迁移、文件后端降格为仪器);D5 改裁取消 INIT-019 顺序门(立即开工,INC-061..071 逐单核销)。三项改裁均为 Owner 2026-08-06 逐字裁定,原文见 POS-C061-FABLE-1。本纪要在 D3-D5 上取代 MIN-063 对应条目;MIN-063 原文留链为历史。",
+      "decisions": [
+        "D3 改裁 DB 选型 Postgres——VM 单实例绑回环经 SSH 隧道、库内五链各一 chain schema 加 domain 加未来协作 schema、chain schema 仅引擎角色可写且 append-only 由 GRANT 加触发器机械化、协作角色永不获链写、PG 不可达时引擎 fail-closed 不回退文件轨、SQLite 转被拒方案理由为不承载未来协作写入(Owner 裁)",
+        "D4 改裁 单轨完整迁移——五链一个计划迁移窗全切、文件树当场转只读归档、SSH 读转发面同窗退役、回滚路径=迁移动词族反向迁移同判据、切换前末次文件形态配对备份永久留存、文件后端代码降格为迁移与验证仪器(Owner 裁)",
+        "D5 改裁 取消 INIT-019 顺序门——INIT-020 立即开工、INC-061..071 在 INIT-020 内逐单核销 superseded 指名承接处或 retained 独立执行、核销清单随 EPIC-052 出并按 closeout-verify 机器核(Owner 裁)",
+        "D1 与 D2 维持 MIN-063 原裁不变(Owner 确认)"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:6b50300fad04af301dc0c3d0",
+      "conferenceTitle": "知识库容量设计与 distill 纪律裁定",
+      "conferenceType": "architecture",
+      "summary": "读源答知识库为何有上限：它是有界的上下文注入面非数据库（同律见 SessionStart 1024 字节）；撞的是 128 KiB 聚合字节（metadata 近乎双重计数，库被 metadata 重量填满）非记录数；退休不释放聚合字节（刻意约束物理总量）。根因＝把库当决议镜像误用。Owner 采纳 distill 纪律：仅蒸馏可复用知识，distill 前问是否会被查询复用。本纪要即不带 --distill 关闭（新纪律首次实践）。",
+      "decisions": [
+        "答why 知识库是有界的上下文注入面非数据库：存在理由是被查询并注入 prompt，凡入模型上下文者构造上有界；同律见 SessionStart≤1024 字节／查询≤8 条／CLI 输出字节稳定；事件链才是无界审计日志",
+        "读源真因 撞聚合字节上限 128 KiB 非记录数（32/64）；聚合公式对 metadata 近乎双重计数（整 index＋每 unit 各一次），body 均 135 字节而 metadata 约 2KB/条，库被 metadata 重量填满",
+        "机制事实 退休只释放记录数槽位不释放聚合字节（scan.units.reduce 不过滤退休，刻意约束物理总量含退休），128 KiB 硬顶退休救不了，回收需 delete 或重建",
+        "根因 误用：conference-close --distill 每决议造一记录，纪要每份 6–9 决议，把知识库变决议镜像",
+        "裁定 Owner 采纳 distill 纪律：distill 改为仅蒸馏真正可复用的知识；决议已完整在事件链纪要无须镜像；distill 前先问「这条日后会被查询复用吗」",
+        "处置 当前库不清理（没坏只是满），少 distill 即不再涨；本纪要即以新纪律不带 --distill 关闭（首次实践）",
+        "落地 记忆 stop-budget 侧已更正 16→64 旧值＋记 distill 纪律；payload 教学入 candidate.21 队列（workflow-operations Decomposing 第 7 步）"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:6cd5793e3af198c0cc202a3d",
+      "conferenceTitle": "INIT-022 门户轨验收会:GATE-006 关闭、S218/S220 与 INC-127/128 收口",
+      "conferenceType": "verification",
+      "summary": "INIT-022 门户轨验收会(单上下文,立场为主线程转录非分头独立)。两张 INC 的复核命令由验收会独立重跑而非采信自述:INC-127 两副本均 INSTALLED_COPY_VALIDATED 且争议文件字节一致;INC-128 部署副本已在重铸谱系、dist 认识新状态、五分区全可读。S220 的 npm run proof 全绿含六条红腿实测。关 GATE-006,四单推 done,EPIC-066 done;钉完定义仅余第(7)项。",
+      "decisions": [
+        "GATE-006 关闭:钉完定义(5)成立",
+        "门户三面经公开面走通且红腿可辨",
+        "S218/S220 推 done;EPIC-066 done",
+        "INC-127 与 INC-128 验收通过推 done",
+        "复核命令由验收会独立重跑",
+        "门户五语言与配置项说明一并验收:语言集取自 ui-copy-state 契约",
+        "两条契约约束各有机器门",
+        "settings-catalog 未暴露 allowedValues 立 TCRN-CROSS-INC-131",
+        "门户不硬写枚举成员",
+        "钉完定义仅余第(7)项 helper 重钉发布;推送与重钉继续 park 待单独授权"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:6eaa974b9321b5fc356dc026",
+      "conferenceTitle": "STORY-004 产出：pins 轨供给已实现并证明（W cf4547b）",
+      "conferenceType": "verification",
+      "summary": "pins 轨供给实现并证明：六 verb 得可选摘要旗标，三点实测＋歧义失败关闭已写入 p5 套件常设化；typecheck／P3／P5／P6／P6B／format-check／guard-check 全绿。W cf4547b 本地提交未推送。残余：compatibility-plan 须先裁可用性。",
+      "decisions": [
+        "实现 W cf4547b 本地提交未推送：新增 suppliedAuthority 助手＋六 verb 可选摘要旗标；旗标缺席时行为逐字不变",
+        "证明 三点实测已写入 p5 套件常设化：无旗标仍 REQUIRED／错摘要停在 AUTHORITY_DIGEST／对摘要越闸产出 effective profile",
+        "证明 注入与旗标同供报 CLI_AUTHORITY_AMBIGUOUS 失败关闭；非摘要形参数报 CLI_ARGUMENT_MALFORMED",
+        "性质留档 旗标供给下读取器的路径交叉校验按构造空转（两串同出一调用方）真正绑定者为摘要比对——已写入代码注释",
+        "绿灯 typecheck／P3／P5／P6／P6B／format-check／guard-check（12 守卫变异体全杀）",
+        "残余 compatibility-plan 属 pins 轨但 availability=programmatic-only 补旗标无用须先裁可用性，不并入本 Story",
+        "边界 五个 attestations host 面 verb 依 MIN-008 刻意不给旗标"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:70631a541cc8a84e3065551d",
+      "conferenceTitle": "门户设计对齐与 Agent Effort 批次裁定",
+      "conferenceType": "strategy",
+      "summary": "Owner 2026-08-14 两轮裁示：批次通过（含 effort 修正）。R1 INIT-036=E1 骨架重建（编辑器网格修复/shell 响应式对齐 v4/Brand lockup/导航可及名称/词典排版）+E2 控件精修与三方对照+E3 Agent Effort+INC-161 digest 根因①。R2 effort=单一名册每条记录带适用宿主字段：两家官方同名值一条交集记录双宿主可用，特有值仅标该宿主，不建重复枚举；名称按官方文档锚定引文+URL+日期入证不自造；assignment 按适用宿主校验。R3 组件处置=三方对照逐件呈报终裁 Owner，本批零移除。R4 v4 基准入公开仓+design-proof 对照腿红腿实证。R5 INC-161 探针从信任根解析期望值。零推送零发版，派工 Codex。",
+      "decisions": [
+        "R1 批次=EPIC-092(S274/275/276)+EPIC-093(S277/278)+EPIC-094(S279/280)+INC-161;R2 effort 单一名册+适用宿主字段（修正版）=S279/S280;R3 三方对照零执行=S278;R4 基准对照腿=S276;R5 探针信任根解析=INC-161"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:71294b42d7caa067f65ac9be",
+      "conferenceTitle": "STORY-011..013 产出：CLI 负例、向后兼容与边界证明（W 129bbe7）",
+      "conferenceType": "verification",
+      "summary": "三条 Story 完成：CLI 路径负例分开证；向后兼容以真链实测（两链五门无身份条目照常回放，砖链回归被五测试抓住）；边界以测试断言回放接受伪造尾部追加，成文三句入 §9。名册已部署于控制树之外并实测可用，摘要为带外常数。",
+      "decisions": [
+        "STORY-011 名册经 argv 抵达 gate-transition，该路径与引擎分开证——接错或没接上的旗标能通过历来所有引擎测试；四种拒绝逐一走 CLI 且各证链未前进",
+        "STORY-012 真链实测 cross-project v137 与 TCRN-Design-System v215 在新引擎下 validate 全绿，共载 5 个已满足 owner_intent_required 门且全不带身份条目",
+        "STORY-012 该状态新动词已造不出来故测试手写事件上链；「回放强制要求身份条目」的回归被五个测试同时抓住——一旦发生每个用过该 class 的工作区变砖",
+        "STORY-013 回放接受伪造尾部追加现为测试而非句子：事件哈希无密钥，任何有写权限者可算出自洽事件，回放能读的每项皆来自同一台机器；用例断言接受故边界一旦移动主张随之失败",
+        "STORY-013 成文三句入 agent-integration-v1.md §9（授权非认证／回放不防尾部追加伪造／任何非密码学回放检查亦不可能防）并点名钉住第三句的测试",
+        "名册部署 .tcrn-workspace/release-trust/gate-identity-authority.json 199 字节置于控制树之外（它是权威非工作区数据），由引擎自身 canonicalGateIdentityAuthority 序列化",
+        "名册教训 手搓的 canonical 被读取器以 CANONICAL_INVALID 拒绝——格式该由定义它的工具产出",
+        "名册实测 owner:governance 被许可／agent:opus 被拒／错摘要被拒；摘要 fab89e256b7a4df472ac6310ae1b5e85e6993a3655c062dcf5ba82e140ed15b7 即带外常数，信任模型同 bootstrap 锚点",
+        "绿灯 49/49 套件、typecheck、format-check、push-gate 全绿；W 129bbe7 已推送"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:71bdb2b9fe7996aebf96dfc2",
+      "conferenceTitle": "workflow 产品化方向会:机器级拓扑定格、初始化流程、门户归置、skills 分发(单上下文审议)",
+      "conferenceType": "strategy",
+      "summary": "workflow 产品化方向会(单上下文,立场为主线程转录非分头独立)。十条裁定:机器级拓扑与三层定格、版本声明承重件、异版本不支持立场、skills 注册表分发、初始化五设计件+宿主接线、容器不入 git 仓、门户机器级+跨平台启动器+分区选择器、建 remote 列为执行项、立 INIT-023 与 AOS 并行、INC-131 并入引擎批而 INC-130 归 DS 轨道。",
+      "decisions": [
+        "引擎运行时定格机器级;三层拓扑=机器级(引擎+信任根+skills)/平台工作区级(链+settings+模板+平台AGENTS.md)/仓级(仓AGENTS.md+代码)",
+        "版本声明承重件(工作区声明所需引擎版本+引擎具名拒绝)并入0.11.10引擎批并提优先级",
+        "同机异版本共存明确不支持为产品立场;逃生门为受裁例外",
+        "分发走skills注册表规范一次安装多agent;CC产品默认放置改用户级;本平台项目级放置作本地选择保留",
+        "工作区初始化=helper向导+既有公开动词引擎零改动;五设计件照案;宿主接线(MCP条目+hooks基线)纳入初始化",
+        "工作区容器不得住进git仓;单仓用户亦建平台容器;标准容器布局成文",
+        "门户定格机器级;启动器为生成脚本非symlink且必须跨平台macOS/Linux/Windows;加分区选择器",
+        "门户仓建remote列为INIT-023执行项;建仓时点仍为对外发布必停",
+        "立INIT-023 workflow产品化批;与AOS kickoff并行小步",
+        "INC-131修复并入引擎批;INC-130归DS轨道待裁分发形态不入本批"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:729c794de85503538c3be1d6",
+      "conferenceTitle": "INIT-005 知识层完全激活:立项拆单与决策清单",
+      "conferenceType": "strategy",
+      "summary": "INIT-005 定形:四 Epic(引擎修复/策展公约/发布列车/内容启动)十一 Story(S023-S033);验收五判据入 Verity 立场;决策清单三分类共 7 项——OWNER-NOW 3(1 已裁 2 待批)/CONDITIONAL 2/AGENT 2;时序 S026→S027→S028→S029→S030→S031/032→S033",
+      "decisions": [
+        "OWNER-NOW 已裁:INIT-005 范围=按引擎既有设计完全激活知识层;跨分区共享层(C)明确出范围留后续 INIT",
+        "OWNER-NOW 待批:W v0.3.2 与 helper candidate.24 对外发布预授权(门证全绿即发)",
+        "OWNER-NOW 待批:策展公约三缺省(晋升=agent 促 Owner 可驳;reverify 挂 initiative-close;平台规范双库复制)——S027 会议落链",
+        "CONDITIONAL:遗留 60 镜像处置——若 S026 证 disposable 再初始化受设计许可则清库重种;否则批量 retire+肥墓重写;tombstone 计数预算一并报告",
+        "CONDITIONAL:SessionStart 摘要携知识行——若 S026 证其走已交付构建器则纳入 EPIC-007;若被 adapter 激活程序阻塞则记录延期不入本 INIT",
+        "AGENT 已决:活化门 outcome_class=role_decision;B③ candidate 层默认可见否决;抬容量上限否决",
+        "AGENT:聚合公式细节/stub 内容/stale-days 具体值/种子选目/DS 库代操作——proceed-and-report"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:7949577d1cca85fcf7a62cdf",
+      "conferenceTitle": "STORY-007 产出：二选一前提消解，测试对齐既有契约（W be29372）",
+      "conferenceType": "incident",
+      "summary": "二选一前提消解：仓内压测注释已裁定真实契约为「至多一个赢家」，其证据（两处生产调用点丢弃返回值）经复核属实。1464 行的「恰好一个」是断言强于实现，CI 零赢家非 flake。已对齐并写明理由；灾难方向（两个赢家）断言两处原样保留。连跑三次全绿，整门 133s 绿。",
+      "decisions": [
+        "真因 同一文件两个相邻测试对同一代码路径互相矛盾：1464 行要求恰好一个赢家，其下压测断言至多一个并附论证",
+        "前提消解 仓内已裁过——压测注释即裁定书；其载荷证据经复核属实：safe-io.mjs 1136 与 1144 两处生产调用点均裸 await 丢弃返回值，赢家信号在生产侧无消费者",
+        "定性 CI 那次零赢家不是 flake 而是断言比实现强；「至少一个赢家」不是实现作出的承诺",
+        "处置 把 1464 对齐到压测已写明的契约（<= 1）并在原处写明理由",
+        "未削弱 两个赢家仍是灾难方向，该断言在两处原样保留；去掉的只有实现从未作出的「至少一个」",
+        "复验 套件连跑三次 136/136 全绿；整门 PUSH_GATE_VERIFIED 133s",
+        "程序说明 本 Story 原载须先呈 Owner 裁，因二选一前提消解故按既有裁定推进；改动单点可逆，Owner 可驳回"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:79975d0e36983467b5b5d79c",
+      "conferenceTitle": "INIT-004 分解：Incident 操作面开通的设计裁定与建树",
+      "conferenceType": "architecture",
+      "summary": "INIT-004 分解裁定（两 persona 四问全收敛+Mara 合成）：仅开 Incident；恒 parentless 校验器强制；图加固通用化先行（8 kind 全覆盖、双侧 fail-closed）；树收两单 EPIC-006→STORY-021/022；发行随 W 列车；无门；奉 Owner 令只拆不做全树 planned；职责以 advisory 入记录。",
+      "decisions": [
+        "Q1 仅开 Incident：Release/Knowledge/Review 各绑既有信任机制且零消费者（Minerva/Sable 收敛）",
+        "Q2 Incident 恒 parentless 且由校验器强制——连可选父都不给，无字段即无可乘之隙；found-in 走 work-annotate advisory",
+        "Q3 图完整性加固通用化并与 Incident 解耦：任意非空 parentId 必解析、覆盖全部 8 个 shape-接纳 kind、动词与回放双侧 fail-closed——CLI 白名单不是信任边界，完整性落图校验器",
+        "Q4 不设 spike：设计裁定即本纪要（Owner 可驳回）；树收两单",
+        "树 EPIC-006（Incident 操作面开通含图加固）→ STORY-021（通用图加固，红证，先行且为 022 放行前置）→ STORY-022（白名单仅加 Incident＋校验器强制 parentless＋非规划 kind 在场排序保持全序＋测试＋scratch e2e）",
+        "发行条件 随下次 W 发布列车（Owner-gated），是条件不是 Story；无门（增量式、裁定在案、发布即 Owner 到场点）",
+        "奉 Owner 令只拆不做：INIT-004 active（已启动分解），EPIC-006 与两 Story 全 planned，零执行",
+        "职责入记录 每张单以 work-annotate 打 advisory:scope 并 decided-by 回链本纪要——职责表活在记录上不在对话里"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:79efc91d6479e81f1cc3d961",
+      "conferenceTitle": "dsh-tcrn-workflow-plugin 委托裁定:决策点清除与完整派工授权",
+      "conferenceType": "architecture",
+      "summary": "Owner 授权裁定会议:Owner 将验收权限与下一步意见授权编排者(原话逐字在案),编排者按已核实现实结果作出七项委托裁定——① 定性=A(宿主扩容,M1 探针全 ok 证据支撑,新 Initiative 于 M1 收口后建);④⑤ 五件配套正式落地(面板=对链只读、调用-署名过渡=只读零写+仪式转交、⑤ 终止条件、名册锚=公证≠验证、删同构);FP-1 关闭(会话级脚本不提升,重建 instrument 入仓=C12);INC-241 批准立单(validator 白名单缺口归引擎仓);⑩ verdict 写盘=M6 不直接写、呈报后由受治会话执行;STORY-310 验收通过落 done(代理验收在案);STORY-311-315 转 ready 派工。保持未决:⑤+、P-PROD(M7 前+用户时间窗)、② 再收编复审(M6 前)。",
+      "decisions": [
+        "① 定性=A(宿主扩容定性成立);依据=M1 探针 #3a/3b/3c/approval 全 ok、相位裁定原文无宿主二字;新 Initiative 于 M1 收口后建(名称不含强制面、目的三件套、纳入 #3a 结论);M2-M5 开工门随本裁定解除",
+        "④⑤ 五件配套正式落地:面板=对链只读(agent:portal 9 条写记录追认);调用-署名过渡=插件只读调用引擎零写、写动作仪式命令转交、actor 由执行仪式者写时实名(宿主级);⑤ 终止条件=引擎 HARNESS_CAPABILITIES 含 dsh 列或 InstallManifestHost 含 dsh、复审随 C8;名册独立验证=M6 九门自跑结果、标注锚=公证不等于验证;删同构断言",
+        "FP-1 关闭:6 个会话级脚本存在但不提升任何候选;重建最小可复跑对抗审查 instrument 入本仓 scripts/(M1 修复项 C12);不另立 Incident",
+        "INC-241 批准:引擎派工校验器白名单缺约 46 个 npm 内置子命令为引擎侧缺陷",
+        "按执行方立单先例立案",
+        "修复方向归引擎仓;本仓侧以 node 形态命令规避",
+        "⑩ verdict 写盘:M6 不直接写 acceptance-verdicts.json;M6 产出九门结果表与提议 verdict 呈报",
+        "实际写入由受治会话执行",
+        "STORY-310 验收通过落 done:四门齐备、三新事实与 N8 口径在案、门四可翻盘落笔、exempt-routine 成立;依据=Owner 授权代理验收(原话在案)加编排者复核",
+        "STORY-311-315 转 ready 派工;311 closeout 以 C1-C12 修复清单为准;316/317 维持 planned"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:7b9f4673a028a6e221f380fc",
+      "conferenceTitle": "判据参照物稳定性公约",
+      "conferenceType": "strategy",
+      "summary": "执行形态：independent——agent:fable 的通则主张由本轮三次实测形成且早于 Owner 裁定，两条立场确由不同上下文得出。裁定：采纳《判据参照物稳定性公约》——门的判据参照物必须是不会移动的东西（受版本控制的名册、链上声明、字节 digest），不得是 HEAD、墙钟此刻或冻结常量搭配会动基线的组合；放通不得依据本地记忆或名册式豁免。约束登记：能力补偿型；执行宿主现为平台散文清单且无机器门，如实登记；机器化落点为逐门红腿，INC-197 与 INC-195 为头两处兑现。文档落点 TCRN Platform/docs/gate-reference-stability-convention.md。",
+      "decisions": [
+        "采纳《判据参照物稳定性公约》：门的判据参照物必须是不会移动的东西",
+        "允许的参照物：受版本控制的名册、链上声明、字节 digest",
+        "禁止的参照物：git HEAD、墙钟此刻、以及冻结常量搭配会动基线的组合",
+        "放通不得依据本地记忆或名册式豁免（承 MIN-099 裁定二并推广至所有门）",
+        "约束分类登记为能力补偿型；现无机器门属如实登记的欠账而非隐瞒",
+        "机器化落点为逐门补红腿；不做全局静态扫描因 git show HEAD 有合法用途",
+        "历史证据沿用 INC-149 先例：不可复现的量标 excerpt 并保留原数不得改写",
+        "首批兑现：INC-197 覆盖门改用版本控制名册；INC-195 doctor 判据改由链上 backup.cadence 推导"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:8356ad65611190b79043cde2",
+      "conferenceTitle": "知识库策展公约:准入/晋升/保鲜/双库复制",
+      "conferenceType": "strategy",
+      "summary": "策展公约四缺省落链:①准入=会被查询复用才制卡（guide/fact/reference,非链镜像）②晋升=agent 促 Owner 可驳,provenance 完备③保鲜=stale-days 缺省 guide90/fact180/ref365,reverify 挂 initiative-close④双库复制=平台规范同卡入两库 source 指 cross 裁定（C 层前过渡）。供 S031-033 遵循。",
+      "decisions": [
+        "准入:会被查询复用才制卡",
+        "kind=guide/fact/reference",
+        "非链镜像;晋升:agent 促发 Owner 可驳",
+        "provenance 完备;保鲜:stale-days 缺省 guide90/fact180/ref365",
+        "reverify 挂 initiative-close;双库复制:平台规范同卡入两库",
+        "source 指 cross 裁定",
+        "C 层落地前过渡"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:83e4b837324dd63d2c079fb7",
+      "conferenceTitle": "INIT-009 定形：跨宿主治理接入 Program 与 Codex 证据阶梯",
+      "conferenceType": "architecture",
+      "summary": "Owner 确认 INIT-009 六 Epic、二十三 Story 的可信双宿主接入阶梯。共享 authority/MCP 核心先行，Codex 依实机证据由单 Hook 扩至 observe，再经显式政策裁定进入 enforce；App Server 限只读 Observer。因 INIT-010 已占原展示键位，实际键仅作机械平移，范围与依赖不变。",
+      "decisions": [
+        "定形六 Epic与二十三 Story 串行证据阶梯并将兼容矩阵置于每级验收列",
+        "因 INIT-010 已占原键位实际键机械平移为 EPIC-021至026 与 STORY-058至080且语义顺序依赖不变",
+        "authority supply 与宿主中立 Workflow MCP 属核心且 Adapter 不铸造 authority",
+        "Codex 依惰性安装与单 SessionStart 再 observe 后 enforce 逐面扩展",
+        "STORY-072 到达 live 阻断前另开失败政策会议裁 N-2 与降级语义",
+        "App Server 本 INIT 仅 Observer且 STORY-079 若支持 Controller则另立 Initiative 并复议 GD-1",
+        "主动编排源码事务治理全局 Hook自动 Knowledge 晋升均不在本 INIT",
+        "任何对外发布仍在发布点停下"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:85e893a7b49d62d505032acd",
+      "conferenceTitle": "INIT-022 收官验收会:钉完定义七项全绿,workflow+helper 钉死达成",
+      "conferenceType": "verification",
+      "summary": "INIT-022 收官验收会(单上下文,立场为主线程转录非分头独立)。钉完定义七项由本会逐项现跑复验:部署位动词 112、三门全 satisfied、prod:ready 7/7 PRODUCTION_READY、两副本 INSTALLED_COPY_VALIDATED @ v0.11.9。S221/EPIC-067/INIT-022 全部推 done,workflow+helper 钉死达成,AOS 轨道解锁。门户仓 remote 与 AOS 分支推送继续 park。",
+      "decisions": [
+        "钉完定义七项全绿",
+        "逐项由收官会现跑复验",
+        "S221 与 EPIC-067 推 done;INIT-022 推 done——workflow+helper 钉死达成",
+        "按裁示二",
+        "AOS 开发轨道自此解锁",
+        "台账种子转入 AOS 整改 kickoff",
+        "门户仓建 remote 与 AOS 分支推送继续 park",
+        "本会不解禁",
+        "INC-130 与 INC-131 保持 planned",
+        "属方向题另裁",
+        "不阻断收官"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:868f0ae66e406ac22d8ed1ba",
+      "conferenceTitle": "EPIC-003 开工：多-skill schema 建 vs fail-closed 先修的分叉裁定",
+      "conferenceType": "architecture",
+      "summary": "扇出裁定 Fork B：现在只把 builder fail-open 变 fail-closed，v2 多-skill schema 推迟到真实第二 skill 消费者。三核查倒向 B：scripts-only 轻仪式不动锚；守卫不变式在 v2 单调加强非回退；E04 是分发机制非第二 skill。EPIC-003 只声明 STORY-014。停顿预算合规、Owner 可驳回。",
+      "decisions": [
+        "裁定 采 Fork B：现在只把 builder 的 fail-open 变 fail-closed，v2 多-skill schema 连同四改推迟到真实第二 skill 消费者到场",
+        "核查一 付两次全套仪式不成立：守卫只改 scripts/create-skill-archive.mjs 与其测试皆不在 skill/ 下，故 EXPECTED_ARCHIVE_SHA256 与锚不动、六文档无须 republish——轻量 scripts-only 仪式",
+        "核查二 注定推倒的墙被驳倒：守卫不变式（archive 须代表 skill/ 下每条被跟踪路径否则构建失败）在 v2 被保留；v2 拓宽满足条件（唯一 SKILL.md 子树→每子树各有 SKILL.md）为单调加强非回退，v2 改判定不拆守卫",
+        "核查三 很可能就是 E04 无源支撑：E04 是把现有单一 helper skill 经宿主 adapter 分发系分发机制而非第二 skill，非多-skill 消费者",
+        "边界确认 采 Opus (d) 砍单为即便建 v2 也不含：fixture skill／每-skill 分片／adapter 路由属 E04／迁移工具无基线",
+        "Story EPIC-003 只声明 TCRN-CROSS-STORY-014（B1–B4 合为一坐定之工不切 Subtask）：builder 对 skill/ 下任何无法代表的路径失败关闭＋红证＋scripts-only 发布",
+        "v2 处置 推迟为待真实第二 skill 消费者，记入本纪要与记忆非遗忘；届时为改守卫判定条件的正常 payload 编辑",
+        "停顿预算合规 本裁定由既有裁定支撑（深度教义＋E02 实现移到有消费者 epic 先例）单点可逆，故执行不停 Owner；Owner 可驳回"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:87a460ec026a850d82639134",
+      "conferenceTitle": "钝式扫描裁定：lint 改判代码、门的告警扫描不动（W 5907551）",
+      "conferenceType": "risk",
+      "summary": "Owner 同意分开处置：lint 改判代码（剥离注释与字符串，强度不减，剥离器常设为 lib＋测试），推送门告警扫描不动并记在案（零暴露且该干净由 processWarningState 工程而来；照搬 H 收紧会丢包管理器告警一类）。尺子：有观测且修法不损强度者修，仅有推测且修法丢覆盖者不修。过程教训：红证前先自检探针。",
+      "decisions": [
+        "裁定一 lint 的 \\bany\\b 改为剥离注释与字符串/模板字面量后只扫代码；剥离长度守恒故报告偏移仍指真处",
+        "依据 28 份 .ts 命中代码 0 注释 0——该零是作者绕开英文词的结果而非无违规；隐式 any 早由 strict 在类型层挡住，本规则增量价值仅在显式标注而显式标注只出现在代码里",
+        "边界 @ts-ignore 因本身即注释仍读全文；LINT_EVAL 同样改判代码",
+        "裁定二 推送门的 \\bwarning\\b 不动并将不动记在案：三个被扫命令实测 warn 出现 0 次，且该干净由 scoped-strip-types.mjs 的 processWarningState 工程消费而来非侥幸",
+        "依据 照搬 H 的收紧（只匹配 Node 运行期签名）会在 W 丢掉包管理器告警一整类；本会话亲见 npm warn Unknown project config",
+        "若将来被咬 修法是加结构（Node 签名并上 ^(npm|pnpm) warn）而非放松模式",
+        "一致的尺 有观测证据且修法不损强度者修；仅有推测且修法会丢覆盖者不修——打包成「钝式扫描一起改」是偷懒",
+        "常设化 剥离器移入 scripts/lib/code-only.mjs 并配 tests/code-only.test.mjs：抓取方向单证（含 as any／Array<any>／Record<string any>／eval）＋误报方向＋长度守恒＋串内注释符＋转义引号",
+        "过程教训 首轮红证十例全报 None 因调用形写错——无法区分正确放行与根本没跑；须先自检探针（已知违规须被检出）再信任任何一次通过",
+        "ceremony 复用 STORY-008 教训：routeAdditions 为一次性引导口，重生成后即撤回"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:884f4d8bf105cde95f41dbb1",
+      "conferenceTitle": "词典分类裁撤更正与厂商模型清单抽屉",
+      "conferenceType": "strategy",
+      "summary": "Owner 更正 MIN-093 R1 的层级读法并下达一项新需求。更正：settingsEnums 词典分类整体裁撤，其中每个设置键拆为独立词典条目（导航中与角色/推理强度等并列，条目名用该设置的人类名称，行为其取值）；fable 原实现停留在同一分类内按枚举值分行，属容器层级读错，逐值释义与列形状可复用。新需求：子代理设置页增按钮展开侧边抽屉，列九家厂商 API 模型清单官方文档超链接（Anthropic/OpenAI/Qwen/Minimax/Deepseek/Kimi/Grok/Google Gemini/GLM），仅跳转不搬运正文。INC-183 重开按更正实现，新需求立 INC-185，组件选型钉到门户既有 .tcrn-detail-drawer 约定。",
+      "decisions": [
+        "settingsEnums 分类裁撤、每设置键独立成条=INC-183 重开;厂商模型清单抽屉=INC-185"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:8a07dd58045bba990a546d94",
+      "conferenceTitle": "STORY-008 产出：身份权威文件 schema 与 pins 轨读取器（W 8743f70）",
+      "conferenceType": "verification",
+      "summary": "身份权威契约落地：名册经共享 pins 轨读取器读取、摘要绑定盘上字节；canonical 次序为要求、许可答案只来自读取器产出的上下文、决策记录自足以便回放只校验形状。三处注入红证全被命名对应测试抓住。两处仪式教训（routeAdditions 一次性、amend 悬挂对象）留档。钝式 \\bany\\b lint 由潜伏升级为已观测隐患，未自行改门。",
+      "decisions": [
+        "实现 新模块 packages/core/src/gate-identity.ts（不并入纯校验的 assignment-gate.ts 以免其沾文件系统）；名册 {schemaVersion permits:[{actorId outcomeClasses}]} 经共享 readAuthorityFile 读取、摘要绑定盘上字节",
+        "不变式一 canonical 次序是要求而非产出：摘要即名册身份，允许重排等于同一许可有第二身份第二摘要；permits 与 outcomeClasses 均须已排序且无重复",
+        "不变式二 许可答案只来自读取器产出的上下文：手工同形对象未过任何文件系统与 canonical 检查，以 WeakSet 品牌拒之（品牌不是信任锚，摘要才是）",
+        "不变式三 决策记录自足 {actorId authorityFileSha256}：供 STORY-010 入 extensions；回放只校验形状永不重读文件，链的可读性不得取决于外部文件在场",
+        "红证 注入三处破坏（去次序守卫／去品牌检查／枚举成员改强制转换）各被命名对应的测试抓住无一存活——新守卫见红方可信",
+        "仪式教训一 routeAdditions 是一次性引导口：文件重生成进 source-allowlist.json 后即在 declared 中，继续留驻会使并集多项并在证明产物测试的合成夹具中报 allowlist must exactly admit the bounded source set",
+        "仪式教训二 git commit --amend 留下的悬挂对象被 p1 的 HISTORY_UNREACHABLE_OBJECTS 拒绝，须 reflog expire --expire-unreachable=now --all 加 gc --prune=now",
+        "绿灯 typecheck／format-check／verify:p1／push-gate 全绿；W 8743f70 已推送",
+        "已观测隐患升级 W 的 lint 以钝式 \\bany\\b 正则扫描整份 .ts 含注释，实测咬中本模块散文中的 any actor 与 any real roster——此前登记为潜伏，现为已观测；依既有纪律未自行改门，另候裁定"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:8b6d419cdf95d88f1ad096b0",
+      "conferenceTitle": "文档拓扑两处形态与 codex 激活的去向",
+      "conferenceType": "strategy",
+      "summary": "执行形态：independent——agent:fable 的立场含一处自我更正且形成于 Owner 裁定之前。裁定：INC-200 拆开处置，相对桥接改门的判据、Localization 段落移入 DS 仓 AGENTS.md；INC-205 取过渡态接受并把 codex 激活面转为受主张列入 v0.11.18，不复活候选；本次授权 v0.11.17 发版信号，收尾与质量验收完成后可直接推送。",
+      "decisions": [
+        "INC-200 ②：@../AGENTS.md 是迁移后正确形态，改 AOS 登记册判据为「桥接解析到正本」而非逐字匹配",
+        "INC-200 ③：DS 仓 Localization 政策段落移入其 AGENTS.md，CLAUDE.md 还原为纯桥接",
+        "INC-200 ①：平台根 AGENTS.md 补 TOPOLOGY-CLAIMS 块；④ 归 INC-194 由发版自愈",
+        "INC-205：取过渡态接受，不复活开发候选 66c9d451——那正是本轮清除的形态",
+        "codex 激活面转为受主张列入 v0.11.18 并走已发布路径，配清单条目、doctor 覆盖与受治理激活回执",
+        "过渡期分工记录在案：受治理写入走 Claude 会话，Codex 做仓内工作，由 AGENTS.md 散文纪律覆盖",
+        "更正：agent:fable 先前称 codex 钩子缺失属便利而非保护，该措辞过轻，已在其立场中自纠",
+        "Owner 本次授权 v0.11.17 发版信号：完成收尾与质量验收后可直接推送"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:8dde9a0d76cd241db4ff7f15",
+      "conferenceTitle": "STORY-005 产出：六个已解锁 verb 的端到端证明（W 5e5c63a）",
+      "conferenceType": "verification",
+      "summary": "六个已解锁 verb 各自带端到端证明（错摘要负例为关键钉）；context-route 双面、Codex/Claude 双读取器、uninstall 只证拒绝三处刻意分列。P3/P5/P6/P6B+format+guard-check 全绿，W 5e5c63a 本地提交未推送。覆盖＝6/7 pins 面 verb。",
+      "decisions": [
+        "证明形制 六个 verb 各自带证明不靠类比：旗标逐 handler 接线，兄弟通过不替它作证",
+        "三点钉法 无供给维持原拒绝／错摘要停在 *_DIGEST／对摘要越闸进入本职工作",
+        "关键负例 错摘要是唯一能证伪「旗标忽略其参数」的钉——只做正向用例该缺陷照样通过",
+        "context-route 单列证明：唯一双面把守者，只陈述其一仍须关另一闸，错的上下文钉不能搭正确 profile 钉便车（实测 CONTEXT_AUTHORITY_DIGEST）",
+        "Codex 与 Claude 安装回执分开证：二者以各自读取器实现同一份文件身份契约，一个通过不带另一个",
+        "claude-adapter-uninstall 只证拒绝：与规划兄弟同走一旗标，错钉须在任何文件被解链之前 refuse",
+        "绿灯 P3／P5／P6／P6B 受治验证＋format-check＋guard-check（12 守卫变异体全杀）；W 5e5c63a 本地提交未推送",
+        "覆盖边界 compatibility-plan 未覆盖（programmatic-only 未解锁）；五个 attestations host 面 verb 未覆盖（MIN-008 不给旗标）——E01 证明覆盖＝6／7 pins 面 verb 而非 12 个全解锁"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:8f78fb1d19f7b44806a8b8b7",
+      "conferenceTitle": "决策清单公约：拆单收尾必盘决策项，补完停顿预算",
+      "conferenceType": "strategy",
+      "summary": "立决策清单公约补完停顿预算：拆单收尾产三类清单（OWNER-NOW 前置批量解／CONDITIONAL 条件式非硬停确认即升级／AGENT 自决），使决策边界拆单时即知、agent 自主跑到交付。与「不预登记」调和：只分类不建硬停。INIT-004 父语义反转回溯证其有效（本该列 CONDITIONAL）。入记忆+payload 队列。",
+      "decisions": [
+        "公约 拆单收尾必产决策清单落 kickoff 纪要：每个会 gate 交付的决策项分三类",
+        "OWNER-NOW owner_intent 门／无既有裁定支撑的方向选择／对外发布授权——批量一次呈 Owner 前置解决，此后 agent 自主跑余下全部",
+        "CONDITIONAL 决策悬于执行会检验的前提，写「若前提成立则裁定/呈 Owner，否则消解」——非硬停守「不预登记假停」原意，执行确认前提即升级 OWNER-NOW（Owner 已预告）",
+        "AGENT 既有裁定支撑可自决 proceed-and-report",
+        "要点 决策边界拆单时即知，Owner 一坐批量解 OWNER-NOW，agent 再无中断跑到交付——更少中断非更多；run-to-delivery 复盘再挂清单标归宿 resolved/dissolved/promoted",
+        "调和 与停顿预算「不预登记」不矛盾：不预登记的是硬停，清单只分类且 CONDITIONAL 仍条件式；新增的是 OWNER-NOW 前置批量盘出（原规则漏做的半，害 agent 边跑边撞）",
+        "INIT-004 回溯证有效 父语义本该列 CONDITIONAL（恒 parentless 假设悬空父 fail-open 存在；执行读源+scratch 检验；证伪则呈 Owner 裁 strict-vs-optional），清单把执行期意外反转变拆单期已挂号条件项",
+        "落地 记忆 stop-budget 补完段已写；payload 教学入 helper 队列（workflow-operations Decomposing 加决策清单步）"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:91c8cce5aff482971d1be568",
+      "conferenceTitle": "INIT-023 收官验收会:四门全关、发版列车清偿、AOS 延迟裁示落纪要",
+      "conferenceType": "verification",
+      "summary": "INIT-023 收官验收会(单上下文,立场为主线程转录非分头独立)。五单判据现场重跑通过;发版列车跑完(v0.11.10 tag 31a0710、helper candidate.35 tag 679f99e、部署位实测新功能生效、prod:ready 7/7)使四张门欠账清偿,GATE-007..010 全关。INC-131 随 S223 修复推 done。AOS 延迟裁示正式落纪要。门户仓 remote 与 INC-130 维持 park。",
+      "decisions": [
+        "INIT-023 五单验收通过;GATE-007..010 四门全关(发版列车已清偿其欠账)",
+        "Codex 交付零造假:park 全守、生效证据位置表被遵守、五份证据未证标注齐全",
+        "skills 注册表发布完成:source-oriented 注册表经仓库与 candidate.35 tag 即可解析",
+        "无独立发布凭据",
+        "INC-131 随 S223 修复完成推 done;INC-130 维持 planned 归 DS 轨道待裁",
+        "AOS 继续延迟——AOS 不是 workflow 的必需品;台账种子继续登记不启动",
+        "门户仓建 remote 维持 park;门户 shadow 分区误选风险另立单"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:9458c60c80dac90942a40bb1",
+      "conferenceTitle": "STORY-006 产出：W 推送门 205s→134s（W 2b0ac2f）",
+      "conferenceType": "verification",
+      "summary": "先测后改：热点不在 build 而在两条守卫跑整套件（75.5s/85s）。改为只跑实测确认的抓手测试，窄化同时更严格且只会大声失败。guard-check 108s→34s（12 守卫全杀），整门 205s→134s 落到 180s 阈值下。残余：verify:p1 90s；另记门的钝式告警扫描隐患待另裁。",
+      "decisions": [
+        "基线实测 verify:p1 90s／verify:p8 7s／guard-check 108s 合计约 205s",
+        "假设证伪 guard-check 成本不在每条一次全量 build（实测 build 仅 1–2s）而在测试运行",
+        "热点定位 12 条守卫中 2 条吃掉 75.5s（p4-knowledge-core 46.3s／p3-file-engine 29.2s）其余 10 条合计约 4s",
+        "改法 这两条只跑真正抓住其变异的那个测试；测试名由注入变异读失败用例名实测得来而非猜测",
+        "窄化更严格 「套件里有测试失败」与「这个测试失败」是不同主张；模式匹配不到时跑零测试退出 0 落在 MUTATION_SURVIVED 分支——只会大声失败不会静默通过",
+        "结果 guard-check 108s→34s 十二守卫仍全杀；整门 205s→134s 已落到门内注释所述 180s 升级阈值之下",
+        "残余热点 verify:p1 90s（566 测试／40 文件）现为最大单项未动",
+        "隐患留档 门的告警扫描仍是钝式 \\bwarning\\b|\\bWARN\\b——与 H candidate.16 所记「钝扫描即故障注入器」同形（H 曾误伤夹具字面量与 CI git 闲聊）；W 未被咬但属潜伏，改门语义应另立裁定不由提速 Story 带过"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:9544853cd5dd2c24ca198181",
+      "conferenceTitle": "DS Storybook 权威源与顶栏选型整改裁定",
+      "conferenceType": "strategy",
+      "summary": "Owner 2026-08-14「落链然后你来做吧」：四单落链且执行改由 agent:fable 亲自承担。R1 复验=钉死的判据全达标（logo digest 一致/sidenav 逐值/焦点移容器/顶栏四宽度），未钉死的组件选型全即兴（usesShellComponents 四项全 false），根因=未把 DS Storybook 指定为选型权威源，同一教训第二次复发责任在交接方。R2 DS Storybook 升格选型权威源为常备条款。R3 顶栏逐元素钉死组件。R4 更正 MIN-088 R3：Workflow 后缀走 DS modifier 机制而非门户自持 token，授权 fable 动 DS 仓，色值沿用 #3b5272/#9db5d4。R5 基准腿扩选型级判据。零推送零发版。",
+      "decisions": [
+        "R1 复验结论存档;R2 权威源常备条款=INC-169;R3 顶栏选型整改=INC-167;R4 DS 注册 workflow 产品=INC-166（更正 MIN-088 R3）;R5 选型级基准腿=INC-168"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:95c6a11377a4330211886221",
+      "conferenceTitle": "门户与 DS 的组件闭环:INC-130 重裁与两线落链",
+      "conferenceType": "architecture",
+      "summary": "门户与 DS 组件闭环裁定:Owner 2026-08-13 全部同意。INC-130 重裁转 done(tcrnComponentCss 机制已满足其判据);INIT-029 两线落链(门户消费 DS+九构件回流);落链后派工 Codex。",
+      "decisions": [
+        "INC-130 重裁:诊断看错分发形态——样式以 tcrnComponentCss(TS 常量",
+        "88KB",
+        "101 根类",
+        "含 tcrn-button",
+        "2026-06-29 起)从主入口分发",
+        "其符合性判据已被该机制满足;更正定性后转 done;若日后需要 .css 文件形态另立新单",
+        "DS 组件样式的分发形态正式确认为 TS 常量导出 tcrnComponentCss;消费方以 import 后注入 style 的方式取用",
+        "落链 INIT-029「门户与 DS 组件闭环」:EPIC-082 门户消费 DS(S252 签入快照内联与同名去重/S253 同义类对齐)+EPIC-083 构件回流 DS(S254 九构件注册回流/S255 门户消费回流构件闭环)",
+        "A 线快照机制须带对账门:签入的 CSS 快照与 DS 源的字节对账在持有 DS 的平台上跑",
+        "CI 用快照自足——与 i18n contract snapshot 同款模式",
+        "回流九构件:Switch、Stat 状态卡、SettingRow(含重置与修改点)、出厂值回显(ghost 与单字段恢复)、行号 gutter 编辑器、应用状态栏、词条定义列表、锁定提示;具体组件命名与合并由实施者提方案",
+        "Owner 验收时裁定",
+        "领域特有 15 类(model-plan/assignment/audit/receipt 等门户业务件)不回流通用 DS",
+        "原预留给 INIT-029 的 adapter 生成宿主 agent 定义与派工许可矩阵顺延至 INIT-030",
+        "三仓纪律不变:git 身份 <git-identity>、禁 email 禁 Co-Authored-By、两仓均 PUBLIC、push/tag/发版停放待 Owner 授权"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:9941f9a6e99def7a8a1416ed",
+      "conferenceTitle": "INIT-024/025 收口:迁置、清洁安装、修复列车验收;推送改 park",
+      "conferenceType": "verification",
+      "summary": "INIT-024(五链迁置 Code/.tcrn-workspace + 全机清框架 + 首次真实清洁安装)与 INIT-025(INC-132 迁置天花板 + INC-133 上手六缺口)验收通过。发版列车跑完:v0.11.11 → v0.11.12(名册漏声明补正)、helper candidate.36 → candidate.37,四个 Release 均带资产,向导步骤 2 以 Release 为唯一来源实测走通。三门全绿(prod:ready 7/7、doc-topology IN_SYNC、local-purity PURE_CLIENT)。推送改列 park:三仓实测均为 PUBLIC 且待发布新增行含内网标识,先前「均私有仓」的说法在本会正式更正。",
+      "decisions": [
+        "INIT-024 与 INIT-025 验收通过",
+        "全部 Story 与 Epic 推 done",
+        "INC-132(迁置天花板)与 INC-133(上手六缺口)修复完成推 done;INC-133 第④项门户 remote 非工程缺陷",
+        "归发布决定",
+        "**推送改列 park**:三仓实测均为 PUBLIC",
+        "待发布新增行含 100+1+1 处内网标识",
+        "须先隐私清洗并另行授权",
+        "历史版本的 GitHub Release 刻意不补建",
+        "只保当前钉死版本",
+        "门户仓建 remote 维持 park;INC-130 维持 planned 归 DS 轨道",
+        "门户 shadow 误选风险已随影子退役消解",
+        "不另立单;AOS 整改继续延迟"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:99b312b503ca7b6373a3f31a",
+      "conferenceTitle": "EPIC-004 开工发现：适配器分发前提撞 LIVE_LOCATION_FORBIDDEN 边界",
+      "conferenceType": "architecture",
+      "summary": "Owner 亲裁方向 B 并点出正确形态：适配器通知 agent、agent 经用户批准执行治理放置，非适配器自写 .claude/。读源三证实成立（SessionStart 是真实指令通道／LIVE_LOCATION_FORBIDDEN 只禁工作流自写不禁 agent 批准放置／分发正解＝通知+执行）。按深度教义只声明 spike STORY-015，其余待读源。",
+      "decisions": [
+        "Owner 择方向 B：E04 纳入 live-install 程序，形态为适配器通知 agent、agent 经用户批准执行治理放置（非适配器自写 .claude/skills/）",
+        "读源证实一 SessionStart 注入是通往模型的真实指令通道：≤1024 字节权威摘要读进上下文 AC-1 实测送达，适配器本就在此通道初始化每个宿主",
+        "读源证实二 LIVE_LOCATION_FORBIDDEN 只护 .claude/.codex 路径组件，禁的是工作流自己的变更命令写宿主活动目录，不禁 agent 经用户批准放置",
+        "读源证实三 分发正解＝适配器通知＋agent 执行：禁令原样成立（工作流永不写 .claude/），agent 写合法（用户宿主、用户批准）",
+        "分解纪律 按深度教义只声明第一条 spike STORY-015（读源定信号承载的设计叉：扩 1024 字节权威摘要 vs 另立 project.json 状态字段；保 fail-open 与隐私；产出裁定零 live 写），其余 Story 待 spike 结论切",
+        "停顿预算 方向 B 由 Owner 亲裁，本纪要据以确立；后续 Story 交付按连续交付，只在 owner_intent 门/对外发布/无裁定支撑的方向变更处停"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:9e2ae969f6f716ba2ee6f2a8",
+      "conferenceTitle": "persona 署名公约：立场 actor-id 记角色而非模型名，含执行形态披露",
+      "conferenceType": "architecture",
+      "summary": "persona 署名公约（Owner 裁定）。立场 actor-id 记角色（persona）非模型名。两级：事件 --actor=执笔者/驱动会话，立场 --actor-id=persona id。引擎零改动（assertActorId 的 ACTOR_PREFIXES 含 profile:，直测 profile:tcrn-minerva-v1 ACCEPT）。8 persona 分工（core-reference-personas.ts）：Arturo编排/Ilya实现/Janus验收/Mara产品/Minerva架构/Mneme知识/Sable安全/Verity验证；争议按 mandate 冲突选派 fresh-context。立场首行披露执行形态（dispatched subagent vs main-thread synthesis），诚实边界：披露是声明非证明。本会议自我 dogfood（Minerva 署名立场经引擎接受）。动因：DS 链 21 立场零扇出=单视角自陈冒充审议。历史 append-only 不改，向前生效，载荷改动随 candidate.23。",
+      "decisions": [
+        "position-actor-id-is-a-persona-id-not-a-model-weight-name",
+        "two-level-signing-event-actor-is-scribe-position-actor-id-is-persona",
+        "zero-engine-change-assertActorId-accepts-profile-prefix-verified-by-live-test",
+        "position-first-line-discloses-execution-form-subagent-or-main-thread-synthesis",
+        "contested-questions-dispatch-personas-by-mandate-conflict-each-fresh-context",
+        "eight-personas-shipped-in-core-reference-personas-are-the-role-vocabulary",
+        "convention-forward-only-history-append-only-payload-queued-candidate.23"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:9ec6c654e179026f8d015e51",
+      "conferenceTitle": "INIT-031 复验两 P1 与证据居所规则裁定",
+      "conferenceType": "strategy",
+      "summary": "Owner 采纳 INIT-031 独立复验建议：R1 分类夹转接 @@ 修复+doctor 转接语法腿；R2 证据居所规则（红证原件入 .tcrn-artifacts，公开仓 evidence 脱敏+显式声明，verbatim 标记仅限真逐字，隐私门无豁免），六命中文件归置至 verify:privacy 绿；R3 档案分裂按同规则收敛（公开仓批次 evidence 住该仓，平台级报告住平台层，红证原件住平台档案，空重复目录清理）。派工 Codex，无推送，done 只属 Owner。",
+      "decisions": [
+        "R1 转接修复与 doctor 扩腿（STORY-259）;R2 证据居所规则与六文件归置（STORY-260）;R3 档案分裂收敛并入 STORY-260"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:9fdc00a25959962b576d0c2c",
+      "conferenceTitle": "抽象概念的界面释义",
+      "conferenceType": "strategy",
+      "summary": "Owner 问独立性底线是什么并裁定：凡界面上比较抽象的概念全部加 i 图标、悬浮出详细说明。答：execution.independenceFloor 规定收口时须自证「多方立场各自独立形成」的会议类型范围（conference.ts:24 与 workspace.ts:3507，不满足即 CONFERENCE_INDEPENDENCE_REQUIRED），四值覆盖范围递增；天花板是该声明为自陈、引擎从不校验其为真——防的是「没人想过」，防不了「声称了没做到」，而这条天花板在界面上一个字都没有，正是本裁定的由来。fable 独立立场给出形态与范围：组件钉到 DS 已出的 Tooltip 件（hover 与 focus-within 双通道、内容禁交互件），触发件须可聚焦且按 INC-191 用内联 SVG 而非 ⓘ 字符；范围限于语义不在界面上的三类（设置行深层语义、词典分类名、抽象列头），不在已可见释义旁重复。立 INC-192。",
+      "decisions": [
+        "抽象概念加 i 图标与悬浮释义=INC-192;组件用 DS Tooltip;范围为三类，不重复已可见释义"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:a0a3288d371cda9692aeb1f3",
+      "conferenceTitle": "dsh-tcrn-workflow-plugin MVP 一次性裁决与分区收编",
+      "conferenceType": "strategy",
+      "summary": "Owner 对 dsh-tcrn-workflow-plugin MVP 裁决包 v4 一次性裁决:O-1..O-7 全部按推荐项(a)批准,D1-D12 十二行协调文本整包采纳(D12 两段默认含 P6 拆分修正);补充要求执行 ②=A 就地新建分区 dsh-tcrn-workflow-plugin(DSH-TWP-)并划分工单落区:INIT-047+STORY-320..328 落新分区,既有 INIT-045/046、STORY-310..318、收编 Incident、上游 INC、backlog 锚留 cross-project。",
+      "decisions": [
+        "[\"O-1 对等参照物=adapter 惰性/KEEP INERT 面",
+        "零 Stop 面保持",
+        "stop-pact 不追\"",
+        " \"O-2 同等能力口径=与参照 adapter 实际出货能力同等\"",
+        " \"O-3 上游零字节例外=接受 AGENTS.md 拓扑行增改+chain-validate 6→7 为 ②=A 显式例外\"",
+        " \"O-4 零 Stop×fail-open 摘要真空=显式接受为已知边界\"",
+        " \"O-5 agent:dsh=不预登记",
+        "实际执笔者实名",
+        "确需先登记再使用\"",
+        " \"O-6 INIT-047 单一承载两阶段",
+        "STORY-326 改题诚实面边界登记\"",
+        " \"O-7 D1-D12 十二行协调文本整包采纳",
+        "D12 两段默认含 P6 拆分修正\"",
+        " \"②=A 就地新建分区 dsh-tcrn-workflow-plugin(DSH-TWP-)",
+        "落区划分按 Owner 补充要求\"]"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:a261bf73c9403cc137154bbb",
+      "conferenceTitle": "INIT-033 独立复验裁断与收尾批",
+      "conferenceType": "verification",
+      "summary": "INIT-033 独立复验(85 代理六维对抗,25 存活/14 证伪)裁断=部分通过:五单维持 pending-owner-acceptance,停放维持。Owner 全部同意建议:P0 回执泄漏移入平台档案+跨仓隐私门;P0 清单完整性门去恒真化;P1 容器根四 hook 修复+doctor 判据;P1 launchd 腿去硬编码+备份停摆可见;P1 helper c41 版本前置止血;验收探针定性为机器判据;清单外安装面登记;三处表述更正。诚实度=高(零虚报/零反转拼接/零伪造/零偷推)。收尾批=INIT-034+INC-159,派工 Codex。",
+      "decisions": [
+        "R2 回执归档+跨仓隐私门=STORY-266;R3 完整性门去恒真=STORY-268;R4 容器根 hook 修复=STORY-267;R5R6 launchd 腿与备份可见=STORY-269",
+        "复原查明=INC-159;R7 helper 版本止血=STORY-271;R8 探针定性为机器判据=STORY-270;R9 清单外安装面登记并入 STORY-266;R10 表述更正并入 STORY-271;R1R11 裁断与诚实度评估存档"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:a2e5a6cbdd858b9203c02b0d",
+      "conferenceTitle": "INIT-019 方向审议:唯一数据平面、知识注入、生效证据纪律",
+      "conferenceType": "architecture",
+      "summary": "INIT-019 方向定案。D1-D4 为 Owner 本日直接裁定:接入 AOS 后 AOS 是唯一数据平面、更新与读取第一时间走 AOS MCP、SSH 直驱引擎 CLI 为错误做法;知识层读写同经 MCP 并由 webhook/hook 提醒 agent 按 prompt 检索注入;知识索引缺陷必修;只有本地模式才写本地文件。D5-D8 按审查层建议采纳待确认:单一 ceremony 写工具、分两阶段(本机包裹→座舱原生 MCP 与渲染上移)、三源策展首批不少于二十卡、拆单模板加第五要素生效证据命令并对 INC-041 四代办补票。执行形态:单上下文合成,非多代理。",
+      "decisions": [
+        "D1 AOS 为唯一数据平面、读写第一时间走 AOS MCP(Owner 裁)",
+        "D2 知识层读写经 MCP 并由 hook 按 prompt 触发检索与注入(Owner 裁)",
+        "D3 知识 store 高水位索引缺陷必修(Owner 裁)",
+        "D4 只有本地模式才写本地文件、已接入 AOS 的分区数据全在 AOS 侧(Owner 裁)",
+        "D5 MCP 写面形状为单一 ceremony 工具而非逐动词转发(建议采纳)",
+        "D6 分两阶段实施先本机包裹后座舱原生并把投影渲染上移(建议采纳)",
+        "D7 知识内容三源策展首批不少于二十卡且每卡至少一条 evidence(建议采纳)",
+        "D8 拆单模板加第五要素生效证据命令并对 INC-041 四代办逐件补票(建议采纳)",
+        "D9 SSH 按残余适用性条件化保留两类场景其余退役(建议采纳)"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:a58b7295b91c80392c3d2b87",
+      "conferenceTitle": "INIT-006 验收:交付节奏公约文本 Owner 批准,关 GATE-003",
+      "conferenceType": "verification",
+      "summary": "Owner 经 AskUserQuestion 显式批准公约文本(docs/delivery-cadence-convention.md),授权关闭 GATE-003,INIT-006 转 done。",
+      "decisions": [
+        "GATE-003 经 Owner 显式批准关闭;INIT-006 交付节奏公约验收通过",
+        "转 done"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:a5b8acfc66c5228473902ed3",
+      "conferenceTitle": "INIT-007 收官:多宿主后台资源治理发布(W v0.4.0 + helper candidate.25)",
+      "conferenceType": "release",
+      "summary": "Owner 授权对外发布,INIT-007 多宿主后台资源治理已上线(W v0.4.0+helper candidate.25,两 Release、安装副本升级、双链回放绿),收官。",
+      "decisions": [
+        "Owner 授权对外发布批次(W v0.4.0 + helper candidate.25)",
+        "已全部执行并三方验证",
+        "W v0.4.0 与 helper candidate.25 均 main+tag 已推+GitHub Release;安装副本升 v0.4.0;两生产链回放绿;placed copy INSTALLED_COPY_VALIDATED",
+        "INIT-007 收官:3 Epic/6 Story 全 done"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:a7150455805abaf5b6a04a2e",
+      "conferenceTitle": "GATE-002 证据卡：gate-v1 验收（关此门须动用其自身名册）",
+      "conferenceType": "architecture",
+      "summary": "Owner 验收 gate-v1 并令关门：验收覆盖交付、证明与边界；运行时（W v0.2.0/H candidate.19/克隆升级）齐备；授权以名册与 owner:governance 关闭 GATE-002。",
+      "decisions": [
+        "验收 gate-v1 经 Owner 验收：owner_intent_required 门须带外名册＋具名 actor；授权决策入 extensions；回放只校验形状与自洽、绝不重读名册",
+        "证明基础 49/49 套件＋三处引擎与两处 CLI 注入红证＋真链回归（cross v137/DS v215 五旧门无一被砖）＋边界由「回放接受伪造尾部追加」测试钉住",
+        "运行时基础 W v0.2.0 已发（tag+Release+P8 五件）；H candidate.19 已发（IDENTITY 重钉+三方锚验证）；安装克隆 ROOT_RESOLVED @ v0.2.0",
+        "授权 以名册（release-trust/gate-identity-authority.json，摘要 fab89e25…）与 actor owner:governance 关闭 GATE-002——gate-v1 首次为自身把关",
+        "前置已满足 停顿预算已落地：stop-budget-standing-rule＋CONF-026/MIN-028＋candidate.20 队列"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:a84b527dc91ecfcbd5eacad3",
+      "conferenceTitle": "待裁两项裁定：交付上限修正与 EPIC-002 补门",
+      "conferenceType": "strategy",
+      "summary": "Owner 全部接纳：批准「7 而非 12」交付上限修正（更正 MIN-003 提法）；确立 E04 必须走嵌入方不可能走 CLI；为 EPIC-002 补 owner_intent_required 门以令 gate-v1 首次为自身把关；名册部署与摘要带外公布并入 STORY-013。授权继续完成 010–013。",
+      "decisions": [
+        "裁定一 批准「E01 诚实交付上限是 7 个 pins 面 verb 而非 12」：5 个 verb 由 claudeAdapterHost／claudeAdapterActivationHost 把守而二者皆品牌构造属 attestations 轨，上 CLI 旗标即令断言冒充权威——为裁定「hostDigest 不是 pin」所禁",
+        "裁定一之更正对象 CONF-003／MIN-003 中「解锁含全部激活在内的 12 个 verb」之提法据此更正",
+        "裁定二 确立 E04 形状：适配器分发必用 claude-adapter-install 而该 verb 同需两个品牌构造面——E04 不可能走 CLI 路径必须有嵌入方（照 scripts/host-evidence.mjs 形制）",
+        "裁定三 为 EPIC-002 补一道 owner_intent_required 门：争议性与 E01 对等（E02 改的是引擎关门规则本身）；不阻塞（只挡 epic→done 且 gate-delete 为成文死锁逃生口）；关门须动用 STORY-008／009 的名册机制乃唯一能在真链上端到端证明部署故事成立之方式",
+        "裁定四 部署名册并带外公布其摘要并入 STORY-013 职责；信任模型同 bootstrap 锚点即一个人手持的常数",
+        "授权 完成上述后继续完成 E02 剩余 Story 010–013"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:aac0952ecd46f9cd16750f8e",
+      "conferenceTitle": "post-0.1.0 候选队列分解与排序",
+      "conferenceType": "architecture",
+      "summary": "采 opus 依赖框架+sonnet 切片细化：五 Epic 顺序 E01权威供给→E02 gate-v1→E03 多-skill归档→E04 适配器分发→E05 链上advisory；被依赖者是 STORY-003 身份信号切片而非整个 E01；#6逐出治理树另立README轨；#7降为E01骑附Story待Owner裁定。Owner 确认执行。",
+      "decisions": [
+        "epic-order-E01-authority-supply→E02-gate-v1→E03-multiskill-archive→E04-adapter-distribution→E05-chain-advisory",
+        "dependency-serial-but-on-STORY-003-identity-slice-not-whole-E01",
+        "story-predeclare-E01-only-rest-at-epic-start",
+        "eject-driver-evidence-probe-to-parallel-README-track",
+        "flake-adjudication-demoted-to-E01-ridealong-story-pending-owner-invariant-vs-impl-ruling",
+        "E05-chain-migration-coupling-deferred-to-E05-kickoff-conference",
+        "owner-confirmed-execute"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:ae753d5b5eec5b73525d4d0e",
+      "conferenceTitle": "首轮 workflow 收尾:门户目视验收与收官",
+      "conferenceType": "verification",
+      "summary": "首轮 workflow 收官。Owner 于门户完成 30 张前端项的目视验收，结论为全部无问题，据此落 done。连同此前按 MIN-ACCEPTANCE-LANES 机检放行的 44 张，本轮共 74 张验收完毕；其容器按 Epic→Initiative 次序闭合:先前已关 EPIC-082/084/085/091/095 与 INIT-031/032/035/037，本次再关 EPIC-083/092/093/094 与 INIT-029/036。\n机检车道 44 张全名单(依裁定「错归类不至于藏起来」列此供复扫):INC-160 INC-161 INC-166 INC-168 INC-169 INC-181 INC-184 INC-186 INC-187 INC-193 INC-194 INC-195 INC-196 INC-197 INC-198 INC-199 INC-200 INC-201 INC-202 INC-204 INC-205 INC-206 INC-207 INC-208 INC-209 INC-210 STORY-252 STORY-253 STORY-254 STORY-256 STORY-257 STORY-258 STORY-259 STORY-260 STORY-272 STORY-273 STORY-276 STORY-278 STORY-279 STORY-281 STORY-282 STORY-283 STORY-284 STORY-285。\n其中 6 张自陈「判定人=Owner」，引擎拒绝无纪要回链即落 done，已补 decided-by 指向 MIN-ACCEPTANCE-LANES;本次 5 张前端 Story 同属此列，回链指向本纪要——它记的正是 Owner 亲自目视并接受的这次决定。\n刻意留开:EPIC-096 ← STORY-286 ← INIT-038。STORY-286 是 v0.11.18 的开篇(codex 激活面由惰性转为受主张)，留开是下一轮的锚点而非遗漏。\n产出方式:owner:governance 的立场为其目视后自述，由 agent:fable 逐字转录；agent:fable 的立场为其落地前实测。声明 independent。",
+      "decisions": [
+        "30 张前端项经 Owner 目视验收无问题，全部落 done",
+        "闭合 EPIC-083/092/093/094 与 INIT-029/036，首轮容器收敛完成",
+        "EPIC-096/STORY-286/INIT-038 留开作 v0.11.18 锚点",
+        "本轮 74 张验收完毕:机检 44 + 目视 30"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:aeeab37fcf03ee703b67a234",
+      "conferenceTitle": "INIT-028 整改批一轮验收:功能真、量具假",
+      "conferenceType": "verification",
+      "summary": "INIT-028 整改批一轮验收不通过。四路独立对抗复核(各自 scratch/副本、各自变异实证)与主线一手浏览器取证独立得出一致结论;复核报告=docs/reports/init-028-design/VERIFICATION-2026-08-13-remediation-fable.md。Owner 2026-08-13 接受判定并指示开二轮整改单派工 Codex。",
+      "decisions": [
+        "验收裁定=不通过。EPIC-080 十二张 INC 维持 pending-owner-acceptance;INC-139 是唯一可原样放行的单",
+        "定性:功能面交付扎实(上轮六条 P0 全真修/preview 15 项在位基本全中/控件 4-4/vocabulary 三元素/五条零守护校验装上真红腿/覆盖超越基线且豁免表为空);量具面不合格(四道门中三道在 CI 条件下空转或误红;INC-136 连本地都测不出核心 UI 被删)",
+        "根因裁定:同一位置第二次失守——上轮以 API 层测试当 UI 判据;本轮以 marker 存在当 UI 判据。门的验收判据自即日起改为「门能对已知真缺陷变红」",
+        "不再是「门绿」",
+        "二轮整改 EPIC-081 挂 INIT-028:修门先行(INC-148 UI 在位门改真 DOM 驱动并补行为腿并删除 ui-contract-markers template/INC-149 三门的 CI 条件与签入式基线并修断言损失死分支)",
+        "修复在后(INC-150 i18n 整表口径与失译找回/INC-151 状态面真实性:引擎版本读引擎、健康芯片失败态、actor 恒真腿/INC-152 同名守卫 285 与 288 补红腿及引擎残余 P2/INC-153 全量恢复 UI 与档案陈旧数字)",
+        "档案归位 INC-154:两处 evidence 构成分裂(平台根那份不在任何 git 仓库、进不了任何门、packet 相对链接 clone 即断",
+        "且已实际造成过一次假 P0);并入仓内为建议方案",
+        "但移动前须先做公开仓敏感内容扫描",
+        "落点未裁前不得移动任何文件",
+        "修门单的交付必须附元判据红腿原始输出:删分配 addline、删 persona ghost 与单字段恢复、断开芯片 click、组件换成空 div、芯片写入后不更新——五条各红一次",
+        "0.11.15 发版、helper c40 重钉、任何 push/tag/deploy 继续停放;reviewOnlyDispatchable 已发布在 vocabulary 公开读面而真源未裁",
+        "应在 0.11.15 之前裁定"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:b00a1a64ca020da57c7246cf",
+      "conferenceTitle": "E05 真开工：链上 advisory 非绑定字段——迁链顾虑读源证伪，方向呈 Owner",
+      "conferenceType": "architecture",
+      "summary": "E05 真开工裁定：Owner 选 (C) 重塑——把 E05 指向价值更清的 advisory 面，否决 (A) 字面搬迁触发散文与 (B) 暂缓。读源坐实并随裁定生效：迁链耦合为空（`WORKSPACE_STORAGE_VERSION=1` 钉死；WSD-1 新词汇走加式事件操作不升版本；非绑定字段＝`required:false` extensions，`validateExtensionMap` 只拒 required:true 且未注册者，故任意 protocol-id 键免注册/免新操作/免版本升/向后兼容，先例 gate-evidence/gate-identity:decision），decomp 待裁的耦合问题当场消解。schema 今日即支持 required:false 广告字段，唯缺写入面——work/project 动词均无 extensions/advisory 旗标（仅 gate 经证据/身份转换特例写过 extensions）。故重塑目标落在『为 work/project 记录开一个受治的非绑定 advisory 写入面』这一有界缺口，具体目标与内容（荐：权威 scope/intent 行＋decided-by 回链治理纪要，由本会话 label≠positions 事故 dogfood）与分解留后续设计会议，Owner 从荐选中定。",
+      "decisions": [
+        "owner-ruled-C-reshape-E05-toward-a-higher-value-advisory-surface",
+        "options-A-build-literal-trigger-fields-and-B-defer-both-rejected",
+        "migration-coupling-confirmed-void-required-false-extensions-are-zero-cost-and-backward-compatible",
+        "schema-supports-advisory-extensions-today-but-no-work-or-project-verb-exposes-writing-them",
+        "reshape-target-and-decomposition-deferred-to-a-follow-up-design-conference"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:b017306eb2765f373ece667d",
+      "conferenceTitle": "E05 设计与分解：work-annotate 非绑定 advisory 写入面（Scope-on-record）",
+      "conferenceType": "architecture",
+      "summary": "定 work-annotate 非绑定 advisory 写入面契约（Scope-on-record）：required:false extensions 键 advisory:scope 与 advisory:decided-by，新动词 work-annotate 发 work.updated 并入 extensions，回放仿 gateEvidenceExtensions 精确比对防夹带，非绑定不阻 done。分解 STORY-018 核心写路径/STORY-019 CLI+catalog+regen/STORY-020 读面+成文+dogfood 回填。",
+      "decisions": [
+        "reshape-target-is-work-annotate-advisory-write-surface-scope-on-record",
+        "extension-keys-are-advisory-scope-and-advisory-decided-by-both-required-false",
+        "replay-validates-exact-extensions-delta-per-gate-precedent-no-arbitrary-keys",
+        "decompose-into-STORY-018-core-STORY-019-cli-STORY-020-read-docs-dogfood",
+        "advisory-fields-are-non-binding-they-never-gate-a-transition-or-block-done"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:b3214c29bc1ccb93ec90f4cb",
+      "conferenceTitle": "dsh-tcrn-workflow-plugin 方案换代审议:rev8 采纳为执行正本与链上记录修订",
+      "conferenceType": "architecture",
+      "summary": "本场审议记录方案换代:rev8(Claude 会话独立产出,三轮对抗 64 条原始指控筛出 37 真、终审加 1 措辞掩盖加 9 盲区、两人复验 19 条中 12 成立)经本会话复核后采纳为 dsh-tcrn-workflow-plugin 执行正本。复核亲自验证两条推翻性论断:sandbox-policy Config 无 deny 路径列表(静态答案「不能」)、INIT-039 范围自陈限 codex+claude 且明写「补齐强制是错的表述」;另实读 acceptance-verdicts.json 确认九条 verdict 全 unrecorded、九门机检车道当下不可达。据此 supersede 三条旧内容、更新 M0 裁定集为 ①-⑭、批准 STORY-306~309 作废与 STORY-310~317 重立、仓库与派工简报换代。全部裁定仍待 Owner 明示,未裁前不执行(除 M0-0 只读证据采集)。",
+      "decisions": [
+        "rev8 采纳为 dsh-tcrn-workflow-plugin 执行正本;v2 方案与旧派工简报降级为历史版并加指针",
+        "supersede 三条:v2 决定1「桥复用退出平台路径;机制C出圈」作废——rev8 D3=hook可见性面板含机制C零跳过落 M3、桥执行职责归 ⑤+ 裁定;未决1「挂INIT-039/EPIC-097」作废——INIT-039 范围自陈限 codex+claude 两侧激活面且明写「补齐强制是错的表述」;STORY-308「首选 sandboxPolicy 声明式 deny」作废——sandbox-policy Config 无 deny 路径列表已实测确认、rev8 M4 直走 ctx.tools.guard()",
+        "M0 裁定集更新为 rev8 的 ①-⑭(定性/收编/有界实验确认/④⑤形态/⑤+桥复用授权/⑥浏览器持久/⑦视觉权威源/⑧桥包四门/⑨信任分层/⑩九门名册/⑪批准面+P-DEF/⑪+去重与~/.agents归属/⑫OfferEngine/⑬⑭);全部保持待 Owner 明示;未裁前不执行任何 Story(除 M0-0 只读证据采集)",
+        "工作树重构:STORY-306~309 planned→cancelled;EPIC-107 下重立 STORY-310~317(M0-0 证据采集/M1 壳+探针/M2 OnboardingDoctor/M3 hook 可见性面板/M4 控制树写拒绝/M5 EngineBridge/M6 收口/M7 投产);INIT-045 保留为立项锚并 annotate 更新决策点段",
+        "平台事实基线更新:STORY-304 verdict 绑 commit、九条现全 unrecorded、九门机检车道当下不可达;M6 与 ⑩ 三分支以此为共同基线"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:b4626ca8c4796bd88db8cc29",
+      "conferenceTitle": "门户第二轮验收五问与 workflow 级设置首批",
+      "conferenceType": "strategy",
+      "summary": "Owner 门户第二轮目视验收认定五条问题并批准 workflow 级设置首批四项。五条:①词典被工作区数据污染(两个计划类设置的词典条目列出实际计划名,用户每建一个计划词典就多一条,违背该页自己声明的不自行发明枚举;fable 在 MIN-094 更正轮引入)②设置 unset 报 WORKSPACE_INPUT_INVALID 且构成死锁(设置引用计划时计划删不掉、设置又 unset 不掉)③顶栏工作区路径宽屏仍截断且窄屏控件叠压④侧边栏与内容容器底部未对齐⑤刷新后语言与主题丢失,同意只做 localStorage 本地持久化。workflow 级设置首批四项:portal.defaultPartition/defaultLocale/defaultTheme/port;解析层级=浏览器本地>机器默认>内置回退;layerKind 增 machine 层;首批每键只属一层不做跨层覆盖;排除引擎版本钉与更新通道、治理策略的机器级默认、门户绑定地址、厂商链接名册。立 INC-186..190 与 STORY-281。",
+      "decisions": [
+        "词典纯净性=INC-186;unset 死锁=INC-187;顶栏=INC-188;底部对齐=INC-189;本地持久化=INC-190;workflow 级设置首批四项=STORY-281"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:b7bbcefc81a8a6a2f4bb194f",
+      "conferenceTitle": "workflow+helper 收官方向:定制分层、钉死前批、模板两层规则(单上下文审议)",
+      "conferenceType": "strategy",
+      "summary": "单上下文审议纪要:Owner 与执笔代理(agent:opus 前四轮、agent:fable 后续)同一会话逐轮收敛;立场为主线程转录非分头独立;十条裁示定案,授权钉死前批(锚定 TCRN-CROSS-INIT-022)。",
+      "decisions": [
+        "受众定为与AI协作开发大型软件的人群",
+        "顺序定为workflow+helper彻底钉死后再转AOS;过渡期生成物走settings配置的workspace路径",
+        "INC-117定类审计型;每kind应有基础模板",
+        "模板形态=底座薄跨kind引擎硬、体裁厚按kind受准入数据变体;template@version绑定;无绑定=前纪元豁免",
+        "Story十区块=feature变体v1并增Non-goals;Initiative模板最先做;Subtask与Review不预铸;Knowledge不重复",
+        "Credentials只存引用;Attachments存digest引用落workspace生成物路径",
+        "hooks两区制=TCRN基线受治安装;用户区自由且validate不置喙",
+        "settings=开发者扩键、用户只设值;键集只收引擎会消费的键",
+        "kind扩展判据=图行为不同才配新kind;钉死前一次性盘点",
+        "门户=workflow家族独立产品、只吃公开面、充当钉死验收载具;AOS使命=生成物管理;AGENTS.md为自定义散文单极"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:b974b3472c97907a298054d9",
+      "conferenceTitle": "停顿预算裁定：执行期默认按推荐推进，三类必停",
+      "conferenceType": "strategy",
+      "summary": "Owner 采纳停顿预算为平台常规：默认按推荐推进，三类必停（owner 门／对外发布／无裁定支撑的不可逆变更）；先执行后可驳回；呈报两栏分列；规划期只写条件式到场点。依据为 INIT-003 复盘与 DS 对照。",
+      "decisions": [
+        "常规一 执行期默认按推荐推进；只有三类必停：owner_intent_required 门／对外发布动作（push tag release）／无既有裁定支撑的不可逆方向变更",
+        "常规二 三类之外先按推荐执行，产出纪要留「Owner 可驳回，单点可逆」",
+        "常规三 复查呈报「已按推荐执行待驳回」与「真待裁」两栏分列；真待裁须过杠：执行方无法用既有裁定加证据自行决定",
+        "常规四 规划期不预登记 Owner 到场点，只写条件式（若执行时前提仍在则呈裁）",
+        "依据 INIT-003 复盘：到场约十次仅 5 次设计内；对照 DS Initiative 15 Story 仅 3 次；实证「不需要再问」后 010..013 零打扰、「授权」后发版列车零打扰",
+        "落地 记忆 stop-budget-standing-rule 已建并入索引；payload 教学入 candidate.20 队列（落点 SKILL.md Recording Triggers 执行面）"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:baea6825f8f1c663728126b6",
+      "conferenceTitle": "词典分列误诊更正与二次视觉验收裁定",
+      "conferenceType": "verification",
+      "summary": "Owner 2026-08-15 二次视觉验收：确认 fable 对 INC-171 的误诊（Owner 所指「挤成一块」是词条内容未按 name/description 等分列，fable 修的是组导航拉伸）。三单落链：INC-176 词典按域分列（用 DS tcrn-table-shell，六域列定义钉死，证据列压缩，删上轮大写小节标）；INC-177 设置页族（空态高度/全宽按钮/legend 骑边框/select 描边/创建流程 effort 可见化，P5P6 先查 DS 表单权威查无则呈报，不改引擎）；INC-178 顶栏空带实测定位+subnav 行高统一。执行人 agent:fable，零推送零发版。",
+      "decisions": [
+        "R1 INC-171 误诊确认并记注记;R2 三单=INC-176/177/178;R3 分列用 DS table-shell 与先查权威源;R4 删大写小节标;R5 effort 可见化不改引擎"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:bb17bc41f830e81fbafe6637",
+      "conferenceTitle": "INIT-026/027 与两张独立 INC 的遗留收口",
+      "conferenceType": "verification",
+      "summary": "INIT-026/027 与 INC-134/135 遗留收口:Owner 2026-08-13 指示一并收口。交付面经逐项实测复核在位并已随 v0.11.15 发版。INC-130 实测未达成,单列不收,归属待裁。",
+      "decisions": [
+        "Owner 授权遗留收口:INIT-026 家族 9 张与 INIT-027 家族 9 张、INC-134、INC-135 共 20 张转 done",
+        "INIT-026 交付面复核在位:执行配置存储面、两政策键、独立性机器校验、设置 label、helper 教学;随 v0.11.14 发版并随 v0.11.15 重新发布",
+        "INIT-026 的 S235/S236 当初记部分通过并整改移交;移交链 INIT-027 至 INIT-028 已闭合",
+        "其呈现面由 INIT-028 全量重构取代",
+        "INIT-027 交付面复核在位:persona 存储面、三编排键、门户 persona 面、design-proof 两腿、helper 教学;经 INIT-028 三轮独立复核覆盖",
+        "S233 与 S234 的测试曾在 INIT-028 一轮被删",
+        "已由 INC-139 恢复并做过变异实证",
+        "故其守护现为有效",
+        "INC-134 达成:门户三个源文件引用 DS 次数为 0",
+        "运行期 dependencies 为空",
+        "INC-135 达成:portal 随 workflow 仓 16 个跟踪文件自带",
+        "另立的 portal 仓不存在",
+        "INC-130 不随本次收口:实测 ui-react 包内 CSS 文件数 0、exports 仅 '.'、storybook.css 中 tcrn-button 命中 0(正向对照 tcrn- 命中 1047)",
+        "缺口原样存在",
+        "属 DS 仓上游工作",
+        "归属待 Owner 裁定"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:bd691aab93584ea5286ef7a2",
+      "conferenceTitle": "dsh-tcrn-workflow-plugin Owner 一次性裁决:①-⑭ 与 PENDING-FP-1 十六项",
+      "conferenceType": "architecture",
+      "summary": "Owner 一次性裁决会议:十六项(①-⑭+PENDING-FP-1)经 16 组对抗评审逐条验证后,Owner 以「按建议执行」整包采纳修订后最终建议。裁决日事实已重核:九条 verdict 全 green、commit=440054d=引擎 HEAD、platform-doctor 健康——九门机检车道可达。据此:⑧S1 批准(条件:M0-0 记录先落笔、S2 改判、本仓 LICENSE 移出)、③ 确认(以⑧=采纳为前提)、⑨ 维持信任核心(停点清除机制言明)、⑩ 取 C(复审触发与 done 语义裁死)、⑪ 撤回无批准面定版(approval 通道改判待测)、⑪+ 去重 C 与 ~/.agents 多宿主共享回答、⑫ 不建+删保留轨道、⑬ 补载体、⑭ 宿主级署名、⑥ 拆两问、⑦ design/ 基线权威、② 取 B(M6 前再收编)、④⑤ 补五件(M0-b 落)、P-PROD 不裁留 M7 前、FP-1 执行方检索先行。M0-0 与 M1 开工门解除;①⑤+P-PROD+FP-1 身份+⑩verdict 写盘授权保持未决。",
+      "decisions": [
+        "⑧ 批准 S1(registry 精确 @0.1.0-rc.7);条件:M0-0 记录先落笔含三新事实(工作树已 rc.8、rc.7↔rc.8 lib 逐字节相同、workspace:^ 依赖)与 N8 比对口径;S2 改判失效或改为对已发布 tarball 比对;本仓 LICENSE 移出⑧归②/M0-b(建议受治身份取 Apache-2.0)",
+        "③ 确认(以 ⑧=采纳 为前提);闭合判据重钉(桥依赖项记 blocked-by-⑨);两工作日仅计执行方可控项且逾期自动上呈;#3a=否即中止",
+        "⑨ 维持信任核心(公约默认);停点清除=⑧ 四门 M0-a 裁可;门四自建代价对照升为可翻盘决策并定义否决分支;忠诚度评估具名承办;代价口径更正",
+        "⑩ 取 C(M1-M5 执行形态);裁决日事实已重核(九条 verdict 绿、commit=HEAD、doctor 健康);「M6 后复审⑩」触发=M6 自我加码九门自跑完成;C 窗口 done 语义=停 pending-owner-acceptance 注明原因;M6 写 acceptance-verdicts.json 的授权 M6 前单列裁问",
+        "⑪ 撤回「无批准面」定版;ctx.approval 实测存在(默认 ask、审计对在案)改判待测项进 M1 #3a 同批探针;P-DEF 只作未裁前形态、M4 证据闭合后重裁;默认关闭不变;C6 从呈报升为处置",
+        "⑪+ 去重取 C 并登记双跑残余风险(Doctor 一等红+M7 前置);~/.agents/skills 显式回答 INC-212 悬置问题=多宿主共享目录、dsh 是消费者之一(三份反证随材料)",
+        "⑫ 不建;删除「保留轨道」容器;同批钉死「M5 只提议不记录=最小 offer 语义」;配 C 类缺口登记与真实复建触发",
+        "⑬ 不代决但补载体(R1b 盘点含⑬行+D6 九门结果表附「上游锚未落、九门全绿不等于 adapter 达成」+具名 follow-up 单据+① 条件化);⑭ 删模型级串(改宿主级 agent:dsh 或写时当场确定并标注示例会腐化)+多代理归属规则+机器限度如实标注",
+        "⑥ 拆两问:配置=settingsScope;非配置浏览器状态默认仅内存、确需持久化走宿主 ctx.storage/storage-domain 而非 localStorage;浏览器半检测 memory-mode 显式降级不假成功;tcrn-dev 配独立 settings path",
+        "⑦ 指定 dsh-joi-channel-theme design/ 基线为视觉权威源;M2/M3 在 tcrn-dev 设 Owner 目视停点;零资产与每点呈报做成机器红腿",
+        "② 取 B(暂挂 cross-project 即现状);M6 前再收编;届时送裁材料显式写明 INC-210 收编机制已退役并回答新分区行由哪台现存门核对;弱路按如实措辞上报",
+        "④⑤ 采纳并补五件(portal 先例衔接、调用-署名过渡规则 A/B 二选一、⑤ 终止条件、名册独立验证人+「锚=公证不等于验证」、删「同构」断言);正式落 M0-b",
+        "FP-1:执行方先完成机器检索(已命中 6 个会话级脚本);Owner 问题改为「哪个候选是参考实现/是否提升」;Incident 由执行方按 agent:fable 先例立单、Owner 批准;替代程序加独立性硬约束+复查点+超期升级阻塞;未定则重建 instrument 入本仓 scripts/ 进 M1 交付物候选",
+        "M0-0 与 M1 开工门解除(⑧ 已裁+③ 已确认);M1 探针清单增 approval 通道探针(与 #3a 同批);M1 步骤 3 停点已随 ⑧ 裁可清除"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:c36ef89909eb3da1844d6b8e",
+      "conferenceTitle": "Owner 视觉验收八缺陷与整改裁定",
+      "conferenceType": "verification",
+      "summary": "Owner 2026-08-15 视觉验收八缺陷（侧栏标题重复/词典布局固定宽塌陷/导航无边距/五图标空/theme 缺 data-current-theme/token 失守/effort 词典不可见+空值写入红回执/UX 空态与表单缺失），fable 逐条取证定根因，六单整改落链（INC-170..175），执行人沿用 MIN-089=agent:fable，按设计权威源公约执行，规格空白由 fable 先定入 scope。零推送零发版。",
+      "decisions": [
+        "INC-170 侧栏+导航(D1/D3/D4);INC-171 词典布局(D2);INC-172 theme 属性接线(D5);INC-173 effort 可见化+空值映射(D7);INC-174 token 清扫(D6);INC-175 UX 心智(D8)"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:c6f11623281732000c25b6a4",
+      "conferenceTitle": "INIT-028 全批验收:Owner 通过并授权全部转 done",
+      "conferenceType": "verification",
+      "summary": "INIT-028 全批验收:Owner 2026-08-13 通过并授权 34 张全部转 done。历经三轮整改与一轮收尾,复核报告=docs/reports/init-028-design/ 下 VERIFICATION-2026-08-12-fable.md、VERIFICATION-2026-08-13-remediation-fable.md、VERIFICATION-2026-08-13-round3-fable.md。发版 v0.11.15 与 helper candidate.40 已完成并经发布后校验。",
+      "decisions": [
+        "Owner 验收通过:INIT-028 全家族 34 张(1 Initiative + 4 Epic + 8 Story + 21 Incident)全部转 done",
+        "交付实质:子代理模型方案域与生效键、persona 预设覆盖层与散文字段、vocabulary 只读词典、门户按 v4 页面语法全量重构、四道能失败的门",
+        "质量证据:元判据五条主线隔离副本亲手复现全过且门已内建常驻自变异;三门在真 CI 条件有牙;引擎五条零守护校验装上真红腿;覆盖基线 93 与实际测试文件数一致并有完整性腿",
+        "i18n 净好于 HEAD 基线:整表等于英文计数 ja/ko/fr 各 1、zh-CN 2(基线 3/3/13/4);13 个丢失键四语言全部找回",
+        "发版已完成并经发布后校验:引擎 v0.11.15(main a985b2a、tag 64fe9a3)与 helper candidate.40 已推送建 Release;helper 钉的四值与远端逐一对上;六文档锚与 bootstrap 实际 sha 一致;push-gate 返回 PUSH_GATE_VERIFIED",
+        "发版途中修复一处公开面隐私缺陷:verify-portal 以 process.execPath 命名子进程",
+        "其回执会把运行者家目录带进证据与公开 CI 日志",
+        "已改为 node 并脱敏一处证据文档",
+        "如实记录:INC-154 按其 scope 只完成公开仓扫描与归位方案",
+        "未移动任何文件(档案落点仍未裁);其余残留见 unresolved-issues",
+        "残留项若需继续",
+        "另立单据承载",
+        "不再挂已收口的 INIT-028"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:c860fb44a0778ff34b2a6100",
+      "conferenceTitle": "MIN-055/056 第三次校正:全量拆解整单移交与不再收窄规则",
+      "conferenceType": "strategy",
+      "summary": "执行形态:synthesis-only(Owner 2026-08-05 裁定落链)。第三次校正:STORY-144..155 补建,INIT-018 子树 19 单整单移交执行层;MIN-055 白名单扩为全子树 Story;真门仅四类(Owner 配置批准/回放 ADR 审议/公约修订 Owner 裁/隔离审议编排),执行层做到门前备材料标待门;判断型回归 MIN-054 分层,审查层再收窄派发须先经 Owner 裁定。含审查层两度过窄执行的更正声明。",
+      "decisions": [
+        "INIT-018 全量拆解一次性预建(STORY-144..155 与既有 137..143 合计 19 单)并整单移交执行层;推荐顺序与门位见简报 v3",
+        "MIN-055 对象白名单由 STORY-137..143 扩为 TCRN-CROSS-INIT-018 子树全部 Story(含后建同规)",
+        "真门仅四类且不移交:S4.2 与 D6 类 Owner 配置批准;S13 回放 ADR 审议与终稿;S16.3 公约修订终稿与 Owner 裁定;S18 隔离审议编排——执行层做到门前备齐门材料并 annotate 待门",
+        "判断型子项回归 MIN-054 原分层(执行层起草、核验层复核、审查层终审);今后不得以规格未出为由扣留派发;审查层再收窄派发范围须先经 Owner 裁定",
+        "理由:Owner 2026-08-05 指出七张非 INIT-018 全部;扣留与 D4 预授权及判断型分层自相矛盾;整单移交是 MIN-056 的当然延伸"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:cd4e9597dae7dd1b01e6621a",
+      "conferenceTitle": "STORY-016 产出：分发纪律落地并 dogfood 自证，E04 收口（H candidate.21）",
+      "conferenceType": "verification",
+      "summary": "分发纪律落地并 dogfood 端到端自证：陈旧副本验出 IDENTITY_MISMATCH→治理放置→复验 INSTALLED_COPY_VALIDATED。经 candidate.21 发布（三方验证）。E04＝运营纪律+治理放置 runbook+信任故事三者 covered 且证明可用，收口（无门，spike 裁定支撑）。余 E05 链上 advisory。",
+      "decisions": [
+        "实现 workflow-operations.md 新节 Keeping the placed Skill current，经 candidate.21 发布（锚 08add187…，三方验证，钉 W v0.2.0）；成文 spike 裁定：工作流永不写 live 位置，放置是 agent 经批准动作，工作流只管 currency 检查",
+        "纪律 每会话 verify-installed-copy，不符提议治理放置（前后双验+回执）绝不静默覆盖；明写不让 skill 自装自更（install/update 仍 test-root-only）",
+        "dogfood 端到端自证 第一次真实使用即践行：陈旧副本 candidate.20 对 candidate.21 钉验得 IDENTITY_MISMATCH（时效检查检出陈旧）→ 从已验证 Release 归档逐条摘要核对展开替换 → 复验 INSTALLED_COPY_VALIDATED",
+        "E04 收口 spike（MIN-034）裁定 E04＝运营纪律＋治理放置 runbook＋成文信任故事三者 STORY-016 全 covered 且 dogfood 证明可用；不需更多 Story 不需门（done 非争议：文档/纪律交付、spike 裁定支撑、单点可逆）",
+        "candidate.21 另载 distill 纪律（MIN-033）：知识库是策展注入面非决议镜像"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:ce585e4cf935653f4f996249",
+      "conferenceTitle": "E05 范围更正：decomp 原义为链上 advisory 字段，kickoff 误读为天花板忠告",
+      "conferenceType": "architecture",
+      "summary": "复核更正：E05 真义＝链上 advisory 字段（decomp 立场逐字：guidance 由 prose 入链；记录/审议触发从散文迁至链上非绑定字段），deferred 的 chain-migration coupling 指 E05 自身 schema 变更与 E02 合并排期避免二次迁链，非增量 materialize。CONF-E05-KICKOFF/MIN-E05-KICKOFF 误读范围，所裁实为 README 天花板忠告的悬空证据修复；该产出独立成立（7 处已发布引用悬空是真缺陷；已验语义等同、format/source/privacy/verification-map+proof-check 全绿）但属已逐出的 README 质量轨、不定义 E05，STORY-017 挂错 epic。合并排期窗口随 v0.2.0 发布已关；gate-identity 走 extensions 未动 storageVersion（实测仍=1）的先例示真 E05 或免迁链。全链 verify-p1 拒脏检出（P1_EXCLUSIVE_SOURCE_BASIS_REQUIRED），完整证明留 push 门产出。误挂记录处置与真开工留 Owner。",
+      "decisions": [
+        "E05-true-scope-is-on-chain-advisory-fields-per-decomp-positions-verbatim",
+        "MIN-E05-KICKOFF-misidentified-scope-its-two-rulings-stand-only-for-the-readme-evidence-track",
+        "samples-landing-work-product-kept-and-verified-publish-remains-owner-gated",
+        "coupling-window-closed-at-v0.2.0-probe-extensions-route-at-true-kickoff"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:d006c8a7628d5d7118d98fc5",
+      "conferenceTitle": "stop-pact 执行前置裁定 D1/D2 (TCRN-CROSS-INIT-016)",
+      "conferenceType": "architecture",
+      "summary": "Owner 直裁 stop-pact 两执行前置项: D1 hook 作用域=用户级(~/.claude/settings.json,全会话生效,无契约放行故日常零影响);D2 Fable 默认 observe(只通知)、其余 enforce,判据按工作状态非模型。并授权执行至完成。执行形态: Owner 直裁,主线程 agent:opus 转写。",
+      "decisions": [
+        "d1-hook-scope-user-level-tilde-claude-settings-json",
+        "d2-fable-default-observe-others-enforce",
+        "execute-init016-to-completion-authorized"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:d7012264acee18bca954f4ea",
+      "conferenceTitle": "SPRINT-002 收官授权、EPIC-025 carry-over 与 persona 边界",
+      "conferenceType": "strategy",
+      "summary": "Owner 已批准完整推荐收官包。收官授权覆盖 Workflow v0.6.0 与 helper repin 的对外发布、SPRINT-002 关闭、DS 方案 B 更正、TMS 两条安全事项及仅 PR 验证。此批准不授权 EPIC-025 的任何 host enforce 面。",
+      "decisions": [
+        "发布 tcrn-workflow v0.6.0 并生成可验证 Release 资产",
+        "发布新的 helper candidate 并重钉 v0.6.0",
+        "SPRINT-002 在发布核验后关闭",
+        "EPIC-025 与 STORY-073/074/075 继续 blocked 且 host enforce 授权数为 0",
+        "TCRN-CROSS-INC-023 carry-over 且不阻断本次发布",
+        "跳过可选 observe 五格补录",
+        "主线程不是只读线程且 persona 仅用于 conference position attribution",
+        "SessionStart 不注入 persona 也不绑定主线程",
+        "DS 采用补记证据更正方案 B",
+        "TMS 建两条安全事项并仅开 PR 验证不合 main"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:d9e558752cc6df897ed307a9",
+      "conferenceTitle": "发布点快照结清：cross-project-20260722T092430Z 双副本 SNAPSHOT_VERIFIED",
+      "conferenceType": "release",
+      "summary": "结清 MIN-C22-REPIN 唯一遗留。发布点快照 cross-project-20260722T092430Z：先撞 KNOWLEDGE_HIGH_WATER_MISMATCH（链先行 v253、store marker 50）→ rebase → 清单重出 → 备份与活根双 SNAPSHOT_VERIFIED → retention=5 轮换删 20260721T092014Z（FINAL 不参与）。至此 candidate.22 仪式链上零遗留。",
+      "decisions": [
+        "release-point-snapshot-taken-and-double-verified-cross-project-20260722T092430Z",
+        "knowledge-store-rebased-50-to-chain-head-before-manifest-fail-closed-worked",
+        "rotation-deleted-oldest-non-FINAL-20260721T092014Z-retention-5-kept",
+        "MIN-C22-REPIN-unresolved-item-settled-zero-residue"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:db6b2c21ff9d817181584f46",
+      "conferenceTitle": "STORY-009 产出：owner_intent_required 关门须凭名册与具名 actor（W b19ddf5）",
+      "conferenceType": "verification",
+      "summary": "身份强制落地：outcomeClass 即逐门开关，owner_intent_required 关门须凭带外名册＋具名 actor 且名册许可；名册供于其它 class 同样生效；强制在动词不在回放。每处拒绝证链未前进。红证抓出一处真覆盖洞（缺具名 actor 不再拒曾存活），补格后三变异全被抓；并记 UNBUILDABLE 不是 kill。",
+      "decisions": [
+        "设计 outcomeClass 即逐门选择开关：建门者选 owner_intent_required 即声明关它需 Owner 意图；引擎兑现该声明故无需链级开关，其余四个 class 可选，既有记录无一改变含义",
+        "规则 满足 owner_intent_required 门须同具带外名册（pins 轨读取器＋调用方陈述摘要核验）与具名 actor 且名册许可该 actor 关此 class；缺 actor 亦拒——许可是关于谁的陈述",
+        "规则 名册供给于任何其它 class 同样生效：要了检查却被悄悄跳过是最坏结局",
+        "承 MIN-014 强制点在动词刻意不在回放；代价写在检查旁：决策点控制非链完整性不变式",
+        "证明 每一处拒绝均证链未前进——对读者已关闭而只是没记录比从未关闭更糟",
+        "红证价值 三处变异中「缺具名 actor 时不再拒」一度存活：该守卫仅在非 owner 类却供名册时起作用而用例未覆盖该格；补格后三处全被抓——只看 44/44 全绿会让此洞上线",
+        "红证方法 首轮两处变异被 TS 拒编译（非法 outcome class 与恒假条件）——变异须能编译才证明得了东西，UNBUILDABLE 不是 kill",
+        "接线 CLI 新增 --identity-authority 与 --identity-authority-digest（复用 STORY-004 的 suppliedAuthority）；名册在取锁之前读取，文件系统拒绝不应占着工作区锁",
+        "新拒绝码 WORKSPACE_GATE_IDENTITY_REQUIRED 与 WORKSPACE_GATE_IDENTITY_REFUSED",
+        "绿灯 typecheck／format-check／push-gate 全绿；W b19ddf5 已推送"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:dbb17922bac93e286a595d78",
+      "conferenceTitle": "GATE-001 证据卡：pins／attestations 信任故事分离",
+      "conferenceType": "architecture",
+      "summary": "Owner 裁定：认可两轨分离规则（hostDigest 不是 pin）与身份权威定 pins 轨，并令 authorization 非 authentication 写入 gate-v1 成文边界；compatibility-plan 经复核维持 programmatic-only，MIN-005 相关提法更正。同时授权 W 五提交推送与 E02 开工。",
+      "decisions": [
+        "裁定一 hostDigest 不是 pin：pins 轨与 attestations 轨不共信任故事；文档与推理不得把品牌上下文当作已钉",
+        "裁定二 身份类权威一律走 pins 轨：落 attestations 轨则接线进程可自称 owner:governance 而 gate-v1 无拒绝能力",
+        "裁定三 authorization 非 authentication 写入 gate-v1 成文边界：能拒未被许可的身份关门，不能证明按键者身份；不越声",
+        "裁定四 compatibility-plan 维持 programmatic-only：经复核为成文设计（文档明载＋双向漂移守卫）非遗留；MIN-005「须另改可用性」提法据此更正并自待裁清单划除",
+        "授权一 W 仓五次提交 cf4547b／5e5c63a／2d39da8／beaa071／be29372 获准推送",
+        "授权二 E02 gate-v1 获准开工"
+      ],
+      "outcomeClass": "owner_intent_required"
+    },
+    {
+      "id": "minutes:de60d2532b23d0ac8cff67e8",
+      "conferenceTitle": "MIN-013 引用更正与遗留项结算",
+      "conferenceType": "retrospective",
+      "summary": "更正 MIN-013 裁定四的错误引用（应指 MIN-008/009/010 非 MIN-005）。逐条结算遗留项：七条已了结，三条未结算（「7 而非 12」提法修正从未明文批准且 EPIC-001 已 done／verify:p1 提速未排期／分区不可迁移为长期限制）。另观察 EPIC-002 未挂门，是否补门属 Owner 裁量。",
+      "decisions": [
+        "更正 MIN-013 裁定四所引「MIN-005」有误：MIN-005 是 STORY-001 产出纪要其遗留项为 STORY-003 范围变更，与 compatibility-plan 无关",
+        "更正 真正提出 compatibility-plan 可用性者为 MIN-008 决议并在 MIN-009／MIN-010 遗留项复述；裁定四的更正对象应为此三处",
+        "结算 已了结七条：GATE-001 分离规则与 STORY-003 定轨（MIN-013 裁定一二）／compatibility-plan 可用性（裁定四）／W 推送授权（授权一已推送）／门的告警扫描（MIN-017 裁定二记不动在案）／lint 钝式扫描（MIN-017 裁定一）／STORY-007 二选一前提（MIN-012 消解且未被驳回）",
+        "未结算一 「E01 诚实交付上限是 7 个 pins 面 verb 而非 12」的提法修正从未明文批准：MIN-013 六条决议无一涵盖，而 EPIC-001 已 done，链上留有按原提法未达标按修正提法已达标的含混",
+        "未结算二 verify:p1 90s 提速属未排期项非待裁项",
+        "未结算三 分区不可迁移（MIN-001）为长期已知限制非待办",
+        "观察非缺陷 EPIC-002 未挂任何门；E01 有 GATE-001 把关而 E02 改的是引擎关门规则本身其 done 的争议性不低于 E01——是否补一道 owner_intent_required 门属 Owner 裁量，执笔者不擅自创建",
+        "同源教训 引用要指对记录：与 MIN-015 的相对编号错误同源，v3「键即身份」须及于叙述文本中的纪要引用"
+      ],
+      "outcomeClass": "recommendation"
+    },
+    {
+      "id": "minutes:e070c05cbaad72306a1bcab8",
+      "conferenceTitle": "INIT-007 拆解定形:多宿主后台资源生命周期治理",
+      "conferenceType": "architecture",
+      "summary": "INIT-007 拆解定形:3 Epic/6 Story(公约教学/检测机制/发布收官)落链;三拒案与决策台账入记;执行 go 在 Owner。",
+      "decisions": [
+        "树定形 3 Epic/6 Story:E013 公约教学(S038 公约裁定+S039 helper 教学)、E014 检测机制(S040 检测器+S041 登记面+S042 宿主接线)、E015 发布收官(S043)",
+        "三拒案入记:B 链原生资源动词(瞬态污染回放且强制读端升级)、C 纯 prose(触发不可靠且不可验)、D 纯宿主本地(违 Owner 多宿主裁定)",
+        "登记面走 transient 区文件协议;链上只落回执摘要;引擎与协议零改动",
+        "决策台账:Owner-now=无(执行 go 本属 Owner);Conditional=Codex hook 可用性(挡则 S042 降配方文档)、W 版本位阶按最终改动面在 S043 定、ride-along 队列先清则 S039 该义务消解;Agent=其余(键号/路径/回执 schema/测试形态)"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:e1cd606c00134e24c2174ddd",
+      "conferenceTitle": "candidate.22 三合一重钉：W v0.3.1 补丁发布＋helper 重钉＋治理换装，resolve 恢复",
+      "conferenceType": "release",
+      "summary": "candidate.22 三合一重钉完毕，信任闭环恢复。W v0.3.1 补丁发布（0.3.0 漏钉 P8 常量致其永不能产own资产，删tag属禁手故补丁是唯一诚实路径；P1+P8 双绿、五资产、独立根复现）。helper candidate.22（IDENTITY 钉 v0.3.1、新锚 6532ea79…六文档、work-annotate 指引入载荷、87测绿、PUSH_GATE_VERIFIED、七资产、三方✓）。治理换装：TRUST_VALIDATED→放置副本逐条sha展开→INSTALLED_COPY_VALIDATED v0.3.1→state 前移→resolve 由 ROOT_IDENTITY_MISMATCH 恢复 ROOT_RESOLVED，活链 v250 绿。settles MIN-E05-REVIEW 待办一；余 snapshot 建议待 Owner。",
+      "decisions": [
+        "W-v0.3.1-patch-released-with-full-P8-assets-P1-and-P8-verified",
+        "v0.3.0-permanently-cannot-build-its-own-assets-downstream-should-pin-v0.3.1",
+        "helper-candidate.22-published-anchor-6532ea79-three-way-verified",
+        "governed-replacement-complete-INSTALLED_COPY_VALIDATED-v0.3.1-state-advanced",
+        "resolve-restored-ROOT_RESOLVED-trust-gate-whole-again",
+        "lesson-version-sweeps-must-cover-all-file-extensions-including-mjs-P8-pins"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:eb1f5317a7e8652a3d7bd307",
+      "conferenceTitle": "Fable 复核 v0.3.0 发布：resolve 已断（ROOT_IDENTITY_MISMATCH），candidate.22 重钉为唯一前进路径",
+      "conferenceType": "verification",
+      "summary": "Fable 复核 v0.3.0：发布链路各项为实（P1_VERIFIED/Release/升级/dogfood/advisory 穿 done 仍在）。更正 MIN-E05-DONE 定性：skill 侧残留非『非阻塞』——bootstrap IDENTITY 硬钉 v0.2.0，resolve 对 v0.3.0 克隆实测 ROOT_IDENTITY_MISMATCH，信任门 resolve 步现已断；回滚桥已烧（活链 v239 含 work.annotated，v0.2.0 不可读），candidate.22 重钉是唯一前进路径（IDENTITY+SKILL.md 版本行+work-annotate 用法三者同批一次 re-pin），发布属 Owner 门。日常 verify-installed-copy 仍绿。另录三低危加固候选（work.updated 不查 extensions 增量/伪造删除键回放可收/scope 无字节上限）。",
+      "decisions": [
+        "MIN-E05-DONE-nonblocking-characterization-corrected-resolve-fails-ROOT_IDENTITY_MISMATCH-now",
+        "rollback-impossible-live-chain-requires-v0.3.0-candidate.22-repin-is-the-only-forward-path",
+        "candidate.22-folds-identity-repin-skill-version-line-and-work-annotate-guidance-into-one-ceremony",
+        "daily-verify-installed-copy-unaffected-trust-gate-resolve-step-is-what-breaks",
+        "lesson-upgrade-plus-dogfood-burns-the-rollback-bridge-repin-must-ship-with-the-upgrade",
+        "three-low-severity-hardening-candidates-recorded-not-blocking"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:ee0e8bcbfbb8cb40bed352b0",
+      "conferenceTitle": "全量安装面方案裁定（含 D 修正五语与意图发问）",
+      "conferenceType": "strategy",
+      "summary": "Owner 裁定全量安装面方案：R1 清单权威化（install-manifest 四要素条目）；R2 双 adapter 全量物化不看当前宿主，机器/用户级向导引导；R3 doctor 四腿、发版列车不挂新鲜度腿；R4 固定短语五语（en/zh-CN/ja/ko/fr）与 UI i18n 同规则，相似语句经 agent 意图识别以用户语言发问确认后才进向导；R5 接线居所两宿主实测定档不猜；R6 立即项（一次性备份+部署刷新 0.11.15）授权 agent:fable 即刻执行；R7 INIT-030 保留原扣题。无推送；c41 重钉本地完成 push 停放；done 只属 Owner；派工 Codex。",
+      "decisions": [
+        "R1 清单权威化（STORY-261）;R2 全量物化（STORY-263）;R3 doctor 四腿（STORY-264）;R4 五语短语+意图发问+向导全量化（STORY-265）;R5 居所实测定档（STORY-262）;R6 立即项 INC-157/INC-158;R7 INIT-030 保留"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:f3149e451883021785bbeba0",
+      "conferenceTitle": "INIT-008 收官:sprint 交付批次机制上线(W v0.5.0 + helper candidate.26)",
+      "conferenceType": "release",
+      "summary": "Owner 授权对外发布,INIT-008 sprint 交付批次机制已上线(W v0.5.0+helper candidate.26,两 Release、副本升级、双链回放、S049 首列车 dogfood),收官。",
+      "decisions": [
+        "Owner 授权对外发布批次(W v0.5.0 + helper candidate.26)",
+        "已全部执行并三方验证",
+        "W v0.5.0 与 helper candidate.26 均 main+tag 已推+GitHub Release;安装副本升 v0.5.0;双生产链回放绿;placed copy INSTALLED_COPY_VALIDATED@v0.5.0",
+        "S049 首列车 dogfood 于活链证 sprint 机制端到端(create Release→enroll INIT-008+INIT-006→work-list 过滤→close)",
+        "成员状态不变证 advisory:sprint 非绑定",
+        "INIT-008 收官:3 Epic/6 Story 全 done"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:f31c320b8b975416016b53a7",
+      "conferenceTitle": "备份方向、v0.11.16 发版与信任档案收口裁定",
+      "conferenceType": "strategy",
+      "summary": "Owner 2026-08-14「同意，落单派工codex」四裁定：R1 备份=退役 paired 改本地快照+加密异地腿（默认落点封存 VM 哑存储可另裁，与 08-08 备份撤=宿主快照同向）；R2 v0.11.16 发版放行，序列=INIT-032 收尾→两 commit（含五语 README 徽章修复）→tag→逐 ref 推→gh release→部署刷新→helper c43 重钉→helper 推，执行 agent:fable；R3 信任档案漂移立 INC-160（新鲜度探针+verify-installed-copy 绿判据入 S273+~/.agents 消费者查明）；R4 INIT-032 维持 open 为 Codex 首位任务。批次=INIT-035（EPIC-091: S272 备份/Codex + S273 发版/fable；INC-160/Codex）。",
+      "decisions": [
+        "R1 备份方向 C=STORY-272;R2 发版序列=STORY-273（前置 INIT-032）;R3 信任档案=INC-160+S273 AC;R4 INIT-032 首位派工"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:f622309ae73382406c836f39",
+      "conferenceTitle": "E05 收口 + INIT-003 完成：v0.3.0 发布与活链 dogfood",
+      "conferenceType": "release",
+      "summary": "E05 收口，INIT-003 五 Epic 全完成。v0.3.0 发布（commit 95cfd88/tag v0.3.0/GitHub Release，verify:p1=P1_VERIFIED 20 门），安装框架升 v0.3.0，活链 dogfood 注解 EPIC-005（v239，work-show 见 scope+decided-by 回链，work.annotated 活链回放绿）。STORY-018/019/020+EPIC-005+INIT-003 全 done。samples 随发布使 README 引用自足。skill 侧成文与快照延后属非阻塞建议。",
+      "decisions": [
+        "v0.3.0-shipped-commit-95cfd88-tag-and-github-release-with-p1-verified",
+        "installed-framework-upgraded-to-v0.3.0-and-live-chain-replays-clean",
+        "epic-005-dogfood-annotated-on-live-chain-v239-record-carries-authoritative-scope",
+        "INIT-003-complete-all-five-epics-done",
+        "samples-evidence-shipped-readme-citation-now-self-resolving-in-a-clone"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:f6ba1376b1d80832616c3926",
+      "conferenceTitle": "门户第三轮：图标件与计划级默认强度",
+      "conferenceType": "strategy",
+      "summary": "Owner 门户第三轮四条，另附 fable 的独立取证立场（两条立场由不同上下文形成，第二点结论不同）。①设置行重置按钮 class 为 tcrn-setting-row__reset，不是任何 DS 按钮类；步进器与移除、复制、词典按钮承载裸文本字符而非 DS 图标件，而同门户主题切换已用 tcrn-icon-button+内联 SVG 的正确形态②📖 实测码点 U+1F4D6，Inter 无该字形回退后渲染成方框，同类裸字符另有 ● U+25CF 与 ↺ − ＋ × ⧉③外链随厂商改版失效无需复核机制、届时开发者修改即可，MIN-094 该未决项关闭④计划表单缺默认推理强度：fable 实测该表单无溢出（774px、栅格 381+381、三输入均未越界），缺的是控件本身（实测仅 plan-host/plan-name/plan-default-model），故按缺控件修而非按样式溢出修；计划级默认须与 INC-184 共用 validateModelPlanEffort 以免边界两处分叉。立 INC-191 与 STORY-282（挂 EPIC-094）。本次为 execution.independenceFloor=all 生效后的首次收口，执行形态自陈 independent，依据见 POS-2 第四点。",
+      "decisions": [
+        "图标与按钮回归 DS 件=INC-191;计划级默认推理强度=STORY-282;外链复核机制不做，MIN-094 未决项关闭"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:f6fb1a1e87ceca6f0fa15af0",
+      "conferenceTitle": "STORY-014 产出：builder fail-closed 落地（H 7480a05）",
+      "conferenceType": "verification",
+      "summary": "STORY-014 完成：builder fail-closed 守卫落地并两路红证；scripts-only 仪式（skill 归档字节不变、锚不动），全绿已推送 H 7480a05。待你：candidate.20 tag+release 收口 main 与 candidate.19 的源归档漂移，属对外发布必停；建议顺带折入停顿预算 payload 教学。",
+      "decisions": [
+        "实现 H 7480a05 已推送：builder 对 skill/ 下任何非唯一 skill 子树的被跟踪路径抛 ARCHIVE_UNREPRESENTABLE 并点名，替代静默过滤",
+        "红证 守卫抽纯函数可脱构建单测＋module 只入口点构建；移除守卫→真 git 集成红证抓（scratch repo 第二 skill 目录 builder 非零退出）；纯函数摆设→单测+集成同抓",
+        "scripts-only 确认 只改 scripts/create-skill-archive.mjs+新测试+typecheck 行皆不在 skill/ 下——skill 归档字节不变 d53bbe61…、锚不动 19513f48…（push-gate 回显）",
+        "绿灯 verify RELEASE_ARTIFACTS_VALIDATED＋typecheck＋全套件 52+2×4+27（新增 3）＋push-gate",
+        "待发布漂移 main 源归档与已发布 candidate.19 漂移（同版本号不同源字节），收口需 candidate.20 tag+release——属三类必停的对外发布，执行方停在此待 Owner",
+        "建议 candidate.20 顺带折入停顿预算 payload 教学，一次 release 载两笔；锚不变故无须六文档 republish"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:f72e665a445e64950ab0488d",
+      "conferenceTitle": "INIT-020 方向审议:AOS 读写门面与引擎数据库后端",
+      "conferenceType": "architecture",
+      "summary": "执行形态:单上下文合成(synthesis-only),非多代理,理由已在开场立场首行声明。INIT-020 方向定案:D1(AOS 成为引擎前的唯一读写门面)与 D2(引擎存储后端改为数据库)为 Owner 2026-08-06 逐字直裁;D3(SQLite 选型)、D4(双轨接缝与日落)、D5(对 INIT-019 的承接顺序)为审查层建议采纳待确认。六 EPIC(052-057)按此拆单;发布为唯一必停点;Owner 指令原文、前提核实与被拒方案见 POS-C060-FABLE-1/2。",
+      "decisions": [
+        "D1 AOS 成为引擎前的唯一读写门面——与链同机的常驻服务供引擎读动词全集与仪式语义写面、本机 MCP 两面降为其客户端、只有引擎写存储不变(Owner 裁)",
+        "D2 引擎存储后端由规范字节文件树替换为数据库——经存储抽象层落地、六依赖面残余适用性结论随 EPIC-052 ADR 固化(Owner 裁)",
+        "D3 DB 选型默认 SQLite 每分区一库——Postgres 被拒因引入常驻服务与凭据面超出单写者需要、抽象层保留可逆性(建议采纳)",
+        "D4 双轨过渡——切换开关落拓扑单点、逐分区迁移双向 verify 可回退、旧文件轨日落条件=五链迁毕+门面 GA+新后端连续两次真备份成功(建议采纳)",
+        "D5 承接 INIT-019——INC-061..071 不作废、最小前置 061/062/063/064/066 done 前不执行切换类动作、门面写面继承仪式全部纪律(建议采纳)"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:fab08f977f653f9fd6f38bdb",
+      "conferenceTitle": "INIT-033/034 双批验收收口",
+      "conferenceType": "verification",
+      "summary": "INIT-033/034 双批验收通过（Owner 2026-08-14「同意」）。依据=两轮独立复验：033 批 85 代理六维对抗（部分通过，遗留由 034 收口）；034 批逐判据亲手实证（两 P0 真收、四新门红绿两侧实证、launchd 红得对、helper 四方一致、三列车绿、零推送权威确认）。全部叶与树转 done，子先父后。INIT-032 不在本次（S259 未执行、S260 链上未推进），归 MIN-086 序列处置。",
+      "decisions": [
+        "INIT-033 树全收 done（EPIC-086/087/088+STORY-261..265+INC-157/158）;INIT-034 树全收 done（EPIC-089/090+STORY-266..271+INC-159）;INIT-032 维持 open 另处置"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:fbae19225d75a5600ea13df2",
+      "conferenceTitle": "STORY-021/022 产出：Incident CLI 开通+守卫回归测试（W f365029）",
+      "conferenceType": "verification",
+      "summary": "Incident CLI 开通+守卫回归测试落地 W f365029 并双红证；全门绿（protocol/rc1/format/guard/p1/push-gate）。过程两课：红证探针先自检（错 build 命令曾致假存活）、变异须能编译。INIT-004 代码交付达成，用户可见随 v0.3.2 发布列车。父语义采 parent-optional（Owner 可驳）。",
+      "decisions": [
+        "实现 W f365029 已推送：STORY-022 CLI 白名单加 Incident（Review/Release/Knowledge 仍闭）；STORY-021 negative/cases.json +missing-parent-unmapped-kind 钉 else-if 守卫",
+        "双红证 022 回退白名单→CLI Incident 测试被抓；021 else-if 守卫改 continue→悬空父负例被抓",
+        "过程课① 红证探针最初用错 build（node scripts/task.mjs 缺 pnpm→RUNTIME_PNPM_VERSION→跑旧 dist 假存活）；改 pnpm run build+先自检基线真绿后才真抓——先自检探针第二次救场",
+        "过程课② 变异须能编译（parent.projectId on undefined 不可编译；用 continue 静默跳过才是有效变异）",
+        "绿灯 verify:protocol P2_CONFORMANCE_VERIFIED／verify:rc1 RC1_CANDIDATE_READY／format／guard-check 12 杀／verify:p1 P1_VERIFIED／push-gate",
+        "父语义 采 parent-optional（推荐，Owner 可驳；驳则单点加 parentless 校验）——恒 parentless 的安全论据已被 MIN-I4-RESHAPE 证伪",
+        "收口 INIT-004 交付达成（代码完成+证明+推送）；用户可见交付随下次 W 发布列车 v0.3.2（Owner 门，连带 helper 重钉）是条件不是欠账"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:fc81b85294e9a85a888e0f97",
+      "conferenceTitle": "SPRINT-002 终局交付证据与关闭",
+      "conferenceType": "verification",
+      "summary": "SPRINT-002 已批准收官包的发布、纠偏、PR 与边界证据完成核验：Workflow v0.6.0 与 helper candidate.27 已发布并全摘要匹配；DS 证据方案 B 已落链；TMS PR 保持未合并且安全红灯未绕过；carry-over 状态与 host enforce=0 均保留。列车可关闭，不把 carry-over 误报为完成。",
+      "decisions": [
+        "SPRINT-002 完成条件满足并可转 done",
+        "TMS PR #1 保持 OPEN 且不得在安全证据满足前合并",
+        "EPIC-025 与 S073/S074/S075 继续 blocked 且 host enforce 授权数为 0",
+        "INC-023 与 TMS 两项安全事项按既定状态 carry-over",
+        "可选 observe 五格不补录"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:fca8513c7a8bad200462b29b",
+      "conferenceTitle": "S024 retire 回收:实现与范围判断",
+      "conferenceType": "verification",
+      "summary": "S024 完成:retire 删 body 为最终持久步,scan 容忍 retired 无 body,活记录仍强制有 body,三聚合触点计回收为 0,promote 拦 retired。红证四性过,34/34+5 邻接文件绿。范围判断:保全 metadata（非 bare stub）+不做肥墓重写路径（S030 清库覆盖）。W f466d35。",
+      "decisions": [
+        "retire 删 body 真退字节;完整性不变量=活记录必有 body/retired 可缺;保全 metadata 非 bare stub（避碰安全敏感 shape 校验）;不做肥墓 rebase 重写（S030 清库重种覆盖）"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:fcd503b817e8d44c77f6db16",
+      "conferenceTitle": "STORY-003 产出：受治供给机制设计与身份面定轨",
+      "conferenceType": "architecture",
+      "summary": "供给机制推广既有 --expected-plan-digest 模式（回归终止于人手，与 shasum 比对公布锚点同构）；attestations 面禁上旗标。第三处修正：E01 可诚实交付上限是 7 个 pins 面 verb，5 个 attestations host 面 verb 无法经 CLI 诚实解锁。身份面契约定死但实现挪 E02（此前无消费者）。另发现文件身份契约有两套实现应互钉。",
+      "decisions": [
+        "供给机制 推广既有 --expected-plan-digest 模式：pins 面加 --*-authority-digest 旗标，CLI 组装 {expectedCanonicalPath expectedFileSha256} 交 CliIo 现有入口",
+        "回归终止 调用方须自带外渠道持有摘要，与 shasum 比对六文档公布锚点同构——无注册表、无可信配置、无二阶回归",
+        "禁令 attestations 轨的面不得上 CLI 旗标：旗标供给的 host 上下文仅是调用方断言而参数校验无从核实；只能由嵌入方构造（host-evidence.mjs 即其形）",
+        "分类 pins 面把守的 7 verb 可诚实经 CLI 解锁：profile-resolve／profile-authorize／context-route／adapter-rollback-plan／claude-adapter-uninstall／claude-adapter-rollback-plan／compatibility-plan（后者另需改 availability）",
+        "分类 attestations host 面把守的 5 verb 不可诚实经 CLI 解锁：adapter-generate／claude-adapter-generate／claude-adapter-install／claude-adapter-settings-fragment／claude-adapter-activation-fragment——需真正构造 host 上下文的嵌入方",
+        "修正三 「解锁全部 12 个 verb」的提法做不到，除非把断言当权威；E01 的可诚实交付上限是 7 个 pins 面 verb",
+        "身份面契约 带外权威文件列明何种 actor 可关何种 outcome-class 的门；摘要如 bootstrap 锚点带外公布；经同一 path+digest 旗标供给",
+        "身份面时点 gate-v1 之前无消费者，此刻实现即写死代码——契约在此定死、面的实现挪到 E02 首个 Story",
+        "一致性发现 文件身份契约存在两套实现：共享原语 readAuthorityFile（generic-profile／context-router／compatibility-modes）与 adapter 自带安装读取器（codex-adapter:412／claude-adapter），二者各做 路径+摘要+变更+链接 四检并各有平行 reason-code 族；依本程序 OD-16／F1 既有先例（两份 RFC3339 解析器互相钉死），此二实现应以共享一致性测试互钉或令 adapter 改用原语"
+      ],
+      "outcomeClass": "recommendation"
+    },
+    {
+      "id": "minutes:feb3ff54699c2ce4ddbe9adb",
+      "conferenceTitle": "STORY-010 产出：授权决策入 extensions，回放只校验形状（W 89531a4）",
+      "conferenceType": "verification",
+      "summary": "授权决策入 extensions 并由回放只校验形状：形状精确＋决策 actor 须等于事件签署 actor＋绝不重读名册（删掉名册后回放实证照常绿）。条目永远可选。attestation 未启用时无佐证已写入代码。测试抓出畸形决策泄漏模块码的实现缺陷已修。红证暴露两处覆盖洞（畸形一格缺失、伪造哈希须按引擎公式重算否则为错误理由通过）。",
+      "decisions": [
+        "形制 gate-identity:decision 入 gate extensions 为 {actorId authorityFileSha256}，成对写入／回放，与既有 gate-evidence 同一纪律（增量须逐字节等于预期防夹带）",
+        "回放判据一 形状精确",
+        "回放判据二 决策所名 actor 须等于事件签署 actor——自相矛盾的记录无论谁写都是损坏，此校验零外部依赖",
+        "回放判据三 绝不重读名册文件：记录的摘要是当时校验了什么的证据，不是拿来再校验一次的对象；测试实证删掉名册后回放照常绿",
+        "条目永远可选 回放无从知晓写入当时是否需要名册，故须接受无名册关闭的门同时拒绝畸形或自相矛盾条目",
+        "诚实交代 attestation 未启用时 payload 不载 actor 无从矛盾，条目处于无佐证状态——已写入代码而非掩盖；attestation 仍是独立开关，把不可逆设置绑在另一不可逆设置之后是更坏的交易",
+        "实现缺陷（由测试抓出）畸形决策原泄漏模块码 GATE_IDENTITY_AUTHORITY_MALFORMED，破坏回放拒绝一律 WORKSPACE_EVENT_CORRUPT 的契约；已并入 extensionRecordOrCorrupt 映射",
+        "覆盖洞一 畸形决策一格原本缺失：若无它形状校验被整段删掉也无人发觉",
+        "覆盖洞二 伪造事件哈希须按引擎公式重算否则测试因哈希失败而通过——为错误理由通过；故拒绝原因亦被断言须点名身份矛盾",
+        "绿灯 typecheck／format-check／push-gate 全绿；W 89531a4 已推送"
+      ],
+      "outcomeClass": "role_decision"
+    },
+    {
+      "id": "minutes:ff33f3598f6ed51dbd33b0ee",
+      "conferenceTitle": "单据颗粒度与派工就绪公约:两层制与要素清单的采纳裁定",
+      "conferenceType": "architecture",
+      "summary": "执行形态:synthesis-only(单上下文综合;Owner 已于 2026-08-04 对话逐项确认方案,分头产出将同构)。裁定:采纳《单据颗粒度与派工就绪公约》——链上单据记录级四要素(现象与证据含复核命令、修复项、可红可绿的验收判据、决策点及裁定状态)+派工执行简报四要素(红线边界、文件指针、验证命令、链上收口动作),缺要素不派工。约束登记:能力补偿型;执行宿主现为本机散文清单、无机器门如实登记;机器化落点=派工工具拒绝缺要素单据。文档落点 docs/dispatch-readiness-convention.md(公约 5 双落点之文档侧,本纪要为链侧)。首批适用:EPIC-040 六单与 INC-029/030/049。",
+      "decisions": [
+        "采纳两层颗粒度制:链上单据保持记录级四要素(现象与证据含复核命令、修复项、可红可绿的验收判据、决策点及裁定状态)",
+        "派工时由派工方生成执行简报补齐红线边界、文件指针、验证命令、链上收口动作四要素;缺任一要素不得派工",
+        "公约按《治理约束分类与进化公约》登记为能力补偿型;谓词=不能可靠重建平台红线与文件指针的执行档位及可能欠规格交接的派工方;执行宿主=本机散文清单且现无机器门(如实登记);机器化落点为派工工具对缺要素单据拒绝派出",
+        "本公约为加法不触发残余适用性分析;不改引擎字节;文档落点 docs/dispatch-readiness-convention.md;Owner 2026-08-04 对话明示同意采纳"
+      ],
+      "outcomeClass": "role_decision"
+    }
+  ]
+}
