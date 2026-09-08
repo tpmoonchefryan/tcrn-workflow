@@ -147,9 +147,10 @@ read from `scripts/policy/proof-budget.json`'s `surfaceCaps` field against a liv
 engine, without a checkout, has nothing to measure; the leg reports
 `comparable: false` rather than a quiet pass.
 
-**Caps, recorded 2026-09-05, zero margin.** `verifyScriptCap: 135`,
-`claimCap: 122`, `coreSourceLineCap: 32086` — the values measured the day this
-field was written, not values with headroom already spent. `verifyScriptCount`
+**Caps, zero margin.** `scripts/policy/proof-budget.json`'s `surfaceCaps` field carries
+the current `verifyScriptCap`, `claimCap`, and `coreSourceLineCap` — read it directly;
+this document does not mirror the numbers, since each is the value measured the day it
+was last written, not a value with headroom already spent. `verifyScriptCount`
 and `claimCount` move only on a deliberate act (a new script, a new claim);
 `coreSourceLines` moves on any change to `packages/core/src`, including an
 ordinary defect fix, so a red result there does not by itself mean new proof
@@ -161,8 +162,11 @@ one question — does the measured count exceed the recorded cap — and cannot
 decide who is authorised to raise one. That authorization is recorded the same
 way a ratio exception is recorded above: a policy-file edit made in review, with
 the reasoning written into `scripts/policy/proof-budget.json`. No verb in this
-engine checks who made that edit, the same limit the ratio's own exceptions have
-carried since 2026-08-19.
+engine checks who made that edit, the same limit the ratio's own exceptions have carried
+since 2026-08-19. In practice: edit the cap to the value measured after the change that
+needs it lands, in the same commit, and add an `exceptions` entry naming the work item
+that raises it and citing the authorising decision (the convention MIN-144 D8 records);
+lowering a cap needs no exception.
 
 ## Evidence is not a gate — `pnpm host-evidence` (OD-C3, 2026-07-20)
 
