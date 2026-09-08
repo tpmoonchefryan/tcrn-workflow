@@ -89,14 +89,14 @@ async function loadCore() {
   return import(CORE);
 }
 
-async function planCommand(core, values) {
+export async function planCommand(core, values) {
   const { listKnowledgeMetadata, materializeWorkspace, readKnowledgeLanguagePolicy, detectLanguage } = core;
   const workspace = values.workspace ?? "";
   const state = await materializeWorkspace(workspace);
   const policy = readKnowledgeLanguagePolicy(state.settings);
   if (policy.artifactLanguage === null) return fail("KNOWLEDGE_LANGUAGE_UNCONFIGURED", "artifact.language is not recorded in this workspace");
   const answer = await listKnowledgeMetadata(workspace, { at: values.at ?? new Date().toISOString().replace(/\.\d+Z$/u, "Z"), selection: "all", limit: 1_048_576, allowTrailing: true });
-  const cards = answer.records ?? [];
+  const cards = (answer.records ?? []).filter((record) => record.lifecycle !== "retired");
   const request = cards.map((record) => {
     const fields = ["subject", "summary", "snippet"]
       .filter((field) => detectLanguage(String(record[field] ?? "")) !== policy.artifactLanguage)
@@ -121,7 +121,7 @@ async function planCommand(core, values) {
   return undefined;
 }
 
-async function migrateCommand(core, values) {
+export async function migrateCommand(core, values) {
   const { listKnowledgeMetadata, materializeWorkspace, readKnowledgeLanguagePolicy, applyWriteLanguagePolicy, readKnowledgeBody, createKnowledgeUnit, validateKnowledgeStore } = core;
   const workspace = values.workspace ?? "";
   const dryRun = values["dry-run"] === "true";
@@ -133,6 +133,7 @@ async function migrateCommand(core, values) {
   const answer = await listKnowledgeMetadata(workspace, { at, selection: "all", limit: 1_048_576, allowTrailing: true });
   const rewrites = [];
   for (const record of answer.records ?? []) {
+    if (record.lifecycle === "retired") continue;
     const provider = bundleProvider(core, bundle, record.id);
     let applied;
     try {

@@ -53,6 +53,7 @@ import { resetRecallCache } from "../dist/build/packages/core/src/recall.js";
 import { deriveStableId } from "../dist/build/packages/protocol/src/index.js";
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import { bundleTranslator, runInjection } from "../scripts/knowledge-inject.mjs";
+import { planCommand, migrateCommand } from "../scripts/knowledge-language.mjs";
 
 const instant = (second) => `2026-09-08T00:00:${String(second).padStart(2, "0")}Z`;
 const OWNER = deriveStableId("owner", "STORY-364-OWNER");
@@ -649,4 +650,130 @@ test("STORY-364 R4: the injection hook translates once and asks again, and adds 
   assert.equal(missing.ok, true);
   assert.equal(missing.translatedQuery, null,
     "read-side is fail-open: a bundle without this prompt keeps the first answer rather than refusing");
+});
+
+test("language migration excludes retired cards before planning or applying policy", async (context) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-language-retired-")));
+  context.after(() => rm(base, { recursive: true, force: true }));
+  const bundlePath = await writeBundle(join(base, "bundle.json"), {
+    model: ECONOMY_MODEL,
+    translations: {},
+    expansions: {},
+  });
+  const records = [
+    { id: "active-default", lifecycle: "active", retrievalDisposition: "default" },
+    { id: "active-excluded", lifecycle: "active", retrievalDisposition: "excluded" },
+    { id: "candidate", lifecycle: "candidate", retrievalDisposition: "default" },
+    { id: "retired", lifecycle: "retired", retrievalDisposition: "default" },
+  ].map((record) => ({
+    ...record,
+    externalKey: record.id,
+    subject: record.id,
+    summary: record.id,
+    snippet: record.id,
+    expansions: {},
+  }));
+  const expected = records.filter((record) => record.lifecycle !== "retired");
+  const expectedIds = expected.map((record) => record.id);
+  const policyCalls = [];
+  const providerCalls = [];
+  const bodyCalls = [];
+  const writes = [];
+  const core = {
+    async materializeWorkspace() {
+      return { settings: [] };
+    },
+    readKnowledgeLanguagePolicy() {
+      return {
+        artifactLanguage: "en",
+        promptLanguages: ["en"],
+        economyModel: ECONOMY_MODEL,
+      };
+    },
+    async listKnowledgeMetadata(_workspace, query) {
+      assert.equal(query.selection, "all");
+      return { records };
+    },
+    detectLanguage() {
+      return "en";
+    },
+    parseLanguageBundle(bundle) {
+      return bundle;
+    },
+    languageProviderFromBundle(_bundle, id) {
+      providerCalls.push(id);
+      return { id };
+    },
+    applyWriteLanguagePolicy(fields, _policy, languageProvider) {
+      policyCalls.push(languageProvider.id);
+      return {
+        ...fields,
+        expansions: { en: ["first question", "second question", "third question"] },
+      };
+    },
+    async readKnowledgeBody(_workspace, id) {
+      bodyCalls.push(id);
+      return { body: id };
+    },
+    async validateKnowledgeStore() {
+      return { version: writes.length };
+    },
+    async createKnowledgeUnit(_workspace, input) {
+      writes.push(input);
+      return {};
+    },
+  };
+  const captureOutput = async (operation) => {
+    let output = "";
+    const original = process.stdout.write;
+    process.stdout.write = function (chunk) {
+      output += String(chunk);
+      return true;
+    };
+    try {
+      await operation();
+    } finally {
+      process.stdout.write = original;
+    }
+    return JSON.parse(output);
+  };
+
+  const plan = await captureOutput(() => planCommand(core, {
+    workspace: base,
+    at: instant(20),
+  }));
+  assert.equal(plan.reasonCode, "KNOWLEDGE_LANGUAGE_PLAN_READY");
+  assert.equal(plan.cards, expected.length);
+  assert.equal(plan.pending, expected.length);
+  assert.deepEqual(plan.request.map((entry) => entry.id), expectedIds);
+  assert.equal(
+    plan.request.filter((entry) =>
+      records.find((record) => record.id === entry.id).lifecycle === "active"
+    ).length,
+    records.filter((record) => record.lifecycle === "active").length,
+  );
+
+  for (const dryRun of [true, false]) {
+    policyCalls.length = 0;
+    providerCalls.length = 0;
+    bodyCalls.length = 0;
+    writes.length = 0;
+    const result = await captureOutput(() => migrateCommand(core, {
+      workspace: base,
+      bundle: bundlePath,
+      at: instant(21),
+      ...(dryRun ? { "dry-run": "true" } : {}),
+    }));
+    assert.equal(result.reasonCode, dryRun
+      ? "KNOWLEDGE_LANGUAGE_MIGRATION_PLANNED"
+      : "KNOWLEDGE_LANGUAGE_MIGRATED");
+    assert.equal(result.cards, expected.length);
+    assert.equal(result.rewritten, expected.length);
+    assert.equal(result.refused, 0);
+    assert.deepEqual(result.rewrites.map((entry) => entry.id), expectedIds);
+    assert.deepEqual(providerCalls, expectedIds);
+    assert.deepEqual(policyCalls, expectedIds);
+    assert.deepEqual(bodyCalls, dryRun ? [] : expectedIds);
+    assert.deepEqual(writes.map((entry) => entry.supersedes), dryRun ? [] : expectedIds);
+  }
 });
