@@ -38,24 +38,38 @@ export const KNOWLEDGE_EXPANSION_LIMITS = Object.freeze({
 });
 
 /**
- * The share of ideographs at which prose stops being English. Requirement 4 asks for a
- * character ratio rather than a language identifier: a Chinese sentence quoting an English
- * identifier is still Chinese, and an English sentence quoting one Chinese term is still
- * English. Measured against the 36 cards of the 2026-09-05 evaluation, every Chinese card
- * scores above 0.30 and every English card below 0.05, so the boundary is not delicate.
+ * Measurement over the live-store acceptance corpus (20 zh-CN fields, 57 en fields, and 4
+ * English fields quoting Chinese terms) showed that a ratio boundary is not dependable: short
+ * Chinese prose containing commands has a low ratio even after cleanup. Identifier-shaped
+ * ASCII runs are removed by character span, never by whitespace token, and two surviving
+ * ideographs are sufficient for zh-CN. The boundary is delicate for intentionally quoted
+ * Chinese terms, so those cases remain explicit regression coverage rather than a claimed margin.
+ *
+ * Owner ruling TCRN-CROSS-MIN-177 D1 accepts one known limitation. English prose that quotes
+ * Chinese terms is judged zh-CN: the detector counts surviving ideographs, not which language
+ * wrote the sentence around them, so two quoted characters are enough regardless of how many
+ * English words surround them. The consequence is that such a card is treated as already in
+ * the artefact language, so it is not translated and nothing is rewritten. That direction is
+ * the one accepted, because the two misjudgments do not cost the same: a Chinese card
+ * misjudged as English reaches applyWriteLanguagePolicy believing a translation is owed,
+ * which either sends human-written prose to a model to be rewritten or refuses the write
+ * outright, while an English card whose Chinese quotes are misjudged the other way only means
+ * a translation that could have run does not -- the text is stored exactly as it was handed
+ * in. The cheap direction is the one left uncorrected.
  */
-export const ARTIFACT_LANGUAGE_CJK_RATIO = 0.2;
+const MINIMUM_CJK_IDEOGRAPHS = 2;
 
 const IDEOGRAPH = /[㐀-䶿一-鿿豈-﫿]/gu;
-const LATIN_LETTER = /[A-Za-z]/gu;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
+const CODE_SPAN_OR_URL_OR_PATH = /`[^`]*`|https?:\/\/\S+|(?:^|\s)(?:\.\.\/|\.\/|\/)?[\w.-]+(?:\/[\w.-]+)+(?:\s|$)/gu;
+const IDENTIFIER_RUN = /[A-Za-z0-9_.:/#-]*[0-9_.:/#-][A-Za-z0-9_.:/#-]*/gu;
 
 export function detectLanguage(text: string): ArtifactLanguageTag {
-  const ideographs = (text.match(IDEOGRAPH) ?? []).length;
-  const latin = (text.match(LATIN_LETTER) ?? []).length;
-  const total = ideographs + latin;
-  if (total === 0) return "en";
-  return ideographs / total >= ARTIFACT_LANGUAGE_CJK_RATIO ? "zh-CN" : "en";
+  const prose = text.replace(CODE_SPAN_OR_URL_OR_PATH, " ").replace(IDENTIFIER_RUN, " ");
+  const ideographs = (prose.match(IDEOGRAPH) ?? []).length;
+  return ideographs >= MINIMUM_CJK_IDEOGRAPHS
+    ? "zh-CN"
+    : "en";
 }
 
 export function isArtifactLanguageTag(value: unknown): value is ArtifactLanguageTag {

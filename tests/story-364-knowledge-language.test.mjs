@@ -146,7 +146,136 @@ test("STORY-364: character ratio, not a language identifier, decides which langu
   assert.equal(detectLanguage("the retrieval.tau 值 floor"), "en",
     "English prose quoting one Chinese term is still English");
   assert.equal(detectLanguage("2026-09-08"), "en", "text with no letters at all falls to the default");
+  assert.equal(detectLanguage("context-limit-is-not-a-reason-to-stop:停只因实质阻塞。"), "zh-CN");
+  assert.equal(detectLanguage("marker-rebase-discipline:每写必 rebase。"), "zh-CN");
+  assert.equal(detectLanguage("corepack pnpm run test；裸 pnpm 撞 RUNTIME_PNPM_VERSION。"), "zh-CN");
   assert.deepEqual([...ARTIFACT_LANGUAGE_TAGS], ["en", "zh-CN"]);
+});
+
+test("STORY-364: a single quoted ideograph is below the zh-CN threshold, so the sentence stays English", () => {
+  const cases = [
+    ["The 引 handles this case", "one ideograph is below MINIMUM_CJK_IDEOGRAPHS"],
+    ["Use the 存 after the request completes", "one ideograph is below MINIMUM_CJK_IDEOGRAPHS"],
+    ["The API returns a 据 when authentication succeeds", "one ideograph is below MINIMUM_CJK_IDEOGRAPHS"],
+    ["The API returns a 凭 when authentication succeeds", "one ideograph is below MINIMUM_CJK_IDEOGRAPHS"],
+  ];
+  for (const [text, message] of cases) assert.equal(detectLanguage(text), "en", message);
+});
+
+test("STORY-364 MIN-177 D1: English prose quoting Chinese terms is judged zh-CN, a known limitation and not a requirement", () => {
+  // These four assert accepted current behaviour under TCRN-CROSS-MIN-177 D1, not a
+  // requirement this test guards. No character-level rule separates an English sentence
+  // quoting a Chinese term from a genuinely Chinese sentence that happens to carry more
+  // Latin letters; the comment above MINIMUM_CJK_IDEOGRAPHS in knowledge-language.ts
+  // records the corpus that proved it. If a future change makes detectLanguage return "en"
+  // for these, that is an improvement, not a regression: update this test to match, rather
+  // than let it block the change.
+  const cases = [
+    ["The 引擎 handles this case", "MIN-177 D1 known limitation"],
+    ["Run the migration before the 迁移 window closes and record the receipt", "MIN-177 D1 known limitation"],
+    ["This card is a 卡片 in the knowledge store", "MIN-177 D1 known limitation"],
+    ["See the 纪要 for the ruling that settled it", "MIN-177 D1 known limitation"],
+  ];
+  for (const [text, message] of cases) assert.equal(detectLanguage(text), "zh-CN", message);
+});
+
+test("STORY-364 TCRN-CROSS-MIN-177 D1: the live-store acceptance corpus, both directions in one run", () => {
+  // Embeds the EPIC-127 r5 live-store acceptance corpus (the translate texts of
+  // .tcrn-artifacts/dispatch-runs/init-051/EPIC-127/r5/request.json) so the 20 zh-CN / 57 en
+  // split this Story is judged on is asserted inside this repository, not only in a script
+  // under a session scratchpad that no gate here reads. Partitioned by whether each text
+  // carries a character in the ranges the IDEOGRAPH regex above uses. Citing
+  // TCRN-CROSS-MIN-177 D1: the known limitation that ruling accepts (an English sentence
+  // quoting a Chinese term is judged zh-CN) is covered separately, above.
+  const zhCnFields = [
+    "引擎 knowledge-create/promote/retire/rebase/reverify 全部以 store.json 的 version 做 CAS;仪式按链版本供给会 KNOWLEDGE_CAS_MISMATCH。",
+    "knowledge-marker-cas:knowledge 写动词 CAS 用 marker。",
+    "git worktree add 建出的树跑不了本仓任何门：worktree 的 .git 是文件而非目录，packages/core/src/safe-io.mjs 的 withExclusiveOutputSession 断言 isDirectory，每道门以 OUTPUT_SESSION_REPOSITORY_INVALID 失败。用 rm -rf <dir> && git clone --local --no-hardlinks <仓> <dir> && git -C <dir> checkout --detach HEAD；离线装依赖 corepack pnpm install --frozen-lockfile --offline；用完 rm -rf。",
+    "隔离树：git clone --local + checkout --detach；worktree 过不了 safe-io。",
+    "Owner 判定的 Story 转 done 前须 work-annotate --decided-by <纪要>，否则 WORKSPACE_OWNER_ACCEPTANCE_REQUIRED。",
+    "recheck-via-mcp:复核走 MCP 读面,SSH 仅 break-glass。",
+    "context-limit-is-not-a-reason-to-stop:停只因实质阻塞。",
+    "裸 pnpm 是 11.7.0，scripts/task.mjs:220 钉 pnpm/11.3.0，裸跑报 RUNTIME_PNPM_VERSION。一律 corepack pnpm run <script>。",
+    "corepack pnpm run test；裸 pnpm 撞 RUNTIME_PNPM_VERSION。",
+    "git worktree add 建出的树跑不了本仓任何门：worktree 的 .git 是文件而非目录，packages/core/src/safe-io.mjs 的 withExclusiveOutputSession 断言 isDirectory，每道门以 OUTPUT_SESSION_REPOSITORY_INVALID 失败。用 rm -rf <dir> && git clone --local --no-hardlinks <仓> <dir> && git -C <dir> checkout --detach HEAD；离线装依赖 corepack pnpm install --frozen-lockfile --offline；用完 rm -rf。",
+    "隔离树：git clone --local + checkout --detach；worktree 过不了 safe-io。",
+    "引擎仓增删被跟踪文件后不改 scripts/policy/source-allowlist.json，pnpm test 整体红于 PROOF_ARTIFACT_UNAPPROVED_SOURCE。同一提交改白名单，再 node scripts/generate-proof-artifacts.mjs。",
+    "增删文件 → 改 source-allowlist.json → generate-proof-artifacts.mjs，否则 PROOF_ARTIFACT_UNAPPROVED_SOURCE。",
+    "marker-rebase-discipline:每写必 rebase。",
+    "evidence-hygiene:证据 scrub 宿主路径,门扫 tracked+evidence。",
+    "裸 pnpm 是 11.7.0，scripts/task.mjs:220 钉 pnpm/11.3.0，裸跑报 RUNTIME_PNPM_VERSION。一律 corepack pnpm run <script>。",
+    "corepack pnpm run test；裸 pnpm 撞 RUNTIME_PNPM_VERSION。",
+    "stop-budget-three-classes:只三类必停。",
+    "引擎仓增删被跟踪文件后不改 scripts/policy/source-allowlist.json，pnpm test 整体红于 PROOF_ARTIFACT_UNAPPROVED_SOURCE。同一提交改白名单，再 node scripts/generate-proof-artifacts.mjs。",
+    "增删文件 → 改 source-allowlist.json → generate-proof-artifacts.mjs，否则 PROOF_ARTIFACT_UNAPPROVED_SOURCE。",
+  ];
+  const enFields = [
+    "guard-check writes its injected mutations into the live working tree while it runs",
+    "Any concurrent gate run or file edit during guard-check reads a deliberately broken tree, and edits made during the run invalidate its verdict.",
+    "Running verify-portal alongside guard-check produced six false red portal cases on 2026-08-19. Treat it as exclusive, wait on the pid, and confirm the mutation is restored before continuing.",
+    "Harness constraints convention index",
+    "Explicit-only index card for platform-docs/harness-constraint-convention.md; retrieve the source document when this topic is needed.",
+    "Read platform-docs/harness-constraint-convention.md on demand.",
+    "The short commit-citation form is ambiguous for two record keys in five",
+    "Partitions number independently, so INIT-009 names a different record in each. The convention requires the full external key; the short form is four times more common and cannot identify a chain.",
+    "Measured 2026-08-19 over 609 completed cross-project records: 11.2 percent cite the full key, 43.5 percent the short form, 56.5 percent nothing. 242 of 609 short forms collide across partitions.",
+    "guard-check writes its injected mutations into the live working tree while it runs",
+    "Any concurrent gate run or file edit during guard-check reads a deliberately broken tree, and edits made during the run invalidate its verdict.",
+    "Running verify-portal alongside guard-check produced six false red portal cases on 2026-08-19. Treat it as exclusive, wait on the pid, and confirm the mutation is restored before continuing.",
+    "Four wrong readings in two days all came from asking a narrower question than the one being answered",
+    "Each measurement used an instrument that could only return the answer already expected. The tell is that the probe's scope is narrower than the claim it is used to support.",
+    "Empty knowledge store read off a search with no matching card; a dropped scope field read off the wrong receipt path; 11.2 percent traceability measured on one of two citation spellings; a load-sensitive test declared a flake from two isolated runs.",
+    "Projection freshness convention index",
+    "Explicit-only index card for platform-docs/projection-freshness-convention.md; retrieve the source document when this topic is needed.",
+    "Read platform-docs/projection-freshness-convention.md on demand.",
+    "A knowledge read refuses after any chain write unless it is asked to tolerate a trailing store",
+    "The store's marker must equal the chain head, and every chain event breaks that. Pass --allow-trailing true on the five metadata-first read verbs; the answer then carries both heads.",
+    "One work-create took all six partitions' knowledge reads dark until a hand-run rebase. Reads accept --allow-trailing true since TCRN-CROSS-INC-226; writes, validate and rebase are not exempt.",
+    "Deliberation adoption convention index",
+    "Explicit-only index card for platform-docs/deliberation-adoption-convention.md; retrieve the source document when this topic is needed.",
+    "Read platform-docs/deliberation-adoption-convention.md on demand.",
+    "A knowledge read refuses after any chain write unless asked to tolerate a trailing store",
+    "The store's marker must equal the chain head, and every chain event breaks that. Pass allow-trailing true on the five metadata-first read verbs; the answer then carries both heads.",
+    "One work-create took all six partitions' knowledge reads dark until a hand-run rebase. Reads accept --allow-trailing true since TCRN-CROSS-INC-226; writes, validate and rebase are not exempt.",
+    "Delivery cadence convention index",
+    "Explicit-only index card for platform-docs/delivery-cadence-convention.md; retrieve the source document when this topic is needed.",
+    "Read platform-docs/delivery-cadence-convention.md on demand.",
+    "Gate reference stability convention index",
+    "Explicit-only index card for platform-docs/gate-reference-stability-convention.md; retrieve the source document when this topic is needed.",
+    "Read platform-docs/gate-reference-stability-convention.md on demand.",
+    "Adversarial review convention index",
+    "Explicit-only index card for platform-docs/adversarial-review-convention.md; retrieve the source document when this topic is needed.",
+    "Read platform-docs/adversarial-review-convention.md on demand.",
+    "On the knowledge verbs, expected-version is the store's own version rather than the chain's",
+    "Every other verb reads that flag as the chain version. The knowledge verbs read it as the knowledge store's version, and nothing in the catalog distinguishes the two meanings.",
+    "Passing chain version 4295 returned KNOWLEDGE_CAS_MISMATCH 4295:160 -- supplied first, expected second. Read the refusal rather than guessing a second time.",
+    "On the knowledge verbs, expected-version is the store's own version rather than the chain's",
+    "Every other verb reads that flag as the chain version. The knowledge verbs read it as the knowledge store's version, and nothing in the catalog distinguishes the two meanings.",
+    "Passing chain version 4295 returned KNOWLEDGE_CAS_MISMATCH 4295:160 -- supplied first, expected second. Read the refusal rather than guessing a second time.",
+    "Sourcing and vetting convention index",
+    "Explicit-only index card for platform-docs/sourcing-and-vetting-convention.md; retrieve the source document when this topic is needed.",
+    "Read platform-docs/sourcing-and-vetting-convention.md on demand.",
+    "Direction and tracks convention index",
+    "Explicit-only index card for platform-docs/direction-and-tracks-convention.md; retrieve the source document when this topic is needed.",
+    "Read platform-docs/direction-and-tracks-convention.md on demand.",
+    "Dependency direction and integration convention index",
+    "Explicit-only index card for platform-docs/dependency-direction-and-integration-convention.md; retrieve the source document when this topic is needed.",
+    "Read platform-docs/dependency-direction-and-integration-convention.md on demand.",
+    "The short commit-citation form is ambiguous for two record keys in five",
+    "Partitions number independently, so INIT-009 names a different record in each. The convention requires the full external key; the short form is four times more common and cannot identify a chain.",
+    "Measured 2026-08-19 over 609 completed cross-project records: 11.2 percent cite the full key, 43.5 percent the short form, 56.5 percent nothing. 242 of 609 short forms collide across partitions.",
+    "Dispatch readiness convention index",
+    "Explicit-only index card for platform-docs/dispatch-readiness-convention.md; retrieve the source document when this topic is needed.",
+    "Read platform-docs/dispatch-readiness-convention.md on demand.",
+  ];
+  assert.equal(zhCnFields.length, 20, "the ideograph-bearing group must hold exactly 20 fields");
+  assert.equal(enFields.length, 57, "the ideograph-free group must hold exactly 57 fields");
+  for (const text of zhCnFields) {
+    assert.equal(detectLanguage(text), "zh-CN", text.slice(0, 40));
+  }
+  for (const text of enFields) {
+    assert.equal(detectLanguage(text), "en", text.slice(0, 40));
+  }
 });
 
 test("STORY-364: an unconfigured workspace stores exactly the prose it was handed", async (context) => {
