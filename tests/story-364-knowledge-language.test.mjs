@@ -665,6 +665,8 @@ test("language migration excludes retired cards before planning or applying poli
     { id: "active-excluded", lifecycle: "active", retrievalDisposition: "excluded" },
     { id: "candidate", lifecycle: "candidate", retrievalDisposition: "default" },
     { id: "retired", lifecycle: "retired", retrievalDisposition: "default" },
+    { id: "superseded-default", lifecycle: "active", retrievalDisposition: "default", extensions: { supersededBy: "knowledge:111111111111111111111111" } },
+    { id: "superseded-excluded", lifecycle: "active", retrievalDisposition: "excluded", extensions: { supersededBy: "knowledge:222222222222222222222222" } },
   ].map((record) => ({
     ...record,
     externalKey: record.id,
@@ -673,7 +675,7 @@ test("language migration excludes retired cards before planning or applying poli
     snippet: record.id,
     expansions: {},
   }));
-  const expected = records.filter((record) => record.lifecycle !== "retired");
+  const expected = ["active-default", "active-excluded", "candidate"].map((id) => records.find((record) => record.id === id));
   const expectedIds = expected.map((record) => record.id);
   const policyCalls = [];
   const providerCalls = [];
@@ -746,12 +748,8 @@ test("language migration excludes retired cards before planning or applying poli
   assert.equal(plan.cards, expected.length);
   assert.equal(plan.pending, expected.length);
   assert.deepEqual(plan.request.map((entry) => entry.id), expectedIds);
-  assert.equal(
-    plan.request.filter((entry) =>
-      records.find((record) => record.id === entry.id).lifecycle === "active"
-    ).length,
-    records.filter((record) => record.lifecycle === "active").length,
-  );
+  assert.deepEqual(plan.request.filter((entry) => entry.id.startsWith("active-")).map((entry) => entry.id),
+    ["active-default", "active-excluded"]);
 
   for (const dryRun of [true, false]) {
     policyCalls.length = 0;

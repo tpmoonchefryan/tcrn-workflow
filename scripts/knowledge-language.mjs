@@ -96,7 +96,7 @@ export async function planCommand(core, values) {
   const policy = readKnowledgeLanguagePolicy(state.settings);
   if (policy.artifactLanguage === null) return fail("KNOWLEDGE_LANGUAGE_UNCONFIGURED", "artifact.language is not recorded in this workspace");
   const answer = await listKnowledgeMetadata(workspace, { at: values.at ?? new Date().toISOString().replace(/\.\d+Z$/u, "Z"), selection: "all", limit: 1_048_576, allowTrailing: true });
-  const cards = (answer.records ?? []).filter((record) => record.lifecycle !== "retired");
+  const cards = (answer.records ?? []).filter((record) => record.lifecycle !== "retired" && !record.extensions?.supersededBy);
   const request = cards.map((record) => {
     const fields = ["subject", "summary", "snippet"]
       .filter((field) => detectLanguage(String(record[field] ?? "")) !== policy.artifactLanguage)
@@ -133,7 +133,7 @@ export async function migrateCommand(core, values) {
   const answer = await listKnowledgeMetadata(workspace, { at, selection: "all", limit: 1_048_576, allowTrailing: true });
   const rewrites = [];
   for (const record of answer.records ?? []) {
-    if (record.lifecycle === "retired") continue;
+    if (record.lifecycle === "retired" || record.extensions?.supersededBy) continue;
     const provider = bundleProvider(core, bundle, record.id);
     let applied;
     try {
