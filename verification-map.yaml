@@ -94,7 +94,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "1d0ba7303b6271bbf57ae5089b73b6aab28cb67fb9ce1605eaf087f3d1adee8f",
+      "fixtureDigest": "3f7b76b3e21291088a9f90be472dac0bbe4e57d1884056b58136249d97a004da",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -140,7 +140,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "9939751d3083ba66fe1736c13d45aaab869acea8bd7443afbd325fb8d5d7a21b",
+      "fixtureDigest": "3efe693c9a9c6e30ac0766638765c952588929676dc7283a18744c79a0c4b4d6",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "cdbf2f80d9937e1e6a27878a1f6ed67d9c8000913a99bc90858bf339e6ecb094",
+      "fixtureDigest": "b0d7ea3e24b8c5de9165e9348a4f9e11577c6166c105d172479cf94875a4d3e4",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -261,7 +261,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "6ab309fe7b1436fdf0c0daf77c7223db7730f14c100126780304e9aceda17d3b",
+      "fixtureDigest": "e7525959f70efd8b849af5ef70c020db3e95f615a94a26c0907906b3572bc328",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -317,7 +317,7 @@
         "test": "retrieval-eval threshold red-leg",
         "expectedReasonCode": "RETRIEVAL_EVAL_THRESHOLD_FAILED"
       },
-      "requirement": 2
+      "requirement": 10
     },
     {
       "id": "P1-EXTERNAL-KEY-FRAGMENT",

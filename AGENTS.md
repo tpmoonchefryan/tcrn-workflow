@@ -121,7 +121,7 @@ a leak; the test is whether anything owns the record of it.
 
 ## The proof-surface caps, and what they cannot decide
 
-`platform-doctor.mjs`'s `proofBudget` leg (TCRN-CROSS-STORY-356) reads three raw counts
+`platform-doctor.mjs`'s `proofBudget` leg (TCRN-CROSS-STORY-356) reads raw counts
 from a live `TCRN Platform/tcrn-workflow` checkout — how many `verify:*` scripts
 `package.json` declares, how many claims `verification-map.yaml` carries, and how many
 lines `packages/core/src/**/*.ts` holds, counted the same deliberately crude way
@@ -129,7 +129,7 @@ lines `packages/core/src/**/*.ts` holds, counted the same deliberately crude way
 count, blank lines and comments included, over a different file set — `core` alone here,
 not every `packages/*/src` directory reportBudget spans, so the two counts are not
 expected to agree. Each count is compared to the cap recorded in
-`scripts/policy/proof-budget.json`'s `surfaceCaps` field, all three pinned at zero
+`scripts/policy/proof-budget.json`'s `surfaceCaps` field, all pinned at zero
 margin — each the value measured the day that field was last written, not a value with
 headroom already spent. Read `surfaceCaps` itself for the current numbers; this file
 does not mirror them. A container that only consumes this engine, without a checkout,
@@ -147,7 +147,7 @@ same commit, and append an entry to `exceptions` naming the work item that raise
 citing the authorising decision (the convention MIN-144 D8 records). Lowering a cap needs
 no exception.
 
-The three current caps are a snapshot, not a destination. The `verify:*` roster they
+The current caps are a snapshot, not a destination. The `verify:*` roster they
 measure changes over time through separate work items. Do not infer the current
 roster, its size, or whether any such change has landed from anything frozen in this
 section — check `verifyScriptCap` in `scripts/policy/proof-budget.json` and the
