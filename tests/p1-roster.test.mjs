@@ -24,6 +24,36 @@ import { P8_VERSION } from "../scripts/lib/p8-workflow-rc.mjs";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const scripts = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")).scripts;
 
+function assertReadmeGateCounts(readme) {
+  const declarations = [
+    /^### (\d+)\r?\n道 P1 门/mu,
+    /^\| \*\*测试真的跑过吗\*\* \|[^\n]*?——(\d+) 道门/mu,
+    /^\| \*\*一条命令跑完 (\d+) 道门\*\* \|/mu,
+    /^# 2\. 让框架自己证明一遍：(\d+) 道门/mu,
+  ];
+  for (const declaration of declarations) {
+    const match = readme.match(declaration);
+    assert.ok(match, `README_GATE_COUNT_MISSING: ${String(declaration)}`);
+    assert.equal(
+      Number(match[1]),
+      P1_SEQUENCE.length,
+      `README_GATE_COUNT_MISMATCH: ${match[0]}`,
+    );
+  }
+
+  const enumeration = readme.match(
+    /^\| \*\*一条命令跑完 \d+ 道门\*\* \| `pnpm verify:p1` 依次跑(.+?)。/mu,
+  );
+  assert.ok(enumeration, "README_GATE_ENUMERATION_MISSING");
+  const entries = enumeration[1].replace(/（[^）]*）/gu, "").split("、");
+  assert.ok(entries.every((entry) => entry.trim().length > 0));
+  assert.equal(
+    entries.length,
+    P1_SEQUENCE.length,
+    "README_GATE_ENUMERATION_MISMATCH",
+  );
+}
+
 test("preflight runs the roster, not a copy of it", () => {
   // The identity is the whole point: preflight's list and P1's list must be the same
   // object, so a gate added to one cannot be missing from the other.
@@ -35,6 +65,31 @@ test("every rostered script exists", () => {
   for (const { task, script } of P1_SEQUENCE) {
     assert.equal(typeof scripts[script], "string", `${task} names package script ${script}, which does not exist`);
   }
+
+  const readme = readFileSync(join(REPO_ROOT, "README.md"), "utf8");
+  assertReadmeGateCounts(readme);
+
+  const declarations = [
+    /(^### )(\d+)(\r?\n道 P1 门)/mu,
+    /(^\| \*\*测试真的跑过吗\*\* \|[^\n]*?——)(\d+)( 道门)/mu,
+    /(^\| \*\*一条命令跑完 )(\d+)( 道门\*\* \|)/mu,
+    /(^# 2\. 让框架自己证明一遍：)(\d+)( 道门)/mu,
+  ];
+  for (const declaration of declarations) {
+    const mutated = readme.replace(
+      declaration,
+      (_match, before, count, after) => `${before}${Number(count) + 1}${after}`,
+    );
+    assert.notEqual(mutated, readme);
+    assert.throws(() => assertReadmeGateCounts(mutated), /README_GATE_COUNT_MISMATCH/u);
+    assertReadmeGateCounts(readme);
+  }
+  const shortened = readme.replace("、检索评测。", "。");
+  assert.notEqual(shortened, readme);
+  assert.throws(
+    () => assertReadmeGateCounts(shortened),
+    /README_GATE_ENUMERATION_MISMATCH/u,
+  );
 });
 
 test("a rostered script dispatches the verb it is listed beside", () => {

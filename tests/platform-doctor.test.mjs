@@ -1494,6 +1494,79 @@ test("proofBudget compares each of the three counts to its own cap independently
     { metric: "claimCount", observed: 130, cap: 122, over: 8 },
     { metric: "coreSourceLines", observed: 32100, cap: 32086, over: 14 },
   ]);
+
+  // Exercise the file-reading path as well as the synthetic values above.
+  // This checkout is manufactured in the test's empty temporary platform.
+  // It contains no copied chain or installed engine.
+  const checkout = join(fixture.root, "TCRN Platform", "tcrn-workflow");
+  const policyDirectory = join(checkout, "scripts", "policy");
+  const coreDirectory = join(checkout, "packages", "core", "src");
+  await mkdir(policyDirectory, { recursive: true });
+  await mkdir(coreDirectory, { recursive: true });
+  const packageValue = { scripts: { "verify:fixture": "node fixture.mjs" } };
+  const mapValue = { claims: [{ id: "fixture" }] };
+  const coreText = "// fixture\n";
+  await writeFile(join(checkout, "package.json"), JSON.stringify(packageValue));
+  await writeFile(join(checkout, "verification-map.yaml"), JSON.stringify(mapValue));
+  await writeFile(join(coreDirectory, "fixture.ts"), coreText);
+  const surfaceCaps = {
+    schemaVersion: "tcrn.proof-budget.surface-caps.v1",
+    note: "Metadata does not declare a cap.",
+    recordedAt: "2026-09-09",
+    verifyScriptCap: Object.keys(packageValue.scripts).length,
+    claimCap: mapValue.claims.length,
+    coreSourceLineCap: Buffer.from(coreText).filter((byte) => byte === 0x0a).length,
+    coreSourceLineMetric: { method: "raw 0x0a byte count" },
+    permissions: { raisingRequiresOwnerRuling: true },
+    rationale: "Fixture ceilings equal the fixture measurements.",
+  };
+  const policyPath = join(policyDirectory, "proof-budget.json");
+  const runFiles = async (caps) => {
+    await writeFile(policyPath, JSON.stringify({ surfaceCaps: caps }));
+    return leg(await inspectPlatform(fixture.root, {
+      homeRoot: fixture.home,
+      launchdLabels: [launchdLabel],
+      acceptanceHeadCommit: FIXTURE_COMMIT,
+    }));
+  };
+  const green = await runFiles(surfaceCaps);
+  assert.equal(green.ok, true);
+  assert.equal(green.source, "live-engine-checkout");
+  assert.equal(
+    green.judgedCapFieldCount,
+    Object.keys(surfaceCaps).filter((name) => name.endsWith("Cap")).length,
+  );
+
+  // An unimplemented measurement cannot be silently omitted from the verdict.
+  // Repeat with different names so a fourth hard-coded branch cannot satisfy it.
+  for (const name of ["additionalProofCap", "anotherProofCap", "futureProofCap"]) {
+    const red = await runFiles({ ...surfaceCaps, [name]: 0 });
+    assert.equal(red.ok, false);
+    assert.equal(red.reasonCode, "PLATFORM_PROOF_BUDGET_UNJUDGED_CAP");
+    assert.deepEqual(red.unjudged, [name]);
+    assert.ok(red.judgedCapFieldCount < red.capFieldCount);
+    assert.equal((await runFiles(surfaceCaps)).ok, true);
+  }
+
+  for (const name of Object.keys(surfaceCaps).filter((key) => key.endsWith("Cap"))) {
+    const red = await runFiles({ ...surfaceCaps, [name]: surfaceCaps[name] - 1 });
+    assert.equal(red.ok, false);
+    assert.equal(red.reasonCode, "PLATFORM_PROOF_BUDGET_EXCEEDED");
+    assert.equal(red.exceeded.length, 1);
+    assert.equal((await runFiles(surfaceCaps)).ok, true);
+
+    const missing = { ...surfaceCaps };
+    delete missing[name];
+    const absent = await runFiles(missing);
+    assert.equal(absent.ok, false);
+    assert.deepEqual(absent.missing, [name]);
+    for (const invalid of [null, "0", -1]) {
+      const malformed = await runFiles({ ...surfaceCaps, [name]: invalid });
+      assert.equal(malformed.ok, false);
+      assert.ok(malformed.unjudged.includes(name));
+    }
+  }
+  assert.equal((await runFiles(surfaceCaps)).ok, true);
 });
 
 // GWT3. The cap a verdict compares against comes from the input, not from a number

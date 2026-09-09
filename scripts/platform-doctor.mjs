@@ -447,10 +447,10 @@ function helperReleaseVerdict(published, trusted, source) {
 // same distinction inspectHelperReleaseAlignment draws above.
 //
 // What this leg cannot do, and is not written to look like it can: decide who is
-// authorised to raise a cap. It answers only whether the currently measured value exceeds
-// the recorded one. That authorization is Owner's, recorded as a policy edit the same way
-// a frozenRatio exception is recorded above -- a human act performed in review, not a
-// verdict this doctor renders.
+// authorised to raise a cap. Since TCRN-CROSS-INC-292 it answers two mechanical questions
+// -- does every key ending in Cap carry a measurement, and does any measurement exceed its
+// recorded cap. That authorization is Owner's, recorded as a policy edit the same way a
+// frozenRatio exception is above -- a human act in review, not a verdict this doctor renders.
 async function inspectProofBudget(platformRoot, homeRoot, options) {
   if (options.proofBudget && typeof options.proofBudget === "object") {
     return proofBudgetVerdict(options.proofBudget, "synthetic");
@@ -493,44 +493,66 @@ async function inspectProofBudget(platformRoot, homeRoot, options) {
     claimCap: caps.claimCap,
     coreSourceLines,
     coreSourceLineCap: caps.coreSourceLineCap,
-  }, "live-engine-checkout");
+  }, "live-engine-checkout", caps);
 }
 
-function proofBudgetVerdict(values, source) {
-  const { verifyScriptCount, verifyScriptCap, claimCount, claimCap, coreSourceLines, coreSourceLineCap } = values;
+function proofBudgetVerdict(values, source, surfaceCaps = values) {
+  // The current policy mixes caps with metadata. Every actual cap-class field
+  // must have a valid measurement; adding an unknown cap must never pass silently.
+  const metrics = {
+    verifyScriptCap: "verifyScriptCount",
+    claimCap: "claimCount",
+    coreSourceLineCap: "coreSourceLines",
+  };
+  const capFields = Object.keys(surfaceCaps).filter((name) => name.endsWith("Cap"));
+  const judged = [];
+  const unjudged = [];
   const exceeded = [];
-  if (verifyScriptCount > verifyScriptCap) {
-    exceeded.push({ metric: "verifyScriptCount", observed: verifyScriptCount, cap: verifyScriptCap, over: verifyScriptCount - verifyScriptCap });
+  const raw = {};
+  for (const [capField, metric] of Object.entries(metrics)) {
+    raw[metric] = values[metric];
+    raw[capField] = surfaceCaps[capField];
   }
-  if (claimCount > claimCap) {
-    exceeded.push({ metric: "claimCount", observed: claimCount, cap: claimCap, over: claimCount - claimCap });
+  for (const capField of capFields) {
+    const metric = Object.hasOwn(metrics, capField) ? metrics[capField] : undefined;
+    const cap = surfaceCaps[capField];
+    const observed = metric === undefined ? undefined : values[metric];
+    if (!Number.isSafeInteger(cap) || cap < 0
+      || !Number.isSafeInteger(observed) || observed < 0) {
+      unjudged.push(capField);
+      continue;
+    }
+    judged.push(capField);
+    if (observed > cap) {
+      exceeded.push({ metric, observed, cap, over: observed - cap });
+    }
   }
-  if (coreSourceLines > coreSourceLineCap) {
-    exceeded.push({ metric: "coreSourceLines", observed: coreSourceLines, cap: coreSourceLineCap, over: coreSourceLines - coreSourceLineCap });
+  const missing = Object.keys(metrics).filter((name) => !Object.hasOwn(surfaceCaps, name));
+  const details = {
+    ...raw,
+    capFieldCount: capFields.length,
+    judgedCapFieldCount: judged.length,
+    source,
+  };
+  if (judged.length !== capFields.length || missing.length > 0) {
+    return check("proofBudget", false, {
+      ...details,
+      reasonCode: "PLATFORM_PROOF_BUDGET_UNJUDGED_CAP",
+      unjudged,
+      missing,
+      exceeded,
+      remedy: "provide a valid measurement for every cap-class field present in surfaceCaps",
+    });
   }
   if (exceeded.length > 0) {
     return check("proofBudget", false, {
+      ...details,
       reasonCode: "PLATFORM_PROOF_BUDGET_EXCEEDED",
       exceeded,
-      verifyScriptCount,
-      verifyScriptCap,
-      claimCount,
-      claimCap,
-      coreSourceLines,
-      coreSourceLineCap,
       remedy: "retire an equivalent amount of the same kind of proof surface in this change, or record an Owner-authorised cap increase in scripts/policy/proof-budget.json",
-      source,
     });
   }
-  return check("proofBudget", true, {
-    verifyScriptCount,
-    verifyScriptCap,
-    claimCount,
-    claimCap,
-    coreSourceLines,
-    coreSourceLineCap,
-    source,
-  });
+  return check("proofBudget", true, details);
 }
 
 // TCRN-CROSS-STORY-361: the charter rule "no consumer, isolate it", with a leg that can

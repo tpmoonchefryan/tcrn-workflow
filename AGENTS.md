@@ -135,8 +135,11 @@ headroom already spent. Read `surfaceCaps` itself for the current numbers; this 
 does not mirror them. A container that only consumes this engine, without a checkout,
 has nothing to count; that state is reported `comparable: false`, never a quiet pass.
 
-**What this leg cannot do: decide who may raise a cap.** It answers exactly one question
-— does the currently measured count exceed the recorded cap — and nothing more. Raising a
+**What this leg cannot do: decide who may raise a cap.** Since TCRN-CROSS-INC-292 it
+answers two mechanical questions — does every cap-class field in `surfaceCaps` (each key
+ending in `Cap`) carry a measurement this engine implements, and does any measured count
+exceed its recorded cap — and nothing more. A cap-class field with no measurement reds the
+leg with `PLATFORM_PROOF_BUDGET_UNJUDGED_CAP` rather than being ignored. Raising a
 cap is authorised the same way a `frozenRatio` exception is authorised in the same policy
 file: by Owner, in review, recorded as a policy edit with the reasoning written down. No
 verb in this engine checks who wrote that edit or whether they had standing to make it. A
