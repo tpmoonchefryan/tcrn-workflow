@@ -94,7 +94,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "c8abe395abcb43433bcc4971c0faf4632e63f71c26c18d382bb47113d2452bf4",
+      "fixtureDigest": "ec494cdd93fd0bdfb627dafe0045f2780b7d83e3c4bbd1c2797d34a4482a9db7",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -140,7 +140,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "2c97706f481712f632dbd5574c89aaa0628ead88d0316268f489c619fe69b08b",
+      "fixtureDigest": "b852951610ed89d67d7ab358a034729b768eeb421ddf3611c3368e1b5405f97b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "ddd1a85ed8fa378024e3174c69b2940dfc63b9d801e726732ee2cb0d917ebe1a",
+      "fixtureDigest": "b8b0a6945227d1c09b3a680e38e2e561b96c79fb872856162e631b1b03cf16d8",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

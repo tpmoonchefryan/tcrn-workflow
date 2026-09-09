@@ -39,7 +39,7 @@
         "INC-193 the design authority is declared, and what cannot be checked here is yellow",
         "INC-192 abstract concepts carry a supplemental explanation the keyboard can reach",
         "INC-186 the dictionary carries no workspace data",
-        "INC-185 the vendor model directory opens as the page",
+        "INC-185 the vendor model directory opens as the page's own drawer",
         "S280 portal filters effort options from vocabulary and keeps the receipt chip on the chain"
       ]
     },
@@ -221,7 +221,7 @@
         "CI acquires pinned pnpm online only after pinned Node and verifies it before dependencies",
         "CI retains explicit safe dependency acquisition and offline P1 execution",
         "CI keeps minimal permissions, refuses pull_request_target, and runs the portal remediation train",
-        "pull-request CI scans the contributor head, not GitHub",
+        "pull-request CI scans the contributor head, not GitHub's synthetic merge commit",
         "every CI action is pinned to a commit SHA, never to a movable tag"
       ],
       "assertionCount": 15
@@ -294,7 +294,7 @@
         "host-execution receipt validates and rejects malformed receipts",
         "executionMode reads legacy as null and rejects malformed declarations",
         "classify substantiates a declared mode and fails closed otherwise",
-        "module constants match the fixture"
+        "module constants match the fixture's declared intent"
       ]
     },
     "tests/conference.test.mjs": {
@@ -309,23 +309,19 @@
         "hostile records fail closed",
         "Draft 2020-12 schema and runtime agree",
         "extension registration binds appliesTo work and the conference schema digest",
-        "MIN-102 the distilled summary is bounded by the knowledge store",
+        "MIN-102 the distilled summary is bounded by the knowledge store's limit, not the conference budget",
         "STORY-359 the conference fixture declares the registration and store values verifyConference used to pin"
       ]
     },
     "tests/coverage-conservation.test.mjs": {
-      "testCount": 22,
+      "testCount": 20,
+      "assertionCount": 44,
       "testNames": [
         "coverage conservation rejects a removed test without a replacement waiver",
-        "kept",
-        "kept",
         "coverage conservation rejects an assertion-only loss while test names remain",
-        "kept",
-        "kept",
         "coverage conservation requires waiver reason and either replacement or disowned",
         "coverage baseline completeness names an unregistered test file",
         "named test waivers remain executable when baseline carries testNames",
-        "kept",
         "validates replacement waiver (regression)",
         "validates disowned waiver",
         "rejects waiver with neither replacement nor disowned",
@@ -337,9 +333,11 @@
         "STORY-359 an imported build artifact resolves back to the TypeScript source that survives",
         "STORY-359 a module that is only imported, never executed, reads as zero blocks",
         "STORY-359 the gate reds when a surviving module the retired test imported executed nothing",
-        "STORY-359 the gate reds when the retired test source cannot be recovered from Git"
-      ],
-      "assertionCount": 44
+        "STORY-359 the gate reds when the retired test source cannot be recovered from Git",
+        "coverage names preserve paired quotes and detect suffix changes",
+        "coverage counts calls while ignoring fixture strings comments and regex data",
+        "coverage self-count equals the registered tests in this file"
+      ]
     },
     "tests/cross-repo-privacy.test.mjs": {
       "testCount": 3,
@@ -435,7 +433,7 @@
         "INC-220 the Claude rendering keeps the project-dir form that host resolves",
         "INC-220 harness drift is reported when a live Claude hook is gone",
         "INC-220 applying the Codex harness is idempotent and atomic",
-        "INC-220 Claude",
+        "INC-220 Claude's settings are not writable through the applier",
         "INC-220 the guard REFUSES an edit into a control tree",
         "INC-220 the guard finds a target nested anywhere in the tool input",
         "INC-220 the guard does NOT touch Bash, or the engine could not read its own chain",
@@ -740,7 +738,7 @@
       "testNames": [
         "Node network entry points are blocked during verification",
         "the socket transport itself is sealed, not only the connect factories",
-        "both Resolver classes are sealed, not only the callback module",
+        "both Resolver classes are sealed, not only the callback module's",
         "UDP egress is blocked without relying on the resolver detour",
         "http2 stays blocked in depth",
         "ESM named imports resolve to the patched functions"
@@ -769,12 +767,12 @@
         "violation: a sink carrying a payload key → exit 1 + PRIVACY_SINK_VIOLATION naming it",
         "the two kinds have genuinely different allowlists",
         "red proof: reverting all three layers restores the bare EISDIR crash",
-        "red proof: layer ",
+        "red proof: layer \"${scenario.layer}\" owns ${scenario.healthyReason} (${scenario.why})",
         "record shape: a sink whose record is ${record.name} → exit 1 + not-an-object, no stack trace",
         "record shape: a line that is not JSON → exit 1 + not-json, and it is counted",
-        "record shape: the report",
-        "red proof: without the shape layer, ",
-        "red proof: without the shape layer, a bare ",
+        "record shape: the report's counts add up against a sink holding one of everything",
+        "red proof: without the shape layer, `null` crashes bare and the crash exits 1 — a leak nobody saw",
+        "red proof: without the shape layer, a bare `42` is certified CLEAN at exit 0",
         "vacuous pass: ${scenario.name} → exit 2 + PRIVACY_SINK_EMPTY",
         "red proof: without the empty-sink layer, an empty sink reports CLEAN at exit 0",
         "truncation: a large violation report survives a pipe byte-for-byte and parses",
@@ -784,7 +782,8 @@
       ]
     },
     "tests/output-session-lifecycle.test.mjs": {
-      "testCount": 106,
+      "testCount": 93,
+      "assertionCount": 415,
       "testNames": [
         "bounded recovery-claim reads accept exactly 65,536 bytes and reject dense or sparse max-plus-one files",
         "bounded recovery-claim reads reject same-inode continuous and sparse growth after open",
@@ -859,27 +858,16 @@
         "atomic initial owner publication recovers before and after its durable replacement",
         "a malformed owner-publication stage preserves the dead lock fail-closed",
         "an unbound detached test controller exits before discovery after its task owner dies",
-        "only a durably bound controller may import this source",
         "a pre-bind process-group bind failure terminates the controller before test discovery",
-        "pre-bind failure never discovers this source",
         "a bound bootstrap blocks recovery before it starts the test controller",
-        "controller starts only after its group was recorded",
         "a fresh real task entrypoint fails closed while a killed predecessor group lives, then recovers cleanly",
-        "remain alive while the outer lifecycle probe kills the actual task entrypoint",
-        "fresh task fixture",
         "a concurrent real task entrypoint preserves its live command-wide owner and rejects the contender",
-        "hold the command-wide session while dist build imports remain stable",
         "the real command-five test path rejects detached inherited-pipe descendants and reproduces the rejected cycle only in a disposable fixture",
-        "the descendant waits for the command-wide lock",
-        "recovered fixture",
         "the real command-five test path rejects a same-group inherited descendant before terminal release",
-        "the controller exits while its same-group descendant awaits cleanup",
         "a permitted real-entrypoint Node relay cannot create a detached escaped descendant",
-        "a permitted relay retains the controller child policy",
         "a real task entrypoint rejects a detached child through the undefined optional-arguments overload",
         "the controller child policy preserves exec and execFile callbacks across optional overloads",
         "a real task entrypoint completes exec and execFile undefined optional callbacks before TESTS_VERIFIED",
-        "callbacks complete",
         "the controller child policy rejects detached escape through every supported child_process signature",
         "the controller child policy normalizes every supported undefined optional-arguments overload",
         "the controller child policy admits only the enumerated non-inheriting stdio forms",
@@ -888,12 +876,9 @@
         "the task entrypoint exemption is anchored on the path segment, not a leading slash",
         "the controller child policy propagates to a Node relay even when it supplies an empty environment",
         "a passing detached test that writes stderr fails the real task entrypoint cleanly",
-        "the underlying detached test passes",
         "a nonzero detached controller propagates COMMAND_FAILED and releases the real task entrypoint cleanly",
-        "the detached controller fails",
         "SIGKILL injection at each staged publication and release boundary resumes deterministically"
-      ],
-      "assertionCount": 422
+      ]
     },
     "tests/p1-roster.test.mjs": {
       "testCount": 5,
@@ -913,8 +898,8 @@
         "commands emits schema-valid, deterministic catalog JSON",
         "catalog and dispatcher are in two-way name parity",
         "unknown verbs fail closed and every cataloged verb dispatches",
-        "required flags in the catalog match the dispatcher",
-        "WSB-4: exactly the nullable flags carry the ",
+        "required flags in the catalog match the dispatcher's missing-argument failure",
+        "WSB-4: exactly the nullable flags carry the '-' sentinel, and only knowledge-create flags carry the 'null' alias",
         "WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel, only on expected-version",
         "S279 model-plan-assign catalog keeps effort optional and headSentinel on expected-version",
         "INIT-009: operator pins make every non-fixture verb binary-invocable",
@@ -972,7 +957,7 @@
         "WSE-4: --attest-dir writes one deterministic advisory receipt outside the workspace, opt-in and clock-gated",
         "WSE-4: --attest-dir fails closed inside the workspace root and with no injected clock, writing nothing",
         "WSE-4: export and archive bytes are identical with and without attestation receipts",
-        "WSB-4: work-create --parent-id ",
+        "WSB-4: work-create --parent-id '-' yields a null parent byte-identical to omitting the flag",
         "WSB-7: --expected-version head derives the current version under the lease; numeric CAS still fails closed",
         "WSB-8: --flag=value representability round-trips literal values and invalid enum flags fail closed naming flag=value",
         "WSA-1: every mutation returns state identical to a fresh materialize (single-replay pipeline)",
@@ -1013,7 +998,7 @@
         "checkpoint is exactly the promoted fresh default-selection corpus",
         "unknown freshness fails closed and metadata filters remain deterministic",
         "governed Knowledge CLI exposes init, validate, create, list, snippet, body, freshness, promotion, and checkpoint",
-        "WSB-4: knowledge-create null sentinel ",
+        "WSB-4: knowledge-create null sentinel '-' round-trips to null and the deprecated 'null' alias is byte-equivalent",
         "selection and strict evaluation instants fail before Knowledge-store scanning",
         "WSC-3: provenance is enforced at promotion, not capture",
         "WSC-6: promotion enforces machine checks for tags and snippet",
@@ -1150,7 +1135,7 @@
         "S259 bridge syntax skips hidden directories and the workspace container",
         "S264 four install-completeness legs are green on a synthetic full fixture",
         "S264 each install-completeness leg has a distinct synthetic red reason",
-        "INC-206 an undeclared harness inside the governed area is red, and an unrelated project",
+        "INC-206 an undeclared harness inside the governed area is red, and an unrelated project's is not",
         "INC-195 the snapshot train is owed only when a chain declares an automatic cadence",
         "S264 manifest mutation is automatically probed by the wiring leg",
         "S267 hook leg expands the container root and checks all four root-bound events",
@@ -1169,7 +1154,7 @@
         "S273 trust archive freshness compares the archive to all installed consumers and marker versions",
         "STORY-286 the hook leg reads codex too, and absence is deferral rather than health",
         "STORY-286 a registered codex hook whose target cannot run turns the leg red",
-        "STORY-286 an adapter bundle is accepted by its receipt",
+        "STORY-286 an adapter bundle is accepted by its receipt's digests, not by existing",
         "an identity drift is named as an observation, with the moment it happened",
         "a matching identity produces no observation at all",
         "MIN-102 engine alignment names a copy that is behind a chain declaration",
@@ -1216,7 +1201,7 @@
       "testNames": [
         "proof-artifact generator rebuilds the exact current surfaces, checks without mutation, and is byte-idempotent",
         "proof-artifact generator fails closed for malformed, unknown, unsafe, duplicate, missing, unapproved, symlink, hardlink, and replacement inputs",
-        "proof-artifact generator check proves the repository"
+        "proof-artifact generator check proves the repository's refreshed generated surfaces"
       ]
     },
     "tests/protocol-proof.test.mjs": {
@@ -1437,7 +1422,7 @@
       "assertionCount": 13,
       "testNames": [
         "STORY-300: every verb that declares the head sentinel is reached by, and accepts, the sentinel",
-        "STORY-300: --help returns the verb"
+        "STORY-300: --help returns the verb's own argument surface without reading engine source"
       ]
     },
     "tests/s300-story-refusal.test.mjs": {
@@ -1499,7 +1484,7 @@
         "a correct decision passes every lesson",
         "the anti-pattern fails every lesson — this is the discrimination claim",
         "both directions of the predicate are exercised across the corpus",
-        "the model gate"
+        "the model gate's corpus has not drifted from this one"
       ]
     },
     "tests/s7-behavior-surface.test.mjs": {
@@ -1532,7 +1517,7 @@
         "self-test is red when runtime configuration is absent or unregistered",
         "control mutation leaves the corpus green (the harness is not red for everyone)",
         "every corpus id is unique",
-        "branch ",
+        "branch '${mutation.id}' is covered: removing it turns ${mutation.witness} red",
         "a parser fault fails toward PASS, never toward a blocked session",
         "the CLI actually runs when the invocation path traverses a symlink",
         "hook mode holds its input contract: log only on HIT, and never block",
@@ -1546,11 +1531,11 @@
         "--verify-channel accepts the exec form of a registration",
         "--verify-channel is red when the channel cannot be written",
         "a severed channel still never blocks: hook mode exits 0 and says so on stderr",
-        "the channel gate is bound to the hook",
+        "the channel gate is bound to the hook's write path: neutering the hook's append turns it red",
         "an unknown, misspelled or missing flag is reason-coded and non-zero",
         "a run with no hook payload is not byte-identical to a passing run",
         "no invocation of the hook ever exits 2, the one status that would block a tool call",
-        "the probe tag cannot be acquired without the gate",
+        "the probe tag cannot be acquired without the gate's own environment",
         "observe semantics: classify never emits a blocking decision"
       ]
     },
@@ -1599,7 +1584,7 @@
         "hook: running + reviewed non-flagship → block, binds the session, counter 1",
         "hook: running + Fable → observe, allows (flagship untouched)",
         "hook: running + UNREADABLE transcript → observe (model unknown), allows — never blocks a possible flagship",
-        "hook: a PARALLEL session does not reset the bound session",
+        "hook: a PARALLEL session does not reset the bound session's counter",
         "hook: a large scope produces a valid, untruncated block decision",
         "hook: completed pact (inactive) → allows the stop",
         "cli: start → status → block enforces the ticket vocabulary and records it",
@@ -1795,7 +1780,7 @@
         "STORY-364: the recall verb reports the query language and its telemetry",
         "STORY-364: phrasings feed the weight-6 recall column, so a question worded differently lands",
         "STORY-364 R3: knowledge-create reaches the write-path hook, and is refused without answers",
-        "STORY-364 R3: a batch",
+        "STORY-364 R3: a batch's create members each get their own answers, keyed by external key",
         "STORY-364 R3: conference-close --distill reaches the write-path hook",
         "STORY-364 R4: the injection hook translates once and asks again, and adds the two counts"
       ]
@@ -1850,7 +1835,7 @@
         "contract: the documented exit line matches what the bytes do",
         "contract: the refusal reason codes are pairwise distinct",
         "red proof: without the refusal returns, ${scenario.name} reports success at exit 0",
-        "red proof: reading --file by truthiness turns an empty value into ",
+        "red proof: reading --file by truthiness turns an empty value into \"no input given\"",
         "truncation: a large report survives a pipe byte-for-byte and parses",
         "red proof: restoring process.exit() after the write truncates that report at the pipe buffer",
         "truncation: an over-long --dir value still yields a whole, parseable refusal",
@@ -1868,7 +1853,7 @@
         "a workspace with zero conference/gate events keeps pre-change golden view bytes, view set, and export digest",
         "a crash across conference.closed leaves the event durable and recover() rebuilds extensions.json",
         "WSD-2: the eight governed verbs plus gate-delete mutate and read under lease and CAS with canonical receipts and deterministic list ordering",
-        "INC-086: gate-list distinguishes a nonexistent work-id from ",
+        "INC-086: gate-list distinguishes a nonexistent work-id from 'no gates'",
         "WSD-2: every mutating verb fails closed on stale CAS, malformed enums pass through to the engine, and contention reports WORKSPACE_LOCKED",
         "WSD-3: conference-close --distill governs each decision into a promotable knowledge candidate under one lease",
         "WSD-3: --distill with no knowledge store fails closed BEFORE the close event is appended",

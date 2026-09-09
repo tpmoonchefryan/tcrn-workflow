@@ -7,6 +7,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { dirname, relative, resolve } from "node:path";
+import ts from "typescript";
 import { repositoryRoot, toPosixPath, walkFiles } from "./lib/files.mjs";
 import { runLocalCommand } from "./lib/local-command.mjs";
 
@@ -34,8 +35,42 @@ export function compareCoverageSurface(baselinePaths, currentPaths) {
 }
 
 export function countCoverage(source) {
-  const tests = [...source.matchAll(/\btest(?:\.(?:skip|only|todo))?\s*\(\s*["'`]([^"'`]+)["'`]/gu)].map((match) => match[1]);
-  const assertions = [...source.matchAll(/\bassert(?:\.[A-Za-z][A-Za-z0-9_]*)?\s*\(/gu)].length;
+  const file = ts.createSourceFile(
+    "coverage.mjs",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
+  const tests = [];
+  let assertions = 0;
+
+  function visit(node) {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression.getText(file);
+      // Preserve the existing static call-site surface, including context.test.
+      // Inspect parsed calls only; fixture strings and comments are not code.
+      if (/\btest(?:\.(?:skip|only|todo))?$/u.test(callee)) {
+        const name = node.arguments[0];
+        if (name && (
+          ts.isStringLiteral(name)
+          || ts.isNoSubstitutionTemplateLiteral(name)
+          || ts.isTemplateExpression(name)
+        )) {
+          // The AST establishes the literal boundary. Keep source spelling and
+          // template placeholders, pairing the closing quote with its opener.
+          const match = name.getText(file).match(/^(["'`])([\s\S]*)\1$/u);
+          if (match) tests.push(match[2]);
+        }
+      }
+      if (/\bassert(?:\.[A-Za-z][A-Za-z0-9_]*)?$/u.test(callee)) {
+        assertions += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(file);
   return { testCount: tests.length, assertionCount: assertions, testNames: tests };
 }
 

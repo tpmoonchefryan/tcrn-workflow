@@ -166,7 +166,7 @@
       "direct": true,
       "license": "Apache-2.0",
       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
-      "purpose": "pinned compiler for the typecheck gate",
+      "purpose": "pinned compiler for the typecheck and build gates, and the parser scripts/coverage-conservation.mjs uses to count test and assertion call sites",
       "acquisitionBoundary": "explicit-npm-registry-read-with-ignore-scripts"
     },
     "undici-types@7.18.2": {

@@ -2,13 +2,14 @@
 // INC-138 self-mutation: the conservation gate must actually turn red.
 
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import {
   compareCoverageSurface,
+  countCoverage,
   evaluateCoverage,
   evaluateSurvivingModuleCoverage,
   measureExecutedBlocks,
@@ -210,4 +211,58 @@ test("STORY-359 the gate reds when the retired test source cannot be recovered f
   const red = await evaluateSurvivingModuleCoverage({ coverageDirectory: directory, waivers, currentTestPaths: [] });
   assert.equal(red.ok, false);
   assert.ok(red.problems.some((problem) => problem.includes("unrecoverable from Git")));
+});
+
+test("coverage names preserve paired quotes and detect suffix changes", async () => {
+  const names = [
+    "pull-request CI scans the contributor head, not GitHub's synthetic merge commit",
+    "STORY-355 GWT4: container mode's default prose root sits above the chain container regardless of partition",
+    'a name containing "double quotes" and `backticks`',
+    "an escaped \"quote\" and an apostrophe's suffix",
+  ];
+  const source = names.map((name) => `test(${JSON.stringify(name)}, () => {});`).join("\n");
+  assert.deepEqual(
+    countCoverage(source).testNames,
+    names.map((name) => JSON.stringify(name).slice(1, -1)),
+  );
+
+  const ci = await readFile(new URL("./ci-bootstrap.test.mjs", import.meta.url), "utf8");
+  const portal = await readFile(new URL("../portal/tests/portal.test.mjs", import.meta.url), "utf8");
+  assert.ok(countCoverage(ci).testNames.includes(names[0]));
+  assert.ok(countCoverage(portal).testNames.includes(names[1]));
+
+  const path = "tests/example.test.mjs";
+  const result = evaluateCoverage({
+    baselineByPath: { [path]: `test("owner's original suffix", () => {});` },
+    currentByPath: { [path]: `test("owner's changed suffix", () => {});` },
+    waivers: [],
+  });
+  assert.deepEqual(result.problems[0].unwaivedTests, ["owner's original suffix"]);
+});
+
+test("coverage counts calls while ignoring fixture strings comments and regex data", () => {
+  const source = [
+    'const fixture = \'test("phantom", () => { assert.equal(1, 1); });\';',
+    'const template = `test("template phantom", () => { assert(false); });`;',
+    '// test("comment phantom", () => { assert(false); });',
+    '/* test("block phantom", () => { assert(false); }); */',
+    'const pattern = /test("regex phantom")/;',
+    'test("real", () => { assert.equal(1, 1); });',
+    'test.skip("skipped", () => {});',
+    'test.only("focused", () => {});',
+    'test.todo("pending");',
+    'context.test("nested", () => { assert(true); });',
+    'test(`dynamic ${scenario.name}`, () => {});',
+  ].join("\n");
+
+  assert.deepEqual(countCoverage(source), {
+    testCount: 6,
+    assertionCount: 2,
+    testNames: ["real", "skipped", "focused", "pending", "nested", "dynamic ${scenario.name}"],
+  });
+});
+
+test("coverage self-count equals the registered tests in this file", async () => {
+  const source = await readFile(new URL("./coverage-conservation.test.mjs", import.meta.url), "utf8");
+  assert.equal(countCoverage(source).testCount, 20);
 });
