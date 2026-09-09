@@ -38,6 +38,7 @@ import {
   initializeWorkspace,
   knowledgeContextCandidates,
   listKnowledgeMetadata,
+  materializeWorkspace,
   readKnowledgeBody,
   readKnowledgeSnippet,
   rebaseKnowledgeStore,
@@ -154,6 +155,12 @@ function settle(operation) {
     (value) => ({ status: "fulfilled", value }),
     (reason) => ({ status: "rejected", reason }),
   );
+}
+
+async function cliJson(args) {
+  let output = "";
+  await runCli(args, { write: (value) => { output += value; } });
+  return JSON.parse(output);
 }
 
 function deterministicPermutations(values) {
@@ -1540,6 +1547,77 @@ test("INIT-047 article index cards stay explicit-only for default context", asyn
     assert.equal((await listKnowledgeMetadata(fx.workspace, { at: instant(12) })).records.length, 0);
     assert.equal((await listKnowledgeMetadata(fx.workspace, { at: instant(12), search: "article-index" })).records.length, 1);
     assert.equal((await knowledgeContextCandidates(fx.workspace, { at: instant(12), search: "article-index" })).candidates.length, 0);
+  } finally { await fx.close(); }
+});
+
+test("STORY-366 GWT1: an article stores full Markdown outside the chain and only a bounded reference index inside", async () => {
+  const fx = await workspaceFixture({ externalKey: "FIXTURE-STORY-366-CREATE" });
+  try {
+    const content = "中文".repeat(1_500);
+    const owner = deriveStableId("owner", "STORY-366-OWNER");
+    const evidence = deriveStableId("evidence", "STORY-366-ARTICLE");
+    const workspaceVersion = (await materializeWorkspace(fx.workspace)).version;
+    await assert.rejects(
+      () => cliJson(["knowledge-article-create", "--workspace", fx.workspace, "--expected-version", String(workspaceVersion), "--at", instant(11, 3), "--path", "wrong-version.md", "--category", "architecture", "--title", "Wrong store version", "--summary", "Not written", "--content", content, "--accountable-owner-id", owner, "--evidence-ids", evidence]),
+      (error) => error?.reasonCode === "KNOWLEDGE_CAS_MISMATCH",
+      "article CAS is the knowledge-store marker, not the workspace chain version",
+    );
+    const created = await cliJson(["knowledge-article-create", "--workspace", fx.workspace, "--expected-version", "0", "--at", instant(11, 3), "--path", "topology.md", "--category", "architecture", "--title", "分区 拓扑", "--summary", "迁移摘要", "--content", content, "--accountable-owner-id", owner, "--evidence-ids", evidence]);
+    assert.equal(created.reasonCode, "KNOWLEDGE_ARTICLE_CREATED");
+    assert.ok(created.articleBytes > Buffer.byteLength(content, "utf8"));
+    assert.ok(created.bodyBytes <= 8_192);
+    const articlePath = join(fx.workspace, "docs/knowledge/articles/topology.md");
+    const markdown = await readFile(articlePath, "utf8");
+    assert.match(markdown, /^---\ncategory: architecture\ntitle: 分区 拓扑\n---\n/u);
+    assert.ok(markdown.includes(content));
+    assert.equal(created.sourceDigest, createHash("sha256").update(markdown).digest("hex"));
+    const metadata = JSON.parse(await readFile(join(fx.store, "metadata", `${created.id}.json`), "utf8"));
+    const storedBody = await readFile(join(fx.store, "bodies", `${created.id}.body`));
+    assert.equal(metadata.kind, "reference");
+    assert.equal(metadata.retrievalDisposition, "explicit-only");
+    assert.deepEqual(metadata.sourceReferences, ["topology.md"]);
+    assert.deepEqual(metadata.linkedEvidenceIds, [evidence]);
+    assert.equal(metadata.accountableOwnerId, owner);
+    assert.ok(metadata.bodyBytes <= 8_192);
+    assert.ok(storedBody.length <= 8_192);
+    assert.equal(storedBody.toString("utf8").includes(content), false);
+    assert.equal((await listKnowledgeMetadata(fx.workspace, { at: instant(12) })).records.length, 0);
+    assert.equal((await listKnowledgeMetadata(fx.workspace, { at: instant(12), search: "分区 拓扑" })).records.length, 1);
+    await assert.rejects(
+      () => cliJson(["knowledge-article-create", "--workspace", fx.workspace, "--expected-version", "1", "--at", instant(11, 4), "--path", "topology.md", "--category", "architecture", "--title", "分区 拓扑", "--summary", "duplicate", "--content", content, "--accountable-owner-id", owner, "--evidence-ids", evidence]),
+      (error) => error?.reasonCode === "KNOWLEDGE_ALREADY_EXISTS",
+    );
+    await assert.rejects(
+      () => cliJson(["knowledge-article-create", "--workspace", fx.workspace, "--expected-version", "1", "--at", instant(11, 4), "--path", "../escape.md", "--category", "architecture", "--title", "Unsafe", "--summary", "unsafe", "--content", content, "--accountable-owner-id", owner, "--evidence-ids", evidence]),
+      (error) => error?.reasonCode === "KNOWLEDGE_PATH_INVALID",
+    );
+  } finally { await fx.close(); }
+});
+
+test("STORY-366 GWT2: refresh reads the edited file, updates its digest and summary, and keeps identity stable", async () => {
+  const fx = await workspaceFixture({ externalKey: "FIXTURE-STORY-366-REFRESH" });
+  try {
+    const owner = deriveStableId("owner", "STORY-366-REFRESH-OWNER");
+    const evidence = deriveStableId("evidence", "STORY-366-REFRESH");
+    const created = await cliJson(["knowledge-article-create", "--workspace", fx.workspace, "--expected-version", "0", "--at", instant(11, 3), "--path", "refresh.md", "--category", "workflow", "--title", "刷新文章", "--summary", "初始摘要", "--content", "正文一".repeat(1_500), "--accountable-owner-id", owner, "--evidence-ids", evidence]);
+    const articlePath = join(fx.workspace, "docs/knowledge/articles/refresh.md");
+    const before = await readFile(articlePath, "utf8");
+    await writeFile(articlePath, `${before}追加的正文标记`);
+    const refreshed = await cliJson(["knowledge-article-refresh", "--workspace", fx.workspace, "--expected-version", "1", "--expected-revision", "1", "--at", instant(11, 4), "--id", created.id, "--path", "refresh.md", "--summary", "更新摘要"]);
+    assert.equal(refreshed.reasonCode, "KNOWLEDGE_ARTICLE_REFRESHED");
+    assert.equal(refreshed.id, created.id);
+    assert.equal(refreshed.revision, 2);
+    assert.equal(refreshed.previousSourceDigest, created.sourceDigest);
+    const after = await readFile(articlePath, "utf8");
+    assert.equal(refreshed.sourceDigest, createHash("sha256").update(after).digest("hex"));
+    assert.notEqual(refreshed.sourceDigest, created.sourceDigest);
+    const metadata = JSON.parse(await readFile(join(fx.store, "metadata", `${created.id}.json`), "utf8"));
+    assert.equal(metadata.summary, "更新摘要");
+    assert.equal((await listKnowledgeMetadata(fx.workspace, { at: instant(12), search: "更新摘要" })).records[0].id, created.id);
+    await assert.rejects(
+      () => cliJson(["knowledge-article-refresh", "--workspace", fx.workspace, "--expected-version", "1", "--expected-revision", "2", "--at", instant(11, 5), "--id", created.id, "--path", "refresh.md", "--summary", "stale"]),
+      (error) => error?.reasonCode === "KNOWLEDGE_CAS_MISMATCH",
+    );
   } finally { await fx.close(); }
 });
 

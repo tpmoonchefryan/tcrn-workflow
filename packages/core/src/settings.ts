@@ -41,6 +41,7 @@ export type SettingKey =
   | "execution.subagentPolicy"
   | "injection.budgetBytes"
   | "knowledge.aggregateBytes"
+  | "knowledge.articlesPath"
   | "model.economyTier"
   | "retrieval.promptLanguages"
   | "retrieval.scopeExcerptBytes"
@@ -328,6 +329,17 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     max: 1_048_576,
   },
   {
+    // Article files are repository material, not knowledge-store control bytes. A
+    // relative value is anchored at the workspace root; an absolute value is stored
+    // as the normalized absolute path the operator supplied. Both forms are refused
+    // when they name the control tree, because article writes use ordinary file IO.
+    key: "knowledge.articlesPath",
+    type: "path",
+    controlType: "text",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "docs/knowledge/articles",
+  },
+  {
     // TCRN-CROSS-STORY-364 (Owner ruling TCRN-CROSS-MIN-152 D3): the economy-tier model the
     // write-path hook and the query-side fallback call, recorded as a value so that no model
     // name appears in engine code. Unset means no model is available, which is what makes a
@@ -511,6 +523,22 @@ export function validateSettingValue(key: unknown, value: unknown, workspaceRoot
       assertWorkspaceRelativeSettingPath(value, entry.key);
     }
   }
+  if (entry.key === "knowledge.articlesPath") {
+    if (/[\u0000-\u001f\u007f]/u.test(value)) fail("SETTINGS_VALUE_INVALID", `${entry.key} must not contain control characters`);
+    if (isAbsolute(value)) {
+      if (value.includes("\\") || resolve(value) !== value) {
+        fail("SETTINGS_VALUE_INVALID", `${entry.key} must be a normalized absolute path`);
+      }
+      if (workspaceRoot !== undefined && isInside(resolve(workspaceRoot, ".tcrn-workflow"), resolve(value))) {
+        fail("SETTINGS_VALUE_INVALID", `${entry.key} must not target the workspace control tree`);
+      }
+    } else {
+      assertWorkspaceRelativeSettingPath(value, entry.key);
+      if (workspaceRoot !== undefined && isInside(resolve(workspaceRoot, ".tcrn-workflow"), resolve(workspaceRoot, value))) {
+        fail("SETTINGS_VALUE_INVALID", `${entry.key} must not target the workspace control tree`);
+      }
+    }
+  }
   if (entry.key === "backup.destination") {
     if (!isAbsolute(value)) {
       fail("SETTINGS_VALUE_INVALID", `${entry.key} must be an absolute path`);
@@ -524,6 +552,11 @@ export function validateSettingValue(key: unknown, value: unknown, workspaceRoot
     }
   }
   return value;
+}
+
+/** Resolve the article directory using the setting's explicit workspace-anchor contract. */
+export function resolveKnowledgeArticlesPath(workspaceRoot: string, value: string): string {
+  return isAbsolute(value) ? resolve(value) : resolve(workspaceRoot, value);
 }
 
 export function validateWorkspaceSettingRecord(value: unknown, workspaceRoot?: string): WorkspaceSettingRecord {

@@ -144,6 +144,41 @@ test("portal writes use actor plus live CAS, then return readback and session au
   assert.ok(audit.body.writes.every((entry) => entry.action && entry.occurredAt));
 });
 
+test("STORY-366: the article endpoint uses knowledge-store CAS and returns the engine receipt unchanged", async (t) => {
+  const fixture = await scratch("tcrn-portal-article-", "TCRN-PORTAL-ARTICLE");
+  await cli(["project-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", "2026-08-11T15:00:01Z", "--external-key", "PORTAL-ARTICLE-PROJECT", "--name", "Articles"]);
+  await cli(["knowledge-init", "--workspace", fixture.workspace, "--acknowledge-disposable", "true"]);
+  const { child, url } = await startPortal(fixture);
+  t.after(async () => { child.kill(); await rm(fixture.base, { recursive: true, force: true }); });
+  const { page, boot } = await readBoot(url);
+  assert.match(page, /data-page="articles"/u);
+  assert.match(page, /data-ui="article-form-surface"/u);
+  const created = await request(url, "/api/knowledge/articles", writeOptions(boot.token, "POST", {
+    title: "Portal article",
+    category: "architecture",
+    content: "Portal body text",
+  }));
+  assert.equal(created.response.status, 200);
+  assert.equal(created.body.reasonCode, "KNOWLEDGE_ARTICLE_CREATED");
+  assert.equal(created.body.version, 1);
+  assert.equal(await readFile(created.body.path, "utf8").then((text) => text.includes("Portal body text")), true);
+  const refused = await request(url, "/api/knowledge/articles", writeOptions(boot.token, "POST", {
+    title: "Unsafe article",
+    category: "architecture",
+    path: "../bad.md",
+    content: "not written",
+  }));
+  assert.equal(refused.response.status, 409);
+  assert.equal(refused.body.reasonCode, "KNOWLEDGE_PATH_INVALID");
+  const audit = await request(url, "/api/session-audit", readOptions(boot.token));
+  assert.equal(audit.body.writes.length, 2);
+  // recordSessionWrite unshifts (portal.mjs), so index 0 is the most recent write --
+  // the refused one -- and index 1 is the create that preceded it. Every other governed
+  // write shares this ordering (it is what #dashboard-audit renders top-first), so the
+  // article endpoint follows the existing convention rather than setting its own.
+  assert.equal(audit.body.writes[0].reasonCode, "KNOWLEDGE_PATH_INVALID");
+});
+
 test("state surface follows engine version and turns health red on failed status/actor legs", async (t) => {
   const fixture = await scratch("tcrn-portal-state-", "TCRN-PORTAL-STATE");
   const wrapper = join(fixture.base, "status-wrapper.mjs");

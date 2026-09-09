@@ -8,7 +8,7 @@
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -251,6 +251,78 @@ async function governedWrite(build, action, summary) {
   return result;
 }
 
+function stableId(namespace, externalKey) {
+  const key = String(externalKey).toUpperCase();
+  return `${namespace}:${createHash("sha256").update(`${namespace}\u0000${key}`, "utf8").digest("hex").slice(0, 24)}`;
+}
+
+function articlePathFor(title) {
+  return `article-${createHash("sha256").update(String(title), "utf8").digest("hex").slice(0, 24)}.md`;
+}
+
+function articleSummaryFor(content) {
+  const firstParagraph = String(content).split(/\n\s*\n/u).map((part) => part.trim()).find((part) => part.length > 0) ?? "";
+  const bytes = Buffer.from(firstParagraph, "utf8");
+  if (bytes.length <= 2048) return firstParagraph;
+  let end = 2048;
+  while (end > 0 && (bytes[end] & 0xc0) === 0x80) end -= 1;
+  return bytes.subarray(0, end).toString("utf8");
+}
+
+function languageBundlePath(value) {
+  if (value === undefined || value === null || String(value).length === 0) return undefined;
+  // CLI subprocesses run from portalRoot. Relative provider bundles therefore
+  // resolve from that directory; article paths remain workspace-relative and
+  // are resolved by the engine against the selected workspace.
+  return isAbsolute(String(value)) ? resolve(String(value)) : resolve(portalRoot, String(value));
+}
+
+async function governedArticleWrite(build, action, summary) {
+  const selected = currentPartition();
+  const occurredAt = nextOccurredAt();
+  let result;
+  try {
+    // Article CAS belongs to the disposable knowledge store, not the workspace
+    // chain. Reading status here would reuse the wrong version number.
+    const marker = await cliResult(["knowledge-validate", "--workspace", selected.workspace]);
+    if (!marker.ok) {
+      result = marker;
+    } else {
+      const common = ["--workspace", selected.workspace, "--expected-version", String(marker.body.version), "--at", occurredAt];
+      result = await cliResult(build(common));
+    }
+  } catch (error) {
+    result = { ok: false, body: { ok: false, reasonCode: "PORTAL_CLI_UNAVAILABLE", error: String(error?.message ?? error) } };
+  }
+  recordSessionWrite(action, result, summary, occurredAt);
+  return result;
+}
+
+function writeArticle(body) {
+  const title = String(body.title ?? "");
+  const category = String(body.category ?? "");
+  const content = String(body.content ?? body.body ?? "");
+  const path = String(body.path ?? articlePathFor(title));
+  const externalKey = `ARTICLE-${createHash("sha256").update(path, "utf8").digest("hex").slice(0, 24).toUpperCase()}`;
+  const owner = String(body.accountableOwnerId ?? stableId("owner", "PORTAL-OWNER"));
+  const evidenceIds = Array.isArray(body.evidenceIds) && body.evidenceIds.length > 0
+    ? body.evidenceIds.map((value) => String(value))
+    : [stableId("evidence", externalKey)];
+  const bundle = languageBundlePath(body.languageBundle);
+  const args = (common) => [
+    "knowledge-article-create", ...common,
+    "--path", path,
+    "--category", category,
+    "--title", title,
+    "--summary", String(body.summary ?? articleSummaryFor(content)),
+    "--content", content,
+    "--accountable-owner-id", owner,
+    "--evidence-ids", evidenceIds.join(","),
+    ...(bundle === undefined ? [] : ["--language-bundle", bundle]),
+  ];
+  return governedArticleWrite(args, "knowledge-article-create", title || "article");
+}
+
 function writeSetting(key, value) {
   return governedWrite(
     (common) => ["settings-set", ...common, "--key", String(key), "--value", String(value)],
@@ -460,6 +532,13 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && pathname === "/api/execution") {
       send(response, 200, await executionState());
+      return;
+    }
+    if (request.method === "POST" && pathname === "/api/knowledge/articles") {
+      const result = await writeArticle(await readJsonBody(request));
+      // The engine receipt is the endpoint body. Do not wrap it in a portal
+      // success object: the drawer must display the engine's reasonCode verbatim.
+      send(response, result.ok ? 200 : 409, result.body);
       return;
     }
     if (request.method === "GET" && pathname === "/api/vocabulary") {

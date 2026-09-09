@@ -261,7 +261,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "e7525959f70efd8b849af5ef70c020db3e95f615a94a26c0907906b3572bc328",
+      "fixtureDigest": "7aa129f8d2e7e0bae4b6e6751f0bdc901e21485685fffeada62be5dbabbf3e2d",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -341,7 +341,7 @@
         "tests/fixtures/retrieval-eval/translations-sonnet.json",
         "tests/fixtures/retrieval-eval/work-compact.json"
       ],
-      "fixtureDigest": "821bd54aeb182ab381e2aef3eb6da49bd6a4de824e10a2fb9f3c724fa8c5e187",
+      "fixtureDigest": "deb5593f5d1fb013ee6165ca7746d64644fa2876d4df954831a6c0fec7e2bf49",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

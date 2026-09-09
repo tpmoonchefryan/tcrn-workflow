@@ -395,6 +395,8 @@ export interface RecallKnowledgeInput {
   readonly subject: string;
   readonly summary: string;
   readonly snippet: string;
+  /** Optional source text is accepted at the boundary only to prove it is ignored. */
+  readonly body?: string;
   readonly tags: readonly string[];
   readonly expansions?: string;
 }
@@ -436,6 +438,14 @@ function excerpt(value: string, maximumBytes: number): string {
   return bytes.subarray(0, end).toString("utf8");
 }
 
+// Knowledge article cards carry only an index contract in the store. Keep the
+// recall projection metadata-only as well: the Markdown source is deliberately
+// not a RecallKnowledgeInput field, so a body-only term cannot enter the FTS5
+// corpus through this adapter.
+function knowledgeMetadataBody(card: RecallKnowledgeInput): string {
+  return `${card.summary} ${card.snippet}`.trim();
+}
+
 /**
  * The three record families reduced to documents.
  *
@@ -456,7 +466,7 @@ export function recallDocuments(inputs: RecallInputs): readonly RecallDocument[]
       key: card.externalKey,
       status: "active",
       title: card.subject,
-      body: `${card.summary} ${card.snippet}`.trim(),
+      body: knowledgeMetadataBody(card),
       tags: card.tags.join(" "),
       expansions: card.expansions ?? "",
       summary: card.summary,

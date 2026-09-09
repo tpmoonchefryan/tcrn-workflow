@@ -11,7 +11,7 @@ import {
   rename,
   rm,
 } from "node:fs/promises";
-import { dirname, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import { resolveStoreBackend, SegmentedKnowledgeStoreBackend } from "./store-backend.js";
 import type { FileStoreBackendProfile, StoreBackend } from "./store-backend.js";
@@ -40,6 +40,7 @@ import {
 import type { KnowledgeExpansions, KnowledgeLanguageProvider } from "./knowledge-language.js";
 import { activeWorkspaceRoot, materializeWorkspace } from "./workspace.js";
 import type { ProjectRecord, WorkspaceState } from "./workspace.js";
+import { SETTINGS_CATALOG, resolveKnowledgeArticlesPath } from "./settings.js";
 
 export const KNOWLEDGE_CORE_VERSION = "tcrn.knowledge-core.v1" as const;
 export const KNOWLEDGE_STORE_SCHEMA_VERSION = "tcrn.knowledge-store.v1" as const;
@@ -47,6 +48,7 @@ export const KNOWLEDGE_METADATA_SCHEMA_VERSION = "tcrn.knowledge-unit-metadata.v
 
 export const KNOWLEDGE_LIMITS = Object.freeze({
   maximumBodyBytes: 8_192,
+  maximumArticleBytes: PROTOCOL_LIMITS.maxCanonicalBytes,
   maximumSummaryBytes: 2_048,
   maximumSnippetBytes: 512,
   maximumMetadataBytes: 32_768,
@@ -77,6 +79,8 @@ function knowledgeAggregateLimit(workspace: WorkspaceState): number {
 
 export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_ALREADY_EXISTS",
+  "KNOWLEDGE_ARTICLE_CREATED",
+  "KNOWLEDGE_ARTICLE_REFRESHED",
   "KNOWLEDGE_BODY_ACCESS_DENIED",
   "KNOWLEDGE_CANONICAL_INVALID",
   "KNOWLEDGE_CAS_MISMATCH",
@@ -237,6 +241,29 @@ export interface CreateKnowledgeUnitInput {
   readonly coexist?: boolean;
 }
 
+export interface KnowledgeArticleCreateInput {
+  readonly expectedVersion: number;
+  readonly occurredAt: string;
+  /** Markdown file path relative to the effective articles directory. */
+  readonly path: string;
+  readonly category: KnowledgeCategory;
+  readonly title: string;
+  readonly summary: string;
+  readonly content: string;
+  readonly accountableOwnerId: string;
+  readonly linkedEvidenceIds: readonly string[];
+}
+
+export interface KnowledgeArticleRefreshInput {
+  readonly expectedVersion: number;
+  readonly expectedRevision: number;
+  readonly occurredAt: string;
+  readonly id: string;
+  /** Markdown file path relative to the effective articles directory. */
+  readonly path: string;
+  readonly summary: string;
+}
+
 export interface KnowledgeReadOptions {
   readonly beforeDescriptorReadForTest?: (path: string) => Promise<void>;
   readonly afterDescriptorOpenForTest?: (path: string) => Promise<void>;
@@ -268,6 +295,8 @@ export interface KnowledgeListQuery extends KnowledgeReadOptions {
   // WSC-4: a bounded case-insensitive substring over subject and tags, and a
   // budgeted window over the ordered result set.
   readonly search?: string;
+  /** Allow explicit-only index cards on a deliberate recall corpus read. */
+  readonly includeExplicitOnly?: boolean;
   readonly limit?: number;
   readonly offset?: number;
 }
@@ -479,6 +508,159 @@ export async function calculateKnowledgeSourceDigest(
   if (fileParts.length === 1 && parts.length === 1) return fileParts[0]!.digest!;
   if (fileParts.length > 0) return sha256(canonicalJson(parts.map((part) => ({ reference: part.reference, digest: part.digest }))));
   return sha256(fallbackBody);
+}
+
+const ARTICLE_CATEGORY_VALUES: readonly KnowledgeCategory[] = [
+  "architecture", "domain", "implementation", "standards", "testing", "workflow", "decision", "evidence",
+];
+
+function articleSettingValue(workspace: WorkspaceState): string {
+  const configured = workspace.settings.find((entry) => entry.key === "knowledge.articlesPath")?.value;
+  if (configured !== undefined) return configured;
+  const defaultValue = SETTINGS_CATALOG.find((entry) => entry.key === "knowledge.articlesPath")?.defaultValue;
+  if (typeof defaultValue !== "string" || defaultValue.length === 0) fail("KNOWLEDGE_PATH_INVALID", "knowledge.articlesPath has no default");
+  return defaultValue;
+}
+
+function assertArticlePath(path: string): void {
+  if (typeof path !== "string" || path.length === 0 || Buffer.byteLength(path, "utf8") > 512 ||
+    isAbsolute(path) || path.includes("\\") || /[\u0000-\u001f\u007f]/u.test(path)) {
+    fail("KNOWLEDGE_PATH_INVALID", "article path");
+  }
+  const segments = path.split("/");
+  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..") || !path.endsWith(".md")) {
+    fail("KNOWLEDGE_PATH_INVALID", "article path");
+  }
+}
+
+function assertArticleField(value: string, maximumBytes: number, label: string): void {
+  assertBoundedString(value, maximumBytes, label);
+  if (/[\r\n\u0000-\u001f\u007f]/u.test(value)) fail("KNOWLEDGE_INPUT_INVALID", label);
+}
+
+async function articleDirectory(workspaceRoot: string, workspace: WorkspaceState): Promise<string> {
+  const configured = articleSettingValue(workspace);
+  const root = resolveKnowledgeArticlesPath(workspaceRoot, configured);
+  try {
+    await mkdir(root, { recursive: true, mode: 0o700 });
+  } catch (error) {
+    fail("KNOWLEDGE_PATH_INVALID", `${root}:${String(error)}`);
+  }
+  return boundDirectory(root);
+}
+
+async function articlePathFor(workspaceRoot: string, workspace: WorkspaceState, articlePath: string): Promise<{ readonly root: string; readonly file: string }> {
+  assertArticlePath(articlePath);
+  const root = await articleDirectory(workspaceRoot, workspace);
+  const file = resolve(root, articlePath);
+  if (!inside(root, file)) fail("KNOWLEDGE_PATH_INVALID", articlePath);
+  try {
+    await boundDirectory(dirname(file), root);
+  } catch (error) {
+    let missing = false;
+    try {
+      await lstat(dirname(file));
+    } catch (filesystemError) {
+      missing = (filesystemError as { readonly code?: string }).code === "ENOENT";
+    }
+    if (!missing) throw error;
+    try {
+      await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+      await boundDirectory(dirname(file), root);
+    } catch (filesystemError) {
+      if (filesystemError instanceof KnowledgeCoreError) throw filesystemError;
+      fail("KNOWLEDGE_PATH_INVALID", `${dirname(file)}:${String(filesystemError)}`);
+    }
+  }
+  return { root, file };
+}
+
+async function readArticleBytes(path: string): Promise<Buffer> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const initial = await handle.stat();
+    if (!initial.isFile() || initial.nlink !== 1) fail("KNOWLEDGE_SPECIAL_FILE", path);
+    if (initial.size > KNOWLEDGE_LIMITS.maximumArticleBytes) fail("KNOWLEDGE_LIMIT_EXCEEDED", "article file");
+    const bytes = await handle.readFile();
+    const final = await handle.stat();
+    if (!sameIdentity(initial, final) || initial.size !== final.size) fail("KNOWLEDGE_SOURCE_CHANGED", path);
+    if (!Buffer.from(bytes.toString("utf8"), "utf8").equals(bytes)) fail("KNOWLEDGE_CANONICAL_INVALID", "article file is not canonical UTF-8");
+    return bytes;
+  } catch (error) {
+    if (error instanceof KnowledgeCoreError) throw error;
+    const code = (error as { readonly code?: string }).code;
+    if (code === "ENOENT") fail("KNOWLEDGE_SOURCE_MISSING", path);
+    if (code === "ELOOP" || code === "ENOTDIR") fail("KNOWLEDGE_LINK_UNSAFE", path);
+    fail("KNOWLEDGE_PATH_INVALID", `${path}:${String(error)}`);
+  } finally {
+    await handle?.close();
+  }
+  return Buffer.alloc(0);
+}
+
+async function writeArticleBytes(path: string, bytes: Buffer, replace: boolean): Promise<Buffer> {
+  if (bytes.length > KNOWLEDGE_LIMITS.maximumArticleBytes) fail("KNOWLEDGE_LIMIT_EXCEEDED", "article file");
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    const flags = constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW | (replace ? constants.O_TRUNC : constants.O_EXCL);
+    handle = await open(path, flags, 0o600);
+    await handle.writeFile(bytes);
+    await handle.sync();
+    const written = await handle.stat();
+    if (!written.isFile() || written.nlink !== 1 || written.size !== bytes.length) fail("KNOWLEDGE_SOURCE_CHANGED", path);
+  } catch (error) {
+    if (error instanceof KnowledgeCoreError) throw error;
+    const code = (error as { readonly code?: string }).code;
+    if (!replace && code === "EEXIST") fail("KNOWLEDGE_ALREADY_EXISTS", path);
+    if (code === "ELOOP" || code === "ENOTDIR") fail("KNOWLEDGE_LINK_UNSAFE", path);
+    fail("KNOWLEDGE_PATH_INVALID", `${path}:${String(error)}`);
+  } finally {
+    await handle?.close();
+  }
+  return readArticleBytes(path);
+}
+
+function articleMarkdown(category: KnowledgeCategory, title: string, content: string): Buffer {
+  return Buffer.from(`---\ncategory: ${category}\ntitle: ${title}\n---\n\n${content}`, "utf8");
+}
+
+function parseArticleMarkdown(bytes: Buffer, path: string): { readonly category: KnowledgeCategory; readonly title: string; readonly content: string } {
+  const text = bytes.toString("utf8");
+  const match = /^---\ncategory: ([^\n]+)\ntitle: ([^\n]*)\n---\n\n?([\s\S]*)$/u.exec(text);
+  if (match === null || !ARTICLE_CATEGORY_VALUES.includes(match[1] as KnowledgeCategory)) {
+    fail("KNOWLEDGE_RECORD_INVALID", `${path}:article front matter`);
+  }
+  const title = match[2] ?? "";
+  assertArticleField(title, 512, "article title");
+  return { category: match[1] as KnowledgeCategory, title, content: match[3] ?? "" };
+}
+
+function articleIndexBody(title: string, summary: string, path: string): string {
+  const body = `${title}\n${summary}\nSource: ${path}`;
+  assertBoundedString(body, KNOWLEDGE_LIMITS.maximumBodyBytes, "article index body");
+  return body;
+}
+
+function truncateArticleUtf8(value: string, maximumBytes: number): string {
+  const bytes = Buffer.from(value, "utf8");
+  if (bytes.length <= maximumBytes) return value;
+  let end = maximumBytes;
+  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end -= 1;
+  return bytes.subarray(0, end).toString("utf8");
+}
+
+function articleSourceReference(path: string): readonly string[] {
+  return [path];
+}
+
+async function removeArticleIfExact(path: string, expected: Buffer): Promise<void> {
+  try {
+    const actual = await readArticleBytes(path);
+    if (actual.equals(expected)) await rm(path, { force: true });
+  } catch {
+    // The original mutation error is the useful receipt; cleanup is best effort.
+  }
 }
 
 function exactFields(value: unknown, expected: readonly string[], label: string, reasonCode: KnowledgeReasonCode): asserts value is Readonly<Record<string, unknown>> {
@@ -1597,6 +1779,88 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
   }
 }
 
+export async function createKnowledgeArticle(
+  workspaceRoot: string,
+  input: KnowledgeArticleCreateInput,
+  options: KnowledgeMutationOptions = {},
+): Promise<Readonly<Record<string, JsonValue>>> {
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) fail("KNOWLEDGE_INPUT_INVALID", "expected version");
+  try { assertStrictInstant(input.occurredAt); } catch (error) { fail("KNOWLEDGE_INPUT_INVALID", String(error)); }
+  if (!ARTICLE_CATEGORY_VALUES.includes(input.category)) fail("KNOWLEDGE_INPUT_INVALID", "article category");
+  assertArticleField(input.title, 512, "article title");
+  assertArticleField(input.summary, KNOWLEDGE_LIMITS.maximumSummaryBytes, "article summary");
+  if (typeof input.content !== "string" || Buffer.byteLength(input.content, "utf8") > KNOWLEDGE_LIMITS.maximumArticleBytes) {
+    fail("KNOWLEDGE_LIMIT_EXCEEDED", "article content");
+  }
+  try {
+    assertProtocolId(input.accountableOwnerId);
+  } catch (error) {
+    fail("KNOWLEDGE_PROVENANCE_INVALID", `accountable owner:${String(error)}`);
+  }
+  if (!input.accountableOwnerId.startsWith("owner:")) fail("KNOWLEDGE_PROVENANCE_INVALID", "article accountable owner");
+  if (!Array.isArray(input.linkedEvidenceIds) || input.linkedEvidenceIds.length === 0) {
+    fail("KNOWLEDGE_PROVENANCE_INVALID", "article evidence links");
+  }
+  for (const evidenceId of input.linkedEvidenceIds) {
+    try { assertProtocolId(evidenceId); } catch (error) { fail("KNOWLEDGE_PROVENANCE_INVALID", String(error)); }
+    if (!evidenceId.startsWith("evidence:")) fail("KNOWLEDGE_PROVENANCE_INVALID", evidenceId);
+  }
+  const workspace = await materializeWorkspace(workspaceRoot);
+  const article = await articlePathFor(workspaceRoot, workspace, input.path);
+  const markdown = articleMarkdown(input.category, input.title, input.content);
+  const body = articleIndexBody(input.title, input.summary, input.path);
+  const articleBytes = await writeArticleBytes(article.file, markdown, false);
+  const sourceDigest = sha256(articleBytes);
+  const externalKey = `ARTICLE-${sha256(input.path).slice(0, 24).toUpperCase()}`;
+  try {
+    const created = await createKnowledgeUnit(workspaceRoot, {
+      expectedVersion: input.expectedVersion,
+      occurredAt: input.occurredAt,
+      externalKey,
+      scope: "workspace",
+      projectId: null,
+      roleScopes: [],
+      category: input.category,
+      kind: "reference",
+      tags: ["article", input.category],
+      subject: input.title,
+      summary: input.summary,
+      snippet: truncateArticleUtf8(input.summary, KNOWLEDGE_LIMITS.maximumSnippetBytes),
+      accountableOwnerId: input.accountableOwnerId,
+      sourceReferences: articleSourceReference(input.path),
+      sourceDigest,
+      supersedes: null,
+      linkedWorkIds: [],
+      linkedDecisionIds: [],
+      linkedGateIds: [],
+      linkedEvidenceIds: input.linkedEvidenceIds,
+      lifecycle: "active",
+      retrievalDisposition: "explicit-only",
+      freshnessState: "fresh",
+      lastVerified: input.occurredAt,
+      stalenessPolicy: { maximumAgeDays: null, unknownDisposition: "fail-closed" },
+      exportDisposition: "metadata-only",
+      body,
+    }, options);
+    return {
+      ...created,
+      schemaVersion: "tcrn.knowledge-article-create-result.v1",
+      reasonCode: "KNOWLEDGE_ARTICLE_CREATED",
+      path: article.file,
+      articlePath: input.path,
+      articleBytes: articleBytes.length,
+      sourceDigest,
+      bodyBytes: Buffer.byteLength(body, "utf8"),
+      category: input.category,
+      title: input.title,
+      summary: input.summary,
+    };
+  } catch (error) {
+    await removeArticleIfExact(article.file, articleBytes);
+    throw error;
+  }
+}
+
 export interface CaptureKnowledgeUnitInput {
   readonly occurredAt: string;
   readonly subject: string;
@@ -1839,7 +2103,7 @@ export function knowledgeConflictHits(
 // one does. Two selections disagreeing about which cards exist is how a card gets listed
 // and then cannot be found by the words it stores.
 function explicitlySelectable(metadata: KnowledgeUnitMetadata, at: string): boolean {
-  return metadata.promotionState !== "rejected" && metadata.lifecycle === "active" &&
+  return metadata.extensions.supersededBy === undefined && metadata.promotionState !== "rejected" && metadata.lifecycle === "active" &&
     metadata.retrievalDisposition !== "excluded" && metadata.exportDisposition === "metadata-only" &&
     computeFreshness(metadata, at) !== "stale";
 }
@@ -1870,7 +2134,8 @@ function selectKnowledgeMetadata(
   const { selection, search } = normalized;
   const selected = scan.units.map((unit) => unit.metadata).filter((metadata) => {
     const freshness = computeFreshness(metadata, query.at);
-    if (selection === "default" && !(includeExplicitOnly && search !== undefined ? explicitlySelectable(metadata, query.at) : isDefaultSelectable(metadata, query.at))) return false;
+    const explicitCorpus = includeExplicitOnly && (query.includeExplicitOnly === true || search !== undefined);
+    if (selection === "default" && !(explicitCorpus ? explicitlySelectable(metadata, query.at) : isDefaultSelectable(metadata, query.at))) return false;
     return (!query.projectId || metadata.projectId === query.projectId) &&
       (!query.roleScope || metadata.roleScopes.includes(query.roleScope)) &&
       (!query.category || metadata.category === query.category) && (!query.kind || metadata.kind === query.kind) &&
@@ -2328,6 +2593,113 @@ export async function reverifyKnowledgeUnit(workspaceRoot: string, input: {
   } catch (error) {
     // WSC-6: same crash exemption as createKnowledgeUnit -- a simulated crash must leave
     // the claim exactly where a real SIGKILL would, since finally never runs for one.
+    if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_FAULT_INJECTED") released = true;
+    throw error;
+  } finally {
+    if (!released) await releaseMutationClaim(initial.storeRoot, claim);
+  }
+}
+
+export async function refreshKnowledgeArticle(
+  workspaceRoot: string,
+  input: KnowledgeArticleRefreshInput,
+  options: KnowledgeMutationOptions = {},
+): Promise<Readonly<Record<string, JsonValue>>> {
+  try {
+    assertProtocolId(input.id);
+    assertStrictInstant(input.occurredAt);
+  } catch (error) {
+    fail("KNOWLEDGE_INPUT_INVALID", String(error));
+  }
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0 ||
+    !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
+    fail("KNOWLEDGE_INPUT_INVALID", "article refresh versions");
+  }
+  assertArticleField(input.summary, KNOWLEDGE_LIMITS.maximumSummaryBytes, "article summary");
+  const initial = await mutationAdmissionScan(workspaceRoot, options);
+  const claim = await acquireMutationClaim(initial);
+  let released = false;
+  try {
+    const scan = await scanKnowledgeStore(workspaceRoot, options, true);
+    if (scan.marker.version !== input.expectedVersion) fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedVersion}:${scan.marker.version}`);
+    const unit = scan.units.find((entry) => entry.metadata.id === input.id);
+    if (unit === undefined) fail("KNOWLEDGE_NOT_FOUND", input.id);
+    if (unit.metadata.revision !== input.expectedRevision) fail("KNOWLEDGE_CAS_MISMATCH", `${input.expectedRevision}:${unit.metadata.revision}`);
+    if (unit.metadata.kind !== "reference" || unit.metadata.retrievalDisposition !== "explicit-only" || unit.metadata.lifecycle === "retired") {
+      fail("KNOWLEDGE_LIFECYCLE_INVALID", "only an active article index can be refreshed");
+    }
+    if (!unit.metadata.sourceReferences.includes(input.path)) fail("KNOWLEDGE_PATH_INVALID", "article identity does not match source path");
+    const workspaceArticle = await articlePathFor(scan.workspaceRoot, scan.workspace, input.path);
+    const articleBytes = await readArticleBytes(workspaceArticle.file);
+    const article = parseArticleMarkdown(articleBytes, input.path);
+    const sourceDigest = sha256(articleBytes);
+    let language;
+    try {
+      language = applyWriteLanguagePolicy(
+        { subject: article.title, summary: input.summary, snippet: truncateArticleUtf8(input.summary, KNOWLEDGE_LIMITS.maximumSnippetBytes) },
+        readKnowledgeLanguagePolicy(scan.workspace.settings),
+        options.languageProvider,
+      );
+    } catch (error) {
+      if (error instanceof KnowledgeLanguageError) fail(error.reasonCode, error.message, error.details as Readonly<Record<string, JsonValue>>);
+      throw error;
+    }
+    const body = articleIndexBody(article.title, input.summary, input.path);
+    const metadata: KnowledgeUnitMetadata = {
+      ...unit.metadata,
+      category: article.category,
+      tags: ["article", article.category].sort(compareCanonicalText),
+      subject: language.subject,
+      summary: language.summary,
+      snippet: language.snippet,
+      sourceDigest,
+      freshnessState: "fresh",
+      lastVerified: input.occurredAt,
+      bodySha256: sha256(body),
+      bodyBytes: Buffer.byteLength(body, "utf8"),
+      revision: unit.metadata.revision + 1,
+      updatedAt: input.occurredAt,
+      expansions: language.expansions,
+    };
+    const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace);
+    validateMetadataBody(validated, Buffer.from(body, "utf8"), scan.workspace);
+    const secondRead = await readArticleBytes(workspaceArticle.file);
+    if (!secondRead.equals(articleBytes)) fail("KNOWLEDGE_SOURCE_CHANGED", workspaceArticle.file);
+    const marker: KnowledgeStoreMarker = { ...scan.marker, version: scan.marker.version + 1 };
+    const projectedMetadata = scan.units.map((entry) => entry.metadata.id === metadata.id ? metadata : entry.metadata);
+    const projectedAggregate = Buffer.byteLength(canonicalJson(marker), "utf8") +
+      scan.units.reduce((total, entry) => total +
+        Buffer.byteLength(canonicalJson(entry.metadata.id === metadata.id ? metadata : entry.metadata), "utf8") +
+        (entry.metadata.id === metadata.id ? Buffer.byteLength(body, "utf8") : (entry.body?.length ?? 0)), 0);
+    if (projectedAggregate > knowledgeAggregateLimit(scan.workspace)) fail("KNOWLEDGE_LIMIT_EXCEEDED", "article refresh aggregate bytes");
+    const backend = storeBackendFor(scan.storeRoot, options);
+    await backend.writeKnowledgeBody(metadata.id, Buffer.from(body, "utf8"));
+    crash("after-body-write", options.faultAt);
+    await backend.writeKnowledgeMetadata(metadata.id, canonicalJson(metadata));
+    crash("after-metadata-write", options.faultAt);
+    await backend.writeKnowledgeMarker(canonicalJson(marker));
+    crash("after-marker-write", options.faultAt);
+    await writeIndex(backend, marker, projectedMetadata);
+    await releaseMutationClaim(scan.storeRoot, claim);
+    released = true;
+    await scanKnowledgeStore(workspaceRoot, options);
+    return {
+      schemaVersion: "tcrn.knowledge-article-refresh-result.v1",
+      reasonCode: "KNOWLEDGE_ARTICLE_REFRESHED",
+      id: metadata.id,
+      revision: metadata.revision,
+      version: marker.version,
+      path: workspaceArticle.file,
+      articlePath: input.path,
+      articleBytes: articleBytes.length,
+      previousSourceDigest: unit.metadata.sourceDigest,
+      sourceDigest: metadata.sourceDigest,
+      bodyBytes: metadata.bodyBytes,
+      category: metadata.category,
+      title: metadata.subject,
+      summary: metadata.summary,
+    };
+  } catch (error) {
     if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_FAULT_INJECTED") released = true;
     throw error;
   } finally {

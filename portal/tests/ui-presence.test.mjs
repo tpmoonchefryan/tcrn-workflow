@@ -33,6 +33,7 @@ const COMPONENTS = Object.freeze([
   ["prose directory", '[data-ui="prose-directory"]'],
   ["prose line-number gutter", '[data-ui="prose-gutter"]'],
   ["prose finding link", '[data-ui="prose-finding-link"]'],
+  ["article form surface", '[data-ui="article-form-surface"]'],
   ["assignment addline", '[data-ui="assignment-addline"]'],
   ["active plan badge", '[data-ui="plan-active-badge"]'],
   ["workspace paths", '[data-ui="workspace-paths"]'],
@@ -330,7 +331,8 @@ function assertDomContract(document) {
   const missing = missingComponents(document);
   assert.deepEqual(missing, [], `rendered DOM components absent: ${JSON.stringify(missing)}`);
   const navigationItems = [...document.querySelectorAll(".tcrn-side-nav .tcrn-nav-item")];
-  assert.equal(navigationItems.length, 5, "the portal must render the five platform destinations");
+  // STORY-366 added the sixth destination (articles), between rules and entities.
+  assert.equal(navigationItems.length, 6, "the portal must render the six platform destinations");
   assert.ok(navigationItems.every((button) => button.getAttribute("aria-label")?.trim()), "every destination must expose an accessible name");
   assert.ok(navigationItems.every((button) => button.getAttribute("data-i18n-aria-label")?.trim()), "every destination name must come from the locale table");
   assert.equal(document.querySelector('img.tcrn-brand-mark')?.getAttribute("alt"), "", "the decorative mark must not duplicate the brand accessible name");

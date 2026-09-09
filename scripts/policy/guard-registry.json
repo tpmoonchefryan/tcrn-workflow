@@ -40,11 +40,11 @@
     },
     {
       "id": "CQ-05-expected-revision-arbiter",
-      "rationale": "Same class on the knowledge marker verbs, which reported the NaN as a promotion-version refusal without naming the flag.",
+      "rationale": "Same class on the knowledge marker verbs, which reported the NaN as a promotion-version refusal without naming the flag. TCRN-CROSS-STORY-366 added a fourth site (knowledge-article-refresh); the mutation-proof test now carries a dedicated malformed-value case for it alongside the pre-existing knowledge-promote case.",
       "file": "packages/cli/src/index.ts",
       "find": "expectedRevision: integerValue(values, \"expected-revision\")",
       "replace": "expectedRevision: Number(values[\"expected-revision\"])",
-      "expectedMatches": 3,
+      "expectedMatches": 4,
       "test": "tests/p3-cli-read-surface.test.mjs"
     },
     {

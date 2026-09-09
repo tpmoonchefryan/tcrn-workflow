@@ -214,6 +214,55 @@ test("STORY-362: the recall verb answers with kind, key, status, title, summary 
   resetRecallCache();
 });
 
+test("STORY-366: recall admits an article index for explicit search but never indexes Markdown body text", async (context) => {
+  const { workspace } = await syntheticWorkspace(context);
+  resetRecallCache();
+  const article = await cli(["knowledge-article-create", "--workspace", workspace, "--expected-version", "4", "--at", instant(8), "--path", "recall.md", "--category", "architecture", "--title", "文章索引入口", "--summary", "通过标题与摘要检索", "--content", "正文独有术语只存在于 Markdown 文件中", "--accountable-owner-id", deriveStableId("owner", "STORY-366-RECALL"), "--evidence-ids", deriveStableId("evidence", "STORY-366-RECALL")]);
+  const defaultList = await cli(["knowledge-list", "--workspace", workspace, "--at", instant(9)]);
+  assert.equal(defaultList.records.some((record) => record.id === article.id), false);
+  const explicit = await cli(["knowledge-list", "--workspace", workspace, "--at", instant(9), "--search", "文章索引入口"]);
+  assert.equal(explicit.records.some((record) => record.id === article.id), true);
+  const titleRecall = await cli(["recall", "--workspace", workspace, "--at", instant(9), "--query", "文章索引入口"]);
+  assert.equal(titleRecall.records.some((record) => record.id === article.id), true);
+  const bodyRecall = await cli(["recall", "--workspace", workspace, "--at", instant(9), "--query", "正文独有术语"]);
+  assert.equal(bodyRecall.records.some((record) => record.id === article.id), false);
+  // STORY-366 changed explicitlySelectable to drop active cards carrying
+  // extensions.supersededBy. That clause governs the pre-existing knowledge-list
+  // --search path as well as this new recall corpus, so it needs its own judgement.
+  const supersedeSubject = "替换检索资格判定测试卡";
+  const supersedeOriginal = await captureKnowledgeUnit(workspace, {
+    occurredAt: instant(9), subject: supersedeSubject, summary: "原始摘要占位",
+    snippet: "原始摘录占位", tags: ["story-366-supersede"],
+    accountableOwnerId: deriveStableId("owner", "STORY-366-SUPERSEDE"),
+    body: `${supersedeSubject} 原始摘要占位`, externalKey: "STORY-366-SUPERSEDE-ORIGINAL",
+  });
+  const supersedeReplacement = await captureKnowledgeUnit(workspace, {
+    occurredAt: instant(9), subject: supersedeSubject, summary: "替代摘要占位",
+    snippet: "替代摘录占位", tags: ["story-366-supersede"],
+    accountableOwnerId: deriveStableId("owner", "STORY-366-SUPERSEDE"),
+    body: `${supersedeSubject} 替代摘要占位`, externalKey: "STORY-366-SUPERSEDE-REPLACEMENT",
+    supersedes: supersedeOriginal.id,
+  });
+  const supersededSearch = await cli(["knowledge-list", "--workspace", workspace, "--at", instant(9), "--search", supersedeSubject]);
+  assert.equal(supersededSearch.records.some((record) => record.id === supersedeOriginal.id), false,
+    "an active original carrying extensions.supersededBy must not compete in explicit search");
+  assert.equal(supersededSearch.records.some((record) => record.id === supersedeReplacement.id), true,
+    "its replacement must be the one that competes");
+  const articleProjection = recallDocuments({ knowledge: [{
+    id: article.id,
+    externalKey: article.externalKey,
+    subject: article.title,
+    summary: article.summary,
+    snippet: "通过标题与摘要检索",
+    body: "正文独有术语只存在于 Markdown 文件中",
+    tags: ["article", "architecture"],
+  }] });
+  const bodyIndex = new RecallIndex(articleProjection, "article-body");
+  assert.equal(bodyIndex.search("正文独有术语").some((hit) => hit.id === article.id), false);
+  bodyIndex.close();
+  resetRecallCache();
+});
+
 test("STORY-362: the verb refuses a partition that is not the one the given path belongs to", async (context) => {
   const { workspace } = await syntheticWorkspace(context);
   resetRecallCache();

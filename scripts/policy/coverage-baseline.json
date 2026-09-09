@@ -1296,11 +1296,12 @@
       ]
     },
     "tests/s213-settings.test.mjs": {
-      "testCount": 2,
-      "assertionCount": 20,
+      "testCount": 3,
+      "assertionCount": 27,
       "testNames": [
         "INIT-022 S213: catalog exposes every engine-consumed workspace setting",
-        "INIT-022 S213: unknown keys fail closed and registered writes receipt plus replay readback"
+        "INIT-022 S213: unknown keys fail closed and registered writes receipt plus replay readback",
+        "STORY-366: article directories are workspace-relative by default and cannot target the control tree"
       ]
     },
     "tests/s222-engine-version.test.mjs": {
@@ -1725,8 +1726,8 @@
       ]
     },
     "tests/story-362-recall.test.mjs": {
-      "testCount": 9,
-      "assertionCount": 47,
+      "testCount": 13,
+      "assertionCount": 71,
       "testNames": [
         "STORY-362: CJK is segmented into bigrams on both sides, so a differently worded question still lands",
         "STORY-362: a term most of the corpus carries scores below the absolute floor and selects nothing",
@@ -1735,8 +1736,12 @@
         "STORY-362: field weights rank a title match above a body match of the same term",
         "STORY-362: the index is cached against the storage checkpoint and rewritten incrementally when it moves",
         "STORY-362: the recall verb answers with kind, key, status, title, summary and score",
+        "STORY-366: recall admits an article index for explicit search but never indexes Markdown body text",
         "STORY-362: the verb refuses a partition that is not the one the given path belongs to",
-        "STORY-362: --tau overrides the setting, and a flooded term returns nothing at the recorded default"
+        "STORY-362: --tau overrides the setting, and a flooded term returns nothing at the recorded default",
+        "external key fragments split hyphens and case boundaries and match token prefixes",
+        "key length does not change prose BM25 scores or selection",
+        "key-only updates invalidate both projections and retire the previous exact key"
       ]
     },
     "tests/story-363-work-summary.test.mjs": {

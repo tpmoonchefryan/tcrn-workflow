@@ -14,6 +14,7 @@ import {
   initializeWorkspace,
   materializeWorkspace,
   setWorkspaceSetting,
+  validateSettingValue,
   validateWorkspace,
 } from "../dist/build/packages/core/src/index.js";
 
@@ -91,4 +92,17 @@ test("INIT-022 S213: unknown keys fail closed and registered writes receipt plus
     await lease.release();
   }
   assert.equal((await materializeWorkspace(workspace)).version, 1, "a rejected path must not append an event");
+});
+
+test("STORY-366: article directories are workspace-relative by default and cannot target the control tree", async (t) => {
+  const { workspace } = await fixture(t, "articles-path");
+  const catalog = await runRaw(["settings-catalog", "--workspace", workspace]);
+  const entry = catalog.settings.find((setting) => setting.key === "knowledge.articlesPath");
+  assert.equal(entry.defaultValue, "docs/knowledge/articles");
+  assert.equal(entry.currentValue, "docs/knowledge/articles");
+  assert.equal(validateSettingValue("knowledge.articlesPath", "docs/knowledge/articles", workspace), "docs/knowledge/articles");
+  assert.equal(validateSettingValue("knowledge.articlesPath", "/tmp/tcrn-article-root", workspace), "/tmp/tcrn-article-root");
+  assert.throws(() => validateSettingValue("knowledge.articlesPath", "../outside", workspace), (error) => error?.reasonCode === "SETTINGS_VALUE_INVALID");
+  assert.throws(() => validateSettingValue("knowledge.articlesPath", ".tcrn-workflow/articles", workspace), (error) => error?.reasonCode === "SETTINGS_VALUE_INVALID");
+  assert.throws(() => validateSettingValue("knowledge.articlesPath", `${workspace}/.tcrn-workflow/articles`, workspace), (error) => error?.reasonCode === "SETTINGS_VALUE_INVALID");
 });

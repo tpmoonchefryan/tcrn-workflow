@@ -12,11 +12,13 @@ const PORTAL_COPY = Object.freeze({
   "nav.dashboard": "Dashboard",
   "nav.settings": "Settings",
   "nav.prose": "Rules",
+  "nav.articles": "Articles",
   "nav.entities": "Entities",
   "nav.vocabulary": "Vocabulary",
   "page.dashboard": "Workspace overview",
   "page.settings": "Settings",
   "page.prose": "Rules",
+  "page.articles": "Knowledge articles",
   "page.entities": "Entities",
   "page.vocabulary": "System vocabulary",
   "partition.label": "Partition",
@@ -76,6 +78,13 @@ const PORTAL_COPY = Object.freeze({
   "prose.fileNote": "plain file",
   "prose.save": "Save file",
   "prose.noHeadings": "No headings in this document.",
+  "articles.lede": "Write a Markdown article to the configured repository directory and keep its governed index receipt.",
+  "articles.title": "New article",
+  "articles.note": "The file carries the full text; the knowledge store carries only its searchable index.",
+  "articles.titleLabel": "Title",
+  "articles.categoryLabel": "Category",
+  "articles.bodyLabel": "Markdown body",
+  "articles.submit": "Create article",
   "reconcile.findings": "findings",
   "reconcile.green": "All named keys are registered.",
   "entities.lede": "Personas are identities. Presets can be overridden or tombstoned; names remain stable.",
@@ -210,6 +219,9 @@ const PORTAL_COPY = Object.freeze({
   "setting.knowledge.aggregateBytes.label": "Knowledge aggregate bytes", "setting.artifact.language.label": "Artefact language", "setting.artifact.language.description": "The language this workspace writes its knowledge cards in. A card captured in another language is translated into it on the write path.", "concept.setting.artifact.language": "Names the one language a workspace stores its cards in, so a question asked in that language matches prose written in it.", "setting.model.economyTier.label": "Economy-tier model", "setting.model.economyTier.description": "The model the write-path hook and the prompt-language fallback call. Unset means no model is available and a card write is refused rather than stored untranslated.", "concept.setting.model.economyTier": "Records which model does the cheap translation and phrasing work, so no model name lives in engine code.", "setting.retrieval.promptLanguages.label": "Prompt languages", "setting.retrieval.promptLanguages.description": "Comma-separated languages questions are expected in. Unset reads as the artefact language alone.", "concept.setting.retrieval.promptLanguages": "Says which languages a question may arrive in; a prompt outside the list is translated once before recall.",
   "setting.knowledge.aggregateBytes.description": "Source-of-truth byte ceiling for the knowledge store. The upper bound is the engine canonical-byte limit.",
   "concept.setting.knowledge.aggregateBytes": "Bounds marker, metadata, and body bytes for this workspace; the derived knowledge index is validated but not charged twice.",
+  "setting.knowledge.articlesPath.label": "Article directory",
+  "setting.knowledge.articlesPath.description": "Workspace-relative directory for Markdown knowledge articles. An absolute path is accepted when it is normalized and outside the workspace control tree.",
+  "concept.setting.knowledge.articlesPath": "Article paths are resolved from the workspace root when relative; the portal passes the same relative path to the CLI so both writes land in one directory.",
   "setting.retrieval.scopeExcerptBytes.label": "Scope excerpt bytes", "setting.retrieval.tau.label": "Recall score floor", "setting.retrieval.tau.description": "Lowest bm25 score the recall verb will return. A term most of the corpus carries scores below it and returns nothing.", "concept.setting.retrieval.tau": "Sets the floor under which a recall result is judged too common to be an answer; the verb flag overrides it per call.",
   "setting.retrieval.scopeExcerptBytes.description": "Default UTF-8 byte window for work-list search excerpts. The command flag can override it.",
   "concept.setting.retrieval.scopeExcerptBytes": "Sets the default amount of advisory scope shown by work-list search while preserving an explicit per-call override.",
@@ -389,6 +401,19 @@ Object.assign(ZH_CN, {
   "vocabulary.roles": "角色", "vocabulary.hosts": "宿主", "vocabulary.conferenceTypes": "会议类型", "vocabulary.executionForms": "执行形式", "vocabulary.efforts": "推理强度", "vocabulary.applicableHosts": "适用宿主", "vocabulary.sourceEvidence": "官方证据",
   "vocabulary.term.roles.orchestrator.description": "协调受约束的工作流决策", "vocabulary.term.roles.planner.description": "将意图转为可执行计划", "vocabulary.term.roles.implementer.description": "修改范围内的实现", "vocabulary.term.roles.reviewer.description": "检查证据并报告差异", "vocabulary.term.roles.gatekeeper.description": "执行命名的质量或权限门", "vocabulary.term.roles.steward.description": "维护受治理工作区的健康",
   "vocabulary.term.conferenceTypes.strategy.description": "确定方向与预期成果", "vocabulary.term.conferenceTypes.architecture.description": "审视结构与技术选择", "vocabulary.term.conferenceTypes.risk.description": "揭示威胁、缓解措施与暴露面", "vocabulary.term.conferenceTypes.verification.description": "检验主张或交付是否可靠", "vocabulary.term.conferenceTypes.release.description": "协调发布或出版决策", "vocabulary.term.conferenceTypes.incident.description": "响应正在发生的故障或差异", "vocabulary.term.conferenceTypes.retrospective.description": "记录执行周期后的经验", "vocabulary.term.executionForms.independent.description": "立场在相互独立的上下文中形成", "vocabulary.term.executionForms.single-context.description": "立场在同一共享上下文中形成",
+});
+
+Object.assign(ZH_CN, {
+  "nav.articles": "知识文章", "page.articles": "知识文章", "articles.lede": "将 Markdown 文章写入配置的仓库目录，并保留受治理的索引回执。", "articles.title": "新建文章", "articles.note": "文件保存全文；知识库存储可搜索的索引。", "articles.titleLabel": "标题", "articles.categoryLabel": "分类", "articles.bodyLabel": "Markdown 正文", "articles.submit": "创建文章", "setting.knowledge.articlesPath.label": "文章目录", "setting.knowledge.articlesPath.description": "Markdown 知识文章的工作区相对目录。经过规范化且位于控制树之外的绝对路径也可用。", "concept.setting.knowledge.articlesPath": "相对文章路径从工作区根解析；门户把同一个相对路径交给 CLI，确保两边写入同一目录。",
+});
+Object.assign(JA, {
+  "nav.articles": "記事", "page.articles": "ナレッジ記事", "articles.lede": "Markdown 記事を設定済みのリポジトリディレクトリに書き、統治対象の索引レシートを残します。", "articles.title": "新しい記事", "articles.note": "ファイルが全文を持ち、ナレッジストアは検索用索引だけを持ちます。", "articles.titleLabel": "タイトル", "articles.categoryLabel": "カテゴリ", "articles.bodyLabel": "Markdown 本文", "articles.submit": "記事を作成", "setting.knowledge.articlesPath.label": "記事ディレクトリ", "setting.knowledge.articlesPath.description": "Markdown ナレッジ記事のワークスペース相対ディレクトリ。正規化され、制御ツリー外にある絶対パスも使えます。", "concept.setting.knowledge.articlesPath": "相対パスはワークスペースルートから解決し、ポータルは同じ相対パスを CLI に渡して同じ場所に書き込みます。",
+});
+Object.assign(KO, {
+  "nav.articles": "지식 문서", "page.articles": "지식 문서", "articles.lede": "Markdown 문서를 구성된 저장소 디렉터리에 기록하고 거버넌스 인덱스 영수증을 남깁니다.", "articles.title": "새 문서", "articles.note": "파일에는 전체 텍스트가 있고 지식 저장소에는 검색 가능한 인덱스만 있습니다.", "articles.titleLabel": "제목", "articles.categoryLabel": "범주", "articles.bodyLabel": "Markdown 본문", "articles.submit": "문서 만들기", "setting.knowledge.articlesPath.label": "문서 디렉터리", "setting.knowledge.articlesPath.description": "Markdown 지식 문서를 위한 워크스페이스 상대 디렉터리입니다. 정규화되고 제어 트리 밖에 있는 절대 경로도 허용됩니다.", "concept.setting.knowledge.articlesPath": "상대 문서 경로는 워크스페이스 루트에서 해석되며 포털은 같은 상대 경로를 CLI에 전달해 같은 위치에 씁니다.",
+});
+Object.assign(FR, {
+  "nav.articles": "Connaissances", "page.articles": "Articles de connaissance", "articles.lede": "Écrivez un article Markdown dans le répertoire de dépôt configuré et conservez le reçu d’index gouverné.", "articles.title": "Nouvel article", "articles.note": "Le fichier contient le texte intégral ; le store de connaissances ne contient que son index consultable.", "articles.titleLabel": "Titre", "articles.categoryLabel": "Catégorie", "articles.bodyLabel": "Corps Markdown", "articles.submit": "Créer l’article", "setting.knowledge.articlesPath.label": "Répertoire des articles", "setting.knowledge.articlesPath.description": "Répertoire relatif à l’espace de travail pour les articles Markdown. Un chemin absolu normalisé hors de l’arbre de contrôle est aussi accepté.", "concept.setting.knowledge.articlesPath": "Les chemins relatifs sont résolus depuis la racine de l’espace ; le portail transmet le même chemin relatif à la CLI pour écrire au même endroit.",
 });
 
 window.PORTAL_LOCALES = {

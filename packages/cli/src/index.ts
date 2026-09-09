@@ -17,6 +17,7 @@ import {
   distillConferenceKnowledge,
   listConferencesByWorkItem,
   createGateInWorkspace,
+  createKnowledgeArticle,
   transitionGateInWorkspace,
   readGateIdentityAuthority,
   deleteGateInWorkspace,
@@ -57,6 +58,7 @@ import {
   readKnowledgeSnippet,
   rebaseKnowledgeStore,
   retireKnowledgeUnit,
+  refreshKnowledgeArticle,
   reverifyKnowledgeUnit,
   recoverWorkspace,
   createSnapshotManifest,
@@ -927,6 +929,8 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "gate-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "minutes-locator", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "identity-authority", required: false, valueKind: "string" }, { name: "identity-authority-digest", required: false, valueKind: "string" }] },
   { name: "init", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "framework", required: true, valueKind: "string" }, { name: "transient", required: true, valueKind: "string" }, { name: "evidence-locator", required: true, valueKind: "string" }, { name: "release-trust", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "segment-events", required: false, valueKind: "integer" }] },
   { name: "install-manifest", availability: "cli", mutates: false, flags: [] },
+  { name: "knowledge-article-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "path", required: true, valueKind: "string" }, { name: "category", required: true, valueKind: "string" }, { name: "title", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "content", required: true, valueKind: "string" }, { name: "accountable-owner-id", required: true, valueKind: "string" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "language-bundle", required: false, valueKind: "string" }] },
+  { name: "knowledge-article-refresh", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "expected-revision", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "path", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "language-bundle", required: false, valueKind: "string" }] },
   { name: "knowledge-batch", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "from-file", required: true, valueKind: "string" }, { name: "align-first", required: false, valueKind: "boolean" }, { name: "language-bundle", required: false, valueKind: "string" }] },
   { name: "knowledge-bodies-migrate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "segment-bytes", required: false, valueKind: "integer" }] },
   { name: "knowledge-body", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "allow-unpromoted", required: false, valueKind: "boolean" }, { name: "allow-stale", required: false, valueKind: "boolean" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
@@ -1708,6 +1712,39 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     io.write(canonicalJson(await validateKnowledgeStore(values.workspace ?? "")));
     return;
   }
+  if (command === "knowledge-article-create") {
+    const names = ["workspace", "expected-version", "at", "path", "category", "title", "summary", "content", "accountable-owner-id", "evidence-ids", "language-bundle"];
+    const values = parseArguments(rest, names);
+    required(values, names.filter((name) => name !== "language-bundle"));
+    const categories = ["architecture", "domain", "implementation", "standards", "testing", "workflow", "decision", "evidence"];
+    if (!categories.includes(values.category ?? "")) fail("CLI_ARGUMENT_MALFORMED", `category=${values.category ?? ""}`);
+    io.write(canonicalJson(await createKnowledgeArticle(values.workspace ?? "", {
+      expectedVersion: expectedVersion(values),
+      occurredAt: values.at ?? "",
+      path: values.path ?? "",
+      category: values.category as KnowledgeCategory,
+      title: values.title ?? "",
+      summary: values.summary ?? "",
+      content: values.content ?? "",
+      accountableOwnerId: values["accountable-owner-id"] ?? "",
+      linkedEvidenceIds: listValue(values["evidence-ids"]),
+    }, languageOptions(values["language-bundle"]))));
+    return;
+  }
+  if (command === "knowledge-article-refresh") {
+    const names = ["workspace", "expected-version", "expected-revision", "at", "id", "path", "summary", "language-bundle"];
+    const values = parseArguments(rest, names);
+    required(values, names.filter((name) => name !== "language-bundle"));
+    io.write(canonicalJson(await refreshKnowledgeArticle(values.workspace ?? "", {
+      expectedVersion: expectedVersion(values),
+      expectedRevision: integerValue(values, "expected-revision"),
+      occurredAt: values.at ?? "",
+      id: values.id ?? "",
+      path: values.path ?? "",
+      summary: values.summary ?? "",
+    }, languageOptions(values["language-bundle"]))));
+    return;
+  }
   if (command === "knowledge-source-check") {
     const values = parseArguments(rest, ["workspace", "allow-trailing"]);
     required(values, ["workspace"]);
@@ -2003,6 +2040,10 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       const answer = await listKnowledgeMetadata(workspace, {
         at: values.at ?? "",
         allowTrailing: booleanValue(values["allow-trailing"], "allow-trailing"),
+        // Recall is an explicit search surface, so it admits explicit-only article
+        // index cards while the context/default selection remains unchanged. The
+        // complete corpus is read before FTS scoring so BM25 keeps its baseline.
+        includeExplicitOnly: true,
         limit: 1_048_576,
       });
       knowledgeReasonCode = String(answer["reasonCode"] ?? "");
