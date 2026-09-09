@@ -1,6 +1,8 @@
 {
   "normativeInputs": [
     "extensions/aos-requirements-v1.json",
+    "fixtures/injection-l0-real-records.json",
+    "fixtures/injection-placement-manifest.json",
     "fixtures/isolated-proof/README.md",
     "fixtures/observer/ci-target-roster.json",
     "fixtures/protocol/v1/negative/cases.json",

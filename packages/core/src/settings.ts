@@ -40,6 +40,7 @@ export type SettingKey =
   | "execution.personalessDispatch"
   | "execution.subagentPolicy"
   | "injection.budgetBytes"
+  | "injection.perPromptBytes"
   | "knowledge.aggregateBytes"
   | "knowledge.articlesPath"
   | "model.economyTier"
@@ -315,9 +316,18 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     type: "string",
     controlType: "number",
     layerKind: SETTINGS_LAYER_KIND,
-    defaultValue: "32768",
+    defaultValue: "24576",
     min: 1,
     max: 1_048_576,
+  },
+  {
+    key: "injection.perPromptBytes",
+    type: "string",
+    controlType: "number",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "1600",
+    min: 1,
+    max: 1600,
   },
   {
     key: "knowledge.aggregateBytes",

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "tcrn.injection-placement-manifest.v1",
+  "events": {
+    "claude": [
+      "SessionStart",
+      "UserPromptSubmit",
+      "PostCompact",
+      "PostToolUse"
+    ],
+    "codex": [
+      "SessionStart",
+      "UserPromptSubmit",
+      "PostCompact",
+      "PostToolUse"
+    ]
+  },
+  "commands": {
+    "claude": "node \"${CLAUDE_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs\"",
+    "codex": "node \"${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs\""
+  },
+  "modelMapping": {
+    "setting": "model.economyTier",
+    "translator": "independent-uninjected-call-before-recall",
+    "judge": "independent-uninjected-call-after-recall",
+    "maxCallsPerPrompt": 1,
+    "timeoutMs": 10000
+  },
+  "runtimeState": {
+    "path": "~/.tcrn-injection/state.json",
+    "lock": "~/.tcrn-injection/state.lock",
+    "persisted": [
+      "emittedIds",
+      "byteAccounting",
+      "promptDecisions",
+      "pullCorrelations",
+      "judgments"
+    ],
+    "excludes": [
+      "hookPayloads",
+      "transcripts",
+      "modelPrompts"
+    ]
+  },
+  "placementOwner": "STORY-371",
+  "installer": null
+}

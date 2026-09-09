@@ -442,6 +442,29 @@
         "INC-220 the guard leaves ordinary edits and reads alone"
       ]
     },
+    "tests/injection-session.test.mjs": {
+      "testCount": 17,
+      "assertionCount": 73,
+      "testNames": [
+        "the real record fixture renders GWT4 six lines and sequence ordering",
+        "status ordering ignores annotation events, prefers active, and uses ascending ids on ties",
+        "inactive parents consume a line without reducing the active/ready omitted count",
+        "a sixty-prompt session stays under the cumulative budget and records every decision",
+        "a repeated card is explicitly skipped, while another session and a restart retain their own state",
+        "acquireAsync waits out a held lock, times out on an unreleased one, and reclaims a stale one",
+        "thirty judge observations are binary telemetry and cannot change injected bytes",
+        "R6 invokes its independent translator before the recall call",
+        "R6 records a translator failure on the last session decision instead of dropping it",
+        "PostCompact re-emits retained L0 and pull correlation ignores failures, unrelated ids, and replay",
+        "the placement manifest is fixture-shaped and the two model wrappers are independent",
+        "codex stdin opens with the system prompt while claude stdin stays the bare prompt",
+        "a hook payload past 512000 bytes drops tool_response and is marked truncated",
+        "an isolated wrapper ignores a forged project hook while a deliberately de-isolated control sees it",
+        "an uninjected model call fails open at ten seconds and asks only once",
+        "a real child process inherits the isolated cwd and its stdout becomes the translation",
+        "a real child that outlives the timeout is killed and leaves its process group empty"
+      ]
+    },
     "tests/inc074-storage-home.test.mjs": {
       "testCount": 5,
       "assertionCount": 15,

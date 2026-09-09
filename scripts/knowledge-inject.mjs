@@ -38,6 +38,20 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  DEFAULT_PER_PROMPT_BYTES,
+  DEFAULT_SESSION_BUDGET,
+  InjectionSessionStore,
+  UninjectedModelCall,
+  buildBoundedCandidateContext,
+  buildL0Injection,
+  deduplicateCandidates,
+  pullCorrelation,
+  temporaryEmptyDirectory,
+  removeTemporaryDirectory,
+  promptDigest,
+  recordIdentity,
+} from "./injection-session.mjs";
 
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 export const PLATFORM_ROOT = resolve(SCRIPT_DIRECTORY, "../../..");
@@ -100,7 +114,8 @@ export function callChainRead(verb, { partition, ...flags }, { timeoutMs = 120_0
 }
 export const SETTINGS_PATH = resolve(PLATFORM_ROOT, ".claude/settings.json");
 export const DEFAULT_PARTITION = "cross-project";
-export const DEFAULT_BUDGET = 32768;
+export const DEFAULT_BUDGET = DEFAULT_SESSION_BUDGET;
+export const DEFAULT_PER_PROMPT = DEFAULT_PER_PROMPT_BYTES;
 // TCRN-CROSS-STORY-362: how many recalled records one prompt may carry. The recall verb
 // caps its own answer; this is the hook's ceiling, and the byte budget below is what
 // actually decides how much of it is spoken.
@@ -165,6 +180,49 @@ async function configuredInjectionBudget(partition, containerRoot = PLATFORM_ROO
   return /^(?:0|[1-9][0-9]*)$/u.test(String(value ?? "")) ? Number(value) : DEFAULT_BUDGET;
 }
 
+async function configuredSetting(partition, key, containerRoot = PLATFORM_ROOT) {
+  const call = await callChainRead("settings-catalog", { partition }, { containerRoot });
+  if (!call.ok) return null;
+  const payload = call.result?.result ?? call.result;
+  const setting = payload?.settings?.find((entry) => entry.key === key);
+  return setting?.currentValue ?? setting?.defaultValue ?? null;
+}
+
+async function configuredSettingRecords(partition, containerRoot = PLATFORM_ROOT) {
+  const call = await callChainRead("settings-catalog", { partition }, { containerRoot });
+  if (!call.ok) return [];
+  const payload = call.result?.result ?? call.result;
+  return Array.isArray(payload?.settings) ? payload.settings : [];
+}
+
+async function configuredPerPromptBytes(partition, containerRoot = PLATFORM_ROOT) {
+  const value = await configuredSetting(partition, "injection.perPromptBytes", containerRoot);
+  return /^(?:0|[1-9][0-9]*)$/u.test(String(value ?? "")) && Number(value) > 0 ? Number(value) : DEFAULT_PER_PROMPT;
+}
+
+let coreLanguageModule;
+async function languageModule() {
+  if (coreLanguageModule !== undefined) return coreLanguageModule;
+  try {
+    coreLanguageModule = await import(resolve(SCRIPT_DIRECTORY, "../dist/build/packages/core/src/index.js"));
+  } catch {
+    coreLanguageModule = null;
+  }
+  return coreLanguageModule;
+}
+
+async function queryLanguageAnswer(prompt, settings) {
+  const core = await languageModule();
+  if (core?.readKnowledgeLanguagePolicy && core?.resolveQueryLanguage) {
+    const policy = core.readKnowledgeLanguagePolicy((settings ?? []).map((entry) => ({
+      key: entry.key,
+      value: entry.currentValue ?? entry.value ?? "",
+    })));
+    return core.resolveQueryLanguage(prompt, policy);
+  }
+  return { queryLanguage: null, queryTranslation: null, telemetry: { queryTranslations: 0 } };
+}
+
 /** Byte-level budget cut, pure: `{ text, truncated }`. A CJK character can exceed the cut. */
 export function truncateToBudget(text, budget) {
   const bytes = Buffer.byteLength(text, "utf8");
@@ -203,8 +261,18 @@ function recallTranslationCount(payload) {
   const counted = payload?.telemetry?.queryTranslations;
   return Number.isSafeInteger(counted) ? counted : 0;
 }
-/** The injection chain: prompt -> recall -> budget report -> metadata-level output. */
-export async function runInjection({ prompt, partition, budget, triggerKeywords, limit, containerRoot = PLATFORM_ROOT, translate = null }) {
+/** The injection chain: prompt -> optional translation -> recall -> metadata-level output. */
+export async function runInjection({
+  prompt,
+  partition,
+  budget,
+  triggerKeywords,
+  limit,
+  containerRoot = PLATFORM_ROOT,
+  translate = null,
+  settings = null,
+  recall = null,
+} = {}) {
   void triggerKeywords;
   const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : await configuredInjectionBudget(partition, containerRoot);
   // The emptiness gate, not the query: a prompt with no meaningful token buys nothing
@@ -221,26 +289,49 @@ export async function runInjection({ prompt, partition, budget, triggerKeywords,
     "allow-trailing": true,
     at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
   }, { containerRoot, withPartitionFlag: true });
-  const call = await askRecall(String(prompt ?? ""));
+  const originalPrompt = String(prompt ?? "");
+  let query = originalPrompt;
+  let translatedQuery = null;
+  let owed = null;
+  let queryTranslations = 0;
+  let translationFailure = null;
+  // R6: use the engine's language policy before recall. The old post-recall path remains
+  // as a fail-open compatibility branch for callers that do not have a settings catalog.
+  if (typeof translate === "function") {
+    const catalogSettings = settings ?? await configuredSettingRecords(partition, containerRoot);
+    const languageAnswer = await queryLanguageAnswer(originalPrompt, catalogSettings);
+    owed = languageAnswer.queryTranslation ?? null;
+    if (owed !== null) {
+      const answer = await translate(originalPrompt, owed);
+      const text = typeof answer === "string" ? answer : answer?.text;
+      if (typeof text === "string" && text.length > 0 && text !== originalPrompt) {
+        query = text;
+        translatedQuery = text;
+        queryTranslations = 1;
+      } else if (answer?.reasonCode) {
+        translationFailure = { reasonCode: answer.reasonCode, model: answer.model ?? null, at: new Date().toISOString() };
+      }
+    }
+  }
+  const call = typeof recall === "function" ? await recall(query, { limit: recallLimit }) : await askRecall(query);
   if (!call.ok) {
     return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
   }
   let payload = recallPayload(call);
-  let queryTranslations = recallTranslationCount(payload);
-  const owed = payload.queryTranslation ?? null;
-  let translatedQuery = null;
+  if (owed === null) owed = payload.queryTranslation ?? null;
+  if (translatedQuery === null) queryTranslations = recallTranslationCount(payload);
   // Fail-open, and deliberately asymmetric with the write path: a session with no answer
   // is worse than an answer ranked in the wrong language. No translator, a bundle without
   // this prompt, or a second recall that errors -- each keeps the first answer and says so.
-  if (owed !== null && typeof translate === "function") {
-    const answer = await translate(String(prompt ?? ""), owed);
+  if (translatedQuery === null && owed !== null && typeof translate === "function") {
+    const answer = await translate(originalPrompt, owed);
     const text = typeof answer === "string" ? answer : answer?.text;
     if (typeof text === "string" && text.length > 0) {
-      const second = await askRecall(text);
+      const second = typeof recall === "function" ? await recall(text, { limit: recallLimit }) : await askRecall(text);
       if (second.ok) {
         translatedQuery = text;
         payload = recallPayload(second);
-        queryTranslations += recallTranslationCount(payload);
+        queryTranslations = Math.max(queryTranslations, 1) + recallTranslationCount(payload);
       }
     }
   }
@@ -263,6 +354,7 @@ export async function runInjection({ prompt, partition, budget, triggerKeywords,
     ...(budgetExceeded ? { reasonCode: "INJECTION_BUDGET_EXCEEDED", warning: { reasonCode: "INJECTION_BUDGET_EXCEEDED", actualBytes: injectedBytes, budget: effectiveBudget } } : {}),
     queryTokens: tokens,
     candidateCount: candidates.length,
+    candidates,
     injectedBytes,
     truncated: false,
     budgetExceeded,
@@ -270,9 +362,204 @@ export async function runInjection({ prompt, partition, budget, triggerKeywords,
     queryLanguage: payload.queryLanguage ?? null,
     queryTranslation: owed,
     translatedQuery,
-    telemetry: { queryTranslations },
+    telemetry: { queryTranslations, ...(translationFailure === null ? {} : { translationFailure }) },
     injection: joined.length === 0 ? null : joined
   };
+}
+
+async function workspaceStateForInjection(partition, containerRoot) {
+  const core = await languageModule();
+  if (core?.validateWorkspace) {
+    try { return await core.validateWorkspace(workspaceForPartition(partition, containerRoot)); } catch { /* fail-open hook */ }
+  }
+  return null;
+}
+
+function settingValue(settings, key) {
+  const entry = (settings ?? []).find((candidate) => candidate.key === key);
+  return entry?.currentValue ?? entry?.value ?? entry?.defaultValue ?? null;
+}
+
+async function productionModelCalls({ host, model, translate, judgeEnabled, judge }) {
+  const needsTranslator = translate === null;
+  const needsObserver = judge === null && judgeEnabled;
+  if ((!needsTranslator && !needsObserver) || typeof model !== "string" || model.length === 0) {
+    return { translate, judge, cleanup: () => {} };
+  }
+  const cwd = temporaryEmptyDirectory();
+  const translator = needsTranslator
+    ? new UninjectedModelCall({
+      host,
+      model,
+      cwd,
+      systemPrompt: "Translate the user's prompt into the recorded knowledge language. Return only the translated prompt.",
+    })
+    : null;
+  const observer = needsObserver
+    ? new UninjectedModelCall({
+      host,
+      model,
+      cwd,
+      systemPrompt: "Judge whether the candidate rows are relevant to the prompt. Return only true or false.",
+    })
+    : null;
+  return {
+    translate: translate ?? (async (text) => translator?.translatePrompt(text)),
+    judge: judge ?? (observer === null ? null : async (text, candidates) => observer.observeCandidates(text, candidates.map((candidate) => String(candidate.injection ?? candidate.title ?? candidate.id ?? "")))),
+    cleanup: () => removeTemporaryDirectory(cwd),
+  };
+}
+
+/**
+ * The production hook path.  Standalone runInjection intentionally retains its historic
+ * reporting-only budget; only this path reads and commits the session ledger.
+ */
+export async function runSessionInjection({
+  prompt = "",
+  partition = DEFAULT_PARTITION,
+  event = "UserPromptSubmit",
+  sessionId = "anonymous",
+  hookInput = {},
+  containerRoot = PLATFORM_ROOT,
+  stateDirectory,
+  budget,
+  perPromptBytes,
+  limit,
+  settings = null,
+  workspaceState = null,
+  translate = null,
+  judge = null,
+  judgeEnabled = true,
+  host = process.env.TCRN_HOST ?? "claude",
+  recall = null,
+} = {}) {
+  const store = new InjectionSessionStore({ directory: stateDirectory });
+  const lease = await store.acquireAsync(sessionId);
+  let calls = { translate, judge, cleanup: () => {} };
+  const started = Date.now();
+  const parts = [];
+  const emittedIds = [];
+  let l0 = null;
+  let recallResult = { ok: true, injected: false, candidates: [], injectedBytes: 0 };
+  let decisionReason = "NO_CONTEXT";
+  try {
+    const effectiveSettings = settings ?? await configuredSettingRecords(partition, containerRoot);
+    calls = await productionModelCalls({
+      host,
+      model: settingValue(effectiveSettings, "model.economyTier"),
+      translate,
+      judgeEnabled,
+      judge,
+    });
+    const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : await configuredInjectionBudget(partition, containerRoot);
+    const effectivePerPrompt = Number.isSafeInteger(perPromptBytes) && perPromptBytes > 0 ? perPromptBytes : await configuredPerPromptBytes(partition, containerRoot);
+    const shouldReadL0 = event === "SessionStart" || event === "PostCompact" || event === "UserPromptSubmit";
+    if (shouldReadL0) {
+      const state = workspaceState ?? await workspaceStateForInjection(partition, containerRoot);
+      if (state !== null) {
+        l0 = buildL0Injection(state);
+        const changed = l0.text !== lease.session.lastL0;
+        if (event === "SessionStart" || event === "PostCompact" || changed) {
+          if (l0.text.length > 0) parts.push(l0.text);
+          emittedIds.push(...l0.ids);
+          lease.session.lastL0 = l0.text;
+          lease.session.lastL0Ids = l0.ids;
+          decisionReason = event === "PostCompact" ? "POST_COMPACT_L0" : changed ? "L0_CHANGED" : "SESSION_START_L0";
+        }
+      }
+    }
+
+    if (event === "PostToolUse") {
+      const correlation = pullCorrelation(hookInput, lease.session.emittedIds, lease.session.pulledIds);
+      if (correlation !== null) {
+        lease.session.pulledIds.push(correlation.id);
+        lease.session.pullCorrelations.push({ ...correlation, at: new Date().toISOString() });
+        decisionReason = "PULL_RECORDED";
+      } else {
+        decisionReason = "PULL_IGNORED";
+      }
+    } else if (event === "UserPromptSubmit") {
+      if (lease.session.l1Bytes >= effectiveBudget) {
+        decisionReason = parts.length > 0 ? "BUDGET_SATURATED_L0_ONLY" : "BUDGET_SATURATED";
+      } else {
+        recallResult = await runInjection({
+          prompt,
+          partition,
+          budget: effectiveBudget,
+          limit,
+          containerRoot,
+          settings: effectiveSettings,
+          translate: calls.translate,
+          recall,
+        });
+        const fresh = deduplicateCandidates(recallResult.candidates, lease.session.emittedIds);
+        const allowance = Math.min(effectivePerPrompt, effectiveBudget - lease.session.l1Bytes);
+        const candidateContext = buildBoundedCandidateContext(fresh, { maxBytes: allowance });
+        if (candidateContext.text.length > 0) {
+          parts.push(candidateContext.text);
+          emittedIds.push(...candidateContext.ids);
+          lease.session.l1Bytes += candidateContext.bytes;
+          decisionReason = "INJECTION_EMITTED";
+        } else if (recallResult.candidates.length > 0) {
+          decisionReason = "ALREADY_INJECTED_SKIPPED";
+        } else if (recallResult.ok !== true) {
+          decisionReason = recallResult.reasonCode ?? "RECALL_FAILED";
+        } else {
+          decisionReason = recallResult.reason ?? "NO_CANDIDATES";
+        }
+        if (judgeEnabled && calls.judge !== null) {
+          const judgement = await calls.judge(prompt, fresh, recallResult);
+          const judgment = typeof judgement === "boolean" ? judgement : judgement?.judgment;
+          lease.session.judgments.push({
+            prompt: promptDigest(prompt),
+            candidateIds: fresh.map(recordIdentity).filter(Boolean),
+            judgment: typeof judgment === "boolean" ? judgment : null,
+            model: judgement?.model ?? settingValue(effectiveSettings, "model.economyTier"),
+            at: new Date().toISOString(),
+          });
+        }
+        if (recallResult.telemetry?.queryTranslations > 0 || recallResult.translatedQuery !== null || recallResult.telemetry?.translationFailure) lease.session.translationAttempts += 1;
+      }
+    }
+
+    const injection = parts.join("\n");
+    const injectedBytes = Buffer.byteLength(injection, "utf8");
+    lease.session.emittedBytes += injectedBytes;
+    for (const id of emittedIds) if (!lease.session.emittedIds.includes(id)) lease.session.emittedIds.push(id);
+    lease.session.decisions.push({
+      prompt: promptDigest(prompt),
+      event,
+      reason: decisionReason,
+      ...(recallResult.telemetry?.translationFailure ? { translationFailure: recallResult.telemetry.translationFailure } : {}),
+      injectedIds: [...new Set(emittedIds)],
+      injectedBytes,
+      cumulativeBytes: lease.session.emittedBytes,
+      cumulativeL1Bytes: lease.session.l1Bytes,
+      at: new Date().toISOString(),
+      elapsedMs: Date.now() - started,
+    });
+    lease.commit();
+    return {
+      ...recallResult,
+      ok: recallResult.ok !== false,
+      injected: injection.length > 0,
+      injection: injection.length > 0 ? injection : null,
+      injectedBytes,
+      cumulativeBytes: lease.session.emittedBytes,
+      cumulativeL1Bytes: lease.session.l1Bytes,
+      decision: decisionReason,
+      l0,
+      sessionId,
+      telemetry: {
+        ...(recallResult.telemetry ?? {}),
+        judgments: lease.session.judgments.length,
+        translationAttempts: lease.session.translationAttempts,
+      },
+    };
+  } finally {
+    calls.cleanup();
+    lease.release();
+  }
 }
 
 /** STORY-162.5: execute the REGISTERED hook command string itself, not a stand-in. */
@@ -295,13 +582,24 @@ export function registeredHookCommands() {
 
 function parseArgv(argv) {
   const flags = parseFlags(argv);
+  let hookInput = {};
+  if (typeof flags["hook-input"] === "string") {
+    try { hookInput = JSON.parse(flags["hook-input"]); } catch { hookInput = {}; }
+  }
   return {
     prompt: typeof flags.prompt === "string" ? flags.prompt : "",
     partition: typeof flags.partition === "string" ? flags.partition : DEFAULT_PARTITION,
     limit: typeof flags.limit === "string" ? Number(flags.limit) : DEFAULT_RECALL_LIMIT,
     budget: typeof flags.budget === "string" ? Number(flags.budget) : (Number(process.env.TCRN_KNOWLEDGE_INJECTION_BUDGET) || undefined),
+    perPromptBytes: typeof flags["per-prompt-bytes"] === "string" ? Number(flags["per-prompt-bytes"]) : undefined,
     triggerKeywords: typeof flags["trigger-keywords"] === "string" ? flags["trigger-keywords"] : "",
     translate: bundleTranslator(typeof flags["translation-bundle"] === "string" ? flags["translation-bundle"] : ""),
+    sessionId: typeof flags["session-id"] === "string" ? flags["session-id"] : null,
+    event: typeof flags.event === "string" ? flags.event : "UserPromptSubmit",
+    stateDirectory: typeof flags["state-dir"] === "string" ? flags["state-dir"] : undefined,
+    hookInput,
+    judgeEnabled: flags["judge-enabled"] !== "false",
+    host: typeof flags.host === "string" ? flags.host : (process.env.TCRN_HOST ?? "claude"),
     selfTest: flags["self-test"] === true,
     verifyChannel: flags["verify-channel"] === true
   };
@@ -329,6 +627,8 @@ if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
     out(result);
     if (result.ok !== true || result.injected !== true || result.candidateCount === 0) process.exitCode = 1;
   } else {
-    out(await runInjection(options));
+    out(options.sessionId === null
+      ? await runInjection(options)
+      : await runSessionInjection(options));
   }
 }

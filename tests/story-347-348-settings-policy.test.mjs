@@ -46,13 +46,14 @@ async function cli(arguments_) {
 test("STORY-347 settings catalog exposes all six new keys and numeric bounds", async (context) => {
   const fx = await fixture(context, "CATALOG");
   const catalog = await cli(["settings-catalog", "--workspace", fx.workspace]);
-  const expected = ["storage.segmentBytes", "storage.snapshotEveryEvents", "storage.backend", "injection.budgetBytes", "retrieval.scopeExcerptBytes", "knowledge.aggregateBytes"];
+  const expected = ["storage.segmentBytes", "storage.snapshotEveryEvents", "storage.backend", "injection.budgetBytes", "injection.perPromptBytes", "retrieval.scopeExcerptBytes", "knowledge.aggregateBytes"];
   const entries = catalog.settings.filter((entry) => expected.includes(entry.key));
   assert.deepEqual(entries.map((entry) => entry.key).sort(), [...expected].sort());
   assert.equal(entries.find((entry) => entry.key === "storage.segmentBytes").defaultValue, "16777216");
   assert.equal(entries.find((entry) => entry.key === "storage.snapshotEveryEvents").defaultValue, "512");
   assert.equal(entries.find((entry) => entry.key === "storage.backend").defaultValue, "file-segmented");
-  assert.equal(entries.find((entry) => entry.key === "injection.budgetBytes").defaultValue, "32768");
+  assert.equal(entries.find((entry) => entry.key === "injection.budgetBytes").defaultValue, "24576");
+  assert.equal(entries.find((entry) => entry.key === "injection.perPromptBytes").defaultValue, "1600");
   assert.equal(entries.find((entry) => entry.key === "retrieval.scopeExcerptBytes").defaultValue, "512");
   assert.equal(entries.find((entry) => entry.key === "knowledge.aggregateBytes").defaultValue, "131072");
   assert.ok(entries.filter((entry) => entry.controlType === "number").every((entry) => entry.min !== undefined && entry.max !== undefined));

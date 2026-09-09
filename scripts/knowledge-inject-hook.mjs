@@ -22,45 +22,107 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 export const INJECT_SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "knowledge-inject.mjs");
 
+// This is a placement description, not an installer.  STORY-371 owns the helper archive,
+// approval, user-level write and receipt; keeping those acts out of this file means the
+// injection path can be fixture-validated without changing a user's persistent settings.
+export const InjectionPlacementManifest = Object.freeze({
+  schemaVersion: "tcrn.injection-placement-manifest.v1",
+  events: Object.freeze({
+    claude: Object.freeze(["SessionStart", "UserPromptSubmit", "PostCompact", "PostToolUse"]),
+    codex: Object.freeze(["SessionStart", "UserPromptSubmit", "PostCompact", "PostToolUse"]),
+  }),
+  commands: Object.freeze({
+    claude: 'node "${CLAUDE_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs"',
+    codex: 'node "${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs"',
+  }),
+  modelMapping: Object.freeze({
+    setting: "model.economyTier",
+    translator: "independent-uninjected-call-before-recall",
+    judge: "independent-uninjected-call-after-recall",
+    maxCallsPerPrompt: 1,
+    timeoutMs: 10_000,
+  }),
+  runtimeState: Object.freeze({
+    path: "~/.tcrn-injection/state.json",
+    lock: "~/.tcrn-injection/state.lock",
+    persisted: ["emittedIds", "byteAccounting", "promptDecisions", "pullCorrelations", "judgments"],
+    excludes: ["hookPayloads", "transcripts", "modelPrompts"],
+  }),
+  placementOwner: "STORY-371",
+  installer: null,
+});
+
+export function validateInjectionPlacementManifest(value) {
+  const manifest = value ?? {};
+  if (manifest.schemaVersion !== "tcrn.injection-placement-manifest.v1") return false;
+  for (const host of ["claude", "codex"]) {
+    if (!Array.isArray(manifest.events?.[host]) || JSON.stringify(manifest.events[host]) !== JSON.stringify(InjectionPlacementManifest.events[host])) return false;
+    if (typeof manifest.commands?.[host] !== "string" || !manifest.commands[host].includes("knowledge-inject-hook.mjs")) return false;
+  }
+  if (manifest.modelMapping?.setting !== "model.economyTier" || manifest.modelMapping?.maxCallsPerPrompt !== 1 || manifest.modelMapping?.timeoutMs !== 10_000) return false;
+  if (manifest.runtimeState?.path?.includes(".tcrn-workflow") || manifest.runtimeState?.path?.includes(".tcrn-workspace")) return false;
+  return manifest.placementOwner === "STORY-371" && manifest.installer === null;
+}
+
 function readStdin() {
   try { return JSON.parse(readFileSync(0, "utf8")); } catch { return {}; }
 }
 
-function runInject(prompt) {
-  const result = spawnSync(process.execPath, [INJECT_SCRIPT, "--prompt", prompt], {
-    encoding: "utf8", timeout: 25_000
+// PostToolUse can carry a `tool_response` large enough to push the whole hook payload
+// past the platform's ARG_MAX: spawnSync then fails outright and runInject() silently
+// degrades to INJECT_OUTPUT_UNPARSEABLE, with nothing in the result naming the cause.
+// Past this many bytes, the response fields are dropped and the payload is marked
+// truncated instead, so the child process still starts and the degradation is visible.
+export const MAX_HOOK_INPUT_BYTES = 512_000;
+
+export function boundedHookInput(input) {
+  const source = input ?? {};
+  const raw = JSON.stringify(source);
+  if (Buffer.byteLength(raw, "utf8") <= MAX_HOOK_INPUT_BYTES) return raw;
+  const { tool_response, toolResponse, ...rest } = source;
+  return JSON.stringify({ ...rest, tcrnPayloadTruncated: true });
+}
+
+export function runInject(input, { stateDirectory, host } = {}) {
+  const event = input?.hook_event_name ?? "";
+  const prompt = typeof input?.prompt === "string" ? input.prompt : "";
+  const sessionId = input?.session_id ?? input?.sessionId ?? "anonymous";
+  const partition = input?.partition ?? process.env.TCRN_INJECTION_PARTITION ?? "cross-project";
+  const argv = [
+    INJECT_SCRIPT,
+    "--prompt", prompt,
+    "--partition", partition,
+    "--event", event,
+    "--session-id", String(sessionId),
+    "--hook-input", boundedHookInput(input),
+  ];
+  if (stateDirectory) argv.push("--state-dir", stateDirectory);
+  const result = spawnSync(process.execPath, argv, {
+    encoding: "utf8",
+    timeout: 25_000,
+    env: { ...process.env, ...(host ? { TCRN_HOST: host } : {}) },
   });
-  try { return JSON.parse(result.stdout); } catch { return { ok: false, reasonCode: "INJECT_OUTPUT_UNPARSEABLE" }; }
+  const lines = `${result.stdout ?? ""}`.trim().split("\n").filter(Boolean);
+  try { return JSON.parse(lines[lines.length - 1] ?? ""); } catch { return { ok: false, reasonCode: "INJECT_OUTPUT_UNPARSEABLE" }; }
 }
 
 export function buildHookResponse(input) {
   const event = input.hook_event_name ?? "";
-  const prompt = typeof input.prompt === "string" ? input.prompt : "";
   // The host contract requires additionalContext to be a STRING (a JSON array is
   // schema-invalid and the whole hook output is dropped — verified against the Claude
   // Code hooks documentation, INC-044). Empty string when nothing matches.
   const chunks = [];
 
-  const inject = (p) => {
-    const result = runInject(p);
+  const inject = () => {
+    const result = runInject(input);
     if (result.ok === true && result.injected === true && typeof result.injection === "string" && result.injection.length > 0) {
-      chunks.push(`[平台知识注入 · ${result.candidateCount} 条 · 来源 cross-project 知识面]${result.injection}`);
+      const count = result.candidateCount ?? result.l0?.lines?.length ?? 0;
+      chunks.push(`[平台知识注入 · ${count} 条 · 来源 cross-project 知识面]\n${result.injection}`);
     }
     return result;
   };
 
-  if (event === "SessionStart") {
-    // Baseline, once per session: query with a single broad term (the "lesson" tag is on
-    // every curated card), no trigger gate, budget-capped. TCRN-CROSS-STORY-362 replaced
-    // the AND-token substring scan behind this with bm25 recall, so a multi-term query no
-    // longer pulls to zero; the single broad term stays because a session with no prompt
-    // yet has nothing more specific to ask, and recall's own floor decides what it returns.
-    inject("lesson", "");
-  } else if (event === "UserPromptSubmit") {
-    const result = inject(prompt);
-    // A prompt with no query tokens still gets the baseline (metadata-only, budgeted).
-    if (result.injected === false && result.reason === "NO_QUERY_TOKENS") inject("lesson", "");
-  }
+  if (["SessionStart", "UserPromptSubmit", "PostCompact", "PostToolUse"].includes(event)) inject();
 
   return { hookSpecificOutput: { hookEventName: event, additionalContext: chunks.join("\n") } };
 }

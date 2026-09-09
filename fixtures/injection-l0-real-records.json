@@ -1,0 +1,503 @@
+{
+  "schemaVersion": "tcrn.injection-l0-fixture.v1",
+  "source": {
+    "workspaceVersion": 5325,
+    "headEventHash": "7cc3bd00c462434703f1ca163245ca60a565d68f56f317d6da1bdc954d8747d1",
+    "recordCount": 855,
+    "activeReadyCount": 15,
+    "latestMinutesSequence": 5324,
+    "latestMinutesId": "minutes:246640ee9b9ce0d34a555564"
+  },
+  "records": [
+    {
+      "id": "work:6a7502e28310c113da1dc6d6",
+      "externalKey": "TCRN-CROSS-INIT-044",
+      "kind": "Initiative",
+      "status": "active",
+      "parentId": null,
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:e95a729d85353a33e3722299",
+      "externalKey": "TCRN-CROSS-INIT-051",
+      "kind": "Initiative",
+      "status": "active",
+      "parentId": null,
+      "title": "自进化工作流：MVP 收敛与重建",
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:fd715245c8f74b698dad8008",
+      "externalKey": "TCRN-CROSS-EPIC-104",
+      "kind": "Epic",
+      "status": "active",
+      "parentId": "work:6a7502e28310c113da1dc6d6",
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:44f130be21f9bfb8139eff79",
+      "externalKey": "TCRN-CROSS-STORY-320",
+      "kind": "Story",
+      "status": "active",
+      "parentId": "work:935a89424c4439f0963ad431",
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:0adc6cb8b582804c34f584b5",
+      "externalKey": "TCRN-CROSS-INC-240",
+      "kind": "Incident",
+      "status": "active",
+      "parentId": null,
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:1e7217cde4cd9b405f698f55",
+      "externalKey": "TCRN-CROSS-INC-225",
+      "kind": "Incident",
+      "status": "active",
+      "parentId": null,
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:45a0b0c4301f4340a04b3851",
+      "externalKey": "TCRN-CROSS-INC-234",
+      "kind": "Incident",
+      "status": "active",
+      "parentId": null,
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:93cc6acf63cf52722d57c29c",
+      "externalKey": "TCRN-CROSS-INC-245",
+      "kind": "Incident",
+      "status": "active",
+      "parentId": "work:1e9f260a063af644e697260e",
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:9ddafbf4b53e3d76a0ddd7b7",
+      "externalKey": "TCRN-CROSS-INC-239",
+      "kind": "Incident",
+      "status": "active",
+      "parentId": null,
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:cd452eba2d85c53e56e71d30",
+      "externalKey": "TCRN-CROSS-INC-242",
+      "kind": "Incident",
+      "status": "active",
+      "parentId": "work:1e9f260a063af644e697260e",
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:7d090af693075fde656f9788",
+      "externalKey": "TCRN-CROSS-INIT-039",
+      "kind": "Initiative",
+      "status": "ready",
+      "parentId": null,
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:49e00023764f6a5babda4025",
+      "externalKey": "TCRN-CROSS-EPIC-097",
+      "kind": "Epic",
+      "status": "ready",
+      "parentId": "work:7d090af693075fde656f9788",
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:13c045517122778de6d65764",
+      "externalKey": "TCRN-CROSS-STORY-304",
+      "kind": "Story",
+      "status": "ready",
+      "parentId": "work:fd715245c8f74b698dad8008",
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:4c6faf20aa99be9e251fe5ce",
+      "externalKey": "TCRN-CROSS-STORY-289",
+      "kind": "Story",
+      "status": "ready",
+      "parentId": "work:49e00023764f6a5babda4025",
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    },
+    {
+      "id": "work:705441ed506908664bb54162",
+      "externalKey": "TCRN-CROSS-STORY-305",
+      "kind": "Story",
+      "status": "ready",
+      "parentId": "work:fd715245c8f74b698dad8008",
+      "title": null,
+      "summary": null,
+      "tombstone": false
+    }
+  ],
+  "conferences": [
+    {
+      "id": "conference:4c1a9d1111c1b6bc33dc7f3e",
+      "title": "线程阻塞清单处置（MIN-193 D3 首次）"
+    }
+  ],
+  "conferenceMinutes": [
+    {
+      "id": "minutes:246640ee9b9ce0d34a555564",
+      "conferenceId": "conference:4c1a9d1111c1b6bc33dc7f3e",
+      "summary": "367 阻塞处置：L0 六行判据不变，R1 加筛选规则（最近纪要、当前单、其父链、按最近状态变更事件序号补足、溢出汇总行）并补 GWT4。",
+      "tombstone": false
+    }
+  ],
+  "events": [
+    {
+      "sequence": 4158,
+      "eventHash": "67b3b94313c9686573d2bf53c6dff82a8b2104a8f3d0907e179bff227c44c684",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:7d090af693075fde656f9788",
+          "externalKey": "TCRN-CROSS-INIT-039",
+          "kind": "Initiative",
+          "status": "planned",
+          "parentId": null
+        }
+      }
+    },
+    {
+      "sequence": 4159,
+      "eventHash": "58efd5c99e90286a977ffda954311d3ee1fbdb3f72ee1c5f91d85d6bcffed554",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:49e00023764f6a5babda4025",
+          "externalKey": "TCRN-CROSS-EPIC-097",
+          "kind": "Epic",
+          "status": "planned",
+          "parentId": "work:7d090af693075fde656f9788"
+        }
+      }
+    },
+    {
+      "sequence": 4160,
+      "eventHash": "ea483bba92295c1dc8acbc49664c702964461525e0e54075f3cee034e3102112",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:4c6faf20aa99be9e251fe5ce",
+          "externalKey": "TCRN-CROSS-STORY-289",
+          "kind": "Story",
+          "status": "planned",
+          "parentId": "work:49e00023764f6a5babda4025"
+        }
+      }
+    },
+    {
+      "sequence": 4182,
+      "eventHash": "58822f6fce5d9bc566cf85c3e85993ee5b462487d0e4da54fba33806358e3",
+      "payload": {
+        "operation": "work.updated",
+        "record": {
+          "id": "work:7d090af693075fde656f9788",
+          "externalKey": "TCRN-CROSS-INIT-039",
+          "kind": "Initiative",
+          "status": "ready",
+          "parentId": null
+        }
+      }
+    },
+    {
+      "sequence": 4183,
+      "eventHash": "66221083f2fc875dbd8b17fdd104b5b0bb90f0dc300445dda66c54c1fa24d203",
+      "payload": {
+        "operation": "work.updated",
+        "record": {
+          "id": "work:49e00023764f6a5babda4025",
+          "externalKey": "TCRN-CROSS-EPIC-097",
+          "kind": "Epic",
+          "status": "ready",
+          "parentId": "work:7d090af693075fde656f9788"
+        }
+      }
+    },
+    {
+      "sequence": 4184,
+      "eventHash": "4c35506cd4da3616a514f31d5d2b7eb4bf8466d2a3eb3bc20fcd6afc95c6f60c",
+      "payload": {
+        "operation": "work.updated",
+        "record": {
+          "id": "work:4c6faf20aa99be9e251fe5ce",
+          "externalKey": "TCRN-CROSS-STORY-289",
+          "kind": "Story",
+          "status": "ready",
+          "parentId": "work:49e00023764f6a5babda4025"
+        }
+      }
+    },
+    {
+      "sequence": 4278,
+      "eventHash": "1cfe311d23cc5f8a0eb6c4990f17bce5886be7696537e2f9f05bafd42d1b5785",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:6a7502e28310c113da1dc6d6",
+          "externalKey": "TCRN-CROSS-INIT-044",
+          "kind": "Initiative",
+          "status": "active",
+          "parentId": null
+        }
+      }
+    },
+    {
+      "sequence": 4279,
+      "eventHash": "d49942c448d487fe75be316361726958da870c36bd91dac6592735262f1e8dca",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:fd715245c8f74b698dad8008",
+          "externalKey": "TCRN-CROSS-EPIC-104",
+          "kind": "Epic",
+          "status": "active",
+          "parentId": "work:6a7502e28310c113da1dc6d6"
+        }
+      }
+    },
+    {
+      "sequence": 4288,
+      "eventHash": "d251f1209d45f8f00ca5a2930e32f5122df5ea8324df6e13fefe45fde4421c60",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:1e7217cde4cd9b405f698f55",
+          "externalKey": "TCRN-CROSS-INC-225",
+          "kind": "Incident",
+          "status": "active",
+          "parentId": null
+        }
+      }
+    },
+    {
+      "sequence": 4323,
+      "eventHash": "6723be865c676aaa8c6f81d181733d56d825ffd6f039f1754b7fc3b5a6d945f5",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:45a0b0c4301f4340a04b3851",
+          "externalKey": "TCRN-CROSS-INC-234",
+          "kind": "Incident",
+          "status": "active",
+          "parentId": null
+        }
+      }
+    },
+    {
+      "sequence": 4334,
+      "eventHash": "223251731b233494183f710b95fed6a94ac188a9ef2d5e762cdd03671f5137f6",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:13c045517122778de6d65764",
+          "externalKey": "TCRN-CROSS-STORY-304",
+          "kind": "Story",
+          "status": "ready",
+          "parentId": "work:fd715245c8f74b698dad8008"
+        }
+      }
+    },
+    {
+      "sequence": 4335,
+      "eventHash": "c1c5c08498af0f1a2b1dcbe0dd111000ffecefe3f83c483e07ed361a8da6e452",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:705441ed506908664bb54162",
+          "externalKey": "TCRN-CROSS-STORY-305",
+          "kind": "Story",
+          "status": "ready",
+          "parentId": "work:fd715245c8f74b698dad8008"
+        }
+      }
+    },
+    {
+      "sequence": 4336,
+      "eventHash": "a06dc01daf1405bbe7ab5904b6cbb1c7aa01cda9da0b949688003128240c06a4",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:9ddafbf4b53e3d76a0ddd7b7",
+          "externalKey": "TCRN-CROSS-INC-239",
+          "kind": "Incident",
+          "status": "active",
+          "parentId": null
+        }
+      }
+    },
+    {
+      "sequence": 4337,
+      "eventHash": "4919b63f8807a3a103cd67969b052324ef399e6ba1f4d359f21124e3f4881264",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:0adc6cb8b582804c34f584b5",
+          "externalKey": "TCRN-CROSS-INC-240",
+          "kind": "Incident",
+          "status": "active",
+          "parentId": null
+        }
+      }
+    },
+    {
+      "sequence": 4494,
+      "eventHash": "8db1df35aa44dd9c6ce8237e46fa86480f64e85f8b93b2ed9614388f12fdc343",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:cd452eba2d85c53e56e71d30",
+          "externalKey": "TCRN-CROSS-INC-242",
+          "kind": "Incident",
+          "status": "active",
+          "parentId": "work:1e9f260a063af644e697260e"
+        }
+      }
+    },
+    {
+      "sequence": 4501,
+      "eventHash": "3e884037a44ce86c3fe7a6efd1c3582f712bcd6ccffdf8b41fccdd3e6f9aea40",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:44f130be21f9bfb8139eff79",
+          "externalKey": "TCRN-CROSS-STORY-320",
+          "kind": "Story",
+          "status": "planned",
+          "parentId": "work:935a89424c4439f0963ad431"
+        }
+      }
+    },
+    {
+      "sequence": 4504,
+      "eventHash": "f79fd0e7eccddad149bd55c0389c54ef73c066ec900c7b030c8a86734222b999",
+      "payload": {
+        "operation": "work.updated",
+        "record": {
+          "id": "work:44f130be21f9bfb8139eff79",
+          "externalKey": "TCRN-CROSS-STORY-320",
+          "kind": "Story",
+          "status": "ready",
+          "parentId": "work:935a89424c4439f0963ad431"
+        }
+      }
+    },
+    {
+      "sequence": 4505,
+      "eventHash": "3965e409370cd16c6b43414e45c85d3dc2680bfcb6e83cbbbbc536cad0fa33c6",
+      "payload": {
+        "operation": "work.updated",
+        "record": {
+          "id": "work:44f130be21f9bfb8139eff79",
+          "externalKey": "TCRN-CROSS-STORY-320",
+          "kind": "Story",
+          "status": "active",
+          "parentId": "work:935a89424c4439f0963ad431"
+        }
+      }
+    },
+    {
+      "sequence": 4506,
+      "eventHash": "44b7b45a412084d1989590a7f4448e41f530e612296525f5bf5356bc90b6b748",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:93cc6acf63cf52722d57c29c",
+          "externalKey": "TCRN-CROSS-INC-245",
+          "kind": "Incident",
+          "status": "active",
+          "parentId": "work:1e9f260a063af644e697260e"
+        }
+      }
+    },
+    {
+      "sequence": 4910,
+      "eventHash": "5097b10d309a0fdb729e9e887ede76f04d326f54665802abd24626ed3d8f2e94",
+      "payload": {
+        "operation": "work.created",
+        "record": {
+          "id": "work:e95a729d85353a33e3722299",
+          "externalKey": "TCRN-CROSS-INIT-051",
+          "kind": "Initiative",
+          "status": "planned",
+          "parentId": null
+        }
+      }
+    },
+    {
+      "sequence": 5025,
+      "eventHash": "c55e046cbd344337cfd0a40e67d1a712bc4ff746b15efc3fe09af89fb555e867",
+      "payload": {
+        "operation": "work.updated",
+        "record": {
+          "id": "work:e95a729d85353a33e3722299",
+          "externalKey": "TCRN-CROSS-INIT-051",
+          "kind": "Initiative",
+          "status": "ready",
+          "parentId": null
+        }
+      }
+    },
+    {
+      "sequence": 5026,
+      "eventHash": "a9de2d95da34e69d454c4d5450a8f17d0581182d9ec1444df56f565e7e9881d5",
+      "payload": {
+        "operation": "work.updated",
+        "record": {
+          "id": "work:e95a729d85353a33e3722299",
+          "externalKey": "TCRN-CROSS-INIT-051",
+          "kind": "Initiative",
+          "status": "active",
+          "parentId": null
+        }
+      }
+    },
+    {
+      "sequence": 5324,
+      "eventHash": "96e08a2fcdccdde1aed22330eb8482a30af5185ad9e77eb5f60e3688a946b8a3",
+      "payload": {
+        "operation": "conference.closed",
+        "record": {
+          "id": "conference:4c1a9d1111c1b6bc33dc7f3e"
+        },
+        "minutes": {
+          "id": "minutes:246640ee9b9ce0d34a555564",
+          "conferenceId": "conference:4c1a9d1111c1b6bc33dc7f3e",
+          "summary": "367 阻塞处置：L0 六行判据不变，R1 加筛选规则并补 GWT4。",
+          "tombstone": false
+        }
+      }
+    }
+  ]
+}
