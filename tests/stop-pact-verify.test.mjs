@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
 import test from "node:test";
 import { tmpdir } from "node:os";
@@ -25,6 +25,8 @@ import { buildPact, writePact } from "../tools/stop-pact/pact.mjs";
 import {
   MAX_STDERR_TAIL_BYTES,
   VERIFY_TIMEOUT_MS,
+  runVerification,
+  runVerificationSync,
   utf8Tail,
 } from "../tools/stop-pact/verify.mjs";
 
@@ -35,6 +37,46 @@ const NOW = "2026-09-10T00:00:00.000Z";
 
 function nodeCommand(source) {
   return `${JSON.stringify(process.execPath)} -e ${JSON.stringify(source)}`;
+}
+
+function backgroundNodeCommand(pidPath, { exitCode = 0, hold = false, ignoreTerm = false } = {}) {
+  const childSource = ignoreTerm ? "process.on('SIGTERM', () => {}); setTimeout(() => {}, 60_000);" : "setTimeout(() => {}, 60_000);";
+  const parentSource = [
+    "const { spawn } = require('node:child_process');",
+    "const { writeFileSync } = require('node:fs');",
+    `const child = spawn(process.execPath, ['-e', ${JSON.stringify(childSource)}], { stdio: 'ignore' });`,
+    `writeFileSync(${JSON.stringify(pidPath)}, String(child.pid));`,
+    hold ? "setTimeout(() => {}, 60_000);" : `process.exit(${exitCode});`,
+  ].join(" ");
+  return nodeCommand(parentSource);
+}
+
+async function waitForProcessToExit(pid, attempts = 100) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if (error?.code === "ESRCH") return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return false;
+}
+
+async function readPid(path) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      const pid = Number(await readFile(path, "utf8"));
+      if (Number.isSafeInteger(pid) && pid > 0) return pid;
+    } catch { /* child has not written its pid yet */ }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`pid file was not written: ${path}`);
+}
+
+function killIfAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return;
+  try { process.kill(pid, "SIGKILL"); } catch { /* child already exited */ }
 }
 
 async function fixture(t, verify) {
@@ -223,4 +265,50 @@ test("STORY-374: the async runner blocks on timeout and reports an exit without 
   assert.equal(output.ok, false);
   assert.equal(output.timedOut, true);
   assert.match(output.reason, /timed out/u);
+});
+
+test("STORY-384: async success, failure, cancellation, timeout, and pipeline paths reclaim their process groups", async (t) => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "tcrn-story384-async-")));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const cases = [
+    ["success", "success.pid", {}, {}],
+    ["failure", "failure.pid", { exitCode: 7 }, {}],
+    ["term-ignoring timeout", "timeout.pid", { hold: true, ignoreTerm: true }, { timeoutMs: 500 }],
+  ];
+  for (const [name, filename, commandOptions, runOptions] of cases) {
+    const pidPath = join(directory, filename);
+    const result = await runVerification(backgroundNodeCommand(pidPath, commandOptions), directory, runOptions);
+    assert.equal(result.ok, name === "success", `${name} result`);
+    if (name === "failure") assert.equal(result.exitCode, 7);
+    if (name === "term-ignoring timeout") assert.equal(result.timedOut, true);
+    const pid = await readPid(pidPath);
+    try { assert.equal(await waitForProcessToExit(pid), true, `${name} child must exit`); } finally { killIfAlive(pid); }
+  }
+
+  const pipelinePidPath = join(directory, "pipeline.pid");
+  await writeFile(pipelinePidPath, "", "utf8");
+  const pipeline = `sleep 30 | cat > /dev/null & echo $! > ${JSON.stringify(pipelinePidPath)}; exit 0`;
+  const pipelineResult = await runVerification(pipeline, directory);
+  assert.equal(pipelineResult.ok, true);
+  const pipelinePid = await readPid(pipelinePidPath);
+  try { assert.equal(await waitForProcessToExit(pipelinePid), true, "pipeline child must exit"); } finally { killIfAlive(pipelinePid); }
+
+  const controller = new AbortController();
+  const cancelledPidPath = join(directory, "cancelled.pid");
+  const cancelledPromise = runVerification(backgroundNodeCommand(cancelledPidPath, { hold: true }), directory, { signal: controller.signal });
+  const cancelledPid = await readPid(cancelledPidPath);
+  controller.abort();
+  const cancelled = await cancelledPromise;
+  assert.equal(cancelled.cancelled, true);
+  try { assert.equal(await waitForProcessToExit(cancelledPid), true, "cancelled child must exit"); } finally { killIfAlive(cancelledPid); }
+});
+
+test("STORY-384: the synchronous runner uses a detached group and reclaims background descendants", async (t) => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "tcrn-story384-sync-")));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const pidPath = join(directory, "sync.pid");
+  const result = runVerificationSync(backgroundNodeCommand(pidPath), directory, { timeoutMs: 500 });
+  assert.equal(result.ok, true);
+  const pid = await readPid(pidPath);
+  try { assert.equal(await waitForProcessToExit(pid), true, "synchronous child must exit"); } finally { killIfAlive(pid); }
 });

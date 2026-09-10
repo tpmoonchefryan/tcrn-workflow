@@ -5,6 +5,8 @@
 // and no nearest/active-work inference is permitted.
 
 import { spawn, spawnSync } from "node:child_process";
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -100,6 +102,28 @@ function killProcessGroup(child, signal) {
   }
 }
 
+function killProcessGroupPid(pid, signal) {
+  if (typeof pid !== "number") return;
+  try { process.kill(-pid, signal); } catch { /* process group already ended */ }
+}
+
+function cleanupProcessGroup(child) {
+  if (!child || typeof child.pid !== "number") return Promise.resolve();
+  killProcessGroup(child, "SIGTERM");
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      killProcessGroup(child, "SIGKILL");
+      resolve();
+    }, 250);
+  });
+}
+
+function cleanupSyncProcessGroup(pid) {
+  if (typeof pid !== "number") return;
+  killProcessGroupPid(pid, "SIGTERM");
+  killProcessGroupPid(pid, "SIGKILL");
+}
+
 function appendTail(current, chunk) {
   const next = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), "utf8");
   const combined = current.length === 0 ? next : Buffer.concat([current, next]);
@@ -114,13 +138,14 @@ function appendTail(current, chunk) {
  * command string; argv construction remains explicit and the detached child group
  * is killed on timeout so grandchildren cannot outlive the Stop hook.
  */
-export function runVerification(command, cwd, { timeoutMs = VERIFY_TIMEOUT_MS, spawnImpl = spawn } = {}) {
+export function runVerification(command, cwd, { timeoutMs = VERIFY_TIMEOUT_MS, spawnImpl = spawn, signal } = {}) {
   if (typeof command !== "string" || command.length === 0 || command.includes("\u0000")) {
     return Promise.resolve({ status: "failed", ok: false, reason: "verify command is malformed" });
   }
   if (!isAbsolute(text(cwd))) {
     return Promise.resolve({ status: "failed", ok: false, reason: "verify working directory is unavailable" });
   }
+  if (signal?.aborted) return Promise.resolve({ status: "failed", ok: false, cancelled: true, reason: "verify command cancelled" });
   return new Promise((resolve) => {
     let child;
     try {
@@ -137,22 +162,24 @@ export function runVerification(command, cwd, { timeoutMs = VERIFY_TIMEOUT_MS, s
 
     let stderr = Buffer.alloc(0);
     let timedOut = false;
-    let settled = false;
+    let settling = false;
     let timeoutTimer;
-    let forceTimer;
+    const removeAbortListener = () => signal?.removeEventListener?.("abort", onAbort);
     const finish = (result) => {
-      if (settled) return;
-      settled = true;
+      if (settling) return;
+      settling = true;
       if (timeoutTimer) clearTimeout(timeoutTimer);
-      if (forceTimer) clearTimeout(forceTimer);
-      resolve(result);
+      removeAbortListener();
+      cleanupProcessGroup(child).then(() => resolve(result));
     };
+    const onAbort = () => finish({ status: "failed", ok: false, cancelled: true, reason: "verify command cancelled" });
+    signal?.addEventListener?.("abort", onAbort, { once: true });
     if (child?.stderr?.on) child.stderr.on("data", (chunk) => { stderr = appendTail(stderr, chunk); });
     child?.once?.("error", (error) => {
       if (timedOut) return;
       finish({ status: "failed", ok: false, reason: failureReason({ error, stderr }) });
     });
-    child?.once?.("close", (status, signal) => {
+    child?.once?.("exit", (status, signal) => {
       if (timedOut) {
         finish({ status: "failed", ok: false, timedOut: true, reason: failureReason({ stderr, timedOut: true }) });
         return;
@@ -165,11 +192,7 @@ export function runVerification(command, cwd, { timeoutMs = VERIFY_TIMEOUT_MS, s
     });
     timeoutTimer = setTimeout(() => {
       timedOut = true;
-      killProcessGroup(child, "SIGTERM");
-      forceTimer = setTimeout(() => {
-        killProcessGroup(child, "SIGKILL");
-        finish({ status: "failed", ok: false, timedOut: true, reason: failureReason({ stderr, timedOut: true }) });
-      }, 250);
+      finish({ status: "failed", ok: false, timedOut: true, reason: failureReason({ stderr, timedOut: true }) });
     }, Math.max(1, timeoutMs));
   });
 }
@@ -183,19 +206,30 @@ export function runVerificationSync(command, cwd, { timeoutMs = VERIFY_TIMEOUT_M
     return { status: "failed", ok: false, reason: "verify working directory is unavailable" };
   }
   let result;
+  let stderrPath;
+  let stderrDirectory;
+  let stderrFd;
   try {
+    stderrDirectory = mkdtempSync(join(tmpdir(), "tcrn-stop-pact-"));
+    stderrPath = join(stderrDirectory, "stderr.log");
+    stderrFd = openSync(stderrPath, "wx", 0o600);
     result = spawnSync("/bin/sh", ["-c", command], {
       cwd,
+      detached: true,
       shell: false,
       timeout: Math.max(1, timeoutMs),
-      maxBuffer: 64 * 1024,
       encoding: "buffer",
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ["ignore", "ignore", stderrFd],
     });
   } catch (error) {
+    if (typeof stderrFd === "number") closeSync(stderrFd);
+    if (stderrDirectory) rmSync(stderrDirectory, { recursive: true, force: true });
     return { status: "failed", ok: false, reason: failureReason({ error, stderr: "" }) };
   }
-  const stderr = result.stderr ?? Buffer.alloc(0);
+  closeSync(stderrFd);
+  let stderr = Buffer.alloc(0);
+  try { stderr = readFileSync(stderrPath); } finally { rmSync(stderrDirectory, { recursive: true, force: true }); }
+  cleanupSyncProcessGroup(result.pid);
   const timedOut = result.error?.code === "ETIMEDOUT" || (result.status === null && result.signal === "SIGTERM");
   if (result.status === 0 && !result.error) return { status: "passed", ok: true, exitCode: 0, stderr: utf8Tail(stderr) };
   return {
