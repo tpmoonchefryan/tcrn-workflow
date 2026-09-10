@@ -4,8 +4,9 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   applyHostRender,
@@ -14,7 +15,7 @@ import {
 } from "../scripts/host-render.mjs";
 import { codexHookDocument } from "../scripts/host-harness.mjs";
 
-const repoRoot = "/workspace/user";
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const newline = "\n";
 const tiers = (host, flagship, main, economy) => JSON.stringify({ [host]: {
   flagship: { model: flagship, effort: "max" },

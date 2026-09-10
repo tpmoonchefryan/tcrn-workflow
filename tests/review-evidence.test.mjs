@@ -6,7 +6,8 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import test from "node:test";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   REVIEW_EVIDENCE_VERSION,
@@ -14,7 +15,7 @@ import {
   parseTestRunOutput,
 } from "../scripts/review-evidence.mjs";
 
-const CHAIN_WORKSPACE = join("/workspace/user", [".tcrn", "workspace"].join("-"), "cross-project", "workspace");
+const CHAIN_WORKSPACE = join(resolve(dirname(fileURLToPath(import.meta.url)), ".."), [".tcrn", "workspace"].join("-"), "cross-project", "workspace");
 const STORY_374 = "work:bba2301b55370dabd7854616";
 
 function gitFixture(t) {
@@ -24,7 +25,7 @@ function gitFixture(t) {
   writeFileSync(join(root, "tests", "fixture.test.mjs"), "test(\"fixture\", () => assert.equal(1, 1));\n");
   assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
   assert.equal(spawnSync("git", ["-C", root, "add", "tests/fixture.test.mjs"]).status, 0);
-  assert.equal(spawnSync("git", ["-C", root, "-c", "user.name=review-test", "-c", "user.email=fixture-at-example.invalid", "commit", "-qm", "base"]).status, 0);
+  assert.equal(spawnSync("git", ["-C", root, "-c", "user.name=review-test", "-c", "user.email=review-at-example.invalid", "commit", "-qm", "base"]).status, 0);
   return root;
 }
 
@@ -94,7 +95,7 @@ test("STORY-375 GWT2: untracked diff files are included and become out-of-bounds
     assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
     writeFileSync(join(root, "tracked.txt"), "tracked\n");
     assert.equal(spawnSync("git", ["-C", root, "add", "tracked.txt"]).status, 0);
-    assert.equal(spawnSync("git", ["-C", root, "-c", "user.name=review-test", "-c", "user.email=fixture-at-example.invalid", "commit", "-qm", "base"]).status, 0);
+    assert.equal(spawnSync("git", ["-C", root, "-c", "user.name=review-test", "-c", "user.email=review-at-example.invalid", "commit", "-qm", "base"]).status, 0);
     writeFileSync(join(root, "untracked.txt"), "untracked\n");
     const diff = diffEvidence(root, "HEAD");
     assert.deepEqual(diff.changedFiles, ["untracked.txt"]);

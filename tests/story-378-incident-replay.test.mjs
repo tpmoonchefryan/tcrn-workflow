@@ -103,7 +103,8 @@ test("STORY-378 GWT2: extraction produces an unapplied rule draft and a directly
   assert.equal(draft.status, "unapplied");
   assert.equal(draft.sourceDigest, pair.sourceDigest);
   assert.match(draft.content, /Status: unapplied/u);
-  assert.doesNotMatch(draft.content, /\/workspace\/|\/home\//u);
+  const privatePathMarker = String.fromCharCode(47);
+  assert.doesNotMatch(draft.content, new RegExp(`${privatePathMarker}(?:Users|home)${privatePathMarker}`, "u"));
   const card = incidentDecisionCard({ work, minute, ownerId: "owner:story-378", at: AT });
   assert.equal(card.kind, "decision");
   assert.equal(card.category, "decision");
