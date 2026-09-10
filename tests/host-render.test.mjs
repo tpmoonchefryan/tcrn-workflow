@@ -92,7 +92,12 @@ test("STORY-371: Codex rendering changes only root model keys and generated hook
   assert.match(toml, /model = "nested-model"/u);
   const hooks = JSON.parse(await readFile(join(root, ".codex", "hooks.json"), "utf8"));
   assert.equal(hooks.custom, true);
-  assert.deepEqual(hooks.hooks, codexHookDocument(repoRoot).hooks);
+  assert.equal(hooks.hooks.User[0].hooks[0].command, "user-hook");
+  assert.deepEqual(hooks.hooks.PreToolUse, codexHookDocument(repoRoot).hooks.PreToolUse);
+  assert.deepEqual(hooks.hooks.SessionStart, codexHookDocument(repoRoot).hooks.SessionStart);
+  assert.deepEqual(hooks.hooks.Stop, codexHookDocument(repoRoot).hooks.Stop);
+  assert.deepEqual(hooks.hooks.SubagentStart, codexHookDocument(repoRoot).hooks.SubagentStart);
+  assert.deepEqual(hooks.hooks.SubagentStop, codexHookDocument(repoRoot).hooks.SubagentStop);
   const green = await inspectHostRenderDrift({ host: "codex", settings: config, root, repoRoot });
   assert.equal(green.ok, true);
   assert.equal(green.drift.length, 0);

@@ -114,6 +114,11 @@ function managedClaudeHooks(actual, expected) {
   return result;
 }
 
+function mergeHookDocument(existing, generated) {
+  const current = jsonObject(existing ?? {}, "Codex hooks");
+  return { ...structuredClone(current), hooks: mergeClaudeHooks(current.hooks, generated) };
+}
+
 function yamlValue(value) {
   return /^[A-Za-z0-9._:-]+$/u.test(value) ? value : JSON.stringify(value);
 }
@@ -269,8 +274,8 @@ export function renderHostPlan({ host, mode, settings, root, repoRoot = REPO_ROO
     }
     const expectedHooks = codexHookDocument(repoRoot).hooks;
     const currentHooks = parseJson(get(CODEX_HOOKS_PATH), CODEX_HOOKS_PATH);
-    const nextHooks = { ...currentHooks, hooks: expectedHooks };
-    files.push(pathEntry(CODEX_HOOKS_PATH, `${JSON.stringify(nextHooks, null, 2)}\n`, ["hooks"], get(CODEX_HOOKS_PATH), currentHooks.hooks, expectedHooks));
+    const nextHooks = mergeHookDocument(currentHooks, expectedHooks);
+    files.push(pathEntry(CODEX_HOOKS_PATH, `${JSON.stringify(nextHooks, null, 2)}\n`, ["hooks"], get(CODEX_HOOKS_PATH), managedClaudeHooks(currentHooks.hooks, expectedHooks), expectedHooks));
   }
   const drift = files.filter((entry) => entry.drift).map((entry) => ({ path: entry.path, expected: entry.expectedManaged, actual: entry.actualManaged }));
   return {
