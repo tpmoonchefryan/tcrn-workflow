@@ -24,6 +24,15 @@
     "hitAt3": 48,
     "hitAt8": 48
   },
+  "incidentReplayIndependent": {
+    "fixture": "incident-replay-frozen.json",
+    "fixtureDigest": "ef21d4f11509ca150b215a6a59292f42884ebb30a23b25e86e1adb293bcbd3fb",
+    "pairsAtLeast": 20,
+    "hitAt1": 19,
+    "hitAt3": 20,
+    "hitAt8": 20,
+    "note": "Independent source-identity labels frozen before scoring; this group is separate from the mixed 55-record replay group above."
+  },
   "externalKey": {
     "exactRankAtMost": 1
   }

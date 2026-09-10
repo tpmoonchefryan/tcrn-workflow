@@ -22,6 +22,7 @@ import {
   incidentRuleDraft,
   runIncidentReplayCli,
 } from "../scripts/incident-replay.mjs";
+import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
 const MINUTE_ID = "minutes:0123456789abcdef01234567";
 const WORK_ID = "work:0123456789abcdef01234567";
@@ -142,4 +143,20 @@ test("STORY-378: the CLI writes only the rule draft file and reports the formal 
   assert.equal(result.capture, null);
   assert.equal((await readFile(draftPath, "utf8")), result.ruleDraft.content);
   assert.equal(result.decisionCard.kind, "decision");
+});
+
+test("STORY-385: the independent freeze contains twenty Incident identities and immutable source digests", async () => {
+  const frozen = await readJson("tests/fixtures/retrieval-eval/incident-replay-frozen.json");
+  const work = await readJson("tests/fixtures/retrieval-eval/work-compact.json");
+  const byId = new Map(work.records.map((record) => [record.id, record]));
+  assert.equal(frozen.records.length, 20);
+  assert.equal(frozen.labelPolicy.createdBeforeScoring, true);
+  assert.ok(frozen.records.every((pair) => pair.source.kind === "Incident" && pair.label.expectedIds.length === 1 && pair.label.expectedIds[0] === pair.source.workId));
+  for (const pair of frozen.records) {
+    const source = byId.get(pair.source.workId);
+    assert.ok(source, pair.source.workId);
+    assert.equal(pair.source.sourceRecordDigest, canonicalSha256(source));
+    assert.equal(pair.source.scopeDigest, canonicalSha256(source.scope ?? ""));
+    assert.match(pair.label.basis, /manual identity/u);
+  }
 });

@@ -41,11 +41,13 @@ import {
   recallDocuments,
   selectRecallHits,
 } from "../dist/build/packages/core/src/recall.js";
+import { canonicalJson, canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 import { buildIncidentReplay } from "./incident-replay.mjs";
 
 const SCOPE_EXCERPT_BYTES = 512;
 const TOP_K = 8;
 const PRECISION_K = 3;
+const INDEPENDENT_INCIDENT_FILE = "incident-replay-frozen.json";
 
 // Every file the score depends on. Order is fixed and the name is hashed with the
 // bytes so a rename cannot pass for an edit.
@@ -64,6 +66,7 @@ const CORPUS_FILES = [
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const fixture = (name) => resolve(root, "tests/fixtures/retrieval-eval", name);
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+const fileSha256 = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
 
 const policy = readJson(resolve(root, "scripts/policy/retrieval-eval-thresholds.json"));
 
@@ -98,6 +101,7 @@ function evaluate(corpusDigest, policy) {
   const minutes = readJson(fixture("minutes-compact.json")).records;
   const work = readJson(fixture("work-compact.json")).records;
   const incidentReplay = buildIncidentReplay({ workRecords: work, cards: snapshot, minutes, at: "2026-09-04T15:08:34Z" });
+  const independentIncidentReplay = readIndependentIncidentReplay(policy.incidentReplayIndependent, work, minutes);
 
   const cardDocuments = recallDocuments({ knowledge });
   const mixedDocuments = recallDocuments({ knowledge, minutes, work, scopeExcerptBytes: SCOPE_EXCERPT_BYTES });
@@ -159,6 +163,13 @@ function evaluate(corpusDigest, policy) {
     return rank < 0 ? null : rank + 1;
   });
   const incidentReplayScore = scoreOf(incidentReplayRanks);
+  const independentIncidentReplayRanks = independentIncidentReplay.ok
+    ? independentIncidentReplay.records.map((pair) => {
+      const rank = selectMixed(pair.prompt).findIndex((hit) => pair.expectedIds.includes(hit.id));
+      return rank < 0 ? null : rank + 1;
+    })
+    : [];
+  const independentIncidentReplayScore = scoreOf(independentIncidentReplayRanks);
 
   // Exact keys retain the map's rank-1 path; key fragments use the low-weight
   // prefix column. Measure both indexes in this run and enforce both contracts.
@@ -186,6 +197,11 @@ function evaluate(corpusDigest, policy) {
   hold("real.precisionAt3", precisionAt3, policy.real.precisionAt3);
   hold("incidentReplay.pairs", incidentReplay.counts.included, policy.incidentReplay.pairsAtLeast);
   for (const k of ["hitAt1", "hitAt3", "hitAt8"]) hold(`incidentReplay.${k}`, incidentReplayScore[k], policy.incidentReplay[k]);
+  if (!independentIncidentReplay.ok) failures.push(...independentIncidentReplay.failures);
+  else {
+    hold("incidentReplayIndependent.pairs", independentIncidentReplay.records.length, policy.incidentReplayIndependent.pairsAtLeast);
+    for (const k of ["hitAt1", "hitAt3", "hitAt8"]) hold(`incidentReplayIndependent.${k}`, independentIncidentReplayScore[k], policy.incidentReplayIndependent[k]);
+  }
   if (externalKey.exactCardsRank === null || externalKey.exactCardsRank > policy.externalKey.exactRankAtMost) {
     failures.push(`externalKey.exactCardsRank ${String(externalKey.exactCardsRank)} > ${String(policy.externalKey.exactRankAtMost)}`);
   }
@@ -210,6 +226,9 @@ function evaluate(corpusDigest, policy) {
     language,
     real: { prompts: judged.length, relevantLabelled, relevantInTop3, precisionAt3 },
     incidentReplay: { ...incidentReplayScore, pairs: incidentReplay.counts.included, skipped: incidentReplay.counts.skipped, skippedNoSummary: incidentReplay.counts.skippedNoSummary },
+    incidentReplayIndependent: independentIncidentReplay.ok
+      ? { ...independentIncidentReplayScore, pairs: independentIncidentReplay.records.length, skipped: 0, sourceDigest: independentIncidentReplay.fixtureDigest, sourceFiles: independentIncidentReplay.sourceFiles }
+      : { pairs: 0, skipped: null, reasonCode: "RETRIEVAL_EVAL_INDEPENDENT_INCIDENT_FREEZE_INVALID" },
     externalKey,
     metrics: ["@1", "@3", "@8", "precision@3"],
   };
@@ -217,4 +236,42 @@ function evaluate(corpusDigest, policy) {
   cardIndex.close();
   mixedIndex.close();
   return result;
+}
+
+function associatedMinuteDigest(work, minutes) {
+  const ids = [...new Set([...String(work.scope ?? "").matchAll(/(?:conference-minutes|minutes):[0-9a-f]{24}/giu)].map((match) => match[0]))].sort();
+  const byId = new Map(minutes.map((minute) => [minute.id, minute]));
+  const associated = ids.map((id) => byId.get(id)).filter(Boolean).map((minute) => ({ id: minute.id, digest: canonicalSha256(minute), summaryDigest: canonicalSha256(minute.summary ?? "") }));
+  return canonicalSha256(associated);
+}
+
+function readIndependentIncidentReplay(declared, work, minutes) {
+  const path = fixture(INDEPENDENT_INCIDENT_FILE);
+  const failures = [];
+  if (!declared || typeof declared !== "object") return { ok: false, failures: ["independentIncidentReplay policy is missing"] };
+  if (declared.fixture !== INDEPENDENT_INCIDENT_FILE) failures.push(`independentIncidentReplay.fixture ${declared.fixture ?? "missing"} is not ${INDEPENDENT_INCIDENT_FILE}`);
+  const fixtureDigest = fileSha256(path);
+  if (fixtureDigest !== declared.fixtureDigest) failures.push(`independentIncidentReplay.fixtureDigest ${fixtureDigest} != ${declared.fixtureDigest}`);
+  let frozen;
+  try { frozen = readJson(path); } catch { return { ok: false, failures: ["independentIncidentReplay fixture is not valid JSON"] }; }
+  if (frozen.schemaVersion !== "tcrn.incident-replay-frozen.v1" || !Array.isArray(frozen.records)) failures.push("independentIncidentReplay fixture schema is invalid");
+  const workById = new Map(work.map((record) => [record.id, record]));
+  const seen = new Set();
+  for (const pair of frozen.records ?? []) {
+    const source = pair?.source;
+    const current = workById.get(source?.workId);
+    const expectedIds = pair?.label?.expectedIds;
+    if (!source || current === undefined || seen.has(source.workId)) { failures.push(`independentIncidentReplay source ${source?.workId ?? "missing"} is missing or duplicated`); continue; }
+    seen.add(source.workId);
+    if (source.kind !== "Incident" || current.kind !== "Incident" || source.externalKey !== current.externalKey || source.status !== current.status) failures.push(`independentIncidentReplay source ${source.workId} is not the frozen Incident record`);
+    if (source.scopeDigest !== canonicalSha256(current.scope ?? "")) failures.push(`independentIncidentReplay scope digest drift for ${source.workId}`);
+    if (source.sourceRecordDigest !== canonicalSha256(current)) failures.push(`independentIncidentReplay record digest drift for ${source.workId}`);
+    if (source.associatedMinutesDigest !== associatedMinuteDigest(current, minutes)) failures.push(`independentIncidentReplay associated digest drift for ${source.workId}`);
+    if (!Array.isArray(expectedIds) || expectedIds.length !== 1 || expectedIds[0] !== source.workId || typeof pair.prompt !== "string" || pair.prompt.length === 0 || typeof pair.label?.basis !== "string" || !pair.label.basis.includes("manual")) failures.push(`independentIncidentReplay label invalid for ${source.workId}`);
+  }
+  if (frozen.records?.length < (declared.pairsAtLeast ?? 20)) failures.push(`independentIncidentReplay records ${frozen.records?.length ?? 0} < ${declared.pairsAtLeast}`);
+  if (seen.size !== frozen.records?.length) failures.push("independentIncidentReplay source identities are not unique");
+  return failures.length === 0
+    ? { ok: true, records: frozen.records.map((pair) => ({ prompt: pair.prompt, expectedIds: pair.label.expectedIds })), fixtureDigest, sourceFiles: frozen.sourceFiles }
+    : { ok: false, failures };
 }
