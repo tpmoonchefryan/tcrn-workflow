@@ -72,6 +72,17 @@ export interface TelemetryPruneResult {
   readonly skipped: readonly string[];
 }
 
+export interface TelemetryObservationWindow {
+  readonly windowDays: number;
+  readonly windowStart: string;
+  readonly windowEnd: string;
+  readonly complete: boolean;
+  readonly missingDays: readonly string[];
+  readonly invalidDays: readonly string[];
+  readonly records: readonly TelemetryRecord[];
+  readonly problems: TelemetryReadResult["problems"];
+}
+
 export interface TelemetryEvidenceSnapshot {
   readonly schemaVersion: "tcrn.telemetry-evidence.v1";
   readonly id: string;
@@ -435,6 +446,73 @@ export async function readTelemetryStats(root: string, options: {
       totalTokens: totalKnown ? totalTotal : null,
     },
     problems: result.problems,
+  };
+}
+
+export async function readTelemetryObservationWindow(root: string, at: string, windowDays = TELEMETRY_RETENTION_DAYS): Promise<TelemetryObservationWindow> {
+  if (!Number.isSafeInteger(windowDays) || windowDays < 1 || windowDays > 3_650) fail("TELEMETRY_FILTER_INVALID", "windowDays must be a positive bounded integer");
+  try { parseStrictInstant(at); } catch { fail("TELEMETRY_FILTER_INVALID", "at is not a strict instant"); }
+  const base = rootDirectory(root);
+  const directory = join(base, "telemetry");
+  const current = new Date(at);
+  current.setUTCHours(0, 0, 0, 0);
+  const names: string[] = [];
+  for (let offset = windowDays; offset >= 1; offset -= 1) {
+    const date = new Date(current);
+    date.setUTCDate(date.getUTCDate() - offset);
+    names.push(`${date.toISOString().slice(0, 10)}.ndjson`);
+  }
+  const missingDays: string[] = [];
+  const invalidDays: string[] = [];
+  const records: TelemetryRecord[] = [];
+  const problems: { path: string; line: number; reasonCode: string }[] = [];
+  let directoryAvailable = true;
+  try {
+    const stats = await lstat(base);
+    if (!stats.isDirectory() || stats.isSymbolicLink()) fail("TELEMETRY_ROOT_INVALID", `${base} must be a real directory`);
+    const telemetryStats = await lstat(directory);
+    if (!telemetryStats.isDirectory() || telemetryStats.isSymbolicLink()) fail("TELEMETRY_ROOT_INVALID", `${directory} must be a real directory`);
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") directoryAvailable = false;
+    else throw error;
+  }
+  if (!directoryAvailable) missingDays.push(...names);
+  for (const name of directoryAvailable ? names : []) {
+    const path = join(directory, name);
+    let source;
+    try {
+      const stats = await lstat(path);
+      if (!stats.isFile() || stats.isSymbolicLink()) fail("TELEMETRY_FILE_INVALID", `${path} must be a regular file`);
+      source = await readFile(path, "utf8");
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") { missingDays.push(name); continue; }
+      throw error;
+    }
+    let invalid = false;
+    for (const [index, line] of source.split("\n").entries()) {
+      if (line.length === 0) continue;
+      const parsed = lineRecord(path, line, index + 1);
+      if (parsed.problem) { problems.push(parsed.problem); invalid = true; }
+      else if (parsed.record) records.push(parsed.record);
+    }
+    if (invalid) invalidDays.push(name);
+  }
+  records.sort((left, right) => {
+    const leftAt = parseStrictInstant(left.at);
+    const rightAt = parseStrictInstant(right.at);
+    return leftAt < rightAt ? -1 : leftAt > rightAt ? 1 : left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+  });
+  const first = names[0]!.slice(0, 10);
+  const last = names.at(-1)!.slice(0, 10);
+  return {
+    windowDays,
+    windowStart: `${first}T00:00:00.000Z`,
+    windowEnd: `${last}T23:59:59.999Z`,
+    complete: missingDays.length === 0 && invalidDays.length === 0,
+    missingDays,
+    invalidDays,
+    records,
+    problems,
   };
 }
 

@@ -7,6 +7,7 @@ import {
   mkdir,
   open,
   readdir,
+  readFile,
   realpath,
   rename,
   rm,
@@ -38,9 +39,11 @@ import {
   readKnowledgeLanguagePolicy,
 } from "./knowledge-language.js";
 import type { KnowledgeExpansions, KnowledgeLanguageProvider } from "./knowledge-language.js";
-import { activeWorkspaceRoot, materializeWorkspace } from "./workspace.js";
+import { activeBinding, activeWorkspaceRoot, materializeWorkspace } from "./workspace.js";
 import type { ProjectRecord, WorkspaceState } from "./workspace.js";
 import { SETTINGS_CATALOG, resolveKnowledgeArticlesPath } from "./settings.js";
+import { readTelemetryObservationWindow } from "./telemetry.js";
+import type { TelemetryRecord } from "./telemetry.js";
 
 export const KNOWLEDGE_CORE_VERSION = "tcrn.knowledge-core.v1" as const;
 export const KNOWLEDGE_STORE_SCHEMA_VERSION = "tcrn.knowledge-store.v1" as const;
@@ -89,6 +92,7 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_DUPLICATE",
   "KNOWLEDGE_FAULT_INJECTED",
   "KNOWLEDGE_FRESHNESS_EVALUATED",
+  "KNOWLEDGE_FITNESS_READY",
   "KNOWLEDGE_HIGH_WATER_MISMATCH",
   "KNOWLEDGE_INPUT_INVALID",
   "KNOWLEDGE_LANGUAGE_INVALID",
@@ -111,6 +115,10 @@ export const KNOWLEDGE_REASON_CODES = Object.freeze([
   "KNOWLEDGE_RECORD_INVALID",
   "KNOWLEDGE_REDACTION_REQUIRED",
   "KNOWLEDGE_RETIRED",
+  "KNOWLEDGE_RETIRE_PROPOSALS_READY",
+  "KNOWLEDGE_RETIRE_SWEEP_READY",
+  "KNOWLEDGE_RECOVERY_NOT_NEEDED",
+  "KNOWLEDGE_RECOVERED",
   "KNOWLEDGE_REVERIFIED",
   "KNOWLEDGE_SELECTION_INVALID",
   "KNOWLEDGE_SOURCE_CHANGED",
@@ -134,6 +142,53 @@ export type KnowledgePromotionState = "candidate" | "promoted" | "rejected";
 export type KnowledgeFreshnessState = "fresh" | "stale" | "unknown";
 export type KnowledgeExportDisposition = "metadata-only" | "excluded";
 export type KnowledgeFaultPoint = "after-body-write" | "after-metadata-write" | "after-marker-write";
+
+export interface KnowledgeRetirementRecord {
+  readonly schemaVersion: "tcrn.knowledge-retirement.v1";
+  readonly id: string;
+  readonly reason: "zero-retrieval-zero-reference";
+  readonly retrievalCount: number;
+  readonly referenceCount: number;
+  readonly observedEvents: number;
+  readonly windowDays: number;
+  readonly windowStart: string;
+  readonly windowEnd: string;
+  readonly sweptAt: string;
+}
+
+export interface KnowledgeFitnessRecord {
+  readonly id: string;
+  readonly artifactKind: KnowledgeKind | "telemetry-only" | null;
+  readonly lifecycle: KnowledgeLifecycle | null;
+  readonly baseDigest: string | null;
+  readonly retrievalCount: number;
+  readonly referenceCount: number;
+  readonly triggerCount: number;
+  readonly verifyFailureCount: number;
+  readonly observedEvents: number;
+  readonly firstObservedAt: string | null;
+  readonly lastActiveAt: string | null;
+  readonly observationStart: string | null;
+  readonly observationComplete: boolean;
+  readonly eligible: boolean;
+  readonly retirement: KnowledgeRetirementRecord | undefined;
+}
+
+export interface KnowledgeFitnessResult {
+  readonly schemaVersion: "tcrn.knowledge-fitness.v1";
+  readonly reasonCode: "KNOWLEDGE_FITNESS_READY";
+  readonly at: string;
+  readonly windowDays: number;
+  readonly minEvents: number;
+  readonly windowStart: string;
+  readonly windowEnd: string;
+  readonly windowComplete: boolean;
+  readonly missingDays: readonly string[];
+  readonly invalidDays: readonly string[];
+  readonly lastSweepAt: string | null;
+  readonly records: readonly KnowledgeFitnessRecord[];
+  readonly proposals: readonly Readonly<Record<string, JsonValue>>[];
+}
 
 export class KnowledgeCoreError extends Error {
   readonly reasonCode: KnowledgeReasonCode;
@@ -202,6 +257,7 @@ export interface KnowledgeUnitMetadata {
   readonly revision: number;
   readonly updatedAt: string;
   readonly extensions: KnowledgeUnitExtensions;
+  readonly retirement?: KnowledgeRetirementRecord;
   // TCRN-CROSS-STORY-364: the question phrasings this card is retrievable by, keyed by
   // prompt language. Empty on a workspace that has recorded no artefact language, and on
   // every card written before this field existed.
@@ -314,6 +370,7 @@ interface KnowledgeStoreMarker {
   readonly version: number;
   readonly disposable: true;
   readonly authority: "metadata-index-authority-body-separate";
+  readonly lastSweepAt?: string;
 }
 
 interface FileIdentity {
@@ -324,6 +381,13 @@ interface FileIdentity {
 interface ExclusiveFile {
   readonly path: string;
   readonly identity: FileIdentity;
+}
+
+interface KnowledgeMutationClaim extends ExclusiveFile {
+  readonly workspaceId: string;
+  readonly token: string;
+  readonly pid: number;
+  readonly acquiredAt: string;
 }
 
 interface ScannedKnowledgeUnit {
@@ -359,6 +423,7 @@ const metadataFields = [
 ];
 const stalenessFields = ["maximumAgeDays", "unknownDisposition"];
 const extensionFields = ["coexistsWith", "supersededBy"];
+const retirementFields = ["schemaVersion", "id", "reason", "retrievalCount", "referenceCount", "observedEvents", "windowDays", "windowStart", "windowEnd", "sweptAt"];
 const knowledgeIdPattern = /^knowledge:[a-f0-9]{24}$/u;
 
 // TCRN-CROSS-STORY-365: extensions were validated as exactly empty. They are now a closed
@@ -862,12 +927,16 @@ function parseCanonicalObject(bytes: Buffer, label: string, reasonCode: Knowledg
 }
 
 function validateMarker(value: Readonly<Record<string, JsonValue>>): KnowledgeStoreMarker {
-  exactFields(value, markerFields, "knowledge marker", "KNOWLEDGE_RECORD_INVALID");
+  exactFields(value, Object.hasOwn(value, "lastSweepAt") ? [...markerFields, "lastSweepAt"] : markerFields, "knowledge marker", "KNOWLEDGE_RECORD_INVALID");
   if (value.schemaVersion !== KNOWLEDGE_STORE_SCHEMA_VERSION || typeof value.workspaceId !== "string" ||
     !/^workspace:[a-f0-9]{24}$/u.test(value.workspaceId) || typeof value.eventHighWaterDigest !== "string" ||
     !/^[a-f0-9]{64}$/u.test(value.eventHighWaterDigest) || !Number.isSafeInteger(value.version) || Number(value.version) < 0 ||
     value.disposable !== true || value.authority !== "metadata-index-authority-body-separate") {
     fail("KNOWLEDGE_RECORD_INVALID", "knowledge marker fields are invalid");
+  }
+  if (Object.hasOwn(value, "lastSweepAt")) {
+    if (typeof value.lastSweepAt !== "string") fail("KNOWLEDGE_RECORD_INVALID", "knowledge marker lastSweepAt");
+    try { assertStrictInstant(value.lastSweepAt); } catch { fail("KNOWLEDGE_RECORD_INVALID", "knowledge marker lastSweepAt"); }
   }
   return value as unknown as KnowledgeStoreMarker;
 }
@@ -911,6 +980,27 @@ function assertPromotableProvenance(metadata: KnowledgeUnitMetadata): void {
 function normalizeMetadataRecord(value: Readonly<Record<string, JsonValue>>): Readonly<Record<string, JsonValue>> {
   const withSupersedes = Object.hasOwn(value, "supersedes") ? value : { ...value, supersedes: null };
   return Object.hasOwn(withSupersedes, "expansions") ? withSupersedes : { ...withSupersedes, expansions: {} };
+}
+
+function validateRetirementRecord(value: unknown, expectedId?: string): KnowledgeRetirementRecord | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) fail("KNOWLEDGE_RECORD_INVALID", "retirement record");
+  const entry = value as Readonly<Record<string, unknown>>;
+  exactFields(entry, retirementFields, "retirement record", "KNOWLEDGE_RECORD_INVALID");
+  if (entry.schemaVersion !== "tcrn.knowledge-retirement.v1" || typeof entry.id !== "string" || !knowledgeIdPattern.test(entry.id) ||
+    (expectedId !== undefined && entry.id !== expectedId) || entry.reason !== "zero-retrieval-zero-reference" ||
+    !Number.isSafeInteger(entry.retrievalCount) || Number(entry.retrievalCount) < 0 ||
+    !Number.isSafeInteger(entry.referenceCount) || Number(entry.referenceCount) < 0 ||
+    !Number.isSafeInteger(entry.observedEvents) || Number(entry.observedEvents) < 1 ||
+    !Number.isSafeInteger(entry.windowDays) || Number(entry.windowDays) < 1 ||
+    typeof entry.windowStart !== "string" || typeof entry.windowEnd !== "string" || typeof entry.sweptAt !== "string") {
+    fail("KNOWLEDGE_RECORD_INVALID", "retirement record fields");
+  }
+  for (const instant of [entry.windowStart, entry.windowEnd, entry.sweptAt]) {
+    try { assertStrictInstant(instant); } catch { fail("KNOWLEDGE_RECORD_INVALID", "retirement record instant"); }
+  }
+  return value as KnowledgeRetirementRecord;
 }
 
 // TCRN-CROSS-STORY-358: relocated from the retired packages/core/src/artifact-lifecycle.ts
@@ -971,7 +1061,7 @@ function redactArtifactReference(input: unknown): string {
 
 function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, workspace: WorkspaceState, deferLinks = false): KnowledgeUnitMetadata {
   const normalizedValue = normalizeMetadataRecord(value);
-  exactFields(normalizedValue, metadataFields, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID");
+  exactFields(normalizedValue, Object.hasOwn(normalizedValue, "retirement") ? [...metadataFields, "retirement"] : metadataFields, "knowledge metadata", "KNOWLEDGE_RECORD_INVALID");
   exactFields(normalizedValue.stalenessPolicy, stalenessFields, "knowledge staleness policy", "KNOWLEDGE_RECORD_INVALID");
   if (normalizedValue.schemaVersion !== KNOWLEDGE_METADATA_SCHEMA_VERSION || typeof normalizedValue.id !== "string" ||
     typeof normalizedValue.externalKey !== "string" || typeof normalizedValue.scope !== "string" ||
@@ -997,6 +1087,7 @@ function validateMetadataShape(value: Readonly<Record<string, JsonValue>>, works
     !extensionsAreBounded(normalizedValue.extensions) || !expansionsAreBounded(normalizedValue.expansions)) {
     fail("KNOWLEDGE_RECORD_INVALID", String(normalizedValue.id ?? "unknown"));
   }
+  validateRetirementRecord(normalizedValue.retirement, typeof normalizedValue.id === "string" ? normalizedValue.id : undefined);
   if ((normalizedValue.stalenessPolicy.maximumAgeDays !== null &&
     (!Number.isSafeInteger(normalizedValue.stalenessPolicy.maximumAgeDays) || Number(normalizedValue.stalenessPolicy.maximumAgeDays) < 1 || Number(normalizedValue.stalenessPolicy.maximumAgeDays) > 3_650)) ||
     (normalizedValue.stalenessPolicy.unknownDisposition !== "fail-closed" && normalizedValue.stalenessPolicy.unknownDisposition !== "fail-open")) {
@@ -1194,6 +1285,7 @@ function knowledgeIndex(marker: KnowledgeStoreMarker, metadata: readonly Knowled
     // for the default null value while metadata-first reads expose supersedes:null.
     .map((record) => Object.fromEntries(Object.entries(record).filter(([key]) =>
       !(key === "supersedes" && record.supersedes === null) &&
+      !(key === "retirement" && record.retirement === null) &&
       !(key === "expansions" && Object.keys(record.expansions ?? {}).length === 0))));
   return {
     schemaVersion: "tcrn.knowledge-index.v1",
@@ -1220,12 +1312,35 @@ async function claimPresence(storeRoot: string): Promise<"absent" | "present"> {
   }
 }
 
+async function readMutationClaim(storeRoot: string): Promise<KnowledgeMutationClaim | null> {
+  const path = resolve(storeRoot, "mutation.claim");
+  let stats;
+  try { stats = await lstat(path); }
+  catch (error) {
+    if ((error as { code?: string }).code === "ENOENT") return null;
+    throw error;
+  }
+  if (stats.isSymbolicLink() || !stats.isFile() || stats.nlink !== 1) {
+    fail("KNOWLEDGE_PARTIAL_STATE", "mutation claim is unsafe");
+  }
+  const value = parseCanonicalObject(await readFile(path), "knowledge mutation claim", "KNOWLEDGE_RECORD_INVALID");
+  if (value.schemaVersion !== "tcrn.knowledge-mutation-claim.v1" || typeof value.workspaceId !== "string" ||
+    typeof value.token !== "string" || !/^[a-f0-9]{48}$/u.test(value.token) ||
+    !Number.isSafeInteger(value.version) || Number(value.version) < 0 ||
+    !Number.isSafeInteger(value.pid) || Number(value.pid) < 1 || typeof value.acquiredAt !== "string") {
+    fail("KNOWLEDGE_RECORD_INVALID", "knowledge mutation claim fields");
+  }
+  try { assertStrictInstant(value.acquiredAt); } catch { fail("KNOWLEDGE_RECORD_INVALID", "knowledge mutation claim acquiredAt"); }
+  return { path, identity: { dev: stats.dev, ino: stats.ino }, workspaceId: String(value.workspaceId), token: String(value.token), pid: Number(value.pid), acquiredAt: String(value.acquiredAt) };
+}
+
 async function scanKnowledgeStore(
   workspaceRootInput: string,
   options: KnowledgeReadOptions = {},
   allowClaim = false,
   bodyMode: "full" | "metadata-only" = "full",
   rebase = false,
+  allowStaleIndex = false,
 ): Promise<KnowledgeStoreScan> {
   const workspace = await materializeWorkspace(workspaceRootInput);
   const workspaceRoot = await boundDirectory(workspaceRootInput);
@@ -1358,7 +1473,7 @@ async function scanKnowledgeStore(
   // near-full store on the read alone.
   const viewBytes = await backend.readKnowledgeView();
   const view = viewBytes.toString("utf8");
-  if (view !== canonicalJson(index)) {
+  if (!allowStaleIndex && view !== canonicalJson(index)) {
     fail("KNOWLEDGE_PARTIAL_STATE", "knowledge index is stale");
   }
   return { workspaceRoot, storeRoot, metadataRoot, bodiesRoot, viewsRoot, marker, workspace, units, index, linkInvalid: linkInvalid.sort(compareCanonicalText) };
@@ -1376,16 +1491,19 @@ async function mutationAdmissionScan(workspaceRoot: string, options: KnowledgeRe
   }
 }
 
-async function acquireMutationClaim(scan: KnowledgeStoreScan): Promise<ExclusiveFile & { readonly token: string }> {
+async function acquireMutationClaim(scan: KnowledgeStoreScan): Promise<KnowledgeMutationClaim> {
   const token = randomBytes(24).toString("hex");
+  const acquiredAt = new Date().toISOString();
   try {
     const claim = await writeExclusiveFile(resolve(scan.storeRoot, "mutation.claim"), canonicalJson({
       schemaVersion: "tcrn.knowledge-mutation-claim.v1",
       workspaceId: scan.marker.workspaceId,
       version: scan.marker.version,
       token,
+      pid: process.pid,
+      acquiredAt,
     }));
-    return { ...claim, token };
+    return { ...claim, workspaceId: scan.marker.workspaceId, token, pid: process.pid, acquiredAt };
   } catch (error) {
     if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_ALREADY_EXISTS") {
       fail("KNOWLEDGE_LOCKED", "knowledge mutation claim exists");
@@ -1407,6 +1525,66 @@ async function releaseMutationClaim(storeRoot: string, claim: ExclusiveFile & { 
   }
   await rm(released);
   await syncDirectory(storeRoot);
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as { code?: string }).code !== "ESRCH";
+  }
+}
+
+/**
+ * Recover a knowledge mutation left behind by a process that is no longer alive.
+ * Recovery only admits a source-consistent metadata/body set; an orphan body or a
+ * malformed claim remains blocked instead of being guessed away.
+ */
+export async function recoverKnowledgeStore(workspaceRoot: string, options: KnowledgeReadOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
+  const claimedRoot = resolve(workspaceRoot, "." + "tcrn-workflow", "knowledge");
+  const claim = await readMutationClaim(claimedRoot);
+  if (claim === null) {
+    return { schemaVersion: "tcrn.knowledge-recovery-result.v1", reasonCode: "KNOWLEDGE_RECOVERY_NOT_NEEDED", recovered: false };
+  }
+  if (processIsAlive(claim.pid)) fail("KNOWLEDGE_LOCKED", "knowledge mutation claim belongs to a live process");
+  const scan = await scanKnowledgeStore(workspaceRoot, options, true, "full", false, true);
+  const boundClaim = await readMutationClaim(scan.storeRoot);
+  if (boundClaim === null || boundClaim.token !== claim.token || boundClaim.pid !== claim.pid ||
+    boundClaim.workspaceId !== scan.marker.workspaceId || !sameIdentity(boundClaim.identity, claim.identity)) {
+    fail("KNOWLEDGE_SOURCE_CHANGED", "knowledge mutation claim changed during recovery");
+  }
+  const backend = storeBackendFor(scan.storeRoot, options);
+  const viewValue = parseCanonicalObject(await backend.readKnowledgeView(), "knowledge index", "KNOWLEDGE_RECORD_INVALID");
+  if (viewValue.schemaVersion !== "tcrn.knowledge-index.v1" || viewValue.authority !== "derived-rebuildable" ||
+    viewValue.workspaceId !== scan.marker.workspaceId || viewValue.eventHighWaterDigest !== scan.marker.eventHighWaterDigest ||
+    !Number.isSafeInteger(viewValue.version) || Number(viewValue.version) < 0 || !Array.isArray(viewValue.records) ||
+    typeof viewValue.indexDigest !== "string" || !/^[a-f0-9]{64}$/u.test(viewValue.indexDigest)) {
+    fail("KNOWLEDGE_RECORD_INVALID", "knowledge index fields");
+  }
+  const indexNeedsVersionAdvance = scan.marker.version === Number(viewValue.version) &&
+    canonicalJson(viewValue) !== canonicalJson(scan.index);
+  const marker: KnowledgeStoreMarker = indexNeedsVersionAdvance
+    ? { ...scan.marker, version: scan.marker.version + 1 }
+    : scan.marker;
+  await backend.writeKnowledgeMarker(canonicalJson(marker));
+  await writeIndex(backend, marker, scan.units.map((unit) => unit.metadata));
+  let reclaimedRetiredBodies = 0;
+  for (const unit of scan.units) {
+    if (unit.metadata.lifecycle !== "retired" || unit.body === null) continue;
+    if (backend instanceof SegmentedKnowledgeStoreBackend) await backend.removeKnowledgeBody(unit.metadata.id);
+    else await rm(unit.bodyPath, { force: true });
+    reclaimedRetiredBodies += 1;
+  }
+  await releaseMutationClaim(scan.storeRoot, boundClaim);
+  await scanKnowledgeStore(workspaceRoot, options);
+  return {
+    schemaVersion: "tcrn.knowledge-recovery-result.v1",
+    reasonCode: "KNOWLEDGE_RECOVERED",
+    recovered: true,
+    version: marker.version,
+    reclaimedRetiredBodies,
+  };
 }
 
 function crash(point: KnowledgeFaultPoint, selected?: KnowledgeFaultPoint): void {
@@ -1647,6 +1825,7 @@ export async function readKnowledgeStoreMarker(workspaceRoot: string, options: K
     records: scan.units.length,
     indexDigest: scan.index.indexDigest ?? "",
     eventHighWaterDigest: scan.marker.eventHighWaterDigest,
+    ...(scan.marker.lastSweepAt === undefined ? {} : { lastSweepAt: scan.marker.lastSweepAt }),
     ...trailingDisclosure(scan),
   };
 }
@@ -2459,6 +2638,256 @@ export async function transitionKnowledgePromotion(workspaceRoot: string, input:
   }
 }
 
+function telemetryIds(record: TelemetryRecord): readonly string[] {
+  const payload = record.payload as Readonly<Record<string, unknown>>;
+  const candidates = Array.isArray(payload.candidateIds) ? payload.candidateIds : [];
+  const singular = [payload.id, payload.artifactId, payload.workId, payload.gateId, payload.decisionId, payload.evidenceId]
+    .filter((value): value is string => typeof value === "string");
+  return [...new Set([...candidates, ...singular].filter((value): value is string => typeof value === "string" && value.length > 0))];
+}
+
+function workspaceArtifactDigest(id: string, workspace: WorkspaceState): string | null {
+  const artifact = [...workspace.work, ...workspace.gates, ...workspace.conferences, ...workspace.conferenceMinutes]
+    .find((entry) => entry.id === id);
+  return artifact === undefined ? null : canonicalSha256(artifact as unknown as JsonValue);
+}
+
+function fitnessRows(records: readonly TelemetryRecord[], metadata: readonly KnowledgeUnitMetadata[], windowComplete: boolean, minEvents: number, windowStart: string, workspace: WorkspaceState): readonly KnowledgeFitnessRecord[] {
+  const byId = new Map<string, { retrievalCount: number; referenceCount: number; triggerCount: number; verifyFailureCount: number; observedEvents: number; firstObservedAt: string | null; lastActiveAt: string | null }>();
+  const touch = (id: string, record: TelemetryRecord, field: "retrievalCount" | "referenceCount" | "triggerCount" | "verifyFailureCount" | null): void => {
+    const current = byId.get(id) ?? { retrievalCount: 0, referenceCount: 0, triggerCount: 0, verifyFailureCount: 0, observedEvents: 0, firstObservedAt: null, lastActiveAt: null };
+    current.observedEvents += 1;
+    current.firstObservedAt = current.firstObservedAt === null || record.at < current.firstObservedAt ? record.at : current.firstObservedAt;
+    current.lastActiveAt = current.lastActiveAt === null || record.at > current.lastActiveAt ? record.at : current.lastActiveAt;
+    if (field !== null) current[field] += 1;
+    byId.set(id, current);
+  };
+  const linkedIds = new Map<string, string[]>();
+  for (const entry of metadata) {
+    for (const linkedId of [entry.id, ...entry.linkedWorkIds, ...entry.linkedDecisionIds, ...entry.linkedGateIds, ...entry.linkedEvidenceIds]) {
+      const owners = linkedIds.get(linkedId) ?? [];
+      owners.push(entry.id);
+      linkedIds.set(linkedId, owners);
+    }
+  }
+  for (const record of records) {
+    const ids = telemetryIds(record);
+    const payload = record.payload as Readonly<Record<string, unknown>>;
+    const field = record.kind === "retrieval-hit" ? "retrievalCount"
+      : record.kind === "pull" || record.kind === "reference" ? "referenceCount"
+        : record.kind === "trigger" || record.kind === "rule-trigger" ? "triggerCount"
+          : record.kind === "verify" && payload.passed === false ? "verifyFailureCount" : null;
+    for (const id of ids) {
+      const targets = new Set([id, ...(linkedIds.get(id) ?? [])]);
+      for (const target of targets) touch(target, record, field);
+    }
+  }
+  const metadataById = new Map(metadata.map((entry) => [entry.id, entry]));
+  const ids = new Set([...metadataById.keys(), ...byId.keys()]);
+  return [...ids].sort(compareCanonicalText).map((id) => {
+    const counts = byId.get(id) ?? { retrievalCount: 0, referenceCount: 0, triggerCount: 0, verifyFailureCount: 0, observedEvents: 0, firstObservedAt: null, lastActiveAt: null };
+    const entry = metadataById.get(id);
+    const smallCard = entry !== undefined && entry.lifecycle === "active" && ["fact", "guide", "summary"].includes(entry.kind) && entry.retrievalDisposition === "default";
+    const observationStart = entry === undefined ? counts.firstObservedAt
+      : counts.firstObservedAt === null || parseStrictInstant(entry.updatedAt) >= parseStrictInstant(counts.firstObservedAt) ? entry.updatedAt : counts.firstObservedAt;
+    const observationComplete = observationStart !== null && observationStart.slice(0, 10) <= windowStart.slice(0, 10);
+    const eligible = smallCard && windowComplete && observationComplete && counts.observedEvents >= minEvents && counts.retrievalCount === 0 && counts.referenceCount === 0;
+    return {
+      id,
+      artifactKind: entry?.kind ?? "telemetry-only",
+      lifecycle: entry?.lifecycle ?? null,
+      baseDigest: entry?.bodySha256 ?? workspaceArtifactDigest(id, workspace) ?? (byId.has(id) ? canonicalSha256({ id, counts }) : null),
+      ...counts,
+      observationStart,
+      observationComplete,
+      eligible,
+      ...(entry?.retirement === undefined ? {} : { retirement: entry.retirement }),
+    } as KnowledgeFitnessRecord;
+  });
+}
+
+function retirementProposals(
+  records: readonly KnowledgeFitnessRecord[],
+  windowComplete: boolean,
+  minEvents: number,
+  windowDays: number,
+  windowStart: string,
+  windowEnd: string,
+): readonly Readonly<Record<string, JsonValue>>[] {
+  return records
+    .filter((record) => windowComplete && record.observationComplete && record.observedEvents >= minEvents && record.retrievalCount === 0 && record.referenceCount === 0 &&
+      (record.eligible || record.artifactKind === "telemetry-only"))
+    .map((record) => ({
+      id: record.id,
+      operation: "retire",
+      proposalKind: record.eligible ? "knowledge-retirement" : "removal-diff",
+      status: "pending",
+      automatic: record.eligible,
+      requiresOwnerReview: !record.eligible,
+      artifactKind: record.artifactKind,
+      baseDigest: record.baseDigest,
+      from: { lifecycle: record.lifecycle, body: record.lifecycle === "retired" ? "deleted" : "present" },
+      to: { lifecycle: "retired", body: "deleted" },
+      impact: { retrieval: record.retrievalCount, reference: record.referenceCount, observedEvents: record.observedEvents },
+      reason: "zero-retrieval-zero-reference",
+      retrievalCount: record.retrievalCount,
+      referenceCount: record.referenceCount,
+      observedEvents: record.observedEvents,
+      windowDays,
+      windowStart,
+      windowEnd,
+    }));
+}
+
+function sameUtcObservationDay(left: string | undefined, right: string): boolean {
+  return left !== undefined && left.slice(0, 10) === right.slice(0, 10);
+}
+
+function fitnessSetting(workspace: WorkspaceState, key: "fitness.windowDays" | "fitness.minEvents", fallback: number): number {
+  const value = workspace.settings.find((entry) => entry.key === key)?.value;
+  return value === undefined ? fallback : Number(value);
+}
+
+function isTransientKnowledgeLock(error: unknown): boolean {
+  return error instanceof KnowledgeCoreError && (error.reasonCode === "KNOWLEDGE_LOCKED" || error.reasonCode === "KNOWLEDGE_PARTIAL_STATE");
+}
+
+async function retryKnowledgeLocks<T>(operation: () => Promise<T>, options: KnowledgeMutationOptions = {}): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (options.faultAt === undefined && attempt < 20 && isTransientKnowledgeLock(error)) {
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+async function retrySweepOperation<T>(workspaceRoot: string, operation: () => Promise<T>, options: KnowledgeMutationOptions): Promise<T> {
+  try {
+    return await retryKnowledgeLocks(operation, options);
+  } catch (error) {
+    if (options.faultAt !== undefined || !isTransientKnowledgeLock(error)) throw error;
+    try {
+      const recovered = await recoverKnowledgeStore(workspaceRoot, options);
+      if (recovered.recovered === true) return retryKnowledgeLocks(operation, options);
+    } catch (recoveryError) {
+      if (!isTransientKnowledgeLock(recoveryError)) throw recoveryError;
+    }
+    throw error;
+  }
+}
+
+export async function evaluateKnowledgeFitness(workspaceRoot: string, input: { readonly at: string; readonly windowDays?: number; readonly minEvents?: number }): Promise<KnowledgeFitnessResult> {
+  assertEvaluationInstant(input.at);
+  const scan = await scanKnowledgeStore(workspaceRoot, { allowTrailing: true }, false, "metadata-only");
+  const windowDays = input.windowDays ?? fitnessSetting(scan.workspace, "fitness.windowDays", 90);
+  const minEvents = input.minEvents ?? fitnessSetting(scan.workspace, "fitness.minEvents", 1);
+  if (!Number.isSafeInteger(windowDays) || windowDays < 1 || windowDays > 3_650 || !Number.isSafeInteger(minEvents) || minEvents < 1) {
+    fail("KNOWLEDGE_INPUT_INVALID", "fitness window");
+  }
+  const transient = activeBinding(scan.workspace.metadata).find((root) => root.kind === "transient");
+  const telemetryRoot = transient?.path ?? null;
+  if (telemetryRoot === null) {
+    return {
+      schemaVersion: "tcrn.knowledge-fitness.v1", reasonCode: "KNOWLEDGE_FITNESS_READY", at: input.at, windowDays, minEvents,
+      windowStart: input.at, windowEnd: input.at, windowComplete: false, missingDays: [], invalidDays: [], lastSweepAt: scan.marker.lastSweepAt ?? null, records: [], proposals: [],
+    };
+  }
+  const window = await readTelemetryObservationWindow(telemetryRoot, input.at, windowDays);
+  const records = fitnessRows(window.records, scan.units.map((unit) => unit.metadata), window.complete, minEvents, window.windowStart, scan.workspace);
+  return {
+    schemaVersion: "tcrn.knowledge-fitness.v1", reasonCode: "KNOWLEDGE_FITNESS_READY", at: input.at, windowDays, minEvents,
+    windowStart: window.windowStart, windowEnd: window.windowEnd,
+    windowComplete: window.complete, missingDays: window.missingDays, invalidDays: window.invalidDays,
+    lastSweepAt: scan.marker.lastSweepAt ?? null, records,
+    proposals: retirementProposals(records, window.complete, minEvents, windowDays, window.windowStart, window.windowEnd),
+  };
+}
+
+async function persistSweepTimestamp(workspaceRoot: string, at: string, options: KnowledgeMutationOptions): Promise<number> {
+  return retryKnowledgeLocks(async () => {
+    const initial = await mutationAdmissionScan(workspaceRoot, options);
+    if (sameUtcObservationDay(initial.marker.lastSweepAt, at)) return initial.marker.version;
+    const claim = await acquireMutationClaim(initial);
+    let released = false;
+    try {
+      const scan = await scanKnowledgeStore(workspaceRoot, options, true);
+      if (sameUtcObservationDay(scan.marker.lastSweepAt, at)) return scan.marker.version;
+      const marker: KnowledgeStoreMarker = { ...scan.marker, lastSweepAt: at, version: scan.marker.version + 1 };
+      const backend = storeBackendFor(scan.storeRoot, options);
+      await backend.writeKnowledgeMarker(canonicalJson(marker));
+      await writeIndex(backend, marker, scan.units.map((unit) => unit.metadata));
+      await releaseMutationClaim(scan.storeRoot, claim);
+      released = true;
+      return marker.version;
+    } finally {
+      if (!released) await releaseMutationClaim(initial.storeRoot, claim);
+    }
+  }, options);
+}
+
+export async function retireKnowledgeSweep(workspaceRoot: string, input: { readonly at: string; readonly windowDays?: number; readonly minEvents?: number }, options: KnowledgeMutationOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
+  const fitness = await retrySweepOperation(workspaceRoot, () => evaluateKnowledgeFitness(workspaceRoot, input), options);
+  const scan = await retrySweepOperation(workspaceRoot, () => scanKnowledgeStore(workspaceRoot, options, false, "metadata-only"), options);
+  if (sameUtcObservationDay(scan.marker.lastSweepAt, fitness.at)) {
+    return { schemaVersion: "tcrn.knowledge-retire-sweep.v1", reasonCode: "KNOWLEDGE_RETIRE_SWEEP_READY", at: fitness.at, windowComplete: fitness.windowComplete, lastSweepAt: scan.marker.lastSweepAt ?? null, eligible: [], retired: [], proposals: fitness.proposals as unknown as JsonValue[], records: fitness.records as unknown as JsonValue[] };
+  }
+  const retired: string[] = [];
+  for (const candidate of fitness.records.filter((entry) => entry.eligible)) {
+    let attempts = 0;
+    while (attempts < 2) {
+      attempts += 1;
+      const current = await retrySweepOperation(workspaceRoot, () => scanKnowledgeStore(workspaceRoot, options, false, "metadata-only"), options);
+      const unit = current.units.find((entry) => entry.metadata.id === candidate.id);
+      if (unit === undefined || unit.metadata.lifecycle !== "active") break;
+      if (candidate.baseDigest !== null && unit.metadata.bodySha256 !== candidate.baseDigest) break;
+      const retirement: KnowledgeRetirementRecord = {
+        schemaVersion: "tcrn.knowledge-retirement.v1",
+        id: candidate.id,
+        reason: "zero-retrieval-zero-reference",
+        retrievalCount: candidate.retrievalCount,
+        referenceCount: candidate.referenceCount,
+        observedEvents: candidate.observedEvents,
+        windowDays: fitness.windowDays,
+        windowStart: fitness.windowStart,
+        windowEnd: fitness.windowEnd,
+        sweptAt: fitness.at,
+      };
+      try {
+        await retrySweepOperation(workspaceRoot, () => retireKnowledgeUnit(workspaceRoot, {
+          expectedVersion: current.marker.version,
+          expectedRevision: unit.metadata.revision,
+          occurredAt: fitness.at,
+          id: candidate.id,
+          retirement,
+        }, options), options);
+        retired.push(candidate.id);
+        break;
+      } catch (error) {
+        if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_CAS_MISMATCH" && attempts < 2) continue;
+        throw error;
+      }
+    }
+  }
+  const version = await persistSweepTimestamp(workspaceRoot, fitness.at, options);
+  return {
+    schemaVersion: "tcrn.knowledge-retire-sweep.v1",
+    reasonCode: "KNOWLEDGE_RETIRE_SWEEP_READY",
+    at: fitness.at,
+    windowComplete: fitness.windowComplete,
+    lastSweepAt: fitness.at,
+    version,
+    eligible: fitness.records.filter((entry) => entry.eligible).map((entry) => entry.id),
+    retired,
+    proposals: fitness.proposals as unknown as JsonValue[],
+    records: fitness.records as unknown as JsonValue[],
+  };
+}
+
 // WSC-5: retire a record — it becomes a tombstoned audit entry (lifecycle
 // "retired") that no longer occupies a live-record slot, and its dangling
 // backlinks are durably tolerated (WSC-2). One version step under the claim.
@@ -2467,6 +2896,7 @@ export async function retireKnowledgeUnit(workspaceRoot: string, input: {
   readonly expectedRevision: number;
   readonly occurredAt: string;
   readonly id: string;
+  readonly retirement?: KnowledgeRetirementRecord;
 }, options: KnowledgeMutationOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
   try {
     assertProtocolId(input.id);
@@ -2478,6 +2908,7 @@ export async function retireKnowledgeUnit(workspaceRoot: string, input: {
     !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
     fail("KNOWLEDGE_INPUT_INVALID", "retire versions");
   }
+  if (input.retirement !== undefined) validateRetirementRecord(input.retirement, input.id);
   const initial = await mutationAdmissionScan(workspaceRoot, options);
   const claim = await acquireMutationClaim(initial);
   let released = false;
@@ -2494,7 +2925,13 @@ export async function retireKnowledgeUnit(workspaceRoot: string, input: {
     if (unit.metadata.lifecycle === "retired") {
       fail("KNOWLEDGE_LIFECYCLE_INVALID", "record is already retired");
     }
-    const metadata: KnowledgeUnitMetadata = { ...unit.metadata, lifecycle: "retired", revision: unit.metadata.revision + 1, updatedAt: input.occurredAt };
+    const metadata: KnowledgeUnitMetadata = {
+      ...unit.metadata,
+      lifecycle: "retired",
+      revision: unit.metadata.revision + 1,
+      updatedAt: input.occurredAt,
+      ...(input.retirement === undefined ? {} : { retirement: input.retirement }),
+    };
     const unitBody = requireBody(unit);
     const validated = validateMetadataShape(metadata as unknown as Readonly<Record<string, JsonValue>>, scan.workspace);
     validateMetadataBody(validated, unitBody, scan.workspace);

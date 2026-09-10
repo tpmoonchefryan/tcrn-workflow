@@ -426,6 +426,22 @@ async function workspaceStateForInjection(partition, containerRoot) {
   return null;
 }
 
+// STORY-377: SessionStart is the once-per-day trigger for the bounded knowledge
+// retirement sweep. The marker in the knowledge store makes repeated starts on the
+// same UTC day a no-op; a missing or unavailable store keeps the hook fail-open.
+async function sessionRetirementSweep(event, partition, containerRoot) {
+  if (event !== "SessionStart") return null;
+  const core = await languageModule();
+  if (typeof core?.retireKnowledgeSweep !== "function") return null;
+  try {
+    return await core.retireKnowledgeSweep(workspaceForPartition(partition, containerRoot), {
+      at: new Date().toISOString(),
+    });
+  } catch {
+    return null;
+  }
+}
+
 function settingValue(settings, key) {
   const entry = (settings ?? []).find((candidate) => candidate.key === key);
   return entry?.currentValue ?? entry?.value ?? entry?.defaultValue ?? null;
@@ -493,9 +509,11 @@ export async function runSessionInjection({
   let l0 = null;
   let recallResult = { ok: true, injected: false, candidates: [], injectedBytes: 0 };
   let decisionReason = "NO_CONTEXT";
+  let retirementSweep = null;
   try {
     const effectiveSettings = settings ?? await configuredSettingRecords(partition, containerRoot);
     const telemetry = await telemetryWriter(partition, containerRoot, sessionId, workspaceState);
+    retirementSweep = await sessionRetirementSweep(event, partition, containerRoot);
     calls = await productionModelCalls({
       host,
       model: settingValue(effectiveSettings, "model.economyTier"),
@@ -612,6 +630,7 @@ export async function runSessionInjection({
       decision: decisionReason,
       l0,
       sessionId,
+      ...(retirementSweep === null ? {} : { retirementSweep }),
       telemetry: {
         ...(recallResult.telemetry ?? {}),
         judgments: lease.session.judgments.length,

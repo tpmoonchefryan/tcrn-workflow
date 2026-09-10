@@ -229,6 +229,7 @@ export async function recordVerificationTelemetry(pact, sessionId, result) {
       payload: {
         source: "stop-pact:verify",
         availability: "available",
+        workId: typeof pact.workId === "string" ? pact.workId : null,
         passed: result.ok === true,
         exitCode: result.exitCode ?? null,
         timedOut: result.timedOut === true,

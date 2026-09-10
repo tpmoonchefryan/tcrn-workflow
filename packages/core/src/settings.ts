@@ -43,6 +43,8 @@ export type SettingKey =
   | "execution.maxConcurrentSubagents"
   | "execution.maxDispatchDepth"
   | "execution.subagentPolicy"
+  | "fitness.minEvents"
+  | "fitness.windowDays"
   | "injection.budgetBytes"
   | "injection.perPromptBytes"
   | "knowledge.aggregateBytes"
@@ -332,6 +334,24 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "allowed",
     allowedValues: ["allowed", "review-only", "forbidden"],
+  },
+  {
+    key: "fitness.minEvents",
+    type: "string",
+    controlType: "number",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "1",
+    min: 1,
+    max: 1_000_000,
+  },
+  {
+    key: "fitness.windowDays",
+    type: "string",
+    controlType: "number",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: "90",
+    min: 1,
+    max: 3_650,
   },
   {
     key: "injection.budgetBytes",

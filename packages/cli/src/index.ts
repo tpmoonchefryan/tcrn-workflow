@@ -33,6 +33,7 @@ import {
   deleteWork,
   enableActorAttestation,
   evaluateKnowledgeFreshness,
+  evaluateKnowledgeFitness,
   exportKnowledgeCheckpoint,
   exportWorkspace,
   authorizeGenericProfileOperation,
@@ -55,8 +56,10 @@ import {
   readKnowledgeBody,
   readKnowledgeStoreMarker,
   readKnowledgeSnippet,
+  recoverKnowledgeStore,
   rebaseKnowledgeStore,
   retireKnowledgeUnit,
+  retireKnowledgeSweep,
   refreshKnowledgeArticle,
   reverifyKnowledgeUnit,
   recoverWorkspace,
@@ -127,8 +130,11 @@ import type {
   ContextRouteAuthorityFileIdentity,
   GenericProfileAdmissionAuthority,
   KnowledgeCategory,
+  KnowledgeFitnessRecord,
+  KnowledgeFitnessResult,
   KnowledgeFreshnessState,
   KnowledgeKind,
+  KnowledgeRetirementRecord,
   KnowledgePromotionState,
   RecallKnowledgeInput,
   RecallMinutesInput,
@@ -950,6 +956,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "knowledge-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "selection", required: false, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "role-scope", required: false, valueKind: "string" }, { name: "category", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "tag", required: false, valueKind: "string" }, { name: "freshness", required: false, valueKind: "string" }, { name: "promotion", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "knowledge-promote", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "expected-revision", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "state", required: true, valueKind: "string" }] },
   { name: "knowledge-rebase", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "retire-invalid", required: false, valueKind: "boolean" }] },
+  { name: "knowledge-recover", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "knowledge-retire", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "expected-revision", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "knowledge-reverify", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer" }, { name: "expected-revision", required: true, valueKind: "integer" }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }] },
   { name: "knowledge-snippet", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
@@ -981,6 +988,8 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "project-update", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "recall", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "query", required: true, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "tau", required: false, valueKind: "string" }, { name: "partition", required: false, valueKind: "string" }, { name: "allow-trailing", required: false, valueKind: "boolean" }] },
   { name: "recover", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
+  { name: "retire-proposals", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "window-days", required: false, valueKind: "integer" }, { name: "min-events", required: false, valueKind: "integer" }] },
+  { name: "retire-sweep", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }, { name: "window-days", required: false, valueKind: "integer" }, { name: "min-events", required: false, valueKind: "integer" }] },
   { name: "settings-catalog", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "settings-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "settings-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "key", required: true, valueKind: "string" }, { name: "value", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -1668,6 +1677,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     })));
     return;
   }
+  if (command === "knowledge-recover") {
+    const values = parseArguments(rest, ["workspace"]);
+    required(values, ["workspace"]);
+    io.write(canonicalJson(await recoverKnowledgeStore(values.workspace ?? "")));
+    return;
+  }
   if (command === "knowledge-bodies-migrate") {
     const values = parseArguments(rest, ["workspace", "segment-bytes"]);
     required(values, ["workspace"]);
@@ -1903,6 +1918,40 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, ["workspace", "at"]);
     io.write(canonicalJson(await evaluateKnowledgeFreshness(values.workspace ?? "", values.at ?? "", {
       allowTrailing: booleanValue(values["allow-trailing"], "allow-trailing"),
+    })));
+    return;
+  }
+  if (command === "retire-proposals") {
+    const values = parseArguments(rest, ["workspace", "at", "window-days", "min-events"]);
+    required(values, ["workspace", "at"]);
+    const fitness: KnowledgeFitnessResult = await evaluateKnowledgeFitness(values.workspace ?? "", {
+      at: values.at ?? "",
+      ...(values["window-days"] === undefined ? {} : { windowDays: integerValue(values, "window-days") }),
+      ...(values["min-events"] === undefined ? {} : { minEvents: integerValue(values, "min-events") }),
+    });
+    io.write(canonicalJson({
+      ...fitness,
+      reasonCode: "KNOWLEDGE_RETIRE_PROPOSALS_READY",
+      proposals: fitness.proposals,
+      retiredRecords: fitness.records.filter((record) => record.lifecycle === "retired").map((record: KnowledgeFitnessRecord) => {
+        const retirement: KnowledgeRetirementRecord | undefined = record.retirement;
+        return {
+          id: record.id,
+          baseDigest: record.baseDigest,
+          ...(retirement === undefined ? {} : { retirement }),
+        };
+      }),
+      ruleDiffs: fitness.proposals.filter((proposal) => proposal.requiresOwnerReview === true),
+    }));
+    return;
+  }
+  if (command === "retire-sweep") {
+    const values = parseArguments(rest, ["workspace", "at", "window-days", "min-events"]);
+    required(values, ["workspace", "at"]);
+    io.write(canonicalJson(await retireKnowledgeSweep(values.workspace ?? "", {
+      at: values.at ?? "",
+      ...(values["window-days"] === undefined ? {} : { windowDays: integerValue(values, "window-days") }),
+      ...(values["min-events"] === undefined ? {} : { minEvents: integerValue(values, "min-events") }),
     })));
     return;
   }

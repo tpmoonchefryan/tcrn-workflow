@@ -1852,6 +1852,16 @@
         "STORY-364 R4: the injection hook translates once and asks again, and adds the two counts"
       ]
     },
+    "tests/story-377-retire-sweep.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 44,
+      "testNames": [
+        "STORY-377 GWT1/GWT2/GWT3: fitness is complete, proposals are read-only, and only a small idle card retires",
+        "STORY-377 GWT4: missing, invalid, and rolled-back observation windows never become zero",
+        "STORY-377: a stopped sweep recovers a retired card once, then its evidence survives telemetry cleanup",
+        "STORY-377: concurrent sweeps converge without a second retirement"
+      ]
+    },
     "tests/story-380-artifact-blob-store.test.mjs": {
       "testCount": 12,
       "assertionCount": 60,

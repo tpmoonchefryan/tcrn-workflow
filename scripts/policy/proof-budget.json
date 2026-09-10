@@ -310,6 +310,12 @@
       "recordedAt": "2026-09-10",
       "ratio": 2.1381,
       "rationale": "Under TCRN-CROSS-MIN-144 D8, this exception records the measured coreSourceLine increase required by the open-kind telemetry store, concurrent line lock, retention boundary, telemetry-stats read surface, and Story 367 injection plus Stop/gate observation callers. The measured packages/core/src count is 23198 raw 0x0a lines, raised from the zero-margin 22953 cap with no headroom; verifyScriptCap remains 14, claimCap remains 9, and frozenRatio remains 1.5888. The formatted tree measures 57873 proof lines and 27067 product lines, ratio 2.1381, below effectiveRatio 2.2067."
+    },
+    {
+      "id": "TCRN-CROSS-STORY-377-knowledge-fitness",
+      "recordedAt": "2026-09-10",
+      "ratio": 2.1026,
+      "rationale": "Under TCRN-CROSS-MIN-144 D8, this exception records the measured coreSourceLine increase required by telemetry fitness aggregation, complete-UTC-day gating, base-digest-bound removal proposals, CAS-protected small-card retirement, dead-claim recovery, fitness settings, the SessionStart once-per-day path, and fixture-backed Story 377 tests. The measured packages/core/src count is 23739 raw 0x0a lines, raised from the zero-margin 23198 cap with no headroom; verifyScriptCap remains 14, claimCap remains 9, and frozenRatio remains 1.5888. The formatted tree measures 58152 proof lines and 27657 product lines, ratio 2.1026, below effectiveRatio 2.2067."
     }
   ],
   "surfaceCaps": {
@@ -318,7 +324,7 @@
     "recordedAt": "2026-09-10",
     "verifyScriptCap": 14,
     "claimCap": 9,
-    "coreSourceLineCap": 23198,
+    "coreSourceLineCap": 23739,
     "coreSourceLineMetric": {
       "glob": "packages/core/src/**/*.ts",
       "method": "raw 0x0a byte count across the matched files, recursive, blank lines and comments included -- the same deliberately crude counting method scripts/task.mjs's reportBudget (WSG-7) uses for productLines.",
