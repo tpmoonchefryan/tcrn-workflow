@@ -9,6 +9,7 @@ import { join } from "node:path";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
+  appendTelemetryObservationCheckpoint,
   appendTelemetryRecord,
   acquireWorkspaceLease,
   captureKnowledgeUnit,
@@ -109,9 +110,38 @@ async function fillWindow(fx, days = 90, events = [], sealed = true) {
 // only emit this receipt after proving coverage; a file's existence is not proof.
 async function sealWindow(fx, days = 90, overrides = {}) {
   for (let offset = days; offset >= 1; offset -= 1) {
+    for (const [index, channel] of ["retrieval", "reference", "trigger", "verify"].entries()) {
+      await appendTelemetryObservationCheckpoint(fx.transient, {
+        at: eventAt(offset, 40 + index * 2),
+        channel,
+        phase: "start",
+        sequence: 1,
+        source: "story-377:test-collector",
+        session: `story-377-checkpoint-${offset}-${channel}`,
+      });
+      await appendTelemetryObservationCheckpoint(fx.transient, {
+        at: eventAt(offset, 41 + index * 2),
+        channel,
+        phase: "stop",
+        sequence: 2,
+        source: "story-377:test-collector",
+        session: `story-377-checkpoint-${offset}-${channel}`,
+      });
+    }
     const source = await readFile(join(fx.transient, "telemetry", dayFile(offset)), "utf8");
     const records = source.split("\n").filter(Boolean).map((line) => JSON.parse(line))
       .filter((record) => record.kind !== "observation-coverage");
+    const channelCheckpoints = Object.fromEntries(["retrieval", "reference", "trigger", "verify"].map((channel) => {
+      const rows = records.filter((record) => record.kind === "observation-checkpoint" && record.payload.channel === channel);
+      return [channel, {
+        availability: "available",
+        source: "story-377:test-collector",
+        startSequence: 1,
+        stopSequence: 2,
+        checkpointCount: rows.length,
+        sourceDigest: canonicalSha256(rows),
+      }];
+    }));
     await appendTelemetryRecord(fx.transient, createTelemetryRecord({
       at: windowDay(offset - 1).toISOString(),
       kind: "observation-coverage",
@@ -121,6 +151,8 @@ async function sealWindow(fx, days = 90, overrides = {}) {
         coveredFrom: windowDay(offset).toISOString(),
         coveredUntil: windowDay(offset - 1).toISOString(),
         channels: ["retrieval", "reference", "trigger", "verify"],
+        coverageVersion: "tcrn.telemetry-observation-coverage.v1",
+        channelCheckpoints,
         recordCount: records.length, sourceDigest: canonicalSha256(records),
         collectionErrors: 0, ...overrides,
       },

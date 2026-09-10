@@ -426,6 +426,23 @@ async function workspaceStateForInjection(partition, containerRoot) {
   return null;
 }
 
+// STORY-387: a SessionStart is the only bounded production opportunity to close the
+// previous UTC day. The collector can write a receipt only when the four upstream
+// channels supplied explicit start/stop checkpoints; no empty file or missing host
+// input is converted into zero activity.
+async function sessionObservationCoverage(event, partition, containerRoot, suppliedState = null) {
+  if (event !== "SessionStart") return null;
+  const core = await languageModule();
+  if (typeof core?.sealTelemetryObservationDay !== "function" || typeof core?.activeBinding !== "function") return null;
+  try {
+    const state = suppliedState ?? await workspaceStateForInjection(partition, containerRoot);
+    const root = state?.metadata === undefined ? null : core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
+    return root === null ? null : await core.sealTelemetryObservationDay(root, { at: new Date().toISOString() });
+  } catch {
+    return null;
+  }
+}
+
 // STORY-377: SessionStart is the once-per-day trigger for the bounded knowledge
 // retirement sweep. The marker in the knowledge store makes repeated starts on the
 // same UTC day a no-op; a missing or unavailable store keeps the hook fail-open.
@@ -510,9 +527,11 @@ export async function runSessionInjection({
   let recallResult = { ok: true, injected: false, candidates: [], injectedBytes: 0 };
   let decisionReason = "NO_CONTEXT";
   let retirementSweep = null;
+  let observationCoverage = null;
   try {
     const effectiveSettings = settings ?? await configuredSettingRecords(partition, containerRoot);
     const telemetry = await telemetryWriter(partition, containerRoot, sessionId, workspaceState);
+    observationCoverage = await sessionObservationCoverage(event, partition, containerRoot, workspaceState);
     retirementSweep = await sessionRetirementSweep(event, partition, containerRoot);
     calls = await productionModelCalls({
       host,
@@ -630,6 +649,7 @@ export async function runSessionInjection({
       decision: decisionReason,
       l0,
       sessionId,
+      ...(observationCoverage === null ? {} : { observationCoverage }),
       ...(retirementSweep === null ? {} : { retirementSweep }),
       telemetry: {
         ...(recallResult.telemetry ?? {}),

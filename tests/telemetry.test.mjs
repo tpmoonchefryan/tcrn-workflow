@@ -8,6 +8,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  appendTelemetryObservationCheckpoint,
   acquireWorkspaceLease,
   appendTelemetryRecord,
   createProject,
@@ -16,6 +17,8 @@ import {
   initializeWorkspace,
   materializeWorkspace,
   readTelemetryRecords,
+  readTelemetryObservationWindow,
+  sealTelemetryObservationDay,
   transitionWork,
 } from "../dist/build/packages/core/src/index.js";
 import { runCli } from "../dist/build/packages/cli/src/index.js";
@@ -124,6 +127,25 @@ test("STORY-372: both hook events record bounded facts and never fabricate obser
   assert.equal(unavailable.ok, true);
 });
 
+test("STORY-387: the telemetry hook records an upstream checkpoint only when one is supplied", async (t) => {
+  const root = await scratch("tcrn-telemetry-checkpoint-hook-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const result = await runTelemetryHook({
+    hook_event_name: "SubagentStart",
+    session_id: "checkpoint-session",
+    observationCheckpoint: {
+      channel: "retrieval",
+      phase: "start",
+      sequence: 11,
+      source: "host-upstream",
+    },
+  }, { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_AT: INSTANT(10) } });
+  assert.equal(result.reasonCode, "TELEMETRY_RECORDED");
+  assert.equal(result.observationCheckpoint.duplicate, false);
+  const records = await readTelemetryRecords(root, { limit: 10 });
+  assert.equal(records.records.filter((record) => record.kind === "observation-checkpoint").length, 1);
+});
+
 test("STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires", async (t) => {
   const fixture = await workspaceFixture(t);
   const telemetry = createTelemetryRecord({ at: INSTANT(4), kind: "subagent-stop", session: "session-evidence", payload: payload() });
@@ -166,4 +188,75 @@ test("STORY-372: telemetry-list filters and done evidence keeps a snapshot after
   const shown = await cli(["work-show", "--workspace", fixture.workspace, "--id", workId]);
   assert.equal(shown.advisory.evidence, telemetry.id);
   assert.equal(shown.advisory.evidenceStatus, "expired");
+});
+
+async function checkpoints(root, day, availabilityByChannel = {}) {
+  for (const [index, channel] of ["retrieval", "reference", "trigger", "verify"].entries()) {
+    await appendTelemetryObservationCheckpoint(root, {
+      at: `${day}T10:00:${String(index * 2).padStart(2, "0")}Z`,
+      channel,
+      phase: "start",
+      sequence: 1,
+      source: "telemetry-test-collector",
+      availability: availabilityByChannel[channel] ?? "available",
+      session: `coverage-${channel}`,
+    });
+    await appendTelemetryObservationCheckpoint(root, {
+      at: `${day}T10:00:${String(index * 2 + 1).padStart(2, "0")}Z`,
+      channel,
+      phase: "stop",
+      sequence: 2,
+      source: "telemetry-test-collector",
+      availability: availabilityByChannel[channel] ?? "available",
+      session: `coverage-${channel}`,
+    });
+  }
+}
+
+test("STORY-387: only explicit four-channel start/stop checkpoints can seal a UTC day", async (t) => {
+  const root = await scratch("tcrn-telemetry-coverage-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await checkpoints(root, "2026-09-10");
+  const sealed = await sealTelemetryObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(sealed.ok, true);
+  assert.equal(sealed.reasonCode, "TELEMETRY_COVERAGE_RECORDED");
+  assert.equal(sealed.recordCount, 8);
+  const duplicate = await sealTelemetryObservationDay(root, { at: "2026-09-11T00:00:02.000Z" });
+  assert.equal(duplicate.reasonCode, "TELEMETRY_COVERAGE_ALREADY_RECORDED");
+  assert.equal(duplicate.duplicate, true);
+  const window = await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1);
+  assert.equal(window.complete, true);
+  assert.equal(window.records.length, 8);
+
+  const late = await sealTelemetryObservationDay(root, { at: "2026-09-10T23:59:59.000Z" });
+  assert.equal(late.ok, false);
+  assert.equal(late.reasonCode, "TELEMETRY_COVERAGE_UNPROVEN");
+  await appendTelemetryObservationCheckpoint(root, {
+    at: "2026-09-10T11:00:00.000Z",
+    channel: "verify",
+    phase: "start",
+    sequence: 3,
+    source: "telemetry-test-collector",
+  });
+  const conflict = await sealTelemetryObservationDay(root, { at: "2026-09-11T00:00:03.000Z" });
+  assert.equal(conflict.ok, false);
+  assert.equal(conflict.reasonCode, "TELEMETRY_COVERAGE_CONFLICT");
+});
+
+test("STORY-387: missing and unavailable upstream observations stay unproven", async (t) => {
+  const missing = await scratch("tcrn-telemetry-coverage-missing-");
+  t.after(() => rm(missing, { recursive: true, force: true }));
+  const noInput = await sealTelemetryObservationDay(missing, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(noInput.ok, false);
+  assert.deepEqual(noInput.missingChannels, ["retrieval", "reference", "trigger", "verify"]);
+
+  const unavailable = await scratch("tcrn-telemetry-coverage-unavailable-");
+  t.after(() => rm(unavailable, { recursive: true, force: true }));
+  await checkpoints(unavailable, "2026-09-10", { verify: "unknown" });
+  const notSealed = await sealTelemetryObservationDay(unavailable, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(notSealed.ok, false);
+  assert.deepEqual(notSealed.invalidChannels, ["verify"]);
+  const notComplete = await readTelemetryObservationWindow(unavailable, "2026-09-11T12:00:00.000Z", 1);
+  assert.equal(notComplete.complete, false);
+  assert.ok(notComplete.invalidDays.includes("2026-09-10.ndjson"));
 });
