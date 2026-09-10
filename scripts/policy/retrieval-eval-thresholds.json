@@ -18,6 +18,12 @@
   "real": {
     "precisionAt3": 0.1889
   },
+  "incidentReplay": {
+    "pairsAtLeast": 20,
+    "hitAt1": 47,
+    "hitAt3": 48,
+    "hitAt8": 48
+  },
   "externalKey": {
     "exactRankAtMost": 1
   }

@@ -41,6 +41,7 @@ import {
   recallDocuments,
   selectRecallHits,
 } from "../dist/build/packages/core/src/recall.js";
+import { buildIncidentReplay } from "./incident-replay.mjs";
 
 const SCOPE_EXCERPT_BYTES = 512;
 const TOP_K = 8;
@@ -96,6 +97,7 @@ function evaluate(corpusDigest, policy) {
     }));
   const minutes = readJson(fixture("minutes-compact.json")).records;
   const work = readJson(fixture("work-compact.json")).records;
+  const incidentReplay = buildIncidentReplay({ workRecords: work, cards: snapshot, minutes, at: "2026-09-04T15:08:34Z" });
 
   const cardDocuments = recallDocuments({ knowledge });
   const mixedDocuments = recallDocuments({ knowledge, minutes, work, scopeExcerptBytes: SCOPE_EXCERPT_BYTES });
@@ -148,6 +150,16 @@ function evaluate(corpusDigest, policy) {
   const translated = readJson(fixture("translations-sonnet.json")).queries;
   const language = scoreOf(translated.map((query) => rankCards(String(query.en), query.id)));
 
+  // STORY-378: a separate metric group scores prompts generated from the frozen work
+  // summaries against the mixed index. Expected ids come from the source linkage, never
+  // from the current ranking, so a scorer change can turn a previously green incident
+  // replay red without changing its labels.
+  const incidentReplayRanks = incidentReplay.pairs.map((pair) => {
+    const rank = selectMixed(pair.prompt).findIndex((hit) => pair.expectedIds.includes(hit.id));
+    return rank < 0 ? null : rank + 1;
+  });
+  const incidentReplayScore = scoreOf(incidentReplayRanks);
+
   // Exact keys retain the map's rank-1 path; key fragments use the low-weight
   // prefix column. Measure both indexes in this run and enforce both contracts.
   const fragmentQuery = queries.find((query) => query.query === "INIT019-C12");
@@ -172,6 +184,8 @@ function evaluate(corpusDigest, policy) {
   }
   hold("language.hitAt8", language.hitAt8, policy.language.hitAt8);
   hold("real.precisionAt3", precisionAt3, policy.real.precisionAt3);
+  hold("incidentReplay.pairs", incidentReplay.counts.included, policy.incidentReplay.pairsAtLeast);
+  for (const k of ["hitAt1", "hitAt3", "hitAt8"]) hold(`incidentReplay.${k}`, incidentReplayScore[k], policy.incidentReplay[k]);
   if (externalKey.exactCardsRank === null || externalKey.exactCardsRank > policy.externalKey.exactRankAtMost) {
     failures.push(`externalKey.exactCardsRank ${String(externalKey.exactCardsRank)} > ${String(policy.externalKey.exactRankAtMost)}`);
   }
@@ -195,6 +209,7 @@ function evaluate(corpusDigest, policy) {
     mixed,
     language,
     real: { prompts: judged.length, relevantLabelled, relevantInTop3, precisionAt3 },
+    incidentReplay: { ...incidentReplayScore, pairs: incidentReplay.counts.included, skipped: incidentReplay.counts.skipped, skippedNoSummary: incidentReplay.counts.skippedNoSummary },
     externalKey,
     metrics: ["@1", "@3", "@8", "precision@3"],
   };

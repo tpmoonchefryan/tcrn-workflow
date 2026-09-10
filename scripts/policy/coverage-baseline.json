@@ -1862,6 +1862,16 @@
         "STORY-377: concurrent sweeps converge without a second retirement"
       ]
     },
+    "tests/story-378-incident-replay.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 28,
+      "testNames": [
+        "STORY-378 GWT1: the frozen 55-work corpus yields source-digested replay pairs",
+        "STORY-378: absent summaries are counted and unknown card links cannot label a pair",
+        "STORY-378 GWT2: extraction produces an unapplied rule draft and a directly capturable decision card",
+        "STORY-378: the CLI writes only the rule draft file and reports the formal card plan"
+      ]
+    },
     "tests/story-380-artifact-blob-store.test.mjs": {
       "testCount": 12,
       "assertionCount": 60,
