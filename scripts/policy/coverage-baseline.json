@@ -37,8 +37,8 @@
       ]
     },
     "portal/tests/ui-presence.test.mjs": {
-      "testCount": 15,
-      "assertionCount": 110,
+      "testCount": 16,
+      "assertionCount": 116,
       "testNames": [
         "INC-148 meta-criterion mutation ${MUTATION} must red",
         "INC-148 rendered DOM contract names every preview component",
@@ -54,7 +54,8 @@
         "INC-186 the dictionary carries no workspace data",
         "INC-185 the vendor model directory opens as the page's own drawer",
         "S280 portal keeps model-plan assignments retired and supported settings writable",
-        "STORY-355 GWT3: the mobile nav toggle flips its state attributes, every destination stays reachable through it, and the 760px rules that gate it are present"
+        "STORY-355 GWT3: the mobile nav toggle flips its state attributes, every destination stays reachable through it, and the 760px rules that gate it are present",
+        "STORY-389: narrow execution cards, status receipts, and French tab labels keep their boundaries"
       ]
     },
     "tests/act11-adapter-acceptance.test.mjs": {
@@ -1650,8 +1651,8 @@
       ]
     },
     "tests/stop-pact-verify.test.mjs": {
-      "testCount": 7,
-      "assertionCount": 33,
+      "testCount": 9,
+      "assertionCount": 43,
       "testNames": [
         "STORY-374 Subtask 020: start persists an explicit workspace/work binding and migrations append history",
         "STORY-374 GWT1/GWT3: a failing bound verify blocks both hosts before model tier resolution",
@@ -1659,7 +1660,9 @@
         "STORY-374 GWT4: an absent verify command keeps the legacy observe path fail-open",
         "STORY-374: stop_hook_active and a parallel session take priority over verify",
         "STORY-374: stderr is retained as a well-formed UTF-8 tail capped at 500 bytes",
-        "STORY-374: the async runner blocks on timeout and reports an exit without stderr"
+        "STORY-374: the async runner blocks on timeout and reports an exit without stderr",
+        "STORY-384: async success, failure, cancellation, timeout, and pipeline paths reclaim their process groups",
+        "STORY-384: the synchronous runner uses a detached group and reclaims background descendants"
       ]
     },
     "tests/story-173-equivalence-redleg.test.mjs": {
@@ -1926,12 +1929,15 @@
       ]
     },
     "tests/telemetry.test.mjs": {
-      "testCount": 3,
-      "assertionCount": 42,
+      "testCount": 6,
+      "assertionCount": 62,
       "testNames": [
         "STORY-372: telemetry is daily NDJSON, stable, idempotent, filterable, and tolerant of bad lines",
         "STORY-372: both hook events record bounded facts and never fabricate observed model",
-        "STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires"
+        "STORY-387: the telemetry hook records an upstream checkpoint only when one is supplied",
+        "STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires",
+        "STORY-387: only explicit four-channel start/stop checkpoints can seal a UTC day",
+        "STORY-387: missing and unavailable upstream observations stay unproven"
       ]
     },
     "tests/telemetry-stats.test.mjs": {
