@@ -728,4 +728,5 @@ export {
   createTelemetryRecord,
   readTelemetryRecordById,
   readTelemetryRecords,
+  readTelemetryStats,
 } from "./telemetry.js";

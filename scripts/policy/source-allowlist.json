@@ -568,6 +568,7 @@
     "tests/story-380-artifact-blob-store.test.mjs",
     "tests/story-rule-conservation.test.mjs",
     "tests/story-scope-compliance.test.mjs",
+    "tests/telemetry-stats.test.mjs",
     "tests/telemetry.test.mjs",
     "tests/token-attribution.test.mjs",
     "tests/workspace-extension-records.test.mjs",

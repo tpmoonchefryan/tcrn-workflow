@@ -1900,6 +1900,17 @@
         "STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires"
       ]
     },
+    "tests/telemetry-stats.test.mjs": {
+      "testCount": 5,
+      "assertionCount": 24,
+      "testNames": [
+        "STORY-376 GWT1/GWT2: open kinds are counted by since, bad lines are reported, and unknown usage stays null",
+        "STORY-376: telemetry-stats and telemetry-list are read-only CLI surfaces for an open kind",
+        "STORY-376: the Story 367 injection path records retrieval, bytes, judge, and pull through the same module",
+        "STORY-376: concurrent writers serialize complete lines and the 16 KiB record bound stays hard",
+        "STORY-376: retention deletes only manifest-registered closed day files and refuses a symlink root"
+      ]
+    },
     "tests/token-attribution.test.mjs": {
       "testCount": 12,
       "assertionCount": 54,

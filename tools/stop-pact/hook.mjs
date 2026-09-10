@@ -25,7 +25,7 @@ import { decide } from "./decide.mjs";
 import { readPact, writePact, withRuntime } from "./pact.mjs";
 import { resolveMode, resolveModelFromTranscript, toolUseCount, workedSinceLastBlock } from "./mode.mjs";
 import { notify } from "./notify.mjs";
-import { runVerification, verifyPactBinding } from "./verify.mjs";
+import { recordVerificationTelemetry, runVerification, verifyPactBinding } from "./verify.mjs";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "cli.mjs");
 const CLI_INVOCATION = `node ${CLI}`;
@@ -56,6 +56,7 @@ async function main() {
   const binding = verifyPactBinding(pact, sessionId);
   if (binding.status === "available") {
     const verification = await runVerification(binding.command, pact.workspace);
+    await recordVerificationTelemetry(pact, sessionId, verification);
     if (verification.ok) { process.exit(0); return; }
     // This is the only new hard-stop branch. Its reason is deliberately the
     // bounded UTF-8 stderr tail (or the explicit exit/timeout/start reason).

@@ -213,3 +213,29 @@ export function verifyPactBinding(pact, sessionId) {
   if (typeof pact.boundSession === "string" && pact.boundSession !== sessionId) return { status: "skipped", reason: "pact belongs to another session" };
   return readAdvisoryVerify({ workspace: pact.workspace, workId: pact.workId });
 }
+
+/** Record the result without putting command output or private process data in telemetry. */
+export async function recordVerificationTelemetry(pact, sessionId, result) {
+  if (!pact?.workspace || result?.status !== "passed" && result?.status !== "failed") return null;
+  try {
+    const core = await import("../../dist/build/packages/core/src/index.js");
+    const state = await core.materializeWorkspace(pact.workspace);
+    const transient = core.activeBinding(state.metadata).find((entry) => entry.kind === "transient");
+    if (transient === undefined) return null;
+    const record = core.createTelemetryRecord({
+      at: new Date().toISOString(),
+      kind: "verify",
+      session: typeof sessionId === "string" && sessionId.length > 0 ? sessionId : "unknown-stop-session",
+      payload: {
+        source: "stop-pact:verify",
+        availability: "available",
+        passed: result.ok === true,
+        exitCode: result.exitCode ?? null,
+        timedOut: result.timedOut === true,
+      },
+    });
+    return await core.appendTelemetryRecord(transient.path, record);
+  } catch {
+    return null;
+  }
+}

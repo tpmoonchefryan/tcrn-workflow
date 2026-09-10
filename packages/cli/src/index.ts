@@ -111,6 +111,9 @@ import {
   templateBindingFromWorkRecord,
   readTelemetryRecordById,
   readTelemetryRecords,
+  appendTelemetryRecord,
+  createTelemetryRecord,
+  readTelemetryStats,
   probeHost,
   validateTemplateDocument,
 } from "../../core/src/index.js";
@@ -838,6 +841,23 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
   }));
 }
 
+async function appendCliTelemetry(state: Awaited<ReturnType<typeof materializeWorkspace>>, kind: string, payload: Readonly<Record<string, unknown>>): Promise<void> {
+  const transient = activeBinding(state.metadata).find((root) => root.kind === "transient");
+  if (transient === undefined) return;
+  try {
+    const record = createTelemetryRecord({
+      at: new Date().toISOString(),
+      kind,
+      session: process.env.TCRN_SESSION_ID ?? "unknown-cli-session",
+      payload: { source: `cli:${kind}`, availability: "available", ...payload },
+    });
+    await appendTelemetryRecord(transient.path, record);
+  } catch {
+    // Telemetry is disposable observation data; a missing sink never changes the
+    // governed command's result or turns an unavailable observation into zero.
+  }
+}
+
 function writeSettingsState(io: CliIo, state: Awaited<ReturnType<typeof materializeWorkspace>>, key: string): void {
   const setting = state.settings.find((entry) => entry.key === key);
   const catalogEntry = SETTINGS_CATALOG.find((entry) => entry.key === key);
@@ -973,6 +993,7 @@ export const COMMAND_CATALOG = Object.freeze([
   // PG-specific; it is removed.
   { name: "storage-home-status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "telemetry-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "class", required: false, valueKind: "string" }, { name: "since", required: false, valueKind: "instant" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
+  { name: "telemetry-stats", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "class", required: false, valueKind: "string" }, { name: "since", required: false, valueKind: "instant" }] },
   { name: "template-admit", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "template", required: true, valueKind: "string" }, { name: "owner", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "template-validate", availability: "cli", mutates: false, flags: [{ name: "template", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
@@ -2376,7 +2397,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
   if (command === "telemetry-list") {
     const values = parseArguments(rest, ["workspace", "kind", "class", "since", "limit", "offset"]);
     required(values, ["workspace"]);
-    if (values.kind !== undefined && !["subagent-start", "subagent-stop"].includes(values.kind)) {
+    if (values.kind !== undefined && (values.kind.length === 0 || values.kind.length > 128 || !values.kind.isWellFormed())) {
       fail("CLI_ARGUMENT_MALFORMED", "kind");
     }
     if (values.class !== undefined && (values.class.length === 0 || values.class.length > 128 || !values.class.isWellFormed())) {
@@ -2404,6 +2425,35 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     });
     io.write(canonicalJson({
       reasonCode: "TELEMETRY_LIST_READY",
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      ...result,
+    }));
+    return;
+  }
+  if (command === "telemetry-stats") {
+    const values = parseArguments(rest, ["workspace", "kind", "class", "since"]);
+    required(values, ["workspace"]);
+    if (values.kind !== undefined && (values.kind.length === 0 || values.kind.length > 128 || !values.kind.isWellFormed())) {
+      fail("CLI_ARGUMENT_MALFORMED", "kind");
+    }
+    if (values.class !== undefined && (values.class.length === 0 || values.class.length > 128 || !values.class.isWellFormed())) {
+      fail("CLI_ARGUMENT_MALFORMED", "class");
+    }
+    if (values.since !== undefined) {
+      try { assertStrictInstant(values.since); } catch { fail("CLI_ARGUMENT_MALFORMED", "since"); }
+    }
+    const state = await validateWorkspace(values.workspace ?? "");
+    const transient = activeBinding(state.metadata).find((root) => root.kind === "transient");
+    if (transient === undefined) fail("CLI_COMMAND_FAILED", "workspace has no transient root for telemetry");
+    const result = await readTelemetryStats(transient.path, {
+      ...(values.kind === undefined ? {} : { kind: values.kind }),
+      ...(values.class === undefined ? {} : { taskClass: values.class }),
+      ...(values.since === undefined ? {} : { since: values.since }),
+    });
+    io.write(canonicalJson({
+      reasonCode: "TELEMETRY_STATS_READY",
       workspaceId: state.metadata.workspaceId,
       version: state.version,
       headEventHash: state.headEventHash,
@@ -2663,6 +2713,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
+    const gate = state.gates.find((entry) => entry.id === (values.id ?? ""));
+    await appendCliTelemetry(state, "gate-result", {
+      gateId: values.id ?? "",
+      status: values.status ?? "",
+      outcomeClass: gate?.outcomeClass ?? null,
+    });
     writeExtensionState(io, state, values.id ?? "");
     return;
   }

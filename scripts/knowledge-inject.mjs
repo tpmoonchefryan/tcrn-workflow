@@ -211,6 +211,39 @@ async function languageModule() {
   return coreLanguageModule;
 }
 
+async function telemetryWriter(partition, containerRoot, sessionId, suppliedState = null) {
+  const core = await languageModule();
+  if (core?.createTelemetryRecord === undefined || core?.appendTelemetryRecord === undefined || core?.activeBinding === undefined) return null;
+  const state = suppliedState ?? await workspaceStateForInjection(partition, containerRoot);
+  const root = state?.metadata === undefined
+    ? null
+    : core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
+  if (root === null) return null;
+  return async ({ kind, payload }) => {
+    try {
+      const record = core.createTelemetryRecord({
+        at: new Date().toISOString(),
+        kind,
+        session: sessionId,
+        payload: {
+          source: `knowledge-inject:${kind}`,
+          availability: "available",
+          ...payload,
+        },
+      });
+      await core.appendTelemetryRecord(root, record);
+      return { availability: "available", id: record.id };
+    } catch {
+      return { availability: "unavailable", id: null };
+    }
+  };
+}
+
+async function emitTelemetry(writer, event) {
+  if (typeof writer !== "function") return { availability: "unavailable", id: null };
+  try { return await writer(event); } catch { return { availability: "unavailable", id: null }; }
+}
+
 async function queryLanguageAnswer(prompt, settings) {
   const core = await languageModule();
   if (core?.readKnowledgeLanguagePolicy && core?.resolveQueryLanguage) {
@@ -272,6 +305,7 @@ export async function runInjection({
   translate = null,
   settings = null,
   recall = null,
+  telemetry = null,
 } = {}) {
   void triggerKeywords;
   const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : await configuredInjectionBudget(partition, containerRoot);
@@ -336,6 +370,14 @@ export async function runInjection({
     }
   }
   const candidates = payload.records ?? [];
+  await emitTelemetry(telemetry, {
+    kind: "retrieval-hit",
+    payload: {
+      candidateCount: candidates.length,
+      candidateIds: candidates.map(recordIdentity).filter(Boolean),
+      queryTranslations,
+    },
+  });
   const lines = [];
   for (const candidate of candidates) {
     // The kind and the key are spoken because the answer now spans three record
@@ -347,6 +389,15 @@ export async function runInjection({
   const joined = lines.join("\n");
   const injectedBytes = Buffer.byteLength(joined, "utf8");
   const budgetExceeded = injectedBytes > effectiveBudget;
+  await emitTelemetry(telemetry, {
+    kind: "injection-bytes",
+    payload: {
+      candidateCount: candidates.length,
+      injectedBytes,
+      budget: effectiveBudget,
+      budgetExceeded,
+    },
+  });
   return {
     ok: true,
     injected: true,
@@ -444,6 +495,7 @@ export async function runSessionInjection({
   let decisionReason = "NO_CONTEXT";
   try {
     const effectiveSettings = settings ?? await configuredSettingRecords(partition, containerRoot);
+    const telemetry = await telemetryWriter(partition, containerRoot, sessionId, workspaceState);
     calls = await productionModelCalls({
       host,
       model: settingValue(effectiveSettings, "model.economyTier"),
@@ -474,6 +526,7 @@ export async function runSessionInjection({
       if (correlation !== null) {
         lease.session.pulledIds.push(correlation.id);
         lease.session.pullCorrelations.push({ ...correlation, at: new Date().toISOString() });
+        await emitTelemetry(telemetry, { kind: "pull", payload: { id: correlation.id, verb: correlation.verb } });
         decisionReason = "PULL_RECORDED";
       } else {
         decisionReason = "PULL_IGNORED";
@@ -491,6 +544,7 @@ export async function runSessionInjection({
           settings: effectiveSettings,
           translate: calls.translate,
           recall,
+          telemetry,
         });
         const fresh = deduplicateCandidates(recallResult.candidates, lease.session.emittedIds);
         const allowance = Math.min(effectivePerPrompt, effectiveBudget - lease.session.l1Bytes);
@@ -516,6 +570,14 @@ export async function runSessionInjection({
             judgment: typeof judgment === "boolean" ? judgment : null,
             model: judgement?.model ?? settingValue(effectiveSettings, "model.economyTier"),
             at: new Date().toISOString(),
+          });
+          await emitTelemetry(telemetry, {
+            kind: "judge",
+            payload: {
+              candidateCount: fresh.length,
+              judgment: typeof judgment === "boolean" ? judgment : null,
+              model: judgement?.model ?? settingValue(effectiveSettings, "model.economyTier"),
+            },
           });
         }
         if (recallResult.telemetry?.queryTranslations > 0 || recallResult.translatedQuery !== null || recallResult.telemetry?.translationFailure) lease.session.translationAttempts += 1;

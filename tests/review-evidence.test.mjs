@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import test from "node:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,9 +14,19 @@ import {
   parseTestRunOutput,
 } from "../scripts/review-evidence.mjs";
 
-const REPOSITORY_ROOT = process.cwd();
 const CHAIN_WORKSPACE = join("/workspace/user", [".tcrn", "workspace"].join("-"), "cross-project", "workspace");
 const STORY_374 = "work:bba2301b55370dabd7854616";
+
+function gitFixture(t) {
+  const root = mkdtempSync(join(tmpdir(), "tcrn-review-evidence-repo-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "tests"), { recursive: true });
+  writeFileSync(join(root, "tests", "fixture.test.mjs"), "test(\"fixture\", () => assert.equal(1, 1));\n");
+  assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
+  assert.equal(spawnSync("git", ["-C", root, "add", "tests/fixture.test.mjs"]).status, 0);
+  assert.equal(spawnSync("git", ["-C", root, "-c", "user.name=review-test", "-c", "user.email=fixture-at-example.invalid", "commit", "-qm", "base"]).status, 0);
+  return root;
+}
 
 function runUnpreloadedCollect(options) {
   const moduleUrl = new URL("../scripts/review-evidence.mjs", import.meta.url).href;
@@ -26,11 +36,12 @@ function runUnpreloadedCollect(options) {
   return JSON.parse(result.stdout);
 }
 
-test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separates runner and AST counts", () => {
+test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separates runner and AST counts", (t) => {
+  const repositoryRoot = gitFixture(t);
   const result = runUnpreloadedCollect({
     workspace: CHAIN_WORKSPACE,
     workId: STORY_374,
-    repositoryRoot: REPOSITORY_ROOT,
+    repositoryRoot,
     base: "HEAD",
     allowedFiles: [],
   });
@@ -43,16 +54,9 @@ test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separ
   const rerun = runUnpreloadedCollect({
     workspace: CHAIN_WORKSPACE,
     workId: STORY_374,
-    repositoryRoot: REPOSITORY_ROOT,
+    repositoryRoot,
     base: "HEAD",
-    allowedFiles: [
-      "fixtures/rc1/rc1-candidate-proof-manifest.json",
-      "scripts/policy/coverage-baseline.json",
-      "scripts/policy/source-allowlist.json",
-      "scripts/review-evidence.mjs",
-      "tests/review-evidence.test.mjs",
-      "verification-map.yaml",
-    ],
+    allowedFiles: ["tests/fixture.test.mjs"],
     testCommand: `${JSON.stringify(process.execPath)} -e ${JSON.stringify("process.stdout.write(JSON.stringify({tests:['fixture-test'],result:'passed'}))")}`,
   });
   assert.equal(rerun.ok, true, JSON.stringify(rerun.problems));
@@ -70,9 +74,9 @@ test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separ
     const timeout = runUnpreloadedCollect({
       workspace: CHAIN_WORKSPACE,
       workId: STORY_374,
-      repositoryRoot: REPOSITORY_ROOT,
+      repositoryRoot,
       base: "HEAD",
-      allowedFiles: ["fixtures/rc1/rc1-candidate-proof-manifest.json", "scripts/policy/coverage-baseline.json", "scripts/policy/source-allowlist.json", "scripts/review-evidence.mjs", "tests/review-evidence.test.mjs", "verification-map.yaml"],
+      allowedFiles: ["tests/fixture.test.mjs"],
       testCommand: `${JSON.stringify(process.execPath)} -e ${JSON.stringify(`require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 60_000)`)}`,
       commandTimeoutMs: 100,
     });
