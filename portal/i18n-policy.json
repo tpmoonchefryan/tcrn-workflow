@@ -36,7 +36,8 @@
         "app.brand",
         "settings.machine",
         "vocabulary.columnDescription",
-        "vocabulary.columnSource"
+        "vocabulary.columnSource",
+        "dashboard.auditTab"
       ]
     }
   }
