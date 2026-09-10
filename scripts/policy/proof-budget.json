@@ -316,6 +316,12 @@
       "recordedAt": "2026-09-10",
       "ratio": 2.1026,
       "rationale": "Under TCRN-CROSS-MIN-144 D8, this exception records the measured coreSourceLine increase required by telemetry fitness aggregation, complete-UTC-day gating, base-digest-bound removal proposals, CAS-protected small-card retirement, dead-claim recovery, fitness settings, the SessionStart once-per-day path, and fixture-backed Story 377 tests. The measured packages/core/src count is 23739 raw 0x0a lines, raised from the zero-margin 23198 cap with no headroom; verifyScriptCap remains 14, claimCap remains 9, and frozenRatio remains 1.5888. The formatted tree measures 58152 proof lines and 27657 product lines, ratio 2.1026, below effectiveRatio 2.2067."
+    },
+    {
+      "id": "TCRN-CROSS-INC-295-observation-coverage",
+      "recordedAt": "2026-09-11",
+      "ratio": 2.1329,
+      "rationale": "Owner approved the bounded INIT-051 closeout repair on 2026-09-11. Under TCRN-CROSS-MIN-144 D8, the core cap moves from 23739 to the measured 23778 raw LF bytes with zero headroom: explicit complete-day coverage receipts, input digest/count consistency, unknown-collection refusal, and artifact-specific removal predicates. No verify script, claim, or guard is added. Four regression tests are added without dropping existing tests. The measured ratio 2.1329 remains below 2.2067 and frozenRatio stays unchanged. Receipt integrity is not collector completeness; INC-301 records the unverified production collector boundary."
     }
   ],
   "surfaceCaps": {
@@ -324,7 +330,7 @@
     "recordedAt": "2026-09-10",
     "verifyScriptCap": 14,
     "claimCap": 9,
-    "coreSourceLineCap": 23739,
+    "coreSourceLineCap": 23778,
     "coreSourceLineMetric": {
       "glob": "packages/core/src/**/*.ts",
       "method": "raw 0x0a byte count across the matched files, recursive, blank lines and comments included -- the same deliberately crude counting method scripts/task.mjs's reportBudget (WSG-7) uses for productLines.",

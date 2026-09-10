@@ -1854,9 +1854,13 @@
       ]
     },
     "tests/story-377-retire-sweep.test.mjs": {
-      "testCount": 4,
-      "assertionCount": 44,
+      "testCount": 8,
+      "assertionCount": 56,
       "testNames": [
+        "INC-295: existing empty day files do not establish complete observation",
+        "INC-295: unknown collection and stale or partial coverage never authorize retirement",
+        "INC-295: changed input invalidates a seal and useful rules or checks are not removal candidates",
+        "INC-295: a conflicting collector receipt or partial day is not coverage",
         "STORY-377 GWT1/GWT2/GWT3: fitness is complete, proposals are read-only, and only a small idle card retires",
         "STORY-377 GWT4: missing, invalid, and rolled-back observation windows never become zero",
         "STORY-377: a stopped sweep recovers a retired card once, then its evidence survives telemetry cleanup",

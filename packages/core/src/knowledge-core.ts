@@ -2716,7 +2716,9 @@ function retirementProposals(
 ): readonly Readonly<Record<string, JsonValue>>[] {
   return records
     .filter((record) => windowComplete && record.observationComplete && record.observedEvents >= minEvents && record.retrievalCount === 0 && record.referenceCount === 0 &&
-      (record.eligible || record.artifactKind === "telemetry-only"))
+      (record.eligible || record.artifactKind === "telemetry-only" &&
+        (/^(?:verify-script|verify|gate):/u.test(record.id) ? record.verifyFailureCount === 0 :
+          /^rule:/u.test(record.id) && record.triggerCount === 0)))
     .map((record) => ({
       id: record.id,
       operation: "retire",
@@ -2728,8 +2730,8 @@ function retirementProposals(
       baseDigest: record.baseDigest,
       from: { lifecycle: record.lifecycle, body: record.lifecycle === "retired" ? "deleted" : "present" },
       to: { lifecycle: "retired", body: "deleted" },
-      impact: { retrieval: record.retrievalCount, reference: record.referenceCount, observedEvents: record.observedEvents },
-      reason: "zero-retrieval-zero-reference",
+      impact: { retrieval: record.retrievalCount, reference: record.referenceCount, trigger: record.triggerCount, verifyFailure: record.verifyFailureCount, observedEvents: record.observedEvents },
+      reason: record.eligible ? "zero-retrieval-zero-reference" : /^rule:/u.test(record.id) ? "never-triggered" : "never-failed",
       retrievalCount: record.retrievalCount,
       referenceCount: record.referenceCount,
       observedEvents: record.observedEvents,

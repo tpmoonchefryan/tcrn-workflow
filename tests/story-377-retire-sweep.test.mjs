@@ -86,7 +86,7 @@ async function card(fx, externalKey, options = {}) {
   });
 }
 
-async function fillWindow(fx, days = 90, events = []) {
+async function fillWindow(fx, days = 90, events = [], sealed = true) {
   const telemetry = join(fx.transient, "telemetry");
   await mkdir(telemetry, { recursive: true });
   for (let offset = days; offset >= 1; offset -= 1) {
@@ -102,7 +102,93 @@ async function fillWindow(fx, days = 90, events = []) {
       payload: { source: `story-377:${event.kind}`, availability: "available", ...event.payload },
     }));
   }
+  if (sealed) await sealWindow(fx, days);
 }
+
+// A test collector knows its complete fixture input. Production collectors may
+// only emit this receipt after proving coverage; a file's existence is not proof.
+async function sealWindow(fx, days = 90, overrides = {}) {
+  for (let offset = days; offset >= 1; offset -= 1) {
+    const source = await readFile(join(fx.transient, "telemetry", dayFile(offset)), "utf8");
+    const records = source.split("\n").filter(Boolean).map((line) => JSON.parse(line))
+      .filter((record) => record.kind !== "observation-coverage");
+    await appendTelemetryRecord(fx.transient, createTelemetryRecord({
+      at: windowDay(offset - 1).toISOString(),
+      kind: "observation-coverage",
+      session: "story-377-test-collector",
+      payload: {
+        source: "story-377:test-collector", availability: "available",
+        coveredFrom: windowDay(offset).toISOString(),
+        coveredUntil: windowDay(offset - 1).toISOString(),
+        channels: ["retrieval", "reference", "trigger", "verify"],
+        recordCount: records.length, sourceDigest: canonicalSha256(records),
+        collectionErrors: 0, ...overrides,
+      },
+    }));
+  }
+}
+
+test("INC-295: existing empty day files do not establish complete observation", async (t) => {
+  const fx = await fixture(t, "FIXTURE-INC-295-EMPTY-DAYS");
+  const idle = await card(fx, "INC-295-IDLE");
+  await fillWindow(fx, 90, [{ offset: 90, kind: "judge", payload: { candidateIds: [idle.id] } }], false);
+  const fitness = await evaluateKnowledgeFitness(fx.workspace, { at: AT });
+  assert.equal(fitness.windowComplete, false);
+  assert.equal(fitness.records.find((record) => record.id === idle.id).eligible, false);
+  assert.deepEqual((await retireKnowledgeSweep(fx.workspace, { at: AT })).retired, []);
+});
+
+test("INC-295: unknown collection and stale or partial coverage never authorize retirement", async (t) => {
+  for (const [key, overrides, availability] of [
+    ["unknown", {}, "unknown"],
+    ["unavailable", {}, "unavailable"],
+    ["missing-channel", { channels: ["retrieval"] }, "available"],
+    ["collection-error", { collectionErrors: 1 }, "available"],
+    ["wrong-count", { recordCount: 100 }, "available"],
+    ["wrong-digest", { sourceDigest: "0".repeat(64) }, "available"],
+  ]) {
+    const fx = await fixture(t, `FIXTURE-INC-295-${key}`);
+    const idle = await card(fx, `INC-295-${key}`);
+    await fillWindow(fx, 90, [{ offset: 90, kind: "judge", payload: { candidateIds: [idle.id], availability } }], false);
+    await sealWindow(fx, 90, overrides);
+    const fitness = await evaluateKnowledgeFitness(fx.workspace, { at: AT });
+    assert.equal(fitness.windowComplete, false, key);
+    assert.equal(fitness.records.find((record) => record.id === idle.id).eligible, false, key);
+  }
+});
+
+test("INC-295: changed input invalidates a seal and useful rules or checks are not removal candidates", async (t) => {
+  const fx = await fixture(t, "FIXTURE-INC-295-PROPOSALS");
+  await fillWindow(fx, 90, [
+    { offset: 90, kind: "verify", payload: { artifactId: "verify-script:story-377", passed: false } },
+    { offset: 90, kind: "verify", payload: { artifactId: "verify-script:idle", passed: true } },
+    { offset: 90, kind: "rule-trigger", payload: { artifactId: "rule:active" } },
+    { offset: 90, kind: "judge", payload: { artifactId: "rule:idle" } },
+    { offset: 90, kind: "judge", payload: { artifactId: "work:not-a-removable-artifact" } },
+  ]);
+  const fitness = await evaluateKnowledgeFitness(fx.workspace, { at: AT });
+  assert.equal(fitness.windowComplete, true);
+  assert.deepEqual(fitness.proposals.map((proposal) => proposal.id).sort(), ["rule:idle", "verify-script:idle"]);
+  await appendTelemetryRecord(fx.transient, createTelemetryRecord({
+    at: eventAt(5), kind: "verify", session: "late-input",
+    payload: { source: "story-377:test-collector", availability: "available", artifactId: "verify-script:idle", passed: false },
+  }));
+  const stale = await evaluateKnowledgeFitness(fx.workspace, { at: AT });
+  assert.equal(stale.windowComplete, false);
+  assert.deepEqual(stale.proposals, []);
+});
+
+test("INC-295: a conflicting collector receipt or partial day is not coverage", async (t) => {
+  const fx = await fixture(t, "FIXTURE-INC-295-CONFLICT");
+  await fillWindow(fx);
+  assert.equal((await evaluateKnowledgeFitness(fx.workspace, { at: AT })).windowComplete, true);
+  await sealWindow(fx, 1, { collectionErrors: 1 });
+  assert.equal((await evaluateKnowledgeFitness(fx.workspace, { at: AT })).windowComplete, false);
+  const partial = await fixture(t, "FIXTURE-INC-295-PARTIAL");
+  await fillWindow(partial, 90, [], false);
+  await sealWindow(partial, 90, { coveredFrom: "2026-06-12T12:00:00.000Z" });
+  assert.equal((await evaluateKnowledgeFitness(partial.workspace, { at: AT })).windowComplete, false);
+});
 
 async function cliJson(argv) {
   let output = "";

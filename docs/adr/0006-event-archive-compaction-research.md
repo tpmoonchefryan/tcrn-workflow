@@ -1,6 +1,6 @@
 # ADR 0006: Research shape for cold-segment archive and compaction
 
-- Status: Draft; Owner decision required
+- Status: Option D adopted for current operation; V2 not started
 - Date: 2026-09-10
 - Governs: TCRN-CROSS-STORY-381 and the future storage-version-2 decision
 - Related: `docs/2026-07-17-p3-compaction-deferral-decision.md`
@@ -9,10 +9,10 @@
 
 This document is a decision package, not a V2 implementation. V1 keeps its
 authoritative event chain, its 10,000-event ceiling, and its fail-closed
-`applyWorkspaceMigration` boundary. The recommendation for the next research
-step is Option A, while Option D remains the safe V1 operating posture. Owner
-must choose whether a V2 proposal is admitted; this ADR does not create that
-implementation work.
+`applyWorkspaceMigration` boundary. Owner adopted Option D on 2026-09-11 when
+approving the INIT-051 closeout remediation. Option A remains a research
+alternative only; no V2 study or implementation is started by this decision.
+Acceptance of the research package does not require starting a new programme.
 
 ## Closed reason and current measurements
 
@@ -98,7 +98,7 @@ manifest/head checks match after the run.
 
 ## Owner decision boundary
 
-Owner decides whether to admit a V2 design study, retain V1 as the only
-operating posture, or request a separate partition protocol. No policy approval
+The current decision retains V1 as the only operating posture. A V2 design
+study or separate partition protocol requires a future Owner decision. No policy approval
 or prototype result is an implementation acceptance, and no external
 publication, deployment, or release is implied.

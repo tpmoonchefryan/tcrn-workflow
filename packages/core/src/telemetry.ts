@@ -465,6 +465,8 @@ export async function readTelemetryObservationWindow(root: string, at: string, w
   const missingDays: string[] = [];
   const invalidDays: string[] = [];
   const records: TelemetryRecord[] = [];
+  const dayRecords = new Map<string, TelemetryRecord[]>();
+  const coverage: TelemetryRecord[] = [];
   const problems: { path: string; line: number; reasonCode: string }[] = [];
   let directoryAvailable = true;
   try {
@@ -477,7 +479,10 @@ export async function readTelemetryObservationWindow(root: string, at: string, w
     else throw error;
   }
   if (!directoryAvailable) missingDays.push(...names);
-  for (const name of directoryAvailable ? names : []) {
+  // A collector closes a UTC day in the next day's stream, never by backdating
+  // observations. Include today's receipts without counting today's activity.
+  const today = `${current.toISOString().slice(0, 10)}.ndjson`;
+  for (const name of directoryAvailable ? [...names, today] : []) {
     const path = join(directory, name);
     let source;
     try {
@@ -485,7 +490,7 @@ export async function readTelemetryObservationWindow(root: string, at: string, w
       if (!stats.isFile() || stats.isSymbolicLink()) fail("TELEMETRY_FILE_INVALID", `${path} must be a regular file`);
       source = await readFile(path, "utf8");
     } catch (error) {
-      if (errorCode(error) === "ENOENT") { missingDays.push(name); continue; }
+      if (errorCode(error) === "ENOENT") { if (name !== today) missingDays.push(name); continue; }
       throw error;
     }
     let invalid = false;
@@ -493,9 +498,41 @@ export async function readTelemetryObservationWindow(root: string, at: string, w
       if (line.length === 0) continue;
       const parsed = lineRecord(path, line, index + 1);
       if (parsed.problem) { problems.push(parsed.problem); invalid = true; }
-      else if (parsed.record) records.push(parsed.record);
+      else if (parsed.record) {
+        const record = parsed.record;
+        if (`${new Date(record.at).toISOString().slice(0, 10)}.ndjson` !== name) { invalid = true; continue; }
+        if (record.kind === "observation-coverage") coverage.push(record);
+        else if (name !== today) {
+          const entries = dayRecords.get(name) ?? [];
+          entries.push(record);
+          dayRecords.set(name, entries);
+          records.push(record);
+          if (record.payload.availability !== "available") invalid = true;
+        }
+      }
     }
     if (invalid) invalidDays.push(name);
+  }
+  for (const name of names) {
+    if (missingDays.includes(name) || invalidDays.includes(name)) continue;
+    const from = `${name.slice(0, 10)}T00:00:00.000Z`;
+    const until = new Date(new Date(from).getTime() + 86_400_000).toISOString();
+    const entries = dayRecords.get(name) ?? [];
+    const sourceDigest = canonicalSha256(entries as unknown as import("../../protocol/src/index.js").JsonValue);
+    const receipts = coverage.filter((record) => record.payload.coveredFrom === from && record.payload.coveredUntil === until);
+    const proven = receipts.length > 0 && receipts.every((record) => {
+      const value = record.payload;
+      const channels = value.channels;
+      return value.availability === "available" && value.collectionErrors === 0 &&
+        value.coveredFrom === from && value.coveredUntil === until &&
+        parseStrictInstant(record.at) >= parseStrictInstant(until) && parseStrictInstant(record.at) <= parseStrictInstant(at) &&
+        Array.isArray(channels) && ["retrieval", "reference", "trigger", "verify"].every((channel) => channels.includes(channel)) &&
+        value.recordCount === entries.length && value.sourceDigest === sourceDigest;
+    });
+    if (!proven) {
+      invalidDays.push(name);
+      problems.push({ path: join(directory, name), line: 0, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN" });
+    }
   }
   records.sort((left, right) => {
     const leftAt = parseStrictInstant(left.at);
