@@ -26,7 +26,7 @@
   },
   "incidentReplayIndependent": {
     "fixture": "incident-replay-frozen.json",
-    "fixtureDigest": "ef21d4f11509ca150b215a6a59292f42884ebb30a23b25e86e1adb293bcbd3fb",
+    "fixtureDigest": "19f1c061d6055a698b27c9a774b84df5659bdc363bcfab11dca17ee6d4f84e0f",
     "pairsAtLeast": 20,
     "hitAt1": 19,
     "hitAt3": 20,
