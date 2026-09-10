@@ -1329,7 +1329,7 @@
     },
     "tests/review-evidence.test.mjs": {
       "testCount": 3,
-      "assertionCount": 18,
+      "assertionCount": 20,
       "testNames": [
         "STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separates runner and AST counts",
         "STORY-375 GWT2: untracked diff files are included and become out-of-bounds without post-hoc scope widening",

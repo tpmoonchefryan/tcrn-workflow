@@ -178,13 +178,36 @@ function parseTestNumber(output, label) {
   return match ? Number(match[1]) : null;
 }
 
+function jsonObjects(output) {
+  return text(output).split("\n").reverse().flatMap((line) => {
+    try {
+      const value = JSON.parse(line);
+      return value !== null && typeof value === "object" && !Array.isArray(value) ? [value] : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
 /** Parse runner output only; a prose "passed" or a supplied count is not accepted. */
 export function parseTestRunOutput(stdout, stderr = "") {
   const combined = `${text(stdout)}\n${text(stderr)}`;
+  const structured = jsonObjects(stdout).find((value) => Array.isArray(value.tests));
+  if (structured !== undefined) {
+    return {
+      tests: structured.tests.length,
+      testFiles: structured.tests.length,
+      testCases: null,
+      passed: structured.result === "passed" || structured.ok === true ? structured.tests.length : null,
+      failed: structured.result === "passed" || structured.ok === true ? 0 : null,
+      parseable: true,
+      source: "engine-test-result.tests-array",
+    };
+  }
   const tests = parseTestNumber(combined, "tests");
   const passed = parseTestNumber(combined, "pass");
   const failed = parseTestNumber(combined, "fail");
-  return { tests, passed, failed, parseable: tests !== null };
+  return { tests: null, testFiles: null, testCases: tests, passed, failed, parseable: false, source: "node-test-case-summary" };
 }
 
 function readGitFile(repositoryRoot, ref, path) {
@@ -293,7 +316,9 @@ export function collectReviewEvidence({
   // twice and presenting two observations as if they were independent.
   const actualTestCommand = testCommand ?? binding.command;
   const testRun = testCommand === undefined ? verifyRun : runShell(testCommand, root, commandTimeoutMs);
-  const testSummary = testRun === null ? { tests: null, passed: null, failed: null, parseable: false } : parseTestRunOutput(testRun.stdout, testRun.stderr);
+  const testSummary = testRun === null
+    ? { tests: null, testFiles: null, testCases: null, passed: null, failed: null, parseable: false }
+    : parseTestRunOutput(testRun.stdout, testRun.stderr);
   const ast = astTestEvidence(root, base, head);
   if (binding.status === "missing") problems.push("bound work has no advisory:verify command");
   if (binding.status === "unavailable") problems.push(`bound work verify is unavailable: ${binding.reason}`);

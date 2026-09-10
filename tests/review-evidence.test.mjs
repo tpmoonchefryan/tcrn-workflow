@@ -46,11 +46,13 @@ test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separ
       "tests/review-evidence.test.mjs",
       "verification-map.yaml",
     ],
+    testCommand: `${JSON.stringify(process.execPath)} -e ${JSON.stringify("process.stdout.write(JSON.stringify({tests:['fixture-test'],result:'passed'}))")}`,
   });
   assert.equal(rerun.ok, true, JSON.stringify(rerun.problems));
   assert.equal(rerun.evidence.verify.ok, true);
   assert.equal(rerun.evidence.testRun.summary.parseable, true);
-  assert.equal(typeof rerun.evidence.testRun.summary.tests, "number");
+  assert.equal(rerun.evidence.testRun.summary.source, "engine-test-result.tests-array");
+  assert.equal(rerun.evidence.testRun.summary.tests, 1);
   assert.equal(typeof rerun.evidence.astCountCoverage.before.testCount, "number");
   assert.equal(typeof rerun.evidence.astCountCoverage.after.testCount, "number");
   assert.deepEqual(rerun.evidence.diff.outOfBounds, []);
@@ -74,11 +76,23 @@ test("STORY-375 GWT2: untracked diff files are included and become out-of-bounds
 });
 
 test("STORY-375: runner counts come from machine output, not prose or a caller-supplied number", () => {
-  assert.deepEqual(parseTestRunOutput("ℹ tests 12\nℹ pass 12\nℹ fail 0\n"), {
-    tests: 12,
-    passed: 12,
+  assert.deepEqual(parseTestRunOutput(JSON.stringify({ tests: ["one", "two"], result: "passed" })), {
+    tests: 2,
+    testFiles: 2,
+    testCases: null,
+    passed: 2,
     failed: 0,
     parseable: true,
+    source: "engine-test-result.tests-array",
+  });
+  assert.deepEqual(parseTestRunOutput("ℹ tests 12\nℹ pass 12\nℹ fail 0\n"), {
+    tests: null,
+    testFiles: null,
+    testCases: 12,
+    passed: 12,
+    failed: 0,
+    parseable: false,
+    source: "node-test-case-summary",
   });
   assert.equal(parseTestRunOutput("passed: 999 tests").parseable, false);
 });
