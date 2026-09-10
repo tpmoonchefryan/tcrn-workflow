@@ -53,30 +53,6 @@
       "replacement": "tests/coverage-conservation.test.mjs:coverage conservation requires waiver reason and either replacement or disowned"
     },
     {
-      "path": "tests/story-346-pg-disabled.test.mjs",
-      "testName": "STORY-346 local backend catalog excludes PostgreSQL and ADR states the MVP revision",
-      "reason": "TCRN-CROSS-INC-275 — renamed when its subject changed. PostgreSQL was removed from this repository under the Owner ruling of 2026-09-04, so the test no longer proves that a retained backend is unselectable; it proves the backend is gone. The assertion surface grew rather than shrank.",
-      "replacement": "tests/story-346-pg-disabled.test.mjs:STORY-346 storage.backend catalog contains only file backends, PostgreSQL absent"
-    },
-    {
-      "path": "tests/story-346-pg-disabled.test.mjs",
-      "testName": "STORY-346 the pg implementation remains present while the verification map has no pg fixture",
-      "reason": "TCRN-CROSS-INC-275 — renamed when its subject changed. PostgreSQL was removed from this repository under the Owner ruling of 2026-09-04, so the test no longer proves that a retained backend is unselectable; it proves the backend is gone. The assertion surface grew rather than shrank.",
-      "replacement": "tests/story-346-pg-disabled.test.mjs:STORY-346 PostgreSQL implementation and migration scripts are absent"
-    },
-    {
-      "path": "tests/story-346-pg-disabled.test.mjs",
-      "testName": "STORY-346 production backend selection has no pg branch",
-      "reason": "TCRN-CROSS-INC-275 — renamed when its subject changed. PostgreSQL was removed from this repository under the Owner ruling of 2026-09-04, so the test no longer proves that a retained backend is unselectable; it proves the backend is gone. The assertion surface grew rather than shrank.",
-      "replacement": "tests/story-346-pg-disabled.test.mjs:STORY-346 production backend selection rejects PostgreSQL"
-    },
-    {
-      "path": "tests/story-346-pg-disabled.test.mjs",
-      "testName": "__assertions__",
-      "reason": "TCRN-CROSS-INC-275 — the two assertions were the ADR-wording matches that were dropped because a later dispatch changes that ADR's text, and its replacement naming the same file's surviving absence test.",
-      "replacement": "tests/story-346-pg-disabled.test.mjs:STORY-346 storage.backend catalog contains only file backends, PostgreSQL absent"
-    },
-    {
       "path": "tests/p3-cli-read-surface.test.mjs",
       "testName": "INIT-047 MCP read face performs the real handshake and stays read-only",
       "reason": "TCRN-CROSS-INC-275 — the MCP stdio surface this exercised was retired in v0.11.18 and removed from the repository under the Owner ruling of 2026-09-04. What is worth proving changed from \"the surface handshakes correctly and stays read-only\" to \"the surface is absent\", and the replacement asserts exactly that and fails if it is reintroduced.",

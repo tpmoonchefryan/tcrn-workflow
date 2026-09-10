@@ -1719,11 +1719,11 @@
     },
     "tests/story-346-pg-disabled.test.mjs": {
       "testCount": 3,
-      "assertionCount": 6,
+      "assertionCount": 4,
       "testNames": [
-        "STORY-346 local backend catalog excludes PostgreSQL and ADR states the MVP revision",
-        "STORY-346 the pg implementation remains present while the verification map has no pg fixture",
-        "STORY-346 production backend selection has no pg branch"
+        "STORY-346 storage.backend catalog contains only file backends, PostgreSQL absent",
+        "STORY-346 PostgreSQL implementation and migration scripts are absent",
+        "STORY-346 production backend selection rejects PostgreSQL"
       ]
     },
     "tests/story-347-348-settings-policy.test.mjs": {
@@ -1915,14 +1915,5 @@
         "STORY-299: the budget report covers every view and the record cap"
       ]
     }
-  },
-  "tests/story-346-pg-disabled.test.mjs": {
-    "testCount": 3,
-    "assertionCount": 4,
-    "testNames": [
-      "STORY-346 storage.backend catalog contains only file backends, PostgreSQL absent",
-      "STORY-346 PostgreSQL implementation and migration scripts are absent",
-      "STORY-346 production backend selection rejects PostgreSQL"
-    ]
   }
 }
