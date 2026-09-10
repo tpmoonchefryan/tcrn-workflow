@@ -108,6 +108,18 @@ export const HARNESS_CAPABILITIES = Object.freeze([
     codex: { mechanism: "hook", event: "UserPromptSubmit", matcher: null, handler: "scripts/agents-zero-hook.mjs", timeout: 10 },
   },
   {
+    id: "dispatch-telemetry-start",
+    purpose: "a subagent start records the parent session and dispatch class in local telemetry",
+    claude: { mechanism: "hook", event: "SubagentStart", matcher: null, handler: "scripts/dispatch-telemetry-hook.mjs", timeout: 10 },
+    codex: { mechanism: "hook", event: "SubagentStart", matcher: null, handler: "scripts/dispatch-telemetry-hook.mjs", timeout: 10 },
+  },
+  {
+    id: "dispatch-telemetry-stop",
+    purpose: "a subagent stop records observed model and token usage in local telemetry",
+    claude: { mechanism: "hook", event: "SubagentStop", matcher: null, handler: "scripts/dispatch-telemetry-hook.mjs", timeout: 10 },
+    codex: { mechanism: "hook", event: "SubagentStop", matcher: null, handler: "scripts/dispatch-telemetry-hook.mjs", timeout: 10 },
+  },
+  {
     id: "stop-response-style-check",
     purpose: "a response that violates the platform output-contract rules is caught and fed back before the turn stops",
     claude: { mechanism: "hook", event: "Stop", matcher: null, handler: "tools/stop-pact/response-style-hook.mjs", timeout: 10 },

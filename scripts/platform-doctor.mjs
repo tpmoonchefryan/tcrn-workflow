@@ -1312,9 +1312,9 @@ async function inspectClaudeBridge(root) {
   return check("claudeBridge", true, { path: "CLAUDE.md", target: "AGENTS.md" });
 }
 
-// STORY-371. Compare the renderer-owned host fields with the current disk state. A
-// workspace without a resolved main model is explicitly unconfigured, so this leg does
-// not invent a target from an empty tier table.
+// STORY-371/372. Compare renderer-owned host fields and the generated hook roster with
+// current disk state. A workspace without a resolved model still has a meaningful hook
+// projection, so hooks-only drift remains visible without inventing a model.
 export async function inspectHostRenderDrift(root, options) {
   if (options.hostRenderDrift && typeof options.hostRenderDrift === "object") {
     const supplied = options.hostRenderDrift;
@@ -1354,7 +1354,7 @@ export async function inspectHostRenderDrift(root, options) {
       rows.push({ name: "hostRenderDrift", host, ok: false, comparable: true, reasonCode: error?.reasonCode ?? "PLATFORM_HOST_RENDER_FAILED", error: String(error?.message ?? error) });
     }
   }
-  const comparable = rows.some((row) => row.comparable);
+  const comparable = rows.some((row) => row.comparable || row.hooksComparable);
   const drift = rows.flatMap((row) => row.drift ?? []);
   return check("hostRenderDrift", drift.length === 0, {
     reasonCode: !comparable ? "PLATFORM_HOST_RENDER_UNCONFIGURED" : drift.length === 0 ? "PLATFORM_HOST_RENDER_CURRENT" : "PLATFORM_HOST_RENDER_DRIFTED",

@@ -59,6 +59,14 @@ test("INC-220 every rostered event exists on Codex", () => {
   }
 });
 
+test("STORY-372 both hosts receive generated SubagentStart and SubagentStop telemetry hooks", () => {
+  for (const host of HOSTS) {
+    const telemetry = hookEntriesFor(host).filter((entry) => entry.handler === "scripts/dispatch-telemetry-hook.mjs");
+    assert.deepEqual(telemetry.map((entry) => entry.event), ["SubagentStart", "SubagentStop"]);
+    assert.ok(telemetry.every((entry) => entry.timeout === 10));
+  }
+});
+
 test("INC-220 the two renderings carry the same handlers for the same capabilities", () => {
   // Rendering differences are legitimate — file shape, command form, one host-specific
   // Stop handler. A capability present on one host and absent on the other is not.

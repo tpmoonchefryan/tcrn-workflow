@@ -43,6 +43,13 @@ function digest(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function stableJson(value) {
+  return JSON.stringify(value, (_key, child) => {
+    if (child === null || typeof child !== "object" || Array.isArray(child)) return child;
+    return Object.fromEntries(Object.keys(child).sort().map((key) => [key, child[key]]));
+  });
+}
+
 function settingsEntries(settings) {
   if (!Array.isArray(settings)) failure("HOST_RENDER_SETTINGS_INVALID", "settings must be an array");
   return settings.map((entry) => {
@@ -81,17 +88,13 @@ function mergeClaudeHooks(existing, generated) {
   for (const [event, groups] of Object.entries(result)) merged[event] = Array.isArray(groups) ? structuredClone(groups) : groups;
   for (const [event, groups] of Object.entries(generated)) {
     const current = Array.isArray(merged[event]) ? merged[event] : [];
-    const next = current.slice();
-    for (const group of groups) {
-      const handler = group.hooks?.[0]?.command?.match(/tcrn-workflow\/(.+?\.mjs)/u)?.[1];
-      const index = next.findIndex((candidate) => {
-        const command = candidate?.hooks?.[0]?.command;
-        return typeof command === "string" && handler !== undefined && command.includes(handler);
-      });
-      if (handler && index >= 0) next[index] = structuredClone(group);
-      else if (handler) next.push(structuredClone(group));
-    }
-    merged[event] = next;
+    const handlers = groups.map((group) => group.hooks?.[0]?.command?.match(/tcrn-workflow\/(.+?\.mjs)/u)?.[1]).filter(Boolean);
+    const userGroups = current.filter((candidate) => {
+      const command = candidate?.hooks?.[0]?.command;
+      return typeof command !== "string" || !handlers.some((handler) => command.includes(handler));
+    });
+    const managedGroups = groups.map((group) => structuredClone(group));
+    merged[event] = [...userGroups, ...managedGroups];
   }
   return merged;
 }
@@ -200,7 +203,7 @@ function pathEntry(path, content, ownedFields, before, actualManaged, expectedMa
     beforeSha256: before === null ? null : digest(before),
     expectedManaged,
     actualManaged,
-    drift: JSON.stringify(actualManaged) !== JSON.stringify(expectedManaged),
+    drift: stableJson(actualManaged) !== stableJson(expectedManaged),
   };
 }
 
@@ -210,7 +213,7 @@ function managedAgent(source) {
   return { model: frontmatterValue(parsed.fields, "model"), effort: frontmatterValue(parsed.fields, "effort") };
 }
 
-export function renderHostPlan({ host, mode, settings, root, repoRoot = REPO_ROOT, existing = undefined } = {}) {
+export function renderHostPlan({ host, mode, settings, root, repoRoot = REPO_ROOT, existing = undefined, includeHooksWithoutModel = false } = {}) {
   text(host, "host");
   if (!HOST_RENDER_HOSTS.includes(host)) failure("HOST_RENDER_HOST_UNKNOWN", `host must be one of ${HOST_RENDER_HOSTS.join(", ")}`);
   const { config, mode: selectedMode } = readConfig(settings, mode);
@@ -219,7 +222,7 @@ export function renderHostPlan({ host, mode, settings, root, repoRoot = REPO_ROO
   const values = existing === undefined ? null : existing;
   const get = (path) => existingValue(values, path);
   const files = [];
-  if (resolutions.plan === null) {
+  if (resolutions.plan === null && !includeHooksWithoutModel) {
     return {
       schemaVersion: HOST_RENDER_VERSION,
       host,
@@ -261,7 +264,9 @@ export function renderHostPlan({ host, mode, settings, root, repoRoot = REPO_ROO
     const currentConfig = get(CODEX_CONFIG_PATH) ?? "";
     const nextConfig = plan === null ? currentConfig : updateToml(currentConfig, { model: plan.model, model_reasoning_effort: plan.effort });
     const expectedConfig = plan === null ? { model: rootTomlValue(currentConfig, "model"), effort: rootTomlValue(currentConfig, "model_reasoning_effort") } : { model: plan.model, effort: plan.effort };
-    files.push(pathEntry(CODEX_CONFIG_PATH, nextConfig, ["model", "model_reasoning_effort"], get(CODEX_CONFIG_PATH), { model: rootTomlValue(currentConfig, "model"), effort: rootTomlValue(currentConfig, "model_reasoning_effort") }, expectedConfig));
+    if (plan !== null) {
+      files.push(pathEntry(CODEX_CONFIG_PATH, nextConfig, ["model", "model_reasoning_effort"], get(CODEX_CONFIG_PATH), { model: rootTomlValue(currentConfig, "model"), effort: rootTomlValue(currentConfig, "model_reasoning_effort") }, expectedConfig));
+    }
     const expectedHooks = codexHookDocument(repoRoot).hooks;
     const currentHooks = parseJson(get(CODEX_HOOKS_PATH), CODEX_HOOKS_PATH);
     const nextHooks = { ...currentHooks, hooks: expectedHooks };
@@ -278,22 +283,25 @@ export function renderHostPlan({ host, mode, settings, root, repoRoot = REPO_ROO
     files,
     drift,
     comparable: resolutions.plan !== null,
-    reasonCode: resolutions.plan === null ? "HOST_RENDER_MODEL_UNSET" : drift.length === 0 ? "HOST_RENDER_CURRENT" : "HOST_RENDER_DRIFTED",
+    hooksComparable: includeHooksWithoutModel,
+    reasonCode: resolutions.plan === null ? (drift.length === 0 ? "HOST_RENDER_HOOKS_CURRENT" : "HOST_RENDER_HOOKS_DRIFTED") : drift.length === 0 ? "HOST_RENDER_CURRENT" : "HOST_RENDER_DRIFTED",
   };
 }
 
 export async function inspectHostRenderDrift(options = {}) {
   const root = resolve(text(options.root, "root"));
-  const first = renderHostPlan({ ...options, root, existing: new Map() });
+  const first = renderHostPlan({ ...options, root, includeHooksWithoutModel: true, existing: new Map() });
   const existing = await readExisting(root, first.files.map((entry) => entry.path));
-  const plan = renderHostPlan({ ...options, root, existing });
+  const plan = renderHostPlan({ ...options, root, includeHooksWithoutModel: true, existing });
+  const comparable = plan.comparable || plan.hooksComparable === true;
   return {
     name: "hostRenderDrift",
-    ok: !plan.comparable || plan.drift.length === 0,
-    reasonCode: !plan.comparable ? "PLATFORM_HOST_RENDER_UNCONFIGURED" : plan.drift.length === 0 ? "PLATFORM_HOST_RENDER_CURRENT" : "PLATFORM_HOST_RENDER_DRIFTED",
+    ok: !comparable || plan.drift.length === 0,
+    reasonCode: !comparable ? "PLATFORM_HOST_RENDER_UNCONFIGURED" : plan.drift.length === 0 ? "PLATFORM_HOST_RENDER_CURRENT" : "PLATFORM_HOST_RENDER_DRIFTED",
     host: plan.host,
     mode: plan.mode,
-    comparable: plan.comparable,
+    comparable,
+    hooksComparable: plan.hooksComparable === true,
     drift: plan.drift,
     resolutions: plan.resolutions,
     source: "dispatch settings + host-render projection",
@@ -404,8 +412,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const settings = settingsJson === undefined ? await workspaceSettings(resolve(workspace)) : JSON.parse(settingsJson);
     const renderRoot = resolve(root);
     const repoRoot = flag(argv, "repo-root") ?? REPO_ROOT;
-    const preliminary = renderHostPlan({ host, mode, settings, root: renderRoot, repoRoot, existing: new Map() });
-    const plan = renderHostPlan({ host, mode, settings, root: renderRoot, repoRoot, existing: await readExisting(renderRoot, preliminary.files.map((entry) => entry.path)) });
+    const includeHooksWithoutModel = argv.includes("--hooks-only");
+    const preliminary = renderHostPlan({ host, mode, settings, root: renderRoot, repoRoot, includeHooksWithoutModel, existing: new Map() });
+    const plan = renderHostPlan({ host, mode, settings, root: renderRoot, repoRoot, includeHooksWithoutModel, existing: await readExisting(renderRoot, preliminary.files.map((entry) => entry.path)) });
     const result = argv.includes("--plan-only") ? { reasonCode: "HOST_RENDER_PLAN_READY", plan: { ...plan, files: plan.files.map(({ content, ...entry }) => ({ ...entry, afterSha256: digest(content) })) } } : await applyHostRender(plan, { backupDir: flag(argv, "backup-dir") });
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } catch (error) {

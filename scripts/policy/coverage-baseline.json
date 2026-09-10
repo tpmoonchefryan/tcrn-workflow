@@ -432,12 +432,13 @@
       ]
     },
     "tests/host-harness.test.mjs": {
-      "testCount": 13,
-      "assertionCount": 33,
+      "testCount": 14,
+      "assertionCount": 35,
       "testNames": [
         "INC-220 every capability is claimed by every host",
         "INC-220 a host that reaches a capability without a hook must say how",
         "INC-220 every rostered event exists on Codex",
+        "STORY-372 both hosts receive generated SubagentStart and SubagentStop telemetry hooks",
         "INC-220 the two renderings carry the same handlers for the same capabilities",
         "INC-220 the Codex document is shaped the way the host documents it",
         "INC-220 the Claude rendering keeps the project-dir form that host resolves",
@@ -1856,6 +1857,15 @@
         "each purpose anchor and each legacy element remains independently enforceable",
         "the catalog exposes the atomic Story scope path",
         "the CLI cannot create a Story without an atomic scope"
+      ]
+    },
+    "tests/telemetry.test.mjs": {
+      "testCount": 3,
+      "assertionCount": 42,
+      "testNames": [
+        "STORY-372: telemetry is daily NDJSON, stable, idempotent, filterable, and tolerant of bad lines",
+        "STORY-372: both hook events record bounded facts and never fabricate observed model",
+        "STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires"
       ]
     },
     "tests/token-attribution.test.mjs": {

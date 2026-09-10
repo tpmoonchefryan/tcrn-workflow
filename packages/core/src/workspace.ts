@@ -130,6 +130,13 @@ import {
   validateWorkspaceSettingRecord,
 } from "./settings.js";
 import type { WorkspaceSettingRecord } from "./settings.js";
+import {
+  readTelemetryRecordById,
+  telemetryEvidenceSnapshot,
+  TelemetryError,
+  validateTelemetryRecord,
+} from "./telemetry.js";
+import type { TelemetryEvidenceSnapshot } from "./telemetry.js";
 
 export const WORKSPACE_SCHEMA_VERSION = "tcrn.workspace.v1" as const;
 export const WORKSPACE_STORAGE_VERSION = 2 as const;
@@ -176,6 +183,7 @@ export const WORKSPACE_REASON_CODES = Object.freeze([
   "WORKSPACE_GATE_IDENTITY_REFUSED",
   "WORKSPACE_GATE_IDENTITY_REQUIRED",
   "WORKSPACE_GATE_PENDING",
+  "WORKSPACE_TELEMETRY_EVIDENCE_UNRESOLVED",
   "WORKSPACE_INPUT_INVALID",
   "WORKSPACE_INPUT_OVERSIZED",
   "WORKSPACE_LEASE_BROKEN",
@@ -1701,6 +1709,8 @@ function readGateEvidenceLocator(extensions: Readonly<Record<string, unknown>>):
 // itself rather than reconstructing it from a compressed external key.
 const ADVISORY_SCOPE_KEY = "advisory:scope";
 const ADVISORY_DECIDED_BY_KEY = "advisory:decided-by";
+const ADVISORY_EVIDENCE_KEY = "advisory:evidence";
+const ADVISORY_EVIDENCE_SNAPSHOT_KEY = "advisory:evidence-snapshot";
 const WORK_SCOPE_REFERENCE_VERSION = "tcrn.work-scope-reference.v1" as const;
 // INIT-008: advisory:sprint is the member-side tag that puts a work record on a
 // sprint / release-train batch. Its value is a QUALIFIED reference to the sprint
@@ -1712,7 +1722,13 @@ const WORK_SCOPE_REFERENCE_VERSION = "tcrn.work-scope-reference.v1" as const;
 // key fails the closed anti-smuggling replay guard on a chain that USES it, which
 // is why it ships in a minor release (0.5.0) that readers of such chains must pin.
 const ADVISORY_SPRINT_KEY = "advisory:sprint";
-const ADVISORY_KEYS: readonly string[] = [ADVISORY_SCOPE_KEY, ADVISORY_DECIDED_BY_KEY, ADVISORY_SPRINT_KEY];
+const ADVISORY_KEYS: readonly string[] = [
+  ADVISORY_SCOPE_KEY,
+  ADVISORY_DECIDED_BY_KEY,
+  ADVISORY_SPRINT_KEY,
+  ADVISORY_EVIDENCE_KEY,
+  ADVISORY_EVIDENCE_SNAPSHOT_KEY,
+];
 
 // A sprint reference is a qualified cross-partition pointer: the workspaceId (derived,
 // so `workspace:` + 24 hex) plus the work id of the sprint's Release record. Both halves
@@ -1745,6 +1761,8 @@ function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisor
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly sprint?: SprintReference;
+  readonly evidence?: string;
+  readonly evidenceSnapshot?: TelemetryEvidenceSnapshot;
 }): Readonly<Record<string, unknown>> {
   const next: Record<string, unknown> = { ...base };
   if (advisory.scope !== undefined) {
@@ -1755,6 +1773,12 @@ function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisor
   }
   if (advisory.sprint !== undefined) {
     next[ADVISORY_SPRINT_KEY] = { required: false, value: { workspaceId: advisory.sprint.workspaceId, workId: advisory.sprint.workId } };
+  }
+  if (advisory.evidence !== undefined) {
+    next[ADVISORY_EVIDENCE_KEY] = { required: false, value: advisory.evidence };
+  }
+  if (advisory.evidenceSnapshot !== undefined) {
+    next[ADVISORY_EVIDENCE_SNAPSHOT_KEY] = { required: false, value: advisory.evidenceSnapshot };
   }
   return next;
 }
@@ -1924,8 +1948,89 @@ function assertAdvisoryEntryShape(key: string, entry: unknown, id: string, reaso
     }
     return;
   }
+  if (key === ADVISORY_EVIDENCE_KEY) {
+    if (typeof value !== "string" || !/^telemetry:[a-f0-9]{24}$/u.test(value)) {
+      fail(reasonCode, `work ${id} advisory evidence must be a telemetry id`);
+    }
+    return;
+  }
+  if (key === ADVISORY_EVIDENCE_SNAPSHOT_KEY) {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      fail(reasonCode, `work ${id} advisory evidence snapshot is malformed`);
+    }
+    const snapshot = value as Readonly<Record<string, unknown>>;
+    try {
+      exactFields(snapshot, ["schemaVersion", "id", "digest", "fields"], reasonCode, "telemetry evidence snapshot");
+      if (snapshot.schemaVersion !== "tcrn.telemetry-evidence.v1" || typeof snapshot.id !== "string" ||
+        !/^telemetry:[a-f0-9]{24}$/u.test(snapshot.id) || typeof snapshot.digest !== "string" ||
+        !/^[a-f0-9]{64}$/u.test(snapshot.digest)) {
+        fail(reasonCode, `work ${id} advisory evidence snapshot identity is malformed`);
+      }
+      const fields = snapshot.fields;
+      if (fields === null || typeof fields !== "object" || Array.isArray(fields)) {
+        fail(reasonCode, `work ${id} advisory evidence snapshot fields are malformed`);
+      }
+      const fieldRecord = fields as Readonly<Record<string, unknown>>;
+      exactFields(fieldRecord, ["at", "kind", "session", "payload"], reasonCode, "telemetry evidence snapshot fields");
+      const record = validateTelemetryRecord({
+        schemaVersion: "tcrn.telemetry.v1",
+        id: snapshot.id,
+        at: fieldRecord.at,
+        kind: fieldRecord.kind,
+        session: fieldRecord.session,
+        payload: fieldRecord.payload,
+      });
+      const expected = telemetryEvidenceSnapshot(record);
+      if (canonicalJson(expected as unknown as JsonValue) !== canonicalJson(value as JsonValue)) {
+        fail(reasonCode, `work ${id} advisory evidence snapshot digest or fields do not match`);
+      }
+    } catch (error) {
+      if (error instanceof WorkspaceError) throw error;
+      if (error instanceof ProtocolError) fail(reasonCode, error.message);
+      if (error instanceof TelemetryError) fail(reasonCode, `${error.reasonCode}:${error.message}`);
+      throw error;
+    }
+    return;
+  }
   if (!Array.isArray(value) || value.length === 0 || !value.every((item) => isMinutesId(item))) {
     fail(reasonCode, `work ${id} advisory decided-by must be a non-empty list of minutes ids`);
+  }
+}
+
+function assertWorkTransitionEvidence(current: WorkRecord, next: WorkRecord, reasonCode: WorkspaceReasonCode): void {
+  const currentExtensions: Record<string, unknown> = { ...current.extensions };
+  const nextExtensions: Record<string, unknown> = { ...next.extensions };
+  const currentEvidence = currentExtensions[ADVISORY_EVIDENCE_KEY];
+  const nextEvidence = nextExtensions[ADVISORY_EVIDENCE_KEY];
+  const currentSnapshot = currentExtensions[ADVISORY_EVIDENCE_SNAPSHOT_KEY];
+  const nextSnapshot = nextExtensions[ADVISORY_EVIDENCE_SNAPSHOT_KEY];
+  delete currentExtensions[ADVISORY_EVIDENCE_KEY];
+  delete currentExtensions[ADVISORY_EVIDENCE_SNAPSHOT_KEY];
+  delete nextExtensions[ADVISORY_EVIDENCE_KEY];
+  delete nextExtensions[ADVISORY_EVIDENCE_SNAPSHOT_KEY];
+  if (canonicalJson(currentExtensions as JsonValue) !== canonicalJson(nextExtensions as JsonValue)) {
+    fail(reasonCode, `work ${next.id} transition changed a non-evidence extension`);
+  }
+  if (currentEvidence !== undefined || currentSnapshot !== undefined) {
+    if (canonicalJson((currentEvidence ?? null) as JsonValue) !== canonicalJson((next.extensions[ADVISORY_EVIDENCE_KEY] ?? null) as JsonValue) ||
+      canonicalJson((currentSnapshot ?? null) as JsonValue) !== canonicalJson((next.extensions[ADVISORY_EVIDENCE_SNAPSHOT_KEY] ?? null) as JsonValue)) {
+      fail(reasonCode, `work ${next.id} transition changed existing evidence`);
+    }
+    return;
+  }
+  if (nextEvidence === undefined && nextSnapshot === undefined) return;
+  if (next.status !== "done" || nextEvidence === undefined || nextSnapshot === undefined) {
+    fail(reasonCode, `work ${next.id} evidence applies only as a complete done transition`);
+  }
+  assertAdvisoryEntryShape(ADVISORY_EVIDENCE_KEY, next.extensions[ADVISORY_EVIDENCE_KEY], next.id, reasonCode);
+  assertAdvisoryEntryShape(ADVISORY_EVIDENCE_SNAPSHOT_KEY, next.extensions[ADVISORY_EVIDENCE_SNAPSHOT_KEY], next.id, reasonCode);
+  const snapshot = (nextSnapshot as { readonly value?: unknown }).value;
+  const evidence = (nextEvidence as { readonly value?: unknown }).value;
+  const snapshotId = snapshot !== null && typeof snapshot === "object" && !Array.isArray(snapshot)
+    ? (snapshot as Readonly<Record<string, unknown>>).id
+    : undefined;
+  if (evidence !== snapshotId) {
+    fail(reasonCode, `work ${next.id} evidence id and snapshot id differ`);
   }
 }
 
@@ -2138,6 +2243,9 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         // bad advisory value in through the one door that used to skip it.
         for (const key of ADVISORY_KEYS) {
           if (Object.hasOwn(record.extensions, key)) {
+            if (key === ADVISORY_EVIDENCE_KEY || key === ADVISORY_EVIDENCE_SNAPSHOT_KEY) {
+              fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} completion evidence may only be written by a done transition`);
+            }
             assertAdvisoryEntryShape(key, (record.extensions as Readonly<Record<string, unknown>>)[key], record.id, "WORKSPACE_EVENT_CORRUPT");
           }
         }
@@ -2160,6 +2268,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         // re-checked against the gates materialized so far, so a hand-crafted log
         // that drives a work item to done past a pending gate fails closed.
         assertGateClearance(gates.values(), record.id, record.status, "WORKSPACE_EVENT_CORRUPT");
+        assertWorkTransitionEvidence(current, record, "WORKSPACE_EVENT_CORRUPT");
       }
       // work.annotated (E05): not a transition -- status is unchanged and the only
       // extension delta is the advisory keys. Both invariants replay as
@@ -2168,6 +2277,10 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
       if (operation === "work.annotated" && current) {
         if (record.status !== current.status) {
           fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} annotation changed status`);
+        }
+        if (canonicalJson((current.extensions[ADVISORY_EVIDENCE_KEY] ?? null) as JsonValue) !== canonicalJson((record.extensions[ADVISORY_EVIDENCE_KEY] ?? null) as JsonValue) ||
+          canonicalJson((current.extensions[ADVISORY_EVIDENCE_SNAPSHOT_KEY] ?? null) as JsonValue) !== canonicalJson((record.extensions[ADVISORY_EVIDENCE_SNAPSHOT_KEY] ?? null) as JsonValue)) {
+          fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} annotation changed completion evidence`);
         }
         assertWorkAnnotation(workAnnotationFields(current), workAnnotationFields(record), record.id, "WORKSPACE_EVENT_CORRUPT");
       }
@@ -4345,7 +4458,18 @@ function hasLiveNonTerminalDescendant(work: readonly WorkRecord[], recordId: str
 // exactly what the WSA-3 comment below was warning about. A rule placed there would refuse
 // a chain that legitimately closed an Initiative before 0.10.0 while descendants were open.
 // A rule placed here fires on live mutations only, which is what it always did.
-function assertTransitionAdmission(state: WorkspaceState, input: { readonly id: string; readonly status: WorkStatus }): void {
+function assertTelemetryEvidenceInput(input: { readonly status: WorkStatus; readonly evidence?: string }, reasonCode: WorkspaceReasonCode): void {
+  if (input.evidence === undefined) return;
+  if (input.status !== "done") {
+    fail(reasonCode, "telemetry evidence applies only to a done transition");
+  }
+  if (!/^telemetry:[a-f0-9]{24}$/u.test(input.evidence)) {
+    fail(reasonCode, "telemetry evidence must be a telemetry id");
+  }
+}
+
+function assertTransitionAdmission(state: WorkspaceState, input: { readonly id: string; readonly status: WorkStatus; readonly evidence?: string }): void {
+  assertTelemetryEvidenceInput(input, "WORKSPACE_INPUT_INVALID");
   // Scope is a live write-path admission rule. Historical chains remain replayable;
   // unbound Stories use the legacy ten-block contract, while a bound Story is checked
   // against its admitted template and the same engine floor before it enters an execution
@@ -4380,7 +4504,7 @@ function assertTransitionAdmission(state: WorkspaceState, input: { readonly id: 
   }
 }
 
-export function transitionWorkDelta(input: { readonly id: string; readonly status: WorkStatus; readonly summary?: string | null; readonly occurredAt: string }): (state: WorkspaceState) => MutationDelta {
+export function transitionWorkDelta(input: { readonly id: string; readonly status: WorkStatus; readonly summary?: string | null; readonly evidence?: string; readonly occurredAt: string }): (state: WorkspaceState) => MutationDelta {
   return (state) => {
     assertTransitionAdmission(state, input);
     return transitionWorkReducerDelta(state, input);
@@ -4391,14 +4515,29 @@ export async function transitionWork(workspaceRoot: string, lease: WorkspaceLeas
   readonly id: string;
   readonly status: WorkStatus;
   readonly summary?: string | null;
+  readonly evidence?: string;
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
+  assertTelemetryEvidenceInput(input, "WORKSPACE_INPUT_INVALID");
+  let evidenceSnapshot: TelemetryEvidenceSnapshot | undefined;
+  if (input.evidence !== undefined) {
+    const state = await materializeWorkspace(workspaceRoot);
+    const transient = activeBinding(state.metadata).find((root) => root.kind === "transient");
+    if (transient === undefined) {
+      fail("WORKSPACE_TELEMETRY_EVIDENCE_UNRESOLVED", "workspace has no transient root for telemetry evidence");
+    }
+    const record = await readTelemetryRecordById(transient.path, input.evidence);
+    if (record === null) {
+      fail("WORKSPACE_TELEMETRY_EVIDENCE_UNRESOLVED", `telemetry evidence ${input.evidence} is not available`);
+    }
+    evidenceSnapshot = telemetryEvidenceSnapshot(record);
+  }
   return appendEvent(workspaceRoot, lease, (state) => {
     assertTransitionAdmission(state, input);
-    return transitionWorkReducerDelta(state, input);
+    return transitionWorkReducerDelta(state, { ...input, ...(evidenceSnapshot === undefined ? {} : { evidenceSnapshot }) });
   }, input);
 }
 
-function transitionWorkReducerDelta(state: WorkspaceState, input: { readonly id: string; readonly status: WorkStatus; readonly summary?: string | null; readonly occurredAt: string }): MutationDelta {
+function transitionWorkReducerDelta(state: WorkspaceState, input: { readonly id: string; readonly status: WorkStatus; readonly summary?: string | null; readonly evidence?: string; readonly evidenceSnapshot?: TelemetryEvidenceSnapshot; readonly occurredAt: string }): MutationDelta {
   {
     const current = workById(state, input.id);
     assertWorkTransition(current.status, input.status);
@@ -4414,7 +4553,12 @@ function transitionWorkReducerDelta(state: WorkspaceState, input: { readonly id:
     const summarised: WorkRecord = input.summary === undefined
       ? workFieldsForWrite(current)
       : { ...workFieldsForWrite(current), summary: normalizeWorkSummary(input.summary) };
-    const record: WorkRecord = { ...summarised, status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
+    const extensions = workAdvisoryExtensions(summarised.extensions, {
+      ...(input.evidence === undefined ? {} : { evidence: input.evidence }),
+      ...(input.evidenceSnapshot === undefined ? {} : { evidenceSnapshot: input.evidenceSnapshot }),
+    });
+    const record: WorkRecord = { ...summarised, extensions: extensions as WorkRecord["extensions"], scopeDigest: workExtensionsDigest(extensions), status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
+    assertWorkTransitionEvidence(current, record, "WORKSPACE_INPUT_INVALID");
     validateBoundTemplateWork(record, state.templates);
     const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
     const storedRecord: WorkRecord = { ...record, extensions: workEventExtensions(record, true) };

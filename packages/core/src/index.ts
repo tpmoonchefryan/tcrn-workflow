@@ -720,3 +720,9 @@ export {
 export type { KnowledgeLanguageBundle, KnowledgeLanguageProvider } from "./knowledge-language.js";
 export { RECALL_CANDIDATE_LIMIT, RECALL_DEFAULT_TAU, recall, recallDocuments } from "./recall.js";
 export type { RecallKnowledgeInput, RecallMinutesInput, RecallWorkInput } from "./recall.js";
+export {
+  appendTelemetryRecord,
+  createTelemetryRecord,
+  readTelemetryRecordById,
+  readTelemetryRecords,
+} from "./telemetry.js";

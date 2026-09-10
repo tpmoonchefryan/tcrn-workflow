@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 
 import {
   acquireWorkspaceLease,
+  activeBinding,
   applyMachineSettingRemove,
   applyMachineSettingSet,
   deleteLegacyAttestations,
@@ -108,6 +109,8 @@ import {
   recallDocuments,
   resolveQueryLanguage,
   templateBindingFromWorkRecord,
+  readTelemetryRecordById,
+  readTelemetryRecords,
   validateTemplateDocument,
 } from "../../core/src/index.js";
 import type { KnowledgeLanguageBundle, KnowledgeLanguageProvider } from "../../core/src/index.js";
@@ -586,11 +589,15 @@ function workAdvisory(record: WorkRecord): Readonly<Record<string, unknown>> | n
   const scope = record.extensions["advisory:scope"] as { readonly value: unknown } | undefined;
   const decidedBy = record.extensions["advisory:decided-by"] as { readonly value: unknown } | undefined;
   const sprint = record.extensions["advisory:sprint"] as { readonly value: unknown } | undefined;
-  if (scope === undefined && decidedBy === undefined && sprint === undefined) return null;
+  const evidence = record.extensions["advisory:evidence"] as { readonly value: unknown } | undefined;
+  const evidenceSnapshot = record.extensions["advisory:evidence-snapshot"] as { readonly value: unknown } | undefined;
+  if (scope === undefined && decidedBy === undefined && sprint === undefined && evidence === undefined && evidenceSnapshot === undefined) return null;
   return {
     ...(scope !== undefined ? { scope: scope.value } : {}),
     ...(decidedBy !== undefined ? { decidedBy: decidedBy.value } : {}),
     ...(sprint !== undefined ? { sprint: sprint.value } : {}),
+    ...(evidence !== undefined ? { evidence: evidence.value } : {}),
+    ...(evidenceSnapshot !== undefined ? { evidenceSnapshot: evidenceSnapshot.value } : {}),
   };
 }
 
@@ -961,6 +968,7 @@ export const COMMAND_CATALOG = Object.freeze([
   // TCRN-CROSS-INC-275: PostgreSQL support removed. storage-home-seal was
   // PG-specific; it is removed.
   { name: "storage-home-status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "telemetry-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "class", required: false, valueKind: "string" }, { name: "since", required: false, valueKind: "instant" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "template-admit", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "template", required: true, valueKind: "string" }, { name: "owner", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "template-validate", availability: "cli", mutates: false, flags: [{ name: "template", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
@@ -972,7 +980,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "work-draft", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }] },
   { name: "work-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "project-id", required: false, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "status", required: false, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string" }, { name: "sprint", required: false, valueKind: "string" }, { name: "search", required: false, valueKind: "string" }, { name: "scope-bytes", required: false, valueKind: "integer" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "work-show", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "id", required: true, valueKind: "string" }] },
-  { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "summary", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "work-transition", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "status", required: true, valueKind: "string" }, { name: "summary", required: false, valueKind: "string" }, { name: "evidence", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
 ] as const);
 
 // INC-016: `mutates` and `authorityBearing` name two DIFFERENT authorization
@@ -2185,7 +2193,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "work-transition") {
-    const values = parseArguments(rest, [...shared, "id", "status", "summary", "actor"]);
+    const values = parseArguments(rest, [...shared, "id", "status", "summary", "evidence", "actor"]);
     required(values, [...requiredShared, "id", "status"]);
     if (values.status !== undefined && !isWorkStatus(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
@@ -2193,6 +2201,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const state = await withLease(workspace, at, async (lease) => transitionWork(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "", status: values.status as WorkStatus,
       ...(values.summary !== undefined ? { summary: values.summary } : {}),
+      ...(values.evidence !== undefined ? { evidence: values.evidence } : {}),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
@@ -2305,7 +2314,21 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const state = await validateWorkspace(values.workspace ?? "");
     const record = state.work.find((entry) => entry.id === values.id && !entry.tombstone);
     if (!record) fail("WORKSPACE_INPUT_INVALID", `work ${values.id ?? ""} is unavailable`);
-    const advisory = workAdvisory(record);
+    const baseAdvisory = workAdvisory(record);
+    let advisory = baseAdvisory;
+    const evidence = baseAdvisory?.evidence;
+    if (typeof evidence === "string") {
+      const transient = activeBinding(state.metadata).find((root) => root.kind === "transient");
+      let evidenceStatus = "expired";
+      if (transient !== undefined) {
+        try {
+          evidenceStatus = await readTelemetryRecordById(transient.path, evidence) === null ? "expired" : "available";
+        } catch {
+          evidenceStatus = "expired";
+        }
+      }
+      advisory = { ...baseAdvisory, evidenceStatus };
+    }
     io.write(canonicalJson({
       reasonCode: "WORKSPACE_RECORD_READY",
       workspaceId: state.metadata.workspaceId,
@@ -2332,6 +2355,44 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, ["workspace"]);
     const state = await validateWorkspace(values.workspace ?? "");
     io.write(eventPage(state, values));
+    return;
+  }
+  if (command === "telemetry-list") {
+    const values = parseArguments(rest, ["workspace", "kind", "class", "since", "limit", "offset"]);
+    required(values, ["workspace"]);
+    if (values.kind !== undefined && !["subagent-start", "subagent-stop"].includes(values.kind)) {
+      fail("CLI_ARGUMENT_MALFORMED", "kind");
+    }
+    if (values.class !== undefined && (values.class.length === 0 || values.class.length > 128 || !values.class.isWellFormed())) {
+      fail("CLI_ARGUMENT_MALFORMED", "class");
+    }
+    if (values.since !== undefined) {
+      try { assertStrictInstant(values.since); } catch { fail("CLI_ARGUMENT_MALFORMED", "since"); }
+    }
+    const limit = values.limit === undefined ? undefined : boundedInteger(values, "limit");
+    let offset = 0;
+    if (values.offset !== undefined) {
+      const parsed = Number(values.offset);
+      if (!Number.isSafeInteger(parsed) || parsed < 0) fail("CLI_ARGUMENT_MALFORMED", "offset");
+      offset = parsed;
+    }
+    const state = await validateWorkspace(values.workspace ?? "");
+    const transient = activeBinding(state.metadata).find((root) => root.kind === "transient");
+    if (transient === undefined) fail("CLI_COMMAND_FAILED", "workspace has no transient root for telemetry");
+    const result = await readTelemetryRecords(transient.path, {
+      ...(values.kind === undefined ? {} : { kind: values.kind }),
+      ...(values.class === undefined ? {} : { taskClass: values.class }),
+      ...(values.since === undefined ? {} : { since: values.since }),
+      ...(limit === undefined ? {} : { limit }),
+      offset,
+    });
+    io.write(canonicalJson({
+      reasonCode: "TELEMETRY_LIST_READY",
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      ...result,
+    }));
     return;
   }
   // WSD-2: governed conference/gate verbs. Every mutating verb wraps its WSD-1
