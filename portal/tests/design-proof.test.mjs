@@ -211,7 +211,7 @@ test("INIT-036 S276 design-proof legs turn red for injected violations and green
     coverageGreen.report.portalOwnedClassBaseline.expectedCount,
   );
   assert.ok(coverageGreen.report.portalOwnedClassBaseline.expectedCount > 0);
-  assert.equal(coverageGreen.report.returnedComponents.rows.length, 9);
+  assert.equal(coverageGreen.report.returnedComponents.rows.length, 5);
 
   // The second direction the HEAD baseline could not express: a class root the
   // portal defines without listing it in the roster.
@@ -239,9 +239,9 @@ test("INIT-036 S276 design-proof legs turn red for injected violations and green
   assert.ok(redRename.report.portalOwnedClassBaseline.snapshotDiff.removedOrRenamed.includes("tcrn-top-bar"));
 
   const missingReturned = join(directory, "coverage-missing-return.html");
-  await writeFile(missingReturned, source.replace('class="tcrn-switch"', 'class="tcrn-switchmutated"'), "utf8");
+  await writeFile(missingReturned, source.replaceAll('class="tcrn-stat-card"', 'class="tcrn-stat-cardmutated"'), "utf8");
   const redReturned = await runCoverageProof(missingReturned);
   assert.notEqual(redReturned.status, 0);
   assert.equal(redReturned.report.reasonCode, "COMPONENT_COVERAGE_CONSERVATION_RED");
-  assert.equal(redReturned.report.returnedComponents.rows.find((row) => row.className === "tcrn-switch").status, "missing");
+  assert.equal(redReturned.report.returnedComponents.rows.find((row) => row.className === "tcrn-stat-card").status, "missing");
 });

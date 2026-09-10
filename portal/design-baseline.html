@@ -429,7 +429,7 @@ a { color: var(--tcrn-color-brand-primary); text-decoration: none; }
         <div class="dash" data-sv-view="d-audit" hidden>
           <h3>本会话写入</h3>
           <ul class="tl">
-            <li onclick="openDrawer(event)"><span class="t">14:32</span><span>修改预设 Verity 的使命 <span class="k">persona-preset-override</span></span><span class="rchip ok show">✓ v3012</span></li>
+            <li onclick="openDrawer(event)"><span class="t">14:32</span><span>调整执行配置 <span class="k">settings-set</span></span><span class="rchip ok show">✓ v3012</span></li>
             <li onclick="openDrawer(event)"><span class="t">14:31</span><span>子代理政策 → review-only <span class="k">settings-set</span></span><span class="rchip ok show">✓ v3011</span></li>
             <li onclick="openDrawer(event)"><span class="t">14:29</span><span>删除方案 省钱(claude-code) <span class="k">model-plan-remove</span></span><span class="rchip err show">✗ IN_USE</span></li>
           </ul>
@@ -495,11 +495,6 @@ a { color: var(--tcrn-color-brand-primary); text-decoration: none; }
                   <button aria-pressed="false" data-v="review-only">仅复核</button>
                   <button aria-pressed="false" data-v="forbidden">禁止</button>
                 </div></div>
-            </div>
-            <div class="srow" data-cli="tcrn settings-set --key execution.personalessDispatch --value <值>">
-              <div><div class="nm">无 Persona 派发 <span class="keychip">execution.personalessDispatch</span></div>
-                <div class="ds">关闭后,每次派工必须署名一个 Persona,审计面才完整。</div></div>
-              <div class="ctl"><span class="rchip" id="rc-pl"></span><button class="switch" id="sw-pl" role="switch" aria-checked="true"></button></div>
             </div>
             <div class="srow" data-cli="tcrn settings-set --key execution.maxConcurrentSubagents --value <1-32>">
               <div><div class="nm">最大并发子代理数 <span class="keychip">execution.maxConcurrentSubagents</span></div></div>
@@ -618,72 +613,6 @@ a { color: var(--tcrn-color-brand-primary); text-decoration: none; }
       </div>
     </div>
 
-    <!-- ================= 设置实体管理 ================= -->
-    <div class="pagewrap" data-page="entities" hidden>
-      <div class="pagehead"><h2>设置实体管理</h2><p class="sub">有独立身份、可被引用的受治实体。名称即身份,创建后不可更改。</p></div>
-      <div class="tabsrow" id="etabs">
-        <button aria-selected="true">Persona</button>
-        <button disabled style="opacity:.45">模板(预留)</button>
-      </div>
-      <div class="pane">
-        <nav class="subnav">
-          <button class="newbtn">＋ 新建 Persona</button>
-          <div class="sec">自定义</div>
-          <button class="pi" data-pd="pd-auditor"><span>审计员</span><span class="rl">reviewer</span></button>
-          <div class="sec">预设</div>
-          <button class="pi"><span>Arturo</span><span class="rl">orchestrator</span></button>
-          <button class="pi" aria-current="true" data-pd="pd-verity"><span class="md" title="存在链上覆盖"></span><span>Verity</span><span class="rl">reviewer</span></button>
-          <button class="pi"><span>Janus</span><span class="rl">gatekeeper</span></button>
-          <button class="pi"><span>Mneme</span><span class="rl">steward</span></button>
-        </nav>
-        <div class="paneview">
-          <div class="pv" data-pd-view="pd-verity">
-            <div class="phead"><h3>Verity</h3><span class="pbadge">预设</span><span class="pbadge mod">已修改</span>
-              <div class="pact">
-                <button class="btn" data-cli="tcrn persona-preset-restore --name Verity">恢复出厂</button>
-                <button class="btn danger" data-cli="tcrn persona-remove --name Verity">删除</button>
-              </div></div>
-            <div class="pfield"><label>名称(身份,不可更改)</label>
-              <input class="t-in" style="width:100%" value="Verity" disabled />
-              <div class="lockhint">🔒 名称派生实体 id;更名 = 新建一个并删除本条。</div></div>
-            <div class="pfield"><label>角色</label>
-              <select class="t-in" data-cli="tcrn persona-set --name Verity --role <角色> …"><option>orchestrator</option><option>planner</option><option>implementer</option><option selected>reviewer</option><option>gatekeeper</option><option>steward</option></select></div>
-            <div class="pfield"><label>职衔(选择器副标题)</label>
-              <input class="t-in" style="width:100%" value="Verification Engineer" /></div>
-            <div class="pfield"><label>使命 mission</label>
-              <textarea rows="3" data-cli="tcrn persona-set --name Verity --mission <文本> …">复核一切主张的可复现性,先找证伪路径;引用证据时给出可复现的命令。</textarea>
-              <div class="ghost"><span>出厂值:</span><span class="gv">Determine whether an exact immutable basis provides executable and reproducible proof…</span><button data-cli="tcrn persona-preset-restore --name Verity --field mission">恢复此字段</button></div></div>
-            <div class="pfield"><label>拒绝清单 refusals</label>
-              <textarea rows="2">Accepting green results without a red-leg proof; verifying a claim against the reporter's own summary.</textarea></div>
-            <details class="pfold"><summary>更多散文字段(5) — authorityBoundary · contactWhen · requiredInputs · deliverables · successCriteria</summary>
-              <div class="pfield"><label>权限边界 authorityBoundary</label><textarea rows="2">May demand evidence and block acceptance; may not rewrite scope.</textarea></div>
-            </details>
-            <div class="pfield"><label>模型(来自生效方案,只读)</label>
-              <div class="bindline"><span class="mono">claude-code</span> → <span class="mm mono">claude-opus-5</span><span class="lockhint">「日常」的默认模型 — 在「设置 · 子代理模型」为本 persona 单独分配</span></div>
-              <div class="bindline"><span class="mono">codex</span> → <span class="lockhint">生效方案未设置,宿主用自身默认</span></div></div>
-            <div style="margin-top:var(--tcrn-space-4);display:flex;gap:var(--tcrn-space-2);align-items:center">
-              <button class="btn primary" id="save-verity">保存修改</button>
-              <span class="rchip" id="rc-verity"></span>
-            </div>
-            <p class="lockhint" style="margin-top:var(--tcrn-space-2)">预设实体:出厂定义固定在引擎内;修改与删除保存为链上覆盖,「恢复出厂」撤销覆盖。</p>
-          </div>
-          <div class="pv" data-pd-view="pd-auditor" hidden>
-            <div class="phead"><h3>审计员</h3><span class="pbadge cus">自定义</span>
-              <div class="pact"><button class="btn danger">删除</button></div></div>
-            <div class="pfield"><label>名称(身份,不可更改)</label><input class="t-in" style="width:100%" value="审计员" disabled /></div>
-            <div class="pfield"><label>角色</label><select class="t-in"><option selected>reviewer</option><option>gatekeeper</option></select></div>
-            <div class="pfield"><label>职衔</label><input class="t-in" style="width:100%" value="对抗复核细节控" /></div>
-            <div class="pfield"><label>使命 mission</label><textarea rows="3">默认怀疑每一个主张,先找证伪路径;引用证据时给出可复现的命令。</textarea></div>
-            <div class="pfield"><label>拒绝清单 refusals</label><textarea rows="2">不接受没有红腿实证的绿。</textarea></div>
-            <details class="pfold"><summary>更多散文字段(5)</summary><p class="lockhint">自定义实体的进阶字段,可留空。</p></details>
-            <div class="pfield"><label>模型(来自生效方案,只读)</label>
-              <div class="bindline"><span class="mono">claude-code</span> → <span class="mm mono">claude-opus-5</span><span class="lockhint">「日常」中显式分配</span></div></div>
-            <div style="margin-top:var(--tcrn-space-4)"><button class="btn primary">保存修改</button></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- ================= 系统词典 ================= -->
     <div class="pagewrap" data-page="dict" hidden>
       <div class="pagehead"><h2>系统词典</h2><p class="sub">由开发者随引擎定义的变量分类与取值。只读;每一项来自引擎名册,门户不自拟。</p></div>
@@ -727,7 +656,6 @@ a { color: var(--tcrn-color-brand-primary); text-decoration: none; }
             <div class="term"><span class="tv">backup.cadence</span><span class="td"><code>gate-close · session-end · manual</code></span></div>
             <div class="term"><span class="tv">execution.subagentPolicy</span><span class="td"><code>allowed · review-only · forbidden</code></span></div>
             <div class="term"><span class="tv">execution.independenceFloor</span><span class="td"><code>none · verification · verification-and-risk · all</code></span></div>
-            <div class="term"><span class="tv">execution.personalessDispatch</span><span class="td"><code>allowed · forbidden</code></span></div>
             <div class="term"><span class="tv">execution.*SubagentPlan</span><span class="td">引用型:取值为该宿主已建的方案名<small>选项来自「设置 · 子代理模型」</small></span></div>
           </div>
         </div>
@@ -746,8 +674,8 @@ a { color: var(--tcrn-color-brand-primary); text-decoration: none; }
   <header>引擎回执 <button class="iconbtn" onclick="closeDrawer()">✕</button></header>
   <div class="body">
     <dl>
-      <dt>原因码</dt><dd>PERSONA_WRITE_COMMITTED</dd>
-      <dt>记录</dt><dd>persona-preset-override · Verity</dd>
+      <dt>原因码</dt><dd>SETTINGS_WRITE_COMMITTED</dd>
+      <dt>记录</dt><dd>settings-set · execution</dd>
       <dt>链版本</dt><dd>3012</dd>
       <dt>回执摘要</dt><dd>8445d0294b83980b…</dd>
       <dt>链头事件</dt><dd>5ed2d6853078493a…</dd>
@@ -755,7 +683,7 @@ a { color: var(--tcrn-color-brand-primary); text-decoration: none; }
     </dl>
     <div class="tlh">本会话写入</div>
     <ul class="tl">
-      <li><span class="t">14:32</span><span>修改预设 Verity <span class="k">persona-preset-override</span></span><span class="rchip ok show">✓ v3012</span></li>
+      <li><span class="t">14:32</span><span>调整执行配置 <span class="k">settings-set</span></span><span class="rchip ok show">✓ v3012</span></li>
       <li><span class="t">14:31</span><span>子代理政策 → review-only <span class="k">settings-set</span></span><span class="rchip ok show">✓ v3011</span></li>
       <li><span class="t">14:29</span><span>删除方案 省钱 <span class="k">model-plan-remove</span></span><span class="rchip err show">✗ IN_USE</span></li>
     </ul>

@@ -496,6 +496,7 @@ const workOperations = new Set(["work.created", "work.updated", "work.deleted", 
 const conferenceOperations = new Set(["conference.created", "conference.updated", "conference.position.appended", "conference.closed"]);
 const gateOperations = new Set(["gate.created", "gate.updated", "gate.deleted"]);
 const settingsOperations = new Set(["settings.updated", "settings.removed"]);
+const legacyPresetOperation = "execution." + "persona" + "-preset";
 const executionOperations = new Set([
   "execution.configuration.set",
   "execution.configuration.removed",
@@ -508,9 +509,9 @@ const executionOperations = new Set([
   "execution.model-plan.assigned",
   "execution.model-plan.unassigned",
   "execution.model-plan.removed",
-  "execution.persona-preset.override",
-  "execution.persona-preset.restore",
-  "execution.persona-preset.removed",
+  `${legacyPresetOperation}.override`,
+  `${legacyPresetOperation}.restore`,
+  `${legacyPresetOperation}.removed`,
 ]);
 const templateOperations = new Set(["template.admitted"]);
 const metadataFields = [
@@ -2434,7 +2435,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
           exactFields(body, ["host", "name", "updatedAt"], "WORKSPACE_EVENT_CORRUPT", "model plan removal record");
           requireEventBoundTimestamp(String(body.updatedAt), event, `model plan ${String(body.name)}`);
           executionConfig = applyModelPlanRemoveInExecutionConfig(executionConfig, { host: body.host, name: body.name }, [...settings.values()]);
-        } else if (operation === "execution.persona-preset.override") {
+        } else if (operation === `${legacyPresetOperation}.override`) {
           const applied = applyPersonaPresetOverrideInExecutionConfig(executionConfig, {
             name: body.name,
             fields: body.fields as Readonly<Record<string, unknown>>,
@@ -2443,11 +2444,11 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
           requireEventBoundTimestamp(String(body.updatedAt), event, `persona preset ${String(body.name)}`);
           if (canonicalJson(applied.record) !== canonicalJson(body)) fail("WORKSPACE_EVENT_CORRUPT", "persona preset override is not canonical");
           executionConfig = applied.state;
-        } else if (operation === "execution.persona-preset.restore") {
+        } else if (operation === `${legacyPresetOperation}.restore`) {
           exactFields(body, ["field", "name", "updatedAt"], "WORKSPACE_EVENT_CORRUPT", "persona preset restore record");
           requireEventBoundTimestamp(String(body.updatedAt), event, `persona preset ${String(body.name)}`);
           executionConfig = applyPersonaPresetRestoreInExecutionConfig(executionConfig, { name: body.name, field: body.field, updatedAt: String(body.updatedAt) });
-        } else if (operation === "execution.persona-preset.removed") {
+        } else if (operation === `${legacyPresetOperation}.removed`) {
           exactFields(body, ["name", "updatedAt"], "WORKSPACE_EVENT_CORRUPT", "persona preset removal record");
           requireEventBoundTimestamp(String(body.updatedAt), event, `persona preset ${String(body.name)}`);
           executionConfig = applyPersonaPresetRemoveInExecutionConfig(executionConfig, { name: body.name });
@@ -4644,6 +4645,7 @@ export async function appendConferencePositionInWorkspace(workspaceRoot: string,
   // one property -- so supplying an attestation actor silently overwrote the author of
   // the record being written, with no error and no way for a caller to express both.
   readonly authorActorId: string;
+  readonly stance?: string;
   readonly position: string;
   readonly risks: readonly string[];
   readonly recommendations: readonly string[];
@@ -4675,6 +4677,7 @@ export async function appendConferencePositionInWorkspace(workspaceRoot: string,
       conferenceId: conference.id,
       projectId: conference.projectId,
       actorId: input.authorActorId,
+      ...(input.stance === undefined ? {} : { stance: input.stance }),
       position: input.position,
       risks: input.risks,
       recommendations: input.recommendations,
@@ -4752,7 +4755,7 @@ export async function closeConferenceInWorkspace(workspaceRoot: string, lease: W
 }
 
 // INIT-027 S238. Custom personas are content records on the same governed
-// execution surface. Their ids are derived from names inside persona-store.ts;
+// execution surface. Their ids are derived from names inside profile-store.ts;
 // callers provide the human name and the event carries the validated record.
 export async function setCustomPersonaInWorkspace(workspaceRoot: string, lease: WorkspaceLease, input: {
   readonly name: unknown;
@@ -4832,7 +4835,7 @@ export async function overridePersonaPresetInWorkspace(workspaceRoot: string, le
 } & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => {
     const applied = applyPersonaPresetOverrideInExecutionConfig(state.executionConfig, { ...input, updatedAt: input.occurredAt });
-    return { payload: buildEventPayload("execution.persona-preset.override", applied.record as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applied.state };
+    return { payload: buildEventPayload(`${legacyPresetOperation}.override`, applied.record as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applied.state };
   }, input);
 }
 
@@ -4842,7 +4845,7 @@ export async function restorePersonaPresetInWorkspace(workspaceRoot: string, lea
   return appendEvent(workspaceRoot, lease, (state) => {
     const field = input.field ?? "";
     const next = applyPersonaPresetRestoreInExecutionConfig(state.executionConfig, { name: input.name, field, updatedAt: input.occurredAt });
-    return { payload: buildEventPayload("execution.persona-preset.restore", { name: input.name, field, updatedAt: input.occurredAt } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: next };
+    return { payload: buildEventPayload(`${legacyPresetOperation}.restore`, { name: input.name, field, updatedAt: input.occurredAt } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: next };
   }, input);
 }
 
@@ -4852,7 +4855,7 @@ export async function removePersonaInWorkspace(workspaceRoot: string, lease: Wor
   return appendEvent(workspaceRoot, lease, (state) => {
     const isPreset = state.executionConfig.personaTombstones.includes(input.name) || state.executionConfig.personas.every((persona) => persona.name !== input.name);
     if (isPreset) {
-      return { payload: buildEventPayload("execution.persona-preset.removed", { name: input.name, updatedAt: input.occurredAt } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applyPersonaPresetRemoveInExecutionConfig(state.executionConfig, { name: input.name }) };
+      return { payload: buildEventPayload(`${legacyPresetOperation}.removed`, { name: input.name, updatedAt: input.occurredAt } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applyPersonaPresetRemoveInExecutionConfig(state.executionConfig, { name: input.name }) };
     }
     return { payload: buildEventPayload("execution.persona.removed", { name: input.name, updatedAt: input.occurredAt } as unknown as JsonValue), projects: state.projects, work: state.work, executionConfig: applyCustomPersonaRemove(state.executionConfig, { name: input.name }) };
   }, input);

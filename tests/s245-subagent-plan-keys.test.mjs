@@ -69,8 +69,8 @@ test("S369: dispatch settings are cataloged, sorted, and vocabulary-linked", asy
   assert.equal(vocabulary.effortValueKind, "string");
   assert.deepEqual(vocabulary.hosts, ["claude-code", "codex"]);
   assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.dispatchMode").valueSource, "dispatch-mode-list");
-  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.claudeCodeSubagentPlan").valueSource, "persona-list:modelPlans");
-  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.codexSubagentPlan").valueSource, "persona-list:modelPlans");
+  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.claudeCodeSubagentPlan").valueSource, "legacy-model-plan-history");
+  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.codexSubagentPlan").valueSource, "legacy-model-plan-history");
 });
 
 test("S369: custom classes and modes merge, while unknown hosts stay absent from renderer hints", async (t) => {

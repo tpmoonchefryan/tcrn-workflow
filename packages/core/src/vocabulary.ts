@@ -6,7 +6,7 @@ import {
   independenceFloorCovers,
 } from "./conference.js";
 import { EXECUTION_HOSTS } from "./execution-config.js";
-import { PERSONA_ROLE_DEFINITIONS } from "./persona-store.js";
+import { PERSONA_ROLE_DEFINITIONS } from "./profile-store.js";
 import { SETTINGS_CATALOG } from "./settings.js";
 
 export const VOCABULARY_VERSION = "tcrn.vocabulary.v1" as const;
@@ -88,7 +88,7 @@ export function readVocabulary(): Readonly<{
         ? "dispatch-mode-list"
         : entry.key === "execution.claudeCodeSubagentPlan" ||
             entry.key === "execution.codexSubagentPlan"
-          ? "persona-list:modelPlans"
+          ? "legacy-model-plan-history"
           : "settings-catalog",
       ...(entry.min === undefined ? {} : { min: entry.min }),
       ...(entry.max === undefined ? {} : { max: entry.max }),

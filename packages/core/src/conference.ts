@@ -112,10 +112,11 @@ function record(value: unknown, label: string): Readonly<Record<string, unknown>
   return value as Readonly<Record<string, unknown>>;
 }
 
-function exact(value: Readonly<Record<string, unknown>>, fields: readonly string[], label: string): void {
+function exact(value: Readonly<Record<string, unknown>>, fields: readonly string[], label: string, optional: readonly string[] = []): void {
   const actual = Object.keys(value).sort(compareCanonicalText);
   const wanted = [...fields].sort(compareCanonicalText);
-  const unknown = actual.filter((field) => !wanted.includes(field));
+  const allowed = [...fields, ...optional];
+  const unknown = actual.filter((field) => !allowed.includes(field));
   if (unknown.length > 0) fail("CONFERENCE_UNKNOWN_FIELD", `${label}:${unknown.join(",")}`);
   if (wanted.some((field) => !actual.includes(field))) fail("CONFERENCE_SCHEMA_INVALID", label);
 }
@@ -221,6 +222,7 @@ export interface ConferencePosition {
   readonly conferenceId: string;
   readonly projectId: string;
   readonly actorId: string;
+  readonly stance?: string;
   readonly position: string;
   readonly risks: readonly string[];
   readonly recommendations: readonly string[];
@@ -234,13 +236,15 @@ export interface ConferencePosition {
 export function validateConferencePosition(value: unknown): ConferencePosition {
   const document = record(value, "conference position");
   if (document.schemaVersion !== CONFERENCE_POSITION_VERSION) fail("CONFERENCE_SCHEMA_INVALID", "position schemaVersion");
-  exact(document, ["schemaVersion", "id", "conferenceId", "projectId", "actorId", "position", "risks", "recommendations", "evidenceIds", "revision", "updatedAt", "tombstone", "extensions"], "conference position");
+  exact(document, ["schemaVersion", "id", "conferenceId", "projectId", "actorId", "position", "risks", "recommendations", "evidenceIds", "revision", "updatedAt", "tombstone", "extensions"], "conference position", ["stance"]);
+  const stance = Object.hasOwn(document, "stance") ? text(document.stance, "stance") : undefined;
   return deepFreeze({
     schemaVersion: CONFERENCE_POSITION_VERSION,
     id: id(document.id, "id"),
     conferenceId: id(document.conferenceId, "conferenceId"),
     projectId: id(document.projectId, "projectId"),
     actorId: id(document.actorId, "actorId"),
+    ...(stance === undefined ? {} : { stance }),
     position: text(document.position, "position", CONFERENCE_POSITION_CEILING_BYTES),
     risks: boundedTextArray(document.risks, "risks", 32),
     recommendations: boundedTextArray(document.recommendations, "recommendations", 32),

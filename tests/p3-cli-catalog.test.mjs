@@ -139,7 +139,6 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
     "conference-append-position", "conference-cancel", "conference-close", "conference-open",
     "dispatch-classes-set", "dispatch-mode-set", "dispatch-tiers-set",
     "gate-create", "gate-delete", "gate-transition",
-    "persona-preset-override", "persona-preset-restore", "persona-remove", "persona-set",
     "project-create", "project-delete", "project-update",
     "settings-remove", "settings-set", "template-admit", "work-annotate", "work-batch", "work-create", "work-delete", "work-transition",
   ]);

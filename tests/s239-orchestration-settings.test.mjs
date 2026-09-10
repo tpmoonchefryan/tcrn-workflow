@@ -52,9 +52,7 @@ test("S239: defaults, closed enum, and bounded numeric strings are catalog-backe
   assert.deepEqual(entries.get("execution.maxDispatchDepth"), {
     key: "execution.maxDispatchDepth", type: "string", controlType: "number", layer: "workspace_configuration", defaultValue: "1", currentValue: "1", min: 1, max: 4,
   });
-  assert.deepEqual(entries.get("execution.personalessDispatch"), {
-    key: "execution.personalessDispatch", type: "enum", controlType: "boolean", layer: "workspace_configuration", defaultValue: "allowed", currentValue: "allowed", allowedValues: ["allowed", "forbidden"], trueValue: "allowed", falseValue: "forbidden",
-  });
+  assert.equal(entries.has("execution.personalessDispatch"), false);
 
   const first = await json(["settings-set", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(1),
     "--key", "execution.maxConcurrentSubagents", "--value", "32", "--actor", "agent:test"]);
@@ -62,10 +60,6 @@ test("S239: defaults, closed enum, and bounded numeric strings are catalog-backe
   const second = await json(["settings-set", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(2),
     "--key", "execution.maxDispatchDepth", "--value", "4", "--actor", "agent:test"]);
   assert.equal(second.setting.value, "4");
-  const third = await json(["settings-set", "--workspace", workspace, "--expected-version", String(await version()), "--at", instant(3),
-    "--key", "execution.personalessDispatch", "--value", "forbidden", "--actor", "agent:test"]);
-  assert.equal(third.setting.value, "forbidden");
-  assert.equal((await json(["settings-catalog", "--workspace", workspace])).settings.find((entry) => entry.key === "execution.personalessDispatch").currentValue, "forbidden");
 });
 
 test("S239: semantic refusals identify the setting and leave the head unchanged", async (t) => {
@@ -76,13 +70,13 @@ test("S239: semantic refusals identify the setting and leave the head unchanged"
     ["execution.maxConcurrentSubagents", "1.0", /1 to 32/u],
     ["execution.maxDispatchDepth", "0", /1 to 4/u],
     ["execution.maxDispatchDepth", "5", /1 to 4/u],
-    ["execution.personalessDispatch", "unknown", /allowed, forbidden/u],
+    ["execution.personalessDispatch", "unknown", /personalessDispatch/u],
   ];
   for (const [key, value, message] of cases) {
     const stable = await version();
     const error = await refusal(["settings-set", "--workspace", workspace, "--expected-version", String(stable), "--at", instant(10),
       "--key", key, "--value", value, "--actor", "agent:test"]);
-    assert.equal(error.reasonCode, "SETTINGS_VALUE_INVALID", `${key}=${value}`);
+    assert.equal(error.reasonCode, key === "execution.personalessDispatch" ? "SETTINGS_KEY_UNREGISTERED" : "SETTINGS_VALUE_INVALID", `${key}=${value}`);
     assert.match(error.message, message);
     assert.equal(await version(), stable);
   }

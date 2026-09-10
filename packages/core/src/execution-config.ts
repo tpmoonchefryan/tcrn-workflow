@@ -14,8 +14,8 @@ import {
   personaNameExists,
   validatePersonaPresetOverride,
   validatePersonaStoreState,
-} from "./persona-store.js";
-import type { PersonaPresetOverrideRecord, PersonaRecord } from "./persona-store.js";
+} from "./profile-store.js";
+import type { PersonaPresetOverrideRecord, PersonaRecord } from "./profile-store.js";
 import {
   ModelPlanError,
   applyModelPlanAssign,
@@ -377,7 +377,7 @@ export function applyPersonaPresetOverrideInExecutionConfig(state: ExecutionConf
   readonly name: unknown; readonly fields: Readonly<Record<string, unknown>>; readonly updatedAt: string;
 }): { readonly state: ExecutionConfigState; readonly record: PersonaPresetOverrideRecord } {
   if (state.personas.some((persona) => persona.name === String(input.name))) {
-    throw new PersonaStoreError("PERSONA_NAME_CONFLICT", `${String(input.name)} is a custom persona, not a preset; use persona-set for custom content`);
+    throw new PersonaStoreError("PERSONA_NAME_CONFLICT", `${String(input.name)} is custom profile content, not a preset; use the custom profile writer`);
   }
   const applied = applyPersonaPresetOverride(input, state.personaOverrides, state.personaTombstones);
   return { state: { ...state, personaOverrides: applied.overrides }, record: applied.record };

@@ -2,19 +2,17 @@
 // S7 — engine behavior-surface golden samples (TCRN-CROSS-STORY-141).
 //
 // The engine's behavior surface is deterministic for a fixed input: same bytes in,
-// same canonical JSON out, for as long as the engine's semantics hold. These tests
-// pin that determinism — a golden snapshot compared full-value on every run — so a
-// change to `persona-render` that alters its output goes red
-// instead of silently shipping a new behavior surface.
+// same canonical JSON out, for as long as the engine's semantics hold. The former
+// persona-render command was retired in STORY-370; this file retains the wrapper
+// smoke test that still exercises the shipped CLI.
 //
 // Goldens live beside this test under fixtures/s7-golden/ as string modules (INC-034:
 // as .json they were rewritten by this repository own formatter, which is the byte
 // under test). Regenerate a golden ONLY when the behavior change is intended: re-run
 // the generator (see docs/reports/init-018/S7/commands.md) and review the diff.
 //
-// TCRN-CROSS-STORY-358 family 1: the adapter-generate golden and the shared fixed
-// inputs that built it retired with packages/core/src/codex-adapter.ts. persona-render
-// is the behavior surface that remains.
+// TCRN-CROSS-STORY-358 family 1 retired the adapter-generate golden and its shared
+// inputs with packages/core/src/codex-adapter.ts.
 //
 // Rework: WSB-5 below is not a golden-snapshot case -- it is a plain CLI smoke test
 // relocated here from tests/p7-compatibility-modes.test.mjs, which retires whole-file
@@ -30,19 +28,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { initializeWorkspace } from "../dist/build/packages/core/src/index.js";
-import { PERSONA_RENDER_GOLDEN } from "./fixtures/s7-golden/persona-render.golden.mjs";
-
-const PERSONA_PROFILE_ID = "profile:tcrn-mneme-v1";
-
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-
-test("persona-render: fixed profile-id reproduces the golden render, full value", async () => {
-  const run = spawnSync(process.execPath,
-    [join(REPO_ROOT, "scripts/tcrn-workflow.mjs"), "persona-render", "--profile-id", PERSONA_PROFILE_ID],
-    { encoding: "utf8", cwd: REPO_ROOT });
-  assert.equal(run.status, 0, `persona-render must succeed; stderr: ${run.stderr}`);
-  assert.equal(run.stdout.trim(), PERSONA_RENDER_GOLDEN);
-});
 
 async function initializedWrapperWorkspace() {
   const base = await realpath(await mkdtemp(join(tmpdir(), "workflow-s7-wrapper-")));

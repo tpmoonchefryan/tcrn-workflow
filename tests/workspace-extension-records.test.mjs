@@ -783,6 +783,27 @@ test("WSD-2: the eight governed verbs plus gate-delete mutate and read under lea
   assert.deepEqual(gatesAfterDelete.map((entry) => entry.id), [deriveStableId("gate", "GATE-CLI-2")]);
 });
 
+test("STORY-370: conference positions accept actor attribution and an optional stance without a profile roster", async (context) => {
+  const fx = await cliSeededFixture(context);
+  const ws = fx.ws;
+  const opened = JSON.parse((await invokeCli(["conference-open", "--workspace", ws, "--expected-version", "2", "--at", instant(3),
+    "--external-key", "CONF-STORY-370", "--project-id", fx.projectId, "--type", "verification", "--title", "Attribution",
+    "--work-ids", fx.workId, "--desired-outcome", "record positions", "--participant-ids", "-"])).output);
+  const conferenceId = opened.recordId;
+  const historical = JSON.parse((await invokeCli(["conference-append-position", "--workspace", ws, "--expected-version", "3", "--at", instant(4),
+    "--conference-id", conferenceId, "--external-key", "POSITION-HISTORICAL-MARA", "--actor-id", "profile:tcrn-mara-v1",
+    "--position", "Historical profile attribution remains readable.", "--risks", "-", "--recommendations", "-", "--evidence-ids", "-"])).output);
+  assert.equal(historical.reasonCode, "WORKSPACE_COMMAND_COMPLETED");
+  const current = JSON.parse((await invokeCli(["conference-append-position", "--workspace", ws, "--expected-version", "4", "--at", instant(5),
+    "--conference-id", conferenceId, "--external-key", "POSITION-ACTOR-STANCE", "--actor-id", "agent:claude-sonnet-5", "--stance", "反对",
+    "--position", "The current actor records a bounded disagreement.", "--risks", "-", "--recommendations", "-", "--evidence-ids", "-"])).output);
+  assert.equal(current.reasonCode, "WORKSPACE_COMMAND_COMPLETED");
+  const listed = JSON.parse((await invokeCli(["conference-position-list", "--workspace", ws, "--conference-id", conferenceId])).output);
+  assert.equal(listed.records.length, 2);
+  assert.equal(listed.records.find((entry) => entry.actorId === "profile:tcrn-mara-v1")?.stance, undefined);
+  assert.equal(listed.records.find((entry) => entry.actorId === "agent:claude-sonnet-5")?.stance, "反对");
+});
+
 test("INC-086: gate-list distinguishes a nonexistent work-id from 'no gates'", async (context) => {
   const fx = await cliSeededFixture(context);
   const ws = fx.ws;

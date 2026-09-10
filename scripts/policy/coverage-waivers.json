@@ -857,6 +857,48 @@
       "testName": "__assertions__",
       "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 2 and 5 replace closed-effort and successful legacy-assignment assertions; the actual assertion call sites decrease from 119 to 118 while retirement refusal, unchanged chain version, and supported settings receipts remain covered.",
       "replacement": "portal/tests/ui-presence.test.mjs:S280 portal exposes open effort values, shows retirement refusals, and keeps supported receipts"
+    },
+    {
+      "path": "portal/tests/portal.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-370 removes the Entities read/write surface and its persona-card assertions; the replacement test proves the surface is absent, retired actions are refused, and execution policy remains writable.",
+      "replacement": "portal/tests/portal.test.mjs:STORY-370 the retired identity surface is absent while execution policy remains writable"
+    },
+    {
+      "path": "portal/tests/ui-presence.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-370 removes the Entities components and their dynamic model-plan assignment fixture; the surviving DOM and receipt tests retain the live shell, settings, vocabulary, and write behavior.",
+      "replacement": "portal/tests/ui-presence.test.mjs:S280 portal keeps model-plan assignments retired and supported settings writable"
+    },
+    {
+      "path": "tests/p5-core-reference-personas.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-370 retires the persona CLI generation/validation verbs. The replacement asserts all eight public names refuse while the profile bundle remains a library-only surface.",
+      "replacement": "tests/p5-core-reference-personas.test.mjs:governed persona CLI names are retired while the profile bundle remains library-only"
+    },
+    {
+      "path": "tests/s238-persona-store.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-370 removes the live persona CLI and workspace CRUD tests. The replacement keeps direct library record, historical replay, readback, and removal invariants covered.",
+      "replacement": "tests/s238-persona-store.test.mjs:S238: library profile records retain a stable derived identity across updates; tests/s238-persona-store.test.mjs:S238: historical v1 records replay into the current content shape without promoting prompt text"
+    },
+    {
+      "path": "tests/s239-orchestration-settings.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-370 removes execution.personalessDispatch from the settings catalog. The retained numeric and policy setting coverage now asserts the removed key is unregistered.",
+      "replacement": "tests/s239-orchestration-settings.test.mjs:S239: defaults, closed enum, and bounded numeric strings are catalog-backed"
+    },
+    {
+      "path": "tests/s246-persona-overlay.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-370 retires the public persona overlay verbs. Direct execution-config tests retain name-conflict, field-restore, and model-plan reference refusal coverage.",
+      "replacement": "tests/s246-persona-overlay.test.mjs:INC-145: preset overlay restores individual fields and then the complete factory view"
+    },
+    {
+      "path": "tests/s7-behavior-surface.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-370 retires persona-render and removes its golden stdout contract. WSB-5 remains as the surviving shipped-binary behavior surface.",
+      "replacement": "tests/s7-behavior-surface.test.mjs:WSB-5: the shipped binary completes the status read verb with exit 0 and WORKSPACE_COMMAND_COMPLETED"
     }
   ]
 }

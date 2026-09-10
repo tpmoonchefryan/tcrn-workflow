@@ -11,7 +11,7 @@
     },
     "portal/tests/portal.test.mjs": {
       "testCount": 20,
-      "assertionCount": 168,
+      "assertionCount": 158,
       "testNames": [
         "portal boots from the live engine and exposes the new read surfaces",
         "portal writes use actor plus live CAS, then return readback and session audit",
@@ -28,7 +28,7 @@
         "i18n proof turns red when the engine drops enum allowedValues",
         "i18n full-table proof turns red when an existing translation regresses",
         "execution surface: the owner scenario end to end with the engine",
-        "INIT-027 execution cards keep persona data, policy linkage, and engine refusals visible",
+        "STORY-370 the retired identity surface is absent while execution policy remains writable",
         "STORY-355 GWT1+GWT2: a forged Host header is refused on every route, and the token now guards every GET under /api/",
         "STORY-355 GWT4: container mode's default prose root sits above the chain container regardless of partition",
         "STORY-355: an explicit --prose-root resolving inside a chain container fails at boot",
@@ -37,7 +37,7 @@
     },
     "portal/tests/ui-presence.test.mjs": {
       "testCount": 15,
-      "assertionCount": 118,
+      "assertionCount": 110,
       "testNames": [
         "INC-148 meta-criterion mutation ${MUTATION} must red",
         "INC-148 rendered DOM contract names every preview component",
@@ -52,7 +52,7 @@
         "INC-192 abstract concepts carry a supplemental explanation the keyboard can reach",
         "INC-186 the dictionary carries no workspace data",
         "INC-185 the vendor model directory opens as the page's own drawer",
-        "S280 portal exposes open effort values, shows retirement refusals, and keeps supported receipts",
+        "S280 portal keeps model-plan assignments retired and supported settings writable",
         "STORY-355 GWT3: the mobile nav toggle flips its state attributes, every destination stays reachable through it, and the 760px rules that gate it are present"
       ]
     },
@@ -79,16 +79,13 @@
       ]
     },
     "tests/act3-persona-render.test.mjs": {
-      "testCount": 7,
-      "assertionCount": 31,
+      "testCount": 4,
+      "assertionCount": 10,
       "testNames": [
-        "all eight closed Core Reference roles render as conference-only references",
-        "unknown roles and over-budget conference references fail closed",
-        "upstream persona tamper still fails against the exact source manifest",
-        "persona-render is an explicit-profile, stdout-only conference aid",
-        "Codex and Claude reject every Core Reference role as a main-session profile",
-        "Claude SessionStart preserves main-thread write scope and injects no persona",
-        "Codex Step 2 and compatibility Step 3 summaries bind no conference persona"
+        "STORY-370: the eight historical reference profiles remain closed and deterministic as library data",
+        "STORY-370: profile bundle validation still rejects a resealed source mutation",
+        "STORY-370: every public persona command is retired from the CLI catalog and dispatcher",
+        "STORY-370: the source no longer exposes the retired renderer module or live command branches"
       ]
     },
     "tests/act7-execution-collection.test.mjs": {
@@ -312,7 +309,7 @@
     },
     "tests/conference.test.mjs": {
       "testCount": 10,
-      "assertionCount": 54,
+      "assertionCount": 55,
       "testNames": [
         "valid conference request, position, and minutes validate",
         "operations bind positions and minutes to an open conference",
@@ -1046,14 +1043,14 @@
     },
     "tests/p5-core-reference-personas.test.mjs": {
       "testCount": 7,
-      "assertionCount": 30,
+      "assertionCount": 28,
       "testNames": [
         "exact eight-profile bundle is closed, schema-valid, source-bound, and deterministic",
         "decision-owning personas advise convening a conference and name the stable gate/conference reason codes (WSD-5 stopgap trigger prose)",
         "forbidden, tampered, duplicate, unknown, and extended roster records fail closed",
         "schema and runtime structural boundaries have exact bidirectional parity",
         "64 distinct insertion permutations normalize to identical accepted bytes",
-        "governed persona CLI is read-only and closed",
+        "governed persona CLI names are retired while the profile bundle remains library-only",
         "persona implementation has no legacy, network, database, hook, Skill, or runtime source authority"
       ]
     },
@@ -1360,17 +1357,17 @@
     },
     "tests/s238-persona-store.test.mjs": {
       "testCount": 4,
-      "assertionCount": 45,
+      "assertionCount": 15,
       "testNames": [
-        "S246: custom persona readback is the unified schema, with stable derived identity",
-        "S246: preset override accepts non-name fields, restores factory data, and tombstones safely",
-        "S238: custom persona set/update/list is one event with a stable derived id",
-        "S238: role, prompt, binding, and removal violations are named and do not advance the chain"
+        "S238: library profile records retain a stable derived identity across updates",
+        "S238: historical v1 records replay into the current content shape without promoting prompt text",
+        "S238: readback keeps shipped references and custom content distinct",
+        "S238: removing a custom library record is explicit and does not remove a reference preset"
       ]
     },
     "tests/s239-orchestration-settings.test.mjs": {
       "testCount": 2,
-      "assertionCount": 11,
+      "assertionCount": 9,
       "testNames": [
         "S239: defaults, closed enum, and bounded numeric strings are catalog-backed",
         "S239: semantic refusals identify the setting and leave the head unchanged"
@@ -1398,11 +1395,11 @@
     },
     "tests/s246-persona-overlay.test.mjs": {
       "testCount": 3,
-      "assertionCount": 11,
+      "assertionCount": 8,
       "testNames": [
-        "INC-145 PERSONA_NAME_CONFLICT names the custom-versus-preset route",
-        "INC-152 PERSONA_NAME_CONFLICT rejects active and tombstoned preset names",
-        "INC-145 PERSONA_PRESET_IN_USE explains how to release a named assignment"
+        "INC-145: custom content and preset overlay names cannot collide",
+        "INC-145: preset overlay restores individual fields and then the complete factory view",
+        "INC-152: preset removal refuses an active model-plan reference"
       ]
     },
     "tests/s247-vocabulary.test.mjs": {
@@ -1506,12 +1503,10 @@
       ]
     },
     "tests/s7-behavior-surface.test.mjs": {
-      "testCount": 3,
-      "assertionCount": 5,
+      "testCount": 1,
+      "assertionCount": 4,
       "testNames": [
-        "adapter-generate: fixed input reproduces the golden bundle, full value",
-        "persona-render: fixed profile-id reproduces the golden render, full value",
-        "the goldens are self-consistent with the shared fixed inputs"
+        "WSB-5: the shipped binary completes the status read verb with exit 0 and WORKSPACE_COMMAND_COMPLETED"
       ]
     },
     "tests/spawn-guard.test.mjs": {
@@ -1861,8 +1856,8 @@
       ]
     },
     "tests/workspace-extension-records.test.mjs": {
-      "testCount": 49,
-      "assertionCount": 223,
+      "testCount": 50,
+      "assertionCount": 228,
       "testNames": [
         "conference and gate mutations round-trip through the event log with chained hashes, sorted collections, fresh views, and materialize parity",
         "mutation-time rules fail closed without appending an event",
@@ -1871,6 +1866,7 @@
         "a workspace with zero conference/gate events keeps pre-change golden view bytes, view set, and export digest",
         "a crash across conference.closed leaves the event durable and recover() rebuilds extensions.json",
         "WSD-2: the eight governed verbs plus gate-delete mutate and read under lease and CAS with canonical receipts and deterministic list ordering",
+        "STORY-370: conference positions accept actor attribution and an optional stance without a profile roster",
         "INC-086: gate-list distinguishes a nonexistent work-id from 'no gates'",
         "WSD-2: every mutating verb fails closed on stale CAS, malformed enums pass through to the engine, and contention reports WORKSPACE_LOCKED",
         "WSD-3: conference-close --distill governs each decision into a promotable knowledge candidate under one lease",

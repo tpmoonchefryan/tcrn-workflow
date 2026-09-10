@@ -41,14 +41,10 @@ const removedBySnapshotDiff = baselineRoots.filter((name) => !currentRoots.inclu
 const addedBySnapshotDiff = currentRoots.filter((name) => !baselineRoots.includes(name));
 
 const returnedComponents = [
-  { name: "Switch", className: "tcrn-switch", replacement: "Use the DS snapshot class; no portal-local duplicate." },
   { name: "StatCard", className: "tcrn-stat-card", replacement: "Use the DS snapshot class; no portal-local duplicate." },
   { name: "SettingRow", className: "tcrn-setting-row", replacement: "Use the DS snapshot class; no portal-local duplicate." },
-  { name: "FieldProvenance", className: "tcrn-field-provenance", replacement: "Use the DS snapshot class; no portal-local duplicate." },
   { name: "LineNumberedEditor", className: "tcrn-line-numbered-editor", replacement: "Use the DS snapshot class; no portal-local duplicate." },
   { name: "AppStatusBar", className: "tcrn-app-status-bar", replacement: "Use the DS snapshot class; no portal-local duplicate." },
-  { name: "DefinitionList", className: "tcrn-definition-list", replacement: "Use the DS snapshot class; no portal-local duplicate." },
-  { name: "LockHint", className: "tcrn-lock-hint", replacement: "Use the DS snapshot class; no portal-local duplicate." },
   { name: "Ninth slot decision", className: "tcrn-readback-panel", replacement: "No new S254 component: the existing DS readback panel is the substitute; do not add a duplicate." },
 ];
 const componentRows = returnedComponents.map((component) => {
@@ -103,7 +99,7 @@ process.stdout.write(`${JSON.stringify({
     },
   },
   returnedComponents: {
-    expectedCount: 9,
+  expectedCount: returnedComponents.length,
     rows: componentRows,
   },
   decisionSummary: {

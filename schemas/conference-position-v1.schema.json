@@ -35,6 +35,12 @@
     "actorId": {
       "$ref": "https://tcrn.dev/schemas/protocol-common-v1.schema.json#/$defs/stableId"
     },
+    "stance": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "x-tcrn-maxUtf8Bytes": 2048
+    },
     "position": {
       "type": "string",
       "minLength": 1,

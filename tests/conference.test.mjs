@@ -60,6 +60,7 @@ test("valid conference request, position, and minutes validate", () => {
   assert.equal(positives.length, fixture.positiveCases);
   assert.equal(validateConferenceRequest(request()).schemaVersion, CONFERENCE_REQUEST_VERSION);
   assert.equal(validateConferencePosition(position()).schemaVersion, CONFERENCE_POSITION_VERSION);
+  assert.equal(validateConferencePosition(position({ stance: "反对" })).stance, "反对");
   assert.equal(validateConferenceMinutes(minutes()).schemaVersion, CONFERENCE_MINUTES_VERSION);
 });
 

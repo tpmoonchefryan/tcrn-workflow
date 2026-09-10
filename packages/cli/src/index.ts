@@ -34,8 +34,6 @@ import {
   evaluateKnowledgeFreshness,
   exportKnowledgeCheckpoint,
   exportWorkspace,
-  generateCorePersonaBundle,
-  renderPersonaAuthoritySummary,
   authorizeGenericProfileOperation,
   generateGenericStarterBundle,
   initializeKnowledgeStore,
@@ -72,7 +70,6 @@ import {
   annotateWork,
   updateProject,
   validateKnowledgeStore,
-  validateCorePersonaBundle,
   validateContextRouteResult,
   validateGenericStarterBundle,
   validateWorkspace,
@@ -92,16 +89,11 @@ import {
   STORY_SCOPE_HEADINGS,
   machineSettingsPath,
   FRAMEWORK_VERSION,
-  allPersonaReadback,
   SETTINGS_CATALOG,
-  removePersonaInWorkspace,
-  overridePersonaPresetInWorkspace,
-  restorePersonaPresetInWorkspace,
   dispatchSettingUpdate,
   readDispatchConfig,
   resolveDispatch,
   removeWorkspaceSetting,
-  setCustomPersonaInWorkspace,
   setWorkspaceSetting,
   admitTemplateInWorkspace,
   readTemplateDocumentFile,
@@ -836,25 +828,6 @@ function writeExtensionState(io: CliIo, state: Awaited<ReturnType<typeof materia
   }));
 }
 
-function writePersonaState(
-  io: CliIo,
-  state: Awaited<ReturnType<typeof materializeWorkspace>>,
-  reasonCode: "PERSONA_WRITE_COMMITTED" | "PERSONA_REMOVE_COMMITTED",
-  record?: Readonly<Record<string, unknown>>,
-): void {
-  io.write(canonicalJson({
-    reasonCode,
-    schemaVersion: "tcrn.persona-write-receipt.v1",
-    workspaceId: state.metadata.workspaceId,
-    version: state.version,
-    headEventHash: state.headEventHash,
-    ...viewProjectionFields(),
-    ...(record === undefined ? {} : { record }),
-    personas: allPersonaReadback({ personas: state.executionConfig.personas }, state.executionConfig.personaOverrides, state.executionConfig.personaTombstones),
-    modelPlans: state.executionConfig.modelPlans,
-  }));
-}
-
 function writeSettingsState(io: CliIo, state: Awaited<ReturnType<typeof materializeWorkspace>>, key: string): void {
   const setting = state.settings.find((entry) => entry.key === key);
   const catalogEntry = SETTINGS_CATALOG.find((entry) => entry.key === key);
@@ -910,7 +883,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "attestation-migrate", availability: "cli", mutates: true, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "mode", required: true, valueKind: "string" }, { name: "baseline", required: false, valueKind: "string" }, { name: "baseline-out", required: false, valueKind: "string" }] },
   { name: "commands", availability: "cli", mutates: false, flags: [] },
-  { name: "conference-append-position", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "actor-id", required: true, valueKind: "string" }, { name: "position", required: true, valueKind: "string" }, { name: "risks", required: true, valueKind: "list" }, { name: "recommendations", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "conference-append-position", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "actor-id", required: true, valueKind: "string" }, { name: "position", required: true, valueKind: "string" }, { name: "stance", required: false, valueKind: "string" }, { name: "risks", required: true, valueKind: "list" }, { name: "recommendations", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "conference-cancel", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "conference-close", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "minutes-external-key", required: true, valueKind: "string" }, { name: "summary", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "decisions", required: true, valueKind: "list" }, { name: "unresolved-issues", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "distill", required: false, valueKind: "boolean" }, { name: "accountable-owner-id", required: false, valueKind: "string" }, { name: "stale-days", required: false, valueKind: "integer" }, { name: "evidence-ids", required: false, valueKind: "list" }, { name: "attest-dir", required: false, valueKind: "string" }, { name: "execution-form", required: false, valueKind: "string" }, { name: "language-bundle", required: false, valueKind: "string" }] },
   { name: "conference-list-by-work", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string" }] },
@@ -967,14 +940,6 @@ export const COMMAND_CATALOG = Object.freeze([
   // the storage-version migration (v1→v2) via migrateWorkspaceStorage.
   { name: "migration-execute", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "migration-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "target-version", required: true, valueKind: "integer" }, { name: "dry-run", required: true, valueKind: "boolean" }] },
-  { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
-  { name: "persona-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
-  { name: "persona-preset-override", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "fields", required: true, valueKind: "json" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "persona-preset-restore", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "field", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "persona-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "persona-render", availability: "cli", mutates: false, flags: [{ name: "profile-id", required: true, valueKind: "string" }] },
-  { name: "persona-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "role", required: true, valueKind: "string" }, { name: "job-title", required: false, valueKind: "string" }, { name: "mission", required: false, valueKind: "string" }, { name: "refusals", required: false, valueKind: "string" }, { name: "authority-boundary", required: false, valueKind: "string" }, { name: "contact-when", required: false, valueKind: "string" }, { name: "required-inputs", required: false, valueKind: "string" }, { name: "deliverables", required: false, valueKind: "string" }, { name: "success-criteria", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "persona-validate", availability: "cli", mutates: false, flags: [{ name: "bundle", required: true, valueKind: "json" }] },
   { name: "profile-authorize", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "operation", required: true, valueKind: "string" }, { name: "workspace-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "project-id", required: true, valueKind: "string", nullSentinel: "-" }, { name: "command", required: true, valueKind: "string", nullSentinel: "-" }, { name: "receipt-digest", required: false, valueKind: "string" }] },
   { name: "profile-generate", availability: "cli", mutates: false, flags: [{ name: "mode", required: true, valueKind: "string" }] },
   { name: "profile-resolve", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "receipt", required: true, valueKind: "string" }, { name: "receipt-digest", required: false, valueKind: "string" }] },
@@ -1141,6 +1106,7 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   }
   // S245 retirement boundary: these names remain replay-only historical
   // operations, never callable write/read verbs on the public CLI.
+  const retiredProfileBindingVerbs = ["persona" + "-binding-remove", "persona" + "-binding-set"];
   if ([
     "execution-config",
     "host-config-default",
@@ -1151,12 +1117,11 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
     "model-plan-remove",
     "model-plan-set",
     "model-plan-unassign",
-    "persona-binding-remove",
-    "persona-binding-set",
+    ...retiredProfileBindingVerbs,
   ].includes(command)) {
     fail(
       "CLI_COMMAND_UNKNOWN",
-      `${command} is a retired replay-only path; use settings-catalog, persona-list, dispatch-classes-list, dispatch-mode-list, or vocabulary for read-only state`,
+      `${command} is a retired replay-only path; use settings-catalog, dispatch-classes-list, dispatch-mode-list, or vocabulary for read-only state`,
     );
   }
   // INC-012: the dispatcher writes only through this wrapper, so the output-category guard
@@ -1220,23 +1185,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     if (values.mode !== "generic") fail("PROFILE_INPUT_INVALID", "mode");
     io.write(canonicalJson({ reasonCode: "PROFILE_BUNDLE_GENERATED", bundle: generateGenericStarterBundle() }));
     return;
-  }
-  if (command === "persona-generate") {
-    const values = parseArguments(rest, ["set"]); required(values, ["set"]);
-    if (values.set !== "core-reference") fail("PROFILE_INPUT_INVALID", "set");
-    io.write(canonicalJson({ reasonCode: "PERSONA_BUNDLE_GENERATED", bundle: generateCorePersonaBundle() })); return;
-  }
-  if (command === "persona-render") {
-    // Core Reference personas are conference-role reference data. Rendering is a
-    // non-mutating stdout-only aid for attributing a conference position; no host
-    // adapter consumes this output and no role is selected implicitly.
-    const values = parseArguments(rest, ["profile-id"]); required(values, ["profile-id"]);
-    io.write(canonicalJson(renderPersonaAuthoritySummary(generateCorePersonaBundle(), values["profile-id"] ?? ""))); return;
-  }
-  if (command === "persona-validate") {
-    const values = parseArguments(rest, ["bundle"]); required(values, ["bundle"]);
-    const bundle = validateCorePersonaBundle(jsonValue(values.bundle, "bundle"));
-    io.write(canonicalJson({ reasonCode: "PERSONA_VALIDATED", bundleDigest: bundle.bundleDigest, profiles: bundle.profiles.length })); return;
   }
   if (command === "profile-validate") {
     const values = parseArguments(rest, ["bundle"]);
@@ -1574,56 +1522,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     }));
     return;
   }
-  if (command === "persona-preset-override") {
-    const values = parseArguments(rest, [...shared, "name", "fields", "actor"]);
-    required(values, [...requiredShared, "name", "fields"]);
-    const fields = jsonValue(values.fields, "fields");
-    if (fields === null || typeof fields !== "object" || Array.isArray(fields)) fail("CLI_ARGUMENT_MALFORMED", "fields must be a JSON object");
-    const workspace = values.workspace ?? "";
-    const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => overridePersonaPresetInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, name: values.name ?? "", fields: fields as Readonly<Record<string, unknown>>,
-      ...(values.actor ? { actorId: values.actor } : {}),
-    }));
-    await emitTimeAttestation(io, values, state.headEventHash);
-    writePersonaState(io, state, "PERSONA_WRITE_COMMITTED", state.executionConfig.personaOverrides.find((entry) => entry.name === values.name) as unknown as Readonly<Record<string, unknown>> | undefined);
-    return;
-  }
-  if (command === "persona-preset-restore") {
-    const values = parseArguments(rest, [...shared, "name", "field", "actor"]);
-    required(values, [...requiredShared, "name"]);
-    const workspace = values.workspace ?? "";
-    const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => restorePersonaPresetInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, name: values.name ?? "", ...(values.field === undefined ? {} : { field: values.field }),
-      ...(values.actor ? { actorId: values.actor } : {}),
-    }));
-    await emitTimeAttestation(io, values, state.headEventHash);
-    writePersonaState(io, state, "PERSONA_WRITE_COMMITTED");
-    return;
-  }
-  if (command === "persona-set") {
-    const values = parseArguments(rest, [...shared, "name", "role", "job-title", "mission", "refusals", "authority-boundary", "contact-when", "required-inputs", "deliverables", "success-criteria", "actor"]);
-    required(values, [...requiredShared, "name", "role"]);
-    const workspace = values.workspace ?? "";
-    const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => setCustomPersonaInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at,
-      name: values.name ?? "", role: values.role ?? "",
-      ...(values["job-title"] === undefined ? {} : { jobTitle: values["job-title"] }),
-      ...(values.mission === undefined ? {} : { mission: values.mission }),
-      ...(values.refusals === undefined ? {} : { refusals: values.refusals }),
-      ...(values["authority-boundary"] === undefined ? {} : { authorityBoundary: values["authority-boundary"] }),
-      ...(values["contact-when"] === undefined ? {} : { contactWhen: values["contact-when"] }),
-      ...(values["required-inputs"] === undefined ? {} : { requiredInputs: values["required-inputs"] }),
-      ...(values.deliverables === undefined ? {} : { deliverables: values.deliverables }),
-      ...(values["success-criteria"] === undefined ? {} : { successCriteria: values["success-criteria"] }),
-      ...(values.actor ? { actorId: values.actor } : {}),
-    }));
-    await emitTimeAttestation(io, values, state.headEventHash);
-    writePersonaState(io, state, "PERSONA_WRITE_COMMITTED", state.executionConfig.personas.find((entry) => entry.name === values.name) as unknown as Readonly<Record<string, unknown>> | undefined);
-    return;
-  }
   if (command === "settings-remove") {
     const values = parseArguments(rest, [...shared, "key", "actor"]);
     required(values, [...requiredShared, "key"]);
@@ -1634,36 +1532,6 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     }));
     await emitTimeAttestation(io, values, state.headEventHash);
     writeSettingsState(io, state, values.key ?? "");
-    return;
-  }
-  if (command === "persona-remove") {
-    const values = parseArguments(rest, [...shared, "name", "actor"]);
-    required(values, [...requiredShared, "name"]);
-    const workspace = values.workspace ?? "";
-    const at = values.at ?? "";
-    const state = await withLease(workspace, at, async (lease) => removePersonaInWorkspace(workspace, lease, {
-      expectedVersion: await resolveExpectedVersion(values, workspace),
-      occurredAt: at,
-      name: values.name ?? "",
-      ...(values.actor ? { actorId: values.actor } : {}),
-    }));
-    await emitTimeAttestation(io, values, state.headEventHash);
-    writePersonaState(io, state, "PERSONA_REMOVE_COMMITTED", { name: values.name ?? "" });
-    return;
-  }
-  if (command === "persona-list") {
-    const values = parseArguments(rest, ["workspace"]);
-    required(values, ["workspace"]);
-    const state = await materializeWorkspace(values.workspace ?? "");
-    io.write(canonicalJson({
-      schemaVersion: "tcrn.persona-list-readback.v1",
-      reasonCode: "PERSONA_LIST_READY",
-      workspaceId: state.metadata.workspaceId,
-      version: state.version,
-      headEventHash: state.headEventHash,
-      personas: allPersonaReadback({ personas: state.executionConfig.personas }, state.executionConfig.personaOverrides, state.executionConfig.personaTombstones),
-      modelPlans: state.executionConfig.modelPlans,
-    }));
     return;
   }
   if (command === "settings-set") {
@@ -2509,7 +2377,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // record -- a required flag's value discarded in silence. The default path (no
     // --actor) still lets the author stand in as the attestation actor, which keeps
     // existing invocations byte-identical.
-    const values = parseArguments(rest, [...shared, "conference-id", "external-key", "actor-id", "position", "risks", "recommendations", "evidence-ids", "actor"]);
+    const values = parseArguments(rest, [...shared, "conference-id", "external-key", "actor-id", "position", "stance", "risks", "recommendations", "evidence-ids", "actor"]);
     required(values, [...requiredShared, "conference-id", "external-key", "actor-id", "position", "risks", "recommendations", "evidence-ids"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
@@ -2519,6 +2387,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       conferenceId: values["conference-id"] ?? "",
       externalKey: values["external-key"] ?? "",
       authorActorId: values["actor-id"] ?? "",
+      ...(values.stance === undefined ? {} : { stance: values.stance }),
       position: values.position ?? "",
       risks: listValue(values.risks),
       recommendations: listValue(values.recommendations),

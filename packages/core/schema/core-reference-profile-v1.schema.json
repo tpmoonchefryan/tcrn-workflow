@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tcrn.dev/schemas/core-reference-persona-v1.schema.json",
+  "$id": "https://tcrn.dev/schemas/core-reference-profile-v1.schema.json",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -11,7 +11,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "tcrn.core-reference-persona-bundle.v1"
+      "const": "tcrn.core-reference-profile-bundle.v1"
     },
     "sourceManifestSha256": {
       "const": "9fa68e8f06e73e1d1b4bffb59a059814e683619b1d80234aef82e44f76de7c13"
@@ -61,7 +61,7 @@
       ],
       "properties": {
         "schemaVersion": {
-          "const": "tcrn.core-reference-persona.v1"
+          "const": "tcrn.core-reference-profile.v1"
         },
         "profileId": {
           "type": "string",

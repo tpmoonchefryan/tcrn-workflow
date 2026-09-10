@@ -20,39 +20,22 @@ const CLI = process.env.TCRN_WORKFLOW_CLI ?? join(portalRoot, "..", "scripts", "
 const MUTATION = process.env.TCRN_UI_MUTATION ?? "";
 const COMPONENTS = Object.freeze([
   ["workspace overview/audit tabs", '[data-ui="workspace-tabs"]'],
-  ["entity Persona/template tabs", '[data-ui="entity-tabs"]'],
-  ["persona custom/preset sections", '[data-ui="persona-section-custom"]'],
-  ["persona override dot", '[data-ui="persona-override-dot"]'],
-  ["persona locked name hint", '[data-ui="persona-name-lock"]'],
-  ["persona more-fields disclosure", '[data-ui="persona-more-fields"]'],
-  ["persona factory ghost", '[data-ui="persona-ghost"]'],
-  ["persona single-field restore", '[data-ui="persona-restore-field"]'],
-  ["persona full restore", '[data-ui="persona-restore-all"]'],
-  ["persona model read-only area", '[data-ui="persona-model-readonly"]'],
-  ["persona modified badge", '[data-ui="persona-modified-badge"]'],
-  ["delete confirmation", '[data-ui="persona-delete-confirm"]'],
   ["prose directory", '[data-ui="prose-directory"]'],
   ["prose line-number gutter", '[data-ui="prose-gutter"]'],
   ["prose finding link", '[data-ui="prose-finding-link"]'],
   ["article form surface", '[data-ui="article-form-surface"]'],
-  ["assignment addline", '[data-ui="assignment-addline"]'],
-  ["active plan badge", '[data-ui="plan-active-badge"]'],
   ["workspace paths", '[data-ui="workspace-paths"]'],
   ["path copy control", '[data-ui="path-copy"]'],
   ["partition switcher", '[data-ui="partition-switcher"]'],
   ["engine connection", '[data-ui="engine-connection"]'],
   ["setting modified dot", '[data-ui="setting-modified-dot"]'],
   ["setting dictionary link", '[data-ui="setting-dictionary-link"]'],
-  ["returned switch", ".tcrn-switch"],
   ["returned stepper", ".tcrn-stepper"],
   ["returned segmented control", ".tcrn-segmented-nav"],
   ["returned stat card", ".tcrn-stat-card"],
   ["returned setting row", ".tcrn-setting-row"],
-  ["returned field provenance", ".tcrn-field-provenance"],
   ["returned line-numbered editor", ".tcrn-line-numbered-editor"],
   ["returned app status bar", ".tcrn-app-status-bar"],
-  ["returned definition list", ".tcrn-definition-list"],
-  ["returned lock hint", ".tcrn-lock-hint"],
   ["receipt chip", '[data-ui="receipt-chip"]'],
   ["receipt drawer", '[data-ui="receipt-drawer"]'],
 ]);
@@ -88,14 +71,12 @@ async function writeScratch(fixture, command, args) {
 }
 
 async function seed(fixture) {
-  await writeScratch(fixture, "persona-preset-override", ["--name", "Verity", "--fields", JSON.stringify({ mission: "Overridden mission" })]);
   await historicalModelPlan(fixture.workspace, "set", { host: "claude-code", name: "budget", defaultModel: "claude-sonnet-4-5" }, nextAt());
   await writeScratch(fixture, "settings-set", ["--key", "execution.claudeCodeSubagentPlan", "--value", "budget"]);
 }
 
 function mutateSource(source, mutation) {
   if (mutation === "assignment-addline") return source.replaceAll('data-ui="assignment-addline"', 'data-ui="assignment-addline-mutated"');
-  if (mutation === "persona-ghost-restore") return source.replaceAll('data-ui="persona-ghost"', 'data-ui="persona-ghost-mutated"').replaceAll('data-ui="persona-restore-field"', 'data-ui="persona-restore-field-mutated"').replaceAll('data-ui="persona-restore-all"', 'data-ui="persona-restore-all-mutated"');
   if (mutation === "receipt-click") return source.replace('$("#receipt-chip").addEventListener("click", openReceipt); ', "");
   if (mutation === "receipt-stale") return source.replace(/setText\("#receipt-chip-text", state\.receipt\.version \? [\s\S]*?\);\n    renderReceipt\(\);/u, 'setText("#receipt-chip-text", "idle");\n    renderReceipt();');
   if (mutation === "s253-old-class") return source.replace('class="tcrn-top-bar"', 'class="tcrn-topbar"');
@@ -258,8 +239,6 @@ async function preparePage(env = {}) {
   const page = await loadExecutedDom(fixture, env);
   page.workspace = fixture.workspace;
   page.cleanup = async () => { page.child.kill(); await rm(fixture.base, { recursive: true, force: true }); };
-  page.document.querySelector('[data-persona-name="Verity"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 80));
   page.document.querySelector('[data-page-target="settings"]')?.click();
   page.document.querySelector('[data-setting-group="models"]')?.click();
   await new Promise((resolve) => setTimeout(resolve, 80));
@@ -284,7 +263,7 @@ function assertDomContract(document) {
     [],
     "the executed DOM must render every shared component root",
   );
-  const returnedRoots = ["tcrn-switch", "tcrn-stat-card", "tcrn-setting-row", "tcrn-field-provenance", "tcrn-line-numbered-editor", "tcrn-app-status-bar", "tcrn-definition-list", "tcrn-lock-hint"];
+  const returnedRoots = ["tcrn-stat-card", "tcrn-setting-row", "tcrn-line-numbered-editor", "tcrn-app-status-bar"];
   const hasCssRoot = (name) => new RegExp(`\\.${name}(?=[\\s,{:>+~]|$)`, "u").test(dsCss);
   assert.deepEqual(
     returnedRoots.filter((name) => !hasCssRoot(name)),
@@ -316,9 +295,7 @@ function assertDomContract(document) {
     ["compound search input", "span.tcrn-search-input > input.tcrn-search-input__control"],
     ["search shortcut", "kbd.tcrn-search-input__shortcut"],
     ["workspace section tabs", '[data-ui="workspace-tabs"].tcrn-section-tabs'],
-    ["entity section tabs", '[data-ui="entity-tabs"].tcrn-section-tabs'],
     ["surface", ".tcrn-surface"],
-    ["detail inspector", "#persona-detail.tcrn-detail-inspector"],
     ["knowledge TOC rail", "#prose-directory.tcrn-knowledge-toc-rail"],
     ["receipt badge", "#receipt-chip.tcrn-badge"],
     ["detail drawer", "#receipt-drawer.tcrn-detail-drawer"],
@@ -333,24 +310,16 @@ function assertDomContract(document) {
   const missing = missingComponents(document);
   assert.deepEqual(missing, [], `rendered DOM components absent: ${JSON.stringify(missing)}`);
   const navigationItems = [...document.querySelectorAll(".tcrn-side-nav .tcrn-nav-item")];
-  // STORY-366 added the sixth destination (articles), between rules and entities.
-  assert.equal(navigationItems.length, 6, "the portal must render the six platform destinations");
+  // STORY-370 retires the Entities destination; Articles remains the fifth live page.
+  assert.equal(navigationItems.length, 5, "the portal must render the five live platform destinations");
   assert.ok(navigationItems.every((button) => button.getAttribute("aria-label")?.trim()), "every destination must expose an accessible name");
   assert.ok(navigationItems.every((button) => button.getAttribute("data-i18n-aria-label")?.trim()), "every destination name must come from the locale table");
   assert.equal(document.querySelector('img.tcrn-brand-mark')?.getAttribute("alt"), "", "the decorative mark must not duplicate the brand accessible name");
-  assert.ok(document.querySelector('[data-ui="assignment-addline"] select, [data-ui="assignment-addline"] input, [data-ui="assignment-addline"] button'), "assignment addline must expose controls");
   assert.ok(document.querySelector('[data-ui="receipt-chip"][data-ui-action="open-receipt"]'), "receipt chip must expose its action");
 }
 
 async function assertBehaviorContract(page) {
   const { document, window } = page;
-  const restoreAll = document.querySelector('[data-ui="persona-restore-all"]');
-  assert.ok(restoreAll, "persona full restore must be rendered for the overridden preset");
-  assert.equal(restoreAll.dataset.restoreAll, "true", "persona full restore must omit a field selector");
-  assert.equal(restoreAll.dataset.restoreField, undefined, "persona full restore must call the no-field engine path");
-  const beforeRestore = receiptText(document);
-  restoreAll.click();
-  await waitFor(receiptAdvanced(document, beforeRestore), "the receipt chip to advance after the persona restore");
   const chip = document.querySelector('[data-ui="receipt-chip"]');
   const drawer = document.querySelector('[data-ui="receipt-drawer"]');
   chip.click();
@@ -750,33 +719,15 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
-  test("S280 portal exposes open effort values, shows retirement refusals, and keeps supported receipts", async () => {
+  test("S280 portal keeps model-plan assignments retired and supported settings writable", async () => {
     const page = await preparePage();
     try {
       const vocabulary = await cli(["vocabulary"]);
       assert.deepEqual(vocabulary.efforts, [], "open effort strings do not produce a closed vocabulary list");
       page.document.querySelector('[data-setting-group="models"]')?.click();
       await new Promise((resolve) => setTimeout(resolve, 80));
-      const effortSelect = page.document.querySelector('[data-assign-effort]');
-      assert.ok(effortSelect, "the seeded Claude Code plan must render an effort selector");
-      const options = [...effortSelect.querySelectorAll("option")].map((option) => option.value);
-      assert.deepEqual(options.filter((value) => value.length > 0), [], "the portal must not invent a closed effort roster");
-
-      const modelInput = page.document.querySelector('[data-assign-model]');
-      const assign = page.document.querySelector('[data-assign]');
-      assert.ok(modelInput && assign, "the model plan addline must expose assignment controls");
-      modelInput.value = "claude-sonnet-4-5";
-      const beforeAssign = receiptText(page.document);
-      const beforeStatus = await cli(["status", "--workspace", page.workspace]);
-      assign.click();
-      await waitFor(() => {
-        const text = receiptText(page.document);
-        return text !== beforeAssign && text.startsWith("✕") ? text : null;
-      }, "the retirement refusal to become visible");
-      assert.match(receiptText(page.document), /✕/u);
-      assert.match(page.document.querySelector("#receipt-body")?.textContent ?? "", /CLI_COMMAND_UNKNOWN/u);
-      const afterStatus = await cli(["status", "--workspace", page.workspace]);
-      assert.equal(afterStatus.version, beforeStatus.version, "a retired assignment must not advance the receipt");
+      assert.equal(page.document.querySelector('[data-assign-effort]'), null, "retired model-plan records must not render assignment controls");
+      assert.match(page.document.querySelector("#model-plans")?.textContent ?? "", /No plans|没有/u);
 
       page.document.querySelector('[data-setting-group="execution"]')?.click();
       await new Promise((resolve) => setTimeout(resolve, 80));
@@ -793,7 +744,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
   // STORY-355 GWT3. Evidence boundary, stated plainly rather than overclaimed: this
   // proves the toggle exists, that clicking it flips the two state attributes the CSS
   // keys off (.tcrn-shell-mobile-nav-toggle and the data-mobile-nav-expanded rule
-  // inside the 760px block), and that all five nav destinations still reach their
+  // inside the 760px block), and that all live nav destinations still reach their
   // section through it. It does NOT prove the CSS actually shows or hides anything at
   // that breakpoint -- linkedom parses and executes script but never runs layout or
   // media queries (INC-148's "against a parsed, executed DOM", not a rendered one).
@@ -815,9 +766,9 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.equal(shell.getAttribute("data-mobile-nav-expanded"), "true");
       assert.equal(toggle.getAttribute("aria-expanded"), "true");
 
-      // The five destinations the CSS puts behind this toggle at narrow widths still
+      // The live destinations the CSS puts behind this toggle at narrow widths still
       // drive the same section router the always-visible desktop nav always used.
-      const destinations = ["dashboard", "settings", "prose", "entities", "vocabulary"];
+      const destinations = ["dashboard", "settings", "prose", "articles", "vocabulary"];
       for (const target of destinations) {
         const navItem = nav.querySelector(`[data-page-target="${target}"]`);
         assert.ok(navItem, `the expanded nav must still carry the ${target} destination`);

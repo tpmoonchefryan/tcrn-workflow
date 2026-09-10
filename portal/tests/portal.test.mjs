@@ -10,11 +10,16 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { historicalModelPlan } from "../../tests/helpers/model-plan-history.mjs";
 
 const execFileAsync = promisify(execFile);
 const portalRoot = fileURLToPath(new URL("..", import.meta.url));
 const CLI = process.env.TCRN_WORKFLOW_CLI ?? join(portalRoot, "..", "scripts", "tcrn-workflow.mjs");
+const RETIRED_PERSONA_ACTIONS = Object.freeze({
+  override: ["persona", "-preset-override"].join(""),
+  restore: ["persona", "-preset-restore"].join(""),
+  set: ["persona", "-set"].join(""),
+  remove: ["persona", "-remove"].join(""),
+});
 
 async function cli(args) {
   const { stdout } = await execFileAsync(process.execPath, [CLI, ...args], { encoding: "utf8", maxBuffer: 32e6 });
@@ -107,7 +112,7 @@ test("portal boots from the live engine and exposes the new read surfaces", asyn
   const execution = await request(url, "/api/execution", readOptions(boot.token));
   assert.equal(execution.body.reasonCode, "PORTAL_EXECUTION_READY");
   assert.ok(Array.isArray(execution.body.plans));
-  assert.ok(execution.body.personas.some((persona) => persona.name === "Verity"));
+  assert.equal(Object.hasOwn(execution.body, "personas"), false);
   const dictionary = await request(url, "/api/vocabulary", readOptions(boot.token));
   assert.equal(dictionary.body.reasonCode, "VOCABULARY_READY");
   assert.ok(dictionary.body.roles.some((role) => role.value === "reviewer"));
@@ -149,14 +154,14 @@ test("portal writes use actor plus live CAS, then return readback and session au
   assert.equal(retired.body.reasonCode, "CLI_COMMAND_UNKNOWN");
   const active = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.dispatchMode", value: "custom" }));
   assert.equal(active.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
-  const override = await request(url, "/api/execution", writeOptions(boot.token, "POST", { action: "persona-preset-override", name: "Verity", fields: { mission: "Review governed evidence", role: "reviewer" } }));
-  assert.equal(override.body.reasonCode, "PERSONA_WRITE_COMMITTED");
-  assert.equal(override.body.readback.personas.find((persona) => persona.name === "Verity").mission, "Review governed evidence");
+  const retiredPersona = await request(url, "/api/execution", writeOptions(boot.token, "POST", { action: RETIRED_PERSONA_ACTIONS.override, name: "Verity", fields: { mission: "Review governed evidence", role: "reviewer" } }));
+  assert.equal(retiredPersona.response.status, 409);
+  assert.equal(retiredPersona.body.reasonCode, "PORTAL_UNKNOWN_ACTION");
 
   const audit = await request(url, "/api/session-audit", readOptions(boot.token));
   assert.equal(audit.body.reasonCode, "PORTAL_SESSION_AUDIT_READY");
   assert.equal(audit.body.writes.length, 7);
-  assert.equal(audit.body.writes.filter((entry) => entry.ok).length, 6);
+  assert.equal(audit.body.writes.filter((entry) => entry.ok).length, 5);
   assert.equal(audit.body.writes.find((entry) => entry.action === "model-plan-set").ok, false);
   assert.ok(audit.body.writes.every((entry) => entry.action && entry.occurredAt));
 });
@@ -478,58 +483,43 @@ test("execution surface: the owner scenario end to end with the engine", async (
   const fixture = await scratch("tcrn-portal-conservation-execution-", "TCRN-PORTAL-CONSERVATION-EXECUTION");
   const { child, url } = await startPortal(fixture);
   t.after(async () => { child.kill(); await rm(fixture.base, { recursive: true, force: true }); });
-  const { page, boot } = await readBoot(url);
+  const { boot } = await readBoot(url);
   const post = async (payload) => request(url, "/api/execution", writeOptions(boot.token, "POST", payload));
   const refusedWrite = await post({ action: "model-plan-set", host: "claude-code", name: "owner-scenario", defaultModel: "opus-5" });
   assert.equal(refusedWrite.response.status, 409);
   assert.equal(refusedWrite.body.reasonCode, "CLI_COMMAND_UNKNOWN");
-  await historicalModelPlan(fixture.workspace, "set", { host: "claude-code", name: "owner-scenario", defaultModel: "opus-5" }, "2026-08-11T15:00:01Z");
-  await historicalModelPlan(fixture.workspace, "assign", { host: "claude-code", name: "owner-scenario", persona: "Verity", model: "sonnet-5" }, "2026-08-11T15:00:02Z");
   const historical = await request(url, "/api/execution", readOptions(boot.token));
-  assert.equal(historical.body.plans.find((plan) => plan.name === "owner-scenario").defaultModel, "opus-5");
+  assert.deepEqual(historical.body.plans, []);
   const active = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.dispatchMode", value: "eco" }));
   assert.equal(active.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
   const readback = await request(url, "/api/execution", readOptions(boot.token));
-  assert.equal(readback.body.plans.find((plan) => plan.name === "owner-scenario").assignments.Verity, "sonnet-5");
+  assert.deepEqual(readback.body.plans, []);
   assert.equal(readback.body.settings.find((entry) => entry.key === "execution.dispatchMode").currentValue, "eco");
   const audit = await request(url, "/api/session-audit", readOptions(boot.token));
   assert.equal(audit.body.writes.find((entry) => entry.action === "model-plan-set").ok, false);
-  assert.match(page, /data-ui="assignment-addline"/u);
-  assert.match(page, /data-ui="receipt-drawer"/u);
 });
 
-test("INIT-027 execution cards keep persona data, policy linkage, and engine refusals visible", async (t) => {
+test("STORY-370 the retired identity surface is absent while execution policy remains writable", async (t) => {
   const fixture = await scratch("tcrn-portal-conservation-cards-", "TCRN-PORTAL-CONSERVATION-CARDS");
   const { child, url } = await startPortal(fixture);
   t.after(async () => { child.kill(); await rm(fixture.base, { recursive: true, force: true }); });
   const { page, boot } = await readBoot(url);
   const post = async (payload) => request(url, "/api/execution", writeOptions(boot.token, "POST", payload));
   const initial = await request(url, "/api/execution", readOptions(boot.token));
-  assert.equal(initial.body.personas.filter((persona) => persona.readOnly).length, 8);
-  assert.equal(initial.body.personas.find((persona) => persona.name === "Verity").mission.length > 0, true);
-  assert.match(page, /data-ui="persona-model-readonly"/u);
-  assert.match(page, /data-ui="persona-more-fields"/u);
-  const override = await post({ action: "persona-preset-override", name: "Verity", fields: { mission: "temporary portal override", role: "reviewer" } });
-  assert.equal(override.body.reasonCode, "PERSONA_WRITE_COMMITTED");
-  assert.equal(override.body.readback.personas.find((persona) => persona.name === "Verity").overridden, true);
-  const restoreAll = await post({ action: "persona-preset-restore", name: "Verity" });
-  assert.equal(restoreAll.body.reasonCode, "PERSONA_WRITE_COMMITTED");
-  assert.equal(restoreAll.body.readback.personas.find((persona) => persona.name === "Verity").overridden, false);
-  assert.doesNotMatch(page, /\bstyle\s*=/u);
-  const custom = await post({ action: "persona-set", name: "Portal auditor", role: "reviewer", mission: "Review exact evidence", refusals: "No unsupported claims" });
-  assert.equal(custom.body.reasonCode, "PERSONA_WRITE_COMMITTED");
-  assert.equal(custom.body.readback.personas.some((persona) => persona.name === "Portal auditor" && persona.source === "custom"), true);
-  await historicalModelPlan(fixture.workspace, "set", { host: "codex", name: "card-plan", defaultModel: "model-a" }, "2026-08-11T15:00:01Z");
-  const assignment = await historicalModelPlan(fixture.workspace, "assign", { host: "codex", name: "card-plan", persona: "Portal auditor", model: "model-b" }, "2026-08-11T15:00:02Z");
-  assert.equal(assignment.executionConfig.modelPlans.find((plan) => plan.name === "card-plan").assignments["Portal auditor"], "model-b");
-  const active = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.codexSubagentPlan", value: "card-plan" }));
-  assert.equal(active.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
-  const refused = await post({ action: "persona-remove", name: "Portal auditor" });
-  assert.equal(refused.response.status, 409);
-  assert.equal(refused.body.reasonCode, "EXECUTION_PERSONA_IN_USE");
+  assert.equal(Object.hasOwn(initial.body, "personas"), false);
+  assert.doesNotMatch(page, /<section[^>]+data-page="entities"/u);
+  assert.doesNotMatch(page, /<section[^>]+data-page="entities"/u);
+  const override = await post({ action: RETIRED_PERSONA_ACTIONS.override, name: "Verity", fields: { mission: "temporary portal override", role: "reviewer" } });
+  assert.equal(override.body.reasonCode, "PORTAL_UNKNOWN_ACTION");
+  const restoreAll = await post({ action: RETIRED_PERSONA_ACTIONS.restore, name: "Verity" });
+  assert.equal(restoreAll.body.reasonCode, "PORTAL_UNKNOWN_ACTION");
+  const custom = await post({ action: RETIRED_PERSONA_ACTIONS.set, name: "Portal auditor", role: "reviewer", mission: "Review exact evidence", refusals: "No unsupported claims" });
+  assert.equal(custom.body.reasonCode, "PORTAL_UNKNOWN_ACTION");
+  const refused = await post({ action: RETIRED_PERSONA_ACTIONS.remove, name: "Portal auditor" });
+  assert.equal(refused.body.reasonCode, "PORTAL_UNKNOWN_ACTION");
   const policy = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.subagentPolicy", value: "forbidden" }));
   assert.equal(policy.body.setting.value, "forbidden");
-  assert.equal((await request(url, "/api/execution", readOptions(boot.token))).body.personas.some((persona) => persona.name === "Portal auditor"), true);
+  assert.equal(Object.hasOwn((await request(url, "/api/execution", readOptions(boot.token))).body, "personas"), false);
 });
 
 test("STORY-355 GWT1+GWT2: a forged Host header is refused on every route, and the token now guards every GET under /api/", async (t) => {

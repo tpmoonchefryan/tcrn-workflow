@@ -39,6 +39,6 @@ test("S369: vocabulary preserves catalog metadata and live replacement sources",
     assert.equal(term.defaultValue, entry.defaultValue);
   }
   assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.dispatchMode").valueSource, "dispatch-mode-list");
-  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.claudeCodeSubagentPlan").valueSource, "persona-list:modelPlans");
-  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.codexSubagentPlan").valueSource, "persona-list:modelPlans");
+  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.claudeCodeSubagentPlan").valueSource, "legacy-model-plan-history");
+  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.codexSubagentPlan").valueSource, "legacy-model-plan-history");
 });

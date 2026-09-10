@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
-import { runCli } from "../dist/build/packages/cli/src/index.js";
+import { COMMAND_CATALOG, runCli } from "../dist/build/packages/cli/src/index.js";
 import { CORE_PERSONA_SOURCE_MANIFEST_SHA256, generateCorePersonaBundle, generateCorePersonaReleaseLayers, resolveGenericProfile, validateCorePersonaBundle, validateCorePersonaProfile, validateCorePersonaProfileShape } from "../dist/build/packages/core/src/index.js";
 import { canonicalJson, canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 const fixture = JSON.parse(await readFile(new URL("../packages/core/fixtures/p5-generic-profile-cases.json", import.meta.url), "utf8"));
@@ -14,7 +14,7 @@ test("exact eight-profile bundle is closed, schema-valid, source-bound, and dete
   const bundle = generateCorePersonaBundle(); assert.equal(bundle.profiles.length, 8); assert.equal(bundle.sourceManifestSha256, CORE_PERSONA_SOURCE_MANIFEST_SHA256);
   assert.deepEqual(bundle.profiles.map((p) => p.displayName).sort(), ["Arturo", "Ilya", "Janus", "Mara", "Minerva", "Mneme", "Sable", "Verity"]);
   assert.equal(new Set(bundle.profiles.map((p) => p.profileId)).size, 8); assert.deepEqual(validateCorePersonaBundle(bundle), bundle);
-  const schema = JSON.parse(await readFile(new URL("../packages/core/schema/core-reference-persona-v1.schema.json", import.meta.url), "utf8")); const ajv = new Ajv2020({ strict: true }); const validate = ajv.compile(schema); assert.equal(validate(bundle), true, JSON.stringify(validate.errors));
+  const schema = JSON.parse(await readFile(new URL("../packages/core/schema/core-reference-profile-v1.schema.json", import.meta.url), "utf8")); const ajv = new Ajv2020({ strict: true }); const validate = ajv.compile(schema); assert.equal(validate(bundle), true, JSON.stringify(validate.errors));
   const layers = generateCorePersonaReleaseLayers(); assert.equal(layers.length, 8); for (const layer of layers) assert.equal(layer.fields.displayOnly.presentation.category, "core-reference");
   reason("PROFILE_ADMISSION_REQUIRED", () => resolveGenericProfile({ schemaVersion: "tcrn.generic-profile-resolution-request.v1", layers: [generateCorePersonaReleaseLayers()[0]], ownerRebind: null }, null));
 });
@@ -76,7 +76,7 @@ test("forbidden, tampered, duplicate, unknown, and extended roster records fail 
 
 test("schema and runtime structural boundaries have exact bidirectional parity", async () => {
   const base = structuredClone(generateCorePersonaBundle().profiles[0]);
-  const schema = JSON.parse(await readFile(new URL("../packages/core/schema/core-reference-persona-v1.schema.json", import.meta.url), "utf8")); const ajv = new Ajv2020({ strict: true }); ajv.addSchema(schema); const validate = ajv.compile({ $ref: `${schema.$id}#/$defs/profile` });
+  const schema = JSON.parse(await readFile(new URL("../packages/core/schema/core-reference-profile-v1.schema.json", import.meta.url), "utf8")); const ajv = new Ajv2020({ strict: true }); ajv.addSchema(schema); const validate = ajv.compile({ $ref: `${schema.$id}#/$defs/profile` });
   const astral = "\u{1F680}";
   const asciiCases = [["jobTitle", "x", false], ["jobTitle", "xx", true], ["jobTitle", "x".repeat(128), true], ["jobTitle", "x".repeat(129), false], ["requiredInputs", ["x"], false], ["requiredInputs", ["xx"], true], ["requiredInputs", ["x".repeat(256)], true], ["requiredInputs", ["x".repeat(257)], false]];
   const astralCases = [["jobTitle", astral.repeat(1), false], ["jobTitle", astral.repeat(2), true], ["jobTitle", astral.repeat(128), true], ["jobTitle", astral.repeat(129), false], ["requiredInputs", [astral.repeat(1)], false], ["requiredInputs", [astral.repeat(2)], true], ["requiredInputs", [astral.repeat(256)], true], ["requiredInputs", [astral.repeat(257)], false], ...["mission", "authorityBoundary", "contactWhen"].flatMap((field) => [[field, astral.repeat(9), false], [field, astral.repeat(10), true], [field, astral.repeat(512), true], [field, astral.repeat(513), false]])];
@@ -94,15 +94,18 @@ test("64 distinct insertion permutations normalize to identical accepted bytes",
   assert.equal(new Set(acceptedBytes).size, 1); assert.equal(new Set(records.map((r) => r.bundleDigest)).size, 1); assert.equal(canonicalSha256(records), fixture.corePersonaPermutationCorpusDigest);
 });
 
-test("governed persona CLI is read-only and closed", async () => {
-  let output=""; await runCli(["persona-generate", "--set", "core-reference"], { write: (v) => { output=v; } }); const generated=JSON.parse(output); assert.equal(generated.reasonCode,"PERSONA_BUNDLE_GENERATED");
-  await runCli(["persona-validate", "--bundle", canonicalJson(generated.bundle)], { write: (v) => { output=v; } }); assert.equal(JSON.parse(output).reasonCode,"PERSONA_VALIDATED");
-  const changed=structuredClone(generated.bundle); changed.profiles[0].mission += " Changed."; delete changed.profiles[0].profileDigest; changed.profiles[0].profileDigest=canonicalSha256(changed.profiles[0]); changed.bundleDigest=canonicalSha256({schemaVersion:changed.schemaVersion,sourceManifestSha256:changed.sourceManifestSha256,profiles:changed.profiles}); await assert.rejects(runCli(["persona-validate","--bundle",canonicalJson(changed)],{write:()=>{}}),(error)=>error?.reasonCode==="PERSONA_SOURCE_MISMATCH");
-  await assert.rejects(runCli(["persona-generate", "--set", "extended"], { write:()=>{} }));
+test("governed persona CLI names are retired while the profile bundle remains library-only", async () => {
+  for (const command of [
+    "persona-generate", "persona-list", "persona-preset-override", "persona-preset-restore",
+    "persona-remove", "persona-render", "persona-set", "persona-validate",
+  ]) {
+    await assert.rejects(runCli([command], { write: () => {} }), (error) => error?.reasonCode === "CLI_COMMAND_UNKNOWN");
+  }
+  assert.equal(COMMAND_CATALOG.some((entry) => entry.name === "persona-list"), false);
 });
 
 test("persona implementation has no legacy, network, database, hook, Skill, or runtime source authority", async () => {
-  const source=await readFile(new URL("../packages/core/src/core-reference-personas.ts", import.meta.url),"utf8");
+  const source=await readFile(new URL("../packages/core/src/reference-profiles.ts", import.meta.url),"utf8");
   const forbidden = [["node", ":", "fs"], ["node", ":", "http"], ["node", ":", "https"], ["process", ".", "env"], ["thread", "Id"], ["session", "Id"], ["model", "Id"], ["/", "Users", "/"], ["legacy", "/"], ["hooks", "/"], ["skills", "/"]].map((parts) => joinParts(parts, ""));
   for(const token of forbidden) assert.equal(source.includes(token),false,token);
 });

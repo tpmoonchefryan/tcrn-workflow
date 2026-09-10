@@ -42,7 +42,6 @@ export type SettingKey =
   | "execution.independenceFloor"
   | "execution.maxConcurrentSubagents"
   | "execution.maxDispatchDepth"
-  | "execution.personalessDispatch"
   | "execution.subagentPolicy"
   | "injection.budgetBytes"
   | "injection.perPromptBytes"
@@ -322,16 +321,6 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     defaultValue: "1",
     min: 1,
     max: 4,
-  },
-  {
-    key: "execution.personalessDispatch",
-    type: "enum",
-    controlType: "boolean",
-    layerKind: SETTINGS_LAYER_KIND,
-    defaultValue: "allowed",
-    allowedValues: ["allowed", "forbidden"],
-    trueValue: "allowed",
-    falseValue: "forbidden",
   },
   {
     // INIT-026 S233. Declarative, like backup.cadence: the engine never sees a

@@ -193,25 +193,23 @@ async function cliResult(args) {
 }
 
 const settingsCatalog = () => cli(["settings-catalog", "--workspace", currentPartition().workspace]);
-const modelPlans = async () => {
-  const state = await cli(["persona-list", "--workspace", currentPartition().workspace]);
-  return { ...state, plans: state.modelPlans };
-};
-const personas = () => cli(["persona-list", "--workspace", currentPartition().workspace]);
 const vocabulary = () => cli(["vocabulary"]);
 const commands = () => cli(["commands"]);
 
 async function executionState() {
-  const [settings, plans, personaList] = await Promise.all([settingsCatalog(), modelPlans(), personas()]);
+  const [settings, classes] = await Promise.all([
+    settingsCatalog(),
+    cli(["dispatch-classes-list", "--workspace", currentPartition().workspace]),
+  ]);
   return {
     ok: true,
     reasonCode: "PORTAL_EXECUTION_READY",
     workspaceId: settings.workspaceId,
-    version: settings.version ?? plans.version ?? personaList.version ?? null,
-    headEventHash: settings.headEventHash ?? plans.headEventHash ?? personaList.headEventHash ?? null,
+    version: settings.version ?? classes.version ?? null,
+    headEventHash: settings.headEventHash ?? classes.headEventHash ?? null,
     settings: settings.settings,
-    plans: plans.plans,
-    personas: personaList.personas,
+    plans: [],
+    classes: classes.classes,
   };
 }
 
@@ -343,28 +341,12 @@ function removeSetting(key) {
 }
 
 function writeExecution(action, body) {
-  const selected = currentPartition();
   const text = (value) => String(value ?? "");
-  const json = (value) => JSON.stringify(value ?? {});
   const verbs = {
     "model-plan-set": (common) => ["model-plan-set", ...common, "--host", text(body.host), "--name", text(body.name), "--default-model", text(body.defaultModel), ...(text(body.defaultEffort) ? ["--default-effort", text(body.defaultEffort)] : [])],
     "model-plan-assign": (common) => ["model-plan-assign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona), "--model", text(body.model), ...(body.effort ? ["--effort", text(body.effort)] : [])],
     "model-plan-unassign": (common) => ["model-plan-unassign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona)],
     "model-plan-remove": (common) => ["model-plan-remove", ...common, "--host", text(body.host), "--name", text(body.name)],
-    "persona-preset-override": (common) => ["persona-preset-override", ...common, "--name", text(body.name), "--fields", json(body.fields)],
-    "persona-preset-restore": (common) => ["persona-preset-restore", ...common, "--name", text(body.name), ...(body.field ? ["--field", text(body.field)] : [])],
-    "persona-set": (common) => ["persona-set", ...common, "--name", text(body.name), "--role", text(body.role),
-      ...Object.entries({
-        "job-title": body.jobTitle,
-        mission: body.mission,
-        refusals: body.refusals,
-        "authority-boundary": body.authorityBoundary,
-        "contact-when": body.contactWhen,
-        "required-inputs": body.requiredInputs,
-        deliverables: body.deliverables,
-        "success-criteria": body.successCriteria,
-      }).flatMap(([key, value]) => value === undefined ? [] : [`--${key}`, text(value)])],
-    "persona-remove": (common) => ["persona-remove", ...common, "--name", text(body.name)],
   };
   const build = verbs[action];
   if (!build) {

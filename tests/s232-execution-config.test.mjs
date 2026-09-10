@@ -162,7 +162,8 @@ test("S369: retired model-plan CLI names refuse while historical records remain 
     const withLegacyFlags = await refusal([command, "--workspace", workspace, "--expected-version", "0", "--at", instant(1), "--host", "codex", "--name", "legacy", "--default-model", "model"]);
     assert.equal(withLegacyFlags.reasonCode, "CLI_COMMAND_UNKNOWN");
   }
-  assert.equal((await json(["persona-list", "--workspace", workspace])).modelPlans.length, 0);
+  const retiredPersonaList = await refusal(["persona-list", "--workspace", workspace]);
+  assert.equal(retiredPersonaList.reasonCode, "CLI_COMMAND_UNKNOWN");
   assert.equal(await version(), 0);
 });
 

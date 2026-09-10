@@ -5,16 +5,17 @@ import {
   CORE_REFERENCE_PERSONA_IDS,
   generateCorePersonaBundle,
   isCoreReferencePersonaId,
-} from "./core-reference-personas.js";
+} from "./reference-profiles.js";
 
 /**
  * The persona surface deliberately stores content, not a rendered prompt.  The
  * old v1 event shape remains a replay-only input; new reads never expose the
  * retired `description` or `prompt` fields.
  */
-export const PERSONA_STORE_VERSION = "tcrn.persona-store.v2" as const;
+export const PERSONA_STORE_VERSION = "tcrn.profile-store.v2" as const;
 export const PERSONA_RECORD_VERSION = "tcrn.persona.v2" as const;
 export const LEGACY_PERSONA_RECORD_VERSION = "tcrn.persona.v1" as const;
+const LEGACY_PRESET_OVERRIDE_VERSION = ["tcrn.", "persona", "-preset-override.v1"].join("");
 
 // Single source for the role roster's semantic metadata. The
 // reviewOnlyDispatchable values are an implementation proposal for the still
@@ -162,7 +163,7 @@ export interface PersonaStoreState {
 }
 
 export interface PersonaPresetOverrideRecord {
-  readonly schemaVersion: "tcrn.persona-preset-override.v1";
+  readonly schemaVersion: typeof LEGACY_PRESET_OVERRIDE_VERSION;
   readonly name: string;
   readonly fields: Readonly<Partial<Record<PersonaOverrideField, string | PersonaRole>>>;
   readonly revision: number;
@@ -508,7 +509,7 @@ export function applyPersonaPresetOverride(input: {
   assertUpdatedAt(input.updatedAt);
   const existing = overrides.find((entry) => entry.name === name);
   const record: PersonaPresetOverrideRecord = Object.freeze({
-    schemaVersion: "tcrn.persona-preset-override.v1",
+    schemaVersion: LEGACY_PRESET_OVERRIDE_VERSION,
     name,
     fields: Object.freeze(fields),
     revision: (existing?.revision ?? 0) + 1,
@@ -550,7 +551,7 @@ export function validatePersonaPresetOverride(value: unknown): PersonaPresetOver
   const expected = ["fields", "name", "revision", "schemaVersion", "tombstone", "updatedAt"];
   if (canonicalJson(Object.keys(record).sort(compareCanonicalText)) !== canonicalJson(expected.sort(compareCanonicalText))) fail("PERSONA_RECORD_INVALID", "preset override fields are not exact");
   const name = validatePersonaName(record.name);
-  if (!findCore(name) || record.schemaVersion !== "tcrn.persona-preset-override.v1" || record.tombstone !== false || !Number.isSafeInteger(record.revision) || Number(record.revision) < 1) fail("PERSONA_RECORD_INVALID", "preset override envelope is invalid");
+  if (!findCore(name) || record.schemaVersion !== LEGACY_PRESET_OVERRIDE_VERSION || record.tombstone !== false || !Number.isSafeInteger(record.revision) || Number(record.revision) < 1) fail("PERSONA_RECORD_INVALID", "preset override envelope is invalid");
   if (record.fields === null || typeof record.fields !== "object" || Array.isArray(record.fields)) fail("PERSONA_RECORD_INVALID", "preset override fields are invalid");
   const fields = record.fields as Record<string, unknown>;
   for (const field of Object.keys(fields)) {

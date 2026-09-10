@@ -8,8 +8,8 @@ import {
 } from "./generic-profile.js";
 
 export const CORE_PERSONA_SOURCE_MANIFEST_SHA256 = "9fa68e8f06e73e1d1b4bffb59a059814e683619b1d80234aef82e44f76de7c13";
-export const CORE_PERSONA_BUNDLE_VERSION = "tcrn.core-reference-persona-bundle.v1" as const;
-export const CORE_PERSONA_PROFILE_VERSION = "tcrn.core-reference-persona.v1" as const;
+export const CORE_PERSONA_BUNDLE_VERSION = "tcrn.core-reference-profile-bundle.v1" as const;
+export const CORE_PERSONA_PROFILE_VERSION = "tcrn.core-reference-profile.v1" as const;
 
 export const CORE_PERSONA_REASON_CODES = Object.freeze([
   "PERSONA_BUNDLE_GENERATED", "PERSONA_BUNDLE_INVALID", "PERSONA_CANONICAL_INVALID", "PERSONA_DUPLICATE",

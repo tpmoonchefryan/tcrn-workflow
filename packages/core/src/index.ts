@@ -366,7 +366,7 @@ export {
   validatePersonaRole,
   validatePersonaStoreState,
   validatePersonaPresetOverride,
-} from "./persona-store.js";
+} from "./profile-store.js";
 export type {
   PersonaReasonCode,
   PersonaRecord,
@@ -376,7 +376,7 @@ export type {
   PersonaReadback,
   PersonaStoreState,
   ReferencePersonaReadback,
-} from "./persona-store.js";
+} from "./profile-store.js";
 export {
   STORY_SCOPE_HEADINGS,
   deriveWorkSummary,
@@ -497,20 +497,6 @@ export type {
   CollectionResult,
   ObservedInvocation,
 } from "./execution-collection.js";
-export {
-  PERSONA_RENDER_ALLOWED_PROFILE_IDS,
-  PERSONA_RENDER_BUDGET_BYTES,
-  PERSONA_RENDER_REASON_CODES,
-  PERSONA_RENDER_VERSION,
-  PersonaRenderError,
-  renderPersonaAuthoritySummary,
-  validatePersonaAuthorityRender,
-} from "./persona-render.js";
-export type {
-  PersonaAuthorityRender,
-  PersonaAuthorityRenderOptions,
-  PersonaRenderReasonCode,
-} from "./persona-render.js";
 export {
   DEPENDENCY_VERSION,
   DEPENDENCY_KINDS,
@@ -683,8 +669,8 @@ export {
   validateCorePersonaBundle,
   validateCorePersonaProfile,
   validateCorePersonaProfileShape,
-} from "./core-reference-personas.js";
-export type { CorePersonaBundle, CorePersonaProfile, CorePersonaReasonCode } from "./core-reference-personas.js";
+} from "./reference-profiles.js";
+export type { CorePersonaBundle, CorePersonaProfile, CorePersonaReasonCode } from "./reference-profiles.js";
 export type {
   EffectiveGenericProfile,
   GenericProfileAdmissionContext,

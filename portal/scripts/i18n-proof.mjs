@@ -188,7 +188,6 @@ const sourceForReachability = `${await readFile(join(portalRoot, "index.html"), 
 const literalReachable = new Set();
 for (const match of sourceForReachability.matchAll(/data-i18n(?:-placeholder|-aria-label)?="([^"]+)"|\bt\(\s*["']([^"']+)["']/gu)) literalReachable.add(match[1] ?? match[2]);
 const dynamicFamilies = [
-  { prefix: "entities.field.", marker: "t(`entities.field.", reason: "persona field names are assembled from the unified schema" },
   { prefix: "setting.", marker: "t(`setting.", reason: "setting labels/descriptions are assembled from the engine catalog" },
   { prefix: "vocabulary.", marker: "t(`vocabulary.", reason: "dictionary category labels are assembled from the vocabulary read surface" },
   // INC-175: receipt hints are looked up by reason code; unmapped codes fall back to

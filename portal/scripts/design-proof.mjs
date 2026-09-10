@@ -203,13 +203,12 @@ const NON_BUTTON_CONTROLS = new Set([
   "tcrn-nav-item",              // sidebar navigation item
   "tcrn-product-shell__brand",  // brand lockup, a navigation affordance
   "tcrn-subnav__item",          // settings-group and vocabulary tabs
-  "tcrn-entity",                // persona list row
   "tcrn-directory__item",       // prose heading jump list
   "tcrn-finding-link",          // reconciliation finding jump
   "tcrn-search-result",         // command palette result row
   "tcrn-shell-locale-menu__trigger", "tcrn-shell-locale-menu__option",
   "tcrn-switch__control",       // the switch's own input
-  "tcrn-workspace-tab", "tcrn-entity-tab",
+  "tcrn-workspace-tab",
   "tcrn-badge",                 // the receipt chip is a status badge that opens the drawer
 ]);
 const interactiveFindings = [];
