@@ -3593,17 +3593,34 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-top-bar__actions .tcrn-search-input { min-width: 0; flex: 1 1 auto; max-width: 430px; }
 .tcrn-form { display: grid; gap: var(--tcrn-space-3); }
 .tcrn-form__row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--tcrn-space-3); }
-.tcrn-model-plan { display: grid; gap: var(--tcrn-space-3); margin-top: var(--tcrn-space-4); }
-.tcrn-model-plan__host { padding: var(--tcrn-space-3); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
-.tcrn-model-plan__host > h3 { margin: 0 0 var(--tcrn-space-2); font-size: var(--tcrn-type-size-heading-3); }
-.tcrn-plan { padding: var(--tcrn-space-3) 0; border-top: 1px solid var(--tcrn-color-border-subtle); }
-.tcrn-plan--active { border-left: 3px solid var(--tcrn-color-brand-primary); padding-left: var(--tcrn-space-3); }
-.tcrn-plan__head { display: flex; justify-content: space-between; gap: var(--tcrn-space-2); align-items: baseline; }
-.tcrn-plan__head strong { font-size: var(--tcrn-type-size-heading-3); }
-.tcrn-plan__model { color: var(--tcrn-color-text-secondary); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); }
-.tcrn-plan__assignments { display: grid; gap: var(--tcrn-space-1); margin-top: var(--tcrn-space-2); }
-.tcrn-assignment { display: flex; align-items: center; justify-content: space-between; gap: var(--tcrn-space-2); padding: var(--tcrn-space-1) var(--tcrn-space-2); border-radius: var(--tcrn-radius-control); background: var(--tcrn-color-brand-neutral-bg); color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-caption); }
-.tcrn-assignment-addline { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) auto; gap: var(--tcrn-space-2); align-items: end; margin-top: var(--tcrn-space-3); }
+.tcrn-dispatch-config { display: grid; gap: var(--tcrn-space-4); margin-bottom: var(--tcrn-space-4); }
+.tcrn-dispatch-surface { display: grid; gap: var(--tcrn-space-4); }
+.tcrn-dispatch-mode { display: grid; gap: var(--tcrn-space-2); padding: var(--tcrn-space-3); border-radius: var(--tcrn-radius-panel); background: var(--tcrn-color-surface-muted); }
+.tcrn-dispatch-mode__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--tcrn-space-3); }
+.tcrn-dispatch-mode__head strong { font-size: var(--tcrn-type-size-ui); }
+.tcrn-dispatch-mode__choices { display: flex; flex-wrap: wrap; gap: var(--tcrn-space-1); }
+.tcrn-dispatch-mode__choice[data-selected="true"] { border-color: var(--tcrn-selection-edge); background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); }
+.tcrn-dispatch-hosts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--tcrn-space-3); align-items: start; }
+.tcrn-dispatch-host { min-width: 0; }
+.tcrn-dispatch-host__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--tcrn-space-2); margin-bottom: var(--tcrn-space-2); }
+.tcrn-dispatch-host__head h3 { margin: 0; font-size: var(--tcrn-type-size-heading-3); }
+.tcrn-dispatch-tier-table { --tcrn-table-shell-columns: minmax(88px, .42fr) minmax(150px, 1.2fr) minmax(120px, .72fr) auto; --tcrn-table-shell-min-width: 100%; }
+.tcrn-dispatch-tier-cell { display: grid; align-content: center; gap: var(--tcrn-space-1); }
+.tcrn-dispatch-tier-cell .tcrn-field { margin: 0; }
+.tcrn-dispatch-tier-cell .tcrn-input { min-width: 0; width: 100%; }
+.tcrn-dispatch-tier-label { color: var(--tcrn-color-text-secondary); font-weight: var(--tcrn-type-weight-strong); }
+.tcrn-dispatch-probe { min-width: max-content; }
+.tcrn-dispatch-probe-result { grid-column: 1 / -1; min-height: 0; color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-caption); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tcrn-dispatch-probe-result[data-state="error"] { color: var(--tcrn-color-state-blocked); }
+.tcrn-dispatch-probe-result[data-state="success"] { color: var(--tcrn-color-state-ready); }
+.tcrn-dispatch-advanced { display: grid; gap: var(--tcrn-space-3); }
+.tcrn-dispatch-advanced__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--tcrn-space-3); }
+.tcrn-dispatch-advanced__head h3 { margin: 0; font-size: var(--tcrn-type-size-heading-3); }
+.tcrn-dispatch-override-table { --tcrn-table-shell-columns: minmax(160px, 1fr) minmax(112px, .55fr) minmax(112px, .55fr) minmax(160px, 1fr); --tcrn-table-shell-min-width: 100%; }
+.tcrn-dispatch-override-table .tcrn-select { width: 100%; min-width: 0; }
+.tcrn-dispatch-boolean { display: inline-flex; align-items: center; gap: var(--tcrn-space-1); color: var(--tcrn-color-text-secondary); }
+.tcrn-dispatch-boolean[data-value="true"] { color: var(--tcrn-color-state-ready); }
+.tcrn-dispatch-boolean[data-value="false"] { color: var(--tcrn-color-text-muted); }
 .tcrn-scope-note { margin: var(--tcrn-space-2) 0 0; color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
 .tcrn-editor-shell { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: var(--tcrn-space-3); }
 .tcrn-editor__bar { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: var(--tcrn-space-3); }
@@ -3630,8 +3647,6 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-more-fields { margin-top: var(--tcrn-space-4); border-top: 1px solid var(--tcrn-color-border-subtle); border-bottom: 1px solid var(--tcrn-color-border-subtle); }
 .tcrn-more-fields summary { padding: var(--tcrn-space-3) 0; color: var(--tcrn-color-text-secondary); cursor: pointer; }
 .tcrn-more-fields__body { display: grid; gap: var(--tcrn-space-3); padding-bottom: var(--tcrn-space-3); }
-.tcrn-model-readonly { display: grid; gap: var(--tcrn-space-2); margin-top: var(--tcrn-space-4); padding-top: var(--tcrn-space-3); border-top: 1px solid var(--tcrn-color-border-subtle); }
-.tcrn-model-resolution { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: var(--tcrn-space-2); align-items: baseline; padding: var(--tcrn-space-1) 0; }
 .tcrn-confirm-dialog { margin-top: var(--tcrn-space-3); }
 .tcrn-confirm-dialog__actions { display: flex; gap: var(--tcrn-space-2); margin-top: var(--tcrn-space-2); }
 /* Same grammar as .tcrn-manage: without align-items start the group nav cell stretches
@@ -3646,9 +3661,6 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
    construct), but the class carries no CSS in the distributable snapshot, so the row's
    two rules live here. Without it a primary button inherits the form grid's stretch and
    spans the whole column, which is not how a form action reads. */
-.tcrn-plan-effort-preview { display: grid; gap: var(--tcrn-space-1); }
-.tcrn-plan-effort-preview__list { display: flex; flex-wrap: wrap; gap: var(--tcrn-space-1); }
-.tcrn-vendor-directory__list { display: grid; gap: var(--tcrn-space-2); }
 /* The concept trigger sits inline beside a label rather than standing alone in a
    toolbar, so it takes a smaller box than the design system's default icon button.
    Everything else — the tooltip surface, its placement, and the hover/focus rule that
@@ -3683,7 +3695,6 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
    whole point is lost — so the ring stays for :focus-visible and is tightened to
    suit a 16px icon rather than the shell's 3px control ring. */
 .tcrn-concept-tip__trigger svg { inline-size: 13px; block-size: 13px; }
-.tcrn-vendor-directory__list .tcrn-link-button { justify-content: flex-start; text-decoration: none; }
 .tcrn-action-row { display: flex; justify-content: flex-end; gap: var(--tcrn-space-2); }
 .tcrn-action-row .tcrn-button { width: auto; }
 /* The design system's table shell takes its column track list from a custom property,
@@ -3748,7 +3759,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 @media (max-width: 680px) {
   .tcrn-top-bar__module, .tcrn-top-bar__actions .tcrn-search-input, .tcrn-top-bar__partition { display: none; }
   .tcrn-top-bar { padding: 0 var(--tcrn-space-2); }
-  .tcrn-grid--2, .tcrn-grid--3, .tcrn-grid--4, .tcrn-form__row, .tcrn-entity-layout, .tcrn-assignment-addline { grid-template-columns: 1fr; }
+  .tcrn-grid--2, .tcrn-grid--3, .tcrn-grid--4, .tcrn-form__row, .tcrn-entity-layout { grid-template-columns: 1fr; }
   .tcrn-page__head { display: grid; }
   .tcrn-editor-shell { grid-template-columns: 1fr; }
   .tcrn-editor__directory { position: static; }
@@ -3895,9 +3906,6 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   border-color: var(--tcrn-color-brand-primary);
   box-shadow: 0 0 0 3px var(--tcrn-color-brand-primary-bg);
 }
-.tcrn-assignment-addline {
-  grid-template-columns: minmax(120px, 1fr) minmax(140px, 1fr) minmax(120px, 1fr) auto;
-}
 .tcrn-page[data-page="prose"] {
   max-width: 860px;
 }
@@ -3984,9 +3992,6 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
       "directory"
       "editor";
   }
-  .tcrn-assignment-addline {
-    grid-template-columns: 1fr;
-  }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: var(--tcrn-motion-reduced-duration) !important; animation-duration: var(--tcrn-motion-reduced-duration) !important; } }
 </style>
@@ -4060,7 +4065,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
       </section>
       <section class="tcrn-page tcrn-page--manage" data-page="settings" hidden>
         <div class="tcrn-page__head"><div><h1 data-i18n="page.settings">Settings</h1><p class="tcrn-page__lede" data-i18n="config.lede">Registered settings, read from the engine and changed through its public CLI.</p></div><div class="tcrn-page__actions"><span class="tcrn-badge" id="settings-count"></span></div></div>
-        <div class="tcrn-manage"><nav class="tcrn-subnav" aria-label="Settings groups"><button class="tcrn-subnav__item" data-setting-group="workspace" aria-current="page" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="models" data-i18n="settings.models">Subagent models</button><button class="tcrn-subnav__item" data-setting-group="machine" data-i18n="settings.machine">Workflow</button></nav><div><div id="design-authority" hidden></div><div id="settings-rows"></div><div id="model-plans" hidden></div><div id="machine-settings" hidden></div></div></div>
+        <div class="tcrn-manage"><nav class="tcrn-subnav" aria-label="Settings groups"><button class="tcrn-subnav__item" data-setting-group="workspace" aria-current="page" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="machine" data-i18n="settings.machine">Workflow</button></nav><div><div id="design-authority" hidden></div><div id="dispatch-config" hidden></div><div id="settings-rows"></div><div id="machine-settings" hidden></div></div></div>
       </section>
       <section class="tcrn-page tcrn-page--manage" data-page="prose" hidden>
         <div class="tcrn-page__head"><div><h1 data-i18n="page.prose">Rules</h1><p class="tcrn-page__lede" data-i18n="prose.lede">Workspace prose is edited as a plain file and checked against the live engine vocabulary.</p></div><div class="tcrn-page__actions"><span class="tcrn-badge" id="reconcile-chip">—</span><button class="tcrn-button tcrn-button--primary" id="save-agents" data-i18n="prose.save" data-cli-action="agents-write">Save</button></div></div>
@@ -4098,7 +4103,7 @@ const BOOT = __PORTAL_BOOT__;
   const storedTheme = tcrnReadPreference("theme", ["light", "dark"], null);
   const machineTheme = ["light", "dark"].includes(BOOT.machineDefaults?.theme) ? BOOT.machineDefaults.theme : null;
   if (storedTheme === null && machineTheme !== null) document.documentElement.dataset.tcrnTheme = machineTheme;
-  const state = { locale: storedLocale ?? (Object.keys(LOCALES).includes(BOOT.machineDefaults?.locale) ? BOOT.machineDefaults.locale : null) ?? BOOT.defaultLocale ?? "en", theme: document.documentElement.dataset.tcrnTheme, page: "dashboard", dashboardTab: "overview", settingGroup: "workspace", settings: null, machineSettings: null, execution: null, vocabulary: null, status: null, commands: [], audit: [], selectedVocabulary: "roles", receipt: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
+  const state = { locale: storedLocale ?? (Object.keys(LOCALES).includes(BOOT.machineDefaults?.locale) ? BOOT.machineDefaults.locale : null) ?? BOOT.defaultLocale ?? "en", theme: document.documentElement.dataset.tcrnTheme, page: "dashboard", dashboardTab: "overview", settingGroup: "workspace", settings: null, machineSettings: null, execution: null, vocabulary: null, status: null, commands: [], audit: [], selectedVocabulary: "roles", receipt: null, dispatchNotice: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const esc = (value) => String(value ?? "").replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]);
@@ -4147,6 +4152,7 @@ const BOOT = __PORTAL_BOOT__;
   const closeReceipt = () => { const drawer = $("#receipt-drawer"); drawer.dataset.open = "false"; drawer.setAttribute("aria-hidden", "true"); };
   const showReceipt = (body) => {
     state.receipt = body || { ok: false, reasonCode: "PORTAL_EMPTY_RECEIPT" };
+    state.dispatchNotice = state.receipt.hostRender || null;
     const success = state.receipt.ok !== false && !String(state.receipt.reasonCode || "").includes("REFUSED");
     const chip = $("#receipt-chip");
     chip.className = `tcrn-badge ${success ? "tcrn-badge--positive" : "tcrn-badge--danger"}`;
@@ -4188,7 +4194,9 @@ const BOOT = __PORTAL_BOOT__;
     setText("#echo-command", page === "dashboard" ? t("echo.idle") : `${page} · ${BOOT.actor}`);
     $("#search-results").hidden = true;
   };
-  const settingGroup = (key) => key.startsWith("design.") ? "workspace" : key.startsWith("backup.") ? "backup" : key.startsWith("execution.") && key.endsWith("SubagentPlan") ? "models" : key.startsWith("execution.") ? "execution" : "workspace";
+  const LEGACY_MODEL_SETTING_KEYS = new Set(["execution.claudeCodeSubagentPlan", "execution.codexSubagentPlan"]);
+  const DISPATCH_SETTING_KEYS = new Set(["execution.dispatchClasses", "execution.dispatchMode", "execution.dispatchModes", "execution.dispatchTiers"]);
+  const settingGroup = (key) => key.startsWith("design.") ? "workspace" : key.startsWith("backup.") ? "backup" : key.startsWith("execution.") ? "execution" : "workspace";
   const settingLabel = (key) => t(`setting.${key}.label`);
   // A supplemental explanation for a concept whose meaning is not on the surface. The
   // markup is the design system's Tooltip verbatim: the wrapper carries the placement
@@ -4211,11 +4219,8 @@ const BOOT = __PORTAL_BOOT__;
   };
   const settingDescription = (key) => t(`setting.${key}.description`);
   const currentSetting = (key) => state.settings?.settings?.find((entry) => entry.key === key);
-  const hostFromPlanKey = (key) => key.slice("execution.".length, -"SubagentPlan".length).replace(/[A-Z]/gu, (character) => `-${character.toLowerCase()}`);
-  const planSettingForHost = (host) => (state.settings?.settings || []).find((entry) => entry.key.startsWith("execution.") && entry.key.endsWith("SubagentPlan") && hostFromPlanKey(entry.key) === host);
-  const activePlan = (host) => { const entry = planSettingForHost(host); return state.execution?.plans?.find((plan) => plan.host === host && plan.name === entry?.currentValue); };
   const controlFor = (entry) => {
-    const values = entry.key.includes("SubagentPlan") ? ["", ...(state.execution?.plans || []).filter((plan) => plan.host === hostFromPlanKey(entry.key)).map((plan) => plan.name)] : [...(entry.allowedValues || [])];
+    const values = [...(entry.allowedValues || [])];
     const current = entry.currentValue ?? "";
     if (entry.controlType === "boolean") return `<label class="tcrn-switch" data-switch-state="${current === (entry.trueValue || "allowed") ? "on" : "off"}"><input class="tcrn-switch__control" type="checkbox" role="switch" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set" data-setting-value="${esc(entry.trueValue || "allowed")}" ${current === (entry.trueValue || "allowed") ? "checked" : ""}><span class="tcrn-switch__label">${esc(current === (entry.trueValue || "allowed") ? t("config.enabled") : t("config.disabled"))}</span></label>`;
     if (entry.controlType === "number") return `<div class="tcrn-stepper" data-stepper="${esc(entry.key)}"><button type="button" class="tcrn-button tcrn-button--quiet tcrn-stepper__button" data-stepper-action="decrement" aria-label="${esc(t("config.decrease"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.5 8h9"/></svg></button><input class="tcrn-input tcrn-stepper__input" type="number" min="${esc(entry.min)}" max="${esc(entry.max)}" step="1" value="${esc(current)}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set"><button type="button" class="tcrn-button tcrn-button--quiet tcrn-stepper__button" data-stepper-action="increment" aria-label="${esc(t("config.increase"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg></button><span class="tcrn-stepper__bound">${esc(entry.min)}–${esc(entry.max)}</span></div>`;
@@ -4285,9 +4290,83 @@ const BOOT = __PORTAL_BOOT__;
     $$("[data-machine-control]").forEach((control) => control.addEventListener("change", () => saveMachineSetting(control.dataset.machineControl, control.value)));
     attachEcho($("#machine-settings"));
   };
+  const renderDispatch = () => {
+    const target = $("#dispatch-config");
+    if (!target) return;
+    if (state.settingGroup !== "execution") {
+      target.hidden = true;
+      target.innerHTML = "";
+      return;
+    }
+    target.hidden = false;
+    const dispatch = state.execution?.dispatch || {};
+    const modes = Object.keys(dispatch.modes || {}).sort();
+    const currentMode = dispatch.mode || modes[0] || "";
+    const tiers = dispatch.tiers || {};
+    const hosts = [...new Set([...(state.vocabulary?.hosts || []), ...Object.keys(tiers)])].sort();
+    const hostList = hosts.length > 0 ? hosts : ["claude-code", "codex"];
+    const tierNames = ["flagship", "main", "economy"];
+    const tierValue = (host, tier) => tiers[host]?.[tier] || {};
+    const probeText = (body) => {
+      const lines = [`${body?.reasonCode || "HOST_PROBE_UNAVAILABLE"} · ${t("dispatch.exit")}: ${body?.exitCode ?? "—"}`];
+      if (body?.stdout) lines.push(`${t("dispatch.stdout")}: ${body.stdout}`);
+      if (body?.stderr) lines.push(`${t("dispatch.stderr")}: ${body.stderr}`);
+      if (!body?.stdout && !body?.stderr && body?.error) lines.push(String(body.error));
+      return lines.join("\n");
+    };
+    const renderNotice = () => {
+      const notice = state.dispatchNotice;
+      if (!notice) return "";
+      const details = notice.hosts?.map((entry) => `${entry.host}: ${entry.reasonCode || "HOST_RENDER_FAILED"}${entry.error ? ` — ${entry.error}` : ""}`).join("\n") || "";
+      return `<div class="tcrn-inline-alert ${notice.ok ? "tcrn-inline-alert--positive" : "tcrn-inline-alert--warning"}" data-ui="dispatch-host-render-status" role="status"><span><strong>${esc(notice.ok ? t("dispatch.renderApplied") : t("dispatch.renderSavedNotApplied"))}</strong>${details ? `<br><span class="tcrn-meta">${esc(details)}</span>` : ""}</span></div>`;
+    };
+    const hostPanel = (host) => `<section class="tcrn-surface tcrn-dispatch-host" data-dispatch-host-card="${esc(host)}"><div class="tcrn-dispatch-host__head"><h3>${esc(host)}</h3><span class="tcrn-badge">${esc(t("dispatch.hostLocal"))}</span></div><div class="tcrn-table-shell tcrn-dispatch-tier-table" data-ui="dispatch-tier-table"><div class="tcrn-table-shell__head" role="row"><span>${esc(t("dispatch.tier"))}</span><span>${esc(t("dispatch.model"))}</span><span>${esc(t("dispatch.effort"))}</span><span>${esc(t("dispatch.probe"))}</span></div>${tierNames.map((tier) => { const value = tierValue(host, tier); const key = JSON.stringify({ host, tier }); return `<div class="tcrn-table-shell__row" role="row" data-dispatch-tier-row="${esc(key)}"><div class="tcrn-table-shell__cell tcrn-dispatch-tier-cell" data-label="${esc(t("dispatch.tier"))}"><span class="tcrn-dispatch-tier-label">${esc(t(`dispatch.tier.${tier}`))}</span></div><div class="tcrn-table-shell__cell tcrn-dispatch-tier-cell" data-label="${esc(t("dispatch.model"))}"><label class="tcrn-sr-only" for="dispatch-model-${esc(host)}-${esc(tier)}">${esc(t("dispatch.model"))}</label><input class="tcrn-input" id="dispatch-model-${esc(host)}-${esc(tier)}" data-dispatch-model="${esc(key)}" maxlength="256" value="${esc(value.model ?? "")}" autocomplete="off"></div><div class="tcrn-table-shell__cell tcrn-dispatch-tier-cell" data-label="${esc(t("dispatch.effort"))}"><label class="tcrn-sr-only" for="dispatch-effort-${esc(host)}-${esc(tier)}">${esc(t("dispatch.effort"))}</label><input class="tcrn-input" id="dispatch-effort-${esc(host)}-${esc(tier)}" data-dispatch-effort="${esc(key)}" maxlength="128" value="${esc(value.effort ?? "")}" autocomplete="off"></div><div class="tcrn-table-shell__cell tcrn-dispatch-tier-cell" data-label="${esc(t("dispatch.probe"))}"><button type="button" class="tcrn-button tcrn-button--secondary tcrn-dispatch-probe" data-dispatch-probe="${esc(key)}" data-cli-action="host-probe">${esc(t("dispatch.probe"))}</button></div><div class="tcrn-dispatch-probe-result" data-dispatch-probe-result="${esc(key)}" data-state="idle" aria-live="polite"></div></div>`; }).join("")}</div><div class="tcrn-action-row"><button type="button" class="tcrn-button tcrn-button--primary" data-dispatch-save-host="${esc(host)}" data-cli-action="dispatch-tiers-set">${esc(t("dispatch.saveHost"))}</button></div></section>`;
+    const classes = Object.keys(dispatch.classes || state.execution?.classes || {}).sort();
+    const mapping = dispatch.modes?.[currentMode] || {};
+    const advancedRows = classes.map((taskClass) => { const behaviour = dispatch.classes?.[taskClass] || state.execution?.classes?.[taskClass] || {}; return `<div class="tcrn-table-shell__row" role="row"><div class="tcrn-table-shell__cell" data-label="${esc(t("dispatch.class"))}"><code>${esc(taskClass)}</code></div><div class="tcrn-table-shell__cell" data-label="${esc(t("dispatch.dispatch"))}"><span class="tcrn-dispatch-boolean" data-value="${String(behaviour.dispatch)}">${esc(behaviour.dispatch ? t("dispatch.yes") : t("dispatch.no"))}</span></div><div class="tcrn-table-shell__cell" data-label="${esc(t("dispatch.verify"))}"><span class="tcrn-dispatch-boolean" data-value="${String(behaviour.verify)}">${esc(behaviour.verify ? t("dispatch.yes") : t("dispatch.no"))}</span></div><div class="tcrn-table-shell__cell" data-label="${esc(t("dispatch.override"))}"><label class="tcrn-sr-only" for="dispatch-override-${esc(taskClass)}">${esc(t("dispatch.override"))}</label><select class="tcrn-select" id="dispatch-override-${esc(taskClass)}" data-dispatch-override="${esc(taskClass)}" data-cli-action="dispatch-mode-set">${tierNames.map((tier) => `<option value="${esc(tier)}" ${mapping[taskClass] === tier ? "selected" : ""}>${esc(t(`dispatch.tier.${tier}`))}</option>`).join("")}</select></div></div>`; }).join("");
+    target.innerHTML = `<div class="tcrn-dispatch-config"><section class="tcrn-surface tcrn-dispatch-surface" data-ui="dispatch-config-surface"><div class="tcrn-surface__head"><div><h2>${esc(t("dispatch.title"))}</h2><p class="tcrn-surface__note">${esc(t("dispatch.note"))}</p><p class="tcrn-scope-note">${esc(t("dispatch.nextSession"))}</p></div><span class="tcrn-badge">${esc(currentMode || t("dispatch.unset"))}</span></div><div class="tcrn-dispatch-mode"><div class="tcrn-dispatch-mode__head"><strong>${esc(t("dispatch.mode"))}</strong><span class="tcrn-meta">${esc(t("dispatch.modeHint"))}</span></div><div class="tcrn-dispatch-mode__choices" role="group" aria-label="${esc(t("dispatch.mode"))}">${modes.map((mode) => `<button type="button" class="tcrn-button tcrn-dispatch-mode__choice" data-selected="${mode === currentMode ? "true" : "false"}" data-dispatch-mode="${esc(mode)}" data-cli-action="settings-set">${esc(mode)}</button>`).join("")}</div></div><div class="tcrn-dispatch-hosts">${hostList.map(hostPanel).join("")}</div></section>${renderNotice()}<section class="tcrn-surface tcrn-dispatch-advanced" data-ui="dispatch-advanced"><div class="tcrn-dispatch-advanced__head"><div><h2>${esc(t("dispatch.advanced"))}</h2><p class="tcrn-surface__note">${esc(t("dispatch.advancedNote"))}</p></div><span class="tcrn-badge">${esc(currentMode || t("dispatch.unset"))}</span></div><div class="tcrn-table-shell tcrn-dispatch-override-table" data-ui="dispatch-override-table"><div class="tcrn-table-shell__head" role="row"><span>${esc(t("dispatch.class"))}</span><span>${esc(t("dispatch.dispatch"))}</span><span>${esc(t("dispatch.verify"))}</span><span>${esc(t("dispatch.override"))}</span></div>${advancedRows || `<div class="tcrn-table-shell__empty">${esc(t("dispatch.noClasses"))}</div>`}</div></section></div>`;
+    $$('[data-dispatch-mode]').forEach((button) => button.addEventListener("click", () => saveSetting("execution.dispatchMode", button.dataset.dispatchMode)));
+    $$('[data-dispatch-save-host]').forEach((button) => button.addEventListener("click", () => {
+      const host = button.dataset.dispatchSaveHost;
+      const card = button.closest("[data-dispatch-host-card]");
+      if (!host || !card) return;
+      const values = {};
+      tierNames.forEach((tier) => {
+        const controlFor = (attribute) => [...card.querySelectorAll(`[${attribute}]`)].find((candidate) => {
+          try { return JSON.parse(candidate.getAttribute(attribute)).tier === tier; } catch { return false; }
+        });
+        const model = controlFor("data-dispatch-model")?.value ?? "";
+        const effort = controlFor("data-dispatch-effort")?.value ?? "";
+        values[tier] = { model, effort };
+      });
+      writeExecution("dispatch-tiers-set", { host, tiers: values, summary: `${t("dispatch.saveHost")}: ${host}` });
+    }));
+    $$('[data-dispatch-probe]').forEach((button) => button.addEventListener("click", async () => {
+      const key = JSON.parse(button.dataset.dispatchProbe);
+      const row = button.closest("[data-dispatch-tier-row]");
+      const model = row?.querySelector("[data-dispatch-model]")?.value?.trim() ?? "";
+      const result = row?.querySelector("[data-dispatch-probe-result]");
+      if (!result) return;
+      if (!model) { result.dataset.state = "error"; result.textContent = t("dispatch.probeMissing"); return; }
+      button.disabled = true;
+      result.dataset.state = "loading";
+      result.textContent = t("dispatch.probeLoading");
+      try {
+        const body = await api("/api/host-probe", { method: "POST", body: JSON.stringify({ host: key.host, model }) });
+        result.dataset.state = body.ok === true ? "success" : "error";
+        result.textContent = probeText(body);
+      } catch (error) {
+        result.dataset.state = "error";
+        result.textContent = `${t("dispatch.probeFailed")}: ${String(error?.message ?? error)}`;
+      } finally { button.disabled = false; }
+    }));
+    $$('[data-dispatch-override]').forEach((select) => select.addEventListener("change", () => writeExecution("dispatch-mode-set", { name: currentMode, mapping: { [select.dataset.dispatchOverride]: select.value }, summary: `${t("dispatch.override")}: ${select.dataset.dispatchOverride}` })));
+    $$('[data-dispatch-model], [data-dispatch-effort]').forEach((input) => input.addEventListener("input", () => input.closest("[data-dispatch-host-card]")?.setAttribute("data-dirty", "true")));
+    attachEcho(target);
+  };
   const renderSettings = () => {
     const settings = state.settings?.settings || [];
-    const visible = settings.filter((entry) => settingGroup(entry.key) === state.settingGroup);
+    const visible = settings.filter((entry) => settingGroup(entry.key) === state.settingGroup && !LEGACY_MODEL_SETTING_KEYS.has(entry.key) && !DISPATCH_SETTING_KEYS.has(entry.key));
     setText("#settings-count", `${visible.length} ${t("config.keyCount")}`);
     $("#settings-rows").innerHTML = visible.map((entry) => {
       const modified = entry.currentValue !== entry.defaultValue;
@@ -4300,8 +4379,8 @@ const BOOT = __PORTAL_BOOT__;
       const dot = `<span class="tcrn-setting-row__modified" data-ui="setting-modified-dot" role="img" aria-label="${esc(t("config.modified"))}" ${modified ? "" : "hidden"}><span class="tcrn-dot" aria-hidden="true"></span></span>`;
       return `<div class="tcrn-setting-row ${modified ? "tcrn-setting-row--modified tcrn-highlightable" : ""}" data-setting-row="${esc(entry.key)}" data-modified="${modified ? "true" : "false"}"><div class="tcrn-setting-row__label"><code class="tcrn-setting-row__key">${esc(entry.key)}</code><span class="tcrn-setting-row__name">${esc(settingLabel(entry.key))}${conceptTip("setting." + entry.key)}</span><span class="tcrn-setting-row__description">${esc(settingDescription(entry.key))}</span></div><div class="tcrn-setting-row__control">${controlFor(entry)}</div><div class="tcrn-setting-row__tools">${dot}${dictionary}${reset}</div></div>`;
     }).join("") || `<div class="tcrn-state-surface">${esc(t("config.empty"))}</div>`;
-    $("#model-plans").hidden = state.settingGroup !== "models";
-    if (state.settingGroup === "models") renderPlans();
+    $("#dispatch-config").hidden = state.settingGroup !== "execution";
+    if (state.settingGroup === "execution") renderDispatch();
     $("#design-authority").hidden = state.settingGroup !== "workspace" || designAuthorityState.status === "unset";
     if (state.settingGroup === "workspace") { renderDesignAuthority(); refreshDesignAuthority(); }
     $("#machine-settings").hidden = state.settingGroup !== "machine";
@@ -4323,81 +4402,6 @@ const BOOT = __PORTAL_BOOT__;
     }));
     $$('[data-vocabulary-link]').forEach((button) => button.addEventListener("click", () => { state.selectedVocabulary = button.dataset.vocabularyLink; navigate("vocabulary"); renderVocabulary(); }));
     attachEcho($("#settings-rows"));
-  };
-  const renderPlans = () => {
-    const plans = state.execution?.plans || [];
-    const hosts = state.vocabulary?.hosts || [];
-    const people = state.execution?.personas || [];
-    // Assignment carries two filters, not one: the level must exist on this host and
-    // it must be assignable per persona. Offering a session level here would produce
-    // an option the engine refuses, so the same predicate the engine validates with
-    // decides what the dropdown shows.
-    const assignableEfforts = (host) => (state.vocabulary?.efforts || [])
-      .filter((effort) => (effort.applicableHosts || []).includes(host) && effort.assignableToSubagent !== false);
-    const effortOptions = (host) => [`<option value="">${esc(t("models.effortDefault"))}</option>`, ...assignableEfforts(host)
-      .map((effort) => `<option value="${esc(effort.name)}">${esc(effort.name)}</option>`)].join("");
-    $("#model-plans").innerHTML = `<div class="tcrn-surface"><div class="tcrn-surface__head"><div><h2>${esc(t("models.title"))}</h2><p class="tcrn-surface__note">${esc(t("models.note"))}</p><p class="tcrn-scope-note">${esc(t("models.scope"))}</p></div><button type="button" class="tcrn-button tcrn-button--secondary" id="vendor-directory-toggle" aria-expanded="false" aria-controls="vendor-directory-drawer" data-ui="vendor-directory-toggle">${esc(t("models.vendorDirectory"))}</button></div><aside class="tcrn-detail-drawer" id="vendor-directory-drawer" role="complementary" data-modal-scope="structural-drawer" data-ui="vendor-directory-drawer" data-open="false" aria-labelledby="vendor-directory-title" aria-hidden="true"><div class="tcrn-detail-drawer__head"><h2 id="vendor-directory-title">${esc(t("models.vendorDirectory"))}</h2><button type="button" class="tcrn-button tcrn-button--quiet" data-ui="vendor-directory-close" id="vendor-directory-close">${esc(t("models.vendorDirectoryClose"))}</button></div><p class="tcrn-meta">${esc(t("models.vendorDirectoryNote"))}</p><div class="tcrn-vendor-directory__list">${VENDOR_MODEL_DIRECTORIES.map((vendor) => `<a class="tcrn-link-button tcrn-link-button--secondary" href="${esc(vendor.url)}" target="_blank" rel="noreferrer noopener" data-vendor-directory="${esc(vendor.id)}">${esc(vendor.name)}</a>`).join("")}</div></aside><div class="tcrn-model-plan">${hosts.map((host) => {
-      const hostPlans = plans.filter((plan) => plan.host === host);
-      return `<section class="tcrn-model-plan__host"><h3>${esc(host)}</h3>${hostPlans.map((plan) => {
-        const active = activePlan(host)?.name === plan.name;
-        return `<article class="tcrn-plan ${active ? "tcrn-plan--active" : ""}"><div class="tcrn-plan__head"><strong>${esc(plan.name)}</strong><span class="tcrn-machine-token tcrn-machine-token--compact"><span class="tcrn-machine-token__value">${esc(plan.defaultModel)}</span></span>${active ? `<span class="tcrn-badge tcrn-badge--positive" data-ui="plan-active-badge" role="status">${esc(t("models.active"))}</span>` : ""}${plan.defaultEffort ? `<span class="tcrn-badge" data-ui="plan-default-effort">${esc(t("models.defaultEffort"))}: ${esc(plan.defaultEffort)}</span>` : ""}</div><div class="tcrn-plan__assignments">${Object.entries(plan.assignments || {}).map(([persona, model]) => { // Where the effort comes from is part of what the row says: a persona with no entry
-      // of its own inherits the plan default, and showing that is the difference between
-      // "nothing set" and "set here".
-      const effort = plan.efforts?.[persona] ?? plan.defaultEffort;
-      const inherited = plan.efforts?.[persona] === undefined && plan.defaultEffort !== undefined;
-      return `<div class="tcrn-assignment"><span>${esc(persona)} → ${esc(model)}${effort ? ` · ${esc(t("models.effort"))}: ${esc(effort)}${inherited ? ` (${esc(t("models.effortInherited"))})` : ""}` : ""}</span><button type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md tcrn-icon-button" data-unassign="${esc(JSON.stringify({ host, plan: plan.name, persona }))}" data-cli-action="model-plan-unassign" aria-label="${esc(t("models.unassign"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>`; }).join("") || `<span class="tcrn-meta">${esc(t("models.defaultFallback"))}</span>`}</div><div class="tcrn-assignment-addline" data-ui="assignment-addline" role="group"><div class="tcrn-field"><label>${esc(t("models.persona"))}</label><select class="tcrn-select" data-assign-persona="${esc(JSON.stringify({ host, plan: plan.name }))}">${people.map((persona) => `<option value="${esc(persona.name)}">${esc(persona.name)}</option>`).join("")}</select></div><div class="tcrn-field"><label>${esc(t("models.model"))}</label><input class="tcrn-input" data-assign-model="${esc(JSON.stringify({ host, plan: plan.name }))}" required></div><div class="tcrn-field"><label>${esc(t("models.effort"))}</label><select class="tcrn-select" data-assign-effort="${esc(JSON.stringify({ host, plan: plan.name }))}">${effortOptions(host)}</select></div><button type="button" class="tcrn-button" data-assign="${esc(JSON.stringify({ host, plan: plan.name }))}" data-cli-action="model-plan-assign">${esc(t("models.assign"))}</button></div><button type="button" class="tcrn-button tcrn-button--quiet" data-remove-plan="${esc(JSON.stringify({ host, name: plan.name }))}" data-cli-action="model-plan-remove">${esc(t("models.remove"))}</button></article>`;
-      }).join("") || `<div class="tcrn-state-surface">${esc(t("models.noPlans"))}</div>`}</section>`;
-    }).join("")}</div><form class="tcrn-form" id="plan-form"><fieldset class="tcrn-form__group"><legend>${esc(t("models.groupPlan"))}</legend><div class="tcrn-form__row"><div class="tcrn-field"><label for="plan-host">${esc(t("models.host"))}</label><select class="tcrn-select" id="plan-host">${hosts.map((host) => `<option value="${esc(host)}">${esc(host)}</option>`).join("")}</select></div><div class="tcrn-field"><label for="plan-name">${esc(t("models.name"))}</label><input class="tcrn-input" id="plan-name" required></div></div><div class="tcrn-field"><label for="plan-default-model">${esc(t("models.defaultModel"))}</label><input class="tcrn-input" id="plan-default-model" required></div><div class="tcrn-field"><label for="plan-default-effort">${esc(t("models.defaultEffort"))}</label><select class="tcrn-select" id="plan-default-effort"><option value="">${esc(t("models.effortDefault"))}</option></select><small class="tcrn-meta">${esc(t("models.defaultEffortNote"))}</small></div><div class="tcrn-field tcrn-plan-effort-preview" id="plan-effort-preview"></div><div class="tcrn-action-row"><button class="tcrn-button tcrn-button--primary" type="submit" data-cli-action="model-plan-set">${esc(t("models.create"))}</button></div></fieldset></form></div>`;
-    $$('[data-assign]').forEach((button) => button.addEventListener("click", () => { const value = JSON.parse(button.dataset.assign); const key = JSON.stringify(value); const persona = $(`[data-assign-persona="${CSS.escape(key)}"]`)?.value || ""; const model = $(`[data-assign-model="${CSS.escape(key)}"]`)?.value || ""; const effort = $(`[data-assign-effort="${CSS.escape(key)}"]`)?.value || undefined; writeExecution("model-plan-assign", { ...value, persona, model, effort }); }));
-    $$('[data-unassign]').forEach((button) => button.addEventListener("click", () => writeExecution("model-plan-unassign", JSON.parse(button.dataset.unassign))));
-    $$('[data-remove-plan]').forEach((button) => button.addEventListener("click", () => writeExecution("model-plan-remove", JSON.parse(button.dataset.removePlan))));
-    // One state, three expressions: the trigger's aria-expanded, the drawer's
-    // aria-hidden and its hidden attribute. Setting only the first would announce a
-    // drawer that screen readers still skip.
-    const vendorDrawer = $("#vendor-directory-drawer");
-    const vendorToggle = $("#vendor-directory-toggle");
-    const setVendorDrawer = (open) => {
-      vendorToggle.setAttribute("aria-expanded", open ? "true" : "false");
-      vendorDrawer.setAttribute("aria-hidden", open ? "false" : "true");
-      vendorDrawer.setAttribute("data-open", open ? "true" : "false");
-      // The design system makes the drawer focusable only while open (tabIndex -1 when
-      // open, absent when closed). Without that attribute the focus() below is a no-op,
-      // so opening the drawer would leave the reader keyboard-stranded on the trigger.
-      if (open) vendorDrawer.setAttribute("tabindex", "-1"); else vendorDrawer.removeAttribute("tabindex");
-      if (open) vendorDrawer.focus();
-    };
-    vendorToggle.addEventListener("click", () => setVendorDrawer(vendorDrawer.getAttribute("data-open") !== "true"));
-    $("#vendor-directory-close").addEventListener("click", () => { setVendorDrawer(false); vendorToggle.focus(); });
-    vendorDrawer.addEventListener("keydown", (event) => { if (event.key === "Escape") { setVendorDrawer(false); vendorToggle.focus(); } });
-    // Effort belongs to an assignment, not to the plan itself, so the create form shows
-    // which levels this host will offer rather than a control that would imply otherwise.
-    const renderEffortPreview = () => {
-      const host = $("#plan-host")?.value;
-      const target = $("#plan-effort-preview");
-      if (!target || !host) return;
-      // The preview promises what the assignment dropdown will offer, so it filters
-      // by the same predicate; a session level shown here would be a promise the
-      // next control breaks.
-      const available = assignableEfforts(host);
-      const withheld = (state.vocabulary?.efforts || []).filter((effort) => (effort.applicableHosts || []).includes(host) && effort.assignableToSubagent === false);
-      // The control offers exactly what the preview promises, from the same list, so
-      // the form cannot offer a value the engine would refuse.
-      const effortSelect = $("#plan-default-effort");
-      if (effortSelect) {
-        const chosen = effortSelect.value;
-        effortSelect.innerHTML = [`<option value="">${esc(t("models.effortDefault"))}</option>`,
-          ...available.map((effort) => `<option value="${esc(effort.name)}">${esc(effort.name)}</option>`)].join("");
-        if (available.some((effort) => effort.name === chosen)) effortSelect.value = chosen;
-      }
-      target.innerHTML = `<span class="tcrn-field__label">${esc(t("models.effortPreview"))}</span>`
-        + (available.length === 0 ? `<span class="tcrn-meta">—</span>` : `<span class="tcrn-plan-effort-preview__list">${available.map((effort) => `<span class="tcrn-badge">${esc(effort.name)}</span>`).join(" ")}</span>`)
-        + (withheld.length === 0 ? "" : `<small class="tcrn-meta" data-ui="effort-session-only-note">${esc(t("models.effortSessionOnlyNote"))}</small>`)
-        + `<small class="tcrn-meta">${esc(t("models.effortPreviewNote"))}</small>`;
-    };
-    $("#plan-host").addEventListener("change", renderEffortPreview);
-    renderEffortPreview();
-    $("#plan-form").addEventListener("submit", (event) => { event.preventDefault(); writeExecution("model-plan-set", { host: $("#plan-host").value, name: $("#plan-name").value, defaultModel: $("#plan-default-model").value, ...($("#plan-default-effort")?.value ? { defaultEffort: $("#plan-default-effort").value } : {}) }); });
-    attachEcho($("#model-plans"));
   };
   const renderDashboard = () => {
     const execution = state.execution || {};
@@ -4426,22 +4430,6 @@ const BOOT = __PORTAL_BOOT__;
   // applies, where it came from) and collapsing them into a single cell is what made
   // this page unreadable. Columns are declared per domain from the fields the engine
   // actually returns; the portal invents neither a field nor a value.
-  // Where each vendor publishes the models its API accepts. This is a jump list, not
-  // a mirror: the portal never fetches these pages, and a model name is typed into the
-  // plan by the reader, so the roster cannot go stale in the way a copied table would.
-  // Every URL was resolved (HTTP 200) on 2026-08-15; vendor names are proper nouns and
-  // stay untranslated in every locale.
-  const VENDOR_MODEL_DIRECTORIES = [
-    { id: "anthropic", name: "Anthropic", url: "https://docs.claude.com/en/docs/about-claude/models/overview" },
-    { id: "openai", name: "OpenAI", url: "https://platform.openai.com/docs/models" },
-    { id: "qwen", name: "Qwen", url: "https://www.alibabacloud.com/help/en/model-studio/models" },
-    { id: "minimax", name: "MiniMax", url: "https://platform.minimaxi.com/document/Models" },
-    { id: "deepseek", name: "DeepSeek", url: "https://api-docs.deepseek.com/quick_start/pricing" },
-    { id: "kimi", name: "Kimi", url: "https://platform.moonshot.ai/docs/pricing/chat" },
-    { id: "grok", name: "Grok", url: "https://docs.x.ai/docs/models" },
-    { id: "gemini", name: "Google Gemini", url: "https://ai.google.dev/gemini-api/docs/models" },
-    { id: "glm", name: "GLM", url: "https://docs.bigmodel.cn/cn/guide/start/model-overview" },
-  ];
   const VOCABULARY_COLUMNS = {
     roles: [
       { key: "value", labelKey: "vocabulary.columnName" },
@@ -4649,13 +4637,16 @@ const BOOT = __PORTAL_BOOT__;
   const refresh = async () => { try { const [settings, execution, vocabularyResult, status, commandsResult, audit, machine] = await Promise.all([api("/api/settings"), api("/api/execution"), api("/api/vocabulary"), api("/api/status"), api("/api/commands"), api("/api/session-audit"), api("/api/machine-settings")]); state.machineSettings = machine; state.settings = settings; state.execution = execution; state.vocabulary = vocabularyResult; state.status = status; state.commands = commandsResult.commands || []; state.audit = audit.writes || []; renderDashboard(); renderSettings(); renderVocabulary(); rebuildSearchIndex(); } catch (error) { state.status = { ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE", checks: [{ key: "validate", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "catalog", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "actor", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }] }; renderDashboard(); showReceipt({ ok: false, reasonCode: "PORTAL_READ_FAILED", error: String(error?.message ?? error) }); } };
   const rebuildSearchIndex = () => {
     const rows = [];
-    for (const entry of state.settings?.settings || []) rows.push({ text: `${entry.key} ${settingLabel(entry.key)} ${settingDescription(entry.key)}`, label: entry.key, meta: t("search.settings"), page: "settings", key: entry.key });
+    for (const entry of state.settings?.settings || []) {
+      if (LEGACY_MODEL_SETTING_KEYS.has(entry.key)) continue;
+      rows.push({ text: `${entry.key} ${settingLabel(entry.key)} ${settingDescription(entry.key)}`, label: entry.key, meta: t("search.settings"), page: "settings", key: entry.key, dispatch: DISPATCH_SETTING_KEYS.has(entry.key) });
+    }
     for (const category of vocabularyCategories()) for (const term of vocabularyRows(category)) rows.push({ text: `${termValue(term)} ${vocabularyDefinition(category, term)}`, label: termValue(term), meta: t("search.vocabulary"), page: "vocabulary", vocabulary: category });
     state.searchIndex = rows;
   };
   const renderSearchResults = () => { const target = $("#search-results"); target.hidden = state.searchResults.length === 0; target.innerHTML = state.searchResults.map((result, index) => `<button type="button" class="tcrn-search-result" aria-current="${index === state.searchSelection ? "true" : "false"}" data-search-index="${index}"><strong>${esc(result.label)}</strong><span class="tcrn-search-result__meta">${esc(result.meta)} · ${esc(result.page)}</span></button>`).join(""); $$('[data-search-index]').forEach((button) => button.addEventListener("click", () => chooseSearch(Number(button.dataset.searchIndex)))); };
   const search = (query) => { const normalized = query.trim().toLocaleLowerCase(); state.searchResults = normalized ? state.searchIndex.filter((entry) => entry.text.toLocaleLowerCase().includes(normalized)).slice(0, 12) : []; state.searchSelection = 0; renderSearchResults(); };
-  const chooseSearch = (index = 0) => { const result = state.searchResults[index]; if (!result) return; navigate(result.page); state.searchResults = []; renderSearchResults(); if (result.vocabulary) { state.selectedVocabulary = result.vocabulary; renderVocabulary(); } if (result.key) { state.settingGroup = settingGroup(result.key); $$('[data-setting-group]').forEach((button) => button.setAttribute("aria-current", button.dataset.settingGroup === state.settingGroup ? "page" : "false")); renderSettings(); const row = $(`[data-setting-row="${CSS.escape(result.key)}"]`); row?.classList.add("tcrn-highlight"); row?.scrollIntoView({ block: "center" }); } };
+  const chooseSearch = (index = 0) => { const result = state.searchResults[index]; if (!result) return; navigate(result.page); state.searchResults = []; renderSearchResults(); if (result.vocabulary) { state.selectedVocabulary = result.vocabulary; renderVocabulary(); } if (result.key) { state.settingGroup = settingGroup(result.key); $$('[data-setting-group]').forEach((button) => button.setAttribute("aria-current", button.dataset.settingGroup === state.settingGroup ? "page" : "false")); renderSettings(); const target = result.dispatch ? $("#dispatch-config") : $(`[data-setting-row="${CSS.escape(result.key)}"]`); target?.classList.add("tcrn-highlight"); target?.scrollIntoView({ block: "center" }); } };
   $$('[data-page-target]').forEach((button) => button.addEventListener("click", () => navigate(button.dataset.pageTarget)));
   $$('[data-setting-group]').forEach((button) => button.addEventListener("click", () => { state.settingGroup = button.dataset.settingGroup; $$('[data-setting-group]').forEach((candidate) => candidate.setAttribute("aria-current", candidate === button ? "page" : "false")); renderSettings(); }));
   $$('[data-workspace-tab]').forEach((button) => button.addEventListener("click", () => { state.dashboardTab = button.dataset.workspaceTab; $$('[data-workspace-tab]').forEach((candidate) => { const selected = candidate === button; candidate.setAttribute("aria-selected", selected ? "true" : "false"); candidate.setAttribute("data-selected", selected ? "true" : "false"); }); $$('[data-workspace-panel]').forEach((panel) => { panel.hidden = panel.dataset.workspacePanel !== state.dashboardTab; }); }));

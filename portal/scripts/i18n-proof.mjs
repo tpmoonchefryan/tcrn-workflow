@@ -104,9 +104,6 @@ legs.push({
 // without maintaining a second hand-written key list.  Any deliberate English
 // carry-over must be listed here with a reason and is visible in the report.
 const TRANSLATION_REALITY_EXEMPTIONS = Object.freeze({
-  // French for "plan" is « plan »: the homograph is the correct translation, the same
-  // way app.brand carries the product name unchanged. Waived in i18n-policy.json too.
-  "models.groupPlan": "fr homograph — « plan » is the French word",
   "vocabulary.columnDescription": "fr homograph — « description » is the French word",
   "vocabulary.columnSource": "fr homograph — « source » is the French word",
   // STORY-281: the group is named after the product, so it reads the same everywhere —
@@ -190,6 +187,7 @@ for (const match of sourceForReachability.matchAll(/data-i18n(?:-placeholder|-ar
 const dynamicFamilies = [
   { prefix: "setting.", marker: "t(`setting.", reason: "setting labels/descriptions are assembled from the engine catalog" },
   { prefix: "vocabulary.", marker: "t(`vocabulary.", reason: "dictionary category labels are assembled from the vocabulary read surface" },
+  { prefix: "dispatch.tier.", marker: "t(`dispatch.tier.", reason: "dispatch tier labels are assembled from the fixed tier order" },
   // INC-175: receipt hints are looked up by reason code; unmapped codes fall back to
   // the code alone, so the family is reachable precisely when the receipt carries one.
   { prefix: "reason.", marker: '"reason." + ', reason: "receipt hints are keyed by the engine reason code on the receipt" },

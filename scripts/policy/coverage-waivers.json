@@ -899,6 +899,30 @@
       "testName": "__assertions__",
       "reason": "TCRN-CROSS-STORY-370 retires persona-render and removes its golden stdout contract. WSB-5 remains as the surviving shipped-binary behavior surface.",
       "replacement": "tests/s7-behavior-surface.test.mjs:WSB-5: the shipped binary completes the status read verb with exit 0 and WORKSPACE_COMMAND_COMPLETED"
+    },
+    {
+      "path": "portal/tests/ui-presence.test.mjs",
+      "testName": "INC-187 unsetting a setting that is already unset writes nothing, and a bound plan can still be freed",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-373 removes the obsolete model-plan page and replaces its visible settings interaction with the dispatch mode, tier, and host-probe surface.",
+      "replacement": "portal/tests/ui-presence.test.mjs:STORY-373 the dispatch surface replaces the old model page and directory; portal/tests/ui-presence.test.mjs:STORY-373 mode save returns the engine receipt and host probe shows raw host failure"
+    },
+    {
+      "path": "portal/tests/ui-presence.test.mjs",
+      "testName": "INC-185 the vendor model directory opens as the page's own drawer",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-373 explicitly removes the vendor directory drawer, so the replacement proves the drawer and old settings group are absent.",
+      "replacement": "portal/tests/ui-presence.test.mjs:STORY-373 the dispatch surface replaces the old model page and directory"
+    },
+    {
+      "path": "portal/tests/ui-presence.test.mjs",
+      "testName": "S280 portal keeps model-plan assignments retired and supported settings writable",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-373 retires the last model-plan UI assertions and carries their supported write proof in the dispatch mode receipt test.",
+      "replacement": "portal/tests/ui-presence.test.mjs:STORY-373 mode save returns the engine receipt and host probe shows raw host failure"
+    },
+    {
+      "path": "portal/tests/ui-presence.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-STORY-373 removes the obsolete model-plan and vendor-directory assertions while adding dispatch configuration, advanced overrides, and raw host-probe error assertions; the new test file retains the receipt and DOM contract paths.",
+      "replacement": "portal/tests/ui-presence.test.mjs:STORY-373 the dispatch surface replaces the old model page and directory; portal/tests/ui-presence.test.mjs:STORY-373 mode save returns the engine receipt and host probe shows raw host failure"
     }
   ]
 }

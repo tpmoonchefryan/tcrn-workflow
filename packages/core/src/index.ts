@@ -721,6 +721,9 @@ export type { KnowledgeLanguageBundle, KnowledgeLanguageProvider } from "./knowl
 export { RECALL_CANDIDATE_LIMIT, RECALL_DEFAULT_TAU, recall, recallDocuments } from "./recall.js";
 export type { RecallKnowledgeInput, RecallMinutesInput, RecallWorkInput } from "./recall.js";
 export {
+  probeHost,
+} from "./host-probe.js";
+export {
   appendTelemetryRecord,
   createTelemetryRecord,
   readTelemetryRecordById,

@@ -34,7 +34,6 @@
       "maxEnglishMatches": 5,
       "waivers": [
         "app.brand",
-        "models.groupPlan",
         "settings.machine",
         "vocabulary.columnDescription",
         "vocabulary.columnSource"

@@ -30,6 +30,9 @@ const COMPONENTS = Object.freeze([
   ["engine connection", '[data-ui="engine-connection"]'],
   ["setting modified dot", '[data-ui="setting-modified-dot"]'],
   ["setting dictionary link", '[data-ui="setting-dictionary-link"]'],
+  ["dispatch configuration surface", '[data-ui="dispatch-config-surface"]'],
+  ["dispatch tier table", '[data-ui="dispatch-tier-table"]'],
+  ["dispatch override table", '[data-ui="dispatch-override-table"]'],
   ["returned stepper", ".tcrn-stepper"],
   ["returned segmented control", ".tcrn-segmented-nav"],
   ["returned stat card", ".tcrn-stat-card"],
@@ -240,8 +243,6 @@ async function preparePage(env = {}) {
   page.workspace = fixture.workspace;
   page.cleanup = async () => { page.child.kill(); await rm(fixture.base, { recursive: true, force: true }); };
   page.document.querySelector('[data-page-target="settings"]')?.click();
-  page.document.querySelector('[data-setting-group="models"]')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 80));
   page.document.querySelector('[data-setting-group="execution"]')?.click();
   await new Promise((resolve) => setTimeout(resolve, 80));
   return page;
@@ -477,41 +478,6 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
-  test("INC-187 unsetting a setting that is already unset writes nothing, and a bound plan can still be freed", async () => {
-    const page = await preparePage();
-    try {
-      // The plan settings live in the subagent-models group, not the execution group.
-      page.document.querySelector('[data-setting-group="models"]')?.click();
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      // A host with a single plan renders a two-segment control whose first segment is
-      // "unset". Pressing it while nothing is set used to call settings-remove, and the
-      // engine refuses to remove a record that does not exist.
-      const codexRow = page.document.querySelector('[data-setting-row="execution.codexSubagentPlan"]');
-      assert.ok(codexRow, "the execution group must render the Codex plan setting");
-      const before = page.document.querySelector("#receipt-chip-text")?.textContent ?? "";
-      const unsetControl = [...codexRow.querySelectorAll('[data-setting-control][data-setting-value=""], [data-setting-control]')]
-        .find((control) => control.tagName === "BUTTON" ? control.dataset.settingValue === "" : true);
-      if (unsetControl?.tagName === "BUTTON") {
-        unsetControl.dispatchEvent(new page.window.Event("click", { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        const after = page.document.querySelector("#receipt-chip-text")?.textContent ?? "";
-        assert.equal(after, before, "asking to unset what is already unset must not reach the engine at all");
-        assert.doesNotMatch(page.document.querySelector("#receipt-body")?.textContent ?? "", /WORKSPACE_INPUT_INVALID/u);
-      }
-
-      // The other half: a setting that IS set can be unset, which is what frees a bound
-      // plan for removal. The fixture binds "budget" to the Claude Code plan setting.
-      const claudeRow = page.document.querySelector('[data-setting-row="execution.claudeCodeSubagentPlan"]');
-      const clear = [...claudeRow.querySelectorAll("[data-setting-control]")]
-        .find((control) => control.tagName === "BUTTON" && control.dataset.settingValue === "");
-      assert.ok(clear, "a bound plan setting must offer a way back to unset");
-      const beforeClear = receiptText(page.document);
-      clear.dispatchEvent(new page.window.Event("click", { bubbles: true }));
-      await waitFor(receiptAdvanced(page.document, beforeClear), "the receipt chip to advance after clearing the bound setting");
-      assert.match(page.document.querySelector("#receipt-chip-text")?.textContent ?? "", /^✓v\d+$/u, "clearing a bound setting reaches the engine and returns a receipt");
-    } finally { await page.cleanup(); }
-  });
-
   test("INC-193 the design authority is declared, and what cannot be checked here is yellow", async () => {
     const page = await preparePage();
     try {
@@ -678,68 +644,66 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
-  test("INC-185 the vendor model directory opens as the page's own drawer", async () => {
+  test("STORY-373 the dispatch surface replaces the old model page and directory", async () => {
     const page = await preparePage();
     try {
-      page.document.querySelector('[data-setting-group="models"]')?.click();
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      const toggle = page.document.querySelector("#vendor-directory-toggle");
-      const drawer = page.document.querySelector("#vendor-directory-drawer");
-      assert.ok(toggle && drawer, "the subagent-models surface must carry the trigger and its drawer");
-      // Same class as the drawer this page already has, so it inherits that drawer's
-      // anchoring and slide rather than carrying a second implementation of them.
-      assert.equal(drawer.className, page.document.querySelector("#receipt-drawer").className);
-      assert.equal(drawer.getAttribute("data-open"), "false");
-      assert.equal(toggle.getAttribute("aria-controls"), "vendor-directory-drawer");
-
-      const links = [...drawer.querySelectorAll("[data-vendor-directory]")];
-      assert.deepEqual(links.map((link) => link.dataset.vendorDirectory),
-        ["anthropic", "openai", "qwen", "minimax", "deepseek", "kimi", "grok", "gemini", "glm"]);
-      // Every link leaves the page safely and carries a design-system class: an <a>
-      // with no class is exactly what the interactive-coverage leg cannot see, because
-      // this markup is written by the page script rather than shipped in the HTML.
-      assert.ok(links.every((link) => link.getAttribute("target") === "_blank"));
-      assert.ok(links.every((link) => (link.getAttribute("rel") ?? "").includes("noreferrer")));
-      assert.ok(links.every((link) => link.className.includes("tcrn-link-button")));
-      assert.ok(links.every((link) => link.getAttribute("href").startsWith("https://")));
-
-      toggle.dispatchEvent(new page.window.Event("click", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 60));
-      // Three expressions of one state; announcing only aria-expanded would leave the
-      // drawer skipped by the readers that follow aria-hidden.
-      assert.equal(drawer.getAttribute("data-open"), "true");
-      assert.equal(drawer.getAttribute("aria-hidden"), "false");
-      assert.equal(toggle.getAttribute("aria-expanded"), "true");
-
-      page.document.querySelector("#vendor-directory-close").dispatchEvent(new page.window.Event("click", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 60));
-      assert.equal(drawer.getAttribute("data-open"), "false");
-      assert.equal(drawer.getAttribute("aria-hidden"), "true");
-      assert.equal(toggle.getAttribute("aria-expanded"), "false");
+      assert.equal(page.document.querySelector('[data-setting-group="models"]'), null);
+      assert.equal(page.document.querySelector("#model-plans"), null);
+      assert.equal(page.document.querySelector('[data-ui="vendor-directory-toggle"]'), null);
+      assert.equal(page.document.querySelector('[data-ui="vendor-directory-drawer"]'), null);
+      const surface = page.document.querySelector('[data-ui="dispatch-config-surface"]');
+      assert.ok(surface, "the execution group must render the dispatch configuration surface");
+      assert.ok(surface.textContent.includes("next session") || surface.textContent.includes("下次会话"), "the activation boundary must be visible");
+      assert.equal(page.document.querySelectorAll("[data-dispatch-tier-row]").length, 6);
+      assert.equal(page.document.querySelectorAll("[data-dispatch-model]").length, 6);
+      assert.equal(page.document.querySelectorAll("[data-dispatch-effort]").length, 6);
+      assert.ok(page.document.querySelector('[data-ui="dispatch-override-table"]'));
+      assert.ok(page.document.querySelector('[data-dispatch-mode="eco"]'));
     } finally { await page.cleanup(); }
   });
 
-  test("S280 portal keeps model-plan assignments retired and supported settings writable", async () => {
-    const page = await preparePage();
+  test("STORY-373 mode save returns the engine receipt and host probe shows raw host failure", async () => {
+    const fixture = await scratch("tcrn-story373-dispatch-dom-");
+    await seed(fixture);
+    const bin = join(fixture.base, "fake-host-bin");
+    await mkdir(bin);
+    const fake = join(bin, "claude");
+    await writeFile(fake, "#!/usr/bin/env node\nprocess.stderr.write('host says model missing\\n'); process.exitCode = 7;\n", { mode: 0o700 });
+    const page = await loadExecutedDom(fixture, { PATH: `${bin}:${process.env.PATH}` });
+    page.workspace = fixture.workspace;
+    page.cleanup = async () => { page.child.kill(); await rm(fixture.base, { recursive: true, force: true }); };
+    page.document.querySelector('[data-page-target="settings"]')?.click();
+    page.document.querySelector('[data-setting-group="execution"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
     try {
-      const vocabulary = await cli(["vocabulary"]);
-      assert.deepEqual(vocabulary.efforts, [], "open effort strings do not produce a closed vocabulary list");
-      page.document.querySelector('[data-setting-group="models"]')?.click();
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      assert.equal(page.document.querySelector('[data-assign-effort]'), null, "retired model-plan records must not render assignment controls");
-      assert.match(page.document.querySelector("#model-plans")?.textContent ?? "", /No plans|没有/u);
+      const mode = page.document.querySelector('[data-dispatch-mode="eco"]');
+      assert.ok(mode);
+      const before = receiptText(page.document);
+      mode.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      await waitFor(receiptAdvanced(page.document, before), "the dispatch-mode receipt");
+      assert.match(page.document.querySelector("#receipt-body")?.textContent ?? "", /SETTINGS_WRITE_COMMITTED/u);
+      assert.equal((await cli(["settings-catalog", "--workspace", fixture.workspace])).settings.find((entry) => entry.key === "execution.dispatchMode").currentValue, "eco");
 
-      page.document.querySelector('[data-setting-group="execution"]')?.click();
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      const mode = page.document.querySelector('[data-setting-control="execution.dispatchMode"]');
-      assert.ok(mode, "the supported dispatch mode setting must render");
-      const beforeSupported = receiptText(page.document);
-      mode.value = "eco";
-      mode.dispatchEvent(new page.window.Event("change", { bubbles: true }));
-      await waitFor(receiptAdvanced(page.document, beforeSupported), "the receipt chip to advance after a supported settings write");
-      assert.match(page.document.querySelector("#receipt-chip-text")?.textContent ?? "", /^✓v\d+$/u);
+      const row = [...page.document.querySelectorAll("[data-dispatch-tier-row]")].find((candidate) => JSON.parse(candidate.dataset.dispatchTierRow).host === "claude-code" && JSON.parse(candidate.dataset.dispatchTierRow).tier === "main");
+      assert.ok(row);
+      row.querySelector("[data-dispatch-model]").value = "does-not-exist";
+      row.querySelector("[data-dispatch-effort]").value = "high";
+      const beforeTierSave = receiptText(page.document);
+      page.document.querySelector('[data-dispatch-save-host="claude-code"]')?.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      await waitFor(receiptAdvanced(page.document, beforeTierSave), "the dispatch-tier receipt");
+      assert.match(page.document.querySelector("#receipt-body")?.textContent ?? "", /DISPATCH_CONFIG_WRITE_COMMITTED/u);
+      const savedTiers = JSON.parse((await cli(["settings-catalog", "--workspace", fixture.workspace])).settings.find((entry) => entry.key === "execution.dispatchTiers").currentValue);
+      assert.equal(savedTiers["claude-code"].main.model, "does-not-exist");
+      const probe = row.querySelector("[data-dispatch-probe]");
+      probe.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      const result = row.querySelector("[data-dispatch-probe-result]");
+      await waitFor(() => result.dataset.state === "error", "the host probe error result");
+      assert.match(result.textContent, /HOST_PROBE_EXIT_NONZERO/u);
+      assert.match(result.textContent, /host says model missing/u);
+      assert.match(result.textContent, /7/u);
     } finally { await page.cleanup(); }
   });
+
 
   // STORY-355 GWT3. Evidence boundary, stated plainly rather than overclaimed: this
   // proves the toggle exists, that clicking it flips the two state attributes the CSS

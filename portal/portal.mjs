@@ -19,6 +19,7 @@ const execFileAsync = promisify(execFile);
 const portalRoot = dirname(fileURLToPath(import.meta.url));
 const ACTOR = (process.env.TCRN_PORTAL_ACTOR ?? "agent:portal").trim();
 const BUNDLED_CLI = join(portalRoot, "..", "scripts", "tcrn-workflow.mjs");
+const HOST_RENDER = join(portalRoot, "..", "scripts", "host-render.mjs");
 const CLI = process.env.TCRN_WORKFLOW_CLI ?? BUNDLED_CLI;
 const PROSE_FILES = Object.freeze(["AGENTS.md"]);
 
@@ -195,11 +196,13 @@ async function cliResult(args) {
 const settingsCatalog = () => cli(["settings-catalog", "--workspace", currentPartition().workspace]);
 const vocabulary = () => cli(["vocabulary"]);
 const commands = () => cli(["commands"]);
+const DISPATCH_SETTING_KEYS = new Set(["execution.dispatchClasses", "execution.dispatchMode", "execution.dispatchModes", "execution.dispatchTiers"]);
 
 async function executionState() {
-  const [settings, classes] = await Promise.all([
+  const [settings, classes, dispatch] = await Promise.all([
     settingsCatalog(),
     cli(["dispatch-classes-list", "--workspace", currentPartition().workspace]),
+    cli(["dispatch-mode-list", "--workspace", currentPartition().workspace]),
   ]);
   return {
     ok: true,
@@ -210,6 +213,11 @@ async function executionState() {
     settings: settings.settings,
     plans: [],
     classes: classes.classes,
+    dispatch: {
+      mode: dispatch.mode,
+      modes: dispatch.modes,
+      tiers: dispatch.tiers,
+    },
   };
 }
 
@@ -217,6 +225,34 @@ function nextOccurredAt() {
   const now = Date.now();
   lastWriteAt = Math.max(now, lastWriteAt + 1000);
   return new Date(lastWriteAt).toISOString().replace(/\.\d{3}Z$/u, "Z");
+}
+
+function childResult(error, fallback = "PORTAL_HOST_RENDER_FAILED") {
+  const raw = String(error?.stderr ?? error?.stdout ?? "").trim();
+  const lines = raw.split("\n").filter((line) => line.length > 0);
+  try { return JSON.parse(lines.at(-1) ?? ""); } catch { return { ok: false, reasonCode: fallback, error: raw || String(error?.message ?? error) }; }
+}
+
+async function hostRenderOne(host, hooksOnly = false) {
+  const args = [HOST_RENDER, "--host", host, "--workspace", currentPartition().workspace, "--root", defaultProseRoot()];
+  if (hooksOnly) args.push("--hooks-only");
+  try {
+    const { stdout } = await execFileAsync(process.execPath, args, { cwd: portalRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+    return JSON.parse(stdout);
+  } catch (error) {
+    return childResult(error);
+  }
+}
+
+async function renderHostProjection() {
+  const hosts = [];
+  for (const host of ["claude-code", "codex"]) {
+    let result = await hostRenderOne(host);
+    if (result.reasonCode === "HOST_RENDER_MODEL_UNSET") result = await hostRenderOne(host, true);
+    hosts.push({ host, ...result });
+  }
+  const ok = hosts.every((result) => ["HOST_RENDER_COMMITTED", "HOST_RENDER_ALREADY_CURRENT"].includes(result.reasonCode));
+  return { ok, reasonCode: ok ? "HOST_RENDER_PROJECTION_READY" : "HOST_RENDER_PROJECTION_FAILED", root: defaultProseRoot(), hosts };
 }
 
 function recordSessionWrite(action, result, summary, occurredAt) {
@@ -324,29 +360,39 @@ function writeArticle(body) {
   return governedArticleWrite(args, "knowledge-article-create", title || "article");
 }
 
-function writeSetting(key, value) {
-  return governedWrite(
+async function writeSetting(key, value) {
+  const result = await governedWrite(
     (common) => ["settings-set", ...common, "--key", String(key), "--value", String(value)],
     "settings-set",
     `${key} → ${value}`,
   );
+  if (result.ok && DISPATCH_SETTING_KEYS.has(key)) {
+    return { ...result, body: { ...result.body, hostRender: await renderHostProjection() } };
+  }
+  return result;
 }
 
-function removeSetting(key) {
-  return governedWrite(
+async function removeSetting(key) {
+  const result = await governedWrite(
     (common) => ["settings-remove", ...common, "--key", String(key)],
     "settings-remove",
     `${key} reset`,
   );
+  if (result.ok && DISPATCH_SETTING_KEYS.has(key)) {
+    return { ...result, body: { ...result.body, hostRender: await renderHostProjection() } };
+  }
+  return result;
 }
 
-function writeExecution(action, body) {
+async function writeExecution(action, body) {
   const text = (value) => String(value ?? "");
   const verbs = {
     "model-plan-set": (common) => ["model-plan-set", ...common, "--host", text(body.host), "--name", text(body.name), "--default-model", text(body.defaultModel), ...(text(body.defaultEffort) ? ["--default-effort", text(body.defaultEffort)] : [])],
     "model-plan-assign": (common) => ["model-plan-assign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona), "--model", text(body.model), ...(body.effort ? ["--effort", text(body.effort)] : [])],
     "model-plan-unassign": (common) => ["model-plan-unassign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona)],
     "model-plan-remove": (common) => ["model-plan-remove", ...common, "--host", text(body.host), "--name", text(body.name)],
+    "dispatch-tiers-set": (common) => ["dispatch-tiers-set", ...common, "--host", text(body.host), "--tiers", JSON.stringify(body.tiers ?? {})],
+    "dispatch-mode-set": (common) => ["dispatch-mode-set", ...common, "--name", text(body.name), "--mapping", JSON.stringify(body.mapping ?? {})],
   };
   const build = verbs[action];
   if (!build) {
@@ -354,7 +400,11 @@ function writeExecution(action, body) {
     recordSessionWrite(action, result, action, new Date().toISOString());
     return Promise.resolve(result);
   }
-  return governedWrite(build, action, body.summary ?? action);
+  const result = await governedWrite(build, action, body.summary ?? action);
+  if (result.ok && ["dispatch-tiers-set", "dispatch-mode-set"].includes(action)) {
+    return { ...result, body: { ...result.body, hostRender: await renderHostProjection() } };
+  }
+  return result;
 }
 
 function proseTarget(name = PROSE_FILES[0]) {
@@ -517,6 +567,14 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && pathname === "/api/execution") {
       send(response, 200, await executionState());
+      return;
+    }
+    if (request.method === "POST" && pathname === "/api/host-probe") {
+      const body = await readJsonBody(request);
+      const args = ["host-probe", "--host", String(body.host ?? ""), "--model", String(body.model ?? "")];
+      if (body.timeoutMs !== undefined) args.push("--timeout-ms", String(body.timeoutMs));
+      const result = await cliResult(args);
+      send(response, result.ok ? 200 : 409, result.body);
       return;
     }
     if (request.method === "POST" && pathname === "/api/knowledge/articles") {

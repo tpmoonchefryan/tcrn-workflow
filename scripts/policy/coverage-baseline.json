@@ -451,6 +451,16 @@
         "INC-220 the guard leaves ordinary edits and reads alone"
       ]
     },
+    "tests/host-probe.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 20,
+      "testNames": [
+        "STORY-373: host-probe passes model text as one argv value without a shell",
+        "STORY-373: missing CLI, authentication failure, timeout, and output truncation stay distinct",
+        "STORY-373: Codex and Claude argv forms are fixed and input validation is fail-closed",
+        "STORY-373: host-probe is a read-only catalog command with explicit host and model flags"
+      ]
+    },
     "tests/injection-session.test.mjs": {
       "testCount": 17,
       "assertionCount": 73,
