@@ -51,12 +51,14 @@ function cmdStart(flags) {
       ttlMs: Math.round(ttlHours * 60 * 60 * 1000),
       ...(maxBlocks !== undefined ? { maxConsecutiveBlocks: maxBlocks } : {}),
       boundSession: typeof flags.session === "string" ? flags.session : null,
+      workspace: typeof flags.workspace === "string" ? flags.workspace : null,
+      workId: typeof flags["work-id"] === "string" ? flags["work-id"] : null,
     });
   } catch (error) {
     return fail("PACT_INVALID", error.message);
   }
   writePact(pact);
-  out({ ok: true, reasonCode: "PACT_STARTED", path: pactPath(), status: pact.status, expiresAt: pact.expiresAt, boundSession: pact.boundSession });
+  out({ ok: true, reasonCode: "PACT_STARTED", path: pactPath(), status: pact.status, expiresAt: pact.expiresAt, boundSession: pact.boundSession, workspace: pact.workspace, workId: pact.workId });
 }
 
 function migrate(status, detail, ticket) {

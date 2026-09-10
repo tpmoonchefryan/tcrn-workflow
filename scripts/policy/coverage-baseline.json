@@ -1639,6 +1639,19 @@
         "INC-265 removes the unsupported prose length rule without weakening rules 3 and 5"
       ]
     },
+    "tests/stop-pact-verify.test.mjs": {
+      "testCount": 7,
+      "assertionCount": 33,
+      "testNames": [
+        "STORY-374 Subtask 020: start persists an explicit workspace/work binding and migrations append history",
+        "STORY-374 GWT1/GWT3: a failing bound verify blocks both hosts before model tier resolution",
+        "STORY-374 GWT2: a passing verify allows the stop without consulting the model tier",
+        "STORY-374 GWT4: an absent verify command keeps the legacy observe path fail-open",
+        "STORY-374: stop_hook_active and a parallel session take priority over verify",
+        "STORY-374: stderr is retained as a well-formed UTF-8 tail capped at 500 bytes",
+        "STORY-374: the async runner blocks on timeout and reports an exit without stderr"
+      ]
+    },
     "tests/story-173-equivalence-redleg.test.mjs": {
       "testCount": 4,
       "assertionCount": 11,

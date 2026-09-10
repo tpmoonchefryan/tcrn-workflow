@@ -25,6 +25,7 @@ import { decide } from "./decide.mjs";
 import { readPact, writePact, withRuntime } from "./pact.mjs";
 import { resolveMode, resolveModelFromTranscript, toolUseCount, workedSinceLastBlock } from "./mode.mjs";
 import { notify } from "./notify.mjs";
+import { runVerification, verifyPactBinding } from "./verify.mjs";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "cli.mjs");
 const CLI_INVOCATION = `node ${CLI}`;
@@ -33,7 +34,7 @@ function readStdin() {
   try { return JSON.parse(readFileSync(0, "utf8")); } catch { return {}; }
 }
 
-function main() {
+async function main() {
   const hookInput = readStdin();
   const pact = readPact();
 
@@ -43,6 +44,30 @@ function main() {
 
   const sessionId = typeof hookInput.session_id === "string" ? hookInput.session_id : "";
   const transcriptPath = typeof hookInput.transcript_path === "string" ? hookInput.transcript_path : "";
+
+  // A host continuation and an already terminal pact are explicit stop/cancel
+  // priority. The verify branch is only for a live, owning running pact; legacy
+  // pacts without the explicit binding continue through the old model path.
+  if (hookInput.stop_hook_active === true || pact.status !== "running" ||
+      (typeof pact.boundSession === "string" && pact.boundSession !== sessionId)) {
+    return decideLegacyStop(hookInput, pact, sessionId, transcriptPath);
+  }
+
+  const binding = verifyPactBinding(pact, sessionId);
+  if (binding.status === "available") {
+    const verification = await runVerification(binding.command, pact.workspace);
+    if (verification.ok) { process.exit(0); return; }
+    // This is the only new hard-stop branch. Its reason is deliberately the
+    // bounded UTF-8 stderr tail (or the explicit exit/timeout/start reason).
+    process.exitCode = 0;
+    process.stdout.write(`${JSON.stringify({ decision: "block", reason: `advisory:verify failed: ${verification.reason}` })}\n`, () => process.exit(0));
+    return;
+  }
+
+  return decideLegacyStop(hookInput, pact, sessionId, transcriptPath);
+}
+
+function decideLegacyStop(hookInput, pact, sessionId, transcriptPath) {
 
   // Enforcement strength from the CURRENT model (recovered from the transcript; the
   // model is not in stdin). Flagship families and unknown/new names => observe;
@@ -109,4 +134,4 @@ function applyEffects(pact, verdict, currentToolUses) {
   } catch { /* never fail the stop on a bookkeeping error */ }
 }
 
-try { main(); } catch { process.exit(0); }
+try { await main(); } catch { process.exit(0); }

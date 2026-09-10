@@ -1709,6 +1709,7 @@ function readGateEvidenceLocator(extensions: Readonly<Record<string, unknown>>):
 // itself rather than reconstructing it from a compressed external key.
 const ADVISORY_SCOPE_KEY = "advisory:scope";
 const ADVISORY_DECIDED_BY_KEY = "advisory:decided-by";
+const ADVISORY_VERIFY_KEY = "advisory:verify";
 const ADVISORY_EVIDENCE_KEY = "advisory:evidence";
 const ADVISORY_EVIDENCE_SNAPSHOT_KEY = "advisory:evidence-snapshot";
 const WORK_SCOPE_REFERENCE_VERSION = "tcrn.work-scope-reference.v1" as const;
@@ -1725,6 +1726,7 @@ const ADVISORY_SPRINT_KEY = "advisory:sprint";
 const ADVISORY_KEYS: readonly string[] = [
   ADVISORY_SCOPE_KEY,
   ADVISORY_DECIDED_BY_KEY,
+  ADVISORY_VERIFY_KEY,
   ADVISORY_SPRINT_KEY,
   ADVISORY_EVIDENCE_KEY,
   ADVISORY_EVIDENCE_SNAPSHOT_KEY,
@@ -1760,6 +1762,7 @@ function isSprintReference(value: unknown): value is SprintReference {
 function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisory: {
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
+  readonly verify?: string;
   readonly sprint?: SprintReference;
   readonly evidence?: string;
   readonly evidenceSnapshot?: TelemetryEvidenceSnapshot;
@@ -1773,6 +1776,9 @@ function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisor
   }
   if (advisory.sprint !== undefined) {
     next[ADVISORY_SPRINT_KEY] = { required: false, value: { workspaceId: advisory.sprint.workspaceId, workId: advisory.sprint.workId } };
+  }
+  if (advisory.verify !== undefined) {
+    next[ADVISORY_VERIFY_KEY] = { required: false, value: advisory.verify };
   }
   if (advisory.evidence !== undefined) {
     next[ADVISORY_EVIDENCE_KEY] = { required: false, value: advisory.evidence };
@@ -1945,6 +1951,12 @@ function assertAdvisoryEntryShape(key: string, entry: unknown, id: string, reaso
   if (key === ADVISORY_SPRINT_KEY) {
     if (!isSprintReference(value)) {
       fail(reasonCode, `work ${id} advisory sprint must be a {workspaceId, workId} qualified reference`);
+    }
+    return;
+  }
+  if (key === ADVISORY_VERIFY_KEY) {
+    if (typeof value !== "string" || value.length === 0 || Buffer.byteLength(value, "utf8") > 4_096 || value.includes("\u0000") || !value.isWellFormed()) {
+      fail(reasonCode, `work ${id} advisory verify must be non-empty bounded text`);
     }
     return;
   }
@@ -2243,6 +2255,7 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         // bad advisory value in through the one door that used to skip it.
         for (const key of ADVISORY_KEYS) {
           if (Object.hasOwn(record.extensions, key)) {
+            if (key === ADVISORY_VERIFY_KEY) fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} verify command may only be written by work.annotated`);
             if (key === ADVISORY_EVIDENCE_KEY || key === ADVISORY_EVIDENCE_SNAPSHOT_KEY) {
               fail("WORKSPACE_EVENT_CORRUPT", `work ${record.id} completion evidence may only be written by a done transition`);
             }
@@ -4579,6 +4592,7 @@ export function annotateWorkDelta(input: {
   readonly id: string;
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
+  readonly verify?: string;
   readonly sprint?: SprintReference;
   readonly title?: string | null;
   readonly summary?: string | null;
@@ -4592,6 +4606,7 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
   readonly id: string;
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
+  readonly verify?: string;
   readonly sprint?: SprintReference;
   readonly title?: string | null;
   readonly summary?: string | null;
@@ -4604,6 +4619,7 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
   readonly id: string;
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
+  readonly verify?: string;
   readonly sprint?: SprintReference;
   readonly title?: string | null;
   readonly summary?: string | null;
@@ -4615,8 +4631,8 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     if (current.tombstone) {
       fail("WORKSPACE_INPUT_INVALID", `work ${input.id} is deleted`);
     }
-    if (input.scope === undefined && input.decidedBy === undefined && input.sprint === undefined && input.title === undefined && input.summary === undefined && input.labels === undefined) {
-      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, sprint, title, summary, or labels");
+    if (input.scope === undefined && input.decidedBy === undefined && input.verify === undefined && input.sprint === undefined && input.title === undefined && input.summary === undefined && input.labels === undefined) {
+      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, verify, sprint, title, summary, or labels");
     }
     if (input.scope !== undefined && input.scope.length === 0) {
       fail("WORKSPACE_INPUT_INVALID", "advisory scope must be a non-empty string");
@@ -4626,6 +4642,9 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     }
     if (input.sprint !== undefined && !isSprintReference(input.sprint)) {
       fail("WORKSPACE_INPUT_INVALID", "advisory sprint must be a {workspaceId, workId} qualified reference");
+    }
+    if (input.verify !== undefined) {
+      assertAdvisoryEntryShape(ADVISORY_VERIFY_KEY, { required: false, value: input.verify }, input.id, "WORKSPACE_INPUT_INVALID");
     }
     const title = input.title === undefined ? current.title ?? null : normalizeWorkTitle(input.title);
     const labels = input.labels === undefined ? current.labels ?? [] : normalizeWorkLabels(input.labels);
@@ -4637,6 +4656,7 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     const extensions = workAdvisoryExtensions(current.extensions, {
       ...(input.scope !== undefined ? { scope: input.scope } : {}),
       ...(input.decidedBy !== undefined ? { decidedBy: input.decidedBy } : {}),
+      ...(input.verify !== undefined ? { verify: input.verify } : {}),
       ...(input.sprint !== undefined ? { sprint: input.sprint } : {}),
     });
     // TCRN-CROSS-INC-269: the reducer's own predicate, run before the event exists.

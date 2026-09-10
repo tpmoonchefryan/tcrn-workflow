@@ -542,6 +542,7 @@
     "tests/spawn-guard.test.mjs",
     "tests/ssh-write-observer.test.mjs",
     "tests/stop-pact-channel.test.mjs",
+    "tests/stop-pact-verify.test.mjs",
     "tests/stop-pact.test.mjs",
     "tests/story-173-equivalence-redleg.test.mjs",
     "tests/story-174-storage-redleg.test.mjs",
@@ -580,6 +581,7 @@
     "tools/stop-pact/pact.mjs",
     "tools/stop-pact/response-style-hook.mjs",
     "tools/stop-pact/verify-channel.mjs",
+    "tools/stop-pact/verify.mjs",
     "tsconfig.build.json",
     "tsconfig.json",
     "verification-map.yaml"

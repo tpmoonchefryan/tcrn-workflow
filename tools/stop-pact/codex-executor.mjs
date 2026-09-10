@@ -14,6 +14,7 @@ import { resolve } from "node:path";
 import { decide } from "./decide.mjs";
 import { readPact, writePact, withRuntime } from "./pact.mjs";
 import { resolveMode } from "./mode.mjs";
+import { runVerification, runVerificationSync, verifyPactBinding } from "./verify.mjs";
 
 export const CODEX_STOP_PACT_EXECUTION_VERSION = "tcrn.codex-stop-pact-execution.v1";
 const DEFAULT_CLI = "node <tcrn-workflow>/tools/stop-pact/cli.mjs";
@@ -193,12 +194,42 @@ function applyEffects(pact, verdict, currentToolUses, now, path) {
   return true;
 }
 
+function verificationResult(pact, verification) {
+  if (verification === null) return null;
+  if (verification.ok) {
+    return contextResult("VERIFY_PASSED", {
+      action: "allow",
+      mode: "verify",
+      modelKnown: false,
+      governingStatus: pact?.status ?? null,
+      message: "advisory:verify passed; the Codex stop is allowed",
+    });
+  }
+  return contextResult("VERIFY_FAILED", {
+    action: "block",
+    mode: "verify",
+    modelKnown: false,
+    governingStatus: pact?.status ?? null,
+    message: `advisory:verify failed: ${verification.reason}`,
+  });
+}
+
+function runBoundVerification(pact, normalized, runner) {
+  if (!pact || pact.active !== true || pact.status !== "running" || normalized.value.stopHookActive === true) return null;
+  const binding = verifyPactBinding(pact, normalized.value.sessionId);
+  if (binding.status !== "available") return null;
+  return runner(binding.command, pact.workspace);
+}
+
 /** Execute one real-host or internal Codex Stop observation using the shared pact. */
 export function executeCodexStop(input, { path } = {}) {
   try {
     const pact = readPact(path);
     const normalized = normalizeCodexStopInput(input, pact);
     if (!normalized.ok) return contextResult(normalized.reasonCode);
+    const verification = runBoundVerification(pact, normalized, runVerificationSync);
+    const verified = verificationResult(pact, verification);
+    if (verified !== null) return { ...verified, wrotePact: false };
     const result = decideCodexStop(input, pact);
     const wrotePact = applyEffects(
       pact,
@@ -212,6 +243,34 @@ export function executeCodexStop(input, { path } = {}) {
     // A stop adapter must never make the host un-stoppable. This is an allow,
     // but it is named so a diagnostic invocation cannot mistake the failure for
     // a normal terminal decision.
+    return contextResult("CODEX_STOP_EXECUTOR_ERROR");
+  }
+}
+
+/** Async host path: the verify runner can terminate the complete process group on timeout. */
+export async function executeCodexStopAsync(input, { path } = {}) {
+  try {
+    const pact = readPact(path);
+    const normalized = normalizeCodexStopInput(input, pact);
+    if (!normalized.ok) return contextResult(normalized.reasonCode);
+    const binding = pact && pact.active === true && pact.status === "running" && !normalized.value.stopHookActive
+      ? verifyPactBinding(pact, normalized.value.sessionId)
+      : null;
+    const verification = binding?.status === "available"
+      ? await runVerification(binding.command, pact.workspace)
+      : null;
+    const verified = verificationResult(pact, verification);
+    if (verified !== null) return { ...verified, wrotePact: false };
+    const result = decideCodexStop(input, pact);
+    const wrotePact = applyEffects(
+      pact,
+      { ...result, code: result.reasonCode },
+      normalized.value.toolUseCount,
+      normalized.value.now,
+      path,
+    );
+    return { ...result, wrotePact };
+  } catch {
     return contextResult("CODEX_STOP_EXECUTOR_ERROR");
   }
 }
@@ -235,7 +294,7 @@ function readStdin() {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const diagnostic = process.argv.includes("--diagnostic");
-  const result = executeCodexStop(readStdin());
+  const result = await executeCodexStopAsync(readStdin());
   if (diagnostic) {
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } else {

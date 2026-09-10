@@ -36,7 +36,7 @@ export function pactPath() {
 // the model on every block (review finding on the stdout path).
 export const MAX_SCOPE_BYTES = 8192;
 
-export function buildPact({ scope, authorizedBy, now, ttlMs = DEFAULT_TTL_MS, maxConsecutiveBlocks = DEFAULT_MAX_CONSECUTIVE_BLOCKS, boundSession = null }) {
+export function buildPact({ scope, authorizedBy, now, ttlMs = DEFAULT_TTL_MS, maxConsecutiveBlocks = DEFAULT_MAX_CONSECUTIVE_BLOCKS, boundSession = null, workspace = null, workId = null }) {
   const createdMs = Date.parse(now);
   if (Number.isNaN(createdMs)) throw new Error("buildPact: `now` must be an ISO-8601 instant");
   if (typeof scope !== "string" || scope.length === 0) throw new Error("buildPact: scope is required");
@@ -49,6 +49,8 @@ export function buildPact({ scope, authorizedBy, now, ttlMs = DEFAULT_TTL_MS, ma
     scope,
     authorizedBy,
     boundSession,
+    workspace,
+    workId,
     maxConsecutiveBlocks,
     createdAt: new Date(createdMs).toISOString(),
     expiresAt: new Date(createdMs + ttlMs).toISOString(),
@@ -105,6 +107,8 @@ export function isWellFormedPact(value) {
   // trapping the session. Rejecting it here fails the pact toward ABSENT (=> allow),
   // the safe direction.
   if (!Number.isInteger(value.runtime.consecutiveBlocks) || value.runtime.consecutiveBlocks < 0) return false;
+  if (value.workspace !== undefined && value.workspace !== null && (typeof value.workspace !== "string" || value.workspace.length === 0 || value.workspace.includes("\u0000"))) return false;
+  if (value.workId !== undefined && value.workId !== null && (typeof value.workId !== "string" || !/^work:[a-z0-9][a-z0-9._-]{0,127}$/u.test(value.workId))) return false;
   return true;
 }
 
