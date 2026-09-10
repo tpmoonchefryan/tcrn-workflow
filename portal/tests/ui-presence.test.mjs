@@ -3,7 +3,7 @@
 // linkedom is test-only; portal/index.html remains dependency-free at runtime.
 
 import { execFile, spawn } from "node:child_process";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -777,6 +777,22 @@ if (process.argv[2] === "status" && actual.status === 0) {
         assert.equal(page.document.documentElement.lang, locale);
         assert.notEqual(page.document.querySelector('[data-i18n="dashboard.evolutionTitle"]')?.textContent, "dashboard.evolutionTitle");
       }
+    } finally { await page.cleanup(); }
+  });
+
+  test("STORY-389: narrow execution cards, status receipts, and French tab labels keep their boundaries", async () => {
+    const page = await preparePage();
+    try {
+      const source = await readFile(join(portalRoot, "index.html"), "utf8");
+      assert.match(source, /\.tcrn-dispatch-hosts\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/u);
+      assert.match(source, /@media \(max-width: 520px\)[\s\S]*?\.tcrn-app-status-bar__command[\s\S]*?white-space:\s*normal;/u);
+      assert.equal(page.document.querySelectorAll("[data-dispatch-host-card]").length, 2);
+      page.document.querySelector('[data-locale-option="fr"]')?.click();
+      assert.notEqual(page.document.querySelector('[data-workspace-tab="gates"]')?.textContent, page.document.querySelector('[data-workspace-tab="audit"]')?.textContent);
+      assert.equal(page.document.querySelector('[data-workspace-tab="audit"]')?.textContent, "Audit");
+      page.document.querySelector('[data-locale-option="en"]')?.click();
+      assert.equal(page.document.querySelector('[data-workspace-tab="audit"]')?.textContent, "Audit");
+      assert.equal(page.document.querySelector('[data-dispatch-tier-row] [data-label]')?.getAttribute("data-label"), "Tier");
     } finally { await page.cleanup(); }
   });
 }

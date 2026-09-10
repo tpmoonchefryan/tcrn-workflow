@@ -3775,6 +3775,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 [data-tcrn-locale="ko"] { --tcrn-type-family-ui: var(--tcrn-type-family-ko); }
 @media (max-width: 980px) {
   .tcrn-product-shell { grid-template-columns: 1fr; }
+  .tcrn-dispatch-hosts { grid-template-columns: minmax(0, 1fr); }
   .tcrn-product-shell__sidebar { border-right: 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); padding: var(--tcrn-space-2) var(--tcrn-space-3); }
   .tcrn-rail__mark, .tcrn-rail__footer { display: none; }
   .tcrn-side-nav { flex-direction: row; overflow: auto; }
@@ -3792,6 +3793,14 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .tcrn-page__head { display: grid; }
   .tcrn-editor-shell { grid-template-columns: 1fr; }
   .tcrn-editor__directory { position: static; }
+}
+@media (max-width: 520px) {
+  .tcrn-app-status-bar { align-items: flex-start; }
+  .tcrn-app-status-bar__command { flex: 1 1 100%; white-space: normal; overflow-wrap: anywhere; }
+  .tcrn-app-status-bar__state, .tcrn-app-status-bar__action { flex: 0 0 auto; }
+  .tcrn-app-status-bar__action { margin-inline-start: auto; }
+  .tcrn-readback-panel__row { flex-direction: column; align-items: flex-start; }
+  .tcrn-readback-panel__value { max-width: 100%; text-align: start; }
 }
 /* INIT-036 S274/S275: the portal consumes the platform shell contract directly, and
    INC-167 stopped narrowing it. The sidebar width is the design system's 280px: the

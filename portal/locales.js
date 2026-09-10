@@ -1436,7 +1436,7 @@ window.PORTAL_LOCALES = {
     "dashboard.lede": "Une surface d'état lisible pour l'espace de travail gouverné actif.",
     "dashboard.audit": "Contrôle de session",
     "dashboard.overview": "Vue d'ensemble",
-    "dashboard.auditTab": "Contrôles",
+    "dashboard.auditTab": "Audit",
     "dashboard.chain": "Version de chaîne",
     "dashboard.events": "Événements",
     "dashboard.eventsNote": "chaîne matérialisée",
