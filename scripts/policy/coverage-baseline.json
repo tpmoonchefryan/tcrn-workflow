@@ -1652,7 +1652,7 @@
     },
     "tests/stop-pact-verify.test.mjs": {
       "testCount": 9,
-      "assertionCount": 43,
+      "assertionCount": 47,
       "testNames": [
         "STORY-374 Subtask 020: start persists an explicit workspace/work binding and migrations append history",
         "STORY-374 GWT1/GWT3: a failing bound verify blocks both hosts before model tier resolution",

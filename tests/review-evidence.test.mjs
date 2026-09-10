@@ -15,7 +15,8 @@ import {
   parseTestRunOutput,
 } from "../scripts/review-evidence.mjs";
 
-const CHAIN_WORKSPACE = join(resolve(dirname(fileURLToPath(import.meta.url)), ".."), [".tcrn", "workspace"].join("-"), "cross-project", "workspace");
+const PLATFORM_ROOT = process.env.TCRN_PLATFORM_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const CHAIN_WORKSPACE = join(PLATFORM_ROOT, [".tcrn", "workspace"].join("-"), "cross-project", "workspace");
 const STORY_374 = "work:bba2301b55370dabd7854616";
 
 function gitFixture(t) {

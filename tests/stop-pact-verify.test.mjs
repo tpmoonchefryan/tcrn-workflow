@@ -19,14 +19,11 @@ import {
 } from "../dist/build/packages/core/src/index.js";
 import {
   CODEX_STOP_PACT_EXECUTION_VERSION,
-  executeCodexStop,
 } from "../tools/stop-pact/codex-executor.mjs";
 import { buildPact, writePact } from "../tools/stop-pact/pact.mjs";
 import {
   MAX_STDERR_TAIL_BYTES,
   VERIFY_TIMEOUT_MS,
-  runVerification,
-  runVerificationSync,
   utf8Tail,
 } from "../tools/stop-pact/verify.mjs";
 
@@ -151,6 +148,59 @@ function runStopCli(path, args) {
   return { ...result, json: JSON.parse(result.stdout.trim()) };
 }
 
+function runCodexStop(input, options) {
+  const moduleUrl = new URL("../tools/stop-pact/codex-executor.mjs", import.meta.url).href;
+  const source = [
+    `import { executeCodexStop } from ${JSON.stringify(moduleUrl)};`,
+    `const result = executeCodexStop(${JSON.stringify(input)}, ${JSON.stringify(options)});`,
+    "process.stdout.write(JSON.stringify(result));",
+  ].join("\n");
+  const result = spawnSync("/usr/bin/env", ["-u", "NODE_OPTIONS", process.execPath, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
+function runVerificationUnpreloaded(command, cwd, options = {}) {
+  const moduleUrl = new URL("../tools/stop-pact/verify.mjs", import.meta.url).href;
+  const source = [
+    `import { runVerification } from ${JSON.stringify(moduleUrl)};`,
+    `const result = await runVerification(${JSON.stringify(command)}, ${JSON.stringify(cwd)}, ${JSON.stringify(options)});`,
+    "process.stdout.write(JSON.stringify(result));",
+  ].join("\n");
+  const result = spawnSync("/usr/bin/env", ["-u", "NODE_OPTIONS", process.execPath, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
+function runVerificationSyncUnpreloaded(command, cwd, options = {}) {
+  const moduleUrl = new URL("../tools/stop-pact/verify.mjs", import.meta.url).href;
+  const source = [
+    `import { runVerificationSync } from ${JSON.stringify(moduleUrl)};`,
+    `const result = runVerificationSync(${JSON.stringify(command)}, ${JSON.stringify(cwd)}, ${JSON.stringify(options)});`,
+    "process.stdout.write(JSON.stringify(result));",
+  ].join("\n");
+  const result = spawnSync("/usr/bin/env", ["-u", "NODE_OPTIONS", process.execPath, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
+function runVerificationCancellationUnpreloaded(command, cwd, pidPath) {
+  const moduleUrl = new URL("../tools/stop-pact/verify.mjs", import.meta.url).href;
+  const source = [
+    `import { runVerification } from ${JSON.stringify(moduleUrl)};`,
+    'import { access } from "node:fs/promises";',
+    'const controller = new AbortController();',
+    `const promise = runVerification(${JSON.stringify(command)}, ${JSON.stringify(cwd)}, { signal: controller.signal, timeoutMs: 30_000 });`,
+    "for (let attempt = 0; attempt < 1_000; attempt += 1) { try { await access(" + JSON.stringify(pidPath) + "); break; } catch { await new Promise((resolve) => setTimeout(resolve, 20)); } }",
+    "controller.abort();",
+    "const result = await promise;",
+    "process.stdout.write(JSON.stringify(result));",
+  ].join("\n");
+  const result = spawnSync("/usr/bin/env", ["-u", "NODE_OPTIONS", process.execPath, "--input-type=module", "--eval", source], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
 test("STORY-374 Subtask 020: start persists an explicit workspace/work binding and migrations append history", async (t) => {
   const { workspace, workId } = await fixture(t);
   const directory = mkdtempSync(join(tmpdir(), "tcrn-story374-start-"));
@@ -187,7 +237,7 @@ test("STORY-374 GWT1/GWT3: a failing bound verify blocks both hosts before model
   assert.equal(claude.json?.decision, "block");
   assert.match(claude.json?.reason ?? "", /verify failed on the bound work/u);
 
-  const codex = executeCodexStop({
+  const codex = runCodexStop({
     hook_event_name: "Stop",
     session_id: "session-374",
     model: "claude-opus-5",
@@ -209,7 +259,7 @@ test("STORY-374 GWT2: a passing verify allows the stop without consulting the mo
   assert.equal(claude.status, 0);
   assert.equal(claude.json, null);
 
-  const codex = executeCodexStop({
+  const codex = runCodexStop({
     session_id: "session-374",
     model: "gpt-5-codex",
     stop_hook_active: false,
@@ -277,7 +327,7 @@ test("STORY-384: async success, failure, cancellation, timeout, and pipeline pat
   ];
   for (const [name, filename, commandOptions, runOptions] of cases) {
     const pidPath = join(directory, filename);
-    const result = await runVerification(backgroundNodeCommand(pidPath, commandOptions), directory, runOptions);
+    const result = runVerificationUnpreloaded(backgroundNodeCommand(pidPath, commandOptions), directory, runOptions);
     assert.equal(result.ok, name === "success", `${name} result`);
     if (name === "failure") assert.equal(result.exitCode, 7);
     if (name === "term-ignoring timeout") assert.equal(result.timedOut, true);
@@ -288,17 +338,14 @@ test("STORY-384: async success, failure, cancellation, timeout, and pipeline pat
   const pipelinePidPath = join(directory, "pipeline.pid");
   await writeFile(pipelinePidPath, "", "utf8");
   const pipeline = `sleep 30 | cat > /dev/null & echo $! > ${JSON.stringify(pipelinePidPath)}; exit 0`;
-  const pipelineResult = await runVerification(pipeline, directory);
+  const pipelineResult = runVerificationUnpreloaded(pipeline, directory);
   assert.equal(pipelineResult.ok, true);
   const pipelinePid = await readPid(pipelinePidPath);
   try { assert.equal(await waitForProcessToExit(pipelinePid), true, "pipeline child must exit"); } finally { killIfAlive(pipelinePid); }
 
-  const controller = new AbortController();
   const cancelledPidPath = join(directory, "cancelled.pid");
-  const cancelledPromise = runVerification(backgroundNodeCommand(cancelledPidPath, { hold: true }), directory, { signal: controller.signal });
+  const cancelled = runVerificationCancellationUnpreloaded(backgroundNodeCommand(cancelledPidPath, { hold: true }), directory, cancelledPidPath);
   const cancelledPid = await readPid(cancelledPidPath);
-  controller.abort();
-  const cancelled = await cancelledPromise;
   assert.equal(cancelled.cancelled, true);
   try { assert.equal(await waitForProcessToExit(cancelledPid), true, "cancelled child must exit"); } finally { killIfAlive(cancelledPid); }
 });
@@ -307,7 +354,7 @@ test("STORY-384: the synchronous runner uses a detached group and reclaims backg
   const directory = await realpath(await mkdtemp(join(tmpdir(), "tcrn-story384-sync-")));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const pidPath = join(directory, "sync.pid");
-  const result = runVerificationSync(backgroundNodeCommand(pidPath), directory, { timeoutMs: 500 });
+  const result = runVerificationSyncUnpreloaded(backgroundNodeCommand(pidPath), directory, { timeoutMs: 500 });
   assert.equal(result.ok, true);
   const pid = await readPid(pidPath);
   try { assert.equal(await waitForProcessToExit(pid), true, "synchronous child must exit"); } finally { killIfAlive(pid); }

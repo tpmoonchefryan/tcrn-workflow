@@ -300,7 +300,7 @@
         "tests/fixtures/retrieval-eval/translations-sonnet.json",
         "tests/fixtures/retrieval-eval/work-compact.json"
       ],
-      "fixtureDigest": "6d76cf146a3e9a75ff849c8055c0b782bbefe252f39e1f84506910eb4efb97e2",
+      "fixtureDigest": "3f4d680f5c7f9974947767ee79de317e7bfd8fd6f9b470dddfd3b1c9038a8796",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -341,7 +341,7 @@
         "tests/fixtures/retrieval-eval/translations-sonnet.json",
         "tests/fixtures/retrieval-eval/work-compact.json"
       ],
-      "fixtureDigest": "da224c378735cb079901fd48a887d32c0b1d83bbcee83f316b699b27cc2a8eb1",
+      "fixtureDigest": "8b5a58fa3994cf5cbe786c8c69c5c49b20a7b14f9bf7ef15b4f6f6975cf070e2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
