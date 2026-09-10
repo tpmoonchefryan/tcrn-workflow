@@ -198,6 +198,118 @@ const vocabulary = () => cli(["vocabulary"]);
 const commands = () => cli(["commands"]);
 const DISPATCH_SETTING_KEYS = new Set(["execution.dispatchClasses", "execution.dispatchMode", "execution.dispatchModes", "execution.dispatchTiers"]);
 
+function readInstant() {
+  return new Date().toISOString();
+}
+
+async function workProjection() {
+  const selected = currentPartition();
+  const result = await cliResult(["work-list", "--workspace", selected.workspace, "--limit", "4096"]);
+  if (!result.ok) return { ok: false, reasonCode: "PORTAL_WORK_READ_FAILED", source: result.body, records: [], total: 0 };
+  return { ok: true, reasonCode: "PORTAL_WORK_READY", workspaceId: result.body.workspaceId ?? null, version: result.body.version ?? null, headEventHash: result.body.headEventHash ?? null, total: result.body.total ?? result.body.records?.length ?? 0, records: result.body.records ?? [] };
+}
+
+async function knowledgeProjection() {
+  const selected = currentPartition();
+  const at = readInstant();
+  const [listing, retirement] = await Promise.all([
+    cliResult(["knowledge-list", "--workspace", selected.workspace, "--at", at, "--selection", "all", "--allow-trailing", "true"]),
+    cliResult(["retire-proposals", "--workspace", selected.workspace, "--at", at]),
+  ]);
+  return {
+    ok: listing.ok || retirement.ok,
+    reasonCode: listing.ok ? "PORTAL_KNOWLEDGE_READY" : "PORTAL_KNOWLEDGE_PARTIAL",
+    at,
+    listing: listing.body,
+    retirement: retirement.body,
+    records: listing.ok ? (listing.body.records ?? []) : [],
+    total: listing.ok ? (listing.body.total ?? listing.body.records?.length ?? 0) : 0,
+  };
+}
+
+async function gateProjection() {
+  const selected = currentPartition();
+  const result = await cliResult(["gate-list-all", "--workspace", selected.workspace]);
+  if (!result.ok) return { ok: false, reasonCode: "PORTAL_GATES_READ_FAILED", source: result.body, records: [], total: 0 };
+  return { ok: true, reasonCode: "PORTAL_GATES_READY", workspaceId: result.body.workspaceId ?? null, version: result.body.version ?? null, headEventHash: result.body.headEventHash ?? null, total: result.body.total ?? 0, records: result.body.records ?? [] };
+}
+
+async function hostSettingsProjection(host) {
+  const args = [HOST_RENDER, "--host", host, "--workspace", currentPartition().workspace, "--root", defaultProseRoot(), "--plan-only", "--hooks-only"];
+  try {
+    const { stdout } = await execFileAsync(process.execPath, args, { cwd: portalRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+    const body = JSON.parse(stdout);
+    return { ok: true, host, ...body };
+  } catch (error) {
+    return { ok: false, host, ...childResult(error, "PORTAL_HOST_SETTINGS_UNAVAILABLE") };
+  }
+}
+
+async function retrievalEvaluation() {
+  try {
+    const { stdout } = await execFileAsync(process.execPath, [join(portalRoot, "..", "scripts", "retrieval-eval.mjs")], { cwd: portalRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+    const lines = stdout.trim().split("\n").filter((line) => line.length > 0);
+    return JSON.parse(lines.at(-1) ?? "{}");
+  } catch (error) {
+    return childResult(error, "PORTAL_RETRIEVAL_EVAL_UNAVAILABLE");
+  }
+}
+
+function modeStats(records) {
+  const modes = new Map();
+  for (const record of records) {
+    const payload = record?.payload ?? {};
+    const mode = typeof payload.mode === "string" && payload.mode.length > 0 ? payload.mode : "unknown";
+    const current = modes.get(mode) ?? { events: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, inputKnown: false, outputKnown: false, totalKnown: false, reworkKnown: 0, reworkCount: 0 };
+    current.events += 1;
+    const usage = payload.usage;
+    if (usage && typeof usage === "object") {
+      if (typeof usage.inputTokens === "number") { current.inputKnown = true; current.inputTokens += usage.inputTokens; }
+      if (typeof usage.outputTokens === "number") { current.outputKnown = true; current.outputTokens += usage.outputTokens; }
+      if (typeof usage.totalTokens === "number") { current.totalKnown = true; current.totalTokens += usage.totalTokens; }
+    }
+    if (typeof payload.rework === "boolean") { current.reworkKnown += 1; if (payload.rework) current.reworkCount += 1; }
+    modes.set(mode, current);
+  }
+  return Object.fromEntries([...modes.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([mode, value]) => [mode, {
+    events: value.events,
+    inputTokens: value.inputKnown ? value.inputTokens : null,
+    outputTokens: value.outputKnown ? value.outputTokens : null,
+    totalTokens: value.totalKnown ? value.totalTokens : null,
+    reworkRate: value.reworkKnown === 0 ? null : Number((value.reworkCount / value.reworkKnown).toFixed(4)),
+    reworkObserved: value.reworkKnown,
+  }]));
+}
+
+async function evolutionProjection() {
+  const selected = currentPartition();
+  const at = readInstant();
+  const [stats, listing, retirement, retrieval, claude, codex] = await Promise.all([
+    cliResult(["telemetry-stats", "--workspace", selected.workspace]),
+    cliResult(["telemetry-list", "--workspace", selected.workspace, "--limit", "4096"]),
+    cliResult(["retire-proposals", "--workspace", selected.workspace, "--at", at]),
+    retrievalEvaluation(),
+    hostSettingsProjection("claude-code"),
+    hostSettingsProjection("codex"),
+  ]);
+  const telemetryRecords = listing.ok && Array.isArray(listing.body.records) ? listing.body.records : [];
+  const pending = retirement.ok && Array.isArray(retirement.body?.proposals) ? retirement.body.proposals.filter((entry) => entry.automatic === true).length : 0;
+  const retired = retirement.ok && Array.isArray(retirement.body?.retiredRecords) ? retirement.body.retiredRecords.length : 0;
+  return {
+    ok: true,
+    reasonCode: "PORTAL_EVOLUTION_READY",
+    at,
+    partial: !stats.ok || !listing.ok || !retirement.ok || retrieval.ok === false,
+    telemetry: stats.body,
+    modeStats: modeStats(telemetryRecords),
+    retirement: retirement.body,
+    pendingRetirementCount: pending,
+    retiredCount: retired,
+    retrievalEval: retrieval,
+    hosts: [claude, codex],
+  };
+}
+
 async function executionState() {
   const [settings, classes, dispatch] = await Promise.all([
     settingsCatalog(),
@@ -567,6 +679,22 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && pathname === "/api/execution") {
       send(response, 200, await executionState());
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/work") {
+      send(response, 200, await workProjection());
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/knowledge") {
+      send(response, 200, await knowledgeProjection());
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/gates") {
+      send(response, 200, await gateProjection());
+      return;
+    }
+    if (request.method === "GET" && pathname === "/api/evolution") {
+      send(response, 200, await evolutionProjection());
       return;
     }
     if (request.method === "POST" && pathname === "/api/host-probe") {

@@ -119,6 +119,33 @@ test("portal boots from the live engine and exposes the new read surfaces", asyn
   assert.ok(dictionary.body.hosts.includes("codex"));
 });
 
+test("STORY-379 read views use CLI projections and keep partial data visible", async (t) => {
+  const fixture = await scratch("tcrn-portal-views-", "TCRN-PORTAL-VIEWS");
+  const { child, url } = await startPortal(fixture);
+  t.after(async () => { child.kill(); await rm(fixture.base, { recursive: true, force: true }); });
+  const { page, boot } = await readBoot(url);
+  for (const tab of ["work", "knowledge", "gates", "evolution"]) assert.match(page, new RegExp(`data-workspace-tab="${tab}"`, "u"));
+
+  const work = await request(url, "/api/work", readOptions(boot.token));
+  assert.equal(work.body.reasonCode, "PORTAL_WORK_READY");
+  assert.ok(Array.isArray(work.body.records));
+  const knowledge = await request(url, "/api/knowledge", readOptions(boot.token));
+  assert.match(knowledge.body.reasonCode, /^PORTAL_KNOWLEDGE_/u);
+  assert.ok(Array.isArray(knowledge.body.records));
+  const gates = await request(url, "/api/gates", readOptions(boot.token));
+  assert.equal(gates.body.reasonCode, "PORTAL_GATES_READY");
+  assert.ok(Array.isArray(gates.body.records));
+  const evolution = await request(url, "/api/evolution", readOptions(boot.token));
+  assert.equal(evolution.body.reasonCode, "PORTAL_EVOLUTION_READY");
+  assert.ok(evolution.body.retrievalEval.reasonCode);
+  assert.ok(Object.hasOwn(evolution.body, "modeStats"));
+  assert.ok(Array.isArray(evolution.body.hosts));
+
+  const untokened = await request(url, "/api/evolution");
+  assert.equal(untokened.response.status, 403);
+  assert.equal(untokened.body.reasonCode, "PORTAL_TOKEN_REQUIRED");
+});
+
 test("portal writes use actor plus live CAS, then return readback and session audit", async (t) => {
   const fixture = await scratch("tcrn-portal-write-", "TCRN-PORTAL-WRITE");
   const { child, url } = await startPortal(fixture);

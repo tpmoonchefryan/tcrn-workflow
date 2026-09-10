@@ -10,10 +10,11 @@
       ]
     },
     "portal/tests/portal.test.mjs": {
-      "testCount": 20,
-      "assertionCount": 158,
+      "testCount": 21,
+      "assertionCount": 171,
       "testNames": [
         "portal boots from the live engine and exposes the new read surfaces",
+        "STORY-379 read views use CLI projections and keep partial data visible",
         "portal writes use actor plus live CAS, then return readback and session audit",
         "STORY-366: the article endpoint uses knowledge-store CAS and returns the engine receipt unchanged",
         "state surface follows engine version and turns health red on failed status/actor legs",

@@ -3557,6 +3557,35 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
    .dashcols { align-items: start }), and .tcrn-manage / .tcrn-vocabulary here already
    follow it; these two were simply never brought along. */
 .tcrn-dashboard-grid { margin-top: var(--tcrn-space-3); align-items: start; }
+.tcrn-work-tree { display: grid; gap: var(--tcrn-space-2); }
+.tcrn-work-tree__epic { border-bottom: 1px solid var(--tcrn-color-border-subtle); padding-bottom: var(--tcrn-space-2); }
+.tcrn-work-tree__epic:last-child { border-bottom: 0; padding-bottom: 0; }
+.tcrn-work-tree__summary { display: flex; align-items: baseline; justify-content: space-between; gap: var(--tcrn-space-3); cursor: pointer; }
+.tcrn-work-tree__summary strong { min-width: 0; overflow-wrap: anywhere; }
+.tcrn-work-tree__children { display: grid; gap: var(--tcrn-space-1); margin-top: var(--tcrn-space-2); padding-inline-start: var(--tcrn-space-4); }
+.tcrn-work-tree__story { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--tcrn-space-2); padding: var(--tcrn-space-1) 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-work-tree__story:last-child { border-bottom: 0; }
+.tcrn-work-tree__text { min-width: 0; }
+.tcrn-work-tree__key { display: block; color: var(--tcrn-color-text-muted); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); overflow-wrap: anywhere; }
+.tcrn-work-tree__title { display: block; margin-top: var(--tcrn-space-1); overflow-wrap: anywhere; }
+.tcrn-work-tree__missing { color: var(--tcrn-color-state-warning); }
+.tcrn-read-list { display: grid; gap: var(--tcrn-space-1); }
+.tcrn-read-list__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--tcrn-space-3); padding: var(--tcrn-space-2) 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); }
+.tcrn-read-list__row:last-child { border-bottom: 0; }
+.tcrn-read-list__main { min-width: 0; overflow-wrap: anywhere; }
+.tcrn-read-list__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tcrn-space-1); margin-top: var(--tcrn-space-1); }
+.tcrn-read-list__summary { display: block; margin-top: var(--tcrn-space-1); color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-caption); overflow-wrap: anywhere; }
+.tcrn-inline-metrics { display: flex; flex-wrap: wrap; gap: var(--tcrn-space-2); }
+.tcrn-inline-metric { display: grid; gap: var(--tcrn-space-1); min-width: 0; padding: var(--tcrn-space-3); border-radius: var(--tcrn-radius-panel); background: var(--tcrn-color-surface-muted); }
+.tcrn-inline-metric strong { overflow-wrap: anywhere; }
+.tcrn-read-table { width: 100%; border-collapse: collapse; }
+.tcrn-read-table th, .tcrn-read-table td { padding: var(--tcrn-space-2) 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.tcrn-read-table th { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-read-table td + td, .tcrn-read-table th + th { padding-inline-start: var(--tcrn-space-2); }
+.tcrn-proposal-list { display: grid; gap: var(--tcrn-space-2); }
+.tcrn-proposal { display: grid; gap: var(--tcrn-space-1); padding: var(--tcrn-space-2); border-inline-start: 2px solid var(--tcrn-color-state-warning); background: var(--tcrn-color-surface-muted); }
+.tcrn-proposal__diff { color: var(--tcrn-color-text-secondary); font-family: var(--tcrn-type-family-mono); font-size: var(--tcrn-type-size-caption); overflow-wrap: anywhere; }
+.tcrn-unknown { color: var(--tcrn-color-text-muted); }
 .tcrn-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tcrn-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .tcrn-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -3759,7 +3788,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 @media (max-width: 680px) {
   .tcrn-top-bar__module, .tcrn-top-bar__actions .tcrn-search-input, .tcrn-top-bar__partition { display: none; }
   .tcrn-top-bar { padding: 0 var(--tcrn-space-2); }
-  .tcrn-grid--2, .tcrn-grid--3, .tcrn-grid--4, .tcrn-form__row, .tcrn-entity-layout { grid-template-columns: 1fr; }
+  .tcrn-grid--2, .tcrn-grid--3, .tcrn-grid--4, .tcrn-form__row, .tcrn-entity-layout, .tcrn-read-list__row, .tcrn-work-tree__story { grid-template-columns: 1fr; }
   .tcrn-page__head { display: grid; }
   .tcrn-editor-shell { grid-template-columns: 1fr; }
   .tcrn-editor__directory { position: static; }
@@ -4056,11 +4085,15 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
     <main class="tcrn-product-shell__main tcrn-main" id="main-content">
       <section class="tcrn-page" data-page="dashboard">
         <div class="tcrn-page__head"><div><h1 data-i18n="page.dashboard">Workspace overview</h1><p class="tcrn-page__lede" data-i18n="dashboard.lede">A readable status surface for the live governed workspace.</p></div><div class="tcrn-page__actions"><span class="tcrn-badge tcrn-badge--positive" id="health-chip"><span id="health-chip-text" data-i18n="health.healthy">healthy</span></span><button class="tcrn-button" id="audit-button" data-i18n="dashboard.audit">Audit</button></div></div>
-        <div class="tcrn-section-tabs" role="tablist" data-ui="workspace-tabs" aria-label="Workspace views"><button class="tcrn-button" role="tab" aria-selected="true" data-selected="true" data-workspace-tab="overview" data-i18n="dashboard.overview">Overview</button><button class="tcrn-button" role="tab" aria-selected="false" data-selected="false" data-workspace-tab="audit" data-i18n="dashboard.auditTab">Audit</button></div>
+        <div class="tcrn-section-tabs" role="tablist" data-ui="workspace-tabs" aria-label="Workspace views"><button class="tcrn-button" role="tab" aria-selected="true" data-selected="true" data-workspace-tab="overview" data-i18n="dashboard.overview">Overview</button><button class="tcrn-button" role="tab" aria-selected="false" data-selected="false" data-workspace-tab="work" data-i18n="dashboard.work">Work</button><button class="tcrn-button" role="tab" aria-selected="false" data-selected="false" data-workspace-tab="knowledge" data-i18n="dashboard.knowledge">Knowledge</button><button class="tcrn-button" role="tab" aria-selected="false" data-selected="false" data-workspace-tab="gates" data-i18n="dashboard.gates">Gates</button><button class="tcrn-button" role="tab" aria-selected="false" data-selected="false" data-workspace-tab="evolution" data-i18n="dashboard.evolution">Evolution</button><button class="tcrn-button" role="tab" aria-selected="false" data-selected="false" data-workspace-tab="audit" data-i18n="dashboard.auditTab">Audit</button></div>
         <div data-workspace-panel="overview">
           <div class="tcrn-grid tcrn-grid--4"><article class="tcrn-stat-card" data-stat-card="true" data-stat-tone="neutral"><span class="tcrn-stat-card__label" data-i18n="dashboard.chain">Chain version</span><strong class="tcrn-stat-card__value" id="stat-version">—</strong><span class="tcrn-stat-card__note" id="stat-head"></span></article><article class="tcrn-stat-card" data-stat-card="true" data-stat-tone="neutral"><span class="tcrn-stat-card__label" data-i18n="dashboard.events">Events</span><strong class="tcrn-stat-card__value" id="stat-events">—</strong><span class="tcrn-stat-card__note" data-i18n="dashboard.eventsNote">materialized chain</span></article><article class="tcrn-stat-card" data-stat-card="true" data-stat-tone="neutral"><span class="tcrn-stat-card__label" data-i18n="dashboard.engine">Engine</span><strong class="tcrn-stat-card__value" id="stat-engine">—</strong><span class="tcrn-stat-card__note" data-i18n="dashboard.engineNote">local loopback</span></article><article class="tcrn-stat-card" data-stat-card="true" data-stat-tone="neutral"><span class="tcrn-stat-card__label" data-i18n="dashboard.healthCard">Health</span><strong class="tcrn-stat-card__value" id="stat-health">—</strong><span class="tcrn-stat-card__note" data-i18n="dashboard.healthCardNote">read-only checks</span></article></div>
           <div class="tcrn-grid tcrn-grid--2 tcrn-dashboard-grid"><article class="tcrn-surface"><div class="tcrn-surface__head"><div><h2 data-i18n="dashboard.healthTitle">Health</h2><p class="tcrn-surface__note" data-i18n="dashboard.healthNote">Read-only checks from the workspace and engine.</p></div><span class="tcrn-badge tcrn-badge--positive" id="validate-chip">validate</span></div><div class="tcrn-list" id="health-list"></div></article><article class="tcrn-surface"><div class="tcrn-surface__head"><div><h2 data-i18n="dashboard.pathsTitle">Workspace paths</h2><p class="tcrn-surface__note" data-i18n="dashboard.pathsNote">The five explicit roots used by this partition.</p></div></div><div class="tcrn-paths" id="workspace-paths" data-ui="workspace-paths" role="region"></div></article></div>
         </div>
+        <div data-workspace-panel="work" hidden><div class="tcrn-surface" data-ui="work-tree"><div class="tcrn-surface__head"><div><h2 data-i18n="dashboard.workTitle">Work tree</h2><p class="tcrn-surface__note" data-i18n="dashboard.workNote">Initiatives, Epics, and Stories read from the engine.</p></div><span class="tcrn-badge" id="work-count">—</span></div><div id="work-tree-content"></div></div></div>
+        <div data-workspace-panel="knowledge" hidden><div class="tcrn-surface" data-ui="knowledge-view"><div class="tcrn-surface__head"><div><h2 data-i18n="dashboard.knowledgeTitle">Knowledge inventory</h2><p class="tcrn-surface__note" data-i18n="dashboard.knowledgeNote">Cards and article indexes, metadata only.</p></div><span class="tcrn-badge" id="knowledge-count">—</span></div><div id="knowledge-view-content"></div></div></div>
+        <div data-workspace-panel="gates" hidden><div class="tcrn-surface" data-ui="gates-view"><div class="tcrn-surface__head"><div><h2 data-i18n="dashboard.gatesTitle">Gate view</h2><p class="tcrn-surface__note" data-i18n="dashboard.gatesNote">Gates grouped by their work item.</p></div><span class="tcrn-badge" id="gates-count">—</span></div><div id="gates-view-content"></div></div></div>
+        <div data-workspace-panel="evolution" hidden><div class="tcrn-surface" data-ui="evolution-dashboard"><div class="tcrn-surface__head"><div><h2 data-i18n="dashboard.evolutionTitle">Evolution dashboard</h2><p class="tcrn-surface__note" data-i18n="dashboard.evolutionNote">Telemetry, retirement proposals, and retrieval evaluation.</p></div><span class="tcrn-badge" id="evolution-at">—</span></div><div class="tcrn-grid tcrn-grid--4" id="evolution-stats"></div><div class="tcrn-grid tcrn-grid--2 tcrn-dashboard-grid"><article class="tcrn-surface"><div class="tcrn-surface__head"><div><h3 data-i18n="dashboard.evolutionRetirementTitle">Retirement</h3><p class="tcrn-surface__note" data-i18n="dashboard.evolutionRetirementNote">Automatic cards and read-only removal diffs.</p></div></div><div id="evolution-retirement"></div></article><article class="tcrn-surface"><div class="tcrn-surface__head"><div><h3 data-i18n="dashboard.evolutionEvalTitle">Retrieval evaluation</h3><p class="tcrn-surface__note" data-i18n="dashboard.evolutionEvalNote">Latest frozen-corpus result.</p></div></div><div id="evolution-eval"></div></article></div><div class="tcrn-grid tcrn-grid--2 tcrn-dashboard-grid"><article class="tcrn-surface"><div class="tcrn-surface__head"><div><h3 data-i18n="dashboard.evolutionModesTitle">Modes and usage</h3><p class="tcrn-surface__note" data-i18n="dashboard.evolutionModesNote">Unknown denominators stay visible.</p></div></div><div id="evolution-modes"></div></article><article class="tcrn-surface"><div class="tcrn-surface__head"><div><h3 data-i18n="dashboard.evolutionHostsTitle">Host render state</h3><p class="tcrn-surface__note" data-i18n="dashboard.evolutionHostsNote">Read-only managed-field drift.</p></div></div><div id="evolution-hosts"></div></article></div></div></div>
         <div data-workspace-panel="audit" hidden><article class="tcrn-surface"><div class="tcrn-surface__head"><div><h2 data-i18n="dashboard.auditTitle">This session</h2><p class="tcrn-surface__note" data-i18n="dashboard.auditNote">Every attempted governed write stays visible.</p></div></div><div class="tcrn-work-activity-feed" id="dashboard-audit"></div></article></div>
       </section>
       <section class="tcrn-page tcrn-page--manage" data-page="settings" hidden>
@@ -4103,7 +4136,7 @@ const BOOT = __PORTAL_BOOT__;
   const storedTheme = tcrnReadPreference("theme", ["light", "dark"], null);
   const machineTheme = ["light", "dark"].includes(BOOT.machineDefaults?.theme) ? BOOT.machineDefaults.theme : null;
   if (storedTheme === null && machineTheme !== null) document.documentElement.dataset.tcrnTheme = machineTheme;
-  const state = { locale: storedLocale ?? (Object.keys(LOCALES).includes(BOOT.machineDefaults?.locale) ? BOOT.machineDefaults.locale : null) ?? BOOT.defaultLocale ?? "en", theme: document.documentElement.dataset.tcrnTheme, page: "dashboard", dashboardTab: "overview", settingGroup: "workspace", settings: null, machineSettings: null, execution: null, vocabulary: null, status: null, commands: [], audit: [], selectedVocabulary: "roles", receipt: null, dispatchNotice: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
+  const state = { locale: storedLocale ?? (Object.keys(LOCALES).includes(BOOT.machineDefaults?.locale) ? BOOT.machineDefaults.locale : null) ?? BOOT.defaultLocale ?? "en", theme: document.documentElement.dataset.tcrnTheme, page: "dashboard", dashboardTab: "overview", settingGroup: "workspace", settings: null, machineSettings: null, execution: null, vocabulary: null, status: null, work: null, knowledge: null, gates: null, evolution: null, commands: [], audit: [], selectedVocabulary: "roles", receipt: null, dispatchNotice: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const esc = (value) => String(value ?? "").replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]);
@@ -4403,6 +4436,74 @@ const BOOT = __PORTAL_BOOT__;
     $$('[data-vocabulary-link]').forEach((button) => button.addEventListener("click", () => { state.selectedVocabulary = button.dataset.vocabularyLink; navigate("vocabulary"); renderVocabulary(); }));
     attachEcho($("#settings-rows"));
   };
+  const statusBadge = (value, tone = "") => `<span class="tcrn-badge ${tone ? `tcrn-badge--${tone}` : ""}">${esc(value ?? "—")}</span>`;
+  const statusTone = (value) => ["done", "satisfied", "active", "ready"].includes(String(value)) ? "positive" : ["blocked", "cancelled", "failed", "retired"].includes(String(value)) ? "danger" : "";
+  const unknownValue = (value) => value === null || value === undefined || value === "" ? `<span class="tcrn-unknown">${esc(t("dashboard.unknown"))}</span>` : esc(value);
+  const renderWorkView = () => {
+    const data = state.work;
+    const records = Array.isArray(data?.records) ? data.records : [];
+    const initiative = records.find((entry) => entry.externalKey === "TCRN-CROSS-INIT-051");
+    const epics = initiative === undefined ? [] : records.filter((entry) => entry.parentId === initiative.id && entry.kind === "Epic").sort((left, right) => String(left.externalKey).localeCompare(String(right.externalKey)));
+    setText("#work-count", `${epics.length} ${t("dashboard.epics")}`);
+    if (initiative === undefined) {
+      $("#work-tree-content").innerHTML = `<div class="tcrn-state-surface">${esc(data?.reasonCode ?? t("dashboard.noWork"))}</div>`;
+      return;
+    }
+    const summaryFor = (entry) => entry.summary || entry.title || t("dashboard.missingSummary");
+    const storyRows = (epic) => records.filter((entry) => entry.parentId === epic.id && entry.kind === "Story").sort((left, right) => String(left.externalKey).localeCompare(String(right.externalKey))).map((entry) => `<div class="tcrn-work-tree__story" role="treeitem" data-work-id="${esc(entry.id)}"><div class="tcrn-work-tree__text"><code class="tcrn-work-tree__key">${esc(entry.externalKey)}</code><span class="tcrn-work-tree__title ${entry.summary || entry.title ? "" : "tcrn-work-tree__missing"}">${esc(summaryFor(entry))}</span></div>${statusBadge(entry.status, statusTone(entry.status))}</div>`).join("") || `<div class="tcrn-meta">${esc(t("dashboard.noStories"))}</div>`;
+    $("#work-tree-content").innerHTML = `<div class="tcrn-work-tree" role="tree" aria-label="${esc(t("dashboard.workTreeLabel"))}">${epics.map((epic) => `<details class="tcrn-work-tree__epic" open role="treeitem" data-work-id="${esc(epic.id)}"><summary class="tcrn-work-tree__summary"><span><code class="tcrn-work-tree__key">${esc(epic.externalKey)}</code><strong>${esc(summaryFor(epic))}</strong></span>${statusBadge(epic.status, statusTone(epic.status))}</summary><div class="tcrn-work-tree__children" role="group">${storyRows(epic)}</div></details>`).join("")}</div>`;
+  };
+  const renderKnowledgeView = () => {
+    const data = state.knowledge;
+    const records = Array.isArray(data?.records) ? data.records : [];
+    setText("#knowledge-count", `${records.length} ${t("dashboard.records")}`);
+    if (records.length === 0) {
+      $("#knowledge-view-content").innerHTML = `<div class="tcrn-state-surface">${esc(data?.listing?.reasonCode ?? t("dashboard.knowledgeEmpty"))}</div>`;
+      return;
+    }
+    $("#knowledge-view-content").innerHTML = `<div class="tcrn-read-list" role="list">${records.slice(0, 160).map((record) => {
+      const retired = record.lifecycle === "retired";
+      const label = retired ? t("dashboard.retired") : record.lifecycle === "candidate" ? t("dashboard.candidate") : t("dashboard.active");
+      const retirement = record.retirement?.reason ? ` · ${record.retirement.reason}` : "";
+      return `<div class="tcrn-read-list__row" role="listitem" data-knowledge-id="${esc(record.id)}"><div class="tcrn-read-list__main"><strong>${esc(record.subject || record.externalKey || record.id)}</strong><span class="tcrn-read-list__summary">${esc(record.summary || t("dashboard.missingSummary"))}</span><span class="tcrn-read-list__meta"><code>${esc(record.id)}</code><span class="tcrn-badge">${esc(record.kind || "—")}</span>${statusBadge(label, retired ? "danger" : "positive")}<span class="tcrn-meta">${esc(retirement)}</span></span></div></div>`;
+    }).join("")}</div>${records.length > 160 ? `<p class="tcrn-scope-note">${esc(t("dashboard.showingFirst", { count: 160 }))}</p>` : ""}`;
+  };
+  const renderGatesView = () => {
+    const data = state.gates;
+    const records = Array.isArray(data?.records) ? data.records : [];
+    const works = new Map((state.work?.records || []).map((entry) => [entry.id, entry.externalKey || entry.id]));
+    setText("#gates-count", `${records.length} ${t("dashboard.gatesCount")}`);
+    if (records.length === 0) {
+      $("#gates-view-content").innerHTML = `<div class="tcrn-state-surface">${esc(data?.reasonCode ?? t("dashboard.gatesEmpty"))}</div>`;
+      return;
+    }
+    $("#gates-view-content").innerHTML = `<div class="tcrn-read-list" role="list">${records.slice(0, 240).map((gate) => `<div class="tcrn-read-list__row" role="listitem"><div class="tcrn-read-list__main"><strong>${esc(gate.title || gate.externalKey || gate.id)}</strong><span class="tcrn-read-list__summary">${esc(works.get(gate.workId) || gate.workId || t("dashboard.noWorkLink"))}</span><span class="tcrn-read-list__meta"><code>${esc(gate.id)}</code><span class="tcrn-badge">${esc(gate.outcomeClass || "—")}</span>${statusBadge(gate.status, statusTone(gate.status))}</span></div></div>`).join("")}</div>${records.length > 240 ? `<p class="tcrn-scope-note">${esc(t("dashboard.showingFirst", { count: 240 }))}</p>` : ""}`;
+  };
+  const renderEvolutionView = () => {
+    const data = state.evolution || {};
+    const telemetry = data.telemetry || {};
+    const usage = telemetry.usage || {};
+    const retirement = data.retirement || {};
+    setText("#evolution-at", String(data.at || "—").slice(0, 10));
+    $("#evolution-stats").innerHTML = [
+      [t("dashboard.evolutionTelemetry"), telemetry.records, t("dashboard.records")],
+      [t("dashboard.evolutionModes"), Object.keys(data.modeStats || {}).length, t("dashboard.modes")],
+      [t("dashboard.evolutionTokens"), usage.totalTokens ?? t("dashboard.unknown"), t("dashboard.tokens")],
+      [t("dashboard.evolutionPending"), data.pendingRetirementCount ?? t("dashboard.unknown"), t("dashboard.items")],
+    ].map(([label, value, note]) => `<article class="tcrn-inline-metric"><span class="tcrn-meta">${esc(label)}</span><strong>${unknownValue(value)}</strong><span class="tcrn-meta">${esc(note)}</span></article>`).join("");
+    const proposals = Array.isArray(retirement.proposals) ? retirement.proposals : [];
+    const retired = Array.isArray(retirement.retiredRecords) ? retirement.retiredRecords : [];
+    const windowLabel = retirement.windowComplete === true ? t("dashboard.completeWindow") : `${t("dashboard.incompleteWindow")} · ${(retirement.missingDays || []).length} ${t("dashboard.missingDays")}`;
+    $("#evolution-retirement").innerHTML = `<div class="tcrn-read-list"><div class="tcrn-read-list__row"><div class="tcrn-read-list__main"><strong>${esc(windowLabel)}</strong><span class="tcrn-read-list__summary">${esc(t("dashboard.lastSweep"))}: ${unknownValue(retirement.lastSweepAt || null)}</span></div></div>${proposals.slice(0, 12).map((proposal) => `<div class="tcrn-proposal"><strong>${esc(proposal.id)}</strong><span class="tcrn-proposal__diff">${esc(proposal.automatic ? t("dashboard.autoRetireProposal") : t("dashboard.ruleDiffProposal"))} · ${esc(proposal.baseDigest || t("dashboard.unknown"))}</span><span class="tcrn-meta">${esc(t("dashboard.impact"))}: ${esc(String(proposal.retrievalCount ?? "—"))} / ${esc(String(proposal.referenceCount ?? "—"))}</span></div>`).join("")}${retired.slice(0, 12).map((record) => `<div class="tcrn-read-list__row"><div class="tcrn-read-list__main"><strong>${esc(record.id)}</strong><span class="tcrn-read-list__summary">${esc(t("dashboard.retired"))} · ${esc(record.retirement?.reason || t("dashboard.unknown"))}</span></div>${statusBadge(t("dashboard.retired"), "danger")}</div>`).join("")}${proposals.length === 0 && retired.length === 0 ? `<div class="tcrn-state-surface">${esc(t("dashboard.noProposals"))}</div>` : ""}</div>`;
+    const evaluation = data.retrievalEval || {};
+    $("#evolution-eval").innerHTML = evaluation.ok === true
+      ? `<div class="tcrn-inline-metrics"><div class="tcrn-inline-metric"><span class="tcrn-meta">${esc(t("dashboard.evalPairs"))}</span><strong>${unknownValue(evaluation.incidentReplay?.pairs)}</strong></div><div class="tcrn-inline-metric"><span class="tcrn-meta">${esc(t("dashboard.evalHitAt8"))}</span><strong>${unknownValue(evaluation.incidentReplay?.hitAt8)}</strong></div></div><p class="tcrn-scope-note">${esc(evaluation.reasonCode || t("dashboard.evalPass"))}</p>`
+      : `<div class="tcrn-state-surface">${esc(evaluation.reasonCode || t("dashboard.evalUnavailable"))}</div>`;
+    const modes = Object.entries(data.modeStats || {});
+    $("#evolution-modes").innerHTML = modes.length === 0 ? `<div class="tcrn-state-surface">${esc(t("dashboard.noModeData"))}</div>` : `<table class="tcrn-read-table"><thead><tr><th>${esc(t("dashboard.mode"))}</th><th>${esc(t("dashboard.events"))}</th><th>${esc(t("dashboard.rework"))}</th><th>${esc(t("dashboard.totalTokens"))}</th></tr></thead><tbody>${modes.map(([mode, value]) => `<tr><td><code>${esc(mode)}</code></td><td>${unknownValue(value.events)}</td><td>${unknownValue(value.reworkRate === null ? null : `${value.reworkRate * 100}%`)}</td><td>${unknownValue(value.totalTokens)}</td></tr>`).join("")}</tbody></table>`;
+    const hosts = Array.isArray(data.hosts) ? data.hosts : [];
+    $("#evolution-hosts").innerHTML = hosts.length === 0 ? `<div class="tcrn-state-surface">${esc(t("dashboard.hostsUnavailable"))}</div>` : `<div class="tcrn-read-list">${hosts.map((host) => { const plan = host.plan || {}; const drift = Array.isArray(plan.drift) ? plan.drift.length : null; const fields = Object.entries(plan.resolutions || {}).slice(0, 12).map(([name, value]) => `${name}: ${value?.model || t("dashboard.unknown")} / ${value?.effort || t("dashboard.unknown")}`).join(" · "); return `<div class="tcrn-read-list__row"><div class="tcrn-read-list__main"><strong>${esc(host.host)}</strong><span class="tcrn-read-list__summary">${esc(plan.reasonCode || host.reasonCode || t("dashboard.unknown"))} · ${esc(t("dashboard.drift"))}: ${unknownValue(drift)}</span><span class="tcrn-read-list__summary">${esc(t("dashboard.hostFields"))}: ${esc(fields || t("dashboard.unknown"))}</span></div>${statusBadge(plan.reasonCode || host.reasonCode || t("dashboard.unknown"), plan.drift?.length ? "danger" : "positive")}</div>`; }).join("")}</div>`;
+  };
   const renderDashboard = () => {
     const execution = state.execution || {};
     const status = state.status || {};
@@ -4423,6 +4524,10 @@ const BOOT = __PORTAL_BOOT__;
     $("#validate-chip").className = `tcrn-badge ${healthy ? "tcrn-badge--positive" : "tcrn-badge--danger"}`;
     $("#workspace-paths").innerHTML = Object.entries(BOOT.paths || {}).map(([key, value]) => `<div class="tcrn-path"><strong>${esc(key)}</strong><span class="tcrn-path__value" title="${esc(value)}">${esc(value)}</span><button type="button" type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md tcrn-icon-button" data-ui="path-copy" data-path="${esc(value)}" aria-label="${esc(t("dashboard.copyPath"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-1a1.5 1.5 0 0 0-1.5-1.5H4a1.5 1.5 0 0 0-1.5 1.5v5A1.5 1.5 0 0 0 4 11h1"/></svg></button></div>`).join("");
     $$('[data-path]').forEach((button) => button.addEventListener("click", async () => { try { await navigator.clipboard.writeText(button.dataset.path); button.textContent = "✓"; setTimeout(() => { button.textContent = "⧉"; }, 700); } catch { setText("#echo-command", t("dashboard.copyUnavailable")); } }));
+    renderWorkView();
+    renderKnowledgeView();
+    renderGatesView();
+    renderEvolutionView();
     renderAudit("#dashboard-audit");
   };
   // Each vocabulary domain is a table of its own fields, not one paragraph per term:
@@ -4634,7 +4739,7 @@ const BOOT = __PORTAL_BOOT__;
     await refresh();
   });
   const loadPartitions = () => { const select = $("#partition-select"); select.innerHTML = (BOOT.partitions || [{ id: "workspace" }]).map((partition) => `<option value="${esc(partition.id)}" ${partition.id === BOOT.selectedPartition ? "selected" : ""}>${esc(partition.id)}</option>`).join(""); select.disabled = !BOOT.partitionMode; };
-  const refresh = async () => { try { const [settings, execution, vocabularyResult, status, commandsResult, audit, machine] = await Promise.all([api("/api/settings"), api("/api/execution"), api("/api/vocabulary"), api("/api/status"), api("/api/commands"), api("/api/session-audit"), api("/api/machine-settings")]); state.machineSettings = machine; state.settings = settings; state.execution = execution; state.vocabulary = vocabularyResult; state.status = status; state.commands = commandsResult.commands || []; state.audit = audit.writes || []; renderDashboard(); renderSettings(); renderVocabulary(); rebuildSearchIndex(); } catch (error) { state.status = { ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE", checks: [{ key: "validate", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "catalog", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "actor", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }] }; renderDashboard(); showReceipt({ ok: false, reasonCode: "PORTAL_READ_FAILED", error: String(error?.message ?? error) }); } };
+  const refresh = async () => { try { const [settings, execution, vocabularyResult, status, commandsResult, audit, machine, work, knowledge, gates, evolution] = await Promise.all([api("/api/settings"), api("/api/execution"), api("/api/vocabulary"), api("/api/status"), api("/api/commands"), api("/api/session-audit"), api("/api/machine-settings"), api("/api/work"), api("/api/knowledge"), api("/api/gates"), api("/api/evolution")]); state.machineSettings = machine; state.settings = settings; state.execution = execution; state.vocabulary = vocabularyResult; state.status = status; state.work = work; state.knowledge = knowledge; state.gates = gates; state.evolution = evolution; state.commands = commandsResult.commands || []; state.audit = audit.writes || []; renderDashboard(); renderSettings(); renderVocabulary(); rebuildSearchIndex(); } catch (error) { state.status = { ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE", checks: [{ key: "validate", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "catalog", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "actor", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }] }; renderDashboard(); showReceipt({ ok: false, reasonCode: "PORTAL_READ_FAILED", error: String(error?.message ?? error) }); } };
   const rebuildSearchIndex = () => {
     const rows = [];
     for (const entry of state.settings?.settings || []) {

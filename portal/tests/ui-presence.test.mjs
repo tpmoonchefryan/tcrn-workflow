@@ -25,6 +25,10 @@ const COMPONENTS = Object.freeze([
   ["prose finding link", '[data-ui="prose-finding-link"]'],
   ["article form surface", '[data-ui="article-form-surface"]'],
   ["workspace paths", '[data-ui="workspace-paths"]'],
+  ["work tree", '[data-ui="work-tree"]'],
+  ["knowledge view", '[data-ui="knowledge-view"]'],
+  ["gates view", '[data-ui="gates-view"]'],
+  ["evolution dashboard", '[data-ui="evolution-dashboard"]'],
   ["path copy control", '[data-ui="path-copy"]'],
   ["partition switcher", '[data-ui="partition-switcher"]'],
   ["engine connection", '[data-ui="engine-connection"]'],
@@ -753,6 +757,26 @@ if (process.argv[2] === "status" && actual.status === 0) {
         "the mobile toggle must become visible inside the 760px breakpoint");
       assert.match(css, /@media \(max-width: 760px\)[\s\S]*?data-mobile-nav-expanded="true"[\s\S]*?\.tcrn-side-nav\s*\{[\s\S]*?display:\s*grid/u,
         "the expanded attribute must be what reveals the side nav inside the 760px breakpoint");
+    } finally { await page.cleanup(); }
+  });
+
+  test("STORY-379 GWT2/GWT3: work, knowledge, gates, and evolution views are reachable, read-only, and translated", async () => {
+    const page = await preparePage();
+    try {
+      page.document.querySelector('[data-page-target="dashboard"]')?.click();
+      for (const target of ["work", "knowledge", "gates", "evolution"]) {
+        page.document.querySelector(`[data-workspace-tab="${target}"]`)?.click();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        assert.equal(page.document.querySelector(`[data-workspace-panel="${target}"]`)?.hidden, false, `${target} panel must be reachable`);
+      }
+      const evolution = page.document.querySelector('[data-ui="evolution-dashboard"]');
+      assert.equal(evolution?.querySelectorAll("button").length, 0, "evolution retirement is read-only and has no confirmation control");
+      for (const locale of ["en", "zh-CN", "ja", "ko", "fr"]) {
+        page.document.querySelector(`[data-locale-option="${locale}"]`)?.click();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        assert.equal(page.document.documentElement.lang, locale);
+        assert.notEqual(page.document.querySelector('[data-i18n="dashboard.evolutionTitle"]')?.textContent, "dashboard.evolutionTitle");
+      }
     } finally { await page.cleanup(); }
   });
 }

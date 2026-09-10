@@ -45,6 +45,8 @@
     "tcrn-grid",
     "tcrn-highlight",
     "tcrn-input",
+    "tcrn-inline-metric",
+    "tcrn-inline-metrics",
     "tcrn-line-numbered-editor",
     "tcrn-list",
     "tcrn-machine-token",
@@ -58,7 +60,11 @@
     "tcrn-paths",
     "tcrn-portal-note",
     "tcrn-product-shell",
+    "tcrn-proposal",
+    "tcrn-proposal-list",
     "tcrn-rail",
+    "tcrn-read-list",
+    "tcrn-read-table",
     "tcrn-readback-panel",
     "tcrn-scope-note",
     "tcrn-search-input",
@@ -72,7 +78,9 @@
     "tcrn-subnav",
     "tcrn-surface",
     "tcrn-top-bar",
+    "tcrn-unknown",
     "tcrn-vocabulary",
-    "tcrn-work-activity-feed"
+    "tcrn-work-activity-feed",
+    "tcrn-work-tree"
   ]
 }
