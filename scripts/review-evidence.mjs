@@ -18,7 +18,7 @@ import { countCoverage } from "./coverage-conservation.mjs";
 
 export const REVIEW_EVIDENCE_VERSION = "tcrn.review-evidence.v1";
 export const REVIEW_OUTPUT_BYTES = 65_536;
-export const REVIEW_COMMAND_TIMEOUT_MS = 180_000;
+export const REVIEW_COMMAND_TIMEOUT_MS = 600_000;
 
 const REPOSITORY_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const DEFAULT_ENGINE = resolve(REPOSITORY_ROOT, "scripts/tcrn-workflow.mjs");
