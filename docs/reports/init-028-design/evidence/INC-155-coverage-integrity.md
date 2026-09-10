@@ -60,8 +60,8 @@
       "reasonCode": "COVERAGE_BASELINE_INCOMPLETE",
       "baselineCompleteness": {
         "ok": false,
-        "expectedFiles": 127,
-        "currentFiles": 128,
+        "expectedFiles": 136,
+        "currentFiles": 137,
         "missingFiles": [
           "tests/s244-model-plan.test.mjs"
         ],
@@ -98,8 +98,8 @@
       "ok": true,
       "baselineCompleteness": {
         "ok": true,
-        "expectedFiles": 128,
-        "currentFiles": 128,
+        "expectedFiles": 137,
+        "currentFiles": 137,
         "missingFiles": [],
         "staleFiles": []
       }
@@ -110,7 +110,11 @@
 
 关键红点分别是：删除 s244 test 块红并指名文件（即使当前计数因新增测试未下降）；不更新基线红并列出新文件；
 保留 test 名但抽空断言仍红且 `removedTests=[]`、`assertionLoss=27`；恢复后
-128/128 完整性与守恒同时转绿。
+137/137 完整性与守恒同时转绿。
+
+2026-09-11（TCRN-CROSS-INC-296）按脚本完整输出重录以上块：遗漏一项时
+136/137 为红，恢复后 137/137 为绿。原文后续的历史 128 条目说明保留为当时事实；
+本次未减少基线成员，也未改动 waiver 或断言判据。
 
 第二十五次重录（2026-09-09，TCRN-CROSS-STORY-369）：本单保留覆盖基线的 128 个文件，改写九个既有测试文件的 AST 计数；被 Requirement 推翻的旧测试名通过带 `replacement` 的 coverage waiver 逐条承接，未删除测试文件或基线成员。
 
