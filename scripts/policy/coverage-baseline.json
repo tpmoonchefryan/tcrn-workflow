@@ -1124,10 +1124,14 @@
       ]
     },
     "tests/platform-doctor.test.mjs": {
-      "testCount": 49,
-      "assertionCount": 176,
+      "testCount": 70,
+      "assertionCount": 288,
       "testNames": [
         "a complete synthetic platform container is green",
+        "STORY-371: Claude's bridge is exact and arbitrary prose is red",
+        "STORY-371: host-render drift is a named platform check",
+        "INC-247: the container-root platform docs location is canonical",
+        "INC-247: the former classification-folder docs location is rejected",
         "STORY-300: an absent acceptance roster is a red leg, not a tolerated gap",
         "STORY-300: an acceptance roster that lost a group is refused with the count",
         "STORY-300: an untracked platform identity file is a red leg",
@@ -1137,6 +1141,7 @@
         "a missing platform AGENTS.md is named separately",
         "a missing chain container is a distinct red leg",
         "a container inside Git ancestry is refused",
+        "the container whitelist repository is allowed, while code-repository ancestry is not",
         "a missing Claude bridge is named separately",
         "an empty misplaced AGENTS.md remains visible before the root is repaired",
         "a missing --platform-root argument fails closed",
@@ -1175,7 +1180,23 @@
         "INC-224: crossing the trigger is red, with the remaining headroom and whose call it is",
         "INC-224: every partition over the trigger is named, largest first",
         "INC-234: missing, stale and red verdicts are each refused, and named",
-        "INC-234: the refusal says a record of a run is not proof the run passed"
+        "INC-246: an accepted red names its exact reason and does not exempt the group",
+        "INC-250: each verdict binds to the repository named by its roster entry",
+        "INC-251: live chain validation enumerates current partitions and reports elapsed time",
+        "INC-251: one live partition failure names that partition and reason",
+        "INC-250: an unresolvable roster repository is a named red condition, never an engine fallback",
+        "INC-234: the refusal says a record of a run is not proof the run passed",
+        "STORY-304: a verdict recorded against another commit is stale, and names both",
+        "STORY-304: verdicts recorded against the inspected commit pass",
+        "STORY-304: a verdict that names no commit is refused as unbound",
+        "INC-250: an unresolved declared repository is red rather than an engine-HEAD fallback",
+        "proofBudget is neutral when the platform root carries no proof-budget policy",
+        "proofBudget compares each of the three counts to its own cap independently",
+        "retiring surface and lowering its cap together turns a red case green",
+        "unusedExports is neutral when the platform root carries no core-export consumer policy",
+        "unusedExports names the export that is not already recorded as isolated",
+        "a recorded allowance that gained a consumer or lost its symbol is its own red",
+        "coreExportedSymbols reads declarations, value blocks and type blocks alike"
       ]
     },
     "tests/preflight.test.mjs": {
@@ -1909,6 +1930,16 @@
         "STORY-299: an over-budget projection is refused with the chain untouched",
         "STORY-299: a view write failure after commit keeps the command successful and the fact durable",
         "STORY-299: the budget report covers every view and the record cap"
+      ]
+    },
+    "tests/host-render.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 35,
+      "testNames": [
+        "STORY-371: Claude rendering preserves user fields, writes tier fields, and proves idempotent drift",
+        "STORY-371: Codex rendering changes only root model keys and generated hooks",
+        "STORY-371: an empty main tier is an explicit no-write plan",
+        "STORY-371: a target change between planning and writing is refused before any host write"
       ]
     }
   }

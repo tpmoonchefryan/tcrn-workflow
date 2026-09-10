@@ -143,6 +143,29 @@ test("a complete synthetic platform container is green", async (context) => {
   assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true, true, true, true]);
 });
 
+test("STORY-371: Claude's bridge is exact and arbitrary prose is red", async (context) => {
+  const invalid = await fixture(context, { claude: "@OTHER.md\n" });
+  const red = await inspectPlatform(invalid, { includeInstallSurface: false });
+  const redBridge = red.checks.find((entry) => entry.name === "claudeBridge");
+  assert.equal(redBridge.ok, false);
+  assert.equal(redBridge.reasonCode, "PLATFORM_CLAUDE_BRIDGE_INVALID");
+
+  const whitespace = await fixture(context, { claude: " @AGENTS.md \n\n" });
+  const green = await inspectPlatform(whitespace, { includeInstallSurface: false });
+  assert.equal(green.checks.find((entry) => entry.name === "claudeBridge").ok, true);
+});
+
+test("STORY-371: host-render drift is a named platform check", async (context) => {
+  const root = await fixture(context);
+  const result = await inspectPlatform(root, {
+    hostRenderDrift: { ok: false, reasonCode: "PLATFORM_HOST_RENDER_DRIFTED", drift: [{ path: ".claude/agents/implement.md" }] },
+  });
+  const check = result.checks.find((entry) => entry.name === "hostRenderDrift");
+  assert.equal(check.ok, false);
+  assert.equal(check.reasonCode, "PLATFORM_HOST_RENDER_DRIFTED");
+  assert.deepEqual(check.drift, [{ path: ".claude/agents/implement.md" }]);
+});
+
 test("INC-247: the container-root platform docs location is canonical", async (context) => {
   const root = await fixture(context, { docsDirectory: "platform-docs" });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
@@ -281,7 +304,7 @@ test("S259 bridge syntax names a double-at reference independently", async (cont
   const root = await fixture(context, { claude: "@@\n" });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
   const bridge = result.checks.find((item) => item.name === "bridgeSyntax");
-  assert.equal(result.reasonCode, "PLATFORM_BRIDGE_SYNTAX_INVALID");
+  assert.equal(bridge.reasonCode, "PLATFORM_BRIDGE_SYNTAX_INVALID");
   assert.equal(bridge.failures[0].path, "CLAUDE.md");
   assert.equal(bridge.failures[0].line, 1);
 });
@@ -290,7 +313,7 @@ test("S259 bridge syntax names a dangling target independently", async (context)
   const root = await fixture(context, { claude: "@missing-bridge.md\n" });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
   const bridge = result.checks.find((item) => item.name === "bridgeSyntax");
-  assert.equal(result.reasonCode, "PLATFORM_BRIDGE_TARGET_UNAVAILABLE");
+  assert.equal(bridge.reasonCode, "PLATFORM_BRIDGE_TARGET_UNAVAILABLE");
   assert.equal(bridge.failures[0].path, "CLAUDE.md");
   assert.equal(bridge.failures[0].target, "missing-bridge.md");
 });

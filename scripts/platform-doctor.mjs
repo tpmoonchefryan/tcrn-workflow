@@ -27,6 +27,7 @@ import {
   codexHookDocument,
   hookEntriesFor,
 } from "./host-harness.mjs";
+import { inspectHostRenderDrift as inspectRenderedHostDrift } from "./host-render.mjs";
 import { toPosixPath, walkFiles } from "./lib/files.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -1305,7 +1306,64 @@ async function inspectClaudeBridge(root) {
   if (!stats || !stats.isFile()) return check("claudeBridge", false, { reasonCode: "PLATFORM_CLAUDE_BRIDGE_MISSING", path: "CLAUDE.md" });
   const content = await readFile(path, "utf8");
   if (content.trim().length === 0) return check("claudeBridge", false, { reasonCode: "PLATFORM_CLAUDE_BRIDGE_EMPTY", path: "CLAUDE.md" });
-  return check("claudeBridge", true, { path: "CLAUDE.md" });
+  if (content.replace(/\s+/gu, "") !== "@AGENTS.md") {
+    return check("claudeBridge", false, { reasonCode: "PLATFORM_CLAUDE_BRIDGE_INVALID", path: "CLAUDE.md", expected: "@AGENTS.md" });
+  }
+  return check("claudeBridge", true, { path: "CLAUDE.md", target: "AGENTS.md" });
+}
+
+// STORY-371. Compare the renderer-owned host fields with the current disk state. A
+// workspace without a resolved main model is explicitly unconfigured, so this leg does
+// not invent a target from an empty tier table.
+export async function inspectHostRenderDrift(root, options) {
+  if (options.hostRenderDrift && typeof options.hostRenderDrift === "object") {
+    const supplied = options.hostRenderDrift;
+    return check("hostRenderDrift", supplied.ok !== false, {
+      reasonCode: supplied.reasonCode ?? (supplied.ok === false ? "PLATFORM_HOST_RENDER_DRIFTED" : "PLATFORM_HOST_RENDER_CURRENT"),
+      ...supplied,
+      source: "synthetic host-render projection",
+    });
+  }
+  let settings = options.hostRenderSettings;
+  let workspace = options.hostRenderWorkspace;
+  if (!Array.isArray(settings)) {
+    const container = join(root, CHAIN_CONTAINER_DIRECTORY);
+    let entries = [];
+    try { entries = await readdir(container, { withFileTypes: true }); } catch { entries = []; }
+    const candidates = entries.filter((entry) => entry.isDirectory()).map((entry) => join(container, entry.name, "workspace"));
+    workspace = workspace ?? candidates.find((candidate) => candidate.endsWith(`${sep}cross-project${sep}workspace`)) ?? candidates[0];
+    if (workspace) {
+      const cli = options.engineCli ?? join(dirname(fileURLToPath(import.meta.url)), "tcrn-workflow.mjs");
+      try {
+        const result = await execFileAsync(process.execPath, [cli, "settings-catalog", "--workspace", workspace], { timeout: 30_000, maxBuffer: 8 * 1024 * 1024 });
+        const catalog = JSON.parse(result.stdout);
+        settings = catalog.settings;
+      } catch {
+        settings = null;
+      }
+    }
+  }
+  if (!Array.isArray(settings)) return check("hostRenderDrift", true, { comparable: false, reasonCode: "PLATFORM_HOST_RENDER_UNREADABLE", source: "dispatch settings + host-render projection" });
+  const hosts = Array.isArray(options.hostRenderHosts) && options.hostRenderHosts.length > 0 ? options.hostRenderHosts : ["claude-code", "codex"];
+  const repoRoot = options.hostRenderRepoRoot ?? join(root, "TCRN Platform", "tcrn-workflow");
+  const rows = [];
+  for (const host of hosts) {
+    try {
+      rows.push(await inspectRenderedHostDrift({ host, settings, root, repoRoot }));
+    } catch (error) {
+      rows.push({ name: "hostRenderDrift", host, ok: false, comparable: true, reasonCode: error?.reasonCode ?? "PLATFORM_HOST_RENDER_FAILED", error: String(error?.message ?? error) });
+    }
+  }
+  const comparable = rows.some((row) => row.comparable);
+  const drift = rows.flatMap((row) => row.drift ?? []);
+  return check("hostRenderDrift", drift.length === 0, {
+    reasonCode: !comparable ? "PLATFORM_HOST_RENDER_UNCONFIGURED" : drift.length === 0 ? "PLATFORM_HOST_RENDER_CURRENT" : "PLATFORM_HOST_RENDER_DRIFTED",
+    comparable,
+    workspace: workspace ?? null,
+    hosts: rows,
+    drift,
+    source: "dispatch settings + host-render projection",
+  });
 }
 
 async function inspectBridgeSyntax(root) {
@@ -2764,6 +2822,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
       await inspectEngineFloorSatisfied(root, homeRoot, manifest, options),
       await inspectEngineCapabilitySurface(root, homeRoot, manifest, options),
       await inspectHelperSettingsCoverage(root, homeRoot, manifest, options),
+      await inspectHostRenderDrift(root, options),
       await inspectTrustArchiveFreshness(root, homeRoot, manifest, options),
       await inspectLaunchdDuty({ ...options, platformRoot: root, homeRoot }, manifest),
       await inspectHarnessSurface(root, manifest),
