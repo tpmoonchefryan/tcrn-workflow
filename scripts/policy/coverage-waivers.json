@@ -755,6 +755,132 @@
         "owningRepository": "none; the retired claim-admission branch has no live successor implementation",
         "ruling": "TCRN-CROSS-MIN-172 D1 retires the claim-admission refusal and D3 requires scoped Story completion without its warning. The adjacent Owner acceptance requirement is not retired."
       }
+    },
+    {
+      "path": "tests/s244-model-plan.test.mjs",
+      "testName": "INC-145 M1/M3/M4: model-plan host and bounded text guards refuse",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 2 and 3 replace closed effort and host rosters while retaining bounded historical record validation.",
+      "replacement": "tests/s244-model-plan.test.mjs:S369: model-plan host strings remain open and bounded record fields refuse"
+    },
+    {
+      "path": "tests/s244-model-plan.test.mjs",
+      "testName": "S279: one effort roster preserves vendor names, host applicability, and legacy replay",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirement 2 replaces the vendor effort roster with opaque free strings and preserves replay envelopes.",
+      "replacement": "tests/s244-model-plan.test.mjs:S369: free effort values round-trip without a roster"
+    },
+    {
+      "path": "tests/s244-model-plan.test.mjs",
+      "testName": "INC-184: a session level stays in the roster and is refused by the dispatch face",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirement 2 accepts session-level and arbitrary effort strings without host applicability checks.",
+      "replacement": "tests/s244-model-plan.test.mjs:S369: free effort values round-trip without a roster"
+    },
+    {
+      "path": "tests/s244-model-plan.test.mjs",
+      "testName": "S282: a plan carries a default effort, held to the same rule as a per-persona one",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirement 2 keeps optional model-plan envelopes while making default and per-persona effort strings free.",
+      "replacement": "tests/s244-model-plan.test.mjs:S369: historical model-plan envelopes retain optional fields exactly"
+    },
+    {
+      "path": "tests/s232-execution-config.test.mjs",
+      "testName": "S244: a plan is a named host record with default and persona assignments",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirement 5 retires the model-plan CLI write family and replaces it with governed dispatch settings.",
+      "replacement": "tests/s232-execution-config.test.mjs:S369: dispatch writes preserve CAS, actor, settings.updated, and exact round-trip values"
+    },
+    {
+      "path": "tests/s232-execution-config.test.mjs",
+      "testName": "S245: active plan keys reference existing plans and the old write family is retired",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirement 5 retires model-plan verbs while historical records remain readable through persona-list.",
+      "replacement": "tests/s232-execution-config.test.mjs:S369: retired model-plan CLI names refuse while historical records remain readable"
+    },
+    {
+      "path": "tests/s232-execution-config.test.mjs",
+      "testName": "S232: the owner scenario — two configurations, one switch, one pinned persona",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 1 and 4 replace the owner scenario's model-plan writes with isolated host tiers and mode resolution.",
+      "replacement": "tests/s232-execution-config.test.mjs:S369: two host tier tables stay isolated while a mode switch changes resolution"
+    },
+    {
+      "path": "tests/s232-execution-config.test.mjs",
+      "testName": "S232: every referential-integrity violation refuses by name and mutates nothing",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 1 and 5 replace model-plan referential refusals with dispatch shape, CAS, and retirement refusals.",
+      "replacement": "tests/s232-execution-config.test.mjs:S369: malformed dispatch shapes and missing behaviour bits refuse without moving the head"
+    },
+    {
+      "path": "tests/s232-execution-config.test.mjs",
+      "testName": "S232: a default cannot be cleared by omission — only --clear does it",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirement 1 replaces the selected model-plan pointer scenario with ordinary dispatch-mode setting removal.",
+      "replacement": "tests/s232-execution-config.test.mjs:S369: selected dispatch mode resets through ordinary settings removal"
+    },
+    {
+      "path": "tests/s245-subagent-plan-keys.test.mjs",
+      "testName": "INC-145 active plan keys are cataloged, sorted, and vocabulary-linked",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 1 and 5 replace the old selector read source with dispatch metadata and historical persona-list readback.",
+      "replacement": "tests/s245-subagent-plan-keys.test.mjs:S369: dispatch settings are cataloged, sorted, and vocabulary-linked"
+    },
+    {
+      "path": "tests/s245-subagent-plan-keys.test.mjs",
+      "testName": "INC-145 model-plan-list rejects an unknown host and legacy writes are explicit",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 3 and 5 replace closed-host refusal with open-host storage and retire the model-plan CLI family.",
+      "replacement": "tests/s245-subagent-plan-keys.test.mjs:S369: custom classes and modes merge, while unknown hosts stay absent from renderer hints"
+    },
+    {
+      "path": "tests/s247-vocabulary.test.mjs",
+      "testName": "INC-145 vocabulary derives role semantics, hosts, and conference relationships",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirement 3 removes the closed model-plan host vocabulary and exposes string-kind metadata with known renderer hints.",
+      "replacement": "tests/s247-vocabulary.test.mjs:S369: vocabulary distinguishes open configuration strings from known renderers"
+    },
+    {
+      "path": "tests/s247-vocabulary.test.mjs",
+      "testName": "INC-145 vocabulary preserves catalog metadata and both plan sources",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 1 and 5 add the dispatch-mode source and preserve historical plan readback through persona-list.",
+      "replacement": "tests/s247-vocabulary.test.mjs:S369: vocabulary preserves catalog metadata and live replacement sources"
+    },
+    {
+      "path": "tests/p3-cli-catalog.test.mjs",
+      "testName": "WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel, only on expected-version",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirement 1 retires the model-plan writers and admits the three governed dispatch writers at the same CAS boundary.",
+      "replacement": "tests/p3-cli-catalog.test.mjs:WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel, only on expected-version"
+    },
+    {
+      "path": "tests/p3-cli-catalog.test.mjs",
+      "testName": "S279 model-plan-assign catalog keeps effort optional and headSentinel on expected-version",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 1, 2, and 5 replace the retired assignment catalog row with the dispatch tier payload and CAS contract.",
+      "replacement": "tests/p3-cli-catalog.test.mjs:dispatch tier catalog declares its payload and CAS boundary"
+    },
+    {
+      "path": "portal/tests/portal.test.mjs",
+      "testName": "portal writes use actor plus live CAS, then return readback and session audit",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 1 and 5 replace successful model-plan portal writes with dispatch settings and preserve explicit retirement audit coverage.",
+      "replacement": "portal/tests/portal.test.mjs:portal writes use actor plus live CAS, then return readback and session audit"
+    },
+    {
+      "path": "portal/tests/portal.test.mjs",
+      "testName": "execution surface: the owner scenario end to end with the engine",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirement 5 rewrites the live owner scenario around retired actions, historical readback, and supported settings data.",
+      "replacement": "portal/tests/portal.test.mjs:execution surface: the owner scenario end to end with the engine"
+    },
+    {
+      "path": "portal/tests/portal.test.mjs",
+      "testName": "INIT-027 execution cards keep persona data, policy linkage, and engine refusals visible",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirement 5 keeps persona-card in-use coverage while constructing historical model-plan references through the defining workspace helpers.",
+      "replacement": "portal/tests/portal.test.mjs:INIT-027 execution cards keep persona data, policy linkage, and engine refusals visible"
+    },
+    {
+      "path": "portal/tests/ui-presence.test.mjs",
+      "testName": "S280 portal filters effort options from vocabulary and keeps the receipt chip on the chain",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 2 and 5 replace the closed effort roster and successful assignment with open strings, visible retirement refusal, and a supported settings receipt.",
+      "replacement": "portal/tests/ui-presence.test.mjs:S280 portal exposes open effort values, shows retirement refusals, and keeps supported receipts"
+    },
+    {
+      "path": "tests/s244-model-plan.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 replaces four contradictory roster assertions with open effort, host, replay, and dispatch resolution coverage while preserving the retained M6 and settings-reference proofs.",
+      "replacement": "tests/s244-model-plan.test.mjs:S369: free effort values round-trip without a roster; S369: historical model-plan envelopes retain optional fields exactly; S369: dispatch resolution falls through lower tiers, keeps hosts isolated, and reports behaviour bits"
+    },
+    {
+      "path": "portal/tests/ui-presence.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-MIN-198 D2; TCRN-CROSS-STORY-369 Requirements 2 and 5 replace closed-effort and successful legacy-assignment assertions; the actual assertion call sites decrease from 119 to 118 while retirement refusal, unchanged chain version, and supported settings receipts remain covered.",
+      "replacement": "portal/tests/ui-presence.test.mjs:S280 portal exposes open effort values, shows retirement refusals, and keeps supported receipts"
     }
   ]
 }

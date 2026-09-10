@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// INIT-028 INC-145/147: active subagent-plan keys and retirement boundary.
+// INIT-028 INC-145/147: dispatch settings metadata and retirement boundary.
 
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
@@ -35,7 +35,9 @@ async function fixture(context) {
   return join(base, "workspace");
 }
 
-test("INC-145 active plan keys are cataloged, sorted, and vocabulary-linked", async (t) => {
+const write = (command, workspace, version, second, args) => [command, "--workspace", workspace, "--expected-version", String(version), "--at", at(second), ...args, "--actor", "agent:test"];
+
+test("S369: dispatch settings are cataloged, sorted, and vocabulary-linked", async (t) => {
   const workspace = await fixture(t);
   const source = await readFile(new URL("../packages/core/src/settings.ts", import.meta.url), "utf8");
   const keyType = source.match(/export type SettingKey =([\s\S]*?);/u)?.[1] ?? "";
@@ -45,27 +47,50 @@ test("INC-145 active plan keys are cataloged, sorted, and vocabulary-linked", as
   assert.deepEqual(sourceTypeKeys, [...sourceTypeKeys].sort(), "SettingKey union must be independently sorted in source");
   assert.deepEqual(sourceCatalogKeys, [...sourceCatalogKeys].sort(), "catalogEntries must be independently sorted in source");
   assert.deepEqual(sourceTypeKeys, sourceCatalogKeys, "SettingKey and catalogEntries must use the same source order");
+
   const catalog = await invoke(["settings-catalog", "--workspace", workspace]);
   assert.deepEqual(catalog.settings.map((entry) => entry.key), [...catalog.settings.map((entry) => entry.key)].sort());
-  for (const [key, host] of [["execution.claudeCodeSubagentPlan", "claude-code"], ["execution.codexSubagentPlan", "codex"]]) {
+  for (const key of ["execution.dispatchClasses", "execution.dispatchMode", "execution.dispatchModes", "execution.dispatchTiers"]) {
     const entry = catalog.settings.find((candidate) => candidate.key === key);
     assert.equal(entry.type, "string");
-    assert.equal(entry.controlType, "enum");
-    assert.equal(entry.defaultValue, null);
-    const vocabulary = await invoke(["vocabulary"]);
-    const term = vocabulary.settingsEnums.find((candidate) => candidate.key === key);
-    assert.equal(term.valueSource, `model-plan-list:${host}`);
-    assert.equal(term.type, entry.type);
-    assert.equal(term.defaultValue, entry.defaultValue);
+    assert.equal(entry.defaultValue.length > 0, true);
   }
+  const classes = await invoke(["dispatch-classes-list", "--workspace", workspace]);
+  assert.deepEqual(Object.keys(classes.classes).sort(), ["chain-ops", "dispatch-review", "docs", "implement", "knowledge-expand", "plan", "research", "retrieval-gate"]);
+  assert.ok(Object.values(classes.classes).every((value) => typeof value.dispatch === "boolean" && typeof value.verify === "boolean"));
+  const modes = await invoke(["dispatch-mode-list", "--workspace", workspace]);
+  assert.deepEqual(Object.keys(modes.modes).sort(), ["eco", "frontier"]);
+  const expectedClasses = Object.keys(classes.classes).sort();
+  for (const mapping of Object.values(modes.modes)) assert.deepEqual(Object.keys(mapping).sort(), expectedClasses);
+
+  const vocabulary = await invoke(["vocabulary"]);
+  assert.deepEqual(vocabulary.efforts, []);
+  assert.equal(vocabulary.hostValueKind, "string");
+  assert.equal(vocabulary.effortValueKind, "string");
+  assert.deepEqual(vocabulary.hosts, ["claude-code", "codex"]);
+  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.dispatchMode").valueSource, "dispatch-mode-list");
+  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.claudeCodeSubagentPlan").valueSource, "persona-list:modelPlans");
+  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.codexSubagentPlan").valueSource, "persona-list:modelPlans");
 });
 
-test("INC-145 model-plan-list rejects an unknown host and legacy writes are explicit", async (t) => {
+test("S369: custom classes and modes merge, while unknown hosts stay absent from renderer hints", async (t) => {
   const workspace = await fixture(t);
-  const unknownHost = await invoke(["model-plan-list", "--workspace", workspace, "--host", "gemini"]);
-  assert.equal(unknownHost.reasonCode, "MODEL_PLAN_HOST_UNKNOWN");
-  assert.match(unknownHost.message, /claude-code.*codex/u);
-  const legacy = await invoke(["execution-config", "--workspace", workspace]);
-  assert.equal(legacy.reasonCode, "CLI_COMMAND_UNKNOWN");
-  assert.match(legacy.message, /settings-catalog.*persona-list.*model-plan-list.*vocabulary/u);
+  const tiers = await invoke(write("dispatch-tiers-set", workspace, 0, 1, ["--host", "gemini", "--tiers", JSON.stringify({ flagship: null, main: { model: "gemini-main", effort: "xhigh2" }, economy: null })]));
+  assert.equal(tiers.reasonCode, "DISPATCH_CONFIG_WRITE_COMMITTED");
+  const classes = await invoke(write("dispatch-classes-set", workspace, 1, 2, ["--classes", JSON.stringify({ "review-visual": { dispatch: false, verify: true } })]));
+  const mode = await invoke(write("dispatch-mode-set", workspace, 2, 3, ["--name", "visual", "--mapping", JSON.stringify({ "review-visual": "main" })]));
+  assert.equal(classes.version, 2);
+  assert.equal(mode.version, 3);
+  const resolved = await invoke(["dispatch-mode-list", "--workspace", workspace, "--host", "gemini", "--class", "review-visual", "--mode", "visual"]);
+  assert.deepEqual(resolved.resolution.value, { model: "gemini-main", effort: "xhigh2" });
+  const vocabulary = await invoke(["vocabulary"]);
+  assert.equal(vocabulary.hosts.includes("gemini"), false);
+  assert.equal(vocabulary.efforts.length, 0);
+
+  const bypass = await invoke(write("settings-set", workspace, 3, 4, ["--key", "execution.dispatchClasses", "--value", JSON.stringify({ "bad-class": { dispatch: true } })]));
+  assert.equal(bypass.reasonCode, "DISPATCH_CLASS_BEHAVIOUR_REQUIRED");
+  assert.equal((await invoke(["status", "--workspace", workspace])).version, 3);
+  const retired = await invoke(["model-plan-list", "--workspace", workspace]);
+  assert.equal(retired.reasonCode, "CLI_COMMAND_UNKNOWN");
+  assert.match(retired.message, /dispatch-classes-list.*dispatch-mode-list.*vocabulary/u);
 });

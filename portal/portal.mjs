@@ -193,7 +193,10 @@ async function cliResult(args) {
 }
 
 const settingsCatalog = () => cli(["settings-catalog", "--workspace", currentPartition().workspace]);
-const modelPlans = () => cli(["model-plan-list", "--workspace", currentPartition().workspace]);
+const modelPlans = async () => {
+  const state = await cli(["persona-list", "--workspace", currentPartition().workspace]);
+  return { ...state, plans: state.modelPlans };
+};
 const personas = () => cli(["persona-list", "--workspace", currentPartition().workspace]);
 const vocabulary = () => cli(["vocabulary"]);
 const commands = () => cli(["commands"]);

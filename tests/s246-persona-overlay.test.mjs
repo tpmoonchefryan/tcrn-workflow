@@ -9,6 +9,11 @@ import test from "node:test";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import { initializeWorkspace } from "../dist/build/packages/core/src/index.js";
+import {
+  acquireWorkspaceLease,
+  assignModelPlanInWorkspace,
+  setModelPlanInWorkspace,
+} from "../dist/build/packages/core/src/workspace.js";
 
 const at = (second) => new Date(Date.UTC(2026, 0, 1, 0, 0, second)).toISOString().replace(/\.\d+Z$/u, "Z");
 
@@ -36,6 +41,18 @@ async function fixture(context) {
 }
 
 const write = (command, workspace, version, second, args) => [command, "--workspace", workspace, "--expected-version", String(version), "--at", at(second), ...args, "--actor", "agent:test"];
+
+async function historicalModelPlan(workspace, version, second, operation, input) {
+  const lease = await acquireWorkspaceLease(workspace, { now: at(second) });
+  try {
+    const options = { ...input, expectedVersion: version, occurredAt: at(second), actorId: "agent:test" };
+    return operation === "set"
+      ? await setModelPlanInWorkspace(workspace, lease, options)
+      : await assignModelPlanInWorkspace(workspace, lease, options);
+  } finally {
+    await lease.release();
+  }
+}
 
 test("INC-145 PERSONA_NAME_CONFLICT names the custom-versus-preset route", async (t) => {
   const { workspace, version } = await fixture(t);
@@ -69,8 +86,8 @@ test("INC-152 PERSONA_NAME_CONFLICT rejects active and tombstoned preset names",
 
 test("INC-145 PERSONA_PRESET_IN_USE explains how to release a named assignment", async (t) => {
   const { workspace, version } = await fixture(t);
-  await invoke(write("model-plan-set", workspace, await version(), 1, ["--host", "codex", "--name", "review", "--default-model", "model-a"]));
-  await invoke(write("model-plan-assign", workspace, await version(), 2, ["--host", "codex", "--plan", "review", "--persona", "Verity", "--model", "model-b"]));
+  await historicalModelPlan(workspace, await version(), 1, "set", { host: "codex", name: "review", defaultModel: "model-a" });
+  await historicalModelPlan(workspace, await version(), 2, "assign", { host: "codex", name: "review", persona: "Verity", model: "model-b" });
   const refused = await invoke(write("persona-remove", workspace, await version(), 3, ["--name", "Verity"]));
   assert.equal(refused.reasonCode, "PERSONA_PRESET_IN_USE");
   assert.match(refused.message, /model plan codex\/review/u);

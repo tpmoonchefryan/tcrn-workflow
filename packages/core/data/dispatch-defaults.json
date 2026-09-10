@@ -1,0 +1,64 @@
+{
+  "tierOrder": [
+    "flagship",
+    "main",
+    "economy"
+  ],
+  "classes": {
+    "plan": {
+      "dispatch": false,
+      "verify": false
+    },
+    "dispatch-review": {
+      "dispatch": false,
+      "verify": false
+    },
+    "implement": {
+      "dispatch": true,
+      "verify": true
+    },
+    "research": {
+      "dispatch": true,
+      "verify": false
+    },
+    "docs": {
+      "dispatch": true,
+      "verify": false
+    },
+    "chain-ops": {
+      "dispatch": false,
+      "verify": false
+    },
+    "knowledge-expand": {
+      "dispatch": true,
+      "verify": false
+    },
+    "retrieval-gate": {
+      "dispatch": true,
+      "verify": false
+    }
+  },
+  "modes": {
+    "frontier": {
+      "plan": "flagship",
+      "dispatch-review": "main",
+      "implement": "main",
+      "research": "economy",
+      "docs": "economy",
+      "chain-ops": "economy",
+      "knowledge-expand": "economy",
+      "retrieval-gate": "economy"
+    },
+    "eco": {
+      "plan": "main",
+      "dispatch-review": "main",
+      "implement": "economy",
+      "research": "economy",
+      "docs": "economy",
+      "chain-ops": "economy",
+      "knowledge-expand": "economy",
+      "retrieval-gate": "economy"
+    }
+  },
+  "mode": "frontier"
+}

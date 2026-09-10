@@ -4,6 +4,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import { assertStrictInstant, canonicalJson, compareCanonicalText } from "../../protocol/src/index.js";
 import { ARTIFACT_LANGUAGE_TAGS, parsePromptLanguages } from "./knowledge-language.js";
+import { dispatchSettingDefault, validateDispatchSetting } from "./dispatch-config.js";
 
 /**
  * Settings are a deliberately small engine-owned overlay surface. The generic
@@ -34,6 +35,10 @@ export type SettingKey =
   | "engine.requiredVersion"
   | "execution.claudeCodeSubagentPlan"
   | "execution.codexSubagentPlan"
+  | "execution.dispatchClasses"
+  | "execution.dispatchMode"
+  | "execution.dispatchModes"
+  | "execution.dispatchTiers"
   | "execution.independenceFloor"
   | "execution.maxConcurrentSubagents"
   | "execution.maxDispatchDepth"
@@ -256,6 +261,34 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     controlType: "enum",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: null,
+  },
+  {
+    key: "execution.dispatchClasses",
+    type: "string",
+    controlType: "text",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: dispatchSettingDefault("execution.dispatchClasses"),
+  },
+  {
+    key: "execution.dispatchMode",
+    type: "string",
+    controlType: "enum",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: dispatchSettingDefault("execution.dispatchMode"),
+  },
+  {
+    key: "execution.dispatchModes",
+    type: "string",
+    controlType: "text",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: dispatchSettingDefault("execution.dispatchModes"),
+  },
+  {
+    key: "execution.dispatchTiers",
+    type: "string",
+    controlType: "text",
+    layerKind: SETTINGS_LAYER_KIND,
+    defaultValue: dispatchSettingDefault("execution.dispatchTiers"),
   },
   {
     // INIT-026 S233/S234. Unlike its sibling above, this one IS enforced: when the
@@ -490,6 +523,14 @@ export function settingsCatalogEntry(key: unknown): SettingsCatalogEntry {
 export function validateSettingValue(key: unknown, value: unknown, workspaceRoot?: string): string {
   const entry = settingsCatalogEntry(key);
   assertCanonicalString(value, String(key), entry.key === "driver.capabilityProfile" ? 128 : 4096);
+  if (
+    entry.key === "execution.dispatchClasses" ||
+    entry.key === "execution.dispatchMode" ||
+    entry.key === "execution.dispatchModes" ||
+    entry.key === "execution.dispatchTiers"
+  ) {
+    validateDispatchSetting(entry.key, value);
+  }
   if (entry.type === "enum" && !entry.allowedValues?.includes(value)) {
     fail(
       "SETTINGS_VALUE_INVALID",

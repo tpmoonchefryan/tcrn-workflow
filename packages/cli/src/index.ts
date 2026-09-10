@@ -92,16 +92,14 @@ import {
   STORY_SCOPE_HEADINGS,
   machineSettingsPath,
   FRAMEWORK_VERSION,
-  assertModelPlanHost,
   allPersonaReadback,
   SETTINGS_CATALOG,
-  assignModelPlanInWorkspace,
-  removeModelPlanInWorkspace,
   removePersonaInWorkspace,
   overridePersonaPresetInWorkspace,
   restorePersonaPresetInWorkspace,
-  setModelPlanInWorkspace,
-  unassignModelPlanInWorkspace,
+  dispatchSettingUpdate,
+  readDispatchConfig,
+  resolveDispatch,
   removeWorkspaceSetting,
   setCustomPersonaInWorkspace,
   setWorkspaceSetting,
@@ -921,6 +919,11 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "conference-position-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "conference-id", required: false, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "context-route", availability: "cli", mutates: false, flags: [{ name: "request", required: true, valueKind: "json" }, { name: "profile-receipt", required: true, valueKind: "string" }, { name: "authority", required: true, valueKind: "string" }, { name: "profile-receipt-digest", required: false, valueKind: "string" }, { name: "authority-digest", required: false, valueKind: "string" }] },
   { name: "context-validate", availability: "cli", mutates: false, flags: [{ name: "result", required: true, valueKind: "string" }] },
+  { name: "dispatch-classes-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
+  { name: "dispatch-classes-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "classes", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "dispatch-mode-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "host", required: false, valueKind: "string" }, { name: "class", required: false, valueKind: "string" }, { name: "mode", required: false, valueKind: "string" }] },
+  { name: "dispatch-mode-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "mapping", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "dispatch-tiers-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "tiers", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "event-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
   { name: "export", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "gate-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "external-key", required: true, valueKind: "string" }, { name: "project-id", required: true, valueKind: "string" }, { name: "work-id", required: true, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "title", required: true, valueKind: "string" }, { name: "outcome-class", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -964,11 +967,6 @@ export const COMMAND_CATALOG = Object.freeze([
   // the storage-version migration (v1→v2) via migrateWorkspaceStorage.
   { name: "migration-execute", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "migration-plan", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "target-version", required: true, valueKind: "integer" }, { name: "dry-run", required: true, valueKind: "boolean" }] },
-  { name: "model-plan-assign", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "plan", required: true, valueKind: "string" }, { name: "persona", required: true, valueKind: "string" }, { name: "model", required: true, valueKind: "string" }, { name: "effort", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "model-plan-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "host", required: false, valueKind: "string" }] },
-  { name: "model-plan-remove", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "model-plan-set", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "name", required: true, valueKind: "string" }, { name: "default-model", required: true, valueKind: "string" }, { name: "default-effort", required: false, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "model-plan-unassign", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "host", required: true, valueKind: "string" }, { name: "plan", required: true, valueKind: "string" }, { name: "persona", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "persona-generate", availability: "cli", mutates: false, flags: [{ name: "set", required: true, valueKind: "string" }] },
   { name: "persona-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "persona-preset-override", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "name", required: true, valueKind: "string" }, { name: "fields", required: true, valueKind: "json" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -1143,8 +1141,23 @@ export async function runCli(arguments_: readonly string[], io: CliIo): Promise<
   }
   // S245 retirement boundary: these names remain replay-only historical
   // operations, never callable write/read verbs on the public CLI.
-  if (["execution-config", "host-config-default", "host-config-remove", "host-config-set", "persona-binding-remove", "persona-binding-set"].includes(command)) {
-    fail("CLI_COMMAND_UNKNOWN", `${command} is a retired replay-only path; use settings-catalog, persona-list, model-plan-list, or vocabulary for read-only state`);
+  if ([
+    "execution-config",
+    "host-config-default",
+    "host-config-remove",
+    "host-config-set",
+    "model-plan-assign",
+    "model-plan-list",
+    "model-plan-remove",
+    "model-plan-set",
+    "model-plan-unassign",
+    "persona-binding-remove",
+    "persona-binding-set",
+  ].includes(command)) {
+    fail(
+      "CLI_COMMAND_UNKNOWN",
+      `${command} is a retired replay-only path; use settings-catalog, persona-list, dispatch-classes-list, dispatch-mode-list, or vocabulary for read-only state`,
+    );
   }
   // INC-012: the dispatcher writes only through this wrapper, so the output-category guard
   // covers every verb -- including ones added later, which is the whole point of moving the
@@ -1472,49 +1485,92 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     io.write(canonicalJson({ reasonCode: "VOCABULARY_READY", ...readVocabulary() }));
     return;
   }
-  if (command === "model-plan-list") {
-    const values = parseArguments(rest, ["workspace", "host"]);
+  if (command === "dispatch-classes-list") {
+    const values = parseArguments(rest, ["workspace"]);
     required(values, ["workspace"]);
     const state = await materializeWorkspace(values.workspace ?? "");
-    const host = values.host;
-    if (host !== undefined && host !== "") assertModelPlanHost(host);
     io.write(canonicalJson({
-      schemaVersion: "tcrn.model-plan-list-readback.v1",
-      reasonCode: "MODEL_PLAN_LIST_READY",
+      reasonCode: "DISPATCH_CLASSES_READY",
       workspaceId: state.metadata.workspaceId,
       version: state.version,
       headEventHash: state.headEventHash,
-      plans: state.executionConfig.modelPlans.filter((plan) => host === undefined || host === "" || plan.host === host),
+      classes: readDispatchConfig(state.settings).classes,
     }));
     return;
   }
-  if (command === "model-plan-set" || command === "model-plan-assign" || command === "model-plan-unassign" || command === "model-plan-remove") {
-    const names = command === "model-plan-set"
-      ? [...shared, "host", "name", "default-model", "default-effort", "actor"]
-      : command === "model-plan-assign"
-        ? [...shared, "host", "plan", "persona", "model", "effort", "actor"]
-        : command === "model-plan-unassign"
-          ? [...shared, "host", "plan", "persona", "actor"]
-          : [...shared, "host", "name", "actor"];
-    const values = parseArguments(rest, names);
-    required(values, command === "model-plan-set" ? [...requiredShared, "host", "name", "default-model"] : command === "model-plan-remove" ? [...requiredShared, "host", "name"] : [...requiredShared, "host", "plan", "persona"]);
+  if (command === "dispatch-mode-list") {
+    const values = parseArguments(rest, ["workspace", "host", "class", "mode"]);
+    required(values, ["workspace"]);
+    if (
+      (values.host === undefined) !== (values.class === undefined) ||
+      (values.mode !== undefined && values.host === undefined)
+    ) {
+      fail("CLI_ARGUMENT_MISSING", "resolution requires both host and class");
+    }
+    const state = await materializeWorkspace(values.workspace ?? "");
+    const config = readDispatchConfig(state.settings);
+    io.write(canonicalJson({
+      reasonCode: "DISPATCH_MODES_READY",
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      ...config,
+      ...(values.host === undefined || values.class === undefined
+        ? {}
+        : {
+          resolution: resolveDispatch(
+            config,
+            values.host,
+            values.class,
+            values.mode ?? config.mode,
+          ),
+        }),
+    }));
+    return;
+  }
+  if (
+    command === "dispatch-classes-set" ||
+    command === "dispatch-tiers-set" ||
+    command === "dispatch-mode-set"
+  ) {
+    const extra = command === "dispatch-classes-set"
+      ? ["classes"]
+      : command === "dispatch-tiers-set"
+        ? ["host", "tiers"]
+        : ["name", "mapping"];
+    const values = parseArguments(rest, [...shared, ...extra, "actor"]);
+    required(values, [...requiredShared, ...extra]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => {
       const expectedVersion = await resolveExpectedVersion(values, workspace);
-      if (command === "model-plan-set") return setModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.name ?? "", defaultModel: values["default-model"] ?? "", ...(values["default-effort"] ? { defaultEffort: values["default-effort"] } : {}), ...(values.actor ? { actorId: values.actor } : {}) });
-      if (command === "model-plan-assign") return assignModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.plan ?? "", persona: values.persona ?? "", model: values.model ?? "", ...(values.effort ? { effort: values.effort } : {}), ...(values.actor ? { actorId: values.actor } : {}) });
-      if (command === "model-plan-unassign") return unassignModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.plan ?? "", persona: values.persona ?? "", ...(values.actor ? { actorId: values.actor } : {}) });
-      return removeModelPlanInWorkspace(workspace, lease, { expectedVersion, occurredAt: at, host: values.host ?? "", name: values.name ?? "", ...(values.actor ? { actorId: values.actor } : {}) });
+      const current = await materializeWorkspace(workspace);
+      const update = command === "dispatch-classes-set"
+        ? dispatchSettingUpdate(
+          current.settings, "classes", "", jsonValue(values.classes, "classes"),
+        )
+        : command === "dispatch-tiers-set"
+          ? dispatchSettingUpdate(
+            current.settings, "tiers", values.host ?? "", jsonValue(values.tiers, "tiers"),
+          )
+          : dispatchSettingUpdate(
+            current.settings, "mode", values.name ?? "", jsonValue(values.mapping, "mapping"),
+          );
+      return setWorkspaceSetting(workspace, lease, {
+        expectedVersion,
+        occurredAt: at,
+        ...update,
+        ...(values.actor ? { actorId: values.actor } : {}),
+      });
     });
     await emitTimeAttestation(io, values, state.headEventHash);
     io.write(canonicalJson({
-      schemaVersion: "tcrn.model-plan-write-receipt.v1",
-      reasonCode: "MODEL_PLAN_WRITE_COMMITTED",
+      reasonCode: "DISPATCH_CONFIG_WRITE_COMMITTED",
       workspaceId: state.metadata.workspaceId,
       version: state.version,
       headEventHash: state.headEventHash,
-      plans: state.executionConfig.modelPlans,
+      ...viewProjectionFields(),
+      ...readDispatchConfig(state.settings),
     }));
     return;
   }
@@ -1606,6 +1662,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       version: state.version,
       headEventHash: state.headEventHash,
       personas: allPersonaReadback({ personas: state.executionConfig.personas }, state.executionConfig.personaOverrides, state.executionConfig.personaTombstones),
+      modelPlans: state.executionConfig.modelPlans,
     }));
     return;
   }

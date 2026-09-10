@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import vm from "node:vm";
 import { parseHTML } from "linkedom";
+import { historicalModelPlan } from "../../tests/helpers/model-plan-history.mjs";
 
 const execFileAsync = promisify(execFile);
 const portalRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -88,7 +89,7 @@ async function writeScratch(fixture, command, args) {
 
 async function seed(fixture) {
   await writeScratch(fixture, "persona-preset-override", ["--name", "Verity", "--fields", JSON.stringify({ mission: "Overridden mission" })]);
-  await writeScratch(fixture, "model-plan-set", ["--host", "claude-code", "--name", "budget", "--default-model", "claude-sonnet-4-5"]);
+  await historicalModelPlan(fixture.workspace, "set", { host: "claude-code", name: "budget", defaultModel: "claude-sonnet-4-5" }, nextAt());
   await writeScratch(fixture, "settings-set", ["--key", "execution.claudeCodeSubagentPlan", "--value", "budget"]);
 }
 
@@ -255,6 +256,7 @@ async function preparePage(env = {}) {
   const fixture = await scratch("tcrn-inc148-dom-");
   await seed(fixture);
   const page = await loadExecutedDom(fixture, env);
+  page.workspace = fixture.workspace;
   page.cleanup = async () => { page.child.kill(); await rm(fixture.base, { recursive: true, force: true }); };
   page.document.querySelector('[data-persona-name="Verity"]')?.click();
   await new Promise((resolve) => setTimeout(resolve, 80));
@@ -748,43 +750,43 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
-  test("S280 portal filters effort options from vocabulary and keeps the receipt chip on the chain", async () => {
+  test("S280 portal exposes open effort values, shows retirement refusals, and keeps supported receipts", async () => {
     const page = await preparePage();
     try {
+      const vocabulary = await cli(["vocabulary"]);
+      assert.deepEqual(vocabulary.efforts, [], "open effort strings do not produce a closed vocabulary list");
       page.document.querySelector('[data-setting-group="models"]')?.click();
       await new Promise((resolve) => setTimeout(resolve, 80));
       const effortSelect = page.document.querySelector('[data-assign-effort]');
       assert.ok(effortSelect, "the seeded Claude Code plan must render an effort selector");
       const options = [...effortSelect.querySelectorAll("option")].map((option) => option.value);
-      assert.ok(options.includes("high"));
-      assert.ok(options.includes("xhigh"));
-      assert.ok(!options.includes("minimal"), "Codex-only effort values must not leak into Claude Code");
-      assert.ok(!options.includes("none"), "Codex-only effort values must not leak into Claude Code");
-      // INC-184: `ultracode` IS a Claude Code level, so host filtering alone would let
-      // it through. It is absent because assignment is per persona and this level is
-      // a property of the session — the engine refuses it, and the control must not
-      // offer what the engine refuses.
-      assert.ok(!options.includes("ultracode"), "a session-only level must not be offered as a per-persona assignment");
-      assert.ok(!options.includes("ultra"), "a Codex session level must not appear on a Claude Code plan");
+      assert.deepEqual(options.filter((value) => value.length > 0), [], "the portal must not invent a closed effort roster");
 
       const modelInput = page.document.querySelector('[data-assign-model]');
       const assign = page.document.querySelector('[data-assign]');
       assert.ok(modelInput && assign, "the model plan addline must expose assignment controls");
       modelInput.value = "claude-sonnet-4-5";
-      effortSelect.value = "high";
       const beforeAssign = receiptText(page.document);
+      const beforeStatus = await cli(["status", "--workspace", page.workspace]);
       assign.click();
-      // Two signals, both waited for rather than slept through: the write reaching
-      // the chain, and the assignment list re-rendering at all. The row's *content*
-      // is then asserted, so a wrong effort value still fails as a diff.
-      await waitFor(receiptAdvanced(page.document, beforeAssign), "the receipt chip to advance past the written version");
-      const assignment = await waitFor(
-        () => page.document.querySelector(".tcrn-assignment")?.textContent || null,
-        "the assignment row to re-render after the write",
-      );
+      await waitFor(() => {
+        const text = receiptText(page.document);
+        return text !== beforeAssign && text.startsWith("✕") ? text : null;
+      }, "the retirement refusal to become visible");
+      assert.match(receiptText(page.document), /✕/u);
+      assert.match(page.document.querySelector("#receipt-body")?.textContent ?? "", /CLI_COMMAND_UNKNOWN/u);
+      const afterStatus = await cli(["status", "--workspace", page.workspace]);
+      assert.equal(afterStatus.version, beforeStatus.version, "a retired assignment must not advance the receipt");
 
+      page.document.querySelector('[data-setting-group="execution"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const mode = page.document.querySelector('[data-setting-control="execution.dispatchMode"]');
+      assert.ok(mode, "the supported dispatch mode setting must render");
+      const beforeSupported = receiptText(page.document);
+      mode.value = "eco";
+      mode.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await waitFor(receiptAdvanced(page.document, beforeSupported), "the receipt chip to advance after a supported settings write");
       assert.match(page.document.querySelector("#receipt-chip-text")?.textContent ?? "", /^✓v\d+$/u);
-      assert.match(assignment, /Effort: high/u);
     } finally { await page.cleanup(); }
   });
 

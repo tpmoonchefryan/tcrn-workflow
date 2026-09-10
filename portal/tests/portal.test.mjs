@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { historicalModelPlan } from "../../tests/helpers/model-plan-history.mjs";
 
 const execFileAsync = promisify(execFile);
 const portalRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -128,11 +129,25 @@ test("portal writes use actor plus live CAS, then return readback and session au
   assert.equal(setting.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
   assert.equal(setting.body.readback.currentValue, "manual");
 
-  const plan = await request(url, "/api/execution", writeOptions(boot.token, "POST", { action: "model-plan-set", host: "claude-code", name: "daily", defaultModel: "opus-5" }));
-  assert.equal(plan.body.reasonCode, "MODEL_PLAN_WRITE_COMMITTED");
-  const assignment = await request(url, "/api/execution", writeOptions(boot.token, "POST", { action: "model-plan-assign", host: "claude-code", plan: "daily", persona: "Verity", model: "sonnet-5" }));
-  assert.equal(assignment.body.reasonCode, "MODEL_PLAN_WRITE_COMMITTED");
-  const active = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.claudeCodeSubagentPlan", value: "daily" }));
+  const tiers = await request(url, "/api/settings", writeOptions(boot.token, "POST", {
+    key: "execution.dispatchTiers",
+    value: JSON.stringify({ "claude-code": { flagship: null, main: { model: "opus-5", effort: "xhigh2" }, economy: null } }),
+  }));
+  assert.equal(tiers.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
+  const classes = await request(url, "/api/settings", writeOptions(boot.token, "POST", {
+    key: "execution.dispatchClasses",
+    value: JSON.stringify({ "review-visual": { dispatch: true, verify: false } }),
+  }));
+  assert.equal(classes.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
+  const modes = await request(url, "/api/settings", writeOptions(boot.token, "POST", {
+    key: "execution.dispatchModes",
+    value: JSON.stringify({ custom: { "review-visual": "main" } }),
+  }));
+  assert.equal(modes.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
+  const retired = await request(url, "/api/execution", writeOptions(boot.token, "POST", { action: "model-plan-set", host: "claude-code", name: "daily", defaultModel: "opus-5" }));
+  assert.equal(retired.response.status, 409);
+  assert.equal(retired.body.reasonCode, "CLI_COMMAND_UNKNOWN");
+  const active = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.dispatchMode", value: "custom" }));
   assert.equal(active.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
   const override = await request(url, "/api/execution", writeOptions(boot.token, "POST", { action: "persona-preset-override", name: "Verity", fields: { mission: "Review governed evidence", role: "reviewer" } }));
   assert.equal(override.body.reasonCode, "PERSONA_WRITE_COMMITTED");
@@ -140,7 +155,9 @@ test("portal writes use actor plus live CAS, then return readback and session au
 
   const audit = await request(url, "/api/session-audit", readOptions(boot.token));
   assert.equal(audit.body.reasonCode, "PORTAL_SESSION_AUDIT_READY");
-  assert.equal(audit.body.writes.length, 5);
+  assert.equal(audit.body.writes.length, 7);
+  assert.equal(audit.body.writes.filter((entry) => entry.ok).length, 6);
+  assert.equal(audit.body.writes.find((entry) => entry.action === "model-plan-set").ok, false);
   assert.ok(audit.body.writes.every((entry) => entry.action && entry.occurredAt));
 });
 
@@ -463,18 +480,20 @@ test("execution surface: the owner scenario end to end with the engine", async (
   t.after(async () => { child.kill(); await rm(fixture.base, { recursive: true, force: true }); });
   const { page, boot } = await readBoot(url);
   const post = async (payload) => request(url, "/api/execution", writeOptions(boot.token, "POST", payload));
-  const created = await post({ action: "model-plan-set", host: "claude-code", name: "owner-scenario", defaultModel: "opus-5" });
-  assert.equal(created.body.reasonCode, "MODEL_PLAN_WRITE_COMMITTED");
-  const assigned = await post({ action: "model-plan-assign", host: "claude-code", plan: "owner-scenario", persona: "Verity", model: "sonnet-5" });
-  assert.equal(assigned.body.reasonCode, "MODEL_PLAN_WRITE_COMMITTED");
-  assert.equal(assigned.body.readback.plans.find((plan) => plan.name === "owner-scenario").assignments.Verity, "sonnet-5");
-  const active = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.claudeCodeSubagentPlan", value: "owner-scenario" }));
+  const refusedWrite = await post({ action: "model-plan-set", host: "claude-code", name: "owner-scenario", defaultModel: "opus-5" });
+  assert.equal(refusedWrite.response.status, 409);
+  assert.equal(refusedWrite.body.reasonCode, "CLI_COMMAND_UNKNOWN");
+  await historicalModelPlan(fixture.workspace, "set", { host: "claude-code", name: "owner-scenario", defaultModel: "opus-5" }, "2026-08-11T15:00:01Z");
+  await historicalModelPlan(fixture.workspace, "assign", { host: "claude-code", name: "owner-scenario", persona: "Verity", model: "sonnet-5" }, "2026-08-11T15:00:02Z");
+  const historical = await request(url, "/api/execution", readOptions(boot.token));
+  assert.equal(historical.body.plans.find((plan) => plan.name === "owner-scenario").defaultModel, "opus-5");
+  const active = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.dispatchMode", value: "eco" }));
   assert.equal(active.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
-  const refused = await post({ action: "model-plan-remove", host: "claude-code", name: "owner-scenario" });
-  assert.equal(refused.response.status, 409);
-  assert.equal(refused.body.reasonCode, "MODEL_PLAN_IN_USE");
   const readback = await request(url, "/api/execution", readOptions(boot.token));
   assert.equal(readback.body.plans.find((plan) => plan.name === "owner-scenario").assignments.Verity, "sonnet-5");
+  assert.equal(readback.body.settings.find((entry) => entry.key === "execution.dispatchMode").currentValue, "eco");
+  const audit = await request(url, "/api/session-audit", readOptions(boot.token));
+  assert.equal(audit.body.writes.find((entry) => entry.action === "model-plan-set").ok, false);
   assert.match(page, /data-ui="assignment-addline"/u);
   assert.match(page, /data-ui="receipt-drawer"/u);
 });
@@ -500,10 +519,9 @@ test("INIT-027 execution cards keep persona data, policy linkage, and engine ref
   const custom = await post({ action: "persona-set", name: "Portal auditor", role: "reviewer", mission: "Review exact evidence", refusals: "No unsupported claims" });
   assert.equal(custom.body.reasonCode, "PERSONA_WRITE_COMMITTED");
   assert.equal(custom.body.readback.personas.some((persona) => persona.name === "Portal auditor" && persona.source === "custom"), true);
-  const plan = await post({ action: "model-plan-set", host: "codex", name: "card-plan", defaultModel: "model-a" });
-  assert.equal(plan.body.reasonCode, "MODEL_PLAN_WRITE_COMMITTED");
-  const assignment = await post({ action: "model-plan-assign", host: "codex", plan: "card-plan", persona: "Portal auditor", model: "model-b" });
-  assert.equal(assignment.body.reasonCode, "MODEL_PLAN_WRITE_COMMITTED");
+  await historicalModelPlan(fixture.workspace, "set", { host: "codex", name: "card-plan", defaultModel: "model-a" }, "2026-08-11T15:00:01Z");
+  const assignment = await historicalModelPlan(fixture.workspace, "assign", { host: "codex", name: "card-plan", persona: "Portal auditor", model: "model-b" }, "2026-08-11T15:00:02Z");
+  assert.equal(assignment.executionConfig.modelPlans.find((plan) => plan.name === "card-plan").assignments["Portal auditor"], "model-b");
   const active = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.codexSubagentPlan", value: "card-plan" }));
   assert.equal(active.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
   const refused = await post({ action: "persona-remove", name: "Portal auditor" });

@@ -46,9 +46,9 @@ import type { ModelPlanRecord } from "./model-plan.js";
  * The pointer is called `default`, not `active`: a pinned persona does not
  * follow it, so "active" would claim more than the mechanism delivers.
  *
- * The host set is CLOSED — exactly the adapter families that exist. An API or
- * relay login still drives one of these two host applications; a third entry
- * would be a ghost host no adapter can wire.
+ * The legacy host-configuration replay family retains its original adapter
+ * shape. New dispatch configuration lives in settings and accepts open host
+ * strings; MODEL_PLAN_HOSTS no longer supplies a validation boundary.
  *
  * Access details stay off the chain: an entry is {name, model, note?}. An
  * endpoint or key belongs to the host's own local configuration, and the

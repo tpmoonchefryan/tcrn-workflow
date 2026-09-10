@@ -10,9 +10,15 @@
       ]
     },
     "portal/tests/portal.test.mjs": {
-      "testCount": 9,
-      "assertionCount": 92,
+      "testCount": 20,
+      "assertionCount": 168,
       "testNames": [
+        "portal boots from the live engine and exposes the new read surfaces",
+        "portal writes use actor plus live CAS, then return readback and session audit",
+        "STORY-366: the article endpoint uses knowledge-store CAS and returns the engine receipt unchanged",
+        "state surface follows engine version and turns health red on failed status/actor legs",
+        "AGENTS.md read/write is allow-listed and reconciliation reports line-level findings",
+        "container mode lists partitions and changes the selected live target",
         "portal serves live catalog, commits a governed write, and refuses an untokened one",
         "reconciliation goes red when prose names an unregistered key, and green once repaired",
         "prose surface writes the file and reads it back",
@@ -20,17 +26,23 @@
         "container mode lists every partition and switches the live target",
         "launcher generation emits regular files, starts macOS launcher, and names a vanished container",
         "i18n proof turns red when the engine drops enum allowedValues",
+        "i18n full-table proof turns red when an existing translation regresses",
         "execution surface: the owner scenario end to end with the engine",
-        "INIT-027 execution cards keep persona data, policy linkage, and engine refusals visible"
+        "INIT-027 execution cards keep persona data, policy linkage, and engine refusals visible",
+        "STORY-355 GWT1+GWT2: a forged Host header is refused on every route, and the token now guards every GET under /api/",
+        "STORY-355 GWT4: container mode's default prose root sits above the chain container regardless of partition",
+        "STORY-355: an explicit --prose-root resolving inside a chain container fails at boot",
+        "STORY-355: --workspace mode's default prose root also lands above the chain container"
       ]
     },
     "portal/tests/ui-presence.test.mjs": {
-      "testCount": 13,
-      "assertionCount": 104,
+      "testCount": 15,
+      "assertionCount": 118,
       "testNames": [
         "INC-148 meta-criterion mutation ${MUTATION} must red",
         "INC-148 rendered DOM contract names every preview component",
         "INC-148 rendered DOM behavior changes receipt state",
+        "INC-221 a settle signal that never arrives fails by name, not by silent misread",
         "INC-151 rendered engine card follows the engine status value",
         "INC-151 rendered health card turns red when actor configuration is absent",
         "INC-150 vocabulary descriptions are localized in the executed DOM",
@@ -40,7 +52,8 @@
         "INC-192 abstract concepts carry a supplemental explanation the keyboard can reach",
         "INC-186 the dictionary carries no workspace data",
         "INC-185 the vendor model directory opens as the page's own drawer",
-        "S280 portal filters effort options from vocabulary and keeps the receipt chip on the chain"
+        "S280 portal exposes open effort values, shows retirement refusals, and keeps supported receipts",
+        "STORY-355 GWT3: the mobile nav toggle flips its state attributes, every destination stays reachable through it, and the 760px rules that gate it are present"
       ]
     },
     "tests/act11-adapter-acceptance.test.mjs": {
@@ -892,8 +905,8 @@
       ]
     },
     "tests/p3-cli-catalog.test.mjs": {
-      "testCount": 9,
-      "assertionCount": 33,
+      "testCount": 10,
+      "assertionCount": 39,
       "testNames": [
         "commands emits schema-valid, deterministic catalog JSON",
         "catalog and dispatcher are in two-way name parity",
@@ -901,7 +914,8 @@
         "required flags in the catalog match the dispatcher's missing-argument failure",
         "WSB-4: exactly the nullable flags carry the '-' sentinel, and only knowledge-create flags carry the 'null' alias",
         "WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel, only on expected-version",
-        "S279 model-plan-assign catalog keeps effort optional and headSentinel on expected-version",
+        "dispatch tier catalog declares its payload and CAS boundary",
+        "S369 retired model-plan commands refuse with and without their legacy flags",
         "INIT-009: operator pins make every non-fixture verb binary-invocable",
         "INC-016: no catalog entry is both a governed write and authority-bearing output"
       ]
@@ -1331,21 +1345,25 @@
       ]
     },
     "tests/s232-execution-config.test.mjs": {
-      "testCount": 6,
-      "assertionCount": 26,
+      "testCount": 8,
+      "assertionCount": 69,
       "testNames": [
-        "S232: the owner scenario — two configurations, one switch, one pinned persona",
-        "S232: every referential-integrity violation refuses by name and mutates nothing",
-        "S232: a default cannot be cleared by omission — only --clear does it",
+        "S369: dispatch writes preserve CAS, actor, settings.updated, and exact round-trip values",
+        "S369: two host tier tables stay isolated while a mode switch changes resolution",
+        "S369: malformed dispatch shapes and missing behaviour bits refuse without moving the head",
+        "S369: retired model-plan CLI names refuse while historical records remain readable",
+        "S369: selected dispatch mode resets through ordinary settings removal",
         "S233: the two policy keys are in the catalog with their closed value sets",
         "S234: a covered close without the declaration refuses; with it, the minutes carry the form",
         "S234: with the floor at its default, a close without the flag behaves exactly as before"
       ]
     },
     "tests/s238-persona-store.test.mjs": {
-      "testCount": 2,
-      "assertionCount": 23,
+      "testCount": 4,
+      "assertionCount": 45,
       "testNames": [
+        "S246: custom persona readback is the unified schema, with stable derived identity",
+        "S246: preset override accepts non-name fields, restores factory data, and tombstones safely",
         "S238: custom persona set/update/list is one event with a stable derived id",
         "S238: role, prompt, binding, and removal violations are named and do not advance the chain"
       ]
@@ -1360,22 +1378,22 @@
     },
     "tests/s244-model-plan.test.mjs": {
       "testCount": 6,
-      "assertionCount": 23,
+      "assertionCount": 22,
       "testNames": [
-        "INC-145 M1/M3/M4: model-plan host and bounded text guards refuse",
+        "S369: model-plan host strings remain open and bounded record fields refuse",
         "INC-145 M6: an active-plan reference refuses removal",
         "INC-152 MODEL_PLAN_IN_USE wiring names the settings reference",
-        "S279: one effort roster preserves vendor names, host applicability, and legacy replay",
-        "INC-184: a session level stays in the roster and is refused by the dispatch face",
-        "S282: a plan carries a default effort, held to the same rule as a per-persona one"
+        "S369: free effort values round-trip without a roster",
+        "S369: historical model-plan envelopes retain optional fields exactly",
+        "S369: dispatch resolution falls through lower tiers, keeps hosts isolated, and reports behaviour bits"
       ]
     },
     "tests/s245-subagent-plan-keys.test.mjs": {
       "testCount": 2,
-      "assertionCount": 14,
+      "assertionCount": 27,
       "testNames": [
-        "INC-145 active plan keys are cataloged, sorted, and vocabulary-linked",
-        "INC-145 model-plan-list rejects an unknown host and legacy writes are explicit"
+        "S369: dispatch settings are cataloged, sorted, and vocabulary-linked",
+        "S369: custom classes and modes merge, while unknown hosts stay absent from renderer hints"
       ]
     },
     "tests/s246-persona-overlay.test.mjs": {
@@ -1389,10 +1407,10 @@
     },
     "tests/s247-vocabulary.test.mjs": {
       "testCount": 2,
-      "assertionCount": 14,
+      "assertionCount": 18,
       "testNames": [
-        "INC-145 vocabulary derives role semantics, hosts, and conference relationships",
-        "INC-145 vocabulary preserves catalog metadata and both plan sources"
+        "S369: vocabulary distinguishes open configuration strings from known renderers",
+        "S369: vocabulary preserves catalog metadata and live replacement sources"
       ]
     },
     "tests/s281-machine-settings.test.mjs": {

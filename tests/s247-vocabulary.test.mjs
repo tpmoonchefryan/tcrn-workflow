@@ -7,15 +7,18 @@ import test from "node:test";
 import {
   CONFERENCE_EXECUTION_FORMS,
   CONFERENCE_TYPES,
-  MODEL_PLAN_HOSTS,
+  EXECUTION_HOSTS,
   PERSONA_ROLE_DEFINITIONS,
   SETTINGS_CATALOG,
   readVocabulary,
 } from "../dist/build/packages/core/src/index.js";
 
-test("INC-145 vocabulary derives role semantics, hosts, and conference relationships", () => {
+test("S369: vocabulary distinguishes open configuration strings from known renderers", () => {
   const vocabulary = readVocabulary();
-  assert.deepEqual(vocabulary.hosts, MODEL_PLAN_HOSTS);
+  assert.deepEqual(vocabulary.hosts, EXECUTION_HOSTS);
+  assert.equal(vocabulary.hostValueKind, "string");
+  assert.equal(vocabulary.effortValueKind, "string");
+  assert.deepEqual(vocabulary.efforts, []);
   assert.deepEqual(vocabulary.roles, PERSONA_ROLE_DEFINITIONS);
   assert.deepEqual(vocabulary.conferenceTypes.map((term) => term.value), CONFERENCE_TYPES);
   assert.ok(vocabulary.conferenceTypes.every((term) => term.description.length > 0 && Array.isArray(term.coveredByIndependenceFloors)));
@@ -24,7 +27,7 @@ test("INC-145 vocabulary derives role semantics, hosts, and conference relations
   assert.ok(vocabulary.executionForms.every((term) => term.description.length > 0));
 });
 
-test("INC-145 vocabulary preserves catalog metadata and both plan sources", () => {
+test("S369: vocabulary preserves catalog metadata and live replacement sources", () => {
   const vocabulary = readVocabulary();
   assert.ok(vocabulary.settingsEnums.every((term) => term.controlType === "enum"), "settingsEnums must not contain non-enum catalog entries");
   const expected = new Map(SETTINGS_CATALOG.map((entry) => [entry.key, entry]));
@@ -35,6 +38,7 @@ test("INC-145 vocabulary preserves catalog metadata and both plan sources", () =
     assert.equal(term.controlType, entry.controlType);
     assert.equal(term.defaultValue, entry.defaultValue);
   }
-  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.claudeCodeSubagentPlan").valueSource, "model-plan-list:claude-code");
-  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.codexSubagentPlan").valueSource, "model-plan-list:codex");
+  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.dispatchMode").valueSource, "dispatch-mode-list");
+  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.claudeCodeSubagentPlan").valueSource, "persona-list:modelPlans");
+  assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.codexSubagentPlan").valueSource, "persona-list:modelPlans");
 });

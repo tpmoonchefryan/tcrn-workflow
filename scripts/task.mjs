@@ -378,6 +378,16 @@ async function build() {
   }
   const canonicalOrder = await readSourceFile(resolve(repositoryRoot, "scripts/lib/canonical-order.mjs"));
   await safeWriteOutput(repositoryRoot, "dist/build/scripts/lib/canonical-order.mjs", canonicalOrder);
+  const dispatchConfigPath = resolve(repositoryRoot, "packages/core/src/dispatch-config.ts");
+  const dispatchDefaultsPath = resolve(repositoryRoot, "packages/core/data/dispatch-defaults.json");
+  if (await pathExists(dispatchConfigPath)) {
+    const dispatchDefaults = await readSourceFile(dispatchDefaultsPath);
+    await safeWriteOutput(
+      repositoryRoot,
+      "dist/build/packages/core/data/dispatch-defaults.json",
+      dispatchDefaults,
+    );
+  }
   return success("BUILD_VERIFIED", {
     files: files.length,
     engine: checked.engine,

@@ -9,6 +9,12 @@ import test from "node:test";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import { initializeWorkspace, derivePersonaId } from "../dist/build/packages/core/src/index.js";
+import {
+  acquireWorkspaceLease,
+  assignModelPlanInWorkspace,
+  setModelPlanInWorkspace,
+  unassignModelPlanInWorkspace,
+} from "../dist/build/packages/core/src/workspace.js";
 
 const instant = (second) => new Date(Date.UTC(2026, 0, 1) + second * 1000).toISOString().replace(/\.\d+Z$/u, "Z");
 
@@ -40,6 +46,21 @@ async function fixture(context, suffix) {
 
 const write = (command, workspace, version, at, args) => [command, "--workspace", workspace, "--expected-version", String(version), "--at", instant(at), ...args, "--actor", "agent:test"];
 const customArgs = (workspace, version, at, name, fields) => write("persona-set", workspace, version, at, ["--name", name, "--role", fields.role, "--job-title", fields.jobTitle, "--mission", fields.mission, "--refusals", fields.refusals, "--authority-boundary", fields.authorityBoundary, "--contact-when", fields.contactWhen, "--required-inputs", fields.requiredInputs, "--deliverables", fields.deliverables, "--success-criteria", fields.successCriteria]);
+
+async function historicalModelPlan(workspace, version, second, operation, input) {
+  const lease = await acquireWorkspaceLease(workspace, { now: instant(second) });
+  try {
+    const options = { ...input, expectedVersion: version, occurredAt: instant(second), actorId: "agent:test" };
+    const result = operation === "set"
+      ? await setModelPlanInWorkspace(workspace, lease, options)
+      : operation === "assign"
+        ? await assignModelPlanInWorkspace(workspace, lease, options)
+        : await unassignModelPlanInWorkspace(workspace, lease, options);
+    return result;
+  } finally {
+    await lease.release();
+  }
+}
 
 test("S246: custom persona readback is the unified schema, with stable derived identity", async (t) => {
   const { workspace, version } = await fixture(t, "custom");
@@ -81,11 +102,11 @@ test("S246: preset override accepts non-name fields, restores factory data, and 
   assert.equal(verity.role, "reviewer");
   assert.equal(verity.overridden, false);
 
-  await json(write("model-plan-set", workspace, await version(), 4, ["--host", "codex", "--name", "review", "--default-model", "m"]));
-  await json(write("model-plan-assign", workspace, await version(), 5, ["--host", "codex", "--plan", "review", "--persona", "Verity", "--model", "m2"]));
+  await historicalModelPlan(workspace, await version(), 4, "set", { host: "codex", name: "review", defaultModel: "m" });
+  await historicalModelPlan(workspace, await version(), 5, "assign", { host: "codex", name: "review", persona: "Verity", model: "m2" });
   const inUse = await refusal(write("persona-remove", workspace, await version(), 6, ["--name", "Verity"]));
   assert.equal(inUse.reasonCode, "PERSONA_PRESET_IN_USE");
-  await json(write("model-plan-unassign", workspace, await version(), 7, ["--host", "codex", "--plan", "review", "--persona", "Verity"]));
+  await historicalModelPlan(workspace, await version(), 7, "unassign", { host: "codex", name: "review", persona: "Verity" });
   const removed = await json(write("persona-remove", workspace, await version(), 8, ["--name", "Verity"]));
   assert.equal(removed.reasonCode, "PERSONA_REMOVE_COMMITTED");
   assert.equal((await json(["persona-list", "--workspace", workspace])).personas.some((persona) => persona.name === "Verity"), false);
@@ -125,13 +146,13 @@ test("S238: role, prompt, binding, and removal violations are named and do not a
   const badPrompt = await refusal(["persona-set", "--workspace", workspace, "--expected-version", String(stable), "--at", instant(3), "--name", "legacy-prompt", "--role", "reviewer", "--prompt", "retired", "--actor", "agent:test"]);
   assert.equal(badPrompt.reasonCode, "CLI_ARGUMENT_UNKNOWN");
   assert.equal(await version(), stable);
-  await json(write("model-plan-set", workspace, await version(), 4, ["--host", "codex", "--name", "review", "--default-model", "m"]));
-  const assigned = await json(write("model-plan-assign", workspace, await version(), 5, ["--host", "codex", "--plan", "review", "--persona", "审计员", "--model", "m2"]));
-  assert.equal(assigned.plans.find((plan) => plan.name === "review").assignments["审计员"], "m2");
+  await historicalModelPlan(workspace, await version(), 4, "set", { host: "codex", name: "review", defaultModel: "m" });
+  const assigned = await historicalModelPlan(workspace, await version(), 5, "assign", { host: "codex", name: "review", persona: "审计员", model: "m2" });
+  assert.equal(assigned.executionConfig.modelPlans.find((plan) => plan.name === "review").assignments["审计员"], "m2");
   const referenced = await refusal(write("persona-remove", workspace, await version(), 6, ["--name", "审计员"]));
   assert.equal(referenced.reasonCode, "EXECUTION_PERSONA_IN_USE");
   assert.match(referenced.message, /model plan/u);
-  await json(write("model-plan-unassign", workspace, await version(), 7, ["--host", "codex", "--plan", "review", "--persona", "审计员"]));
+  await historicalModelPlan(workspace, await version(), 7, "unassign", { host: "codex", name: "review", persona: "审计员" });
   const removed = await json(write("persona-remove", workspace, await version(), 8, ["--name", "审计员"]));
   assert.equal(removed.reasonCode, "PERSONA_REMOVE_COMMITTED");
   assert.equal((await json(["persona-list", "--workspace", workspace])).personas.some((persona) => persona.name === "审计员"), false);

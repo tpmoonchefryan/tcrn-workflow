@@ -1,20 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { assertStrictInstant, canonicalJson, compareCanonicalText } from "../../protocol/src/index.js";
-import { AGENT_EFFORT_ROSTER } from "./effort.js";
 import type { AgentEffortName } from "./effort.js";
 
-/** The closed host roster is the adapter roster, not a user-editable enum. */
-export const MODEL_PLAN_HOSTS = Object.freeze(["claude-code", "codex"] as const);
-export type ModelPlanHost = typeof MODEL_PLAN_HOSTS[number];
+/** Historical records retain their host string without a capability roster. */
+export type ModelPlanHost = string;
 export const MODEL_PLAN_VERSION = "tcrn.model-plan.v1" as const;
 
 export const MODEL_PLAN_REASON_CODES = Object.freeze([
   "MODEL_PLAN_ASSIGNMENT_INVALID",
   "MODEL_PLAN_DEFAULT_MODEL_INVALID",
-  "MODEL_PLAN_EFFORT_HOST_UNSUPPORTED",
-  "MODEL_PLAN_EFFORT_NOT_ASSIGNABLE",
-  "MODEL_PLAN_HOST_UNKNOWN",
   "MODEL_PLAN_IN_USE",
   "MODEL_PLAN_NAME_INVALID",
   "MODEL_PLAN_NOT_FOUND",
@@ -45,9 +40,10 @@ function bounded(value: unknown, label: string, maximum: number, reasonCode: Mod
 }
 
 export function assertModelPlanHost(value: unknown): asserts value is ModelPlanHost {
-  if (!(MODEL_PLAN_HOSTS as readonly string[]).includes(value as string)) {
-    fail("MODEL_PLAN_HOST_UNKNOWN", `${String(value)} is not a legal model-plan host; choose one of ${MODEL_PLAN_HOSTS.join(", ")}`);
+  if (typeof value !== "string" || value.length === 0 || value.includes("\u0000")) {
+    fail("MODEL_PLAN_RECORD_INVALID", "model-plan host must be a non-empty string");
   }
+  canonicalJson(value);
 }
 
 export function validateModelPlanName(value: unknown): string {
@@ -58,24 +54,13 @@ export function validateModelPlanModel(value: unknown): string {
   return bounded(value, "model plan model", 128, "MODEL_PLAN_DEFAULT_MODEL_INVALID");
 }
 
-/**
- * A plan's effort is per-persona dispatch configuration, so two separate things
- * disqualify a value here and they fail with different reason codes: the level may
- * not exist on this host at all, or it may exist as a session level the host cannot
- * carry per dispatch.  Both messages list the values that would have been accepted,
- * which for the second case is the assignable subset rather than the whole roster.
- */
-export function validateModelPlanEffort(value: unknown, host: ModelPlanHost): AgentEffortName {
-  const assignable = AGENT_EFFORT_ROSTER.filter((candidate) => candidate.applicableHosts.includes(host) && candidate.assignableToSubagent).map((candidate) => candidate.name).join(", ");
-  const record = AGENT_EFFORT_ROSTER.find((candidate) => candidate.name === value);
-  if (record === undefined || !record.applicableHosts.includes(host)) {
-    const legal = AGENT_EFFORT_ROSTER.filter((candidate) => candidate.applicableHosts.includes(host)).map((candidate) => candidate.name).join(", ");
-    fail("MODEL_PLAN_EFFORT_HOST_UNSUPPORTED", `effort ${String(value)} is not valid for ${host}; legal values: ${legal}`);
+/** Replay preserves effort strings without consulting a vendor or host roster. */
+export function validateModelPlanEffort(value: unknown, _host: ModelPlanHost): AgentEffortName {
+  if (typeof value !== "string") {
+    fail("MODEL_PLAN_RECORD_INVALID", "model-plan effort must be a string");
   }
-  if (!record.assignableToSubagent) {
-    fail("MODEL_PLAN_EFFORT_NOT_ASSIGNABLE", `effort ${record.name} is a ${host} session level and cannot be assigned to one persona; assignable values: ${assignable}`);
-  }
-  return record.name;
+  canonicalJson(value);
+  return value;
 }
 
 export interface ModelPlanRecord {
@@ -84,14 +69,9 @@ export interface ModelPlanRecord {
   readonly name: string;
   readonly defaultModel: string;
   readonly assignments: Readonly<Record<string, string>>;
-  /** Optional so events and state written before S279 replay byte-for-byte. */
+  /** Optional so historical records retain their exact stored envelope. */
   readonly efforts?: Readonly<Record<string, AgentEffortName>>;
-  /**
-   * The effort a persona gets when it has no entry in `efforts`. Optional for the same
-   * replay reason, and validated by the same function as a per-persona effort — a
-   * second predicate here would let the "session levels are not dispatchable" boundary
-   * hold in one place and not the other, and the loose side becomes the way around it.
-   */
+  /** Optional so historical records retain their exact stored envelope. */
   readonly defaultEffort?: AgentEffortName;
   readonly revision: number;
   readonly updatedAt: string;

@@ -201,13 +201,9 @@ export {
   removeHostConfigurationInWorkspace,
   removeCustomPersonaInWorkspace,
   removePersonaBindingInWorkspace,
-  removeModelPlanInWorkspace,
   removePersonaInWorkspace,
   restorePersonaPresetInWorkspace,
   overridePersonaPresetInWorkspace,
-  assignModelPlanInWorkspace,
-  setModelPlanInWorkspace,
-  unassignModelPlanInWorkspace,
   setCustomPersonaInWorkspace,
   setHostConfigurationInWorkspace,
   setHostDefaultInWorkspace,
@@ -315,11 +311,14 @@ export {
   validateNote,
 } from "./execution-config.js";
 export {
-  MODEL_PLAN_HOSTS,
+  dispatchSettingUpdate,
+  readDispatchConfig,
+  resolveDispatch,
+} from "./dispatch-config.js";
+export {
   MODEL_PLAN_REASON_CODES,
   MODEL_PLAN_VERSION,
   ModelPlanError,
-  assertModelPlanHost,
   applyModelPlanAssign,
   applyModelPlanRemove,
   applyModelPlanSet,
@@ -331,14 +330,6 @@ export {
   validateModelPlanState,
 } from "./model-plan.js";
 export type { ModelPlanHost, ModelPlanReasonCode, ModelPlanRecord } from "./model-plan.js";
-export {
-  AGENT_EFFORT_HOSTS,
-  AGENT_EFFORT_NAMES,
-  AGENT_EFFORT_ROSTER,
-  AGENT_EFFORT_VERSION,
-  effortForHost,
-} from "./effort.js";
-export type { AgentEffortHost, AgentEffortName, AgentEffortRecord } from "./effort.js";
 export type {
   ExecutionConfigState,
   ExecutionHost,

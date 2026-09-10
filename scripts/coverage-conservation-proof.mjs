@@ -40,8 +40,8 @@ async function main() {
   const directory = await mkdtemp(join(tmpdir(), "tcrn-inc155-coverage-"));
   try {
     const s244 = await readFile(s244Path, "utf8");
-    const firstStart = s244.indexOf('test("INC-145 M1/M3/M4:');
-    const secondStart = s244.indexOf('\n\ntest("INC-145 M6:', firstStart);
+    const firstStart = s244.indexOf('test("INC-145 M6:');
+    const secondStart = s244.indexOf('\n\ntest("INC-152 MODEL_PLAN_IN_USE wiring names the settings reference"', firstStart);
     if (firstStart < 0 || secondStart < 0) throw new Error("INC155_S244_MUTATION_ANCHOR_MISSING");
     const deletedTestSource = `${s244.slice(0, firstStart)}${s244.slice(secondStart + 2)}`;
     const deletedOverride = join(directory, "deleted-s244.json");
@@ -96,8 +96,8 @@ async function main() {
     const valid = deletedCase.exitCode !== 0
       && deletedCase.reasonCode === "COVERAGE_CONSERVATION_VIOLATION"
       && deletedCase.target?.path === s244Path
-      && deletedCase.target.removedTests.includes("INC-145 M1/M3/M4: model-plan host and bounded text guards refuse")
-      && deletedCase.target.unwaivedTests.includes("INC-145 M1/M3/M4: model-plan host and bounded text guards refuse")
+      && deletedCase.target.removedTests.includes("INC-145 M6: an active-plan reference refuses removal")
+      && deletedCase.target.unwaivedTests.includes("INC-145 M6: an active-plan reference refuses removal")
       && missingCase.exitCode !== 0
       && missingCase.reasonCode === "COVERAGE_BASELINE_INCOMPLETE"
       && missingCase.baselineCompleteness.missingFiles.includes(s244Path)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// INIT-028 S244/S245: model-plan records, active plan settings, and retired writes.
+// INIT-028 S244/S245: dispatch settings, historical model-plan replay, and retired writes.
 
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
@@ -8,7 +8,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
-import { initializeWorkspace } from "../dist/build/packages/core/src/index.js";
+import { initializeWorkspace, validateWorkspace } from "../dist/build/packages/core/src/index.js";
 
 const instant = (second) => new Date(Date.UTC(2026, 0, 1) + second * 1000).toISOString().replace(/\.\d+Z$/u, "Z");
 
@@ -40,90 +40,140 @@ async function fixture(context, suffix) {
 
 const write = (command, workspace, version, at, args) => [command, "--workspace", workspace, "--expected-version", String(version), "--at", instant(at), ...args, "--actor", "agent:test"];
 
-test("S244: a plan is a named host record with default and persona assignments", async (t) => {
-  const { workspace, version } = await fixture(t, "plan");
-  const created = await json(write("model-plan-set", workspace, await version(), 1, ["--host", "claude-code", "--name", "daily", "--default-model", "opus-5"]));
-  assert.equal(created.reasonCode, "MODEL_PLAN_WRITE_COMMITTED");
-  assert.equal(created.plans[0].assignments && Object.keys(created.plans[0].assignments).length, 0);
-  const assigned = await json(write("model-plan-assign", workspace, await version(), 2, ["--host", "claude-code", "--plan", "daily", "--persona", "Verity", "--model", "sonnet-5", "--effort", "high"]));
-  assert.equal(assigned.plans[0].assignments.Verity, "sonnet-5");
-  assert.equal(assigned.plans[0].efforts.Verity, "high");
-  const readback = await json(["model-plan-list", "--workspace", workspace, "--host", "claude-code"]);
-  assert.deepEqual(readback.plans.map((plan) => ({ host: plan.host, name: plan.name, defaultModel: plan.defaultModel, assignments: plan.assignments })), [{ host: "claude-code", name: "daily", defaultModel: "opus-5", assignments: { Verity: "sonnet-5" } }]);
+test("S369: dispatch writes preserve CAS, actor, settings.updated, and exact round-trip values", async (t) => {
+  const { workspace, version } = await fixture(t, "dispatch-writes");
+  const enabled = await json(["attestation-enable", "--workspace", workspace, "--expected-version", "0", "--at", instant(1), "--actor", "agent:attester"]);
+  assert.equal(enabled.version, 1);
 
-  const unknownPersona = await refusal(write("model-plan-assign", workspace, await version(), 3, ["--host", "claude-code", "--plan", "daily", "--persona", "ghost", "--model", "x"]));
-  assert.equal(unknownPersona.reasonCode, "MODEL_PLAN_PERSONA_UNKNOWN");
-  const unknownPlan = await refusal(write("model-plan-assign", workspace, await version(), 4, ["--host", "claude-code", "--plan", "ghost", "--persona", "Verity", "--model", "x"]));
-  assert.equal(unknownPlan.reasonCode, "MODEL_PLAN_NOT_FOUND");
-});
+  const tiers = JSON.stringify({ flagship: null, main: { model: "main-model", effort: "xhigh2" }, economy: { model: "economy-model", effort: "" } });
+  const first = await json(write("dispatch-tiers-set", workspace, await version(), 2, ["--host", "gemini", "--tiers", tiers]));
+  assert.equal(first.reasonCode, "DISPATCH_CONFIG_WRITE_COMMITTED");
+  assert.equal(first.version, 2);
+  assert.equal(first.tiers.gemini.main.effort, "xhigh2");
 
-test("S245: active plan keys reference existing plans and the old write family is retired", async (t) => {
-  const { workspace, version } = await fixture(t, "settings");
-  await json(write("model-plan-set", workspace, await version(), 1, ["--host", "codex", "--name", "review", "--default-model", "gpt-5"]));
-  const active = await json(write("settings-set", workspace, await version(), 2, ["--key", "execution.codexSubagentPlan", "--value", "review"]));
-  assert.equal(active.reasonCode, "SETTINGS_WRITE_COMMITTED");
-  const catalog = await json(["settings-catalog", "--workspace", workspace]);
-  assert.equal(catalog.settings.find((entry) => entry.key === "execution.codexSubagentPlan").currentValue, "review");
-  const badReference = await refusal(write("settings-set", workspace, await version(), 3, ["--key", "execution.claudeCodeSubagentPlan", "--value", "missing"]));
-  assert.equal(badReference.reasonCode, "MODEL_PLAN_NOT_FOUND");
-  assert.equal(await version(), active.version);
+  const classes = await json(write("dispatch-classes-set", workspace, await version(), 3, ["--classes", JSON.stringify({ "review-visual": { dispatch: true, verify: false } })]));
+  assert.equal(classes.version, 3);
+  assert.deepEqual(classes.classes["review-visual"], { dispatch: true, verify: false });
 
-  const retired = await refusal(["execution-config", "--workspace", workspace]);
-  assert.equal(retired.reasonCode, "CLI_COMMAND_UNKNOWN");
-  for (const command of ["host-config-set", "host-config-default", "host-config-remove", "persona-binding-set", "persona-binding-remove"]) {
-    assert.equal((await refusal([command])).reasonCode, "CLI_COMMAND_UNKNOWN", command);
-  }
+  const modes = await json(write("dispatch-mode-set", workspace, await version(), 4, ["--name", "custom", "--mapping", JSON.stringify({ "review-visual": "main" })]));
+  assert.equal(modes.version, 4);
+  const resolved = await json(["dispatch-mode-list", "--workspace", workspace, "--host", "gemini", "--class", "review-visual", "--mode", "custom"]);
+  assert.deepEqual(resolved.resolution, {
+    taskClass: "review-visual",
+    host: "gemini",
+    mode: "custom",
+    dispatch: true,
+    verify: false,
+    requestedTier: "main",
+    resolvedTier: "main",
+    value: { model: "main-model", effort: "xhigh2" },
+  });
 
-  const unset = await json(write("settings-remove", workspace, await version(), 4, ["--key", "execution.codexSubagentPlan"]));
-  assert.equal(unset.reasonCode, "SETTINGS_WRITE_COMMITTED");
-  assert.equal((await json(["settings-catalog", "--workspace", workspace])).settings.find((entry) => entry.key === "execution.codexSubagentPlan").currentValue, null);
-  const vocabulary = await json(["vocabulary"]);
-  assert.equal(vocabulary.reasonCode, "VOCABULARY_READY");
-  assert.deepEqual(vocabulary.hosts, ["claude-code", "codex"]);
-});
-
-test("S232: the owner scenario — two configurations, one switch, one pinned persona", async (t) => {
-  const { workspace, version } = await fixture(t, "owner-remediation");
-  const first = await json(write("model-plan-set", workspace, await version(), 1, ["--host", "claude-code", "--name", "strong", "--default-model", "opus-5"]));
-  assert.equal(first.reasonCode, "MODEL_PLAN_WRITE_COMMITTED");
-  const second = await json(write("model-plan-set", workspace, await version(), 2, ["--host", "claude-code", "--name", "economy", "--default-model", "sonnet-5"]));
-  assert.equal(second.plans.length, 2);
-  const pinned = await json(write("model-plan-assign", workspace, await version(), 3, ["--host", "claude-code", "--plan", "strong", "--persona", "Verity", "--model", "opus-5"]));
-  assert.equal(pinned.plans.find((plan) => plan.name === "strong").assignments.Verity, "opus-5");
-  const active = await json(write("settings-set", workspace, await version(), 4, ["--key", "execution.claudeCodeSubagentPlan", "--value", "economy"]));
-  assert.equal(active.reasonCode, "SETTINGS_WRITE_COMMITTED");
-  assert.equal((await json(["settings-catalog", "--workspace", workspace])).settings.find((entry) => entry.key === "execution.claudeCodeSubagentPlan").currentValue, "economy");
-  const readback = await json(["model-plan-list", "--workspace", workspace, "--host", "claude-code"]);
-  assert.equal(readback.plans.find((plan) => plan.name === "strong").assignments.Verity, "opus-5");
+  const replayed = await validateWorkspace(workspace);
+  const settingsEvents = replayed.events.filter((event) => event.payload.operation === "settings.updated");
+  assert.equal(settingsEvents.length, 3);
+  assert.deepEqual(settingsEvents.map((event) => event.payload.actor), ["agent:test", "agent:test", "agent:test"]);
+  assert.ok(settingsEvents.every((event) => event.payload.record.key.startsWith("execution.dispatch")));
+  assert.equal(replayed.version, 4);
   assert.equal((await json(["validate", "--workspace", workspace])).reasonCode, "WORKSPACE_COMMAND_COMPLETED");
+
+  const stale = await refusal(write("dispatch-mode-set", workspace, 2, 5, ["--name", "stale", "--mapping", JSON.stringify({ implement: "main" })]));
+  assert.notEqual(stale.reasonCode, undefined);
+  assert.equal(await version(), 4);
+  const headed = await json(write("dispatch-mode-set", workspace, "head", 6, ["--name", "headed", "--mapping", JSON.stringify({ implement: "main" })]));
+  assert.equal(headed.version, 5);
 });
 
-test("S232: every referential-integrity violation refuses by name and mutates nothing", async (t) => {
-  const { workspace, version } = await fixture(t, "integrity-remediation");
-  await json(write("model-plan-set", workspace, await version(), 1, ["--host", "codex", "--name", "review", "--default-model", "gpt-5"]));
-  const before = await version();
-  const unknownHost = await refusal(write("model-plan-set", workspace, before, 2, ["--host", "vscode", "--name", "bad", "--default-model", "m"]));
-  assert.equal(unknownHost.reasonCode, "MODEL_PLAN_HOST_UNKNOWN");
-  assert.match(unknownHost.message, /claude-code.*codex/u);
-  const unknownPersona = await refusal(write("model-plan-assign", workspace, before, 3, ["--host", "codex", "--plan", "review", "--persona", "ghost", "--model", "m"]));
-  assert.equal(unknownPersona.reasonCode, "MODEL_PLAN_PERSONA_UNKNOWN");
-  assert.equal(await version(), before);
-  const unknownPlan = await refusal(write("model-plan-assign", workspace, before, 4, ["--host", "codex", "--plan", "ghost", "--persona", "Verity", "--model", "m"]));
-  assert.equal(unknownPlan.reasonCode, "MODEL_PLAN_NOT_FOUND");
-  assert.equal(await version(), before);
-  const badReference = await refusal(write("settings-set", workspace, before, 5, ["--key", "execution.codexSubagentPlan", "--value", "missing"]));
-  assert.equal(badReference.reasonCode, "MODEL_PLAN_NOT_FOUND");
-  assert.equal(await version(), before);
+test("S369: two host tier tables stay isolated while a mode switch changes resolution", async (t) => {
+  const { workspace, version } = await fixture(t, "mode-isolation");
+  const claude = await json(write("dispatch-tiers-set", workspace, await version(), 1, ["--host", "claude-code", "--tiers", JSON.stringify({ flagship: null, main: { model: "claude-main", effort: "high" }, economy: { model: "claude-eco", effort: "low" } })]));
+  const codex = await json(write("dispatch-tiers-set", workspace, await version(), 2, ["--host", "codex", "--tiers", JSON.stringify({ flagship: null, main: { model: "codex-main", effort: "medium" }, economy: { model: "codex-eco", effort: "none" } })]));
+  await json(write("dispatch-mode-set", workspace, await version(), 3, ["--name", "custom", "--mapping", JSON.stringify({ implement: "economy" })]));
+
+  const frontier = await json(["dispatch-mode-list", "--workspace", workspace, "--host", "claude-code", "--class", "implement"]);
+  assert.equal(frontier.resolution.value.model, "claude-main");
+  assert.equal(frontier.resolution.dispatch, true);
+  assert.equal(frontier.resolution.verify, true);
+  const codexRead = await json(["dispatch-mode-list", "--workspace", workspace, "--host", "codex", "--class", "implement"]);
+  assert.equal(codexRead.resolution.value.model, "codex-main", "frontier reads the selected host's main row");
+
+  const switched = await json(write("settings-set", workspace, await version(), 4, ["--key", "execution.dispatchMode", "--value", "custom"]));
+  assert.equal(switched.version, 4);
+  const custom = await json(["dispatch-mode-list", "--workspace", workspace, "--host", "codex", "--class", "implement"]);
+  assert.equal(custom.mode, "custom");
+  assert.deepEqual(custom.resolution.value, { model: "codex-eco", effort: "none" });
+  const reloaded = await validateWorkspace(workspace);
+  assert.equal(reloaded.settings.find((entry) => entry.key === "execution.dispatchMode").value, "custom");
+  assert.equal(reloaded.settings.find((entry) => entry.key === "execution.dispatchTiers").value.includes("claude-main"), true);
+  assert.equal(reloaded.settings.find((entry) => entry.key === "execution.dispatchTiers").value.includes("codex-eco"), true);
+  assert.equal(claude.version, 1);
+  assert.equal(codex.version, 2);
 });
 
-test("S232: a default cannot be cleared by omission — only --clear does it", async (t) => {
-  const { workspace, version } = await fixture(t, "clear-remediation");
-  await json(write("model-plan-set", workspace, await version(), 1, ["--host", "codex", "--name", "review", "--default-model", "gpt-5"]));
-  await json(write("settings-set", workspace, await version(), 2, ["--key", "execution.codexSubagentPlan", "--value", "review"]));
-  assert.equal((await json(["settings-catalog", "--workspace", workspace])).settings.find((entry) => entry.key === "execution.codexSubagentPlan").currentValue, "review");
-  const cleared = await json(write("settings-remove", workspace, await version(), 3, ["--key", "execution.codexSubagentPlan"]));
-  assert.equal(cleared.reasonCode, "SETTINGS_WRITE_COMMITTED");
-  assert.equal((await json(["settings-catalog", "--workspace", workspace])).settings.find((entry) => entry.key === "execution.codexSubagentPlan").currentValue, null);
+test("S369: malformed dispatch shapes and missing behaviour bits refuse without moving the head", async (t) => {
+  const { workspace, version } = await fixture(t, "dispatch-refusals");
+  const before = await json(["status", "--workspace", workspace]);
+  const missingBoth = await refusal(write("dispatch-classes-set", workspace, before.version, 1, ["--classes", JSON.stringify({ "review-visual": {} })]));
+  assert.equal(missingBoth.reasonCode, "DISPATCH_CLASS_BEHAVIOUR_REQUIRED");
+  assert.match(missingBoth.message, /dispatch.*verify/u);
+  const afterMissingBoth = await json(["status", "--workspace", workspace]);
+  assert.equal(afterMissingBoth.version, before.version);
+  assert.equal(afterMissingBoth.headEventHash, before.headEventHash);
+  const missingDispatch = await refusal(write("dispatch-classes-set", workspace, 0, 1, ["--classes", JSON.stringify({ "review-visual": { verify: false } })]));
+  assert.equal(missingDispatch.reasonCode, "DISPATCH_CLASS_BEHAVIOUR_REQUIRED");
+  assert.match(missingDispatch.message, /dispatch.*verify/u);
+  const missingVerify = await refusal(write("dispatch-classes-set", workspace, 0, 1, ["--classes", JSON.stringify({ "review-visual": { dispatch: true } })]));
+  assert.equal(missingVerify.reasonCode, "DISPATCH_CLASS_BEHAVIOUR_REQUIRED");
+  assert.match(missingVerify.message, /dispatch.*verify/u);
+  const cases = [
+    ["dispatch-tiers-set", ["--host", "gemini", "--tiers", JSON.stringify({ main: { model: "model" } })]],
+    ["dispatch-mode-set", ["--name", "broken", "--mapping", JSON.stringify({ implement: "unknown-tier" })]],
+    ["settings-set", ["--key", "execution.dispatchClasses", "--value", JSON.stringify({ "review-visual": { dispatch: true } })]],
+  ];
+  for (const [command, args] of cases) {
+    const error = await refusal(write(command, workspace, await version(), 1, args));
+    assert.ok(error.reasonCode);
+    assert.equal(await version(), before.version, `${command} must not append on refusal`);
+    assert.equal((await json(["status", "--workspace", workspace])).headEventHash, before.headEventHash);
+  }
+  const missing = await refusal(["dispatch-mode-list", "--workspace", workspace, "--host", "gemini"]);
+  assert.equal(missing.reasonCode, "CLI_ARGUMENT_MISSING");
+  assert.equal((await json(["status", "--workspace", workspace])).version, 0);
+  const shape = { gemini: { flagship: null, main: { model: "", effort: "" }, economy: null } };
+  const envelopeOverhead = JSON.stringify(shape).length;
+  const atLimit = JSON.stringify({ gemini: { flagship: null, main: { model: "x".repeat(4096 - envelopeOverhead), effort: "" }, economy: null } });
+  assert.equal(atLimit.length, 4096);
+  const accepted = await json(write("settings-set", workspace, 0, 2, ["--key", "execution.dispatchTiers", "--value", atLimit]));
+  assert.equal(accepted.version, 1, "the existing 4096-character setting envelope accepts its boundary");
+  const beforeOversized = await json(["status", "--workspace", workspace]);
+  const oversized = JSON.stringify({ gemini: { flagship: null, main: { model: "x".repeat(4097 - envelopeOverhead), effort: "" }, economy: null } });
+  assert.equal(oversized.length, 4097);
+  const rejected = await refusal(write("settings-set", workspace, beforeOversized.version, 3, ["--key", "execution.dispatchTiers", "--value", oversized]));
+  assert.equal(rejected.reasonCode, "SETTINGS_VALUE_INVALID");
+  assert.equal((await json(["status", "--workspace", workspace])).version, beforeOversized.version);
+  assert.equal((await json(["status", "--workspace", workspace])).headEventHash, beforeOversized.headEventHash);
+});
+
+test("S369: retired model-plan CLI names refuse while historical records remain readable", async (t) => {
+  const { workspace, version } = await fixture(t, "retirement");
+  for (const command of ["model-plan-assign", "model-plan-list", "model-plan-remove", "model-plan-set", "model-plan-unassign"]) {
+    const error = await refusal([command]);
+    assert.equal(error.reasonCode, "CLI_COMMAND_UNKNOWN");
+    const withLegacyFlags = await refusal([command, "--workspace", workspace, "--expected-version", "0", "--at", instant(1), "--host", "codex", "--name", "legacy", "--default-model", "model"]);
+    assert.equal(withLegacyFlags.reasonCode, "CLI_COMMAND_UNKNOWN");
+  }
+  assert.equal((await json(["persona-list", "--workspace", workspace])).modelPlans.length, 0);
+  assert.equal(await version(), 0);
+});
+
+test("S369: selected dispatch mode resets through ordinary settings removal", async (t) => {
+  const { workspace, version } = await fixture(t, "mode-clear");
+  const changed = await json(write("settings-set", workspace, await version(), 1, ["--key", "execution.dispatchMode", "--value", "eco"]));
+  assert.equal(changed.version, 1);
+  assert.equal((await json(["dispatch-mode-list", "--workspace", workspace])).mode, "eco");
+  const cleared = await json(write("settings-remove", workspace, await version(), 2, ["--key", "execution.dispatchMode"]));
+  assert.equal(cleared.version, 2);
+  assert.equal((await json(["dispatch-mode-list", "--workspace", workspace])).mode, "frontier");
 });
 
 test("S233: the two policy keys are in the catalog with their closed value sets", async (t) => {

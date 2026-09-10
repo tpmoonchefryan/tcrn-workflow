@@ -35,22 +35,22 @@
         "path": "tests/s244-model-plan.test.mjs",
         "baseline": {
           "testCount": 6,
-          "assertionCount": 23
+          "assertionCount": 22
         },
         "current": {
           "testCount": 5,
-          "assertionCount": 23
+          "assertionCount": 21
         },
         "removedTests": [
-          "INC-145 M1/M3/M4: model-plan host and bounded text guards refuse"
+          "INC-145 M6: an active-plan reference refuses removal"
         ],
         "unwaivedTests": [
-          "INC-145 M1/M3/M4: model-plan host and bounded text guards refuse"
+          "INC-145 M6: an active-plan reference refuses removal"
         ],
         "testCountLoss": 1,
         "testCountWaived": false,
-        "assertionLoss": 0,
-        "assertionWaived": false,
+        "assertionLoss": 1,
+        "assertionWaived": true,
         "ok": false
       }
     },
@@ -109,11 +109,14 @@
 ```
 
 关键红点分别是：删除 s244 test 块红并指名文件（即使当前计数因新增测试未下降）；不更新基线红并列出新文件；
-保留 test 名但抽空断言仍红且 `removedTests=[]`、`assertionLoss=20`；恢复后
+保留 test 名但抽空断言仍红且 `removedTests=[]`、`assertionLoss=27`；恢复后
 128/128 完整性与守恒同时转绿。
+
+第二十五次重录（2026-09-09，TCRN-CROSS-STORY-369）：本单保留覆盖基线的 128 个文件，改写九个既有测试文件的 AST 计数；被 Requirement 推翻的旧测试名通过带 `replacement` 的 coverage waiver 逐条承接，未删除测试文件或基线成员。
 
 ## 边界
 
-没有添加 coverage waiver 来掩盖本批缺口。既有依赖测试的改名由一条具名、
-带 replacement 的 waiver 记录，证明 name-based 分支真实可用。0.11.15、
+本单的 coverage waiver 只记录 TCRN-CROSS-MIN-198 D2 / TCRN-CROSS-STORY-369
+要求的替代路径，没有用来掩盖未承接的缺口。每条改名记录都具名并带 replacement，
+证明 name-based 分支真实可用。0.11.15、
 helper c41、push/tag/deploy 和发布仍停放。

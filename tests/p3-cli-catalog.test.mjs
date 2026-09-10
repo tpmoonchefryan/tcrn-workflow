@@ -137,28 +137,41 @@ test("WSB-7/WSD-2: exactly the workspace-event mutation verbs carry headSentinel
   assert.deepEqual([...sentinelVerbs].sort(), [
     "attestation-enable",
     "conference-append-position", "conference-cancel", "conference-close", "conference-open",
+    "dispatch-classes-set", "dispatch-mode-set", "dispatch-tiers-set",
     "gate-create", "gate-delete", "gate-transition",
-    "model-plan-assign", "model-plan-remove", "model-plan-set", "model-plan-unassign",
     "persona-preset-override", "persona-preset-restore", "persona-remove", "persona-set",
     "project-create", "project-delete", "project-update",
     "settings-remove", "settings-set", "template-admit", "work-annotate", "work-batch", "work-create", "work-delete", "work-transition",
   ]);
 });
 
-test("S279 model-plan-assign catalog keeps effort optional and headSentinel on expected-version", async () => {
-  const entry = COMMAND_CATALOG.find((candidate) => candidate.name === "model-plan-assign");
+test("dispatch tier catalog declares its payload and CAS boundary", async () => {
+  const entry = COMMAND_CATALOG.find((candidate) => candidate.name === "dispatch-tiers-set");
   assert.ok(entry);
   assert.deepEqual(entry.flags.map((flag) => flag.name), [
-    "workspace", "expected-version", "at", "host", "plan", "persona", "model", "effort", "actor", "attest-dir",
+    "workspace", "expected-version", "at", "host", "tiers", "actor", "attest-dir",
   ]);
-  assert.deepEqual(entry.flags.find((flag) => flag.name === "effort"), { name: "effort", required: false, valueKind: "string" });
+  assert.deepEqual(entry.flags.find((flag) => flag.name === "tiers"), { name: "tiers", required: true, valueKind: "string" });
   assert.equal(entry.flags.find((flag) => flag.name === "expected-version")?.headSentinel, true);
-  assert.equal(entry.flags.find((flag) => flag.name === "effort")?.headSentinel, undefined);
+  assert.equal(entry.flags.find((flag) => flag.name === "tiers")?.headSentinel, undefined);
 
   const policy = JSON.parse(await readFile(new URL("../scripts/policy/source-allowlist.json", import.meta.url), "utf8"));
   for (const path of ["packages/core/src/effort.ts", "portal/design-baseline.html", "scripts/s278-component-coverage.mjs"]) {
     assert.ok(policy.allowedFiles.includes(path), `${path} must be source-allowlisted`);
   }
+});
+
+test("S369 retired model-plan commands refuse with and without their legacy flags", async () => {
+  for (const command of ["model-plan-assign", "model-plan-list", "model-plan-remove", "model-plan-set", "model-plan-unassign"]) {
+    const empty = await invoke([command]);
+    assert.equal(empty.ok, false);
+    assert.equal(empty.reasonCode, "CLI_COMMAND_UNKNOWN");
+    const legacy = await invoke([command, "--workspace", "/tmp/retired", "--expected-version", "0", "--at", "2026-01-01T00:00:00Z", "--host", "codex", "--name", "legacy", "--default-model", "model"]);
+    assert.equal(legacy.ok, false);
+    assert.equal(legacy.reasonCode, "CLI_COMMAND_UNKNOWN");
+  }
+  assert.equal(COMMAND_CATALOG.filter((entry) => entry.name.startsWith("dispatch-")).length, 5);
+  assert.equal(COMMAND_CATALOG.filter((entry) => entry.name.startsWith("model-plan-")).length, 0);
 });
 
 test("INIT-009: operator pins make every non-fixture verb binary-invocable", () => {
