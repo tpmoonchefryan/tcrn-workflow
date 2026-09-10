@@ -9,9 +9,10 @@
 // caller-supplied passed flag or test count as evidence.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, statSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 
 import { countCoverage } from "./coverage-conservation.mjs";
 
@@ -57,25 +58,48 @@ function runShell(command, cwd, timeoutMs = REVIEW_COMMAND_TIMEOUT_MS) {
     return { command: command ?? null, cwd, exitCode: "INPUT_INVALID", stdout: "", stderr: "" };
   }
   let result;
+  const outputDirectory = mkdtempSync(join(tmpdir(), "tcrn-review-evidence-run-"));
+  const stdoutPath = join(outputDirectory, "stdout");
+  const stderrPath = join(outputDirectory, "stderr");
+  let stdoutFd;
+  let stderrFd;
   try {
+    stdoutFd = openSync(stdoutPath, "w", 0o600);
+    stderrFd = openSync(stderrPath, "w", 0o600);
+    // A detached shell owns a private process group. Node's synchronous timeout
+    // sends the kill signal to that process group on this host; regular output
+    // files keep a timed-out grandchild from holding a pipe open.
     result = spawnSync("/bin/sh", ["-c", command], {
       cwd,
+      detached: true,
       shell: false,
       timeout: timeoutMs,
       maxBuffer: REVIEW_OUTPUT_BYTES * 2,
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", stdoutFd, stderrFd],
       env: childEnvironment(),
     });
   } catch (error) {
+    rmSync(outputDirectory, { recursive: true, force: true });
     return { command, cwd, exitCode: String(error?.code ?? "START_FAILED"), stdout: "", stderr: String(error?.message ?? error) };
+  } finally {
+    if (stdoutFd !== undefined) closeSync(stdoutFd);
+    if (stderrFd !== undefined) closeSync(stderrFd);
+  }
+  let stdout = "";
+  let stderr = "";
+  try {
+    stdout = readFileSync(stdoutPath, "utf8");
+    stderr = readFileSync(stderrPath, "utf8");
+  } finally {
+    rmSync(outputDirectory, { recursive: true, force: true });
   }
   return {
     command,
     cwd,
     exitCode: resultCode(result),
-    stdout: outputTail(result.stdout),
-    stderr: outputTail(result.stderr),
+    stdout: outputTail(stdout),
+    stderr: outputTail(stderr),
   };
 }
 
@@ -368,8 +392,9 @@ if (process.argv[1]?.endsWith("review-evidence.mjs")) {
   const values = readRequest(parseArguments(process.argv.slice(2)));
   let request = values;
   if (values.requestUnreadable) request = { ...values, allowedFiles: [] };
-  if (typeof request.allowed === "string") {
-    try { request.allowedFiles = JSON.parse(readFileSync(resolve(request.allowed), "utf8")); }
+  const allowedPath = request.allowed ?? request["allowed-files"];
+  if (typeof allowedPath === "string") {
+    try { request.allowedFiles = JSON.parse(readFileSync(resolve(allowedPath), "utf8")); }
     catch { request.allowedFiles = []; }
   }
   const result = collectReviewEvidence({
