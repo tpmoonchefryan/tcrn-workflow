@@ -1891,6 +1891,14 @@
         "a chain carrying an absolute artifact root replays even where that directory does not exist"
       ]
     },
+    "tests/story-381-compaction-prototype.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 12,
+      "testNames": [
+        "STORY-381 compaction projection keeps the head and estimates cold bytes",
+        "STORY-381 tail simulation is deterministic and does not write a workspace"
+      ]
+    },
     "tests/story-rule-conservation.test.mjs": {
       "testCount": 4,
       "assertionCount": 7,
