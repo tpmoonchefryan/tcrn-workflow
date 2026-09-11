@@ -225,6 +225,75 @@ async function checkpoints(root, day, availabilityByChannel = {}) {
   }
 }
 
+async function unionCheckpoints(root, spans, hosts = []) {
+  for (const channel of OBSERVATION_CHANNELS) {
+    const kind = { retrieval: "retrieval", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
+    const actual = createTelemetryRecord({ at: "2026-09-10T10:00:00.000Z", kind, session: `union-actual-${channel}`, payload: { source: `union-actual:${channel}`, availability: "available" } });
+    await appendTelemetryRecord(root, actual);
+    for (const [index, [session, start, stop]] of spans.entries()) {
+      const host = hosts[index] ?? "test-host";
+      for (const [phase, at, sequence] of [["start", start, 1], ["stop", stop, 2]]) {
+        const boundaryDate = new Date(at);
+        if (phase === "stop" && boundaryDate.getUTCHours() === 0) boundaryDate.setUTCDate(boundaryDate.getUTCDate() - 1);
+        const day = boundaryDate.toISOString().slice(0, 10);
+        const observed = day === "2026-09-10" && Date.parse(at) >= Date.parse(actual.at) ? [actual] : [];
+        await appendTelemetryRecord(root, createTelemetryRecord({
+          at,
+          kind,
+          session,
+          payload: { source: `${OBSERVATION_BOUNDARY_PREFIX}${host}:${session}:${channel}`, availability: "available", phase, sequence, highWaterDay: day, highWaterCount: observed.length, highWaterDigest: canonicalSha256(observed), highWaterAt: observed.at(-1)?.at ?? null },
+        }));
+      }
+    }
+  }
+}
+
+test("STORY-393: continuous and overlapping trusted sessions form one coverage interval", async (t) => {
+  const root = await scratch("tcrn-telemetry-coverage-union-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await unionCheckpoints(root, [
+    ["session-a", "2026-09-09T23:59:59.000Z", "2026-09-10T12:00:00.000Z"],
+    ["session-b", "2026-09-10T11:59:59.000Z", "2026-09-11T00:00:00.000Z"],
+  ]);
+  const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(sealed.ok, true, JSON.stringify(sealed));
+  const receipt = (await readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER })).records.find((record) => record.kind === "observation-coverage");
+  assert.equal(receipt.payload.channelCheckpoints.retrieval.recordCount, 4);
+  assert.equal((await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1)).complete, true);
+});
+
+test("STORY-393: gaps and incompatible host sources never combine into a full day", async (t) => {
+  for (const [name, hosts] of [["gap", ["test-host", "test-host"]], ["host", ["host-a", "host-b"]]]) {
+    const root = await scratch(`tcrn-telemetry-coverage-${name}-union-`);
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await unionCheckpoints(root, [
+      ["session-a", "2026-09-09T23:59:59.000Z", "2026-09-10T12:00:00.000Z"],
+      ["session-b", name === "gap" ? "2026-09-10T12:00:01.000Z" : "2026-09-10T12:00:00.000Z", "2026-09-11T00:00:00.000Z"],
+    ], hosts);
+    const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
+    assert.equal(sealed.ok, false, name);
+    assert.deepEqual(sealed.invalidChannels, OBSERVATION_CHANNELS, name);
+  }
+});
+
+test("STORY-393: a late boundary with a bad high-water digest cannot extend coverage", async (t) => {
+  const root = await scratch("tcrn-telemetry-coverage-late-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await unionCheckpoints(root, [
+    ["session-a", "2026-09-09T23:59:59.000Z", "2026-09-10T12:00:00.000Z"],
+    ["session-b", "2026-09-10T12:00:00.000Z", "2026-09-11T00:00:00.000Z"],
+  ]);
+  await appendTelemetryRecord(root, createTelemetryRecord({
+    at: "2026-09-11T00:00:00.100Z",
+    kind: "retrieval",
+    session: "session-b",
+    payload: { source: `${OBSERVATION_BOUNDARY_PREFIX}test-host:session-b:retrieval`, availability: "available", phase: "stop", sequence: 3, highWaterDay: "2026-09-10", highWaterCount: 1, highWaterDigest: "0".repeat(64), highWaterAt: "2026-09-10T10:00:00.000Z" },
+  }));
+  const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(sealed.ok, false);
+  assert.deepEqual(sealed.invalidChannels, ["retrieval"]);
+});
+
 test("STORY-393: only actual full-day four-channel observations can seal a UTC day", async (t) => {
   const root = await scratch("tcrn-telemetry-coverage-");
   t.after(() => rm(root, { recursive: true, force: true }));

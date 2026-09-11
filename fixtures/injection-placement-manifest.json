@@ -15,8 +15,8 @@
     ]
   },
   "commands": {
-    "claude": "node \"${CLAUDE_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs\"",
-    "codex": "node \"${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs\""
+    "claude": "node \"${CLAUDE_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs\" --host claude",
+    "codex": "node \"${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs\" --host codex"
   },
   "modelMapping": {
     "setting": "model.economyTier",

@@ -32,8 +32,8 @@ export const InjectionPlacementManifest = Object.freeze({
     codex: Object.freeze(["SessionStart", "UserPromptSubmit", "PostCompact", "PostToolUse"]),
   }),
   commands: Object.freeze({
-    claude: 'node "${CLAUDE_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs"',
-    codex: 'node "${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs"',
+    claude: 'node "${CLAUDE_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs" --host claude',
+    codex: 'node "${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs" --host codex',
   }),
   modelMapping: Object.freeze({
     setting: "model.economyTier",
@@ -83,6 +83,15 @@ export function boundedHookInput(input) {
   return JSON.stringify({ ...rest, tcrnPayloadTruncated: true });
 }
 
+export function inferHost(input = {}, env = process.env) {
+  const explicit = input?.host ?? input?.host_name ?? input?.hostName;
+  if (typeof explicit === "string" && explicit.length > 0) return explicit;
+  if (typeof env?.TCRN_HOST === "string" && env.TCRN_HOST.length > 0) return env.TCRN_HOST;
+  if (env?.CODEX_PROJECT_DIR && !env?.CLAUDE_PROJECT_DIR) return "codex";
+  if (env?.CLAUDE_PROJECT_DIR && !env?.CODEX_PROJECT_DIR) return "claude";
+  return "unknown-host";
+}
+
 export function runInject(input, { stateDirectory, host } = {}) {
   const event = input?.hook_event_name ?? "";
   const prompt = typeof input?.prompt === "string" ? input.prompt : "";
@@ -97,6 +106,7 @@ export function runInject(input, { stateDirectory, host } = {}) {
     "--hook-input", boundedHookInput(input),
   ];
   if (stateDirectory) argv.push("--state-dir", stateDirectory);
+  argv.push("--host", host ?? inferHost(input));
   const result = spawnSync(process.execPath, argv, {
     encoding: "utf8",
     timeout: 25_000,
@@ -106,7 +116,7 @@ export function runInject(input, { stateDirectory, host } = {}) {
   try { return JSON.parse(lines[lines.length - 1] ?? ""); } catch { return { ok: false, reasonCode: "INJECT_OUTPUT_UNPARSEABLE" }; }
 }
 
-export function buildHookResponse(input) {
+export function buildHookResponse(input, { host } = {}) {
   const event = input.hook_event_name ?? "";
   // The host contract requires additionalContext to be a STRING (a JSON array is
   // schema-invalid and the whole hook output is dropped — verified against the Claude
@@ -114,7 +124,7 @@ export function buildHookResponse(input) {
   const chunks = [];
 
   const inject = () => {
-    const result = runInject(input);
+    const result = runInject(input, { host: host ?? inferHost(input) });
     if (result.ok === true && result.injected === true && typeof result.injection === "string" && result.injection.length > 0) {
       const count = result.candidateCount ?? result.l0?.lines?.length ?? 0;
       chunks.push(`[平台知识注入 · ${count} 条 · 来源 cross-project 知识面]\n${result.injection}`);
@@ -128,5 +138,7 @@ export function buildHookResponse(input) {
 }
 
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
-  process.stdout.write(`${JSON.stringify(buildHookResponse(readStdin()))}\n`);
+  const hostFlag = process.argv.indexOf("--host");
+  const host = hostFlag >= 0 ? process.argv[hostFlag + 1] : undefined;
+  process.stdout.write(`${JSON.stringify(buildHookResponse(readStdin(), { host }))}\n`);
 }

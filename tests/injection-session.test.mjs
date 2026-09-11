@@ -21,6 +21,7 @@ import {
   InjectionPlacementManifest,
   MAX_HOOK_INPUT_BYTES,
   boundedHookInput,
+  inferHost,
   validateInjectionPlacementManifest,
 } from "../scripts/knowledge-inject-hook.mjs";
 
@@ -286,6 +287,14 @@ test("the placement manifest is fixture-shaped and the two model wrappers are in
   assert.match(calls[0].args.join(" "), /-p --bare --model economy/u);
   assert.match(calls[1].args.join(" "), /exec -C .* -m economy -s read-only --ephemeral/u);
   assert.equal((await translator.call("second")).reasonCode, "UNINJECTED_MODEL_CALL_LIMIT");
+});
+
+test("the injection hook carries the actual host instead of defaulting Codex to Claude", () => {
+  assert.equal(inferHost({}, { CODEX_PROJECT_DIR: "/repo" }), "codex");
+  assert.equal(inferHost({}, { CLAUDE_PROJECT_DIR: "/repo" }), "claude");
+  assert.equal(inferHost({ host: "codex" }, { CLAUDE_PROJECT_DIR: "/repo" }), "codex");
+  assert.match(InjectionPlacementManifest.commands.codex, /--host codex$/u);
+  assert.match(InjectionPlacementManifest.commands.claude, /--host claude$/u);
 });
 
 test("codex stdin opens with the system prompt while claude stdin stays the bare prompt", async () => {

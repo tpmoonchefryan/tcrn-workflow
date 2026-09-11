@@ -265,6 +265,56 @@ function safeObservationPart(value, fallback) {
   return text.length > 0 ? text : fallback;
 }
 
+function observationSourceIdentity(record, channel) {
+  const source = typeof record?.payload?.source === "string" ? record.payload.source : "";
+  if (!source.startsWith(OBSERVATION_BOUNDARY_PREFIX)) return null;
+  const session = safeObservationPart(record.session, "unknown-session");
+  const suffix = `:${session}:${channel}`;
+  if (source.endsWith(suffix) && source.length > OBSERVATION_BOUNDARY_PREFIX.length + suffix.length) return `${source.slice(0, -suffix.length)}:${channel}`;
+  return source.endsWith(`:${channel}`) ? source : null;
+}
+
+function observationPhaseSequenceValid(rows) {
+  const phases = rows.map((record) => record.payload.phase);
+  const firstStop = phases.indexOf("stop");
+  const sequences = rows.map((record) => record.payload.sequence);
+  return rows.length >= 2 && rows.every((record) => record.payload.availability === "available") && firstStop > 0 && phases.every((phase, index) => index < firstStop ? phase === "start" : phase === "stop") && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && sequence >= 1 && (index === 0 || sequence === sequences[index - 1] + 1));
+}
+
+function observationHighWaterValid(record, actual, day, requireFull = false) {
+  const fields = record.payload;
+  const observed = typeof fields.highWaterAt === "string" ? actual.filter((entry) => entry.at <= fields.highWaterAt) : [];
+  return fields.highWaterDay === day && Number.isSafeInteger(fields.highWaterCount) && fields.highWaterCount === observed.length && typeof fields.highWaterDigest === "string" && fields.highWaterDigest === canonicalSha256(observed) && (!requireFull || observed.length === actual.length);
+}
+
+function observationCoverageCandidate(rows, actual, from, until) {
+  const groups = new Map();
+  for (const row of rows) {
+    const list = groups.get(row.payload.source) ?? [];
+    list.push(row);
+    groups.set(row.payload.source, list);
+  }
+  const intervals = [];
+  for (const group of groups.values()) {
+    const ordered = [...group].sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
+    if (!observationPhaseSequenceValid(group) || !observationPhaseSequenceValid(ordered)) continue;
+    const last = ordered.at(-1);
+    if (!observationHighWaterValid(last, actual, from.slice(0, 10))) continue;
+    intervals.push({ ordered, start: Date.parse(ordered[0].at), end: Date.parse(last.at), last });
+  }
+  intervals.sort((left, right) => left.start - right.start || left.end - right.end || left.last.id.localeCompare(right.last.id));
+  let cursor = Date.parse(from);
+  for (const interval of intervals) {
+    if (interval.start > cursor) return null;
+    cursor = Math.max(cursor, interval.end);
+  }
+  if (cursor < Date.parse(until) - 1) return null;
+  const terminal = intervals.reduce((best, interval) => best === null || interval.end > best.end ? interval : best, null);
+  if (terminal === null || !observationHighWaterValid(terminal.last, actual, from.slice(0, 10), true)) return null;
+  const selected = intervals.flatMap((interval) => interval.ordered).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
+  return { rows: selected, startSequence: intervals[0].ordered[0].payload.sequence, stopSequence: terminal.last.payload.sequence };
+}
+
 async function telemetryRootForState(core, partition, containerRoot, suppliedState = null) {
   const state = suppliedState ?? await workspaceStateForInjection(partition, containerRoot);
   return state?.metadata === undefined ? null : core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
@@ -287,7 +337,7 @@ export async function recordObservationBoundary({
     const root = await telemetryRootForState(core, partition, containerRoot, workspaceState);
     if (root === null) return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE" };
     const sourceBase = `${OBSERVATION_BOUNDARY_PREFIX}${safeObservationPart(host, "unknown-host")}:${safeObservationPart(sessionId, "unknown-session")}`;
-    const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER });
+    const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER, preserveOrder: true });
     const boundaryDate = new Date(at);
     if (phase === "stop" && boundaryDate.getUTCHours() === 0) boundaryDate.setUTCDate(boundaryDate.getUTCDate() - 1);
     const boundaryDay = boundaryDate.toISOString().slice(0, 10);
@@ -330,12 +380,11 @@ export async function sealObservationDay(root, { at = new Date().toISOString(), 
   const fromValue = Date.parse(from);
   const untilValue = Date.parse(until);
   if (!Number.isFinite(fromValue) || !Number.isFinite(untilValue) || untilValue - fromValue !== 86_400_000 || current.getTime() < untilValue || !from.endsWith("T00:00:00.000Z") || !until.endsWith("T00:00:00.000Z")) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN", coveredFrom: from, coveredUntil: until };
-  const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER });
+  const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER, preserveOrder: true });
   const targetFile = `${from.slice(0, 10)}.ndjson`;
   const entries = read.records.filter((record) => record.kind !== "observation-coverage" && Date.parse(record.at) >= fromValue && Date.parse(record.at) < untilValue)
     .sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
-  const boundaryEntries = read.records.filter((record) => record.kind !== "observation-coverage" && String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX) && (Date.parse(record.at) < fromValue || Date.parse(record.at) >= untilValue));
-  const proofEntries = [...entries, ...boundaryEntries];
+  const proofEntries = read.records.filter((record) => record.kind !== "observation-coverage" && ((Date.parse(record.at) >= fromValue && Date.parse(record.at) < untilValue) || String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)));
   const missingChannels = [];
   const invalidChannels = [];
   const channelCheckpoints = {};
@@ -343,16 +392,14 @@ export async function sealObservationDay(root, { at = new Date().toISOString(), 
     const allRows = proofEntries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX));
     if (allRows.length === 0) { missingChannels.push(channel); continue; }
     const actual = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
-    const candidates = [...new Set(allRows.map((record) => record.payload.source))].sort().map((source) => allRows.filter((record) => record.payload.source === source).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id)));
-    const rows = candidates.find((candidate) => {
-      const phases = candidate.map((record) => record.payload.phase);
-      const sequences = candidate.map((record) => record.payload.sequence);
-      const firstStop = phases.indexOf("stop");
-      return candidate.every((record) => record.payload.availability === "available") && firstStop > 0 && phases.every((phase, index) => index < firstStop ? phase === "start" : phase === "stop") && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && sequence >= 1 && (index === 0 || sequence === sequences[index - 1] + 1)) && Date.parse(candidate[0].at) <= fromValue && Date.parse(candidate.at(-1).at) >= untilValue - 1 && actual.length > 0 && candidate.at(-1)?.payload.highWaterDay === from.slice(0, 10) && candidate.at(-1)?.payload.highWaterCount === actual.length && candidate.at(-1)?.payload.highWaterDigest === canonicalSha256(actual);
-    });
-    if (rows === undefined) { invalidChannels.push(channel); continue; }
-    const sequences = rows.map((record) => record.payload.sequence);
-    channelCheckpoints[channel] = { availability: "available", source: rows[0].payload.source, startSequence: sequences[0], stopSequence: sequences.at(-1), recordCount: rows.length, sourceDigest: canonicalSha256(rows), highWaterDay: from.slice(0, 10), highWaterCount: actual.length, highWaterDigest: canonicalSha256(actual) };
+    if (actual.length === 0) { invalidChannels.push(channel); continue; }
+    const identities = [...new Set(allRows.map((record) => observationSourceIdentity(record, channel)).filter(Boolean))].sort();
+    const candidate = identities.map((identity) => ({ identity, rows: allRows.filter((record) => observationSourceIdentity(record, channel) === identity) }))
+      .map(({ identity, rows }) => ({ identity, proof: observationCoverageCandidate(rows, actual, from, until) }))
+      .find((entry) => entry.proof !== null);
+    if (candidate === undefined) { invalidChannels.push(channel); continue; }
+    const { proof } = candidate;
+    channelCheckpoints[channel] = { availability: "available", source: candidate.identity, startSequence: proof.startSequence, stopSequence: proof.stopSequence, recordCount: proof.rows.length, sourceDigest: canonicalSha256(proof.rows), highWaterDay: from.slice(0, 10), highWaterCount: actual.length, highWaterDigest: canonicalSha256(actual) };
   }
   const problems = read.problems.filter((problem) => problem.path.endsWith(`/${targetFile}`));
   const sourceDigest = canonicalSha256(entries);

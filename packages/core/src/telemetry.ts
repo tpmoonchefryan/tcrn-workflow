@@ -82,12 +82,6 @@ function errorCode(error: unknown): string | undefined {
     : undefined;
 }
 
-function errorReasonCode(error: unknown): string | undefined {
-  return error !== null && typeof error === "object" && typeof (error as { readonly reasonCode?: unknown }).reasonCode === "string"
-    ? (error as { readonly reasonCode: string }).reasonCode
-    : undefined;
-}
-
 function object(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) fail("TELEMETRY_RECORD_INVALID", `${label} must be an object`);
   return value as Record<string, unknown>;
@@ -284,7 +278,7 @@ async function telemetryLock(lockPath: string): Promise<void> {
 
 function lineRecord(path: string, line: string, lineNumber: number): { record?: TelemetryRecord; problem?: { path: string; line: number; reasonCode: string } } {
   try { return { record: validateTelemetryRecord(JSON.parse(line)) }; }
-  catch (error) { return { problem: { path, line: lineNumber, reasonCode: errorReasonCode(error) ?? "TELEMETRY_RECORD_INVALID" } }; }
+  catch (error) { return { problem: { path, line: lineNumber, reasonCode: error !== null && typeof error === "object" && typeof (error as { readonly reasonCode?: unknown }).reasonCode === "string" ? (error as { readonly reasonCode: string }).reasonCode : "TELEMETRY_RECORD_INVALID" } }; }
 }
 
 export async function appendTelemetryRecord(root: string, record: TelemetryRecord): Promise<{ readonly record: TelemetryRecord; readonly path: string; readonly duplicate: boolean }> {
@@ -319,6 +313,7 @@ export async function readTelemetryRecords(root: string, options: {
   readonly since?: string;
   readonly limit?: number;
   readonly offset?: number;
+  readonly preserveOrder?: boolean;
 } = {}): Promise<TelemetryReadResult> {
   if (options.kind !== undefined) requiredText(options.kind, "kind", 128);
   if (options.taskClass !== undefined) requiredText(options.taskClass, "taskClass", 128);
@@ -360,12 +355,12 @@ export async function readTelemetryRecords(root: string, options: {
   }
   const filtered = records.filter((record) => (options.kind === undefined || record.kind === options.kind)
     && (options.taskClass === undefined || record.payload.taskClass === options.taskClass)
-    && (since === undefined || parseStrictInstant(record.at) >= since))
-    .sort((left, right) => {
-      const leftAt = parseStrictInstant(left.at);
-      const rightAt = parseStrictInstant(right.at);
-      return leftAt < rightAt ? -1 : leftAt > rightAt ? 1 : left.id.localeCompare(right.id);
-    });
+    && (since === undefined || parseStrictInstant(record.at) >= since));
+  if (!options.preserveOrder) filtered.sort((left, right) => {
+    const leftAt = parseStrictInstant(left.at);
+    const rightAt = parseStrictInstant(right.at);
+    return leftAt < rightAt ? -1 : leftAt > rightAt ? 1 : left.id.localeCompare(right.id);
+  });
   return { records: filtered.slice(offset, offset + limit), total: filtered.length, offset, limit, problems };
 }
 
@@ -417,37 +412,40 @@ export async function readTelemetryStats(root: string, options: {
   };
 }
 
+function observationPhaseSequenceValid(rows: readonly TelemetryRecord[]): boolean {
+  const phases = rows.map((record) => record.payload.phase), sequences = rows.map((record) => record.payload.sequence), firstStop = phases.indexOf("stop");
+  return rows.length >= 2 && rows.every((record) => record.payload.availability === "available") && firstStop > 0 && phases.every((phase, index) => index < firstStop ? phase === "start" : phase === "stop") && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && Number(sequence) >= 1 && (index === 0 || Number(sequence) === Number(sequences[index - 1]) + 1));
+}
+
+function observationHighWaterValid(record: TelemetryRecord, actual: readonly TelemetryRecord[], day: string, requireFull = false): boolean {
+  const fields = record.payload, highWaterAt = fields.highWaterAt, observed = typeof highWaterAt === "string" ? actual.filter((entry) => entry.at <= highWaterAt) : [];
+  return fields.highWaterDay === day && Number.isSafeInteger(fields.highWaterCount) && fields.highWaterCount === observed.length && typeof fields.highWaterDigest === "string" && fields.highWaterDigest === canonicalSha256(observed as unknown as import("../../protocol/src/index.js").JsonValue) && (!requireFull || observed.length === actual.length);
+}
+
+function observationCoverageChannelValid(value: TelemetryPayload, entries: readonly TelemetryRecord[], channel: string, from: string, until: string): boolean {
+  const proof = (value.channelCheckpoints as Record<string, unknown>)[channel];
+  if (proof === null || typeof proof !== "object" || Array.isArray(proof)) return false;
+  const fields = proof as Record<string, unknown>;
+  if (canonicalJson(Object.keys(fields).sort()) !== canonicalJson(["availability", "highWaterCount", "highWaterDay", "highWaterDigest", "recordCount", "source", "sourceDigest", "startSequence", "stopSequence"])) return false;
+  const boundary = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)), exact = boundary.filter((record) => record.payload.source === fields.source), identityPrefix = typeof fields.source === "string" ? fields.source.slice(0, -channel.length) : "", rows = exact.length > 0 ? exact : boundary.filter((record) => String(record.payload.source).startsWith(identityPrefix) && String(record.payload.source).endsWith(`:${channel}`));
+  const actual = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id));
+  if (rows.length === 0 || actual.length === 0) return false;
+  const groups = new Map<string, TelemetryRecord[]>(); for (const row of rows) { const source = row.payload.source as string; groups.set(source, [...(groups.get(source) ?? []), row]); }
+  const intervals = [...groups.values()].map((group) => { const ordered = [...group].sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id)); return { group, ordered, start: parseStrictInstant(ordered[0]!.at), end: parseStrictInstant(ordered.at(-1)!.at), last: ordered.at(-1)! }; });
+  const fromValue = parseStrictInstant(from), untilValue = parseStrictInstant(until);
+  intervals.sort((left, right) => left.start < right.start ? -1 : left.start > right.start ? 1 : left.end < right.end ? -1 : 1);
+  let cursor = fromValue;
+  for (const interval of intervals) { if (!observationPhaseSequenceValid(interval.group) || !observationPhaseSequenceValid(interval.ordered) || !observationHighWaterValid(interval.last, actual, from.slice(0, 10)) || interval.start > cursor) return false; if (interval.end > cursor) cursor = interval.end; }
+  const terminal = intervals.reduce((best, interval) => best === null || interval.end > best.end ? interval : best, null as typeof intervals[number] | null);
+  const selected = intervals.flatMap((interval) => interval.ordered).sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id));
+  return fields.availability === "available" && typeof fields.source === "string" && fields.source.startsWith(OBSERVATION_BOUNDARY_PREFIX) && typeof fields.sourceDigest === "string" && /^[a-f0-9]{64}$/u.test(fields.sourceDigest) && Number.isSafeInteger(fields.recordCount) && Number(fields.recordCount) >= 2 && selected.length === fields.recordCount && Number.isSafeInteger(fields.highWaterCount) && Number(fields.highWaterCount) >= 1 && Number(fields.highWaterCount) === actual.length && fields.highWaterDay === from.slice(0, 10) && typeof fields.highWaterDigest === "string" && fields.highWaterDigest === canonicalSha256(actual as unknown as import("../../protocol/src/index.js").JsonValue) && cursor >= untilValue - 1_000_000n && terminal !== null && observationHighWaterValid(terminal.last, actual, from.slice(0, 10), true) && Number.isSafeInteger(fields.startSequence) && Number.isSafeInteger(fields.stopSequence) && Number(fields.startSequence) === Number(intervals[0]?.ordered[0]?.payload.sequence) && Number(fields.stopSequence) === Number(terminal.last.payload.sequence) && canonicalSha256(selected as unknown as import("../../protocol/src/index.js").JsonValue) === fields.sourceDigest;
+}
+
 function observationCoverageValid(value: TelemetryPayload, entries: readonly TelemetryRecord[], from: string, until: string): boolean {
   const channels = value.channels;
-  if (value.source !== "telemetry:observation-collector" || value.coverageVersion !== OBSERVATION_COVERAGE_VERSION || !Array.isArray(channels) ||
-      channels.length !== OBSERVATION_CHANNELS.length || new Set(channels).size !== channels.length ||
-      !OBSERVATION_CHANNELS.every((channel) => channels.includes(channel)) ||
-      value.channelCheckpoints === null || typeof value.channelCheckpoints !== "object" || Array.isArray(value.channelCheckpoints)) return false;
+  if (value.source !== "telemetry:observation-collector" || value.coverageVersion !== OBSERVATION_COVERAGE_VERSION || !Array.isArray(channels) || channels.length !== OBSERVATION_CHANNELS.length || new Set(channels).size !== channels.length || !OBSERVATION_CHANNELS.every((channel) => channels.includes(channel)) || value.channelCheckpoints === null || typeof value.channelCheckpoints !== "object" || Array.isArray(value.channelCheckpoints)) return false;
   const proofs = value.channelCheckpoints as Record<string, unknown>;
-  if (canonicalJson(Object.keys(proofs).sort()) !== canonicalJson([...OBSERVATION_CHANNELS].sort())) return false;
-  const fromValue = parseStrictInstant(from);
-  const untilValue = parseStrictInstant(until);
-  return OBSERVATION_CHANNELS.every((channel) => {
-    const proof = proofs[channel];
-    if (proof === null || typeof proof !== "object" || Array.isArray(proof)) return false;
-    const fields = proof as Record<string, unknown>;
-    if (canonicalJson(Object.keys(fields).sort()) !== canonicalJson(["availability", "highWaterCount", "highWaterDay", "highWaterDigest", "recordCount", "source", "sourceDigest", "startSequence", "stopSequence"])) return false;
-    const rows = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && record.payload.source === fields.source)
-      .sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id));
-    const phases = rows.map((record) => record.payload.phase);
-    const firstStop = phases.indexOf("stop");
-    const sequences = rows.map((record) => record.payload.sequence);
-    const validSequence = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) >= 1;
-    return fields.availability === "available" && typeof fields.source === "string" &&
-      typeof fields.sourceDigest === "string" && /^[a-f0-9]{64}$/u.test(fields.sourceDigest) && typeof fields.source === "string" && fields.source.startsWith(OBSERVATION_BOUNDARY_PREFIX) &&
-      Number.isSafeInteger(fields.recordCount) && Number(fields.recordCount) >= 2 && rows.length === fields.recordCount && typeof fields.highWaterDay === "string" && fields.highWaterDay === from.slice(0, 10) && Number.isSafeInteger(fields.highWaterCount) && Number(fields.highWaterCount) >= 1 && typeof fields.highWaterDigest === "string" && /^[a-f0-9]{64}$/u.test(fields.highWaterDigest) && Number(fields.highWaterCount) === entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).length && fields.highWaterDigest === canonicalSha256(entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id)) as unknown as import("../../protocol/src/index.js").JsonValue) &&
-      Number.isSafeInteger(fields.startSequence) && Number.isSafeInteger(fields.stopSequence) && Number(fields.startSequence) >= 1 && Number(fields.stopSequence) >= Number(fields.startSequence) &&
-      rows.every((record) => record.payload.availability === "available") && firstStop > 0 && phases.every((phase, index) => index < firstStop ? phase === "start" : phase === "stop") &&
-      sequences.every((sequence, index) => validSequence(sequence) && (index === 0 || Number(sequence) === Number(sequences[index - 1]) + 1)) &&
-      sequences[0] === fields.startSequence && sequences.at(-1) === fields.stopSequence &&
-      parseStrictInstant(rows[0]!.at) <= fromValue && parseStrictInstant(rows[rows.length - 1]!.at) >= untilValue - 1_000_000n &&
-      canonicalSha256(rows as unknown as import("../../protocol/src/index.js").JsonValue) === fields.sourceDigest;
-  });
+  return canonicalJson(Object.keys(proofs).sort()) === canonicalJson([...OBSERVATION_CHANNELS].sort()) && OBSERVATION_CHANNELS.every((channel) => observationCoverageChannelValid(value, entries, channel, from, until));
 }
 
 export async function readTelemetryObservationWindow(root: string, at: string, windowDays = TELEMETRY_RETENTION_DAYS): Promise<TelemetryObservationWindow> {
@@ -467,7 +465,8 @@ export async function readTelemetryObservationWindow(root: string, at: string, w
   const invalidDays: string[] = [];
   const records: TelemetryRecord[] = [];
   const dayRecords = new Map<string, TelemetryRecord[]>();
-  const coverage: TelemetryRecord[] = [], boundaryRecords: TelemetryRecord[] = [];
+  const proofRecords: TelemetryRecord[] = [];
+  const coverage: TelemetryRecord[] = [];
   const problems: { path: string; line: number; reasonCode: string }[] = [];
   let directoryAvailable = true;
   try {
@@ -502,7 +501,8 @@ export async function readTelemetryObservationWindow(root: string, at: string, w
         if (`${new Date(record.at).toISOString().slice(0, 10)}.ndjson` !== name) { invalid = true; continue; }
           if (record.kind === "observation-coverage") coverage.push(record);
           else {
-            if (String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)) boundaryRecords.push(record);
+            const boundary = String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX);
+            if (name !== today || boundary) proofRecords.push(record);
         if (name !== today) {
           const entries = dayRecords.get(name) ?? [];
           entries.push(record);
@@ -526,7 +526,7 @@ export async function readTelemetryObservationWindow(root: string, at: string, w
       return value.availability === "available" && value.collectionErrors === 0 &&
         value.coveredFrom === from && value.coveredUntil === until &&
         parseStrictInstant(record.at) >= parseStrictInstant(until) && parseStrictInstant(record.at) <= parseStrictInstant(at) &&
-        observationCoverageValid(value, [...entries, ...boundaryRecords.filter((boundary) => !entries.some((entry) => entry.id === boundary.id))], from, until) &&
+        observationCoverageValid(value, proofRecords.filter((entry) => (entry.at >= from && entry.at < until) || String(entry.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)), from, until) &&
         value.recordCount === entries.length && value.sourceDigest === sourceDigest;
     });
     if (!proven) {
