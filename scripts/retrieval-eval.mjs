@@ -41,13 +41,14 @@ import {
   recallDocuments,
   selectRecallHits,
 } from "../dist/build/packages/core/src/recall.js";
-import { canonicalJson, canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
+import { canonicalJson, canonicalSha256, parseStrictInstant } from "../dist/build/packages/protocol/src/index.js";
 import { buildIncidentReplay } from "./incident-replay.mjs";
 
 const SCOPE_EXCERPT_BYTES = 512;
 const TOP_K = 8;
 const PRECISION_K = 3;
 const INDEPENDENT_INCIDENT_FILE = "incident-replay-frozen.json";
+const PRE_REGISTERED_HOLDOUT_FILE = "holdout-preregistered.json";
 
 // Every file the score depends on. Order is fixed and the name is hashed with the
 // bytes so a rename cannot pass for an edit.
@@ -101,7 +102,8 @@ function evaluate(corpusDigest, policy) {
   const minutes = readJson(fixture("minutes-compact.json")).records;
   const work = readJson(fixture("work-compact.json")).records;
   const incidentReplay = buildIncidentReplay({ workRecords: work, cards: snapshot, minutes, at: "2026-09-04T15:08:34Z" });
-  const independentIncidentReplay = readIndependentIncidentReplay(policy.incidentReplayIndependent, work, minutes);
+  const developmentIncidentReplay = readDevelopmentIncidentReplay(policy.incidentReplayIndependent, work, minutes);
+  const preRegisteredHoldout = readPreRegisteredHoldout(policy.preRegisteredHoldout, work);
 
   const cardDocuments = recallDocuments({ knowledge });
   const mixedDocuments = recallDocuments({ knowledge, minutes, work, scopeExcerptBytes: SCOPE_EXCERPT_BYTES });
@@ -163,13 +165,20 @@ function evaluate(corpusDigest, policy) {
     return rank < 0 ? null : rank + 1;
   });
   const incidentReplayScore = scoreOf(incidentReplayRanks);
-  const independentIncidentReplayRanks = independentIncidentReplay.ok
-    ? independentIncidentReplay.records.map((pair) => {
+  const developmentIncidentReplayRanks = developmentIncidentReplay.ok
+    ? developmentIncidentReplay.records.map((pair) => {
       const rank = selectMixed(pair.prompt).findIndex((hit) => pair.expectedIds.includes(hit.id));
       return rank < 0 ? null : rank + 1;
     })
     : [];
-  const independentIncidentReplayScore = scoreOf(independentIncidentReplayRanks);
+  const developmentIncidentReplayScore = scoreOf(developmentIncidentReplayRanks);
+  const preRegisteredHoldoutRanks = preRegisteredHoldout.ok
+    ? preRegisteredHoldout.records.map((pair) => {
+      const rank = selectMixed(pair.prompt).findIndex((hit) => pair.expectedIds.includes(hit.id));
+      return rank < 0 ? null : rank + 1;
+    })
+    : [];
+  const preRegisteredHoldoutScore = scoreOf(preRegisteredHoldoutRanks);
 
   // Exact keys retain the map's rank-1 path; key fragments use the low-weight
   // prefix column. Measure both indexes in this run and enforce both contracts.
@@ -186,6 +195,10 @@ function evaluate(corpusDigest, policy) {
   };
 
   const failures = [];
+  const historical = policy.historicalProvenance;
+  if (historical?.fixture !== INDEPENDENT_INCIDENT_FILE || historical.role !== "development-seen-after-scoring" || historical.freezeClaimDisposition !== "retained-as-historical-metadata-not-a-real-freeze-time" || !Array.isArray(historical.evidence) || historical.evidence.length !== 2 || historical.evidence.some((entry) => typeof entry?.path !== "string" || !/^[a-f0-9]{64}$/u.test(String(entry.sha256)))) {
+    failures.push("historical development-set provenance is missing or malformed");
+  }
   const hold = (name, observed, floor) => {
     if (observed < floor) failures.push(`${name} ${String(observed)} < ${String(floor)}`);
   };
@@ -197,10 +210,15 @@ function evaluate(corpusDigest, policy) {
   hold("real.precisionAt3", precisionAt3, policy.real.precisionAt3);
   hold("incidentReplay.pairs", incidentReplay.counts.included, policy.incidentReplay.pairsAtLeast);
   for (const k of ["hitAt1", "hitAt3", "hitAt8"]) hold(`incidentReplay.${k}`, incidentReplayScore[k], policy.incidentReplay[k]);
-  if (!independentIncidentReplay.ok) failures.push(...independentIncidentReplay.failures);
+  if (!developmentIncidentReplay.ok) failures.push(...developmentIncidentReplay.failures);
   else {
-    hold("incidentReplayIndependent.pairs", independentIncidentReplay.records.length, policy.incidentReplayIndependent.pairsAtLeast);
-    for (const k of ["hitAt1", "hitAt3", "hitAt8"]) hold(`incidentReplayIndependent.${k}`, independentIncidentReplayScore[k], policy.incidentReplayIndependent[k]);
+    hold("incidentReplayDevelopment.pairs", developmentIncidentReplay.records.length, policy.incidentReplayIndependent.pairsAtLeast);
+    for (const k of ["hitAt1", "hitAt3", "hitAt8"]) hold(`incidentReplayDevelopment.${k}`, developmentIncidentReplayScore[k], policy.incidentReplayIndependent[k]);
+  }
+  if (!preRegisteredHoldout.ok) failures.push(...preRegisteredHoldout.failures);
+  else {
+    hold("preRegisteredHoldout.pairs", preRegisteredHoldout.records.length, policy.preRegisteredHoldout.pairsAtLeast);
+    for (const k of ["hitAt1", "hitAt3", "hitAt8"]) hold(`preRegisteredHoldout.${k}`, preRegisteredHoldoutScore[k], policy.preRegisteredHoldout[k]);
   }
   if (externalKey.exactCardsRank === null || externalKey.exactCardsRank > policy.externalKey.exactRankAtMost) {
     failures.push(`externalKey.exactCardsRank ${String(externalKey.exactCardsRank)} > ${String(policy.externalKey.exactRankAtMost)}`);
@@ -226,9 +244,13 @@ function evaluate(corpusDigest, policy) {
     language,
     real: { prompts: judged.length, relevantLabelled, relevantInTop3, precisionAt3 },
     incidentReplay: { ...incidentReplayScore, pairs: incidentReplay.counts.included, skipped: incidentReplay.counts.skipped, skippedNoSummary: incidentReplay.counts.skippedNoSummary },
-    incidentReplayIndependent: independentIncidentReplay.ok
-      ? { ...independentIncidentReplayScore, pairs: independentIncidentReplay.records.length, skipped: 0, sourceDigest: independentIncidentReplay.fixtureDigest, sourceFiles: independentIncidentReplay.sourceFiles }
-      : { pairs: 0, skipped: null, reasonCode: "RETRIEVAL_EVAL_INDEPENDENT_INCIDENT_FREEZE_INVALID" },
+    incidentReplayDevelopment: developmentIncidentReplay.ok
+      ? { ...developmentIncidentReplayScore, pairs: developmentIncidentReplay.records.length, skipped: 0, sourceDigest: developmentIncidentReplay.fixtureDigest, sourceFiles: developmentIncidentReplay.sourceFiles, role: "development-seen-after-scoring" }
+      : { pairs: 0, skipped: null, reasonCode: "RETRIEVAL_EVAL_DEVELOPMENT_INCIDENT_FREEZE_INVALID" },
+    historicalDevelopment: historical,
+    preRegisteredHoldout: preRegisteredHoldout.ok
+      ? { ...preRegisteredHoldoutScore, pairs: preRegisteredHoldout.records.length, skipped: 0, sourceDigest: preRegisteredHoldout.fixtureDigest, sourceFiles: preRegisteredHoldout.sourceFiles, role: preRegisteredHoldout.role, thresholds: preRegisteredHoldout.thresholds }
+      : { pairs: 0, skipped: null, reasonCode: "RETRIEVAL_EVAL_PRE_REGISTERED_HOLDOUT_INVALID" },
     externalKey,
     metrics: ["@1", "@3", "@8", "precision@3"],
   };
@@ -245,10 +267,11 @@ function associatedMinuteDigest(work, minutes) {
   return canonicalSha256(associated);
 }
 
-function readIndependentIncidentReplay(declared, work, minutes) {
+function readDevelopmentIncidentReplay(declared, work, minutes) {
   const path = fixture(INDEPENDENT_INCIDENT_FILE);
   const failures = [];
   if (!declared || typeof declared !== "object") return { ok: false, failures: ["independentIncidentReplay policy is missing"] };
+  if (declared.role !== "development-seen-after-scoring") failures.push(`incidentReplayDevelopment.role ${declared.role ?? "missing"} is not development-seen-after-scoring`);
   if (declared.fixture !== INDEPENDENT_INCIDENT_FILE) failures.push(`independentIncidentReplay.fixture ${declared.fixture ?? "missing"} is not ${INDEPENDENT_INCIDENT_FILE}`);
   const fixtureDigest = fileSha256(path);
   if (fixtureDigest !== declared.fixtureDigest) failures.push(`independentIncidentReplay.fixtureDigest ${fixtureDigest} != ${declared.fixtureDigest}`);
@@ -272,6 +295,55 @@ function readIndependentIncidentReplay(declared, work, minutes) {
   if (frozen.records?.length < (declared.pairsAtLeast ?? 20)) failures.push(`independentIncidentReplay records ${frozen.records?.length ?? 0} < ${declared.pairsAtLeast}`);
   if (seen.size !== frozen.records?.length) failures.push("independentIncidentReplay source identities are not unique");
   return failures.length === 0
-    ? { ok: true, records: frozen.records.map((pair) => ({ prompt: pair.prompt, expectedIds: pair.label.expectedIds })), fixtureDigest, sourceFiles: frozen.sourceFiles }
+    ? { ok: true, records: frozen.records.map((pair) => ({ prompt: pair.prompt, expectedIds: pair.label.expectedIds })), fixtureDigest, sourceFiles: frozen.sourceFiles, role: declared.role }
+    : { ok: false, failures };
+}
+
+function readPreRegisteredHoldout(declared, work) {
+  const path = fixture(PRE_REGISTERED_HOLDOUT_FILE);
+  const failures = [];
+  if (!declared || typeof declared !== "object") return { ok: false, failures: ["preRegisteredHoldout policy is missing"] };
+  if (declared.fixture !== PRE_REGISTERED_HOLDOUT_FILE) failures.push(`preRegisteredHoldout.fixture ${declared.fixture ?? "missing"} is not ${PRE_REGISTERED_HOLDOUT_FILE}`);
+  const fixtureDigest = fileSha256(path);
+  if (fixtureDigest !== declared.fixtureDigest) failures.push(`preRegisteredHoldout.fixtureDigest ${fixtureDigest} != ${declared.fixtureDigest}`);
+  let frozen;
+  try { frozen = readJson(path); } catch { return { ok: false, failures: [...failures, "preRegisteredHoldout fixture is not valid JSON"] }; }
+  if (frozen.schemaVersion !== "tcrn.retrieval-holdout.v1") failures.push("preRegisteredHoldout fixture schema is invalid");
+  if (frozen.role !== declared.role || declared.role !== "unseen-disjoint-holdout") failures.push(`preRegisteredHoldout.role ${frozen.role ?? "missing"} is not unseen-disjoint-holdout`);
+  try {
+    if (parseStrictInstant(frozen.frozenAt) > parseStrictInstant(new Date().toISOString())) failures.push("preRegisteredHoldout.frozenAt is in the future");
+  } catch { failures.push("preRegisteredHoldout.frozenAt is not a strict instant"); }
+  const sourceFiles = frozen.sourceFiles;
+  const sourcePath = "tests/fixtures/retrieval-eval/work-compact.json";
+  if (!Array.isArray(sourceFiles) || sourceFiles.length !== 1 || sourceFiles[0]?.path !== sourcePath) failures.push("preRegisteredHoldout sourceFiles must name only work-compact.json");
+  else if (fileSha256(resolve(root, sourcePath)) !== sourceFiles[0].sha256) failures.push("preRegisteredHoldout work source digest drift");
+  const selection = frozen.sourceSelection;
+  const keys = selection?.externalKeys;
+  if (selection?.kind !== "Story" || !Array.isArray(selection?.excludedKinds) || !selection.excludedKinds.includes("Incident") || !Array.isArray(keys) || keys.length !== new Set(keys).size || [...keys].sort().join("\n") !== keys.join("\n") || selection.selectionDigest !== canonicalSha256(keys)) failures.push("preRegisteredHoldout source selection is not a sorted disjoint Story set");
+  const labels = frozen.labelPolicy;
+  if (labels?.kind !== "Story" || labels?.expectedIdRule !== "source.workId only" || labels?.createdBeforeScoring !== true || labels?.modelCalls !== 0) failures.push("preRegisteredHoldout label policy is not pre-registered source identity");
+  const thresholdFields = ["pairsAtLeast", "hitAt1", "hitAt3", "hitAt8"];
+  if (!frozen.thresholds || thresholdFields.some((field) => frozen.thresholds[field] !== declared[field])) failures.push("preRegisteredHoldout thresholds drifted between fixture and policy");
+  const old = readJson(fixture(INDEPENDENT_INCIDENT_FILE));
+  const oldIds = new Set((old.records ?? []).map((pair) => pair?.source?.workId));
+  const byId = new Map(work.map((record) => [record.id, record]));
+  const seen = new Set();
+  for (const pair of frozen.records ?? []) {
+    const source = pair?.source;
+    const current = byId.get(source?.workId);
+    const expectedIds = pair?.label?.expectedIds;
+    if (!source || current === undefined || seen.has(source.workId)) { failures.push(`preRegisteredHoldout source ${source?.workId ?? "missing"} is missing or duplicated`); continue; }
+    seen.add(source.workId);
+    if (oldIds.has(source.workId) || source.kind !== "Story" || current.kind !== "Story" || source.externalKey !== current.externalKey || source.status !== current.status) failures.push(`preRegisteredHoldout source ${source.workId} is not a disjoint frozen Story record`);
+    if (source.scopeDigest !== canonicalSha256(current.scope ?? "")) failures.push(`preRegisteredHoldout scope digest drift for ${source.workId}`);
+    if (source.sourceRecordDigest !== canonicalSha256(current)) failures.push(`preRegisteredHoldout record digest drift for ${source.workId}`);
+    if (!Array.isArray(expectedIds) || expectedIds.length !== 1 || expectedIds[0] !== source.workId || typeof pair.prompt !== "string" || pair.prompt.length === 0 || typeof pair.label?.basis !== "string" || !pair.label.basis.includes("manual identity")) failures.push(`preRegisteredHoldout label invalid for ${source.workId}`);
+    const generated = buildIncidentReplay({ workRecords: [current], cards: [], minutes: [] }).pairs[0];
+    if (generated === undefined || pair.prompt !== generated.prompt) failures.push(`preRegisteredHoldout prompt drift for ${source.workId}`);
+  }
+  if (!Array.isArray(frozen.records) || frozen.records.length < (declared.pairsAtLeast ?? 20)) failures.push(`preRegisteredHoldout records ${frozen.records?.length ?? 0} < ${declared.pairsAtLeast}`);
+  if (seen.size !== frozen.records?.length || seen.size !== keys?.length) failures.push("preRegisteredHoldout source identities are not complete");
+  return failures.length === 0
+    ? { ok: true, records: frozen.records.map((pair) => ({ prompt: pair.prompt, expectedIds: pair.label.expectedIds })), fixtureDigest, sourceFiles, role: declared.role, thresholds: Object.fromEntries(thresholdFields.map((field) => [field, declared[field]])) }
     : { ok: false, failures };
 }

@@ -113,7 +113,7 @@ test("STORY-376: the Story 367 injection path records retrieval, bytes, judge, a
   });
   assert.equal(pulled.decision, "PULL_RECORDED");
   const telemetry = await readTelemetryRecords(fixture.transient, { limit: 100 });
-  assert.deepEqual(new Set(telemetry.records.map((entry) => entry.kind)), new Set(["retrieval-hit", "injection-bytes", "judge", "pull"]));
+  assert.deepEqual(new Set(telemetry.records.map((entry) => entry.kind)), new Set(["retrieval", "retrieval-hit", "reference", "pull", "trigger", "injection-bytes", "judge"]));
   assert.equal(telemetry.problems.length, 0);
 });
 

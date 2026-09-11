@@ -52,6 +52,7 @@ import {
   promptDigest,
   recordIdentity,
 } from "./injection-session.mjs";
+import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 export const PLATFORM_ROOT = resolve(SCRIPT_DIRECTORY, "../../..");
@@ -211,6 +212,19 @@ async function languageModule() {
   return coreLanguageModule;
 }
 
+const OBSERVATION_CHANNEL_BY_KIND = Object.freeze({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify" });
+
+async function nextObservationSequence(core, root, kind, source) {
+  const channel = OBSERVATION_CHANNEL_BY_KIND[kind];
+  if (channel === undefined || typeof core.readTelemetryRecords !== "function") return null;
+  const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER });
+  const values = read.records
+    .filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && record.payload.source === source)
+    .map((record) => record.payload.sequence)
+    .filter((sequence) => Number.isSafeInteger(sequence) && sequence >= 1);
+  return Math.max(0, ...values) + 1;
+}
+
 async function telemetryWriter(partition, containerRoot, sessionId, suppliedState = null) {
   const core = await languageModule();
   if (core?.createTelemetryRecord === undefined || core?.appendTelemetryRecord === undefined || core?.activeBinding === undefined) return null;
@@ -219,20 +233,25 @@ async function telemetryWriter(partition, containerRoot, sessionId, suppliedStat
     ? null
     : core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
   if (root === null) return null;
-  return async ({ kind, payload }) => {
+  return async ({ kind, payload, observationPhase, observationSource }) => {
     try {
+      const source = observationSource ?? `knowledge-inject:${kind}`;
+      const sequence = observationPhase === "start" || observationPhase === "stop"
+        ? await nextObservationSequence(core, root, kind, source)
+        : null;
       const record = core.createTelemetryRecord({
         at: new Date().toISOString(),
         kind,
         session: sessionId,
         payload: {
-          source: `knowledge-inject:${kind}`,
-          availability: "available",
           ...payload,
+          source,
+          availability: "available",
+          ...(sequence === null ? {} : { phase: observationPhase, sequence }),
         },
       });
-      await core.appendTelemetryRecord(root, record);
-      return { availability: "available", id: record.id };
+      const receipt = await core.appendTelemetryRecord(root, record);
+      return { availability: "available", id: receipt.record.id };
     } catch {
       return { availability: "unavailable", id: null };
     }
@@ -242,6 +261,56 @@ async function telemetryWriter(partition, containerRoot, sessionId, suppliedStat
 async function emitTelemetry(writer, event) {
   if (typeof writer !== "function") return { availability: "unavailable", id: null };
   try { return await writer(event); } catch { return { availability: "unavailable", id: null }; }
+}
+
+export async function sealObservationDay(root, { at = new Date().toISOString(), coveredFrom, coveredUntil } = {}) {
+  const core = await languageModule();
+  if (core?.createTelemetryRecord === undefined || core?.appendTelemetryRecord === undefined || core?.readTelemetryRecords === undefined) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN" };
+  const current = new Date(at);
+  if (Number.isNaN(current.getTime())) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN" };
+  current.setUTCHours(0, 0, 0, 0);
+  const until = coveredUntil ?? current.toISOString();
+  const fromDate = new Date(current);
+  fromDate.setUTCDate(fromDate.getUTCDate() - 1);
+  const from = coveredFrom ?? fromDate.toISOString();
+  const fromValue = Date.parse(from);
+  const untilValue = Date.parse(until);
+  if (!Number.isFinite(fromValue) || !Number.isFinite(untilValue) || untilValue - fromValue !== 86_400_000 || current.getTime() < untilValue || !from.endsWith("T00:00:00.000Z") || !until.endsWith("T00:00:00.000Z")) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN", coveredFrom: from, coveredUntil: until };
+  const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER });
+  const targetFile = `${from.slice(0, 10)}.ndjson`;
+  const entries = read.records.filter((record) => record.kind !== "observation-coverage" && Date.parse(record.at) >= fromValue && Date.parse(record.at) < untilValue)
+    .sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
+  const missingChannels = [];
+  const invalidChannels = [];
+  const channelCheckpoints = {};
+  for (const channel of ["retrieval", "reference", "trigger", "verify"]) {
+    const allRows = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel);
+    if (allRows.length === 0) { missingChannels.push(channel); continue; }
+    const candidates = [...new Set(allRows.map((record) => record.payload.source))].sort().map((source) => allRows.filter((record) => record.payload.source === source));
+    const rows = candidates.find((candidate) => {
+      const phases = candidate.map((record) => record.payload.phase);
+      const sequences = candidate.map((record) => record.payload.sequence);
+      const firstStop = phases.indexOf("stop");
+      return candidate.every((record) => record.payload.availability === "available") && firstStop > 0 && phases.every((phase, index) => index < firstStop ? phase === "start" : phase === "stop") && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && sequence >= 1 && (index === 0 || sequence === sequences[index - 1] + 1)) && Date.parse(candidate[0].at) <= fromValue && Date.parse(candidate.at(-1).at) >= untilValue - 1;
+    });
+    if (rows === undefined) { invalidChannels.push(channel); continue; }
+    const sequences = rows.map((record) => record.payload.sequence);
+    channelCheckpoints[channel] = { availability: "available", source: rows[0].payload.source, startSequence: sequences[0], stopSequence: sequences.at(-1), recordCount: rows.length, sourceDigest: canonicalSha256(rows) };
+  }
+  const problems = read.problems.filter((problem) => problem.path.endsWith(`/${targetFile}`));
+  const sourceDigest = canonicalSha256(entries);
+  if (problems.length > 0 || entries.length === 0 || missingChannels.length > 0 || invalidChannels.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN", coveredFrom: from, coveredUntil: until, missingChannels, invalidChannels, recordCount: entries.length, sourceDigest };
+  const existing = read.records.filter((record) => record.kind === "observation-coverage" && record.payload.coveredFrom === from && record.payload.coveredUntil === until);
+  const matching = existing.find((record) => record.payload.sourceDigest === sourceDigest && record.payload.recordCount === entries.length);
+  if (matching !== undefined) return { ok: true, reasonCode: "TELEMETRY_COVERAGE_ALREADY_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: true, record: matching };
+  if (existing.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_CONFLICT", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest };
+  const receipt = await core.appendTelemetryRecord(root, core.createTelemetryRecord({
+    at,
+    kind: "observation-coverage",
+    session: `observation-seal-${from.slice(0, 10)}`,
+    payload: { source: "telemetry:observation-collector", availability: "available", coverageVersion: "tcrn.telemetry-observation-coverage.v1", coveredFrom: from, coveredUntil: until, channels: ["retrieval", "reference", "trigger", "verify"], channelCheckpoints, recordCount: entries.length, sourceDigest, collectionErrors: 0 },
+  }));
+  return { ok: true, reasonCode: receipt.duplicate ? "TELEMETRY_COVERAGE_ALREADY_RECORDED" : "TELEMETRY_COVERAGE_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: receipt.duplicate, record: receipt.record };
 }
 
 async function queryLanguageAnswer(prompt, settings) {
@@ -323,6 +392,8 @@ export async function runInjection({
     "allow-trailing": true,
     at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
   }, { containerRoot, withPartitionFlag: true });
+  const retrievalSource = "knowledge-inject:retrieval";
+  await emitTelemetry(telemetry, { kind: "retrieval", observationPhase: "start", observationSource: retrievalSource, payload: { stage: "start" } });
   const originalPrompt = String(prompt ?? "");
   let query = originalPrompt;
   let translatedQuery = null;
@@ -349,6 +420,7 @@ export async function runInjection({
   }
   const call = typeof recall === "function" ? await recall(query, { limit: recallLimit }) : await askRecall(query);
   if (!call.ok) {
+    await emitTelemetry(telemetry, { kind: "retrieval", observationPhase: "stop", observationSource: retrievalSource, payload: { stage: "stop" } });
     return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
   }
   let payload = recallPayload(call);
@@ -372,6 +444,8 @@ export async function runInjection({
   const candidates = payload.records ?? [];
   await emitTelemetry(telemetry, {
     kind: "retrieval-hit",
+    observationPhase: "stop",
+    observationSource: retrievalSource,
     payload: {
       candidateCount: candidates.length,
       candidateIds: candidates.map(recordIdentity).filter(Boolean),
@@ -427,17 +501,16 @@ async function workspaceStateForInjection(partition, containerRoot) {
 }
 
 // STORY-387: a SessionStart is the only bounded production opportunity to close the
-// previous UTC day. The collector can write a receipt only when the four upstream
-// channels supplied explicit start/stop checkpoints; no empty file or missing host
-// input is converted into zero activity.
+// previous UTC day. The collector seals actual channel records; no empty file or
+// missing host input is converted into zero activity.
 async function sessionObservationCoverage(event, partition, containerRoot, suppliedState = null) {
   if (event !== "SessionStart") return null;
   const core = await languageModule();
-  if (typeof core?.sealTelemetryObservationDay !== "function" || typeof core?.activeBinding !== "function") return null;
+  if (typeof core?.activeBinding !== "function") return null;
   try {
     const state = suppliedState ?? await workspaceStateForInjection(partition, containerRoot);
     const root = state?.metadata === undefined ? null : core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
-    return root === null ? null : await core.sealTelemetryObservationDay(root, { at: new Date().toISOString() });
+    return root === null ? null : await sealObservationDay(root);
   } catch {
     return null;
   }
@@ -559,30 +632,38 @@ export async function runSessionInjection({
     }
 
     if (event === "PostToolUse") {
+      const referenceSource = "knowledge-inject:reference";
+      await emitTelemetry(telemetry, { kind: "reference", observationPhase: "start", observationSource: referenceSource, payload: { stage: "start" } });
       const correlation = pullCorrelation(hookInput, lease.session.emittedIds, lease.session.pulledIds);
       if (correlation !== null) {
         lease.session.pulledIds.push(correlation.id);
         lease.session.pullCorrelations.push({ ...correlation, at: new Date().toISOString() });
-        await emitTelemetry(telemetry, { kind: "pull", payload: { id: correlation.id, verb: correlation.verb } });
+        await emitTelemetry(telemetry, { kind: "pull", observationPhase: "stop", observationSource: referenceSource, payload: { id: correlation.id, verb: correlation.verb } });
         decisionReason = "PULL_RECORDED";
       } else {
+        await emitTelemetry(telemetry, { kind: "reference", observationPhase: "stop", observationSource: referenceSource, payload: { stage: "stop" } });
         decisionReason = "PULL_IGNORED";
       }
     } else if (event === "UserPromptSubmit") {
       if (lease.session.l1Bytes >= effectiveBudget) {
         decisionReason = parts.length > 0 ? "BUDGET_SATURATED_L0_ONLY" : "BUDGET_SATURATED";
       } else {
-        recallResult = await runInjection({
-          prompt,
-          partition,
-          budget: effectiveBudget,
-          limit,
-          containerRoot,
-          settings: effectiveSettings,
-          translate: calls.translate,
-          recall,
-          telemetry,
-        });
+        await emitTelemetry(telemetry, { kind: "trigger", observationPhase: "start", observationSource: "knowledge-inject:trigger", payload: { event: "UserPromptSubmit", stage: "start" } });
+        try {
+          recallResult = await runInjection({
+            prompt,
+            partition,
+            budget: effectiveBudget,
+            limit,
+            containerRoot,
+            settings: effectiveSettings,
+            translate: calls.translate,
+            recall,
+            telemetry,
+          });
+        } finally {
+          await emitTelemetry(telemetry, { kind: "trigger", observationPhase: "stop", observationSource: "knowledge-inject:trigger", payload: { event: "UserPromptSubmit", stage: "stop" } });
+        }
         const fresh = deduplicateCandidates(recallResult.candidates, lease.session.emittedIds);
         const allowance = Math.min(effectivePerPrompt, effectiveBudget - lease.session.l1Bytes);
         const candidateContext = buildBoundedCandidateContext(fresh, { maxBytes: allowance });

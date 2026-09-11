@@ -106,7 +106,7 @@
     },
     "tests/actor-attestation.test.mjs": {
       "testCount": 10,
-      "assertionCount": 35,
+      "assertionCount": 44,
       "testNames": [
         "assertActorId accepts the allowlisted prefixes and fails closed otherwise",
         "buildEventPayload carries a validated actor only when supplied",
@@ -1878,7 +1878,7 @@
         "STORY-378: absent summaries are counted and unknown card links cannot label a pair",
         "STORY-378 GWT2: extraction produces an unapplied rule draft and a directly capturable decision card",
         "STORY-378: the CLI writes only the rule draft file and reports the formal card plan",
-        "STORY-385: the independent freeze contains twenty Incident identities and immutable source digests"
+        "STORY-385/394: historical Incident scores are development data and the holdout is pre-registered"
       ]
     },
     "tests/story-380-artifact-blob-store.test.mjs": {
@@ -1929,15 +1929,16 @@
       ]
     },
     "tests/telemetry.test.mjs": {
-      "testCount": 6,
-      "assertionCount": 62,
+      "testCount": 7,
+      "assertionCount": 64,
       "testNames": [
         "STORY-372: telemetry is daily NDJSON, stable, idempotent, filterable, and tolerant of bad lines",
         "STORY-372: both hook events record bounded facts and never fabricate observed model",
-        "STORY-387: the telemetry hook records an upstream checkpoint only when one is supplied",
+        "STORY-393: the dispatch hook cannot mint an observation checkpoint from external input",
         "STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires",
-        "STORY-387: only explicit four-channel start/stop checkpoints can seal a UTC day",
-        "STORY-387: missing and unavailable upstream observations stay unproven"
+        "STORY-393: only actual full-day four-channel observations can seal a UTC day",
+        "STORY-393: missing and unavailable upstream observations stay unproven",
+        "STORY-393: partial, gapped, and reverse-phase upstream coverage never seals"
       ]
     },
     "tests/telemetry-stats.test.mjs": {

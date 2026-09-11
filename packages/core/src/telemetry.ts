@@ -1,44 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
-// STORY-372: local dispatch telemetry. This is a disposable observation surface,
-// separate from the governed workspace event chain and its snapshots.
-
 import { appendFile, lstat, mkdir, readdir, readFile, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 
 import { canonicalJson, canonicalSha256, parseStrictInstant } from "../../protocol/src/index.js";
 
 export const TELEMETRY_SCHEMA_VERSION = "tcrn.telemetry.v1" as const;
-export const TELEMETRY_KINDS = Object.freeze(["subagent-start", "subagent-stop"] as const);
 export const TELEMETRY_AVAILABILITY = Object.freeze(["available", "unavailable", "unknown"] as const);
-export const TELEMETRY_OBSERVATION_CHANNELS = Object.freeze(["retrieval", "reference", "trigger", "verify"] as const);
-export const TELEMETRY_OBSERVATION_COVERAGE_VERSION = "tcrn.telemetry-observation-coverage.v1" as const;
-export const TELEMETRY_OBSERVATION_CHECKPOINT_KIND = "observation-checkpoint" as const;
+const OBSERVATION_CHANNELS = Object.freeze(["retrieval", "reference", "trigger", "verify"]);
+const OBSERVATION_CHANNEL_BY_KIND: Record<string, string> = Object.freeze({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify" });
+const OBSERVATION_COVERAGE_VERSION = "tcrn.telemetry-observation-coverage.v1";
 export const TELEMETRY_LINE_BYTES = 16 * 1024;
 export const TELEMETRY_RETENTION_DAYS = 90;
-export type TelemetryKind = string;
 export type TelemetryAvailability = typeof TELEMETRY_AVAILABILITY[number];
-export type TelemetryObservationChannel = typeof TELEMETRY_OBSERVATION_CHANNELS[number];
-export type TelemetryObservationPhase = "start" | "stop";
 
 export interface TelemetryUsage {
   readonly inputTokens: number | null;
   readonly outputTokens: number | null;
   readonly totalTokens: number | null;
-}
-
-export interface DispatchTelemetryPayload {
-  readonly dispatchId: string | null;
-  readonly parentSession: string | null;
-  readonly workId: string | null;
-  readonly taskClass: string | null;
-  readonly mode: string | null;
-  readonly requestedTier: string | null;
-  readonly resolvedTier: string | null;
-  readonly requestedModel: string | null;
-  readonly observedModel: string | null;
-  readonly usage: TelemetryUsage | null;
-  readonly source: string;
-  readonly availability: TelemetryAvailability;
 }
 
 export type TelemetryPayload = Readonly<Record<string, unknown>>;
@@ -47,7 +25,7 @@ export interface TelemetryRecord {
   readonly schemaVersion: typeof TELEMETRY_SCHEMA_VERSION;
   readonly id: string;
   readonly at: string;
-  readonly kind: TelemetryKind;
+  readonly kind: string;
   readonly session: string;
   readonly payload: TelemetryPayload;
 }
@@ -60,24 +38,7 @@ export interface TelemetryReadResult {
   readonly problems: readonly { readonly path: string; readonly line: number; readonly reasonCode: string }[];
 }
 
-export interface TelemetryStatsResult {
-  readonly records: number;
-  readonly countsByKind: Readonly<Record<string, number>>;
-  readonly usage: {
-    readonly observedRecords: number;
-    readonly inputTokens: number | null;
-    readonly outputTokens: number | null;
-    readonly totalTokens: number | null;
-  };
-  readonly problems: TelemetryReadResult["problems"];
-}
-
-export interface TelemetryPruneResult {
-  readonly deleted: readonly string[];
-  readonly skipped: readonly string[];
-}
-
-export interface TelemetryObservationWindow {
+interface TelemetryObservationWindow {
   readonly windowDays: number;
   readonly windowStart: string;
   readonly windowEnd: string;
@@ -88,37 +49,13 @@ export interface TelemetryObservationWindow {
   readonly problems: TelemetryReadResult["problems"];
 }
 
-export interface TelemetryObservationCheckpointInput {
-  readonly at: string;
-  readonly channel: TelemetryObservationChannel;
-  readonly phase: TelemetryObservationPhase;
-  readonly sequence: number;
-  readonly source: string;
-  readonly availability?: TelemetryAvailability;
-  readonly session?: string;
-}
-
-export interface TelemetryObservationCoverageResult {
-  readonly ok: boolean;
-  readonly reasonCode: string;
-  readonly coveredFrom: string;
-  readonly coveredUntil: string;
-  readonly missingChannels: readonly TelemetryObservationChannel[];
-  readonly invalidChannels: readonly TelemetryObservationChannel[];
-  readonly recordCount: number;
-  readonly sourceDigest: string | null;
-  readonly duplicate?: boolean;
-  readonly record?: TelemetryRecord;
-  readonly problems: TelemetryReadResult["problems"];
-}
-
 export interface TelemetryEvidenceSnapshot {
   readonly schemaVersion: "tcrn.telemetry-evidence.v1";
   readonly id: string;
   readonly digest: string;
   readonly fields: {
     readonly at: string;
-    readonly kind: TelemetryKind;
+    readonly kind: string;
     readonly session: string;
     readonly payload: TelemetryPayload;
   };
@@ -265,13 +202,13 @@ export function validateTelemetryRecord(value: unknown): TelemetryRecord {
   return record;
 }
 
-function telemetryId(kind: TelemetryKind, at: string, session: string, body: TelemetryPayload): string {
+function telemetryId(kind: string, at: string, session: string, body: TelemetryPayload): string {
   return `telemetry:${canonicalSha256({ schemaVersion: TELEMETRY_SCHEMA_VERSION, kind, at, session, payload: body }).slice(0, 24)}`;
 }
 
 export function createTelemetryRecord(input: {
   readonly at: string;
-  readonly kind: TelemetryKind;
+  readonly kind: string;
   readonly session: string;
   readonly payload: TelemetryPayload;
   readonly id?: string;
@@ -283,178 +220,6 @@ export function createTelemetryRecord(input: {
   try { parseStrictInstant(at); } catch { fail("TELEMETRY_RECORD_INVALID", "at is not a strict instant"); }
   const id = input.id ?? telemetryId(kind, at, session, body);
   return validateTelemetryRecord({ schemaVersion: TELEMETRY_SCHEMA_VERSION, id, at, kind, session, payload: body });
-}
-
-function observationChannel(value: unknown): TelemetryObservationChannel | null {
-  return (TELEMETRY_OBSERVATION_CHANNELS as readonly string[]).includes(value as string)
-    ? value as TelemetryObservationChannel
-    : null;
-}
-
-/** Map recorded events to the four upstream channels used by coverage sealing. */
-export function telemetryObservationChannel(record: TelemetryRecord): TelemetryObservationChannel | null {
-  if (record.kind === TELEMETRY_OBSERVATION_CHECKPOINT_KIND) return observationChannel(record.payload.channel);
-  if (record.kind === "retrieval-hit") return "retrieval";
-  if (record.kind === "pull" || record.kind === "reference") return "reference";
-  if (record.kind === "trigger" || record.kind === "rule-trigger") return "trigger";
-  if (record.kind === "verify") return "verify";
-  return null;
-}
-
-function observationInstant(value: string, label: string): bigint {
-  try { return parseStrictInstant(value); } catch { fail("TELEMETRY_COVERAGE_UNPROVEN", `${label} is not a strict instant`); }
-}
-
-function observationSequence(value: unknown): number | null {
-  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
-}
-
-export async function appendTelemetryObservationCheckpoint(root: string, input: TelemetryObservationCheckpointInput): Promise<{ readonly record: TelemetryRecord; readonly path: string; readonly duplicate: boolean }> {
-  const channel = observationChannel(input.channel);
-  if (channel === null || (input.phase !== "start" && input.phase !== "stop") || observationSequence(input.sequence) === null) {
-    fail("TELEMETRY_COVERAGE_UNPROVEN", "observation checkpoint fields are invalid");
-  }
-  const at = requiredText(input.at, "observation checkpoint at", 64);
-  observationInstant(at, "observation checkpoint at");
-  const source = requiredText(input.source, "observation checkpoint source", 128);
-  const availability = input.availability ?? "available";
-  if (!(TELEMETRY_AVAILABILITY as readonly string[]).includes(availability)) fail("TELEMETRY_COVERAGE_UNPROVEN", "observation checkpoint availability");
-  const record = createTelemetryRecord({
-    at,
-    kind: TELEMETRY_OBSERVATION_CHECKPOINT_KIND,
-    session: input.session ?? `observation-${channel}`,
-    payload: { source, availability, channel, phase: input.phase, sequence: input.sequence },
-  });
-  return appendTelemetryRecord(root, record);
-}
-
-function coverageResult(input: { readonly coveredFrom: string; readonly coveredUntil: string; readonly missingChannels?: readonly TelemetryObservationChannel[]; readonly invalidChannels?: readonly TelemetryObservationChannel[]; readonly recordCount?: number; readonly sourceDigest?: string | null; readonly reasonCode: string; readonly ok: boolean; readonly duplicate?: boolean; readonly record?: TelemetryRecord; readonly problems?: TelemetryReadResult["problems"] }): TelemetryObservationCoverageResult {
-  return {
-    ok: input.ok,
-    reasonCode: input.reasonCode,
-    coveredFrom: input.coveredFrom,
-    coveredUntil: input.coveredUntil,
-    missingChannels: input.missingChannels ?? [],
-    invalidChannels: input.invalidChannels ?? [],
-    recordCount: input.recordCount ?? 0,
-    sourceDigest: input.sourceDigest ?? null,
-    ...(input.duplicate === undefined ? {} : { duplicate: input.duplicate }),
-    ...(input.record === undefined ? {} : { record: input.record }),
-    problems: input.problems ?? [],
-  };
-}
-
-/**
- * Close one UTC day only from explicit upstream checkpoints. Empty or merely
- * existing day files cannot produce a coverage receipt. The receipt is appended
- * at the next day's observed time, so the reader can enforce the close-after-day
- * rule without backdating evidence.
- */
-export async function sealTelemetryObservationDay(root: string, input: { readonly at: string; readonly coveredFrom?: string; readonly coveredUntil?: string }): Promise<TelemetryObservationCoverageResult> {
-  const at = requiredText(input.at, "observation seal at", 64);
-  const atValue = observationInstant(at, "observation seal at");
-  const current = new Date(at);
-  current.setUTCHours(0, 0, 0, 0);
-  const defaultUntil = current.toISOString();
-  const defaultFromDate = new Date(current);
-  defaultFromDate.setUTCDate(defaultFromDate.getUTCDate() - 1);
-  const coveredFrom = input.coveredFrom ?? defaultFromDate.toISOString();
-  const coveredUntil = input.coveredUntil ?? defaultUntil;
-  const fromValue = observationInstant(coveredFrom, "coveredFrom");
-  const untilValue = observationInstant(coveredUntil, "coveredUntil");
-  if (untilValue <= fromValue || untilValue - fromValue !== 86_400_000_000_000n || atValue < untilValue ||
-    !coveredFrom.endsWith("T00:00:00.000Z") || !coveredUntil.endsWith("T00:00:00.000Z")) {
-    return coverageResult({
-      coveredFrom,
-      coveredUntil,
-      reasonCode: "TELEMETRY_COVERAGE_UNPROVEN",
-      ok: false,
-      invalidChannels: [...TELEMETRY_OBSERVATION_CHANNELS],
-      problems: [{ path: "", line: 0, reasonCode: "TELEMETRY_COVERAGE_WINDOW_INVALID" }],
-    });
-  }
-  const targetDay = coveredFrom.slice(0, 10);
-  const targetFile = `${targetDay}.ndjson`;
-  const read = await readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER });
-  const sourceRecords = read.records.filter((record) => record.kind !== "observation-coverage" && day(record.at) === targetDay);
-  const targetProblems = read.problems.filter((problem) => problem.path.endsWith(`/${targetFile}`));
-  const missingChannels: TelemetryObservationChannel[] = [];
-  const invalidChannels: TelemetryObservationChannel[] = [];
-  const checkpoints: Partial<Record<TelemetryObservationChannel, readonly TelemetryRecord[]>> = {};
-  for (const channel of TELEMETRY_OBSERVATION_CHANNELS) {
-    const rows = sourceRecords.filter((record) => telemetryObservationChannel(record) === channel && record.kind === TELEMETRY_OBSERVATION_CHECKPOINT_KIND);
-    checkpoints[channel] = rows;
-    if (rows.length === 0) {
-      missingChannels.push(channel);
-      continue;
-    }
-    const ordered = [...rows].sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id < right.id ? -1 : 1);
-    const sequences = ordered.map((record) => observationSequence(record.payload.sequence));
-    const phases = new Set(ordered.map((record) => record.payload.phase));
-    const sources = new Set(ordered.map((record) => record.payload.source));
-    if (ordered.some((record) => record.payload.availability !== "available") || sequences.some((sequence) => sequence === null) ||
-      new Set(sequences).size !== sequences.length || sequences.some((sequence, index) => index > 0 && sequence! <= sequences[index - 1]!) ||
-      !phases.has("start") || !phases.has("stop") || sources.size !== 1) invalidChannels.push(channel);
-  }
-  if (targetProblems.length > 0 || sourceRecords.length === 0 || missingChannels.length > 0 || invalidChannels.length > 0) {
-    return coverageResult({
-      coveredFrom,
-      coveredUntil,
-      missingChannels,
-      invalidChannels: [...new Set([...invalidChannels, ...(targetProblems.length > 0 ? [...TELEMETRY_OBSERVATION_CHANNELS] : [])])],
-      recordCount: sourceRecords.length,
-      reasonCode: "TELEMETRY_COVERAGE_UNPROVEN",
-      ok: false,
-      problems: [...targetProblems, ...(sourceRecords.length === 0 ? [{ path: targetFile, line: 0, reasonCode: "TELEMETRY_COVERAGE_INPUT_MISSING" }] : [])],
-    });
-  }
-  const sourceDigest = canonicalSha256(sourceRecords as unknown as import("../../protocol/src/index.js").JsonValue);
-  const existing = read.records.filter((record) => record.kind === "observation-coverage" && record.payload.coveredFrom === coveredFrom && record.payload.coveredUntil === coveredUntil);
-  if (existing.length > 0) {
-    const matching = existing.find((record) => record.payload.sourceDigest === sourceDigest && record.payload.recordCount === sourceRecords.length);
-    if (matching !== undefined) return coverageResult({ coveredFrom, coveredUntil, sourceDigest, recordCount: sourceRecords.length, reasonCode: "TELEMETRY_COVERAGE_ALREADY_RECORDED", ok: true, duplicate: true, record: matching });
-    return coverageResult({ coveredFrom, coveredUntil, sourceDigest, recordCount: sourceRecords.length, reasonCode: "TELEMETRY_COVERAGE_CONFLICT", ok: false, problems: [{ path: targetFile, line: 0, reasonCode: "TELEMETRY_COVERAGE_CONFLICT" }] });
-  }
-  const channelCheckpoints = Object.fromEntries(TELEMETRY_OBSERVATION_CHANNELS.map((channel) => {
-    const rows = checkpoints[channel]!;
-    const ordered = [...rows].sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id < right.id ? -1 : 1);
-    return [channel, {
-      availability: "available",
-      source: ordered[0]!.payload.source as string,
-      startSequence: observationSequence(ordered[0]!.payload.sequence)!,
-      stopSequence: observationSequence(ordered.at(-1)!.payload.sequence)!,
-      checkpointCount: ordered.length,
-      sourceDigest: canonicalSha256(ordered as unknown as import("../../protocol/src/index.js").JsonValue),
-    }];
-  }));
-  const receipt = createTelemetryRecord({
-    at,
-    kind: "observation-coverage",
-    session: `observation-seal-${targetDay}`,
-    payload: {
-      source: "telemetry:observation-collector",
-      availability: "available",
-      coverageVersion: TELEMETRY_OBSERVATION_COVERAGE_VERSION,
-      coveredFrom,
-      coveredUntil,
-      channels: [...TELEMETRY_OBSERVATION_CHANNELS],
-      channelCheckpoints,
-      recordCount: sourceRecords.length,
-      sourceDigest,
-      collectionErrors: 0,
-    },
-  });
-  const appended = await appendTelemetryRecord(root, receipt);
-  return coverageResult({
-    coveredFrom,
-    coveredUntil,
-    sourceDigest,
-    recordCount: sourceRecords.length,
-    reasonCode: appended.duplicate ? "TELEMETRY_COVERAGE_ALREADY_RECORDED" : "TELEMETRY_COVERAGE_RECORDED",
-    ok: true,
-    duplicate: appended.duplicate,
-    record: appended.record,
-  });
 }
 
 export function telemetryEvidenceSnapshot(record: TelemetryRecord): TelemetryEvidenceSnapshot {
@@ -477,12 +242,8 @@ function rootDirectory(root: string): string {
   return resolve(root);
 }
 
-function day(at: string): string {
-  return new Date(at).toISOString().slice(0, 10);
-}
-
 function fileFor(root: string, at: string): string {
-  return join(rootDirectory(root), "telemetry", `${day(at)}.ndjson`);
+  return join(rootDirectory(root), "telemetry", `${new Date(at).toISOString().slice(0, 10)}.ndjson`);
 }
 
 async function regularDirectory(path: string, create = false): Promise<void> {
@@ -611,7 +372,12 @@ export async function readTelemetryStats(root: string, options: {
   readonly kind?: string;
   readonly taskClass?: string;
   readonly since?: string;
-} = {}): Promise<TelemetryStatsResult> {
+} = {}): Promise<{
+  readonly records: number;
+  readonly countsByKind: Readonly<Record<string, number>>;
+  readonly usage: { readonly observedRecords: number; readonly inputTokens: number | null; readonly outputTokens: number | null; readonly totalTokens: number | null };
+  readonly problems: TelemetryReadResult["problems"];
+}> {
   const result = await readTelemetryRecords(root, {
     ...(options.kind === undefined ? {} : { kind: options.kind }),
     ...(options.taskClass === undefined ? {} : { taskClass: options.taskClass }),
@@ -650,32 +416,36 @@ export async function readTelemetryStats(root: string, options: {
   };
 }
 
-function coverageCheckpointsValid(value: Record<string, unknown>, entries: readonly TelemetryRecord[]): boolean {
+function observationCoverageValid(value: TelemetryPayload, entries: readonly TelemetryRecord[], from: string, until: string): boolean {
   const channels = value.channels;
-  if (value.coverageVersion !== TELEMETRY_OBSERVATION_COVERAGE_VERSION || !Array.isArray(channels) ||
-    channels.length !== TELEMETRY_OBSERVATION_CHANNELS.length || new Set(channels).size !== channels.length ||
-    !TELEMETRY_OBSERVATION_CHANNELS.every((channel) => channels.includes(channel)) ||
-    value.channelCheckpoints === null || typeof value.channelCheckpoints !== "object" || Array.isArray(value.channelCheckpoints)) return false;
-  const checkpointMap = value.channelCheckpoints as Record<string, unknown>;
-  if (canonicalJson(Object.keys(checkpointMap).sort()) !== canonicalJson([...TELEMETRY_OBSERVATION_CHANNELS].sort())) return false;
-  return TELEMETRY_OBSERVATION_CHANNELS.every((channel) => {
-    const proof = checkpointMap[channel];
+  if (value.source !== "telemetry:observation-collector" || value.coverageVersion !== OBSERVATION_COVERAGE_VERSION || !Array.isArray(channels) ||
+      channels.length !== OBSERVATION_CHANNELS.length || new Set(channels).size !== channels.length ||
+      !OBSERVATION_CHANNELS.every((channel) => channels.includes(channel)) ||
+      value.channelCheckpoints === null || typeof value.channelCheckpoints !== "object" || Array.isArray(value.channelCheckpoints)) return false;
+  const proofs = value.channelCheckpoints as Record<string, unknown>;
+  if (canonicalJson(Object.keys(proofs).sort()) !== canonicalJson([...OBSERVATION_CHANNELS].sort())) return false;
+  const fromValue = parseStrictInstant(from);
+  const untilValue = parseStrictInstant(until);
+  return OBSERVATION_CHANNELS.every((channel) => {
+    const proof = proofs[channel];
     if (proof === null || typeof proof !== "object" || Array.isArray(proof)) return false;
-    const entry = proof as Record<string, unknown>;
-    const fields = ["availability", "checkpointCount", "source", "sourceDigest", "startSequence", "stopSequence"];
-    if (canonicalJson(Object.keys(entry).sort()) !== canonicalJson(fields.sort()) || entry.availability !== "available" ||
-      typeof entry.source !== "string" || !/^[a-f0-9]{64}$/u.test(String(entry.sourceDigest)) ||
-      !Number.isSafeInteger(entry.checkpointCount) || Number(entry.checkpointCount) < 2 ||
-      !Number.isSafeInteger(entry.startSequence) || Number(entry.startSequence) < 0 ||
-      !Number.isSafeInteger(entry.stopSequence) || Number(entry.stopSequence) < Number(entry.startSequence)) return false;
-    const rows = entries.filter((record) => record.kind === TELEMETRY_OBSERVATION_CHECKPOINT_KIND && telemetryObservationChannel(record) === channel)
-      .sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id < right.id ? -1 : 1);
-    const sequences = rows.map((record) => observationSequence(record.payload.sequence));
-    const phases = new Set(rows.map((record) => record.payload.phase));
-    return rows.length === entry.checkpointCount && rows.every((record) => record.payload.availability === "available" && record.payload.source === entry.source) &&
-      sequences.every((sequence, index) => sequence !== null && (index === 0 || sequence > sequences[index - 1]!)) && phases.has("start") && phases.has("stop") &&
-      sequences[0] === entry.startSequence && sequences.at(-1) === entry.stopSequence &&
-      canonicalSha256(rows as unknown as import("../../protocol/src/index.js").JsonValue) === entry.sourceDigest;
+    const fields = proof as Record<string, unknown>;
+    if (canonicalJson(Object.keys(fields).sort()) !== canonicalJson(["availability", "recordCount", "source", "sourceDigest", "startSequence", "stopSequence"])) return false;
+    const rows = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && record.payload.source === fields.source)
+      .sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id));
+    const phases = rows.map((record) => record.payload.phase);
+    const firstStop = phases.indexOf("stop");
+    const sequences = rows.map((record) => record.payload.sequence);
+    const validSequence = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) >= 1;
+    return fields.availability === "available" && typeof fields.source === "string" &&
+      typeof fields.sourceDigest === "string" && /^[a-f0-9]{64}$/u.test(fields.sourceDigest) &&
+      Number.isSafeInteger(fields.recordCount) && Number(fields.recordCount) >= 2 && rows.length === fields.recordCount &&
+      Number.isSafeInteger(fields.startSequence) && Number.isSafeInteger(fields.stopSequence) && Number(fields.startSequence) >= 1 && Number(fields.stopSequence) >= Number(fields.startSequence) &&
+      rows.every((record) => record.payload.availability === "available") && firstStop > 0 && phases.every((phase, index) => index < firstStop ? phase === "start" : phase === "stop") &&
+      sequences.every((sequence, index) => validSequence(sequence) && (index === 0 || Number(sequence) === Number(sequences[index - 1]) + 1)) &&
+      sequences[0] === fields.startSequence && sequences.at(-1) === fields.stopSequence &&
+      parseStrictInstant(rows[0]!.at) <= fromValue && parseStrictInstant(rows[rows.length - 1]!.at) >= untilValue - 1_000_000n &&
+      canonicalSha256(rows as unknown as import("../../protocol/src/index.js").JsonValue) === fields.sourceDigest;
   });
 }
 
@@ -709,8 +479,6 @@ export async function readTelemetryObservationWindow(root: string, at: string, w
     else throw error;
   }
   if (!directoryAvailable) missingDays.push(...names);
-  // A collector closes a UTC day in the next day's stream, never by backdating
-  // observations. Include today's receipts without counting today's activity.
   const today = `${current.toISOString().slice(0, 10)}.ndjson`;
   for (const name of directoryAvailable ? [...names, today] : []) {
     const path = join(directory, name);
@@ -747,16 +515,15 @@ export async function readTelemetryObservationWindow(root: string, at: string, w
     if (missingDays.includes(name) || invalidDays.includes(name)) continue;
     const from = `${name.slice(0, 10)}T00:00:00.000Z`;
     const until = new Date(new Date(from).getTime() + 86_400_000).toISOString();
-    const entries = dayRecords.get(name) ?? [];
+    const entries = [...(dayRecords.get(name) ?? [])].sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id));
     const sourceDigest = canonicalSha256(entries as unknown as import("../../protocol/src/index.js").JsonValue);
     const receipts = coverage.filter((record) => record.payload.coveredFrom === from && record.payload.coveredUntil === until);
     const proven = receipts.length > 0 && receipts.every((record) => {
       const value = record.payload;
-      const channels = value.channels;
       return value.availability === "available" && value.collectionErrors === 0 &&
         value.coveredFrom === from && value.coveredUntil === until &&
         parseStrictInstant(record.at) >= parseStrictInstant(until) && parseStrictInstant(record.at) <= parseStrictInstant(at) &&
-        Array.isArray(channels) && coverageCheckpointsValid(value as Record<string, unknown>, entries) &&
+        observationCoverageValid(value, entries, from, until) &&
         value.recordCount === entries.length && value.sourceDigest === sourceDigest;
     });
     if (!proven) {
@@ -800,7 +567,7 @@ function telemetryManifest(value: unknown): readonly { readonly file: string; re
 export async function pruneTelemetryRecords(root: string, options: {
   readonly now?: string;
   readonly retentionDays?: number;
-} = {}): Promise<TelemetryPruneResult> {
+} = {}): Promise<{ readonly deleted: readonly string[]; readonly skipped: readonly string[] }> {
   const now = options.now ?? new Date().toISOString();
   const retentionDays = options.retentionDays ?? TELEMETRY_RETENTION_DAYS;
   if (!Number.isSafeInteger(retentionDays) || retentionDays < 0) fail("TELEMETRY_FILTER_INVALID", "retentionDays must be a non-negative integer");

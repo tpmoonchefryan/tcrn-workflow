@@ -1,0 +1,418 @@
+{
+  "schemaVersion": "tcrn.retrieval-holdout.v1",
+  "frozenAt": "2026-09-11T05:07:05.880Z",
+  "role": "unseen-disjoint-holdout",
+  "origin": "disjoint Story identities from the frozen work source; selected before any holdout score",
+  "sourceFiles": [
+    {
+      "path": "tests/fixtures/retrieval-eval/work-compact.json",
+      "sha256": "50aaa302464c4568f48702a09816a1aba7ec9e514a29a34663dfee4e45053122"
+    }
+  ],
+  "sourceSelection": {
+    "kind": "Story",
+    "excludedKinds": [
+      "Incident"
+    ],
+    "externalKeys": [
+      "TCRN-CROSS-STORY-333",
+      "TCRN-CROSS-STORY-334",
+      "TCRN-CROSS-STORY-335",
+      "TCRN-CROSS-STORY-336",
+      "TCRN-CROSS-STORY-337",
+      "TCRN-CROSS-STORY-338",
+      "TCRN-CROSS-STORY-339",
+      "TCRN-CROSS-STORY-340",
+      "TCRN-CROSS-STORY-341",
+      "TCRN-CROSS-STORY-342",
+      "TCRN-CROSS-STORY-343",
+      "TCRN-CROSS-STORY-345",
+      "TCRN-CROSS-STORY-346",
+      "TCRN-CROSS-STORY-347",
+      "TCRN-CROSS-STORY-348",
+      "TCRN-CROSS-STORY-349",
+      "TCRN-CROSS-STORY-350",
+      "TCRN-CROSS-STORY-351",
+      "TCRN-CROSS-STORY-352",
+      "TCRN-CROSS-STORY-353"
+    ],
+    "selectionDigest": "3c61e84dd37bbef320812a698a7b8463be9f476b68156917011562ce02bc08e7"
+  },
+  "labelPolicy": {
+    "kind": "Story",
+    "minimumRecords": 20,
+    "expectedIdRule": "source.workId only",
+    "basis": "manual identity from the source record",
+    "createdBeforeScoring": true,
+    "modelCalls": 0
+  },
+  "thresholds": {
+    "pairsAtLeast": 20,
+    "hitAt1": 8,
+    "hitAt3": 12,
+    "hitAt8": 16,
+    "rule": "fixed 40%/60%/80% floors before first scoring"
+  },
+  "records": [
+    {
+      "id": "holdout-preregistered:f8ad1a983f0ff661dd83cc78",
+      "source": {
+        "workId": "work:70e764d8890c5c508c2bb1ec",
+        "externalKey": "TCRN-CROSS-STORY-333",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "5299bad88740a207552f66ab39eb313819dbf5dd2e156e2154b436bb29cf1d50",
+        "sourceRecordDigest": "94983df8adbcb42fe161af557a92328843e804f99d79bbc8b05ef9763ce04a34"
+      },
+      "prompt": "现象：【Goal】为谁=维护事件段的人：段尺寸均匀，不因单条记录大小波动而倾斜。目的锚=INIT-048 方案部分 A；Owner 2026-09-02 裁定段上限 16 MiB。符合性判据=段尺寸最大对最小收敛到 1.0 附近，且 AC 全绿。判定人=九门全绿。\n【Requirements】①事件段的滚动判据由条数改为已写字节数。②`workspace.json` 的 `segmentEventLimit` 保留字段名与位置，值改为字节；旧值按条数解释由 `storageVersion` 区分。③段上",
+      "label": {
+        "expectedIds": [
+          "work:70e764d8890c5c508c2bb1ec"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:fdab6e5bc2813b4f955ecacc",
+      "source": {
+        "workId": "work:3df677fb0e17208536e71ae9",
+        "externalKey": "TCRN-CROSS-STORY-334",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "cb2433ccdfffb240cb8ac7315e3ed439aea919d82de82f8f680f0892bde160d4",
+        "sourceRecordDigest": "e93e6b897b3a2faf4f0aaa744274f0386211ec3b3f38719c4c5948f2414d462a"
+      },
+      "prompt": "现象：【Goal】为谁=按 key 点查记录的调用方：一次定位，不扫段。目的锚=INIT-048 方案部分 A；Kafka 的 `[offset].log` 配 `.index`／`.timeindex` 是同一形态。符合性判据=点查为 O(1)，主题过滤不复制正文，且 AC 全绿。判定人=九门全绿。\n【Requirements】①实现分段 NDJSON 存储：`<段号>.ndjson` 一行一记录按到达顺序追加。②每段配 `<段号>.idx`，内容为 key 到段号、偏移、长度的映射。③全局 `labels.idx` 为标",
+      "label": {
+        "expectedIds": [
+          "work:3df677fb0e17208536e71ae9"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:d280682d58690b125075fbce",
+      "source": {
+        "workId": "work:d871200b7c4f06492631d6ed",
+        "externalKey": "TCRN-CROSS-STORY-335",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "e736c6ee0f8ce37c841577922511615e5f7b241f514c957755d2330a6b8cb5e7",
+        "sourceRecordDigest": "91ab41bc201e267476f0c04c6946675bfe1142992589a37df47d3af10e1849eb"
+      },
+      "prompt": "现象：【Goal】为谁=读链的人与磁盘：状态迁移不再整体重写未变化的正文。目的锚=INIT-048 方案部分 B；实测 1,212 次 `work.updated` 携带与上一版逐字节相同的 scope。符合性判据=`work.updated` 不再整体重写未变化的 extensions，且 AC 全绿。判定人=九门全绿。\n【Requirements】①新增 `scopeDigest` 字段，值为 `extensions` 的内容摘要。②`work.updated` 写入时比对摘要，未变化则只写引用，不重写正文。③事件重",
+      "label": {
+        "expectedIds": [
+          "work:d871200b7c4f06492631d6ed"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:c18733c2bc730f03d930ae23",
+      "source": {
+        "workId": "work:100ee76ded89e7143666c8e4",
+        "externalKey": "TCRN-CROSS-STORY-336",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "e39d3008d07f4f29d452458a80fdc6f3036ed8e7dd261c6707953976cc82bf49",
+        "sourceRecordDigest": "e3dcb57da234a60c2078edefd2069dc7c2fa2275c2dc7bdec51ad10a4e4880e9"
+      },
+      "prompt": "现象：【Goal】为谁=检索工单的人与模型：列表可读、可按时间排序、可按主题过滤。目的锚=INIT-048 方案部分 B；Owner 2026-09-02 裁定四个字段一次性升版。符合性判据=四个字段可写可读可校验，只走一条迁移，且 AC 全绿。判定人=九门全绿。\n【Requirements】①`tcrn.work.v1` 一次性新增四个字段：`scopeDigest`、`title`、`createdAt`、`labels`。②`labels` 做成一级字段，不做成 `extensions` 项——`advisory:sprint` 走",
+      "label": {
+        "expectedIds": [
+          "work:100ee76ded89e7143666c8e4"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:db9f08c47745944cb6837ba0",
+      "source": {
+        "workId": "work:9c72660553f61faa1fc9c6f3",
+        "externalKey": "TCRN-CROSS-STORY-337",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "5f63a85bebbcdcad27fec1c9fc50307d952f8d1512331710ebf109bb21c38907",
+        "sourceRecordDigest": "5fc2a6b5e6af0271e9ece13ea93eeadac812905cc218dc0579a36dbf31e2ced9"
+      },
+      "prompt": "现象：【Goal】为谁=每一次读链的人：耗时进入常数量级，不随事件数线性增长。目的锚=INIT-048 方案部分 C；Owner 2026-09-02 裁定快照间隔 512 事件。符合性判据=读路径经快照加尾部重放，且快照损坏时红而非静默回退，AC 全绿。判定人=九门全绿。\n【Requirements】①每 N 个事件落一个状态快照，N 走新设置 `storage.snapshotEveryEvents`，默认 512。②读路径改为载入最新快照后只重放尾部。③快照写入用",
+      "label": {
+        "expectedIds": [
+          "work:9c72660553f61faa1fc9c6f3"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:c7a41b0b31c5153b3dbfa804",
+      "source": {
+        "workId": "work:b5588392aea8b116072ae749",
+        "externalKey": "TCRN-CROSS-STORY-338",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "85b1d87b3f63f459785b78feb1df9d48ed621a18c8bb0fd26fe975f873b4e3ae",
+        "sourceRecordDigest": "dd3b71fc807102aca4e6ef73fe5a4da338b543a90c1bf4bd7cac0407bd841c38"
+      },
+      "prompt": "现象：【Goal】为谁=容器磁盘：归档区只留有理由留的东西。目的锚=INIT-048 方案部分 D；Owner 2026-09-02 批准清理范围。符合性判据=标为待裁的条目已清理，保留项逐条有理由，且 AC 全绿。判定人=九门全绿。\n【Requirements】①按方案部分 D 两张表清理标为待裁的条目，合计约 498MB。②`chain-snapshots` 保留最新一份 `chain-snapshot-20260816T132815656Z`，其余清理。③每次删除前先记录条目名、字节数与最后",
+      "label": {
+        "expectedIds": [
+          "work:b5588392aea8b116072ae749"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:334b5dfe580d5a9b298318cb",
+      "source": {
+        "workId": "work:44a11d22d0cfed222dfe3803",
+        "externalKey": "TCRN-CROSS-STORY-339",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "05ffc8f3fdfe5bc80cab4e67a13bab7a9075e5ddd170071c8996db921b5e5616",
+        "sourceRecordDigest": "4f67aadc3b08c5e22e7cdda13783feba6c328b2f746cf265cea63b79a88a7fe6"
+      },
+      "prompt": "现象：【Goal】为谁=读 AGENTS.md 找归档区正本的人：清单与盘上一致。目的锚=INIT-048 方案部分 D；实测第六节漏了 18 个条目共 55MB。符合性判据=清单与盘上逐条一致，且有判据看住，AC 全绿。判定人=九门全绿。\n【Requirements】①补齐 `AGENTS.md` 第六节的归档区清单，使其与清理后的盘上实况逐条一致。②新增一条判据：归档区出现未在清单中声明的目录即红。③判据须能双向检出——清单多写一",
+      "label": {
+        "expectedIds": [
+          "work:44a11d22d0cfed222dfe3803"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:8d28133c27151d6211eab50c",
+      "source": {
+        "workId": "work:18ebf8d259271cef4d14488c",
+        "externalKey": "TCRN-CROSS-STORY-340",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "8733572ee4be469961a5281429b43ba2a5ddd6b6aed774b2a88ba4d2faecce28",
+        "sourceRecordDigest": "f36d71362d8178457f318558f921efc4cef43758d4b6ad241328b86a1d74cb16"
+      },
+      "prompt": "现象：【Goal】为谁=磁盘与未来的读取方：存证从一操作一文件迁为分段加索引。目的锚=INIT-048 方案部分 E；实测存证放大 20.4 倍。符合性判据=迁移后逐条全值回读通过，原文件删除后九门仍绿，AC 全绿。判定人=九门全绿。\n【Requirements】①把 8 个分区共 3,719 个存证文件迁入分段 NDJSON 加边车索引。②按六步安全序列执行：取基线、写新布局且原文件不动、逐条全值回读、跑九门、删除原文件",
+      "label": {
+        "expectedIds": [
+          "work:18ebf8d259271cef4d14488c"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:b2d1e5d3ecc725b866697385",
+      "source": {
+        "workId": "work:8001fb603410b8cb09d18e06",
+        "externalKey": "TCRN-CROSS-STORY-341",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "f9e9cdf6d1c8f8f7895173bb0d611cd69883dd393721fb7ee91635bd33dd8517",
+        "sourceRecordDigest": "e6df4cd73b955f27107473e6564b06b283aef851456228f405f1ab3abdba0061"
+      },
+      "prompt": "现象：【Goal】为谁=知识库磁盘：正文从一卡一文件迁为分段。目的锚=INIT-048 方案部分 E；实测 bodies 放大 12.5 倍。符合性判据=迁移后 `knowledge-validate` 通过且记录数不变，AC 全绿。判定人=九门全绿。\n【Requirements】①把 `knowledge/bodies` 的 37 个文件合并入分段布局。②store 声明 `disposable: true`，可整体重建；迁移后重算 `indexDigest`。③`knowledge/metadata` 保持按 id 单文件不动——它的访问形态是全目",
+      "label": {
+        "expectedIds": [
+          "work:8001fb603410b8cb09d18e06"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:71497351dfc3982a2c64fb2b",
+      "source": {
+        "workId": "work:984922ef1dc17065322c7443",
+        "externalKey": "TCRN-CROSS-STORY-342",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "c943055d519238e0bec05270c47d977b401c1f90068c7964a194549a39452e91",
+        "sourceRecordDigest": "ccb399f26231fa02a4e43ce5f44c52e239d9059197cae9dee11ce618806cf19c"
+      },
+      "prompt": "现象：【Goal】为谁=读 verification-map 判断某项能力是否成立的人：判据文本与实况一致。目的锚=INIT-048 方案部分 F；实测 32 条判据的 fixturePaths 命中要改的文件。符合性判据=受影响判据全部处理，两条语义改写显式记录，AC 全绿。判定人=九门全绿。\n【Requirements】①`fixturePaths` 指向 `workspace.ts`／`knowledge-core.ts`／`storage-backend`／`store-backend`／`artifact-lifecycle` 的 32 条判据，`fixtureDigest` 全部重算。",
+      "label": {
+        "expectedIds": [
+          "work:984922ef1dc17065322c7443"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:f7a3cb9253bbb8a7492e3af6",
+      "source": {
+        "workId": "work:59c84dc5d707bef94b107ef8",
+        "externalKey": "TCRN-CROSS-STORY-343",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "8f3e5334862d07bcd3e30bd758595754360aa3fc2b2e6a8e012d182c76cd22f9",
+        "sourceRecordDigest": "53f6ceb38ba14f98b95018420865e2f16c7b65f36856eec9450b78b75eb46895"
+      },
+      "prompt": "现象：【Goal】为谁=读 helper 与引擎文档的人：描述的布局与盘上一致。目的锚=INIT-048 方案部分 F；实测 helper 有 13 处点名具体布局。符合性判据=文档与实况一致且有判据看住，helper 发布物重新对齐，AC 全绿。判定人=九门全绿。\n【Requirements】①helper 的 13 处点名布局的句子改为新布局，分布在 `SKILL.md`、`workflow-operations.md`、`platform-layout.md`、`first-run-wizard.md`、`backup-elicitation.md`、`reason-codes.md`",
+      "label": {
+        "expectedIds": [
+          "work:59c84dc5d707bef94b107ef8"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:822da1fc8dd92c92076c731d",
+      "source": {
+        "workId": "work:98f0c3b5febe4baeef3c2dae",
+        "externalKey": "TCRN-CROSS-STORY-345",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "7aa129ea7b061338f81b0ae49ed299d3f14436c9943845f4efc944646b641802",
+        "sourceRecordDigest": "7723fba0211bdd9414c6a427ea2dd9f76119e92b0c565aa17ed130bde75a958c"
+      },
+      "prompt": "现象：【Goal】为谁=未来要换存储实现的人：本地分段是一个可选后端，不是唯一写死的实现。目的锚=INIT-048 方案部分 G；ADR 0004 已把文件后端定为本地模式轨。符合性判据=两种后端行为等价、可选择、未知取值须拒绝，AC 全绿。判定人=九门全绿。\n【Requirements】①`backendKind` 增加 `file-segmented` 取值，本轮只有 `file` 与 `file-segmented` 两个。②后端选择走新设置 `storage.backend`，`allowedValues` 为这两",
+      "label": {
+        "expectedIds": [
+          "work:98f0c3b5febe4baeef3c2dae"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:90e9e0348333bdc9d35de4e8",
+      "source": {
+        "workId": "work:4593b3fd825c2d6d67f8d80b",
+        "externalKey": "TCRN-CROSS-STORY-346",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "2153e1a13f216f5957279148ab2241b8856a24c41a7708436a2f413124857896",
+        "sourceRecordDigest": "e7afbb8d6d38fd2a67d7a7da25b84a28a2bb1e282e7a080f96207e4a2d53d4be"
+      },
+      "prompt": "现象：【Goal】为谁=读 ADR 判断生产轨是什么的人：文档与本轮裁定一致。目的锚=INIT-048 方案部分 G；Owner 2026-09-02 裁定 pg 本轮停用、MVP 仅本地实现。符合性判据=pg 不接线且 ADR 0004 状态与裁定一致，AC 全绿。判定人=九门全绿。\n【Requirements】①pg 后端本轮停用：`packages/pg-backend` 的 550 行代码、`pg:schema` 与 `pg:test` 两个脚本、devDependency `pg 8.22.0` 保留在仓内但不接线。②`docs/adr/0004-postgres-storage-ba",
+      "label": {
+        "expectedIds": [
+          "work:4593b3fd825c2d6d67f8d80b"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:8083e94b6f9d82081f54c35f",
+      "source": {
+        "workId": "work:a07ca92d2dee421373f7590d",
+        "externalKey": "TCRN-CROSS-STORY-347",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "4eeeec2e38e902f39714f47aa2cbf4522388259e70dcb8c574e60a178cb27c68",
+        "sourceRecordDigest": "0c46e35a36f2b8d8c328e1e57aaeb5b03c925a3fc22fb8f45b8c9fbb1cedd597"
+      },
+      "prompt": "现象：【Goal】为谁=调参数的人：能走设置的不写死在代码里。目的锚=INIT-048 方案部分 H；Owner 2026-09-02 要求尽量解耦、能走变量不写死。符合性判据=六个新设置可读可改可校验且有默认值，AC 全绿。判定人=九门全绿。\n【Requirements】①新增六个设置：`storage.segmentBytes`（默认 16 MiB）、`storage.snapshotEveryEvents`（默认 512）、`storage.backend`（默认 `file-segmented`）、`injection.budgetBytes`（默认 32768）、`retr",
+      "label": {
+        "expectedIds": [
+          "work:a07ca92d2dee421373f7590d"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:9951970c8b0eef417739a690",
+      "source": {
+        "workId": "work:d669087d3a0d3f4a9ef32a68",
+        "externalKey": "TCRN-CROSS-STORY-348",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "944eb28c4186d327e84e84df1946671c3f30129d61410eb8297a51516afd71ff",
+        "sourceRecordDigest": "5ca1e2290a361973e1526daea35e90f77bfcec32d3164b9c057dff1f689630b6"
+      },
+      "prompt": "现象：【Goal】为谁=调整知识分档与容量的人：改名册不必改代码。目的锚=INIT-048 方案部分 H；实测出处门分档表是 `Object.freeze` 的代码常量。符合性判据=分档表外置且容量上限设置化，必须写死的项保持写死，AC 全绿。判定人=九门全绿。\n【Requirements】①`KNOWLEDGE_PROVENANCE_POLICY` 外置为 `scripts/policy/knowledge-provenance.json`，现值 `relaxedKinds: [fact, decision, summary]`、`strictKinds: [guide, reference]`。②`KNOWLEDG",
+      "label": {
+        "expectedIds": [
+          "work:d669087d3a0d3f4a9ef32a68"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:2ab92326d9971748af85b318",
+      "source": {
+        "workId": "work:dc934ddde549c3c9d3310c59",
+        "externalKey": "TCRN-CROSS-STORY-349",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "38ec112a8cfe7e977d1c8e9fc904e57d0da233f19e4ac356ef388589d34f3445",
+        "sourceRecordDigest": "2a82fc76692266f49664cd1fa2029962b7c3046d8498b90ce74a327e113a3942"
+      },
+      "prompt": "现象：【Goal】为谁=每一次跑九门的人：不重复执行已被包含的门。目的锚=INIT-049 实测：九门顺序全跑 1,859 秒，其中 852 秒是重复执行。符合性判据=全绿一轮的墙钟时间由 1,859 秒降到 1,007 秒量级，且覆盖不减，AC 全绿。判定人=九门全绿。\n【Requirements】①识别门与门之间的包含关系：`scripts/push-gate.mjs` 第 305 至 309 行的循环内容是 `verify:p1`、`verify:p8`、`guard-check` 三条；helper 的 `scripts/push-gate.m",
+      "label": {
+        "expectedIds": [
+          "work:dc934ddde549c3c9d3310c59"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:f762d4a45daf5fe63164b8a5",
+      "source": {
+        "workId": "work:96709c1c8297546df0a26b1f",
+        "externalKey": "TCRN-CROSS-STORY-350",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "607a174ef140a565766e9f838657fff4168b5c8878242f5ff324a9938a875400",
+        "sourceRecordDigest": "22852480eb085d5c073f56527ea6f64a9754160ff765eaa71556beb3a860377f"
+      },
+      "prompt": "现象：【Goal】为谁=门红时定位问题的人：知道哪一条子门失败，不因失败即止而丢掉信息。目的锚=INIT-049；`push-gate` 失败即止，`verify:p1` 红时不会再跑 `guard-check`。符合性判据=红时能拿到与顺序全跑等价的定位信息，且不为此在绿时付重复代价，AC 全绿。判定人=九门全绿。\n【Requirements】①`push-gate` 保持失败即止，不改。②新增一条定位路径：顶层门红之后，可单独跑被包含的那几条来定位",
+      "label": {
+        "expectedIds": [
+          "work:96709c1c8297546df0a26b1f"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:1c70be5a9874a49d12fadbf9",
+      "source": {
+        "workId": "work:64f5aee2493f41540b06cafb",
+        "externalKey": "TCRN-CROSS-STORY-351",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "e2dc77a0bcab7742b432a4a9257fe53094e90fcf8adc10a89c552622bb732c60",
+        "sourceRecordDigest": "5b7557c9c455d59296ef97d9ba60da8e106057f385a914ee39d0f195bccb7bcb"
+      },
+      "prompt": "现象：【Goal】为谁=读测试判断某行为是否被验证的人：断言测的是行为，不是代码长什么样。目的锚=INIT-049 实测：测试里有 17 处对源码正文做 match 断言。符合性判据=16 处源码文本断言改为行为断言，1 处禁止构造扫描保留，AC 全绿。判定人=九门全绿。\n【Requirements】①把 16 处断言代码正文含有某字符串的测试改为断言该行为本身。②保留 `tests/p7-canonical-exchange.test.mjs` 第 565 行的禁止构造扫",
+      "label": {
+        "expectedIds": [
+          "work:64f5aee2493f41540b06cafb"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:87b3979f934ec49ca216254b",
+      "source": {
+        "workId": "work:3c1906de09196ad982b09e6f",
+        "externalKey": "TCRN-CROSS-STORY-352",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "8ab63cf5e6a45441f6a59709e8f8abdd7909fea156fd0a5810e80d1a2fbfc543",
+        "sourceRecordDigest": "09ad5d15882cdd6858d40bd59e4a9b9bc06e523c5acb028043de7a07209a8a57"
+      },
+      "prompt": "现象：【Goal】为谁=读 verification-map 判断某项能力是否成立的人：判据能各自独立变红。目的锚=INIT-049 实测：83 个唯一命令承载 116 条判据，`verify:p3` 一条带 13 条。符合性判据=两组共用命令的判据各自独立，形态与 TCRN-CROSS-INC-257 一致，AC 全绿。判定人=九门全绿。\n【Requirements】①`pnpm verify:p3` 承载的 13 条判据拆为各自独立的正腿：每条有自己的 command 与自己的 expectedReasonCode。②`pnpm verify:p4:k",
+      "label": {
+        "expectedIds": [
+          "work:3c1906de09196ad982b09e6f"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    },
+    {
+      "id": "holdout-preregistered:73f1d4632ca75ab977fc7bf1",
+      "source": {
+        "workId": "work:c5d0407f08c788a6d9525baa",
+        "externalKey": "TCRN-CROSS-STORY-353",
+        "kind": "Story",
+        "status": "done",
+        "scopeDigest": "57b85a252897b564f236468e72d7dfadd90b3c9ef7ae9ddf99156e5d5e0840ae",
+        "sourceRecordDigest": "4ddc19aac5dea69abd84163217e84bcb50589e9552d0ac19605e1c7662aa0171"
+      },
+      "prompt": "现象：【Goal】为谁=跑测试的人：单个测试文件的耗时与它验证的对象相称。目的锚=INIT-049 实测：`platform-doctor` 门本身 4 秒，测它的文件 28.5 秒。符合性判据=查明 7 倍差距的成因并给出处置，AC 全绿。判定人=九门全绿。\n【Requirements】①测量 `tests/platform-doctor.test.mjs` 内部各段耗时，定位那 28.5 秒花在哪里。②若成因是重复起进程、重复建装置或不必要的真实分区扫描，按测得的结果削减。③",
+      "label": {
+        "expectedIds": [
+          "work:c5d0407f08c788a6d9525baa"
+        ],
+        "basis": "manual identity label from pre-registered Story source"
+      }
+    }
+  ]
+}

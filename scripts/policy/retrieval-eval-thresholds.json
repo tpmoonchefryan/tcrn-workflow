@@ -27,11 +27,40 @@
   "incidentReplayIndependent": {
     "fixture": "incident-replay-frozen.json",
     "fixtureDigest": "19f1c061d6055a698b27c9a774b84df5659bdc363bcfab11dca17ee6d4f84e0f",
+    "role": "development-seen-after-scoring",
     "pairsAtLeast": 20,
     "hitAt1": 19,
     "hitAt3": 20,
     "hitAt8": 20,
-    "note": "Independent source-identity labels frozen before scoring; this group is separate from the mixed 55-record replay group above."
+    "note": "Historical 20-record development set. Its source-identity labels and thresholds are retained exactly; the old freeze claim is not evidence of a pre-registered holdout."
+  },
+  "preRegisteredHoldout": {
+    "fixture": "holdout-preregistered.json",
+    "fixtureDigest": "564a132b9f3047a026f45f1dabc05a54a3f1f037c799fa069bf1de21421894bf",
+    "role": "unseen-disjoint-holdout",
+    "pairsAtLeast": 20,
+    "hitAt1": 8,
+    "hitAt3": 12,
+    "hitAt8": 16,
+    "note": "Pre-registered Story identities disjoint from the historical Incident development set. Floors are fixed at 40%/60%/80% before the first holdout score; no model generated labels."
+  },
+  "historicalProvenance": {
+    "fixture": "incident-replay-frozen.json",
+    "role": "development-seen-after-scoring",
+    "freezeClaim": "2026-09-11T18:00:00Z",
+    "freezeClaimDisposition": "retained-as-historical-metadata-not-a-real-freeze-time",
+    "evidence": [
+      {
+        "path": "acceptance-2026-09-11/prethreshold-score.jsonl",
+        "sha256": "3e7dceb530e0e45e5881f95f2a508eb2fb7b51f9aab3caa35556881e2df34d7a",
+        "role": "ranking-before-threshold"
+      },
+      {
+        "path": "acceptance-2026-09-11/freeze-sequence.jsonl",
+        "sha256": "19b6c9c8b7cf2530cb9725e338dd57543163284fad0ecd6b50bf4f68757d9a28",
+        "role": "threshold-after-ranking"
+      }
+    ]
   },
   "externalKey": {
     "exactRankAtMost": 1

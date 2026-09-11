@@ -5,16 +5,15 @@
 // and no nearest/active-work inference is permitted.
 
 import { spawn, spawnSync } from "node:child_process";
-import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const VERIFY_TIMEOUT_MS = 8_000;
 export const WORK_SHOW_TIMEOUT_MS = 1_500;
 export const MAX_STDERR_TAIL_BYTES = 500;
+const SYNC_SUPERVISOR_ARG = "--sync-supervisor";
 
-const ENGINE_CLI = join(fileURLToPath(new URL("../../scripts/tcrn-workflow.mjs", import.meta.url)));
+const ENGINE_CLI = fileURLToPath(new URL("../../scripts/tcrn-workflow.mjs", import.meta.url));
 const WORK_ID_PATTERN = /^work:[a-z0-9][a-z0-9._-]{0,127}$/u;
 
 function text(value) {
@@ -82,6 +81,11 @@ export function readAdvisoryVerify({ workspace, workId, engineCli = ENGINE_CLI }
     return unavailable("bound advisory:verify command is malformed");
   }
   return { status: "available", command, reason: "advisory:verify command is recorded" };
+}
+
+/** A pact is explicitly bound when either half of its work binding is present. */
+export function hasExplicitWorkBinding(pact) {
+  return (pact?.workspace !== undefined && pact?.workspace !== null) || (pact?.workId !== undefined && pact?.workId !== null);
 }
 
 function failureReason({ stderr, timedOut, error, status, signal }) {
@@ -206,46 +210,53 @@ export function runVerificationSync(command, cwd, { timeoutMs = VERIFY_TIMEOUT_M
     return { status: "failed", ok: false, reason: "verify working directory is unavailable" };
   }
   let result;
-  let stderrPath;
-  let stderrDirectory;
-  let stderrFd;
   try {
-    stderrDirectory = mkdtempSync(join(tmpdir(), "tcrn-stop-pact-"));
-    stderrPath = join(stderrDirectory, "stderr.log");
-    stderrFd = openSync(stderrPath, "wx", 0o600);
-    result = spawnSync("/bin/sh", ["-c", command], {
+    // spawnSync cannot run a JavaScript timeout callback while it is blocked. A
+    // separate synchronous supervisor owns the detached verification group, so its
+    // event loop can terminate that group before this call returns.
+    result = spawnSync(process.execPath, [fileURLToPath(import.meta.url), SYNC_SUPERVISOR_ARG, command, cwd, String(Math.max(1, timeoutMs))], {
       cwd,
       detached: true,
       shell: false,
-      timeout: Math.max(1, timeoutMs),
-      encoding: "buffer",
-      stdio: ["ignore", "ignore", stderrFd],
+      timeout: Math.max(1_000, timeoutMs + 2_000),
+      encoding: "utf8",
+      maxBuffer: 256 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (error) {
-    if (typeof stderrFd === "number") closeSync(stderrFd);
-    if (stderrDirectory) rmSync(stderrDirectory, { recursive: true, force: true });
     return { status: "failed", ok: false, reason: failureReason({ error, stderr: "" }) };
   }
-  closeSync(stderrFd);
-  let stderr = Buffer.alloc(0);
-  try { stderr = readFileSync(stderrPath); } finally { rmSync(stderrDirectory, { recursive: true, force: true }); }
-  cleanupSyncProcessGroup(result.pid);
+  if (result.error || result.status !== 0) cleanupSyncProcessGroup(result.pid);
+  if (result.status === 0 && !result.error) {
+    try {
+      const output = JSON.parse(result.stdout);
+      if (output && typeof output === "object") return output;
+    } catch { /* supervisor output is handled by the bounded failure below */ }
+  }
+  const stderr = utf8Tail(result.stderr ?? "");
   const timedOut = result.error?.code === "ETIMEDOUT" || (result.status === null && result.signal === "SIGTERM");
-  if (result.status === 0 && !result.error) return { status: "passed", ok: true, exitCode: 0, stderr: utf8Tail(stderr) };
-  return {
-    status: "failed",
-    ok: false,
-    timedOut,
-    exitCode: result.status,
-    signal: result.signal,
-    reason: failureReason({ stderr, timedOut, error: timedOut ? null : result.error, status: result.status, signal: result.signal }),
-  };
+  return { status: "failed", ok: false, timedOut, exitCode: result.status, signal: result.signal, reason: failureReason({ stderr, timedOut, error: timedOut ? null : result.error, status: result.status, signal: result.signal }) };
 }
 
 export function verifyPactBinding(pact, sessionId) {
   if (pact?.status !== "running" || pact?.active !== true) return { status: "skipped", reason: "pact is not running" };
   if (typeof pact.boundSession === "string" && pact.boundSession !== sessionId) return { status: "skipped", reason: "pact belongs to another session" };
   return readAdvisoryVerify({ workspace: pact.workspace, workId: pact.workId });
+}
+
+export function bindingFailure(pact, binding) {
+  return hasExplicitWorkBinding(pact) && binding?.status === "unavailable"
+    ? { status: "failed", ok: false, reason: `bound work verification unavailable: ${binding.reason}` }
+    : null;
+}
+
+async function nextVerificationSequence(core, root) {
+  const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER });
+  const sequences = read.records
+    .filter((record) => record.kind === "verify" && record.payload.source === "stop-pact:verify")
+    .map((record) => record.payload.sequence)
+    .filter((sequence) => Number.isSafeInteger(sequence) && sequence >= 1);
+  return Math.max(0, ...sequences) + 1;
 }
 
 /** Record the result without putting command output or private process data in telemetry. */
@@ -256,6 +267,7 @@ export async function recordVerificationTelemetry(pact, sessionId, result) {
     const state = await core.materializeWorkspace(pact.workspace);
     const transient = core.activeBinding(state.metadata).find((entry) => entry.kind === "transient");
     if (transient === undefined) return null;
+    const sequence = await nextVerificationSequence(core, transient.path);
     const record = core.createTelemetryRecord({
       at: new Date().toISOString(),
       kind: "verify",
@@ -267,10 +279,38 @@ export async function recordVerificationTelemetry(pact, sessionId, result) {
         passed: result.ok === true,
         exitCode: result.exitCode ?? null,
         timedOut: result.timedOut === true,
+        phase: "stop",
+        sequence,
       },
     });
-    return await core.appendTelemetryRecord(transient.path, record);
+    return core.appendTelemetryRecord(transient.path, record);
   } catch {
     return null;
   }
+}
+
+/** Record the real verifier lifecycle before it is run, not a caller-supplied checkpoint. */
+export async function recordVerificationObservation(pact, sessionId, phase) {
+  if (!pact?.workspace || (phase !== "start" && phase !== "stop")) return null;
+  try {
+    const core = await import("../../dist/build/packages/core/src/index.js");
+    const state = await core.materializeWorkspace(pact.workspace);
+    const transient = core.activeBinding(state.metadata).find((entry) => entry.kind === "transient");
+    if (transient === undefined) return null;
+    const sequence = await nextVerificationSequence(core, transient.path);
+    const record = core.createTelemetryRecord({
+      at: new Date().toISOString(),
+      kind: "verify",
+      session: typeof sessionId === "string" && sessionId.length > 0 ? sessionId : "unknown-stop-session",
+      payload: { source: "stop-pact:verify", availability: "available", phase, sequence },
+    });
+    return core.appendTelemetryRecord(transient.path, record);
+  } catch {
+    return null;
+  }
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url) && process.argv[2] === SYNC_SUPERVISOR_ARG) {
+  const result = await runVerification(process.argv[3] ?? "", process.argv[4] ?? "", { timeoutMs: Number(process.argv[5]) });
+  process.stdout.write(`${JSON.stringify(result)}\n`);
 }

@@ -730,14 +730,9 @@ export {
   probeHost,
 } from "./host-probe.js";
 export {
-  appendTelemetryObservationCheckpoint,
   appendTelemetryRecord,
   createTelemetryRecord,
   readTelemetryRecordById,
   readTelemetryRecords,
   readTelemetryStats,
-  readTelemetryObservationWindow,
-  sealTelemetryObservationDay,
-  telemetryObservationChannel,
 } from "./telemetry.js";
-export type { TelemetryObservationChannel, TelemetryObservationCheckpointInput, TelemetryObservationCoverageResult, TelemetryObservationPhase } from "./telemetry.js";

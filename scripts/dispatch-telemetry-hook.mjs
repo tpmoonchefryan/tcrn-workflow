@@ -13,7 +13,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   activeBinding,
-  appendTelemetryObservationCheckpoint,
   appendTelemetryRecord,
   createTelemetryRecord,
   materializeWorkspace,
@@ -97,19 +96,6 @@ function eventAt(input, env, now) {
   return now();
 }
 
-function observationCheckpoint(input, env) {
-  const direct = firstDefined(input?.observationCheckpoint, input?.observation_checkpoint, input?.coverageCheckpoint);
-  if (isRecord(direct)) return direct;
-  const encoded = env?.TCRN_TELEMETRY_OBSERVATION_CHECKPOINT;
-  if (typeof encoded !== "string" || encoded.length === 0) return null;
-  try {
-    const parsed = JSON.parse(encoded);
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
 export function workspaceForPartition(partition = DEFAULT_PARTITION, containerRoot = PLATFORM_ROOT) {
   return resolve(containerRoot, CHAIN_DIRECTORY, String(partition), "workspace");
 }
@@ -165,16 +151,6 @@ export async function runTelemetryHook(input, {
       payload: payloadFor(input, env, kind),
     });
     const receipt = await appendTelemetryRecord(root, record);
-    const checkpoint = observationCheckpoint(input, env);
-    const checkpointReceipt = checkpoint === null ? null : await appendTelemetryObservationCheckpoint(root, {
-      at: typeof checkpoint.at === "string" ? checkpoint.at : record.at,
-      channel: checkpoint.channel,
-      phase: checkpoint.phase,
-      sequence: checkpoint.sequence,
-      source: checkpoint.source,
-      availability: checkpoint.availability,
-      session,
-    });
     return {
       ok: true,
       reasonCode: receipt.duplicate ? "TELEMETRY_DUPLICATE" : "TELEMETRY_RECORDED",
@@ -183,7 +159,6 @@ export async function runTelemetryHook(input, {
       path: receipt.path,
       duplicate: receipt.duplicate,
       availability: receipt.record.payload.availability,
-      ...(checkpointReceipt === null ? {} : { observationCheckpoint: { id: checkpointReceipt.record.id, duplicate: checkpointReceipt.duplicate } }),
     };
   } catch (error) {
     return { ok: true, reasonCode: "TELEMETRY_FAIL_OPEN", error: String(error?.reasonCode ?? error?.message ?? error) };

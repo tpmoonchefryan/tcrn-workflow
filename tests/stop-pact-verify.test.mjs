@@ -359,3 +359,44 @@ test("STORY-384: the synchronous runner uses a detached group and reclaims backg
   const pid = await readPid(pidPath);
   try { assert.equal(await waitForProcessToExit(pid), true, "synchronous child must exit"); } finally { killIfAlive(pid); }
 });
+
+test("STORY-392: synchronous timeout reclaims a TERM-ignoring group before the watchdog boundary", async (t) => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "tcrn-story392-timeout-")));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const pidPath = join(directory, "timeout-supervisor.pid");
+  const command = `trap '' TERM; echo $$ > ${JSON.stringify(pidPath)}; while :; do sleep 1; done`;
+  const started = Date.now();
+  const result = runVerificationSyncUnpreloaded(command, directory, { timeoutMs: 200 });
+  const elapsed = Date.now() - started;
+  assert.equal(result.timedOut, true);
+  assert.ok(elapsed < 3_000, `synchronous verification exceeded watchdog budget: ${elapsed}ms`);
+  const pid = await readPid(pidPath);
+  assert.equal(await waitForProcessToExit(pid), true, "timeout group must be empty before return");
+});
+
+test("STORY-392: an explicitly bound unreadable work record fails closed while Owner stop stays available", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "tcrn-story392-binding-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, "pact.json");
+  const workspace = join(directory, "missing-workspace");
+  writePact(buildPact({
+    scope: "finish Story 392",
+    authorizedBy: "owner",
+    now: NOW,
+    boundSession: "session-374",
+    workspace,
+    workId: "work:000000000000000000000000",
+  }), path);
+  const input = { session_id: "session-374", model: "gpt-5-codex", stop_hook_active: false, tool_use_count: 0, now: NOW };
+  const claude = runClaudeHook(path, input);
+  assert.equal(claude.status, 0);
+  assert.equal(claude.json?.decision, "block");
+  assert.match(claude.json?.reason ?? "", /bound work verification unavailable/u);
+  const codex = runCodexStop(input, { path });
+  assert.equal(codex.reasonCode, "VERIFY_FAILED");
+  assert.equal(codex.action, "block");
+  assert.match(codex.message, /bound work verification unavailable/u);
+  const ownerStop = runCodexStop({ ...input, stop_hook_active: true }, { path });
+  assert.equal(ownerStop.reasonCode, "STOP_HOOK_ACTIVE");
+  assert.equal(ownerStop.action, "allow");
+});

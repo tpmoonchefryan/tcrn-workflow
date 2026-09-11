@@ -793,6 +793,21 @@ if (process.argv[2] === "status" && actual.status === 0) {
       page.document.querySelector('[data-locale-option="en"]')?.click();
       assert.equal(page.document.querySelector('[data-workspace-tab="audit"]')?.textContent, "Audit");
       assert.equal(page.document.querySelector('[data-dispatch-tier-row] [data-label]')?.getAttribute("data-label"), "Tier");
+      for (const locale of ["en", "zh-CN", "ja", "ko", "fr"]) {
+        page.document.querySelector(`[data-locale-option="${locale}"]`)?.click();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        const effortLabels = [...page.document.querySelectorAll("[data-dispatch-effort]")].map((input) => {
+          const label = page.document.querySelector(`label[for="${input.id}"]`);
+          const cell = input.closest("[data-label]");
+          return { label: label?.textContent.trim(), dataLabel: cell?.getAttribute("data-label") };
+        });
+        assert.equal(effortLabels.length, 6);
+        assert.ok(effortLabels.every(({ label, dataLabel }) => label && dataLabel && label === dataLabel), `${locale} effort fields must share their translated visible and accessible label`);
+        if (locale === "en") {
+          assert.ok(effortLabels.every(({ label }) => label === "Effort"), "English effort labels must be English");
+          assert.ok(effortLabels.every(({ label }) => label !== "Intensité"), "English must not inherit the old French effort label");
+        }
+      }
     } finally { await page.cleanup(); }
   });
 }

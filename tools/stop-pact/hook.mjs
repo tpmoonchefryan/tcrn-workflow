@@ -25,7 +25,7 @@ import { decide } from "./decide.mjs";
 import { readPact, writePact, withRuntime } from "./pact.mjs";
 import { resolveMode, resolveModelFromTranscript, toolUseCount, workedSinceLastBlock } from "./mode.mjs";
 import { notify } from "./notify.mjs";
-import { recordVerificationTelemetry, runVerification, verifyPactBinding } from "./verify.mjs";
+import { bindingFailure, recordVerificationObservation, recordVerificationTelemetry, runVerification, verifyPactBinding } from "./verify.mjs";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "cli.mjs");
 const CLI_INVOCATION = `node ${CLI}`;
@@ -55,6 +55,7 @@ async function main() {
 
   const binding = verifyPactBinding(pact, sessionId);
   if (binding.status === "available") {
+    await recordVerificationObservation(pact, sessionId, "start");
     const verification = await runVerification(binding.command, pact.workspace);
     await recordVerificationTelemetry(pact, sessionId, verification);
     if (verification.ok) { process.exit(0); return; }
@@ -62,6 +63,14 @@ async function main() {
     // bounded UTF-8 stderr tail (or the explicit exit/timeout/start reason).
     process.exitCode = 0;
     process.stdout.write(`${JSON.stringify({ decision: "block", reason: `advisory:verify failed: ${verification.reason}` })}\n`, () => process.exit(0));
+    return;
+  }
+
+  const bindingError = bindingFailure(pact, binding);
+  if (bindingError !== null) {
+    await recordVerificationTelemetry(pact, sessionId, bindingError);
+    process.exitCode = 0;
+    process.stdout.write(`${JSON.stringify({ decision: "block", reason: `advisory:verify failed: ${bindingError.reason}` })}\n`, () => process.exit(0));
     return;
   }
 

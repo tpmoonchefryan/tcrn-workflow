@@ -82,19 +82,50 @@ function parseJson(bytes, label, fallback = {}) {
   try { return jsonObject(JSON.parse(bytes), label); } catch (error) { failure("HOST_RENDER_TARGET_INVALID", `${label} is not valid JSON`, { cause: String(error?.message ?? error) }); }
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function isManagedHookCommand(command, handlers) {
+  if (typeof command !== "string" || !/^\s*node(?:\s|$)/u.test(command)) return false;
+  const normalized = command.replaceAll("\\", "/");
+  return handlers.some((handler) => {
+    const path = handler.split("/").map(escapeRegExp).join("/");
+    return new RegExp(`(?:^|/)${path}(?=["'\\s]|$)`, "u").test(normalized);
+  });
+}
+
+function managedHandlers(groups) {
+  return groups.flatMap((group) => group.hooks ?? [])
+    .map((hook) => hook?.command)
+    .filter((command) => typeof command === "string")
+    .map((command) => command.replaceAll("\\", "/").match(/(?:^|\/)((?:scripts|tools)\/[^"'\s]+?\.mjs)(?:["'\s]|$)/u)?.[1])
+    .filter(Boolean);
+}
+
+function groupWithHooks(group, hooks) {
+  const copy = structuredClone(group);
+  copy.hooks = hooks;
+  return copy;
+}
+
+function splitUserGroups(groups, handlers) {
+  return groups.flatMap((group) => {
+    if (!Array.isArray(group?.hooks)) return [structuredClone(group)];
+    const userHooks = group.hooks.filter((hook) => !isManagedHookCommand(hook?.command, handlers));
+    return userHooks.length === 0 ? [] : [groupWithHooks(group, userHooks)];
+  });
+}
+
 function mergeClaudeHooks(existing, generated) {
   const result = jsonObject(existing ?? {}, "Claude hooks");
   const merged = {};
   for (const [event, groups] of Object.entries(result)) merged[event] = Array.isArray(groups) ? structuredClone(groups) : groups;
   for (const [event, groups] of Object.entries(generated)) {
     const current = Array.isArray(merged[event]) ? merged[event] : [];
-    const handlers = groups.map((group) => group.hooks?.[0]?.command?.match(/tcrn-workflow\/(.+?\.mjs)/u)?.[1]).filter(Boolean);
-    const userGroups = current.filter((candidate) => {
-      const command = candidate?.hooks?.[0]?.command;
-      return typeof command !== "string" || !handlers.some((handler) => command.includes(handler));
-    });
-    const managedGroups = groups.map((group) => structuredClone(group));
-    merged[event] = [...userGroups, ...managedGroups];
+    const handlers = managedHandlers(groups);
+    const userGroups = splitUserGroups(current, handlers);
+    merged[event] = [...userGroups, ...groups.map((group) => structuredClone(group))];
   }
   return merged;
 }
@@ -102,13 +133,12 @@ function mergeClaudeHooks(existing, generated) {
 function managedClaudeHooks(actual, expected) {
   const result = {};
   for (const [event, groups] of Object.entries(expected)) {
-    const expectedHandlers = groups
-      .map((group) => group.hooks?.[0]?.command?.match(/tcrn-workflow\/(.+?\.mjs)/u)?.[1])
-      .filter(Boolean);
+    const handlers = managedHandlers(groups);
     const actualGroups = Array.isArray(actual?.[event]) ? actual[event] : [];
-    result[event] = actualGroups.filter((group) => {
-      const command = group?.hooks?.[0]?.command;
-      return typeof command === "string" && expectedHandlers.some((handler) => command.includes(handler));
+    result[event] = actualGroups.flatMap((group) => {
+      if (!Array.isArray(group?.hooks)) return [];
+      const managed = group.hooks.filter((hook) => isManagedHookCommand(hook?.command, handlers));
+      return managed.length === 0 ? [] : [groupWithHooks(group, managed)];
     });
   }
   return result;

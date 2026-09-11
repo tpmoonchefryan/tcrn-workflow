@@ -14,7 +14,7 @@ import { resolve } from "node:path";
 import { decide } from "./decide.mjs";
 import { readPact, writePact, withRuntime } from "./pact.mjs";
 import { resolveMode } from "./mode.mjs";
-import { recordVerificationTelemetry, runVerification, runVerificationSync, verifyPactBinding } from "./verify.mjs";
+import { bindingFailure, recordVerificationObservation, recordVerificationTelemetry, runVerification, runVerificationSync, verifyPactBinding } from "./verify.mjs";
 
 export const CODEX_STOP_PACT_EXECUTION_VERSION = "tcrn.codex-stop-pact-execution.v1";
 const DEFAULT_CLI = "node <tcrn-workflow>/tools/stop-pact/cli.mjs";
@@ -217,7 +217,7 @@ function verificationResult(pact, verification) {
 function runBoundVerification(pact, normalized, runner) {
   if (!pact || pact.active !== true || pact.status !== "running" || normalized.value.stopHookActive === true) return null;
   const binding = verifyPactBinding(pact, normalized.value.sessionId);
-  if (binding.status !== "available") return null;
+  if (binding.status !== "available") return bindingFailure(pact, binding);
   return runner(binding.command, pact.workspace);
 }
 
@@ -257,8 +257,8 @@ export async function executeCodexStopAsync(input, { path } = {}) {
       ? verifyPactBinding(pact, normalized.value.sessionId)
       : null;
     const verification = binding?.status === "available"
-      ? await runVerification(binding.command, pact.workspace)
-      : null;
+      ? (await recordVerificationObservation(pact, normalized.value.sessionId, "start"), await runVerification(binding.command, pact.workspace))
+      : bindingFailure(pact, binding);
     if (verification !== null) await recordVerificationTelemetry(pact, normalized.value.sessionId, verification);
     const verified = verificationResult(pact, verification);
     if (verified !== null) return { ...verified, wrotePact: false };

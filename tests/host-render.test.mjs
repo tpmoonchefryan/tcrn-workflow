@@ -104,6 +104,24 @@ test("STORY-371: Codex rendering changes only root model keys and generated hook
   assert.equal(green.drift.length, 0);
 });
 
+test("STORY-391: a mixed managed hook group keeps user entries and group attributes", async (t) => {
+  const root = await scratch("tcrn-host-render-mixed-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const old = codexHookDocument("/old/TCRN Platform/tcrn-workflow").hooks.SessionStart[0];
+  old.matcher = "user-session-start";
+  old.timeout = 30;
+  old.hooks.push({ type: "command", command: "echo user-owned-hook" });
+  const existing = new Map([[".codex/hooks.json", JSON.stringify({ hooks: { SessionStart: [old] } })]]);
+  const plan = renderHostPlan({ host: "codex", settings: settings("codex"), root, repoRoot, existing });
+  const document = JSON.parse(plan.files.find((entry) => entry.path === ".codex/hooks.json").content);
+  const userGroup = document.hooks.SessionStart.find((group) => group.matcher === "user-session-start");
+  assert.deepEqual(userGroup, { matcher: "user-session-start", timeout: 30, hooks: [{ type: "command", command: "echo user-owned-hook" }] });
+  const managedCommands = document.hooks.SessionStart.flatMap((group) => group.hooks ?? [])
+    .filter((hook) => hook.command.includes("scripts/knowledge-inject-hook.mjs"));
+  assert.equal(managedCommands.length, 1);
+  assert.equal(plan.drift.some((entry) => entry.path === ".codex/hooks.json"), true);
+});
+
 test("STORY-371: an empty main tier is an explicit no-write plan", async (t) => {
   const root = await scratch("tcrn-host-render-empty-");
   t.after(() => rm(root, { recursive: true, force: true }));

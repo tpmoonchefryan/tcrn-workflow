@@ -9,7 +9,6 @@ import { join } from "node:path";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import {
-  appendTelemetryObservationCheckpoint,
   appendTelemetryRecord,
   acquireWorkspaceLease,
   captureKnowledgeUnit,
@@ -110,35 +109,34 @@ async function fillWindow(fx, days = 90, events = [], sealed = true) {
 // only emit this receipt after proving coverage; a file's existence is not proof.
 async function sealWindow(fx, days = 90, overrides = {}) {
   for (let offset = days; offset >= 1; offset -= 1) {
-    for (const [index, channel] of ["retrieval", "reference", "trigger", "verify"].entries()) {
-      await appendTelemetryObservationCheckpoint(fx.transient, {
-        at: eventAt(offset, 40 + index * 2),
-        channel,
-        phase: "start",
-        sequence: 1,
-        source: "story-377:test-collector",
-        session: `story-377-checkpoint-${offset}-${channel}`,
-      });
-      await appendTelemetryObservationCheckpoint(fx.transient, {
-        at: eventAt(offset, 41 + index * 2),
-        channel,
-        phase: "stop",
-        sequence: 2,
-        source: "story-377:test-collector",
-        session: `story-377-checkpoint-${offset}-${channel}`,
-      });
+    for (const channel of ["retrieval", "reference", "trigger", "verify"]) {
+      const kind = { retrieval: "retrieval-hit", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
+      for (const [phase, at] of [["start", windowDay(offset).toISOString()], ["stop", (() => {
+        const date = windowDay(offset);
+        date.setUTCHours(23, 59, 59, 999);
+        return date.toISOString();
+      })()]]) {
+        const upstream = createTelemetryRecord({
+          at,
+          kind,
+          session: `story-377-checkpoint-${offset}-${channel}`,
+          payload: { source: "story-377:test-collector", availability: "available", phase, sequence: phase === "start" ? 1 : 2 },
+        });
+        await appendTelemetryRecord(fx.transient, upstream);
+      }
     }
     const source = await readFile(join(fx.transient, "telemetry", dayFile(offset)), "utf8");
     const records = source.split("\n").filter(Boolean).map((line) => JSON.parse(line))
-      .filter((record) => record.kind !== "observation-coverage");
+      .filter((record) => record.kind !== "observation-coverage")
+      .sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id));
     const channelCheckpoints = Object.fromEntries(["retrieval", "reference", "trigger", "verify"].map((channel) => {
-      const rows = records.filter((record) => record.kind === "observation-checkpoint" && record.payload.channel === channel);
+      const rows = records.filter((record) => record.payload.source === "story-377:test-collector" && ({ retrieval: "retrieval", reference: "reference", trigger: "trigger", verify: "verify" }[channel] === ({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify" }[record.kind] ?? null)));
       return [channel, {
         availability: "available",
         source: "story-377:test-collector",
-        startSequence: 1,
-        stopSequence: 2,
-        checkpointCount: rows.length,
+        startSequence: rows[0]?.payload.sequence,
+        stopSequence: rows.at(-1)?.payload.sequence,
+        recordCount: rows.length,
         sourceDigest: canonicalSha256(rows),
       }];
     }));
@@ -147,7 +145,7 @@ async function sealWindow(fx, days = 90, overrides = {}) {
       kind: "observation-coverage",
       session: "story-377-test-collector",
       payload: {
-        source: "story-377:test-collector", availability: "available",
+        source: "telemetry:observation-collector", availability: "available",
         coveredFrom: windowDay(offset).toISOString(),
         coveredUntil: windowDay(offset - 1).toISOString(),
         channels: ["retrieval", "reference", "trigger", "verify"],

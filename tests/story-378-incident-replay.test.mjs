@@ -146,9 +146,11 @@ test("STORY-378: the CLI writes only the rule draft file and reports the formal 
   assert.equal(result.decisionCard.kind, "decision");
 });
 
-test("STORY-385: the independent freeze contains twenty Incident identities and immutable source digests", async () => {
+test("STORY-385/394: historical Incident scores are development data and the holdout is pre-registered", async () => {
   const frozen = await readJson("tests/fixtures/retrieval-eval/incident-replay-frozen.json");
   const work = await readJson("tests/fixtures/retrieval-eval/work-compact.json");
+  const holdout = await readJson("tests/fixtures/retrieval-eval/holdout-preregistered.json");
+  const policy = await readJson("scripts/policy/retrieval-eval-thresholds.json");
   const byId = new Map(work.records.map((record) => [record.id, record]));
   assert.equal(frozen.records.length, 20);
   assert.equal(frozen.labelPolicy.createdBeforeScoring, true);
@@ -160,4 +162,13 @@ test("STORY-385: the independent freeze contains twenty Incident identities and 
     assert.equal(pair.source.scopeDigest, canonicalSha256(source.scope ?? ""));
     assert.match(pair.label.basis, /manual identity/u);
   }
+  assert.equal(policy.incidentReplayIndependent.role, "development-seen-after-scoring");
+  assert.equal(policy.historicalProvenance.freezeClaimDisposition, "retained-as-historical-metadata-not-a-real-freeze-time");
+  assert.equal(holdout.role, "unseen-disjoint-holdout");
+  assert.equal(holdout.records.length, 20);
+  assert.equal(holdout.labelPolicy.createdBeforeScoring, true);
+  assert.equal(holdout.labelPolicy.modelCalls, 0);
+  assert.deepEqual(holdout.thresholds, { pairsAtLeast: 20, hitAt1: 8, hitAt3: 12, hitAt8: 16, rule: "fixed 40%/60%/80% floors before first scoring" });
+  assert.equal(new Set(holdout.records.map((pair) => pair.source.workId)).size, holdout.records.length);
+  assert.ok(holdout.records.every((pair) => pair.source.kind === "Story" && pair.label.expectedIds.length === 1 && pair.label.expectedIds[0] === pair.source.workId));
 });
