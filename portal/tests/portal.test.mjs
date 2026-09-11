@@ -194,7 +194,9 @@ test("portal writes use actor plus live CAS, then return readback and session au
   assert.ok(audit.body.writes.every((entry) => entry.action && entry.occurredAt));
 });
 
-test("STORY-403: the portal exposes governed knowledge reads while the manual article route is absent", async (t) => {
+// STORY-403 replaces the old STORY-366 manual-writing interaction while retaining
+// the native CLI/data contract tested by this same integration case.
+test("STORY-366: the article endpoint uses knowledge-store CAS and returns the engine receipt unchanged", async (t) => {
   const fixture = await scratch("tcrn-portal-article-", "TCRN-PORTAL-ARTICLE");
   await cli(["project-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", "2026-08-11T15:00:01Z", "--external-key", "PORTAL-ARTICLE-PROJECT", "--name", "Articles"]);
   await cli(["knowledge-init", "--workspace", fixture.workspace, "--acknowledge-disposable", "true"]);

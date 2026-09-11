@@ -67,6 +67,7 @@ test("S369: dispatch settings are cataloged, sorted, and vocabulary-linked", asy
   assert.equal(vocabulary.hostValueKind, "string");
   assert.equal(vocabulary.effortValueKind, "string");
   assert.deepEqual(vocabulary.hosts, ["claude-code", "codex"]);
+  assert.equal(Object.hasOwn(vocabulary, "roles"), false);
   assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.dispatchMode").valueSource, "dispatch-mode-list");
   assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.claudeCodeSubagentPlan").valueSource, "legacy-model-plan-history");
   assert.equal(vocabulary.settingsEnums.find((term) => term.key === "execution.codexSubagentPlan").valueSource, "legacy-model-plan-history");
