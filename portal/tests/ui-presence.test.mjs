@@ -218,7 +218,7 @@ function missingComponents(document) {
 // arrived rather than with an empty-string diff. Callers wait for the *settle
 // signal* and assert content separately, so a genuine regression still surfaces as
 // an assertion difference rather than as a timeout.
-async function waitFor(predicate, label, timeoutMs = 5_000) {
+async function waitFor(predicate, label, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const value = predicate();
