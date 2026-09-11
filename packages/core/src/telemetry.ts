@@ -412,9 +412,13 @@ export async function readTelemetryStats(root: string, options: {
   };
 }
 
-function observationPhaseSequenceValid(rows: readonly TelemetryRecord[]): boolean {
-  const phases = rows.map((record) => record.payload.phase), sequences = rows.map((record) => record.payload.sequence), firstStop = phases.indexOf("stop");
-  return rows.length >= 2 && rows.every((record) => record.payload.availability === "available") && firstStop > 0 && phases.every((phase, index) => index < firstStop ? phase === "start" : phase === "stop") && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && Number(sequence) >= 1 && (index === 0 || Number(sequence) === Number(sequences[index - 1]) + 1));
+function observationChronologicalCompare(left: TelemetryRecord, right: TelemetryRecord): number { return left.at < right.at ? -1 : left.at > right.at ? 1 : Number(left.payload.sequence) - Number(right.payload.sequence) || left.id.localeCompare(right.id); }
+function observationPhaseSequenceValid(rows: readonly TelemetryRecord[]): boolean { const phases = rows.map((record) => record.payload.phase), sequences = rows.map((record) => record.payload.sequence); return rows.length >= 2 && rows.length % 2 === 0 && rows.every((record) => record.payload.availability === "available") && phases.every((phase, index) => phase === (index % 2 === 0 ? "start" : "stop")) && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && Number(sequence) >= 1 && (index === 0 || Number(sequence) === Number(sequences[index - 1]) + 1)); }
+function observationIntervals(rows: readonly TelemetryRecord[]): readonly { readonly ordered: readonly TelemetryRecord[]; readonly start: bigint; readonly end: bigint; readonly last: TelemetryRecord }[] | null {
+  const ordered = [...rows].sort(observationChronologicalCompare); if (!observationPhaseSequenceValid(rows) || !observationPhaseSequenceValid(ordered)) return null;
+  const intervals: { ordered: readonly TelemetryRecord[]; start: bigint; end: bigint; last: TelemetryRecord }[] = [];
+  for (let index = 0; index < ordered.length; index += 2) { const start = ordered[index]!; const last = ordered[index + 1]!; intervals.push({ ordered: [start, last], start: parseStrictInstant(start.at), end: parseStrictInstant(last.at), last }); }
+  return intervals;
 }
 
 function observationCoverageChannelValid(value: TelemetryPayload, entries: readonly TelemetryRecord[], channel: string, from: string, until: string): boolean {
@@ -423,16 +427,16 @@ function observationCoverageChannelValid(value: TelemetryPayload, entries: reado
   const fields = proof as Record<string, unknown>;
   if (canonicalJson(Object.keys(fields).sort()) !== canonicalJson(["availability", "highWaterCount", "highWaterDay", "highWaterDigest", "recordCount", "source", "sourceDigest", "startSequence", "stopSequence"])) return false;
   const boundary = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)), exact = boundary.filter((record) => record.payload.source === fields.source), identityPrefix = typeof fields.source === "string" ? fields.source.slice(0, -channel.length) : "", rows = exact.length > 0 ? exact : boundary.filter((record) => String(record.payload.source).startsWith(identityPrefix) && String(record.payload.source).endsWith(`:${channel}`));
-  const actual = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id));
+  const actual = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort(observationChronologicalCompare);
   if (rows.length === 0 || actual.length === 0) return false;
   const groups = new Map<string, TelemetryRecord[]>(); for (const row of rows) { const source = row.payload.source as string; groups.set(source, [...(groups.get(source) ?? []), row]); }
-  const intervals = [...groups.values()].map((group) => { const ordered = [...group].sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id)); return { group, ordered, start: parseStrictInstant(ordered[0]!.at), end: parseStrictInstant(ordered.at(-1)!.at), last: ordered.at(-1)! }; });
+  const intervals = [...groups.values()].flatMap((group) => observationIntervals(group) ?? []);
   const fromValue = parseStrictInstant(from), untilValue = parseStrictInstant(until);
   intervals.sort((left, right) => left.start < right.start ? -1 : left.start > right.start ? 1 : left.end < right.end ? -1 : 1);
   let cursor = fromValue;
-  for (const interval of intervals) { if (!observationPhaseSequenceValid(interval.group) || !observationPhaseSequenceValid(interval.ordered) || interval.start > cursor) return false; if (interval.end > cursor) cursor = interval.end; }
+  for (const interval of intervals) { if (interval.start > cursor) return false; if (interval.end > cursor) cursor = interval.end; }
   const terminal = intervals.reduce((best, interval) => best === null || interval.end > best.end ? interval : best, null as typeof intervals[number] | null);
-  const selected = intervals.flatMap((interval) => interval.ordered).sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id));
+  const selected = intervals.flatMap((interval) => interval.ordered).sort(observationChronologicalCompare);
   return fields.availability === "available" && typeof fields.source === "string" && fields.source.startsWith(OBSERVATION_BOUNDARY_PREFIX) && typeof fields.sourceDigest === "string" && /^[a-f0-9]{64}$/u.test(fields.sourceDigest) && Number.isSafeInteger(fields.recordCount) && Number(fields.recordCount) >= 2 && selected.length === fields.recordCount && Number.isSafeInteger(fields.highWaterCount) && Number(fields.highWaterCount) >= 1 && Number(fields.highWaterCount) === actual.length && fields.highWaterDay === from.slice(0, 10) && typeof fields.highWaterDigest === "string" && fields.highWaterDigest === canonicalSha256(actual as unknown as import("../../protocol/src/index.js").JsonValue) && cursor >= untilValue - 1_000_000n && terminal !== null && Number.isSafeInteger(fields.startSequence) && Number.isSafeInteger(fields.stopSequence) && Number(fields.startSequence) === Number(intervals[0]?.ordered[0]?.payload.sequence) && Number(fields.stopSequence) === Number(terminal.last.payload.sequence) && canonicalSha256(selected as unknown as import("../../protocol/src/index.js").JsonValue) === fields.sourceDigest;
 }
 

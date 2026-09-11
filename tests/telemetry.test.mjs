@@ -230,9 +230,13 @@ async function unionCheckpoints(root, spans, hosts = []) {
     const kind = { retrieval: "retrieval", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
     const actual = createTelemetryRecord({ at: "2026-09-10T10:00:00.000Z", kind, session: `union-actual-${channel}`, payload: { source: `union-actual:${channel}`, availability: "available" } });
     await appendTelemetryRecord(root, actual);
+    const sequenceBySource = new Map();
     for (const [index, [session, start, stop]] of spans.entries()) {
       const host = hosts[index] ?? "test-host";
-      for (const [phase, at, sequence] of [["start", start, 1], ["stop", stop, 2]]) {
+      const source = `${OBSERVATION_BOUNDARY_PREFIX}${host}:${session}:${channel}`;
+      const sequenceStart = (sequenceBySource.get(source) ?? 0) + 1;
+      sequenceBySource.set(source, sequenceStart + 1);
+      for (const [phase, at] of [["start", start], ["stop", stop]]) {
         const boundaryDate = new Date(at);
         if (phase === "stop" && boundaryDate.getUTCHours() === 0) boundaryDate.setUTCDate(boundaryDate.getUTCDate() - 1);
         const day = boundaryDate.toISOString().slice(0, 10);
@@ -241,7 +245,7 @@ async function unionCheckpoints(root, spans, hosts = []) {
           at,
           kind,
           session,
-          payload: { source: `${OBSERVATION_BOUNDARY_PREFIX}${host}:${session}:${channel}`, availability: "available", phase, sequence, highWaterDay: day, highWaterCount: observed.length, highWaterDigest: canonicalSha256(observed), highWaterAt: observed.at(-1)?.at ?? null },
+          payload: { source, availability: "available", phase, sequence: sequenceStart + (phase === "start" ? 0 : 1), highWaterDay: day, highWaterCount: observed.length, highWaterDigest: canonicalSha256(observed), highWaterAt: observed.at(-1)?.at ?? null },
         }));
       }
     }
@@ -254,6 +258,20 @@ test("STORY-393: continuous and overlapping trusted sessions form one coverage i
   await unionCheckpoints(root, [
     ["session-a", "2026-09-09T23:59:59.000Z", "2026-09-10T12:00:00.000Z"],
     ["session-b", "2026-09-10T11:59:59.000Z", "2026-09-11T00:00:00.000Z"],
+  ]);
+  const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(sealed.ok, true, JSON.stringify(sealed));
+  const receipt = (await readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER })).records.find((record) => record.kind === "observation-coverage");
+  assert.equal(receipt.payload.channelCheckpoints.retrieval.recordCount, 4);
+  assert.equal((await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1)).complete, true);
+});
+
+test("STORY-393 U5: repeated start-stop pairs in one trusted session form one coverage interval", async (t) => {
+  const root = await scratch("tcrn-telemetry-coverage-resumed-session-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await unionCheckpoints(root, [
+    ["session-resumed", "2026-09-09T23:59:59.000Z", "2026-09-10T12:00:00.000Z"],
+    ["session-resumed", "2026-09-10T12:00:00.000Z", "2026-09-11T00:00:00.000Z"],
   ]);
   const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
   assert.equal(sealed.ok, true, JSON.stringify(sealed));
@@ -318,7 +336,8 @@ test("STORY-393: only actual full-day four-channel observations can seal a UTC d
   await appendTelemetryRecord(root, extra);
   const conflict = await sealObservationDay(root, { at: "2026-09-11T00:00:03.000Z" });
   assert.equal(conflict.ok, false);
-  assert.equal(conflict.reasonCode, "TELEMETRY_COVERAGE_CONFLICT");
+  assert.equal(conflict.reasonCode, "TELEMETRY_COVERAGE_UNPROVEN");
+  assert.deepEqual(conflict.invalidChannels, ["verify"]);
 });
 
 test("STORY-393: missing and unavailable upstream observations stay unproven", async (t) => {

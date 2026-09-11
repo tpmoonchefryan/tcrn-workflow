@@ -274,11 +274,26 @@ function observationSourceIdentity(record, channel) {
   return source.endsWith(`:${channel}`) ? source : null;
 }
 
+function observationChronologicalCompare(left, right) {
+  return left.at.localeCompare(right.at) || Number(left.payload.sequence) - Number(right.payload.sequence) || left.id.localeCompare(right.id);
+}
+
 function observationPhaseSequenceValid(rows) {
   const phases = rows.map((record) => record.payload.phase);
-  const firstStop = phases.indexOf("stop");
   const sequences = rows.map((record) => record.payload.sequence);
-  return rows.length >= 2 && rows.every((record) => record.payload.availability === "available") && firstStop > 0 && phases.every((phase, index) => index < firstStop ? phase === "start" : phase === "stop") && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && sequence >= 1 && (index === 0 || sequence === sequences[index - 1] + 1));
+  return rows.length >= 2 && rows.length % 2 === 0 && rows.every((record) => record.payload.availability === "available") && phases.every((phase, index) => phase === (index % 2 === 0 ? "start" : "stop")) && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && sequence >= 1 && (index === 0 || sequence === sequences[index - 1] + 1));
+}
+
+function observationIntervals(rows) {
+  const ordered = [...rows].sort(observationChronologicalCompare);
+  if (!observationPhaseSequenceValid(rows) || !observationPhaseSequenceValid(ordered)) return null;
+  const intervals = [];
+  for (let index = 0; index < ordered.length; index += 2) {
+    const start = ordered[index];
+    const last = ordered[index + 1];
+    intervals.push({ ordered: [start, last], start: Date.parse(start.at), end: Date.parse(last.at), last });
+  }
+  return intervals;
 }
 
 function observationHighWaterValid(record, actual, day, requireFull = false) {
@@ -296,11 +311,9 @@ function observationCoverageCandidate(rows, actual, from, until) {
   }
   const intervals = [];
   for (const group of groups.values()) {
-    const ordered = [...group].sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
-    if (!observationPhaseSequenceValid(group) || !observationPhaseSequenceValid(ordered)) continue;
-    const last = ordered.at(-1);
-    if (!observationHighWaterValid(last, actual, from.slice(0, 10))) continue;
-    intervals.push({ ordered, start: Date.parse(ordered[0].at), end: Date.parse(last.at), last });
+    const paired = observationIntervals(group);
+    if (paired === null || paired.some((interval) => !observationHighWaterValid(interval.last, actual, from.slice(0, 10)))) continue;
+    intervals.push(...paired);
   }
   intervals.sort((left, right) => left.start - right.start || left.end - right.end || left.last.id.localeCompare(right.last.id));
   let cursor = Date.parse(from);
@@ -311,7 +324,7 @@ function observationCoverageCandidate(rows, actual, from, until) {
   if (cursor < Date.parse(until) - 1) return null;
   const terminal = intervals.reduce((best, interval) => best === null || interval.end > best.end ? interval : best, null);
   if (terminal === null || !observationHighWaterValid(terminal.last, actual, from.slice(0, 10), true)) return null;
-  const selected = intervals.flatMap((interval) => interval.ordered).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
+  const selected = intervals.flatMap((interval) => interval.ordered).sort(observationChronologicalCompare);
   return { rows: selected, startSequence: intervals[0].ordered[0].payload.sequence, stopSequence: terminal.last.payload.sequence };
 }
 
