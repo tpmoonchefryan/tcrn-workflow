@@ -3,6 +3,14 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 1.0.2 — unpublished candidate
+
+This candidate carries the approved INIT-051 repair set: explicit host identity
+injection, paired telemetry coverage for resumed sessions, trusted companion
+verification before test-root execution, and the portal vocabulary and knowledge
+read-surface cleanup. It has not been tagged, published, deployed, or installed
+into a live host.
+
 ## 1.0.1 — 2026-08-20
 
 A patch release with one fix, cut because `v1.0.0`'s commit is red in CI and a

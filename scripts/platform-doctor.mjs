@@ -2024,7 +2024,7 @@ async function inspectEngineFloorSatisfied(root, homeRoot, manifest, options) {
 
 // TCRN-CROSS-INC-270: the installed and worktree engine copies diverge in capability
 // surface during development because the worktree is authoritative for what the engine
-// can do. Version strings alone cannot see this: both copies report "1.0.1" while one
+// can do. Version strings alone cannot see this: both copies can report the same version while one
 // has 132 verbs and 9 flags on work-annotate, the other 137 verbs and 11 flags.
 //
 // The verdict follows the Owner ruling (2026-09-04): worktree ahead is expected and
