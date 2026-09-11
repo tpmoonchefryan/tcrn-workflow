@@ -3575,6 +3575,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-read-list__main { min-width: 0; overflow-wrap: anywhere; }
 .tcrn-read-list__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tcrn-space-1); margin-top: var(--tcrn-space-1); }
 .tcrn-read-list__summary { display: block; margin-top: var(--tcrn-space-1); color: var(--tcrn-color-text-secondary); font-size: var(--tcrn-type-size-caption); overflow-wrap: anywhere; }
+.tcrn-read-list__summary[role="document"] { max-width: 100%; margin: 0 0 var(--tcrn-space-2); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font: inherit; color: var(--tcrn-color-text-primary); }
 .tcrn-inline-metrics { display: flex; flex-wrap: wrap; gap: var(--tcrn-space-2); }
 .tcrn-inline-metric { display: grid; gap: var(--tcrn-space-1); min-width: 0; padding: var(--tcrn-space-3); border-radius: var(--tcrn-radius-panel); background: var(--tcrn-color-surface-muted); }
 .tcrn-inline-metric strong { overflow-wrap: anywhere; }
@@ -3951,7 +3952,6 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-page[data-page="dashboard"],
 .tcrn-page[data-page="settings"],
 .tcrn-page[data-page="entities"],
-.tcrn-page[data-page="articles"],
 .tcrn-page[data-page="vocabulary"] {
   max-width: 1040px;
 }
@@ -4055,7 +4055,6 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
         <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="dashboard" aria-current="page" aria-label="Dashboard" data-i18n-aria-label="nav.dashboard"><span class="tcrn-nav-item__content" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="1.8" width="5.2" height="5.2" rx="1"/><rect x="9" y="1.8" width="5.2" height="5.2" rx="1"/><rect x="1.8" y="9" width="5.2" height="5.2" rx="1"/><rect x="9" y="9" width="5.2" height="5.2" rx="1"/></svg></span><span class="tcrn-nav-item__label" data-i18n="nav.dashboard">Dashboard</span></button>
         <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="settings" aria-label="Settings" data-i18n-aria-label="nav.settings"><span class="tcrn-nav-item__content" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.4"/><path d="M8 1.6v2M8 12.4v2M1.6 8h2M12.4 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M12.5 3.5l-1.4 1.4M4.9 11.1l-1.4 1.4"/></svg></span><span class="tcrn-nav-item__label" data-i18n="nav.settings">Settings</span></button>
         <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="prose" aria-label="Rules" data-i18n-aria-label="nav.prose"><span class="tcrn-nav-item__content" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2.5h10M3 5.5h10M3 8.5h6.5"/><path d="M3 12.5h4"/></svg></span><span class="tcrn-nav-item__label" data-i18n="nav.prose">Rules</span></button>
-        <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="articles" aria-label="Articles" data-i18n-aria-label="nav.articles"><span class="tcrn-nav-item__content" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2.5h7l3 3v8H3z"/><path d="M10 2.5v3h3M5 8h6M5 10.5h6"/></svg></span><span class="tcrn-nav-item__label" data-i18n="nav.articles">Articles</span></button>
         <button class="tcrn-nav-item" data-nav-item-has-icon="true" data-page-target="vocabulary" aria-label="Vocabulary" data-i18n-aria-label="nav.vocabulary"><span class="tcrn-nav-item__content" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.8C6.6 1.9 4.4 1.7 2.2 2.2v10.6c2.2-.5 4.4-.3 5.8.6 1.4-.9 3.6-1.1 5.8-.6V2.2C11.6 1.7 9.4 1.9 8 2.8Z"/><path d="M8 2.8v10.6"/></svg></span><span class="tcrn-nav-item__label" data-i18n="nav.vocabulary">Vocabulary</span></button>
       </nav>
       <div class="tcrn-rail__footer"><span data-i18n="app.boundaryBody">Writes use the public CLI and return the engine receipt.</span></div>
@@ -4115,10 +4114,6 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
         <div class="tcrn-page__head"><div><h1 data-i18n="page.prose">Rules</h1><p class="tcrn-page__lede" data-i18n="prose.lede">Workspace prose is edited as a plain file and checked against the live engine vocabulary.</p></div><div class="tcrn-page__actions"><span class="tcrn-badge" id="reconcile-chip">—</span><button class="tcrn-button tcrn-button--primary" id="save-agents" data-i18n="prose.save" data-cli-action="agents-write">Save</button></div></div>
         <div class="tcrn-editor-shell"><nav class="tcrn-knowledge-toc-rail tcrn-editor__directory" id="prose-directory" data-ui="prose-directory" aria-label="Document directory" role="tree"></nav><div class="tcrn-editor__bar"><span class="tcrn-meta" id="agents-path"></span><span class="tcrn-editor__status" id="agents-status" data-i18n="prose.fileNote">plain file</span></div><div class="tcrn-line-numbered-editor" id="prose-editor" data-line-numbered-editor="true"><ol class="tcrn-line-numbered-editor__gutter" id="prose-gutter" data-ui="prose-gutter" role="note" aria-label="Line numbers"></ol><div class="tcrn-line-numbered-editor__content"><textarea class="tcrn-input tcrn-textarea tcrn-line-numbered-editor__control" id="agents-md" spellcheck="false" aria-label="AGENTS.md"></textarea><ul class="tcrn-line-numbered-editor__findings" id="reconcile-findings" aria-label="Editor findings"></ul></div></div></div>
       </section>
-      <section class="tcrn-page tcrn-page--manage" data-page="articles" hidden>
-        <div class="tcrn-page__head"><div><h1 data-i18n="page.articles">Knowledge articles</h1><p class="tcrn-page__lede" data-i18n="articles.lede">Write a Markdown article to the configured repository directory and keep its governed index receipt.</p></div></div>
-        <article class="tcrn-surface" data-ui="article-form-surface"><div class="tcrn-surface__head"><div><h2 data-i18n="articles.title">New article</h2><p class="tcrn-surface__note" data-i18n="articles.note">The file carries the full text; the knowledge store carries only its searchable index.</p></div></div><form class="tcrn-form" id="article-form"><div class="tcrn-form__row"><label class="tcrn-field"><span class="tcrn-field__label" data-i18n="articles.titleLabel">Title</span><input class="tcrn-input" id="article-title" required maxlength="512" autocomplete="off"></label><label class="tcrn-field"><span class="tcrn-field__label" data-i18n="articles.categoryLabel">Category</span><select class="tcrn-select" id="article-category" required><option value="architecture">architecture</option><option value="domain">domain</option><option value="implementation">implementation</option><option value="standards">standards</option><option value="testing">testing</option><option value="workflow">workflow</option><option value="decision">decision</option><option value="evidence">evidence</option></select></label></div><label class="tcrn-field"><span class="tcrn-field__label" data-i18n="articles.bodyLabel">Markdown body</span><textarea class="tcrn-input tcrn-textarea" id="article-body" required rows="16"></textarea></label><div class="tcrn-action-row"><button type="submit" class="tcrn-button tcrn-button--primary" data-i18n="articles.submit" data-cli-action="knowledge-article-create">Create article</button></div></form></article>
-      </section>
       <section class="tcrn-page tcrn-page--manage" data-page="vocabulary" hidden>
         <div class="tcrn-page__head"><div><h1 data-i18n="page.vocabulary">System vocabulary</h1><p class="tcrn-page__lede" data-i18n="vocabulary.lede">Read-only terms come from the engine roster. The portal does not invent enums.</p></div><span class="tcrn-badge" id="vocabulary-version">—</span></div>
         <div class="tcrn-vocabulary"><nav class="tcrn-subnav" aria-label="Vocabulary categories" id="vocabulary-nav"></nav><div class="tcrn-vocabulary__terms" id="vocabulary-terms"></div></div>
@@ -4147,14 +4142,13 @@ const BOOT = __PORTAL_BOOT__;
   const storedTheme = tcrnReadPreference("theme", ["light", "dark"], null);
   const machineTheme = ["light", "dark"].includes(BOOT.machineDefaults?.theme) ? BOOT.machineDefaults.theme : null;
   if (storedTheme === null && machineTheme !== null) document.documentElement.dataset.tcrnTheme = machineTheme;
-  const state = { locale: storedLocale ?? (Object.keys(LOCALES).includes(BOOT.machineDefaults?.locale) ? BOOT.machineDefaults.locale : null) ?? BOOT.defaultLocale ?? "en", theme: document.documentElement.dataset.tcrnTheme, page: "dashboard", dashboardTab: "overview", settingGroup: "workspace", settings: null, machineSettings: null, execution: null, vocabulary: null, status: null, work: null, knowledge: null, gates: null, evolution: null, commands: [], audit: [], selectedVocabulary: "roles", receipt: null, dispatchNotice: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
+  const state = { locale: storedLocale ?? (Object.keys(LOCALES).includes(BOOT.machineDefaults?.locale) ? BOOT.machineDefaults.locale : null) ?? BOOT.defaultLocale ?? "en", theme: document.documentElement.dataset.tcrnTheme, page: "dashboard", dashboardTab: "overview", settingGroup: "workspace", settings: null, machineSettings: null, execution: null, vocabulary: null, status: null, work: null, knowledge: null, knowledgeQuery: "", knowledgeBody: null, gates: null, evolution: null, commands: [], audit: [], selectedVocabulary: "conferenceTypes", receipt: null, dispatchNotice: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const esc = (value) => String(value ?? "").replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]);
   const localeText = (key) => LOCALES[state.locale]?.[key] ?? LOCALES[BOOT.fallbackLocale || "en"]?.[key] ?? key;
   const t = (key, values = {}) => Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), localeText(key));
   const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = String(value ?? ""); };
-  const roleValue = (role) => typeof role === "string" ? role : role?.value;
   const termValue = (term) => typeof term === "string" ? term : term?.value ?? term?.key ?? term?.name ?? "";
   const vocabularyDefinition = (category, term) => {
     if (typeof term === "string") return t("vocabulary.readOnly");
@@ -4166,7 +4160,6 @@ const BOOT = __PORTAL_BOOT__;
       if (perValue !== `setting.${term.settingKey}.value.${term.value}.description`) return perValue;
       return settingDescription(term.settingKey);
     }
-    if (category === "efforts") return Object.entries(term.semantics || {}).map(([host, semantic]) => `${host}: ${semantic}`).join(" · ") || t("vocabulary.readOnly");
     return term.description || `${t("vocabulary.enumValues")}: ${(term.allowedValues || term.coveredByIndependenceFloors || []).join(", ")}`;
   };
   const api = async (path, options = {}) => {
@@ -4467,17 +4460,47 @@ const BOOT = __PORTAL_BOOT__;
   const renderKnowledgeView = () => {
     const data = state.knowledge;
     const records = Array.isArray(data?.records) ? data.records : [];
-    setText("#knowledge-count", `${records.length} ${t("dashboard.records")}`);
-    if (records.length === 0) {
-      $("#knowledge-view-content").innerHTML = `<div class="tcrn-state-surface">${esc(data?.listing?.reasonCode ?? t("dashboard.knowledgeEmpty"))}</div>`;
-      return;
-    }
-    $("#knowledge-view-content").innerHTML = `<div class="tcrn-read-list" role="list">${records.slice(0, 160).map((record) => {
+    const filter = state.knowledgeQuery.trim().toLocaleLowerCase();
+    const visibleRecords = filter.length === 0 ? records : records.filter((record) => [record.subject, record.summary, record.snippet, ...(record.sourceReferences || [])].filter((value) => typeof value === "string").join(" ").toLocaleLowerCase().includes(filter));
+    setText("#knowledge-count", `${visibleRecords.length} ${t("dashboard.records")}`);
+    const selectedBody = state.knowledgeBody;
+    const selectedRecord = records.find((record) => record.id === selectedBody?.id);
+    const bodyReader = selectedBody === null || selectedBody === undefined
+      ? ""
+      : selectedBody.pending === true
+        ? `<article class="tcrn-surface" data-ui="knowledge-body-reader" aria-live="polite"><div class="tcrn-surface__head"><h3>${esc(t("knowledge.bodyTitle"))}</h3></div><div class="tcrn-state-surface">${esc(t("knowledge.bodyLoading"))}</div></article>`
+        : selectedBody.body
+          ? `<article class="tcrn-surface" data-ui="knowledge-body-reader"><div class="tcrn-surface__head"><div><h3>${esc(selectedRecord?.subject || selectedBody.id)}</h3><p class="tcrn-surface__note">${esc(t("knowledge.bodyReadBoundary"))}</p></div><span class="tcrn-badge">${esc(selectedBody.freshness || "—")}</span></div><pre class="tcrn-read-list__summary" role="document">${esc(selectedBody.body)}</pre><span class="tcrn-meta">${esc(t("knowledge.bodyDigest"))}: ${esc(selectedBody.bodySha256 || "—")}</span></article>`
+          : `<article class="tcrn-surface" data-ui="knowledge-body-reader" role="alert"><div class="tcrn-surface__head"><h3>${esc(t("knowledge.bodyTitle"))}</h3></div><div class="tcrn-state-surface">${esc(selectedBody.reasonCode || t("knowledge.bodyUnavailable"))}</div></article>`;
+    const filterField = `<label class="tcrn-field"><span class="tcrn-field__label">${esc(t("knowledge.search"))}</span><input class="tcrn-input" id="knowledge-filter" type="search" value="${esc(state.knowledgeQuery)}" placeholder="${esc(t("knowledge.searchPlaceholder"))}" autocomplete="off"></label>`;
+    if (visibleRecords.length === 0) {
+      $("#knowledge-view-content").innerHTML = `${filterField}<div class="tcrn-state-surface">${esc(records.length === 0 ? (data?.listing?.reasonCode ?? t("dashboard.knowledgeEmpty")) : t("knowledge.noMatches"))}</div>${bodyReader}`;
+    } else {
+      $("#knowledge-view-content").innerHTML = `${filterField}<div class="tcrn-read-list" role="list">${visibleRecords.slice(0, 160).map((record) => {
       const retired = record.lifecycle === "retired";
       const label = retired ? t("dashboard.retired") : record.lifecycle === "candidate" ? t("dashboard.candidate") : t("dashboard.active");
       const retirement = record.retirement?.reason ? ` · ${record.retirement.reason}` : "";
-      return `<div class="tcrn-read-list__row" role="listitem" data-knowledge-id="${esc(record.id)}"><div class="tcrn-read-list__main"><strong>${esc(record.subject || record.externalKey || record.id)}</strong><span class="tcrn-read-list__summary">${esc(record.summary || t("dashboard.missingSummary"))}</span><span class="tcrn-read-list__meta"><code>${esc(record.id)}</code><span class="tcrn-badge">${esc(record.kind || "—")}</span>${statusBadge(label, retired ? "danger" : "positive")}<span class="tcrn-meta">${esc(retirement)}</span></span></div></div>`;
-    }).join("")}</div>${records.length > 160 ? `<p class="tcrn-scope-note">${esc(t("dashboard.showingFirst", { count: 160 }))}</p>` : ""}`;
+      const sources = Array.isArray(record.sourceReferences) ? record.sourceReferences.filter((source) => typeof source === "string" && source.length > 0) : [];
+      const sourceText = sources.length > 0 ? `${t("knowledge.sources")}: ${sources.join(", ")}` : t("knowledge.noSources");
+      const readAction = typeof record.id === "string" && record.id.startsWith("knowledge:")
+        ? `<button type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md" data-knowledge-body-id="${esc(record.id)}" data-cli-action="knowledge-body">${esc(t("knowledge.readBody"))}</button>`
+        : "";
+      return `<div class="tcrn-read-list__row" role="listitem" data-knowledge-id="${esc(record.id)}"><div class="tcrn-read-list__main"><strong>${esc(record.subject || record.externalKey || record.id)}</strong><span class="tcrn-read-list__summary">${esc(record.summary || t("dashboard.missingSummary"))}</span><span class="tcrn-read-list__meta"><code>${esc(record.id)}</code><span class="tcrn-badge">${esc(record.kind || "—")}</span>${statusBadge(label, retired ? "danger" : "positive")}<span class="tcrn-meta">${esc(retirement)}</span></span><span class="tcrn-read-list__summary">${esc(sourceText)}</span></div>${readAction}</div>`;
+      }).join("")}</div>${visibleRecords.length > 160 ? `<p class="tcrn-scope-note">${esc(t("dashboard.showingFirst", { count: 160 }))}</p>` : ""}${bodyReader}`;
+    }
+    $("#knowledge-filter")?.addEventListener("input", (event) => {
+      state.knowledgeQuery = event.target.value;
+      renderKnowledgeView();
+    });
+    $$('[data-knowledge-body-id]').forEach((button) => button.addEventListener("click", async () => {
+      const id = button.dataset.knowledgeBodyId;
+      state.knowledgeBody = { id, pending: true };
+      renderKnowledgeView();
+      state.knowledgeBody = await api(`/api/knowledge/body?id=${encodeURIComponent(id)}`);
+      renderKnowledgeView();
+      $("[data-ui=knowledge-body-reader]")?.scrollIntoView({ block: "nearest" });
+    }));
+    attachEcho($("#knowledge-view-content"));
   };
   const renderGatesView = () => {
     const data = state.gates;
@@ -4547,23 +4570,7 @@ const BOOT = __PORTAL_BOOT__;
   // this page unreadable. Columns are declared per domain from the fields the engine
   // actually returns; the portal invents neither a field nor a value.
   const VOCABULARY_COLUMNS = {
-    roles: [
-      { key: "value", labelKey: "vocabulary.columnName" },
-      { key: "description", labelKey: "vocabulary.columnDescription", kind: "description" },
-      { key: "reviewOnlyDispatchable", labelKey: "vocabulary.columnReviewOnly", kind: "boolean" },
-    ],
     hosts: [{ key: "@self", labelKey: "vocabulary.columnName" }],
-    efforts: [
-      { key: "name", labelKey: "vocabulary.columnName" },
-      { key: "semantics", labelKey: "vocabulary.columnSemantics", kind: "semantics" },
-      { key: "applicableHosts", labelKey: "vocabulary.columnApplicableHosts", kind: "badges" },
-      // A level the host applies to a whole session is real and belongs in the
-      // vocabulary, but a plan assigns effort to one persona and cannot carry it.
-      // The column says which is which, so the absence of such a level from the
-      // assignment dropdown reads as a stated rule rather than a missing option.
-      { key: "assignableToSubagent", labelKey: "vocabulary.columnAssignable", kind: "boolean" },
-      { key: "evidence", labelKey: "vocabulary.columnSource", kind: "evidence" },
-    ],
     conferenceTypes: [
       { key: "value", labelKey: "vocabulary.columnName" },
       { key: "description", labelKey: "vocabulary.columnDescription", kind: "description" },
@@ -4738,17 +4745,6 @@ const BOOT = __PORTAL_BOOT__;
     await refresh();
   };
   const writeExecution = async (action, body) => { echo(action); const result = await api("/api/execution", { method: "POST", body: JSON.stringify({ action, ...body }) }); showReceipt(result); await refresh(); };
-  $("#article-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    echo("knowledge-article-create");
-    const result = await api("/api/knowledge/articles", { method: "POST", body: JSON.stringify({
-      title: $("#article-title").value,
-      category: $("#article-category").value,
-      content: $("#article-body").value,
-    }) });
-    showReceipt(result);
-    await refresh();
-  });
   const loadPartitions = () => { const select = $("#partition-select"); select.innerHTML = (BOOT.partitions || [{ id: "workspace" }]).map((partition) => `<option value="${esc(partition.id)}" ${partition.id === BOOT.selectedPartition ? "selected" : ""}>${esc(partition.id)}</option>`).join(""); select.disabled = !BOOT.partitionMode; };
   const refresh = async () => { try { const [settings, execution, vocabularyResult, status, commandsResult, audit, machine, work, knowledge, gates, evolution] = await Promise.all([api("/api/settings"), api("/api/execution"), api("/api/vocabulary"), api("/api/status"), api("/api/commands"), api("/api/session-audit"), api("/api/machine-settings"), api("/api/work"), api("/api/knowledge"), api("/api/gates"), api("/api/evolution")]); state.machineSettings = machine; state.settings = settings; state.execution = execution; state.vocabulary = vocabularyResult; state.status = status; state.work = work; state.knowledge = knowledge; state.gates = gates; state.evolution = evolution; state.commands = commandsResult.commands || []; state.audit = audit.writes || []; renderDashboard(); renderSettings(); renderVocabulary(); rebuildSearchIndex(); } catch (error) { state.status = { ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE", checks: [{ key: "validate", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "catalog", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }, { key: "actor", ok: false, reasonCode: "PORTAL_STATUS_UNAVAILABLE" }] }; renderDashboard(); showReceipt({ ok: false, reasonCode: "PORTAL_READ_FAILED", error: String(error?.message ?? error) }); } };
   const rebuildSearchIndex = () => {

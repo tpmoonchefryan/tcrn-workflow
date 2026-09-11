@@ -64,7 +64,6 @@ test("S369: dispatch settings are cataloged, sorted, and vocabulary-linked", asy
   for (const mapping of Object.values(modes.modes)) assert.deepEqual(Object.keys(mapping).sort(), expectedClasses);
 
   const vocabulary = await invoke(["vocabulary"]);
-  assert.deepEqual(vocabulary.efforts, []);
   assert.equal(vocabulary.hostValueKind, "string");
   assert.equal(vocabulary.effortValueKind, "string");
   assert.deepEqual(vocabulary.hosts, ["claude-code", "codex"]);
@@ -85,7 +84,7 @@ test("S369: custom classes and modes merge, while unknown hosts stay absent from
   assert.deepEqual(resolved.resolution.value, { model: "gemini-main", effort: "xhigh2" });
   const vocabulary = await invoke(["vocabulary"]);
   assert.equal(vocabulary.hosts.includes("gemini"), false);
-  assert.equal(vocabulary.efforts.length, 0);
+  assert.equal(Object.hasOwn(vocabulary, "efforts"), false);
 
   const bypass = await invoke(write("settings-set", workspace, 3, 4, ["--key", "execution.dispatchClasses", "--value", JSON.stringify({ "bad-class": { dispatch: true } })]));
   assert.equal(bypass.reasonCode, "DISPATCH_CLASS_BEHAVIOUR_REQUIRED");

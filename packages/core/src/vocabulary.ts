@@ -6,7 +6,6 @@ import {
   independenceFloorCovers,
 } from "./conference.js";
 import { EXECUTION_HOSTS } from "./execution-config.js";
-import { PERSONA_ROLE_DEFINITIONS } from "./profile-store.js";
 import { SETTINGS_CATALOG } from "./settings.js";
 
 export const VOCABULARY_VERSION = "tcrn.vocabulary.v1" as const;
@@ -34,12 +33,10 @@ const EXECUTION_FORM_DESCRIPTIONS: Readonly<Record<typeof CONFERENCE_EXECUTION_F
  */
 export function readVocabulary(): Readonly<{
   readonly schemaVersion: typeof VOCABULARY_VERSION;
-  readonly roles: typeof PERSONA_ROLE_DEFINITIONS;
   /** Known renderers, not the set of accepted configuration values. */
   readonly hosts: typeof EXECUTION_HOSTS;
   readonly hostValueKind: "string";
   readonly effortValueKind: "string";
-  readonly efforts: readonly never[];
   readonly conferenceTypes: readonly {
     readonly value: typeof CONFERENCE_TYPES[number];
     readonly description: string;
@@ -62,11 +59,9 @@ export function readVocabulary(): Readonly<{
 }> {
   return Object.freeze({
     schemaVersion: VOCABULARY_VERSION,
-    roles: PERSONA_ROLE_DEFINITIONS,
     hosts: EXECUTION_HOSTS,
     hostValueKind: "string",
     effortValueKind: "string",
-    efforts: Object.freeze([]),
     conferenceTypes: Object.freeze(CONFERENCE_TYPES.map((value) => Object.freeze({
       value,
       description: CONFERENCE_TYPE_DESCRIPTIONS[value],

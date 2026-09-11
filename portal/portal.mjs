@@ -9,7 +9,7 @@ import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createHash, randomBytes } from "node:crypto";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -227,6 +227,17 @@ async function knowledgeProjection() {
   };
 }
 
+async function knowledgeBody(id) {
+  const selected = currentPartition();
+  const result = await cliResult([
+    "knowledge-body",
+    "--workspace", selected.workspace,
+    "--id", String(id ?? ""),
+    "--at", readInstant(),
+  ]);
+  return result;
+}
+
 async function gateProjection() {
   const selected = currentPartition();
   const result = await cliResult(["gate-list-all", "--workspace", selected.workspace]);
@@ -405,73 +416,6 @@ function stableId(namespace, externalKey) {
   return `${namespace}:${createHash("sha256").update(`${namespace}\u0000${key}`, "utf8").digest("hex").slice(0, 24)}`;
 }
 
-function articlePathFor(title) {
-  return `article-${createHash("sha256").update(String(title), "utf8").digest("hex").slice(0, 24)}.md`;
-}
-
-function articleSummaryFor(content) {
-  const firstParagraph = String(content).split(/\n\s*\n/u).map((part) => part.trim()).find((part) => part.length > 0) ?? "";
-  const bytes = Buffer.from(firstParagraph, "utf8");
-  if (bytes.length <= 2048) return firstParagraph;
-  let end = 2048;
-  while (end > 0 && (bytes[end] & 0xc0) === 0x80) end -= 1;
-  return bytes.subarray(0, end).toString("utf8");
-}
-
-function languageBundlePath(value) {
-  if (value === undefined || value === null || String(value).length === 0) return undefined;
-  // CLI subprocesses run from portalRoot. Relative provider bundles therefore
-  // resolve from that directory; article paths remain workspace-relative and
-  // are resolved by the engine against the selected workspace.
-  return isAbsolute(String(value)) ? resolve(String(value)) : resolve(portalRoot, String(value));
-}
-
-async function governedArticleWrite(build, action, summary) {
-  const selected = currentPartition();
-  const occurredAt = nextOccurredAt();
-  let result;
-  try {
-    // Article CAS belongs to the disposable knowledge store, not the workspace
-    // chain. Reading status here would reuse the wrong version number.
-    const marker = await cliResult(["knowledge-validate", "--workspace", selected.workspace]);
-    if (!marker.ok) {
-      result = marker;
-    } else {
-      const common = ["--workspace", selected.workspace, "--expected-version", String(marker.body.version), "--at", occurredAt];
-      result = await cliResult(build(common));
-    }
-  } catch (error) {
-    result = { ok: false, body: { ok: false, reasonCode: "PORTAL_CLI_UNAVAILABLE", error: String(error?.message ?? error) } };
-  }
-  recordSessionWrite(action, result, summary, occurredAt);
-  return result;
-}
-
-function writeArticle(body) {
-  const title = String(body.title ?? "");
-  const category = String(body.category ?? "");
-  const content = String(body.content ?? body.body ?? "");
-  const path = String(body.path ?? articlePathFor(title));
-  const externalKey = `ARTICLE-${createHash("sha256").update(path, "utf8").digest("hex").slice(0, 24).toUpperCase()}`;
-  const owner = String(body.accountableOwnerId ?? stableId("owner", "PORTAL-OWNER"));
-  const evidenceIds = Array.isArray(body.evidenceIds) && body.evidenceIds.length > 0
-    ? body.evidenceIds.map((value) => String(value))
-    : [stableId("evidence", externalKey)];
-  const bundle = languageBundlePath(body.languageBundle);
-  const args = (common) => [
-    "knowledge-article-create", ...common,
-    "--path", path,
-    "--category", category,
-    "--title", title,
-    "--summary", String(body.summary ?? articleSummaryFor(content)),
-    "--content", content,
-    "--accountable-owner-id", owner,
-    "--evidence-ids", evidenceIds.join(","),
-    ...(bundle === undefined ? [] : ["--language-bundle", bundle]),
-  ];
-  return governedArticleWrite(args, "knowledge-article-create", title || "article");
-}
-
 async function writeSetting(key, value) {
   const result = await governedWrite(
     (common) => ["settings-set", ...common, "--key", String(key), "--value", String(value)],
@@ -499,10 +443,6 @@ async function removeSetting(key) {
 async function writeExecution(action, body) {
   const text = (value) => String(value ?? "");
   const verbs = {
-    "model-plan-set": (common) => ["model-plan-set", ...common, "--host", text(body.host), "--name", text(body.name), "--default-model", text(body.defaultModel), ...(text(body.defaultEffort) ? ["--default-effort", text(body.defaultEffort)] : [])],
-    "model-plan-assign": (common) => ["model-plan-assign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona), "--model", text(body.model), ...(body.effort ? ["--effort", text(body.effort)] : [])],
-    "model-plan-unassign": (common) => ["model-plan-unassign", ...common, "--host", text(body.host), "--plan", text(body.plan ?? body.name), "--persona", text(body.persona)],
-    "model-plan-remove": (common) => ["model-plan-remove", ...common, "--host", text(body.host), "--name", text(body.name)],
     "dispatch-tiers-set": (common) => ["dispatch-tiers-set", ...common, "--host", text(body.host), "--tiers", JSON.stringify(body.tiers ?? {})],
     "dispatch-mode-set": (common) => ["dispatch-mode-set", ...common, "--name", text(body.name), "--mapping", JSON.stringify(body.mapping ?? {})],
   };
@@ -689,6 +629,11 @@ const server = createServer(async (request, response) => {
       send(response, 200, await knowledgeProjection());
       return;
     }
+    if (request.method === "GET" && pathname === "/api/knowledge/body") {
+      const result = await knowledgeBody(url.searchParams.get("id") ?? "");
+      send(response, result.ok ? 200 : 409, result.body);
+      return;
+    }
     if (request.method === "GET" && pathname === "/api/gates") {
       send(response, 200, await gateProjection());
       return;
@@ -702,13 +647,6 @@ const server = createServer(async (request, response) => {
       const args = ["host-probe", "--host", String(body.host ?? ""), "--model", String(body.model ?? "")];
       if (body.timeoutMs !== undefined) args.push("--timeout-ms", String(body.timeoutMs));
       const result = await cliResult(args);
-      send(response, result.ok ? 200 : 409, result.body);
-      return;
-    }
-    if (request.method === "POST" && pathname === "/api/knowledge/articles") {
-      const result = await writeArticle(await readJsonBody(request));
-      // The engine receipt is the endpoint body. Do not wrap it in a portal
-      // success object: the drawer must display the engine's reasonCode verbatim.
       send(response, result.ok ? 200 : 409, result.body);
       return;
     }

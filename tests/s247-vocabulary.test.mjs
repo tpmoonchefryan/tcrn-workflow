@@ -8,7 +8,6 @@ import {
   CONFERENCE_EXECUTION_FORMS,
   CONFERENCE_TYPES,
   EXECUTION_HOSTS,
-  PERSONA_ROLE_DEFINITIONS,
   SETTINGS_CATALOG,
   readVocabulary,
 } from "../dist/build/packages/core/src/index.js";
@@ -18,8 +17,8 @@ test("S369: vocabulary distinguishes open configuration strings from known rende
   assert.deepEqual(vocabulary.hosts, EXECUTION_HOSTS);
   assert.equal(vocabulary.hostValueKind, "string");
   assert.equal(vocabulary.effortValueKind, "string");
-  assert.deepEqual(vocabulary.efforts, []);
-  assert.deepEqual(vocabulary.roles, PERSONA_ROLE_DEFINITIONS);
+  assert.equal(Object.hasOwn(vocabulary, "roles"), false);
+  assert.equal(Object.hasOwn(vocabulary, "efforts"), false);
   assert.deepEqual(vocabulary.conferenceTypes.map((term) => term.value), CONFERENCE_TYPES);
   assert.ok(vocabulary.conferenceTypes.every((term) => term.description.length > 0 && Array.isArray(term.coveredByIndependenceFloors)));
   assert.ok(vocabulary.conferenceTypes.find((term) => term.value === "verification").coveredByIndependenceFloors.includes("verification"));

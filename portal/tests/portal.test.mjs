@@ -115,7 +115,8 @@ test("portal boots from the live engine and exposes the new read surfaces", asyn
   assert.equal(Object.hasOwn(execution.body, "personas"), false);
   const dictionary = await request(url, "/api/vocabulary", readOptions(boot.token));
   assert.equal(dictionary.body.reasonCode, "VOCABULARY_READY");
-  assert.ok(dictionary.body.roles.some((role) => role.value === "reviewer"));
+  assert.equal(Object.hasOwn(dictionary.body, "roles"), false);
+  assert.equal(Object.hasOwn(dictionary.body, "efforts"), false);
   assert.ok(dictionary.body.hosts.includes("codex"));
 });
 
@@ -178,7 +179,7 @@ test("portal writes use actor plus live CAS, then return readback and session au
   assert.equal(modes.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
   const retired = await request(url, "/api/execution", writeOptions(boot.token, "POST", { action: "model-plan-set", host: "claude-code", name: "daily", defaultModel: "opus-5" }));
   assert.equal(retired.response.status, 409);
-  assert.equal(retired.body.reasonCode, "CLI_COMMAND_UNKNOWN");
+  assert.equal(retired.body.reasonCode, "PORTAL_UNKNOWN_ACTION");
   const active = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.dispatchMode", value: "custom" }));
   assert.equal(active.body.reasonCode, "SETTINGS_WRITE_COMMITTED");
   const retiredPersona = await request(url, "/api/execution", writeOptions(boot.token, "POST", { action: RETIRED_PERSONA_ACTIONS.override, name: "Verity", fields: { mission: "Review governed evidence", role: "reviewer" } }));
@@ -193,39 +194,29 @@ test("portal writes use actor plus live CAS, then return readback and session au
   assert.ok(audit.body.writes.every((entry) => entry.action && entry.occurredAt));
 });
 
-test("STORY-366: the article endpoint uses knowledge-store CAS and returns the engine receipt unchanged", async (t) => {
+test("STORY-403: the portal exposes governed knowledge reads while the manual article route is absent", async (t) => {
   const fixture = await scratch("tcrn-portal-article-", "TCRN-PORTAL-ARTICLE");
   await cli(["project-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", "2026-08-11T15:00:01Z", "--external-key", "PORTAL-ARTICLE-PROJECT", "--name", "Articles"]);
   await cli(["knowledge-init", "--workspace", fixture.workspace, "--acknowledge-disposable", "true"]);
+  const native = await cli(["knowledge-article-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", "2026-08-11T15:00:01Z", "--path", "portal-article.md", "--category", "architecture", "--title", "Agent article", "--summary", "Agent article summary", "--content", "Agent article body", "--accountable-owner-id", "owner:portal", "--evidence-ids", "evidence:portal-article"]);
+  assert.equal(native.reasonCode, "KNOWLEDGE_ARTICLE_CREATED");
+  assert.equal(await readFile(native.path, "utf8").then((text) => text.includes("Agent article body")), true);
   const { child, url } = await startPortal(fixture);
   t.after(async () => { child.kill(); await rm(fixture.base, { recursive: true, force: true }); });
   const { page, boot } = await readBoot(url);
-  assert.match(page, /data-page="articles"/u);
-  assert.match(page, /data-ui="article-form-surface"/u);
-  const created = await request(url, "/api/knowledge/articles", writeOptions(boot.token, "POST", {
-    title: "Portal article",
-    category: "architecture",
-    content: "Portal body text",
-  }));
-  assert.equal(created.response.status, 200);
-  assert.equal(created.body.reasonCode, "KNOWLEDGE_ARTICLE_CREATED");
-  assert.equal(created.body.version, 1);
-  assert.equal(await readFile(created.body.path, "utf8").then((text) => text.includes("Portal body text")), true);
-  const refused = await request(url, "/api/knowledge/articles", writeOptions(boot.token, "POST", {
-    title: "Unsafe article",
-    category: "architecture",
-    path: "../bad.md",
-    content: "not written",
-  }));
-  assert.equal(refused.response.status, 409);
-  assert.equal(refused.body.reasonCode, "KNOWLEDGE_PATH_INVALID");
-  const audit = await request(url, "/api/session-audit", readOptions(boot.token));
-  assert.equal(audit.body.writes.length, 2);
-  // recordSessionWrite unshifts (portal.mjs), so index 0 is the most recent write --
-  // the refused one -- and index 1 is the create that preceded it. Every other governed
-  // write shares this ordering (it is what #dashboard-audit renders top-first), so the
-  // article endpoint follows the existing convention rather than setting its own.
-  assert.equal(audit.body.writes[0].reasonCode, "KNOWLEDGE_PATH_INVALID");
+  assert.doesNotMatch(page, /data-page="articles"/u);
+  assert.doesNotMatch(page, /article-form|knowledge-article-create/iu);
+  assert.match(page, /data-workspace-tab="knowledge"/u);
+  const knowledge = await request(url, "/api/knowledge", readOptions(boot.token));
+  const article = knowledge.body.records.find((record) => record.subject === "Agent article");
+  assert.ok(article, "the native article must remain in the knowledge index");
+  assert.deepEqual(article.sourceReferences, ["portal-article.md"]);
+  const body = await request(url, `/api/knowledge/body?id=${encodeURIComponent(article.id)}`, readOptions(boot.token));
+  assert.equal(body.response.status, 200);
+  assert.match(body.body.body, /Source: portal-article\.md/u);
+  const refused = await request(url, "/api/knowledge/articles", writeOptions(boot.token, "POST", { title: "Manual article", category: "architecture", content: "must not write" }));
+  assert.equal(refused.response.status, 404);
+  assert.equal(refused.body.reasonCode, "PORTAL_ROUTE_UNKNOWN");
 });
 
 test("state surface follows engine version and turns health red on failed status/actor legs", async (t) => {
@@ -514,7 +505,7 @@ test("execution surface: the owner scenario end to end with the engine", async (
   const post = async (payload) => request(url, "/api/execution", writeOptions(boot.token, "POST", payload));
   const refusedWrite = await post({ action: "model-plan-set", host: "claude-code", name: "owner-scenario", defaultModel: "opus-5" });
   assert.equal(refusedWrite.response.status, 409);
-  assert.equal(refusedWrite.body.reasonCode, "CLI_COMMAND_UNKNOWN");
+  assert.equal(refusedWrite.body.reasonCode, "PORTAL_UNKNOWN_ACTION");
   const historical = await request(url, "/api/execution", readOptions(boot.token));
   assert.deepEqual(historical.body.plans, []);
   const active = await request(url, "/api/settings", writeOptions(boot.token, "POST", { key: "execution.dispatchMode", value: "eco" }));

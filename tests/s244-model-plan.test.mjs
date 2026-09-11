@@ -11,7 +11,6 @@ import {
   applyModelPlanRemove,
   applyModelPlanSet,
   readDispatchConfig,
-  readVocabulary,
   resolveDispatch,
   validateModelPlanEffort,
   validateModelPlanState,
@@ -55,7 +54,6 @@ test("INC-152 MODEL_PLAN_IN_USE wiring names the settings reference", () => {
 });
 
 test("S369: free effort values round-trip without a roster", () => {
-  assert.deepEqual(readVocabulary().efforts, []);
   for (const effort of ["none", "ultra", "ultracode", "xhigh2", ""]) {
     assert.equal(validateModelPlanEffort(effort, "gemini"), effort);
     const created = applyModelPlanSet([], { host: "gemini", name: `plan-${effort || "empty"}`, defaultModel: "model", defaultEffort: effort, updatedAt: at });

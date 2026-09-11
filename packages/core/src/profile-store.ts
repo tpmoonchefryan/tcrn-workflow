@@ -17,10 +17,10 @@ export const PERSONA_RECORD_VERSION = "tcrn.persona.v2" as const;
 export const LEGACY_PERSONA_RECORD_VERSION = "tcrn.persona.v1" as const;
 const LEGACY_PRESET_OVERRIDE_VERSION = ["tcrn.", "persona", "-preset-override.v1"].join("");
 
-// Single source for the role roster's semantic metadata. The
-// reviewOnlyDispatchable values are an implementation proposal for the still
-// unresolved policy decision; vocabulary consumers derive from this table and
-// must not invent a second policy table at the presentation layer.
+// Single source for the historical role roster's semantic metadata. The
+// reviewOnlyDispatchable values are retained for replay and library consumers;
+// the current product vocabulary deliberately does not publish this retired
+// identity surface.
 export const PERSONA_ROLE_DEFINITIONS = Object.freeze([
   { value: "orchestrator", description: "Coordinates bounded workflow decisions", reviewOnlyDispatchable: false },
   { value: "planner", description: "Turns intent into an executable plan", reviewOnlyDispatchable: false },

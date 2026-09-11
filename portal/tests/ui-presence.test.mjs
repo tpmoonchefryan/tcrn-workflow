@@ -23,7 +23,6 @@ const COMPONENTS = Object.freeze([
   ["prose directory", '[data-ui="prose-directory"]'],
   ["prose line-number gutter", '[data-ui="prose-gutter"]'],
   ["prose finding link", '[data-ui="prose-finding-link"]'],
-  ["article form surface", '[data-ui="article-form-surface"]'],
   ["workspace paths", '[data-ui="workspace-paths"]'],
   ["work tree", '[data-ui="work-tree"]'],
   ["knowledge view", '[data-ui="knowledge-view"]'],
@@ -315,8 +314,9 @@ function assertDomContract(document) {
   const missing = missingComponents(document);
   assert.deepEqual(missing, [], `rendered DOM components absent: ${JSON.stringify(missing)}`);
   const navigationItems = [...document.querySelectorAll(".tcrn-side-nav .tcrn-nav-item")];
-  // STORY-370 retires the Entities destination; Articles remains the fifth live page.
-  assert.equal(navigationItems.length, 5, "the portal must render the five live platform destinations");
+  // STORY-370 retired Entities, and STORY-403 folds article reading into the
+  // dashboard knowledge view rather than keeping a manual article destination.
+  assert.equal(navigationItems.length, 4, "the portal must render the four live platform destinations");
   assert.ok(navigationItems.every((button) => button.getAttribute("aria-label")?.trim()), "every destination must expose an accessible name");
   assert.ok(navigationItems.every((button) => button.getAttribute("data-i18n-aria-label")?.trim()), "every destination name must come from the locale table");
   assert.equal(document.querySelector('img.tcrn-brand-mark')?.getAttribute("alt"), "", "the decorative mark must not duplicate the brand accessible name");
@@ -424,10 +424,27 @@ if (process.argv[2] === "status" && actual.status === 0) {
       // linkedom has no :nth-child, and the cell carries its column name in data-label
       // anyway — which is the more honest anchor: it names the column, not a position.
       const definition = [...page.document.querySelectorAll('[data-vocabulary-table] .tcrn-table-shell__cell')].find((cell) => cell.getAttribute("data-label") === "描述")?.textContent || "";
-      assert.match(definition, /协调受约束的工作流决策|将意图转为可执行计划|检查证据并报告差异/u);
-      assert.doesNotMatch(definition, /Coordinates bounded workflow decisions|Turns intent into an executable plan|Checks evidence and reports discrepancies/u);
+      assert.match(definition, /确定方向与预期成果|审视结构与技术选择|揭示威胁、缓解措施与暴露面/u);
+      assert.doesNotMatch(definition, /Sets direction and intended outcomes|Examines structural and technical choices|Surfaces threats, mitigations, and exposure/u);
       assert.equal(page.document.querySelector('[data-i18n="dashboard.chain"]')?.textContent, "链版本");
       assert.ok([...page.document.querySelectorAll("[data-i18n]")].every((node) => node.textContent.trim().length > 0), "every static i18n binding must render text in the executed DOM");
+    } finally { await page.cleanup(); }
+  });
+
+  test("STORY-402 retires persona and empty-effort dictionary surfaces while keeping dispatch vocabulary current", async () => {
+    const page = await preparePage();
+    try {
+      page.document.querySelector('[data-page-target="vocabulary"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      const categories = [...page.document.querySelectorAll("[data-vocabulary-category]")].map((button) => button.dataset.vocabularyCategory);
+      assert.ok(categories.includes("conferenceTypes"));
+      assert.ok(categories.includes("executionForms"));
+      assert.equal(categories.includes("roles"), false);
+      assert.equal(categories.includes("efforts"), false);
+      assert.equal(page.document.querySelector('[data-vocabulary-table="roles"]'), null);
+      assert.equal(page.document.querySelector('[data-vocabulary-table="efforts"]'), null);
+      assert.doesNotMatch(await readFile(join(portalRoot, "index.html"), "utf8"), /data-page="articles"|article-form|vocabulary\.roles|vocabulary\.efforts/iu);
+      assert.doesNotMatch(await readFile(join(portalRoot, "locales.js"), "utf8"), /vocabulary\.roles|vocabulary\.efforts|persona/iu);
     } finally { await page.cleanup(); }
   });
 
@@ -736,7 +753,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
 
       // The live destinations the CSS puts behind this toggle at narrow widths still
       // drive the same section router the always-visible desktop nav always used.
-      const destinations = ["dashboard", "settings", "prose", "articles", "vocabulary"];
+      const destinations = ["dashboard", "settings", "prose", "vocabulary"];
       for (const target of destinations) {
         const navItem = nav.querySelector(`[data-page-target="${target}"]`);
         assert.ok(navItem, `the expanded nav must still carry the ${target} destination`);
