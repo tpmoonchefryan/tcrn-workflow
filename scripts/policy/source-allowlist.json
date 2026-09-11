@@ -459,6 +459,7 @@
     "tests/fixtures/retrieval-eval/corpus-snapshot.json",
     "tests/fixtures/retrieval-eval/gold-labels.json",
     "tests/fixtures/retrieval-eval/holdout-preregistered.json",
+    "tests/fixtures/retrieval-eval/holdout-source.json",
     "tests/fixtures/retrieval-eval/incident-replay-frozen.json",
     "tests/fixtures/retrieval-eval/judge-sheet.json",
     "tests/fixtures/retrieval-eval/minutes-compact.json",

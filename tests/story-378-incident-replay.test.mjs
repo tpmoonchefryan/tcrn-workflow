@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -150,6 +151,7 @@ test("STORY-385/394: historical Incident scores are development data and the hol
   const frozen = await readJson("tests/fixtures/retrieval-eval/incident-replay-frozen.json");
   const work = await readJson("tests/fixtures/retrieval-eval/work-compact.json");
   const holdout = await readJson("tests/fixtures/retrieval-eval/holdout-preregistered.json");
+  const holdoutSource = await readJson("tests/fixtures/retrieval-eval/holdout-source.json");
   const policy = await readJson("scripts/policy/retrieval-eval-thresholds.json");
   const byId = new Map(work.records.map((record) => [record.id, record]));
   assert.equal(frozen.records.length, 20);
@@ -164,11 +166,41 @@ test("STORY-385/394: historical Incident scores are development data and the hol
   }
   assert.equal(policy.incidentReplayIndependent.role, "development-seen-after-scoring");
   assert.equal(policy.historicalProvenance.freezeClaimDisposition, "retained-as-historical-metadata-not-a-real-freeze-time");
+  assert.equal(holdout.schemaVersion, "tcrn.retrieval-holdout.v2");
   assert.equal(holdout.role, "unseen-disjoint-holdout");
   assert.equal(holdout.records.length, 20);
+  assert.deepEqual(holdout.thresholds, { pairsAtLeast: 20, hitAt1: 8, hitAt3: 12, hitAt8: 16 });
+  assert.equal(holdout.labelPolicy.kind, "Work");
   assert.equal(holdout.labelPolicy.createdBeforeScoring, true);
   assert.equal(holdout.labelPolicy.modelCalls, 0);
-  assert.deepEqual(holdout.thresholds, { pairsAtLeast: 20, hitAt1: 8, hitAt3: 12, hitAt8: 16, rule: "fixed 40%/60%/80% floors before first scoring" });
-  assert.equal(new Set(holdout.records.map((pair) => pair.source.workId)).size, holdout.records.length);
-  assert.ok(holdout.records.every((pair) => pair.source.kind === "Story" && pair.label.expectedIds.length === 1 && pair.label.expectedIds[0] === pair.source.workId));
+  assert.equal(holdout.labelPolicy.priorPromptDisjoint, true);
+  assert.equal(holdoutSource.schemaVersion, "tcrn.retrieval-holdout-source.v1");
+  assert.equal(holdoutSource.role, "unseen-disjoint-holdout-source");
+  assert.equal(holdout.sourceFiles[0].sha256, createHash("sha256").update(await readFile("tests/fixtures/retrieval-eval/holdout-source.json")).digest("hex"));
+  assert.equal(holdout.sourceSnapshot.chainVersion, holdoutSource.chainVersion);
+  assert.equal(holdout.sourceSnapshot.headEventHash, holdoutSource.headEventHash);
+  assert.equal(holdout.sourceSnapshot.recordsDigest, holdoutSource.recordsDigest);
+  assert.equal(holdoutSource.recordsDigest, canonicalSha256(holdoutSource.records));
+  const historicalPrompts = new Set(buildIncidentReplay({ workRecords: work.records, cards: [], minutes: [] }).pairs.map((pair) => pair.prompt));
+  const sourceById = new Map(holdoutSource.records.map((record) => [record.id, record]));
+  const sourceIds = new Set();
+  const prompts = new Set();
+  for (const pair of holdout.records) {
+    const source = pair.source;
+    const snapshot = sourceById.get(source.id);
+    assert.ok(snapshot, source.id);
+    assert.equal(sourceIds.has(source.id), false);
+    sourceIds.add(source.id);
+    assert.ok(["Incident", "Story"].includes(source.kind));
+    assert.equal(source.sourceRecordDigest, canonicalSha256(Object.fromEntries(Object.entries(source).filter(([key]) => key !== "sourceRecordDigest"))));
+    assert.deepEqual(source, snapshot);
+    assert.equal(pair.label.expectedIds[0], source.id);
+    assert.equal(pair.prompt, `问题：${source.title}。${source.summary}`);
+    assert.equal(prompts.has(pair.prompt), false);
+    assert.equal(historicalPrompts.has(pair.prompt), false);
+    prompts.add(pair.prompt);
+  }
+  assert.equal(sourceIds.size, 20);
+  assert.equal(holdoutSource.records.length, 20);
+  assert.deepEqual(holdout.sourceSelection.externalKeys, holdoutSource.records.map((record) => record.externalKey).sort());
 });

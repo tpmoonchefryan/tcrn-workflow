@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "eb497456e6c9011cf05367c485598d43ed5e3351d6ba88b25d1d76b8dcd2f1df",
+      "fixtureDigest": "3549844580e2c43a37daef594205b99b203681fc2bececa63dae3e342243f76e",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -56,7 +56,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "e4c4b89dfbef75db06acd13ee81086f382230c8280eee5bc0cd393dba40110d0",
+      "fixtureDigest": "ab0a2722eeac8c96f3187b273940eb6e4b8e9cb72bf8c4859d8006da01c795c9",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -261,7 +261,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "1edd4587ee7549dc7ce31d4247f6a8285dc5f4753d43b51f889c668a9156fe0d",
+      "fixtureDigest": "aa561f9fb61299d077b25846b9544bcddbc8b4e0ba23e056b15948fcbc524d59",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -294,13 +294,15 @@
         "tests/fixtures/retrieval-eval/cards-compact.json",
         "tests/fixtures/retrieval-eval/corpus-snapshot.json",
         "tests/fixtures/retrieval-eval/gold-labels.json",
+        "tests/fixtures/retrieval-eval/holdout-preregistered.json",
+        "tests/fixtures/retrieval-eval/holdout-source.json",
         "tests/fixtures/retrieval-eval/judge-sheet.json",
         "tests/fixtures/retrieval-eval/minutes-compact.json",
         "tests/fixtures/retrieval-eval/synthetic-queries.json",
         "tests/fixtures/retrieval-eval/translations-sonnet.json",
         "tests/fixtures/retrieval-eval/work-compact.json"
       ],
-      "fixtureDigest": "801c9fba0d9e0cc5b6501769d701cd497d1a0eccff5171d7969da7edb773c10d",
+      "fixtureDigest": "c95b02592a2e3c84d10e095a8e077f621548fc9689b272425dff544ccefb0390",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -335,13 +337,15 @@
         "tests/fixtures/retrieval-eval/cards-compact.json",
         "tests/fixtures/retrieval-eval/corpus-snapshot.json",
         "tests/fixtures/retrieval-eval/gold-labels.json",
+        "tests/fixtures/retrieval-eval/holdout-preregistered.json",
+        "tests/fixtures/retrieval-eval/holdout-source.json",
         "tests/fixtures/retrieval-eval/judge-sheet.json",
         "tests/fixtures/retrieval-eval/minutes-compact.json",
         "tests/fixtures/retrieval-eval/synthetic-queries.json",
         "tests/fixtures/retrieval-eval/translations-sonnet.json",
         "tests/fixtures/retrieval-eval/work-compact.json"
       ],
-      "fixtureDigest": "39d7fed1f56bb9dc93a0fc759d854571045980676e98c8648c65a7c9e61e675d",
+      "fixtureDigest": "ef895cd19c5ffc2fa6a124318ac0da2d664b95724f65ae9f57970310a377a1f3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

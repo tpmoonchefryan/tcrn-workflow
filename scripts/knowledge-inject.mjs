@@ -212,7 +212,9 @@ async function languageModule() {
   return coreLanguageModule;
 }
 
-const OBSERVATION_CHANNEL_BY_KIND = Object.freeze({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify" });
+export const OBSERVATION_CHANNELS = Object.freeze(["retrieval", "reference", "trigger", "verify"]);
+export const OBSERVATION_BOUNDARY_PREFIX = "telemetry:observation-collector:";
+const OBSERVATION_CHANNEL_BY_KIND = Object.freeze({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify", "gate-result": "verify" });
 
 async function nextObservationSequence(core, root, kind, source) {
   const channel = OBSERVATION_CHANNEL_BY_KIND[kind];
@@ -258,6 +260,58 @@ async function telemetryWriter(partition, containerRoot, sessionId, suppliedStat
   };
 }
 
+function safeObservationPart(value, fallback) {
+  const text = String(value ?? fallback).replace(/[^A-Za-z0-9._:-]/gu, "_").slice(0, 32);
+  return text.length > 0 ? text : fallback;
+}
+
+async function telemetryRootForState(core, partition, containerRoot, suppliedState = null) {
+  const state = suppliedState ?? await workspaceStateForInjection(partition, containerRoot);
+  return state?.metadata === undefined ? null : core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
+}
+
+/** Record the real host-session boundaries used by the daily coverage proof. */
+export async function recordObservationBoundary({
+  partition = DEFAULT_PARTITION,
+  containerRoot = PLATFORM_ROOT,
+  sessionId = "anonymous",
+  host = process.env.TCRN_HOST ?? "claude",
+  phase,
+  at = new Date().toISOString(),
+  workspaceState = null,
+} = {}) {
+  if (phase !== "start" && phase !== "stop") return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_INVALID" };
+  const core = await languageModule();
+  if (typeof core?.createTelemetryRecord !== "function" || typeof core?.appendTelemetryRecord !== "function" || typeof core?.readTelemetryRecords !== "function" || typeof core?.activeBinding !== "function") return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE" };
+  try {
+    const root = await telemetryRootForState(core, partition, containerRoot, workspaceState);
+    if (root === null) return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE" };
+    const sourceBase = `${OBSERVATION_BOUNDARY_PREFIX}${safeObservationPart(host, "unknown-host")}:${safeObservationPart(sessionId, "unknown-session")}`;
+    const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER });
+    const boundaryDate = new Date(at);
+    if (phase === "stop" && boundaryDate.getUTCHours() === 0) boundaryDate.setUTCDate(boundaryDate.getUTCDate() - 1);
+    const boundaryDay = boundaryDate.toISOString().slice(0, 10);
+    const records = [];
+    for (const channel of OBSERVATION_CHANNELS) {
+      const source = `${sourceBase}:${channel}`;
+      const rows = read.records.filter((record) => record.payload.source === source).map((record) => record.payload.sequence).filter((sequence) => Number.isSafeInteger(sequence) && sequence >= 1);
+      const sequence = Math.max(0, ...rows) + 1;
+      const actual = read.records.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX) && new Date(record.at).toISOString().slice(0, 10) === boundaryDay).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
+      records.push(core.createTelemetryRecord({
+        at,
+        kind: channel,
+        session: String(sessionId),
+        payload: { source, availability: "available", phase, sequence, highWaterDay: boundaryDay, highWaterCount: actual.length, highWaterDigest: canonicalSha256(actual), highWaterAt: actual.at(-1)?.at ?? null },
+      }));
+    }
+    const receipts = [];
+    for (const record of records) receipts.push(await core.appendTelemetryRecord(root, record));
+    return { ok: true, reasonCode: "TELEMETRY_BOUNDARY_RECORDED", phase, sessionId: String(sessionId), count: receipts.length, duplicate: receipts.filter((receipt) => receipt.duplicate).length > 0 };
+  } catch (error) {
+    return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE", error: String(error?.reasonCode ?? error?.message ?? error) };
+  }
+}
+
 async function emitTelemetry(writer, event) {
   if (typeof writer !== "function") return { availability: "unavailable", id: null };
   try { return await writer(event); } catch { return { availability: "unavailable", id: null }; }
@@ -280,22 +334,25 @@ export async function sealObservationDay(root, { at = new Date().toISOString(), 
   const targetFile = `${from.slice(0, 10)}.ndjson`;
   const entries = read.records.filter((record) => record.kind !== "observation-coverage" && Date.parse(record.at) >= fromValue && Date.parse(record.at) < untilValue)
     .sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
+  const boundaryEntries = read.records.filter((record) => record.kind !== "observation-coverage" && String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX) && (Date.parse(record.at) < fromValue || Date.parse(record.at) >= untilValue));
+  const proofEntries = [...entries, ...boundaryEntries];
   const missingChannels = [];
   const invalidChannels = [];
   const channelCheckpoints = {};
-  for (const channel of ["retrieval", "reference", "trigger", "verify"]) {
-    const allRows = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel);
+  for (const channel of OBSERVATION_CHANNELS) {
+    const allRows = proofEntries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX));
     if (allRows.length === 0) { missingChannels.push(channel); continue; }
-    const candidates = [...new Set(allRows.map((record) => record.payload.source))].sort().map((source) => allRows.filter((record) => record.payload.source === source));
+    const actual = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
+    const candidates = [...new Set(allRows.map((record) => record.payload.source))].sort().map((source) => allRows.filter((record) => record.payload.source === source).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id)));
     const rows = candidates.find((candidate) => {
       const phases = candidate.map((record) => record.payload.phase);
       const sequences = candidate.map((record) => record.payload.sequence);
       const firstStop = phases.indexOf("stop");
-      return candidate.every((record) => record.payload.availability === "available") && firstStop > 0 && phases.every((phase, index) => index < firstStop ? phase === "start" : phase === "stop") && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && sequence >= 1 && (index === 0 || sequence === sequences[index - 1] + 1)) && Date.parse(candidate[0].at) <= fromValue && Date.parse(candidate.at(-1).at) >= untilValue - 1;
+      return candidate.every((record) => record.payload.availability === "available") && firstStop > 0 && phases.every((phase, index) => index < firstStop ? phase === "start" : phase === "stop") && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && sequence >= 1 && (index === 0 || sequence === sequences[index - 1] + 1)) && Date.parse(candidate[0].at) <= fromValue && Date.parse(candidate.at(-1).at) >= untilValue - 1 && actual.length > 0 && candidate.at(-1)?.payload.highWaterDay === from.slice(0, 10) && candidate.at(-1)?.payload.highWaterCount === actual.length && candidate.at(-1)?.payload.highWaterDigest === canonicalSha256(actual);
     });
     if (rows === undefined) { invalidChannels.push(channel); continue; }
     const sequences = rows.map((record) => record.payload.sequence);
-    channelCheckpoints[channel] = { availability: "available", source: rows[0].payload.source, startSequence: sequences[0], stopSequence: sequences.at(-1), recordCount: rows.length, sourceDigest: canonicalSha256(rows) };
+    channelCheckpoints[channel] = { availability: "available", source: rows[0].payload.source, startSequence: sequences[0], stopSequence: sequences.at(-1), recordCount: rows.length, sourceDigest: canonicalSha256(rows), highWaterDay: from.slice(0, 10), highWaterCount: actual.length, highWaterDigest: canonicalSha256(actual) };
   }
   const problems = read.problems.filter((problem) => problem.path.endsWith(`/${targetFile}`));
   const sourceDigest = canonicalSha256(entries);
@@ -604,6 +661,7 @@ export async function runSessionInjection({
   try {
     const effectiveSettings = settings ?? await configuredSettingRecords(partition, containerRoot);
     const telemetry = await telemetryWriter(partition, containerRoot, sessionId, workspaceState);
+    const observationBoundary = event === "SessionStart" ? await recordObservationBoundary({ partition, containerRoot, sessionId, host, workspaceState, phase: "start" }) : null;
     observationCoverage = await sessionObservationCoverage(event, partition, containerRoot, workspaceState);
     retirementSweep = await sessionRetirementSweep(event, partition, containerRoot);
     calls = await productionModelCalls({
@@ -731,6 +789,7 @@ export async function runSessionInjection({
       l0,
       sessionId,
       ...(observationCoverage === null ? {} : { observationCoverage }),
+      ...(observationBoundary === null ? {} : { observationBoundary }),
       ...(retirementSweep === null ? {} : { retirementSweep }),
       telemetry: {
         ...(recallResult.telemetry ?? {}),
@@ -783,14 +842,19 @@ function parseArgv(argv) {
     judgeEnabled: flags["judge-enabled"] !== "false",
     host: typeof flags.host === "string" ? flags.host : (process.env.TCRN_HOST ?? "claude"),
     selfTest: flags["self-test"] === true,
-    verifyChannel: flags["verify-channel"] === true
+    verifyChannel: flags["verify-channel"] === true,
+    observationBoundary: typeof flags["observation-boundary"] === "string" ? flags["observation-boundary"] : null,
+    at: typeof flags.at === "string" ? flags.at : undefined,
+    containerRoot: typeof flags["container-root"] === "string" ? flags["container-root"] : PLATFORM_ROOT,
   };
 }
 
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   const options = parseArgv(process.argv.slice(2));
   const out = (value) => { process.stdout.write(`${JSON.stringify(value, null, 2)}\n`); };
-  if (options.verifyChannel) {
+  if (options.observationBoundary !== null) {
+    out(await recordObservationBoundary({ partition: options.partition, containerRoot: options.containerRoot, sessionId: options.sessionId ?? "anonymous", host: options.host, phase: options.observationBoundary, at: options.at }));
+  } else if (options.verifyChannel) {
     // Red surfaces: registration missing / command cannot start / chain returns nothing.
     const registered = registeredHookCommands();
     if (registered.length === 0) { out({ ok: false, reasonCode: "REGISTRATION_MISSING", detail: "no knowledge-inject hook is registered in the platform .claude/settings.json" }); process.exitCode = 1; }

@@ -9,6 +9,7 @@
 // caller-supplied passed flag or test count as evidence.
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +18,7 @@ import { tmpdir } from "node:os";
 import { countCoverage } from "./coverage-conservation.mjs";
 
 export const REVIEW_EVIDENCE_VERSION = "tcrn.review-evidence.v1";
-export const REVIEW_OUTPUT_BYTES = 65_536;
+export const REVIEW_OUTPUT_BYTES = 4 * 1024 * 1024;
 export const REVIEW_COMMAND_TIMEOUT_MS = 600_000;
 
 const REPOSITORY_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -44,6 +45,21 @@ function outputTail(value, maximum = REVIEW_OUTPUT_BYTES) {
   let start = bytes.length - maximum;
   while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start += 1;
   return bytes.subarray(start).toString("utf8");
+}
+
+function fullOutput(path) {
+  const bytes = readFileSync(path);
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  if (bytes.length > REVIEW_OUTPUT_BYTES) {
+    return { text: "", bytes: bytes.length, sha256: digest, complete: false };
+  }
+  return { text: bytes.toString("utf8"), bytes: bytes.length, sha256: digest, complete: true };
+}
+
+function terminateProcessGroup(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return;
+  try { process.kill(-pid, "SIGTERM"); } catch { /* group already ended */ }
+  try { process.kill(-pid, "SIGKILL"); } catch { /* group already ended */ }
 }
 
 function resultCode(result) {
@@ -86,20 +102,27 @@ function runShell(command, cwd, timeoutMs = REVIEW_COMMAND_TIMEOUT_MS) {
     if (stdoutFd !== undefined) closeSync(stdoutFd);
     if (stderrFd !== undefined) closeSync(stderrFd);
   }
-  let stdout = "";
-  let stderr = "";
+  let stdout = { text: "", bytes: 0, sha256: createHash("sha256").digest("hex"), complete: true };
+  let stderr = { text: "", bytes: 0, sha256: createHash("sha256").digest("hex"), complete: true };
+  if (result.error || result.status !== 0) terminateProcessGroup(result.pid);
   try {
-    stdout = readFileSync(stdoutPath, "utf8");
-    stderr = readFileSync(stderrPath, "utf8");
+    stdout = fullOutput(stdoutPath);
+    stderr = fullOutput(stderrPath);
   } finally {
     rmSync(outputDirectory, { recursive: true, force: true });
   }
+  const outputComplete = stdout.complete && stderr.complete;
   return {
     command,
     cwd,
-    exitCode: resultCode(result),
-    stdout: outputTail(stdout),
-    stderr: outputTail(stderr),
+    exitCode: outputComplete ? resultCode(result) : "OUTPUT_LIMIT",
+    stdout: stdout.text,
+    stderr: stderr.text,
+    stdoutBytes: stdout.bytes,
+    stderrBytes: stderr.bytes,
+    stdoutSha256: stdout.sha256,
+    stderrSha256: stderr.sha256,
+    outputComplete,
   };
 }
 
@@ -145,6 +168,26 @@ function normalizeAllowedFiles(repositoryRoot, allowedFiles) {
     const raw = pointerPath(entry.trim());
     const normalized = repositoryRelative(repositoryRoot, raw);
     if (normalized === null) problems.push(`${entry} is outside repositoryRoot`);
+    else files.push(normalized);
+  }
+  return { files: [...new Set(files)].sort(), problems };
+}
+
+function normalizeTestFiles(repositoryRoot, testFiles) {
+  if (!Array.isArray(testFiles) || testFiles.length === 0) return { files: [], problems: ["testFiles must be a non-empty list of actual test paths"] };
+  const files = [];
+  const problems = [];
+  for (const entry of testFiles) {
+    if (typeof entry !== "string" || entry.trim().length === 0) {
+      problems.push("testFiles contains an empty entry");
+      continue;
+    }
+    const normalized = repositoryRelative(repositoryRoot, entry.trim());
+    if (normalized === null || !normalized.endsWith(".test.mjs") || (!normalized.startsWith("tests/") && !normalized.startsWith("portal/tests/"))) {
+      problems.push(`${entry} is not an in-repository test path`);
+      continue;
+    }
+    if (!existsSync(resolve(repositoryRoot, normalized))) problems.push(`${normalized} does not exist in repositoryRoot`);
     else files.push(normalized);
   }
   return { files: [...new Set(files)].sort(), problems };
@@ -214,24 +257,36 @@ function jsonObjects(output) {
 }
 
 /** Parse runner output only; a prose "passed" or a supplied count is not accepted. */
-export function parseTestRunOutput(stdout, stderr = "") {
+export function parseTestRunOutput(stdout, stderr = "", declaredTestFiles = []) {
   const combined = `${text(stdout)}\n${text(stderr)}`;
-  const structured = jsonObjects(stdout).find((value) => Array.isArray(value.tests));
+  const structured = jsonObjects(stdout).find((value) => Array.isArray(value.tests) && value.tests.every((path) => typeof path === "string" && path.endsWith(".test.mjs")));
   if (structured !== undefined) {
+    const testFiles = [...structured.tests];
+    const testCases = parseTestNumber(combined, "tests");
+    const passed = parseTestNumber(combined, "pass");
+    const failed = parseTestNumber(combined, "fail");
     return {
-      tests: structured.tests.length,
-      testFiles: structured.tests.length,
-      testCases: null,
-      passed: structured.result === "passed" || structured.ok === true ? structured.tests.length : null,
-      failed: structured.result === "passed" || structured.ok === true ? 0 : null,
+      testFiles,
+      testFileCount: testFiles.length,
+      testCases,
+      passed: passed ?? (structured.result === "passed" || structured.ok === true ? testCases : null),
+      failed: failed ?? (structured.result === "passed" || structured.ok === true ? 0 : null),
       parseable: true,
-      source: "engine-test-result.tests-array",
+      source: "engine-test-result.file-list",
     };
   }
-  const tests = parseTestNumber(combined, "tests");
+  const testCases = parseTestNumber(combined, "tests");
   const passed = parseTestNumber(combined, "pass");
   const failed = parseTestNumber(combined, "fail");
-  return { tests: null, testFiles: null, testCases: tests, passed, failed, parseable: false, source: "node-test-case-summary" };
+  return {
+    testFiles: [...declaredTestFiles],
+    testFileCount: declaredTestFiles.length,
+    testCases,
+    passed,
+    failed,
+    parseable: testCases !== null && failed !== null,
+    source: "node-test-case-summary",
+  };
 }
 
 function readGitFile(repositoryRoot, ref, path) {
@@ -278,21 +333,31 @@ function readBoundVerify({ workspace, workId, engineCli }) {
     return { status: "unavailable", reason: "workspace/work-id binding is not qualified", command: null };
   }
   let output;
-  try {
-    const child = spawnSync(process.execPath, [engineCli, "work-show", "--workspace", workspace, "--id", workId], {
-      cwd: workspace,
-      encoding: "utf8",
-      // A live chain read can contend with the repository's parallel gate suite.
-      // Keep the read bounded, but do not turn transient contention into a false
-      // missing binding before the review command's own timeout has elapsed.
-      timeout: 15_000,
-      maxBuffer: REVIEW_OUTPUT_BYTES * 2,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    if (child.status !== 0 || child.error) return { status: "unavailable", reason: "work-show failed", command: null };
-    output = JSON.parse(text(child.stdout));
-  } catch (error) {
-    return { status: "unavailable", reason: String(error?.message ?? error), command: null };
+  let reason = "work-show failed";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const child = spawnSync(process.execPath, [engineCli, "work-show", "--workspace", workspace, "--id", workId], {
+        cwd: workspace,
+        encoding: "utf8",
+        // A live chain read can contend with the repository's parallel gate suite.
+        // Keep the read bounded and retry a transient refusal before declaring the
+        // binding unavailable.
+        timeout: 30_000,
+        maxBuffer: REVIEW_OUTPUT_BYTES * 2,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      if (child.status === 0 && !child.error) {
+        output = JSON.parse(text(child.stdout));
+        break;
+      }
+      reason = text(child.stderr).trim().slice(-200) || reason;
+    } catch (error) {
+      reason = String(error?.message ?? error);
+    }
+    if (attempt < 2) spawnSync("/bin/sleep", ["0.25"]);
+  }
+  if (output === undefined) {
+    return { status: "unavailable", reason, command: null };
   }
   if (output?.record?.id !== workId) return { status: "unavailable", reason: "work-show returned a different record", command: null };
   const command = output?.advisory?.verify;
@@ -308,6 +373,7 @@ export function collectReviewEvidence({
   head = null,
   allowedFiles,
   testCommand,
+  testFiles,
   engineCli = DEFAULT_ENGINE,
   commandTimeoutMs = REVIEW_COMMAND_TIMEOUT_MS,
 } = {}) {
@@ -321,7 +387,8 @@ export function collectReviewEvidence({
     return { schemaVersion: REVIEW_EVIDENCE_VERSION, ok: false, reasonCode: "REVIEW_EVIDENCE_INPUT_INVALID", problems: ["base is required"], evidence: null };
   }
   const allowed = normalizeAllowedFiles(root, allowedFiles);
-  const problems = [...allowed.problems];
+  const declaredTests = normalizeTestFiles(root, testFiles);
+  const problems = [...allowed.problems, ...declaredTests.problems];
   let diff;
   try {
     diff = diffEvidence(root, base, head);
@@ -345,12 +412,15 @@ export function collectReviewEvidence({
   const testRun = testCommand === undefined ? verifyRun : runShell(testCommand, root, commandTimeoutMs);
   const testSummary = testRun === null
     ? { tests: null, testFiles: null, testCases: null, passed: null, failed: null, parseable: false }
-    : parseTestRunOutput(testRun.stdout, testRun.stderr);
-  const ast = astTestEvidence(root, base, head);
+    : parseTestRunOutput(testRun.stdout, testRun.stderr, declaredTests.files);
+  if (testSummary.source === "engine-test-result.file-list" && testSummary.testFiles.join("\n") !== declaredTests.files.join("\n")) {
+    problems.push("test runner's actual file list differs from the pre-declared test paths");
+  }
+  const ast = astTestEvidence(root, base, head, declaredTests.files);
   if (binding.status === "missing") problems.push("bound work has no advisory:verify command");
   if (binding.status === "unavailable") problems.push(`bound work verify is unavailable: ${binding.reason}`);
   if (!verify.ok) problems.push("verify command did not exit 0");
-  if (testRun === null || !testSummary.parseable) problems.push("test runner output has no machine-readable tests count");
+  if (testRun === null || !testSummary.parseable) problems.push("test runner output has no machine-readable test result");
   if (testRun !== null && testRun.exitCode !== "0") problems.push(`test runner exited ${testRun.exitCode}`);
   if (ast.after.testCount < ast.before.testCount) problems.push(`AST test count decreased from ${ast.before.testCount} to ${ast.after.testCount}`);
   if (testSummary.failed !== null && testSummary.failed > 0) problems.push(`test runner reported ${testSummary.failed} failed tests`);
@@ -364,6 +434,7 @@ export function collectReviewEvidence({
       work: { workspace, workId },
       basis: { repositoryRoot: root, base, head: head ?? "WORKING_TREE" },
       allowedFiles: allowed.files,
+      testFiles: declaredTests.files,
       verify,
       testRun: { command: actualTestCommand, result: testRun, summary: testSummary },
       astCountCoverage: ast,
@@ -408,6 +479,7 @@ if (process.argv[1]?.endsWith("review-evidence.mjs")) {
     head: request.head === true ? null : request.head,
     allowedFiles: request.allowedFiles,
     testCommand: request["test-command"] ?? request.testCommand,
+    testFiles: request["test-files"] ?? request.testFiles,
     engineCli: request["engine-cli"] ?? request.engineCli,
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

@@ -1,417 +1,521 @@
 {
-  "schemaVersion": "tcrn.retrieval-holdout.v1",
-  "frozenAt": "2026-09-11T05:07:05.880Z",
+  "schemaVersion": "tcrn.retrieval-holdout.v2",
   "role": "unseen-disjoint-holdout",
-  "origin": "disjoint Story identities from the frozen work source; selected before any holdout score",
+  "frozenAt": "2026-09-11T11:38:54.709Z",
   "sourceFiles": [
     {
-      "path": "tests/fixtures/retrieval-eval/work-compact.json",
-      "sha256": "50aaa302464c4568f48702a09816a1aba7ec9e514a29a34663dfee4e45053122"
+      "path": "tests/fixtures/retrieval-eval/holdout-source.json",
+      "sha256": "9f5d06013b49147d717fa1417fe6bdd379af1ce7aa80b1c10c96cc50a5ef11f2"
     }
   ],
+  "sourceSnapshot": {
+    "chainVersion": 5870,
+    "headEventHash": "94b5cb3f2e40f6ab62ce6a3d260d18033c0b28186f601ced1d14184a34db0dd3",
+    "recordsDigest": "e4835a09a7f9089e992c148bd09fd1de4f50233bd0d1ccf341cc20c1704624b1"
+  },
   "sourceSelection": {
-    "kind": "Story",
-    "excludedKinds": [
-      "Incident"
+    "kind": "Work",
+    "allowedKinds": [
+      "Incident",
+      "Story"
     ],
     "externalKeys": [
-      "TCRN-CROSS-STORY-333",
-      "TCRN-CROSS-STORY-334",
-      "TCRN-CROSS-STORY-335",
-      "TCRN-CROSS-STORY-336",
-      "TCRN-CROSS-STORY-337",
-      "TCRN-CROSS-STORY-338",
-      "TCRN-CROSS-STORY-339",
-      "TCRN-CROSS-STORY-340",
-      "TCRN-CROSS-STORY-341",
-      "TCRN-CROSS-STORY-342",
-      "TCRN-CROSS-STORY-343",
-      "TCRN-CROSS-STORY-345",
-      "TCRN-CROSS-STORY-346",
-      "TCRN-CROSS-STORY-347",
-      "TCRN-CROSS-STORY-348",
-      "TCRN-CROSS-STORY-349",
-      "TCRN-CROSS-STORY-350",
-      "TCRN-CROSS-STORY-351",
-      "TCRN-CROSS-STORY-352",
-      "TCRN-CROSS-STORY-353"
+      "TCRN-CROSS-INC-300",
+      "TCRN-CROSS-STORY-383",
+      "TCRN-CROSS-STORY-384",
+      "TCRN-CROSS-STORY-385",
+      "TCRN-CROSS-STORY-386",
+      "TCRN-CROSS-STORY-387",
+      "TCRN-CROSS-STORY-388",
+      "TCRN-CROSS-STORY-389",
+      "TCRN-CROSS-STORY-390",
+      "TCRN-CROSS-STORY-391",
+      "TCRN-CROSS-STORY-392",
+      "TCRN-CROSS-STORY-393",
+      "TCRN-CROSS-STORY-394",
+      "TCRN-CROSS-STORY-395",
+      "TCRN-CROSS-STORY-396",
+      "TCRN-CROSS-STORY-397",
+      "TCRN-CROSS-STORY-398",
+      "TCRN-CROSS-STORY-399",
+      "TCRN-CROSS-STORY-400",
+      "TCRN-CROSS-STORY-401"
     ],
-    "selectionDigest": "3c61e84dd37bbef320812a698a7b8463be9f476b68156917011562ce02bc08e7"
+    "selectionDigest": "0c5e7862c286827a7bb03ea1b28073a782d8ae25b1ca0f00dee130687c138482"
   },
   "labelPolicy": {
-    "kind": "Story",
-    "minimumRecords": 20,
+    "kind": "Work",
     "expectedIdRule": "source.workId only",
-    "basis": "manual identity from the source record",
     "createdBeforeScoring": true,
-    "modelCalls": 0
+    "modelCalls": 0,
+    "promptRule": "问题：<source.title>。<source.summary>",
+    "priorPromptDisjoint": true
   },
+  "priorPromptSources": [
+    {
+      "path": "tests/fixtures/retrieval-eval/incident-replay-frozen.json",
+      "role": "historical-development-replay"
+    },
+    {
+      "path": "tests/fixtures/retrieval-eval/synthetic-queries.json",
+      "role": "synthetic-regression"
+    },
+    {
+      "path": "tests/fixtures/retrieval-eval/translations-sonnet.json",
+      "role": "language-regression"
+    },
+    {
+      "path": "tests/fixtures/retrieval-eval/judge-sheet.json",
+      "role": "real-prompts"
+    }
+  ],
+  "priorPromptDigest": "f6dada44631b077df7a52a060004ee77bb8d72c6879bdf1af1d9b72abc564540",
+  "legacyHoldoutPromptDigest": "a29fb34c90b8c36848e858568fa6d5bac5baa10f5ff77c78d8d1b861ddfee4b1",
   "thresholds": {
     "pairsAtLeast": 20,
     "hitAt1": 8,
     "hitAt3": 12,
-    "hitAt8": 16,
-    "rule": "fixed 40%/60%/80% floors before first scoring"
+    "hitAt8": 16
   },
   "records": [
     {
-      "id": "holdout-preregistered:f8ad1a983f0ff661dd83cc78",
+      "id": "holdout-preregistered:3325ceb0d898997804f5599c",
       "source": {
-        "workId": "work:70e764d8890c5c508c2bb1ec",
-        "externalKey": "TCRN-CROSS-STORY-333",
-        "kind": "Story",
-        "status": "done",
-        "scopeDigest": "5299bad88740a207552f66ab39eb313819dbf5dd2e156e2154b436bb29cf1d50",
-        "sourceRecordDigest": "94983df8adbcb42fe161af557a92328843e804f99d79bbc8b05ef9763ce04a34"
+        "id": "work:4e7b7121c6cfbbc252a09bc5",
+        "externalKey": "TCRN-CROSS-INC-300",
+        "kind": "Incident",
+        "status": "blocked",
+        "title": "helper安装副本与bootstrap固定归档不一致",
+        "summary": "最新诊断需由STORY-386继续；Owner已授权，条件验证与验收不免除。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "5a6e6b0b256047e7fb649b404dbd3782c4f749d31336f2460444c61f4614977c",
+        "sourceRecordDigest": "6c00a7a5db120a866f4e707c0c9911f3eba4d87fa6dd876f11d6c7af1a5b8161"
       },
-      "prompt": "现象：【Goal】为谁=维护事件段的人：段尺寸均匀，不因单条记录大小波动而倾斜。目的锚=INIT-048 方案部分 A；Owner 2026-09-02 裁定段上限 16 MiB。符合性判据=段尺寸最大对最小收敛到 1.0 附近，且 AC 全绿。判定人=九门全绿。\n【Requirements】①事件段的滚动判据由条数改为已写字节数。②`workspace.json` 的 `segmentEventLimit` 保留字段名与位置，值改为字节；旧值按条数解释由 `storageVersion` 区分。③段上",
+      "prompt": "问题：helper安装副本与bootstrap固定归档不一致。最新诊断需由STORY-386继续；Owner已授权，条件验证与验收不免除。",
       "label": {
         "expectedIds": [
-          "work:70e764d8890c5c508c2bb1ec"
+          "work:4e7b7121c6cfbbc252a09bc5"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:fdab6e5bc2813b4f955ecacc",
+      "id": "holdout-preregistered:2e3ca41b89b892fc93d13a00",
       "source": {
-        "workId": "work:3df677fb0e17208536e71ae9",
-        "externalKey": "TCRN-CROSS-STORY-334",
+        "id": "work:59ae82b2372609aa4bf11954",
+        "externalKey": "TCRN-CROSS-STORY-383",
         "kind": "Story",
         "status": "done",
-        "scopeDigest": "cb2433ccdfffb240cb8ac7315e3ed439aea919d82de82f8f680f0892bde160d4",
-        "sourceRecordDigest": "e93e6b897b3a2faf4f0aaa744274f0386211ec3b3f38719c4c5948f2414d462a"
+        "title": "保留用户hooks的宿主结构化渲染修复",
+        "summary": "验收未过；新INC-305／STORY-391承接，旧状态保留。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "79646810bf3c49be5279d475b49c29d19fd382b2363f0c683010bef6b94689b2",
+        "sourceRecordDigest": "895bc481ef5fc550c2e67c3b7c42ecc7a90130fb522ddbf576fe1efd50994e43"
       },
-      "prompt": "现象：【Goal】为谁=按 key 点查记录的调用方：一次定位，不扫段。目的锚=INIT-048 方案部分 A；Kafka 的 `[offset].log` 配 `.index`／`.timeindex` 是同一形态。符合性判据=点查为 O(1)，主题过滤不复制正文，且 AC 全绿。判定人=九门全绿。\n【Requirements】①实现分段 NDJSON 存储：`<段号>.ndjson` 一行一记录按到达顺序追加。②每段配 `<段号>.idx`，内容为 key 到段号、偏移、长度的映射。③全局 `labels.idx` 为标",
+      "prompt": "问题：保留用户hooks的宿主结构化渲染修复。验收未过；新INC-305／STORY-391承接，旧状态保留。",
       "label": {
         "expectedIds": [
-          "work:3df677fb0e17208536e71ae9"
+          "work:59ae82b2372609aa4bf11954"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:d280682d58690b125075fbce",
+      "id": "holdout-preregistered:240846c44ddb315e4634ba80",
       "source": {
-        "workId": "work:d871200b7c4f06492631d6ed",
-        "externalKey": "TCRN-CROSS-STORY-335",
+        "id": "work:eabbea285c16b8d6c07a1205",
+        "externalKey": "TCRN-CROSS-STORY-384",
         "kind": "Story",
         "status": "done",
-        "scopeDigest": "e736c6ee0f8ce37c841577922511615e5f7b241f514c957755d2330a6b8cb5e7",
-        "sourceRecordDigest": "91ab41bc201e267476f0c04c6946675bfe1142992589a37df47d3af10e1849eb"
+        "title": "Stop所有退出路径的有界进程组回收",
+        "summary": "验收未过；新INC-306／STORY-392承接，旧状态保留。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "023b12e3ae7ae24bfa9301ff09b4a2836f1500121de815648097a7e1bfc2992a",
+        "sourceRecordDigest": "b7acd1c3a0ccae7a2a3c0a6f2ae1a56d998d0bfc7ff3b9080e1f0fc770b94b48"
       },
-      "prompt": "现象：【Goal】为谁=读链的人与磁盘：状态迁移不再整体重写未变化的正文。目的锚=INIT-048 方案部分 B；实测 1,212 次 `work.updated` 携带与上一版逐字节相同的 scope。符合性判据=`work.updated` 不再整体重写未变化的 extensions，且 AC 全绿。判定人=九门全绿。\n【Requirements】①新增 `scopeDigest` 字段，值为 `extensions` 的内容摘要。②`work.updated` 写入时比对摘要，未变化则只写引用，不重写正文。③事件重",
+      "prompt": "问题：Stop所有退出路径的有界进程组回收。验收未过；新INC-306／STORY-392承接，旧状态保留。",
       "label": {
         "expectedIds": [
-          "work:d871200b7c4f06492631d6ed"
+          "work:eabbea285c16b8d6c07a1205"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:c18733c2bc730f03d930ae23",
+      "id": "holdout-preregistered:260c6d274f0172758dfdeaa6",
       "source": {
-        "workId": "work:100ee76ded89e7143666c8e4",
-        "externalKey": "TCRN-CROSS-STORY-336",
+        "id": "work:4892f7cf15d56db9e5ac4688",
+        "externalKey": "TCRN-CROSS-STORY-385",
         "kind": "Story",
         "status": "done",
-        "scopeDigest": "e39d3008d07f4f29d452458a80fdc6f3036ed8e7dd261c6707953976cc82bf49",
-        "sourceRecordDigest": "e3dcb57da234a60c2078edefd2069dc7c2fa2275c2dc7bdec51ad10a4e4880e9"
+        "title": "独立冻结真实Incident重放评测集",
+        "summary": "验收未过；新INC-308／STORY-394承接，旧状态保留。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "aa603314602d4041603023982491afa1b10aad0711becc6b946e171e2bb6935c",
+        "sourceRecordDigest": "59352499c42d50a64d9e7a4948e047ceb4b3b421fe63ace278525c5e21664dbf"
       },
-      "prompt": "现象：【Goal】为谁=检索工单的人与模型：列表可读、可按时间排序、可按主题过滤。目的锚=INIT-048 方案部分 B；Owner 2026-09-02 裁定四个字段一次性升版。符合性判据=四个字段可写可读可校验，只走一条迁移，且 AC 全绿。判定人=九门全绿。\n【Requirements】①`tcrn.work.v1` 一次性新增四个字段：`scopeDigest`、`title`、`createdAt`、`labels`。②`labels` 做成一级字段，不做成 `extensions` 项——`advisory:sprint` 走",
+      "prompt": "问题：独立冻结真实Incident重放评测集。验收未过；新INC-308／STORY-394承接，旧状态保留。",
       "label": {
         "expectedIds": [
-          "work:100ee76ded89e7143666c8e4"
+          "work:4892f7cf15d56db9e5ac4688"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:db9f08c47745944cb6837ba0",
+      "id": "holdout-preregistered:d5db1c27c0ac722af3685945",
       "source": {
-        "workId": "work:9c72660553f61faa1fc9c6f3",
-        "externalKey": "TCRN-CROSS-STORY-337",
+        "id": "work:7adbe918fcd753cfd695dfdb",
+        "externalKey": "TCRN-CROSS-STORY-386",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "5f63a85bebbcdcad27fec1c9fc50307d952f8d1512331710ebf109bb21c38907",
-        "sourceRecordDigest": "5fc2a6b5e6af0271e9ece13ea93eeadac812905cc218dc0579a36dbf31e2ced9"
+        "status": "blocked",
+        "title": "helper可信入口核验及更新材料准备",
+        "summary": "受信更新已授权；须独立锚通过，未验证仍不得放置。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "63faa0ef216da6abc28ddb9e50e1854a8ccc39caea5d550e6e1e5e22065dd578",
+        "sourceRecordDigest": "d0e5a208d7906dab044b6309b51381f0b6fd1e4d7847ed0d84006a97fac5d063"
       },
-      "prompt": "现象：【Goal】为谁=每一次读链的人：耗时进入常数量级，不随事件数线性增长。目的锚=INIT-048 方案部分 C；Owner 2026-09-02 裁定快照间隔 512 事件。符合性判据=读路径经快照加尾部重放，且快照损坏时红而非静默回退，AC 全绿。判定人=九门全绿。\n【Requirements】①每 N 个事件落一个状态快照，N 走新设置 `storage.snapshotEveryEvents`，默认 512。②读路径改为载入最新快照后只重放尾部。③快照写入用",
+      "prompt": "问题：helper可信入口核验及更新材料准备。受信更新已授权；须独立锚通过，未验证仍不得放置。",
       "label": {
         "expectedIds": [
-          "work:9c72660553f61faa1fc9c6f3"
+          "work:7adbe918fcd753cfd695dfdb"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:c7a41b0b31c5153b3dbfa804",
+      "id": "holdout-preregistered:50cf06076e8b28efa8aa7d7d",
       "source": {
-        "workId": "work:b5588392aea8b116072ae749",
-        "externalKey": "TCRN-CROSS-STORY-338",
+        "id": "work:a1fbd9686fc3af536942b976",
+        "externalKey": "TCRN-CROSS-STORY-387",
         "kind": "Story",
         "status": "done",
-        "scopeDigest": "85b1d87b3f63f459785b78feb1df9d48ed621a18c8bb0fd26fe975f873b4e3ae",
-        "sourceRecordDigest": "dd3b71fc807102aca4e6ef73fe5a4da338b543a90c1bf4bd7cac0407bd841c38"
+        "title": "完整观测日的真实采集与退役证据闭环",
+        "summary": "验收未过；新INC-307、311、312／STORY-393、397、398承接，旧状态保留。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "055522fb37a7cce6620698c08ed840faa6984c29c0e2014ec29b41981dd1e63e",
+        "sourceRecordDigest": "948d08ca89e94e373489813abf09f93138816733c05c8806c707e0e61ff78a99"
       },
-      "prompt": "现象：【Goal】为谁=容器磁盘：归档区只留有理由留的东西。目的锚=INIT-048 方案部分 D；Owner 2026-09-02 批准清理范围。符合性判据=标为待裁的条目已清理，保留项逐条有理由，且 AC 全绿。判定人=九门全绿。\n【Requirements】①按方案部分 D 两张表清理标为待裁的条目，合计约 498MB。②`chain-snapshots` 保留最新一份 `chain-snapshot-20260816T132815656Z`，其余清理。③每次删除前先记录条目名、字节数与最后",
+      "prompt": "问题：完整观测日的真实采集与退役证据闭环。验收未过；新INC-307、311、312／STORY-393、397、398承接，旧状态保留。",
       "label": {
         "expectedIds": [
-          "work:b5588392aea8b116072ae749"
+          "work:a1fbd9686fc3af536942b976"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:334b5dfe580d5a9b298318cb",
+      "id": "holdout-preregistered:85f99cbf3e0f8f850b6366fd",
       "source": {
-        "workId": "work:44a11d22d0cfed222dfe3803",
-        "externalKey": "TCRN-CROSS-STORY-339",
+        "id": "work:ce087e939a7766cb4df43e42",
+        "externalKey": "TCRN-CROSS-STORY-388",
         "kind": "Story",
         "status": "done",
-        "scopeDigest": "05ffc8f3fdfe5bc80cab4e67a13bab7a9075e5ddd170071c8996db921b5e5616",
-        "sourceRecordDigest": "4f67aadc3b08c5e22e7cdda13783feba6c328b2f746cf265cea63b79a88a7fe6"
+        "title": "移除发布测试夹具中的本机身份",
+        "summary": "修复：三份发布源夹具已无本机身份，行为/P8反例测试全绿；保留可达历史旧对象隐私遗留，未改历史。",
+        "labels": [],
+        "revision": 5,
+        "scopeDigest": "3a04d70365425b8473dab98eaa7cda66a5ab61a9e02ed7f8e6804835c33f7092",
+        "sourceRecordDigest": "f4df9c51138efa201d17d3c5e1ecc16e8d80324ac7b3305918dca0021e67fceb"
       },
-      "prompt": "现象：【Goal】为谁=读 AGENTS.md 找归档区正本的人：清单与盘上一致。目的锚=INIT-048 方案部分 D；实测第六节漏了 18 个条目共 55MB。符合性判据=清单与盘上逐条一致，且有判据看住，AC 全绿。判定人=九门全绿。\n【Requirements】①补齐 `AGENTS.md` 第六节的归档区清单，使其与清理后的盘上实况逐条一致。②新增一条判据：归档区出现未在清单中声明的目录即红。③判据须能双向检出——清单多写一",
+      "prompt": "问题：移除发布测试夹具中的本机身份。修复：三份发布源夹具已无本机身份，行为/P8反例测试全绿；保留可达历史旧对象隐私遗留，未改历史。",
       "label": {
         "expectedIds": [
-          "work:44a11d22d0cfed222dfe3803"
+          "work:ce087e939a7766cb4df43e42"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:8d28133c27151d6211eab50c",
+      "id": "holdout-preregistered:144d1b061c639b52a9e28a55",
       "source": {
-        "workId": "work:18ebf8d259271cef4d14488c",
-        "externalKey": "TCRN-CROSS-STORY-340",
+        "id": "work:9a89929299d5f301892023ab",
+        "externalKey": "TCRN-CROSS-STORY-389",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "8733572ee4be469961a5281429b43ba2a5ddd6b6aed774b2a88ba4d2faecce28",
-        "sourceRecordDigest": "f36d71362d8178457f318558f921efc4cef43758d4b6ad241328b86a1d74cb16"
+        "status": "pending-owner-acceptance",
+        "title": "门户窄屏设置和五语切换修复",
+        "summary": "验收未过；新INC-309／STORY-395承接，旧状态保留。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "b3c43c56420542096152ae7f7b882aba7457a93f0b1e8f0cb0f6922bdec2d3ff",
+        "sourceRecordDigest": "852db03820a318f3723f3b73518a55ab54270c17492053aac0e35f77131dc19c"
       },
-      "prompt": "现象：【Goal】为谁=磁盘与未来的读取方：存证从一操作一文件迁为分段加索引。目的锚=INIT-048 方案部分 E；实测存证放大 20.4 倍。符合性判据=迁移后逐条全值回读通过，原文件删除后九门仍绿，AC 全绿。判定人=九门全绿。\n【Requirements】①把 8 个分区共 3,719 个存证文件迁入分段 NDJSON 加边车索引。②按六步安全序列执行：取基线、写新布局且原文件不动、逐条全值回读、跑九门、删除原文件",
+      "prompt": "问题：门户窄屏设置和五语切换修复。验收未过；新INC-309／STORY-395承接，旧状态保留。",
       "label": {
         "expectedIds": [
-          "work:18ebf8d259271cef4d14488c"
+          "work:9a89929299d5f301892023ab"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:b2d1e5d3ecc725b866697385",
+      "id": "holdout-preregistered:ca7fa57c598b516e79debcad",
       "source": {
-        "workId": "work:8001fb603410b8cb09d18e06",
-        "externalKey": "TCRN-CROSS-STORY-341",
+        "id": "work:7ce781b2c0da7a29a83ae2fd",
+        "externalKey": "TCRN-CROSS-STORY-390",
         "kind": "Story",
         "status": "done",
-        "scopeDigest": "f9e9cdf6d1c8f8f7895173bb0d611cd69883dd393721fb7ee91635bd33dd8517",
-        "sourceRecordDigest": "e6df4cd73b955f27107473e6564b06b283aef851456228f405f1ab3abdba0061"
+        "title": "精确清理已备份的16个不可达Git对象",
+        "summary": "精确清理16对象并删6条对应旧reflog已完成；保留新12条补丁commit对象，P1红如实保留。",
+        "labels": [],
+        "revision": 5,
+        "scopeDigest": "6130842a0e0e4c260895f007259c4033a000ebab5266e5f6588957cc322a3adc",
+        "sourceRecordDigest": "eb5d9874262a33da049488aaebaa5c7a650cd8741b04ace0442b4122a6908f46"
       },
-      "prompt": "现象：【Goal】为谁=知识库磁盘：正文从一卡一文件迁为分段。目的锚=INIT-048 方案部分 E；实测 bodies 放大 12.5 倍。符合性判据=迁移后 `knowledge-validate` 通过且记录数不变，AC 全绿。判定人=九门全绿。\n【Requirements】①把 `knowledge/bodies` 的 37 个文件合并入分段布局。②store 声明 `disposable: true`，可整体重建；迁移后重算 `indexDigest`。③`knowledge/metadata` 保持按 id 单文件不动——它的访问形态是全目",
+      "prompt": "问题：精确清理已备份的16个不可达Git对象。精确清理16对象并删6条对应旧reflog已完成；保留新12条补丁commit对象，P1红如实保留。",
       "label": {
         "expectedIds": [
-          "work:8001fb603410b8cb09d18e06"
+          "work:7ce781b2c0da7a29a83ae2fd"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:71497351dfc3982a2c64fb2b",
+      "id": "holdout-preregistered:1389cc33a3e9b44f16451a34",
       "source": {
-        "workId": "work:984922ef1dc17065322c7443",
-        "externalKey": "TCRN-CROSS-STORY-342",
+        "id": "work:8d5768caabcbf1b308d4d88c",
+        "externalKey": "TCRN-CROSS-STORY-391",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "c943055d519238e0bec05270c47d977b401c1f90068c7964a194549a39452e91",
-        "sourceRecordDigest": "ccb399f26231fa02a4e43ce5f44c52e239d9059197cae9dee11ce618806cf19c"
+        "status": "blocked",
+        "title": "混合Hook组按条目所有权保留用户命令",
+        "summary": "STORY-391 implementation evidence is green; blocked by the final acceptance roster.",
+        "labels": [],
+        "revision": 5,
+        "scopeDigest": "7d313449eeb4cbe78b5d159ada785dd8dcacc36f244113dc6ccd1c8075089791",
+        "sourceRecordDigest": "e60461f60544517a7f1a3459316858132fd6e0e476b0008760948f85b07e3e79"
       },
-      "prompt": "现象：【Goal】为谁=读 verification-map 判断某项能力是否成立的人：判据文本与实况一致。目的锚=INIT-048 方案部分 F；实测 32 条判据的 fixturePaths 命中要改的文件。符合性判据=受影响判据全部处理，两条语义改写显式记录，AC 全绿。判定人=九门全绿。\n【Requirements】①`fixturePaths` 指向 `workspace.ts`／`knowledge-core.ts`／`storage-backend`／`store-backend`／`artifact-lifecycle` 的 32 条判据，`fixtureDigest` 全部重算。",
+      "prompt": "问题：混合Hook组按条目所有权保留用户命令。STORY-391 implementation evidence is green; blocked by the final acceptance roster.",
       "label": {
         "expectedIds": [
-          "work:984922ef1dc17065322c7443"
+          "work:8d5768caabcbf1b308d4d88c"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:f7a3cb9253bbb8a7492e3af6",
+      "id": "holdout-preregistered:835473e361ec3d95ebc9a3fb",
       "source": {
-        "workId": "work:59c84dc5d707bef94b107ef8",
-        "externalKey": "TCRN-CROSS-STORY-343",
+        "id": "work:21ee9c559de5d558af1abc46",
+        "externalKey": "TCRN-CROSS-STORY-392",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "8f3e5334862d07bcd3e30bd758595754360aa3fc2b2e6a8e012d182c76cd22f9",
-        "sourceRecordDigest": "53f6ceb38ba14f98b95018420865e2f16c7b65f36856eec9450b78b75eb46895"
+        "status": "blocked",
+        "title": "Stop同步超时及绑定不可读的可靠处理",
+        "summary": "STORY-392 implementation evidence is green; blocked by the final acceptance roster.",
+        "labels": [],
+        "revision": 5,
+        "scopeDigest": "2df34fcef875b605522da9a5ccba1dd47e6f3780508191c2b4aaf83127bc7011",
+        "sourceRecordDigest": "e22de1c6b667f7214d0a80299dc747c6dcf0e0ed67677455e9f6b1cbe8c3e96a"
       },
-      "prompt": "现象：【Goal】为谁=读 helper 与引擎文档的人：描述的布局与盘上一致。目的锚=INIT-048 方案部分 F；实测 helper 有 13 处点名具体布局。符合性判据=文档与实况一致且有判据看住，helper 发布物重新对齐，AC 全绿。判定人=九门全绿。\n【Requirements】①helper 的 13 处点名布局的句子改为新布局，分布在 `SKILL.md`、`workflow-operations.md`、`platform-layout.md`、`first-run-wizard.md`、`backup-elicitation.md`、`reason-codes.md`",
+      "prompt": "问题：Stop同步超时及绑定不可读的可靠处理。STORY-392 implementation evidence is green; blocked by the final acceptance roster.",
       "label": {
         "expectedIds": [
-          "work:59c84dc5d707bef94b107ef8"
+          "work:21ee9c559de5d558af1abc46"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:822da1fc8dd92c92076c731d",
+      "id": "holdout-preregistered:7119dc0b8177721968f73096",
       "source": {
-        "workId": "work:98f0c3b5febe4baeef3c2dae",
-        "externalKey": "TCRN-CROSS-STORY-345",
+        "id": "work:0a64992dc007db4ff556fb36",
+        "externalKey": "TCRN-CROSS-STORY-393",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "7aa129ea7b061338f81b0ae49ed299d3f14436c9943845f4efc944646b641802",
-        "sourceRecordDigest": "7723fba0211bdd9414c6a427ea2dd9f76119e92b0c565aa17ed130bde75a958c"
+        "status": "blocked",
+        "title": "拒绝片段观测冒充完整UTC日并接通真实采集",
+        "summary": "本轮已授权继续；STORY-393须按最新诊断补齐，未整体验收。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "33c1d1984bd63e21c83a253984299a69ec5ec2b5ce24bb31a71e46fbb1d60843",
+        "sourceRecordDigest": "b538051f2b897819b651d98afb3115472ab56e133f0601ab1f8fa71294e603e9"
       },
-      "prompt": "现象：【Goal】为谁=未来要换存储实现的人：本地分段是一个可选后端，不是唯一写死的实现。目的锚=INIT-048 方案部分 G；ADR 0004 已把文件后端定为本地模式轨。符合性判据=两种后端行为等价、可选择、未知取值须拒绝，AC 全绿。判定人=九门全绿。\n【Requirements】①`backendKind` 增加 `file-segmented` 取值，本轮只有 `file` 与 `file-segmented` 两个。②后端选择走新设置 `storage.backend`，`allowedValues` 为这两",
+      "prompt": "问题：拒绝片段观测冒充完整UTC日并接通真实采集。本轮已授权继续；STORY-393须按最新诊断补齐，未整体验收。",
       "label": {
         "expectedIds": [
-          "work:98f0c3b5febe4baeef3c2dae"
+          "work:0a64992dc007db4ff556fb36"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:90e9e0348333bdc9d35de4e8",
+      "id": "holdout-preregistered:05572e7976df54b82fde559d",
       "source": {
-        "workId": "work:4593b3fd825c2d6d67f8d80b",
-        "externalKey": "TCRN-CROSS-STORY-346",
+        "id": "work:5d993449c18bbaceb311d953",
+        "externalKey": "TCRN-CROSS-STORY-394",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "2153e1a13f216f5957279148ab2241b8856a24c41a7708436a2f413124857896",
-        "sourceRecordDigest": "e7afbb8d6d38fd2a67d7a7da25b84a28a2bb1e282e7a080f96207e4a2d53d4be"
+        "status": "blocked",
+        "title": "补齐事故评测阈值的真实预注册证据",
+        "summary": "本轮已授权继续；STORY-394须按最新诊断补齐，未整体验收。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "66a52eb229c21113ab743c42037968757874c1d1e317fa5c43f8033c1a6a3510",
+        "sourceRecordDigest": "67d979d8aeacaefe93a6a7c537f93f1ace2650ee4c0bfcf1cd279f3d19327817"
       },
-      "prompt": "现象：【Goal】为谁=读 ADR 判断生产轨是什么的人：文档与本轮裁定一致。目的锚=INIT-048 方案部分 G；Owner 2026-09-02 裁定 pg 本轮停用、MVP 仅本地实现。符合性判据=pg 不接线且 ADR 0004 状态与裁定一致，AC 全绿。判定人=九门全绿。\n【Requirements】①pg 后端本轮停用：`packages/pg-backend` 的 550 行代码、`pg:schema` 与 `pg:test` 两个脚本、devDependency `pg 8.22.0` 保留在仓内但不接线。②`docs/adr/0004-postgres-storage-ba",
+      "prompt": "问题：补齐事故评测阈值的真实预注册证据。本轮已授权继续；STORY-394须按最新诊断补齐，未整体验收。",
       "label": {
         "expectedIds": [
-          "work:4593b3fd825c2d6d67f8d80b"
+          "work:5d993449c18bbaceb311d953"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:8083e94b6f9d82081f54c35f",
+      "id": "holdout-preregistered:166c9078ae4828ccd61cdb25",
       "source": {
-        "workId": "work:a07ca92d2dee421373f7590d",
-        "externalKey": "TCRN-CROSS-STORY-347",
+        "id": "work:b9e1778790f8006883c67eb5",
+        "externalKey": "TCRN-CROSS-STORY-395",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "4eeeec2e38e902f39714f47aa2cbf4522388259e70dcb8c574e60a178cb27c68",
-        "sourceRecordDigest": "0c46e35a36f2b8d8c328e1e57aaeb5b03c925a3fc22fb8f45b8c9fbb1cedd597"
+        "status": "pending-owner-acceptance",
+        "title": "修复英文effort标签并补齐五语界面复验",
+        "summary": "本轮已授权继续；STORY-395须按最新诊断补齐，未整体验收。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "8f85e854c1e0cc036e991ce49da6a805e6d8d208a63272ede075902c58c1941f",
+        "sourceRecordDigest": "4e25ae8b173f4d436d0f13af0b8a622f7207eca9f3d44e3b2d471abef21bc26f"
       },
-      "prompt": "现象：【Goal】为谁=调参数的人：能走设置的不写死在代码里。目的锚=INIT-048 方案部分 H；Owner 2026-09-02 要求尽量解耦、能走变量不写死。符合性判据=六个新设置可读可改可校验且有默认值，AC 全绿。判定人=九门全绿。\n【Requirements】①新增六个设置：`storage.segmentBytes`（默认 16 MiB）、`storage.snapshotEveryEvents`（默认 512）、`storage.backend`（默认 `file-segmented`）、`injection.budgetBytes`（默认 32768）、`retr",
+      "prompt": "问题：修复英文effort标签并补齐五语界面复验。本轮已授权继续；STORY-395须按最新诊断补齐，未整体验收。",
       "label": {
         "expectedIds": [
-          "work:a07ca92d2dee421373f7590d"
+          "work:b9e1778790f8006883c67eb5"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:9951970c8b0eef417739a690",
+      "id": "holdout-preregistered:7fd606dc95b8d3fc85fe8f84",
       "source": {
-        "workId": "work:d669087d3a0d3f4a9ef32a68",
-        "externalKey": "TCRN-CROSS-STORY-348",
+        "id": "work:4da471302ea7ebf7f8b87383",
+        "externalKey": "TCRN-CROSS-STORY-396",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "944eb28c4186d327e84e84df1946671c3f30129d61410eb8297a51516afd71ff",
-        "sourceRecordDigest": "5ca1e2290a361973e1526daea35e90f77bfcec32d3164b9c057dff1f689630b6"
+        "status": "blocked",
+        "title": "追加更正22次链写时间并恢复可追溯回执",
+        "summary": "事后更正为原定交付；旧回执不可重构不再独立阻塞，仍须真实复核与完整门。",
+        "labels": [],
+        "revision": 7,
+        "scopeDigest": "cf8037692af8b0bb4fdb6282f83a58aceab469d5fdfe7be6fdab57537d515d99",
+        "sourceRecordDigest": "4c28106284740dec22f3e1fdabdfd2989c8d53968395f162c9f36016fb76d8e7"
       },
-      "prompt": "现象：【Goal】为谁=调整知识分档与容量的人：改名册不必改代码。目的锚=INIT-048 方案部分 H；实测出处门分档表是 `Object.freeze` 的代码常量。符合性判据=分档表外置且容量上限设置化，必须写死的项保持写死，AC 全绿。判定人=九门全绿。\n【Requirements】①`KNOWLEDGE_PROVENANCE_POLICY` 外置为 `scripts/policy/knowledge-provenance.json`，现值 `relaxedKinds: [fact, decision, summary]`、`strictKinds: [guide, reference]`。②`KNOWLEDG",
+      "prompt": "问题：追加更正22次链写时间并恢复可追溯回执。事后更正为原定交付；旧回执不可重构不再独立阻塞，仍须真实复核与完整门。",
       "label": {
         "expectedIds": [
-          "work:d669087d3a0d3f4a9ef32a68"
+          "work:4da471302ea7ebf7f8b87383"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:2ab92326d9971748af85b318",
+      "id": "holdout-preregistered:6d93b314c33600f47a37db38",
       "source": {
-        "workId": "work:dc934ddde549c3c9d3310c59",
-        "externalKey": "TCRN-CROSS-STORY-349",
+        "id": "work:05e954577cb4bae9c0a53058",
+        "externalKey": "TCRN-CROSS-STORY-397",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "38ec112a8cfe7e977d1c8e9fc904e57d0da233f19e4ac356ef388589d34f3445",
-        "sourceRecordDigest": "2a82fc76692266f49664cd1fa2029962b7c3046d8498b90ce74a327e113a3942"
+        "status": "blocked",
+        "title": "在既有上限内消除源码预算回归",
+        "summary": "STORY-397 proof-budget evidence is green; blocked by final acceptance closeout.",
+        "labels": [],
+        "revision": 5,
+        "scopeDigest": "51c41e752c83464907eff7e26f646704bbbd90bc82efaf1475dc877329e7e97d",
+        "sourceRecordDigest": "03991f18b6351ff5faac63df851e927402ce1bcfcecbf726a192ebcea2231d53"
       },
-      "prompt": "现象：【Goal】为谁=每一次跑九门的人：不重复执行已被包含的门。目的锚=INIT-049 实测：九门顺序全跑 1,859 秒，其中 852 秒是重复执行。符合性判据=全绿一轮的墙钟时间由 1,859 秒降到 1,007 秒量级，且覆盖不减，AC 全绿。判定人=九门全绿。\n【Requirements】①识别门与门之间的包含关系：`scripts/push-gate.mjs` 第 305 至 309 行的循环内容是 `verify:p1`、`verify:p8`、`guard-check` 三条；helper 的 `scripts/push-gate.m",
+      "prompt": "问题：在既有上限内消除源码预算回归。STORY-397 proof-budget evidence is green; blocked by final acceptance closeout.",
       "label": {
         "expectedIds": [
-          "work:dc934ddde549c3c9d3310c59"
+          "work:05e954577cb4bae9c0a53058"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:f762d4a45daf5fe63164b8a5",
+      "id": "holdout-preregistered:e06535520eb1b37dd19bda0c",
       "source": {
-        "workId": "work:96709c1c8297546df0a26b1f",
-        "externalKey": "TCRN-CROSS-STORY-350",
+        "id": "work:b8a48336903b5de9f7ab7b0b",
+        "externalKey": "TCRN-CROSS-STORY-398",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "607a174ef140a565766e9f838657fff4168b5c8878242f5ff324a9938a875400",
-        "sourceRecordDigest": "22852480eb085d5c073f56527ea6f64a9754160ff765eaa71556beb3a860377f"
+        "status": "blocked",
+        "title": "消除新增公开导出的未消费回归",
+        "summary": "本轮已授权继续；STORY-398须按最新诊断补齐，未整体验收。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "0dc5e944dc24ce3a9b835f30981db66e7910268d88b58dab18547ba271b9c872",
+        "sourceRecordDigest": "6f85a3ccca57e4a2b04e0d869ee724e04a48125c5de1a6eb48fd6ee909e1d415"
       },
-      "prompt": "现象：【Goal】为谁=门红时定位问题的人：知道哪一条子门失败，不因失败即止而丢掉信息。目的锚=INIT-049；`push-gate` 失败即止，`verify:p1` 红时不会再跑 `guard-check`。符合性判据=红时能拿到与顺序全跑等价的定位信息，且不为此在绿时付重复代价，AC 全绿。判定人=九门全绿。\n【Requirements】①`push-gate` 保持失败即止，不改。②新增一条定位路径：顶层门红之后，可单独跑被包含的那几条来定位",
+      "prompt": "问题：消除新增公开导出的未消费回归。本轮已授权继续；STORY-398须按最新诊断补齐，未整体验收。",
       "label": {
         "expectedIds": [
-          "work:96709c1c8297546df0a26b1f"
+          "work:b8a48336903b5de9f7ab7b0b"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:1c70be5a9874a49d12fadbf9",
+      "id": "holdout-preregistered:40c377e8764862de62a869b4",
       "source": {
-        "workId": "work:64f5aee2493f41540b06cafb",
-        "externalKey": "TCRN-CROSS-STORY-351",
+        "id": "work:35924e9a902cd39feb6356cc",
+        "externalKey": "TCRN-CROSS-STORY-399",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "e2dc77a0bcab7742b432a4a9257fe53094e90fcf8adc10a89c552622bb732c60",
-        "sourceRecordDigest": "5b7557c9c455d59296ef97d9ba60da8e106057f385a914ee39d0f195bccb7bcb"
+        "status": "blocked",
+        "title": "补交逐项复核证据和最终候选核销",
+        "summary": "本轮已授权继续；STORY-399须按最新诊断补齐，未整体验收。",
+        "labels": [],
+        "revision": 6,
+        "scopeDigest": "4347d96067253a8e340dbd2330a6350dc2f2a58b7308360481d6605a64e23c5b",
+        "sourceRecordDigest": "73c3f10abbec6a5db79edd5dff3072e88bd1e132f594909e51428045d3f510dd"
       },
-      "prompt": "现象：【Goal】为谁=读测试判断某行为是否被验证的人：断言测的是行为，不是代码长什么样。目的锚=INIT-049 实测：测试里有 17 处对源码正文做 match 断言。符合性判据=16 处源码文本断言改为行为断言，1 处禁止构造扫描保留，AC 全绿。判定人=九门全绿。\n【Requirements】①把 16 处断言代码正文含有某字符串的测试改为断言该行为本身。②保留 `tests/p7-canonical-exchange.test.mjs` 第 565 行的禁止构造扫",
+      "prompt": "问题：补交逐项复核证据和最终候选核销。本轮已授权继续；STORY-399须按最新诊断补齐，未整体验收。",
       "label": {
         "expectedIds": [
-          "work:64f5aee2493f41540b06cafb"
+          "work:35924e9a902cd39feb6356cc"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:87b3979f934ec49ca216254b",
+      "id": "holdout-preregistered:1b6a2e75b1a1da20b1247ad9",
       "source": {
-        "workId": "work:3c1906de09196ad982b09e6f",
-        "externalKey": "TCRN-CROSS-STORY-352",
+        "id": "work:3a38af94dd4283ca5d4450fd",
+        "externalKey": "TCRN-CROSS-STORY-400",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "8ab63cf5e6a45441f6a59709e8f8abdd7909fea156fd0a5810e80d1a2fbfc543",
-        "sourceRecordDigest": "09ad5d15882cdd6858d40bd59e4a9b9bc06e523c5acb028043de7a07209a8a57"
+        "status": "planned",
+        "title": "净化八个隐私blob涉及的未发布本地历史",
+        "summary": "Owner已授权限定范围；须备份、保护已发布引用并完成复验。",
+        "labels": [],
+        "revision": 1,
+        "scopeDigest": "a0cedf883cccc554e2bf69940c83a52ffb62f0b164bf35ef0c9d304dde0f2210",
+        "sourceRecordDigest": "0274b7ed281651903b2ac412af79c7a1254dacfbbc2a64e2d868fc044b4991d1"
       },
-      "prompt": "现象：【Goal】为谁=读 verification-map 判断某项能力是否成立的人：判据能各自独立变红。目的锚=INIT-049 实测：83 个唯一命令承载 116 条判据，`verify:p3` 一条带 13 条。符合性判据=两组共用命令的判据各自独立，形态与 TCRN-CROSS-INC-257 一致，AC 全绿。判定人=九门全绿。\n【Requirements】①`pnpm verify:p3` 承载的 13 条判据拆为各自独立的正腿：每条有自己的 command 与自己的 expectedReasonCode。②`pnpm verify:p4:k",
+      "prompt": "问题：净化八个隐私blob涉及的未发布本地历史。Owner已授权限定范围；须备份、保护已发布引用并完成复验。",
       "label": {
         "expectedIds": [
-          "work:3c1906de09196ad982b09e6f"
+          "work:3a38af94dd4283ca5d4450fd"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     },
     {
-      "id": "holdout-preregistered:73f1d4632ca75ab977fc7bf1",
+      "id": "holdout-preregistered:d28f4e41854f67db1e8c6be2",
       "source": {
-        "workId": "work:c5d0407f08c788a6d9525baa",
-        "externalKey": "TCRN-CROSS-STORY-353",
+        "id": "work:895c66048f7d792d04419c91",
+        "externalKey": "TCRN-CROSS-STORY-401",
         "kind": "Story",
-        "status": "done",
-        "scopeDigest": "57b85a252897b564f236468e72d7dfadd90b3c9ef7ae9ddf99156e5d5e0840ae",
-        "sourceRecordDigest": "4ddc19aac5dea69abd84163217e84bcb50589e9552d0ac19605e1c7662aa0171"
+        "status": "planned",
+        "title": "精确回收十三对象及限定净化产生的旧对象",
+        "summary": "Owner已授权限定范围；须备份、保护已发布引用并完成复验。",
+        "labels": [],
+        "revision": 1,
+        "scopeDigest": "fd888ffc3347272dfa7a1f454801a7656781655c9a8f7d7af70f81c097ca9705",
+        "sourceRecordDigest": "1543e1724d256e7af5f677f9f033f8a2185b005306a9a6d778c02908b57b3304"
       },
-      "prompt": "现象：【Goal】为谁=跑测试的人：单个测试文件的耗时与它验证的对象相称。目的锚=INIT-049 实测：`platform-doctor` 门本身 4 秒，测它的文件 28.5 秒。符合性判据=查明 7 倍差距的成因并给出处置，AC 全绿。判定人=九门全绿。\n【Requirements】①测量 `tests/platform-doctor.test.mjs` 内部各段耗时，定位那 28.5 秒花在哪里。②若成因是重复起进程、重复建装置或不必要的真实分区扫描，按测得的结果削减。③",
+      "prompt": "问题：精确回收十三对象及限定净化产生的旧对象。Owner已授权限定范围；须备份、保护已发布引用并完成复验。",
       "label": {
         "expectedIds": [
-          "work:c5d0407f08c788a6d9525baa"
+          "work:895c66048f7d792d04419c91"
         ],
-        "basis": "manual identity label from pre-registered Story source"
+        "basis": "manual identity label from pre-registered live chain source"
       }
     }
   ]

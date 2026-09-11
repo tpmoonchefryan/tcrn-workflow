@@ -21,7 +21,8 @@ import {
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import { runTelemetryHook } from "../scripts/dispatch-telemetry-hook.mjs";
 import { readTelemetryObservationWindow } from "../dist/build/packages/core/src/telemetry.js";
-import { sealObservationDay } from "../scripts/knowledge-inject.mjs";
+import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
+import { OBSERVATION_BOUNDARY_PREFIX, OBSERVATION_CHANNELS, recordObservationBoundary, sealObservationDay } from "../scripts/knowledge-inject.mjs";
 
 const INSTANT = (second) => `2026-09-10T00:00:${String(second).padStart(2, "0")}Z`;
 
@@ -144,6 +145,23 @@ test("STORY-393: the dispatch hook cannot mint an observation checkpoint from ex
   assert.equal(records.records.filter((record) => record.kind === "observation-checkpoint").length, 0);
 });
 
+test("STORY-393: a host session boundary reconciles four real channel high-water marks", async (t) => {
+  const fixture = await workspaceFixture(t);
+  const start = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "host-session", host: "claude", phase: "start", at: "2026-09-09T23:59:59.000Z", workspaceState: fixture.state });
+  assert.equal(start.ok, true);
+  for (const channel of OBSERVATION_CHANNELS) {
+    const kind = { retrieval: "retrieval-hit", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
+    await appendTelemetryRecord(fixture.transient, createTelemetryRecord({ at: "2026-09-10T12:00:00.000Z", kind, session: `host-session-${channel}`, payload: { source: `host-session:actual:${channel}`, availability: "available" } }));
+  }
+  const stop = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "host-session", host: "claude", phase: "stop", at: "2026-09-10T23:59:59.999Z", workspaceState: fixture.state });
+  assert.equal(stop.ok, true);
+  const sealed = await sealObservationDay(fixture.transient, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(sealed.ok, true, JSON.stringify(sealed));
+  assert.equal((await readTelemetryObservationWindow(fixture.transient, "2026-09-11T12:00:00.000Z", 1)).complete, true);
+  const records = await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER });
+  assert.equal(records.records.filter((record) => record.payload.source.startsWith(OBSERVATION_BOUNDARY_PREFIX)).length, 8);
+});
+
 test("STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires", async (t) => {
   const fixture = await workspaceFixture(t);
   const telemetry = createTelemetryRecord({ at: INSTANT(4), kind: "subagent-stop", session: "session-evidence", payload: payload() });
@@ -189,15 +207,18 @@ test("STORY-372: telemetry-list filters and done evidence keeps a snapshot after
 });
 
 async function checkpoints(root, day, availabilityByChannel = {}) {
-  for (const channel of ["retrieval", "reference", "trigger", "verify"]) {
+  for (const channel of OBSERVATION_CHANNELS) {
     const kind = { retrieval: "retrieval-hit", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
     const availability = availabilityByChannel[channel] ?? "available";
+    const actual = createTelemetryRecord({ at: `${day}T12:00:00.000Z`, kind, session: `coverage-actual-${channel}`, payload: { source: `telemetry-test-actual:${channel}`, availability: "available" } });
+    await appendTelemetryRecord(root, actual);
+    const highWater = { highWaterDay: day, highWaterCount: 1, highWaterDigest: canonicalSha256([actual]), highWaterAt: actual.at };
     for (const [phase, at] of [["start", `${day}T00:00:00.000Z`], ["stop", `${day}T23:59:59.999Z`]]) {
       const upstream = createTelemetryRecord({
         at,
         kind,
         session: `coverage-${channel}`,
-        payload: { source: "telemetry-test-collector", availability, phase, sequence: phase === "start" ? 1 : 2 },
+        payload: { source: `${OBSERVATION_BOUNDARY_PREFIX}test-session:${channel}`, availability, phase, sequence: phase === "start" ? 1 : 2, ...highWater },
       });
       await appendTelemetryRecord(root, upstream);
     }
@@ -211,18 +232,20 @@ test("STORY-393: only actual full-day four-channel observations can seal a UTC d
   const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
   assert.equal(sealed.ok, true);
   assert.equal(sealed.reasonCode, "TELEMETRY_COVERAGE_RECORDED");
-  assert.equal(sealed.recordCount, 8);
+  assert.equal(sealed.recordCount, 12);
   const duplicate = await sealObservationDay(root, { at: "2026-09-11T00:00:02.000Z" });
   assert.equal(duplicate.reasonCode, "TELEMETRY_COVERAGE_ALREADY_RECORDED");
   assert.equal(duplicate.duplicate, true);
   const window = await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1);
   assert.equal(window.complete, true);
-  assert.equal(window.records.length, 8);
+  assert.equal(window.records.length, 12);
 
   const late = await sealObservationDay(root, { at: "2026-09-10T23:59:59.000Z" });
   assert.equal(late.ok, false);
   assert.equal(late.reasonCode, "TELEMETRY_COVERAGE_UNPROVEN");
-  const extra = createTelemetryRecord({ id: "telemetry:ffffffffffffffffffffffff", at: "2026-09-10T23:59:59.999Z", kind: "verify", session: "coverage-verify-extra", payload: { source: "telemetry-test-collector", availability: "available", phase: "stop", sequence: 3 } });
+  const current = await readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER });
+  const verifyActual = current.records.filter((record) => record.kind === "verify" && !record.payload.source.startsWith(OBSERVATION_BOUNDARY_PREFIX));
+  const extra = createTelemetryRecord({ id: "telemetry:ffffffffffffffffffffffff", at: "2026-09-10T23:59:59.999Z", kind: "verify", session: "coverage-verify-extra", payload: { source: `${OBSERVATION_BOUNDARY_PREFIX}test-session:verify`, availability: "available", phase: "stop", sequence: 3, highWaterDay: "2026-09-10", highWaterCount: verifyActual.length, highWaterDigest: canonicalSha256(verifyActual), highWaterAt: verifyActual.at(-1).at } });
   await appendTelemetryRecord(root, extra);
   const conflict = await sealObservationDay(root, { at: "2026-09-11T00:00:03.000Z" });
   assert.equal(conflict.ok, false);
@@ -256,10 +279,13 @@ test("STORY-393: partial, gapped, and reverse-phase upstream coverage never seal
   for (const [name, times, sequences, phases] of cases) {
     const root = await scratch(`tcrn-telemetry-coverage-${name}-`);
     t.after(() => rm(root, { recursive: true, force: true }));
-    for (const channel of ["retrieval", "reference", "trigger", "verify"]) {
+    for (const channel of OBSERVATION_CHANNELS) {
       const kind = { retrieval: "retrieval-hit", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
+      const actual = createTelemetryRecord({ at: "2026-09-10T12:00:00.000Z", kind, session: `coverage-${name}-actual-${channel}`, payload: { source: `telemetry-test-actual:${name}:${channel}`, availability: "available" } });
+      await appendTelemetryRecord(root, actual);
+      const highWater = { highWaterDay: "2026-09-10", highWaterCount: 1, highWaterDigest: canonicalSha256([actual]), highWaterAt: actual.at };
       for (const [index, phase] of phases.entries()) {
-        const upstream = createTelemetryRecord({ at: times[index], kind, session: `coverage-${name}-${channel}`, payload: { source: `collector-${name}`, availability: "available", phase, sequence: sequences[index] } });
+        const upstream = createTelemetryRecord({ at: times[index], kind, session: `coverage-${name}-${channel}`, payload: { source: `${OBSERVATION_BOUNDARY_PREFIX}test-session:${name}:${channel}`, availability: "available", phase, sequence: sequences[index], ...highWater } });
         await appendTelemetryRecord(root, upstream);
       }
     }

@@ -49,6 +49,7 @@ const TOP_K = 8;
 const PRECISION_K = 3;
 const INDEPENDENT_INCIDENT_FILE = "incident-replay-frozen.json";
 const PRE_REGISTERED_HOLDOUT_FILE = "holdout-preregistered.json";
+const PRE_REGISTERED_HOLDOUT_SOURCE_FILE = "holdout-source.json";
 
 // Every file the score depends on. Order is fixed and the name is hashed with the
 // bytes so a rename cannot pass for an edit.
@@ -103,12 +104,30 @@ function evaluate(corpusDigest, policy) {
   const work = readJson(fixture("work-compact.json")).records;
   const incidentReplay = buildIncidentReplay({ workRecords: work, cards: snapshot, minutes, at: "2026-09-04T15:08:34Z" });
   const developmentIncidentReplay = readDevelopmentIncidentReplay(policy.incidentReplayIndependent, work, minutes);
-  const preRegisteredHoldout = readPreRegisteredHoldout(policy.preRegisteredHoldout, work);
+
+  const queries = readJson(fixture("synthetic-queries.json")).queries;
+  const translated = readJson(fixture("translations-sonnet.json")).queries;
+  const judged = Object.values(readJson(fixture("judge-sheet.json")));
+  const priorPrompts = new Set([
+    ...incidentReplay.pairs.map((pair) => pair.prompt),
+    ...(developmentIncidentReplay.ok ? developmentIncidentReplay.records.map((pair) => pair.prompt) : []),
+    ...queries.map((query) => query.query),
+    ...translated.map((query) => String(query.en)),
+    ...judged.map((entry) => entry.prompt),
+  ]);
+  const preRegisteredHoldout = readPreRegisteredHoldout(policy.preRegisteredHoldout, work, priorPrompts);
 
   const cardDocuments = recallDocuments({ knowledge });
   const mixedDocuments = recallDocuments({ knowledge, minutes, work, scopeExcerptBytes: SCOPE_EXCERPT_BYTES });
+  // Keep the historical mixed-index score on its original 55-work corpus. The new
+  // holdout gets a separate derived index containing its independently frozen source
+  // records, so adding holdout rows cannot silently move the old thresholds.
+  const holdoutDocuments = preRegisteredHoldout.ok
+    ? recallDocuments({ knowledge, minutes, work: [...work, ...preRegisteredHoldout.sourceRecords], scopeExcerptBytes: SCOPE_EXCERPT_BYTES })
+    : [];
   const cardIndex = new RecallIndex(cardDocuments, "cards");
   const mixedIndex = new RecallIndex(mixedDocuments, "mixed");
+  const holdoutIndex = new RecallIndex(holdoutDocuments, "mixed-holdout");
 
   // The cards-only index is read raw: it is one kind, so the per-kind quota has nothing
   // to arbitrate. The mixed index goes through the selector the recall verb uses, floors
@@ -130,7 +149,6 @@ function evaluate(corpusDigest, policy) {
   const hitAt = (ranks, k) => ranks.filter((rank) => rank !== null && rank <= k).length;
   const scoreOf = (ranks) => ({ queries: ranks.length, hitAt1: hitAt(ranks, 1), hitAt3: hitAt(ranks, 3), hitAt8: hitAt(ranks, TOP_K) });
 
-  const queries = readJson(fixture("synthetic-queries.json")).queries;
   const cardsOnly = scoreOf(queries.map((query) => rankCards(query.query, query.id)));
   const mixed = scoreOf(queries.map((query) => rankMixed(query.query, query.id)));
 
@@ -139,7 +157,6 @@ function evaluate(corpusDigest, policy) {
   // the current ranking is scored against those ids. Anything the judged pool never
   // contained is unjudged and counts against precision, which makes this a floor rather
   // than an estimate.
-  const judged = Object.values(readJson(fixture("judge-sheet.json")));
   const labels = readJson(fixture("gold-labels.json")).labels;
   let relevantInTop3 = 0;
   let relevantLabelled = 0;
@@ -153,7 +170,6 @@ function evaluate(corpusDigest, policy) {
 
   // The language corpus is a regression set, not decoration: each English rendering is
   // put to the cards index and has to find the card it was translated from.
-  const translated = readJson(fixture("translations-sonnet.json")).queries;
   const language = scoreOf(translated.map((query) => rankCards(String(query.en), query.id)));
 
   // STORY-378: a separate metric group scores prompts generated from the frozen work
@@ -174,7 +190,12 @@ function evaluate(corpusDigest, policy) {
   const developmentIncidentReplayScore = scoreOf(developmentIncidentReplayRanks);
   const preRegisteredHoldoutRanks = preRegisteredHoldout.ok
     ? preRegisteredHoldout.records.map((pair) => {
-      const rank = selectMixed(pair.prompt).findIndex((hit) => pair.expectedIds.includes(hit.id));
+      const rank = selectRecallHits(holdoutIndex.search(pair.prompt), {
+        tau: RECALL_DEFAULT_TAU,
+        relativeFloor: RECALL_RELATIVE_FLOOR,
+        limit: TOP_K,
+        quota: RECALL_KIND_QUOTA,
+      }).findIndex((hit) => pair.expectedIds.includes(hit.id));
       return rank < 0 ? null : rank + 1;
     })
     : [];
@@ -257,6 +278,7 @@ function evaluate(corpusDigest, policy) {
   if (failures.length > 0) result.message = failures.join("; ");
   cardIndex.close();
   mixedIndex.close();
+  holdoutIndex.close();
   return result;
 }
 
@@ -299,7 +321,27 @@ function readDevelopmentIncidentReplay(declared, work, minutes) {
     : { ok: false, failures };
 }
 
-function readPreRegisteredHoldout(declared, work) {
+function holdoutPrompt(source) {
+  const bounded = (value) => typeof value === "string"
+    ? value.replace(/\u0000/gu, "").trim().slice(0, 512)
+      .replace(/(?:\/Users|\/home|\/private|[A-Za-z]:[\\/])[^\s，。；;,)）]+/gu, "[redacted-path]")
+      .replace(/(?:https?:\/\/)[^\s，。；;,)）]+/giu, "[redacted-url]")
+    : "";
+  const title = bounded(source?.title);
+  const summary = bounded(source?.summary);
+  const value = Buffer.from(`问题：${title}。${summary}`, "utf8");
+  if (value.length <= 1_024) return value.toString("utf8");
+  let end = 1_024;
+  while (end > 0 && (value[end] & 0xc0) === 0x80) end -= 1;
+  return value.subarray(0, end).toString("utf8");
+}
+
+function holdoutSourceProjection(source) {
+  const { sourceRecordDigest, ...projection } = source;
+  return projection;
+}
+
+function readPreRegisteredHoldout(declared, work, priorPrompts = new Set()) {
   const path = fixture(PRE_REGISTERED_HOLDOUT_FILE);
   const failures = [];
   if (!declared || typeof declared !== "object") return { ok: false, failures: ["preRegisteredHoldout policy is missing"] };
@@ -308,42 +350,55 @@ function readPreRegisteredHoldout(declared, work) {
   if (fixtureDigest !== declared.fixtureDigest) failures.push(`preRegisteredHoldout.fixtureDigest ${fixtureDigest} != ${declared.fixtureDigest}`);
   let frozen;
   try { frozen = readJson(path); } catch { return { ok: false, failures: [...failures, "preRegisteredHoldout fixture is not valid JSON"] }; }
-  if (frozen.schemaVersion !== "tcrn.retrieval-holdout.v1") failures.push("preRegisteredHoldout fixture schema is invalid");
+  if (frozen.schemaVersion !== "tcrn.retrieval-holdout.v2") failures.push("preRegisteredHoldout fixture schema is invalid");
   if (frozen.role !== declared.role || declared.role !== "unseen-disjoint-holdout") failures.push(`preRegisteredHoldout.role ${frozen.role ?? "missing"} is not unseen-disjoint-holdout`);
   try {
     if (parseStrictInstant(frozen.frozenAt) > parseStrictInstant(new Date().toISOString())) failures.push("preRegisteredHoldout.frozenAt is in the future");
   } catch { failures.push("preRegisteredHoldout.frozenAt is not a strict instant"); }
+
   const sourceFiles = frozen.sourceFiles;
-  const sourcePath = "tests/fixtures/retrieval-eval/work-compact.json";
-  if (!Array.isArray(sourceFiles) || sourceFiles.length !== 1 || sourceFiles[0]?.path !== sourcePath) failures.push("preRegisteredHoldout sourceFiles must name only work-compact.json");
-  else if (fileSha256(resolve(root, sourcePath)) !== sourceFiles[0].sha256) failures.push("preRegisteredHoldout work source digest drift");
+  const sourcePath = `tests/fixtures/retrieval-eval/${PRE_REGISTERED_HOLDOUT_SOURCE_FILE}`;
+  if (!Array.isArray(sourceFiles) || sourceFiles.length !== 1 || sourceFiles[0]?.path !== sourcePath) failures.push("preRegisteredHoldout sourceFiles must name only the frozen holdout source snapshot");
+  else if (fileSha256(resolve(root, sourcePath)) !== sourceFiles[0].sha256) failures.push("preRegisteredHoldout holdout source digest drift");
+  if (declared.sourceFile !== PRE_REGISTERED_HOLDOUT_SOURCE_FILE || declared.sourceFileDigest !== sourceFiles?.[0]?.sha256) failures.push("preRegisteredHoldout policy source binding is missing or drifted");
+  let sourceSnapshot;
+  try { sourceSnapshot = readJson(fixture(PRE_REGISTERED_HOLDOUT_SOURCE_FILE)); }
+  catch { sourceSnapshot = null; failures.push("preRegisteredHoldout source snapshot is not valid JSON"); }
+  if (sourceSnapshot !== null) {
+    if (sourceSnapshot.schemaVersion !== "tcrn.retrieval-holdout-source.v1" || sourceSnapshot.role !== "unseen-disjoint-holdout-source") failures.push("preRegisteredHoldout source snapshot schema is invalid");
+    if (!Number.isSafeInteger(sourceSnapshot.chainVersion) || sourceSnapshot.chainVersion < 1 || typeof sourceSnapshot.workspaceId !== "string" || !/^[a-f0-9]{64}$/u.test(String(sourceSnapshot.headEventHash)) || !Array.isArray(sourceSnapshot.records) || sourceSnapshot.recordsDigest !== canonicalSha256(sourceSnapshot.records)) failures.push("preRegisteredHoldout source snapshot binding is invalid");
+    if (frozen.sourceSnapshot?.chainVersion !== sourceSnapshot.chainVersion || frozen.sourceSnapshot?.headEventHash !== sourceSnapshot.headEventHash || frozen.sourceSnapshot?.recordsDigest !== sourceSnapshot.recordsDigest || frozen.frozenAt !== sourceSnapshot.capturedAt || declared.sourceChainVersion !== sourceSnapshot.chainVersion || declared.sourceHeadEventHash !== sourceSnapshot.headEventHash || declared.sourceRecordsDigest !== sourceSnapshot.recordsDigest) failures.push("preRegisteredHoldout source snapshot does not match its frozen binding");
+  }
+
   const selection = frozen.sourceSelection;
   const keys = selection?.externalKeys;
-  if (selection?.kind !== "Story" || !Array.isArray(selection?.excludedKinds) || !selection.excludedKinds.includes("Incident") || !Array.isArray(keys) || keys.length !== new Set(keys).size || [...keys].sort().join("\n") !== keys.join("\n") || selection.selectionDigest !== canonicalSha256(keys)) failures.push("preRegisteredHoldout source selection is not a sorted disjoint Story set");
+  if (selection?.kind !== "Work" || !Array.isArray(selection?.allowedKinds) || selection.allowedKinds.join("\n") !== ["Incident", "Story"].join("\n") || !Array.isArray(keys) || keys.length !== new Set(keys).size || [...keys].sort().join("\n") !== keys.join("\n") || selection.selectionDigest !== canonicalSha256(keys)) failures.push("preRegisteredHoldout source selection is not a sorted disjoint Work set");
   const labels = frozen.labelPolicy;
-  if (labels?.kind !== "Story" || labels?.expectedIdRule !== "source.workId only" || labels?.createdBeforeScoring !== true || labels?.modelCalls !== 0) failures.push("preRegisteredHoldout label policy is not pre-registered source identity");
+  if (labels?.kind !== "Work" || labels?.expectedIdRule !== "source.workId only" || labels?.createdBeforeScoring !== true || labels?.modelCalls !== 0 || labels?.priorPromptDisjoint !== true || labels?.promptRule !== "问题：<source.title>。<source.summary>") failures.push("preRegisteredHoldout label policy is not pre-registered source identity");
+  if (!Array.isArray(frozen.priorPromptSources) || frozen.priorPromptSources.length !== 4 || frozen.priorPromptDigest !== canonicalSha256([...priorPrompts].sort())) failures.push("preRegisteredHoldout prior prompt registry is missing or drifted");
   const thresholdFields = ["pairsAtLeast", "hitAt1", "hitAt3", "hitAt8"];
   if (!frozen.thresholds || thresholdFields.some((field) => frozen.thresholds[field] !== declared[field])) failures.push("preRegisteredHoldout thresholds drifted between fixture and policy");
-  const old = readJson(fixture(INDEPENDENT_INCIDENT_FILE));
-  const oldIds = new Set((old.records ?? []).map((pair) => pair?.source?.workId));
-  const byId = new Map(work.map((record) => [record.id, record]));
+
+  const oldIds = new Set(work.map((record) => record.id));
+  const sourceById = new Map((sourceSnapshot?.records ?? []).map((record) => [record.id, record]));
   const seen = new Set();
+  const prompts = new Set();
   for (const pair of frozen.records ?? []) {
     const source = pair?.source;
-    const current = byId.get(source?.workId);
+    const current = sourceById.get(source?.id);
     const expectedIds = pair?.label?.expectedIds;
-    if (!source || current === undefined || seen.has(source.workId)) { failures.push(`preRegisteredHoldout source ${source?.workId ?? "missing"} is missing or duplicated`); continue; }
-    seen.add(source.workId);
-    if (oldIds.has(source.workId) || source.kind !== "Story" || current.kind !== "Story" || source.externalKey !== current.externalKey || source.status !== current.status) failures.push(`preRegisteredHoldout source ${source.workId} is not a disjoint frozen Story record`);
-    if (source.scopeDigest !== canonicalSha256(current.scope ?? "")) failures.push(`preRegisteredHoldout scope digest drift for ${source.workId}`);
-    if (source.sourceRecordDigest !== canonicalSha256(current)) failures.push(`preRegisteredHoldout record digest drift for ${source.workId}`);
-    if (!Array.isArray(expectedIds) || expectedIds.length !== 1 || expectedIds[0] !== source.workId || typeof pair.prompt !== "string" || pair.prompt.length === 0 || typeof pair.label?.basis !== "string" || !pair.label.basis.includes("manual identity")) failures.push(`preRegisteredHoldout label invalid for ${source.workId}`);
-    const generated = buildIncidentReplay({ workRecords: [current], cards: [], minutes: [] }).pairs[0];
-    if (generated === undefined || pair.prompt !== generated.prompt) failures.push(`preRegisteredHoldout prompt drift for ${source.workId}`);
+    if (!source || current === undefined || seen.has(source?.id)) { failures.push(`preRegisteredHoldout source ${source?.id ?? "missing"} is missing or duplicated`); continue; }
+    seen.add(source.id);
+    if (oldIds.has(source.id) || !["Incident", "Story"].includes(source.kind) || source.externalKey !== current.externalKey || source.status !== current.status || source.title !== current.title || source.summary !== current.summary) failures.push(`preRegisteredHoldout source ${source.id} is not a disjoint frozen Work record`);
+    if (source.sourceRecordDigest !== canonicalSha256(holdoutSourceProjection(source))) failures.push(`preRegisteredHoldout record digest drift for ${source.id}`);
+    if (!/^[a-f0-9]{64}$/u.test(String(source.scopeDigest)) || !Number.isSafeInteger(source.revision) || !Array.isArray(source.labels)) failures.push(`preRegisteredHoldout source projection invalid for ${source.id}`);
+    const expectedPrompt = holdoutPrompt(source);
+    if (!Array.isArray(expectedIds) || expectedIds.length !== 1 || expectedIds[0] !== source.id || typeof pair.prompt !== "string" || pair.prompt !== expectedPrompt || prompts.has(pair.prompt) || priorPrompts.has(pair.prompt) || typeof pair.label?.basis !== "string" || !pair.label.basis.includes("manual identity")) failures.push(`preRegisteredHoldout label or prior-prompt disjointness invalid for ${source.id}`);
+    prompts.add(pair.prompt);
   }
   if (!Array.isArray(frozen.records) || frozen.records.length < (declared.pairsAtLeast ?? 20)) failures.push(`preRegisteredHoldout records ${frozen.records?.length ?? 0} < ${declared.pairsAtLeast}`);
-  if (seen.size !== frozen.records?.length || seen.size !== keys?.length) failures.push("preRegisteredHoldout source identities are not complete");
+  if (seen.size !== frozen.records?.length || seen.size !== keys?.length || seen.size !== sourceSnapshot?.records?.length || [...seen].some((id) => !sourceById.has(id)) || keys?.join("\n") !== [...(sourceSnapshot?.records ?? [])].map((record) => record.externalKey).sort().join("\n")) failures.push("preRegisteredHoldout source identities are not complete");
   return failures.length === 0
-    ? { ok: true, records: frozen.records.map((pair) => ({ prompt: pair.prompt, expectedIds: pair.label.expectedIds })), fixtureDigest, sourceFiles, role: declared.role, thresholds: Object.fromEntries(thresholdFields.map((field) => [field, declared[field]])) }
+    ? { ok: true, records: frozen.records.map((pair) => ({ prompt: pair.prompt, expectedIds: pair.label.expectedIds })), sourceRecords: sourceSnapshot.records, fixtureDigest, sourceFiles, role: declared.role, thresholds: Object.fromEntries(thresholdFields.map((field) => [field, declared[field]])) }
     : { ok: false, failures };
 }

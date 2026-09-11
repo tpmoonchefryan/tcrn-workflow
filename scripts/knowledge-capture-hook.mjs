@@ -32,6 +32,7 @@ import { resolveLastAssistantText } from "../tools/stop-pact/mode.mjs";
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 export const PLATFORM_ROOT = resolve(SCRIPT_DIRECTORY, "../../..");
 export const ENGINE_CLI = resolve(SCRIPT_DIRECTORY, "tcrn-workflow.mjs");
+export const INJECT_SCRIPT = resolve(SCRIPT_DIRECTORY, "knowledge-inject.mjs");
 export const DEFAULT_PARTITION = "cross-project";
 export const DEFAULT_ROLE_SCOPE = "implementation";
 // The accountable owner of a card nobody typed. Overridable so a host registration can
@@ -143,6 +144,23 @@ function runEngine(argv) {
   }
 }
 
+function observationBoundaryArguments(input, { containerRoot, partition, at }) {
+  const sessionId = boundedUtf8(String(input?.session_id ?? input?.sessionId ?? "anonymous"), 256);
+  const host = boundedUtf8(String(input?.host ?? input?.host_name ?? process.env.TCRN_HOST ?? "claude"), 64);
+  return [INJECT_SCRIPT, "--observation-boundary", "stop", "--partition", partition, "--session-id", sessionId, "--host", host, "--at", at, "--container-root", containerRoot];
+}
+
+function recordStopObservationBoundary(input, { containerRoot, partition, at }) {
+  try {
+    const result = spawnSync(process.execPath, observationBoundaryArguments(input, { containerRoot, partition, at }), { encoding: "utf8", timeout: 25_000 });
+    const text = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+    const lines = text.split("\n").filter((line) => line.trim().length > 0);
+    return JSON.parse(lines.at(-1) ?? "");
+  } catch (error) {
+    return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE", error: String(error?.message ?? error) };
+  }
+}
+
 /**
  * The whole hook, as a function so a test can drive it against a temporary container.
  *
@@ -158,6 +176,8 @@ export function runCaptureHook(input, {
 } = {}) {
   const attempts = [];
   try {
+    const at = now();
+    const observationBoundary = recordStopObservationBoundary(input, { containerRoot, partition, at });
     // TCRN-CROSS-STORY-365: Codex's real Stop payload carries the assistant text inline as
     // last_assistant_message and no transcript_path at all (tools/stop-pact/codex-response-style-hook.mjs,
     // confirmed against the real-payload fixture). Reading only the path makes this hook a silent
@@ -166,14 +186,13 @@ export function runCaptureHook(input, {
     const transcriptPath = typeof input?.transcript_path === "string" ? input.transcript_path : "";
     const text = inline.length > 0 ? inline : readTranscript(transcriptPath);
     const lessons = extractLessons(text);
-    if (lessons.length === 0) return { ok: true, reasonCode: "NO_LESSON_DECLARED", written: 0, attempts };
+    if (lessons.length === 0) return { ok: true, reasonCode: "NO_LESSON_DECLARED", written: 0, attempts, observationBoundary };
     const workspace = workspaceForPartition(partition, containerRoot);
     if (!existsSync(workspace)) {
-      const report = { ok: false, reasonCode: "KNOWLEDGE_CAPTURE_WORKSPACE_ABSENT", workspace, written: 0, attempts };
+      const report = { ok: false, reasonCode: "KNOWLEDGE_CAPTURE_WORKSPACE_ABSENT", workspace, written: 0, attempts, observationBoundary };
       appendLog(containerRoot, { at: now(), ...report });
       return report;
     }
-    const at = now();
     for (const lesson of lessons) {
       const card = cardFor(lesson, { ownerId });
       const answer = runEngine(captureArguments(card, workspace, at, { roleScope }));
@@ -184,7 +203,7 @@ export function runCaptureHook(input, {
     }
     const written = attempts.filter((attempt) => attempt.written).length;
     appendLog(containerRoot, { at, reasonCode: "KNOWLEDGE_CAPTURE_RUN", declared: lessons.length, written });
-    return { ok: true, reasonCode: "KNOWLEDGE_CAPTURE_RUN", written, attempts };
+    return { ok: true, reasonCode: "KNOWLEDGE_CAPTURE_RUN", written, attempts, observationBoundary };
   } catch (error) {
     const report = { ok: false, reasonCode: "KNOWLEDGE_CAPTURE_HOOK_FAILED", error: String(error?.message ?? error), written: 0, attempts };
     appendLog(containerRoot, { at: now(), ...report });

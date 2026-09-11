@@ -23,7 +23,7 @@ function gitFixture(t) {
   const root = mkdtempSync(join(tmpdir(), "tcrn-review-evidence-repo-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests", "fixture.test.mjs"), "test(\"fixture\", () => assert.equal(1, 1));\n");
+  writeFileSync(join(root, "tests", "fixture.test.mjs"), "import assert from \"node:assert/strict\"; import test from \"node:test\"; test(\"fixture\", () => assert.equal(1, 1));\n");
   assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
   assert.equal(spawnSync("git", ["-C", root, "add", "tests/fixture.test.mjs"]).status, 0);
   assert.equal(spawnSync("git", ["-C", root, "-c", "user.name=review-test", "-c", "user.email=review-at-example.invalid", "commit", "-qm", "base"]).status, 0);
@@ -59,13 +59,19 @@ test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separ
     repositoryRoot,
     base: "HEAD",
     allowedFiles: ["tests/fixture.test.mjs"],
-    testCommand: `${JSON.stringify(process.execPath)} -e ${JSON.stringify("process.stdout.write(JSON.stringify({tests:['fixture-test'],result:'passed'}))")}`,
+    testFiles: ["tests/fixture.test.mjs"],
+    testCommand: `${JSON.stringify(process.execPath)} --test tests/fixture.test.mjs`,
   });
   assert.equal(rerun.ok, true, JSON.stringify(rerun.problems));
   assert.equal(rerun.evidence.verify.ok, true);
   assert.equal(rerun.evidence.testRun.summary.parseable, true);
-  assert.equal(rerun.evidence.testRun.summary.source, "engine-test-result.tests-array");
-  assert.equal(rerun.evidence.testRun.summary.tests, 1);
+  assert.equal(rerun.evidence.testRun.summary.source, "node-test-case-summary");
+  assert.deepEqual(rerun.evidence.testRun.summary.testFiles, ["tests/fixture.test.mjs"]);
+  assert.equal(rerun.evidence.testRun.summary.testFileCount, 1);
+  assert.equal(rerun.evidence.testRun.summary.testCases, 1);
+  assert.match(rerun.evidence.testRun.result.stdout, /tests 1/u);
+  assert.match(rerun.evidence.testRun.result.stdoutSha256, /^[a-f0-9]{64}$/u);
+  assert.equal(rerun.evidence.testRun.result.outputComplete, true);
   assert.equal(typeof rerun.evidence.astCountCoverage.before.testCount, "number");
   assert.equal(typeof rerun.evidence.astCountCoverage.after.testCount, "number");
   assert.deepEqual(rerun.evidence.diff.outOfBounds, []);
@@ -79,6 +85,7 @@ test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separ
       repositoryRoot,
       base: "HEAD",
       allowedFiles: ["tests/fixture.test.mjs"],
+      testFiles: ["tests/fixture.test.mjs"],
       testCommand: `${JSON.stringify(process.execPath)} -e ${JSON.stringify(`require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 60_000)`)}`,
       commandTimeoutMs: 100,
     });
@@ -108,23 +115,24 @@ test("STORY-375 GWT2: untracked diff files are included and become out-of-bounds
 });
 
 test("STORY-375: runner counts come from machine output, not prose or a caller-supplied number", () => {
-  assert.deepEqual(parseTestRunOutput(JSON.stringify({ tests: ["one", "two"], result: "passed" })), {
-    tests: 2,
-    testFiles: 2,
+  assert.deepEqual(parseTestRunOutput(JSON.stringify({ tests: ["tests/one.test.mjs", "tests/two.test.mjs"], result: "passed" })), {
+    testFiles: ["tests/one.test.mjs", "tests/two.test.mjs"],
+    testFileCount: 2,
     testCases: null,
-    passed: 2,
+    passed: null,
     failed: 0,
     parseable: true,
-    source: "engine-test-result.tests-array",
+    source: "engine-test-result.file-list",
   });
-  assert.deepEqual(parseTestRunOutput("ℹ tests 12\nℹ pass 12\nℹ fail 0\n"), {
-    tests: null,
-    testFiles: null,
+  assert.deepEqual(parseTestRunOutput("ℹ tests 12\nℹ pass 12\nℹ fail 0\n", "", ["tests/fixture.test.mjs"]), {
+    testFiles: ["tests/fixture.test.mjs"],
+    testFileCount: 1,
     testCases: 12,
     passed: 12,
     failed: 0,
-    parseable: false,
+    parseable: true,
     source: "node-test-case-summary",
   });
+  assert.equal(parseTestRunOutput(JSON.stringify({ tests: ["fixture-test"], result: "passed" })).parseable, false);
   assert.equal(parseTestRunOutput("passed: 999 tests").parseable, false);
 });

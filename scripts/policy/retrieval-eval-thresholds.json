@@ -36,13 +36,18 @@
   },
   "preRegisteredHoldout": {
     "fixture": "holdout-preregistered.json",
-    "fixtureDigest": "564a132b9f3047a026f45f1dabc05a54a3f1f037c799fa069bf1de21421894bf",
+    "fixtureDigest": "ae6dc2868e331b2f6cdd009565111ee36e24c9711755a1e888ac9ae01a016401",
     "role": "unseen-disjoint-holdout",
+    "sourceFile": "holdout-source.json",
+    "sourceFileDigest": "9f5d06013b49147d717fa1417fe6bdd379af1ce7aa80b1c10c96cc50a5ef11f2",
+    "sourceChainVersion": 5870,
+    "sourceHeadEventHash": "94b5cb3f2e40f6ab62ce6a3d260d18033c0b28186f601ced1d14184a34db0dd3",
+    "sourceRecordsDigest": "e4835a09a7f9089e992c148bd09fd1de4f50233bd0d1ccf341cc20c1704624b1",
     "pairsAtLeast": 20,
     "hitAt1": 8,
     "hitAt3": 12,
     "hitAt8": 16,
-    "note": "Pre-registered Story identities disjoint from the historical Incident development set. Floors are fixed at 40%/60%/80% before the first holdout score; no model generated labels."
+    "note": "Pre-registered live-chain Work identities and title/summary prompts disjoint from every known prior evaluation prompt. Floors are fixed at 40%/60%/80% before the first holdout score; no model generated labels."
   },
   "historicalProvenance": {
     "fixture": "incident-replay-frozen.json",

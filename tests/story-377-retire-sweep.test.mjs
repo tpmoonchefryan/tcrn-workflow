@@ -111,18 +111,30 @@ async function sealWindow(fx, days = 90, overrides = {}) {
   for (let offset = days; offset >= 1; offset -= 1) {
     for (const channel of ["retrieval", "reference", "trigger", "verify"]) {
       const kind = { retrieval: "retrieval-hit", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
-      for (const [phase, at] of [["start", windowDay(offset).toISOString()], ["stop", (() => {
-        const date = windowDay(offset);
-        date.setUTCHours(23, 59, 59, 999);
-        return date.toISOString();
-      })()]]) {
-        const upstream = createTelemetryRecord({
+      await appendTelemetryRecord(fx.transient, createTelemetryRecord({
+        at: eventAt(offset, 30),
+        kind,
+        session: `story-377-actual-${offset}-${channel}`,
+        payload: { source: `story-377:actual:${channel}`, availability: "available" },
+      }));
+    }
+    const beforeBoundaries = (await readFile(join(fx.transient, "telemetry", dayFile(offset)), "utf8"))
+      .split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const start = windowDay(offset).toISOString();
+    const endDate = windowDay(offset);
+    endDate.setUTCHours(23, 59, 59, 999);
+    const end = endDate.toISOString();
+    for (const channel of ["retrieval", "reference", "trigger", "verify"]) {
+      const kind = { retrieval: "retrieval-hit", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
+      const actual = beforeBoundaries.filter((record) => record.kind === kind && !String(record.payload.source).startsWith("telemetry:observation-collector:"));
+      const highWater = { highWaterCount: actual.length, highWaterDigest: canonicalSha256(actual), highWaterAt: actual.at(-1)?.at ?? null };
+      for (const [phase, at] of [["start", start], ["stop", end]]) {
+        await appendTelemetryRecord(fx.transient, createTelemetryRecord({
           at,
           kind,
           session: `story-377-checkpoint-${offset}-${channel}`,
-          payload: { source: "story-377:test-collector", availability: "available", phase, sequence: phase === "start" ? 1 : 2 },
-        });
-        await appendTelemetryRecord(fx.transient, upstream);
+          payload: { source: `telemetry:observation-collector:story-377:${offset}:${channel}`, availability: "available", phase, sequence: phase === "start" ? 1 : 2, highWaterDay: start.slice(0, 10), ...highWater },
+        }));
       }
     }
     const source = await readFile(join(fx.transient, "telemetry", dayFile(offset)), "utf8");
@@ -130,14 +142,18 @@ async function sealWindow(fx, days = 90, overrides = {}) {
       .filter((record) => record.kind !== "observation-coverage")
       .sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id));
     const channelCheckpoints = Object.fromEntries(["retrieval", "reference", "trigger", "verify"].map((channel) => {
-      const rows = records.filter((record) => record.payload.source === "story-377:test-collector" && ({ retrieval: "retrieval", reference: "reference", trigger: "trigger", verify: "verify" }[channel] === ({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify" }[record.kind] ?? null)));
+      const rows = records.filter((record) => record.payload.source === `telemetry:observation-collector:story-377:${offset}:${channel}` && ({ retrieval: "retrieval", reference: "reference", trigger: "trigger", verify: "verify" }[channel] === ({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify" }[record.kind] ?? null)));
+      const actual = records.filter((record) => ({ retrieval: "retrieval", reference: "reference", trigger: "trigger", verify: "verify" }[channel] === ({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify" }[record.kind] ?? null) && !String(record.payload.source).startsWith("telemetry:observation-collector:")));
       return [channel, {
         availability: "available",
-        source: "story-377:test-collector",
+        source: `telemetry:observation-collector:story-377:${offset}:${channel}`,
         startSequence: rows[0]?.payload.sequence,
         stopSequence: rows.at(-1)?.payload.sequence,
         recordCount: rows.length,
         sourceDigest: canonicalSha256(rows),
+        highWaterDay: start.slice(0, 10),
+        highWaterCount: actual.length,
+        highWaterDigest: canonicalSha256(actual),
       }];
     }));
     await appendTelemetryRecord(fx.transient, createTelemetryRecord({
