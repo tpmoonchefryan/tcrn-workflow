@@ -282,7 +282,10 @@ function readBoundVerify({ workspace, workId, engineCli }) {
     const child = spawnSync(process.execPath, [engineCli, "work-show", "--workspace", workspace, "--id", workId], {
       cwd: workspace,
       encoding: "utf8",
-      timeout: 5_000,
+      // A live chain read can contend with the repository's parallel gate suite.
+      // Keep the read bounded, but do not turn transient contention into a false
+      // missing binding before the review command's own timeout has elapsed.
+      timeout: 15_000,
       maxBuffer: REVIEW_OUTPUT_BYTES * 2,
       stdio: ["ignore", "pipe", "pipe"],
     });
