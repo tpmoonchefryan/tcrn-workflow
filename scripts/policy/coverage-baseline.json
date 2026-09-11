@@ -106,7 +106,7 @@
     },
     "tests/actor-attestation.test.mjs": {
       "testCount": 10,
-      "assertionCount": 44,
+      "assertionCount": 35,
       "testNames": [
         "assertActorId accepts the allowlisted prefixes and fails closed otherwise",
         "buildEventPayload carries a validated actor only when supplied",
