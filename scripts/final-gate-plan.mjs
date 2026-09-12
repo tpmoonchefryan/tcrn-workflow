@@ -3,6 +3,7 @@
 // TCRN-CROSS-STORY-413 — phase-aware gate selection with containment-aware execution.
 // This module plans work; it never turns a missing or failed result into a cache hit.
 
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -103,9 +104,22 @@ export const DEVELOPMENT_CHECK_COMMANDS = Object.freeze({
   "p1-roster": "node --test tests/p1-roster.test.mjs",
 });
 
+function registeredCommand(command) {
+  const tokens = command.split(/\s+/u);
+  if (tokens[0] === "pnpm") {
+    const script = tokens[1] === "run" ? tokens[2] : tokens[1];
+    let scripts;
+    try { scripts = JSON.parse(readFileSync(resolve(repositoryRoot, "package.json"), "utf8")).scripts ?? {}; } catch { scripts = null; }
+    return scripts !== null && typeof script === "string" && Object.hasOwn(scripts, script);
+  }
+  if (tokens[0] === "node" && tokens[1] === "--test") return tokens[2] !== undefined && existsSync(resolve(repositoryRoot, tokens[2]));
+  return false;
+}
+
 function developmentCommand(check) {
   const command = DEVELOPMENT_CHECK_COMMANDS[check];
   if (command === undefined) throw planError("GATE_PLAN_DEVELOPMENT_COMMAND_UNREGISTERED", check);
+  if (!registeredCommand(command)) throw planError("GATE_PLAN_DEVELOPMENT_COMMAND_UNREGISTERED", command);
   return command;
 }
 
@@ -120,11 +134,11 @@ export function buildDevelopmentPlan({ changedFiles, previousEvidence = [], inpu
     const matches = DEVELOPMENT_RULES.filter((rule) => rule.match(path));
     if (matches.length === 0) {
       blocked.push({ id: path, reason: "unknown impact; typecheck and test must be chosen by the caller" });
-      selected.set("typecheck", { id: "typecheck", command: "pnpm typecheck", selected: true, coveredBy: null, reason: `fail-closed fallback for ${path}` });
-      selected.set("test", { id: "test", command: "pnpm test", selected: true, coveredBy: null, reason: `fail-closed fallback for ${path}` });
+      selected.set("typecheck", { id: "typecheck", command: developmentCommand("typecheck"), scriptExists: true, selected: true, coveredBy: null, reason: `fail-closed fallback for ${path}` });
+      selected.set("test", { id: "test", command: developmentCommand("test"), scriptExists: true, selected: true, coveredBy: null, reason: `fail-closed fallback for ${path}` });
       continue;
     }
-    for (const rule of matches) for (const check of rule.checks) selected.set(check, { id: check, command: developmentCommand(check), selected: true, coveredBy: null, reason: `changed file matched ${rule.id}` });
+    for (const rule of matches) for (const check of rule.checks) selected.set(check, { id: check, command: developmentCommand(check), scriptExists: true, selected: true, coveredBy: null, reason: `changed file matched ${rule.id}` });
   }
   const prior = Array.isArray(previousEvidence) ? previousEvidence : previousEvidence ? [previousEvidence] : [];
   const evidence = prior.map((entry) => assessEvidenceReuse({ evidence: entry, inputs }));
