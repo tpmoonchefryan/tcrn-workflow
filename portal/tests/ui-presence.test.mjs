@@ -207,6 +207,85 @@ function missingComponents(document) {
     .map(([name, selector]) => ({ name, selector }));
 }
 
+const hierarchyPages = Object.freeze(["dashboard", "settings", "prose", "vocabulary"]);
+const topbarDesignMap = Object.freeze([
+  ["product-shell-header", "header.tcrn-top-bar", "ProductShell/TopBar", "https://tcrn-design-system-storybook.vercel.app/components-navigation-shells.html#navigation-shell-spec"],
+  ["partition-select", "#partition-select", "Select", "https://tcrn-design-system-storybook.vercel.app/components-controls-data.html#field-spec-usage"],
+  ["engine-status", "#engine-connection", "Badge", "https://tcrn-design-system-storybook.vercel.app/proof-proof-visual-instances.html#owner-quality-product-shell"],
+  ["workspace-search", "#global-search", "SearchInput", "https://tcrn-design-system-storybook.vercel.app/components-navigation-shells.html#navigation-shell-spec"],
+  ["theme-toggle", "#theme-button", "ThemeToggle", "https://tcrn-design-system-storybook.vercel.app/components-navigation-shells.html#navigation-shell-spec"],
+  ["locale-menu", "#locale-menu", "LocaleMenu", "https://tcrn-design-system-storybook.vercel.app/components-navigation-shells.html#navigation-shell-spec"],
+  ["receipt-chip", "#receipt-chip", "Badge/Button", "https://tcrn-design-system-storybook.vercel.app/proof-proof-visual-instances.html#owner-quality-product-shell"],
+]);
+
+function childIndex(parent, child) {
+  return [...parent.children].indexOf(child);
+}
+
+function pageHierarchyFindings(document, source) {
+  const findings = [];
+  const pages = hierarchyPages.map((name) => document.querySelector(`[data-page="${name}"]`));
+  if (document.querySelectorAll('[data-page-hierarchy="two-level"]').length !== hierarchyPages.length) findings.push("page-level-marker-count");
+  for (const [name, page] of hierarchyPages.map((name, index) => [name, pages[index]])) {
+    if (!page || page.getAttribute("data-page-hierarchy") !== "two-level") { findings.push(`${name}:page-level`); continue; }
+    const head = page.querySelector(":scope > .tcrn-page__head");
+    if (!head || childIndex(page, head) !== 0) findings.push(`${name}:header-first`);
+    if (name === "dashboard") {
+      const tabs = page.querySelector(':scope > [data-ui="workspace-tabs"]');
+      const panels = [...page.querySelectorAll(":scope > [data-workspace-panel]")];
+      if (!tabs || panels.length === 0 || panels.some((panel) => childIndex(page, panel) <= childIndex(page, tabs))) findings.push("dashboard:tabs-before-content");
+    }
+    if (name === "settings") {
+      const grid = page.querySelector("[data-settings-layout-grid]");
+      const nav = page.querySelector("[data-settings-layout-nav]");
+      const content = page.querySelector("[data-settings-layout-content]");
+      if (!grid || !nav || !content || childIndex(grid, nav) !== 0 || childIndex(grid, content) !== 1) findings.push("settings:tabs-before-content");
+      if (content?.contains(nav)) findings.push("settings:local-nav-inside-content");
+    }
+    if (name === "prose") {
+      const shell = page.querySelector(":scope > .tcrn-editor-shell");
+      const directory = shell?.querySelector(":scope > #prose-directory");
+      const bar = shell?.querySelector(":scope > .tcrn-editor__bar");
+      const editor = shell?.querySelector(":scope > #prose-editor");
+      if (!shell || !directory || !bar || !editor || childIndex(shell, directory) !== 0 || childIndex(shell, bar) !== 1 || childIndex(shell, editor) !== 2) findings.push("prose:controls-before-editor");
+    }
+    if (name === "vocabulary") {
+      const shell = page.querySelector(":scope > .tcrn-vocabulary");
+      const nav = shell?.querySelector(":scope > #vocabulary-nav");
+      const terms = shell?.querySelector(":scope > #vocabulary-terms");
+      if (!shell || !nav || !terms || childIndex(shell, nav) !== 0 || childIndex(shell, terms) !== 1) findings.push("vocabulary:tabs-before-content");
+      if (terms?.contains(nav)) findings.push("vocabulary:nav-inside-content");
+    }
+  }
+  const sourceRules = [
+    '[data-page-hierarchy="two-level"] [data-settings-layout-grid] { display: block; }',
+    '[data-page-hierarchy="two-level"] .tcrn-editor-shell { display: block; }',
+    '[data-page-hierarchy="two-level"] .tcrn-editor__directory { margin-bottom: var(--tcrn-space-3); }',
+    '[data-page-hierarchy="two-level"] [data-settings-layout-nav],',
+  ];
+  for (const rule of sourceRules) if (!source.includes(rule)) findings.push(`source:${rule}`);
+  return findings;
+}
+
+function topbarFindings(document) {
+  const findings = [];
+  for (const [name, selector, component, sourceUrl] of topbarDesignMap) {
+    const nodes = [...document.querySelectorAll(selector)];
+    if (nodes.length !== 1) { findings.push(`${name}:count`); continue; }
+    const node = nodes[0];
+    if (node.getAttribute("data-ds-component") !== component) findings.push(`${name}:component`);
+    if (node.getAttribute("data-ds-source-url") !== sourceUrl) findings.push(`${name}:source-url`);
+  }
+  const header = document.querySelector("header.tcrn-top-bar");
+  const actionOrder = ["#partition-select", "#engine-connection", "#global-search", "#theme-button", "#locale-menu", "#receipt-chip"]
+    .map((selector) => document.querySelector(selector));
+  const domOrder = header ? [header, ...header.querySelectorAll("*")] : [];
+  if (actionOrder.some((node) => !node || !domOrder.includes(node))) findings.push("topbar:action-ownership");
+  else if (actionOrder.some((node, index) => index > 0 && domOrder.indexOf(actionOrder[index - 1]) >= domOrder.indexOf(node))) findings.push("topbar:action-order");
+  if (header?.getAttribute("data-ds-mapping-status") !== "provisional-awaiting-DS112") findings.push("topbar:mapping-status");
+  return findings;
+}
+
 // A fixed sleep after a governed write is a race, not a wait: too short and the
 // assertion reads a DOM that has not re-rendered, too long and every run pays for
 // the worst case. Lengthening it only moves the boundary — the S280 leg below
@@ -448,12 +527,13 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
-  test("TCRN-CROSS-STORY-404 consumes the fixed DS106-108 settings contract", async () => {
+  test("TCRN-CROSS-STORY-404 consumes the DS106-108 settings shape and exposes the rejected candidate", async () => {
     const page = await preparePage();
     try {
       const layout = page.document.querySelector('[data-settings-layout-component="SettingsLayout"]');
       assert.ok(layout, "the settings page must consume the DS SettingsLayout contract");
       assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@8bbc6cd6fbbe16d30943198c62c270c8c4ebc8da");
+      assert.equal(layout.getAttribute("data-ds-contract-status"), "rejected-awaiting-DS112");
       assert.equal(layout.getAttribute("data-ds-contract-version"), "ds_consumption_contract_v1");
       assert.equal(layout.getAttribute("data-ds-contract-digest"), "038f7cb407ae664afbbe64779db3b25a61fdd53735d58e45aeeeef103cb036c2");
       assert.deepEqual(layout.getAttribute("data-ds-rules")?.split(" "), ["DS-106-R1", "DS-106-R2", "DS-107-R1", "DS-107-R2", "DS-108-R1", "DS-108-R2"]);
@@ -507,7 +587,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
-  test("TCRN-CROSS-STORY-405 proves DS semantics and rejects structural mutations", async () => {
+  test("TCRN-CROSS-STORY-405 proves consumed DS semantics, rejects structural mutations, and preserves rejection status", async () => {
     const page = await preparePage();
     try {
       page.document.querySelector('[data-setting-group="execution"]')?.click();
@@ -517,6 +597,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
       const findings = (root) => {
         const output = [];
         if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@8bbc6cd6fbbe16d30943198c62c270c8c4ebc8da") output.push("ds-candidate");
+        if (root.getAttribute("data-ds-contract-status") !== "rejected-awaiting-DS112") output.push("ds-contract-status");
         if (root.getAttribute("data-ds-contract-version") !== "ds_consumption_contract_v1") output.push("ds-contract-version");
         if (root.getAttribute("data-ds-contract-digest") !== "038f7cb407ae664afbbe64779db3b25a61fdd53735d58e45aeeeef103cb036c2") output.push("ds-contract-digest");
         if (root.getAttribute("data-ds-rules") !== "DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2") output.push("ds-rules");
@@ -542,7 +623,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
         }
         return output;
       };
-      assert.deepEqual(findings(layout), [], "the fixed candidate's positive consumer must be green");
+      assert.deepEqual(findings(layout), [], "the consumed candidate's structural proof must be green while its acceptance remains rejected");
 
       layout.removeAttribute("data-settings-layout-form-policy");
       assert.ok(findings(layout).includes("data-settings-layout-form-policy"), "missing single-column policy must red");
@@ -567,6 +648,50 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(findings(layout).includes("stepper-numeric-entry"), "a Stepper numeric mutation must red");
       stepper.remove();
       assert.deepEqual(findings(layout), [], "restoring the candidate must return the positive proof to green");
+    } finally { await page.cleanup(); }
+  });
+
+  test("TCRN-CROSS-STORY-406 renders every current route as two levels and rejects a third-level or reordered mutation", async () => {
+    const page = await preparePage();
+    const source = await readFile(join(portalRoot, "index.html"), "utf8");
+    try {
+      assert.deepEqual(pageHierarchyFindings(page.document, source), [], "current routes must use Header + subpage controls + lower content");
+
+      const settings = page.document.querySelector('[data-page="settings"]');
+      settings.removeAttribute("data-page-hierarchy");
+      assert.ok(pageHierarchyFindings(page.document, source).includes("settings:page-level"), "a missing level declaration must red");
+      settings.setAttribute("data-page-hierarchy", "two-level");
+
+      const grid = settings.querySelector("[data-settings-layout-grid]");
+      const nav = settings.querySelector("[data-settings-layout-nav]");
+      const content = settings.querySelector("[data-settings-layout-content]");
+      grid.append(nav);
+      assert.ok(pageHierarchyFindings(page.document, source).includes("settings:tabs-before-content"), "a local-nav-after-content mutation must red");
+      grid.insertBefore(nav, content);
+      assert.deepEqual(pageHierarchyFindings(page.document, source), [], "restoring the two-level order must return green");
+    } finally { await page.cleanup(); }
+  });
+
+  test("TCRN-CROSS-STORY-407 binds each product topbar control to its complete DS address and rejects duplicate or unbound controls", async () => {
+    const page = await preparePage();
+    try {
+      assert.deepEqual(topbarFindings(page.document), [], "the topbar mapping must be structurally complete");
+
+      const header = page.document.querySelector("header.tcrn-top-bar");
+      const duplicate = header.cloneNode(true);
+      header.parentElement.append(duplicate);
+      assert.ok(topbarFindings(page.document).includes("product-shell-header:count"), "a duplicate product shell header must red");
+      duplicate.remove();
+
+      const receipt = page.document.querySelector("#receipt-chip");
+      const receiptParent = receipt.parentElement;
+      receipt.remove();
+      assert.ok(topbarFindings(page.document).includes("receipt-chip:count"), "a missing mapped action must red");
+      receiptParent.append(receipt);
+      assert.deepEqual(topbarFindings(page.document), [], "restoring the mapped action must return green");
+
+      header.removeAttribute("data-ds-source-url");
+      assert.ok(topbarFindings(page.document).includes("product-shell-header:source-url"), "a self-reported but incomplete DS binding must red");
     } finally { await page.cleanup(); }
   });
 

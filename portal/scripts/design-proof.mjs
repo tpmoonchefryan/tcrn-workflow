@@ -400,6 +400,17 @@ const layoutRequirements = [
   { name: "settings compact local navigation", source: indexText, text: 'data-settings-local-navigation="compact"' },
   { name: "settings overflow policy", source: indexText, text: 'data-settings-overflow-policy="no-page-overflow"' },
   { name: "settings long value policy", source: indexText, text: 'data-settings-long-value-policy="native-inline-scroll-copy"' },
+  { name: "dashboard two-level route", source: indexText, text: 'data-page="dashboard" data-page-hierarchy="two-level"' },
+  { name: "settings two-level route", source: indexText, text: 'data-page="settings" data-page-hierarchy="two-level"' },
+  { name: "prose two-level route", source: indexText, text: 'data-page="prose" data-page-hierarchy="two-level"' },
+  { name: "vocabulary two-level route", source: indexText, text: 'data-page="vocabulary" data-page-hierarchy="two-level"' },
+  { name: "two-level settings flow", source: initLayoutSource, text: '[data-page-hierarchy="two-level"] [data-settings-layout-grid] { display: block; }' },
+  { name: "two-level editor flow", source: initLayoutSource, text: '[data-page-hierarchy="two-level"] .tcrn-editor-shell { display: block; }' },
+  { name: "two-level navigation is not sticky", source: initLayoutSource, text: "  position: static;" },
+  { name: "topbar DS mapping status", source: indexText, text: 'data-ds-mapping-status="provisional-awaiting-DS112"' },
+  { name: "topbar DS source address", source: indexText, text: 'data-ds-source-url="https://tcrn-design-system-storybook.vercel.app/components-navigation-shells.html#navigation-shell-spec"' },
+  { name: "partition DS source address", source: indexText, text: 'data-ds-source-url="https://tcrn-design-system-storybook.vercel.app/components-controls-data.html#field-spec-usage"' },
+  { name: "status DS source address", source: indexText, text: 'data-ds-source-url="https://tcrn-design-system-storybook.vercel.app/proof-proof-visual-instances.html#owner-quality-product-shell"' },
   // INC-188: the workspace path uses the design system's plain top-bar module. Its
   // breadcrumb sibling `__current-location` ships flex: 0 1 240px and max-width: 240px,
   // sized for a short label, and clipped the path at 240px with 630px of unused space
