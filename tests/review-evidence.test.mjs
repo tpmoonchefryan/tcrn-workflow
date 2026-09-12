@@ -14,7 +14,7 @@ import {
   diffEvidence,
   parseTestRunOutput,
 } from "../scripts/review-evidence.mjs";
-import { assessEvidenceReuse, buildDevelopmentPlan, buildFinalGatePlan, recordExecution } from "../scripts/final-gate-plan.mjs";
+import { assessEvidenceReuse, buildDevelopmentPlan, buildFinalGatePlan, executeSelectedRoots, recordExecution } from "../scripts/final-gate-plan.mjs";
 import { appendProgressEvent, readProgressDelta, summarizeProgress, waitForProgress } from "../scripts/lib/incremental-output.mjs";
 
 const PLATFORM_ROOT = process.env.TCRN_PLATFORM_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -139,7 +139,7 @@ test("STORY-375: runner counts come from machine output, not prose or a caller-s
   assert.equal(parseTestRunOutput("passed: 999 tests").parseable, false);
 });
 
-test("STORY-413: gate planning and evidence reuse use one positive and negative predicate", () => {
+test("STORY-413: gate planning and evidence reuse use one positive and negative predicate", async () => {
   const roster = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "platform-docs/acceptance-gate-groups.json"), "utf8"));
   const containment = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/scripts/policy/gate-containment.json"), "utf8"));
   const inputs = { sourceDigest: "source-a", environmentDigest: "environment-a", commandDigest: "command-a", baselineDigest: "baseline-a" };
@@ -170,6 +170,17 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   assert.ok(plan.coveredBy.every(({ coveredBy }) => coveredBy !== null));
   const executed = recordExecution(plan, plan.selected.map(({ id }) => ({ id, ok: true })));
   assert.deepEqual(executed.executed.map(({ id }) => id), plan.executionOrder);
+  const order = [];
+  const measured = await executeSelectedRoots(plan, async (entry) => {
+    order.push(entry.id);
+    return { ok: true, reasonCode: "FIXTURE_ROOT_GREEN" };
+  });
+  assert.deepEqual(order, plan.executionOrder);
+  assert.deepEqual(measured.executed.map(({ id, reasonCode }) => ({ id, reasonCode })), plan.executionOrder.map((id) => ({ id, reasonCode: "FIXTURE_ROOT_GREEN" })));
+  assert.ok(measured.executed.every(({ elapsedMs }) => Number.isSafeInteger(elapsedMs) && elapsedMs >= 0));
+  const failedRoot = await executeSelectedRoots(plan, async (entry) => ({ ok: entry.id !== "platform-layout", reasonCode: entry.id === "platform-layout" ? "FIXTURE_ROOT_RED" : "FIXTURE_ROOT_GREEN" }));
+  assert.ok(failedRoot.blocked.some(({ id, reason }) => id === "platform-layout" && reason === "FIXTURE_ROOT_RED"));
+  assert.equal(failedRoot.executed.find(({ id }) => id === "platform-layout").ok, false);
   assert.throws(() => recordExecution(plan, [{ id: "engine-release", ok: true }]), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
   assert.throws(() => recordExecution(plan, [...plan.selected.map(({ id }) => ({ id, ok: true })), { id: "engine-p1", ok: true }]), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
 

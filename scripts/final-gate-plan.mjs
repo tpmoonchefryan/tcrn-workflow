@@ -151,6 +151,35 @@ export function recordExecution(plan, results) {
   return { ...plan, executed: rows.map((entry) => ({ ...entry, selected: true, coveredBy: null })) };
 }
 
+/** Execute only the selected roots, in declaration order, and retain measured rows. */
+export async function executeSelectedRoots(plan, runner) {
+  if (plan?.execution?.strategy !== "serial" || plan?.execution?.maxConcurrent !== 1) {
+    throw planError("GATE_PLAN_SERIAL_POLICY_INVALID", "same-repository roots must execute serially");
+  }
+  if (typeof runner !== "function") throw planError("GATE_PLAN_RUNNER_REQUIRED", "a root runner is required");
+  const rows = [];
+  const blocked = [...(plan.blocked ?? [])];
+  for (const entry of plan.selected ?? []) {
+    const startedAt = Date.now();
+    let result;
+    try {
+      result = await runner(entry);
+    } catch (error) {
+      result = { ok: false, reasonCode: error.reasonCode ?? "GATE_ROOT_RUN_FAILED", error: error.message };
+    }
+    const row = {
+      ...entry,
+      ...(result && typeof result === "object" ? result : { ok: false, reasonCode: "GATE_ROOT_RESULT_INVALID" }),
+      elapsedMs: Math.max(0, Date.now() - startedAt),
+    };
+    if (row.ok !== true) blocked.push({ id: entry.id, reason: row.reasonCode ?? "root execution failed" });
+    rows.push(row);
+  }
+  return recordExecution({ ...plan, blocked }, rows);
+}
+
+export const executePlan = executeSelectedRoots;
+
 async function main() {
   const phaseIndex = process.argv.indexOf("--phase");
   const phase = phaseIndex >= 0 ? process.argv[phaseIndex + 1] : "candidate-final";
