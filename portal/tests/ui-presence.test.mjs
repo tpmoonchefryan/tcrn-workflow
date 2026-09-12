@@ -453,6 +453,10 @@ if (process.argv[2] === "status" && actual.status === 0) {
     try {
       const layout = page.document.querySelector('[data-settings-layout-component="SettingsLayout"]');
       assert.ok(layout, "the settings page must consume the DS SettingsLayout contract");
+      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@8bbc6cd6fbbe16d30943198c62c270c8c4ebc8da");
+      assert.equal(layout.getAttribute("data-ds-contract-version"), "ds_consumption_contract_v1");
+      assert.equal(layout.getAttribute("data-ds-contract-digest"), "038f7cb407ae664afbbe64779db3b25a61fdd53735d58e45aeeeef103cb036c2");
+      assert.deepEqual(layout.getAttribute("data-ds-rules")?.split(" "), ["DS-106-R1", "DS-106-R2", "DS-107-R1", "DS-107-R2", "DS-108-R1", "DS-108-R2"]);
       const required = {
         "data-settings-layout-mode": "container-driven",
         "data-settings-layout-form-policy": "single-host-single-column",
@@ -512,6 +516,10 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(layout);
       const findings = (root) => {
         const output = [];
+        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@8bbc6cd6fbbe16d30943198c62c270c8c4ebc8da") output.push("ds-candidate");
+        if (root.getAttribute("data-ds-contract-version") !== "ds_consumption_contract_v1") output.push("ds-contract-version");
+        if (root.getAttribute("data-ds-contract-digest") !== "038f7cb407ae664afbbe64779db3b25a61fdd53735d58e45aeeeef103cb036c2") output.push("ds-contract-digest");
+        if (root.getAttribute("data-ds-rules") !== "DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2") output.push("ds-rules");
         const required = {
           "data-settings-layout-mode": "container-driven",
           "data-settings-layout-form-policy": "single-host-single-column",
