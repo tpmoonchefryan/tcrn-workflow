@@ -3515,6 +3515,27 @@ a.tcrn-relationship-chip:focus-visible {
 .tcrn-dictionary-table[data-dictionary-valid="false"]{border-inline-start:3px solid var(--tcrn-color-state-blocked);padding-inline-start:var(--tcrn-space-2)}
 .tcrn-popover[data-overlay-positioning="portal-fixed"],.tcrn-popover[data-overlay-positioning="static-fixed"]{position:fixed;max-width:min(420px,calc(100vw - var(--tcrn-space-4)));max-height:calc(100vh - var(--tcrn-space-4));overflow:auto;overflow-wrap:anywhere}
 
+/* DS-116/117 operation feedback and content-scope contracts. Both roots are
+   min-content-safe so long consumer ids/copy wrap inside the surface instead
+   of widening the document. The status remains a short StatusBadge; details
+   and identity are readable regions owned by the consumer's supplied labels. */
+.tcrn-operation-feedback,.tcrn-content-scope{display:grid;gap:var(--tcrn-space-2);min-inline-size:0;max-inline-size:100%;border:1px solid var(--tcrn-color-border-subtle);border-radius:var(--tcrn-radius-surface);background:var(--tcrn-color-surface-panel);padding:var(--tcrn-space-3)}
+.tcrn-operation-feedback__summary{display:flex;align-items:flex-start;flex-wrap:wrap;gap:var(--tcrn-space-2);min-inline-size:0;max-inline-size:100%}
+.tcrn-operation-feedback__status{flex:0 1 auto;min-inline-size:0}
+.tcrn-operation-feedback__identity{display:grid;grid-template-columns:max-content minmax(0,1fr);flex:1 1 240px;gap:var(--tcrn-space-1) var(--tcrn-space-2);min-inline-size:0;margin:0}
+.tcrn-operation-feedback__identity-row{display:grid;grid-template-columns:subgrid;grid-column:1/-1;min-inline-size:0}
+.tcrn-operation-feedback__identity dt{color:var(--tcrn-color-text-secondary);font-size:var(--tcrn-type-size-meta);font-weight:var(--tcrn-type-weight-medium)}
+.tcrn-operation-feedback__identity dd{min-inline-size:0;margin:0;overflow-wrap:anywhere;word-break:break-word;color:var(--tcrn-color-text-primary)}
+.tcrn-operation-feedback__details-trigger{flex:0 1 auto;max-inline-size:100%;min-block-size:36px;border:1px solid var(--tcrn-color-border-control);border-radius:var(--tcrn-radius-control);background:var(--tcrn-color-surface-muted);color:var(--tcrn-color-text-primary);padding:var(--tcrn-space-1) var(--tcrn-space-2);font:inherit;cursor:pointer;overflow-wrap:anywhere}
+.tcrn-operation-feedback__details-trigger:focus-visible{outline:2px solid var(--tcrn-color-focus-ring);outline-offset:2px}
+.tcrn-operation-feedback__details{min-inline-size:0;max-inline-size:100%}
+.tcrn-operation-feedback__details-body{min-inline-size:0;max-inline-size:100%;overflow-wrap:anywhere;word-break:break-word}
+.tcrn-operation-feedback__details-body p{max-inline-size:100%;overflow-wrap:anywhere}
+.tcrn-content-scope__content{min-inline-size:0;max-inline-size:100%}
+.tcrn-content-scope[data-content-valid="false"]{border-inline-start:3px solid var(--tcrn-color-state-blocked);padding-inline-start:var(--tcrn-space-2)}
+.tcrn-content-scope[data-content-phase="loading"]{border-color:var(--tcrn-color-state-warning)}
+.tcrn-content-scope[data-content-phase="error"]{border-color:var(--tcrn-color-state-blocked)}
+
 /* DS-112 page hierarchy contract. */
 .tcrn-page-hierarchy{display:grid;gap:var(--tcrn-space-4);min-inline-size:0;max-inline-size:100%}
 .tcrn-page-hierarchy__header,.tcrn-page-hierarchy__section-tabs,.tcrn-page-hierarchy__lower-content,.tcrn-page-hierarchy__third-level-frame,.tcrn-page-hierarchy__third-level,.tcrn-page-hierarchy__content{min-inline-size:0;max-inline-size:100%}

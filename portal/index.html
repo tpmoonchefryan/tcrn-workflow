@@ -3542,9 +3542,10 @@ a.tcrn-relationship-chip:focus-visible {
 .tcrn-dictionary-table[data-dictionary-valid="false"]{border-inline-start:3px solid var(--tcrn-color-state-blocked);padding-inline-start:var(--tcrn-space-2)}
 .tcrn-popover[data-overlay-positioning="portal-fixed"],.tcrn-popover[data-overlay-positioning="static-fixed"]{position:fixed;max-width:min(420px,calc(100vw - var(--tcrn-space-4)));max-height:calc(100vh - var(--tcrn-space-4));overflow:auto;overflow-wrap:anywhere}
 
-/* DS-116/117 operation feedback and content-scope contracts. These are the
-   package-emitted class names consumed by the portal's static markup; product
-   values and lifecycle updates remain owned by the Workflow renderer. */
+/* DS-116/117 operation feedback and content-scope contracts. Both roots are
+   min-content-safe so long consumer ids/copy wrap inside the surface instead
+   of widening the document. The status remains a short StatusBadge; details
+   and identity are readable regions owned by the consumer's supplied labels. */
 .tcrn-operation-feedback,.tcrn-content-scope{display:grid;gap:var(--tcrn-space-2);min-inline-size:0;max-inline-size:100%;border:1px solid var(--tcrn-color-border-subtle);border-radius:var(--tcrn-radius-surface);background:var(--tcrn-color-surface-panel);padding:var(--tcrn-space-3)}
 .tcrn-operation-feedback__summary{display:flex;align-items:flex-start;flex-wrap:wrap;gap:var(--tcrn-space-2);min-inline-size:0;max-inline-size:100%}
 .tcrn-operation-feedback__status{flex:0 1 auto;min-inline-size:0}
@@ -4160,7 +4161,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
       <div class="tcrn-rail__footer"><span data-i18n="app.boundaryBody">Writes use the public CLI and return the engine receipt.</span></div>
     </aside>
     <div class="tcrn-product-shell__workspace">
-      <header class="tcrn-top-bar" data-ds-component="ProductShell/TopBar" data-ds-source-url="https://tcrn-design-system-storybook.vercel.app/components-navigation-shells.html#navigation-shell-spec" data-ds-mapping-status="candidate-consumed-pending-coordination" data-ds-candidate-sha="e464b5139fc59aae5c5a64731afbbee64446df1d">
+      <header class="tcrn-top-bar" data-ds-component="ProductShell/TopBar" data-ds-source-url="https://tcrn-design-system-storybook.vercel.app/components-navigation-shells.html#navigation-shell-spec" data-ds-mapping-status="candidate-consumed-pending-coordination" data-ds-candidate-sha="bee2fff2099605c8590ff0607a5038246cd9a2a4">
         <div class="tcrn-top-bar__module tcrn-top-bar__module--path" id="workspace-label"></div>
         <div class="tcrn-top-bar__actions">
           <label class="tcrn-sr-only" for="partition-select" data-i18n="partition.label">Partition</label>
@@ -4223,7 +4224,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
             <nav class="tcrn-subnav tcrn-settings-layout__nav" data-settings-layout-nav data-settings-local-nav="true" aria-label="Settings groups" role="tablist"><button class="tcrn-subnav__item" data-setting-group="workspace" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="machine" data-i18n="settings.machine">Workflow</button></nav>
           </div>
           <div class="tcrn-page-hierarchy__lower-content" data-page-hierarchy-region="lower-content" data-page-hierarchy-slot="content">
-            <div class="tcrn-manage tcrn-settings-layout" data-settings-layout-component="SettingsLayout" data-settings-layout="true" data-settings-layout-navigation-location="page-hierarchy-section-tabs" data-ds-candidate="TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d" data-ds-contract-status="candidate-consumed-pending-coordination" data-ds-contract-version="ai_consumption_contract_v1" data-ds-contract-digest="2f2c0f5ccfec4a8d710c45f4374f09e8882f1ae9a35c881c73ca50d416d984bb" data-ds-component-css-sha256="025be2c8b3380cfc20c7c1b468243d6e61fe5291f28483a614de469235788877" data-ds-rules="DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2 DS-116-R1 DS-116-R2 DS-117-R1 DS-117-R2 DS-118-R1 DS-118-R2 DS-119-R1 DS-119-R2" data-ds-surface-contracts="overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1 operation-feedback-contract-v1 content-scope-contract-v1 consumer-evidence-contract-v1 verification-cadence-contract-v1" data-ds-static-overlay-bridge="mountStaticOverlayBoundary" data-ds-candidate-status="fixed-candidate-pending-coordination" data-settings-layout-mode="container-driven" data-settings-layout-form-policy="single-host-single-column" data-settings-layout-breakpoint="960px" data-settings-content-breakpoint="720px" data-settings-local-navigation="compact" data-settings-overflow-policy="no-page-overflow" data-settings-long-value-policy="native-inline-scroll-copy"><div class="tcrn-settings-layout__frame"><div class="tcrn-settings-layout__grid" data-settings-layout-grid><div class="tcrn-settings-layout__content" data-settings-layout-content data-settings-content="true" data-settings-complete-form="true"><div id="design-authority" hidden></div><div id="dispatch-config" class="tcrn-settings-layout__form" hidden></div><div id="settings-rows" class="tcrn-settings-layout__form"></div><div id="machine-settings" class="tcrn-settings-layout__form" hidden></div></div></div></div></div>
+            <div class="tcrn-manage tcrn-settings-layout" data-settings-layout-component="SettingsLayout" data-settings-layout="true" data-settings-layout-navigation-location="page-hierarchy-section-tabs" data-ds-candidate="TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4" data-ds-contract-status="candidate-consumed-pending-coordination" data-ds-contract-version="ai_consumption_contract_v1" data-ds-contract-digest="a56fcf3427866d4034ede1c59b59b888ac8169ca19fcd1c3af66b0a49cd16138" data-ds-component-css-sha256="025be2c8b3380cfc20c7c1b468243d6e61fe5291f28483a614de469235788877" data-ds-rules="DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2 DS-116-R1 DS-116-R2 DS-117-R1 DS-117-R2 DS-118-R1 DS-118-R2 DS-119-R1 DS-119-R2" data-ds-surface-contracts="overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1 operation-feedback-contract-v1 content-scope-contract-v1 consumer-evidence-contract-v1 verification-cadence-contract-v1" data-ds-static-overlay-bridge="mountStaticOverlayBoundary" data-ds-candidate-status="fixed-candidate-pending-coordination" data-settings-layout-mode="container-driven" data-settings-layout-form-policy="single-host-single-column" data-settings-layout-breakpoint="960px" data-settings-content-breakpoint="720px" data-settings-local-navigation="compact" data-settings-overflow-policy="no-page-overflow" data-settings-long-value-policy="native-inline-scroll-copy"><div class="tcrn-settings-layout__frame"><div class="tcrn-settings-layout__grid" data-settings-layout-grid><div class="tcrn-settings-layout__content" data-settings-layout-content data-settings-content="true" data-settings-complete-form="true"><div id="design-authority" hidden></div><div id="dispatch-config" class="tcrn-settings-layout__form" hidden></div><div id="settings-rows" class="tcrn-settings-layout__form"></div><div id="machine-settings" class="tcrn-settings-layout__form" hidden></div></div></div></div></div>
           </div>
         </div>
       </section>
@@ -4556,11 +4557,11 @@ const BOOT = __PORTAL_BOOT__;
   const currentSetting = (key) => state.settings?.settings?.find((entry) => entry.key === key);
   const controlId = (prefix, key) => `${prefix}-${String(key).replace(/[^a-zA-Z0-9_-]/gu, "-")}`;
   // DS R2 static-consumer bridge. This is the package's fixed DOM bridge from
-  // TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d, kept inline because
+  // TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4, kept inline because
   // the portal is intentionally dependency-free at runtime. The portal owns only
   // pairing, placement choice, and domain content; boundary, geometry, and dismissal
   // mechanics remain the signed DS implementation.
-  const DS_STATIC_OVERLAY_CANDIDATE = "TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d";
+  const DS_STATIC_OVERLAY_CANDIDATE = "TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4";
   const clampStaticOverlay = (value, minimum, maximum) => Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
   const staticOverlayRect = (element) => {
     const rect = element.getBoundingClientRect();

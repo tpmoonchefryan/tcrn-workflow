@@ -249,6 +249,7 @@
     "portal/README.md",
     "portal/design-baseline.html",
     "portal/ds-component-css.snapshot.css",
+    "portal/ds-consumer-contract.json",
     "portal/i18n-policy.json",
     "portal/index.html",
     "portal/locale-contract.mjs",

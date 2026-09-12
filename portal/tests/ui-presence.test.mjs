@@ -538,10 +538,10 @@ if (process.argv[2] === "status" && actual.status === 0) {
     try {
       const layout = page.document.querySelector('[data-settings-layout-component="SettingsLayout"]');
       assert.ok(layout, "the settings page must consume the DS SettingsLayout contract");
-      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d");
+      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4");
       assert.equal(layout.getAttribute("data-ds-contract-status"), "candidate-consumed-pending-coordination");
       assert.equal(layout.getAttribute("data-ds-contract-version"), "ai_consumption_contract_v1");
-      assert.equal(layout.getAttribute("data-ds-contract-digest"), "2f2c0f5ccfec4a8d710c45f4374f09e8882f1ae9a35c881c73ca50d416d984bb");
+      assert.equal(layout.getAttribute("data-ds-contract-digest"), "a56fcf3427866d4034ede1c59b59b888ac8169ca19fcd1c3af66b0a49cd16138");
       assert.equal(layout.getAttribute("data-ds-surface-contracts"), "overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1 operation-feedback-contract-v1 content-scope-contract-v1 consumer-evidence-contract-v1 verification-cadence-contract-v1");
       assert.equal(layout.getAttribute("data-ds-static-overlay-bridge"), "mountStaticOverlayBoundary");
       assert.deepEqual(layout.getAttribute("data-ds-rules")?.split(" "), ["DS-106-R1", "DS-106-R2", "DS-107-R1", "DS-107-R2", "DS-108-R1", "DS-108-R2", "DS-112-R1", "DS-112-R2", "DS-116-R1", "DS-116-R2", "DS-117-R1", "DS-117-R2", "DS-118-R1", "DS-118-R2", "DS-119-R1", "DS-119-R2"]);
@@ -613,10 +613,10 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(layout);
       const findings = (root) => {
         const output = [];
-        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d") output.push("ds-candidate");
+        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4") output.push("ds-candidate");
         if (root.getAttribute("data-ds-contract-status") !== "candidate-consumed-pending-coordination") output.push("ds-contract-status");
         if (root.getAttribute("data-ds-contract-version") !== "ai_consumption_contract_v1") output.push("ds-contract-version");
-        if (root.getAttribute("data-ds-contract-digest") !== "2f2c0f5ccfec4a8d710c45f4374f09e8882f1ae9a35c881c73ca50d416d984bb") output.push("ds-contract-digest");
+        if (root.getAttribute("data-ds-contract-digest") !== "a56fcf3427866d4034ede1c59b59b888ac8169ca19fcd1c3af66b0a49cd16138") output.push("ds-contract-digest");
         if (root.getAttribute("data-ds-rules") !== "DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2 DS-116-R1 DS-116-R2 DS-117-R1 DS-117-R2 DS-118-R1 DS-118-R2 DS-119-R1 DS-119-R2") output.push("ds-rules");
         if (root.getAttribute("data-settings-layout-navigation-location") !== "page-hierarchy-section-tabs") output.push("navigation-location");
         const required = {
@@ -1189,7 +1189,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.equal(content.parentElement, page.document.body, "the popover layer must be mounted at document body");
       assert.equal(content.getAttribute("data-overlay-boundary"), "document-body");
       assert.equal(content.getAttribute("data-overlay-positioning"), "static-fixed");
-      assert.equal(content.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d");
+      assert.equal(content.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4");
       assert.equal(content.hidden, true, "a mounted popover starts closed");
       // INC-201: the contract is that the trigger names *a* design-system button
       // component, which is what design-proof's button-family leg enforces. It used to
@@ -1247,7 +1247,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
         assert.equal(layer.parentElement, page.document.body, "every layer must escape the settings row boundary");
         assert.equal(layer.getAttribute("data-overlay-boundary"), "document-body");
         assert.equal(layer.getAttribute("data-overlay-positioning"), "static-fixed");
-        assert.equal(layer.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d");
+        assert.equal(layer.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4");
         assert.equal(layer.hidden, true);
         return { trigger, layer };
       };

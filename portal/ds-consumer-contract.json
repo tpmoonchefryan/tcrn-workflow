@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "tcrn.workflow.ds-consumer-contract.v1",
+  "consumer": "TCRN Workflow portal static consumer",
+  "candidate": "bee2fff2099605c8590ff0607a5038246cd9a2a4",
+  "candidateTree": "0e90ece4c4cf5d3f674b60fd2cab55b6f2d5c368",
+  "package": "@tcrn/ui-react@3.0.0",
+  "aiContract": {
+    "version": "ai_consumption_contract_v1",
+    "payloadDigest": "a56fcf3427866d4034ede1c59b59b888ac8169ca19fcd1c3af66b0a49cd16138"
+  },
+  "componentCss": {
+    "sourceExport": "tcrnComponentCss",
+    "bytes": 115116,
+    "sha256": "025be2c8b3380cfc20c7c1b468243d6e61fe5291f28483a614de469235788877",
+    "snapshot": "portal/ds-component-css.snapshot.css",
+    "inlineSelector": "style#tcrn-ds-component-css[data-source=\"snapshot\"]"
+  },
+  "consumedContracts": {
+    "operationFeedback": {
+      "root": "#operation-feedback[data-operation-feedback=\"true\"]",
+      "shortStatus": "[data-operation-short-status=\"true\"]",
+      "identity": "[data-operation-identity=\"true\"]",
+      "details": "[data-operation-details=\"true\"]",
+      "detailsTrigger": "[data-operation-details-trigger=\"true\"]"
+    },
+    "contentScope": {
+      "root": "[data-content-scope=\"machine-settings\"]",
+      "source": "engine.machine-settings",
+      "countKind": "total",
+      "independentSiblingEmptyState": true
+    },
+    "consumerEvidence": {
+      "productProof": "portal/tests/ui-presence.test.mjs",
+      "geometryProof": "U1-U3 browser recheck",
+      "requiredAxes": ["dpr", "pinch-visual-viewport", "page-zoom"]
+    }
+  },
+  "reconciliation": {
+    "snapshotMatchesSource": true,
+    "inlineMatchesSnapshot": true,
+    "productValuesOwnedByWorkflow": true,
+    "status": "candidate-consumed-pending-coordination"
+  },
+  "boundaries": {
+    "ownerVisualAcceptance": "independent",
+    "packagePublication": "not claimed",
+    "externalRelease": "not claimed"
+  }
+}
