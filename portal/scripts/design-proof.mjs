@@ -406,7 +406,7 @@ const layoutRequirements = [
   { name: "two-level settings flow", source: initLayoutSource, text: '[data-page-hierarchy="true"][data-page-hierarchy-depth="two"] [data-settings-layout-grid] { display: block; }' },
   { name: "two-level editor flow", source: initLayoutSource, text: '[data-page-hierarchy="true"][data-page-hierarchy-depth="two"] .tcrn-editor-shell { display: block; }' },
   { name: "two-level navigation is not sticky", source: initLayoutSource, text: "  position: static;" },
-  { name: "settings DS candidate", source: indexText, text: 'data-ds-candidate="TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4"' },
+  { name: "settings DS candidate", source: indexText, text: 'data-ds-candidate="TCRN-Design-System@610680b81a950e91e9e1e77718ea7f3f3b19bc27"' },
   { name: "settings DS contract version", source: indexText, text: 'data-ds-contract-version="ai_consumption_contract_v1"' },
   { name: "settings DS contract digest", source: indexText, text: 'data-ds-contract-digest="a56fcf3427866d4034ede1c59b59b888ac8169ca19fcd1c3af66b0a49cd16138"' },
   { name: "settings DS coordination status", source: indexText, text: 'data-ds-contract-status="candidate-consumed-pending-coordination"' },

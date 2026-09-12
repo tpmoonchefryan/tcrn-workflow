@@ -538,7 +538,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
     try {
       const layout = page.document.querySelector('[data-settings-layout-component="SettingsLayout"]');
       assert.ok(layout, "the settings page must consume the DS SettingsLayout contract");
-      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4");
+      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@610680b81a950e91e9e1e77718ea7f3f3b19bc27");
       assert.equal(layout.getAttribute("data-ds-contract-status"), "candidate-consumed-pending-coordination");
       assert.equal(layout.getAttribute("data-ds-contract-version"), "ai_consumption_contract_v1");
       assert.equal(layout.getAttribute("data-ds-contract-digest"), "a56fcf3427866d4034ede1c59b59b888ac8169ca19fcd1c3af66b0a49cd16138");
@@ -613,7 +613,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(layout);
       const findings = (root) => {
         const output = [];
-        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4") output.push("ds-candidate");
+        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@610680b81a950e91e9e1e77718ea7f3f3b19bc27") output.push("ds-candidate");
         if (root.getAttribute("data-ds-contract-status") !== "candidate-consumed-pending-coordination") output.push("ds-contract-status");
         if (root.getAttribute("data-ds-contract-version") !== "ai_consumption_contract_v1") output.push("ds-contract-version");
         if (root.getAttribute("data-ds-contract-digest") !== "a56fcf3427866d4034ede1c59b59b888ac8169ca19fcd1c3af66b0a49cd16138") output.push("ds-contract-digest");
@@ -1189,7 +1189,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.equal(content.parentElement, page.document.body, "the popover layer must be mounted at document body");
       assert.equal(content.getAttribute("data-overlay-boundary"), "document-body");
       assert.equal(content.getAttribute("data-overlay-positioning"), "static-fixed");
-      assert.equal(content.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4");
+      assert.equal(content.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@610680b81a950e91e9e1e77718ea7f3f3b19bc27");
       assert.equal(content.hidden, true, "a mounted popover starts closed");
       // INC-201: the contract is that the trigger names *a* design-system button
       // component, which is what design-proof's button-family leg enforces. It used to
@@ -1247,7 +1247,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
         assert.equal(layer.parentElement, page.document.body, "every layer must escape the settings row boundary");
         assert.equal(layer.getAttribute("data-overlay-boundary"), "document-body");
         assert.equal(layer.getAttribute("data-overlay-positioning"), "static-fixed");
-        assert.equal(layer.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@bee2fff2099605c8590ff0607a5038246cd9a2a4");
+        assert.equal(layer.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@610680b81a950e91e9e1e77718ea7f3f3b19bc27");
         assert.equal(layer.hidden, true);
         return { trigger, layer };
       };

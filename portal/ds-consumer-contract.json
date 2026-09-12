@@ -1,8 +1,8 @@
 {
   "schemaVersion": "tcrn.workflow.ds-consumer-contract.v1",
   "consumer": "TCRN Workflow portal static consumer",
-  "candidate": "bee2fff2099605c8590ff0607a5038246cd9a2a4",
-  "candidateTree": "0e90ece4c4cf5d3f674b60fd2cab55b6f2d5c368",
+  "candidate": "610680b81a950e91e9e1e77718ea7f3f3b19bc27",
+  "candidateTree": "bc11d2fd36648648c93bff9b98d5ce0dea7fd4cf",
   "package": "@tcrn/ui-react@3.0.0",
   "aiContract": {
     "version": "ai_consumption_contract_v1",
