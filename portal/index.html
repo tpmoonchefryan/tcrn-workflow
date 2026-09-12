@@ -4411,17 +4411,17 @@ const BOOT = __PORTAL_BOOT__;
     const success = state.receipt.ok !== false && !String(state.receipt.reasonCode || "").includes("REFUSED");
     const chip = $("#receipt-chip");
     chip.className = `tcrn-badge ${success ? "tcrn-badge--positive" : "tcrn-badge--danger"}`;
-    const receiptTag = state.receipt.version !== undefined && state.receipt.version !== null
+    const receiptTag = state.receipt.version
       ? `v${state.receipt.version}`
-      : state.receipt.updatedAt ? ` ${state.receipt.reasonCode || "—"} · ${state.receipt.updatedAt}` : ` ${state.receipt.reasonCode || "—"}`;
-    setText("#receipt-chip-text", `${success ? "✓" : "✕"}${receiptTag}`);
+      : success ? t("receipt.saved") : `✕ ${t("receipt.failed")}`;
+    setText("#receipt-chip-text", state.receipt.version ? `${success ? "✓" : "✕"}${receiptTag}` : receiptTag);
     renderReceipt();
   };
   const renderReceipt = () => {
     const body = state.receipt || { reasonCode: "PORTAL_IDLE", message: t("receipt.empty"), actor: BOOT.actor };
     const reasonHint = (code) => { const key = "reason." + String(code || ""); const hint = t(key); return hint === key ? "" : hint; };
     const hint = reasonHint(body.reasonCode);
-    const fields = [["receipt.reasonCode", t("receipt.reasonCode"), body.reasonCode + (hint ? " — " + hint : "")], ["receipt.record", t("receipt.record"), recordValue(body)], ["receipt.version", t("receipt.version"), body.version ?? (body.updatedAt ? `— · ${body.updatedAt}` : "—")], ["receipt.digest", t("receipt.digest"), body.receiptDigest ?? "—"], ["receipt.head", t("receipt.head"), body.headEventHash ?? "—"], ["receipt.actor", t("receipt.actor"), body.actor ?? BOOT.actor]];
+    const fields = [["receipt.reasonCode", t("receipt.reasonCode"), body.reasonCode + (hint ? " — " + hint : "")], ["receipt.record", t("receipt.record"), recordValue(body)], ["receipt.version", t("receipt.version"), body.version ?? "—"], ["receipt.updatedAt", t("receipt.updatedAt"), body.updatedAt ?? "—"], ["receipt.digest", t("receipt.digest"), body.receiptDigest ?? "—"], ["receipt.head", t("receipt.head"), body.headEventHash ?? "—"], ["receipt.actor", t("receipt.actor"), body.actor ?? BOOT.actor]];
     $("#receipt-body").innerHTML = fields.map(([, label, value]) => `<div class="tcrn-readback-panel__row"><span class="tcrn-readback-panel__key">${esc(label)}</span><span class="tcrn-readback-panel__value">${esc(value)}</span></div>`).join("");
     renderAudit("#drawer-audit");
   };
@@ -4749,7 +4749,10 @@ const BOOT = __PORTAL_BOOT__;
     renderDesignAuthority();
   };
   const renderMachineSettings = () => {
-    const entries = state.machineSettings?.settings || [];
+    const machineState = state.machineSettings;
+    const entries = Array.isArray(machineState?.settings) ? machineState.settings : [];
+    const loading = machineState === null && state.status === null;
+    const unavailable = !loading && (machineState === null || machineState?.ok === false || machineState?.reasonCode === "MACHINE_SETTINGS_UNAVAILABLE");
     // The partition's legal values are this machine's workspaces, so they come from the
     // boot payload rather than from a closed list — the engine says the value source is
     // discovery and refuses to invent one.
@@ -4763,7 +4766,7 @@ const BOOT = __PORTAL_BOOT__;
       return `<div class="tcrn-setting-choice" data-setting-choice-component="SettingChoice" ${settingChoiceAttrs(values, entry.key)}><label class="tcrn-setting-choice__select-label"><span class="tcrn-sr-only">${esc(t("setting." + entry.key + ".label"))}</span><select class="tcrn-select" data-machine-control="${esc(entry.key)}" data-cli-action="machine-settings-set">${values.map((value) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(value || t("config.unset"))}</option>`).join("")}</select></label></div>`;
     };
     $("#machine-settings").innerHTML = `<div class="tcrn-surface"><div class="tcrn-surface__head"><div><h2>${esc(t("settings.machine"))}</h2><p class="tcrn-surface__note">${esc(t("settings.machineNote"))}</p><p class="tcrn-scope-note">${esc(t("settings.machineScope"))}</p></div></div>`
-      + (entries.length === 0 ? `<div class="tcrn-state-surface">${esc(t("config.empty"))}</div>` : entries.map((entry) => `<div class="tcrn-setting-row" data-machine-row="${esc(entry.key)}"><div class="tcrn-setting-row__label"><code class="tcrn-setting-row__key">${esc(entry.key)}</code><span class="tcrn-setting-row__name">${esc(t("setting." + entry.key + ".label"))}</span><span class="tcrn-setting-row__description">${esc(t("setting." + entry.key + ".description"))}${entry.appliesOn === "restart" ? " " + esc(t("settings.machineRestart")) : ""}</span></div><div class="tcrn-setting-row__control">${controlFor(entry)}</div></div>`).join(""))
+      + (loading ? `<div class="tcrn-state-surface" data-settings-state="loading">${esc(t("config.loading"))}</div>` : unavailable ? `<div class="tcrn-state-surface" data-settings-state="error">${esc(t("health.unavailable"))}</div>` : entries.length === 0 ? `<div class="tcrn-state-surface" data-settings-state="empty">${esc(t("config.empty"))}</div>` : entries.map((entry) => `<div class="tcrn-setting-row" data-machine-row="${esc(entry.key)}"><div class="tcrn-setting-row__label"><code class="tcrn-setting-row__key">${esc(entry.key)}</code><span class="tcrn-setting-row__name">${esc(t("setting." + entry.key + ".label"))}</span><span class="tcrn-setting-row__description">${esc(t("setting." + entry.key + ".description"))}${entry.appliesOn === "restart" ? " " + esc(t("settings.machineRestart")) : ""}</span></div><div class="tcrn-setting-row__control">${controlFor(entry)}</div></div>`).join(""))
       + `</div>`;
     $$("[data-machine-control]").forEach((control) => control.addEventListener("change", () => saveMachineSetting(control.dataset.machineControl, control.value)));
     attachEcho($("#machine-settings"));
@@ -4862,8 +4865,10 @@ const BOOT = __PORTAL_BOOT__;
     });
     const settings = state.settings?.settings || [];
     const visible = settings.filter((entry) => settingGroup(entry.key) === state.settingGroup && !LEGACY_MODEL_SETTING_KEYS.has(entry.key) && !DISPATCH_SETTING_KEYS.has(entry.key));
-    setText("#settings-count", `${visible.length} ${t("config.keyCount")}`);
-    $("#settings-rows").innerHTML = visible.map((entry) => {
+    const machineEntries = Array.isArray(state.machineSettings?.settings) ? state.machineSettings.settings : [];
+    const displayedCount = state.settingGroup === "machine" ? machineEntries.length : visible.length;
+    setText("#settings-count", `${displayedCount} ${t("config.keyCount")}`);
+    $("#settings-rows").innerHTML = state.settingGroup === "machine" ? "" : visible.map((entry) => {
       const modified = entry.currentValue !== entry.defaultValue;
       const reset = modified ? `<button type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md tcrn-icon-button tcrn-setting-row__reset" data-reset-setting="${esc(entry.key)}" data-cli-action="settings-remove" aria-label="${esc(t("config.reset"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5"/><path d="M2.6 2.8v2.6h2.6"/></svg></button>` : "";
       // The dictionary link and the dictionary row must agree on who is in the domain:
