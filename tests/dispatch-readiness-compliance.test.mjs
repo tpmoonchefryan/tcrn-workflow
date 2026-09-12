@@ -85,7 +85,7 @@ test("STORY-412 verification cadence is optional for old briefs but strict when 
     localChecks: ["node --test tests/dispatch-readiness-compliance.test.mjs"],
     finalRoots: ["engine-release", "platform-layout", "product-gates"],
     invalidationTriggers: ["sourceDigest", "environmentDigest", "commandDigest", "baselineDigest"],
-    blockedDependencies: ["unknown impact", "failed prior evidence"],
+    blockedDependencies: [],
     sameRepoExecution: "serial",
   };
   const ready = validateDispatchBrief({ ...brief, verificationPlan });
@@ -94,6 +94,9 @@ test("STORY-412 verification cadence is optional for old briefs but strict when 
   const malformed = validateDispatchBrief({ ...brief, verificationPlan: { ...verificationPlan, sameRepoExecution: "parallel" } });
   assert.equal(malformed.ok, false);
   assert.ok(malformed.problems.some((problem) => problem.code === "DISPATCH_VERIFICATION_SERIAL_REQUIRED"));
+  const blocked = validateDispatchBrief({ ...brief, verificationPlan: { ...verificationPlan, blockedDependencies: ["DS candidate not fixed"] } });
+  assert.equal(blocked.ok, false);
+  assert.ok(blocked.problems.some((problem) => problem.code === "DISPATCH_VERIFICATION_PREREQUISITE_BLOCKED"));
   const missingPhase = validateDispatchBrief({ ...brief, verificationPlan: { ...verificationPlan, phase: "release" } });
   assert.equal(missingPhase.ok, false);
   assert.ok(missingPhase.problems.some((problem) => problem.code === "DISPATCH_VERIFICATION_PHASE_INVALID"));

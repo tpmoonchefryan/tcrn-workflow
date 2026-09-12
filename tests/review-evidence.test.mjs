@@ -14,7 +14,7 @@ import {
   diffEvidence,
   parseTestRunOutput,
 } from "../scripts/review-evidence.mjs";
-import { assessEvidenceReuse, buildDevelopmentPlan, buildFinalGatePlan, executeSelectedRoots, recordExecution } from "../scripts/final-gate-plan.mjs";
+import { assessEvidenceReuse, buildDevelopmentPlan, buildFinalGatePlan, DEVELOPMENT_CHECK_COMMANDS, executeSelectedRoots, recordExecution } from "../scripts/final-gate-plan.mjs";
 import { appendProgressEvent, readProgressDelta, summarizeProgress, waitForProgress } from "../scripts/lib/incremental-output.mjs";
 
 const PLATFORM_ROOT = process.env.TCRN_PLATFORM_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -162,7 +162,7 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   assert.equal(assessEvidenceReuse({ evidence: { ...successful, ok: false }, inputs }).reusable, false);
   assert.equal(assessEvidenceReuse({ evidence: { ...successful, status: "running" }, inputs }).reusable, false);
 
-  const plan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", inputs, previousEvidence: [successful] });
+  const plan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", inputs, executionPermission: true, previousEvidence: [successful] });
   assert.deepEqual(plan.selected.map(({ id }) => id), ["engine-release", "platform-layout", "product-gates"]);
   assert.deepEqual(plan.executionOrder, plan.selected.map(({ id }) => id));
   assert.equal(plan.execution.strategy, "serial");
@@ -181,12 +181,32 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   const failedRoot = await executeSelectedRoots(plan, async (entry) => ({ ok: entry.id !== "platform-layout", reasonCode: entry.id === "platform-layout" ? "FIXTURE_ROOT_RED" : "FIXTURE_ROOT_GREEN" }));
   assert.ok(failedRoot.blocked.some(({ id, reason }) => id === "platform-layout" && reason === "FIXTURE_ROOT_RED"));
   assert.equal(failedRoot.executed.find(({ id }) => id === "platform-layout").ok, false);
+  let blockedCalls = 0;
+  const blockedPlan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", inputs, executionPermission: true, blockedDependencies: ["DS candidate pending"] });
+  const blockedResult = await executeSelectedRoots(blockedPlan, async () => { blockedCalls += 1; return { ok: true }; });
+  assert.equal(blockedCalls, 0);
+  assert.deepEqual(blockedResult.executed, []);
+  assert.ok(blockedResult.blocked.some(({ reason }) => reason === "DS candidate pending"));
+  let missingInputCalls = 0;
+  const missingInputPlan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", executionPermission: true });
+  await executeSelectedRoots(missingInputPlan, async () => { missingInputCalls += 1; return { ok: true }; });
+  assert.equal(missingInputCalls, 0);
+  const missingRequiredSuite = { ...containment, groups: containment.groups.filter((group) => group.id !== "engine-suite").map((group) => group.id === "engine-p1" ? { ...group, contains: [] } : group) };
+  assert.throws(() => buildFinalGatePlan({ roster, containment: missingRequiredSuite, inputs, executionPermission: true }), (error) => error.reasonCode === "GATE_PLAN_REQUIRED_GROUP_MISSING");
   assert.throws(() => recordExecution(plan, [{ id: "engine-release", ok: true }]), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
   assert.throws(() => recordExecution(plan, [...plan.selected.map(({ id }) => ({ id, ok: true })), { id: "engine-p1", ok: true }]), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
 
   const known = buildDevelopmentPlan({ changedFiles: ["scripts/task.mjs"], inputs, previousEvidence: [successful] });
   assert.deepEqual(known.selected.map(({ id }) => id), ["typecheck", "test"]);
+  assert.deepEqual(known.selected.map(({ id, command }) => ({ id, command })), [{ id: "typecheck", command: "pnpm typecheck" }, { id: "test", command: "pnpm test" }]);
   assert.deepEqual(known.blocked, []);
+  const docs = buildDevelopmentPlan({ changedFiles: ["docs/dispatch.md"] });
+  assert.deepEqual(docs.selected.map(({ id, command }) => ({ id, command })), [{ id: "format-check", command: "pnpm format:check" }, { id: "links", command: "pnpm verify:links" }]);
+  const packageScripts = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/package.json"), "utf8")).scripts;
+  for (const command of Object.values(DEVELOPMENT_CHECK_COMMANDS)) {
+    const tokens = command.split(/\s+/u);
+    if (tokens[0] === "pnpm") assert.equal(Object.hasOwn(packageScripts, tokens.at(-1)), true, command);
+  }
   const unknown = buildDevelopmentPlan({ changedFiles: ["generated/unknown.bin"] });
   assert.ok(unknown.blocked.some(({ id }) => id === "generated/unknown.bin"));
   assert.deepEqual(unknown.selected.map(({ id }) => id), ["typecheck", "test"]);
@@ -211,6 +231,19 @@ test("STORY-414: progress waits report cursor deltas, unchanged polls, and termi
   assert.equal(completed.status, "completed");
   assert.ok(completed.polls >= 1);
   assert.ok(completed.bytesRead > 0);
+  for (const [name, event, expected] of [
+    ["completed", { type: "completed", ok: true, code: 0, signal: null }, "completed"],
+    ["failed", { type: "error", reasonCode: "FIXTURE_FAILED" }, "failed"],
+    ["orphaned", { type: "orphaned-before-bind", processGroup: 123 }, "orphaned"],
+  ]) {
+    const historyPath = join(root, `${name}-history.ndjson`);
+    await appendProgressEvent(historyPath, event);
+    const history = await readProgressDelta(historyPath);
+    const knownTerminal = await waitForProgress(historyPath, { cursor: history.nextCursor, events: history.events, timeoutMs: 0, pollMs: 5 });
+    assert.equal(knownTerminal.status, expected, name);
+    assert.equal(knownTerminal.summary.status, expected, name);
+    assert.equal(knownTerminal.polls, 0, name);
+  }
 
   const idlePath = join(root, "idle.ndjson");
   const idle = await waitForProgress(idlePath, { timeoutMs: 25, pollMs: 5, maxPollMs: 10 });

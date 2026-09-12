@@ -177,6 +177,8 @@ export async function waitForProgress(path, {
     elapsedMs: Math.max(0, Date.now() - startedAt),
     ...extra,
   });
+  const knownTerminal = summarizeProgress(allEvents).status;
+  if (["completed", "failed", "orphaned"].includes(knownTerminal)) return snapshot(knownTerminal);
   while (true) {
     if (signal?.aborted) return snapshot("cancelled");
     let delta;

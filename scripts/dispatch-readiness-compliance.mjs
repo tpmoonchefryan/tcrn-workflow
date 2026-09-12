@@ -37,7 +37,6 @@ const VERIFICATION_PLAN_LIST_FIELDS = Object.freeze([
   "localChecks",
   "finalRoots",
   "invalidationTriggers",
-  "blockedDependencies",
 ]);
 
 function verificationPlanProblems(plan) {
@@ -52,6 +51,11 @@ function verificationPlanProblems(plan) {
   for (const field of VERIFICATION_PLAN_LIST_FIELDS) {
     const problem = nonEmptyList(plan[field], `verificationPlan.${field}`);
     if (problem) problems.push(problem);
+  }
+  if (!Array.isArray(plan.blockedDependencies) || plan.blockedDependencies.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
+    problems.push({ field: "verificationPlan.blockedDependencies", message: "blockedDependencies must be a list of non-empty strings; an empty list means no blockers", code: "DISPATCH_VERIFICATION_BLOCKED_DEPENDENCIES_INVALID" });
+  } else if (plan.blockedDependencies.length > 0) {
+    problems.push({ field: "verificationPlan.blockedDependencies", message: "non-empty blockedDependencies make this plan a preview and block dispatch", code: "DISPATCH_VERIFICATION_PREREQUISITE_BLOCKED" });
   }
   if (plan.sameRepoExecution !== "serial") {
     problems.push({ field: "verificationPlan.sameRepoExecution", message: "same-repository output work must be serial", code: "DISPATCH_VERIFICATION_SERIAL_REQUIRED" });

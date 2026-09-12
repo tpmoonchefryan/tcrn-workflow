@@ -33,8 +33,22 @@ function validateRoster(roster, containment) {
     rosterGroups.set(group.id, group);
   }
   const contained = buildContainedExecutionPlan(containment);
+  const containedGroups = new Map(contained.all.map((entry) => [entry.id, entry]));
   if (!Array.isArray(roster.topLevel) || JSON.stringify(roster.topLevel) !== JSON.stringify(contained.selected.map(({ id }) => id))) {
     throw planError("GATE_PLAN_ROOT_ORDER_DRIFT", "acceptance roster topLevel must match gate containment roots");
+  }
+  for (const rosterGroup of roster.groups) {
+    const containedGroup = containedGroups.get(rosterGroup.id);
+    if (!containedGroup) throw planError("GATE_PLAN_REQUIRED_GROUP_MISSING", rosterGroup.id);
+    if (normalizeCommand(rosterGroup.command) !== normalizeCommand(containedGroup.command)) {
+      throw planError("GATE_PLAN_COMMAND_DRIFT", `${rosterGroup.id}: ${normalizeCommand(rosterGroup.command)} != ${normalizeCommand(containedGroup.command)}`);
+    }
+    if (!Array.isArray(rosterGroup.contains)) throw planError("GATE_PLAN_ROSTER_CONTAINMENT_INVALID", `${rosterGroup.id}.contains`);
+    for (const child of rosterGroup.contains) {
+      if (!containedGroup.path.includes(child) && !contained.all.some((entry) => entry.id === child && entry.rootId === containedGroup.rootId && entry.path.includes(containedGroup.id))) {
+        throw planError("GATE_PLAN_REQUIRED_EDGE_MISSING", `${rosterGroup.id}->${child}`);
+      }
+    }
   }
   for (const root of contained.selected) {
     const rosterGroup = rosterGroups.get(root.id);
@@ -76,6 +90,25 @@ const DEVELOPMENT_RULES = Object.freeze([
   { id: "gate-declaration", match: (path) => path === "scripts/policy/gate-containment.json" || path === "scripts/lib/push-gate-children.mjs", checks: ["p1-roster"] },
 ]);
 
+// These are the commands registered by this repository. Keep the rule ids
+// stable for changed-file selection, but never derive a package command by
+// concatenating the rule id: `format-check` and `links` are policy names, while
+// the package scripts are `format:check` and `verify:links`.
+export const DEVELOPMENT_CHECK_COMMANDS = Object.freeze({
+  "format-check": "pnpm format:check",
+  links: "pnpm verify:links",
+  portal: "pnpm verify:portal",
+  typecheck: "pnpm typecheck",
+  test: "pnpm test",
+  "p1-roster": "node --test tests/p1-roster.test.mjs",
+});
+
+function developmentCommand(check) {
+  const command = DEVELOPMENT_CHECK_COMMANDS[check];
+  if (command === undefined) throw planError("GATE_PLAN_DEVELOPMENT_COMMAND_UNREGISTERED", check);
+  return command;
+}
+
 export function buildDevelopmentPlan({ changedFiles, previousEvidence = [], inputs = {} }) {
   if (!Array.isArray(changedFiles) || changedFiles.length === 0) {
     return { schemaVersion: FINAL_GATE_PLAN_VERSION, phase: "development", selected: [], executed: [], coveredBy: [], reused: [], invalidated: [], blocked: [{ id: null, reason: "changed file list is required" }] };
@@ -91,7 +124,7 @@ export function buildDevelopmentPlan({ changedFiles, previousEvidence = [], inpu
       selected.set("test", { id: "test", command: "pnpm test", selected: true, coveredBy: null, reason: `fail-closed fallback for ${path}` });
       continue;
     }
-    for (const rule of matches) for (const check of rule.checks) selected.set(check, { id: check, command: check === "portal" ? "pnpm verify:portal" : check === "p1-roster" ? "node --test tests/p1-roster.test.mjs" : `pnpm ${check}`, selected: true, coveredBy: null, reason: `changed file matched ${rule.id}` });
+    for (const rule of matches) for (const check of rule.checks) selected.set(check, { id: check, command: developmentCommand(check), selected: true, coveredBy: null, reason: `changed file matched ${rule.id}` });
   }
   const prior = Array.isArray(previousEvidence) ? previousEvidence : previousEvidence ? [previousEvidence] : [];
   const evidence = prior.map((entry) => assessEvidenceReuse({ evidence: entry, inputs }));
@@ -106,10 +139,11 @@ export function buildDevelopmentPlan({ changedFiles, previousEvidence = [], inpu
     invalidated: evidence.flatMap((result) => result.invalidated),
     blocked: [...blocked, ...evidence.flatMap((result) => result.blocked)],
     execution: { strategy: "serial", maxConcurrent: 1 },
+    executable: blocked.length === 0,
   };
 }
 
-export function buildFinalGatePlan({ roster, containment, phase = "candidate-final", inputs = {}, previousEvidence = [] }) {
+export function buildFinalGatePlan({ roster, containment, phase = "candidate-final", inputs = {}, previousEvidence = [], readiness = {}, blockedDependencies = readiness.blockedDependencies, executionPermission = readiness.executionPermission, candidateReady = readiness.ready }) {
   if (!FINAL_GATE_PHASES.includes(phase)) throw planError("GATE_PLAN_PHASE_INVALID", phase);
   const { contained, rosterGroups } = validateRoster(roster, containment);
   const selected = contained.selected.map((entry) => ({ ...entry, command: rosterGroups.get(entry.id).command, phase }));
@@ -117,6 +151,17 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
   const reuse = [];
   const invalidated = [];
   const blocked = [];
+  const requiredInputs = inputKey(inputs);
+  const inputNames = ["sourceDigest", "environmentDigest", "commandDigest", "baselineDigest"];
+  const missingInputs = inputNames.filter((_name, index) => requiredInputs[index] === null);
+  if (missingInputs.length > 0) blocked.push({ id: "candidate-inputs", reason: `missing candidate inputs: ${missingInputs.join(", ")}` });
+  if (candidateReady === false) blocked.push({ id: "candidate-readiness", reason: "candidate is not ready" });
+  if (blockedDependencies !== undefined && (!Array.isArray(blockedDependencies) || blockedDependencies.some((entry) => typeof entry !== "string" || entry.trim().length === 0))) {
+    blocked.push({ id: "blocked-dependencies", reason: "blockedDependencies must be an array of non-empty strings" });
+  } else if (Array.isArray(blockedDependencies) && blockedDependencies.length > 0) {
+    blocked.push(...blockedDependencies.map((reason, index) => ({ id: `dependency-${index + 1}`, reason })));
+  }
+  if (executionPermission !== true) blocked.push({ id: "execution-permission", reason: "explicit candidate execution permission is required" });
   const prior = Array.isArray(previousEvidence) ? previousEvidence : previousEvidence ? [previousEvidence] : [];
   for (const evidence of prior) {
     const result = assessEvidenceReuse({ evidence, inputs });
@@ -136,11 +181,14 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
     blocked,
     execution: { strategy: "serial", maxConcurrent: 1 },
     executionOrder: selected.map(({ id }) => id),
+    executionPermission: blocked.length === 0 ? "granted" : "denied",
+    executable: blocked.length === 0,
     rule: "execute selected top-level roots once; contained children are reported, not launched independently",
   };
 }
 
 export function recordExecution(plan, results) {
+  if (plan?.executable !== true) throw planError("GATE_PLAN_NOT_EXECUTABLE", "plan has blocked prerequisites");
   const rows = Array.isArray(results) ? results : [];
   const selectedIds = new Set((plan?.selected ?? []).map((entry) => entry.id));
   const executedIds = rows.map((entry) => entry?.id).filter(Boolean);
@@ -157,6 +205,7 @@ export async function executeSelectedRoots(plan, runner) {
     throw planError("GATE_PLAN_SERIAL_POLICY_INVALID", "same-repository roots must execute serially");
   }
   if (typeof runner !== "function") throw planError("GATE_PLAN_RUNNER_REQUIRED", "a root runner is required");
+  if (plan?.executable !== true || (plan?.blocked ?? []).length > 0) return { ...plan, executed: [] };
   const rows = [];
   const blocked = [...(plan.blocked ?? [])];
   for (const entry of plan.selected ?? []) {
