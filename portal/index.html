@@ -4411,14 +4411,17 @@ const BOOT = __PORTAL_BOOT__;
     const success = state.receipt.ok !== false && !String(state.receipt.reasonCode || "").includes("REFUSED");
     const chip = $("#receipt-chip");
     chip.className = `tcrn-badge ${success ? "tcrn-badge--positive" : "tcrn-badge--danger"}`;
-    setText("#receipt-chip-text", state.receipt.version ? `${success ? "✓" : "✕"}v${state.receipt.version}` : `${success ? "✓" : "✕"} ${state.receipt.reasonCode || "—"}`);
+    const receiptTag = state.receipt.version !== undefined && state.receipt.version !== null
+      ? `v${state.receipt.version}`
+      : state.receipt.updatedAt ? ` ${state.receipt.reasonCode || "—"} · ${state.receipt.updatedAt}` : ` ${state.receipt.reasonCode || "—"}`;
+    setText("#receipt-chip-text", `${success ? "✓" : "✕"}${receiptTag}`);
     renderReceipt();
   };
   const renderReceipt = () => {
     const body = state.receipt || { reasonCode: "PORTAL_IDLE", message: t("receipt.empty"), actor: BOOT.actor };
     const reasonHint = (code) => { const key = "reason." + String(code || ""); const hint = t(key); return hint === key ? "" : hint; };
     const hint = reasonHint(body.reasonCode);
-    const fields = [["receipt.reasonCode", t("receipt.reasonCode"), body.reasonCode + (hint ? " — " + hint : "")], ["receipt.record", t("receipt.record"), recordValue(body)], ["receipt.version", t("receipt.version"), body.version ?? "—"], ["receipt.digest", t("receipt.digest"), body.receiptDigest ?? "—"], ["receipt.head", t("receipt.head"), body.headEventHash ?? "—"], ["receipt.actor", t("receipt.actor"), body.actor ?? BOOT.actor]];
+    const fields = [["receipt.reasonCode", t("receipt.reasonCode"), body.reasonCode + (hint ? " — " + hint : "")], ["receipt.record", t("receipt.record"), recordValue(body)], ["receipt.version", t("receipt.version"), body.version ?? (body.updatedAt ? `— · ${body.updatedAt}` : "—")], ["receipt.digest", t("receipt.digest"), body.receiptDigest ?? "—"], ["receipt.head", t("receipt.head"), body.headEventHash ?? "—"], ["receipt.actor", t("receipt.actor"), body.actor ?? BOOT.actor]];
     $("#receipt-body").innerHTML = fields.map(([, label, value]) => `<div class="tcrn-readback-panel__row"><span class="tcrn-readback-panel__key">${esc(label)}</span><span class="tcrn-readback-panel__value">${esc(value)}</span></div>`).join("");
     renderAudit("#drawer-audit");
   };
