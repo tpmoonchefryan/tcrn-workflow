@@ -32,7 +32,11 @@
     "consumerEvidence": {
       "productProof": "portal/tests/ui-presence.test.mjs",
       "geometryProof": "U1-U3 browser recheck",
-      "requiredAxes": ["dpr", "pinch-visual-viewport", "page-zoom"]
+      "requiredAxes": [
+        "dpr",
+        "pinch-visual-viewport",
+        "page-zoom"
+      ]
     }
   },
   "reconciliation": {
