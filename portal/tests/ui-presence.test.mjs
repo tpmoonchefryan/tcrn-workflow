@@ -288,7 +288,7 @@ function topbarFindings(document) {
   const domOrder = header ? [header, ...header.querySelectorAll("*")] : [];
   if (actionOrder.some((node) => !node || !domOrder.includes(node))) findings.push("topbar:action-ownership");
   else if (actionOrder.some((node, index) => index > 0 && domOrder.indexOf(actionOrder[index - 1]) >= domOrder.indexOf(node))) findings.push("topbar:action-order");
-  if (header?.getAttribute("data-ds-mapping-status") !== "rejected-awaiting-next-DS112") findings.push("topbar:mapping-status");
+  if (header?.getAttribute("data-ds-mapping-status") !== "candidate-consumed-pending-coordination") findings.push("topbar:mapping-status");
   return findings;
 }
 
@@ -538,10 +538,12 @@ if (process.argv[2] === "status" && actual.status === 0) {
     try {
       const layout = page.document.querySelector('[data-settings-layout-component="SettingsLayout"]');
       assert.ok(layout, "the settings page must consume the DS SettingsLayout contract");
-      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@1a4709db59af073f1d30403258881999d2364463");
-      assert.equal(layout.getAttribute("data-ds-contract-status"), "rejected-awaiting-next-DS112");
+      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6");
+      assert.equal(layout.getAttribute("data-ds-contract-status"), "candidate-consumed-pending-coordination");
       assert.equal(layout.getAttribute("data-ds-contract-version"), "ds_consumption_contract_v2");
-      assert.equal(layout.getAttribute("data-ds-contract-digest"), "6ea12f36efe107af3d9340a6927b974b9bdd88749407a4036c16b2be857e347b");
+      assert.equal(layout.getAttribute("data-ds-contract-digest"), "5cad4072dcca7ad959bd018cb10ff82fe588e94158a27d6cd50b6d8c2c73f07b");
+      assert.equal(layout.getAttribute("data-ds-surface-contracts"), "overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1");
+      assert.equal(layout.getAttribute("data-ds-static-overlay-bridge"), "mountStaticOverlayBoundary");
       assert.deepEqual(layout.getAttribute("data-ds-rules")?.split(" "), ["DS-106-R1", "DS-106-R2", "DS-107-R1", "DS-107-R2", "DS-108-R1", "DS-108-R2", "DS-112-R1", "DS-112-R2"]);
       const required = {
         "data-settings-layout-mode": "container-driven",
@@ -611,10 +613,10 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(layout);
       const findings = (root) => {
         const output = [];
-        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@1a4709db59af073f1d30403258881999d2364463") output.push("ds-candidate");
-        if (root.getAttribute("data-ds-contract-status") !== "rejected-awaiting-next-DS112") output.push("ds-contract-status");
+        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6") output.push("ds-candidate");
+        if (root.getAttribute("data-ds-contract-status") !== "candidate-consumed-pending-coordination") output.push("ds-contract-status");
         if (root.getAttribute("data-ds-contract-version") !== "ds_consumption_contract_v2") output.push("ds-contract-version");
-        if (root.getAttribute("data-ds-contract-digest") !== "6ea12f36efe107af3d9340a6927b974b9bdd88749407a4036c16b2be857e347b") output.push("ds-contract-digest");
+        if (root.getAttribute("data-ds-contract-digest") !== "5cad4072dcca7ad959bd018cb10ff82fe588e94158a27d6cd50b6d8c2c73f07b") output.push("ds-contract-digest");
         if (root.getAttribute("data-ds-rules") !== "DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2") output.push("ds-rules");
         if (root.getAttribute("data-settings-layout-navigation-location") !== "page-hierarchy-section-tabs") output.push("navigation-location");
         const required = {
@@ -1005,16 +1007,23 @@ if (process.argv[2] === "status" && actual.status === 0) {
       const tip = page.document.querySelector('[data-concept-tip="setting.execution.independenceFloor"]');
       assert.ok(tip, "the independence floor is the concept that prompted this batch and must carry one");
 
-      // The markup is the design system's Tooltip: the wrapper declares the scope and
-      // forbids interactive content, and the content is a real tooltip role wired to
-      // the trigger. The design system's rule reveals it on hover AND focus-within, so
-      // the trigger has to be focusable or the keyboard half can never fire.
-      assert.equal(tip.getAttribute("data-tooltip-scope"), "supplemental");
-      assert.equal(tip.getAttribute("data-tooltip-interactive-content"), "forbidden");
+      // This long explanation uses the design system's non-interactive Popover boundary:
+      // the consumer supplies the trigger and domain copy, while the mounted layer is
+      // body-bound and cannot be clipped by a settings row.
+      assert.equal(tip.getAttribute("data-overlay-scope"), "popover");
+      assert.equal(tip.getAttribute("data-static-overlay-kind"), "popover");
       const trigger = tip.querySelector("button");
-      const content = tip.querySelector('[role="tooltip"]');
+      const layerId = trigger?.getAttribute("aria-controls");
+      const content = layerId ? page.document.getElementById(layerId) : null;
       assert.ok(trigger && content);
-      assert.equal(trigger.getAttribute("aria-describedby"), content.getAttribute("id"));
+      assert.equal(trigger.getAttribute("aria-haspopup"), "dialog");
+      assert.equal(trigger.getAttribute("aria-controls"), content.getAttribute("id"));
+      assert.equal(content.getAttribute("role"), "dialog");
+      assert.equal(content.parentElement, page.document.body, "the popover layer must be mounted at document body");
+      assert.equal(content.getAttribute("data-overlay-boundary"), "document-body");
+      assert.equal(content.getAttribute("data-overlay-positioning"), "static-fixed");
+      assert.equal(content.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6");
+      assert.equal(content.hidden, true, "a mounted popover starts closed");
       // INC-201: the contract is that the trigger names *a* design-system button
       // component, which is what design-proof's button-family leg enforces. It used to
       // be pinned to tcrn-icon-button specifically, and that class is a 38x38 control
@@ -1027,6 +1036,15 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(trigger.querySelector("svg"), "the icon is inline SVG, not a character the shipped font may not have");
       assert.equal(trigger.textContent.trim(), "", "no glyph stands in for the icon");
       assert.equal(content.querySelectorAll("a,button,input,select,textarea").length, 0, "the design system forbids interactive content inside a tooltip");
+
+      trigger.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      assert.equal(content.hidden, false, "the popover opens from its trigger");
+      assert.equal(trigger.getAttribute("aria-expanded"), "true");
+      const escape = new page.window.Event("keydown", { bubbles: true });
+      Object.defineProperty(escape, "key", { value: "Escape" });
+      page.document.dispatchEvent(escape);
+      assert.equal(content.hidden, true, "Escape closes the popover");
+      assert.equal(trigger.getAttribute("aria-expanded"), "false");
 
       // The explanation says the thing the surface does not — here, that the engine
       // never checks the declaration is true. A tip that only repeated the label would
@@ -1043,6 +1061,47 @@ if (process.argv[2] === "status" && actual.status === 0) {
       const explained = [...page.document.querySelectorAll('#vocabulary-nav [data-concept-tip]')]
         .map((node) => node.dataset.conceptTip.replace("vocabulary.", ""));
       assert.deepEqual(explained.slice().sort(), categories.slice().sort(), "every dictionary category is explained");
+    } finally { await page.cleanup(); }
+  });
+
+  test("TCRN-CROSS-STORY-408 R2 consumes the DS static overlay boundary for short and long explanations", async () => {
+    const page = await preparePage();
+    try {
+      page.document.querySelector('[data-setting-group="execution"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const longTip = page.document.querySelector('[data-concept-tip="setting.execution.independenceFloor"]');
+      const shortTip = page.document.querySelector('[data-concept-tip="setting.execution.subagentPolicy"]');
+      assert.ok(longTip && shortTip, "the settings surface must expose both overlay consumers");
+      const inspect = (tip) => {
+        const trigger = tip.querySelector("button");
+        const id = trigger?.getAttribute("aria-controls") || trigger?.getAttribute("aria-describedby");
+        const layer = id ? page.document.getElementById(id) : null;
+        assert.ok(trigger && layer, "every overlay trigger must resolve its layer by id");
+        assert.equal(layer.parentElement, page.document.body, "every layer must escape the settings row boundary");
+        assert.equal(layer.getAttribute("data-overlay-boundary"), "document-body");
+        assert.equal(layer.getAttribute("data-overlay-positioning"), "static-fixed");
+        assert.equal(layer.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6");
+        assert.equal(layer.hidden, true);
+        return { trigger, layer };
+      };
+      const long = inspect(longTip);
+      assert.equal(long.trigger.getAttribute("aria-haspopup"), "dialog");
+      long.trigger.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      assert.equal(long.layer.hidden, false);
+      const closeLong = new page.window.Event("keydown", { bubbles: true });
+      Object.defineProperty(closeLong, "key", { value: "Escape" });
+      page.document.dispatchEvent(closeLong);
+      assert.equal(long.layer.hidden, true);
+
+      const short = inspect(shortTip);
+      assert.equal(short.trigger.getAttribute("aria-describedby"), short.layer.getAttribute("id"));
+      assert.equal(short.layer.getAttribute("role"), "tooltip");
+      short.trigger.dispatchEvent(new page.window.Event("focusin", { bubbles: true }));
+      assert.equal(short.layer.hidden, false, "the short tooltip opens from keyboard focus");
+      const closeShort = new page.window.Event("keydown", { bubbles: true });
+      Object.defineProperty(closeShort, "key", { value: "Escape" });
+      page.document.dispatchEvent(closeShort);
+      assert.equal(short.layer.hidden, true, "Escape closes the short tooltip");
     } finally { await page.cleanup(); }
   });
 

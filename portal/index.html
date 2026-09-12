@@ -2584,7 +2584,8 @@ a.tcrn-relationship-chip:focus-visible {
   z-index: var(--tcrn-z-popover);
   pointer-events: none;
   width: max-content;
-  max-width: min(260px, calc(100vw - 32px));
+  max-width: min(260px, calc(100vw - var(--tcrn-space-4)));
+  overflow-wrap: anywhere;
   border-radius: var(--tcrn-radius-control);
   background: var(--tcrn-color-text-primary);
   color: var(--tcrn-color-surface-panel);
@@ -3308,7 +3309,6 @@ a.tcrn-relationship-chip:focus-visible {
   border-color: color-mix(in srgb, var(--tcrn-color-brand-primary) 24%, transparent);
   box-shadow: var(--tcrn-elevation-floating);
 }
-
 /* Reduced-motion + forced-colors handling for the relocated component families. */
 @media (prefers-reduced-motion: reduce) {
   .tcrn-skeleton::after {
@@ -3525,6 +3525,22 @@ a.tcrn-relationship-chip:focus-visible {
 .tcrn-settings-layout__form .tcrn-setting-row__control>.tcrn-number-input{inline-size:100%}
 @container tcrn-settings-layout-frame (min-width:960px){.tcrn-settings-layout__grid{grid-template-columns:minmax(0,var(--tcrn-container-settings-local-nav)) minmax(0,1fr)}}
 @container tcrn-settings-content (min-width:720px){.tcrn-settings-layout__form .tcrn-setting-row{grid-template-columns:minmax(0,1fr) minmax(var(--tcrn-container-settings-control-min),.8fr) max-content}.tcrn-settings-layout__form .tcrn-setting-row__tools{justify-content:flex-end}}
+
+/* DS-113/114/115 full-surface boundary and content rules. These follow the settings
+   contract marker so Storybook's global package CSS carries them once while the
+   scoped legacy copy remains bounded. */
+.tcrn-tooltip__content[data-tooltip-portal="true"],.tcrn-tooltip__content[data-overlay-positioning="static-fixed"]{position:fixed;transform:none;max-width:min(260px,calc(100vw - var(--tcrn-space-4)))}
+.tcrn-tooltip__content[data-tooltip-portal="true"][data-tooltip-open="true"],.tcrn-tooltip__content[data-overlay-positioning="static-fixed"][data-tooltip-open="true"]{opacity:1}
+.tcrn-dictionary-table{display:grid;gap:var(--tcrn-space-2);min-inline-size:0;max-inline-size:100%}
+.tcrn-dictionary-table__category-description{margin:0}
+.tcrn-dictionary-table table{inline-size:100%;border-collapse:collapse;min-inline-size:0}
+.tcrn-dictionary-table th,.tcrn-dictionary-table td{padding:var(--tcrn-space-2) var(--tcrn-space-3);text-align:start;vertical-align:top;border-block-end:1px solid var(--tcrn-color-border-subtle)}
+.tcrn-dictionary-table thead th{background:var(--tcrn-color-surface-muted);font-weight:var(--tcrn-type-weight-medium)}
+.tcrn-dictionary-table tbody th{font-weight:var(--tcrn-type-weight-medium)}
+.tcrn-dictionary-table tbody th code{display:block;color:var(--tcrn-color-text-tertiary);font-family:var(--tcrn-type-family-mono);font-size:var(--tcrn-type-size-meta);overflow-wrap:anywhere}
+.tcrn-dictionary-table__label{display:block;margin-block-start:var(--tcrn-space-0h);color:var(--tcrn-color-text-primary)}
+.tcrn-dictionary-table[data-dictionary-valid="false"]{border-inline-start:3px solid var(--tcrn-color-state-blocked);padding-inline-start:var(--tcrn-space-2)}
+.tcrn-popover[data-overlay-positioning="portal-fixed"],.tcrn-popover[data-overlay-positioning="static-fixed"]{position:fixed;max-width:min(420px,calc(100vw - var(--tcrn-space-4)));max-height:calc(100vh - var(--tcrn-space-4));overflow:auto;overflow-wrap:anywhere}
 
 /* DS-112 page hierarchy contract. */
 .tcrn-page-hierarchy{display:grid;gap:var(--tcrn-space-4);min-inline-size:0;max-inline-size:100%}
@@ -4124,7 +4140,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
       <div class="tcrn-rail__footer"><span data-i18n="app.boundaryBody">Writes use the public CLI and return the engine receipt.</span></div>
     </aside>
     <div class="tcrn-product-shell__workspace">
-      <header class="tcrn-top-bar" data-ds-component="ProductShell/TopBar" data-ds-source-url="https://tcrn-design-system-storybook.vercel.app/components-navigation-shells.html#navigation-shell-spec" data-ds-mapping-status="rejected-awaiting-next-DS112">
+      <header class="tcrn-top-bar" data-ds-component="ProductShell/TopBar" data-ds-source-url="https://tcrn-design-system-storybook.vercel.app/components-navigation-shells.html#navigation-shell-spec" data-ds-mapping-status="candidate-consumed-pending-coordination" data-ds-candidate-sha="3a91bab4232c769125c03d39beb3cae6a3e328c6">
         <div class="tcrn-top-bar__module tcrn-top-bar__module--path" id="workspace-label"></div>
         <div class="tcrn-top-bar__actions">
           <label class="tcrn-sr-only" for="partition-select" data-i18n="partition.label">Partition</label>
@@ -4187,7 +4203,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
             <nav class="tcrn-subnav tcrn-settings-layout__nav" data-settings-layout-nav data-settings-local-nav="true" aria-label="Settings groups" role="tablist"><button class="tcrn-subnav__item" data-setting-group="workspace" aria-current="page" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="machine" data-i18n="settings.machine">Workflow</button></nav>
           </div>
           <div class="tcrn-page-hierarchy__lower-content" data-page-hierarchy-region="lower-content" data-page-hierarchy-slot="content">
-            <div class="tcrn-manage tcrn-settings-layout" data-settings-layout-component="SettingsLayout" data-settings-layout="true" data-settings-layout-navigation-location="page-hierarchy-section-tabs" data-ds-candidate="TCRN-Design-System@1a4709db59af073f1d30403258881999d2364463" data-ds-contract-status="rejected-awaiting-next-DS112" data-ds-contract-version="ds_consumption_contract_v2" data-ds-contract-digest="6ea12f36efe107af3d9340a6927b974b9bdd88749407a4036c16b2be857e347b" data-ds-rules="DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2" data-settings-layout-mode="container-driven" data-settings-layout-form-policy="single-host-single-column" data-settings-layout-breakpoint="960px" data-settings-content-breakpoint="720px" data-settings-local-navigation="compact" data-settings-overflow-policy="no-page-overflow" data-settings-long-value-policy="native-inline-scroll-copy"><div class="tcrn-settings-layout__frame"><div class="tcrn-settings-layout__grid" data-settings-layout-grid><div class="tcrn-settings-layout__content" data-settings-layout-content data-settings-content="true" data-settings-complete-form="true"><div id="design-authority" hidden></div><div id="dispatch-config" class="tcrn-settings-layout__form" hidden></div><div id="settings-rows" class="tcrn-settings-layout__form"></div><div id="machine-settings" class="tcrn-settings-layout__form" hidden></div></div></div></div></div>
+            <div class="tcrn-manage tcrn-settings-layout" data-settings-layout-component="SettingsLayout" data-settings-layout="true" data-settings-layout-navigation-location="page-hierarchy-section-tabs" data-ds-candidate="TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6" data-ds-contract-status="candidate-consumed-pending-coordination" data-ds-contract-version="ds_consumption_contract_v2" data-ds-contract-digest="5cad4072dcca7ad959bd018cb10ff82fe588e94158a27d6cd50b6d8c2c73f07b" data-ds-rules="DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2" data-ds-surface-contracts="overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1" data-ds-static-overlay-bridge="mountStaticOverlayBoundary" data-ds-candidate-status="fixed-candidate-pending-coordination" data-settings-layout-mode="container-driven" data-settings-layout-form-policy="single-host-single-column" data-settings-layout-breakpoint="960px" data-settings-content-breakpoint="720px" data-settings-local-navigation="compact" data-settings-overflow-policy="no-page-overflow" data-settings-long-value-policy="native-inline-scroll-copy"><div class="tcrn-settings-layout__frame"><div class="tcrn-settings-layout__grid" data-settings-layout-grid><div class="tcrn-settings-layout__content" data-settings-layout-content data-settings-content="true" data-settings-complete-form="true"><div id="design-authority" hidden></div><div id="dispatch-config" class="tcrn-settings-layout__form" hidden></div><div id="settings-rows" class="tcrn-settings-layout__form"></div><div id="machine-settings" class="tcrn-settings-layout__form" hidden></div></div></div></div></div>
           </div>
         </div>
       </section>
@@ -4366,28 +4382,194 @@ const BOOT = __PORTAL_BOOT__;
   });
   const settingGroup = (key) => LEGACY_MODEL_SETTING_KEYS.has(key) ? "execution" : SETTING_GROUPS[key] ?? "unassigned";
   const settingLabel = (key) => t(`setting.${key}.label`);
-  // A supplemental explanation for a concept whose meaning is not on the surface. The
-  // markup is the design system's Tooltip verbatim: the wrapper carries the placement
-  // and scope attributes, the content carries role="tooltip", and the design system's
-  // own rule shows it on hover AND on focus-within — which is why the trigger has to be
-  // focusable, or the keyboard half of that rule can never fire. The icon is inline SVG
-  // for the reason INC-191 established: a character like ⓘ depends on whatever font
-  // resolves it, and the shipped face has no glyph for several of them.
+  // A supplemental explanation for a concept whose meaning is not on the surface. Short
+  // text uses the DS Tooltip boundary; long text uses its non-interactive Popover boundary
+  // so the reader gets a scrollable, body-bound layer rather than a clipped paragraph.
+  // The icon is inline SVG for the reason INC-191 established: a character like ⓘ depends
+  // on whatever font resolves it, and the shipped face has no glyph for several of them.
   let conceptTipSequence = 0;
   const conceptTip = (key, placement = "top") => {
     const body = t(`concept.${key}`);
     if (body === `concept.${key}`) return "";
     const id = `concept-tip-${conceptTipSequence += 1}`;
-    return `<span class="tcrn-tooltip" data-placement="${esc(placement)}" data-tooltip-scope="supplemental" data-tooltip-interactive-content="forbidden" data-concept-tip="${esc(key)}">`
-      + `<button type="button" class="tcrn-button tcrn-button--quiet tcrn-concept-tip__trigger" aria-describedby="${id}" aria-label="${esc(t("concept.explain"))}">`
+    const kind = body.length > 240 ? "popover" : "tooltip";
+    const layerTag = kind === "popover" ? "section" : "span";
+    const layerClass = kind === "popover" ? "tcrn-popover" : "tcrn-tooltip__content";
+    const layerRole = kind === "popover" ? `role="dialog" aria-modal="false" aria-label="${esc(t("concept.explain"))}" data-overlay-scope="popover"` : `role="tooltip" data-tooltip-scope="supplemental" data-tooltip-interactive-content="forbidden"`;
+    const triggerRelation = kind === "popover" ? `aria-controls="${id}" aria-haspopup="dialog" aria-expanded="false"` : `aria-describedby="${id}"`;
+    return `<span class="tcrn-tooltip" data-placement="${esc(placement)}" data-overlay-scope="${kind}" data-concept-tip="${esc(key)}" data-static-overlay-kind="${kind}" data-ds-overlay-candidate="${DS_STATIC_OVERLAY_CANDIDATE}">`
+      + `<button type="button" class="tcrn-button tcrn-button--quiet tcrn-concept-tip__trigger" ${triggerRelation} data-static-overlay-trigger="true" data-static-overlay-kind="${kind}" aria-label="${esc(t("concept.explain"))}">`
       + `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v4"/><path d="M8 4.8h.01"/></svg>`
       + `</button>`
-      + `<span id="${id}" role="tooltip" class="tcrn-tooltip__content">${esc(body)}</span>`
+      + `<${layerTag} id="${id}" ${layerRole} class="${layerClass}" data-static-overlay-layer="true" data-static-overlay-kind="${kind}" data-ds-overlay-candidate="${DS_STATIC_OVERLAY_CANDIDATE}" hidden>${esc(body)}</${layerTag}>`
       + `</span>`;
   };
   const settingDescription = (key) => t(`setting.${key}.description`);
   const currentSetting = (key) => state.settings?.settings?.find((entry) => entry.key === key);
   const controlId = (prefix, key) => `${prefix}-${String(key).replace(/[^a-zA-Z0-9_-]/gu, "-")}`;
+  // DS R2 static-consumer bridge. This is the package's fixed DOM bridge from
+  // TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6, kept inline because
+  // the portal is intentionally dependency-free at runtime. The portal owns only
+  // pairing, placement choice, and domain content; boundary, geometry, and dismissal
+  // mechanics remain the signed DS implementation.
+  const DS_STATIC_OVERLAY_CANDIDATE = "TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6";
+  const clampStaticOverlay = (value, minimum, maximum) => Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
+  const staticOverlayRect = (element) => {
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+  };
+  const computeStaticOverlayPosition = (anchor, layer, requestedPlacement, viewportWidth, viewportHeight, gap) => {
+    const layerWidth = Math.max(layer.width, 0);
+    const layerHeight = Math.max(layer.height, 0);
+    const edge = Math.max(gap, 0);
+    const fitsTop = anchor.top - layerHeight - edge >= edge;
+    const fitsBottom = anchor.bottom + layerHeight + edge <= viewportHeight - edge;
+    const fitsLeft = anchor.left - layerWidth - edge >= edge;
+    const fitsRight = anchor.right + layerWidth + edge <= viewportWidth - edge;
+    let placement = requestedPlacement;
+    const direction = requestedPlacement.split("-")[0];
+    if (direction === "top" && !fitsTop && fitsBottom) placement = requestedPlacement.replace(/^top/u, "bottom");
+    if (direction === "bottom" && !fitsBottom && fitsTop) placement = requestedPlacement.replace(/^bottom/u, "top");
+    if (direction === "left" && !fitsLeft && fitsRight) placement = "right";
+    if (direction === "right" && !fitsRight && fitsLeft) placement = "left";
+    let left = anchor.left;
+    let top = anchor.bottom + edge;
+    if (["top", "top-start", "top-end"].includes(placement)) top = anchor.top - layerHeight - edge;
+    else if (["bottom", "bottom-start", "bottom-end"].includes(placement)) top = anchor.bottom + edge;
+    else if (placement === "left") { left = anchor.left - layerWidth - edge; top = anchor.top + ((anchor.height - layerHeight) / 2); }
+    else if (placement === "right") { left = anchor.right + edge; top = anchor.top + ((anchor.height - layerHeight) / 2); }
+    if (placement === "top-end" || placement === "bottom-end") left = anchor.right - layerWidth;
+    if (placement === "top" || placement === "bottom") left = anchor.left + ((anchor.width - layerWidth) / 2);
+    if (placement === "top-start" || placement === "bottom-start") left = anchor.left;
+    return {
+      left: clampStaticOverlay(left, edge, viewportWidth - layerWidth - edge),
+      top: clampStaticOverlay(top, edge, viewportHeight - layerHeight - edge),
+      placement,
+    };
+  };
+  const mountStaticOverlayBoundary = ({ trigger, layer, kind, placement, gap = 8 }) => {
+    const inert = { open: () => undefined, close: () => undefined, reposition: () => undefined, destroy: () => undefined };
+    if (!(trigger instanceof HTMLElement) || !(layer instanceof HTMLElement)) return inert;
+    const originalParent = layer.parentNode;
+    const originalNextSibling = layer.nextSibling;
+    const previousStyle = layer.getAttribute("style");
+    const previousHidden = layer.hidden;
+    const previousBoundary = layer.getAttribute("data-overlay-boundary");
+    const previousPositioning = layer.getAttribute("data-overlay-positioning");
+    const previousResolvedPlacement = layer.getAttribute("data-overlay-placement-resolved");
+    const previousOpen = layer.getAttribute("data-overlay-open");
+    const previousTooltipOpen = layer.getAttribute("data-tooltip-open");
+    const previousExpanded = trigger.getAttribute("aria-expanded");
+    const initialOpen = layer.getAttribute("data-overlay-open") === "true"
+      || (layer.getAttribute("data-overlay-open") === null && !layer.hidden);
+    let openState = initialOpen;
+    let disposed = false;
+    const setLayerState = (nextOpen) => {
+      openState = nextOpen;
+      layer.hidden = !nextOpen;
+      layer.setAttribute("data-overlay-open", nextOpen ? "true" : "false");
+      if (kind === "tooltip") layer.setAttribute("data-tooltip-open", nextOpen ? "true" : "false");
+      if (kind === "popover") trigger.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+    };
+    const reposition = () => {
+      if (disposed || !openState) return;
+      layer.hidden = false;
+      layer.style.visibility = "hidden";
+      const next = computeStaticOverlayPosition(staticOverlayRect(trigger), staticOverlayRect(layer), placement, window.innerWidth, window.innerHeight, gap);
+      layer.style.left = `${next.left}px`;
+      layer.style.top = `${next.top}px`;
+      layer.setAttribute("data-overlay-placement-resolved", next.placement);
+      layer.style.visibility = "visible";
+    };
+    const open = () => { if (!disposed) { setLayerState(true); reposition(); } };
+    const close = ({ restoreFocus = false } = {}) => {
+      if (disposed) return;
+      setLayerState(false);
+      layer.style.visibility = "hidden";
+      if (restoreFocus) trigger.focus();
+    };
+    const onFocusIn = () => { if (kind === "tooltip") open(); };
+    const onFocusOut = (event) => {
+      const related = event.relatedTarget;
+      if (related instanceof Node && (trigger.contains(related) || layer.contains(related))) return;
+      if (kind === "tooltip") close();
+    };
+    const onMouseEnter = () => { if (kind === "tooltip") open(); };
+    const onMouseLeave = () => { if (kind === "tooltip") close(); };
+    const onClick = () => { if (kind === "popover") (openState ? close : open)(); };
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape" || !openState) return;
+      event.preventDefault();
+      close({ restoreFocus: kind === "popover" });
+    };
+    const onPointerDown = (event) => {
+      const target = event.target;
+      if (kind === "popover" && openState && (!(target instanceof Node) || (!trigger.contains(target) && !layer.contains(target)))) close();
+    };
+    document.body.append(layer);
+    layer.setAttribute("data-overlay-boundary", "document-body");
+    layer.setAttribute("data-overlay-positioning", "static-fixed");
+    layer.setAttribute("data-ds-overlay-candidate", DS_STATIC_OVERLAY_CANDIDATE);
+    layer.style.position = "fixed";
+    trigger.addEventListener("focusin", onFocusIn);
+    trigger.addEventListener("focusout", onFocusOut);
+    trigger.addEventListener("mouseenter", onMouseEnter);
+    trigger.addEventListener("mouseleave", onMouseLeave);
+    trigger.addEventListener("click", onClick);
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    if (openState) open(); else close();
+    return {
+      open,
+      close,
+      reposition,
+      destroy() {
+        if (disposed) return;
+        disposed = true;
+        trigger.removeEventListener("focusin", onFocusIn);
+        trigger.removeEventListener("focusout", onFocusOut);
+        trigger.removeEventListener("mouseenter", onMouseEnter);
+        trigger.removeEventListener("mouseleave", onMouseLeave);
+        trigger.removeEventListener("click", onClick);
+        document.removeEventListener("keydown", onKeyDown);
+        document.removeEventListener("pointerdown", onPointerDown);
+        window.removeEventListener("resize", reposition);
+        window.removeEventListener("scroll", reposition, true);
+        if (originalParent) {
+          if (originalNextSibling?.parentNode === originalParent) originalParent.insertBefore(layer, originalNextSibling);
+          else originalParent.appendChild(layer);
+        }
+        if (previousStyle === null) layer.removeAttribute("style"); else layer.setAttribute("style", previousStyle);
+        if (previousHidden) layer.hidden = true; else layer.removeAttribute("hidden");
+        if (previousBoundary === null) layer.removeAttribute("data-overlay-boundary"); else layer.setAttribute("data-overlay-boundary", previousBoundary);
+        if (previousPositioning === null) layer.removeAttribute("data-overlay-positioning"); else layer.setAttribute("data-overlay-positioning", previousPositioning);
+        if (previousResolvedPlacement === null) layer.removeAttribute("data-overlay-placement-resolved"); else layer.setAttribute("data-overlay-placement-resolved", previousResolvedPlacement);
+        if (previousOpen === null) layer.removeAttribute("data-overlay-open"); else layer.setAttribute("data-overlay-open", previousOpen);
+        if (previousTooltipOpen === null) layer.removeAttribute("data-tooltip-open"); else layer.setAttribute("data-tooltip-open", previousTooltipOpen);
+        if (kind === "popover") {
+          if (previousExpanded === null) trigger.removeAttribute("aria-expanded"); else trigger.setAttribute("aria-expanded", previousExpanded);
+        }
+      },
+    };
+  };
+  const staticOverlayMounts = new Set();
+  const destroyStaticOverlayMounts = () => {
+    for (const mounted of staticOverlayMounts) mounted.handle.destroy();
+    staticOverlayMounts.clear();
+  };
+  const mountStaticOverlayMounts = (root = document) => {
+    for (const trigger of $$('[data-static-overlay-trigger="true"]', root)) {
+      const layerId = trigger.getAttribute("aria-describedby") || trigger.getAttribute("aria-controls");
+      const layer = layerId ? document.getElementById(layerId) : null;
+      if (!layer) continue;
+      const kind = trigger.dataset.staticOverlayKind || "tooltip";
+      const placement = trigger.closest("[data-placement]")?.getAttribute("data-placement") || "top";
+      const handle = mountStaticOverlayBoundary({ trigger, layer, kind, placement });
+      staticOverlayMounts.add({ trigger, layer, handle });
+    }
+  };
   const settingChoiceAttrs = (values, key = "", reasonOverride = "") => {
     const reason = reasonOverride || (values.length === 2 ? "option-measurement-required" : "option-count-requires-select");
     return `data-setting-choice="true" data-setting-choice-semantic="value-selection" data-setting-choice-control="select" data-setting-key="${esc(key)}" data-setting-choice-option-count="${values.length}" data-setting-choice-fit="false" data-setting-choice-rejection-reason="${reason}"`;
@@ -4565,6 +4747,7 @@ const BOOT = __PORTAL_BOOT__;
     attachEcho(target);
   };
   const renderSettings = () => {
+    destroyStaticOverlayMounts();
     const settings = state.settings?.settings || [];
     const visible = settings.filter((entry) => settingGroup(entry.key) === state.settingGroup && !LEGACY_MODEL_SETTING_KEYS.has(entry.key) && !DISPATCH_SETTING_KEYS.has(entry.key));
     setText("#settings-count", `${visible.length} ${t("config.keyCount")}`);
@@ -4611,6 +4794,7 @@ const BOOT = __PORTAL_BOOT__;
     }));
     $$('[data-vocabulary-link]').forEach((button) => button.addEventListener("click", () => { state.selectedVocabulary = button.dataset.vocabularyLink; navigate("vocabulary"); renderVocabulary(); }));
     attachEcho($("#settings-rows"));
+    mountStaticOverlayMounts($("#settings-rows"));
   };
   const statusBadge = (value, tone = "") => `<span class="tcrn-badge ${tone ? `tcrn-badge--${tone}` : ""}">${esc(value ?? "—")}</span>`;
   const statusTone = (value) => ["done", "satisfied", "active", "ready"].includes(String(value)) ? "positive" : ["blocked", "cancelled", "failed", "retired"].includes(String(value)) ? "danger" : "";
@@ -4845,6 +5029,7 @@ const BOOT = __PORTAL_BOOT__;
     return `<span>${esc(raw === undefined || raw === null || raw === "" ? "—" : String(raw))}</span>`;
   };
   const renderVocabulary = () => {
+    destroyStaticOverlayMounts();
     const vocabulary = state.vocabulary || {};
     setText("#vocabulary-version", vocabulary.schemaVersion || "—");
     const categories = vocabularyCategories();
@@ -4867,6 +5052,7 @@ const BOOT = __PORTAL_BOOT__;
         + `<div role="row" class="tcrn-table-shell__head">${columns.map((column) => `<span role="columnheader">${esc(t(column.labelKey))}${conceptTip("column." + column.labelKey, "bottom")}</span>`).join("")}</div>`
         + terms.map((term) => `<div role="row" class="tcrn-table-shell__row">${columns.map((column) => `<span role="cell" data-label="${esc(t(column.labelKey))}" class="tcrn-table-shell__cell">${vocabularyCell(term, column, state.selectedVocabulary)}</span>`).join("")}</div>`).join("")
         + `</div>`;
+    mountStaticOverlayMounts();
   };
   const lineFromText = (text) => text.split("\n");
   const renderProseDirectory = () => {
