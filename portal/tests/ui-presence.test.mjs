@@ -36,8 +36,8 @@ const COMPONENTS = Object.freeze([
   ["dispatch configuration surface", '[data-ui="dispatch-config-surface"]'],
   ["dispatch tier table", '[data-ui="dispatch-tier-table"]'],
   ["dispatch override table", '[data-ui="dispatch-override-table"]'],
-  ["returned stepper", ".tcrn-stepper"],
-  ["returned segmented control", ".tcrn-segmented-nav"],
+  ["DS NumberInput", ".tcrn-number-input"],
+  ["DS SettingChoice", ".tcrn-setting-choice"],
   ["returned stat card", ".tcrn-stat-card"],
   ["returned setting row", ".tcrn-setting-row"],
   ["returned line-numbered editor", ".tcrn-line-numbered-editor"],
@@ -448,6 +448,120 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
+  test("TCRN-CROSS-STORY-404 consumes the fixed DS106-108 settings contract", async () => {
+    const page = await preparePage();
+    try {
+      const layout = page.document.querySelector('[data-settings-layout-component="SettingsLayout"]');
+      assert.ok(layout, "the settings page must consume the DS SettingsLayout contract");
+      const required = {
+        "data-settings-layout-mode": "container-driven",
+        "data-settings-layout-form-policy": "single-host-single-column",
+        "data-settings-layout-breakpoint": "960px",
+        "data-settings-content-breakpoint": "720px",
+        "data-settings-local-navigation": "compact",
+        "data-settings-overflow-policy": "no-page-overflow",
+        "data-settings-long-value-policy": "native-inline-scroll-copy",
+      };
+      for (const [attribute, expected] of Object.entries(required)) assert.equal(layout.getAttribute(attribute), expected, `${attribute} must be declared by SettingsLayout`);
+      assert.ok(layout.querySelector(".tcrn-settings-layout__frame > .tcrn-settings-layout__grid"));
+      assert.ok(layout.querySelector(".tcrn-settings-layout__nav"));
+      assert.ok(layout.querySelector(".tcrn-settings-layout__content"));
+      const dsStyle = page.document.querySelector('style#tcrn-ds-component-css[data-source="snapshot"]');
+      assert.ok(dsStyle?.textContent.includes(".tcrn-setting-choice") && dsStyle.textContent.includes(".tcrn-number-input") && dsStyle.textContent.includes(".tcrn-settings-layout"));
+      const numberInputs = [...layout.querySelectorAll('[data-number-input-component="NumberInput"]')];
+      assert.ok(numberInputs.length > 0, "workspace settings must render DS NumberInput controls");
+      assert.ok(numberInputs.every((input) => input.classList.contains("tcrn-number-input")
+        && input.classList.contains("tcrn-input")
+        && input.type === "number"
+        && input.getAttribute("min") !== null
+        && input.getAttribute("max") !== null
+        && input.getAttribute("value") !== null
+        && input.getAttribute("data-number-input-visibility") === "full-value"));
+      assert.equal(layout.querySelectorAll(".tcrn-stepper").length, 0, "Stepper must not carry numeric setting semantics");
+
+      page.document.querySelector('[data-setting-group="execution"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      assert.equal(layout.querySelectorAll('[data-settings-host-switcher="true"]').length, 1, "one host switcher must precede the selected host form");
+      assert.equal(layout.querySelectorAll("[data-dispatch-host-card]").length, 1, "only one complete host form may be rendered");
+      assert.equal(layout.querySelectorAll('[data-dispatch-mode-select="true"]').length, 1, "dispatch mode must use a native select fallback when width is unknown");
+      assert.equal(layout.querySelectorAll("button[data-dispatch-mode]").length, 0, "navigation-style buttons must not carry setting values");
+      const hostSelect = layout.querySelector('[data-dispatch-host-switcher="true"]');
+      const alternateHost = [...hostSelect.options].find((option) => option.value !== hostSelect.value);
+      if (alternateHost) {
+        hostSelect.value = alternateHost.value;
+        hostSelect.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+        assert.equal(layout.querySelector('[data-dispatch-host-card]')?.getAttribute("data-dispatch-host-card"), alternateHost.value);
+      }
+      for (const locale of ["en", "zh-CN", "ja", "ko", "fr"]) {
+        page.document.querySelector(`[data-locale-option="${locale}"]`)?.click();
+        assert.equal(page.document.documentElement.lang, locale);
+        assert.equal(layout.getAttribute("data-settings-layout-component"), "SettingsLayout");
+      }
+      page.document.querySelector('[data-locale-option="en"]')?.click();
+      page.document.querySelector("#theme-button")?.click();
+      assert.ok(["light", "dark"].includes(page.document.documentElement.dataset.tcrnTheme));
+    } finally { await page.cleanup(); }
+  });
+
+  test("TCRN-CROSS-STORY-405 proves DS semantics and rejects structural mutations", async () => {
+    const page = await preparePage();
+    try {
+      page.document.querySelector('[data-setting-group="execution"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const layout = page.document.querySelector('[data-settings-layout-component="SettingsLayout"]');
+      assert.ok(layout);
+      const findings = (root) => {
+        const output = [];
+        const required = {
+          "data-settings-layout-mode": "container-driven",
+          "data-settings-layout-form-policy": "single-host-single-column",
+          "data-settings-layout-breakpoint": "960px",
+          "data-settings-content-breakpoint": "720px",
+          "data-settings-local-navigation": "compact",
+          "data-settings-overflow-policy": "no-page-overflow",
+          "data-settings-long-value-policy": "native-inline-scroll-copy",
+        };
+        for (const [attribute, expected] of Object.entries(required)) if (root.getAttribute(attribute) !== expected) output.push(attribute);
+        if (root.querySelectorAll("[data-dispatch-host-card]").length !== 1) output.push("parallel-host-columns");
+        if (!root.querySelector('[data-settings-host-switcher="true"]')) output.push("host-switcher");
+        if (!root.querySelector('[data-dispatch-mode-select="true"]')) output.push("mode-select");
+        if (root.querySelectorAll("button[data-dispatch-mode]").length > 0) output.push("setting-value-navigation-button");
+        if (root.querySelectorAll(".tcrn-stepper").length > 0) output.push("stepper-numeric-entry");
+        for (const input of root.querySelectorAll('[data-number-input-component="NumberInput"]')) {
+          if (!input.classList.contains("tcrn-number-input")) output.push("number-input-identity");
+          if (input.getAttribute("data-number-input-visibility") !== "full-value") output.push("number-input-visibility");
+          if (input.type !== "number" || input.getAttribute("min") === null || input.getAttribute("max") === null || input.getAttribute("value") === null) output.push("number-input-native-range");
+        }
+        return output;
+      };
+      assert.deepEqual(findings(layout), [], "the fixed candidate's positive consumer must be green");
+
+      layout.removeAttribute("data-settings-layout-form-policy");
+      assert.ok(findings(layout).includes("data-settings-layout-form-policy"), "missing single-column policy must red");
+      layout.setAttribute("data-settings-layout-form-policy", "single-host-single-column");
+
+      const numberInput = layout.querySelector('[data-number-input-component="NumberInput"]');
+      numberInput.classList.remove("tcrn-number-input");
+      numberInput.removeAttribute("data-number-input-visibility");
+      assert.ok(findings(layout).includes("number-input-identity") && findings(layout).includes("number-input-visibility"), "a NumberInput lookalike must red");
+      numberInput.classList.add("tcrn-number-input");
+      numberInput.setAttribute("data-number-input-visibility", "full-value");
+
+      const hostContainer = layout.querySelector(".tcrn-dispatch-hosts");
+      const duplicate = hostContainer.querySelector("[data-dispatch-host-card]").cloneNode(true);
+      hostContainer.append(duplicate);
+      assert.ok(findings(layout).includes("parallel-host-columns"), "a second host form must red");
+      duplicate.remove();
+
+      const stepper = page.document.createElement("div");
+      stepper.className = "tcrn-stepper";
+      layout.append(stepper);
+      assert.ok(findings(layout).includes("stepper-numeric-entry"), "a Stepper numeric mutation must red");
+      stepper.remove();
+      assert.deepEqual(findings(layout), [], "restoring the candidate must return the positive proof to green");
+    } finally { await page.cleanup(); }
+  });
+
   test("INC-183 every enum setting is its own dictionary entry", async () => {
     const page = await preparePage();
     try {
@@ -675,11 +789,11 @@ if (process.argv[2] === "status" && actual.status === 0) {
       const surface = page.document.querySelector('[data-ui="dispatch-config-surface"]');
       assert.ok(surface, "the execution group must render the dispatch configuration surface");
       assert.ok(surface.textContent.includes("next session") || surface.textContent.includes("下次会话"), "the activation boundary must be visible");
-      assert.equal(page.document.querySelectorAll("[data-dispatch-tier-row]").length, 6);
-      assert.equal(page.document.querySelectorAll("[data-dispatch-model]").length, 6);
-      assert.equal(page.document.querySelectorAll("[data-dispatch-effort]").length, 6);
+      assert.equal(page.document.querySelectorAll("[data-dispatch-tier-row]").length, 3);
+      assert.equal(page.document.querySelectorAll("[data-dispatch-model]").length, 3);
+      assert.equal(page.document.querySelectorAll("[data-dispatch-effort]").length, 3);
       assert.ok(page.document.querySelector('[data-ui="dispatch-override-table"]'));
-      assert.ok(page.document.querySelector('[data-dispatch-mode="eco"]'));
+      assert.ok(page.document.querySelector('[data-dispatch-mode-select] option[value="eco"]'));
     } finally { await page.cleanup(); }
   });
 
@@ -697,10 +811,11 @@ if (process.argv[2] === "status" && actual.status === 0) {
     page.document.querySelector('[data-setting-group="execution"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 80));
     try {
-      const mode = page.document.querySelector('[data-dispatch-mode="eco"]');
+      const mode = page.document.querySelector('[data-dispatch-mode-select]');
       assert.ok(mode);
       const before = receiptText(page.document);
-      mode.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+      mode.value = "eco";
+      mode.dispatchEvent(new page.window.Event("change", { bubbles: true }));
       await waitFor(receiptAdvanced(page.document, before), "the dispatch-mode receipt");
       assert.match(page.document.querySelector("#receipt-body")?.textContent ?? "", /SETTINGS_WRITE_COMMITTED/u);
       assert.equal((await cli(["settings-catalog", "--workspace", fixture.workspace])).settings.find((entry) => entry.key === "execution.dispatchMode").currentValue, "eco");
@@ -801,9 +916,9 @@ if (process.argv[2] === "status" && actual.status === 0) {
     const page = await preparePage();
     try {
       const source = await readFile(join(portalRoot, "index.html"), "utf8");
-      assert.match(source, /\.tcrn-dispatch-hosts\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/u);
+      assert.match(source, /\.tcrn-dispatch-hosts\s*\{[^}]*display:\s*block;/u);
       assert.match(source, /@media \(max-width: 520px\)[\s\S]*?\.tcrn-app-status-bar__command[\s\S]*?white-space:\s*normal;/u);
-      assert.equal(page.document.querySelectorAll("[data-dispatch-host-card]").length, 2);
+      assert.equal(page.document.querySelectorAll("[data-dispatch-host-card]").length, 1);
       page.document.querySelector('[data-locale-option="fr"]')?.click();
       assert.notEqual(page.document.querySelector('[data-workspace-tab="gates"]')?.textContent, page.document.querySelector('[data-workspace-tab="audit"]')?.textContent);
       assert.equal(page.document.querySelector('[data-workspace-tab="audit"]')?.textContent, "Audit");
@@ -818,7 +933,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
           const cell = input.closest("[data-label]");
           return { label: label?.textContent.trim(), dataLabel: cell?.getAttribute("data-label") };
         });
-        assert.equal(effortLabels.length, 6);
+        assert.equal(effortLabels.length, 3);
         assert.ok(effortLabels.every(({ label, dataLabel }) => label && dataLabel && label === dataLabel), `${locale} effort fields must share their translated visible and accessible label`);
         if (locale === "en") {
           assert.ok(effortLabels.every(({ label }) => label === "Effort"), "English effort labels must be English");

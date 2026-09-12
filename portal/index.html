@@ -3500,6 +3500,31 @@ a.tcrn-relationship-chip:focus-visible {
 .tcrn-data-grid { inline-size: 100%; border-collapse: collapse; }
 .tcrn-data-grid th, .tcrn-data-grid td { padding: var(--tcrn-space-2) var(--tcrn-space-3); text-align: start; border-block-end: 1px solid var(--tcrn-color-border-subtle); }
 .tcrn-data-grid__sort { border: 0; background: none; cursor: pointer; font: inherit; padding: 0; }
+
+/* DS-106/107 settings contract. */
+.tcrn-setting-choice{display:grid;gap:var(--tcrn-space-1);min-inline-size:0;max-inline-size:100%}
+.tcrn-setting-choice__select-label{display:grid;gap:var(--tcrn-space-1);min-inline-size:0;color:var(--tcrn-color-text-primary);font-weight:var(--tcrn-type-weight-medium)}
+.tcrn-setting-choice__select-label>.tcrn-select{inline-size:100%}
+.tcrn-setting-choice[data-setting-choice-control="radio"] .tcrn-radio-group{flex-direction:row;flex-wrap:nowrap;gap:var(--tcrn-space-2);max-inline-size:100%;overflow-x:auto;padding:var(--tcrn-container-settings-choice-padding);border:1px solid var(--tcrn-color-border-subtle);border-radius:var(--tcrn-radius-surface);background:var(--tcrn-color-surface-muted)}
+.tcrn-setting-choice[data-setting-choice-control="radio"] .tcrn-radio-group__option{min-inline-size:0;flex:1 1 0}
+.tcrn-setting-choice[data-setting-choice-control="radio"] .tcrn-radio-group__label{min-inline-size:0;overflow-wrap:anywhere}
+.tcrn-setting-choice__hint,.tcrn-setting-choice__error{overflow-wrap:anywhere;font-size:var(--tcrn-type-size-meta);line-height:var(--tcrn-type-line-caption)}
+.tcrn-setting-choice__hint{color:var(--tcrn-color-text-secondary)}.tcrn-setting-choice__error{color:var(--tcrn-color-state-blocked)}
+.tcrn-number-input{inline-size:100%;min-inline-size:var(--tcrn-container-settings-number-min);font-variant-numeric:tabular-nums;text-overflow:clip}
+.tcrn-settings-layout{min-inline-size:0;max-inline-size:100%}
+.tcrn-settings-layout__frame{container:tcrn-settings-layout-frame/inline-size;min-inline-size:0}
+.tcrn-settings-layout__grid{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--tcrn-space-4);min-inline-size:0}
+.tcrn-settings-layout__nav{min-inline-size:0;max-inline-size:100%;overflow-x:auto}
+.tcrn-settings-layout__nav>:is(.tcrn-segmented-nav,.tcrn-section-tabs,.tcrn-module-tabs){flex-wrap:nowrap;max-inline-size:max-content}
+.tcrn-settings-layout__content{display:grid;gap:var(--tcrn-space-4);min-inline-size:0;container:tcrn-settings-content/inline-size}
+.tcrn-settings-layout__form{display:grid;gap:var(--tcrn-space-2);min-inline-size:0}
+.tcrn-settings-layout__form .tcrn-setting-row{grid-template-columns:minmax(0,1fr);gap:var(--tcrn-space-2)}
+.tcrn-settings-layout__form .tcrn-setting-row__control{inline-size:100%;grid-column:auto;grid-row:auto}
+.tcrn-settings-layout__form .tcrn-setting-row__tools{grid-column:auto;grid-row:auto}
+.tcrn-settings-layout__form .tcrn-setting-row__control>:is(.tcrn-input,.tcrn-select){inline-size:100%;min-inline-size:0}
+.tcrn-settings-layout__form .tcrn-setting-row__control>.tcrn-number-input{inline-size:100%}
+@container tcrn-settings-layout-frame (min-width:960px){.tcrn-settings-layout__grid{grid-template-columns:minmax(0,var(--tcrn-container-settings-local-nav)) minmax(0,1fr)}}
+@container tcrn-settings-content (min-width:720px){.tcrn-settings-layout__form .tcrn-setting-row{grid-template-columns:minmax(0,1fr) minmax(var(--tcrn-container-settings-control-min),.8fr) max-content}.tcrn-settings-layout__form .tcrn-setting-row__tools{justify-content:flex-end}}
 </style>
 <style>
 /* The Workflow accent and its suffix rule are the design system's now (registered as a
@@ -3602,6 +3627,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-list__sub { color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); }
 .tcrn-section-tabs { margin-bottom: var(--tcrn-space-4); }
 .tcrn-manage { display: grid; grid-template-columns: 208px minmax(0, 860px); gap: var(--tcrn-space-6); align-items: start; }
+[data-settings-layout-mode] { display: block; width: 100%; }
 /* INC-202: sticky positioning always creates a stacking context, so a popover raised
    inside this column is sealed into it — its own z-index counts only among the column's
    own descendants. The column and the table shell's sticky head are then two positioned
@@ -3630,7 +3656,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-dispatch-mode__head strong { font-size: var(--tcrn-type-size-ui); }
 .tcrn-dispatch-mode__choices { display: flex; flex-wrap: wrap; gap: var(--tcrn-space-1); }
 .tcrn-dispatch-mode__choice[data-selected="true"] { border-color: var(--tcrn-selection-edge); background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); }
-.tcrn-dispatch-hosts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--tcrn-space-3); align-items: start; }
+.tcrn-dispatch-hosts { display: block; min-width: 0; }
 .tcrn-dispatch-host { min-width: 0; }
 .tcrn-dispatch-host__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--tcrn-space-2); margin-bottom: var(--tcrn-space-2); }
 .tcrn-dispatch-host__head h3 { margin: 0; font-size: var(--tcrn-type-size-heading-3); }
@@ -3776,7 +3802,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 [data-tcrn-locale="ko"] { --tcrn-type-family-ui: var(--tcrn-type-family-ko); }
 @media (max-width: 980px) {
   .tcrn-product-shell { grid-template-columns: 1fr; }
-  .tcrn-dispatch-hosts { grid-template-columns: minmax(0, 1fr); }
+  .tcrn-dispatch-hosts { display: block; }
   .tcrn-product-shell__sidebar { border-right: 0; border-bottom: 1px solid var(--tcrn-color-border-subtle); padding: var(--tcrn-space-2) var(--tcrn-space-3); }
   .tcrn-rail__mark, .tcrn-rail__footer { display: none; }
   .tcrn-side-nav { flex-direction: row; overflow: auto; }
@@ -4108,7 +4134,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
       </section>
       <section class="tcrn-page tcrn-page--manage" data-page="settings" hidden>
         <div class="tcrn-page__head"><div><h1 data-i18n="page.settings">Settings</h1><p class="tcrn-page__lede" data-i18n="config.lede">Registered settings, read from the engine and changed through its public CLI.</p></div><div class="tcrn-page__actions"><span class="tcrn-badge" id="settings-count"></span></div></div>
-        <div class="tcrn-manage"><nav class="tcrn-subnav" aria-label="Settings groups"><button class="tcrn-subnav__item" data-setting-group="workspace" aria-current="page" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="machine" data-i18n="settings.machine">Workflow</button></nav><div><div id="design-authority" hidden></div><div id="dispatch-config" hidden></div><div id="settings-rows"></div><div id="machine-settings" hidden></div></div></div>
+        <div class="tcrn-manage tcrn-settings-layout" data-settings-layout-component="SettingsLayout" data-settings-layout-mode="container-driven" data-settings-layout-form-policy="single-host-single-column" data-settings-layout-breakpoint="960px" data-settings-content-breakpoint="720px" data-settings-local-navigation="compact" data-settings-overflow-policy="no-page-overflow" data-settings-long-value-policy="native-inline-scroll-copy"><div class="tcrn-settings-layout__frame"><div class="tcrn-settings-layout__grid"><nav class="tcrn-subnav tcrn-settings-layout__nav" aria-label="Settings groups"><button class="tcrn-subnav__item" data-setting-group="workspace" aria-current="page" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="machine" data-i18n="settings.machine">Workflow</button></nav><div class="tcrn-settings-layout__content"><div id="design-authority" hidden></div><div id="dispatch-config" class="tcrn-settings-layout__form" hidden></div><div id="settings-rows" class="tcrn-settings-layout__form"></div><div id="machine-settings" class="tcrn-settings-layout__form" hidden></div></div></div></div></div>
       </section>
       <section class="tcrn-page tcrn-page--manage" data-page="prose" hidden>
         <div class="tcrn-page__head"><div><h1 data-i18n="page.prose">Rules</h1><p class="tcrn-page__lede" data-i18n="prose.lede">Workspace prose is edited as a plain file and checked against the live engine vocabulary.</p></div><div class="tcrn-page__actions"><span class="tcrn-badge" id="reconcile-chip">—</span><button class="tcrn-button tcrn-button--primary" id="save-agents" data-i18n="prose.save" data-cli-action="agents-write">Save</button></div></div>
@@ -4142,7 +4168,7 @@ const BOOT = __PORTAL_BOOT__;
   const storedTheme = tcrnReadPreference("theme", ["light", "dark"], null);
   const machineTheme = ["light", "dark"].includes(BOOT.machineDefaults?.theme) ? BOOT.machineDefaults.theme : null;
   if (storedTheme === null && machineTheme !== null) document.documentElement.dataset.tcrnTheme = machineTheme;
-  const state = { locale: storedLocale ?? (Object.keys(LOCALES).includes(BOOT.machineDefaults?.locale) ? BOOT.machineDefaults.locale : null) ?? BOOT.defaultLocale ?? "en", theme: document.documentElement.dataset.tcrnTheme, page: "dashboard", dashboardTab: "overview", settingGroup: "workspace", settings: null, machineSettings: null, execution: null, vocabulary: null, status: null, work: null, knowledge: null, knowledgeQuery: "", knowledgeBody: null, gates: null, evolution: null, commands: [], audit: [], selectedVocabulary: "conferenceTypes", receipt: null, dispatchNotice: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
+  const state = { locale: storedLocale ?? (Object.keys(LOCALES).includes(BOOT.machineDefaults?.locale) ? BOOT.machineDefaults.locale : null) ?? BOOT.defaultLocale ?? "en", theme: document.documentElement.dataset.tcrnTheme, page: "dashboard", dashboardTab: "overview", settingGroup: "workspace", settings: null, machineSettings: null, execution: null, vocabulary: null, status: null, work: null, knowledge: null, knowledgeQuery: "", knowledgeBody: null, gates: null, evolution: null, commands: [], audit: [], selectedVocabulary: "conferenceTypes", receipt: null, dispatchNotice: null, dispatchHost: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const esc = (value) => String(value ?? "").replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]);
@@ -4256,14 +4282,16 @@ const BOOT = __PORTAL_BOOT__;
   };
   const settingDescription = (key) => t(`setting.${key}.description`);
   const currentSetting = (key) => state.settings?.settings?.find((entry) => entry.key === key);
+  const controlId = (prefix, key) => `${prefix}-${String(key).replace(/[^a-zA-Z0-9_-]/gu, "-")}`;
   const controlFor = (entry) => {
     const values = [...(entry.allowedValues || [])];
     const current = entry.currentValue ?? "";
+    const id = controlId("setting-control", entry.key);
+    const label = settingLabel(entry.key);
     if (entry.controlType === "boolean") return `<label class="tcrn-switch" data-switch-state="${current === (entry.trueValue || "allowed") ? "on" : "off"}"><input class="tcrn-switch__control" type="checkbox" role="switch" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set" data-setting-value="${esc(entry.trueValue || "allowed")}" ${current === (entry.trueValue || "allowed") ? "checked" : ""}><span class="tcrn-switch__label">${esc(current === (entry.trueValue || "allowed") ? t("config.enabled") : t("config.disabled"))}</span></label>`;
-    if (entry.controlType === "number") return `<div class="tcrn-stepper" data-stepper="${esc(entry.key)}"><button type="button" class="tcrn-button tcrn-button--quiet tcrn-stepper__button" data-stepper-action="decrement" aria-label="${esc(t("config.decrease"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.5 8h9"/></svg></button><input class="tcrn-input tcrn-stepper__input" type="number" min="${esc(entry.min)}" max="${esc(entry.max)}" step="1" value="${esc(current)}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set"><button type="button" class="tcrn-button tcrn-button--quiet tcrn-stepper__button" data-stepper-action="increment" aria-label="${esc(t("config.increase"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg></button><span class="tcrn-stepper__bound">${esc(entry.min)}–${esc(entry.max)}</span></div>`;
-    if (entry.controlType === "enum" && values.length > 0 && values.length <= 3) return `<div class="tcrn-segmented-nav" role="group" aria-label="${esc(settingLabel(entry.key))}">${values.map((value) => `<button type="button" class="tcrn-button" data-selected="${value === current ? "true" : "false"}" data-setting-control="${esc(entry.key)}" data-setting-value="${esc(value)}" data-cli-action="settings-set">${esc(value || t("config.unset"))}</button>`).join("")}</div>`;
-    if (entry.controlType === "enum" && values.length > 0) return `<select class="tcrn-select" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set">${values.map((value) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(value || t("config.unset"))}</option>`).join("")}</select>`;
-    return `<input class="tcrn-input" value="${esc(current)}" placeholder="${esc(entry.defaultValue ?? t("config.unset"))}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set">`;
+    if (entry.controlType === "number") return `<div class="tcrn-number-input-field"><label class="tcrn-field" for="${esc(id)}"><span class="tcrn-sr-only">${esc(label)}</span><input class="tcrn-input tcrn-number-input" id="${esc(id)}" type="number" min="${esc(entry.min)}" max="${esc(entry.max)}" step="1" value="${esc(current)}" data-number-input-component="NumberInput" data-number-input-visibility="full-value" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set" aria-label="${esc(label)}"></label><span class="tcrn-setting-choice__hint">${esc(entry.min)}–${esc(entry.max)}</span></div>`;
+    if (entry.controlType === "enum" && values.length > 0) return `<div class="tcrn-setting-choice" data-setting-choice-component="SettingChoice" data-setting-choice-control="select" data-setting-key="${esc(entry.key)}"><label class="tcrn-setting-choice__select-label" for="${esc(id)}"><span class="tcrn-sr-only">${esc(label)}</span><select class="tcrn-select" id="${esc(id)}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set">${values.map((value) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(value || t("config.unset"))}</option>`).join("")}</select></label></div>`;
+    return `<label class="tcrn-field"><span class="tcrn-sr-only">${esc(label)}</span><input class="tcrn-input" id="${esc(id)}" value="${esc(current)}" placeholder="${esc(entry.defaultValue ?? t("config.unset"))}" aria-label="${esc(label)}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set"></label>`;
   };
   // INC-193: the design authority is a declaration, and what is behind it is an
   // external fact. Verified-true is green, verified-false is red, and "cannot be
@@ -4317,7 +4345,7 @@ const BOOT = __PORTAL_BOOT__;
       : entry.allowedValues || [];
     const controlFor = (entry) => {
       const current = entry.currentValue ?? "";
-      if (entry.controlType === "number") return `<input class="tcrn-input" type="number" min="${esc(entry.min)}" max="${esc(entry.max)}" step="1" value="${esc(current)}" data-machine-control="${esc(entry.key)}" data-cli-action="machine-settings-set">`;
+      if (entry.controlType === "number") return `<label class="tcrn-field"><span class="tcrn-sr-only">${esc(t("setting." + entry.key + ".label"))}</span><input class="tcrn-input tcrn-number-input" type="number" min="${esc(entry.min)}" max="${esc(entry.max)}" step="1" value="${esc(current)}" data-machine-control="${esc(entry.key)}" data-number-input-component="NumberInput" data-number-input-visibility="full-value" data-cli-action="machine-settings-set" aria-label="${esc(t("setting." + entry.key + ".label"))}"></label>`;
       const values = ["", ...optionsFor(entry)];
       return `<select class="tcrn-select" data-machine-control="${esc(entry.key)}" data-cli-action="machine-settings-set">${values.map((value) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(value || t("config.unset"))}</option>`).join("")}</select>`;
     };
@@ -4361,8 +4389,18 @@ const BOOT = __PORTAL_BOOT__;
     const classes = Object.keys(dispatch.classes || state.execution?.classes || {}).sort();
     const mapping = dispatch.modes?.[currentMode] || {};
     const advancedRows = classes.map((taskClass) => { const behaviour = dispatch.classes?.[taskClass] || state.execution?.classes?.[taskClass] || {}; return `<div class="tcrn-table-shell__row" role="row"><div class="tcrn-table-shell__cell" data-label="${esc(t("dispatch.class"))}"><code>${esc(taskClass)}</code></div><div class="tcrn-table-shell__cell" data-label="${esc(t("dispatch.dispatch"))}"><span class="tcrn-dispatch-boolean" data-value="${String(behaviour.dispatch)}">${esc(behaviour.dispatch ? t("dispatch.yes") : t("dispatch.no"))}</span></div><div class="tcrn-table-shell__cell" data-label="${esc(t("dispatch.verify"))}"><span class="tcrn-dispatch-boolean" data-value="${String(behaviour.verify)}">${esc(behaviour.verify ? t("dispatch.yes") : t("dispatch.no"))}</span></div><div class="tcrn-table-shell__cell" data-label="${esc(t("dispatch.override"))}"><label class="tcrn-sr-only" for="dispatch-override-${esc(taskClass)}">${esc(t("dispatch.override"))}</label><select class="tcrn-select" id="dispatch-override-${esc(taskClass)}" data-dispatch-override="${esc(taskClass)}" data-cli-action="dispatch-mode-set">${tierNames.map((tier) => `<option value="${esc(tier)}" ${mapping[taskClass] === tier ? "selected" : ""}>${esc(t(`dispatch.tier.${tier}`))}</option>`).join("")}</select></div></div>`; }).join("");
-    target.innerHTML = `<div class="tcrn-dispatch-config"><section class="tcrn-surface tcrn-dispatch-surface" data-ui="dispatch-config-surface"><div class="tcrn-surface__head"><div><h2>${esc(t("dispatch.title"))}</h2><p class="tcrn-surface__note">${esc(t("dispatch.note"))}</p><p class="tcrn-scope-note">${esc(t("dispatch.nextSession"))}</p></div><span class="tcrn-badge">${esc(currentMode || t("dispatch.unset"))}</span></div><div class="tcrn-dispatch-mode"><div class="tcrn-dispatch-mode__head"><strong>${esc(t("dispatch.mode"))}</strong><span class="tcrn-meta">${esc(t("dispatch.modeHint"))}</span></div><div class="tcrn-dispatch-mode__choices" role="group" aria-label="${esc(t("dispatch.mode"))}">${modes.map((mode) => `<button type="button" class="tcrn-button tcrn-dispatch-mode__choice" data-selected="${mode === currentMode ? "true" : "false"}" data-dispatch-mode="${esc(mode)}" data-cli-action="settings-set">${esc(mode)}</button>`).join("")}</div></div><div class="tcrn-dispatch-hosts">${hostList.map(hostPanel).join("")}</div></section>${renderNotice()}<section class="tcrn-surface tcrn-dispatch-advanced" data-ui="dispatch-advanced"><div class="tcrn-dispatch-advanced__head"><div><h2>${esc(t("dispatch.advanced"))}</h2><p class="tcrn-surface__note">${esc(t("dispatch.advancedNote"))}</p></div><span class="tcrn-badge">${esc(currentMode || t("dispatch.unset"))}</span></div><div class="tcrn-table-shell tcrn-dispatch-override-table" data-ui="dispatch-override-table"><div class="tcrn-table-shell__head" role="row"><span>${esc(t("dispatch.class"))}</span><span>${esc(t("dispatch.dispatch"))}</span><span>${esc(t("dispatch.verify"))}</span><span>${esc(t("dispatch.override"))}</span></div>${advancedRows || `<div class="tcrn-table-shell__empty">${esc(t("dispatch.noClasses"))}</div>`}</div></section></div>`;
-    $$('[data-dispatch-mode]').forEach((button) => button.addEventListener("click", () => saveSetting("execution.dispatchMode", button.dataset.dispatchMode)));
+    const selectedHost = hostList.includes(state.dispatchHost) ? state.dispatchHost : hostList[0];
+    state.dispatchHost = selectedHost;
+    const modeOptions = modes.map((mode) => `<option value="${esc(mode)}" data-dispatch-mode="${esc(mode)}" ${mode === currentMode ? "selected" : ""}>${esc(mode)}</option>`).join("");
+    const hostOptions = hostList.map((host) => `<option value="${esc(host)}" ${host === selectedHost ? "selected" : ""}>${esc(host)}</option>`).join("");
+    const modeChoice = `<div class="tcrn-setting-choice" data-setting-choice-component="SettingChoice" data-setting-choice-control="select"><label class="tcrn-setting-choice__select-label" for="dispatch-mode-select"><span class="tcrn-field__label">${esc(t("dispatch.mode"))}</span><select class="tcrn-select" id="dispatch-mode-select" data-dispatch-mode-select="true" data-cli-action="settings-set" aria-label="${esc(t("dispatch.mode"))}">${modeOptions}</select></label></div>`;
+    const hostChoice = `<div class="tcrn-setting-choice tcrn-settings-host-switcher" data-setting-choice-component="SettingChoice" data-setting-choice-control="select" data-settings-host-switcher="true" data-settings-host-switcher-component="SettingsHostSwitcher"><label class="tcrn-setting-choice__select-label" for="dispatch-host-switcher"><span class="tcrn-field__label">${esc(t("dispatch.host"))}</span><select class="tcrn-select" id="dispatch-host-switcher" data-dispatch-host-switcher="true" data-cli-action="settings-set" aria-label="${esc(t("dispatch.host"))}">${hostOptions}</select></label></div>`;
+    target.innerHTML = `<div class="tcrn-dispatch-config"><section class="tcrn-surface tcrn-dispatch-surface" data-ui="dispatch-config-surface"><div class="tcrn-surface__head"><div><h2>${esc(t("dispatch.title"))}</h2><p class="tcrn-surface__note">${esc(t("dispatch.note"))}</p><p class="tcrn-scope-note">${esc(t("dispatch.nextSession"))}</p></div><span class="tcrn-badge">${esc(currentMode || t("dispatch.unset"))}</span></div><div class="tcrn-dispatch-mode"><div class="tcrn-dispatch-mode__head"><span class="tcrn-meta">${esc(t("dispatch.modeHint"))}</span></div>${modeChoice}</div>${hostChoice}<div class="tcrn-dispatch-hosts">${hostPanel(selectedHost)}</div></section>${renderNotice()}<section class="tcrn-surface tcrn-dispatch-advanced" data-ui="dispatch-advanced"><div class="tcrn-dispatch-advanced__head"><div><h2>${esc(t("dispatch.advanced"))}</h2><p class="tcrn-surface__note">${esc(t("dispatch.advancedNote"))}</p></div><span class="tcrn-badge">${esc(currentMode || t("dispatch.unset"))}</span></div><div class="tcrn-table-shell tcrn-dispatch-override-table" data-ui="dispatch-override-table"><div class="tcrn-table-shell__head" role="row"><span>${esc(t("dispatch.class"))}</span><span>${esc(t("dispatch.dispatch"))}</span><span>${esc(t("dispatch.verify"))}</span><span>${esc(t("dispatch.override"))}</span></div>${advancedRows || `<div class="tcrn-table-shell__empty">${esc(t("dispatch.noClasses"))}</div>`}</div></section></div>`;
+    target.querySelector("[data-dispatch-host-switcher]")?.addEventListener("change", (event) => {
+      state.dispatchHost = event.currentTarget.value;
+      renderDispatch();
+    });
+    target.querySelector("[data-dispatch-mode-select]")?.addEventListener("change", (event) => saveSetting("execution.dispatchMode", event.currentTarget.value));
     $$('[data-dispatch-save-host]').forEach((button) => button.addEventListener("click", () => {
       const host = button.dataset.dispatchSaveHost;
       const card = button.closest("[data-dispatch-host-card]");
