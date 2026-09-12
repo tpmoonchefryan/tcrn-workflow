@@ -2880,6 +2880,20 @@ test("a real task entrypoint completes exec and execFile undefined optional call
   await assertTaskResidueClean(root);
 });
 
+test("a real task entrypoint reports a bounded controller timeout without false success", async (context) => {
+  const root = await taskEntrypointFixture(context, [
+    'import test from "node:test";',
+    'test("the controller remains live until the bounded timeout", async () => { await new Promise(() => {}); });',
+    "",
+  ].join("\n"));
+  const result = await startTaskEntrypoint(root, { TCRN_TEST_CONTROLLER_TIMEOUT_MS: "100" }).result;
+  assert.equal(result.code, 1);
+  assert.equal(result.signal, null);
+  assert.equal(result.stdout, "");
+  assert.equal(JSON.parse(result.stderr).reasonCode, "TEST_CONTROLLER_TIMEOUT");
+  await assertTaskResidueClean(root);
+});
+
 test("the controller child policy rejects detached escape through every supported child_process signature", () => {
   const policy = new URL("../scripts/test-controller-child-policy.mjs", import.meta.url).href;
   const source = [
