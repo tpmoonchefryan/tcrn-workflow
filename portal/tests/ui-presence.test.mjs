@@ -225,43 +225,49 @@ function childIndex(parent, child) {
 function pageHierarchyFindings(document, source) {
   const findings = [];
   const pages = hierarchyPages.map((name) => document.querySelector(`[data-page="${name}"]`));
-  if (document.querySelectorAll('[data-page-hierarchy="two-level"]').length !== hierarchyPages.length) findings.push("page-level-marker-count");
-  for (const [name, page] of hierarchyPages.map((name, index) => [name, pages[index]])) {
-    if (!page || page.getAttribute("data-page-hierarchy") !== "two-level") { findings.push(`${name}:page-level`); continue; }
-    const head = page.querySelector(":scope > .tcrn-page__head");
-    if (!head || childIndex(page, head) !== 0) findings.push(`${name}:header-first`);
+  const hierarchies = pages.map((page) => page?.querySelector(':scope > [data-page-hierarchy="true"]'));
+  if (document.querySelectorAll('[data-page-hierarchy="true"]').length !== hierarchyPages.length) findings.push("page-level-marker-count");
+  for (const [name, page, hierarchy] of hierarchyPages.map((name, index) => [name, pages[index], hierarchies[index]])) {
+    if (!page || !hierarchy || hierarchy.getAttribute("data-page-hierarchy-depth") !== "two") { findings.push(`${name}:page-level`); continue; }
+    const headRegion = hierarchy.querySelector(':scope > [data-page-hierarchy-region="header"]');
+    const head = headRegion?.querySelector(":scope > .tcrn-page__head");
+    const tabsRegion = hierarchy.querySelector(':scope > [data-page-hierarchy-region="section-tabs"]');
+    const lowerContent = hierarchy.querySelector(':scope > [data-page-hierarchy-region="lower-content"]');
+    if (!headRegion || !head || childIndex(hierarchy, headRegion) !== 0 || childIndex(headRegion, head) !== 0) findings.push(`${name}:header-first`);
+    if (!tabsRegion || !lowerContent || childIndex(hierarchy, tabsRegion) >= childIndex(hierarchy, lowerContent)) findings.push(`${name}:tabs-before-content`);
     if (name === "dashboard") {
-      const tabs = page.querySelector(':scope > [data-ui="workspace-tabs"]');
-      const panels = [...page.querySelectorAll(":scope > [data-workspace-panel]")];
-      if (!tabs || panels.length === 0 || panels.some((panel) => childIndex(page, panel) <= childIndex(page, tabs))) findings.push("dashboard:tabs-before-content");
+      const tabs = tabsRegion?.querySelector('[data-ui="workspace-tabs"]');
+      const panels = [...lowerContent?.querySelectorAll(":scope > [data-workspace-panel]") ?? []];
+      if (!tabs || panels.length === 0 || !lowerContent || panels.some((panel) => childIndex(lowerContent, panel) < 0)) findings.push("dashboard:tabs-before-content");
     }
     if (name === "settings") {
-      const grid = page.querySelector("[data-settings-layout-grid]");
-      const nav = page.querySelector("[data-settings-layout-nav]");
-      const content = page.querySelector("[data-settings-layout-content]");
-      if (!grid || !nav || !content || childIndex(grid, nav) !== 0 || childIndex(grid, content) !== 1) findings.push("settings:tabs-before-content");
+      const nav = tabsRegion?.querySelector("[data-settings-layout-nav]");
+      const layout = lowerContent?.querySelector('[data-settings-layout-component="SettingsLayout"]');
+      const grid = layout?.querySelector("[data-settings-layout-grid]");
+      const content = layout?.querySelector("[data-settings-layout-content]");
+      if (!grid || !nav || !content || childIndex(grid, content) !== 0 || childIndex(tabsRegion, nav) !== 0) findings.push("settings:tabs-before-content");
       if (content?.contains(nav)) findings.push("settings:local-nav-inside-content");
     }
     if (name === "prose") {
-      const shell = page.querySelector(":scope > .tcrn-editor-shell");
-      const directory = shell?.querySelector(":scope > #prose-directory");
+      const directory = tabsRegion?.querySelector(":scope > #prose-directory");
+      const shell = lowerContent?.querySelector(":scope > .tcrn-editor-shell");
       const bar = shell?.querySelector(":scope > .tcrn-editor__bar");
       const editor = shell?.querySelector(":scope > #prose-editor");
-      if (!shell || !directory || !bar || !editor || childIndex(shell, directory) !== 0 || childIndex(shell, bar) !== 1 || childIndex(shell, editor) !== 2) findings.push("prose:controls-before-editor");
+      if (!directory || !shell || !bar || !editor || childIndex(tabsRegion, directory) !== 0 || childIndex(lowerContent, shell) !== 0 || childIndex(shell, bar) !== 0 || childIndex(shell, editor) !== 1) findings.push("prose:controls-before-editor");
     }
     if (name === "vocabulary") {
-      const shell = page.querySelector(":scope > .tcrn-vocabulary");
-      const nav = shell?.querySelector(":scope > #vocabulary-nav");
+      const nav = tabsRegion?.querySelector(":scope > #vocabulary-nav");
+      const shell = lowerContent?.querySelector(":scope > .tcrn-vocabulary");
       const terms = shell?.querySelector(":scope > #vocabulary-terms");
-      if (!shell || !nav || !terms || childIndex(shell, nav) !== 0 || childIndex(shell, terms) !== 1) findings.push("vocabulary:tabs-before-content");
+      if (!nav || !shell || !terms || childIndex(tabsRegion, nav) !== 0 || childIndex(lowerContent, shell) !== 0 || childIndex(shell, terms) !== 0) findings.push("vocabulary:tabs-before-content");
       if (terms?.contains(nav)) findings.push("vocabulary:nav-inside-content");
     }
   }
   const sourceRules = [
-    '[data-page-hierarchy="two-level"] [data-settings-layout-grid] { display: block; }',
-    '[data-page-hierarchy="two-level"] .tcrn-editor-shell { display: block; }',
-    '[data-page-hierarchy="two-level"] .tcrn-editor__directory { margin-bottom: var(--tcrn-space-3); }',
-    '[data-page-hierarchy="two-level"] [data-settings-layout-nav],',
+    '[data-page-hierarchy="true"][data-page-hierarchy-depth="two"] [data-settings-layout-grid] { display: block; }',
+    '[data-page-hierarchy="true"][data-page-hierarchy-depth="two"] .tcrn-editor-shell { display: block; }',
+    '[data-page-hierarchy="true"][data-page-hierarchy-depth="two"] .tcrn-editor__directory { margin-bottom: var(--tcrn-space-3); }',
+    '[data-page-hierarchy="true"][data-page-hierarchy-depth="two"] [data-settings-layout-nav],',
   ];
   for (const rule of sourceRules) if (!source.includes(rule)) findings.push(`source:${rule}`);
   return findings;
@@ -527,16 +533,16 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
-  test("TCRN-CROSS-STORY-404 consumes the DS106-108 settings shape and exposes the rejected candidate", async () => {
+  test("TCRN-CROSS-STORY-404 consumes the DS106-112 settings contract and exposes coordination status", async () => {
     const page = await preparePage();
     try {
       const layout = page.document.querySelector('[data-settings-layout-component="SettingsLayout"]');
       assert.ok(layout, "the settings page must consume the DS SettingsLayout contract");
-      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@8bbc6cd6fbbe16d30943198c62c270c8c4ebc8da");
-      assert.equal(layout.getAttribute("data-ds-contract-status"), "rejected-awaiting-DS112");
-      assert.equal(layout.getAttribute("data-ds-contract-version"), "ds_consumption_contract_v1");
-      assert.equal(layout.getAttribute("data-ds-contract-digest"), "038f7cb407ae664afbbe64779db3b25a61fdd53735d58e45aeeeef103cb036c2");
-      assert.deepEqual(layout.getAttribute("data-ds-rules")?.split(" "), ["DS-106-R1", "DS-106-R2", "DS-107-R1", "DS-107-R2", "DS-108-R1", "DS-108-R2"]);
+      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@1a4709db59af073f1d30403258881999d2364463");
+      assert.equal(layout.getAttribute("data-ds-contract-status"), "pending-coordination-recheck");
+      assert.equal(layout.getAttribute("data-ds-contract-version"), "ds_consumption_contract_v2");
+      assert.equal(layout.getAttribute("data-ds-contract-digest"), "6ea12f36efe107af3d9340a6927b974b9bdd88749407a4036c16b2be857e347b");
+      assert.deepEqual(layout.getAttribute("data-ds-rules")?.split(" "), ["DS-106-R1", "DS-106-R2", "DS-107-R1", "DS-107-R2", "DS-108-R1", "DS-108-R2", "DS-112-R1", "DS-112-R2"]);
       const required = {
         "data-settings-layout-mode": "container-driven",
         "data-settings-layout-form-policy": "single-host-single-column",
@@ -547,8 +553,9 @@ if (process.argv[2] === "status" && actual.status === 0) {
         "data-settings-long-value-policy": "native-inline-scroll-copy",
       };
       for (const [attribute, expected] of Object.entries(required)) assert.equal(layout.getAttribute(attribute), expected, `${attribute} must be declared by SettingsLayout`);
+      assert.equal(layout.getAttribute("data-settings-layout-navigation-location"), "page-hierarchy-section-tabs");
       assert.ok(layout.querySelector(".tcrn-settings-layout__frame > .tcrn-settings-layout__grid"));
-      assert.ok(layout.querySelector(".tcrn-settings-layout__nav"));
+      assert.ok(page.document.querySelector('[data-page-hierarchy-region="section-tabs"] [data-settings-layout-nav]'));
       assert.ok(layout.querySelector(".tcrn-settings-layout__content"));
       const dsStyle = page.document.querySelector('style#tcrn-ds-component-css[data-source="snapshot"]');
       assert.ok(dsStyle?.textContent.includes(".tcrn-setting-choice") && dsStyle.textContent.includes(".tcrn-number-input") && dsStyle.textContent.includes(".tcrn-settings-layout"));
@@ -557,10 +564,18 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(numberInputs.every((input) => input.classList.contains("tcrn-number-input")
         && input.classList.contains("tcrn-input")
         && input.type === "number"
+        && input.getAttribute("data-number-input") === "true"
+        && input.getAttribute("data-number-input-semantic") === "numeric-entry"
         && input.getAttribute("min") !== null
         && input.getAttribute("max") !== null
         && input.getAttribute("value") !== null
         && input.getAttribute("data-number-input-visibility") === "full-value"));
+      const settingChoices = [...layout.querySelectorAll('[data-setting-choice="true"]')];
+      assert.ok(settingChoices.length > 0, "workspace settings must render DS SettingChoice markers");
+      assert.ok(settingChoices.every((choice) => choice.getAttribute("data-setting-choice-semantic") === "value-selection"
+        && choice.getAttribute("data-setting-choice-control") === "select"
+        && Number.isInteger(Number(choice.getAttribute("data-setting-choice-option-count")))
+        && choice.getAttribute("data-setting-choice-rejection-reason") !== null));
       assert.equal(layout.querySelectorAll(".tcrn-stepper").length, 0, "Stepper must not carry numeric setting semantics");
 
       page.document.querySelector('[data-setting-group="execution"]')?.click();
@@ -587,7 +602,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
-  test("TCRN-CROSS-STORY-405 proves consumed DS semantics, rejects structural mutations, and preserves rejection status", async () => {
+  test("TCRN-CROSS-STORY-405 proves the fixed DS semantics, rejects structural mutations, and preserves coordination status", async () => {
     const page = await preparePage();
     try {
       page.document.querySelector('[data-setting-group="execution"]')?.click();
@@ -596,11 +611,12 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(layout);
       const findings = (root) => {
         const output = [];
-        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@8bbc6cd6fbbe16d30943198c62c270c8c4ebc8da") output.push("ds-candidate");
-        if (root.getAttribute("data-ds-contract-status") !== "rejected-awaiting-DS112") output.push("ds-contract-status");
-        if (root.getAttribute("data-ds-contract-version") !== "ds_consumption_contract_v1") output.push("ds-contract-version");
-        if (root.getAttribute("data-ds-contract-digest") !== "038f7cb407ae664afbbe64779db3b25a61fdd53735d58e45aeeeef103cb036c2") output.push("ds-contract-digest");
-        if (root.getAttribute("data-ds-rules") !== "DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2") output.push("ds-rules");
+        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@1a4709db59af073f1d30403258881999d2364463") output.push("ds-candidate");
+        if (root.getAttribute("data-ds-contract-status") !== "pending-coordination-recheck") output.push("ds-contract-status");
+        if (root.getAttribute("data-ds-contract-version") !== "ds_consumption_contract_v2") output.push("ds-contract-version");
+        if (root.getAttribute("data-ds-contract-digest") !== "6ea12f36efe107af3d9340a6927b974b9bdd88749407a4036c16b2be857e347b") output.push("ds-contract-digest");
+        if (root.getAttribute("data-ds-rules") !== "DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2") output.push("ds-rules");
+        if (root.getAttribute("data-settings-layout-navigation-location") !== "page-hierarchy-section-tabs") output.push("navigation-location");
         const required = {
           "data-settings-layout-mode": "container-driven",
           "data-settings-layout-form-policy": "single-host-single-column",
@@ -623,7 +639,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
         }
         return output;
       };
-      assert.deepEqual(findings(layout), [], "the consumed candidate's structural proof must be green while its acceptance remains rejected");
+      assert.deepEqual(findings(layout), [], "the fixed candidate's structural proof must be green while coordination remains pending");
 
       layout.removeAttribute("data-settings-layout-form-policy");
       assert.ok(findings(layout).includes("data-settings-layout-form-policy"), "missing single-column policy must red");
@@ -658,16 +674,18 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.deepEqual(pageHierarchyFindings(page.document, source), [], "current routes must use Header + subpage controls + lower content");
 
       const settings = page.document.querySelector('[data-page="settings"]');
-      settings.removeAttribute("data-page-hierarchy");
+      const settingsHierarchy = settings.querySelector('[data-page-hierarchy="true"]');
+      settingsHierarchy.removeAttribute("data-page-hierarchy");
       assert.ok(pageHierarchyFindings(page.document, source).includes("settings:page-level"), "a missing level declaration must red");
-      settings.setAttribute("data-page-hierarchy", "two-level");
+      settingsHierarchy.setAttribute("data-page-hierarchy", "true");
 
       const grid = settings.querySelector("[data-settings-layout-grid]");
       const nav = settings.querySelector("[data-settings-layout-nav]");
       const content = settings.querySelector("[data-settings-layout-content]");
+      const settingsTabsRegion = settingsHierarchy.querySelector('[data-page-hierarchy-region="section-tabs"]');
       grid.append(nav);
       assert.ok(pageHierarchyFindings(page.document, source).includes("settings:tabs-before-content"), "a local-nav-after-content mutation must red");
-      grid.insertBefore(nav, content);
+      settingsTabsRegion.append(nav);
       assert.deepEqual(pageHierarchyFindings(page.document, source), [], "restoring the two-level order must return green");
     } finally { await page.cleanup(); }
   });

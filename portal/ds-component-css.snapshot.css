@@ -3498,3 +3498,13 @@ a.tcrn-relationship-chip:focus-visible {
 .tcrn-settings-layout__form .tcrn-setting-row__control>.tcrn-number-input{inline-size:100%}
 @container tcrn-settings-layout-frame (min-width:960px){.tcrn-settings-layout__grid{grid-template-columns:minmax(0,var(--tcrn-container-settings-local-nav)) minmax(0,1fr)}}
 @container tcrn-settings-content (min-width:720px){.tcrn-settings-layout__form .tcrn-setting-row{grid-template-columns:minmax(0,1fr) minmax(var(--tcrn-container-settings-control-min),.8fr) max-content}.tcrn-settings-layout__form .tcrn-setting-row__tools{justify-content:flex-end}}
+
+/* DS-112 page hierarchy contract. */
+.tcrn-page-hierarchy{display:grid;gap:var(--tcrn-space-4);min-inline-size:0;max-inline-size:100%}
+.tcrn-page-hierarchy__header,.tcrn-page-hierarchy__section-tabs,.tcrn-page-hierarchy__lower-content,.tcrn-page-hierarchy__third-level-frame,.tcrn-page-hierarchy__third-level,.tcrn-page-hierarchy__content{min-inline-size:0;max-inline-size:100%}
+.tcrn-page-hierarchy__section-tabs{display:block}
+.tcrn-page-hierarchy__third-level-frame{container:tcrn-page-hierarchy-third-level/inline-size}
+.tcrn-page-hierarchy__third-level{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--tcrn-space-4)}
+.tcrn-page-hierarchy__local-navigation{min-inline-size:0;max-inline-size:100%;overflow-x:auto}
+.tcrn-page-hierarchy__content{display:grid;gap:var(--tcrn-space-3)}
+@container tcrn-page-hierarchy-third-level (min-width:960px){.tcrn-page-hierarchy__third-level{grid-template-columns:minmax(0,var(--tcrn-container-page-third-level-nav)) minmax(0,1fr)}}
