@@ -254,7 +254,8 @@ async function main() {
   const result = phase === "development"
     ? buildDevelopmentPlan({ changedFiles })
     : buildFinalGatePlan({ roster, containment, phase });
-  process.stdout.write(`${JSON.stringify({ ok: true, reasonCode: "GATE_PLAN_READY", ...result })}\n`);
+  const executable = result.executable !== false && (result.blocked ?? []).length === 0;
+  process.stdout.write(`${JSON.stringify({ ok: true, reasonCode: executable ? "GATE_PLAN_READY" : "GATE_PLAN_PREVIEW_ONLY", ...result })}\n`);
 }
 
 if (process.argv[1]?.endsWith("final-gate-plan.mjs")) {
