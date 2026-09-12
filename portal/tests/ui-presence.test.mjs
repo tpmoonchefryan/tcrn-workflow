@@ -764,6 +764,93 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
+  test("TCRN-CROSS-STORY-409 keeps every visible field in its declared group and models prompt languages as a deduplicated set", async () => {
+    const page = await preparePage();
+    try {
+      page.document.querySelector('[data-page-target="settings"]')?.click();
+      const groupFor = (key) => {
+        for (const group of ["workspace", "backup", "execution", "machine"]) {
+          page.document.querySelector(`[data-setting-group="${group}"]`)?.click();
+          const selector = group === "machine" ? `[data-machine-row="${key}"]` : `[data-setting-row="${key}"]`;
+          if (page.document.querySelector(selector)) return group;
+        }
+        return null;
+      };
+      assert.equal(groupFor("model.economyTier"), "execution", "model.economyTier belongs to execution, not workspace");
+      assert.equal(groupFor("retrieval.promptLanguages"), "workspace");
+      assert.equal(groupFor("backup.cadence"), "backup");
+      assert.equal(groupFor("portal.port"), "machine", "machine settings stay outside the workspace settings groups");
+
+      page.document.querySelector('[data-setting-group="workspace"]')?.click();
+      assert.equal(page.document.querySelector('[data-setting-row="model.economyTier"]'), null, "the model field must not leak into workspace");
+      const prompt = page.document.querySelector('[data-setting-control="retrieval.promptLanguages"]');
+      assert.ok(prompt, "prompt languages must have a live control");
+      assert.equal(prompt.tagName, "SELECT");
+      assert.equal(prompt.hasAttribute("multiple"), true);
+      assert.equal(prompt.getAttribute("data-setting-cardinality"), "set");
+      assert.equal(prompt.closest("[data-setting-choice-component]")?.getAttribute("data-setting-choice-source"), "artifact.language.allowedValues");
+      assert.equal(prompt.closest("[data-setting-choice-component]")?.getAttribute("data-setting-choice-value-format"), "comma-separated");
+
+      const catalog = await cli(["settings-catalog", "--workspace", page.workspace]);
+      const languageSetting = catalog.settings.find((entry) => entry.key === "artifact.language");
+      const roster = languageSetting.allowedValues;
+      assert.ok(Array.isArray(roster) && roster.length > 0);
+      assert.deepEqual([...prompt.options].map((option) => option.value), roster, "the selector options must come from the engine language roster");
+      assert.equal(new Set([...prompt.options].map((option) => option.value)).size, prompt.options.length, "language options must be unique");
+
+      const firstOption = prompt.options[0];
+      for (const option of [...prompt.options]) option.removeAttribute("selected");
+      firstOption.setAttribute("selected", "");
+      const duplicate = firstOption.cloneNode(true);
+      duplicate.setAttribute("selected", "");
+      prompt.append(duplicate);
+      const before = receiptText(page.document);
+      prompt.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await waitFor(receiptAdvanced(page.document, before), "the prompt-language set receipt");
+      const saved = (await cli(["settings-catalog", "--workspace", page.workspace])).settings.find((entry) => entry.key === "retrieval.promptLanguages");
+      assert.equal(saved.currentValue, firstOption.value, "duplicate selected language values must be serialized once");
+    } finally { await page.cleanup(); }
+  });
+
+  test("TCRN-CROSS-STORY-410 gives every vocabulary value a distinct five-locale definition and shows each category explanation once", async () => {
+    const page = await preparePage();
+    try {
+      page.document.querySelector('[data-page-target="vocabulary"]')?.click();
+      const categories = [
+        "hosts",
+        "conferenceTypes",
+        "executionForms",
+        "setting:artifact.language",
+        "setting:backup.cadence",
+        "setting:execution.independenceFloor",
+        "setting:execution.subagentPolicy",
+        "setting:storage.backend",
+      ];
+      const countOf = (text, needle) => needle ? text.split(needle).length - 1 : 0;
+      for (const locale of ["en", "zh-CN", "ja", "ko", "fr"]) {
+        page.document.querySelector(`[data-locale-option="${locale}"]`)?.click();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        for (const category of categories) {
+          const button = page.document.querySelector(`[data-vocabulary-category="${category}"]`);
+          assert.ok(button, `${locale} must keep the ${category} vocabulary category`);
+          button.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+          const terms = page.document.querySelector("#vocabulary-terms");
+          const categoryDescription = terms.querySelector(`[data-vocabulary-category-description="${category}"]`);
+          assert.equal(terms.querySelectorAll("[data-vocabulary-category-description]").length, 1, `${locale}/${category} must show one category explanation`);
+          assert.ok(categoryDescription?.textContent.trim() && !/^(?:vocabulary|setting)\./u.test(categoryDescription.textContent.trim()), `${locale}/${category} category explanation must be localized`);
+          const rows = [...terms.querySelectorAll(".tcrn-table-shell__row")];
+          assert.ok(rows.length > 0, `${locale}/${category} must render its engine values`);
+          const descriptions = rows.map((row) => row.children[1]?.textContent.trim() ?? "");
+          assert.ok(descriptions.every((description) => description.length > 0 && !/^(?:vocabulary|setting)\./u.test(description)), `${locale}/${category} values must have localized definitions`);
+          assert.equal(new Set(descriptions).size, descriptions.length, `${locale}/${category} values must not collapse to one repeated description`);
+          assert.ok(descriptions.every((description) => description !== categoryDescription.textContent.trim()), `${locale}/${category} values must not repeat the category explanation`);
+          if (category === "setting:backup.cadence") assert.equal(countOf(terms.textContent, categoryDescription.textContent.trim()), 1, `${locale}/backup category copy must appear once`);
+          if (category === "setting:storage.backend") assert.notEqual(descriptions[0], descriptions[1], `${locale}/storage backend values need distinct meaning`);
+        }
+      }
+    } finally { await page.cleanup(); }
+  });
+
   test("INC-193 the design authority is declared, and what cannot be checked here is yellow", async () => {
     const page = await preparePage();
     try {

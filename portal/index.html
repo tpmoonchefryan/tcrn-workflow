@@ -4250,10 +4250,10 @@ const BOOT = __PORTAL_BOOT__;
   const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = String(value ?? ""); };
   const termValue = (term) => typeof term === "string" ? term : term?.value ?? term?.key ?? term?.name ?? "";
   const vocabularyDefinition = (category, term) => {
-    if (typeof term === "string") return t("vocabulary.readOnly");
     const value = termValue(term);
     const localized = t(`vocabulary.term.${category}.${value}.description`);
     if (localized !== `vocabulary.term.${category}.${value}.description`) return localized;
+    if (typeof term === "string") return t("vocabulary.readOnly");
     if (settingKeyOf(category) !== null) {
       const perValue = t(`setting.${term.settingKey}.value.${term.value}.description`);
       if (perValue !== `setting.${term.settingKey}.value.${term.value}.description`) return perValue;
@@ -4332,7 +4332,39 @@ const BOOT = __PORTAL_BOOT__;
   };
   const LEGACY_MODEL_SETTING_KEYS = new Set(["execution.claudeCodeSubagentPlan", "execution.codexSubagentPlan"]);
   const DISPATCH_SETTING_KEYS = new Set(["execution.dispatchClasses", "execution.dispatchMode", "execution.dispatchModes", "execution.dispatchTiers"]);
-  const settingGroup = (key) => key.startsWith("design.") ? "workspace" : key.startsWith("backup.") ? "backup" : key.startsWith("execution.") ? "execution" : "workspace";
+  const SETTING_GROUPS = Object.freeze({
+    "artifact.language": "workspace",
+    "backup.cadence": "backup",
+    "backup.destination": "backup",
+    "conference.positionBudgetBytes": "workspace",
+    "design.authority": "workspace",
+    "driver.capabilityProfile": "workspace",
+    "engine.requiredVersion": "workspace",
+    "execution.claudeCodeSubagentPlan": "execution",
+    "execution.dispatchClasses": "execution",
+    "execution.dispatchMode": "execution",
+    "execution.dispatchModes": "execution",
+    "execution.dispatchTiers": "execution",
+    "execution.independenceFloor": "execution",
+    "execution.maxConcurrentSubagents": "execution",
+    "execution.maxDispatchDepth": "execution",
+    "execution.subagentPolicy": "execution",
+    "fitness.minEvents": "workspace",
+    "fitness.windowDays": "workspace",
+    "injection.budgetBytes": "workspace",
+    "injection.perPromptBytes": "workspace",
+    "knowledge.aggregateBytes": "workspace",
+    "knowledge.articlesPath": "workspace",
+    "model.economyTier": "execution",
+    "retrieval.promptLanguages": "workspace",
+    "retrieval.scopeExcerptBytes": "workspace",
+    "retrieval.tau": "workspace",
+    "storage.backend": "workspace",
+    "storage.segmentBytes": "workspace",
+    "storage.snapshotEveryEvents": "workspace",
+    "workspace.generatedArtifactsPath": "workspace",
+  });
+  const settingGroup = (key) => LEGACY_MODEL_SETTING_KEYS.has(key) ? "execution" : SETTING_GROUPS[key] ?? "unassigned";
   const settingLabel = (key) => t(`setting.${key}.label`);
   // A supplemental explanation for a concept whose meaning is not on the surface. The
   // markup is the design system's Tooltip verbatim: the wrapper carries the placement
@@ -4356,9 +4388,24 @@ const BOOT = __PORTAL_BOOT__;
   const settingDescription = (key) => t(`setting.${key}.description`);
   const currentSetting = (key) => state.settings?.settings?.find((entry) => entry.key === key);
   const controlId = (prefix, key) => `${prefix}-${String(key).replace(/[^a-zA-Z0-9_-]/gu, "-")}`;
-  const settingChoiceAttrs = (values, key = "") => {
-    const reason = values.length === 2 ? "option-measurement-required" : "option-count-requires-select";
+  const settingChoiceAttrs = (values, key = "", reasonOverride = "") => {
+    const reason = reasonOverride || (values.length === 2 ? "option-measurement-required" : "option-count-requires-select");
     return `data-setting-choice="true" data-setting-choice-semantic="value-selection" data-setting-choice-control="select" data-setting-key="${esc(key)}" data-setting-choice-option-count="${values.length}" data-setting-choice-fit="false" data-setting-choice-rejection-reason="${reason}"`;
+  };
+  const promptLanguageRoster = () => {
+    const values = currentSetting("artifact.language")?.allowedValues;
+    return Array.isArray(values) ? [...new Set(values.filter((value) => typeof value === "string" && value.length > 0))] : [];
+  };
+  const promptLanguageSelection = (value, roster) => {
+    const selected = new Set(String(value ?? "").split(",").map((part) => part.trim()).filter((part) => roster.includes(part)));
+    return roster.filter((language) => selected.has(language));
+  };
+  const promptLanguageLabel = (language) => BOOT.localeMetadata?.find((entry) => entry.locale === language)?.nativeName || language;
+  const promptLanguageChoice = (entry, label, id) => {
+    const roster = promptLanguageRoster();
+    const selected = new Set(promptLanguageSelection(entry.currentValue, roster));
+    const options = roster.map((language) => `<option value="${esc(language)}" data-setting-option-value="${esc(language)}" ${selected.has(language) ? "selected" : ""}>${esc(promptLanguageLabel(language))} (${esc(language)})</option>`).join("");
+    return `<div class="tcrn-setting-choice" data-setting-choice-component="SettingChoice" ${settingChoiceAttrs(roster, entry.key, "option-count-requires-select")} data-setting-choice-cardinality="set" data-setting-choice-source="artifact.language.allowedValues" data-setting-choice-value-format="comma-separated"><label class="tcrn-setting-choice__select-label" for="${esc(id)}"><span class="tcrn-field__label">${esc(label)}</span><select class="tcrn-select" id="${esc(id)}" multiple size="${Math.max(2, Math.min(5, roster.length))}" data-setting-cardinality="set" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set" aria-label="${esc(label)}">${options}</select></label></div>`;
   };
   const controlFor = (entry) => {
     const values = [...(entry.allowedValues || [])];
@@ -4367,6 +4414,7 @@ const BOOT = __PORTAL_BOOT__;
     const label = settingLabel(entry.key);
     if (entry.controlType === "boolean") return `<label class="tcrn-switch" data-switch-state="${current === (entry.trueValue || "allowed") ? "on" : "off"}"><input class="tcrn-switch__control" type="checkbox" role="switch" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set" data-setting-value="${esc(entry.trueValue || "allowed")}" ${current === (entry.trueValue || "allowed") ? "checked" : ""}><span class="tcrn-switch__label">${esc(current === (entry.trueValue || "allowed") ? t("config.enabled") : t("config.disabled"))}</span></label>`;
     if (entry.controlType === "number") return `<div class="tcrn-number-input-field"><label class="tcrn-field" for="${esc(id)}"><span class="tcrn-sr-only">${esc(label)}</span><input class="tcrn-input tcrn-number-input" id="${esc(id)}" type="number" min="${esc(entry.min)}" max="${esc(entry.max)}" step="1" value="${esc(current)}" data-number-input-component="NumberInput" data-number-input="true" data-number-input-semantic="numeric-entry" data-number-input-visibility="full-value" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set" aria-label="${esc(label)}"></label><span class="tcrn-setting-choice__hint">${esc(entry.min)}–${esc(entry.max)}</span></div>`;
+    if (entry.key === "retrieval.promptLanguages") return promptLanguageChoice(entry, label, id);
     if (entry.controlType === "enum" && values.length > 0) return `<div class="tcrn-setting-choice" data-setting-choice-component="SettingChoice" ${settingChoiceAttrs(values, entry.key)}><label class="tcrn-setting-choice__select-label" for="${esc(id)}"><span class="tcrn-sr-only">${esc(label)}</span><select class="tcrn-select" id="${esc(id)}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set">${values.map((value) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(value || t("config.unset"))}</option>`).join("")}</select></label></div>`;
     return `<label class="tcrn-field"><span class="tcrn-sr-only">${esc(label)}</span><input class="tcrn-input" id="${esc(id)}" value="${esc(current)}" placeholder="${esc(entry.defaultValue ?? t("config.unset"))}" aria-label="${esc(label)}" data-setting-control="${esc(entry.key)}" data-cli-action="settings-set"></label>`;
   };
@@ -4543,6 +4591,11 @@ const BOOT = __PORTAL_BOOT__;
     if (state.settingGroup === "machine") renderMachineSettings();
     $$('[data-setting-control]').forEach((control) => {
       if (control.tagName === "BUTTON") control.addEventListener("click", () => saveSetting(control.dataset.settingControl, control.dataset.settingValue));
+      else if (control.getAttribute("data-setting-cardinality") === "set") control.addEventListener("change", () => {
+        const selected = [...new Set([...control.options].filter((option) => option.selected).map((option) => option.value))];
+        if (selected.length === 0) resetSetting(control.dataset.settingControl);
+        else saveSetting(control.dataset.settingControl, selected.join(","));
+      });
       else control.addEventListener("change", () => saveSetting(control.dataset.settingControl, control.type === "checkbox" ? (control.checked ? control.dataset.settingValue : (currentSetting(control.dataset.settingControl)?.falseValue || "forbidden")) : control.value));
     });
     $$('[data-reset-setting]').forEach((button) => button.addEventListener("click", () => resetSetting(button.dataset.resetSetting)));
@@ -4689,7 +4742,10 @@ const BOOT = __PORTAL_BOOT__;
   // this page unreadable. Columns are declared per domain from the fields the engine
   // actually returns; the portal invents neither a field nor a value.
   const VOCABULARY_COLUMNS = {
-    hosts: [{ key: "@self", labelKey: "vocabulary.columnName" }],
+    hosts: [
+      { key: "@self", labelKey: "vocabulary.columnName" },
+      { key: "description", labelKey: "vocabulary.columnDescription", kind: "description" },
+    ],
     conferenceTypes: [
       { key: "value", labelKey: "vocabulary.columnName" },
       { key: "description", labelKey: "vocabulary.columnDescription", kind: "description" },
@@ -4739,6 +4795,12 @@ const BOOT = __PORTAL_BOOT__;
   const vocabularyCategoryLabel = (category) => {
     const key = settingKeyOf(category);
     return key === null ? t("vocabulary." + category) : settingLabel(key);
+  };
+  const vocabularyCategoryDescription = (category) => {
+    const key = settingKeyOf(category);
+    const lookup = key === null ? `vocabulary.category.${category}.description` : `vocabulary.category.setting.${key}.description`;
+    const localized = t(lookup);
+    return localized === lookup ? (key === null ? t(`concept.vocabulary.${category}`) : settingDescription(key)) : localized;
   };
   // Rows come from what the engine returns; no value is invented here. Two settings
   // draw their values from the plan list rather than a closed enum, so their rows are
@@ -4798,9 +4860,10 @@ const BOOT = __PORTAL_BOOT__;
     });
     const terms = vocabularyRows(state.selectedVocabulary);
     const columns = vocabularyColumns(state.selectedVocabulary);
+    const categoryDescription = `<p class="tcrn-scope-note tcrn-vocabulary__category-description" data-vocabulary-category-description="${esc(state.selectedVocabulary)}">${esc(vocabularyCategoryDescription(state.selectedVocabulary))}</p>`;
     $("#vocabulary-terms").innerHTML = terms.length === 0
-      ? `<div class="tcrn-state-surface">${esc(t("vocabulary.empty"))}</div>`
-      : `<div class="tcrn-table-shell" role="table" data-mobile-layout="stacked-cards" data-vocabulary-table="${esc(state.selectedVocabulary)}" data-vocabulary-columns="${columns.length}" tabindex="0">`
+      ? `${categoryDescription}<div class="tcrn-state-surface">${esc(t("vocabulary.empty"))}</div>`
+      : `${categoryDescription}<div class="tcrn-table-shell" role="table" data-mobile-layout="stacked-cards" data-vocabulary-table="${esc(state.selectedVocabulary)}" data-vocabulary-columns="${columns.length}" tabindex="0">`
         + `<div role="row" class="tcrn-table-shell__head">${columns.map((column) => `<span role="columnheader">${esc(t(column.labelKey))}${conceptTip("column." + column.labelKey, "bottom")}</span>`).join("")}</div>`
         + terms.map((term) => `<div role="row" class="tcrn-table-shell__row">${columns.map((column) => `<span role="cell" data-label="${esc(t(column.labelKey))}" class="tcrn-table-shell__cell">${vocabularyCell(term, column, state.selectedVocabulary)}</span>`).join("")}</div>`).join("")
         + `</div>`;
